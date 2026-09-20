@@ -422,6 +422,7 @@ const en = {
   "question.versions.title": "Version history",
   "question.versions.empty": "Never published yet.",
   "question.versions.number": "v{n}",
+  "question.versions.publishedAt": "Published",
   "question.versions.view": "View this version",
   "question.versions.restore": "Restore into the draft",
   "question.versions.restoreConfirm":
@@ -1124,6 +1125,7 @@ const fr: Record<keyof Dict, string> = {
   "question.versions.title": "Historique des versions",
   "question.versions.empty": "Jamais publiée.",
   "question.versions.number": "v{n}",
+  "question.versions.publishedAt": "Publiée le",
   "question.versions.view": "Voir cette version",
   "question.versions.restore": "Restaurer dans le brouillon",
   "question.versions.restoreConfirm":

@@ -119,7 +119,7 @@ export function VersionHistory({
           <thead className={T.head}>
             <tr>
               <th className={T.th}>{t("pool.col.version")}</th>
-              <th className={T.th}>{t("pool.col.updated")}</th>
+              <th className={T.th}>{t("question.versions.publishedAt")}</th>
               <th className={T.th}>{t("question.changeNote")}</th>
               <th className={T.th}>
                 <span className="sr-only">{t("common.actions")}</span>
