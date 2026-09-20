@@ -57,6 +57,17 @@ describe("student feedback", () => {
     expect(screen.getByText("Clean answer.")).toBeVisible();
   });
 
+  // `position` is 0-based on the wire (the API stores it that way); every
+  // screen of this app numbers questions from 1.
+  it("numbers the questions from one, not from the stored position", async () => {
+    const payload = makeFeedback();
+    expect(payload.items[0]!.position).toBe(0);
+    mockFetch({ [`GET ${URL}`]: ok(payload) });
+    renderWithProviders(<Feedback attemptId="a1" />);
+    expect(await screen.findByRole("heading", { name: "Question 1" })).toBeVisible();
+    expect(screen.queryByRole("heading", { name: "Question 0" })).toBeNull();
+  });
+
   it("shows only what the policy let through", async () => {
     const payload = makeFeedback();
     mockFetch({

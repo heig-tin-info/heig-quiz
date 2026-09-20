@@ -43,7 +43,9 @@ export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
         return (
           <Card key={q.item.id} className="space-y-4 p-5">
             <SectionHeading
-              title={`${q.item.position}. ${q.item.internalName}`}
+              // `position` is 0-based on the wire; every screen numbers
+              // questions from 1.
+              title={`${q.item.position + 1}. ${q.item.internalName}`}
               actions={
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Badge tone="zinc">{typeLabel(t, q.item.type)}</Badge>

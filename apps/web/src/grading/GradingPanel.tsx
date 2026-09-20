@@ -123,7 +123,9 @@ export function GradingPanel({
   const steps = useMemo(
     () =>
       order === "question"
-        ? items.map((i) => ({ key: i.id, label: `${i.position}. ${i.internalName}` }))
+        ? // `position` is 0-based on the wire; every screen of this app numbers
+          // questions from 1, and the step counter above this list does too.
+          items.map((i) => ({ key: i.id, label: `${i.position + 1}. ${i.internalName}` }))
         : students,
     [order, items, students],
   );
@@ -507,7 +509,7 @@ export function GradingPanel({
                     order === "question"
                       ? entry.label
                       : item
-                        ? `${item.position}. ${item.internalName}`
+                        ? `${item.position + 1}. ${item.internalName}`
                         : entry.label
                   }
                   renderDetail={(entry, item) => (

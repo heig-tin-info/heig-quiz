@@ -121,7 +121,8 @@ export function Feedback({ attemptId }: { attemptId: string }) {
             <Card key={item.itemId} className="space-y-4 p-5 sm:p-6">
               <div className="flex items-center gap-3">
                 <h2 className="text-base font-bold tracking-tight">
-                  {t("feedback.question", { n: item.position })}
+                  {/* 0-based on the wire; the player and the panel both count from 1. */}
+                  {t("feedback.question", { n: item.position + 1 })}
                 </h2>
                 <span className="flex-1" />
                 {item.points === null ? (

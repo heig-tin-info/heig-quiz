@@ -78,7 +78,8 @@ export function RegradeSheet({
         }}
       >
         <p className="text-sm text-fg-muted">
-          {item.position}. {item.internalName}
+          {/* 0-based on the wire; every screen numbers questions from 1. */}
+          {item.position + 1}. {item.internalName}
         </p>
         <div className="space-y-1.5">
           <Textarea

@@ -50,7 +50,13 @@ export function CodeReview({
     </div>
   );
 
-  if (details === null) {
+  /*
+   * `details` is whatever `gradings.details` holds: this type's breakdown, or
+   * a grading-level marker with no `cases` at all — an absent answer, an
+   * unreadable configuration, a grader that threw. Both read the same to a
+   * student, and reading a marker as a breakdown is a blank page.
+   */
+  if (details === null || !Array.isArray(details.cases)) {
     return (
       <div className="flex flex-col gap-3">
         {statement}

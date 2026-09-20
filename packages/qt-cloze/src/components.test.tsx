@@ -161,6 +161,27 @@ describe("ClozeReview", () => {
     expect(screen.getAllByText("newton").length).toBeGreaterThan(0);
   });
 
+  /*
+   * `gradings.details` is a union: this type's breakdown, or a grading-level
+   * marker written when no type ever ran on the cell. A marker has no
+   * `perBlank`, and reading it as one used to take the page down.
+   */
+  it("survives a grading-level marker where a breakdown was expected", () => {
+    render(
+      <ClozeReview
+        student={student}
+        answer={null}
+        solution={null}
+        details={{ reason: "config_unreadable" } as unknown as typeof details}
+        points={0}
+        maxPoints={6}
+        audience="student"
+      />,
+    );
+    expect(screen.queryAllByText("Correct")).toHaveLength(0);
+    expect(screen.getByText("Score")).toBeInTheDocument();
+  });
+
   it("hides the expected column when the policy hides the key", () => {
     render(
       <ClozeReview

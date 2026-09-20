@@ -45,7 +45,15 @@ export function ClozeReview({
 }: ClozeReviewProps) {
   const s = resolveStrings(clozeReviewStrings, strings);
   const given = answer?.blanks ?? [];
-  const verdicts = new Map(details?.perBlank.map((blank) => [blank.index, blank]) ?? []);
+  /*
+   * `details` comes off the wire as whatever `gradings.details` holds, which
+   * is this type's breakdown OR a grading-level marker (an unreadable
+   * configuration, a grader that threw). A marker has no `perBlank`, and
+   * reading it as one is a crash on a page whose whole job is to reassure.
+   * Without verdicts the blanks simply read neutral, which is honest.
+   */
+  const perBlank = Array.isArray(details?.perBlank) ? details.perBlank : [];
+  const verdicts = new Map(perBlank.map((blank) => [blank.index, blank]));
   const expected = new Map(solution?.blanks.map((blank) => [blank.index, blank.expected]) ?? []);
   const Text = renderText ?? ClozeFallbackText;
 
@@ -120,7 +128,7 @@ export function ClozeReview({
         <span className="tabular-nums">
           {points === null ? "—" : points} / {maxPoints}
         </span>
-        {details ? (
+        {typeof details?.total === "number" ? (
           <span className="ml-2 text-fg-faint">
             · {s.weights} {details.earned}/{details.total}
           </span>

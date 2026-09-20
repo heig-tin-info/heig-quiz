@@ -62,7 +62,7 @@ export function ShortReview({
         {verdict ? <span className={cx(badgeClass, verdict.tone)}>{verdict.label}</span> : null}
       </div>
 
-      {details?.matchedIndex !== null && details !== null ? (
+      {typeof details?.matchedIndex === "number" ? (
         <p className={helpClass}>
           {s.matchedBy} #{details.matchedIndex + 1} · {details.matchedKind}
         </p>

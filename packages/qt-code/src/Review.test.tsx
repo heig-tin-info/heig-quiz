@@ -101,6 +101,17 @@ describe("CodeReview", () => {
     expect(screen.getByText("Not answered.")).toBeInTheDocument();
   });
 
+  /*
+   * `gradings.details` is a union: this type's breakdown, or a grading-level
+   * marker written when no type ever ran. A marker has no `cases`, and
+   * reading it as a breakdown used to blank the whole feedback page.
+   */
+  it("survives a grading-level marker where a breakdown was expected", () => {
+    setup({ reason: "config_unreadable" } as unknown as CodeDetails, { answer: null });
+    expect(screen.getByText("Not answered.")).toBeInTheDocument();
+    expect(screen.getByText(student.prompt)).toBeInTheDocument();
+  });
+
   it("renders the statement through the host's markdown renderer", () => {
     setup(studentDetails(graded.details), {
       renderMarkdown: (source) => <em data-testid="md">{source}</em>,

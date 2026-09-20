@@ -78,7 +78,7 @@ export function McqReview({
         <span className="tabular-nums">
           {points === null ? "—" : points} / {maxPoints}
         </span>
-        {details ? (
+        {typeof details?.C === "number" ? (
           <span className="ml-2 text-fg-faint">
             · {s.breakdown} {details.c}/{details.C} · {s.wrongTicked} {details.w}/{details.W}
           </span>

@@ -127,7 +127,9 @@ describe("grading.evaluation (F-GRADE-01, §5.4)", () => {
     expect(missing!.points).toBe(0);
     expect(missing!.state).toBe("validated");
     expect(missing!.source).toBe("auto");
-    expect(missing!.details).toMatchObject({ empty: true });
+    // No details at all: no question type ever ran on it, and a marker of
+    // another shape is what a type's `Review` chokes on downstream.
+    expect(missing!.details).toBeNull();
   });
 
   it("is enqueued by closing the evaluation", async () => {

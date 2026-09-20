@@ -192,12 +192,18 @@ export async function runEvaluationGrading(
         });
       } else if (answer === null) {
         // F-GRADE-01: an absent answer is worth zero, and it is settled.
+        //
+        // With NO details: `gradings.details` is the question type's own
+        // breakdown, and no type ever ran here. A marker of another shape is
+        // handed to that type's `Review` further down the line, which is how
+        // a feedback page dies on `details.cases.filter`. The record of what
+        // happened is `answerId: null` beside the zero.
         await writeGrading(db, {
           ...base,
           points: 0,
           source: "auto",
           state: "validated",
-          details: { empty: true, reason: "no_answer" },
+          details: null,
         });
       } else {
         const outcome = await gradeOne(app, {

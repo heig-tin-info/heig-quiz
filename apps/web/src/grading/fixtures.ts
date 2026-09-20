@@ -77,7 +77,8 @@ export function makeQueue(entries: GradingEntry[], over: Partial<GradingQueue> =
   const validated = entries.filter((e) => e.grading?.state === "validated").length;
   return {
     order: "question",
-    items: [{ id: "i1", position: 1, internalName: "sizeof-ptr", type: "mcq", points: 2 }],
+    // `position` is 0-based, exactly as the API stores and serves it.
+    items: [{ id: "i1", position: 0, internalName: "sizeof-ptr", type: "mcq", points: 2 }],
     entries,
     counts: {
       total: entries.length,
@@ -132,7 +133,7 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
     items: [
       {
         id: "i1",
-        position: 1,
+        position: 0,
         points: 2,
         milestone: false,
         questionId: "q1",
@@ -145,7 +146,7 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
       },
       {
         id: "i2",
-        position: 2,
+        position: 1,
         points: 3,
         milestone: false,
         questionId: "q2",
@@ -202,7 +203,7 @@ export function makeResultsView(over: Partial<ResultsView> = {}): ResultsView {
     releasedAt: null,
     modifiedAfterRelease: false,
     items: [
-      { id: "i1", position: 1, internalName: "sizeof-ptr", type: "mcq", points: 5, successRate: 0.6 },
+      { id: "i1", position: 0, internalName: "sizeof-ptr", type: "mcq", points: 5, successRate: 0.6 },
     ],
     rows,
     stats: {
@@ -241,7 +242,7 @@ export function makeFeedback(over: Partial<Extract<StudentFeedback, { available:
     items: [
       {
         itemId: "i1",
-        position: 1,
+        position: 0,
         type: "mcq",
         points: 2,
         maxPoints: 2,
