@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useRef, useState, type ReactNod
 
 import type { NoticeKind } from "@quiz/contracts";
 
+import { useT } from "./i18n";
 import { Z } from "./ui";
 
 /**
@@ -100,6 +101,9 @@ export function useToast() {
 const AUTO_DISMISS_MS = 6000;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  // `translate`, not `t`: the toast being rendered below is already called
+  // `t`, and a shadowed translator is a runtime crash, not a type error.
+  const translate = useT();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seq = useRef(0);
 
@@ -159,7 +163,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               <span className="text-fg">{t.message}</span>
               <button
                 type="button"
-                aria-label="Dismiss notification"
+                aria-label={translate("toast.dismiss")}
                 onClick={() => dismiss(t.id)}
                 className="ml-1 rounded-full p-1 text-fg-faint transition-colors hover:bg-surface-2 hover:text-fg"
               >

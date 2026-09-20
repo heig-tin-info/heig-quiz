@@ -3,6 +3,7 @@ import { ImageUp, Trash2, ZoomIn } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { api, apiErrorMessage } from "./api";
+import { useT } from "./i18n";
 import { Button, Modal } from "./ui";
 
 const VIEW = 288; // on-screen preview
@@ -43,6 +44,7 @@ export function AvatarEditor({
   hasAvatar: boolean;
   onClose: () => void;
 }) {
+  const t = useT();
   const qc = useQueryClient();
   const [img, setImg] = useState<HTMLImageElement | null>(null);
   const [crop, setCrop] = useState<CropState>({ cx: 0, cy: 0, zoom: 1 });
@@ -90,23 +92,23 @@ export function AvatarEditor({
 
   return (
     <Modal
-      title="Profile picture"
+      title={t("avatar.title")}
       size="sm"
       onClose={onClose}
       footer={
         <>
           {hasAvatar ? (
             <Button variant="ghost" onClick={() => remove.mutate()} loading={remove.isPending} className="mr-auto">
-              <Trash2 /> Remove picture
+              <Trash2 /> {t("avatar.remove")}
             </Button>
           ) : null}
           {img ? (
             <Button variant="ghost" onClick={() => fileRef.current?.click()}>
-              Choose another
+              {t("avatar.chooseAnother")}
             </Button>
           ) : null}
           <Button onClick={() => save.mutate()} disabled={!img} loading={save.isPending}>
-            Save picture
+            {t("avatar.save")}
           </Button>
         </>
       }
@@ -119,8 +121,8 @@ export function AvatarEditor({
             className="flex w-full cursor-pointer flex-col items-center gap-2 rounded-card border border-dashed border-line-strong px-4 py-10 text-center transition-colors hover:border-fg-faint hover:bg-surface-2/60"
           >
             <ImageUp className="size-7 text-fg-faint" />
-            <span className="text-sm font-semibold">Choose an image</span>
-            <span className="text-xs text-fg-muted">JPEG, PNG or WebP — you will crop it next</span>
+            <span className="text-sm font-semibold">{t("avatar.choose")}</span>
+            <span className="text-xs text-fg-muted">{t("avatar.formats")}</span>
           </button>
         ) : (
           <div className="flex flex-col items-center gap-3">
@@ -166,7 +168,7 @@ export function AvatarEditor({
                 }}
               />
             </div>
-            <p className="text-xs text-fg-muted">Drag to reposition, scroll or use the slider to zoom.</p>
+            <p className="text-xs text-fg-muted">{t("avatar.dragHint")}</p>
             <div className="flex w-full max-w-xs items-center gap-2">
               <ZoomIn className="size-4 text-fg-faint" />
               <input
@@ -180,7 +182,7 @@ export function AvatarEditor({
                   setCrop((c) => clampCenter(img, { ...c, zoom: Number(e.target.value) }))
                 }
                 className="w-full accent-accent"
-                aria-label="Zoom"
+                aria-label={t("avatar.zoom")}
               />
             </div>
           </div>
@@ -199,12 +201,12 @@ export function AvatarEditor({
         />
         {save.isError ? (
           <p className="text-sm text-danger">
-            {apiErrorMessage(save.error, "Could not upload the picture. Try again.")}
+            {apiErrorMessage(save.error, t("avatar.uploadFailed"))}
           </p>
         ) : null}
         {remove.isError ? (
           <p className="text-sm text-danger">
-            {apiErrorMessage(remove.error, "Could not remove the picture. Try again.")}
+            {apiErrorMessage(remove.error, t("avatar.removeFailed"))}
           </p>
         ) : null}
       </div>
