@@ -296,7 +296,6 @@ with a keyboard-reachable dismiss button.
 
 ## Voice
 
-Sentence case everywhere. Buttons start with a verb ("Create assignment",
-"Publish"). Status words are lowercase in badges. Teacher surfaces are in
-English; student and settings surfaces go through `t()` in English and
-French.
+Sentence case everywhere. Buttons start with a verb ("Create question",
+"Publish"). Status words are lowercase in badges. Every surface, teacher and
+student alike, goes through `t()` with an `en` and an `fr` entry (N-I18N-01).
