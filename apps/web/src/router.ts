@@ -14,6 +14,10 @@ export type Route =
   | { view: "pools" }
   | { view: "pool"; id: string }
   | { view: "question"; id: string }
+  // WP10: grading + results
+  | { view: "grading"; evaluationId: string }
+  | { view: "results"; evaluationId: string }
+  | { view: "feedback"; attemptId: string }
   /** Development only: the gallery of the shared primitives (App.tsx gates it). */
   | { view: "devUi" };
 
@@ -33,6 +37,13 @@ export function routeToPath(r: Route): string {
       return `/pools/${r.id}`;
     case "question":
       return `/questions/${r.id}`;
+    // WP10: grading + results
+    case "grading":
+      return `/evaluations/${r.evaluationId}/grading`;
+    case "results":
+      return `/evaluations/${r.evaluationId}/results`;
+    case "feedback":
+      return `/attempts/${r.attemptId}/feedback`;
     case "devUi":
       return "/dev/ui";
   }
@@ -45,6 +56,13 @@ export function parsePath(path: string): Route {
   if (parts[0] === "classrooms" && parts[1]) return { view: "classroom", id: parts[1] };
   if (parts[0] === "pools") return parts[1] ? { view: "pool", id: parts[1] } : { view: "pools" };
   if (parts[0] === "questions" && parts[1]) return { view: "question", id: parts[1] };
+  // WP10: grading + results
+  if (parts[0] === "evaluations" && parts[1] && parts[2] === "grading")
+    return { view: "grading", evaluationId: parts[1] };
+  if (parts[0] === "evaluations" && parts[1] && parts[2] === "results")
+    return { view: "results", evaluationId: parts[1] };
+  if (parts[0] === "attempts" && parts[1] && parts[2] === "feedback")
+    return { view: "feedback", attemptId: parts[1] };
   // Parsed in every build so the route is one pure function; App.tsx is what
   // refuses to render it outside development.
   if (parts[0] === "dev" && parts[1] === "ui") return { view: "devUi" };

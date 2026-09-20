@@ -1,5 +1,7 @@
 import {
+  BarChart3,
   BookOpen,
+  ClipboardCheck,
   CircleHelp,
   ClipboardList,
   Code2,
@@ -19,6 +21,7 @@ import {
 import type { CourseSummary, Me, PoolSummary } from "@quiz/contracts";
 
 import { fuzzyFilter } from "./fuzzy";
+import { gradingLinks } from "./grading";
 import { DOCS_URL, SOURCES_URL } from "./Header";
 import { LOCALES, type Locale, type TFunction } from "./i18n";
 import type { Route } from "./router";
@@ -159,6 +162,30 @@ export function buildCommands(ctx: CommandContext): Command[] {
         });
       }
     }
+  }
+
+  // WP10: grading + results. Derived from the route and nothing else — the
+  // palette has no evaluation list to walk, but a teacher standing on one of
+  // the two screens of a closed evaluation must be able to reach the other
+  // without going back through the classroom.
+  if (ctx.teacherUi && (ctx.route.view === "grading" || ctx.route.view === "results")) {
+    const links = gradingLinks(ctx.route.evaluationId);
+    commands.push(
+      {
+        id: "nav:grading",
+        label: t("palette.openGrading"),
+        icon: ClipboardCheck,
+        group: "navigate",
+        run: () => navigate(links.grading),
+      },
+      {
+        id: "nav:results",
+        label: t("palette.openResults"),
+        icon: BarChart3,
+        group: "navigate",
+        run: () => navigate(links.results),
+      },
+    );
   }
 
   const dark = ctx.resolvedTheme === "dark";

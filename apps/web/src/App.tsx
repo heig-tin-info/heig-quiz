@@ -24,6 +24,16 @@ const PoolView = lazy(() => import("./pool/PoolView").then((m) => ({ default: m.
 const QuestionEditor = lazy(() =>
   import("./question/QuestionEditor").then((m) => ({ default: m.QuestionEditor })),
 );
+// WP10: grading + results. Three more page chunks, for the same reason as
+// the pool ones: a student never downloads the grading panel, and a teacher
+// who only runs quizzes never downloads the student feedback page.
+const GradingPanel = lazy(() =>
+  import("./grading/GradingPanel").then((m) => ({ default: m.GradingPanel })),
+);
+const ResultsView = lazy(() =>
+  import("./results/ResultsView").then((m) => ({ default: m.ResultsView })),
+);
+const Feedback = lazy(() => import("./student/Feedback").then((m) => ({ default: m.Feedback })));
 const SettingsPage = lazy(() => import("./SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const AdminPage = lazy(() => import("./AdminPanel").then((m) => ({ default: m.AdminPage })));
 // Development only. The chunk is still built in production (Vite has no way
@@ -113,6 +123,10 @@ export default function App() {
   const page =
     route.view === "settings" ? (
       <SettingsPage me={me.data} />
+    ) : // WP10: the student's own feedback page, reachable in either UI — a
+    // teacher checking the student view opens the same page a student does.
+    route.view === "feedback" ? (
+      <Feedback attemptId={route.attemptId} />
     ) : !teacherUi ? (
       <StudentHome />
     ) : route.view === "devUi" && import.meta.env.DEV ? (
@@ -127,6 +141,11 @@ export default function App() {
       <PoolView id={route.id} navigate={navigate} />
     ) : route.view === "question" ? (
       <QuestionEditor id={route.id} navigate={navigate} />
+    ) : // WP10: grading + results
+    route.view === "grading" ? (
+      <GradingPanel evaluationId={route.evaluationId} navigate={navigate} />
+    ) : route.view === "results" ? (
+      <ResultsView evaluationId={route.evaluationId} navigate={navigate} />
     ) : (
       <TeacherHome navigate={navigate} />
     );
