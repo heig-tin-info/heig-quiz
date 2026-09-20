@@ -10,6 +10,7 @@ import {
   type Command,
   type CommandContext,
 } from "./commands";
+import { screenCommands } from "./screenCommands";
 import { cx, Kbd, useLayer, useScrollLock, Z } from "./ui";
 
 /*
@@ -49,7 +50,11 @@ export function CommandPalette({
   // Rebuilt on every render rather than memoized: a few dozen objects, each
   // closing over the current context, against a dependency array that would
   // have to list every field of that context to stay honest.
-  const groups = groupCommands(capClassrooms(filterCommands(query, buildCommands(ctx)), query));
+  // The global registry, plus whatever the screen under the palette declared
+  // while it was mounted (`screenCommands`): "Publish this question" exists
+  // in the editor and nowhere else.
+  const all = [...screenCommands(), ...buildCommands(ctx)];
+  const groups = groupCommands(capClassrooms(filterCommands(query, all), query));
   // The list the arrows walk is the one the eye walks: the groups in their
   // fixed order, not the score order the filter returned.
   const flat = groups.flatMap((g) => g.commands);

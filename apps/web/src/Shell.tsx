@@ -3,6 +3,7 @@ import {
   ChevronDown,
   ClipboardList,
   Eye,
+  FolderTree,
   Library,
   Menu as MenuIcon,
   School,
@@ -13,7 +14,7 @@ import {
 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 
-import type { CourseSummary, Me } from "@quiz/contracts";
+import type { CourseSummary, Me, PoolSummary } from "@quiz/contracts";
 
 import { api } from "./api";
 import { CommandPalette } from "./CommandPalette";
@@ -128,6 +129,16 @@ function Nav({
           active={route.view === "home"}
           onClick={() => go({ view: "home" })}
         />
+        {teacherUi ? (
+          <NavItem
+            icon={FolderTree}
+            label={t("pools.title")}
+            // The three pool routes are one place as far as navigation goes:
+            // a question is read inside its pool, not beside it.
+            active={route.view === "pools" || route.view === "pool" || route.view === "question"}
+            onClick={() => go({ view: "pools" })}
+          />
+        ) : null}
         <NavItem
           icon={SettingsIcon}
           label={t("menu.settings")}
@@ -224,6 +235,13 @@ export function Shell({
   const courses = useQuery<CourseSummary[]>({
     queryKey: ["courses"],
     queryFn: () => api("/app/api/courses"),
+    enabled: teacherUi,
+  });
+  // Same shape as the classroom list above: the palette lists the pools a
+  // teacher can jump to, on the key the pool screens already use.
+  const pools = useQuery<PoolSummary[]>({
+    queryKey: ["pools"],
+    queryFn: () => api("/app/api/pools"),
     enabled: teacherUi,
   });
   const themeChoice = useThemeChoice();
@@ -374,6 +392,7 @@ export function Shell({
           studentView={studentView}
           onToggleStudentView={onToggleStudentView}
           courses={courses.data ?? []}
+          pools={pools.data ?? []}
           themeChoice={themeChoice}
           resolvedTheme={resolvedTheme}
           setThemeChoice={setThemeChoice}

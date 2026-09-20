@@ -3,6 +3,7 @@ import {
   CircleHelp,
   ClipboardList,
   Code2,
+  FolderTree,
   GraduationCap,
   Languages,
   Library,
@@ -15,7 +16,7 @@ import {
   Sun,
 } from "lucide-react";
 
-import type { CourseSummary, Me } from "@quiz/contracts";
+import type { CourseSummary, Me, PoolSummary } from "@quiz/contracts";
 
 import { fuzzyFilter } from "./fuzzy";
 import { DOCS_URL, SOURCES_URL } from "./Header";
@@ -61,6 +62,8 @@ export interface CommandContext {
   /** Absent for a plain student: they have no other view to switch to. */
   onToggleStudentView?: () => void;
   courses: CourseSummary[];
+  /** The teacher's question pools; absent for a student (WP7). */
+  pools?: PoolSummary[];
   themeChoice: ThemeChoice;
   resolvedTheme: Theme;
   setThemeChoice: (c: ThemeChoice) => void;
@@ -71,6 +74,9 @@ export interface CommandContext {
 
 /** Id prefix of the per-classroom commands; the cap below recognizes them by it. */
 export const CLASSROOM_COMMAND_PREFIX = "classroom:";
+
+/** Id prefix of the per-pool commands (WP7). */
+export const POOL_COMMAND_PREFIX = "pool:";
 
 /**
  * How many classrooms the palette lists while nothing is typed. A teacher can
@@ -119,6 +125,25 @@ export function buildCommands(ctx: CommandContext): Command[] {
   }
 
   if (ctx.teacherUi) {
+    commands.push({
+      id: "nav:pools",
+      label: t("pools.title"),
+      icon: FolderTree,
+      group: "navigate",
+      run: () => navigate({ view: "pools" }),
+    });
+    for (const pool of ctx.pools ?? []) {
+      commands.push({
+        id: `${POOL_COMMAND_PREFIX}${pool.id}`,
+        label: t("palette.openPool", { name: pool.name }),
+        hint: t(pool.questionCount === 1 ? "pools.questions.one" : "pools.questions", {
+          n: pool.questionCount,
+        }),
+        icon: FolderTree,
+        group: "navigate",
+        run: () => navigate({ view: "pool", id: pool.id }),
+      });
+    }
     for (const course of ctx.courses) {
       for (const room of course.classrooms) {
         commands.push({

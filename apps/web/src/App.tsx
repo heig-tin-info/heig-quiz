@@ -17,6 +17,13 @@ const StudentHome = lazy(() => import("./StudentHome").then((m) => ({ default: m
 const ClassroomView = lazy(() =>
   import("./ClassroomView").then((m) => ({ default: m.ClassroomView })),
 );
+// The pool screens (WP7): the teacher's authoring surface, one chunk each,
+// so a student — or a teacher who only runs quizzes — never downloads them.
+const PoolsPage = lazy(() => import("./pool/PoolsPage").then((m) => ({ default: m.PoolsPage })));
+const PoolView = lazy(() => import("./pool/PoolView").then((m) => ({ default: m.PoolView })));
+const QuestionEditor = lazy(() =>
+  import("./question/QuestionEditor").then((m) => ({ default: m.QuestionEditor })),
+);
 const SettingsPage = lazy(() => import("./SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const AdminPage = lazy(() => import("./AdminPanel").then((m) => ({ default: m.AdminPage })));
 // Development only. The chunk is still built in production (Vite has no way
@@ -114,6 +121,12 @@ export default function App() {
       <AdminPage />
     ) : route.view === "classroom" ? (
       <ClassroomView id={route.id} navigate={navigate} />
+    ) : route.view === "pools" ? (
+      <PoolsPage navigate={navigate} />
+    ) : route.view === "pool" ? (
+      <PoolView id={route.id} navigate={navigate} />
+    ) : route.view === "question" ? (
+      <QuestionEditor id={route.id} navigate={navigate} />
     ) : (
       <TeacherHome navigate={navigate} />
     );

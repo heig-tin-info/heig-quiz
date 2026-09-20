@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Library, Plus, School, Trash2, UserPlus, Users } from "lucide-react";
+import { FolderTree, Library, Link2, Plus, School, Trash2, Unlink, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 
-import type { CourseSummary } from "@quiz/contracts";
+import type { CourseDetail, CourseSummary, PoolSummary } from "@quiz/contracts";
 
 import { api, apiErrorMessage } from "./api";
 import { useConfirm } from "./confirm";
@@ -17,6 +17,7 @@ import {
   Menu,
   Modal,
   PageHeader,
+  Select,
   QueryError,
   SectionHeading,
   Skeleton,
@@ -202,6 +203,146 @@ function AddStaffModal({ course, onClose }: { course: CourseSummary; onClose: ()
   );
 }
 
+/**
+ * The pools a course draws from (F-POOL-05). `PUT /courses/:id/pools`
+ * replaces the WHOLE set in one call, so both the link and the unlink send
+ * the list the course should end up with — there is no add/remove route, and
+ * inventing one on the client would be a second way to do one thing.
+ */
+function CoursePools({
+  course,
+  navigate,
+}: {
+  course: CourseSummary;
+  navigate: (r: Route) => void;
+}) {
+  const t = useT();
+  const qc = useQueryClient();
+  const confirm = useConfirm();
+  const [linking, setLinking] = useState(false);
+  const [poolId, setPoolId] = useState("");
+
+  const detail = useQuery<CourseDetail>({
+    queryKey: ["course", course.id],
+    queryFn: () => api(`/app/api/courses/${course.id}`),
+  });
+  const pools = useQuery<PoolSummary[]>({
+    queryKey: ["pools"],
+    queryFn: () => api("/app/api/pools"),
+  });
+
+  const linked = detail.data?.pools ?? [];
+  const available = (pools.data ?? []).filter((p) => !linked.some((l) => l.id === p.id));
+
+  const setLinks = useMutation({
+    mutationFn: (poolIds: string[]) =>
+      api(`/app/api/courses/${course.id}/pools`, {
+        method: "PUT",
+        body: JSON.stringify({ poolIds }),
+      }),
+    onSuccess: async () => {
+      setLinking(false);
+      setPoolId("");
+      await qc.invalidateQueries({ queryKey: ["course", course.id] });
+    },
+  });
+
+  const unlink = async (pool: { id: string; name: string }) => {
+    const ok = await confirm({
+      title: t("pools.unlink"),
+      message: t("pools.unlinkConfirm", { name: pool.name, course: course.name }),
+      confirmLabel: t("pools.unlink"),
+      cancelLabel: t("common.cancel"),
+    });
+    if (ok) setLinks.mutate(linked.filter((l) => l.id !== pool.id).map((l) => l.id));
+  };
+
+  return (
+    <div className="mt-4 border-t border-line pt-3">
+      <div className="flex items-center gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-fg-faint">
+          {t("pools.link")}
+        </span>
+        <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setLinking(true)}>
+          <Link2 /> {t("pools.linkAction")}
+        </Button>
+      </div>
+      {detail.isLoading ? (
+        <Skeleton className="mt-2 h-6 w-48" />
+      ) : linked.length === 0 ? (
+        <p className="mt-1 text-[13px] text-fg-muted">{t("pools.linkNone")}</p>
+      ) : (
+        <ul className="mt-1 space-y-0.5">
+          {linked.map((pool) => (
+            <li key={pool.id} className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => navigate({ view: "pool", id: pool.id })}
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-[10px] px-2 py-1 text-left text-[13px] transition-colors hover:bg-surface-2"
+              >
+                <FolderTree className="size-3.5 shrink-0 text-fg-faint" />
+                <span className="min-w-0 flex-1 truncate font-medium">{pool.name}</span>
+                <span className="shrink-0 text-xs tabular-nums text-fg-muted">
+                  {t(pool.questionCount === 1 ? "pools.questions.one" : "pools.questions", {
+                    n: pool.questionCount,
+                  })}
+                </span>
+              </button>
+              <Menu
+                label={t("common.actions")}
+                items={[
+                  { label: t("pools.unlink"), icon: Unlink, danger: true, onSelect: () => void unlink(pool) },
+                ]}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {linking ? (
+        <Modal
+          title={t("pools.linkAction")}
+          onClose={() => setLinking(false)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setLinking(false)}>
+                {t("common.cancel")}
+              </Button>
+              <Button
+                loading={setLinks.isPending}
+                disabled={poolId === ""}
+                onClick={() => setLinks.mutate([...linked.map((l) => l.id), poolId])}
+              >
+                {t("pools.linkAction")}
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-3">
+            <Select
+              label={t("pools.linkPick")}
+              value={poolId}
+              onChange={(e) => setPoolId(e.target.value)}
+            >
+              <option value="">—</option>
+              {available.map((pool) => (
+                <option key={pool.id} value={pool.id}>
+                  {pool.name}
+                </option>
+              ))}
+            </Select>
+            {setLinks.isError ? (
+              <p className="text-[13px] text-danger">
+                {apiErrorMessage(setLinks.error, t("pools.linkSaveFailed"))}
+              </p>
+            ) : null}
+          </div>
+        </Modal>
+      ) : null}
+    </div>
+  );
+}
+
 function CourseCard({
   course,
   navigate,
@@ -340,6 +481,8 @@ function CourseCard({
           </div>
         </div>
       ) : null}
+
+      <CoursePools course={course} navigate={navigate} />
 
       {newRoom ? <NewClassroomModal course={course} onClose={() => setNewRoom(false)} /> : null}
       {newStaff ? <AddStaffModal course={course} onClose={() => setNewStaff(false)} /> : null}

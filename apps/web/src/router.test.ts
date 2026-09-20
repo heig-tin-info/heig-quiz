@@ -8,6 +8,9 @@ describe("routeToPath / parsePath", () => {
     { view: "settings" },
     { view: "admin" },
     { view: "classroom", id: "c-1" },
+    { view: "pools" },
+    { view: "pool", id: "p-1" },
+    { view: "question", id: "q-1" },
     { view: "devUi" },
   ];
 
@@ -21,6 +24,15 @@ describe("routeToPath / parsePath", () => {
     expect(parsePath("/")).toEqual({ view: "home" });
     expect(parsePath("/nope")).toEqual({ view: "home" });
     expect(parsePath("/classrooms")).toEqual({ view: "home" });
+  });
+
+  it("parses the pool routes, and /pools alone is the list", () => {
+    expect(parsePath("/pools")).toEqual({ view: "pools" });
+    expect(parsePath("/pools/p-1")).toEqual({ view: "pool", id: "p-1" });
+    expect(parsePath("/questions/q-1")).toEqual({ view: "question", id: "q-1" });
+    // The editor tab lives in the query string, not in the path.
+    expect(parsePath("/questions/q-1/edit")).toEqual({ view: "question", id: "q-1" });
+    expect(parsePath("/questions")).toEqual({ view: "home" });
   });
 
   it("parses the development gallery; App.tsx is what refuses it in production", () => {

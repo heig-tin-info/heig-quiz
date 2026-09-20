@@ -76,6 +76,49 @@ const scenes = [
   { name: "palette-many", role: "teacher", path: "/?many=1", fold: true, act: (p) => p.keyboard.press("Control+k") },
   { name: "palette-student", role: "student", path: "/", fold: true, act: (p) => p.keyboard.press("Control+k") },
 
+
+  // Pools, the question editors and the try panel (WP7). The mock question
+  // ids are stable: q1 code, q2 mcq, q3 short, q4 cloze.
+  { name: "pools", role: "teacher", path: "/pools" },
+  { name: "pools-empty", role: "teacher", path: "/pools?empty=1" },
+  { name: "pools-error", role: "teacher", path: "/pools?fail=1", settle: 2500 },
+  { name: "pool", role: "teacher", path: "/pools/p1" },
+  { name: "pool-empty", role: "teacher", path: "/pools/p1?empty=1", settle: 800 },
+  { name: "pool-error", role: "teacher", path: "/pools/p1?fail=1", settle: 2500 },
+  { name: "pool-loading", role: "teacher", path: "/pools/p1?slow=1", settle: 300 },
+  { name: "pool-many", role: "teacher", path: "/pools/p1?many=1" },
+  { name: "pool-filters", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("button", { name: /^filtres|^filters/i }).first().click() },
+  { name: "pool-panel", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("row", { name: /ptr-arith-01/ }).first().click() },
+  { name: "pool-bulk", role: "teacher", path: "/pools/p1", act: async (p) => {
+      await p.getByLabel(/ptr-arith-01/).first().check();
+      await p.getByLabel(/ptr-null-check/).first().check();
+    } },
+  { name: "pool-new-question", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("button", { name: /nouvelle question|new question/i }).first().click() },
+  { name: "pool-category-menu", role: "teacher", path: "/pools/p1", fold: true, act: (p) => openRowMenu(p, /^actions$/i) },
+
+  { name: "editor-mcq", role: "teacher", path: "/questions/q2" },
+  { name: "editor-code", role: "teacher", path: "/questions/q1", settle: 5000 },
+  { name: "editor-short", role: "teacher", path: "/questions/q3" },
+  { name: "editor-cloze", role: "teacher", path: "/questions/q4" },
+  { name: "editor-preview", role: "teacher", path: "/questions/q2", act: (p) => p.keyboard.press("Control+Shift+M") },
+  { name: "editor-publish", role: "teacher", path: "/questions/q2", fold: true, act: (p) => p.keyboard.press("Control+Shift+P") },
+  { name: "editor-versions", role: "teacher", path: "/questions/q1?tab=versions", settle: 3000 },
+  { name: "editor-loading", role: "teacher", path: "/questions/q2?slow=1", settle: 300 },
+  { name: "editor-error", role: "teacher", path: "/questions/q2?fail=1", settle: 2500 },
+
+  { name: "try-mcq", role: "teacher", path: "/questions/q2?tab=try" },
+  { name: "try-mcq-graded", role: "teacher", path: "/questions/q2?tab=try", act: async (p) => {
+      await p.getByRole("radio").first().check();
+      await p.getByRole("button", { name: /corriger|grade/i }).first().click();
+      // The verdict is a round trip away; 700 ms of grace is the act's own.
+      await p.waitForTimeout(1200);
+    } },
+  { name: "try-code-runner", role: "teacher", path: "/questions/q1?tab=try", settle: 5000, act: async (p) => {
+      await p.getByRole("button", { name: /corriger|grade/i }).first().click();
+      await p.waitForTimeout(1200);
+    } },
+  { name: "palette-pool", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.keyboard.press("Control+k") },
+
   // The primitive gallery (development route, teacher only)
   { name: "dev-ui", role: "teacher", path: "/dev/ui" },
   // The segmented control hides real radios (sr-only), so the label is what a
