@@ -2,7 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, BarChart3, ClipboardCheck, Send, Users } from "lucide-react";
 import { useState } from "react";
 
-import type { ByQuestion, ReleaseResponse, ResultsView as ResultsPayload } from "@quiz/contracts";
+import type {
+  ByQuestion,
+  EvaluationDetail,
+  ReleaseResponse,
+  ResultsView as ResultsPayload,
+} from "@quiz/contracts";
 
 import { api, apiErrorMessage } from "../api";
 import { useConfirm } from "../confirm";
@@ -99,6 +104,18 @@ export function ResultsView({
     release.mutate(on);
   };
 
+  /**
+   * The evaluation, for one thing only: which classroom to go back to. It is
+   * an aid, never an error state — the results render perfectly well without
+   * it, and the eyebrow simply stays a label until it arrives.
+   */
+  const evaluation = useQuery<EvaluationDetail>({
+    queryKey: ["evaluation", evaluationId],
+    queryFn: () => api(`/app/api/evaluations/${evaluationId}`),
+    retry: false,
+  });
+  const classroomId = evaluation.data?.evaluation.classroomId ?? null;
+
   const links = gradingLinks(evaluationId);
   useScreenCommands([
     {
@@ -141,7 +158,20 @@ export function ResultsView({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow={view.title}
+        eyebrow={
+          classroomId ? (
+            <button
+              type="button"
+              onClick={() => navigate({ view: "classroom", id: classroomId })}
+              className="hover:text-fg hover:underline"
+              title={t("results.classroom")}
+            >
+              {view.title}
+            </button>
+          ) : (
+            view.title
+          )
+        }
         title={t("results.title")}
         description={
           view.released && view.releasedAt

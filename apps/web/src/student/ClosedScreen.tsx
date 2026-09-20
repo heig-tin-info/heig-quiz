@@ -9,7 +9,7 @@
  * The three reasons read differently on purpose: "time is up" must say that
  * the answers WERE saved and handed in, because that is the fear.
  */
-import { Clock, Lock, Send } from "lucide-react";
+import { BarChart3, Clock, Lock, Send } from "lucide-react";
 
 import type { AttemptClosed } from "@quiz/contracts";
 
@@ -44,11 +44,20 @@ export function ClosedScreen({
   reason,
   title,
   onHome,
+  onResults,
 }: {
   reason: AttemptClosed["reason"];
   /** The evaluation's own title, so the page still says what ended. */
   title: string;
   onHome: () => void;
+  /**
+   * WP10: where the student's own feedback lives. Absent for a teacher
+   * preview, which has no attempt to show. It is offered even before the
+   * grades are out: the page asks the server, which answers `available:
+   * false` with a reason, and that reading is the reassurance the student
+   * came for.
+   */
+  onResults?: () => void;
 }) {
   const t = useT();
   const copy = COPY[reason];
@@ -59,9 +68,16 @@ export function ClosedScreen({
           icon={copy.icon}
           title={t(copy.title)}
           action={
-            <Button variant="primary" onClick={onHome}>
-              {t("player.closed.home")}
-            </Button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {onResults ? (
+                <Button variant="primary" onClick={onResults}>
+                  <BarChart3 /> {t("player.closed.results")}
+                </Button>
+              ) : null}
+              <Button variant={onResults ? "secondary" : "primary"} onClick={onHome}>
+                {t("player.closed.home")}
+              </Button>
+            </div>
           }
         >
           <span className="mb-1 block font-medium text-fg">{title}</span>

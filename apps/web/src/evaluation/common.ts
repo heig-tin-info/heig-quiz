@@ -53,6 +53,15 @@ export function isLive(state: EvaluationState): boolean {
   return state === "lobby" || state === "running" || state === "paused";
 }
 
+/**
+ * The states where the second half of an evaluation's life has something to
+ * show: the grading panel has answers to correct, the results a table to
+ * print. Before `closed` both would be empty by construction.
+ */
+export function isGraded(state: EvaluationState): boolean {
+  return state === "closed" || state === "grading" || state === "released";
+}
+
 /** The states whose dashboard is worth opening at all. */
 export function hasDashboard(summary: Pick<EvaluationSummary, "state">): boolean {
   return summary.state !== "draft";

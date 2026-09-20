@@ -18,6 +18,7 @@ import { KeyRound, Lock } from "lucide-react";
 import type { AttemptOrLobby } from "@quiz/contracts";
 
 import { ApiError, api } from "../api";
+import { feedbackLink } from "../grading";
 import { useT } from "../i18n";
 import type { Route } from "../router";
 import { Button, Card, EmptyState, Field, QueryError, Spinner } from "../ui";
@@ -131,5 +132,11 @@ export function AttemptPage({
       />
     );
   }
-  return <Player initial={data.view} onHome={home} />;
+  return (
+    <Player
+      initial={data.view}
+      onHome={home}
+      onResults={(attemptId) => navigate(feedbackLink(attemptId).route)}
+    />
+  );
 }

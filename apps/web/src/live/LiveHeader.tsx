@@ -1,8 +1,8 @@
-import { Clock, Maximize2, Minimize2, Pause, Play, Square } from "lucide-react";
+import { ClipboardCheck, Clock, Maximize2, Minimize2, Pause, Play, Square } from "lucide-react";
 
 import type { EvaluationState } from "@quiz/contracts";
 
-import { stateLabel, stateTone } from "../evaluation/common";
+import { isGraded, stateLabel, stateTone } from "../evaluation/common";
 import { useT } from "../i18n";
 import { Badge, Button, Countdown, IconButton, Menu, PageHeader } from "../ui";
 
@@ -15,6 +15,10 @@ import { Badge, Button, Countdown, IconButton, Menu, PageHeader } from "../ui";
  * primary at all — pausing, extending and closing are all secondary, because
  * none of them is what the screen is FOR. Closing is the one destructive
  * action and goes through a confirmation, never a single click.
+ *
+ * Once the quiz is closed the primary comes back, and it is the correction:
+ * the grid is a record at that point, and the teacher's next move is to grade
+ * (WP10). There is nothing else to press here, so the squint test is safe.
  */
 export interface LiveControls {
   start: () => void;
@@ -34,6 +38,7 @@ export function LiveHeader({
   controls,
   fullscreen,
   onToggleFullscreen,
+  onGoToGrading,
 }: {
   title: string;
   eyebrow?: React.ReactNode;
@@ -44,6 +49,8 @@ export function LiveHeader({
   controls: LiveControls;
   fullscreen: boolean;
   onToggleFullscreen: () => void;
+  /** WP10: shown as the primary once the evaluation is closed. */
+  onGoToGrading: () => void;
 }) {
   const t = useT();
   const running = state === "running";
@@ -65,6 +72,11 @@ export function LiveHeader({
       }
       actions={
         <>
+          {isGraded(state) ? (
+            <Button onClick={onGoToGrading}>
+              <ClipboardCheck /> {t("live.goToGrading")}
+            </Button>
+          ) : null}
           {lobby ? (
             <Button onClick={controls.start} loading={controls.busy}>
               <Play /> {t("live.start")}

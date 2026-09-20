@@ -60,7 +60,16 @@ function segmentsOf(state: PlayerState): Segment[] {
   }));
 }
 
-export function Player({ initial, onHome }: { initial: AttemptView; onHome: () => void }) {
+export function Player({
+  initial,
+  onHome,
+  onResults,
+}: {
+  initial: AttemptView;
+  onHome: () => void;
+  /** WP10: opens the student's own feedback on this attempt. */
+  onResults: (attemptId: string) => void;
+}) {
   const t = useT();
   const toast = useToast();
   const confirm = useConfirm();
@@ -117,7 +126,16 @@ export function Player({ initial, onHome }: { initial: AttemptView; onHome: () =
   }, [dispatch, toggleDone, submitting]);
 
   if (closed !== null) {
-    return <ClosedScreen reason={closed.reason} title={initial.evaluation.title} onHome={onHome} />;
+    return (
+      <ClosedScreen
+        reason={closed.reason}
+        title={initial.evaluation.title}
+        onHome={onHome}
+        // A teacher preview has no attempt of its own, so there is nothing
+        // to show them; every real attempt has a feedback page (WP10).
+        {...(initial.attempt.preview ? {} : { onResults: () => onResults(initial.attempt.id) })}
+      />
+    );
   }
 
   const previous = neighbour(state, -1);

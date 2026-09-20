@@ -166,11 +166,21 @@ export function buildCommands(ctx: CommandContext): Command[] {
   }
 
   // WP10: grading + results. Derived from the route and nothing else — the
-  // palette has no evaluation list to walk, but a teacher standing on one of
-  // the two screens of a closed evaluation must be able to reach the other
-  // without going back through the classroom.
-  if (ctx.teacherUi && (ctx.route.view === "grading" || ctx.route.view === "results")) {
-    const links = gradingLinks(ctx.route.evaluationId);
+  // palette has no evaluation list to walk, but a teacher standing on ANY
+  // screen of one evaluation must be able to reach its other three without
+  // going back through the classroom.
+  //
+  // Teacher-only, twice over: the student UI never mounts these screens, and
+  // in the teacher's own student view `teacherUi` is false, so the palette
+  // there offers exactly what a student's does.
+  const evaluationInView =
+    ctx.route.view === "grading" || ctx.route.view === "results"
+      ? ctx.route.evaluationId
+      : ctx.route.view === "evaluation" || ctx.route.view === "live"
+        ? ctx.route.id
+        : null;
+  if (ctx.teacherUi && evaluationInView !== null) {
+    const links = gradingLinks(evaluationInView);
     commands.push(
       {
         id: "nav:grading",

@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ClipboardList, Copy, MonitorPlay, Plus, Trash2 } from "lucide-react";
+import { BarChart3, ClipboardCheck, ClipboardList, Copy, MonitorPlay, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import type { EvaluationMode, EvaluationSummary } from "@quiz/contracts";
 
 import { api, apiErrorMessage } from "../api";
 import { useConfirm } from "../confirm";
+import { gradingLinks } from "../grading";
 import { useT } from "../i18n";
 import type { Route } from "../router";
 import {
@@ -24,7 +25,7 @@ import {
   Skeleton,
   T,
 } from "../ui";
-import { evaluationsKey, hasDashboard, isLive, stateLabel, stateTone } from "./common";
+import { evaluationsKey, hasDashboard, isGraded, isLive, stateLabel, stateTone } from "./common";
 
 /**
  * The evaluations of one classroom, under its roster.
@@ -148,8 +149,17 @@ export function EvaluationList({
     onSuccess: invalidate,
   });
 
-  const open = (row: EvaluationSummary) =>
-    navigate(isLive(row.state) ? { view: "live", id: row.id } : { view: "evaluation", id: row.id });
+  /**
+   * Where a row leads: the dashboard while the class is in it, the grading
+   * panel once it is closed — that is the work waiting — the results once
+   * they are published, and the configuration screen before any of that.
+   */
+  const open = (row: EvaluationSummary) => {
+    if (isLive(row.state)) return navigate({ view: "live", id: row.id });
+    if (!isGraded(row.state)) return navigate({ view: "evaluation", id: row.id });
+    const links = gradingLinks(row.id);
+    return navigate(row.state === "released" ? links.results : links.grading);
+  };
 
   /**
    * Secondary in the section header and primary only inside the empty state:
@@ -224,6 +234,24 @@ export function EvaluationList({
                     <Menu
                       label={t("live.row.actions", { name: row.title })}
                       items={[
+                        // WP10: once a quiz is closed, the two screens the
+                        // teacher actually wants are the correction and the
+                        // table — first in the menu, above the dashboard the
+                        // row no longer opens by itself.
+                        ...(isGraded(row.state)
+                          ? [
+                              {
+                                label: t("eval.grading"),
+                                icon: ClipboardCheck,
+                                onSelect: () => navigate(gradingLinks(row.id).grading),
+                              },
+                              {
+                                label: t("eval.results"),
+                                icon: BarChart3,
+                                onSelect: () => navigate(gradingLinks(row.id).results),
+                              },
+                            ]
+                          : []),
                         ...(hasDashboard(row)
                           ? [
                               {

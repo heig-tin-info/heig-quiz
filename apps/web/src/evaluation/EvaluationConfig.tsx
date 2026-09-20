@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Eye, MonitorPlay, Pencil, Trash2 } from "lucide-react";
+import { BarChart3, ClipboardCheck, Copy, Eye, MonitorPlay, Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import type { ClassroomDetail, EvaluationDetail } from "@quiz/contracts";
 
 import { api, apiErrorMessage } from "../api";
 import { useConfirm } from "../confirm";
+import { gradingLinks } from "../grading";
 import { useT } from "../i18n";
 import type { Route } from "../router";
 import { useSearchParam } from "../router";
@@ -21,7 +22,7 @@ import {
   Skeleton,
   Tabs,
 } from "../ui";
-import { evaluationKey, evaluationsKey, stateLabel, stateTone } from "./common";
+import { evaluationKey, evaluationsKey, isGraded, stateLabel, stateTone } from "./common";
 import { ItemsStep } from "./ItemsStep";
 import { LaunchStep } from "./LaunchStep";
 import { PreviewSheet } from "./PreviewSheet";
@@ -160,6 +161,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
 
   const data = detail.data;
   const evaluation = data.evaluation;
+  const links = gradingLinks(id);
 
   return (
     <div className="space-y-6">
@@ -185,12 +187,28 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
         }
         actions={
           <>
+            {/* WP10: once it is closed, the correction is where this screen
+                leads — the configuration is history at that point. */}
+            {isGraded(evaluation.state) ? (
+              <Button variant="secondary" onClick={() => navigate(links.grading)}>
+                <ClipboardCheck /> {t("eval.grading")}
+              </Button>
+            ) : null}
             <Button variant="secondary" onClick={() => setPreviewing(true)}>
               <Eye /> {t("eval.preview")}
             </Button>
             <Menu
               label={t("common.actions")}
               items={[
+                ...(isGraded(evaluation.state)
+                  ? [
+                      {
+                        label: t("eval.results"),
+                        icon: BarChart3,
+                        onSelect: () => navigate(links.results),
+                      },
+                    ]
+                  : []),
                 {
                   label: t("eval.dashboard"),
                   icon: MonitorPlay,

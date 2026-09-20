@@ -7,6 +7,7 @@ import type { DashboardRow, EvaluationDetail } from "@quiz/contracts";
 import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { dashboardKey, evaluationKey } from "../evaluation/common";
+import { gradingLinks } from "../grading";
 import { useT } from "../i18n";
 import { presence } from "../realtime/grid";
 import type { Route } from "../router";
@@ -232,6 +233,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
         controls={controls}
         fullscreen={fullscreen}
         onToggleFullscreen={toggleFullscreen}
+        onGoToGrading={() => navigate(gradingLinks(id).grading)}
       />
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">

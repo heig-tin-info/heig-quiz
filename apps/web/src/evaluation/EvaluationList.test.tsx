@@ -67,6 +67,49 @@ describe("EvaluationList", () => {
     expect(navigate).toHaveBeenLastCalledWith({ view: "live", id: id("evaluation", 2) });
   });
 
+  // WP10: the second half of an evaluation's life.
+  it("sends a closed one to the grading and a published one to the results", async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    mockFetch(
+      list([
+        summary({ state: "closed", title: "Closed quiz", attemptCount: 12 }),
+        summary({ id: id("evaluation", 2), state: "released", title: "Published quiz" }),
+      ]),
+    );
+    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={navigate} />);
+
+    await user.click(await screen.findByText("Closed quiz"));
+    expect(navigate).toHaveBeenLastCalledWith({ view: "grading", evaluationId: EVALUATION_ID });
+    await user.click(screen.getByText("Published quiz"));
+    expect(navigate).toHaveBeenLastCalledWith({
+      view: "results",
+      evaluationId: id("evaluation", 2),
+    });
+  });
+
+  it("offers both grading destinations in a closed row's menu, and neither in a draft's", async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    mockFetch(
+      list([
+        summary({ state: "closed", title: "Closed quiz" }),
+        summary({ id: id("evaluation", 2), state: "draft", title: "Draft quiz" }),
+      ]),
+    );
+    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={navigate} />);
+
+    await user.click(await screen.findByRole("button", { name: /Closed quiz/ }));
+    expect(await screen.findByRole("menuitem", { name: "Results" })).toBeInTheDocument();
+    await user.click(screen.getByRole("menuitem", { name: "Grading" }));
+    expect(navigate).toHaveBeenLastCalledWith({ view: "grading", evaluationId: EVALUATION_ID });
+
+    await user.click(screen.getByRole("button", { name: /Draft quiz/ }));
+    await waitFor(() => expect(screen.getByRole("menu")).toBeInTheDocument());
+    expect(screen.queryByRole("menuitem", { name: "Grading" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Results" })).not.toBeInTheDocument();
+  });
+
   it("creates one from the empty state and goes straight to its configuration", async () => {
     const user = userEvent.setup();
     const navigate = vi.fn();
