@@ -22,6 +22,9 @@ describe("app (without a database)", () => {
     // database every second and log one failure per task per tick. What this
     // file is about is the REQUEST path surviving a dead database.
     WORKER_MODE: "web",
+    // The scrape token of finding L2; without it `/metrics` wants an admin
+    // session, and a session cannot be minted without a database.
+    METRICS_TOKEN: "scrape-me",
   });
   let app: Awaited<ReturnType<typeof buildApp>>;
 
@@ -83,10 +86,29 @@ describe("app (without a database)", () => {
     expect(logged.at(-1)?.cause?.code).toBe("57P01");
   });
 
-  it("metrics exposes quiz_database_up", async () => {
-    const res = await app.inject({ method: "GET", url: "/metrics" });
-    expect(res.statusCode).toBe(200);
-    expect(res.body).toContain("quiz_database_up 0");
+  /**
+   * Finding L2: the scrape endpoint used to be public, and the default
+   * collectors publish the command line, the versions and the memory
+   * profile of the process.
+   */
+  it("metrics answers the Prometheus token, and nothing else", async () => {
+    const anonymous = await app.inject({ method: "GET", url: "/metrics" });
+    expect(anonymous.statusCode).toBe(401);
+
+    const wrong = await app.inject({
+      method: "GET",
+      url: "/metrics",
+      headers: { authorization: "Bearer not-the-token" },
+    });
+    expect(wrong.statusCode).toBe(401);
+
+    const scraped = await app.inject({
+      method: "GET",
+      url: "/metrics",
+      headers: { authorization: `Bearer ${config.METRICS_TOKEN}` },
+    });
+    expect(scraped.statusCode).toBe(200);
+    expect(scraped.body).toContain("quiz_database_up 0");
   });
 });
 

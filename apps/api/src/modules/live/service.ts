@@ -66,9 +66,11 @@ import {
 import { loadConfig, typeOf } from "../pool/config.js";
 import {
   applyState,
+  byId as evaluationById,
   feedbackOf,
   settingsOf,
   toEvaluation,
+  tryApplyState,
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
@@ -642,6 +644,46 @@ export function assertWritable(
   }
 }
 
+/**
+ * The lighter half of {@link assertWritable}, for what is not a write to an
+ * answer: the position, the journal and the sign of life.
+ *
+ * It allows a PAUSED evaluation — the student is still in the room, and
+ * their client keeps saying so (decision D17) — and refuses everything a
+ * finished attempt or a finished evaluation would otherwise keep writing:
+ * a submitted student must stop refreshing `present_at` and growing the
+ * journal for ever.
+ */
+export function isOpen(
+  evaluation: EvaluationRecord,
+  attempt: AttemptRecord,
+  now: Date,
+): boolean {
+  if (attempt.state !== "in_progress") return false;
+  if (evaluation.state !== "running" && evaluation.state !== "paused") return false;
+  return !pastGrace(attempt.deadlineAt, now);
+}
+
+/** {@link isOpen}, as the 410 of §4.7. */
+export function assertOpen(
+  evaluation: EvaluationRecord,
+  attempt: AttemptRecord,
+  now: Date,
+): void {
+  if (attempt.state !== "in_progress") {
+    throw new AttemptClosedError(
+      attempt.state === "submitted" ? "submitted" : "deadline",
+      attempt.deadlineAt,
+    );
+  }
+  if (evaluation.state !== "running" && evaluation.state !== "paused") {
+    throw new AttemptClosedError("evaluation_closed", attempt.deadlineAt);
+  }
+  if (pastGrace(attempt.deadlineAt, now)) {
+    throw new AttemptClosedError("deadline", attempt.deadlineAt);
+  }
+}
+
 async function itemOf(
   db: Db,
   evaluationId: string,
@@ -1095,7 +1137,10 @@ export async function resumeEvaluation(
   now: Date,
 ): Promise<EvaluationRecord> {
   const pausedFor = evaluation.pausedAt === null ? 0 : now.getTime() - evaluation.pausedAt.getTime();
-  const next = await applyState(db, evaluation, "running", now);
+  // Compare-and-set: a double-clicked resume (or a second ticker process)
+  // must not add the pause to every deadline twice.
+  const next = await tryApplyState(db, evaluation, "running", now);
+  if (next === null) return (await evaluationById(db, evaluation.id))!;
   if (pausedFor > 0) {
     await db
       .update(attempts)

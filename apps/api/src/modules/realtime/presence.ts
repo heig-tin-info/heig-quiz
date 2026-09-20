@@ -54,16 +54,26 @@ export class PresenceMap {
     return { evaluationId, userId, online: true, lastSeenAt: now };
   }
 
-  /** A connection closed. The user goes offline when the last one is gone. */
+  /**
+   * A connection closed. The user goes offline when the last one is gone.
+   *
+   * The record goes with it, and the room with the last record: this map is
+   * the only structure of the process that grows with every student of every
+   * evaluation ever opened. The durable "last sign of life" is
+   * `attempts.present_at`, which the dashboard falls back to.
+   */
   leave(evaluationId: string, userId: string, now: Date): PresenceChange | null {
     const room = this.rooms.get(evaluationId);
     const record = room?.get(userId);
     if (!room || !record) return null;
     record.connections = Math.max(0, record.connections - 1);
     record.lastSeenAt = now;
-    if (record.connections > 0 || !record.online) return null;
+    if (record.connections > 0) return null;
+    const wasOnline = record.online;
     record.online = false;
-    return { evaluationId, userId, online: false, lastSeenAt: now };
+    room.delete(userId);
+    if (room.size === 0) this.rooms.delete(evaluationId);
+    return wasOnline ? { evaluationId, userId, online: false, lastSeenAt: now } : null;
   }
 
   /** A heartbeat on an open connection (a clock frame went out). */

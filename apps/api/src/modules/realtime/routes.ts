@@ -25,7 +25,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { ServerResponse } from "node:http";
 import { and, eq } from "drizzle-orm";
 
-import { isStaffOnly, type ServerEvent } from "@quiz/contracts";
+import { WatchSubject, isStaffOnly, type ServerEvent } from "@quiz/contracts";
 
 import { iso } from "../../clock.js";
 import { classrooms, courses, enrollments, evaluations, pools } from "../../db/schema.js";
@@ -122,9 +122,10 @@ async function topicsOf(app: FastifyInstance, req: FastifyRequest): Promise<Set<
 async function resolveWatch(
   app: FastifyInstance,
   req: FastifyRequest,
-  raw: string,
+  subject: WatchSubject,
 ): Promise<{ watch: Watch; staff: boolean } | null> {
-  const [kind, id] = [raw.slice(0, raw.indexOf(":")), raw.slice(raw.indexOf(":") + 1)];
+  const separator = subject.indexOf(":");
+  const [kind, id] = [subject.slice(0, separator), subject.slice(separator + 1)];
   if (kind === "evaluation") {
     const scope = await reachable(app, req, id);
     if (!scope) return null;
@@ -248,7 +249,11 @@ export async function realtimePlugin(app: FastifyInstance) {
     let watch: Watch | null = null;
     let staff = me.role === "teacher" || me.role === "admin";
     if (raw !== null) {
-      const resolved = await resolveWatch(app, req, raw);
+      // The grammar is a contract (`WatchSubject`), not a `split(":")`:
+      // `attempt:not-a-uuid` used to reach the database and answer a 500.
+      const subject = WatchSubject.safeParse(raw);
+      if (!subject.success) return reply.code(400).send({ error: "validation" });
+      const resolved = await resolveWatch(app, req, subject.data);
       // An unreachable subject is a 404, exactly like a missing one.
       if (!resolved) return reply.code(404).send({ error: "not_found" });
       watch = resolved.watch;

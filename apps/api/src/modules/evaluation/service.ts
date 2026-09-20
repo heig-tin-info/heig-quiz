@@ -118,7 +118,8 @@ export const TRANSITIONS: Readonly<Record<EvaluationState, readonly EvaluationSt
   paused: ["running", "closed"],
   closed: ["draft", "grading", "released"],
   grading: ["closed", "released"],
-  released: ["released"],
+  // `released → closed` is the withdrawal of a release (`unreleaseResults`).
+  released: ["released", "closed"],
 };
 
 export function isLegalTransition(from: EvaluationState, to: EvaluationState): boolean {
@@ -452,16 +453,22 @@ export async function deleteEvaluation(db: Db, row: EvaluationRecord): Promise<v
 }
 
 /**
- * Applies a state change with its side effects on the row itself. The
- * side effects on the ATTEMPTS (starting them, shifting their deadlines,
+ * Applies a state change with its side effects on the row itself, ONLY if the
+ * row is still in the state the caller read. `null` means somebody else moved
+ * it first — a double-clicked `POST /resume`, or a second ticker process
+ * under `WORKER_MODE` — and the caller must then skip its own side effects,
+ * because they have already been applied once (a second `pausedFor` would
+ * double every deadline).
+ *
+ * The side effects on the ATTEMPTS (starting them, shifting their deadlines,
  * expiring them) belong to `modules/live/service.ts`, which calls this.
  */
-export async function applyState(
+export async function tryApplyState(
   db: Db,
   row: EvaluationRecord,
   to: EvaluationState,
   now: Date,
-): Promise<EvaluationRecord> {
+): Promise<EvaluationRecord | null> {
   const next: Partial<typeof evaluations.$inferInsert> = { state: to, updatedAt: now };
   if (to === "running") {
     if (row.startedAt === null) next.startedAt = now;
@@ -476,8 +483,27 @@ export async function applyState(
     next.pausedAt = null;
     next.closedAt = null;
   }
-  await db.update(evaluations).set(next).where(eq(evaluations.id, row.id));
+  const updated = await db
+    .update(evaluations)
+    .set(next)
+    // The compare-and-set: the row must still be where the caller saw it.
+    .where(and(eq(evaluations.id, row.id), eq(evaluations.state, row.state)))
+    .returning({ id: evaluations.id });
+  if (updated.length === 0) return null;
   return (await byId(db, row.id))!;
+}
+
+/**
+ * {@link tryApplyState} for a caller with nothing to undo: it hands back the
+ * row as it stands, moved or already moved by somebody else.
+ */
+export async function applyState(
+  db: Db,
+  row: EvaluationRecord,
+  to: EvaluationState,
+  now: Date,
+): Promise<EvaluationRecord> {
+  return (await tryApplyState(db, row, to, now)) ?? (await byId(db, row.id))!;
 }
 
 /** The authoring transitions of §4.3; guards included. */

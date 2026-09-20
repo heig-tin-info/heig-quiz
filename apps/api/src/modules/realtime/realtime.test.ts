@@ -102,6 +102,19 @@ describe("presence map", () => {
     expect(map.count("e")).toBe(0);
   });
 
+  /** Finding L4: the only structure that grew with every evaluation ever run. */
+  it("drops the record with the last connection, and the empty room with it", () => {
+    const map = new PresenceMap();
+    const at = new Date("2026-09-20T08:00:00.000Z");
+    map.join("e", "u1", at);
+    map.join("e", "u2", at);
+    expect(map.watchedEvaluations()).toEqual(["e"]);
+    map.leave("e", "u1", at);
+    expect(map.watchedEvaluations()).toEqual(["e"]);
+    map.leave("e", "u2", at);
+    expect(map.watchedEvaluations()).toEqual([]);
+  });
+
   it("sweeps a silent user offline exactly once", () => {
     const map = new PresenceMap();
     const at = new Date("2026-09-20T08:00:00.000Z");
@@ -203,6 +216,13 @@ describe("topic authorisation", () => {
       "evaluation:11111111-1111-4111-8111-111111111111",
     );
     expect(denied.statusCode).toBe(404);
+  });
+
+  /** Finding M4: `attempt:not-a-uuid` used to reach the database and 500. */
+  it("refuses a malformed watch subject with a 400", async () => {
+    expect((await openStream(teacher.headers, "attempt:not-a-uuid")).statusCode).toBe(400);
+    expect((await openStream(teacher.headers, "pool:whatever")).statusCode).toBe(400);
+    expect((await openStream(teacher.headers, "nonsense")).statusCode).toBe(400);
   });
 
   it("refuses an attempt that belongs to someone else", async () => {
@@ -313,6 +333,35 @@ describe("what a student is allowed to receive (§4.8)", () => {
     expect(studentStream.text).not.toContain("dashboard.cell");
     // …and the answer summary certainly never reaches the other student.
     expect(studentStream.text).not.toContain("typed something");
+  });
+
+  /**
+   * Finding M3: `attempt.closed` rode the evaluation topic for everybody, so
+   * every student in the room saw which classmate submitted, and when.
+   */
+  it("keeps attempt.closed for the attempt's owner and for the staff", async () => {
+    const live = await import("../live/service.js");
+    const row = await reload(server.app.db, seed.evaluationId);
+    const participant = (await live.participantOf(server.app.db, row, student.id))!;
+    const attempt = await live.ensureAttempt(server.app.db, row, participant, server.clock.now());
+
+    const teacherStream = await openStream(teacher.headers, `evaluation:${seed.evaluationId}`);
+    const peerStream = await openStream(student.headers, `evaluation:${seed.evaluationId}`);
+    const ownStream = await openStream(student.headers, `attempt:${attempt.id}`);
+    await settle();
+
+    bus.attemptClosed({
+      attemptId: attempt.id,
+      evaluationId: seed.evaluationId,
+      closedBy: "student",
+      now: server.clock.now(),
+    });
+    await settle();
+
+    expect(names(ownStream.text)).toContain("attempt.closed");
+    expect(names(teacherStream.text)).toContain("attempt.closed");
+    // The same student, watching only the evaluation, learns nothing.
+    expect(peerStream.text).not.toContain("attempt.closed");
   });
 
   it("delivers lobby.count and evaluation.state to both", async () => {

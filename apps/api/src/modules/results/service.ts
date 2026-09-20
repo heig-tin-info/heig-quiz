@@ -49,6 +49,7 @@ import {
   gradings,
 } from "../../db/schema.js";
 import {
+  applyState,
   feedbackOf,
   joinedItems,
   scaleOf,
@@ -250,7 +251,15 @@ export async function releaseResults(
   return { releasedAt, rows: computed.rows.length };
 }
 
-/** Withdrawing a release: the students stop seeing anything again. */
+/**
+ * Withdrawing a release: the students stop seeing anything again.
+ *
+ * The release pair is cleared FIRST and the state moved after, through
+ * `applyState` — the one definition of the arrow `released → closed`
+ * (§5.1). An interruption between the two therefore leaves an evaluation
+ * that says `released` but shows nothing, never one that says `closed` and
+ * still serves the grades.
+ */
 export async function unreleaseResults(
   db: Db,
   evaluation: EvaluationRecord,
@@ -258,14 +267,9 @@ export async function unreleaseResults(
 ): Promise<void> {
   await db
     .update(evaluations)
-    .set({
-      releasedAt: null,
-      releasedGrades: null,
-      modifiedAfterRelease: false,
-      state: "closed",
-      updatedAt: now,
-    })
+    .set({ releasedAt: null, releasedGrades: null, modifiedAfterRelease: false, updatedAt: now })
     .where(eq(evaluations.id, evaluation.id));
+  await applyState(db, evaluation, "closed", now);
 }
 
 /**

@@ -136,9 +136,12 @@ export function attemptClosed(input: {
     closedBy: input.closedBy,
     serverNow: iso(input.now),
   };
-  // Both the student (their own stream) and the dashboard need it, and the
-  // dashboard watches the evaluation, not each attempt.
-  emit(event, [attemptTopic(input.attemptId), evaluationTopic(input.evaluationId)]);
+  // The student's OWN stream gets it; the dashboard watches the evaluation
+  // and gets it too, but as a staff-only copy: on the evaluation topic this
+  // frame would otherwise tell every student in the room which classmate
+  // submitted, and when.
+  emit(event, [attemptTopic(input.attemptId)]);
+  emit(event, [evaluationTopic(input.evaluationId)], "staff");
 }
 
 /** Coalesced 250 ms per `(attemptId, itemId)`; staff connections only. */

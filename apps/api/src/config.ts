@@ -117,6 +117,14 @@ const EnvSchema = z.object({
   RUNNER_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
 
   /**
+   * Bearer token for `GET /metrics` (Prometheus, N-OPS). Empty — the default
+   * — means the endpoint is open to an ADMIN SESSION only; it is never
+   * public, because the default metrics carry the process's command line,
+   * versions and memory profile.
+   */
+  METRICS_TOKEN: z.string().default(""),
+
+  /**
    * Super administrator: the only email managed through the environment.
    * Teachers are managed in the database, from the admin screen.
    */

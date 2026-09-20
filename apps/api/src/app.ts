@@ -1,7 +1,12 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-import Fastify, { type FastifyError, type FastifyInstance } from "fastify";
+import Fastify, {
+  type FastifyError,
+  type FastifyInstance,
+  type FastifyReply,
+  type FastifyRequest,
+} from "fastify";
 import fastifyCookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
 import { sql } from "drizzle-orm";
@@ -15,6 +20,7 @@ import type { AppConfig } from "./config.js";
 import { createDb } from "./db/client.js";
 import { publish } from "./events.js";
 import { adminPlugin } from "./modules/admin.js";
+import { adminGuard } from "./modules/guards.js";
 import { avatarPlugin } from "./modules/avatar.js";
 import { coursesPlugin } from "./modules/courses.js";
 import { evaluationPlugin } from "./modules/evaluation/routes.js";
@@ -202,7 +208,18 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
     return reply.code(databaseOk ? 200 : 503).send(body);
   });
 
-  app.get("/metrics", async (_req, reply) => {
+  /**
+   * The scrape endpoint is NOT public (the default collectors publish the
+   * command line, the versions and the memory profile of the process): a
+   * `METRICS_TOKEN` bearer for Prometheus, an admin session otherwise.
+   */
+  const metricsGuard = async (req: FastifyRequest, reply: FastifyReply) => {
+    const token = config.METRICS_TOKEN;
+    if (token !== "" && req.headers.authorization === `Bearer ${token}`) return undefined;
+    return adminGuard(app)(req, reply);
+  };
+
+  app.get("/metrics", { preHandler: metricsGuard }, async (_req, reply) => {
     await checkDatabase();
     return reply.type(registry.contentType).send(await registry.metrics());
   });

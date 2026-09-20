@@ -153,6 +153,17 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
     });
     expect(stale.json()).toMatchObject({ accepted: false, revision: 4, payload: "Rome" });
 
+    // Finding M1: `revision` is an int4 in the database. A bigger one used to
+    // be a generic 500 from pg, and `2147483647` froze the item for good.
+    const absurd = await server.app.inject({
+      method: "PUT",
+      url: `/app/api/attempts/${attemptId}/answers/${itemId}`,
+      headers: student.headers,
+      payload: { payload: "overflow", revision: 2_147_483_648, clientTs: server.clock.now().toISOString() },
+    });
+    expect(absurd.statusCode).toBe(400);
+    expect(absurd.json().error).toBe("validation");
+
     const restored = await get(`/app/api/attempts/${attemptId}`, student.headers);
     expect(restored.json().kind).toBe("attempt");
     const item = restored.json().view.items.find((i: { id: string }) => i.id === itemId);
@@ -266,6 +277,17 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
     });
     expect(after.statusCode).toBe(410);
     expect(after.json().reason).toBe("submitted");
+
+    // Finding M7: the position and the journal are writes too. A submitted
+    // student kept refreshing `present_at` — so kept showing up as online —
+    // and kept growing the journal after the exam.
+    const moved = await post(`/app/api/attempts/${attemptId}/position`, student.headers, { itemId });
+    expect(moved.statusCode).toBe(410);
+    expect(moved.json().reason).toBe("submitted");
+    const journalled = await post(`/app/api/attempts/${attemptId}/events`, student.headers, {
+      kind: "visibility",
+    });
+    expect(journalled.statusCode).toBe(410);
   });
 
   it("closes the evaluation and leaves it closed", async () => {

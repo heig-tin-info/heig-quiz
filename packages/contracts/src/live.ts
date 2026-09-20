@@ -125,8 +125,14 @@ export type AttemptStartBody = z.infer<typeof AttemptStartBody>;
 export const AutosaveRequest = z.object({
   /** Validated server-side by `type.answerSchema`; never trusted here. */
   payload: z.unknown(),
-  /** Client-local monotonic counter; never resets for the life of the attempt. */
-  revision: z.number().int().min(1),
+  /**
+   * Client-local monotonic counter; never resets for the life of the attempt.
+   * Capped well under `int4`, which is what the column is: a revision the
+   * database cannot store would be a 500, and one at the very top of the
+   * range would freeze the item for the rest of the exam (the upsert only
+   * accepts a STRICTLY greater revision).
+   */
+  revision: z.number().int().min(1).max(2_000_000_000),
   clientTs: z.iso.datetime(),
 });
 export type AutosaveRequest = z.infer<typeof AutosaveRequest>;

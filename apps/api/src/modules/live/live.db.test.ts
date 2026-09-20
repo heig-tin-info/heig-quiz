@@ -321,6 +321,30 @@ describe("teacher controls (F-LIVE-11, F-LIVE-12)", () => {
     expect(after.deadlineAt!.getTime() - before.getTime()).toBe(120_000);
   });
 
+  /**
+   * Finding M8: `applyState` was an unconditional UPDATE, so two resumes on
+   * the same row — a double click, or two ticker processes — each added the
+   * pause to every deadline.
+   */
+  it("resumes once, whatever a double click says", async () => {
+    const { evaluation, attempt } = await running();
+    const before = attempt.deadlineAt!;
+    const paused = await service.pauseEvaluation(db, evaluation, clock.now());
+    clock.advance(120_000);
+
+    // Both calls hold the row they read while it was paused.
+    const [first, second] = await Promise.all([
+      service.resumeEvaluation(db, paused, clock.now()),
+      service.resumeEvaluation(db, paused, clock.now()),
+    ]);
+    expect(first.state).toBe("running");
+    expect(second.state).toBe("running");
+
+    const after = (await service.attemptById(db, attempt.id))!;
+    expect(after.deadlineAt!.getTime() - before.getTime()).toBe(120_000);
+    expect(after.extraS).toBe(120);
+  });
+
   it("extends every attempt, or exactly one (+1/+5/+10)", async () => {
     const seed = await seedLive(db, { students: 2 });
     const row = await applyState(db, await reload(db, seed.evaluationId), "running", clock.now());

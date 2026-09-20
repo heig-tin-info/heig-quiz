@@ -157,7 +157,11 @@ export async function livePlugin(app: FastifyInstance) {
     if (!params.success) return reply.code(404).send({ error: "not_found" });
     const scope = await ownAttempt(app, req, reply, params.data.id);
     if (!scope) return reply;
-    await service.markPresent(app.db, scope.attempt.id, now);
+    // A sign of life only counts while the attempt is live: a submitted
+    // student refreshing this page must not show up as online on the grid.
+    if (service.isOpen(scope.evaluation, scope.attempt, now)) {
+      await service.markPresent(app.db, scope.attempt.id, now);
+    }
     return service.attemptOrLobbyView(app.db, scope.evaluation, scope.attempt, now);
   });
 
@@ -223,6 +227,11 @@ export async function livePlugin(app: FastifyInstance) {
     if (!body.success) return invalid(reply, body.error);
     const scope = await ownAttempt(app, req, reply, params.data.id);
     if (!scope) return reply;
+    try {
+      service.assertOpen(scope.evaluation, scope.attempt, now);
+    } catch (error) {
+      return failure(reply, error, now);
+    }
     await service.setPosition(app.db, scope.attempt, body.data.itemId, now);
     return reply.code(204).send();
   });
@@ -253,6 +262,12 @@ export async function livePlugin(app: FastifyInstance) {
     if (!body.success) return invalid(reply, body.error);
     const scope = await ownAttempt(app, req, reply, params.data.id);
     if (!scope) return reply;
+    // The journal follows the attempt: once it is over, it stops growing.
+    try {
+      service.assertOpen(scope.evaluation, scope.attempt, now);
+    } catch (error) {
+      return failure(reply, error, now);
+    }
     const used = await service.countRecentEvents(
       app.db,
       scope.attempt.id,
