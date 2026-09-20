@@ -12,18 +12,37 @@
  * Scene flags, remembered the same way (`?empty=1`, `?empty=0` to clear):
  *
  *  - `empty` — nothing anywhere: no courses, no classrooms, no roster, no
- *    teachers, so every empty state is reachable;
+ *    teachers, no pool and no evaluation, so every empty state is reachable;
  *  - `fail`  — every GET under /app/api answers 500 (except /app/api/me and
  *    /app/api/config, so the shell still renders), for the error states;
  *  - `slow`  — 2.5 s of latency on every call, for the loading states;
  *  - `many`  — 8 courses, 30 classrooms, a 120-student roster on the first
- *    one and 70 questions in the first pool, for long lists, the sidebar and
- *    the cursor pagination of the pool table.
+ *    one and 70 questions in the first pool: long lists, the sidebar, the
+ *    cursor pagination of the pool table and the 120 × 10 live grid;
+ *  - `scene` — the student player's state, and only that one screen's:
+ *    `?scene=lobby|running|paused|closed|extend` (`running` by default).
  *
- * The pool half (WP7) carries real French content about C programming and
- * electronics, questions of all four types, their published versions, the
- * preview and the `try` grading — `code` answering the same
- * `runner_unavailable` a machine without a container engine answers.
+ * ONE dataset, in four labelled sections:
+ *
+ *   1. the session, courses, classrooms, roster and administration;
+ *   2. pools, categories and questions of the four types, with their
+ *      versions, the preview and the `try` grading — real French content
+ *      about C programming and electronics;
+ *   3. evaluations in every state, over the questions of section 2, plus the
+ *      live dashboard and the teacher's controls on it;
+ *   4. the student's home, lobby and player.
+ *
+ * Sections 3 and 4 share the questions of section 2: an item of an
+ * evaluation is frozen on a published version of a real question, so the
+ * dashboard, the inspect panel and the teacher's preview render what the
+ * pool actually holds rather than a second, parallel truth.
+ *
+ * Ids follow the same rule as the server. They are hand-written wherever a
+ * human types them into a URL (`p1`, `q2`, `r1`, and an evaluation is also
+ * addressable by its STATE — `/evaluations/running/live`), and real UUIDs
+ * wherever a frame of the SSE stream carries them: those are validated in the
+ * browser against `ServerEvent` and `DashboardView` (invariant 7), which a
+ * made-up id silently fails.
  */
 import {
   clozeStudentTemplate,
@@ -34,12 +53,18 @@ import {
 } from "@quiz/domain";
 import type {
   AdminTeacher,
+  AttemptView,
+  AutosaveResponse,
   ClassroomDetail,
   CourseSummary,
+  JoinResult,
+  LobbyView,
   Me,
   PublicConfig,
   RosterEntry,
+  ServerEvent,
   StudentClassroom,
+  StudentHome as StudentHomeData,
 } from "@quiz/contracts";
 
 type Role = Me["role"];
@@ -70,6 +95,23 @@ for (const name of FLAG_NAMES) {
   }
   flags[name] = localStorage.getItem(key) === "1";
 }
+
+/**
+ * The student player's scene, remembered the same way. It picks what the
+ * fake backend serves on ONE evaluation (section 4) and changes nothing
+ * anywhere else.
+ */
+type Scene = "lobby" | "running" | "paused" | "closed" | "extend";
+const SCENE_KEY = "quiz-mock-scene";
+const sceneParam = params.get("scene");
+if (sceneParam !== null) {
+  if (sceneParam === "" || sceneParam === "0") localStorage.removeItem(SCENE_KEY);
+  else localStorage.setItem(SCENE_KEY, sceneParam);
+  params.delete("scene");
+  urlDirty = true;
+}
+const scene = (localStorage.getItem(SCENE_KEY) ?? "running") as Scene;
+
 if (urlDirty) {
   const q = params.toString();
   window.history.replaceState(null, "", window.location.pathname + (q ? `?${q}` : ""));
@@ -77,6 +119,8 @@ if (urlDirty) {
 
 /** Latency of every mocked call: enough to see a skeleton under `?slow=1`. */
 const LATENCY = () => (flags.slow ? 2500 : 120 + Math.random() * 180);
+
+// --- 1. Session, courses, classrooms, roster, administration ---------------
 
 const H = 3_600_000;
 const D = 24 * H;
@@ -590,7 +634,7 @@ on("DELETE", "/app/api/admin/teachers/:gid", (m) => {
   return undefined;
 });
 
-// --- Pools, categories, questions (WP7) ------------------------------------
+// --- 2. Pools, categories, questions (WP7) --------------------------------
 //
 // The mock carries real French content — C programming and electronics, the
 // two courses above — because an empty-looking pool proves nothing about the
@@ -971,6 +1015,17 @@ const questions: MockQuestion[] = [
     explanation: "2^12 = 4096 paliers ; 3,3 V / 4096 ≈ 0,8 mV.",
   }),
 ];
+
+/**
+ * One published version is deprecated, like one question is unpublished: the
+ * amber badge of the pool table, of the evaluation's question picker and of
+ * its item table is then a state of the data rather than a prop.
+ */
+const deprecated = questions.find((q) => q.internalName === "fopen-modes")?.versions.at(-1);
+if (deprecated) {
+  deprecated.deprecatedAt = iso(-3 * D);
+  deprecated.deprecationNote = "Remplacée par une question sur les modes binaires.";
+}
 
 /** `?many=1`: a pool long enough to need the cursor and the "load more" row. */
 function inflatePool() {
@@ -1612,86 +1667,782 @@ on("PUT", "/app/api/courses/:id/pools", (m, body) => {
     .map(poolSummary);
 });
 
-// --- fetch / EventSource interception ---
+// --- 3. Evaluations, live dashboard (WP8) ----------------------------------
+//
+// Everything a teacher can configure and supervise, with enough data that the
+// five states of every surface are reachable without a backend: one
+// evaluation per state, and a running one at 24 students × 10 questions —
+// the size the grid has to stay usable at (120 × 10 under `?many=1`, which is
+// the roster the classroom above grows to).
+//
+// The items are frozen on the questions of section 2, by design: the item
+// table, the picker, the teacher's preview and the inspect panel of the
+// dashboard then all render the SAME four types on the SAME French content
+// the pool screens show, and there is exactly one place to edit when a
+// payload changes.
+//
+// Ids here are real UUIDs, not "e1": the SSE client validates every frame
+// against the `ServerEvent` schema of `@quiz/contracts` (invariant 7) and the
+// dashboard snapshot against `DashboardView`, so the mock has to speak the
+// same grammar as the server, down to the id format. The one exception is the
+// `questionId` an item points at, which is the pool's own `q3` — it never
+// travels on the stream.
 
-const realFetch = window.fetch.bind(window);
-window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
-  const raw = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-  const url = new URL(raw, window.location.origin);
-  if (!url.pathname.startsWith("/app/")) return realFetch(input, init);
-  await new Promise((r) => setTimeout(r, LATENCY()));
-  const method = (init?.method ?? "GET").toUpperCase();
-  // `?fail=1`: every read fails, except the session and the public config —
-  // the shell must still render so the failing page is the one under test.
-  if (
-    flags.fail &&
-    method === "GET" &&
-    url.pathname !== "/app/api/me" &&
-    url.pathname !== "/app/api/config"
-  ) {
-    return new Response(JSON.stringify({ message: "Simulated failure" }), {
-      status: 500,
-      headers: { "content-type": "application/json" },
-    });
-  }
-  let body: Record<string, unknown> = {};
-  if (typeof init?.body === "string" && init.body.startsWith("{")) {
-    try {
-      body = JSON.parse(init.body) as Record<string, unknown>;
-    } catch {
-      body = {};
+let uuidSeq = 0;
+const uuid = (): string =>
+  `00000000-0000-4000-8000-${(uuidSeq += 1).toString(16).padStart(12, "0")}`;
+
+const ADJECTIVES = ["calme", "vif", "patient", "curieux", "sobre", "franc", "alerte", "serein"];
+const ANIMALS = ["héron", "renard", "lynx", "martre", "bouquetin", "chamois", "castor", "milan"];
+/** Decision D20: a stable adjective+animal per row, never the student's name. */
+const pseudonymOf = (index: number) =>
+  `${ADJECTIVES[index % ADJECTIVES.length]} ${ANIMALS[(index * 3) % ANIMALS.length]}`;
+
+// --- The pool, seen from an evaluation -------------------------------------
+//
+// Four adapters, one per thing an item needs from the question it froze: what
+// the student sees, what the key is, what a student plausibly answered, and
+// the glyph the grid puts in a cell. The first two go through the very
+// functions of section 2 (`studentView`, and the `@quiz/domain` cloze
+// helpers), so nothing is described twice.
+
+/** The config an item is frozen on: the last published one, or the draft. */
+const frozenConfig = (q: MockQuestion): Record<string, unknown> =>
+  q.versions.at(-1)?.config ?? q.draft.config;
+
+/** The questions an evaluation may draw from: published, `p1` first. */
+function itemSource(): MockQuestion[] {
+  const published = questions.filter((q) => q.deletedAt === null && q.versions.length > 0);
+  const primary = published.filter((q) => q.poolId === "p1");
+  return primary.length > 0 ? primary : published;
+}
+
+const studentConfigOf = (q: MockQuestion): unknown => studentView(q, frozenConfig(q));
+
+/** The key, in the shape each type's `Review` reads (`solutionSchema`). */
+function solutionOf(q: MockQuestion): unknown {
+  const config = frozenConfig(q);
+  switch (q.type) {
+    case "mcq": {
+      const choices = (config.choices ?? []) as { correct: boolean }[];
+      return { correct: choices.flatMap((c, i) => (c.correct ? [i] : [])) };
+    }
+    case "short": {
+      const matchers = (config.matchers ?? []) as { value?: unknown }[];
+      return { expected: matchers.map((m) => String(m.value)) };
+    }
+    case "cloze": {
+      const parse = parseCloze(String(config.text ?? ""));
+      return { blanks: parse.blanks.map((b) => ({ index: b.index, expected: describeBlank(b) })) };
+    }
+    case "code": {
+      const tests = (config.tests ?? {}) as { compare?: unknown; cases?: CodeCaseLike[] };
+      return {
+        referenceSolution: String(config.referenceSolution ?? ""),
+        cases: (tests.cases ?? []).map((c) => ({
+          name: c.name,
+          stdin: c.stdin,
+          expected: c.expected,
+          points: c.points,
+          visible: c.visible,
+        })),
+        compare: tests.compare,
+      };
     }
   }
-  for (const r of routes) {
-    if (r.method !== method) continue;
-    const m = url.pathname.match(r.re);
-    if (!m) continue;
-    try {
-      const result = r.h(m, body, url);
-      if (result === undefined) return new Response(null, { status: 204 });
-      return new Response(JSON.stringify(result), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      });
-    } catch (e) {
-      if (e instanceof MockError) {
-        const payload =
-          e instanceof MockValidation
-            ? { error: "config_invalid", message: e.message, details: e.details }
-            : { message: e.message };
-        return new Response(JSON.stringify(payload), {
-          status: e.status,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      throw e;
+}
+
+type MockBlank = ReturnType<typeof parseCloze>["blanks"][number];
+
+/** What a student would type in one blank. A `select` stores the option INDEX. */
+function blankAnswer(blank: MockBlank): string {
+  switch (blank.kind) {
+    case "text":
+      return blank.answers[0] ?? "";
+    case "number":
+      return String(blank.value);
+    case "select":
+      return String(blank.correct[0] ?? 0);
+    case "regex":
+      return blank.pattern.replace(/[^\w ]/g, "");
+  }
+}
+
+/**
+ * One student's answer to one item. Two in three are the right one: a grid of
+ * nothing but wrong answers reads as a broken mock rather than as a hard
+ * question, and the teacher's eye is exactly what these screens are for.
+ */
+function answerOf(q: MockQuestion, seedValue: number): unknown {
+  const config = frozenConfig(q);
+  const wrong = seedValue % 3 === 0;
+  switch (q.type) {
+    case "mcq": {
+      const choices = (config.choices ?? []) as { correct: boolean }[];
+      const correct = Math.max(
+        choices.findIndex((c) => c.correct),
+        0,
+      );
+      const picked = wrong ? (correct + 1) % Math.max(choices.length, 1) : correct;
+      return { selected: [picked] };
+    }
+    case "short": {
+      const matchers = (config.matchers ?? []) as { value?: unknown }[];
+      const expected = String(matchers[0]?.value ?? "");
+      return { text: wrong ? `${expected}0` : expected };
+    }
+    case "cloze": {
+      const parse = parseCloze(String(config.text ?? ""));
+      // A blank left untouched is `null`, which is what an unfinished answer
+      // looks like on the wire.
+      return {
+        blanks: parse.blanks.map((b, i) => ((seedValue + i) % 4 === 0 ? null : blankAnswer(b))),
+      };
+    }
+    case "code":
+      return {
+        regions: splitTemplate(String(config.template ?? ""), "c")
+          .filter((s) => s.kind === "editable")
+          .map((s) => s.text),
+        lastRun: null,
+      };
+  }
+}
+
+/** One glyph or two for the grid cell (what `type.summarize` returns). */
+function summaryOf(q: MockQuestion, seedValue: number): string {
+  const answer = answerOf(q, seedValue);
+  switch (q.type) {
+    case "mcq":
+      return String.fromCharCode(65 + ((answer as { selected: number[] }).selected[0] ?? 0));
+    case "short":
+      return (answer as { text: string }).text.slice(0, 8);
+    case "cloze": {
+      const blanks = (answer as { blanks: (string | null)[] }).blanks;
+      return `${blanks.filter((b) => b !== null).length}/${blanks.length}`;
+    }
+    case "code": {
+      const cases = ((frozenConfig(q).tests ?? {}) as { cases?: unknown[] }).cases ?? [];
+      return `${cases.length === 0 ? 0 : 1 + (seedValue % cases.length)}/${cases.length}`;
     }
   }
-  console.warn(`[mock] no route for ${method} ${url.pathname}`);
-  return new Response(JSON.stringify({ message: "Not mocked" }), { status: 404 });
+}
+
+/** The pool question an item froze on, or null if the pool no longer has it. */
+const itemQuestion = (item: { questionId: string }): MockQuestion | null =>
+  questions.find((q) => q.id === item.questionId) ?? null;
+interface MockCell {
+  itemId: string;
+  status: "empty" | "seen" | "in_progress" | "done";
+  verdict: null;
+  points: null;
+  revision: number;
+  summary: string | null;
+}
+
+interface MockItem {
+  id: string;
+  position: number;
+  points: number;
+  milestone: boolean;
+  questionId: string;
+  questionVersionId: string;
+  type: string;
+  internalName: string;
+  versionNumber: number;
+  latestVersionNumber: number | null;
+  deprecated: boolean;
+}
+
+interface MockRowState {
+  attemptId: string | null;
+  userId: string;
+  displayName: string;
+  pseudonym: string;
+  state: "not_started" | "in_progress" | "submitted" | "expired";
+  online: boolean;
+  lastSeenAt: string | null;
+  deadlineAt: string | null;
+  timeBonusPercent: number;
+  points: null;
+  maxPoints: number;
+  cells: MockCell[];
+}
+
+interface MockEvaluation {
+  id: string;
+  classroomId: string;
+  title: string;
+  mode: "exam" | "exercise" | "poll";
+  state:
+    | "draft"
+    | "scheduled"
+    | "lobby"
+    | "running"
+    | "paused"
+    | "closed"
+    | "grading"
+    | "released";
+  settings: Record<string, unknown>;
+  gradingScale: Record<string, unknown>;
+  feedbackPolicy: Record<string, unknown>;
+  opensAt: string | null;
+  closesAt: string | null;
+  durationS: number | null;
+  accessCode: string | null;
+  ipAllowlist: string[];
+  startedAt: string | null;
+  pausedAt: string | null;
+  closedAt: string | null;
+  releasedAt: string | null;
+  modifiedAfterRelease: boolean;
+  createdAt: string;
+  items: MockItem[];
+  rows: MockRowState[];
+  present: number;
+}
+
+const defaultEvaluationSettings = () => ({
+  navigation: "free",
+  presentation: "zen",
+  lobby: "manual",
+  shuffleItems: false,
+  shuffleChoices: true,
+  timing: "duration",
+  showProgressBar: true,
+  logVisibility: true,
+  requireFullscreen: false,
+});
+
+/**
+ * The items of an evaluation, frozen on the published questions of the pool.
+ * `versionNumber` is the frozen one and `latestVersionNumber` what the pool
+ * published since: one item in five is deliberately left a version behind, so
+ * the stale badge and the one-click update are reachable without editing
+ * anything.
+ */
+function makeItems(count: number): MockItem[] {
+  const source = itemSource();
+  if (source.length === 0) return [];
+  return Array.from({ length: count }, (_, i) => {
+    const q = source[i % source.length]!;
+    const latest = q.versions.at(-1)!;
+    // Every third item is frozen one version behind, whenever the question
+    // has one: that is the stale badge and the one-click update.
+    const frozen = i % 3 === 0 && latest.number > 1 ? latest.number - 1 : latest.number;
+    return {
+      id: uuid(),
+      position: i + 1,
+      points: q.type === "code" ? 3 : 1 + (i % 3),
+      milestone: i === 4,
+      questionId: q.id,
+      questionVersionId: uuid(),
+      type: q.type,
+      internalName: q.internalName,
+      versionNumber: frozen,
+      latestVersionNumber: latest.number,
+      deprecated: latest.deprecatedAt !== null,
+    };
+  });
+}
+
+function makeRows(e: MockEvaluation, started: boolean): MockRowState[] {
+  const room = rooms.find((r) => r.id === e.classroomId);
+  const roster = (room?.roster ?? []).filter((s) => !s.staff);
+  const maxPoints = e.items.reduce((sum, i) => sum + i.points, 0);
+  return roster.map((student, index) => {
+    // A deterministic spread: some are ahead, some have not opened it.
+    const progress = started ? Math.min(e.items.length, Math.floor(rand() * (e.items.length + 2))) : 0;
+    const online = started ? rand() > 0.12 : rand() > 0.3;
+    const hasAttempt = started && progress > 0;
+    return {
+      attemptId: hasAttempt ? uuid() : null,
+      userId: uuid(),
+      displayName: `${student.nom}, ${student.prenom}`,
+      pseudonym: pseudonymOf(index),
+      state: !hasAttempt
+        ? "not_started"
+        : progress >= e.items.length
+          ? "submitted"
+          : "in_progress",
+      online,
+      lastSeenAt: online ? iso(-2000) : hasAttempt ? iso(-40_000) : null,
+      deadlineAt: hasAttempt ? iso(12 * 60_000 + index * 1000) : null,
+      timeBonusPercent: student.timeBonusPercent,
+      points: null,
+      maxPoints,
+      cells: e.items.map((item, i) => {
+        const status: MockCell["status"] =
+          i < progress - 1 ? "done" : i === progress - 1 ? "in_progress" : "empty";
+        return {
+          itemId: item.id,
+          status,
+          verdict: null,
+          points: null,
+          revision: status === "empty" ? 0 : 1 + i,
+          summary:
+            status === "done" && itemQuestion(item) !== null
+              ? summaryOf(itemQuestion(item)!, index + i)
+              : null,
+        };
+      }),
+    };
+  });
+}
+
+function makeEvaluation(
+  classroomId: string,
+  title: string,
+  state: MockEvaluation["state"],
+  itemCount: number,
+  extra: Partial<MockEvaluation> = {},
+): MockEvaluation {
+  const e: MockEvaluation = {
+    id: uuid(),
+    classroomId,
+    title,
+    mode: "exam",
+    state,
+    settings: defaultEvaluationSettings(),
+    gradingScale: { kind: "linear", rounding: "nearest" },
+    feedbackPolicy: {
+      when: "on_release",
+      showAnswer: true,
+      showKey: false,
+      showExplanation: false,
+      showHiddenCaseNames: true,
+      showTeacherComment: true,
+    },
+    opensAt: null,
+    closesAt: null,
+    durationS: 45 * 60,
+    accessCode: null,
+    ipAllowlist: [],
+    startedAt: null,
+    pausedAt: null,
+    closedAt: null,
+    releasedAt: null,
+    modifiedAfterRelease: false,
+    createdAt: iso(-10 * D),
+    items: [],
+    rows: [],
+    present: 0,
+    ...extra,
+  };
+  e.items = makeItems(itemCount);
+  const started =
+    state === "running" || state === "paused" || state === "closed" || state === "released";
+  e.rows = makeRows(e, started);
+  if (state === "closed" || state === "released") {
+    // Nothing is in flight once the ticker has closed everything: no
+    // countdown keeps running on a finished quiz.
+    for (const row of e.rows) {
+      if (row.state === "in_progress") row.state = "expired";
+      row.deadlineAt = null;
+    }
+  }
+  e.present = e.rows.filter((r) => r.online).length;
+  return e;
+}
+
+const evaluations: MockEvaluation[] = [];
+
+function seedEvaluations() {
+  const room = rooms[0];
+  if (!room) return;
+  evaluations.push(
+    makeEvaluation(room.id, "Quiz 1 — variables et types", "draft", 4),
+    makeEvaluation(room.id, "Quiz 2 — boucles", "scheduled", 6, {
+      opensAt: iso(2 * D),
+      closesAt: iso(2 * D + H),
+    }),
+    makeEvaluation(room.id, "Quiz 4 — chaînes", "lobby", 8),
+    makeEvaluation(room.id, "Quiz 3 — pointeurs et tableaux", "running", 10, {
+      startedAt: iso(-13 * 60_000),
+      closesAt: iso(12 * 60_000),
+    }),
+    makeEvaluation(room.id, "Exercice — allocation dynamique", "paused", 5, {
+      mode: "exercise",
+      startedAt: iso(-30 * 60_000),
+      closesAt: iso(8 * 60_000),
+      pausedAt: iso(-60_000),
+    }),
+    makeEvaluation(room.id, "Quiz 0 — prise en main", "closed", 5, {
+      startedAt: iso(-20 * D),
+      closedAt: iso(-20 * D + H),
+    }),
+    makeEvaluation(room.id, "Test d'entrée", "released", 6, {
+      startedAt: iso(-60 * D),
+      closedAt: iso(-60 * D + H),
+      releasedAt: iso(-59 * D),
+    }),
+  );
+}
+if (!flags.empty) seedEvaluations();
+
+/** The running evaluation is the one the fake stream keeps moving. */
+const runningEvaluation = () => evaluations.find((e) => e.state === "running") ?? null;
+
+/**
+ * Mock-only affordance: an evaluation is addressable by its STATE as well as
+ * by its id, so `/evaluations/running/live` and `/evaluations/lobby` are
+ * stable URLs for the screenshot script and for a quick look. The real API
+ * only knows uuids, and so does every id the mock puts on the wire.
+ */
+const findEvaluation = (key: string): MockEvaluation | null =>
+  evaluations.find((x) => x.id === key) ?? evaluations.find((x) => x.state === key) ?? null;
+
+const evaluationOr404 = (id: string) => {
+  const e = findEvaluation(id);
+  if (!e) throw new MockError(404, "Evaluation not found");
+  return e;
 };
 
-// SSE is a refresh hint channel; the mock simply never emits.
-class MockEventSource {
-  onmessage: ((e: MessageEvent) => void) | null = null;
-  onopen: (() => void) | null = null;
-  close() {}
-}
-(window as unknown as { EventSource: unknown }).EventSource = MockEventSource;
+const totalPointsOf = (e: MockEvaluation) => e.items.reduce((sum, i) => sum + i.points, 0);
+const attemptCountOf = (e: MockEvaluation) => e.rows.filter((r) => r.attemptId !== null).length;
 
-const active = FLAG_NAMES.filter((f) => flags[f]);
-console.info(
-  `[mock] persona: ${role} — switch with ?as=teacher|student|admin` +
-    `\n[mock] scene flags: ${active.length ? active.join(", ") : "none"} — ?empty=1 ?fail=1 ?slow=1 ?many=1 (append =0 to clear)`,
+const toEvaluation = (e: MockEvaluation) => ({
+  id: e.id,
+  classroomId: e.classroomId,
+  title: e.title,
+  mode: e.mode,
+  state: e.state,
+  settings: e.settings,
+  gradingScale: e.gradingScale,
+  feedbackPolicy: e.feedbackPolicy,
+  opensAt: e.opensAt,
+  closesAt: e.closesAt,
+  durationS: e.durationS,
+  accessCode: e.accessCode,
+  ipAllowlist: e.ipAllowlist,
+  startedAt: e.startedAt,
+  pausedAt: e.pausedAt,
+  closedAt: e.closedAt,
+  releasedAt: e.releasedAt,
+  modifiedAfterRelease: e.modifiedAfterRelease,
+  createdAt: e.createdAt,
+});
+
+const evaluationSummary = (e: MockEvaluation) => ({
+  id: e.id,
+  classroomId: e.classroomId,
+  title: e.title,
+  mode: e.mode,
+  state: e.state,
+  itemCount: e.items.length,
+  totalPoints: totalPointsOf(e),
+  attemptCount: attemptCountOf(e),
+  opensAt: e.opensAt,
+  closesAt: e.closesAt,
+  createdAt: e.createdAt,
+});
+
+const evaluationDetail = (e: MockEvaluation) => ({
+  evaluation: toEvaluation(e),
+  items: e.items.map((i) => ({ ...i })),
+  totalPoints: totalPointsOf(e),
+  staleItems: e.items
+    .filter((i) => i.latestVersionNumber !== null && i.latestVersionNumber > i.versionNumber)
+    .map((i) => i.id),
+  attemptCount: attemptCountOf(e),
+  editable: attemptCountOf(e) === 0,
+});
+
+const dashboardView = (e: MockEvaluation, includeAnswers: boolean) => {
+  const started = e.rows.filter((r) => r.attemptId !== null).length;
+  return {
+    evaluation: {
+      id: e.id,
+      state: e.state,
+      startedAt: e.startedAt,
+      pausedAt: e.pausedAt,
+      closesAt: e.closesAt,
+      serverNow: iso(0),
+    },
+    items: e.items.map((i) => ({
+      id: i.id,
+      position: i.position,
+      points: i.points,
+      type: i.type,
+      internalName: i.internalName,
+      milestone: i.milestone,
+    })),
+    rows: e.rows.map((r) => ({
+      ...r,
+      cells: r.cells.map((c) => ({ ...c, summary: includeAnswers ? c.summary : null })),
+    })),
+    totals: e.items.map((item) => {
+      const done = e.rows.filter(
+        (r) => r.cells.find((c) => c.itemId === item.id)?.status === "done",
+      ).length;
+      return {
+        itemId: item.id,
+        completion: started === 0 ? 0 : Math.round((done / started) * 100) / 100,
+        successRate: null,
+      };
+    }),
+  };
+};
+
+const attemptInspect = (e: MockEvaluation, attemptId: string) => {
+  const row = e.rows.find((r) => r.attemptId === attemptId);
+  if (!row) throw new MockError(404, "Attempt not found");
+  return {
+    attempt: {
+      id: attemptId,
+      userId: row.userId,
+      displayName: row.displayName,
+      pseudonym: row.pseudonym,
+      state: row.state,
+      startedAt: e.startedAt,
+      deadlineAt: row.deadlineAt,
+      submittedAt: row.state === "submitted" ? iso(-60_000) : null,
+    },
+    items: e.items.flatMap((item, i) => {
+      const q = itemQuestion(item);
+      if (q === null) return [];
+      const cell = row.cells.find((c) => c.itemId === item.id);
+      return [{
+        item: {
+          id: item.id,
+          position: item.position,
+          points: item.points,
+          type: item.type,
+          internalName: item.internalName,
+        },
+        studentConfig: studentConfigOf(q),
+        answer: cell && cell.status !== "empty" ? answerOf(q, i) : null,
+        revision: cell?.revision ?? 0,
+        markedDone: cell?.status === "done",
+        solution: solutionOf(q),
+      }];
+    }),
+    events: [{ kind: "visibility" as const, at: iso(-120_000), details: null }],
+    serverNow: iso(0),
+  };
+};
+
+const previewView = (e: MockEvaluation) => ({
+  attempt: {
+    id: "00000000-0000-4000-8000-0000000000ff",
+    state: "in_progress" as const,
+    startedAt: iso(0),
+    deadlineAt: iso(45 * 60_000),
+    lastItemId: null,
+    serverNow: iso(0),
+    preview: true,
+  },
+  evaluation: {
+    id: e.id,
+    title: e.title,
+    mode: e.mode,
+    state: e.state,
+    settings: e.settings,
+    feedbackPolicy: e.feedbackPolicy,
+    pausedAt: e.pausedAt,
+    totalPoints: totalPointsOf(e),
+  },
+  items: e.items.flatMap((item) => {
+    const q = itemQuestion(item);
+    if (q === null) return [];
+    return [{
+      id: item.id,
+      position: item.position,
+      points: item.points,
+      type: item.type,
+      milestone: item.milestone,
+      student: studentConfigOf(q),
+      answer: null,
+      revision: 0,
+      markedDone: false,
+      locked: false,
+    }];
+  }),
+});
+// --- Routes: evaluations --------------------------------------------------
+
+on("GET", "/app/api/classrooms/:id/evaluations", (m) =>
+  evaluations.filter((e) => e.classroomId === m.groups!.id).map(evaluationSummary),
 );
+on("POST", "/app/api/classrooms/:id/evaluations", (m, body) => {
+  const e = makeEvaluation(
+    roomOr404(m.groups!.id!).id,
+    String(body.title),
+    "draft",
+    0,
+    { mode: (body.mode as MockEvaluation["mode"]) ?? "exam" },
+  );
+  evaluations.push(e);
+  return toEvaluation(e);
+});
+on("GET", "/app/api/evaluations/:id", (m) => evaluationDetail(evaluationOr404(m.groups!.id!)));
+on("PATCH", "/app/api/evaluations/:id", (m, body) => {
+  const e = evaluationOr404(m.groups!.id!);
+  if (typeof body.title === "string") e.title = body.title;
+  if (body.settings) e.settings = { ...e.settings, ...(body.settings as object) };
+  if (body.feedbackPolicy) {
+    e.feedbackPolicy = { ...e.feedbackPolicy, ...(body.feedbackPolicy as object) };
+    // W5-18: an exam never stores `immediate`.
+    if (e.mode === "exam" && (e.feedbackPolicy as { when: string }).when === "immediate") {
+      (e.feedbackPolicy as { when: string }).when = "on_release";
+    }
+  }
+  if (body.gradingScale) e.gradingScale = body.gradingScale as Record<string, unknown>;
+  if ("opensAt" in body) e.opensAt = body.opensAt as string | null;
+  if ("closesAt" in body) e.closesAt = body.closesAt as string | null;
+  if ("durationS" in body) e.durationS = body.durationS as number | null;
+  if ("accessCode" in body) e.accessCode = body.accessCode as string | null;
+  return evaluationDetail(e);
+});
+on("DELETE", "/app/api/evaluations/:id", (m) => {
+  const i = evaluations.findIndex((e) => e.id === m.groups!.id);
+  if (i >= 0) evaluations.splice(i, 1);
+  return undefined;
+});
+on("POST", "/app/api/evaluations/:id/duplicate", (m, body) => {
+  const e = evaluationOr404(m.groups!.id!);
+  const copy = makeEvaluation(e.classroomId, String(body.title), "draft", e.items.length, {
+    mode: e.mode,
+  });
+  evaluations.push(copy);
+  return toEvaluation(copy);
+});
+on("POST", "/app/api/evaluations/:id/items/update-versions", (m, body) => {
+  const e = evaluationOr404(m.groups!.id!);
+  const ids = (body.itemIds as string[] | undefined) ?? null;
+  for (const item of e.items) {
+    if (ids !== null && !ids.includes(item.id)) continue;
+    if (item.latestVersionNumber !== null) item.versionNumber = item.latestVersionNumber;
+  }
+  return e.items.map((i) => ({ ...i }));
+});
+on("POST", "/app/api/evaluations/:id/items", (m, body) => {
+  const e = evaluationOr404(m.groups!.id!);
+  for (const questionId of (body.questionIds as string[] | undefined) ?? []) {
+    const q = questions.find((x) => x.id === questionId);
+    const latest = q?.versions.at(-1);
+    // A question that was never published cannot be added: the picker shows
+    // it disabled, and the API refuses it too (F-EVAL-03).
+    if (!q || !latest) continue;
+    e.items.push({
+      id: uuid(),
+      position: e.items.length + 1,
+      points: q.type === "code" ? 3 : 1,
+      milestone: false,
+      questionId: q.id,
+      questionVersionId: uuid(),
+      type: q.type,
+      internalName: q.internalName,
+      versionNumber: latest.number,
+      latestVersionNumber: latest.number,
+      deprecated: latest.deprecatedAt !== null,
+    });
+  }
+  return e.items.map((i) => ({ ...i }));
+});
+on("PATCH", "/app/api/evaluations/:id/items/:itemId", (m, body) => {
+  const e = evaluationOr404(m.groups!.id!);
+  const item = e.items.find((i) => i.id === m.groups!.itemId);
+  if (!item) throw new MockError(404, "Item not found");
+  if (typeof body.points === "number") item.points = body.points;
+  if (typeof body.milestone === "boolean") item.milestone = body.milestone;
+  return { ...item };
+});
+on("PUT", "/app/api/evaluations/:id/items/order", (m, body) => {
+  const e = evaluationOr404(m.groups!.id!);
+  const order = (body.itemIds as string[]) ?? [];
+  e.items.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+  e.items.forEach((i, index) => (i.position = index + 1));
+  return e.items.map((i) => ({ ...i }));
+});
+on("DELETE", "/app/api/evaluations/:id/items/:itemId", (m) => {
+  const e = evaluationOr404(m.groups!.id!);
+  e.items = e.items.filter((i) => i.id !== m.groups!.itemId);
+  e.items.forEach((i, index) => (i.position = index + 1));
+  return undefined;
+});
+on("POST", "/app/api/evaluations/:id/state", (m, body) => {
+  const e = evaluationOr404(m.groups!.id!);
+  e.state = body.to as MockEvaluation["state"];
+  return toEvaluation(e);
+});
+on("POST", "/app/api/evaluations/:id/preview", (m) => previewView(evaluationOr404(m.groups!.id!)));
 
-// ---------------------------------------------------------------------------
-// WP9: student player
-// ---------------------------------------------------------------------------
+// --- Routes: the teacher's controls on a live evaluation -------------------
+
+on("GET", "/app/api/evaluations/:id/dashboard", (m, _b, url) =>
+  dashboardView(evaluationOr404(m.groups!.id!), url.searchParams.get("includeAnswers") === "1"),
+);
+on("POST", "/app/api/evaluations/:id/start", (m) => {
+  const e = evaluationOr404(m.groups!.id!);
+  e.state = "running";
+  e.startedAt = iso(0);
+  e.closesAt = iso((e.durationS ?? 2700) * 1000);
+  e.rows = makeRows(e, true);
+  return toEvaluation(e);
+});
+on("POST", "/app/api/evaluations/:id/pause", (m) => {
+  const e = evaluationOr404(m.groups!.id!);
+  e.state = "paused";
+  e.pausedAt = iso(0);
+  return toEvaluation(e);
+});
+on("POST", "/app/api/evaluations/:id/resume", (m) => {
+  const e = evaluationOr404(m.groups!.id!);
+  e.state = "running";
+  e.pausedAt = null;
+  return toEvaluation(e);
+});
+on("POST", "/app/api/evaluations/:id/close", (m) => {
+  const e = evaluationOr404(m.groups!.id!);
+  e.state = "closed";
+  e.closedAt = iso(0);
+  for (const row of e.rows) {
+    if (row.state === "in_progress") row.state = "expired";
+  }
+  return toEvaluation(e);
+});
+on("POST", "/app/api/evaluations/:id/extend", (m, body) => {
+  const e = evaluationOr404(m.groups!.id!);
+  const ms = Number(body.minutes ?? 5) * 60_000;
+  const target = body.scope === "attempt" ? String(body.attemptId) : null;
+  let updated = 0;
+  for (const row of e.rows) {
+    if (row.deadlineAt === null) continue;
+    if (target !== null && row.attemptId !== target) continue;
+    row.deadlineAt = new Date(Date.parse(row.deadlineAt) + ms).toISOString();
+    updated += 1;
+  }
+  if (target === null && e.closesAt) {
+    e.closesAt = new Date(Date.parse(e.closesAt) + ms).toISOString();
+  }
+  return { updated, serverNow: iso(0) };
+});
+on("GET", "/app/api/evaluations/:id/attempts/:attemptId", (m) =>
+  attemptInspect(evaluationOr404(m.groups!.id!), m.groups!.attemptId!),
+);
+on("POST", "/app/api/evaluations/:id/attempts/:attemptId/close", (m) => {
+  const e = evaluationOr404(m.groups!.id!);
+  const row = e.rows.find((r) => r.attemptId === m.groups!.attemptId);
+  if (row) row.state = "expired";
+  return { state: row?.state ?? "expired", serverNow: iso(0) };
+});
+on("POST", "/app/api/evaluations/:id/attempts/:attemptId/reopen", (m) => {
+  const e = evaluationOr404(m.groups!.id!);
+  const row = e.rows.find((r) => r.attemptId === m.groups!.attemptId);
+  if (row) {
+    row.state = "in_progress";
+    row.deadlineAt = iso(10 * 60_000);
+  }
+  return { state: "in_progress", deadlineAt: row?.deadlineAt ?? null, serverNow: iso(0) };
+});
+
+// --- 4. The student: home, lobby and player (WP9) --------------------------
 //
 // The student persona's scenes: a home with three evaluations, the lobby, a
 // running attempt holding one question of every MVP type, a pause and a
-// closure. One extra scene flag drives them, remembered like the others:
+// closure. `?scene=` (read in section 0) picks which one the fake backend
+// serves:
 //
 //   ?scene=lobby | running | paused | closed | extend   (running by default)
 //
@@ -1699,49 +2450,29 @@ console.info(
 // `attempt.deadline` four seconds in, which is the only way to see the
 // countdown jump without a backend.
 //
-// The ids are real UUIDs on purpose: the SSE frames are validated against
-// `ServerEvent` (`packages/contracts`), which is exactly the check a hand
-// written id would silently fail.
-import type {
-  AttemptView,
-  AutosaveResponse,
-  JoinResult,
-  LobbyView,
-  ServerEvent,
-  StudentHome as StudentHomeData,
-} from "@quiz/contracts";
-
-type Wp9Scene = "lobby" | "running" | "paused" | "closed" | "extend";
-
-const WP9_SCENE_KEY = "quiz-mock-scene";
-const wp9SceneParams = new URLSearchParams(window.location.search);
-const wp9Requested = wp9SceneParams.get("scene");
-if (wp9Requested !== null) {
-  if (wp9Requested === "" || wp9Requested === "0") localStorage.removeItem(WP9_SCENE_KEY);
-  else localStorage.setItem(WP9_SCENE_KEY, wp9Requested);
-  wp9SceneParams.delete("scene");
-  const rest = wp9SceneParams.toString();
-  window.history.replaceState(null, "", window.location.pathname + (rest ? `?${rest}` : ""));
-}
-const wp9Scene = (localStorage.getItem(WP9_SCENE_KEY) ?? "running") as Wp9Scene;
-
-const WP9_EVAL = "11111111-1111-4111-8111-111111111111";
-const WP9_EVAL_NEXT = "11111111-1111-4111-8111-111111111112";
-const WP9_EVAL_PAST = "11111111-1111-4111-8111-111111111113";
-const WP9_ATTEMPT = "22222222-2222-4222-8222-222222222222";
-const WP9_PAST_ATTEMPT = "22222222-2222-4222-8222-222222222223";
-const wp9Item = (n: number) => `aaaaaaaa-0000-4000-8000-00000000000${n}`;
+// This one evaluation is NOT one of section 3's: it is the student's side of
+// the story, with its own uuid, its own attempt and payloads written by hand
+// rather than derived from a pool question — the player is the only screen
+// that shows all four types at once, and the four are chosen to be read side
+// by side. The teacher's evaluations stay addressable at the same time, so
+// `/evaluations/running/live` and `/take/1111…` both work in one browser.
+const STUDENT_EVAL = "11111111-1111-4111-8111-111111111111";
+const STUDENT_EVAL_NEXT = "11111111-1111-4111-8111-111111111112";
+const STUDENT_EVAL_PAST = "11111111-1111-4111-8111-111111111113";
+const STUDENT_ATTEMPT = "22222222-2222-4222-8222-222222222222";
+const STUDENT_PAST_ATTEMPT = "22222222-2222-4222-8222-222222222223";
+const studentItem = (n: number) => `aaaaaaaa-0000-4000-8000-00000000000${n}`;
 
 /** The evaluation's state follows the scene; everything else is fixed. */
-const wp9EvaluationState = () =>
-  wp9Scene === "lobby"
+const studentEvaluationState = () =>
+  scene === "lobby"
     ? ("lobby" as const)
-    : wp9Scene === "paused"
+    : scene === "paused"
       ? ("paused" as const)
       : ("running" as const);
 
 /** One question of each MVP type, in French, as `toStudent` would publish it. */
-const wp9Students: Record<number, unknown> = {
+const studentPayloads: Record<number, unknown> = {
   1: {
     prompt: "Quelle expression donne **l'adresse** de la variable `x` ?",
     mode: "single",
@@ -1814,28 +2545,28 @@ const wp9Students: Record<number, unknown> = {
 };
 
 /** The attempt's mutable half: what the student typed, and where they are. */
-const wp9Answers = new Map<string, { payload: unknown; revision: number; done: boolean }>();
-let wp9Position: string | null = wp9Item(1);
-const WP9_BASE_DEADLINE = now + 14 * 60_000 + 32_000;
-let wp9Deadline = WP9_BASE_DEADLINE;
+const studentAnswers = new Map<string, { payload: unknown; revision: number; done: boolean }>();
+let studentPosition: string | null = studentItem(1);
+const BASE_DEADLINE = now + 14 * 60_000 + 32_000;
+let studentDeadline = BASE_DEADLINE;
 
-const wp9AttemptView = (): AttemptView => ({
+const studentAttemptView = (): AttemptView => ({
   attempt: {
-    id: WP9_ATTEMPT,
+    id: STUDENT_ATTEMPT,
     // `closed` is the deadline case of F-LIVE-07: the server expired the
     // attempt while the evaluation itself is still running for the others.
-    state: wp9Scene === "closed" ? "expired" : "in_progress",
+    state: scene === "closed" ? "expired" : "in_progress",
     startedAt: iso(-6 * 60_000),
-    deadlineAt: new Date(wp9Deadline).toISOString(),
-    lastItemId: wp9Position,
+    deadlineAt: new Date(studentDeadline).toISOString(),
+    lastItemId: studentPosition,
     serverNow: new Date().toISOString(),
     preview: false,
   },
   evaluation: {
-    id: WP9_EVAL,
+    id: STUDENT_EVAL,
     title: "Quiz 3 — Pointeurs et lois fondamentales",
     mode: "exam",
-    state: wp9EvaluationState(),
+    state: studentEvaluationState(),
     settings: {
       navigation: "free",
       presentation: "zen",
@@ -1855,18 +2586,18 @@ const wp9AttemptView = (): AttemptView => ({
       showHiddenCaseNames: true,
       showTeacherComment: true,
     },
-    pausedAt: wp9Scene === "paused" ? iso(-30_000) : null,
+    pausedAt: scene === "paused" ? iso(-30_000) : null,
     totalPoints: 10,
   },
   items: [1, 2, 3, 4].map((n) => {
-    const stored = wp9Answers.get(wp9Item(n));
+    const stored = studentAnswers.get(studentItem(n));
     return {
-      id: wp9Item(n),
+      id: studentItem(n),
       position: n,
       points: n === 4 ? 5 : n === 3 ? 1 : 2,
       type: n === 1 ? "mcq" : n === 2 ? "cloze" : n === 3 ? "short" : "code",
       milestone: n === 3,
-      student: wp9Students[n],
+      student: studentPayloads[n],
       answer: stored?.payload ?? null,
       revision: stored?.revision ?? 0,
       markedDone: stored?.done ?? false,
@@ -1875,9 +2606,9 @@ const wp9AttemptView = (): AttemptView => ({
   }),
 });
 
-const wp9LobbyView = (): LobbyView => ({
+const studentLobbyView = (): LobbyView => ({
   evaluation: {
-    id: WP9_EVAL,
+    id: STUDENT_EVAL,
     title: "Quiz 3 — Pointeurs et lois fondamentales",
     state: "lobby",
     announcedDurationS: 20 * 60,
@@ -1896,23 +2627,23 @@ on("GET", "/app/api/student/home", (): StudentHomeData => {
   return {
     open: [
       {
-        id: WP9_EVAL,
+        id: STUDENT_EVAL,
         title: "Quiz 3 — Pointeurs et lois fondamentales",
         mode: "exam",
-        state: wp9EvaluationState(),
+        state: studentEvaluationState(),
         ...room,
         opensAt: iso(-6 * 60_000),
         closesAt: iso(14 * 60_000),
         durationS: 20 * 60,
-        attemptId: wp9Scene === "lobby" ? null : WP9_ATTEMPT,
-        attemptState: wp9Scene === "lobby" ? null : "in_progress",
+        attemptId: scene === "lobby" ? null : STUDENT_ATTEMPT,
+        attemptState: scene === "lobby" ? null : "in_progress",
         grade: null,
-        deadlineAt: wp9Scene === "lobby" ? null : new Date(wp9Deadline).toISOString(),
+        deadlineAt: scene === "lobby" ? null : new Date(studentDeadline).toISOString(),
       },
     ],
     upcoming: [
       {
-        id: WP9_EVAL_NEXT,
+        id: STUDENT_EVAL_NEXT,
         title: "Série 4 — Récursivité",
         mode: "exercise",
         state: "scheduled",
@@ -1928,7 +2659,7 @@ on("GET", "/app/api/student/home", (): StudentHomeData => {
     ],
     past: [
       {
-        id: WP9_EVAL_PAST,
+        id: STUDENT_EVAL_PAST,
         title: "Quiz 2 — Tableaux et chaînes",
         mode: "exam",
         state: "released",
@@ -1936,7 +2667,7 @@ on("GET", "/app/api/student/home", (): StudentHomeData => {
         opensAt: iso(-8 * D),
         closesAt: iso(-8 * D + 20 * 60_000),
         durationS: 20 * 60,
-        attemptId: WP9_PAST_ATTEMPT,
+        attemptId: STUDENT_PAST_ATTEMPT,
         attemptState: "submitted",
         grade: null,
         deadlineAt: null,
@@ -1947,17 +2678,17 @@ on("GET", "/app/api/student/home", (): StudentHomeData => {
 });
 
 on("POST", "/app/api/evaluations/:id/attempt", () =>
-  wp9Scene === "lobby"
-    ? { kind: "lobby", view: wp9LobbyView() }
-    : { kind: "attempt", view: wp9AttemptView() },
+  scene === "lobby"
+    ? { kind: "lobby", view: studentLobbyView() }
+    : { kind: "attempt", view: studentAttemptView() },
 );
 
-on("GET", "/app/api/attempts/:id", () => wp9AttemptView());
+on("GET", "/app/api/attempts/:id", () => studentAttemptView());
 
 on("PUT", "/app/api/attempts/:id/answers/:itemId", (m, body): AutosaveResponse => {
   const itemId = m.groups!.itemId!;
   const revision = Number(body.revision ?? 1);
-  const stored = wp9Answers.get(itemId);
+  const stored = studentAnswers.get(itemId);
   // The same last-writer-wins rule as the server: a lower revision is stale
   // and comes back with what is stored (§4.7).
   if (stored && stored.revision >= revision) {
@@ -1968,20 +2699,20 @@ on("PUT", "/app/api/attempts/:id/answers/:itemId", (m, body): AutosaveResponse =
       serverNow: new Date().toISOString(),
     };
   }
-  wp9Answers.set(itemId, { payload: body.payload, revision, done: stored?.done ?? false });
+  studentAnswers.set(itemId, { payload: body.payload, revision, done: stored?.done ?? false });
   return { revision, accepted: true, serverNow: new Date().toISOString() };
 });
 
 on("POST", "/app/api/attempts/:id/answers/:itemId/done", (m, body) => {
   const itemId = m.groups!.itemId!;
-  const stored = wp9Answers.get(itemId) ?? { payload: null, revision: 0, done: false };
+  const stored = studentAnswers.get(itemId) ?? { payload: null, revision: 0, done: false };
   const done = body.done === true;
-  wp9Answers.set(itemId, { ...stored, done });
+  studentAnswers.set(itemId, { ...stored, done });
   return { done, nextItemId: null, serverNow: new Date().toISOString() };
 });
 
 on("POST", "/app/api/attempts/:id/position", (_m, body) => {
-  wp9Position = String(body.itemId);
+  studentPosition = String(body.itemId);
   return undefined;
 });
 
@@ -2025,109 +2756,289 @@ on("POST", "/app/api/join/:code", (m): JoinResult => ({
   courseCode: "PRG1",
   status: m.groups!.code!.toUpperCase() === "PRG1-2026" ? "already" : "joined",
 }));
+// --- The fetch interception ----------------------------------------------
 
-/**
- * The fake stream. It replaces the hint-only `MockEventSource` defined above
- * and keeps its behaviour for an unwatched connection, so nothing that worked
- * before changes: only `?watch=attempt:…` and `?watch=evaluation:…` grow a
- * body, and they emit the named frames of §4.8.
- */
-class Wp9EventSource {
+const realFetch = window.fetch.bind(window);
+window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const raw = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+  const url = new URL(raw, window.location.origin);
+  if (!url.pathname.startsWith("/app/")) return realFetch(input, init);
+  await new Promise((r) => setTimeout(r, LATENCY()));
+  const method = (init?.method ?? "GET").toUpperCase();
+  // `?fail=1`: every read fails, except the session and the public config —
+  // the shell must still render so the failing page is the one under test.
+  if (
+    flags.fail &&
+    method === "GET" &&
+    url.pathname !== "/app/api/me" &&
+    url.pathname !== "/app/api/config"
+  ) {
+    return new Response(JSON.stringify({ message: "Simulated failure" }), {
+      status: 500,
+      headers: { "content-type": "application/json" },
+    });
+  }
+  let body: Record<string, unknown> = {};
+  if (typeof init?.body === "string" && init.body.startsWith("{")) {
+    try {
+      body = JSON.parse(init.body) as Record<string, unknown>;
+    } catch {
+      body = {};
+    }
+  }
+  for (const r of routes) {
+    if (r.method !== method) continue;
+    const m = url.pathname.match(r.re);
+    if (!m) continue;
+    try {
+      const result = r.h(m, body, url);
+      if (result === undefined) return new Response(null, { status: 204 });
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    } catch (e) {
+      if (e instanceof MockError) {
+        const payload =
+          e instanceof MockValidation
+            ? { error: "config_invalid", message: e.message, details: e.details }
+            : { message: e.message };
+        return new Response(JSON.stringify(payload), {
+          status: e.status,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      throw e;
+    }
+  }
+  console.warn(`[mock] no route for ${method} ${url.pathname}`);
+  return new Response(JSON.stringify({ message: "Not mocked" }), { status: 404 });
+};
+
+// --- The fake SSE stream ---------------------------------------------------
+//
+// ONE `EventSource` for the three kinds of connection the app opens (§4.8),
+// because the browser has one too: `realtime/useEventStream` shares a single
+// socket between the shell and whichever screen is watching something.
+//
+//   - no `watch`    the shell's hint stream. The mock never sends a hint —
+//                   every mutation here mutates the store synchronously, so
+//                   there is nothing to re-fetch — but it does send the
+//                   `clock`, because thirty seconds without one is how the
+//                   client decides a socket is dead and reopens it;
+//   - `evaluation:` the teacher's dashboard (section 3): a `snapshot` seeding
+//                   the grid, then a trickle of `dashboard.cell` and
+//                   `dashboard.presence`, or a `lobby.count` climbing while
+//                   nobody has started. The student's own evaluation
+//                   (section 4) answers the same subject with the lobby it
+//                   is watching instead;
+//   - `attempt:`    the student's player (section 4): the attempt snapshot,
+//                   a beat a second, and whatever `?scene=` asks for — the
+//                   teacher granting time, the pause, the closure.
+//
+// The dashboard trickle is deliberately faster than the server's coalescing
+// (a cell a second instead of one per 250 ms per pair): the point is to SEE
+// the grid move while looking at it, not to reproduce a load profile.
+//
+// Every frame goes out through `emit`, which is typed `ServerEvent`: the
+// client validates each one against the same schema and drops what it cannot
+// read, so a frame this file got wrong would fail silently. The type is the
+// only thing that catches it.
+
+/** How often the fake stream emits, in ms. */
+const STREAM = { clock: 5_000, beat: 1_000, cell: 1_100, presence: 4_000, lobby: 3_000 };
+
+class MockEventSource {
   onmessage: ((e: MessageEvent) => void) | null = null;
   onopen: (() => void) | null = null;
   onerror: (() => void) | null = null;
-  private readonly listeners = new Map<string, Set<(e: MessageEvent) => void>>();
-  private readonly timers: ReturnType<typeof setTimeout>[] = [];
-  private beat: ReturnType<typeof setInterval> | null = null;
+  readonly url: string;
+  private readonly listeners = new Map<string, ((e: MessageEvent) => void)[]>();
+  private readonly intervals: ReturnType<typeof setInterval>[] = [];
+  private readonly timeouts: ReturnType<typeof setTimeout>[] = [];
+  private closed = false;
 
   constructor(url: string) {
-    const watch = new URL(url, window.location.origin).searchParams.get("watch");
-    setTimeout(() => {
-      this.onopen?.();
-      if (watch === null) return;
-      this.emit({
-        type: "snapshot",
-        serverNow: new Date().toISOString(),
-        subject: watch,
-        state: watch.startsWith("attempt:") ? wp9AttemptView() : wp9LobbyView(),
-      });
-      if (watch.startsWith("evaluation:")) {
-        this.emit({
-          type: "lobby.count",
-          evaluationId: WP9_EVAL,
-          present: 18,
-          enrolled: 24,
-        });
-      }
-      // A running attempt gets a beat a second (§4.8), which is what keeps
-      // the countdown honest on a browser with a wrong clock.
-      this.beat = setInterval(
-        () => this.emit({ type: "clock", serverNow: new Date().toISOString() }),
-        1000,
-      );
-      if (wp9Scene === "extend") {
-        this.timers.push(
-          setTimeout(() => {
-            // Assignment, not `+=`: React mounts effects twice in
-            // development, so two streams open and an increment would grant
-            // ten minutes instead of five.
-            wp9Deadline = WP9_BASE_DEADLINE + 5 * 60_000;
-            this.emit({
-              type: "attempt.deadline",
-              attemptId: WP9_ATTEMPT,
-              deadlineAt: new Date(wp9Deadline).toISOString(),
-              bonusS: 300,
-              reason: "teacher_extend",
-              serverNow: new Date().toISOString(),
-            });
-          }, 4000),
-        );
-      }
-      if (wp9Scene === "paused") {
-        this.emit({
-          type: "evaluation.state",
-          evaluationId: WP9_EVAL,
-          state: "paused",
-          pausedAt: new Date().toISOString(),
-          closesAt: null,
-          serverNow: new Date().toISOString(),
-        });
-      }
-      if (wp9Scene === "closed") {
-        this.emit({
-          type: "attempt.closed",
-          attemptId: WP9_ATTEMPT,
-          evaluationId: WP9_EVAL,
-          closedBy: "server",
-          serverNow: new Date().toISOString(),
-        });
-      }
-    }, 60);
-  }
-
-  private emit(event: ServerEvent): void {
-    const frame = { data: JSON.stringify(event) } as MessageEvent;
-    for (const fn of this.listeners.get(event.type) ?? []) fn(frame);
+    this.url = url;
+    this.after(60, () => this.start());
   }
 
   addEventListener(name: string, fn: (e: MessageEvent) => void): void {
-    const set = this.listeners.get(name) ?? new Set();
-    set.add(fn);
-    this.listeners.set(name, set);
+    this.listeners.set(name, [...(this.listeners.get(name) ?? []), fn]);
   }
 
   removeEventListener(name: string, fn: (e: MessageEvent) => void): void {
-    this.listeners.get(name)?.delete(fn);
+    this.listeners.set(name, (this.listeners.get(name) ?? []).filter((f) => f !== fn));
   }
 
   close(): void {
-    if (this.beat !== null) clearInterval(this.beat);
-    this.beat = null;
-    for (const timer of this.timers) clearTimeout(timer);
-    this.timers.length = 0;
+    this.closed = true;
+    for (const timer of this.intervals) clearInterval(timer);
+    for (const timer of this.timeouts) clearTimeout(timer);
+    this.intervals.length = 0;
+    this.timeouts.length = 0;
     this.listeners.clear();
   }
-}
-(window as unknown as { EventSource: unknown }).EventSource = Wp9EventSource;
 
-console.info(`[mock] student scene: ${wp9Scene} — ?scene=lobby|running|paused|closed|extend`);
+  /** The named frames of §4.8; the unnamed hint would go through `onmessage`. */
+  private emit(event: ServerEvent): void {
+    if (this.closed) return;
+    const frame = new MessageEvent(event.type, { data: JSON.stringify(event) });
+    for (const fn of this.listeners.get(event.type) ?? []) fn(frame);
+  }
+
+  private every(ms: number, fn: () => void): void {
+    this.intervals.push(setInterval(fn, ms));
+  }
+
+  private after(ms: number, fn: () => void): void {
+    this.timeouts.push(setTimeout(fn, ms));
+  }
+
+  private start(): void {
+    if (this.closed) return;
+    this.onopen?.();
+    const watch = new URL(this.url, window.location.origin).searchParams.get("watch");
+    const beat = watch !== null && watch.startsWith("attempt:") ? STREAM.beat : STREAM.clock;
+    const tick = () => this.emit({ type: "clock", serverNow: new Date().toISOString() });
+    tick();
+    this.every(beat, tick);
+    if (watch === null) return;
+    const id = watch.slice(watch.indexOf(":") + 1);
+    if (watch.startsWith("attempt:") || id === STUDENT_EVAL) {
+      this.student(watch);
+      return;
+    }
+    const evaluation = findEvaluation(id);
+    if (evaluation !== null) this.dashboard(watch, evaluation);
+  }
+
+  /** Section 4: the player and the lobby the student is looking at. */
+  private student(watch: string): void {
+    const attempt = watch.startsWith("attempt:");
+    this.emit({
+      type: "snapshot",
+      serverNow: new Date().toISOString(),
+      subject: watch,
+      state: attempt ? studentAttemptView() : studentLobbyView(),
+    });
+    if (!attempt) {
+      this.emit({ type: "lobby.count", evaluationId: STUDENT_EVAL, present: 18, enrolled: 24 });
+    }
+    if (scene === "extend") {
+      this.after(4000, () => {
+        // Assignment, not `+=`: React mounts effects twice in development, so
+        // two streams open and an increment would grant ten minutes instead
+        // of five.
+        studentDeadline = BASE_DEADLINE + 5 * 60_000;
+        this.emit({
+          type: "attempt.deadline",
+          attemptId: STUDENT_ATTEMPT,
+          deadlineAt: new Date(studentDeadline).toISOString(),
+          bonusS: 300,
+          reason: "teacher_extend",
+          serverNow: new Date().toISOString(),
+        });
+      });
+    }
+    if (scene === "paused") {
+      this.emit({
+        type: "evaluation.state",
+        evaluationId: STUDENT_EVAL,
+        state: "paused",
+        pausedAt: new Date().toISOString(),
+        closesAt: null,
+        serverNow: new Date().toISOString(),
+      });
+    }
+    if (scene === "closed") {
+      this.emit({
+        type: "attempt.closed",
+        attemptId: STUDENT_ATTEMPT,
+        evaluationId: STUDENT_EVAL,
+        closedBy: "server",
+        serverNow: new Date().toISOString(),
+      });
+    }
+  }
+
+  /** Section 3: one class of students working, seen from the teacher's grid. */
+  private dashboard(watch: string, evaluation: MockEvaluation): void {
+    this.emit({
+      type: "snapshot",
+      serverNow: new Date().toISOString(),
+      subject: watch,
+      // Always without the answers, exactly like the server: the stream does
+      // not know which toggles the teacher has on (`modules/realtime`).
+      state: dashboardView(evaluation, false),
+    });
+
+    if (evaluation.state === "lobby" || evaluation.state === "scheduled") {
+      this.every(STREAM.lobby, () => {
+        const enrolled = evaluation.rows.length;
+        evaluation.present = Math.min(enrolled, evaluation.present + (rand() < 0.6 ? 1 : 0));
+        this.emit({
+          type: "lobby.count",
+          evaluationId: evaluation.id,
+          present: evaluation.present,
+          enrolled,
+        });
+      });
+      return;
+    }
+    if (evaluation.state !== "running") return;
+
+    // One student advances by one question at a time, in the store as well as
+    // on the wire: a reload must not undo what the teacher watched happen.
+    this.every(STREAM.cell, () => {
+      const candidates = evaluation.rows.filter(
+        (r) => r.attemptId !== null && r.state === "in_progress",
+      );
+      const row = candidates[Math.floor(rand() * candidates.length)];
+      if (!row) return;
+      const index = row.cells.findIndex((c) => c.status !== "done");
+      const cell = row.cells[index];
+      const item = evaluation.items[index];
+      if (!cell || !item) return;
+      const question = itemQuestion(item);
+      cell.status = cell.status === "empty" ? "in_progress" : "done";
+      cell.revision += 1;
+      cell.summary =
+        cell.status === "done" && question !== null
+          ? summaryOf(question, index + cell.revision)
+          : null;
+      this.emit({
+        type: "dashboard.cell",
+        evaluationId: evaluation.id,
+        attemptId: row.attemptId!,
+        itemId: cell.itemId,
+        status: cell.status,
+        revision: cell.revision,
+        points: null,
+        summary: cell.summary,
+      });
+    });
+
+    this.every(STREAM.presence, () => {
+      const row = evaluation.rows[Math.floor(rand() * evaluation.rows.length)];
+      if (!row) return;
+      row.online = !row.online;
+      row.lastSeenAt = new Date().toISOString();
+      this.emit({
+        type: "dashboard.presence",
+        evaluationId: evaluation.id,
+        userId: row.userId,
+        online: row.online,
+        lastSeenAt: row.lastSeenAt,
+      });
+    });
+  }
+}
+(window as unknown as { EventSource: unknown }).EventSource = MockEventSource;
+
+const active = FLAG_NAMES.filter((f) => flags[f]);
+console.info(
+  `[mock] persona: ${role} — switch with ?as=teacher|student|admin` +
+    `\n[mock] scene flags: ${active.length ? active.join(", ") : "none"} — ?empty=1 ?fail=1 ?slow=1 ?many=1 (append =0 to clear)` +
+    `\n[mock] student scene: ${scene} — ?scene=lobby|running|paused|closed|extend`,
+);

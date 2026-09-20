@@ -1,0 +1,285 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ClipboardList, Copy, MonitorPlay, Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+
+import type { EvaluationMode, EvaluationSummary } from "@quiz/contracts";
+
+import { api, apiErrorMessage } from "../api";
+import { useConfirm } from "../confirm";
+import { useT } from "../i18n";
+import type { Route } from "../router";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  Menu,
+  Modal,
+  pressable,
+  QueryError,
+  SectionHeading,
+  Segmented,
+  Skeleton,
+  T,
+} from "../ui";
+import { evaluationsKey, hasDashboard, isLive, stateLabel, stateTone } from "./common";
+
+/**
+ * The evaluations of one classroom, under its roster.
+ *
+ * It is a list and not a grid of cards: what a teacher looks for here is one
+ * line — which quiz, in which state, how many students have taken it — and a
+ * table reads those four facts in one scan. The single action of the section
+ * is "New evaluation"; everything else is per row, in the overflow menu.
+ */
+
+function NewEvaluationModal({
+  classroomId,
+  onClose,
+  onCreated,
+}: {
+  classroomId: string;
+  onClose: () => void;
+  onCreated: (id: string) => void;
+}) {
+  const t = useT();
+  const qc = useQueryClient();
+  const [title, setTitle] = useState("");
+  const [mode, setMode] = useState<Exclude<EvaluationMode, "poll">>("exam");
+  const create = useMutation({
+    mutationFn: () =>
+      api<EvaluationSummary>(`/app/api/classrooms/${classroomId}/evaluations`, {
+        method: "POST",
+        body: JSON.stringify({ title: title.trim(), mode, preset: mode }),
+      }),
+    onSuccess: async (row) => {
+      await qc.invalidateQueries({ queryKey: evaluationsKey(classroomId) });
+      onCreated(row.id);
+    },
+  });
+  return (
+    <Modal
+      title={t("eval.new")}
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            {t("common.cancel")}
+          </Button>
+          <Button
+            onClick={() => create.mutate()}
+            loading={create.isPending}
+            disabled={title.trim() === ""}
+          >
+            {t("eval.create")}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <Field
+          label={t("eval.titleLabel")}
+          placeholder={t("eval.titlePlaceholder")}
+          required
+          fullWidth
+          autoFocus
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+        <div className="space-y-1.5">
+          <span className="text-[13px] font-medium">{t("eval.mode")}</span>
+          <div>
+            <Segmented
+              name="eval-mode"
+              value={mode}
+              onChange={setMode}
+              options={[
+                { value: "exam", label: t("eval.mode.exam") },
+                { value: "exercise", label: t("eval.mode.exercise") },
+              ]}
+            />
+          </div>
+          <p className="text-[13px] text-fg-muted">{t(`eval.mode.desc.${mode}`)}</p>
+        </div>
+        {create.isError ? (
+          <Alert tone="danger" title={t("eval.createFailed")}>
+            {apiErrorMessage(create.error, t("error.server"))}
+          </Alert>
+        ) : null}
+      </div>
+    </Modal>
+  );
+}
+
+export function EvaluationList({
+  classroomId,
+  navigate,
+}: {
+  classroomId: string;
+  navigate: (r: Route) => void;
+}) {
+  const t = useT();
+  const qc = useQueryClient();
+  const confirm = useConfirm();
+  const [creating, setCreating] = useState(false);
+
+  const list = useQuery<EvaluationSummary[]>({
+    queryKey: evaluationsKey(classroomId),
+    queryFn: () => api(`/app/api/classrooms/${classroomId}/evaluations`),
+  });
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: evaluationsKey(classroomId) });
+  const duplicate = useMutation({
+    mutationFn: (row: EvaluationSummary) =>
+      api(`/app/api/evaluations/${row.id}/duplicate`, {
+        method: "POST",
+        body: JSON.stringify({ title: t("eval.duplicateTitle", { title: row.title }) }),
+      }),
+    onSuccess: invalidate,
+  });
+  const remove = useMutation({
+    mutationFn: (row: EvaluationSummary) =>
+      api(`/app/api/evaluations/${row.id}`, {
+        method: "DELETE",
+        body: JSON.stringify({ confirmTitle: row.title }),
+      }),
+    onSuccess: invalidate,
+  });
+
+  const open = (row: EvaluationSummary) =>
+    navigate(isLive(row.state) ? { view: "live", id: row.id } : { view: "evaluation", id: row.id });
+
+  /**
+   * Secondary in the section header and primary only inside the empty state:
+   * the classroom page's one primary action is "Add students" — a roster is
+   * what unblocks everything else — and a second accent button beside it
+   * would make the squint test ambiguous.
+   */
+  const newButton = (variant: "primary" | "secondary") => (
+    <Button variant={variant} onClick={() => setCreating(true)}>
+      <Plus /> {t("eval.new")}
+    </Button>
+  );
+
+  return (
+    <section className="space-y-3">
+      <SectionHeading
+        icon={ClipboardList}
+        title={t("eval.title")}
+        count={list.data?.length}
+        actions={list.data && list.data.length > 0 ? newButton("secondary") : undefined}
+      />
+      {list.isLoading ? (
+        <Skeleton className="h-40 w-full" />
+      ) : list.isError || !list.data ? (
+        <QueryError
+          title={t("eval.notFound")}
+          error={list.error}
+          onRetry={() => void list.refetch()}
+          retrying={list.isFetching}
+          fallback={t("error.server")}
+        />
+      ) : list.data.length === 0 ? (
+        <Card>
+          <EmptyState icon={ClipboardList} title={t("eval.empty.title")} action={newButton("primary")}>
+            {t("eval.empty.body")}
+          </EmptyState>
+        </Card>
+      ) : (
+        <Card className="overflow-hidden">
+          <table className={T.table}>
+            <thead className={T.head}>
+              <tr>
+                <th className={T.th}>{t("eval.titleLabel")}</th>
+                <th className={T.th}>{t("eval.mode")}</th>
+                <th className={`${T.th} text-right`}>{t("eval.step.questions")}</th>
+                <th className={`${T.th} text-right`}>{t("eval.col.points")}</th>
+                <th className={`${T.th} text-right`}>{t("eval.col.attempts")}</th>
+                <th className={`${T.th} w-10`} />
+              </tr>
+            </thead>
+            <tbody>
+              {list.data.map((row) => (
+                <tr
+                  key={row.id}
+                  className={`${T.row} ${T.rowHover} cursor-pointer`}
+                  onClick={() => open(row)}
+                  {...pressable(() => open(row), "row")}
+                >
+                  <td className={T.td}>
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold">{row.title}</span>
+                      <Badge tone={stateTone(row.state)}>{stateLabel(row.state, t)}</Badge>
+                    </span>
+                  </td>
+                  <td className={`${T.td} text-fg-muted`}>{t(`eval.mode.${row.mode}`)}</td>
+                  <td className={`${T.td} text-right tabular-nums`}>{row.itemCount}</td>
+                  <td className={`${T.td} text-right tabular-nums`}>{row.totalPoints}</td>
+                  <td className={`${T.td} text-right tabular-nums`}>
+                    {row.attemptCount === 0 ? "—" : row.attemptCount}
+                  </td>
+                  <td className={`${T.td} text-right`} onClick={(e) => e.stopPropagation()}>
+                    <Menu
+                      label={t("live.row.actions", { name: row.title })}
+                      items={[
+                        ...(hasDashboard(row)
+                          ? [
+                              {
+                                label: t("eval.dashboard"),
+                                icon: MonitorPlay,
+                                onSelect: () => navigate({ view: "live", id: row.id }),
+                              },
+                            ]
+                          : []),
+                        {
+                          label: t("eval.configure"),
+                          icon: ClipboardList,
+                          onSelect: () => navigate({ view: "evaluation", id: row.id }),
+                        },
+                        {
+                          label: t("eval.duplicate"),
+                          icon: Copy,
+                          onSelect: () => duplicate.mutate(row),
+                        },
+                        {
+                          label: t("eval.delete"),
+                          icon: Trash2,
+                          danger: true,
+                          separator: true,
+                          onSelect: async () => {
+                            if (
+                              await confirm({
+                                title: t("eval.deleteConfirm", { name: row.title }),
+                                confirmLabel: t("common.delete"),
+                                cancelLabel: t("common.cancel"),
+                                danger: true,
+                              })
+                            ) {
+                              remove.mutate(row);
+                            }
+                          },
+                        },
+                      ]}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+      {creating ? (
+        <NewEvaluationModal
+          classroomId={classroomId}
+          onClose={() => setCreating(false)}
+          onCreated={(id) => {
+            setCreating(false);
+            navigate({ view: "evaluation", id });
+          }}
+        />
+      ) : null}
+    </section>
+  );
+}

@@ -65,6 +65,28 @@ const scenes = [
   { name: "classroom-menu", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /^actions$/i }).first().click() },
   { name: "classroom-row-menu", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => openRowMenu(p, /^Actions for /) },
 
+  // WP8: evaluation + dashboard. The mock addresses an evaluation by its
+  // state as well as by its id, so these URLs are stable across reloads.
+  { name: "eval-list", role: "teacher", path: "/classrooms/r1" },
+  { name: "eval-config-questions", role: "teacher", path: "/evaluations/draft?step=questions" },
+  { name: "eval-config-picker", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { name: /add questions/i }).first().click() },
+  { name: "eval-config-timing", role: "teacher", path: "/evaluations/draft?step=timing" },
+  { name: "eval-config-advanced", role: "teacher", path: "/evaluations/draft?step=timing", act: (p) => p.getByRole("button", { name: /^advanced options$/i }).first().click() },
+  { name: "eval-config-launch", role: "teacher", path: "/evaluations/draft?step=launch" },
+  { name: "eval-config-loading", role: "teacher", path: "/evaluations/draft?slow=1", settle: 300 },
+  { name: "eval-config-error", role: "teacher", path: "/evaluations/draft?fail=1", settle: 2500 },
+  { name: "eval-preview", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { name: /preview as student/i }).first().click() },
+  { name: "live-running", role: "teacher", path: "/evaluations/running/live" },
+  { name: "live-running-many", role: "teacher", path: "/evaluations/running/live?many=1" },
+  { name: "live-lobby", role: "teacher", path: "/evaluations/lobby/live" },
+  { name: "live-closed", role: "teacher", path: "/evaluations/closed/live" },
+  { name: "live-inspect", role: "teacher", path: "/evaluations/running/live", act: (p) => p.getByRole("button", { name: /· Question 1$/ }).first().click() },
+  { name: "live-extend-menu", role: "teacher", path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^extend$/i }).first().click() },
+  { name: "live-fullscreen", role: "teacher", path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^full screen$/i }).first().click() },
+  { name: "live-empty", role: "teacher", path: "/evaluations/running/live?empty=1", settle: 900 },
+  { name: "live-loading", role: "teacher", path: "/evaluations/running/live?slow=1", settle: 300 },
+  { name: "live-error", role: "teacher", path: "/evaluations/running/live?fail=1", settle: 2500 },
+
   // Student
   { name: "student-home", role: "student", path: "/" },
   { name: "student-empty", role: "student", path: "/?empty=1" },

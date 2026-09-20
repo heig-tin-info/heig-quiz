@@ -19,6 +19,11 @@ export type Route =
   | { view: "attempt"; evaluationId: string }
   /** The student's own feedback on a finished attempt. */
   | { view: "studentResults"; attemptId: string }
+  // WP8: evaluation + dashboard
+  /** The three-step configuration; the step lives in `?step=`. */
+  | { view: "evaluation"; id: string }
+  /** The live grid of one evaluation. */
+  | { view: "live"; id: string }
   /** Development only: the gallery of the shared primitives (App.tsx gates it). */
   | { view: "devUi" };
 
@@ -43,6 +48,11 @@ export function routeToPath(r: Route): string {
       return `/take/${r.evaluationId}`;
     case "studentResults":
       return `/results/${r.attemptId}`;
+    // WP8: evaluation + dashboard
+    case "evaluation":
+      return `/evaluations/${r.id}`;
+    case "live":
+      return `/evaluations/${r.id}/live`;
     case "devUi":
       return "/dev/ui";
   }
@@ -58,6 +68,12 @@ export function parsePath(path: string): Route {
   // WP9: student player
   if (parts[0] === "take" && parts[1]) return { view: "attempt", evaluationId: parts[1] };
   if (parts[0] === "results" && parts[1]) return { view: "studentResults", attemptId: parts[1] };
+  // WP8: evaluation + dashboard
+  if (parts[0] === "evaluations" && parts[1]) {
+    return parts[2] === "live"
+      ? { view: "live", id: parts[1] }
+      : { view: "evaluation", id: parts[1] };
+  }
   // Parsed in every build so the route is one pure function; App.tsx is what
   // refuses to render it outside development.
   if (parts[0] === "dev" && parts[1] === "ui") return { view: "devUi" };
