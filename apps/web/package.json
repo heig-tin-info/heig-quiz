@@ -17,7 +17,10 @@
     "@quiz/contracts": "workspace:*",
     "@quiz/domain": "workspace:*",
     "@tanstack/react-query": "^5.101.2",
+    "dompurify": "^3.4.15",
+    "katex": "^0.18.7",
     "lucide-react": "^1.23.0",
+    "marked": "^18.0.13",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"

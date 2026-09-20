@@ -1884,3 +1884,30 @@ Rule for contracts: a route is not "done" until its zod schemas are exported fro
 - Never read a module's `routes.ts` from another module: call its `service.ts`.
 - A table belongs to exactly one module; other modules read it by join, never write it.
 - Code, comments, commits and docs in English; UI strings through `t()` in `fr` + `en`.
+
+---
+
+## Deviations
+
+Append-only log of places where the implementation departs from the plan above.
+Each entry names the work package, what changed and why. Everything not listed
+here follows §1–§10 verbatim.
+
+### WP1 — `packages/core`, `packages/domain`, `packages/registry`
+
+| # | Plan | Implemented | Why |
+|---|---|---|---|
+| W1-1 | §1 lists `packages/core` exports `.` and `./client` | `.`, `./server` (the same module as `.`), `./client` and `./rng` | The WP1 brief requires an explicit `./server` entry; `./rng` makes the `@quiz/core/rng` import path of §7.5 real |
+| W1-2 | §7.1 puts `roundToTenth` in `grade.ts`, the §7 file list puts it in `round.ts` | `round.ts` owns `Rounding`, `roundToTenth`, `round2` and `clamp`; `grade.ts` imports them | The two statements contradict each other and a symbol cannot be exported twice through `index.ts` |
+| W1-3 | §1.1 exports `shuffle` | `shuffle`, plus `seededShuffle` as a documented alias | The WP1 brief names the function `seededShuffle`; both names denote the same function, so neither WP2..WP6 nor the supervisor has to adapt |
+| W1-4 | §1.5 `makeLookup(m: Record<string, T>)` | `makeLookup(m: Readonly<Record<string, T \| undefined>>)` | A registry that is still empty (or partial until WP3 lands) is typed `Partial<Record<QuestionTypeId, …>>`, which does not satisfy `Record<string, T>` under `exactOptionalPropertyTypes`. A full registry is still accepted unchanged |
+| W1-5 | §1.5 declares `QUESTION_TYPE_IDS` in `packages/registry/src/server.ts` | Declared in `@quiz/core` (it is the source of the `QuestionTypeId` union) and re-exported by `@quiz/registry/server` **and** `@quiz/registry/client` | Keeps the constant and the union from drifting. The import path named in the plan keeps working |
+| W1-6 | §1 file list names three error types | Adds `RunnerBusy` and an abstract `QuizCoreError` base | §1.7 requires the runner to throw `RunnerBusy` on a 429; the base class gives the API one `instanceof` to map to a status |
+| W1-7 | §1.2/§1.3 use `LlmGradeRequest` and `LlmService` without defining them | Minimal shapes in `packages/core/src/llm.ts`, marked Phase 2 | `GradeResult` and `GradeContext` do not compile without them. Phase 2 may change the shapes freely; nothing in the MVP constructs one |
+| W1-8 | The WP1 brief forbids `any` | Two aliases use it: `AnyQuestionTypeServer` and `AnyQuestionTypeClient` in `core/src/registry.ts` | As written in §1.5. A registry erases five unrelated type parameters, and `QuestionTypeServer`'s method parameters are contravariant, so `unknown` would make every concrete type unassignable. Confined to those two aliases; call sites go back through the concrete type via `loadConfig`/`saveConfig` |
+| W1-9 | D5 writes the cloze sentinel `⟦b<i>⟧`, §2.3 writes `⸢{index}⸣` | `⸢<index>⸣` (U+2E22, U+2E23), as §2.3 and as D5's own code points | The two spellings name the same code points; §2.3 is the precise one. `parseCloze` additionally strips those two characters from the authoring text so a teacher cannot conjure a phantom input |
+| W1-10 | §7.4 gives `attemptDeadline` / `bonusSeconds` inline input types | Named interfaces `BonusInput` and `DeadlineInput` (same fields) | Callers in WP5 need to name the type; the field list is unchanged |
+| W1-11 | §7 names one function per concern | Domain also exports `isPassing`, `remainingSeconds`, `truncateSelection`, `clozeTotalWeight`, `matchBlank`, `describeBlank`, `describeMatcher`, `hasLlmMatcher`, `isValidPattern`, `compileFullMatch`, `regionCount`, `emptyRegions`, `mainFileName`, `uniquePseudonyms` | Additions, never replacements: the qt packages and the grading worker need them, and they belong in the pure layer rather than in an API module |
+| W1-12 | §7.6 does not say what an empty series gives | `describe([])` returns `count: 0` and zeroes everywhere | Total function; the results screen shows a dash on `count === 0` |
+| W1-13 | §2.4 says a marker line is a line comment (`//`, `#`, `--`) | Per-language prefixes: `//` and `/* … */` for c/cpp/js, `//` for rust, `#` for python | `--` belongs to no MVP language; a C template commonly writes `/* @@lock */` |
+| W1-14 | — | `@quiz/domain` gains subpath exports (`@quiz/domain/grade`, `@quiz/domain/deadline`, …) next to `.` | §10 refers to `@quiz/domain/grade#gradeFromPoints`; the subpaths make that import real |

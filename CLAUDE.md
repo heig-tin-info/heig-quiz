@@ -36,8 +36,10 @@ apps/
   web/        React SPA (Vite, Tailwind, TanStack Query)
   runner/     code execution in containers — RAW MATERIAL ONLY, not wired up
 packages/
+  core/       the QuestionType contract, the seeded RNG, the runner interface
+  registry/   the two static question-type registries (./server, ./client)
   contracts/  zod schemas and payload types shared api <-> web
-  domain/     pure business rules (roster import today; scales, policies next)
+  domain/     pure business rules: grade scale, deadlines, policies, cloze, roster
 docs/
   spec/       the product specification (above)
   adr/        the architecture decisions inherited from heig-classroom
@@ -45,10 +47,15 @@ mockups/      HTML mockups of the target screens
 infra/        Keycloak development realm
 ```
 
-Packages still to create, in this order (`docs/spec/05-architecture.md`, 5.2):
-`packages/core` (the `QuestionType` contract and the two registries), then
-`packages/qt-mcq` as the first type, before any evaluation screen. Then
+Packages still to create, in this order (`docs/spec/05-architecture.md`, 5.2
+and `docs/PLAN-MVP.md` §8): `packages/qt-mcq`, `qt-short`, `qt-cloze` and
+`qt-code`, each registered in `packages/registry` in two places. Then
 `packages/canonical`, `packages/ui`, `packages/cli`.
+
+`packages/core` is split in two entry points: `@quiz/core/server` (no React,
+anywhere) and `@quiz/core/client` (React as type-only imports). The static
+wiring lives in `packages/registry` so that `core` never imports a `qt-*`
+package — the cycle that decision D1 breaks.
 
 `apps/runner/_from-codespace/` is the hardening material lifted from the
 sibling project's codespace app: the `c-dev` image, the seccomp profile, the

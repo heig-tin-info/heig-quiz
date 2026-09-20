@@ -6,7 +6,9 @@ FROM node:24-slim AS build
 RUN corepack enable pnpm
 WORKDIR /src
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY packages/core/package.json packages/core/
 COPY packages/domain/package.json packages/domain/
+COPY packages/registry/package.json packages/registry/
 COPY packages/contracts/package.json packages/contracts/
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
