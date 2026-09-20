@@ -27,7 +27,7 @@ raw values live in `src/style.css` and swap in dark mode without any
 | `line-strong` | `#d3cfc7` | `#3a3733` | input borders, focused hairlines |
 | `fg` | `#1a1917` | `#ecebe7` | text, and the timeline "now" marker (red there would read as one more bar) |
 | `fg-muted` | `#67635b` | `#a39e94` | secondary text, ≥ 4.5:1 on surface and surface-2 |
-| `fg-faint` | `#8f8a80` | `#6e6961` | captions, disabled, icons at rest; ≥ 3:1 on canvas |
+| `fg-faint` | `#726d64` | `#8d887f` | captions, disabled, icons at rest; ≥ 4.5:1 on canvas and surface |
 | `accent` | `#b41f24` | `#e85f64` | HEIG red (brand constraint): primary action, focus ring |
 | `accent-hover` | `#9a1b1f` | `#f0787c` | |
 | `accent-soft` | `#fbebeb` | `rgb(232 95 100 / 0.10)` | selected nav item, accent chips |
@@ -49,16 +49,21 @@ Components never write `text-white` on `bg-accent`, `bg-danger` or
 ### Measured contrast (WCAG 2.1 relative luminance)
 
 Every pair the design promises, computed on the values above (translucent
-`-soft` backgrounds composited over `surface`). Text pairs are held to 4.5:1, non-text ones (focus ring) to 3:1. `fg-faint` is decorative,
-but an icon button at rest is the only meaning it carries alone, so it is
-held to 3:1 on `canvas` and `surface`.
+`-soft` backgrounds composited over `surface`). Text pairs are held to 4.5:1,
+non-text ones (focus ring) to 3:1. `fg-faint` used to be held to 3:1 as a
+decorative tone — but a caption is read, not glanced at: "Choose one answer.",
+"14 minutes left" and a course code all live in it, and a reader who cannot
+make them out has lost the sentence, not an ornament. So it is held to 4.5:1
+on `canvas` and on `surface`, in both themes, and stays a clear step quieter
+than `fg-muted`. A caption that carries information a screen cannot repeat
+belongs in `fg-muted` anyway; `fg-faint` is for the ones that only support it.
 
 | Pair | Light before | Light after | Dark before | Dark after |
 | --- | --- | --- | --- | --- |
 | `fg-muted` on `surface` | 5.98 | 5.98 | 6.52 | 6.52 |
 | `fg-muted` on `surface-2` | 5.30 | 5.30 | 5.96 | 5.96 |
-| `fg-faint` on `surface` | 2.98 ✗ | **3.43** | 3.19 | 3.19 |
-| `fg-faint` on `canvas` | 2.73 ✗ | **3.15** | 3.44 | 3.44 |
+| `fg-faint` on `surface` | 3.43 ✗ | **5.14** | 3.19 ✗ | **4.94** |
+| `fg-faint` on `canvas` | 3.15 ✗ | **4.71** | 3.44 ✗ | **5.31** |
 | `success` on `success-soft` | 4.70 | 4.70 | 6.10 | 6.10 |
 | `warning` on `warning-soft` | 4.48 ✗ | **4.76** | 6.27 | 6.27 |
 | `danger` on `danger-soft` | 5.01 | 5.01 | 4.88 | 4.88 |
