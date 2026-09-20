@@ -250,7 +250,12 @@ export interface ClozeBlankResult {
   kind: ClozeBlank["kind"];
   ok: boolean;
   given: string | null;
-  /** Teacher-facing only: stripped from a student payload unless the feedback policy reveals the key. */
+  /**
+   * The key for this blank. Teacher-facing: `clozeServer.studentDetails`
+   * removes it from the breakdown a student receives unless the feedback
+   * policy publishes the key (`showKey`), and the `results` module strips it
+   * again on the way out.
+   */
   expected: string;
 }
 

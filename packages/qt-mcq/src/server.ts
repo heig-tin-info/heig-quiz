@@ -89,6 +89,18 @@ export const mcqServer: QuestionTypeServer<
 
   toSolution: (config) => ({ correct: correctIndices(config) }),
 
+  /**
+   * `details.correct` is the answer key, and the breakdown is served to the
+   * student by the feedback policy: it goes when the key is not published.
+   * `c`/`C` and `w`/`W` stay — they are the student's own score, which is
+   * what the review shows next to it.
+   */
+  studentDetails(details: McqDetails, policy): unknown {
+    if (policy.showKey) return details;
+    const { correct: _correct, ...rest } = details;
+    return rest;
+  },
+
   grade: (config, answer, ctx) => gradeMcq(config, answer, ctx.itemPoints),
 
   searchText: (config) => [config.prompt, ...config.choices.map((c) => c.text)].join("\n"),

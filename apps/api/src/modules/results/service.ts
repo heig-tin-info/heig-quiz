@@ -35,7 +35,7 @@ import type {
   StudentResultItem,
 } from "@quiz/contracts";
 import { describe, gradeFromPoints, histogram, round2 } from "@quiz/domain";
-import { studentDetails as codeStudentDetails, CodeDetails } from "@quiz/qt-code/server";
+import { CodeDetails } from "@quiz/qt-code/server";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -58,6 +58,7 @@ import {
 } from "../evaluation/service.js";
 import { pairKey, validatedGradings, verdictOf, type GradingRecord, type PairKey } from "../grading/service.js";
 import { solutionView, studentView } from "../live/studentView.js";
+import { typeOf } from "../pool/config.js";
 
 export class ResultsError extends Error {
   constructor(
@@ -497,22 +498,64 @@ export async function studentFeedback(
 /**
  * The per-type redaction of `gradings.details` (§4.6, decision D15).
  *
- * `code` is the only MVP type whose details hold a secret: the hidden cases'
- * expected and actual output. `studentDetails` (deviation W3-5) keeps
- * `{ name, ok, points }` for a hidden case and drops the bodies, and hides the
- * NAME too unless `showHiddenCaseNames`. `showKey` means the teacher chose to
- * publish the key, so the details travel whole.
+ * `gradings.details` is written by `type.grade` FOR THE TEACHER: it holds
+ * whatever justifies the score — the correct choices of an `mcq`, every
+ * expected blank of a `cloze`, which matcher a `short` answer hit, a `code`
+ * question's hidden cases. It is the one payload that does not travel through
+ * `toStudent`, so the policy is applied here, in two layers:
+ *
+ *   1. the type's own {@link QuestionTypeServer.studentDetails} hook, which
+ *      knows what its breakdown means and keeps the feedback that is not a
+ *      key (the verdicts, the student's own text, the case pass/fail);
+ *   2. a blind strip of {@link FORBIDDEN_DETAIL_KEYS}, so a type that gains a
+ *      key-bearing field and forgets the hook still cannot publish it.
+ *
+ * `showKey` means the teacher chose to publish the key: the details travel
+ * whole, both layers off.
  */
+export const FORBIDDEN_DETAIL_KEYS: readonly string[] = [
+  "correct",
+  "expected",
+  "matchers",
+  "pattern",
+  "referenceSolution",
+];
+
+const forbiddenDetailKeys = new Set(FORBIDDEN_DETAIL_KEYS);
+
+/**
+ * The safety net of layer 2, recursive and depth-capped like
+ * `stripMetadata`.
+ *
+ * One exception, and it is the published half of a `code` question: the
+ * expected output of a case the teacher marked `visible` is already in the
+ * student's own question payload (`toStudent`, deviation W3-4), so removing
+ * it here would only blank the comparison the review shows. A hidden case
+ * never carries one by the time it gets here — layer 1 removed it.
+ */
+export function stripDetailKeys(value: unknown, depth = 0): unknown {
+  if (depth > 12 || value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map((v) => stripDetailKeys(v, depth + 1));
+  const entries = value as Record<string, unknown>;
+  const published = entries["visible"] === true;
+  const out: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(entries)) {
+    if (forbiddenDetailKeys.has(key) && !(published && key === "expected")) continue;
+    out[key] = stripDetailKeys(child, depth + 1);
+  }
+  return out;
+}
+
 export function filterDetails(
   type: string,
   details: unknown,
   policy: FeedbackPolicy,
 ): unknown {
   if (details === null || details === undefined) return null;
-  if (type !== "code" || policy.showKey) return details;
-  const parsed = CodeDetails.safeParse(details);
-  if (!parsed.success) return details;
-  return codeStudentDetails(parsed.data, { showHiddenCaseNames: policy.showHiddenCaseNames });
+  if (policy.showKey) return details;
+  const hook = typeOf(type).studentDetails;
+  const shaped = hook ? hook(details, policy) : details;
+  return stripDetailKeys(shaped);
 }
 
 /** `GET /student/results` — one card per released evaluation the student took. */

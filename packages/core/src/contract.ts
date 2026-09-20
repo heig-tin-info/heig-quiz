@@ -90,6 +90,20 @@ export interface GradeContext {
 /** The context of the second half of a runner grading: no service is reachable from there. */
 export type FinalizeContext = Omit<GradeContext, "runner" | "llm">;
 
+/**
+ * What the feedback policy allows inside a grading `details` payload.
+ *
+ * It is the subset of `FeedbackPolicy` (`@quiz/contracts`) a question type
+ * needs to redact its own breakdown; `packages/core` does not import the
+ * contracts, and a type never sees the rest of the policy.
+ */
+export interface StudentDetailsPolicy {
+  /** The teacher publishes the answer key: the details may travel whole. */
+  showKey: boolean;
+  /** docs/06 Q8: the names of a `code` question's hidden cases. */
+  showHiddenCaseNames: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // QuestionTypeServer
 // ---------------------------------------------------------------------------
@@ -133,6 +147,17 @@ export interface QuestionTypeServer<
 
   /** Key + rationale for review, served ONLY when the feedback policy allows it. */
   toSolution(config: TConfig, view: StudentView): TSolution;
+
+  /**
+   * The grading breakdown as a STUDENT may read it (docs/05 §5.7).
+   *
+   * `details` is written by `grade` for the teacher, so it holds whatever the
+   * type needs to justify a score — the correct choices, the expected blanks,
+   * a hidden test's output. This hook is where the answer key comes back out
+   * of it when `policy.showKey` is false. Omitting it means "the breakdown
+   * holds no key"; the `results` module strips the forbidden keys either way.
+   */
+  studentDetails?(details: TDetails, policy: StudentDetailsPolicy): unknown;
 
   /** Phase 2 random values; absent in MVP packages. */
   randomize?(config: TConfig, seed: number): TConfig;

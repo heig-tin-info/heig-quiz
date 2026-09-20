@@ -83,6 +83,19 @@ export const clozeServer: QuestionTypeServer<
     })),
   }),
 
+  /**
+   * `perBlank[].expected` is the key, blank by blank. The verdict, the weight
+   * and what the student typed stay: they are the feedback. The expected
+   * value only travels when the teacher publishes the key.
+   */
+  studentDetails(details: ClozeDetails, policy): unknown {
+    if (policy.showKey) return details;
+    return {
+      ...details,
+      perBlank: details.perBlank.map(({ expected: _expected, ...rest }) => rest),
+    };
+  },
+
   grade: (config, answer, ctx) => gradeClozeAnswer(config, answer, ctx.itemPoints),
 
   /** The authoring text: the teacher searches for what they typed, blanks included. */

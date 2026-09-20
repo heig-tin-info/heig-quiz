@@ -74,6 +74,19 @@ export const shortServer: QuestionTypeServer<
 
   toSolution: (config) => ({ expected: expectedAnswers(config) }),
 
+  /**
+   * `matchedIndex` and `matchedKind` describe WHICH matcher accepted the
+   * answer — the rank of an alternative in the key and its nature (`regex`,
+   * `numeric`, …). Both go when the key is not published; the normalised
+   * text (the student's own) and the fraction stay, which is what the review
+   * needs to show the verdict.
+   */
+  studentDetails(details: ShortDetails, policy): unknown {
+    if (policy.showKey) return details;
+    const { matchedIndex: _index, matchedKind: _kind, ...rest } = details;
+    return rest;
+  },
+
   grade: (config, answer, ctx) => gradeShort(config, answer, ctx.itemPoints),
 
   /**

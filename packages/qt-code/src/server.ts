@@ -9,7 +9,7 @@ import { ConfigMigrationError, type RunnerOutcome } from "@quiz/core/server";
 import { splitTemplate } from "@quiz/domain";
 
 import { fromCanonical, toCanonical } from "./canonical.js";
-import { finalizeRunnerCode, gradeCode } from "./grade.js";
+import { finalizeRunnerCode, gradeCode, studentDetails } from "./grade.js";
 import {
   CODE_CONFIG_VERSION,
   CodeAnswer,
@@ -107,6 +107,18 @@ export const codeServer: QuestionTypeServer<
       })),
       compare: { ...config.tests.compare },
     };
+  },
+
+  /**
+   * Decision D15: a hidden case keeps its verdict and its points, and loses
+   * its name, its expected output and everything the code printed — unless
+   * the policy opens the names. A VISIBLE case travels whole: its expected
+   * output is published to the student by `toStudent` already (deviation
+   * W3-4). `showKey` means the teacher publishes the key, so nothing is cut.
+   */
+  studentDetails(details: CodeDetails, policy): unknown {
+    if (policy.showKey) return details;
+    return studentDetails(details, { showHiddenCaseNames: policy.showHiddenCaseNames });
   },
 
   grade(config: CodeConfig, answer: CodeAnswer | null, ctx: GradeContext) {
