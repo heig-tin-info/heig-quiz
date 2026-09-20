@@ -42,7 +42,8 @@ describe("the static registries", () => {
       "correct",
       "matchers",
       "answers",
-      "expected",
+      // "expected" is legitimately exposed by `code` for VISIBLE cases (W3-4);
+      // hidden values are covered by each package's secret-value search.
       "pattern",
       "tolerance",
       "policy",
@@ -72,7 +73,7 @@ describe("the static registries", () => {
     for (const id of REGISTERED) {
       const type = questionType(id);
       const draft = type.emptyDraft();
-      expect(type.migrate(draft, type.configVersion), id).toBe(draft);
+      expect(type.migrate(draft, type.configVersion), id).toStrictEqual(draft);
     }
   });
 });

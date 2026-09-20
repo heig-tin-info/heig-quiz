@@ -23,10 +23,10 @@ export type { QuestionTypeId } from "@quiz/core/client";
 
 export const clientRegistry: Partial<Record<QuestionTypeId, AnyQuestionTypeClient>> =
   defineClientRegistry({
-    code: codeClient,
     mcq: mcqClient,
     short: shortClient,
     cloze: clozeClient,
+    code: codeClient,
   });
 
 /** Total lookup; an unregistered id throws `UnknownQuestionType`. */

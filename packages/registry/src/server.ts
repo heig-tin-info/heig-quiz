@@ -22,10 +22,10 @@ import { shortServer } from "@quiz/qt-short/server";
 
 export const serverRegistry: Partial<Record<QuestionTypeId, AnyQuestionTypeServer>> =
   defineServerRegistry({
-    code: codeServer,
     mcq: mcqServer,
     short: shortServer,
     cloze: clozeServer,
+    code: codeServer,
   });
 
 /** Total lookup; an unregistered id throws `UnknownQuestionType`. */
