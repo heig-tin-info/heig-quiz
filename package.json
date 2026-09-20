@@ -11,7 +11,7 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "dev": "pnpm -r --parallel --filter @quiz/api --filter @quiz/web dev",
+    "dev": "pnpm -r --parallel --filter @quiz/api --filter @quiz/web --filter @quiz/runner dev",
     "dev:mock": "pnpm --filter @quiz/web dev:mock",
     "seed": "pnpm --filter @quiz/api seed",
     "smoke": "bash scripts/smoke.sh",

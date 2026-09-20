@@ -26,9 +26,14 @@ if (socket === undefined) {
   process.exit(0);
 }
 
-console.log(`[runner] Podman socket ${socket} — starting on :${process.env.PORT ?? "3200"}`);
+// `.env` at the root belongs to the API, and its PORT is the API's. Node's
+// `--env-file` never overrides a variable that is already set, so pinning it
+// here is what keeps the runner on 3200 while the API keeps 3000.
+const port = process.env.RUNNER_PORT ?? "3200";
+
+console.log(`[runner] Podman socket ${socket} — starting on :${port}`);
 const child = spawn("tsx", ["watch", "--env-file-if-exists=../../.env", "src/server.ts"], {
   stdio: "inherit",
-  env: { ...process.env, PODMAN_SOCKET: socket },
+  env: { ...process.env, PODMAN_SOCKET: socket, PORT: port },
 });
 child.on("exit", (code) => process.exit(code ?? 0));

@@ -34,7 +34,7 @@ before implementing it.** It is nine documents; the relevant one is short.
 apps/
   api/        Fastify: modules, SSE, jobs, ticker, Drizzle schema + migrations
   web/        React SPA (Vite, Tailwind, TanStack Query)
-  runner/     code execution in containers — RAW MATERIAL ONLY, not wired up
+  runner/     code execution in hardened Podman containers (@quiz/runner)
 packages/
   core/       the QuestionType contract, the seeded RNG, the runner interface
   registry/   the two static question-type registries (./server, ./client)
@@ -61,11 +61,15 @@ anywhere) and `@quiz/core/client` (React as type-only imports). The static
 wiring lives in `packages/registry` so that `core` never imports a `qt-*`
 package — the cycle that decision D1 breaks.
 
-`apps/runner/_from-codespace/` is the hardening material lifted from the
-sibling project's codespace app: the `c-dev` image, the seccomp profile, the
-Podman driver module and its `CLAUDE.md`. It is **not an app yet** — no
-`package.json`, nothing imports it. Build `apps/runner` from it when the
-runner lands; do not delete it in the meantime.
+`apps/runner` is the code execution service (WP11): Fastify on :3200,
+`POST /run` + `GET /health`, one hardened container per request driven over
+the Podman socket. It was built from the material lifted from the sibling
+codespace project, which `apps/runner/README.md` credits and which the
+package now replaces — the seccomp profile lives at
+`apps/runner/infra/seccomp/runner.json`, the flag list is asserted by
+`src/engine.test.ts`, and `images/*/Containerfile` holds one image per
+language. Its unit tests need no container; `pnpm --filter @quiz/runner
+test:integration` really starts them and skips itself without Podman.
 
 ## Invariants
 
@@ -109,10 +113,10 @@ Never work around these, not even "temporarily".
 9. **The audit log is a closed TypeScript union** (`apps/api/src/audit.ts`).
    A typo at a trigger site is a compile error.
 
-### Runner invariants (from `apps/runner/_from-codespace/CODESPACE-CLAUDE.md`)
+### Runner invariants (`apps/runner`, from the sibling codespace project)
 
-These are already proven in the sibling project. Copy them, do not re-derive
-them.
+These are already proven in the sibling project, and `apps/runner` implements
+them. Do not re-derive them, and do not relax one to make a test simpler.
 
 10. **No secret inside the container.** No token, no key, no credential
     helper. The set of environment variables passed at `podman run` is a
@@ -124,14 +128,21 @@ them.
     `--userns=auto --cap-drop=ALL --security-opt no-new-privileges
     --security-opt seccomp=<profile> --read-only --pids-limit --memory
     --cpus`, tmpfs work directory, wall-clock timeout enforced by the
-    service. The exact list is `_from-codespace/c-dev/run-hardened.sh`
-    (N-SEC-06). A test that needs an option relaxed says so in the docs, not
-    in a comment.
-13. **Podman rootful in `--remote`**, always
-    `podman --remote --url unix:///run/podman/podman.sock … --format json`.
-    Without `--remote` the binary silently falls back to local rootless mode
-    and every isolation test measures something else. gVisor (`--runtime
-    runsc`) on top when the host has it.
+    service. The exact list is `apps/runner/src/engine.ts`
+    (`containerArgs`), asserted flag for flag by `src/engine.test.ts` and
+    documented in `apps/runner/README.md` (N-SEC-06). A test that needs an
+    option relaxed says so in the docs, not in a comment. **Nothing from the
+    host is mounted**: the sources travel in on `podman exec`'s stdin and
+    `/work` is a tmpfs. A file name from a request is sanitized to a name —
+    never a path.
+13. **Podman in `--remote`**, always
+    `podman --remote --url unix://<socket> …`. Without `--remote` the binary
+    silently falls back to local rootless mode and every isolation test
+    measures something else. Production is the ROOTFUL socket
+    (`/run/podman/podman.sock`, `--userns=auto` always available); a
+    development workstation is the user one, where `--userns=auto` is probed
+    once at startup and dropped with a log line when the engine cannot do it.
+    gVisor (`--runtime runsc`) on top when the host has it.
 14. **The source sent to the runner is rebuilt server-side** from the
     template and the student's editable regions — never taken as-is.
 
@@ -143,7 +154,8 @@ No Docker, no Podman and no PostgreSQL are needed to run this.
 corepack enable pnpm && pnpm install
 cp .env.example .env            # pglite:// database + AUTH_DEV_LOGIN=1
 pnpm seed                       # the whole demo world (below)
-pnpm dev                        # API on :3000 and Vite on :5173, together
+pnpm dev                        # API :3000, Vite :5173 — and the runner on
+                                # :3200 when the machine has a Podman socket
 pnpm smoke                      # end-to-end HTTP walk, against a running API
 ```
 

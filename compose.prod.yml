@@ -6,7 +6,9 @@
 # Production uses a REAL PostgreSQL. The embedded pglite database of `pnpm dev`
 # is refused by config.ts under NODE_ENV=production, and pg-boss needs a real
 # server anyway. No Keycloak here: it is a development identity provider.
-# No runner service yet (docs/spec/05-architecture.md, 5.5).
+# The `runner` service (docs/spec/05-architecture.md, 5.5) drives the HOST's
+# ROOTFUL Podman over the socket mounted below. It is on the internal compose
+# network only: Caddy never routes to it and no port of it is published.
 services:
   app:
     # Image built in CI and pulled from GHCR -- never built on the VM.
@@ -18,6 +20,12 @@ services:
       DATABASE_URL: postgres://quiz:${POSTGRES_PASSWORD:?}@postgres:5432/quiz
       PUBLIC_URL: https://quiz.example.ch
       NODE_ENV: production
+      # The runner is reached by its compose service name. Drop these two and
+      # the platform falls back to RUNNER_MODE=stub: code questions are still
+      # authorable, playable and releasable, and their grading is proposed for
+      # a manual review (decision D14).
+      RUNNER_MODE: http
+      RUNNER_URL: http://runner:3200
     ports:
       - "127.0.0.1:3000:3000" # native Caddy -> reverse_proxy localhost:3000
     volumes:
@@ -26,6 +34,24 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+  # Code execution. Holds no secret, reaches no database, and is never
+  # published: `deploy.md` § Runner has the host-side recipe (rootful Podman,
+  # the socket, and `apps/runner/images/build.sh` for the language images).
+  runner:
+    image: ghcr.io/heig-tin-info/quiz-runner:${IMAGE_TAG:-latest}
+    restart: always
+    environment:
+      # Rootful, so `--userns=auto` is always available: no probe at startup.
+      RUNNER_USERNS_AUTO: "true"
+      PODMAN_SOCKET: /run/podman/podman.sock
+      RUNNER_CONCURRENCY: ${RUNNER_CONCURRENCY:-4}
+      RUNNER_QUEUE_MAX: ${RUNNER_QUEUE_MAX:-32}
+    volumes:
+      # The ONLY thing this container gets from the host. The containers it
+      # then starts mount nothing at all.
+      - /run/podman/podman.sock:/run/podman/podman.sock
+    # No `ports:` on purpose: internal network only, never exposed by Caddy.
 
   postgres:
     image: postgres:17

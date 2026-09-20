@@ -10,4 +10,6 @@ secrets
 docs
 mockups
 *.xlsx
-apps/runner
+# apps/runner IS part of the build context: apps/runner/Dockerfile builds it
+# from the repository root. The root Dockerfile simply never copies it.
+apps/runner/images

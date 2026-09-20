@@ -76,7 +76,7 @@ refuses a `pglite://` URL there, and refuses `AUTH_DEV_LOGIN=1` outright.
 | --- | --- |
 | `apps/api` | Fastify API, Drizzle schema and migrations |
 | `apps/web` | React SPA |
-| `apps/runner` | container-hardening material for the code runner (not wired up yet) |
+| `apps/runner` | the code execution service: hardened Podman containers, `POST /run` |
 | `packages/contracts`, `packages/domain` | shared schemas, pure business rules |
 | `docs/spec` | the product specification |
 | `docs/adr` | inherited architecture decisions |

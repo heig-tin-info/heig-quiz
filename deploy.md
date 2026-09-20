@@ -101,15 +101,50 @@ in `.env.prod` stops the container from starting, on purpose.
 
 The super administrator is `SUPER_ADMIN_EMAIL`; teachers are managed from the Admin screen.
 
-There is no runner service yet (docs/spec/05-architecture.md, 5.5). When it lands it will be
-a fourth service with access to the host Podman socket, and the hardening invariants of
-`apps/runner/_from-codespace/` apply to it as written.
+## 5b. The runner (code execution)
+
+The `runner` service of `compose.prod.yml` executes student code. It contains no engine of
+its own: it drives the **host's rootful Podman** through the socket it mounts, and the
+containers it starts are the hardened ones (`apps/runner/README.md` has the flag list). It is
+on the internal compose network only — never published, never behind Caddy — and holds no
+secret, no database access and no credential.
+
+```bash
+# On the VM, once. Rootful Podman: the socket is root-owned, which is why the
+# runner container is the only one that gets to see it.
+sudo apt-get install -y podman
+sudo systemctl enable --now podman.socket      # /run/podman/podman.sock
+
+# The language images, built ON THE VM but NOT from a Dockerfile of ours: they
+# are three `apk add` on Alpine, a few seconds each, and no Node build.
+sudo -u root env PODMAN_REMOTE_URL=unix:///run/podman/podman.sock \
+  /opt/quiz/apps/runner/images/build.sh c cpp python js
+
+sudo podman images | grep quiz-runner          # c, cpp, python, js
+```
+
+Then bring the stack up as usual. Checks:
+
+```bash
+docker compose -f compose.prod.yml exec app curl -sf http://runner:3200/health
+curl -sf https://quiz.example.ch/healthz | jq .checks.runner     # "up"
+```
+
+`/healthz` reports `disabled` when `RUNNER_MODE` is left at `stub`, `down` when the service
+is unreachable, and neither of those degrades the platform: a code question stays authorable,
+playable and releasable, and its grading is proposed for a manual review (decision D14). So a
+VM where Podman is not installed yet runs the whole platform minus the automatic grading of
+code — remove `RUNNER_MODE`/`RUNNER_URL` from the `app` service and drop the `runner` service.
+
+**The images are the runner's only supply chain.** They are built from
+`apps/runner/images/*/Containerfile` on the VM, never pulled from a registry: the runner has
+no registry credential and the sandbox containers have no network at all.
 
 ## 6. Update / rollback
 
 Deployment is done by CI (`.github/workflows/ci.yml`): every push to `main` passes the
-checks, builds the image on GitHub Actions, pushes it to GHCR
-(`ghcr.io/heig-tin-info/quiz`, tags `latest` + sha), and then the `deploy` job
+checks, builds the two images on GitHub Actions, pushes them to GHCR
+(`ghcr.io/heig-tin-info/quiz` and `ghcr.io/heig-tin-info/quiz-runner`, tags `latest` + sha), and then the `deploy` job
 connects to the VM over SSH and triggers `deploy.sh` (image pull + `up -d`) — a few seconds,
 zero contention.
 

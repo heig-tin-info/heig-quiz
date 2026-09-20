@@ -22,7 +22,11 @@ if [ -n "${SSH_ORIGINAL_COMMAND:-}" ]; then
 fi
 
 git pull --ff-only
-docker compose -f compose.prod.yml --env-file .env.prod pull app
+# `pull app runner`, not `pull`: postgres and backup are public images that
+# compose already has, and naming the two of ours keeps the login scoped to
+# what the token was issued for. `--ignore-pull-failures` is deliberately NOT
+# used: a missing image must stop the deploy, not half-restart the stack.
+docker compose -f compose.prod.yml --env-file .env.prod pull app runner
 docker compose -f compose.prod.yml --env-file .env.prod up -d
 docker image prune -f
 echo "deploy: done ($(git rev-parse --short HEAD))"
