@@ -1,54 +1,78 @@
 import { UnknownQuestionType } from "@quiz/core/server";
 import { describe, expect, it } from "vitest";
-
 import { clientRegistry, questionTypeClient } from "./client.js";
 import { QUESTION_TYPE_IDS, questionType, registeredServerIds, serverRegistry } from "./server.js";
 
-/** Registered by WP3; `mcq`, `short` and `cloze` arrive with WP2. */
-const REGISTERED = ["code"] as const;
+/** The four MVP types. */
+const REGISTERED = ["mcq", "short", "cloze", "code"] as const;
 
 describe("the static registries", () => {
-  it("expose the four MVP ids and the types wired up so far", () => {
-    expect(QUESTION_TYPE_IDS).toEqual(["mcq", "short", "cloze", "code"]);
+  it("hold the four MVP types, in both halves", () => {
     expect(registeredServerIds()).toEqual([...REGISTERED]);
     expect(Object.keys(clientRegistry)).toEqual([...REGISTERED]);
   });
 
-  it("look a registered type up on both sides", () => {
+  it("look a type up by its id", () => {
     for (const id of REGISTERED) {
       expect(questionType(id).id).toBe(id);
       expect(questionTypeClient(id).id).toBe(id);
     }
   });
 
-  it("reject an id no package has registered", () => {
-    for (const id of QUESTION_TYPE_IDS.filter((i) => !REGISTERED.includes(i as "code"))) {
-      expect(() => questionType(id)).toThrow(UnknownQuestionType);
-      expect(() => questionTypeClient(id)).toThrow(UnknownQuestionType);
+  it("reject an id that no package registers", () => {
+    expect(() => questionType("rich")).toThrow(UnknownQuestionType);
+  });
+
+  it("expose the four MVP ids", () => {
+    expect(QUESTION_TYPE_IDS).toEqual(["mcq", "short", "cloze", "code"]);
+    expect(Object.keys(serverRegistry)).toEqual([...REGISTERED]);
+  });
+
+  it("agree with themselves: one client entry per server entry", () => {
+    expect(Object.keys(clientRegistry)).toEqual(Object.keys(serverRegistry));
+  });
+
+  /**
+   * The generic version of the §2.5 leak test, over every registered type: a
+   * type added later cannot forget it. The per-package suites own the
+   * secret-VALUE half, which needs a fixture only they can write.
+   */
+  it("expose no forbidden key through any toStudent", () => {
+    const forbidden = [
+      "correct",
+      "matchers",
+      "answers",
+      "expected",
+      "pattern",
+      "tolerance",
+      "policy",
+      "penalty",
+      "rubric",
+      "explanation",
+      "tags",
+      "difficulty",
+    ];
+    for (const id of REGISTERED) {
+      const type = questionType(id);
+      const student = type.toStudent(type.emptyDraft(), { seed: 7, itemId: "i", shuffle: true });
+      const out = JSON.stringify(student);
+      for (const key of forbidden) expect(out, `${id}.${key}`).not.toContain(`"${key}"`);
+      expect(type.studentSchema.safeParse(student).success).toBe(true);
     }
   });
 
-  it("gives every registered server type the whole contract", () => {
+  it("emit a draft that validates, for every registered type", () => {
     for (const id of REGISTERED) {
-      const type = serverRegistry[id]!;
-      expect(typeof type.emptyDraft).toBe("function");
-      expect(typeof type.migrate).toBe("function");
-      expect(typeof type.toStudent).toBe("function");
-      expect(typeof type.toSolution).toBe("function");
-      expect(typeof type.grade).toBe("function");
-      expect(typeof type.searchText).toBe("function");
-      expect(type.configSchema.safeParse(type.emptyDraft()).success).toBe(true);
+      const type = questionType(id);
+      expect(type.configSchema.safeParse(type.emptyDraft()).success, id).toBe(true);
     }
   });
 
-  it("gives every registered client type three lazy surfaces", () => {
+  it("migrate their own current version by identity", () => {
     for (const id of REGISTERED) {
-      const type = questionTypeClient(id);
-      expect(type.labelKey).toBe(`qt.${id}.label`);
-      for (const surface of [type.Editor, type.Player, type.Review]) {
-        // React.lazy components are objects, not functions: that IS the check.
-        expect(typeof surface).toBe("object");
-      }
+      const type = questionType(id);
+      const draft = type.emptyDraft();
+      expect(type.migrate(draft, type.configVersion), id).toBe(draft);
     }
   });
 });

@@ -40,6 +40,9 @@ packages/
   registry/   the two static question-type registries (./server, ./client)
   contracts/  zod schemas and payload types shared api <-> web
   domain/     pure business rules: grade scale, deadlines, policies, cloze, roster
+  qt-mcq/     question type: multiple choice (./server, ./client)
+  qt-short/   question type: short answer (./server, ./client)
+  qt-cloze/   question type: fill in the blanks (./server, ./client)
 docs/
   spec/       the product specification (above)
   adr/        the architecture decisions inherited from heig-classroom
@@ -47,9 +50,10 @@ mockups/      HTML mockups of the target screens
 infra/        Keycloak development realm
 ```
 
-Packages still to create, in this order (`docs/spec/05-architecture.md`, 5.2
-and `docs/PLAN-MVP.md` §8): `packages/qt-mcq`, `qt-short`, `qt-cloze` and
-`qt-code`, each registered in `packages/registry` in two places. Then
+`packages/qt-mcq`, `qt-short` and `qt-cloze` exist and are registered in
+`packages/registry` in two places (`./server` and `./client`). Packages still
+to create, in this order (`docs/spec/05-architecture.md`, 5.2 and
+`docs/PLAN-MVP.md` §8): `packages/qt-code`, registered the same way, then
 `packages/canonical`, `packages/ui`, `packages/cli`.
 
 `packages/core` is split in two entry points: `@quiz/core/server` (no React,

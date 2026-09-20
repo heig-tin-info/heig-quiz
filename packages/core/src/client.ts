@@ -5,7 +5,7 @@
  * `verbatimModuleSyntax`, so `@quiz/core/server` never pulls React into the API
  * bundle, and this module adds no runtime import either.
  */
-import type { ComponentType, LazyExoticComponent } from "react";
+import type { ComponentType, LazyExoticComponent, ReactNode } from "react";
 import type { QuestionTypeId } from "./contract.js";
 
 export interface EditorProps<TConfig> {
@@ -77,3 +77,47 @@ export { defineClientRegistry, makeLookup } from "./registry.js";
 export type { AnyQuestionTypeClient, ClientRegistry } from "./registry.js";
 export { UnknownQuestionType } from "./errors.js";
 export * from "./rng.js";
+
+// ---------------------------------------------------------------------------
+// Host-provided rendering and UI strings (PLAN-MVP §8 WP2)
+// ---------------------------------------------------------------------------
+
+/**
+ * How a question-type component turns authored markdown into nodes.
+ *
+ * A `qt-*` package cannot depend on `apps/web`, so it never owns a markdown
+ * renderer: it renders plain text by itself and lets the host inject its own
+ * sanitised `MarkdownView` through a prop. One signature for every type, so a
+ * host wires it once.
+ */
+export type MarkdownRenderer = (source: string) => ReactNode;
+
+/**
+ * One validation problem of a stored draft (decision D16: an invalid draft is
+ * stored and answered with `issues[]`, `configSchema.parse` only runs at
+ * publication). `message` is an i18n key or a zod message; the host decides how
+ * to present it, the editor only places it next to the field.
+ */
+export interface ConfigIssue {
+  /** Path into the config, as zod reports it: `["choices", 2, "text"]`. */
+  readonly path: readonly (string | number)[];
+  readonly message: string;
+}
+
+/**
+ * The UI strings a question-type component accepts.
+ *
+ * Every component ships a complete English dictionary and takes a partial
+ * override, so `apps/web` passes the French entries it already holds in
+ * `i18n.tsx` (N-I18N-01) without a `qt-*` package ever importing the app. The
+ * key set is typed, so a renamed key is a compile error on the host side.
+ */
+export type StringOverrides<K extends string> = Partial<Readonly<Record<K, string>>>;
+
+/** Merges a component's English defaults with the host's overrides. Total, pure. */
+export function resolveStrings<K extends string>(
+  defaults: Readonly<Record<K, string>>,
+  overrides?: StringOverrides<K>,
+): Readonly<Record<K, string>> {
+  return overrides === undefined ? defaults : { ...defaults, ...overrides };
+}

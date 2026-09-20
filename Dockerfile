@@ -11,6 +11,9 @@ COPY packages/domain/package.json packages/domain/
 COPY packages/registry/package.json packages/registry/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/qt-code/package.json packages/qt-code/
+COPY packages/qt-mcq/package.json packages/qt-mcq/
+COPY packages/qt-short/package.json packages/qt-short/
+COPY packages/qt-cloze/package.json packages/qt-cloze/
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile
