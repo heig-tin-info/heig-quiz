@@ -32,4 +32,24 @@ describe("routeToPath / parsePath", () => {
     expect(parsePath("/classrooms/c-1/whatever")).toEqual({ view: "classroom", id: "c-1" });
     expect(parsePath("/classrooms/c-1/")).toEqual({ view: "classroom", id: "c-1" });
   });
+
+  // WP8: evaluation + dashboard
+  it("parses the configuration screen and the live dashboard", () => {
+    expect(parsePath("/evaluations/e-1")).toEqual({ view: "evaluation", id: "e-1" });
+    expect(parsePath("/evaluations/e-1/live")).toEqual({ view: "live", id: "e-1" });
+  });
+
+  it("round-trips both evaluation routes", () => {
+    for (const r of [
+      { view: "evaluation", id: "e-1" },
+      { view: "live", id: "e-1" },
+    ] as const) {
+      expect(parsePath(routeToPath(r))).toEqual(r);
+    }
+  });
+
+  it("falls back to the configuration screen for an unknown sub-path", () => {
+    expect(parsePath("/evaluations/e-1/nope")).toEqual({ view: "evaluation", id: "e-1" });
+    expect(parsePath("/evaluations")).toEqual({ view: "home" });
+  });
 });

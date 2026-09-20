@@ -1,0 +1,341 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Users, Wifi, WifiOff } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+
+import type { DashboardRow, EvaluationDetail } from "@quiz/contracts";
+
+import { api } from "../api";
+import { useConfirm } from "../confirm";
+import { dashboardKey, evaluationKey } from "../evaluation/common";
+import { useT } from "../i18n";
+import { presence } from "../realtime/grid";
+import type { Route } from "../router";
+import {
+  Card,
+  cx,
+  EmptyState,
+  Kbd,
+  QueryError,
+  Skeleton,
+  Switch,
+  useNow,
+} from "../ui";
+import { InspectPanel } from "./InspectPanel";
+import { Legend } from "./Legend";
+import { LobbyPanel } from "./LobbyPanel";
+import { LiveHeader, type LiveControls } from "./LiveHeader";
+import { StudentGrid } from "./StudentGrid";
+import { useDashboard } from "./useDashboard";
+import { useLiveCommands } from "./useLiveCommands";
+
+/**
+ * The live dashboard (mockup 03, F-DASH, F-LIVE-11).
+ *
+ * Three decisions carry the screen:
+ *   - it does not poll. One fetch, then the SSE stream walks the grid forward
+ *     (`useDashboard`), with a once-a-minute refetch as the only safety net;
+ *   - the shortcuts are the real interface. A teacher runs this from the back
+ *     of a lecture hall: Space pauses, `n` hides the names before projecting,
+ *     `r` hides the answers, `s` shows the results, `f` goes full screen. All
+ *     of them are written under the grid, because a shortcut nobody can see
+ *     does not exist;
+ *   - the inspection panel sits beside the grid, never over it.
+ */
+
+/** Toggles (F-DASH-02), their keys, and their initial state. */
+interface Toggles {
+  names: boolean;
+  answers: boolean;
+  results: boolean;
+}
+
+/** A keystroke typed into a field is not a shortcut. */
+function isTyping(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el || !el.tagName) return false;
+  const tag = el.tagName.toLowerCase();
+  return tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable;
+}
+
+export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Route) => void }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const confirm = useConfirm();
+  const [toggles, setToggles] = useState<Toggles>({ names: true, answers: true, results: true });
+  const [fullscreen, setFullscreen] = useState(false);
+  const [selected, setSelected] = useState<{ attemptId: string; userId: string; itemId: string } | null>(
+    null,
+  );
+
+  const { query, clock, connected } = useDashboard(id, toggles.answers);
+  // One tick a second drives every countdown on the page; the clock itself is
+  // the server's, so they all agree (DESIGN.md, Countdown).
+  useNow(1000);
+  const now = clock.now();
+
+  // The title and the classroom are the evaluation's, not the grid's read
+  // model — one extra cached request, shared with the configuration screen.
+  const detail = useQuery<EvaluationDetail>({
+    queryKey: evaluationKey(id),
+    queryFn: () => api(`/app/api/evaluations/${id}`),
+  });
+
+  const refresh = useCallback(() => {
+    void qc.invalidateQueries({ queryKey: dashboardKey(id, toggles.answers) });
+    void qc.invalidateQueries({ queryKey: evaluationKey(id) });
+  }, [qc, id, toggles.answers]);
+
+  const control = useMutation({
+    mutationFn: (v: { path: string; body?: unknown }) =>
+      api(`/app/api/evaluations/${id}/${v.path}`, {
+        method: "POST",
+        body: JSON.stringify(v.body ?? {}),
+      }),
+    onSuccess: refresh,
+  });
+  const attemptControl = useMutation({
+    mutationFn: (v: { attemptId: string; action: "close" | "reopen" }) =>
+      api(`/app/api/evaluations/${id}/attempts/${v.attemptId}/${v.action}`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      }),
+    onSuccess: refresh,
+  });
+
+  const state = query.data ?? null;
+  const evaluationState = state?.view.evaluation.state ?? "draft";
+  const live = evaluationState === "running" || evaluationState === "paused";
+
+  const controls: LiveControls = {
+    busy: control.isPending,
+    start: () => control.mutate({ path: "start", body: { confirm: true } }),
+    pause: () => control.mutate({ path: "pause" }),
+    resume: () => control.mutate({ path: "resume" }),
+    extend: (minutes) => control.mutate({ path: "extend", body: { minutes, scope: "all" } }),
+    close: () => {
+      void (async () => {
+        if (
+          await confirm({
+            title: t("live.closeAllConfirm"),
+            confirmLabel: t("live.closeAll"),
+            cancelLabel: t("common.cancel"),
+            danger: true,
+          })
+        ) {
+          control.mutate({ path: "close" });
+        }
+      })();
+    },
+  };
+
+  const toggleFullscreen = useCallback(() => {
+    setFullscreen((on) => {
+      // The real browser full screen on top of the in-page one: a projector
+      // wants the whole panel. A browser that refuses (a permissions policy,
+      // a headless run) still gets the page-level version, so the rejection
+      // is swallowed on purpose rather than reported.
+      const ignore = () => {};
+      try {
+        if (!on) document.documentElement.requestFullscreen?.().catch(ignore);
+        else if (document.fullscreenElement) document.exitFullscreen?.().catch(ignore);
+      } catch {
+        /* the in-page mode is enough */
+      }
+      return !on;
+    });
+  }, []);
+
+  const selectCell = useCallback((row: DashboardRow, itemId: string) => {
+    if (row.attemptId === null) return;
+    setSelected({ attemptId: row.attemptId, userId: row.userId, itemId });
+  }, []);
+
+  useLiveCommands({ t, state: evaluationState, controls, navigate, id });
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
+      if (e.key === " " || e.key === "Spacebar") {
+        if (!live) return;
+        e.preventDefault();
+        if (evaluationState === "paused") controls.resume();
+        else controls.pause();
+        return;
+      }
+      const key = e.key.toLowerCase();
+      if (key === "n" || key === "r" || key === "s") {
+        e.preventDefault();
+        const field = key === "n" ? "names" : key === "r" ? "answers" : "results";
+        setToggles((prev) => ({ ...prev, [field]: !prev[field] }));
+        return;
+      }
+      if (key === "f") {
+        e.preventDefault();
+        toggleFullscreen();
+        return;
+      }
+      if (e.key === "Escape" && selected) {
+        e.preventDefault();
+        setSelected(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // `controls` is rebuilt on every render; the handler reads the state it
+    // needs through the closure, which is refreshed by the same render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live, evaluationState, selected, toggleFullscreen]);
+
+  if (query.isLoading) {
+    return (
+      <div className="space-y-6">
+        <Skeleton className="h-10 w-80" />
+        <Skeleton className="h-9 w-64" />
+        <Skeleton className="h-80 w-full" />
+      </div>
+    );
+  }
+  if (query.isError || !state) {
+    return (
+      <QueryError
+        title={t("live.notFound")}
+        error={query.error}
+        onRetry={() => void query.refetch()}
+        retrying={query.isFetching}
+        fallback={t("error.server")}
+      />
+    );
+  }
+
+  const { view } = state;
+  const counts = presence(state);
+  const selectedRow =
+    selected === null ? null : (view.rows.find((r) => r.userId === selected.userId) ?? null);
+  const lobby = evaluationState === "lobby" || evaluationState === "scheduled";
+
+  const body = (
+    <div className="space-y-5">
+      <LiveHeader
+        title={detail.data?.evaluation.title ?? t("live.title")}
+        eyebrow={
+          <button
+            type="button"
+            onClick={() => navigate({ view: "evaluation", id })}
+            className="hover:text-fg hover:underline"
+          >
+            {t("eval.configure")}
+          </button>
+        }
+        state={evaluationState}
+        closesAt={view.evaluation.closesAt}
+        now={now}
+        controls={controls}
+        fullscreen={fullscreen}
+        onToggleFullscreen={toggleFullscreen}
+      />
+
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        <div className={cx("flex flex-wrap items-center gap-x-5 gap-y-2", lobby && "hidden")}>
+          {(["names", "answers", "results"] as const).map((field) => (
+            <label key={field} className="flex items-center gap-2 text-[13px] text-fg-muted">
+              <Switch
+                checked={toggles[field]}
+                label={t(`live.toggle.${field}`)}
+                onChange={(v) => setToggles((prev) => ({ ...prev, [field]: v }))}
+              />
+              {t(`live.toggle.${field}`)}
+            </label>
+          ))}
+        </div>
+        <span
+          className={cx(
+            "flex items-center gap-1.5 text-[13px]",
+            connected ? "text-fg-muted" : "text-warning",
+          )}
+        >
+          {connected ? <Wifi className="size-4" /> : <WifiOff className="size-4" />}
+          {connected ? t("live.connected") : t("live.disconnected")}
+          <span className="text-fg-faint">
+            · {t("live.present", { present: counts.present, enrolled: counts.enrolled })}
+          </span>
+        </span>
+      </div>
+
+      {view.rows.length === 0 ? (
+        <Card>
+          <EmptyState icon={Users} title={t("live.empty.title")}>
+            {t("live.empty.body")}
+          </EmptyState>
+        </Card>
+      ) : lobby ? (
+        <LobbyPanel state={state} />
+      ) : (
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
+          <Card className="min-w-0 flex-1 overflow-hidden">
+            <StudentGrid
+              state={state}
+              now={now}
+              showNames={toggles.names}
+              showAnswers={toggles.answers}
+              showResults={toggles.results}
+              selected={selected}
+              onInspect={selectCell}
+              onExtend={(row) =>
+                control.mutate({
+                  path: "extend",
+                  body: { minutes: 5, scope: "attempt", attemptId: row.attemptId },
+                })
+              }
+              onClose={(row) =>
+                row.attemptId &&
+                attemptControl.mutate({ attemptId: row.attemptId, action: "close" })
+              }
+              onReopen={(row) =>
+                row.attemptId &&
+                attemptControl.mutate({ attemptId: row.attemptId, action: "reopen" })
+              }
+            />
+          </Card>
+          {selectedRow && selected ? (
+            <InspectPanel
+              evaluationId={id}
+              state={state}
+              row={selectedRow}
+              itemId={selected.itemId}
+              onSelect={selectCell}
+              onClose={() => setSelected(null)}
+            />
+          ) : null}
+        </div>
+      )}
+
+      <div className={cx("flex flex-wrap items-center justify-between gap-4", lobby && "hidden")}>
+        <Legend />
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-faint">
+          <span>{t("live.hint")}</span>
+          <span className="inline-flex items-center gap-1">
+            <Kbd>N</Kbd> {t("live.toggle.names")}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Kbd>R</Kbd> {t("live.toggle.answers")}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Kbd>S</Kbd> {t("live.toggle.results")}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Kbd>Space</Kbd> {t("live.pause")}
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <Kbd>F</Kbd> {t("live.fullscreen")}
+          </span>
+        </p>
+      </div>
+    </div>
+  );
+
+  return fullscreen ? (
+    <div className="fixed inset-0 z-30 overflow-auto bg-canvas px-6 py-6">{body}</div>
+  ) : (
+    body
+  );
+}

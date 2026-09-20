@@ -1,37 +1,33 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
-
-import type { NoticeKind } from "@quiz/contracts";
 
 import { useNotify } from "./notify";
+import { useEventStream } from "./realtime/useEventStream";
 
 /**
- * Live updates over SSE (no WebSocket — ADR-005). Events are refresh hints,
- * never data: on any event we invalidate the active queries and TanStack
+ * Live updates over SSE (no WebSocket — ADR-005). The hint frame is a refresh
+ * hint, never data: on any hint we invalidate the active queries and TanStack
  * Query refetches through the authorized endpoints. Reconnection (native to
  * EventSource) also triggers a full refetch — no replay needed.
  *
- * Events may carry a typed notice; those surface as toasts (bottom left),
- * filtered by the user's notification preferences.
+ * Hints may carry a typed notice; those surface as toasts, filtered by the
+ * user's notification preferences.
+ *
+ * The connection itself is no longer opened here: `realtime/useEventStream`
+ * owns the ONE stream of the page, so this hook and the live dashboard's own
+ * watcher share a socket instead of holding two (WP8). Everything a screen
+ * that only needs hints sees is unchanged.
  */
 export function useLiveUpdates(enabled: boolean) {
   const qc = useQueryClient();
   const notify = useNotify();
-  useEffect(() => {
-    if (!enabled) return;
-    const es = new EventSource("/app/events");
-    es.onmessage = (e) => {
+  useEventStream({
+    enabled,
+    onHint: (hint) => {
       void qc.invalidateQueries();
-      try {
-        const data = JSON.parse(e.data as string) as {
-          notice?: { kind: NoticeKind; message: string } | null;
-        };
-        if (data.notice) notify(data.notice.kind, data.notice.message);
-      } catch {
-        // hint without payload: nothing else to do
-      }
-    };
-    es.onopen = () => void qc.invalidateQueries();
-    return () => es.close();
-  }, [enabled, qc, notify]);
+      if (hint.notice) notify(hint.notice.kind, hint.notice.message);
+    },
+    // On (re)connection everything is refetched: the same full refresh the
+    // previous `onopen` did, and the reason no event has to be replayed.
+    onRefresh: () => void qc.invalidateQueries(),
+  });
 }

@@ -7,6 +7,8 @@ import type { ClassroomDetail } from "@quiz/contracts";
 import { api } from "./api";
 import { useConfirm } from "./confirm";
 import { useT } from "./i18n";
+// WP8: evaluation + dashboard
+import { EvaluationList } from "./evaluation/EvaluationList";
 import { RosterImport } from "./RosterImport";
 import { RosterTable } from "./RosterTable";
 import type { Route } from "./router";
@@ -218,6 +220,9 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
           </Card>
         )}
       </section>
+
+      {/* WP8: evaluation + dashboard */}
+      <EvaluationList classroomId={id} navigate={navigate} />
 
       {importing ? (
         <RosterImport classroomId={id} onClose={() => setImporting(false)} />
