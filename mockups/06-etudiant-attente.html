@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<!-- Écran : salle d'attente d'un quiz, côté étudiant, avant le démarrage par l'enseignant. -->
+<!-- Scénario : Léa a rejoint le Quiz 3 à 10:12 ; elle attend que l'enseignant lance l'épreuve et doit comprendre sans effort qu'il n'y a rien à faire, que sa connexion tient et que son tiers-temps est pris en compte. -->
+<!-- Choix notables : aucune action primaire (seul « Quitter » est cliquable, en lien discret), anneau SVG comme unique élément vivant de l'écran, consignes en trois lignes fixes, tiers-temps affiché comme badge neutre et non comme alerte. -->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Salle d'attente — Quiz 3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>try{if(localStorage.getItem('quiz-theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}</script>
+<style>
+:root {
+  --canvas: #f6f5f2;
+  --surface: #ffffff;
+  --surface-2: #f3f1ed;
+  --surface-3: #eae7e1;
+  --line: #e7e4de;
+  --line-strong: #d3cfc7;
+  --fg: #1a1917;
+  --fg-muted: #67635b;
+  --fg-faint: #8f8a80;
+  --accent: #b41f24;
+  --accent-hover: #9a1b1f;
+  --accent-soft: #fbebeb;
+  /* Ink laid on a saturated fill (accent, danger, success button, avatar,
+     checkbox tick): white here, near-black in dark mode where the fills are
+     light. One token so no component needs a `dark:` variant. */
+  --on-fill: #ffffff;
+  --success: #1f7a4d;
+  --success-soft: #e7f4ec;
+  --warning: #a35810;
+  --warning-soft: #fdf1e2;
+  --danger: #c2242a;
+  --danger-soft: #fbe9e9;
+  --shadow-overlay: 0 16px 48px -16px rgb(28 25 20 / 0.28), 0 1px 3px rgb(0 0 0 / 0.06);
+  --shadow-popover: 0 10px 32px -12px rgb(28 25 20 / 0.24), 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-sheet: -12px 0 48px -16px rgb(28 25 20 / 0.3);
+}
+html.dark {
+  --canvas: #131211;
+  --surface: #1b1a18;
+  --surface-2: #232220;
+  --surface-3: #2c2a27;
+  --line: #2a2825;
+  --line-strong: #3a3733;
+  --fg: #ecebe7;
+  --fg-muted: #a39e94;
+  --fg-faint: #6e6961;
+  --accent: #e85f64;
+  --accent-hover: #f0787c;
+  --accent-soft: rgb(232 95 100 / 0.10);
+  --on-fill: #131211;
+  --success: #4cc38a;
+  --success-soft: rgb(76 195 138 / 0.14);
+  --warning: #f0a04b;
+  --warning-soft: rgb(240 160 75 / 0.14);
+  --danger: #f26d72;
+  --danger-soft: rgb(242 109 114 / 0.14);
+  --shadow-overlay: 0 16px 48px -16px rgb(0 0 0 / 0.7), 0 1px 3px rgb(0 0 0 / 0.4);
+  --shadow-popover: 0 10px 32px -12px rgb(0 0 0 / 0.65), 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-sheet: -12px 0 48px -16px rgb(0 0 0 / 0.7);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--canvas); color: var(--fg);
+  font-family: Manrope, system-ui, -apple-system, sans-serif;
+  font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+}
+.mono, .num { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-variant-numeric: tabular-nums; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+button { font: inherit; color: inherit; }
+
+.topbar { background: var(--surface); border-bottom: 1px solid var(--line); }
+.topbar-in { max-width: 1120px; margin: 0 auto; padding: 0 24px; height: 52px; display: flex; align-items: center; gap: 16px; }
+.brand { display: flex; align-items: center; gap: 8px; font-weight: 700; letter-spacing: -0.02em; font-size: 15px; }
+.brand svg { color: var(--accent); }
+.crumb { font-size: 13px; color: var(--fg-muted); padding-left: 16px; border-left: 1px solid var(--line); }
+.spacer { flex: 1; }
+.iconbtn { width: 32px; height: 32px; border-radius: 999px; border: 0; background: transparent; color: var(--fg-faint); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.iconbtn:hover { background: var(--surface-2); color: var(--fg); }
+.avatar { width: 30px; height: 30px; border-radius: 999px; background: var(--accent); color: var(--on-fill); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
+
+.stage { max-width: 600px; margin: 0 auto; padding: 48px 24px 64px; text-align: center; }
+.eyebrow { font-size: 12px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; color: var(--fg-faint); margin: 0 0 10px; }
+h1 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.02em; }
+.facts { margin: 8px 0 0; color: var(--fg-muted); }
+.facts .dot { color: var(--fg-faint); padding: 0 6px; }
+
+/* ---- anneau ---- */
+.ring { margin: 36px auto 0; width: 208px; height: 208px; position: relative; }
+.ring svg { display: block; transform: rotate(-90deg); }
+.ring .track { stroke: var(--surface-3); }
+.ring .fill { stroke: var(--fg); stroke-linecap: round; }
+.ring .center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.ring .pct { font-size: 34px; font-weight: 500; letter-spacing: -0.02em; line-height: 1.1; }
+.ring .cap { font-size: 13px; color: var(--fg-muted); margin-top: 2px; }
+.counted { margin: 16px 0 0; font-size: 15px; font-weight: 500; }
+.counted .sep { color: var(--fg-faint); font-weight: 400; }
+
+.wait {
+  margin: 10px auto 0; display: inline-flex; align-items: center; gap: 9px;
+  color: var(--fg-muted); font-size: 14px;
+}
+.pulse { width: 7px; height: 7px; border-radius: 999px; background: var(--fg-faint); animation: blink 2s cubic-bezier(0.2,0,0,1) infinite; }
+@keyframes blink { 0%, 100% { opacity: .35 } 50% { opacity: 1 } }
+
+/* ---- consignes ---- */
+.panel {
+  margin-top: 36px; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 16px; padding: 4px 20px; text-align: left;
+}
+.rule { display: flex; align-items: flex-start; gap: 12px; padding: 14px 0; }
+.rule + .rule { border-top: 1px solid var(--line); }
+.rule svg { color: var(--fg-faint); flex: none; margin-top: 2px; }
+.rule .t { font-weight: 500; }
+.rule .d { color: var(--fg-muted); font-size: 13px; margin-top: 1px; }
+
+.badge { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 500; background: var(--surface-2); color: var(--fg-muted); }
+.badge svg { color: var(--fg-faint); }
+.adjust { margin-top: 20px; display: flex; justify-content: center; }
+
+.status {
+  margin-top: 28px; display: flex; align-items: center; justify-content: center; gap: 8px;
+  font-size: 13px; color: var(--fg-muted);
+}
+.status .live { width: 7px; height: 7px; border-radius: 999px; background: var(--success); flex: none; }
+.status svg { color: var(--fg-faint); }
+.status .sep { color: var(--fg-faint); }
+
+.leave { margin-top: 28px; }
+.leave a {
+  font-size: 13px; color: var(--fg-muted); text-decoration: none;
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+}
+.leave a:hover { background: var(--surface-2); color: var(--fg); }
+
+@media (max-width: 640px) {
+  .topbar-in { padding-left: 16px; padding-right: 16px; }
+  .crumb { display: none; }
+  .stage { padding: 32px 16px 48px; }
+  h1 { font-size: 24px; }
+  .ring { width: 176px; height: 176px; }
+  .ring svg { width: 176px; height: 176px; }
+}
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; opacity: .8; } }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <span class="brand">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.2a2.9 2.9 0 0 1 5.6 1c0 1.9-2.8 2.4-2.8 2.4"/><path d="M12 17h.01"/></svg>
+      Quiz
+    </span>
+    <span class="crumb">Programmation C · Salle d'attente</span>
+    <span class="spacer"></span>
+    <button class="iconbtn" type="button" onclick="toggleTheme()" aria-label="Basculer le thème clair/sombre" title="Thème">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/></svg>
+    </button>
+    <button class="iconbtn" type="button" aria-label="Aide" title="Aide">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.2a2.9 2.9 0 0 1 5.6 1c0 1.9-2.8 2.4-2.8 2.4"/><path d="M12 17h.01"/></svg>
+    </button>
+    <span class="avatar" title="Léa Progin">LP</span>
+  </div>
+</header>
+
+<main class="stage">
+  <p class="eyebrow">Salle d'attente</p>
+  <h1>Quiz 3 — Pointeurs</h1>
+  <p class="facts">Programmation C<span class="dot">·</span>20 min<span class="dot">·</span>8 questions</p>
+
+  <div class="ring">
+    <svg width="208" height="208" viewBox="0 0 208 208" role="img" aria-label="18 étudiants présents sur 24, soit 75 %">
+      <circle class="track" cx="104" cy="104" r="88" fill="none" stroke-width="10"/>
+      <!-- circonférence = 2·π·88 = 552.9 ; 75 % = 414.7 -->
+      <circle class="fill" cx="104" cy="104" r="88" fill="none" stroke-width="10"
+              stroke-dasharray="414.7 552.9"/>
+    </svg>
+    <div class="center" aria-hidden="true">
+      <span class="pct num">75 %</span>
+      <span class="cap">présents</span>
+    </div>
+  </div>
+
+  <p class="counted"><span class="num">18</span> <span class="sep">/</span> <span class="num">24</span> présents</p>
+
+  <p class="wait"><span class="pulse"></span> Le professeur démarrera le quiz.</p>
+
+  <section class="panel" aria-label="Consignes">
+    <div class="rule">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h16M14 6l6 6-6 6"/></svg>
+      <span>
+        <span class="t">Navigation libre</span>
+        <span class="d">Vous pouvez revenir sur une question et modifier votre réponse jusqu'à la fin du temps.</span>
+      </span>
+    </div>
+    <div class="rule">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg>
+      <span>
+        <span class="t">8 questions</span>
+        <span class="d">Texte à trou, choix multiple et une question de code. Aucune pénalité pour une réponse vide.</span>
+      </span>
+    </div>
+    <div class="rule">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 4.4 3.2 8.2 8 9 4.8-.8 8-4.6 8-9V6l-8-3Z"/></svg>
+      <span>
+        <span class="t">Une seule tentative</span>
+        <span class="d">Vos réponses sont enregistrées en continu ; la remise est automatique à la fin du temps.</span>
+      </span>
+    </div>
+  </section>
+
+  <div class="adjust">
+    <span class="badge">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      Temps supplémentaire : +33 % · 27 min pour vous
+    </span>
+  </div>
+
+  <p class="status">
+    <span class="live"></span> Connecté
+    <span class="sep">·</span>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+    horloge synchronisée <span class="num">10:12:41</span>
+  </p>
+
+  <p class="leave">
+    <a href="05-etudiant-accueil.html">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 12H4M8 8l-4 4 4 4"/><path d="M10 4h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-8"/></svg>
+      Quitter
+    </a>
+  </p>
+</main>
+
+<script>
+function toggleTheme(){
+  var r = document.documentElement;
+  r.classList.toggle('dark');
+  try { localStorage.setItem('quiz-theme', r.classList.contains('dark') ? 'dark' : 'light'); } catch(e) {}
+}
+</script>
+</body>
+</html>

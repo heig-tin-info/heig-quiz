@@ -1,0 +1,101 @@
+{
+  "realm": "quiz-dev",
+  "enabled": true,
+  "registrationAllowed": false,
+  "clients": [
+    {
+      "clientId": "quiz",
+      "name": "Quiz portal (dev)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "dev-secret-not-for-production",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:5173/*",
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5173",
+        "http://localhost:3000"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "defaultClientScopes": [
+        "openid",
+        "profile",
+        "email"
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "teacher",
+      "enabled": true,
+      "email": "teacher@heig-vd.ch",
+      "emailVerified": true,
+      "firstName": "Tania",
+      "lastName": "Teacher",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "teacher",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "teacher"
+      ]
+    },
+    {
+      "username": "student",
+      "enabled": true,
+      "email": "student@heig-vd.ch",
+      "emailVerified": true,
+      "firstName": "Sacha",
+      "lastName": "Student",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "student",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "student"
+      ]
+    },
+    {
+      "username": "student2",
+      "enabled": true,
+      "email": "student2@heig-vd.ch",
+      "emailVerified": true,
+      "firstName": "Sam",
+      "lastName": "Student",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "student2",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "student"
+      ]
+    }
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "student",
+        "description": "Student (portal)"
+      },
+      {
+        "name": "teacher",
+        "description": "Enseignant (portail)"
+      }
+    ]
+  }
+}

@@ -1,0 +1,84 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  # Production image, built HERE and pushed to GHCR: the VM must never build.
+  image:
+    needs: checks
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # :latest for the regular deploy, :<sha> kept for rollbacks.
+          tags: |
+            ghcr.io/heig-tin-info/quiz:latest
+            ghcr.io/heig-tin-info/quiz:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # Deploy: the runner SSHes to the VM, whose authorized_keys pins the CI key
+  # to /opt/quiz/deploy.sh (forced command) — the key can ONLY deploy, never
+  # open a shell. The ephemeral GHCR token is passed as the SSH command
+  # (→ $SSH_ORIGINAL_COMMAND) so the private image pulls without any
+  # credential stored on the VM. Without DEPLOY_SSH_KEY the job no-ops, so the
+  # pipeline stays green until the key is provisioned.
+  deploy:
+    needs: image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    concurrency:
+      group: prod-deploy
+      cancel-in-progress: false
+    env:
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+      DEPLOY_HOST_KEY: ${{ vars.DEPLOY_HOST_KEY }}
+    steps:
+      - name: Skip when the deploy key is not configured
+        if: env.DEPLOY_SSH_KEY == '' || env.DEPLOY_HOST == ''
+        run: echo "::notice::DEPLOY_SSH_KEY/DEPLOY_HOST not set — image pushed, deploy skipped."
+      - name: Set up SSH (pinned host key)
+        if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != ''
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s %s\n' "$DEPLOY_HOST" "$DEPLOY_HOST_KEY" >> ~/.ssh/known_hosts
+      - name: Trigger deploy (forced command runs deploy.sh on the VM)
+        if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != ''
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_HOST" "$GHCR_TOKEN"

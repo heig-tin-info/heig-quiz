@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<!-- Écran : player en mode zen, une question par écran, quiz en cours (variante texte à trou + variante question de code). -->
+<!-- Scénario : Léa est à la question 4 / 8, il reste 14:32 ; sous stress, elle doit repérer instantanément où saisir, où elle en est et si son travail est sauvegardé. -->
+<!-- Choix notables : champs sans cadre mais reconnaissables (fond --surface-2 + filet bas), segments de progression cliquables aux 4 états, une seule action primaire par variante (« Marquer comme faite » en texte, « Vérifier » en code), état de synchronisation toujours visible avec icône + mot. -->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Question 4 / 8 — Quiz 3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>try{if(localStorage.getItem('quiz-theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}</script>
+<style>
+:root {
+  --canvas: #f6f5f2;
+  --surface: #ffffff;
+  --surface-2: #f3f1ed;
+  --surface-3: #eae7e1;
+  --line: #e7e4de;
+  --line-strong: #d3cfc7;
+  --fg: #1a1917;
+  --fg-muted: #67635b;
+  --fg-faint: #8f8a80;
+  --accent: #b41f24;
+  --accent-hover: #9a1b1f;
+  --accent-soft: #fbebeb;
+  /* Ink laid on a saturated fill (accent, danger, success button, avatar,
+     checkbox tick): white here, near-black in dark mode where the fills are
+     light. One token so no component needs a `dark:` variant. */
+  --on-fill: #ffffff;
+  --success: #1f7a4d;
+  --success-soft: #e7f4ec;
+  --warning: #a35810;
+  --warning-soft: #fdf1e2;
+  --danger: #c2242a;
+  --danger-soft: #fbe9e9;
+  --shadow-overlay: 0 16px 48px -16px rgb(28 25 20 / 0.28), 0 1px 3px rgb(0 0 0 / 0.06);
+  --shadow-popover: 0 10px 32px -12px rgb(28 25 20 / 0.24), 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-sheet: -12px 0 48px -16px rgb(28 25 20 / 0.3);
+}
+html.dark {
+  --canvas: #131211;
+  --surface: #1b1a18;
+  --surface-2: #232220;
+  --surface-3: #2c2a27;
+  --line: #2a2825;
+  --line-strong: #3a3733;
+  --fg: #ecebe7;
+  --fg-muted: #a39e94;
+  --fg-faint: #6e6961;
+  --accent: #e85f64;
+  --accent-hover: #f0787c;
+  --accent-soft: rgb(232 95 100 / 0.10);
+  --on-fill: #131211;
+  --success: #4cc38a;
+  --success-soft: rgb(76 195 138 / 0.14);
+  --warning: #f0a04b;
+  --warning-soft: rgb(240 160 75 / 0.14);
+  --danger: #f26d72;
+  --danger-soft: rgb(242 109 114 / 0.14);
+  --shadow-overlay: 0 16px 48px -16px rgb(0 0 0 / 0.7), 0 1px 3px rgb(0 0 0 / 0.4);
+  --shadow-popover: 0 10px 32px -12px rgb(0 0 0 / 0.65), 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-sheet: -12px 0 48px -16px rgb(0 0 0 / 0.7);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--canvas); color: var(--fg);
+  font-family: Manrope, system-ui, -apple-system, sans-serif;
+  font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+}
+.mono, .num { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace; font-variant-numeric: tabular-nums; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+[hidden] { display: none !important; }
+
+/* ===== barre zen ===== */
+.zenbar { position: sticky; top: 0; z-index: 10; background: var(--surface); border-bottom: 1px solid var(--line); }
+.zenbar-in {
+  max-width: 1120px; margin: 0 auto; padding: 10px 24px;
+  display: grid; grid-template-columns: minmax(120px, 1fr) auto minmax(120px, 1fr);
+  align-items: center; gap: 20px;
+}
+.zentitle { font-size: 13px; color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.zentitle b { color: var(--fg); font-weight: 600; }
+
+/* segments de progression */
+.segs { display: flex; gap: 4px; justify-content: center; }
+.seg { border: 0; background: none; padding: 8px 0 6px; cursor: pointer; width: 34px; }
+.seg i { display: block; height: 5px; border-radius: 999px; background: var(--surface-3); }
+.seg.done i { background: var(--fg); }                       /* faite */
+.seg.seen i { background: var(--line-strong); }              /* vue, sans réponse */
+.seg.empty i { background: var(--surface-3); }               /* jamais ouverte */
+.seg.cur i { background: var(--accent); height: 7px; margin-top: -1px; }   /* courante */
+.seg:hover i { opacity: .75; }
+.seg.cur span { display: block; font-size: 11px; font-weight: 600; color: var(--accent); margin-top: 3px; line-height: 1; }
+.seg span { display: none; }
+
+/* droite : chrono + synchro + sortie */
+.zenright { display: flex; align-items: center; justify-content: flex-end; gap: 14px; }
+.clock { display: inline-flex; align-items: center; gap: 7px; font-size: 15px; font-weight: 500; }
+.clock svg { color: var(--fg-faint); }
+/* Sous 2 minutes, le chrono passe en danger :
+   .clock.low { color: var(--danger); } .clock.low svg { color: var(--danger); } */
+.sync { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--fg-muted); white-space: nowrap; }
+.sync.ok svg { color: var(--success); }
+.sync.off { color: var(--warning); }
+.sync.off svg { color: var(--warning); }
+.iconbtn { width: 32px; height: 32px; border-radius: 999px; border: 0; background: transparent; color: var(--fg-faint); display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.iconbtn:hover { background: var(--surface-2); color: var(--fg); }
+
+/* ===== question ===== */
+.stage { max-width: 760px; margin: 0 auto; padding: 48px 24px 24px; }
+.stage.wide { max-width: 1120px; }
+.qhead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 18px; }
+.eyebrow { font-size: 12px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; color: var(--fg-faint); }
+.pts { font-size: 12px; color: var(--fg-faint); margin-left: auto; }
+.prompt { font-size: 16px; color: var(--fg-muted); margin: 0 0 20px; }
+.cloze { font-size: 20px; line-height: 2.1; letter-spacing: -0.01em; margin: 0; }
+
+/* champs sans cadre : fond surface-2 + filet bas */
+.fill {
+  display: inline-block; min-width: 7ch; padding: 4px 10px 3px;
+  background: var(--surface-2); border: 0; border-bottom: 1px solid var(--line-strong);
+  border-radius: 8px 8px 4px 4px; font-size: 18px; line-height: 1.4;
+  transition: background 120ms cubic-bezier(0.2,0,0,1);
+}
+.fill::placeholder { color: var(--fg-faint); font-size: 15px; }
+.fill:hover { background: var(--surface-3); }
+.fill:focus { background: var(--surface); border-bottom-color: var(--accent); outline: 2px solid var(--accent); outline-offset: 2px; }
+.fill.filled { border-bottom-color: var(--fg-muted); }
+.selwrap { position: relative; display: inline-block; }
+.selwrap svg { position: absolute; right: 9px; top: 50%; margin-top: -7px; pointer-events: none; color: var(--fg-faint); }
+.fill.sel { -webkit-appearance: none; appearance: none; padding-right: 28px; cursor: pointer; }
+.hint { margin-top: 24px; font-size: 13px; color: var(--fg-faint); }
+
+/* ===== barre d'actions ===== */
+.actions {
+  max-width: 760px; margin: 0 auto; padding: 24px; display: flex; align-items: center; gap: 10px;
+  border-top: 1px solid var(--line);
+}
+.actions.wide { max-width: 1120px; }
+.actions .right { margin-left: auto; display: flex; gap: 10px; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  height: 40px; padding: 0 18px; border-radius: 999px; border: 1px solid transparent;
+  font-size: 14px; font-weight: 500; cursor: pointer; text-decoration: none;
+  transition: background 120ms cubic-bezier(0.2,0,0,1);
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary { background: var(--accent); color: var(--on-fill); }
+.btn-primary:hover { background: var(--accent-hover); }
+.btn-secondary { background: var(--surface); color: var(--fg); border-color: var(--line-strong); }
+.btn-secondary:hover { background: var(--surface-2); }
+.btn-ghost { background: transparent; color: var(--fg-muted); padding: 0 12px; }
+.btn-ghost:hover { background: var(--surface-2); color: var(--fg); }
+.btn.sm { height: 32px; padding: 0 14px; font-size: 13px; }
+
+/* ===== variante code ===== */
+.codegrid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; align-items: start; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.cardhead {
+  display: flex; align-items: center; gap: 8px; padding: 10px 16px;
+  border-bottom: 1px solid var(--line); font-size: 13px; color: var(--fg-muted);
+}
+.cardhead .name { color: var(--fg); font-weight: 500; }
+.cardhead .r { margin-left: auto; font-size: 12px; color: var(--fg-faint); }
+.editor { background: var(--surface); padding: 12px 0; }
+.cl { display: flex; align-items: flex-start; font-size: 13px; line-height: 1.75; }
+.cl:hover { background: var(--surface-2); }
+.cl .ln {
+  width: 42px; flex: none; text-align: right; padding-right: 12px;
+  color: var(--fg-faint); user-select: none; border-right: 1px solid var(--line);
+}
+.cl .code { padding-left: 14px; white-space: pre-wrap; }
+.cl.caret .code::after { content: ''; display: inline-block; width: 1px; height: 1.1em; background: var(--accent); vertical-align: -2px; margin-left: 1px; }
+.tok-key { color: var(--accent); }
+.tok-com { color: var(--fg-faint); }
+.tok-str { color: var(--success); }
+
+.tests { padding: 8px 16px 16px; }
+.test { padding: 12px 0; }
+.test + .test { border-top: 1px solid var(--line); }
+.test .top { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.test .top .call { font-size: 12px; color: var(--fg-muted); margin-left: auto; }
+.test .st { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+.test .st.pass { color: var(--success); }
+.test .st.fail { color: var(--danger); }
+.diff { margin-top: 10px; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); }
+.diff div { display: flex; gap: 10px; padding: 6px 10px; font-size: 12.5px; }
+.diff .want { background: var(--success-soft); color: var(--success); }
+.diff .got { background: var(--danger-soft); color: var(--danger); }
+.diff .lab { width: 7ch; flex: none; font-weight: 500; }
+.testfoot { display: flex; gap: 10px; padding: 14px 16px; border-top: 1px solid var(--line); background: var(--surface-2); }
+.badge { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 3px 9px; font-size: 12px; font-weight: 500; background: var(--surface-2); color: var(--fg-muted); }
+
+/* ===== bande de démonstration (hors production) ===== */
+.demo { border-top: 1px dashed var(--line-strong); margin-top: 40px; background: var(--surface-2); }
+.demo-in { max-width: 1120px; margin: 0 auto; padding: 20px 24px 40px; }
+.demo h2 { margin: 0 0 4px; font-size: 13px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--fg-faint); }
+.demo p.note { margin: 0 0 16px; font-size: 13px; color: var(--fg-muted); }
+.demorow { display: flex; flex-wrap: wrap; gap: 28px; align-items: flex-start; }
+.demoblk h3 { margin: 0 0 8px; font-size: 13px; font-weight: 600; }
+.segtrack { display: inline-flex; background: var(--surface-3); border-radius: 999px; padding: 3px; gap: 2px; }
+.segtrack button { border: 0; background: transparent; border-radius: 999px; padding: 5px 12px; font-size: 13px; font-weight: 500; color: var(--fg-muted); cursor: pointer; }
+.segtrack button[aria-pressed="true"] { background: var(--surface); color: var(--fg); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--fg-muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { display: block; width: 22px; height: 5px; border-radius: 999px; }
+.variants { display: flex; flex-direction: column; gap: 8px; }
+
+@media (max-width: 860px) {
+  .codegrid { grid-template-columns: 1fr; }  /* 390px : éditeur au-dessus des résultats */
+}
+@media (max-width: 640px) {
+  .zenbar-in { grid-template-columns: 1fr auto; gap: 8px 12px; padding: 8px 16px; }
+  .zentitle { order: 1; }
+  .zenright { order: 2; gap: 10px; }
+  .segs { order: 3; grid-column: 1 / -1; justify-content: space-between; }
+  .seg { width: 100%; }
+  .stage, .stage.wide { padding: 28px 16px 16px; }
+  .actions, .actions.wide { padding: 16px; flex-wrap: wrap; }
+  .actions .right { width: 100%; }
+  .actions .right .btn { flex: 1; }
+  .cloze { font-size: 17px; line-height: 2.2; }
+  .demo-in { padding: 20px 16px 40px; }
+  .sync .txt { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } .btn:active { transform: none; } }
+</style>
+</head>
+<body>
+
+<!-- ============ barre zen ============ -->
+<header class="zenbar">
+  <div class="zenbar-in">
+    <div class="zentitle"><b>Quiz 3 — Lois fondamentales</b> · Électronique</div>
+
+    <nav class="segs" aria-label="Progression : question 4 sur 8">
+      <button class="seg done" type="button" aria-label="Question 1, faite"><i></i><span></span></button>
+      <button class="seg done" type="button" aria-label="Question 2, faite"><i></i><span></span></button>
+      <button class="seg seen" type="button" aria-label="Question 3, vue mais sans réponse"><i></i><span></span></button>
+      <button class="seg cur" type="button" aria-current="true" aria-label="Question 4, en cours"><i></i><span>4</span></button>
+      <button class="seg empty" type="button" aria-label="Question 5, non ouverte"><i></i><span></span></button>
+      <button class="seg seen" type="button" aria-label="Question 6, vue mais sans réponse"><i></i><span></span></button>
+      <button class="seg empty" type="button" aria-label="Question 7, non ouverte"><i></i><span></span></button>
+      <button class="seg empty" type="button" aria-label="Question 8, non ouverte"><i></i><span></span></button>
+    </nav>
+
+    <div class="zenright">
+      <span class="clock" title="Temps restant">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        <span class="num">14:32</span>
+      </span>
+
+      <!-- variante A (visible) : sauvegardé -->
+      <span class="sync ok" id="sync-ok" role="status">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5 10 17l9-10"/></svg>
+        <span class="txt">Sauvegardé</span>
+      </span>
+      <!-- variante B (masquée ici, montrée dans la bande de démonstration) : hors ligne -->
+      <span class="sync off" id="sync-off" role="status" hidden>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M6.5 8.3A5.5 5.5 0 0 0 7 19h9.5a4.5 4.5 0 0 0 2.9-1"/><path d="M20.5 15.2A4.5 4.5 0 0 0 16.5 9h-1.3A7 7 0 0 0 10 5.2"/></svg>
+        <span class="txt">Hors ligne</span>
+      </span>
+
+      <button class="iconbtn" type="button" onclick="toggleTheme()" aria-label="Basculer le thème clair/sombre" title="Thème">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z"/></svg>
+      </button>
+      <button class="iconbtn" type="button" aria-label="Quitter le quiz" title="Quitter">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 12H4M8 8l-4 4 4 4"/><path d="M10 4h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-8"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ============ variante 1 : texte à trou ============ -->
+<main id="view-cloze">
+  <div class="stage">
+    <div class="qhead">
+      <span class="eyebrow">Question 4 sur 8</span>
+      <span class="badge">Texte à trou</span>
+      <span class="pts">2 points</span>
+    </div>
+    <p class="prompt">Complétez la phrase. L'orthographe des noms propres n'est pas notée.</p>
+
+    <p class="cloze">
+      La loi d'<input class="fill filled" type="text" value="Ohm" size="5" aria-label="Nom de la loi" spellcheck="false">
+      relie la tension et le courant : pour un conducteur ohmique,
+      <span class="mono">U =</span>
+      <input class="fill mono" type="text" placeholder="?" size="3" aria-label="Grandeur multipliant le courant" spellcheck="false">
+      <span class="mono">× I</span>, où la tension <span class="mono">U</span> s'exprime en
+      <span class="selwrap">
+        <select class="fill sel" aria-label="Unité de la tension">
+          <option>choisir…</option>
+          <option>ampères</option>
+          <option>ohms</option>
+          <option selected>volts</option>
+          <option>watts</option>
+        </select>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      </span>.
+    </p>
+
+    <p class="hint">Vos réponses sont enregistrées à chaque frappe. Vous pouvez revenir sur cette question jusqu'à la fin du temps.</p>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-ghost" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>
+      Précédent
+    </button>
+    <span class="right">
+      <button class="btn btn-primary" id="btn-done" type="button">Marquer comme faite</button>
+      <button class="btn btn-secondary" type="button">
+        Suivant
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 6 6 6-6 6"/></svg>
+      </button>
+    </span>
+  </div>
+</main>
+
+<!-- ============ variante 2 : question de code ============ -->
+<main id="view-code" hidden>
+  <div class="stage wide">
+    <div class="qhead">
+      <span class="eyebrow">Question 7 sur 8</span>
+      <span class="badge">Code · C</span>
+      <span class="pts">5 points</span>
+    </div>
+    <p class="prompt">Corrigez <span class="mono">r_parallele</span> pour qu'elle renvoie la résistance équivalente de deux résistances en parallèle, en ohms. Le cas d'un court-circuit doit renvoyer <span class="mono">0</span>.</p>
+
+    <div class="codegrid">
+
+      <!-- éditeur -->
+      <section class="card" aria-label="Éditeur">
+        <div class="cardhead">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 8-5 4 5 4M15 8l5 4-5 4"/></svg>
+          <span class="name mono">r_parallele.c</span>
+          <span class="r">modifié il y a 12 s</span>
+        </div>
+        <div class="editor mono">
+          <div class="cl"><span class="ln">1</span><span class="code"><span class="tok-com">/* Résistance équivalente de deux</span></span></div>
+          <div class="cl"><span class="ln">2</span><span class="code"><span class="tok-com">   résistances en parallèle, en ohms. */</span></span></div>
+          <div class="cl"><span class="ln">3</span><span class="code"><span class="tok-key">double</span> r_parallele(<span class="tok-key">double</span> r1, <span class="tok-key">double</span> r2)</span></div>
+          <div class="cl"><span class="ln">4</span><span class="code">{</span></div>
+          <div class="cl"><span class="ln">5</span><span class="code">    <span class="tok-key">if</span> (r1 == 0 || r2 == 0)</span></div>
+          <div class="cl"><span class="ln">6</span><span class="code">        <span class="tok-key">return</span> 0;</span></div>
+          <div class="cl caret"><span class="ln">7</span><span class="code">    <span class="tok-key">return</span> r1 * r2 / (r1 - r2);</span></div>
+          <div class="cl"><span class="ln">8</span><span class="code">}</span></div>
+        </div>
+        <div class="testfoot">
+          <button class="btn btn-primary sm" type="button">Vérifier</button>
+          <button class="btn btn-secondary sm" type="button">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 5l11 7-11 7V5Z"/></svg>
+            Exécuter
+          </button>
+          <span class="badge" style="margin-left:auto">Compilé sans avertissement</span>
+        </div>
+      </section>
+
+      <!-- résultats des tests -->
+      <section class="card" aria-label="Résultats des tests">
+        <div class="cardhead">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4a2 2 0 0 0 1.8-3l-5-9V3"/></svg>
+          <span class="name">Tests publics</span>
+          <span class="r">1 réussi sur 2</span>
+        </div>
+        <div class="tests">
+          <div class="test">
+            <div class="top">
+              <span class="st pass">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5 10 17l9-10"/></svg>
+                Réussi
+              </span>
+              <span class="call mono">r_parallele(0, 100)</span>
+            </div>
+          </div>
+          <div class="test">
+            <div class="top">
+              <span class="st fail">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17"/></svg>
+                Échoué
+              </span>
+              <span class="call mono">r_parallele(10, 40)</span>
+            </div>
+            <div class="diff mono">
+              <div class="want"><span class="lab">attendu</span><span>8.00</span></div>
+              <div class="got"><span class="lab">obtenu</span><span>-13.33</span></div>
+            </div>
+          </div>
+          <p class="hint" style="margin-top:14px">3 tests cachés seront exécutés à la remise.</p>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <div class="actions wide">
+    <button class="btn btn-ghost" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg>
+      Précédent
+    </button>
+    <span class="right">
+      <button class="btn btn-secondary" type="button">Marquer comme faite</button>
+      <button class="btn btn-secondary" type="button">
+        Suivant
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m10 6 6 6-6 6"/></svg>
+      </button>
+    </span>
+  </div>
+</main>
+
+<!-- ============ bande de démonstration (absente en production) ============ -->
+<section class="demo">
+  <div class="demo-in">
+    <h2>Bande de démonstration</h2>
+    <p class="note">Hors production : elle sert à comparer les variantes de cet écran.</p>
+
+    <div class="demorow">
+      <div class="demoblk">
+        <h3>Type de question</h3>
+        <div class="segtrack" role="group" aria-label="Variante de question">
+          <button type="button" id="v-cloze" aria-pressed="true" onclick="showView('cloze')">Texte à trou</button>
+          <button type="button" id="v-code" aria-pressed="false" onclick="showView('code')">Code</button>
+        </div>
+      </div>
+
+      <div class="demoblk">
+        <h3>État de synchronisation</h3>
+        <div class="segtrack" role="group" aria-label="État de synchronisation">
+          <button type="button" id="s-ok" aria-pressed="true" onclick="showSync(true)">Sauvegardé</button>
+          <button type="button" id="s-off" aria-pressed="false" onclick="showSync(false)">Hors ligne</button>
+        </div>
+        <div class="variants" style="margin-top:12px">
+          <span class="sync ok">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5 10 17l9-10"/></svg>
+            Sauvegardé · il y a 3 s
+          </span>
+          <span class="sync off">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3l18 18"/><path d="M6.5 8.3A5.5 5.5 0 0 0 7 19h9.5a4.5 4.5 0 0 0 2.9-1"/><path d="M20.5 15.2A4.5 4.5 0 0 0 16.5 9h-1.3A7 7 0 0 0 10 5.2"/></svg>
+            Hors ligne · réponses gardées sur cet appareil
+          </span>
+        </div>
+      </div>
+
+      <div class="demoblk">
+        <h3>États des segments</h3>
+        <div class="legend">
+          <span><i style="background:var(--fg)"></i> faite</span>
+          <span><i style="background:var(--line-strong)"></i> vue</span>
+          <span><i style="background:var(--surface-3)"></i> vide</span>
+          <span><i style="background:var(--accent);height:7px"></i> courante</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+function toggleTheme(){
+  var r = document.documentElement;
+  r.classList.toggle('dark');
+  try { localStorage.setItem('quiz-theme', r.classList.contains('dark') ? 'dark' : 'light'); } catch(e) {}
+}
+function showView(name){
+  var code = name === 'code';
+  document.getElementById('view-cloze').hidden = code;
+  document.getElementById('view-code').hidden = !code;
+  document.getElementById('v-cloze').setAttribute('aria-pressed', String(!code));
+  document.getElementById('v-code').setAttribute('aria-pressed', String(code));
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function showSync(ok){
+  document.getElementById('sync-ok').hidden = !ok;
+  document.getElementById('sync-off').hidden = ok;
+  document.getElementById('s-ok').setAttribute('aria-pressed', String(ok));
+  document.getElementById('s-off').setAttribute('aria-pressed', String(!ok));
+}
+</script>
+</body>
+</html>

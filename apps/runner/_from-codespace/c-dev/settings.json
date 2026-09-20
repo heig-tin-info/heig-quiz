@@ -1,0 +1,25 @@
+{
+  "files.autoSave": "afterDelay",
+  "files.autoSaveDelay": 1000,
+  "extensions.autoUpdate": false,
+  "extensions.autoCheckUpdates": false,
+  "update.mode": "none",
+  "update.showReleaseNotes": false,
+  "telemetry.telemetryLevel": "off",
+  "chat.disableAIFeatures": true,
+  "workbench.secondarySideBar.defaultVisibility": "hidden",
+  "keyboard.dispatch": "keyCode",
+  "terminal.integrated.stickyScroll.enabled": false,
+  "terminal.integrated.fontLigatures.enabled": false,
+  "extensions.allowed": {
+    "*": false,
+    "llvm-vs-code-extensions.vscode-clangd": true,
+    "webfreak.debug": true,
+    "heig.codespace-statusbar": true
+  },
+  "workbench.startupEditor": "none",
+  "security.workspace.trust.enabled": false,
+  "clangd.path": "/usr/bin/clangd",
+  "clangd.checkUpdates": false,
+  "clangd.onConfigChanged": "restart"
+}

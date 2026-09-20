@@ -1,0 +1,18 @@
+node_modules/
+dist/
+*.tsbuildinfo
+coverage/
+
+# Embedded development database (DATABASE_URL=pglite://...)
+.data/
+
+.env
+.env.*
+!.env.example
+!.env.prod.example
+
+# Real personal data (local samples, data protection)
+/*.xlsx
+
+# Local secrets -- ADR-010
+secrets/
