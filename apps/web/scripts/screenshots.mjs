@@ -76,6 +76,12 @@ const scenes = [
   { name: "palette-many", role: "teacher", path: "/?many=1", fold: true, act: (p) => p.keyboard.press("Control+k") },
   { name: "palette-student", role: "student", path: "/", fold: true, act: (p) => p.keyboard.press("Control+k") },
 
+  // The primitive gallery (development route, teacher only)
+  { name: "dev-ui", role: "teacher", path: "/dev/ui" },
+  // The segmented control hides real radios (sr-only), so the label is what a
+  // pointer can reach — the same thing a mouse hits on the screen.
+  { name: "dev-ui-preview", role: "teacher", path: "/dev/ui", act: (p) => p.locator("label").filter({ hasText: /^(Preview|Aper\u00e7u)$/ }).first().click() },
+
   // Settings and administration
   { name: "settings", role: "teacher", path: "/settings" },
   { name: "settings-avatar", role: "teacher", path: "/settings", act: (p) => p.getByRole("button", { name: /change picture/i }).first().click() },

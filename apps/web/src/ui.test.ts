@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { buttonClass, formatDateTimeAs, localDateKey, menuPosition, scrollEdges } from "./ui";
+import {
+  buttonClass,
+  countdownPhase,
+  formatDateTimeAs,
+  formatRemaining,
+  localDateKey,
+  menuPosition,
+  scrollEdges,
+} from "./ui";
 
 // Fixed local date-time: the formatters work on local getters, so building the
 // date from local parts keeps the test free of any timezone assumption.
@@ -148,5 +156,51 @@ describe("scrollEdges", () => {
     // edge the reader can scroll towards, so it must not draw a fade.
     expect(scrollEdges(0.5, 600.4, 390)).toEqual({ left: false, right: true });
     expect(scrollEdges(210.4, 600.4, 390)).toEqual({ left: true, right: false });
+  });
+});
+
+describe("formatRemaining", () => {
+  it("writes minutes and seconds, zero-padded on the seconds", () => {
+    expect(formatRemaining(14 * 60_000 + 32_000)).toBe("14:32");
+    expect(formatRemaining(9_000)).toBe("0:09");
+  });
+
+  it("adds the hours only when there are any, and pads the minutes then", () => {
+    expect(formatRemaining(3_600_000 + 5 * 60_000)).toBe("1:05:00");
+    expect(formatRemaining(59 * 60_000)).toBe("59:00");
+  });
+
+  it("rounds up, so the last second is shown as one and not as zero", () => {
+    expect(formatRemaining(1)).toBe("0:01");
+    expect(formatRemaining(1_001)).toBe("0:02");
+  });
+
+  it("never counts into the negative: the server closes the attempt", () => {
+    expect(formatRemaining(0)).toBe("0:00");
+    expect(formatRemaining(-90_000)).toBe("0:00");
+  });
+});
+
+describe("countdownPhase", () => {
+  it("is normal above the evaluation's own threshold", () => {
+    expect(countdownPhase(10 * 60_000, 300)).toBe("normal");
+  });
+
+  it("warns from the threshold down", () => {
+    expect(countdownPhase(300_000, 300)).toBe("warning");
+    expect(countdownPhase(90_000, 300)).toBe("warning");
+  });
+
+  it("turns danger under a minute, whatever the threshold says", () => {
+    expect(countdownPhase(60_000, 300)).toBe("danger");
+    expect(countdownPhase(30_000, 30)).toBe("danger");
+    // A threshold under a minute never gets its own warning phase; the
+    // stricter rule wins rather than the configured one.
+    expect(countdownPhase(45_000, 30)).toBe("danger");
+  });
+
+  it("is over at the deadline and past it", () => {
+    expect(countdownPhase(0, 300)).toBe("over");
+    expect(countdownPhase(-1, 300)).toBe("over");
   });
 });

@@ -9,7 +9,9 @@ export type Route =
   | { view: "home" }
   | { view: "settings" }
   | { view: "admin" }
-  | { view: "classroom"; id: string };
+  | { view: "classroom"; id: string }
+  /** Development only: the gallery of the shared primitives (App.tsx gates it). */
+  | { view: "devUi" };
 
 export function routeToPath(r: Route): string {
   switch (r.view) {
@@ -21,6 +23,8 @@ export function routeToPath(r: Route): string {
       return "/admin";
     case "classroom":
       return `/classrooms/${r.id}`;
+    case "devUi":
+      return "/dev/ui";
   }
 }
 
@@ -29,6 +33,9 @@ export function parsePath(path: string): Route {
   if (parts[0] === "settings") return { view: "settings" };
   if (parts[0] === "admin") return { view: "admin" };
   if (parts[0] === "classrooms" && parts[1]) return { view: "classroom", id: parts[1] };
+  // Parsed in every build so the route is one pure function; App.tsx is what
+  // refuses to render it outside development.
+  if (parts[0] === "dev" && parts[1] === "ui") return { view: "devUi" };
   return { view: "home" };
 }
 

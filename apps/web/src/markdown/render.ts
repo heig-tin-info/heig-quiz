@@ -1,0 +1,218 @@
+import DOMPurify from "dompurify";
+import katex from "katex";
+import { Marked, type Tokens } from "marked";
+
+import { escapeHtml, highlight } from "./highlight";
+
+/*
+ * Markdown -> sanitised HTML for content a student reads: question prompts,
+ * choices, explanations, teacher comments.
+ *
+ * The content is written by a teacher, but a teacher is not the trust
+ * boundary the browser cares about: the same pipeline renders text that came
+ * out of the database, through an import, or out of an AI suggestion, and
+ * `docs/spec/03` (N-SEC-05) asks for no raw script, no foreign origin, no
+ * `javascript:`. So the output is passed through an explicit ALLOW-list —
+ * not a deny-list, which is a promise nobody can keep.
+ *
+ * The order matters and is the whole design:
+ *
+ *  1. marked turns the markdown into HTML. Its `image` renderer already drops
+ *     every href that is not an `asset:<id>`, so the only `src` a well-formed
+ *     document can produce is our own endpoint.
+ *  2. DOMPurify sanitises the result against the allow-list below and hands
+ *     back a DOM, not a string, so step 3 can inspect what survived.
+ *  3. A DOM pass fixes what an allow-list cannot express: an <img> smuggled
+ *     in as raw HTML (its src is not ours -> the node goes), an external link
+ *     (opens in a new tab, `rel=noreferrer`), a code fence (its language
+ *     class and the small tokenizer), and the maths.
+ *  4. KaTeX renders `$…$` and `$$…$$` LAST, into the text nodes that are not
+ *     inside <code>. Last, because its output is a thicket of spans and
+ *     MathML that an allow-list would have to admit wholesale; generated
+ *     after sanitisation, it is ours and never comes from the document.
+ *     Skipping <code> is also what makes `$HOME` in a shell block stay
+ *     `$HOME`.
+ */
+
+/** Where an `asset:<id>` image resolves to. Same origin, no CDN (N-SEC-02). */
+export const ASSET_BASE = "/app/api/assets/";
+
+/** Ids are what the upload endpoint returns; anything else is not an asset. */
+const ASSET_REF = /^asset:([A-Za-z0-9_-]{1,64})$/;
+
+/** `asset:<id>` -> the same-origin URL, or null when it is not an asset ref. */
+export function assetUrl(href: string): string | null {
+  const m = ASSET_REF.exec(href.trim());
+  return m ? ASSET_BASE + m[1] : null;
+}
+
+/** The markdown source of an image pointing at an uploaded asset. */
+export function assetMarkdown(id: string, alt = ""): string {
+  return `![${alt}](asset:${id})`;
+}
+
+const ALLOWED_TAGS = [
+  "p", "br", "hr", "strong", "em", "del", "code", "pre", "blockquote",
+  "ul", "ol", "li", "input", "a", "img",
+  "h1", "h2", "h3", "h4", "h5", "h6",
+  "table", "thead", "tbody", "tfoot", "tr", "th", "td",
+  "span", "sup", "sub",
+];
+
+/*
+ * `class` is here because the code fences and the task lists need it, and it
+ * is harmless: this app ships no stylesheet a class can weaponise (no
+ * `position: fixed` overlay class, no `display:none` on a warning). `style`
+ * is NOT here, which is what keeps a prompt from covering the countdown.
+ */
+const ALLOWED_ATTR = ["href", "title", "alt", "src", "class", "type", "checked", "disabled", "start", "align", "colspan", "rowspan"];
+
+/**
+ * Schemes a link may carry. DOMPurify's own default also admits `tel:`,
+ * `sms:`, `callto:` and `cid:`; a question prompt has no business dialling a
+ * phone, so the list is cut to what a course actually links to. The trailing
+ * alternatives are DOMPurify's own way of letting relative URLs through.
+ */
+const ALLOWED_URI_REGEXP = /^(?:https?:|mailto:|[^a-z]|[a-z+.\-]+(?:[^a-z+:.\-]|$))/i;
+
+const marked = new Marked({
+  gfm: true, // tables, task lists, strikethrough, autolinks
+  breaks: false,
+  renderer: {
+    /**
+     * Fenced code: the language becomes a class (so the stylesheet can set
+     * the mono face and the tint) and the small tokenizer does the rest.
+     * `escaped` means marked already escaped the text; `highlight` escapes
+     * every run it emits, so it must see the raw source either way.
+     */
+    code({ text, lang }: Tokens.Code) {
+      const tag = (lang ?? "").trim().split(/\s+/)[0] ?? "";
+      const cls = tag ? ` class="language-${escapeHtml(tag.toLowerCase())}"` : "";
+      return `<pre><code${cls}>${highlight(text, tag)}\n</code></pre>\n`;
+    },
+    /**
+     * The ONE place an <img> is allowed to come from. An `asset:<id>` becomes
+     * our endpoint; anything else (an http URL, a data: blob, a relative
+     * path) is dropped and leaves its alt text behind, so the prompt still
+     * reads and the teacher sees that the image did not take.
+     */
+    image({ href, title, text }: Tokens.Image) {
+      const src = assetUrl(href ?? "");
+      if (!src) return escapeHtml(text ?? "");
+      const titleAttr = title ? ` title="${escapeHtml(title)}"` : "";
+      return `<img src="${src}" alt="${escapeHtml(text ?? "")}"${titleAttr}>`;
+    },
+  },
+});
+
+/** Math delimiters, longest first so `$$` wins over `$`. `\$` is a literal. */
+const MATH = /\$\$([\s\S]+?)\$\$|(?<!\\)\$((?:[^$\\\n]|\\.)+?)\$/g;
+
+/** Tags whose text is literal: no maths, no smart anything. */
+const LITERAL = new Set(["CODE", "PRE", "KBD", "SAMP"]);
+
+/**
+ * Replaces `$…$` and `$$…$$` inside one text node with KaTeX output. Returns
+ * true when it changed something, so the caller can skip untouched nodes.
+ */
+function renderMathIn(node: Text, doc: Document): boolean {
+  const text = node.data;
+  if (!text.includes("$")) return false;
+  MATH.lastIndex = 0;
+  let match = MATH.exec(text);
+  if (!match) return false;
+  const frag = doc.createDocumentFragment();
+  let last = 0;
+  while (match) {
+    if (match.index > last) frag.append(doc.createTextNode(text.slice(last, match.index)));
+    const display = match[1] !== undefined;
+    const tex = (match[1] ?? match[2] ?? "").trim();
+    const host = doc.createElement("span");
+    host.className = display ? "md-math md-math-display" : "md-math";
+    // `throwOnError: false` renders the offending source in the error colour
+    // instead of taking the whole prompt down: a half-written formula must
+    // not blank the question a student is reading.
+    host.innerHTML = katex.renderToString(tex, {
+      displayMode: display,
+      throwOnError: false,
+      output: "htmlAndMathml",
+    });
+    frag.append(host);
+    last = match.index + match[0].length;
+    match = MATH.exec(text);
+  }
+  if (last < text.length) frag.append(doc.createTextNode(text.slice(last)));
+  node.replaceWith(frag);
+  return true;
+}
+
+/** Walks the sanitised tree and applies steps 3 and 4 above. */
+function postProcess(root: HTMLElement) {
+  const doc = root.ownerDocument;
+
+  // An <img> that did not come from our renderer came from raw HTML. Its src
+  // survived the allow-list only if it happens to be same-origin; it is still
+  // not an asset of this course, so it goes.
+  for (const img of Array.from(root.querySelectorAll("img"))) {
+    if (!img.getAttribute("src")?.startsWith(ASSET_BASE)) img.remove();
+    else img.setAttribute("loading", "lazy");
+  }
+
+  // A link out of the app opens in its own tab and carries no referrer. A
+  // relative one (an asset, another page) keeps the current tab. An <a> whose
+  // href the allow-list refused (a `javascript:` URL) becomes plain text:
+  // leaving it underlined and red would promise a link that does nothing.
+  for (const a of Array.from(root.querySelectorAll("a"))) {
+    const href = a.getAttribute("href") ?? "";
+    if (href === "") {
+      a.replaceWith(...Array.from(a.childNodes));
+      continue;
+    }
+    if (/^https?:/i.test(href)) {
+      a.setAttribute("target", "_blank");
+      a.setAttribute("rel", "noreferrer noopener");
+    }
+  }
+
+  // A task list is read, never ticked: the answer of a question is its own
+  // payload, not a checkbox in the prompt.
+  for (const input of Array.from(root.querySelectorAll("input"))) {
+    if (input.getAttribute("type") !== "checkbox") input.remove();
+    else {
+      input.setAttribute("disabled", "");
+      input.parentElement?.classList.add("md-task");
+    }
+  }
+
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      let parent = node.parentElement;
+      while (parent && parent !== root) {
+        if (LITERAL.has(parent.tagName)) return NodeFilter.FILTER_REJECT;
+        parent = parent.parentElement;
+      }
+      return node.nodeValue?.includes("$") ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+    },
+  });
+  const texts: Text[] = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) texts.push(n as Text);
+  for (const node of texts) renderMathIn(node, doc);
+}
+
+/**
+ * Untrusted markdown -> a sanitised HTML string, ready for
+ * `dangerouslySetInnerHTML`. Empty in, empty out (the caller shows its own
+ * placeholder rather than an empty box).
+ */
+export function renderMarkdown(source: string): string {
+  if (!source.trim()) return "";
+  const html = marked.parse(source, { async: false });
+  const body = DOMPurify.sanitize(html, {
+    ALLOWED_TAGS,
+    ALLOWED_ATTR,
+    ALLOWED_URI_REGEXP,
+    RETURN_DOM: true,
+  }) as unknown as HTMLElement;
+  postProcess(body);
+  return body.innerHTML;
+}

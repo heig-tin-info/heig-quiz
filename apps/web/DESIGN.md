@@ -251,6 +251,49 @@ with a keyboard-reachable dismiss button.
   scroll: a panel anchored at 12 dvh of a viewport moving under it is not
   anchored to anything.
 
+- Countdown: the time left on a deadline the **server** owns. `now` is a
+  prop, never `Date.now()`, so two countdowns on a screen agree and both
+  follow `useServerClock`. Tabular digits, `warning` under the evaluation's
+  threshold, `danger` under a minute whatever that threshold says, `0:00` and
+  never a negative. The phase is also announced once, when it is crossed,
+  through a polite live region: the colour change alone reaches neither a
+  screen reader nor a red-green reader.
+- Ring: SVG progress ring for the lobby's "present / enrolled" and the
+  dashboard's completion. `fg` and not the accent — on the waiting screen it
+  is the only living element, and a red disc would read as an alarm on a page
+  whose whole message is "there is nothing to do". `label` names the figure;
+  the middle is `aria-hidden`, or the reader hears the numbers twice.
+- ProgressSegments: one bar per question in the zen player, four states
+  (`empty` never opened, `answered` opened and left, `done`, `current`). The
+  bars share the width so twenty fit 360 px; roving tabindex like `Tabs`,
+  because twenty questions must not be twenty stops on the way to the answer
+  field; the state is in the accessible name, not only in the height.
+- VerdictCell: one cell of the live grid and of the grading list, seven
+  states (`blank`, `inProgress`, `answered`, `correct`, `partial`, `wrong`,
+  `pending`). Icon **and** tint **and** word, never a tint alone: a dashboard
+  projected on a lecture-hall wall loses half its saturation. `value` holds
+  the answer in a glyph or two ("B", "NULL", "3/3") beside the icon.
+- SyncBadge: whether the student's work is safe — `saved`, `saving`,
+  `offline`, `closed` — icon plus word, in a polite live region, since it is
+  the answer to "did that save?". The word hides under `sm` where the zen bar
+  has no room, and the accessible name keeps it.
+- MarkdownView: the ONE renderer of untrusted content a student sees
+  (prompts, choices, explanations, comments). Markdown through marked, then
+  an explicit DOMPurify allow-list, then KaTeX last so its own markup never
+  has to be allow-listed; `asset:<id>` images resolve to `/app/api/assets/`
+  and every other `src` is dropped. Its typography lives in the `.md-body`
+  block of `style.css` — the one place a stylesheet is unavoidable, because
+  the content is HTML the component never sees as React elements. `size="sm"`
+  is the dense variant for a table cell or an inspection panel.
+  `markdown.tsx` beside it is a different thing: trusted help text turned into
+  React elements, never into HTML.
+- MarkdownField: the teacher's editor (decision D11). A textarea, a six-button
+  toolbar, `Ctrl+B` / `Ctrl+I`, Tab as two spaces, and an image pasted or
+  dropped going through `onUploadImage` and coming back as `![](asset:<id>)`.
+  Its segmented control already names the three panes — Write, Preview,
+  Source — that the later Tiptap split will need: the day it lands, "Write"
+  changes and "Source" does not, and no stored value moves.
+
 ## Voice
 
 Sentence case everywhere. Buttons start with a verb ("Create assignment",

@@ -19,6 +19,10 @@ const ClassroomView = lazy(() =>
 );
 const SettingsPage = lazy(() => import("./SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const AdminPage = lazy(() => import("./AdminPanel").then((m) => ({ default: m.AdminPage })));
+// Development only. The chunk is still built in production (Vite has no way
+// to know otherwise), but nothing routes to it: `parsePath` returns the view
+// and the guard below sends it home.
+const DevGallery = lazy(() => import("./DevGallery").then((m) => ({ default: m.DevGallery })));
 
 /*
  * Signed-out page. The four decisions, so the door looks like the house:
@@ -104,6 +108,8 @@ export default function App() {
       <SettingsPage me={me.data} />
     ) : !teacherUi ? (
       <StudentHome />
+    ) : route.view === "devUi" && import.meta.env.DEV ? (
+      <DevGallery />
     ) : route.view === "admin" && role === "admin" ? (
       <AdminPage />
     ) : route.view === "classroom" ? (

@@ -9,6 +9,10 @@ import { HelpProvider } from "./help";
 import { I18nProvider } from "./i18n";
 import { ToastProvider } from "./notify";
 import { applyTheme, getThemeChoice } from "./theme";
+// KaTeX ships its own stylesheet and its own fonts, self-hosted through the
+// bundler (N-SEC-02 forbids a CDN). Imported once, here: MarkdownView is
+// rendered from half a dozen lazy chunks and none of them should own it.
+import "katex/dist/katex.css";
 import "./style.css";
 
 async function boot() {

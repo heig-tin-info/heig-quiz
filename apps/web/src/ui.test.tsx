@@ -8,21 +8,29 @@ import { renderWithProviders } from "./test/render";
 import {
   Alert,
   Button,
+  Countdown,
   EmptyState,
   Field,
   Menu,
   Modal,
   pressable,
+  ProgressSegments,
   QueryError,
+  Ring,
   Segmented,
   Select,
   Sheet,
   Switch,
+  SyncBadge,
   Tabs,
   Textarea,
   Tip,
+  VerdictCell,
   Z,
   type MenuItem,
+  type Segment,
+  type SyncState,
+  type VerdictState,
 } from "./ui";
 
 /*
@@ -807,5 +815,262 @@ describe("Tip", () => {
     );
     const button = screen.getByRole("button", { name: "Lock" });
     expect(button.parentElement).not.toHaveClass("inline-flex");
+  });
+});
+
+/*
+ * The five live primitives (PLAN-MVP §6.4). What is asserted of each is the
+ * same triple: it renders, a screen reader is told the state in words, and
+ * the state variants differ by more than their tint.
+ */
+
+describe("Countdown", () => {
+  const now = 1_700_000_000_000;
+
+  it("shows the time left, tabular, and names it for a reader", () => {
+    renderWithProviders(<Countdown deadlineAt={now + 872_000} now={now} />);
+    const timer = screen.getByRole("timer");
+    expect(timer).toHaveTextContent("14:32");
+    expect(timer).toHaveClass("tabular-nums");
+    expect(timer).toHaveAccessibleName("14:32 remaining");
+  });
+
+  it("stays neutral above the threshold and turns warning under it", () => {
+    const { rerender } = renderWithProviders(
+      <Countdown deadlineAt={now + 600_000} now={now} warnUnderS={300} />,
+    );
+    expect(screen.getByRole("timer")).toHaveClass("text-fg");
+    rerender(<Countdown deadlineAt={now + 240_000} now={now} warnUnderS={300} />);
+    expect(screen.getByRole("timer")).toHaveClass("text-warning");
+  });
+
+  it("turns danger under a minute even when the threshold is lower", () => {
+    renderWithProviders(<Countdown deadlineAt={now + 30_000} now={now} warnUnderS={20} />);
+    expect(screen.getByRole("timer")).toHaveClass("text-danger");
+  });
+
+  it("announces the phase once when it is crossed, not every tick", async () => {
+    const live = () => document.querySelector('[aria-live="polite"]')!;
+    const { rerender } = renderWithProviders(
+      <Countdown deadlineAt={now + 600_000} now={now} warnUnderS={300} />,
+    );
+    expect(live()).toHaveTextContent("");
+    rerender(<Countdown deadlineAt={now + 240_000} now={now} warnUnderS={300} />);
+    await waitFor(() => expect(live()).toHaveTextContent("4:00 remaining."));
+    // One more second inside the same phase must not re-announce.
+    rerender(<Countdown deadlineAt={now + 239_000} now={now} warnUnderS={300} />);
+    expect(live()).toHaveTextContent("4:00 remaining.");
+  });
+
+  it("says the time is up rather than counting into the negative", () => {
+    renderWithProviders(<Countdown deadlineAt={now - 5_000} now={now} />);
+    const timer = screen.getByRole("timer");
+    expect(timer).toHaveTextContent("0:00");
+    expect(timer).toHaveAccessibleName("Time is up.");
+  });
+
+  it("speaks French when the locale does (N-I18N-01)", () => {
+    renderWithProviders(<Countdown deadlineAt={now + 60_001} now={now} />, { locale: "fr" });
+    expect(screen.getByRole("timer")).toHaveAccessibleName("il reste 1:01");
+  });
+});
+
+describe("Ring", () => {
+  it("is a named figure whose middle is hidden from the reader", () => {
+    renderWithProviders(
+      <Ring value={18} max={24} label="18 of 24 students present">
+        <span>75%</span>
+      </Ring>,
+    );
+    const ring = screen.getByRole("img", { name: "18 of 24 students present" });
+    expect(ring.querySelector("svg")).toHaveAttribute("aria-hidden");
+    expect(screen.getByText("75%").closest("[aria-hidden]")).not.toBeNull();
+  });
+
+  it("draws the arc in proportion, and the whole circle when full", () => {
+    const dash = (value: number, max: number) => {
+      const { container, unmount } = renderWithProviders(
+        <Ring value={value} max={max} size={100} thickness={10} label="ring" />,
+      );
+      const arc = container.querySelectorAll("circle")[1]!;
+      const [drawn, total] = arc.getAttribute("stroke-dasharray")!.split(" ").map(Number);
+      unmount();
+      return (drawn! / total!).toFixed(3);
+    };
+    expect(dash(0, 24)).toBe("0.000");
+    expect(dash(12, 24)).toBe("0.500");
+    expect(dash(24, 24)).toBe("1.000");
+  });
+
+  it("survives a zero and an out-of-range value rather than drawing NaN", () => {
+    const { container } = renderWithProviders(<Ring value={5} max={0} size={100} label="ring" />);
+    const arc = container.querySelectorAll("circle")[1]!;
+    expect(arc.getAttribute("stroke-dasharray")).not.toContain("NaN");
+  });
+
+  it("takes the accent-free stroke of DESIGN.md, not a red one", () => {
+    const { container } = renderWithProviders(<Ring value={1} max={2} label="ring" />);
+    expect(container.querySelectorAll("circle")[1]).toHaveClass("stroke-fg");
+  });
+});
+
+describe("ProgressSegments", () => {
+  const segments: Segment[] = [
+    { id: "q1", state: "done" },
+    { id: "q2", state: "answered" },
+    { id: "q3", state: "current" },
+    { id: "q4", state: "empty" },
+  ];
+
+  it("names every segment with its number and its state in words", () => {
+    renderWithProviders(<ProgressSegments segments={segments} label="Progress" onSelect={() => {}} />);
+    expect(screen.getByRole("navigation", { name: "Progress" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Question 1, done" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Question 2, opened, not marked done" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Question 4, not opened" })).toBeInTheDocument();
+  });
+
+  it("marks the current one and gives it the only tab stop", () => {
+    renderWithProviders(<ProgressSegments segments={segments} label="Progress" onSelect={() => {}} />);
+    const current = screen.getByRole("button", { name: "Question 3, current" });
+    expect(current).toHaveAttribute("aria-current", "true");
+    const stops = screen.getAllByRole("button").filter((b) => b.tabIndex === 0);
+    expect(stops).toEqual([current]);
+  });
+
+  it("gives each state its own bar, not just its own tint", () => {
+    const { container } = renderWithProviders(
+      <ProgressSegments segments={segments} label="Progress" onSelect={() => {}} />,
+    );
+    const bars = Array.from(container.querySelectorAll("button > span:first-child"));
+    expect(bars[0]).toHaveClass("bg-fg");
+    expect(bars[1]).toHaveClass("bg-line-strong");
+    expect(bars[2]).toHaveClass("bg-accent", "h-2");
+    expect(bars[3]).toHaveClass("bg-surface-3");
+  });
+
+  it("moves with the arrows, wraps, and jumps with Home and End", async () => {
+    renderWithProviders(<ProgressSegments segments={segments} label="Progress" onSelect={() => {}} />);
+    const at = (n: number) => screen.getByRole("button", { name: new RegExp(`^Question ${n},`) });
+    at(3).focus();
+    await userEvent.keyboard("{ArrowRight}");
+    expect(at(4)).toHaveFocus();
+    await userEvent.keyboard("{ArrowRight}");
+    expect(at(1)).toHaveFocus();
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(at(4)).toHaveFocus();
+    await userEvent.keyboard("{Home}");
+    expect(at(1)).toHaveFocus();
+    await userEvent.keyboard("{End}");
+    expect(at(4)).toHaveFocus();
+  });
+
+  it("hands the caller the id and the index it clicked", async () => {
+    const onSelect = vi.fn();
+    renderWithProviders(<ProgressSegments segments={segments} label="Progress" onSelect={onSelect} />);
+    await userEvent.click(screen.getByRole("button", { name: "Question 2, opened, not marked done" }));
+    expect(onSelect).toHaveBeenCalledWith("q2", 1);
+  });
+
+  it("is a read-only indicator when navigation is locked", () => {
+    renderWithProviders(<ProgressSegments segments={segments} label="Progress" />);
+    for (const button of screen.getAllByRole("button")) expect(button).toBeDisabled();
+  });
+});
+
+describe("VerdictCell", () => {
+  const states: VerdictState[] = [
+    "blank",
+    "inProgress",
+    "answered",
+    "correct",
+    "partial",
+    "wrong",
+    "pending",
+  ];
+
+  it("carries an icon and a word in every one of its states", () => {
+    for (const state of states) {
+      const { container, unmount } = renderWithProviders(<VerdictCell state={state} />);
+      expect(container.querySelector("svg")).not.toBeNull();
+      expect(container.textContent?.trim()).not.toBe("");
+      unmount();
+    }
+  });
+
+  it("names the state for a reader and shows the answer for everyone else", () => {
+    renderWithProviders(<VerdictCell state="correct" value="NULL" />);
+    expect(screen.getByText("Correct")).toHaveClass("sr-only");
+    expect(screen.getByText("NULL")).toBeInTheDocument();
+  });
+
+  it("separates correct, partial and wrong by icon, not only by tint", () => {
+    const paths = (state: VerdictState) => {
+      const { container, unmount } = renderWithProviders(<VerdictCell state={state} />);
+      const d = container.querySelector("svg")!.innerHTML;
+      unmount();
+      return d;
+    };
+    const [ok, partial, bad] = [paths("correct"), paths("partial"), paths("wrong")];
+    expect(new Set([ok, partial, bad]).size).toBe(3);
+  });
+
+  it("becomes a real button when the dashboard can inspect it", async () => {
+    const onClick = vi.fn();
+    renderWithProviders(<VerdictCell state="partial" value="2/3" onClick={onClick} label="Nadia, question 5: partly correct" />);
+    const cell = screen.getByRole("button", { name: "Nadia, question 5: partly correct" });
+    await userEvent.click(cell);
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it("speaks French when the locale does", () => {
+    renderWithProviders(<VerdictCell state="wrong" />, { locale: "fr" });
+    expect(screen.getByText("Faux")).toBeInTheDocument();
+  });
+});
+
+describe("SyncBadge", () => {
+  const states: SyncState[] = ["saved", "saving", "offline", "closed"];
+
+  it("is a polite status with an icon and a word in every state", () => {
+    for (const state of states) {
+      const { container, unmount } = renderWithProviders(<SyncBadge state={state} />);
+      const badge = screen.getByRole("status");
+      expect(badge).toHaveAttribute("aria-live", "polite");
+      expect(container.querySelector("svg")).not.toBeNull();
+      expect(badge.textContent?.trim()).not.toBe("");
+      unmount();
+    }
+  });
+
+  it("reads the four states out", () => {
+    renderWithProviders(
+      <>
+        <SyncBadge state="saved" />
+        <SyncBadge state="saving" />
+        <SyncBadge state="offline" />
+        <SyncBadge state="closed" />
+      </>,
+    );
+    for (const word of ["Saved", "Saving…", "Offline", "Closed"]) {
+      expect(screen.getAllByText(word).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("spins only while it is saving", () => {
+    const { container, rerender } = renderWithProviders(<SyncBadge state="saving" />);
+    expect(container.querySelector("svg")).toHaveClass("animate-spin");
+    rerender(<SyncBadge state="saved" />);
+    expect(container.querySelector("svg")).not.toHaveClass("animate-spin");
+  });
+
+  it("warns without shouting when the connection went away", () => {
+    renderWithProviders(<SyncBadge state="offline" />);
+    expect(screen.getByRole("status")).toHaveClass("text-warning");
+  });
+
+  it("speaks French when the locale does", () => {
+    renderWithProviders(<SyncBadge state="offline" />, { locale: "fr" });
+    expect(screen.getAllByText("Hors ligne").length).toBeGreaterThan(0);
   });
 });
