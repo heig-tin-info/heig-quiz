@@ -142,13 +142,29 @@ No Docker, no Podman and no PostgreSQL are needed to run this.
 ```bash
 corepack enable pnpm && pnpm install
 cp .env.example .env            # pglite:// database + AUTH_DEV_LOGIN=1
-pnpm seed                       # course PRG1, one classroom, six students
+pnpm seed                       # the whole demo world (below)
 pnpm dev                        # API on :3000 and Vite on :5173, together
+pnpm smoke                      # end-to-end HTTP walk, against a running API
 ```
 
 Then open <http://localhost:5173>, click **Dev login** and pick a persona.
 The embedded database is a directory (`apps/api/.data/pglite`, gitignored);
 delete it to start over. It is single-process: stop the API before `pnpm seed`.
+
+`pnpm seed` (`apps/api/src/seed.ts`, content in `apps/api/src/seed/`) is
+idempotent and builds everything through the ORDINARY SERVICES, never by raw
+inserts: course PRG1, classroom PRG1-2026, six students, two pools with
+fourteen published questions of all four types, and four evaluations — one
+`draft`, one `scheduled`, one exercise in `lobby`, and `Test 0 — bases du C`
+closed, answered by five of the six students, graded by the real grading pass
+and left UNRELEASED so the panel has proposals to validate. Keyed on internal
+names and titles, so a second run writes nothing.
+
+`pnpm smoke` (`scripts/smoke.sh`) needs a running API and a seeded database.
+It walks one whole life of an evaluation over HTTP — login, author, publish,
+build, open, answer, submit, close, grade, release, CSV, feedback — and exits
+non-zero on the first failed expectation. A base URL may be passed as its only
+argument.
 
 ```bash
 pnpm build && pnpm typecheck && pnpm test    # what CI runs

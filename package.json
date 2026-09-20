@@ -14,6 +14,7 @@
     "dev": "pnpm -r --parallel --filter @quiz/api --filter @quiz/web dev",
     "dev:mock": "pnpm --filter @quiz/web dev:mock",
     "seed": "pnpm --filter @quiz/api seed",
+    "smoke": "bash scripts/smoke.sh",
     "db:generate": "pnpm --filter @quiz/api db:generate"
   },
   "pnpm": {
