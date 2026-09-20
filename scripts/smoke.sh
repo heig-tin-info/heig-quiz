@@ -75,6 +75,12 @@ wait_grading() {
 step "health"
 api "$TEACHER" GET /healthz; expect 200 "GET /healthz"
 [ "$(jq -r .checks.database <"$BODY")" = "up" ] || fail "healthz: database is not up"
+# The code section below runs only against a real runner. `disabled` is the
+# ordinary answer of a machine with no container engine (decision D14) and
+# `down` is one that is configured but unreachable: neither is a failure of
+# this walk, and neither stops it.
+RUNNER="$(jq -r '.checks.runner // "disabled"' <"$BODY")"
+printf '   .. runner is %s\n' "$RUNNER"
 
 step "teacher session"
 login "$TEACHER" teacher
@@ -84,9 +90,48 @@ api "$TEACHER" GET "/app/api/courses/$COURSE_ID"; expect 200 "GET /courses/:id"
 CLASSROOM_ID="$(jqx '.classrooms[0].id' 'first classroom')"
 POOL_ID="$(jqx '.pools[0].id' 'first pool of the course')"
 api "$TEACHER" GET /app/api/pools; expect 200 "GET /pools"
-api "$TEACHER" GET "/app/api/pools/$POOL_ID/questions"; expect 200 "GET /pools/:id/questions"
+api "$TEACHER" GET "/app/api/pools/$POOL_ID/questions?limit=100"; expect 200 "GET /pools/:id/questions"
 EXISTING_Q="$(jqx '.items[0].id' 'an existing question')"
+# The seeded C exercise, by name: the two answers below are written for THAT
+# question (a `somme` over an array), so any other code question would only
+# produce a confusing link error.
+CODE_Q="$(jq -r '[.items[] | select(.internalName=="prg1-code-somme-tableau")][0].id // empty' <"$BODY")"
 printf '   .. %s questions in the pool\n' "$(jq -r '.items | length' <"$BODY")"
+
+# --- the code runner, only when there is one -------------------------------
+# The seeded C question carries visible AND hidden cases, so one `try` with the
+# reference solution and one with a wrong answer exercise the whole path:
+# assemble server-side, compile in a container, run every case, compare.
+if [ "$RUNNER" = "up" ] && [ -n "$CODE_Q" ]; then
+  step "code runner: the teacher rehearses a C question"
+  RIGHT='"\nint somme(const int *t, int n) {\n    int total = 0;\n    for (int i = 0; i < n; i++) {\n        total += t[i];\n    }\n    return total;\n}\n"'
+  WRONG='"\nint somme(const int *t, int n) {\n    int total = 0;\n    for (int i = 0; i <= n; i++) {\n        total += t[i];\n    }\n    return total;\n}\n"'
+
+  api "$TEACHER" POST "/app/api/questions/$CODE_Q/try" "{\"source\":1,\"answer\":{\"regions\":[$RIGHT]}}"
+  expect 200 "POST /questions/:id/try (reference solution)"
+  [ "$(jq -r .status <"$BODY")" = "graded" ] \
+    || fail "try: the runner did not answer ($(jq -r '.status, .reason' <"$BODY" | tr '\n' ' '))"
+  jq -e '.details.compile.ok == true' <"$BODY" >/dev/null || fail "try: the reference solution did not compile"
+  jq -e '.points == .maxPoints and .points > 0' <"$BODY" >/dev/null \
+    || fail "try: the reference solution scored $(jq -r .points <"$BODY") / $(jq -r .maxPoints <"$BODY")"
+  jq -e '[.details.cases[] | select(.ok == false)] | length == 0' <"$BODY" >/dev/null \
+    || fail "try: a case failed on the reference solution"
+  printf '   ok  %s / %s points, %s cases, compiled in %s ms\n' \
+    "$(jq -r .points <"$BODY")" "$(jq -r .maxPoints <"$BODY")" \
+    "$(jq -r '.details.cases | length' <"$BODY")" "$(jq -r .details.compile.ms <"$BODY")"
+
+  api "$TEACHER" POST "/app/api/questions/$CODE_Q/try" "{\"source\":1,\"answer\":{\"regions\":[$WRONG]}}"
+  expect 200 "POST /questions/:id/try (off-by-one answer)"
+  jq -e '.points < .maxPoints' <"$BODY" >/dev/null || fail "try: the wrong answer scored full marks"
+  # A failing case must carry what the program actually printed: without the
+  # `got`, a student is told they are wrong and nothing else.
+  jq -e '[.details.cases[] | select(.ok == false and (.actual // "") != "")] | length > 0' <"$BODY" >/dev/null \
+    || fail "try: the failing case carries no output"
+  printf '   ok  %s / %s points; first failure expected %s got %s\n' \
+    "$(jq -r .points <"$BODY")" "$(jq -r .maxPoints <"$BODY")" \
+    "$(jq -r '[.details.cases[] | select(.ok == false)][0].expected' <"$BODY" | head -c 40)" \
+    "$(jq -r '[.details.cases[] | select(.ok == false)][0].actual' <"$BODY" | head -c 40)"
+fi
 
 step "author and publish a fresh question"
 api "$TEACHER" POST "/app/api/pools/$POOL_ID/questions" \
@@ -109,10 +154,15 @@ expect 201 "POST /classrooms/:id/evaluations"
 EVAL_ID="$(jqx '.id' 'evaluation id')"
 api "$TEACHER" PATCH "/app/api/evaluations/$EVAL_ID" '{"durationS":1800}'
 expect 200 "PATCH /evaluations/:id (duration)"
-api "$TEACHER" POST "/app/api/evaluations/$EVAL_ID/items" \
-  "{\"questionIds\":[\"$QUESTION_ID\",\"$EXISTING_Q\"]}"
+# The code question joins the evaluation only when a runner can answer for it.
+if [ "$RUNNER" = "up" ] && [ -n "$CODE_Q" ]; then
+  ITEMS="[\"$QUESTION_ID\",\"$EXISTING_Q\",\"$CODE_Q\"]"; WANT=3
+else
+  ITEMS="[\"$QUESTION_ID\",\"$EXISTING_Q\"]"; WANT=2
+fi
+api "$TEACHER" POST "/app/api/evaluations/$EVAL_ID/items" "{\"questionIds\":$ITEMS}"
 expect 200 "POST /evaluations/:id/items"
-[ "$(jq -r 'length' <"$BODY")" = "2" ] || fail "items: expected two items"
+[ "$(jq -r 'length' <"$BODY")" = "$WANT" ] || fail "items: expected $WANT items"
 api "$TEACHER" POST "/app/api/evaluations/$EVAL_ID/state" '{"to":"lobby"}'
 expect 200 "POST /evaluations/:id/state (lobby)"
 api "$TEACHER" POST "/app/api/evaluations/$EVAL_ID/start" '{"confirm":true}'
@@ -125,12 +175,26 @@ expect 200 "POST /evaluations/:id/attempt"
 [ "$(jq -r .kind <"$BODY")" = "attempt" ] || fail "attempt: the student landed in the lobby"
 ATTEMPT_ID="$(jqx '.view.attempt.id' 'attempt id')"
 ITEM_ID="$(jqx '[.view.items[] | select(.type=="short")][0].id' 'a short item')"
+CODE_ITEM="$(jq -r '[.view.items[] | select(.type=="code")][0].id // empty' <"$BODY")"
 for rev in 1 2; do
   api "$STUDENT" PUT "/app/api/attempts/$ATTEMPT_ID/answers/$ITEM_ID" \
     "{\"payload\":{\"text\":\"$((2 + rev))\"},\"revision\":$rev,\"clientTs\":\"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)\"}"
   expect 200 "PUT answer (revision $rev)"
   [ "$(jq -r .accepted <"$BODY")" = "true" ] || fail "autosave: revision $rev was refused"
 done
+# The Run button: the visible cases only, and never the hidden half.
+if [ "$RUNNER" = "up" ] && [ -n "$CODE_ITEM" ]; then
+  api "$STUDENT" POST "/app/api/attempts/$ATTEMPT_ID/run" \
+    "{\"itemId\":\"$CODE_ITEM\",\"regions\":[$RIGHT]}"
+  expect 202 "POST /attempts/:id/run"
+  jq -e '.result.status == "ok" and .result.compile.ok == true' <"$BODY" >/dev/null \
+    || fail "run: the runner did not compile the student's code"
+  jq -e '[.result.cases[] | select(.ok == false)] | length == 0' <"$BODY" >/dev/null \
+    || fail "run: a visible case failed on the reference solution"
+  printf '   ok  %s visible cases, first one in %s ms\n' \
+    "$(jq -r '.result.cases | length' <"$BODY")" "$(jq -r '.result.cases[0].ms' <"$BODY")"
+fi
+
 api "$STUDENT" POST "/app/api/attempts/$ATTEMPT_ID/submit" '{"confirm":true}'
 expect 200 "POST /attempts/:id/submit"
 
