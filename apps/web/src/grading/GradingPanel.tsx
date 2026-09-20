@@ -24,6 +24,7 @@ import {
   Button,
   Card,
   EmptyState,
+  PageError,
   PageHeader,
   QueryError,
   Segmented,
@@ -318,7 +319,7 @@ export function GradingPanel({
   if (evaluation.isLoading) return <ListSkeleton />;
   if (evaluation.isError) {
     return (
-      <QueryError
+      <PageError
         title={t("grading.loadFailed")}
         error={evaluation.error}
         onRetry={() => void evaluation.refetch()}
@@ -457,7 +458,10 @@ export function GradingPanel({
               `items-start` there sizes them to their content and pushes the
               whole document sideways. */}
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-            <aside className="w-full shrink-0 lg:sticky lg:top-6 lg:w-75">
+            <aside
+              aria-label={t("aside.gradingItem")}
+              className="w-full shrink-0 lg:sticky lg:top-6 lg:w-75"
+            >
               <Card className="space-y-3 p-5">
                 <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
                   {order === "question"

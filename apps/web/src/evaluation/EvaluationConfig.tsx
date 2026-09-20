@@ -17,9 +17,10 @@ import {
   Field,
   Menu,
   Modal,
+  PageError,
   PageHeader,
-  QueryError,
   Skeleton,
+  TabPanel,
   Tabs,
 } from "../ui";
 import { evaluationKey, evaluationsKey, isGraded, stateLabel, stateTone } from "./common";
@@ -149,7 +150,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
   }
   if (detail.isError || !detail.data) {
     return (
-      <QueryError
+      <PageError
         title={t("eval.notFound")}
         error={detail.error}
         onRetry={() => void detail.refetch()}
@@ -263,13 +264,15 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
         </Alert>
       ) : null}
 
-      {step === "questions" ? (
-        <ItemsStep detail={data} />
-      ) : step === "timing" ? (
-        <TimingStep detail={data} patch={patch} />
-      ) : (
-        <LaunchStep detail={data} navigate={navigate} />
-      )}
+      <TabPanel idPrefix="eval-step" value={step}>
+        {step === "questions" ? (
+          <ItemsStep detail={data} />
+        ) : step === "timing" ? (
+          <TimingStep detail={data} patch={patch} />
+        ) : (
+          <LaunchStep detail={data} navigate={navigate} />
+        )}
+      </TabPanel>
 
       {step !== "launch" ? (
         <div className="flex justify-end">

@@ -207,7 +207,9 @@ export function EvaluationList({
                 <th className={`${T.th} text-right`}>{t("eval.step.questions")}</th>
                 <th className={`${T.th} text-right`}>{t("eval.col.points")}</th>
                 <th className={`${T.th} text-right`}>{t("eval.col.attempts")}</th>
-                <th className={`${T.th} w-10`} />
+                <th className={`${T.th} w-10`}>
+                  <span className="sr-only">{t("common.actions")}</span>
+                </th>
               </tr>
             </thead>
             <tbody>

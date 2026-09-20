@@ -16,7 +16,7 @@ import {
   cx,
   EmptyState,
   Kbd,
-  QueryError,
+  PageError,
   Skeleton,
   Switch,
   useNow,
@@ -198,7 +198,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   }
   if (query.isError || !state) {
     return (
-      <QueryError
+      <PageError
         title={t("live.notFound")}
         error={query.error}
         onRetry={() => void query.refetch()}
@@ -277,6 +277,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
             <StudentGrid
               state={state}
               now={now}
+              paused={evaluationState === "paused"}
               showNames={toggles.names}
               showAnswers={toggles.answers}
               showResults={toggles.results}

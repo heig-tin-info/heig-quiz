@@ -24,6 +24,7 @@ import {
   EmptyState,
   isoDateTime,
   Menu,
+  PageError,
   PageHeader,
   QueryError,
   SectionHeading,
@@ -145,7 +146,7 @@ export function ResultsView({
   }
   if (results.isError || !view) {
     return (
-      <QueryError
+      <PageError
         title={t("results.loadFailed")}
         error={results.error}
         onRetry={() => void results.refetch()}

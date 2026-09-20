@@ -504,9 +504,15 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
         title={t("courses.title")}
         description={t("courses.subtitle")}
         actions={
-          <Button onClick={() => setCreating(true)}>
-            <Plus /> {t("courses.new")}
-          </Button>
+          // Not while the list is empty: the empty state below carries the
+          // same action, and two accent fills of the SAME action on one
+          // screen is noise, not emphasis (W19). One button, in the place
+          // the reader is already looking.
+          (courses.data ?? []).length > 0 ? (
+            <Button onClick={() => setCreating(true)}>
+              <Plus /> {t("courses.new")}
+            </Button>
+          ) : undefined
         }
       />
 

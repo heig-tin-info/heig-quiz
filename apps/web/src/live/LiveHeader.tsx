@@ -61,12 +61,22 @@ export function LiveHeader({
   return (
     <PageHeader
       eyebrow={eyebrow}
-      title={
-        <span className="flex flex-wrap items-baseline gap-3">
-          {title}
+      // The heading is the evaluation, and nothing else. The state badge and
+      // the countdown used to live inside it, which made the document heading
+      // read "Quiz 3 — pointeurs et tableaux running 11:58" and rewrite itself
+      // every second (W6). They sit under it now, on the same line as each
+      // other, where they are still the first thing the eye lands on.
+      title={title}
+      description={
+        <span className="flex flex-wrap items-center gap-3">
           <Badge tone={stateTone(state)}>{stateLabel(state, t)}</Badge>
           {closesAt && live ? (
-            <Countdown deadlineAt={Date.parse(closesAt)} now={now} className="text-[20px]" />
+            <Countdown
+              deadlineAt={Date.parse(closesAt)}
+              now={now}
+              paused={paused}
+              className="text-[20px]"
+            />
           ) : null}
         </span>
       }

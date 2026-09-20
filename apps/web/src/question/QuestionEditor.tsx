@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Copy, Eye, Save, Trash2, CloudUpload } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertTriangle, Copy, Eye, Play, Save, Trash2, CloudUpload } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   Asset,
@@ -26,12 +26,13 @@ import {
   Button,
   Card,
   Menu,
+  PageError,
   PageHeader,
-  QueryError,
   SectionHeading,
   Skeleton,
   Spinner,
   SyncBadge,
+  TabPanel,
   Tabs,
 } from "../ui";
 import { useAutosave } from "./autosave";
@@ -79,6 +80,9 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   const [issues, setIssues] = useState<readonly ZodIssueLite[]>([]);
   const [publishing, setPublishing] = useState(false);
   const [preview, setPreview] = useState(false);
+  // The tab panel, so `Ctrl+Enter` can put the reader inside what it opened.
+  const panelRef = useRef<HTMLDivElement>(null);
+  const followToPanel = useRef(false);
 
   const detail = useQuery<QuestionDetail>({
     queryKey: ["question", id],
@@ -170,7 +174,8 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
 
   // docs/spec/08 §8.4: Ctrl+S saves (the automatic save is invisible and a
   // teacher wants to be sure), Ctrl+Shift+P publishes, Ctrl+Shift+M shows the
-  // student preview. All three are reachable with the mouse as well.
+  // student preview, Ctrl+Enter tries the question. All four are reachable
+  // with the mouse as well.
   const { flush } = autosave;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -179,6 +184,18 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
       if (key === "s" && !e.shiftKey) {
         e.preventDefault();
         flush();
+        return;
+      }
+      // §8.5 "Essayer la question": the draft is saved first — the Try tab
+      // runs what the SERVER holds, and trying a question without the edit
+      // that prompted the try is the one thing this shortcut must not do.
+      // The focus follows into the panel; a shortcut that moves the screen
+      // and leaves the caret behind has moved only half the reader.
+      if (key === "enter" && !e.shiftKey) {
+        e.preventDefault();
+        flush();
+        followToPanel.current = true;
+        setTab("try");
         return;
       }
       if (!e.shiftKey) return;
@@ -192,7 +209,13 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [flush]);
+  }, [flush, setTab]);
+
+  useEffect(() => {
+    if (!followToPanel.current) return;
+    followToPanel.current = false;
+    panelRef.current?.focus();
+  }, [tab]);
 
   // The editor's own palette entries (docs/spec/08 §8.3). They carry the
   // shortcut as a hidden keyword, so typing "ctrl+shift+p" finds the action
@@ -214,6 +237,17 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
       keywords: "ctrl+shift+m",
       run: () => setPreview((v) => !v),
     },
+    {
+      id: "question:try",
+      label: t("question.tab.try"),
+      icon: Play,
+      group: "action",
+      keywords: "ctrl+enter",
+      run: () => {
+        followToPanel.current = true;
+        setTab("try");
+      },
+    },
   ]);
 
   const configIssues = useMemo(() => toConfigIssues(t, issues), [t, issues]);
@@ -228,7 +262,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   }
   if (detail.isError) {
     return (
-      <QueryError
+      <PageError
         title={t("question.notFound")}
         error={detail.error}
         onRetry={() => void detail.refetch()}
@@ -313,6 +347,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
         ]}
       />
 
+      <TabPanel idPrefix="question" value={tab} ref={panelRef}>
       {tab === "edit" ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="min-w-0 space-y-5">
@@ -352,7 +387,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
             <p className="text-xs text-fg-faint">{t("question.shortcuts")}</p>
           </div>
 
-          <aside className="space-y-5">
+          <aside aria-label={t("aside.questionMeta")} className="space-y-5">
             <MetaPanel
               meta={data.meta}
               categories={pool.data?.categories ?? []}
@@ -366,6 +401,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
       ) : (
         <VersionHistory questionId={id} versions={data.versions} />
       )}
+      </TabPanel>
 
       {publishing ? (
         <PublishDialog

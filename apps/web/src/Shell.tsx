@@ -169,7 +169,12 @@ function Nav({
                 label={
                   <span className="flex min-w-0 items-baseline gap-1.5">
                     <span className="truncate">{r.name}</span>
-                    <span className="shrink-0 text-[11px] text-fg-faint">{r.courseCode}</span>
+                    {/* `fg-muted`: a course code is the classroom's other
+                        name, not decoration, and this row sits on
+                        `accent-soft` when it is the one being read — the one
+                        background `fg-faint` still falls short of 4.5:1 on
+                        (W1). */}
+                    <span className="shrink-0 text-[11px] text-fg-muted">{r.courseCode}</span>
                   </span>
                 }
                 active={currentRoom === r.id}
@@ -280,7 +285,10 @@ export function Shell({
   return (
     <div className="min-h-dvh lg:flex">
       {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-line bg-canvas lg:flex">
+      <aside
+        aria-label={t("aside.sidebar")}
+        className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-line bg-canvas lg:flex"
+      >
         <div className="px-3 pb-2 pt-4">{brand()}</div>
         {/* A palette nobody can see does not exist: the shortcut is written
             on its own trigger, above the navigation it duplicates. */}

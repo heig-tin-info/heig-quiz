@@ -18,6 +18,7 @@ import {
   EmptyState,
   Field,
   Modal,
+  PageError,
   PageHeader,
   QueryError,
   Skeleton,
@@ -232,7 +233,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   }
   if (pool.isError) {
     return (
-      <QueryError
+      <PageError
         title={t("pools.notFound")}
         error={pool.error}
         onRetry={() => void pool.refetch()}

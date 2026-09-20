@@ -327,7 +327,9 @@ export function RosterTable({
             <Th k="status">{t("roster.col.status")}</Th>
             <Th k="timeBonusPercent">{t("roster.col.bonus")}</Th>
             <Th k="lastLoginAt">{t("roster.col.lastSignIn")}</Th>
-            <th className={T.th} aria-label={t("common.actions")} />
+            <th className={T.th}>
+              <span className="sr-only">{t("common.actions")}</span>
+            </th>
           </tr>
         </thead>
         <tbody>

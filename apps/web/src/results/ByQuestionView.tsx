@@ -87,7 +87,15 @@ export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
                 <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
                   {t("results.byQuestion.reference")}
                 </p>
-                <pre className="mt-1.5 overflow-x-auto font-mono text-xs leading-relaxed">
+                {/* A focusable scroll region: this block runs past the
+                    screen edge on a phone and a keyboard cannot reach into a
+                    container that holds nothing focusable (W10). */}
+                <pre
+                  tabIndex={0}
+                  role="region"
+                  aria-label={t("results.byQuestion.reference")}
+                  className="mt-1.5 overflow-x-auto font-mono text-xs leading-relaxed"
+                >
                   {referenceSolution(q.solution)}
                 </pre>
               </div>

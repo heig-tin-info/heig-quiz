@@ -141,7 +141,9 @@ export function AdminPage() {
                   <Th k="courses">{t("admin.col.courses")}</Th>
                   <Th k="lastLoginAt">{t("admin.col.lastSignIn")}</Th>
                   <Th k="grantedAt">{t("admin.col.granted")}</Th>
-                  <th className={T.th} aria-label={t("common.actions")} />
+                  <th className={T.th}>
+                    <span className="sr-only">{t("common.actions")}</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>

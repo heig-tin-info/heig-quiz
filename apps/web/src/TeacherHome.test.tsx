@@ -52,8 +52,12 @@ describe("TeacherHome", () => {
     renderWithProviders(<TeacherHome navigate={vi.fn()} />);
 
     expect(await screen.findByText("No courses yet")).toBeVisible();
-    // The header button and the empty-state button are the same action.
-    await userEvent.click(screen.getAllByRole("button", { name: /New course/ })[1]!);
+    // ONE "New course" while the list is empty: the header drops its copy of
+    // the action the empty state already carries, so the screen has a single
+    // accent fill and the squint test points at it (W19).
+    const create = screen.getAllByRole("button", { name: /New course/ });
+    expect(create).toHaveLength(1);
+    await userEvent.click(create[0]!);
 
     const dialog = await screen.findByRole("dialog");
     await userEvent.type(within(dialog).getByLabelText(/Name/), "Programmation C");

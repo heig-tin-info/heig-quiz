@@ -50,6 +50,7 @@ function presenceDot(row: DashboardRow, t: ReturnType<typeof useT>) {
 export function StudentGrid({
   state,
   now,
+  paused,
   showNames,
   showAnswers,
   showResults,
@@ -62,6 +63,8 @@ export function StudentGrid({
   state: GridState;
   /** Server time in epoch ms, ticked once a second by the page. */
   now: number;
+  /** The evaluation is paused: every row's countdown freezes with it (W16). */
+  paused: boolean;
   showNames: boolean;
   showAnswers: boolean;
   showResults: boolean;
@@ -217,6 +220,7 @@ export function StudentGrid({
                     <Countdown
                       deadlineAt={Date.parse(row.deadlineAt)}
                       now={now}
+                      paused={paused}
                       icon={false}
                       className="text-[13px]"
                     />

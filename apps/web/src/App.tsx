@@ -7,7 +7,7 @@ import { api, useMe } from "./api";
 import { Logo } from "./Header";
 import { useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
-import { useRoute } from "./router";
+import { useRoute, type Route } from "./router";
 import { Shell } from "./Shell";
 import { Button, LinkButton, setDateFormat, Spinner } from "./ui";
 
@@ -111,6 +111,14 @@ function Landing() {
 // Persisted teacher choice: "student" keeps the student view across reloads.
 const VIEW_AS_KEY = "quiz-view-as";
 
+/**
+ * The routes a student (or a teacher in student view) actually has a screen
+ * for. Everything else falls through to `StudentHome` — which is right — but
+ * it used to render it UNDER the teacher URL, so a reload or a Back landed
+ * on the same wrong address again (W20).
+ */
+const STUDENT_ROUTES = new Set<Route["view"]>(["home", "settings", "feedback", "attempt"]);
+
 export default function App() {
   const me = useMe();
   const [route, navigate] = useRoute();
@@ -128,6 +136,19 @@ export default function App() {
   // Same for the date format, but synchronously: it must be set before the
   // first view renders a date (module-level store in ui.tsx, idempotent).
   setDateFormat(me.data?.dateFormat);
+
+  // The address bar must name the page the reader got. `replaceState` and not
+  // `navigate`: there is nothing to go back to, the screen does not change,
+  // and pushing a second entry would make Back a no-op.
+  const viewer = me.data;
+  const onTeacherRoute =
+    viewer != null &&
+    !STUDENT_ROUTES.has(route.view) &&
+    !((viewer.role === "teacher" || viewer.role === "admin") && !studentView);
+  useEffect(() => {
+    if (onTeacherRoute) window.history.replaceState(null, "", "/");
+  }, [onTeacherRoute]);
+
   if (me.isLoading) return null;
   if (!me.data) return <Landing />;
   const role = me.data.role;

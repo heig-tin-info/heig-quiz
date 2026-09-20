@@ -241,6 +241,28 @@ describe("QuestionEditor — keyboard", () => {
     expect(await screen.findByRole("dialog")).toHaveAccessibleName("Publish this question");
   });
 
+  /*
+   * W14: `docs/spec/08` §8.5 lists Ctrl+Enter as "Essayer la question" and it
+   * was not implemented. It saves first (the Try tab runs what the SERVER
+   * holds) and takes the focus with it — a shortcut that moves the screen and
+   * leaves the caret behind has moved half the reader.
+   */
+  it("Ctrl+Enter switches to the Try tab and moves the focus into it", async () => {
+    const user = userEvent.setup();
+    mockFetch(routes(mcqDetail()));
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    await screen.findByRole("heading", { name: "ptr-null-check" });
+    expect(screen.getByRole("tab", { name: "Edit" })).toHaveAttribute("aria-selected", "true");
+
+    await user.keyboard("{Control>}{Enter}{/Control}");
+    await waitFor(() =>
+      expect(screen.getByRole("tab", { name: "Try" })).toHaveAttribute("aria-selected", "true"),
+    );
+    const panel = screen.getByRole("tabpanel");
+    expect(panel).toHaveAttribute("id", "question-panel-try");
+    expect(panel).toHaveFocus();
+  });
+
   it("Ctrl+Shift+M toggles the student preview", async () => {
     const user = userEvent.setup();
     mockFetch(routes(mcqDetail()));
