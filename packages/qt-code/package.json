@@ -1,5 +1,5 @@
 {
-  "name": "@quiz/registry",
+  "name": "@quiz/qt-code",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -20,14 +20,26 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "@quiz/core": "workspace:*",
-    "@quiz/qt-code": "workspace:*"
+    "@quiz/domain": "workspace:*"
   },
   "peerDependencies": {
+    "react": "^19.0.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/node": "^22.20.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "jsdom": "^30.1.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.11",
+    "zod": "^4.4.3"
   }
 }

@@ -1,0 +1,143 @@
+/**
+ * The feedback view of a `code` answer.
+ *
+ * Hidden cases are the whole point of this component: a student may see that
+ * they exist and how many passed, but their names, inputs and expected outputs
+ * stay closed unless the feedback policy opens them (decision D15). The
+ * filtering itself happened server-side in `studentDetails`; this component
+ * renders what it was given and never reconstructs a key.
+ */
+import type { ReviewProps } from "@quiz/core/client";
+
+import type { CodeAnswer, CodeCaseDetail, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
+import { REVIEW_STRINGS, withStrings, type CodeReviewStrings } from "./strings.js";
+import { badge, card, cx, hint, lockedBlock, sectionTitle, table } from "./styles.js";
+
+export interface CodeReviewProps
+  extends ReviewProps<CodeStudent, CodeAnswer, CodeSolution, CodeDetails> {
+  /** docs/06 Q8: the policy may name the hidden cases once the results are out. */
+  showHiddenCaseNames?: boolean | undefined;
+  strings?: Partial<CodeReviewStrings> | undefined;
+}
+
+function verdictOf(detail: CodeCaseDetail, s: CodeReviewStrings): string {
+  if (detail.timedOut) return s.timedOut;
+  if (detail.oom) return s.outOfMemory;
+  return detail.ok ? s.passed : s.failed;
+}
+
+export function CodeReview({
+  answer,
+  solution,
+  details,
+  points,
+  maxPoints,
+  audience,
+  showHiddenCaseNames,
+  strings,
+}: CodeReviewProps) {
+  const s = withStrings(REVIEW_STRINGS, strings);
+  const reveal = audience === "teacher" || showHiddenCaseNames === true;
+
+  if (details === null) {
+    return <p className={hint}>{answer === null ? s.notAnswered : s.runnerError}</p>;
+  }
+
+  const shown = details.cases.filter((c) => c.visible || reveal);
+  const hidden = details.cases.filter((c) => !c.visible && !reveal);
+  const hiddenPassed = hidden.filter((c) => c.ok).length;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={cx(sectionTitle, "tabular-nums")}>
+          {s.score(points ?? 0, maxPoints)}
+        </span>
+        {details.runner === "unavailable" ? (
+          <span className={badge("warning")}>{s.runnerUnavailable}</span>
+        ) : null}
+        {details.runner === "busy" ? <span className={badge("warning")}>{s.runnerBusy}</span> : null}
+        {details.runner === "error" ? <span className={badge("danger")}>{s.runnerError}</span> : null}
+      </div>
+
+      {details.compile !== null && !details.compile.ok ? (
+        <section className={cx(card, "flex flex-col gap-2 p-4")}>
+          <h3 className={cx(sectionTitle, "text-danger")}>{s.compileFailed}</h3>
+          {details.compile.stderr === "" ? null : (
+            <pre className={lockedBlock} aria-label={s.compilerOutput}>
+              <code>{details.compile.stderr}</code>
+            </pre>
+          )}
+        </section>
+      ) : null}
+
+      {shown.length === 0 ? null : (
+        <div className="overflow-x-auto">
+          <table className={table.table}>
+            <caption className="sr-only">{s.cases}</caption>
+            <thead className={table.head}>
+              <tr>
+                <th scope="col" className={table.th}>
+                  {s.caseName}
+                </th>
+                <th scope="col" className={table.th}>
+                  {s.expected}
+                </th>
+                <th scope="col" className={table.th}>
+                  {s.got}
+                </th>
+                <th scope="col" className={table.th}>
+                  {s.verdict}
+                </th>
+                <th scope="col" className={cx(table.th, "text-right")}>
+                  {s.points}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((detail, i) => (
+                <tr key={i} className={table.row}>
+                  <td className={cx(table.td, "font-medium")}>
+                    {detail.name}
+                    {detail.visible ? null : (
+                      <span className={badge("neutral", "ml-2")}>{s.hiddenCase}</span>
+                    )}
+                  </td>
+                  <td className={cx(table.td, "whitespace-pre-wrap font-mono")}>
+                    {detail.expected ?? "—"}
+                  </td>
+                  <td className={cx(table.td, "whitespace-pre-wrap font-mono")}>
+                    {detail.actual ?? "—"}
+                  </td>
+                  <td className={table.td}>
+                    <span className={badge(detail.ok ? "success" : "danger")}>
+                      {verdictOf(detail, s)}
+                    </span>
+                  </td>
+                  <td className={cx(table.td, "text-right tabular-nums")}>
+                    {detail.ok ? detail.points : 0} / {detail.points}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {hidden.length > 0 ? (
+        <p className={hint}>{s.hiddenSummary(hiddenPassed, hidden.length)}</p>
+      ) : null}
+
+      {solution !== null && solution.referenceSolution !== "" ? (
+        <section className={cx(card, "flex flex-col gap-2 p-4")}>
+          <h3 className={sectionTitle}>{s.referenceSolution}</h3>
+          <pre className={lockedBlock}>
+            <code>{solution.referenceSolution}</code>
+          </pre>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+export default CodeReview;

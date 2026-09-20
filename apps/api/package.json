@@ -21,6 +21,7 @@
     "@quiz/contracts": "workspace:*",
     "@quiz/core": "workspace:*",
     "@quiz/domain": "workspace:*",
+    "@quiz/qt-code": "workspace:*",
     "@quiz/registry": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.12.1",
