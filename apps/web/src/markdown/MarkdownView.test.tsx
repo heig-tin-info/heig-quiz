@@ -106,6 +106,28 @@ describe("MarkdownView — content", () => {
     expect(code.querySelector(".tok-com")?.textContent).toBe("// note");
   });
 
+  /*
+   * W10: a fenced block scrolls sideways at 390 px, and a scroll container
+   * with nothing focusable inside it cannot be reached from a keyboard at
+   * all — a student with no mouse could not read past the fold.
+   */
+  it("makes a fenced block a focusable, named scroll region", () => {
+    const body = view('```c\nint n = 3;\n```');
+    const pre = body.querySelector("pre")!;
+    expect(pre).toHaveAttribute("tabindex", "0");
+    // A group and not a landmark: two fences in one prompt would otherwise be
+    // two landmarks with the same name.
+    expect(pre).toHaveAttribute("role", "group");
+    expect(pre).toHaveAccessibleName("Code block, scrollable");
+  });
+
+  it("names the block in French when the locale does (N-I18N-01)", () => {
+    const { container } = renderWithProviders(<MarkdownView source={'```c\nint n;\n```'} />, {
+      locale: "fr",
+    });
+    expect(container.querySelector("pre")).toHaveAccessibleName("Bloc de code, défilable");
+  });
+
   it("renders a GFM table", () => {
     const body = view("| a | b |\n| --- | --- |\n| 1 | 2 |");
     expect(body.querySelectorAll("th")).toHaveLength(2);

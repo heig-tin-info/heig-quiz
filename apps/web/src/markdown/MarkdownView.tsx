@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 
+import { useT } from "../i18n";
 import { cx } from "../ui";
 import { renderMarkdown } from "./render";
 
@@ -38,10 +39,15 @@ export function MarkdownView({
    */
   inline?: boolean;
 }) {
+  const t = useT();
+  const codeLabel = t("markdown.codeBlock");
   const Element = inline ? "span" : Tag;
   const html = useMemo(
-    () => (inline ? unwrapParagraph(renderMarkdown(source)) : renderMarkdown(source)),
-    [source, inline],
+    () =>
+      inline
+        ? unwrapParagraph(renderMarkdown(source, codeLabel))
+        : renderMarkdown(source, codeLabel),
+    [source, inline, codeLabel],
   );
   if (!html) return null;
   return (

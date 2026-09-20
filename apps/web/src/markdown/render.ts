@@ -147,8 +147,25 @@ function renderMathIn(node: Text, doc: Document): boolean {
 }
 
 /** Walks the sanitised tree and applies steps 3 and 4 above. */
-function postProcess(root: HTMLElement) {
+function postProcess(root: HTMLElement, codeBlockLabel: string) {
   const doc = root.ownerDocument;
+
+  // A fenced block scrolls sideways on a phone, and a scroll container with
+  // nothing focusable inside it cannot be reached with a keyboard at all: a
+  // student with no mouse could not read past the fold (W10). `tabindex` is
+  // what makes it scrollable from the keyboard, and the named region is what
+  // tells a reader what they just landed in. Set here, after DOMPurify, so
+  // these three attributes are ours and never something the document asked
+  // for.
+  for (const pre of Array.from(root.querySelectorAll("pre"))) {
+    pre.setAttribute("tabindex", "0");
+    // `group` and not `region`: a region is a LANDMARK, and a document with
+    // two code fences would then offer a reader two landmarks with the same
+    // name — which axe calls out as `landmark-unique`, rightly. A named group
+    // says what the box is without pretending to be a section of the page.
+    pre.setAttribute("role", "group");
+    pre.setAttribute("aria-label", codeBlockLabel);
+  }
 
   // An <img> that did not come from our renderer came from raw HTML. Its src
   // survived the allow-list only if it happens to be same-origin; it is still
@@ -203,8 +220,12 @@ function postProcess(root: HTMLElement) {
  * Untrusted markdown -> a sanitised HTML string, ready for
  * `dangerouslySetInnerHTML`. Empty in, empty out (the caller shows its own
  * placeholder rather than an empty box).
+ *
+ * `codeBlockLabel` is the accessible name given to each fenced block, which
+ * is a focusable scroll region (W10). It is passed in rather than read from
+ * `t()` here: this module is pure, and its tests read the HTML, not a locale.
  */
-export function renderMarkdown(source: string): string {
+export function renderMarkdown(source: string, codeBlockLabel = "Code block"): string {
   if (!source.trim()) return "";
   const html = marked.parse(source, { async: false });
   const body = DOMPurify.sanitize(html, {
@@ -213,6 +234,6 @@ export function renderMarkdown(source: string): string {
     ALLOWED_URI_REGEXP,
     RETURN_DOM: true,
   }) as unknown as HTMLElement;
-  postProcess(body);
+  postProcess(body, codeBlockLabel);
   return body.innerHTML;
 }

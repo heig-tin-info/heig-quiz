@@ -56,7 +56,7 @@ import {
 
 import type { Dict, TFunction } from "./i18n";
 import { MarkdownView } from "./markdown/MarkdownView";
-import { Skeleton, type IconType } from "./ui";
+import { ScrollableCode, Skeleton, type IconType } from "./ui";
 
 export { QUESTION_TYPE_IDS };
 export type { QuestionTypeId };
@@ -259,16 +259,21 @@ export function QuestionPlayerHost({
   if (!client) return <Unknown>{t("qt.unknown")}</Unknown>;
   const Player = client.Player as unknown as ComponentType<PlayerHostProps>;
   return (
-    <Suspense fallback={<EditorSkeleton label={t("qt.loading")} />}>
-      <Player
-        student={student}
-        answer={answer}
-        onChange={onChange}
-        readOnly={readOnly}
-        strings={playerStrings[client.id](t)}
-        renderMarkdown={renderInline}
-      />
-    </Suspense>
+    // `qt-code` prints the provided, locked part of the program in `<pre>`
+    // blocks that scroll sideways on a phone; a student with no mouse could
+    // not read past the fold (W10).
+    <ScrollableCode label={t("markdown.codeBlock")}>
+      <Suspense fallback={<EditorSkeleton label={t("qt.loading")} />}>
+        <Player
+          student={student}
+          answer={answer}
+          onChange={onChange}
+          readOnly={readOnly}
+          strings={playerStrings[client.id](t)}
+          renderMarkdown={renderInline}
+        />
+      </Suspense>
+    </ScrollableCode>
   );
 }
 
@@ -309,19 +314,24 @@ export function QuestionReviewHost({
   if (!client) return <Unknown>{t("qt.unknown")}</Unknown>;
   const Review = client.Review as unknown as ComponentType<ReviewHostProps>;
   return (
-    <Suspense fallback={<EditorSkeleton label={t("qt.loading")} />}>
-      <Review
-        student={student}
-        answer={answer}
-        solution={solution}
-        details={details}
-        points={points}
-        maxPoints={maxPoints}
-        audience={audience}
-        strings={reviewStrings[client.id](t)}
-        renderMarkdown={renderInline}
-      />
-    </Suspense>
+    // `qt-code`'s review prints the compiler output and the reference solution
+    // in `<pre>` blocks that scroll sideways on a phone. The package is not
+    // ours to edit from here, so the host makes them focusable (W10).
+    <ScrollableCode label={t("markdown.codeBlock")}>
+      <Suspense fallback={<EditorSkeleton label={t("qt.loading")} />}>
+        <Review
+          student={student}
+          answer={answer}
+          solution={solution}
+          details={details}
+          points={points}
+          maxPoints={maxPoints}
+          audience={audience}
+          strings={reviewStrings[client.id](t)}
+          renderMarkdown={renderInline}
+        />
+      </Suspense>
+    </ScrollableCode>
   );
 }
 

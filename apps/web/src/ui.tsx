@@ -15,6 +15,7 @@ import {
   Hourglass,
   Loader2,
   Lock,
+  Pause,
   RefreshCw,
   Search,
   WifiOff,
@@ -1313,8 +1314,9 @@ export function QueryError({
   onRetry?: () => void;
   retrying?: boolean;
   /**
-   * Shown when the server sent no message of its own. Teacher surfaces keep
-   * the English default; student surfaces pass their own `t("error.server")`.
+   * Shown when the server sent no message of its own. It defaults to the
+   * translated `error.server`: an English literal here was a French screen
+   * one forgotten prop away (W9).
    */
   fallback?: string;
 }) {
@@ -1332,20 +1334,55 @@ export function QueryError({
         ) : undefined
       }
     >
-      {apiErrorMessage(error, fallback ?? "The server did not answer.")}
+      {apiErrorMessage(error, fallback ?? t("error.server"))}
     </Alert>
+  );
+}
+
+/**
+ * A query that failed and took the WHOLE page with it. `QueryError` on its own
+ * is an alert in a page frame; returned instead of the frame, it leaves the
+ * document with no `<h1>` at all, and a screen reader with no way in (W3).
+ * So the page keeps a heading — what could not be loaded — and the alert
+ * underneath says what went wrong and offers the retry.
+ */
+export function PageError({
+  title,
+  ...rest
+}: {
+  /** The `<h1>`: what the page was, not what the server said. */
+  title: string;
+  error: unknown;
+  onRetry?: () => void;
+  retrying?: boolean;
+  fallback?: string;
+}) {
+  const t = useT();
+  return (
+    <div className="space-y-6">
+      <PageHeader title={title} />
+      <QueryError title={t("error.title")} {...rest} />
+    </div>
   );
 }
 
 export function EmptyState({
   icon: Icon,
   title,
+  titleAs: Title = "p",
   children,
   action,
   className = "py-14",
 }: {
   icon: IconType;
   title: string;
+  /**
+   * `h1` when the empty state IS the page — the closed player, a screen with
+   * nothing else on it. A page with no heading of any level has no outline
+   * for a screen reader to land on (W4). It stays a `p` by default: an empty
+   * state inside a populated page must not invent a heading level.
+   */
+  titleAs?: "p" | "h1" | "h2";
   children?: ReactNode;
   /** The one thing to do from here. */
   action?: ReactNode;
@@ -1356,7 +1393,9 @@ export function EmptyState({
       <div className="mb-1 rounded-full bg-surface-2 p-3">
         <Icon className="size-6 text-fg-muted" />
       </div>
-      <p className="font-semibold">{title}</p>
+      <Title className={cx("font-semibold", Title === "h1" && "text-lg tracking-tight")}>
+        {title}
+      </Title>
       {children ? <p className="max-w-sm text-sm text-fg-muted">{children}</p> : null}
       {action ? <div className="mt-3">{action}</div> : null}
     </div>
@@ -1496,9 +1535,11 @@ export function scrollEdges(
  * Text tabs with an ink underline; counts sit in `fg-faint`.
  * Roving tabindex: only the selected tab is in the Tab order, ArrowLeft and
  * ArrowRight move and select with wrap, Home and End jump to the ends.
- * Give `idPrefix` to wire the tabs to their panels: each tab then carries
- * `id="<prefix>-tab-<value>"` and `aria-controls="<prefix>-panel-<value>"`,
- * and the panel is expected to carry the matching id.
+ * Give `idPrefix` ONLY when the panels are rendered through `TabPanel` with
+ * the same prefix: each tab then carries `id="<prefix>-tab-<value>"` and
+ * `aria-controls="<prefix>-panel-<value>"`, and `TabPanel` is what makes those
+ * ids resolve. Without panels, leave `idPrefix` out — an `aria-controls`
+ * pointing at nothing is worse than no `aria-controls` at all (W2).
  *
  * On a narrow viewport the strip scrolls: the hidden side is faded out so the
  * fourth tab announces itself instead of just ending at the screen edge, and
@@ -1594,7 +1635,10 @@ export function Tabs<V extends string>({
               type="button"
               role="tab"
               id={idPrefix ? `${idPrefix}-tab-${it.value}` : undefined}
-              aria-controls={idPrefix ? `${idPrefix}-panel-${it.value}` : undefined}
+              // Only the selected tab points at a panel: the consumers render
+              // one panel at a time, and `aria-controls` on the other three
+              // would name ids no element carries (W2).
+              aria-controls={idPrefix && active ? `${idPrefix}-panel-${it.value}` : undefined}
               aria-selected={active}
               tabIndex={i === roving ? 0 : -1}
               onClick={() => onChange(it.value)}
@@ -1615,6 +1659,101 @@ export function Tabs<V extends string>({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The panel a `Tabs` strip points at. It exists because `aria-controls` is a
+ * promise: a tab announcing `question-panel-edit` to a document that holds no
+ * such element tells a screen reader to go somewhere that is not there (W2).
+ *
+ * `idPrefix` and `value` are the same two strings the strip was given, so the
+ * ids line up by construction. `tabIndex={-1}` makes it a focus target
+ * without putting it in the Tab order: a shortcut that switches tabs
+ * (`Ctrl+Enter` in the question editor) moves the reader into the panel it
+ * just opened, which is the whole point of switching.
+ */
+export function TabPanel({
+  idPrefix,
+  value,
+  children,
+  className = "",
+  ref,
+}: {
+  idPrefix: string;
+  value: string;
+  children: ReactNode;
+  className?: string;
+  ref?: RefObject<HTMLDivElement | null>;
+}) {
+  return (
+    <div
+      ref={ref}
+      id={`${idPrefix}-panel-${value}`}
+      role="tabpanel"
+      aria-labelledby={`${idPrefix}-tab-${value}`}
+      tabIndex={-1}
+      className={cx("focus:outline-none", className)}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Makes every `<pre>` rendered inside it reachable with the keyboard (W10).
+ *
+ * A code block that scrolls sideways and holds nothing focusable is invisible
+ * to a keyboard: at 390 px a student cannot read past the fold. The blocks in
+ * question are emitted by the question-type packages (`qt-code`'s review and
+ * player), which this app hosts rather than owns, so the fix is applied here,
+ * on the rendered DOM, instead of being duplicated in every package.
+ *
+ * A MutationObserver and not a plain effect: the packages load lazily behind
+ * a `Suspense` INSIDE this subtree, so the tree fills long after this
+ * component's last render and an effect here would have run against an empty
+ * div. Anything that scrolls sideways gets the `tabindex` axe asks for; a
+ * `<pre>` also gets a named group, because a code block is worth announcing
+ * and a table wrapper is not.
+ */
+export function ScrollableCode({
+  label,
+  children,
+  className = "",
+}: {
+  /** Accessible name of each block, e.g. `t("markdown.codeBlock")`. */
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
+  const host = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const root = host.current;
+    if (!root) return;
+    const mark = () => {
+      for (const el of Array.from(
+        root.querySelectorAll<HTMLElement>("pre, .overflow-x-auto"),
+      )) {
+        if (el.getAttribute("tabindex") !== null) continue;
+        el.setAttribute("tabindex", "0");
+        if (el.tagName !== "PRE") continue;
+        // `group`, not `region`: see `markdown/render.ts` — two identically
+        // named landmarks on one page are worse than none.
+        el.setAttribute("role", "group");
+        // A block the package already named keeps its name: "Locked —
+        // provided code" says more than "Code block" ever will.
+        if (!el.hasAttribute("aria-label")) el.setAttribute("aria-label", label);
+      }
+    };
+    mark();
+    const observer = new MutationObserver(mark);
+    observer.observe(root, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [label]);
+  return (
+    <div ref={host} className={className}>
+      {children}
     </div>
   );
 }
@@ -2136,11 +2275,17 @@ const COUNTDOWN_TONE: Record<CountdownPhase, string> = {
  * a third of the men in a lecture hall, so the phase is announced once, when
  * it is crossed, through a polite live region. Once, not every tick — a timer
  * that speaks every second is a timer nobody can work next to.
+ *
+ * `paused` freezes it. A paused evaluation is not consuming its window, so a
+ * display that keeps falling is telling a room full of students something
+ * false (W16); it holds the time it was paused at and says "paused" beside
+ * it, because a frozen number and a slow one look the same for a second.
  */
 export function Countdown({
   deadlineAt,
   now,
   warnUnderS = 300,
+  paused = false,
   icon = true,
   className = "",
 }: {
@@ -2150,13 +2295,20 @@ export function Countdown({
   now: number;
   /** Seconds under which the countdown turns `warning`. */
   warnUnderS?: number;
+  /** The evaluation is paused: freeze the digits and say so. */
+  paused?: boolean;
   icon?: boolean;
   className?: string;
 }) {
   const t = useT();
-  const remaining = deadlineAt - now;
+  // The last tick seen while running. Written during render on purpose: it is
+  // a cache of a prop, not state — `paused` flipping must freeze the number
+  // that is on screen in that very commit, not one tick later.
+  const lastRunning = useRef(now);
+  if (!paused) lastRunning.current = now;
+  const remaining = deadlineAt - (paused ? lastRunning.current : now);
   const label = formatRemaining(remaining);
-  const phase = countdownPhase(remaining, warnUnderS);
+  const phase = paused ? "normal" : countdownPhase(remaining, warnUnderS);
   const [announced, setAnnounced] = useState("");
   useEffect(() => {
     if (phase === "normal") {
@@ -2176,16 +2328,30 @@ export function Countdown({
       <span
         role="timer"
         aria-label={
-          phase === "over" ? t("countdown.over") : t("countdown.remaining", { time: label })
+          paused
+            ? t("countdown.remainingPaused", { time: label })
+            : phase === "over"
+              ? t("countdown.over")
+              : t("countdown.remaining", { time: label })
         }
         className={cx(
           "inline-flex items-center gap-1.5 text-[15px] font-medium tabular-nums",
-          COUNTDOWN_TONE[phase],
+          paused ? "text-fg-muted" : COUNTDOWN_TONE[phase],
           className,
         )}
       >
-        {icon ? <Clock className="size-4" aria-hidden /> : null}
+        {icon ? (paused ? <Pause className="size-4" aria-hidden /> : <Clock className="size-4" aria-hidden />) : null}
         <span>{label}</span>
+        {/* The word rides with the icon: both belong to the full
+            presentation. A dense countdown (`icon={false}`, one per row of
+            the live grid) would otherwise print "paused" twenty-four times
+            under a badge that already says it once. The accessible name
+            carries it in every variant. */}
+        {paused && icon ? (
+          <span aria-hidden className="text-[13px] font-normal">
+            {t("countdown.paused")}
+          </span>
+        ) : null}
       </span>
       <span className="sr-only" aria-live="polite">
         {announced}

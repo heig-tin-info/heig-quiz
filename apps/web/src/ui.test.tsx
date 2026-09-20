@@ -15,6 +15,7 @@ import {
   Modal,
   pressable,
   ProgressSegments,
+  PageError,
   QueryError,
   Ring,
   Segmented,
@@ -22,6 +23,7 @@ import {
   Sheet,
   Switch,
   SyncBadge,
+  TabPanel,
   Tabs,
   Textarea,
   Tip,
@@ -480,20 +482,25 @@ type DemoTab = "assignments" | "students" | "staff";
 function TabsHarness({ onChange }: { onChange: (v: DemoTab) => void }) {
   const [value, setValue] = useState<DemoTab>("assignments");
   return (
-    <Tabs
-      value={value}
-      onChange={(v) => {
-        setValue(v);
-        onChange(v);
-      }}
-      idPrefix="classroom"
-      label="Classroom sections"
-      items={[
-        { value: "assignments", label: "Assignments" },
-        { value: "students", label: "Students", count: 24 },
-        { value: "staff", label: "Staff" },
-      ]}
-    />
+    <>
+      <Tabs
+        value={value}
+        onChange={(v) => {
+          setValue(v);
+          onChange(v);
+        }}
+        idPrefix="classroom"
+        label="Classroom sections"
+        items={[
+          { value: "assignments", label: "Assignments" },
+          { value: "students", label: "Students", count: 24 },
+          { value: "staff", label: "Staff" },
+        ]}
+      />
+      <TabPanel idPrefix="classroom" value={value}>
+        {value}
+      </TabPanel>
+    </>
   );
 }
 
@@ -557,11 +564,32 @@ describe("Tabs", () => {
     expect(onChange).toHaveBeenLastCalledWith("students");
   });
 
-  it("wires every tab to its panel through idPrefix", () => {
+  /*
+   * W2: `aria-controls` is a promise. Only one panel is rendered at a time,
+   * so only the SELECTED tab may name one; the others named ids no element
+   * carried, which axe reports as an invalid attribute value and a reader
+   * follows into nothing.
+   */
+  it("points the selected tab at a panel that exists, and the others at nothing", async () => {
     renderWithProviders(<TabsHarness onChange={vi.fn()} />);
-    const tab = screen.getByRole("tab", { name: /Students/ });
-    expect(tab).toHaveAttribute("id", "classroom-tab-students");
-    expect(tab).toHaveAttribute("aria-controls", "classroom-panel-students");
+    const selected = screen.getByRole("tab", { name: /Assignments/ });
+    expect(selected).toHaveAttribute("id", "classroom-tab-assignments");
+    expect(selected).toHaveAttribute("aria-controls", "classroom-panel-assignments");
+    const panel = screen.getByRole("tabpanel");
+    expect(panel).toHaveAttribute("id", "classroom-panel-assignments");
+    expect(panel).toHaveAttribute("aria-labelledby", "classroom-tab-assignments");
+
+    const other = screen.getByRole("tab", { name: /Students/ });
+    expect(other).toHaveAttribute("id", "classroom-tab-students");
+    expect(other).not.toHaveAttribute("aria-controls");
+
+    // And the wiring follows the selection.
+    await userEvent.click(other);
+    expect(screen.getByRole("tabpanel")).toHaveAttribute("id", "classroom-panel-students");
+    expect(screen.getByRole("tab", { name: /Students/ })).toHaveAttribute(
+      "aria-controls",
+      "classroom-panel-students",
+    );
   });
 });
 
@@ -741,9 +769,10 @@ describe("QueryError", () => {
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
+  // W9: the default is the TRANSLATED `error.server`, not an English literal.
   it("falls back when the failure carries no message", () => {
     renderWithProviders(<QueryError title="Could not load this classroom" error={new Error("x")} />);
-    expect(screen.getByText("The server did not answer.")).toBeVisible();
+    expect(screen.getByText("The server did not answer. Try again in a moment.")).toBeVisible();
     // No retry handler: no Retry button either.
     expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
   });
@@ -767,6 +796,30 @@ describe("QueryError", () => {
   });
 });
 
+/*
+ * W3: a query that fails and takes the page with it still has to leave the
+ * document a heading. `QueryError` returned on its own left a route whose
+ * `document.querySelectorAll("h1").length` was 0 — nothing for a screen
+ * reader to land on, and no way to tell which page had failed.
+ */
+describe("PageError", () => {
+  it("keeps the page's heading above the alert", () => {
+    renderWithProviders(<PageError title="Pool not found" error={new Error("x")} />);
+    expect(screen.getByRole("heading", { level: 1, name: "Pool not found" })).toBeVisible();
+    expect(screen.getByText("Something went wrong")).toBeVisible();
+    expect(screen.getByText(/The server did not answer/)).toBeVisible();
+  });
+
+  it("offers the retry it was given", async () => {
+    const onRetry = vi.fn();
+    renderWithProviders(
+      <PageError title="Pool not found" error={new Error("x")} onRetry={onRetry} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("EmptyState", () => {
   it("carries the one action of the surface", async () => {
     const onClick = vi.fn();
@@ -781,9 +834,22 @@ describe("EmptyState", () => {
       </EmptyState>,
     );
     expect(screen.getByText("No classrooms")).toBeVisible();
+    // A `p` by default: an empty state inside a populated page must not
+    // invent a heading level (W4).
+    expect(screen.queryByRole("heading")).toBeNull();
     expect(screen.getByText(/distribute assignments/)).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Create classroom" }));
     expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  /*
+   * W4: the closed player is an empty state and nothing else. A page with no
+   * heading of any level has no outline at all, so this one carries the h1.
+   */
+  it("becomes the page's heading when it IS the page", () => {
+    const Icon = () => <svg aria-hidden />;
+    renderWithProviders(<EmptyState icon={Icon} title="Time is up" titleAs="h1" />);
+    expect(screen.getByRole("heading", { level: 1, name: "Time is up" })).toBeVisible();
   });
 });
 
@@ -872,6 +938,31 @@ describe("Countdown", () => {
   it("speaks French when the locale does (N-I18N-01)", () => {
     renderWithProviders(<Countdown deadlineAt={now + 60_001} now={now} />, { locale: "fr" });
     expect(screen.getByRole("timer")).toHaveAccessibleName("il reste 1:01");
+  });
+
+  /*
+   * W16: a paused evaluation is not spending its window. The digits froze at
+   * the moment of the pause and say so; the server's clock keeps ticking
+   * underneath, which is exactly what must not show.
+   */
+  it("freezes while paused and says it is paused", () => {
+    const { rerender } = renderWithProviders(
+      <Countdown deadlineAt={now + 600_000} now={now} paused={false} />,
+    );
+    expect(screen.getByRole("timer")).toHaveTextContent("10:00");
+
+    rerender(<Countdown deadlineAt={now + 600_000} now={now} paused />);
+    rerender(<Countdown deadlineAt={now + 600_000} now={now + 7_000} paused />);
+    const timer = screen.getByRole("timer");
+    expect(timer).toHaveTextContent("10:00");
+    expect(timer).toHaveTextContent("paused");
+    expect(timer).toHaveAccessibleName("10:00 remaining, paused");
+    // Frozen, so it is not urgent either: no warning or danger tone.
+    expect(timer).toHaveClass("text-fg-muted");
+
+    // Resuming picks the real clock back up.
+    rerender(<Countdown deadlineAt={now + 600_000} now={now + 7_000} paused={false} />);
+    expect(screen.getByRole("timer")).toHaveTextContent("9:53");
   });
 });
 
