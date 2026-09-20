@@ -1,6 +1,11 @@
-# Development services -- PostgreSQL + Keycloak (the development OIDC identity
-# provider, standing in for Switch edu-ID; ADR-002).
-# Start with: docker compose -f docker-compose.dev.yml up -d
+# OPTIONAL development services. `pnpm dev` needs NEITHER of them: the API
+# runs on an embedded PGlite database and `AUTH_DEV_LOGIN=1` opens sessions
+# without an identity provider.
+#
+# Bring this up when you want to exercise the REAL paths — a true PostgreSQL
+# (and therefore pg-boss) and a true OIDC login:
+#   docker compose -f docker-compose.dev.yml up -d
+#   DATABASE_URL=postgres://quiz:quiz@localhost:5432/quiz AUTH_DEV_LOGIN=0 pnpm dev
 services:
   postgres:
     image: postgres:17

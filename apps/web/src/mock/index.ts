@@ -13,8 +13,8 @@
  *
  *  - `empty` — nothing anywhere: no courses, no classrooms, no roster, no
  *    teachers, so every empty state is reachable;
- *  - `fail`  — every GET under /app/api answers 500 (except /app/api/me, so
- *    the shell still renders), for the error states;
+ *  - `fail`  — every GET under /app/api answers 500 (except /app/api/me and
+ *    /app/api/config, so the shell still renders), for the error states;
  *  - `slow`  — 2.5 s of latency on every call, for the loading states;
  *  - `many`  — 8 courses, 30 classrooms and a 120-student roster on the
  *    first one, for long lists and the sidebar.
@@ -24,6 +24,7 @@ import type {
   ClassroomDetail,
   CourseSummary,
   Me,
+  PublicConfig,
   RosterEntry,
   StudentClassroom,
 } from "@quiz/contracts";
@@ -369,6 +370,8 @@ const roomOr404 = (id: string) => {
 let seq = 100;
 const nextId = (p: string) => `${p}${(seq += 1)}`;
 
+on("GET", "/app/api/config", (): PublicConfig => ({ devLogin: true }));
+
 on("GET", "/app/api/me", () => {
   if (!me) throw new MockError(401, "Signed out");
   return me;
@@ -575,7 +578,12 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
   const method = (init?.method ?? "GET").toUpperCase();
   // `?fail=1`: every read fails, except the session and the public config —
   // the shell must still render so the failing page is the one under test.
-  if (flags.fail && method === "GET" && url.pathname !== "/app/api/me") {
+  if (
+    flags.fail &&
+    method === "GET" &&
+    url.pathname !== "/app/api/me" &&
+    url.pathname !== "/app/api/config"
+  ) {
     return new Response(JSON.stringify({ message: "Simulated failure" }), {
       status: 500,
       headers: { "content-type": "application/json" },

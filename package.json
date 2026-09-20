@@ -11,8 +11,9 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "dev": "pnpm --filter @quiz/api dev",
+    "dev": "pnpm -r --parallel --filter @quiz/api --filter @quiz/web dev",
     "dev:mock": "pnpm --filter @quiz/web dev:mock",
+    "seed": "pnpm --filter @quiz/api seed",
     "db:generate": "pnpm --filter @quiz/api db:generate"
   },
   "pnpm": {

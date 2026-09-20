@@ -1,7 +1,14 @@
 /**
- * pg-boss job queue (ADR-004): PostgreSQL is the only stateful component.
- * Handlers run with exponential-backoff retries then dead-letter (visible in
- * the database).
+ * Background job queue (ADR-004). On a real PostgreSQL the queue IS pg-boss:
+ * durable, retried, dead-lettered, visible in the database.
+ *
+ * On the embedded development database (`pglite://…`) pg-boss cannot run —
+ * it needs its own `pgboss` schema, advisory locks and several connections.
+ * Rather than making `pnpm dev` depend on a container engine, this module
+ * swaps in a minimal in-process runner behind the SAME `send`/`work`
+ * surface. It is deliberately not durable: a job not yet run dies with the
+ * process. That is acceptable for development and nowhere else, which is why
+ * `config.ts` refuses a pglite URL under NODE_ENV=production.
  */
 import { PgBoss } from "pg-boss";
 
@@ -11,7 +18,7 @@ import type { FastifyInstance } from "fastify";
 export const HOUSEKEEPING_QUEUE = "housekeeping.purge";
 
 export interface SendOptions {
-  /** At most one pending job per key. */
+  /** At most one pending job per key, as pg-boss defines it. */
   singletonKey?: string;
   retryLimit?: number;
   retryBackoff?: boolean;
@@ -28,9 +35,12 @@ export interface JobQueue {
   send<T extends object>(name: string, data: T, options?: SendOptions): Promise<void>;
   work<T extends object>(name: string, handler: JobHandler<T>): Promise<void>;
   stop(): Promise<void>;
+  /** False for the in-process development runner. */
+  readonly durable: boolean;
 }
 
 class PgBossQueue implements JobQueue {
+  readonly durable = true;
   constructor(
     private readonly boss: PgBoss,
     private readonly runWorkers: boolean,
@@ -52,17 +62,95 @@ class PgBossQueue implements JobQueue {
   }
 }
 
+/**
+ * In-process replacement: jobs run on the next tick of the event loop, in
+ * order, one at a time. `singletonKey` collapses duplicates that have not
+ * started yet, which is the property the callers rely on.
+ */
+class InProcessQueue implements JobQueue {
+  readonly durable = false;
+  private readonly handlers = new Map<string, JobHandler<never>>();
+  private readonly pending: { name: string; data: object; key?: string | undefined }[] = [];
+  private readonly keys = new Set<string>();
+  private draining = false;
+  private stopped = false;
+
+  constructor(
+    private readonly runWorkers: boolean,
+    private readonly log: FastifyInstance["log"],
+  ) {}
+
+  async createQueue() {
+    /* nothing to create: the queue is an array */
+  }
+
+  async send<T extends object>(name: string, data: T, options?: SendOptions) {
+    if (this.stopped) return;
+    const key = options?.singletonKey ? `${name}:${options.singletonKey}` : undefined;
+    if (key) {
+      if (this.keys.has(key)) return;
+      this.keys.add(key);
+    }
+    this.pending.push({ name, data, key });
+    void this.drain();
+  }
+
+  async work<T extends object>(name: string, handler: JobHandler<T>) {
+    if (!this.runWorkers) return;
+    this.handlers.set(name, handler as JobHandler<never>);
+    void this.drain();
+  }
+
+  private async drain() {
+    if (this.draining) return;
+    this.draining = true;
+    try {
+      let job = this.pending.shift();
+      while (job) {
+        if (job.key) this.keys.delete(job.key);
+        const handler = this.handlers.get(job.name);
+        if (handler) {
+          try {
+            await (handler as JobHandler<object>)(job.data);
+          } catch (err) {
+            // No retry, no dead letter: the durable queue is the one that
+            // owes those guarantees, and it is not this one.
+            this.log.error({ err, queue: job.name }, "in-process job failed");
+          }
+        }
+        job = this.pending.shift();
+      }
+    } finally {
+      this.draining = false;
+    }
+  }
+
+  async stop() {
+    this.stopped = true;
+    this.pending.length = 0;
+    this.keys.clear();
+  }
+}
+
 export async function startJobs(
   app: FastifyInstance,
-  opts: { databaseUrl: string; runWorkers: boolean },
+  opts: { databaseUrl: string; embedded: boolean; runWorkers: boolean },
 ): Promise<JobQueue> {
-  const boss = new PgBoss({
-    connectionString: opts.databaseUrl,
-    // The pgboss.* schema lives in the same database (a single backup).
-  });
-  boss.on("error", (err: Error) => app.log.error({ err }, "pg-boss error"));
-  await boss.start();
-  const queue: JobQueue = new PgBossQueue(boss, opts.runWorkers);
+  let queue: JobQueue;
+  if (opts.embedded) {
+    app.log.warn(
+      "embedded database (pglite): pg-boss disabled, jobs run in-process and do not survive a restart",
+    );
+    queue = new InProcessQueue(opts.runWorkers, app.log);
+  } else {
+    const boss = new PgBoss({
+      connectionString: opts.databaseUrl,
+      // The pgboss.* schema lives in the same database (a single backup).
+    });
+    boss.on("error", (err: Error) => app.log.error({ err }, "pg-boss error"));
+    await boss.start();
+    queue = new PgBossQueue(boss, opts.runWorkers);
+  }
 
   await queue.createQueue(HOUSEKEEPING_QUEUE, { retryLimit: 0 });
 

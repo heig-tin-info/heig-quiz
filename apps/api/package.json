@@ -9,10 +9,12 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
+    "seed": "tsx --env-file-if-exists=../../.env src/seed.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.4",
     "@fastify/cookie": "^11.0.2",
     "@fastify/static": "^10.1.2",
     "@quiz/contracts": "workspace:*",
@@ -27,7 +29,6 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.4",
     "@types/pg": "^8.20.0",
     "drizzle-kit": "^0.31.10",
     "tsx": "^4.23.0",

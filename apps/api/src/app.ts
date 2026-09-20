@@ -64,6 +64,19 @@ export async function buildApp({ config }: AppDeps): Promise<FastifyInstance> {
     { parseAs: "buffer" },
     (_req, body, done) => done(null, body),
   );
+  // Server-rendered HTML forms (the development persona picker is the only
+  // one): a plain field map, no nesting, no array syntax.
+  app.addContentTypeParser(
+    "application/x-www-form-urlencoded",
+    { parseAs: "string" },
+    (_req, body, done) => {
+      try {
+        done(null, Object.fromEntries(new URLSearchParams(body as string)));
+      } catch (err) {
+        done(err as Error, undefined);
+      }
+    },
+  );
 
   // Every successful HTTP mutation emits an SSE refresh hint (ADR-005).
   app.addHook("onResponse", async (req, reply) => {
@@ -89,7 +102,11 @@ export async function buildApp({ config }: AppDeps): Promise<FastifyInstance> {
   // the server: healthz stays degraded until restart.
   const runWorkers = config.WORKER_MODE !== "web";
   try {
-    await startJobs(app, { databaseUrl: config.DATABASE_URL, runWorkers });
+    await startJobs(app, {
+      databaseUrl: config.DATABASE_URL,
+      embedded: handle.embedded,
+      runWorkers,
+    });
     if (runWorkers) startTicker(app, config);
   } catch (err) {
     app.log.error({ err }, "job queue start failed — jobs disabled");

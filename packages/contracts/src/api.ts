@@ -12,6 +12,16 @@ export function isDateFormat(v: unknown): v is DateFormat {
   return typeof v === "string" && (DATE_FORMATS as readonly string[]).includes(v);
 }
 
+/**
+ * The single unauthenticated endpoint (`GET /app/api/config`): what the
+ * sign-in screen needs to know before anyone has a session. It carries no
+ * personal data and no secret.
+ */
+export interface PublicConfig {
+  /** The API exposes the persona picker at `/app/auth/dev` (never in prod). */
+  devLogin: boolean;
+}
+
 export interface Me {
   id: string;
   email: string;

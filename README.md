@@ -11,14 +11,19 @@ browser, Switch edu-ID for authentication, one VM and one database.
 
 ## Run it
 
+Nothing to install beyond Node 24 and pnpm — no container engine, no local
+PostgreSQL.
+
 ```bash
 corepack enable pnpm && pnpm install
-docker compose -f docker-compose.dev.yml up -d   # PostgreSQL + Keycloak
-cp .env.example .env
-pnpm --filter @quiz/api db:migrate
-pnpm dev                                         # API on :3000
-pnpm --filter @quiz/web dev                      # web on :5173
+cp .env.example .env     # embedded database, development login on
+pnpm seed                # one course, one classroom, six students
+pnpm dev                 # API on :3000, web on :5173
+```
 
+Open <http://localhost:5173>, click **Dev login**, pick a persona.
+
+```bash
 pnpm build && pnpm typecheck && pnpm test
 pnpm dev:mock            # the interface alone, on fake data
 ```

@@ -12,11 +12,17 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   /** ADR-001: `all` (default) | `web` | `worker`; roles can split without code changes. */
   WORKER_MODE: z.enum(["all", "web", "worker"]).default("all"),
-  DATABASE_URL: z.string().default("postgres://quiz:quiz@localhost:5432/quiz"),
-  /** Apply Drizzle migrations at startup (container deployment). */
+  /**
+   * Either a real PostgreSQL URL (`postgres://…`, production and CI) or
+   * `pglite://<dir>` — an embedded Postgres persisted on disk, which is what
+   * makes `pnpm dev` work on a laptop without Docker. The directory is
+   * relative to the working directory unless absolute.
+   */
+  DATABASE_URL: z.string().default("pglite://.data/pglite"),
+  /** Apply Drizzle migrations at startup (container deployment, and dev). */
   MIGRATE_ON_START: z
     .string()
-    .default("")
+    .default("1")
     .transform((v) => v === "1" || v === "true"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
 
@@ -41,6 +47,16 @@ const EnvSchema = z.object({
   OIDC_PRIVATE_KEY_PATH: z.string().default(""),
   OIDC_PRIVATE_KEY_KID: z.string().default("quiz-eduid-2026"),
 
+  /**
+   * Development login (`GET /app/auth/dev`): a persona picker that opens a
+   * normal session without any identity provider. NEVER in production — see
+   * the refusal below, which is the same mechanism as the dev-value one.
+   */
+  AUTH_DEV_LOGIN: z
+    .string()
+    .default("")
+    .transform((v) => v === "1" || v === "true"),
+
   /** Signs the login state cookies (not the sessions, which live in the database). */
   COOKIE_SECRET: z.string().min(16).default("dev-cookie-secret-change-me"),
   /**
@@ -58,6 +74,13 @@ const EnvSchema = z.object({
 
 export type AppConfig = z.infer<typeof EnvSchema>;
 
+/** `pglite://<dir>` → the resolved data directory; null for a real Postgres. */
+export function pgliteDir(databaseUrl: string): string | null {
+  if (!databaseUrl.startsWith("pglite://")) return null;
+  const raw = databaseUrl.slice("pglite://".length) || ".data/pglite";
+  return resolve(raw);
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = EnvSchema.safeParse(env);
   if (!parsed.success) {
@@ -74,6 +97,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       if (parsed.data[key].includes(marker)) {
         throw new Error(`Invalid configuration: dev ${key} forbidden in production`);
       }
+    }
+    // A persona picker in production is an open door, whatever the reason
+    // given for turning it on: refuse to boot rather than serve it.
+    if (parsed.data.AUTH_DEV_LOGIN) {
+      throw new Error("Invalid configuration: dev AUTH_DEV_LOGIN forbidden in production");
+    }
+    // The embedded database is a single-process file store with no backup
+    // path: it is a development convenience, never a deployment.
+    if (pgliteDir(parsed.data.DATABASE_URL)) {
+      throw new Error("Invalid configuration: dev DATABASE_URL (pglite) forbidden in production");
     }
   }
   return {

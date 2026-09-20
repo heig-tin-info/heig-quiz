@@ -1,12 +1,15 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
-import { useMe } from "./api";
+import type { PublicConfig } from "@quiz/contracts";
+
+import { api, useMe } from "./api";
 import { Logo } from "./Header";
 import { useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
 import { useRoute } from "./router";
 import { Shell } from "./Shell";
-import { LinkButton, setDateFormat, Spinner } from "./ui";
+import { Button, LinkButton, setDateFormat, Spinner } from "./ui";
 
 // One chunk per page: a student never downloads the teacher UI and vice versa.
 const TeacherHome = lazy(() => import("./TeacherHome").then((m) => ({ default: m.TeacherHome })));
@@ -30,6 +33,13 @@ const AdminPage = lazy(() => import("./AdminPanel").then((m) => ({ default: m.Ad
  */
 function Landing() {
   const t = useT();
+  // The one unauthenticated endpoint. A failure is not an error state here:
+  // the OIDC button is the real door and it is always there.
+  const config = useQuery<PublicConfig>({
+    queryKey: ["config"],
+    queryFn: () => api("/app/api/config"),
+    retry: false,
+  });
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center px-4 py-10">
       <div className="w-full max-w-115 rounded-card border border-line bg-surface px-8 py-10 text-center">
@@ -41,6 +51,21 @@ function Landing() {
         <LinkButton href="/app/auth/login" variant="primary" size="lg" className="mt-8 w-full">
           {t("landing.signin")}
         </LinkButton>
+        {config.data?.devLogin ? (
+          <>
+            <Button
+              variant="secondary"
+              size="lg"
+              className="mt-3 w-full"
+              onClick={() => {
+                window.location.href = "/app/auth/dev";
+              }}
+            >
+              {t("landing.devSignin")}
+            </Button>
+            <p className="mt-2 text-xs text-fg-faint">{t("landing.devHint")}</p>
+          </>
+        ) : null}
       </div>
       <p className="mt-12 text-xs text-fg-faint">{t("landing.footer")}</p>
     </main>

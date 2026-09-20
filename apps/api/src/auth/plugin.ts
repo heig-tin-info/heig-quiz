@@ -7,11 +7,12 @@ import { eq } from "drizzle-orm";
 import { audit } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import { avatars, users } from "../db/schema.js";
-import { isDateFormat, type DateFormat } from "@quiz/contracts";
+import { isDateFormat, type DateFormat, type PublicConfig } from "@quiz/contracts";
 
 import { claimEnrollments } from "../modules/roster.js";
 import { roleForIdentity } from "../roles.js";
 import { addressesOf, affiliationsOf, recordIdpClaims, syncUserEmails } from "./claims.js";
+import { devLoginRoutes } from "./dev.js";
 import { OidcProvider, type OidcClaims } from "./oidc.js";
 import {
   CSRF_COOKIE,
@@ -153,6 +154,15 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     },
   );
 
+  // --- Public configuration ---
+  /**
+   * The only unauthenticated endpoint: what the sign-in screen must know
+   * before anyone has a session. No personal data, no secret.
+   */
+  app.get("/app/api/config", async (): Promise<PublicConfig> => ({
+    devLogin: config.AUTH_DEV_LOGIN && config.NODE_ENV !== "production",
+  }));
+
   // --- Routes ---
   /**
    * Where to land after the login round trip. Only a same-origin, absolute
@@ -227,6 +237,13 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     });
     return reply.redirect(safeReturnTo(stash.returnTo), 303);
   });
+
+  // Development persona picker. Registered only when explicitly enabled, and
+  // config.ts refuses the flag under NODE_ENV=production.
+  if (config.AUTH_DEV_LOGIN && config.NODE_ENV !== "production") {
+    app.log.warn("AUTH_DEV_LOGIN is on: /app/auth/dev opens sessions without an IdP");
+    await devLoginRoutes(app, config);
+  }
 
   app.post(
     "/app/auth/logout",

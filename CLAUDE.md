@@ -69,10 +69,11 @@ Never work around these, not even "temporarily".
 2. **One primary action per screen.** If you cannot name the single thing a
    screen is for, the flow is wrong, not the styling. See
    `.claude/skills/quiz-ui/SKILL.md` and `apps/web/DESIGN.md`.
-3. **Real OIDC even in development.** Keycloak in dev, Switch edu-ID in
-   production, the same code on both. No "current user" environment
-   variable. `config.ts` refuses a development secret under
-   `NODE_ENV=production` and the process does not start.
+3. **The development login never exists in production.** `AUTH_DEV_LOGIN=1`
+   under `NODE_ENV=production` makes `config.ts` throw and the process refuse
+   to start, exactly like a dev secret. The same refusal covers a
+   `pglite://` database. The OIDC path (Keycloak in dev, Switch edu-ID in
+   production) is the real one and stays intact.
 4. **Question content never reaches a student except through `toStudent`.**
    One point of exit, in the `studentView` service of the `live` module: it
    strips the internal name, the tags, the difficulty and the explanation,
@@ -125,18 +126,35 @@ them.
 
 ## Development
 
+No Docker, no Podman and no PostgreSQL are needed to run this.
+
 ```bash
 corepack enable pnpm && pnpm install
-docker compose -f docker-compose.dev.yml up -d   # PostgreSQL + Keycloak
-cp .env.example .env
-pnpm --filter @quiz/api db:migrate
-pnpm dev                                         # API on :3000
-pnpm --filter @quiz/web dev                      # Vite on :5173
-
-pnpm build && pnpm typecheck && pnpm test        # what CI runs
-pnpm dev:mock                                    # the SPA alone, no backend
-pnpm db:generate                                 # a migration, after a schema change
+cp .env.example .env            # pglite:// database + AUTH_DEV_LOGIN=1
+pnpm seed                       # course PRG1, one classroom, six students
+pnpm dev                        # API on :3000 and Vite on :5173, together
 ```
+
+Then open <http://localhost:5173>, click **Dev login** and pick a persona.
+The embedded database is a directory (`apps/api/.data/pglite`, gitignored);
+delete it to start over. It is single-process: stop the API before `pnpm seed`.
+
+```bash
+pnpm build && pnpm typecheck && pnpm test    # what CI runs
+pnpm dev:mock                                # the SPA alone, no backend at all
+pnpm db:generate                             # a migration, after a schema change
+```
+
+To exercise the REAL paths — a true PostgreSQL (and therefore pg-boss) and a
+true OIDC login — bring up the optional services:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d
+DATABASE_URL=postgres://quiz:quiz@localhost:5432/quiz AUTH_DEV_LOGIN=0 pnpm dev
+```
+
+Production always uses a real PostgreSQL: pg-boss needs one, and `config.ts`
+refuses a `pglite://` URL there.
 
 ## Conventions
 

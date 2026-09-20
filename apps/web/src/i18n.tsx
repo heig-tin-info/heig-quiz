@@ -28,6 +28,8 @@ const en = {
   "landing.tagline":
     "Question pools, live evaluations and automatic grading for HEIG-VD courses.",
   "landing.signin": "Sign in with Switch edu-ID",
+  "landing.devSignin": "Dev login",
+  "landing.devHint": "Development only: pick a persona, no identity provider.",
   "landing.footer": "HEIG-VD — TIN Department",
 
   "header.docs": "Documentation",
@@ -233,6 +235,8 @@ const fr: Record<keyof Dict, string> = {
   "landing.tagline":
     "Banques de questions, évaluations en direct et correction automatique pour les cours de la HEIG-VD.",
   "landing.signin": "Se connecter avec Switch edu-ID",
+  "landing.devSignin": "Connexion de développement",
+  "landing.devHint": "Développement uniquement : choisir un personnage, sans fournisseur d'identité.",
   "landing.footer": "HEIG-VD — Département TIN",
 
   "header.docs": "Documentation",
