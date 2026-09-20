@@ -20,7 +20,7 @@ export function mcqPlayerStrings(t: TFunction) {
 
 export function shortPlayerStrings(t: TFunction) {
   return {
-    label: t("qt.short.label"),
+    label: t("qt.short.player.label"),
     hintText: t("qt.short.hintText"),
     hintNumber: t("qt.short.hintNumber"),
     hintDate: t("qt.short.hintDate"),
@@ -32,7 +32,7 @@ export function clozePlayerStrings(t: TFunction) {
   return {
     blank: t("qt.cloze.blank"),
     choose: t("qt.cloze.choose"),
-    hint: t("qt.cloze.hint"),
+    hint: t("qt.cloze.player.hint"),
   };
 }
 

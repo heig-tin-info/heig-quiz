@@ -33,6 +33,7 @@ const card = (over: Partial<EvaluationCard>): EvaluationCard => ({
   durationS: 1200,
   attemptId: null,
   attemptState: null,
+  grade: null,
   deadlineAt: null,
   ...over,
 });
