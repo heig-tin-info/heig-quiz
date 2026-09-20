@@ -94,7 +94,8 @@ export function buildCommands(ctx: CommandContext): Command[] {
       id: "nav:home",
       // Same label and icon as the first row of the sidebar: the palette must
       // name things the way the screen behind it does.
-      label: ctx.teacherUi ? t("nav.courses") : t("student.title"),
+      // WP9: student player — same label as the sidebar row it duplicates.
+      label: ctx.teacherUi ? t("nav.courses") : t("shome.title"),
       icon: ctx.teacherUi ? Library : ClipboardList,
       group: "navigate",
       run: () => navigate({ view: "home" }),

@@ -124,7 +124,9 @@ function Nav({
       <div className="space-y-0.5">
         <NavItem
           icon={teacherUi ? Library : ClipboardList}
-          label={teacherUi ? t("nav.courses") : t("student.title")}
+          // WP9: student player — the student home is their evaluations now,
+          // not the list of classrooms it used to be.
+          label={teacherUi ? t("nav.courses") : t("shome.title")}
           active={route.view === "home"}
           onClick={() => go({ view: "home" })}
         />
