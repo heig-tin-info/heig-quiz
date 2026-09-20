@@ -81,7 +81,7 @@ describe("buildCommands: who sees what", () => {
       buildCommands(makeContext({ me: makeMe({ role: "student" }), teacherUi: false })),
       "nav:home",
     );
-    expect(student.label).toBe("My classrooms");
+    expect(student.label).toBe("Home");
     expect(student.icon).toBe(ClipboardList);
   });
 

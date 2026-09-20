@@ -13,7 +13,14 @@ import { Button, LinkButton, setDateFormat, Spinner } from "./ui";
 
 // One chunk per page: a student never downloads the teacher UI and vice versa.
 const TeacherHome = lazy(() => import("./TeacherHome").then((m) => ({ default: m.TeacherHome })));
-const StudentHome = lazy(() => import("./StudentHome").then((m) => ({ default: m.StudentHome })));
+// WP9: student player
+const StudentHome = lazy(() =>
+  import("./student/StudentHome").then((m) => ({ default: m.StudentHome })),
+);
+const AttemptPage = lazy(() =>
+  import("./student/Attempt").then((m) => ({ default: m.AttemptPage })),
+);
+const Feedback = lazy(() => import("./student/Feedback").then((m) => ({ default: m.Feedback })));
 const ClassroomView = lazy(() =>
   import("./ClassroomView").then((m) => ({ default: m.ClassroomView })),
 );
@@ -110,11 +117,25 @@ export default function App() {
   const inStudentView = teacher && studentView;
   const teacherUi = teacher && !inStudentView;
 
+  // WP9: student player — the attempt takes the whole screen. A zen player
+  // (one question, one action) beside a navigation sidebar is not a zen
+  // player, and an exam is the one place the rest of the app must go away.
+  if (route.view === "attempt") {
+    return (
+      <Suspense fallback={<Spinner className="py-24" />}>
+        <AttemptPage evaluationId={route.evaluationId} navigate={navigate} />
+      </Suspense>
+    );
+  }
+
   const page =
     route.view === "settings" ? (
       <SettingsPage me={me.data} />
+    ) : // WP9: student player
+    route.view === "studentResults" ? (
+      <Feedback attemptId={route.attemptId} navigate={navigate} />
     ) : !teacherUi ? (
-      <StudentHome />
+      <StudentHome me={me.data} navigate={navigate} />
     ) : route.view === "devUi" && import.meta.env.DEV ? (
       <DevGallery />
     ) : route.view === "admin" && role === "admin" ? (

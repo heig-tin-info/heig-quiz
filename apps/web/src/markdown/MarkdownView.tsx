@@ -22,21 +22,47 @@ export function MarkdownView({
   className = "",
   size = "md",
   as: Tag = "div",
+  inline = false,
 }: {
   source: string;
   className?: string;
   size?: "sm" | "md";
   /** `span` for a one-line cell, where a <div> would break the row. */
   as?: "div" | "span";
+  /**
+   * WP9: student player — renders inside a host element that already is a
+   * paragraph or a label (a question prompt, one choice of an mcq). It renders
+   * a `span` and drops the wrapping `<p>` when the source is a single
+   * paragraph, which is what a `<p><div>` nesting would otherwise cost.
+   * Multi-block content keeps its blocks, inside the span.
+   */
+  inline?: boolean;
 }) {
-  const html = useMemo(() => renderMarkdown(source), [source]);
+  const Element = inline ? "span" : Tag;
+  const html = useMemo(
+    () => (inline ? unwrapParagraph(renderMarkdown(source)) : renderMarkdown(source)),
+    [source, inline],
+  );
   if (!html) return null;
   return (
-    <Tag
-      className={cx("md-body", size === "sm" && "md-sm", className)}
+    <Element
+      className={cx("md-body", size === "sm" && "md-sm", inline && "md-inline", className)}
       // Sanitised by `renderMarkdown`: allow-listed tags and attributes, no
       // script, no foreign origin, no `javascript:`. See render.ts.
       dangerouslySetInnerHTML={{ __html: html }}
     />
   );
+}
+
+/**
+ * A single `<p>…</p>` loses its wrapper; anything else is left alone. The
+ * check is deliberately literal (one opening tag, at the very start, closed at
+ * the very end): a regex clever enough to handle two paragraphs would be a
+ * regex clever enough to break one.
+ */
+function unwrapParagraph(html: string): string {
+  const trimmed = html.trimEnd();
+  if (!trimmed.startsWith("<p>") || !trimmed.endsWith("</p>")) return html;
+  const inner = trimmed.slice(3, -4);
+  return inner.includes("<p>") || inner.includes("</p>") ? html : inner;
 }

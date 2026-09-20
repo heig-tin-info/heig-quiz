@@ -373,3 +373,15 @@ html.dark {
 
 .md-body.md-sm { font-size: 13px; line-height: 1.5; }
 .md-body.md-sm p, .md-body.md-sm ul, .md-body.md-sm ol, .md-body.md-sm pre { margin-bottom: 8px; }
+
+/* WP9: student player. `.md-inline` is the variant that renders INSIDE a host
+   element which already is a paragraph or a label — a question prompt, one
+   choice of an mcq. It is an inline box with no block margins of its own; the
+   host owns the spacing, exactly as it does for the plain-text fallback the
+   question type renders when no renderer is injected. */
+.md-inline {
+  display: inline;
+  line-height: inherit;
+}
+.md-inline > :first-child { margin-top: 0; }
+.md-inline > :last-child { margin-bottom: 0; }

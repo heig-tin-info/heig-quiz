@@ -42,6 +42,9 @@ const widths = opt("width").map(Number).filter(Boolean);
 //        below the fold comes out undimmed, which reads as a bug and is not
 //        what anyone sees.
 
+/** The mock's evaluation, taken by the student persona (WP9). */
+const TAKE = "/take/11111111-1111-4111-8111-111111111111";
+
 const scenes = [
   // Teacher home (the courses)
   { name: "teacher-home", role: "teacher", path: "/" },
@@ -68,6 +71,20 @@ const scenes = [
   { name: "student-error", role: "student", path: "/?fail=1", settle: 2500 },
   { name: "student-loading", role: "student", path: "/?slow=1", settle: 300 },
   { name: "student-settings", role: "student", path: "/settings" },
+
+  // WP9: student player. `TAKE` is the mock's evaluation; `?scene=` picks the
+  // state the fake backend serves (see the WP9 block of src/mock/index.ts).
+  { name: "student-home-eval", role: "student", path: "/" },
+  { name: "student-lobby", role: "student", path: `${TAKE}?scene=lobby` },
+  { name: "player-mcq", role: "student", path: `${TAKE}?scene=running` },
+  { name: "player-cloze", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 2) },
+  { name: "player-short", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 3) },
+  { name: "player-code", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 4) },
+  { name: "player-run", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 4); await p.getByRole("button", { name: /^run$/i }).click(); } },
+  { name: "player-submit", role: "student", path: `${TAKE}?scene=running`, fold: true, act: (p) => p.getByRole("button", { name: /hand in/i }).first().click() },
+  { name: "player-paused", role: "student", path: `${TAKE}?scene=paused`, fold: true },
+  { name: "player-timeup", role: "student", path: `${TAKE}?scene=closed` },
+  { name: "student-results", role: "student", path: "/results/22222222-2222-4222-8222-222222222223" },
 
   // Command palette (Ctrl+K from anywhere; the mock persona decides the groups)
   { name: "palette", role: "teacher", path: "/", fold: true, act: (p) => p.keyboard.press("Control+k") },
@@ -133,6 +150,17 @@ const scenes = [
   { name: "admin-error", role: "admin", path: "/admin?fail=1", settle: 2500 },
   { name: "admin-loading", role: "admin", path: "/admin?slow=1", settle: 300 },
 ];
+
+/**
+ * WP9: moves the player to question `n` through its progress segment, which
+ * is how a student does it with a mouse. The bars carry their number and
+ * their state in the accessible name, so the selector is the same one a
+ * screen reader follows.
+ */
+async function openQuestion(page, n) {
+  await page.getByRole("button", { name: new RegExp(`^Question ${n},`) }).click();
+  await page.waitForTimeout(400);
+}
 
 /**
  * Opens the overflow menu of a table row (and optionally picks an item). The

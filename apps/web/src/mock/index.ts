@@ -1684,3 +1684,447 @@ console.info(
   `[mock] persona: ${role} — switch with ?as=teacher|student|admin` +
     `\n[mock] scene flags: ${active.length ? active.join(", ") : "none"} — ?empty=1 ?fail=1 ?slow=1 ?many=1 (append =0 to clear)`,
 );
+
+// ---------------------------------------------------------------------------
+// WP9: student player
+// ---------------------------------------------------------------------------
+//
+// The student persona's scenes: a home with three evaluations, the lobby, a
+// running attempt holding one question of every MVP type, a pause and a
+// closure. One extra scene flag drives them, remembered like the others:
+//
+//   ?scene=lobby | running | paused | closed | extend   (running by default)
+//
+// `extend` is the teacher granting time: the fake stream pushes an
+// `attempt.deadline` four seconds in, which is the only way to see the
+// countdown jump without a backend.
+//
+// The ids are real UUIDs on purpose: the SSE frames are validated against
+// `ServerEvent` (`packages/contracts`), which is exactly the check a hand
+// written id would silently fail.
+import type {
+  AttemptView,
+  AutosaveResponse,
+  JoinResult,
+  LobbyView,
+  ServerEvent,
+  StudentHome as StudentHomeData,
+} from "@quiz/contracts";
+
+type Wp9Scene = "lobby" | "running" | "paused" | "closed" | "extend";
+
+const WP9_SCENE_KEY = "quiz-mock-scene";
+const wp9SceneParams = new URLSearchParams(window.location.search);
+const wp9Requested = wp9SceneParams.get("scene");
+if (wp9Requested !== null) {
+  if (wp9Requested === "" || wp9Requested === "0") localStorage.removeItem(WP9_SCENE_KEY);
+  else localStorage.setItem(WP9_SCENE_KEY, wp9Requested);
+  wp9SceneParams.delete("scene");
+  const rest = wp9SceneParams.toString();
+  window.history.replaceState(null, "", window.location.pathname + (rest ? `?${rest}` : ""));
+}
+const wp9Scene = (localStorage.getItem(WP9_SCENE_KEY) ?? "running") as Wp9Scene;
+
+const WP9_EVAL = "11111111-1111-4111-8111-111111111111";
+const WP9_EVAL_NEXT = "11111111-1111-4111-8111-111111111112";
+const WP9_EVAL_PAST = "11111111-1111-4111-8111-111111111113";
+const WP9_ATTEMPT = "22222222-2222-4222-8222-222222222222";
+const WP9_PAST_ATTEMPT = "22222222-2222-4222-8222-222222222223";
+const wp9Item = (n: number) => `aaaaaaaa-0000-4000-8000-00000000000${n}`;
+
+/** The evaluation's state follows the scene; everything else is fixed. */
+const wp9EvaluationState = () =>
+  wp9Scene === "lobby"
+    ? ("lobby" as const)
+    : wp9Scene === "paused"
+      ? ("paused" as const)
+      : ("running" as const);
+
+/** One question of each MVP type, in French, as `toStudent` would publish it. */
+const wp9Students: Record<number, unknown> = {
+  1: {
+    prompt: "Quelle expression donne **l'adresse** de la variable `x` ?",
+    mode: "single",
+    choices: [
+      { id: 0, text: "`&x`" },
+      { id: 1, text: "`*x`" },
+      { id: 2, text: "`x[0]`" },
+      { id: 3, text: "`addr(x)`" },
+    ],
+  },
+  2: {
+    template:
+      "Complétez la phrase. L'orthographe des noms propres n'est pas notée.\n\nLa loi d'⸢0⸣ relie la tension et le courant : pour un conducteur ohmique, U = ⸢1⸣ × I, où la tension U s'exprime en ⸢2⸣.",
+    blanks: [
+      { index: 0, weight: 1, kind: "input", numeric: false },
+      { index: 1, weight: 1, kind: "input", numeric: false },
+      {
+        index: 2,
+        weight: 1,
+        kind: "select",
+        options: [
+          { id: 0, label: "ampères" },
+          { id: 1, label: "ohms" },
+          { id: 2, label: "volts" },
+          { id: 3, label: "watts" },
+        ],
+      },
+    ],
+  },
+  3: {
+    prompt:
+      "Sur une machine 64 bits compilant en LP64, combien d'octets occupe un `int` en C ?",
+    kind: "number",
+    placeholder: "4",
+  },
+  4: {
+    prompt:
+      // Plain text: the `code` player renders its prompt as written (its
+      // props carry no markdown renderer), so no backtick survives as syntax.
+      "Corrigez r_parallele pour qu'elle renvoie la résistance équivalente de deux résistances en parallèle, en ohms. Le cas d'un court-circuit doit renvoyer 0.",
+    language: "c",
+    segments: [
+      {
+        kind: "locked",
+        index: null,
+        text: "/* Résistance équivalente de deux résistances en parallèle, en ohms. */\n#include <stdio.h>\n",
+      },
+      {
+        kind: "editable",
+        index: 0,
+        text: "double r_parallele(double r1, double r2)\n{\n    if (r1 == 0 || r2 == 0)\n        return 0;\n    return r1 * r2 / (r1 - r2);\n}\n",
+      },
+      {
+        kind: "locked",
+        index: null,
+        text: 'int main(void)\n{\n    double a, b;\n    if (scanf("%lf %lf", &a, &b) != 2)\n        return 1;\n    printf("%.2f\\n", r_parallele(a, b));\n    return 0;\n}\n',
+      },
+    ],
+    limits: { timeMs: 2000, memoryMb: 128, outputKb: 64 },
+    runsPerMinute: 10,
+    visibleCases: [
+      { name: "deux résistances égales", stdin: "100 100", expected: "50.00", points: 1 },
+      { name: "court-circuit", stdin: "0 470", expected: "0.00", points: 1 },
+    ],
+    hiddenCount: 3,
+    hiddenPoints: 3,
+    filesPreview: [],
+    allOrNothing: false,
+  },
+};
+
+/** The attempt's mutable half: what the student typed, and where they are. */
+const wp9Answers = new Map<string, { payload: unknown; revision: number; done: boolean }>();
+let wp9Position: string | null = wp9Item(1);
+const WP9_BASE_DEADLINE = now + 14 * 60_000 + 32_000;
+let wp9Deadline = WP9_BASE_DEADLINE;
+
+const wp9AttemptView = (): AttemptView => ({
+  attempt: {
+    id: WP9_ATTEMPT,
+    // `closed` is the deadline case of F-LIVE-07: the server expired the
+    // attempt while the evaluation itself is still running for the others.
+    state: wp9Scene === "closed" ? "expired" : "in_progress",
+    startedAt: iso(-6 * 60_000),
+    deadlineAt: new Date(wp9Deadline).toISOString(),
+    lastItemId: wp9Position,
+    serverNow: new Date().toISOString(),
+    preview: false,
+  },
+  evaluation: {
+    id: WP9_EVAL,
+    title: "Quiz 3 — Pointeurs et lois fondamentales",
+    mode: "exam",
+    state: wp9EvaluationState(),
+    settings: {
+      navigation: "free",
+      presentation: "zen",
+      lobby: "manual",
+      shuffleItems: false,
+      shuffleChoices: true,
+      timing: "duration",
+      showProgressBar: true,
+      logVisibility: true,
+      requireFullscreen: false,
+    },
+    feedbackPolicy: {
+      when: "on_release",
+      showAnswer: true,
+      showKey: false,
+      showExplanation: false,
+      showHiddenCaseNames: true,
+      showTeacherComment: true,
+    },
+    pausedAt: wp9Scene === "paused" ? iso(-30_000) : null,
+    totalPoints: 10,
+  },
+  items: [1, 2, 3, 4].map((n) => {
+    const stored = wp9Answers.get(wp9Item(n));
+    return {
+      id: wp9Item(n),
+      position: n,
+      points: n === 4 ? 5 : n === 3 ? 1 : 2,
+      type: n === 1 ? "mcq" : n === 2 ? "cloze" : n === 3 ? "short" : "code",
+      milestone: n === 3,
+      student: wp9Students[n],
+      answer: stored?.payload ?? null,
+      revision: stored?.revision ?? 0,
+      markedDone: stored?.done ?? false,
+      locked: false,
+    };
+  }),
+});
+
+const wp9LobbyView = (): LobbyView => ({
+  evaluation: {
+    id: WP9_EVAL,
+    title: "Quiz 3 — Pointeurs et lois fondamentales",
+    state: "lobby",
+    announcedDurationS: 20 * 60,
+  },
+  present: 18,
+  enrolled: 24,
+  timeBonusPercent: 33,
+  serverNow: new Date().toISOString(),
+});
+
+on("GET", "/app/api/student/home", (): StudentHomeData => {
+  if (flags.empty) {
+    return { open: [], upcoming: [], past: [], serverNow: new Date().toISOString() };
+  }
+  const room = { classroomId: "r1", classroomName: "PRG1-2026", courseCode: "PRG1" };
+  return {
+    open: [
+      {
+        id: WP9_EVAL,
+        title: "Quiz 3 — Pointeurs et lois fondamentales",
+        mode: "exam",
+        state: wp9EvaluationState(),
+        ...room,
+        opensAt: iso(-6 * 60_000),
+        closesAt: iso(14 * 60_000),
+        durationS: 20 * 60,
+        attemptId: wp9Scene === "lobby" ? null : WP9_ATTEMPT,
+        attemptState: wp9Scene === "lobby" ? null : "in_progress",
+        deadlineAt: wp9Scene === "lobby" ? null : new Date(wp9Deadline).toISOString(),
+      },
+    ],
+    upcoming: [
+      {
+        id: WP9_EVAL_NEXT,
+        title: "Série 4 — Récursivité",
+        mode: "exercise",
+        state: "scheduled",
+        ...room,
+        opensAt: iso(3 * D),
+        closesAt: iso(7 * D),
+        durationS: null,
+        attemptId: null,
+        attemptState: null,
+        deadlineAt: null,
+      },
+    ],
+    past: [
+      {
+        id: WP9_EVAL_PAST,
+        title: "Quiz 2 — Tableaux et chaînes",
+        mode: "exam",
+        state: "released",
+        ...room,
+        opensAt: iso(-8 * D),
+        closesAt: iso(-8 * D + 20 * 60_000),
+        durationS: 20 * 60,
+        attemptId: WP9_PAST_ATTEMPT,
+        attemptState: "submitted",
+        deadlineAt: null,
+      },
+    ],
+    serverNow: new Date().toISOString(),
+  };
+});
+
+on("POST", "/app/api/evaluations/:id/attempt", () =>
+  wp9Scene === "lobby"
+    ? { kind: "lobby", view: wp9LobbyView() }
+    : { kind: "attempt", view: wp9AttemptView() },
+);
+
+on("GET", "/app/api/attempts/:id", () => wp9AttemptView());
+
+on("PUT", "/app/api/attempts/:id/answers/:itemId", (m, body): AutosaveResponse => {
+  const itemId = m.groups!.itemId!;
+  const revision = Number(body.revision ?? 1);
+  const stored = wp9Answers.get(itemId);
+  // The same last-writer-wins rule as the server: a lower revision is stale
+  // and comes back with what is stored (§4.7).
+  if (stored && stored.revision >= revision) {
+    return {
+      revision: stored.revision,
+      payload: stored.payload,
+      accepted: false,
+      serverNow: new Date().toISOString(),
+    };
+  }
+  wp9Answers.set(itemId, { payload: body.payload, revision, done: stored?.done ?? false });
+  return { revision, accepted: true, serverNow: new Date().toISOString() };
+});
+
+on("POST", "/app/api/attempts/:id/answers/:itemId/done", (m, body) => {
+  const itemId = m.groups!.itemId!;
+  const stored = wp9Answers.get(itemId) ?? { payload: null, revision: 0, done: false };
+  const done = body.done === true;
+  wp9Answers.set(itemId, { ...stored, done });
+  return { done, nextItemId: null, serverNow: new Date().toISOString() };
+});
+
+on("POST", "/app/api/attempts/:id/position", (_m, body) => {
+  wp9Position = String(body.itemId);
+  return undefined;
+});
+
+on("POST", "/app/api/attempts/:id/submit", () => ({
+  state: "submitted",
+  submittedAt: new Date().toISOString(),
+  serverNow: new Date().toISOString(),
+}));
+
+on("POST", "/app/api/attempts/:id/events", () => undefined);
+
+on("POST", "/app/api/attempts/:id/run", () => ({
+  requestId: "33333333-3333-4333-8333-333333333333",
+  result: {
+    status: "ok",
+    compile: { ok: true, stderr: "" },
+    cases: [
+      {
+        name: "deux résistances égales",
+        ok: false,
+        stdout: "-inf",
+        expected: "50.00",
+        ms: 3,
+        timedOut: false,
+      },
+      {
+        name: "court-circuit",
+        ok: true,
+        stdout: "0.00",
+        expected: "0.00",
+        ms: 2,
+        timedOut: false,
+      },
+    ],
+  },
+}));
+
+on("POST", "/app/api/join/:code", (m): JoinResult => ({
+  classroomId: "r1",
+  classroomName: "PRG1-2026",
+  courseCode: "PRG1",
+  status: m.groups!.code!.toUpperCase() === "PRG1-2026" ? "already" : "joined",
+}));
+
+/**
+ * The fake stream. It replaces the hint-only `MockEventSource` defined above
+ * and keeps its behaviour for an unwatched connection, so nothing that worked
+ * before changes: only `?watch=attempt:…` and `?watch=evaluation:…` grow a
+ * body, and they emit the named frames of §4.8.
+ */
+class Wp9EventSource {
+  onmessage: ((e: MessageEvent) => void) | null = null;
+  onopen: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  private readonly listeners = new Map<string, Set<(e: MessageEvent) => void>>();
+  private readonly timers: ReturnType<typeof setTimeout>[] = [];
+  private beat: ReturnType<typeof setInterval> | null = null;
+
+  constructor(url: string) {
+    const watch = new URL(url, window.location.origin).searchParams.get("watch");
+    setTimeout(() => {
+      this.onopen?.();
+      if (watch === null) return;
+      this.emit({
+        type: "snapshot",
+        serverNow: new Date().toISOString(),
+        subject: watch,
+        state: watch.startsWith("attempt:") ? wp9AttemptView() : wp9LobbyView(),
+      });
+      if (watch.startsWith("evaluation:")) {
+        this.emit({
+          type: "lobby.count",
+          evaluationId: WP9_EVAL,
+          present: 18,
+          enrolled: 24,
+        });
+      }
+      // A running attempt gets a beat a second (§4.8), which is what keeps
+      // the countdown honest on a browser with a wrong clock.
+      this.beat = setInterval(
+        () => this.emit({ type: "clock", serverNow: new Date().toISOString() }),
+        1000,
+      );
+      if (wp9Scene === "extend") {
+        this.timers.push(
+          setTimeout(() => {
+            // Assignment, not `+=`: React mounts effects twice in
+            // development, so two streams open and an increment would grant
+            // ten minutes instead of five.
+            wp9Deadline = WP9_BASE_DEADLINE + 5 * 60_000;
+            this.emit({
+              type: "attempt.deadline",
+              attemptId: WP9_ATTEMPT,
+              deadlineAt: new Date(wp9Deadline).toISOString(),
+              bonusS: 300,
+              reason: "teacher_extend",
+              serverNow: new Date().toISOString(),
+            });
+          }, 4000),
+        );
+      }
+      if (wp9Scene === "paused") {
+        this.emit({
+          type: "evaluation.state",
+          evaluationId: WP9_EVAL,
+          state: "paused",
+          pausedAt: new Date().toISOString(),
+          closesAt: null,
+          serverNow: new Date().toISOString(),
+        });
+      }
+      if (wp9Scene === "closed") {
+        this.emit({
+          type: "attempt.closed",
+          attemptId: WP9_ATTEMPT,
+          evaluationId: WP9_EVAL,
+          closedBy: "server",
+          serverNow: new Date().toISOString(),
+        });
+      }
+    }, 60);
+  }
+
+  private emit(event: ServerEvent): void {
+    const frame = { data: JSON.stringify(event) } as MessageEvent;
+    for (const fn of this.listeners.get(event.type) ?? []) fn(frame);
+  }
+
+  addEventListener(name: string, fn: (e: MessageEvent) => void): void {
+    const set = this.listeners.get(name) ?? new Set();
+    set.add(fn);
+    this.listeners.set(name, set);
+  }
+
+  removeEventListener(name: string, fn: (e: MessageEvent) => void): void {
+    this.listeners.get(name)?.delete(fn);
+  }
+
+  close(): void {
+    if (this.beat !== null) clearInterval(this.beat);
+    this.beat = null;
+    for (const timer of this.timers) clearTimeout(timer);
+    this.timers.length = 0;
+    this.listeners.clear();
+  }
+}
+(window as unknown as { EventSource: unknown }).EventSource = Wp9EventSource;
+
+console.info(`[mock] student scene: ${wp9Scene} — ?scene=lobby|running|paused|closed|extend`);

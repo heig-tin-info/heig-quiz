@@ -129,8 +129,8 @@ describe("Shell sidebar", () => {
   it("shows the student navigation, with no classroom list, outside the teacher UI", () => {
     renderShell({ teacherUi: false, me: makeMe({ role: "student" }) });
     const nav = within(sidebar());
-    // "My classrooms" is the student heading; the teacher sections are gone.
-    expect(nav.getByRole("button", { name: "My classrooms" })).toBeInTheDocument();
+    // WP9: "Home" is the student heading; the teacher sections are gone.
+    expect(nav.getByRole("button", { name: "Home" })).toBeInTheDocument();
     expect(nav.queryByRole("button", { name: /^Classroom 1(?!\d)/ })).toBeNull();
   });
 });
