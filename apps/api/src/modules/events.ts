@@ -1,9 +1,9 @@
 import type { FastifyInstance } from "fastify";
 import { and, eq } from "drizzle-orm";
 
-import { classrooms, courses, enrollments } from "../db/schema.js";
+import { classrooms, courses, enrollments, pools } from "../db/schema.js";
 import { subscribe } from "../events.js";
-import { staffAccess } from "./guards.js";
+import { poolAccess, staffAccess } from "./guards.js";
 
 /**
  * SSE stream (ADR-005): unidirectional, session cookies reused,
@@ -31,6 +31,14 @@ export async function eventsPlugin(app: FastifyInstance) {
           topics.add(`course:${r.courseId}`);
           if (r.roomId) topics.add(`classroom:${r.roomId}`);
         }
+        // `pool:<id>` is authorized by THE pool predicate, exactly like
+        // `course:<id>` is by the staff one: a connection is subscribed to a
+        // pool if and only if `poolAccess` lets it in (PLAN-MVP §4.8).
+        const reachablePools = await app.db
+          .select({ id: pools.id })
+          .from(pools)
+          .where(me.role === "admin" ? undefined : poolAccess(me.id));
+        for (const p of reachablePools) topics.add(`pool:${p.id}`);
       } else {
         const rooms = await app.db
           .select({ id: enrollments.classroomId })

@@ -15,12 +15,14 @@ export interface AppNotice {
 }
 
 /** Refresh-hint families the client knows how to react to. */
-export type EventType = "courses" | "classrooms" | "roster" | "mutation";
+export type EventType = "courses" | "classrooms" | "roster" | "pool" | "mutation";
 
 /** Topic grammar: which audience a hint is addressed to. */
 export type Topic =
   | "admin"
   | `course:${string}`
+  /** A question pool; subscribed to by whoever `poolAccess` lets in. */
+  | `pool:${string}`
   | `classroom:${string}`
   | `teacher:${string}`
   | `user:${string}`;

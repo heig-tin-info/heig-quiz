@@ -32,6 +32,15 @@ const EnvSchema = z.object({
   /** Directory of the built SPA (apps/web/dist); empty = API only (Vite dev). */
   STATIC_DIR: z.string().default(""),
 
+  /**
+   * Where uploaded question images live (F-QST-06). Files are named after
+   * their sha256, so the directory is content-addressed and a backup is a
+   * plain `rsync`. Relative to the working directory unless absolute.
+   */
+  ASSETS_DIR: z.string().default(".data/assets"),
+  /** Hard cap on one uploaded image, in bytes (PLAN-MVP §4.2: 5 MB). */
+  ASSETS_MAX_BYTES: z.coerce.number().int().min(1024).max(50_000_000).default(5_000_000),
+
   /** Deadline ticker period, in milliseconds (docs/spec/05, 5.4). */
   TICK_MS: z.coerce.number().int().min(100).max(600_000).default(1000),
 
@@ -111,6 +120,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   }
   return {
     ...parsed.data,
+    // Made absolute at load time, like the PEM path below: the asset store
+    // must not follow the process around.
+    ASSETS_DIR: resolve(parsed.data.ASSETS_DIR),
     SUPER_ADMIN_EMAIL: parsed.data.SUPER_ADMIN_EMAIL.trim().toLowerCase(),
     // PEM path made absolute at load time: the process no longer depends on
     // its launch directory (ADR-010, secret in a file).

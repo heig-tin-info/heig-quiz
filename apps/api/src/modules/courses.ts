@@ -25,6 +25,7 @@ import {
   staffAccess,
   teacherGuard,
 } from "./guards.js";
+import { setJoinCode } from "./org/service.js";
 import { claimForExistingUsers, importRoster, rosterView } from "./roster.js";
 
 const RowsBody = z.object({
@@ -325,6 +326,19 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
     if (!body.success) {
       return reply.code(400).send({ error: "validation", issues: body.error.issues });
     }
+    // Self-enrolment is a switch of its own: turning it on mints the code
+    // when there is none, which `org/service.ts` owns (F-ORG-06).
+    if (body.data.joinCodeEnabled !== undefined) {
+      const state = await setJoinCode(app.db, scope.room.id, body.data.joinCodeEnabled);
+      await audit(app.db, {
+        actorUserId: req.user!.id,
+        actorType: "user",
+        action: "classroom.join_code",
+        subjectType: "classroom",
+        subjectId: scope.room.id,
+        payload: { enabled: state.joinCodeEnabled },
+      });
+    }
     const [updated] = await app.db
       .update(classrooms)
       .set({
@@ -334,14 +348,16 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
       })
       .where(eq(classrooms.id, scope.room.id))
       .returning();
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "classroom.rename",
-      subjectType: "classroom",
-      subjectId: scope.room.id,
-      payload: { from: scope.room.name, to: updated!.name },
-    });
+    if (body.data.name !== undefined || body.data.period !== undefined) {
+      await audit(app.db, {
+        actorUserId: req.user!.id,
+        actorType: "user",
+        action: "classroom.rename",
+        subjectType: "classroom",
+        subjectId: scope.room.id,
+        payload: { from: scope.room.name, to: updated!.name },
+      });
+    }
     return updated;
   });
 

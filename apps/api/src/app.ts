@@ -16,6 +16,8 @@ import { adminPlugin } from "./modules/admin.js";
 import { avatarPlugin } from "./modules/avatar.js";
 import { coursesPlugin } from "./modules/courses.js";
 import { eventsPlugin } from "./modules/events.js";
+import { orgPlugin } from "./modules/org/routes.js";
+import { poolPlugin } from "./modules/pool/routes.js";
 import { studentPlugin } from "./modules/student.js";
 import { startJobs } from "./jobs.js";
 import { startTicker } from "./ticker.js";
@@ -82,9 +84,11 @@ export async function buildApp({ config }: AppDeps): Promise<FastifyInstance> {
   app.addHook("onResponse", async (req, reply) => {
     if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return;
     if (reply.statusCode >= 400 || !req.user) return;
+    const pool = /^\/app\/api\/pools\/([0-9a-f-]{36})/.exec(req.url);
     const classroom = /^\/app\/api\/classrooms\/([0-9a-f-]{36})/.exec(req.url);
     const course = /^\/app\/api\/courses\/([0-9a-f-]{36})/.exec(req.url);
-    if (classroom) publish("mutation", [`classroom:${classroom[1]}`]);
+    if (pool) publish("mutation", [`pool:${pool[1]}`]);
+    else if (classroom) publish("mutation", [`classroom:${classroom[1]}`]);
     else if (course) publish("mutation", [`course:${course[1]}`, `teacher:${req.user.id}`]);
     else if (req.url.startsWith("/app/api/courses")) publish("mutation", [`teacher:${req.user.id}`]);
     else publish("mutation", [`user:${req.user.id}`]);
@@ -96,6 +100,8 @@ export async function buildApp({ config }: AppDeps): Promise<FastifyInstance> {
   await app.register(adminPlugin, { config });
   await app.register(avatarPlugin);
   await app.register(coursesPlugin, { config });
+  await app.register(orgPlugin);
+  await app.register(poolPlugin, { config });
   await app.register(studentPlugin);
 
   // Job queue + ticker. A database that is unreachable at boot does not kill
