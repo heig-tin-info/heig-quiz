@@ -770,12 +770,15 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       // per-pool check would break the second teacher's image. Any staff
       // session may therefore read an asset — its id is a random uuid, and a
       // colleague holding the same bytes obtains the same id anyway.
-      // TODO(WP5): a student reaches an asset through the attempt that shows
-      // it; until `attempts` exists, a student session gets a plain 404.
+      // A STUDENT reaches it through the attempt that shows it, and only
+      // then (`assetReachableBy`): the image of a question they are taking
+      // or reviewing, never the instance's image store.
       const staff = req.user!.role === "teacher" || req.user!.role === "admin";
-      if (!staff && asset.ownerId !== req.user!.id) {
-        return reply.code(404).send({ error: "not_found" });
-      }
+      const allowed =
+        staff ||
+        asset.ownerId === req.user!.id ||
+        (await service.assetReachableBy(app.db, asset.id, req.user!.id));
+      if (!allowed) return reply.code(404).send({ error: "not_found" });
       let bytes: Buffer;
       try {
         bytes = await readAsset(config.ASSETS_DIR, asset.path);

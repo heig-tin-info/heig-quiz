@@ -5,9 +5,13 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { registerForTests } from "@quiz/registry/server";
 
-import { assets, coursePools, courseStaff, courses, pools } from "../../db/schema.js";
+import { assets, coursePools, courseStaff, courses, pools, questions } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { fakeRunnerType, fakeShort } from "../../test/fakeType.js";
+import { seedLive } from "../../test/live.js";
+import { addItems, applyState, byId } from "../evaluation/service.js";
+import * as live from "../live/service.js";
+import * as poolService from "./service.js";
 
 /** A real 1×1 PNG: the upload path reads the bytes, not the header we claim. */
 const PNG = Buffer.from(
@@ -346,8 +350,8 @@ describe("assets", () => {
     expect(served.headers["x-content-type-options"]).toBe("nosniff");
     expect(served.rawPayload.equals(PNG)).toBe(true);
 
-    // A student has no way in until WP5 wires the attempt that shows the
-    // image; a colleague does, because the store is deduplicated instance-wide.
+    // A student with no attempt showing the image has no way in; a colleague
+    // does, because the store is deduplicated instance-wide.
     const student = await server.signIn("student");
     const denied = await server.app.inject({
       method: "GET",
@@ -362,6 +366,66 @@ describe("assets", () => {
         headers: stranger.headers,
       })).statusCode,
     ).toBe(200);
+  });
+});
+
+/**
+ * Finding H3: every image in a question prompt was a broken image during the
+ * exam, because a student session could never read an asset. The rule is the
+ * attempt, not the role: a student reaches an asset exactly when a question
+ * they are taking (or reviewing after the release) shows it.
+ */
+describe("a student reads the assets of their own attempt (H3)", () => {
+  it("serves the image during the attempt, and 404s to another classroom", async () => {
+    const db = server.app.db;
+    const [asset] = await db.select().from(assets);
+    const student = await server.signIn("student");
+    const elsewhere = await server.signIn("student");
+
+    const seed = await seedLive(db, {
+      teacherId: owner.id,
+      studentIds: [student.id],
+      questions: 0,
+    });
+    // A question whose statement embeds the uploaded image, published
+    // through the real pipeline: the link row is written at publication.
+    const questionId = await poolService.createQuestion(db, {
+      poolId: seed.poolId,
+      type: "short",
+      internalName: "with-an-image",
+      createdBy: owner.id,
+    });
+    const [question] = await db.select().from(questions).where(eq(questions.id, questionId));
+    await poolService.putDraft(db, question!, {
+      config: { statement: `Look at ![](asset:${asset!.id})`, answer: "yes" },
+    });
+    await poolService.publishQuestion(db, question!, { userId: owner.id });
+    await addItems(db, (await byId(db, seed.evaluationId))!, [questionId], () => 1, {
+      attemptCount: 0,
+    });
+
+    const served = (headers: Record<string, string>) =>
+      server.app.inject({ method: "GET", url: `/app/api/assets/${asset!.id}`, headers });
+
+    // Before the attempt exists, the student is nobody to this asset.
+    expect((await served(student.headers)).statusCode).toBe(404);
+
+    const evaluation = await applyState(
+      db,
+      (await byId(db, seed.evaluationId))!,
+      "running",
+      server.clock.now(),
+    );
+    const participant = (await live.participantOf(db, evaluation, student.id))!;
+    const created = await live.ensureAttempt(db, evaluation, participant, server.clock.now());
+    await live.beginAttempt(db, evaluation, created, participant, server.clock.now());
+
+    const ok = await served(student.headers);
+    expect(ok.statusCode).toBe(200);
+    expect(ok.rawPayload.equals(PNG)).toBe(true);
+
+    // A student of another classroom stays at 404, attempt or no attempt.
+    expect((await served(elsewhere.headers)).statusCode).toBe(404);
   });
 });
 

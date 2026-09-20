@@ -20,6 +20,7 @@ import {
   inArray,
   isNotNull,
   isNull,
+  or,
   sql,
   type SQL,
 } from "drizzle-orm";
@@ -39,11 +40,15 @@ import type {
 
 import type { Db } from "../../db/client.js";
 import {
+  assets,
+  attempts,
   categories,
   coursePools,
   evaluationItems,
+  evaluations,
   pools,
   questionTags,
+  questionVersionAssets,
   questionVersions,
   questions,
 } from "../../db/schema.js";
@@ -713,6 +718,24 @@ export async function putDraft(
 }
 
 /**
+ * Every `asset:<uuid>` reference a stored configuration carries (F-QST-06).
+ *
+ * The markdown of a prompt, of a choice or of a cloze text embeds an image as
+ * `asset:<uuid>`, which the web renderer rewrites into
+ * `/app/api/assets/<uuid>`. Scanning the serialized config is what keeps this
+ * type-agnostic: a new question type needs no hook for its images to be
+ * reachable during an exam.
+ */
+export function assetReferences(value: unknown): string[] {
+  const found = new Set<string>();
+  const pattern = /asset:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi;
+  for (const match of JSON.stringify(value ?? null).matchAll(pattern)) {
+    found.add(match[1]!.toLowerCase());
+  }
+  return [...found];
+}
+
+/**
  * Publication (F-QST-03) in ONE transaction: the draft BECOMES version
  * `max + 1` and a fresh draft is opened with the same content. The partial
  * unique index `(question_id) where number is null` is what makes two
@@ -778,8 +801,67 @@ export async function publishQuestion(
       createdAt: now,
     });
     await tx.update(questions).set({ updatedAt: now }).where(eq(questions.id, question.id));
+
+    // The link table of `db/pool.ts`: which assets this version shows. It is
+    // the garbage-collection root, and it is what lets a STUDENT taking the
+    // evaluation read the image (`assetReachableBy`).
+    await tx
+      .delete(questionVersionAssets)
+      .where(eq(questionVersionAssets.versionId, draft.id));
+    const referenced = assetReferences({ config, explanation: draft.explanation });
+    if (referenced.length > 0) {
+      // Only ids that exist: a reference to a deleted asset is a broken
+      // image, not a failed publication.
+      const known = await tx
+        .select({ id: assets.id })
+        .from(assets)
+        .where(inArray(assets.id, referenced));
+      if (known.length > 0) {
+        await tx
+          .insert(questionVersionAssets)
+          .values(known.map((row) => ({ versionId: draft.id, assetId: row.id })))
+          .onConflictDoNothing();
+      }
+    }
     return versionJson(published!);
   });
+}
+
+/**
+ * May this STUDENT read this asset? (F-QST-06, N-SEC-05.)
+ *
+ * Exactly when the image is shown to them by a question they are taking or
+ * reviewing: a version referenced by an item of an evaluation they hold an
+ * attempt on, while that attempt is running or once the results are
+ * released. Anything else is a 404, indistinguishable from a missing asset
+ * (invariant 6). `assets` and `question_version_assets` are this module's
+ * tables; `evaluation_items` and `attempts` are read by join, never written.
+ */
+export async function assetReachableBy(
+  db: Db,
+  assetId: string,
+  userId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: questionVersionAssets.assetId })
+    .from(questionVersionAssets)
+    .innerJoin(
+      evaluationItems,
+      eq(evaluationItems.questionVersionId, questionVersionAssets.versionId),
+    )
+    .innerJoin(evaluations, eq(evaluations.id, evaluationItems.evaluationId))
+    .innerJoin(
+      attempts,
+      and(eq(attempts.evaluationId, evaluationItems.evaluationId), eq(attempts.userId, userId)),
+    )
+    .where(
+      and(
+        eq(questionVersionAssets.assetId, assetId),
+        or(eq(attempts.state, "in_progress"), isNotNull(evaluations.releasedAt)),
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
 }
 
 /** One published version, config migrated to the current shape. */
