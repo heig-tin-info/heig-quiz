@@ -1,0 +1,402 @@
+/**
+ * The `short` editor.
+ *
+ * Controlled and offline: it reads `config`, emits a whole new config through
+ * `onChange` and never fetches. An invalid draft is a normal state (decision
+ * D16); the host stores it and hands back `issues`.
+ *
+ * The order of the matchers is the grading order — the first match wins — so
+ * the list is reorderable and numbered.
+ */
+import type { ConfigIssue, EditorProps, MarkdownRenderer, StringOverrides } from "@quiz/core/client";
+import { resolveStrings } from "@quiz/core/client";
+import { SHORT_MAX_MATCHERS, type ShortConfig, type ShortMatcher } from "./schema.js";
+import { shortEditorStrings, type ShortEditorStringKey } from "./strings.js";
+import {
+  buttonClass,
+  cx,
+  helpClass,
+  inputClass,
+  IssueList,
+  issuesAt,
+  labelClass,
+  rootIssues,
+  sectionClass,
+} from "./ui.js";
+
+export type ShortEditorProps = Omit<EditorProps<ShortConfig>, "uploadAsset"> & {
+  uploadAsset?: EditorProps<ShortConfig>["uploadAsset"];
+  issues?: readonly ConfigIssue[];
+  strings?: StringOverrides<ShortEditorStringKey>;
+  renderMarkdown?: MarkdownRenderer;
+};
+
+type Strings = Readonly<Record<ShortEditorStringKey, string>>;
+
+/**
+ * A matcher of the requested kind, with every default in place.
+ *
+ * The literals are NOT run through `ShortMatcherSchema.parse`: a freshly added
+ * matcher is empty, and an empty `value` is exactly what the schema refuses. A
+ * draft is allowed to be invalid (decision D16) — publication is where it is
+ * not.
+ */
+function blankMatcher(kind: ShortMatcher["kind"]): ShortMatcher {
+  switch (kind) {
+    case "exact":
+      return { kind, value: "", caseSensitive: false, trim: true, collapseSpaces: true, points: 1 };
+    case "regex":
+      return { kind, pattern: "", flags: "i", points: 1 };
+    case "number":
+      return { kind, value: 0, tolerance: 0, toleranceMode: "abs", unitRequired: false, points: 1 };
+    case "date":
+      return { kind, value: "", toleranceDays: 0, points: 1 };
+    case "time":
+      return { kind, value: "", toleranceMinutes: 0, points: 1 };
+    case "llm":
+      return { kind, rubric: "", points: 1 };
+  }
+}
+
+const MATCHER_LABEL: Record<ShortMatcher["kind"], ShortEditorStringKey> = {
+  exact: "matcherExact",
+  regex: "matcherRegex",
+  number: "matcherNumber",
+  date: "matcherDate",
+  time: "matcherTime",
+  llm: "matcherLlm",
+};
+
+function MatcherFields({
+  matcher,
+  index,
+  disabled,
+  s,
+  onPatch,
+}: {
+  matcher: ShortMatcher;
+  index: number;
+  disabled: boolean | undefined;
+  s: Strings;
+  onPatch: (next: ShortMatcher) => void;
+}) {
+  const at = (label: string) => `${label} ${index + 1}`;
+  const field = cx(inputClass, "w-full");
+
+  switch (matcher.kind) {
+    case "exact":
+      return (
+        <>
+          <input
+            type="text"
+            className={field}
+            aria-label={at(s.value)}
+            value={matcher.value}
+            disabled={disabled}
+            onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
+          />
+          <label className="inline-flex items-center gap-1.5 text-[13px] text-fg-muted">
+            <input
+              type="checkbox"
+              className="size-4 accent-accent"
+              checked={matcher.caseSensitive}
+              disabled={disabled}
+              onChange={(e) => onPatch({ ...matcher, caseSensitive: e.target.checked })}
+            />
+            {s.caseSensitive}
+          </label>
+        </>
+      );
+    case "regex":
+      return (
+        <>
+          <input
+            type="text"
+            className={cx(field, "font-mono text-[13px]")}
+            aria-label={at(s.pattern)}
+            value={matcher.pattern}
+            disabled={disabled}
+            onChange={(e) => onPatch({ ...matcher, pattern: e.target.value })}
+          />
+          <input
+            type="text"
+            className={cx(inputClass, "w-20 font-mono text-[13px]")}
+            aria-label={at(s.flags)}
+            value={matcher.flags}
+            disabled={disabled}
+            onChange={(e) => onPatch({ ...matcher, flags: e.target.value })}
+          />
+        </>
+      );
+    case "number":
+      return (
+        <>
+          <input
+            type="number"
+            className={cx(inputClass, "w-28 tabular-nums")}
+            aria-label={at(s.value)}
+            value={matcher.value}
+            disabled={disabled}
+            onChange={(e) => onPatch({ ...matcher, value: Number(e.target.value) })}
+          />
+          <input
+            type="number"
+            min={0}
+            step="any"
+            className={cx(inputClass, "w-24 tabular-nums")}
+            aria-label={at(s.tolerance)}
+            value={matcher.tolerance}
+            disabled={disabled}
+            onChange={(e) => onPatch({ ...matcher, tolerance: Number(e.target.value) })}
+          />
+          <select
+            className={cx(inputClass, "w-32")}
+            aria-label={at(s.tolerance)}
+            value={matcher.toleranceMode}
+            disabled={disabled}
+            onChange={(e) =>
+              onPatch({ ...matcher, toleranceMode: e.target.value === "rel" ? "rel" : "abs" })
+            }
+          >
+            <option value="abs">{s.toleranceAbs}</option>
+            <option value="rel">{s.toleranceRel}</option>
+          </select>
+          <input
+            type="text"
+            className={cx(inputClass, "w-24")}
+            aria-label={at(s.unit)}
+            value={matcher.unit ?? ""}
+            disabled={disabled}
+            onChange={(e) => {
+              const next = { ...matcher };
+              if (e.target.value === "") delete next.unit;
+              else next.unit = e.target.value;
+              onPatch(next);
+            }}
+          />
+          <label className="inline-flex items-center gap-1.5 text-[13px] text-fg-muted">
+            <input
+              type="checkbox"
+              className="size-4 accent-accent"
+              checked={matcher.unitRequired}
+              disabled={disabled}
+              onChange={(e) => onPatch({ ...matcher, unitRequired: e.target.checked })}
+            />
+            {s.unitRequired}
+          </label>
+        </>
+      );
+    case "date":
+      return (
+        <>
+          <input
+            type="date"
+            className={cx(inputClass, "w-40")}
+            aria-label={at(s.value)}
+            value={matcher.value}
+            disabled={disabled}
+            onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
+          />
+          <input
+            type="number"
+            min={0}
+            className={cx(inputClass, "w-24 tabular-nums")}
+            aria-label={at(s.toleranceDays)}
+            value={matcher.toleranceDays}
+            disabled={disabled}
+            onChange={(e) => onPatch({ ...matcher, toleranceDays: Number(e.target.value) })}
+          />
+        </>
+      );
+    case "time":
+      return (
+        <>
+          <input
+            type="time"
+            className={cx(inputClass, "w-32")}
+            aria-label={at(s.value)}
+            value={matcher.value}
+            disabled={disabled}
+            onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
+          />
+          <input
+            type="number"
+            min={0}
+            className={cx(inputClass, "w-24 tabular-nums")}
+            aria-label={at(s.toleranceMinutes)}
+            value={matcher.toleranceMinutes}
+            disabled={disabled}
+            onChange={(e) => onPatch({ ...matcher, toleranceMinutes: Number(e.target.value) })}
+          />
+        </>
+      );
+    case "llm":
+      return (
+        <>
+          <textarea
+            rows={2}
+            className={cx(field, "resize-y")}
+            aria-label={at(s.rubric)}
+            value={matcher.rubric}
+            disabled={disabled}
+            onChange={(e) => onPatch({ ...matcher, rubric: e.target.value })}
+          />
+          <span className="text-xs text-warning">{s.llmWarning}</span>
+        </>
+      );
+  }
+}
+
+export function ShortEditor({
+  config,
+  onChange,
+  disabled,
+  issues = [],
+  strings,
+  renderMarkdown,
+}: ShortEditorProps) {
+  const s = resolveStrings(shortEditorStrings, strings);
+  const patch = (next: Partial<ShortConfig>) => onChange({ ...config, ...next });
+  const setMatchers = (matchers: ShortMatcher[]) => patch({ matchers });
+  const replace = (index: number, next: ShortMatcher) =>
+    setMatchers(config.matchers.map((m, i) => (i === index ? next : m)));
+
+  return (
+    <div className="flex flex-col gap-6">
+      <IssueList issues={rootIssues(issues)} />
+
+      <section className={sectionClass}>
+        <label className={labelClass} htmlFor="short-prompt">
+          {s.prompt}
+        </label>
+        <textarea
+          id="short-prompt"
+          rows={4}
+          className={cx(inputClass, "w-full resize-y font-mono text-[13px]")}
+          value={config.prompt}
+          disabled={disabled}
+          onChange={(e) => patch({ prompt: e.target.value })}
+        />
+        <p className={helpClass}>{s.promptHint}</p>
+        <IssueList issues={issuesAt(issues, "prompt")} />
+        {renderMarkdown ? (
+          <div className="border-t border-line pt-2 text-sm text-fg">
+            <p className={cx(helpClass, "mb-1")}>{s.preview}</p>
+            {renderMarkdown(config.prompt)}
+          </div>
+        ) : null}
+      </section>
+
+      <section className={cx(sectionClass, "flex-row flex-wrap items-end gap-4")}>
+        <div className="flex flex-col gap-1.5">
+          <label className={labelClass} htmlFor="short-kind">
+            {s.kind}
+          </label>
+          <select
+            id="short-kind"
+            className={cx(inputClass, "w-40")}
+            value={config.kind}
+            disabled={disabled}
+            onChange={(e) => patch({ kind: e.target.value as ShortConfig["kind"] })}
+          >
+            <option value="text">{s.kindText}</option>
+            <option value="number">{s.kindNumber}</option>
+            <option value="date">{s.kindDate}</option>
+            <option value="time">{s.kindTime}</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label className={labelClass} htmlFor="short-placeholder">
+            {s.placeholder}
+          </label>
+          <input
+            id="short-placeholder"
+            type="text"
+            className={cx(inputClass, "w-56")}
+            value={config.placeholder ?? ""}
+            disabled={disabled}
+            onChange={(e) => {
+              const next = { ...config };
+              if (e.target.value === "") delete next.placeholder;
+              else next.placeholder = e.target.value;
+              onChange(next);
+            }}
+          />
+          <p className={helpClass}>{s.placeholderHint}</p>
+        </div>
+      </section>
+
+      <section className={sectionClass}>
+        <h3 className={labelClass}>{s.matchers}</h3>
+        <p className={helpClass}>{s.matchersHint}</p>
+        <ol className="flex flex-col gap-2">
+          {config.matchers.map((matcher, index) => (
+            <li
+              key={index}
+              className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface-2 px-3 py-2"
+            >
+              <span className="w-4 shrink-0 text-center text-[13px] tabular-nums text-fg-faint">
+                {index + 1}
+              </span>
+              <select
+                className={cx(inputClass, "w-44")}
+                aria-label={`${s.matcherKind} ${index + 1}`}
+                value={matcher.kind}
+                disabled={disabled}
+                onChange={(e) => replace(index, blankMatcher(e.target.value as ShortMatcher["kind"]))}
+              >
+                {(Object.keys(MATCHER_LABEL) as ShortMatcher["kind"][]).map((kind) => (
+                  <option key={kind} value={kind}>
+                    {s[MATCHER_LABEL[kind]]}
+                  </option>
+                ))}
+              </select>
+              <MatcherFields
+                matcher={matcher}
+                index={index}
+                disabled={disabled}
+                s={s}
+                onPatch={(next) => replace(index, next)}
+              />
+              <input
+                type="number"
+                min={0}
+                max={1}
+                step={0.25}
+                className={cx(inputClass, "w-20 tabular-nums")}
+                aria-label={`${s.points} ${index + 1}`}
+                value={matcher.points}
+                disabled={disabled}
+                onChange={(e) => replace(index, { ...matcher, points: Number(e.target.value) })}
+              />
+              <button
+                type="button"
+                className={cx(buttonClass, "ml-auto w-7 px-0 text-fg-muted hover:text-danger")}
+                aria-label={`${s.removeMatcher} ${index + 1}`}
+                disabled={disabled || config.matchers.length <= 1}
+                onClick={() => setMatchers(config.matchers.filter((_, i) => i !== index))}
+              >
+                ×
+              </button>
+              <div className="w-full">
+                <IssueList issues={issuesAt(issues, "matchers", index)} />
+              </div>
+            </li>
+          ))}
+        </ol>
+        <IssueList issues={issuesAt(issues, "matchers").filter((i) => i.path.length === 1)} />
+        <p className={helpClass}>{s.pointsHint}</p>
+        <div>
+          <button
+            type="button"
+            className={buttonClass}
+            disabled={disabled || config.matchers.length >= SHORT_MAX_MATCHERS}
+            onClick={() => setMatchers([...config.matchers, blankMatcher("exact")])}
+          >
+            {s.addMatcher}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
