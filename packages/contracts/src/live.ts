@@ -200,6 +200,12 @@ export const EvaluationCard = z.object({
   attemptId: z.uuid().nullable(),
   attemptState: AttemptState.nullable(),
   deadlineAt: z.iso.datetime().nullable(),
+  /**
+   * The Swiss grade, once the results are released (WP6). `null` everywhere
+   * else: an evaluation still running has no grade to show, and an unreleased
+   * one must not leak the one it would have.
+   */
+  grade: z.number().nullable(),
 });
 export type EvaluationCard = z.infer<typeof EvaluationCard>;
 

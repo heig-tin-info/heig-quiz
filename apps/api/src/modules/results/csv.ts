@@ -1,0 +1,82 @@
+/**
+ * The CSV export (F-RES-02, PLAN-MVP §4.6).
+ *
+ * Two decisions the requirement makes for us, and which are asserted by the
+ * tests byte for byte:
+ *
+ *   - a UTF-8 BOM (`EF BB BF`). Excel on Windows reads a BOM-less UTF-8 file
+ *     as Latin-1 and turns every accent into mojibake — and this file is full
+ *     of French family names;
+ *   - `;` as the separator, for the same reason: a French or Swiss Excel
+ *     splits on `;` and puts a comma-separated file in one column.
+ *
+ * Numbers use `.` as the decimal separator (a spreadsheet converts, a parser
+ * does not), and the grade is written at one decimal, which is the
+ * granularity of the Swiss scale (§7.1).
+ */
+import type { ResultsView } from "@quiz/contracts";
+
+/** U+FEFF, which UTF-8 encodes as the three bytes `EF BB BF`. */
+export const BOM = "﻿";
+export const SEPARATOR = ";";
+/** A header built from `internal_name` is truncated to this (§4.6). */
+export const HEADER_MAX = 30;
+
+/**
+ * RFC-4180 quoting, with the separator of this file. A field is quoted only
+ * when it has to be, so a plain export stays diff-readable.
+ */
+export function csvField(value: string): string {
+  return /[";\r\n]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value;
+}
+
+const line = (fields: readonly string[]): string => fields.map(csvField).join(SEPARATOR);
+
+/** Two decimals, `.` separator, no trailing zeroes beyond what is needed. */
+const points = (value: number): string => String(Math.round(value * 100) / 100);
+
+/** Exactly one decimal: `4` is written `4.0`, because a grade always is. */
+const grade = (value: number): string => value.toFixed(1);
+
+/**
+ * `email;last_name;first_name;q1;…;total;grade`, one row per STUDENT — the
+ * absent ones included, with empty per-item cells and a 1.0.
+ */
+export function resultsCsv(view: ResultsView): string {
+  const header = [
+    "email",
+    "last_name",
+    "first_name",
+    ...view.items.map((i) => i.internalName.slice(0, HEADER_MAX)),
+    "total",
+    "grade",
+  ];
+  const rows = view.rows.map((row) =>
+    line([
+      row.email,
+      row.lastName,
+      row.firstName,
+      ...view.items.map((item) => {
+        const value = row.perItem[item.id];
+        return value === undefined ? "" : points(value);
+      }),
+      points(row.points),
+      grade(row.grade),
+    ]),
+  );
+  // A trailing newline: every line of the file, including the last, ends.
+  return `${BOM}${[line(header), ...rows].join("\r\n")}\r\n`;
+}
+
+/** The `Content-Disposition` filename: the title, reduced to a safe slug. */
+export function csvFilename(title: string): string {
+  const slug =
+    title
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-zA-Z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .toLowerCase()
+      .slice(0, 60) || "results";
+  return `${slug}.csv`;
+}

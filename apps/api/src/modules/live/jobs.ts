@@ -44,7 +44,7 @@ export const LIVE_TASKS: TickTask[] = [
     // Step 4: the common end of a `deadline`-timed evaluation.
     name: "live.close_due",
     run: async (app) => {
-      await autoCloseDue(app.db, app.clock.now());
+      await autoCloseDue(app.db, app.clock.now(), app);
     },
   },
   {

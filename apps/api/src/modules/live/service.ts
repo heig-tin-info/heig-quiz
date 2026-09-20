@@ -17,10 +17,13 @@
  */
 import { randomUUID } from "node:crypto";
 
+import type { FastifyInstance } from "fastify";
+
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
 
 import {
   EvaluationSettings,
+  GradingScale,
   type AttemptClosed,
   type AttemptInspect,
   type AttemptItem,
@@ -42,6 +45,7 @@ import {
   attemptDeadline,
   bonusSeconds,
   compareOutput,
+  gradeFromPoints,
   uniquePseudonyms,
 } from "@quiz/domain";
 
@@ -69,6 +73,15 @@ import {
 } from "../evaluation/service.js";
 import { joinedItems } from "../evaluation/service.js";
 import * as events from "./events.js";
+import { enqueueEvaluationGrading } from "../grading/jobs.js";
+import {
+  pairKey,
+  pointsByAttempt,
+  standingGradings,
+  verdictOf,
+  type GradingRecord,
+  type PairKey,
+} from "../grading/service.js";
 import { presence } from "../realtime/presence.js";
 import { isShuffleable, solutionView, studentView } from "./studentView.js";
 
@@ -1062,12 +1075,21 @@ export async function resumeEvaluation(
   return next;
 }
 
-/** `* → closed`: every open attempt becomes `expired`, closed by the teacher. */
+/**
+ * `* → closed`: every open attempt becomes `expired`, closed by the teacher.
+ *
+ * Closing is also what starts the automatic correction (§5.4): when the
+ * caller hands over the Fastify instance — the route and the ticker both do —
+ * the `grading.evaluation` singleton is enqueued here, so the two entry
+ * points cannot drift apart. A caller that passes nothing (a unit test on the
+ * transition alone) closes without grading.
+ */
 export async function closeEvaluation(
   db: Db,
   evaluation: EvaluationRecord,
   now: Date,
   closedBy: ClosedBy = "teacher",
+  app?: FastifyInstance,
 ): Promise<EvaluationRecord> {
   const open = await db
     .select()
@@ -1080,6 +1102,7 @@ export async function closeEvaluation(
   const next = await applyState(db, evaluation, "closed", now);
   for (const attempt of open) events.attemptClosed(next.id, attempt, closedBy, now);
   events.stateChanged(next, now);
+  if (app) await enqueueEvaluationGrading(app, { evaluationId: next.id });
   return next;
 }
 
@@ -1215,6 +1238,10 @@ export async function dashboardView(
     map.set(row.itemId, row);
   }
 
+  // The grades of the grid (F-DASH-01): every grading still standing, in one
+  // query. A proposal shows as `pending`, a validated one as its verdict.
+  const standing: ReadonlyMap<PairKey, GradingRecord> = await standingGradings(db, evaluation.id);
+
   const userIds = roster.map((r) => r.userId).filter((id): id is string => id !== null);
   const pseudonyms = uniquePseudonyms(evaluation.id, userIds);
   const online = presence.online(evaluation.id);
@@ -1236,16 +1263,18 @@ export async function dashboardView(
         lastSeenAt: isoOrNull(presence.lastSeenAt(evaluation.id, userId) ?? attempt?.presentAt ?? null),
         deadlineAt: isoOrNull(attempt?.deadlineAt ?? null),
         timeBonusPercent: entry.timeBonusPercent,
-        // Grades are WP6's: the grid shows progress until then.
-        points: null,
+        points: attempt ? pointsOf(standing, attempt.id, items) : null,
         maxPoints,
         cells: items.map((item) => {
           const answer = answered.get(item.item.id) ?? null;
+          const grading = attempt
+            ? (standing.get(pairKey(attempt.id, item.item.id)) ?? null)
+            : null;
           return {
             itemId: item.item.id,
             status: cellStatus(answer),
-            verdict: null,
-            points: null,
+            verdict: grading ? verdictOf(grading) : null,
+            points: grading && grading.state === "validated" ? grading.points : null,
             revision: answer?.revision ?? 0,
             summary:
               input.includeAnswers && answer ? summarizeAnswer(answer.payload) : null,
@@ -1280,10 +1309,43 @@ export async function dashboardView(
       return {
         itemId: item.item.id,
         completion: started === 0 ? 0 : Math.round((done / started) * 100) / 100,
-        successRate: null,
+        successRate: successRateOf(standing, item.item.id),
       };
     }),
   };
+}
+
+/** The validated points of one attempt; `null` while nothing is graded yet. */
+function pointsOf(
+  standing: ReadonlyMap<PairKey, GradingRecord>,
+  attemptId: string,
+  items: readonly JoinedItem[],
+): number | null {
+  let total = 0;
+  let seen = 0;
+  for (const item of items) {
+    const grading = standing.get(pairKey(attemptId, item.item.id));
+    if (grading?.state !== "validated") continue;
+    total += grading.points;
+    seen += 1;
+  }
+  return seen === 0 ? null : Math.round(total * 100) / 100;
+}
+
+/** The mean of `points / maxPoints` over the validated gradings of one item. */
+function successRateOf(
+  standing: ReadonlyMap<PairKey, GradingRecord>,
+  itemId: string,
+): number | null {
+  let sum = 0;
+  let n = 0;
+  for (const grading of standing.values()) {
+    if (grading.itemId !== itemId || grading.state !== "validated") continue;
+    if (grading.maxPoints <= 0) continue;
+    sum += grading.points / grading.maxPoints;
+    n += 1;
+  }
+  return n === 0 ? null : Math.round((sum / n) * 100) / 100;
 }
 
 /** F-DASH-05: one attempt opened in read mode, key included (teacher only). */
@@ -1378,6 +1440,33 @@ export async function studentHome(db: Db, userId: string, now: Date): Promise<St
     .where(and(eq(enrollments.userId, userId), eq(enrollments.status, "claimed")))
     .orderBy(desc(evaluations.createdAt));
 
+  // The grade of a released evaluation (WP6): the sum of the validated
+  // gradings of the student's own attempt, converted by the evaluation's
+  // scale. Two queries for the whole page, not one per card.
+  const attemptIds = rows
+    .map((r) => r.attempt?.id)
+    .filter((id): id is string => id !== undefined && id !== null);
+  const pointsPerAttempt = await pointsByAttempt(db, attemptIds);
+  const totals = new Map<string, number>();
+  for (const row of rows) {
+    if (row.evaluation.releasedAt === null || totals.has(row.evaluation.id)) continue;
+    const items = await db
+      .select({ points: evaluationItems.points })
+      .from(evaluationItems)
+      .where(eq(evaluationItems.evaluationId, row.evaluation.id));
+    totals.set(
+      row.evaluation.id,
+      Math.round(items.reduce((sum, i) => sum + i.points, 0) * 100) / 100,
+    );
+  }
+
+  const gradeOf = (row: (typeof rows)[number]): number | null => {
+    if (row.evaluation.releasedAt === null) return null;
+    const total = totals.get(row.evaluation.id) ?? 0;
+    const points = row.attempt ? (pointsPerAttempt.get(row.attempt.id) ?? 0) : 0;
+    return gradeFromPoints(points, total, GradingScale.parse(row.evaluation.gradingScale));
+  };
+
   const card = (row: (typeof rows)[number]): EvaluationCard => ({
     id: row.evaluation.id,
     title: row.evaluation.title,
@@ -1392,6 +1481,7 @@ export async function studentHome(db: Db, userId: string, now: Date): Promise<St
     attemptId: row.attempt?.id ?? null,
     attemptState: row.attempt?.state ?? null,
     deadlineAt: isoOrNull(row.attempt?.deadlineAt ?? null),
+    grade: gradeOf(row),
   });
 
   const open: EvaluationCard[] = [];
@@ -1478,8 +1568,12 @@ export async function autoStartFullLobbies(db: Db, now: Date): Promise<Evaluatio
   return moved;
 }
 
-/** Step 4: `running|paused` past `closes_at` → `closed`. */
-export async function autoCloseDue(db: Db, now: Date): Promise<EvaluationRecord[]> {
+/** Step 4: `running|paused` past `closes_at` → `closed` (+ enqueue grading). */
+export async function autoCloseDue(
+  db: Db,
+  now: Date,
+  app?: FastifyInstance,
+): Promise<EvaluationRecord[]> {
   const due = await db
     .select()
     .from(evaluations)
@@ -1491,7 +1585,7 @@ export async function autoCloseDue(db: Db, now: Date): Promise<EvaluationRecord[
       ),
     );
   const moved: EvaluationRecord[] = [];
-  for (const row of due) moved.push(await closeEvaluation(db, row, now, "server"));
+  for (const row of due) moved.push(await closeEvaluation(db, row, now, "server", app));
   return moved;
 }
 

@@ -356,7 +356,7 @@ export async function livePlugin(app: FastifyInstance) {
   control("start", "evaluation.start", (e, now) => service.startEvaluation(app.db, e, now), "running");
   control("pause", "evaluation.pause", (e, now) => service.pauseEvaluation(app.db, e, now), "paused");
   control("resume", "evaluation.resume", (e, now) => service.resumeEvaluation(app.db, e, now), "running");
-  control("close", "evaluation.close", (e, now) => service.closeEvaluation(app.db, e, now), "closed");
+  control("close", "evaluation.close", (e, now) => service.closeEvaluation(app.db, e, now, "teacher", app), "closed");
 
   /** F-LIVE-11/12. */
   app.post("/app/api/evaluations/:id/extend", { preHandler: requireTeacher }, async (req, reply) => {

@@ -18,6 +18,7 @@ import type {
   DashboardCellEvent,
   DashboardPresenceEvent,
   EvaluationState,
+  GradingProgressEvent,
   LobbyCountEvent,
   RunnerResultEvent,
   ServerEvent,
@@ -41,6 +42,7 @@ export const PRESENCE_WINDOW_MS = 1000;
 export const evaluationTopic = (id: string): Topic => `evaluation:${id}`;
 export const attemptTopic = (id: string): Topic => `attempt:${id}`;
 export const userTopic = (id: string): Topic => `user:${id}`;
+export const teacherTopic = (id: string): Topic => `teacher:${id}`;
 
 /** The one low-level exit. Everything below funnels through it. */
 export function emit(event: ServerEvent, topics: Topic[], audience: Audience = "all"): void {
@@ -175,6 +177,32 @@ export function lobbyCount(input: {
   enrolled: number;
 }): void {
   lobbyCounts.push(input.evaluationId, { type: "lobby.count", ...input });
+}
+
+/**
+ * Grading progress (§4.8, F-GRADE-03). Addressed to the teachers of the
+ * course — who hold `teacher:<id>` whether or not they have the dashboard
+ * open — AND to the evaluation topic, which is what a dashboard watches.
+ * Staff only: a student has no business knowing how far the correction is.
+ */
+export function gradingProgress(input: {
+  evaluationId: string;
+  done: number;
+  total: number;
+  phase: GradingProgressEvent["phase"];
+  teacherIds: readonly string[];
+}): void {
+  emit(
+    {
+      type: "grading.progress",
+      evaluationId: input.evaluationId,
+      done: input.done,
+      total: input.total,
+      phase: input.phase,
+    },
+    [evaluationTopic(input.evaluationId), ...input.teacherIds.map(teacherTopic)],
+    "staff",
+  );
 }
 
 /** Addressed to the student who pressed Run, never to a topic they share. */

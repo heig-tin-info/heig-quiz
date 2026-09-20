@@ -188,6 +188,11 @@ export function feedbackOf(row: EvaluationRecord): FeedbackPolicy {
   return FeedbackPolicy.parse(row.feedbackPolicy);
 }
 
+/** The grade scale of F-EVAL-10; the results module never parses the jsonb itself. */
+export function scaleOf(row: EvaluationRecord): GradingScale {
+  return GradingScale.parse(row.gradingScale);
+}
+
 export function toEvaluation(row: EvaluationRecord): Evaluation {
   return {
     id: row.id,

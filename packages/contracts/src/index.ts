@@ -4,6 +4,8 @@ export * from "./org.js";
 export * from "./pool.js";
 export * from "./evaluation.js";
 export * from "./live.js";
+export * from "./grading.js";
+export * from "./results.js";
 export * from "./realtime.js";
 export * from "./api.js";
 export * from "./notifications.js";

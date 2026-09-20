@@ -17,12 +17,28 @@ import type { FastifyInstance } from "fastify";
 /** Purge of expired sessions, wired into the ticker. */
 export const HOUSEKEEPING_QUEUE = "housekeeping.purge";
 
+/**
+ * The grading queues (PLAN-MVP §5.4). Their names live here, next to the
+ * queue itself, so that `grep QUEUE jobs.ts` lists everything this process
+ * can be asked to do in the background.
+ *
+ * `grading.evaluation` is a SINGLETON per evaluation: closing an evaluation
+ * twice, or pressing "re-grade" while a pass is already pending, enqueues one
+ * job. `grading.runner` is one job per answer, at low priority, because a
+ * container run is the slow half and must never hold up the deterministic
+ * grading of the other questions.
+ */
+export const GRADING_EVALUATION_QUEUE = "grading.evaluation";
+export const GRADING_RUNNER_QUEUE = "grading.runner";
+
 export interface SendOptions {
   /** At most one pending job per key, as pg-boss defines it. */
   singletonKey?: string;
   retryLimit?: number;
   retryBackoff?: boolean;
   retryDelay?: number;
+  /** Higher runs first; the in-process development runner ignores it. */
+  priority?: number;
 }
 
 export interface JobHandler<T> {

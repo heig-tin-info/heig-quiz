@@ -18,11 +18,14 @@ import { adminPlugin } from "./modules/admin.js";
 import { avatarPlugin } from "./modules/avatar.js";
 import { coursesPlugin } from "./modules/courses.js";
 import { evaluationPlugin } from "./modules/evaluation/routes.js";
+import { gradingPlugin } from "./modules/grading/routes.js";
+import { registerGradingJobs } from "./modules/grading/jobs.js";
 import { livePlugin } from "./modules/live/routes.js";
 import { orgPlugin } from "./modules/org/routes.js";
 import { poolPlugin } from "./modules/pool/routes.js";
 import { flushCoalescers } from "./modules/realtime/bus.js";
 import { realtimePlugin } from "./modules/realtime/routes.js";
+import { resultsPlugin } from "./modules/results/routes.js";
 import { createRunner, runnerCheck } from "./modules/runner/index.js";
 import { studentPlugin } from "./modules/student.js";
 import { startJobs } from "./jobs.js";
@@ -123,18 +126,24 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(poolPlugin, { config });
   await app.register(evaluationPlugin);
   await app.register(livePlugin);
+  await app.register(gradingPlugin);
+  await app.register(resultsPlugin);
   await app.register(studentPlugin);
 
   // Job queue + ticker. A database that is unreachable at boot does not kill
   // the server: healthz stays degraded until restart.
   const runWorkers = config.WORKER_MODE !== "web";
   try {
-    await startJobs(app, {
+    const queue = await startJobs(app, {
       databaseUrl: config.DATABASE_URL,
       embedded: handle.embedded,
       runWorkers,
       disabled: config.JOBS_DISABLED,
     });
+    // The grading queues and their handlers (PLAN-MVP §5.4). Without a queue
+    // — `JOBS_DISABLED=1`, or a database that was unreachable at boot — the
+    // grading pass runs inline at the call site instead of being dropped.
+    if (queue) await registerGradingJobs(app, queue);
     if (runWorkers) startTicker(app, config);
   } catch (err) {
     app.log.error({ err }, "job queue start failed — jobs disabled");

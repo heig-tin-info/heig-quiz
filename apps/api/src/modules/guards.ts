@@ -12,6 +12,7 @@ import { and, eq, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import {
+  answers,
   attempts,
   categories,
   classrooms,
@@ -20,6 +21,7 @@ import {
   courses,
   enrollments,
   evaluations,
+  gradings,
   pools,
   questions,
 } from "../db/schema.js";
@@ -365,4 +367,61 @@ export async function staffAttempt(
     .limit(1);
   if (!row) return notFound(reply);
   return row.attempt;
+}
+
+// ---------------------------------------------------------------------------
+// Grading loaders (WP6) — an answer and a grading are reached through the
+// evaluation they belong to, by the same predicate as everything above, and
+// an unreachable one is a 404 (invariant 6).
+// ---------------------------------------------------------------------------
+
+export interface AnswerScope {
+  answer: typeof answers.$inferSelect;
+  attempt: typeof attempts.$inferSelect;
+  evaluation: typeof evaluations.$inferSelect;
+}
+
+/** `/answers/:answerId/…` — teacher side (the grading panel). */
+export async function staffAnswer(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  answerId: string,
+): Promise<AnswerScope | null> {
+  const [row] = await app.db
+    .select({ answer: answers, attempt: attempts, evaluation: evaluations })
+    .from(answers)
+    .innerJoin(attempts, eq(answers.attemptId, attempts.id))
+    .innerJoin(evaluations, eq(attempts.evaluationId, evaluations.id))
+    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
+    .innerJoin(courses, eq(classrooms.courseId, courses.id))
+    .where(and(eq(answers.id, answerId), accessWhere(req, staffAccess(req.user!.id))))
+    .limit(1);
+  if (!row) return notFound(reply);
+  return row;
+}
+
+export interface GradingScope {
+  grading: typeof gradings.$inferSelect;
+  evaluation: typeof evaluations.$inferSelect;
+}
+
+/** `/gradings/:id/…` — the same motif, from the grading itself. */
+export async function staffGrading(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  gradingId: string,
+): Promise<GradingScope | null> {
+  const [row] = await app.db
+    .select({ grading: gradings, evaluation: evaluations })
+    .from(gradings)
+    .innerJoin(attempts, eq(gradings.attemptId, attempts.id))
+    .innerJoin(evaluations, eq(attempts.evaluationId, evaluations.id))
+    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
+    .innerJoin(courses, eq(classrooms.courseId, courses.id))
+    .where(and(eq(gradings.id, gradingId), accessWhere(req, staffAccess(req.user!.id))))
+    .limit(1);
+  if (!row) return notFound(reply);
+  return row;
 }
