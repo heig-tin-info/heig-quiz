@@ -5,6 +5,9 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
+    // Listen on every interface: under WSL2 the browser runs on the Windows
+    // side and reaches the dev server through the VM's address, not localhost.
+    host: true,
     // Standalone dev: the backend stays the sole origin for cookies.
     proxy: {
       "/app": "http://localhost:3000",
