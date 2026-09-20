@@ -27,6 +27,7 @@ import {
   type AttemptClosed,
   type AttemptInspect,
   type AttemptItem,
+  type AttemptOrLobby,
   type AttemptState,
   type AttemptView,
   type AutosaveResponse,
@@ -424,6 +425,53 @@ function attemptItems(
   });
 }
 
+/**
+ * Whether question content may travel to the student at all right now.
+ *
+ * Before the start the lobby is the WHOLE answer: an attempt row already
+ * exists during the lobby (`enterEvaluation` creates it), and serving its
+ * items would publish the exam before the teacher pressed Start. Once the
+ * evaluation is over the items come back — the student payload carries no
+ * key, and `readOnly` says the writes are done.
+ */
+export function contentVisible(state: EvaluationRecord["state"]): boolean {
+  return (
+    state === "running" ||
+    state === "paused" ||
+    state === "closed" ||
+    state === "grading" ||
+    state === "released"
+  );
+}
+
+/** A write is only ever accepted on a running evaluation and a live attempt. */
+function readOnlyFor(evaluation: EvaluationRecord, attempt: AttemptRecord): boolean {
+  return !(attempt.state === "in_progress" && evaluation.state === "running");
+}
+
+/**
+ * The ONE view of an attempt a student may hold: the lobby until the
+ * evaluation starts, the attempt itself afterwards. Every student-facing
+ * caller goes through it — `POST /evaluations/:id/attempt`,
+ * `GET /attempts/:id` and the `watch=attempt:<id>` snapshot — so there is a
+ * single place where "may this student see the questions yet" is decided.
+ */
+export async function attemptOrLobbyView(
+  db: Db,
+  evaluation: EvaluationRecord,
+  attempt: AttemptRecord,
+  now: Date,
+): Promise<AttemptOrLobby> {
+  if (!contentVisible(evaluation.state)) {
+    const participant = (await participantOf(db, evaluation, attempt.userId)) ?? {
+      userId: attempt.userId,
+      timeBonusPercent: 0,
+    };
+    return { kind: "lobby", view: await lobbyView(db, evaluation, participant, now) };
+  }
+  return { kind: "attempt", view: await attemptView(db, evaluation, attempt, now) };
+}
+
 export async function attemptView(
   db: Db,
   evaluation: EvaluationRecord,
@@ -444,6 +492,7 @@ export async function attemptView(
       lastItemId: attempt.lastItemId,
       serverNow: iso(now),
       preview: false,
+      readOnly: readOnlyFor(evaluation, attempt),
     },
     evaluation: {
       id: evaluation.id,
@@ -481,6 +530,7 @@ export async function previewView(
       lastItemId: null,
       serverNow: iso(now),
       preview: true,
+      readOnly: false,
     },
     evaluation: {
       id: evaluation.id,
@@ -553,17 +603,13 @@ export async function enterEvaluation(
   let attempt = existing ?? (await ensureAttempt(db, evaluation, participant, now));
   await markPresent(db, attempt.id, now);
 
-  if (evaluation.state === "lobby") {
-    return { kind: "lobby", view: await lobbyView(db, evaluation, participant, now), attempt };
-  }
   if (evaluation.state === "running") {
     attempt = await beginAttempt(db, evaluation, attempt, participant, now);
   }
-  return {
-    kind: "attempt",
-    view: await attemptView(db, evaluation, attempt, now),
-    attempt,
-  };
+  const view = await attemptOrLobbyView(db, evaluation, attempt, now);
+  return view.kind === "lobby"
+    ? { kind: "lobby", view: view.view, attempt }
+    : { kind: "attempt", view: view.view, attempt };
 }
 
 // --- Autosave (§4.7) ------------------------------------------------------

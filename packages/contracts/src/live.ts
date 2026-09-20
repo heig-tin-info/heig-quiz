@@ -71,6 +71,12 @@ export const AttemptView = z.object({
     serverNow: z.iso.datetime(),
     /** True for the teacher preview: nothing is persisted (PLAN-MVP §4.3). */
     preview: z.boolean(),
+    /**
+     * The attempt no longer accepts writes: it is over, or the evaluation is
+     * not running. The player renders the same content in read mode; every
+     * write would answer `410 attempt_closed` anyway (§4.7).
+     */
+    readOnly: z.boolean(),
   }),
   evaluation: z.object({
     id: z.uuid(),
@@ -100,7 +106,11 @@ export const LobbyView = z.object({
 });
 export type LobbyView = z.infer<typeof LobbyView>;
 
-/** `POST /evaluations/:id/attempt` answers one of the two. */
+/**
+ * `POST /evaluations/:id/attempt` and `GET /attempts/:id` answer one of the
+ * two: question content exists only once the evaluation has started, so a
+ * `scheduled` or `lobby` evaluation answers the lobby, whichever route asked.
+ */
 export const AttemptOrLobby = z.union([
   z.object({ kind: z.literal("attempt"), view: AttemptView }),
   z.object({ kind: z.literal("lobby"), view: LobbyView }),

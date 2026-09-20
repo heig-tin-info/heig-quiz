@@ -48,6 +48,7 @@ function view(
       lastItemId,
       serverNow: "2026-09-20T10:00:00.000Z",
       preview: false,
+      readOnly: false,
     },
     evaluation: {
       id: "e1",

@@ -145,7 +145,12 @@ export async function livePlugin(app: FastifyInstance) {
     }
   });
 
-  /** F-LIVE-06: the whole state back, answers and position included. */
+  /**
+   * F-LIVE-06: the whole state back, answers and position included — but
+   * only once the evaluation has started. Before that it answers the LOBBY,
+   * exactly as `POST /evaluations/:id/attempt` does: an attempt id is not a
+   * key to the questions (see `attemptOrLobbyView`).
+   */
   app.get("/app/api/attempts/:id", { preHandler: requireSession }, async (req, reply) => {
     const now = app.clock.now();
     const params = IdParam.safeParse(req.params);
@@ -153,7 +158,7 @@ export async function livePlugin(app: FastifyInstance) {
     const scope = await ownAttempt(app, req, reply, params.data.id);
     if (!scope) return reply;
     await service.markPresent(app.db, scope.attempt.id, now);
-    return service.attemptView(app.db, scope.evaluation, scope.attempt, now);
+    return service.attemptOrLobbyView(app.db, scope.evaluation, scope.attempt, now);
   });
 
   /** §4.7 — the autosave. One statement, three 410 reasons, always `serverNow`. */

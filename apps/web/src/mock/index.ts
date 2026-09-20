@@ -2253,6 +2253,7 @@ const previewView = (e: MockEvaluation) => ({
     lastItemId: null,
     serverNow: iso(0),
     preview: true,
+    readOnly: false,
   },
   evaluation: {
     id: e.id,
@@ -2583,6 +2584,7 @@ const studentAttemptView = (): AttemptView => ({
     lastItemId: studentPosition,
     serverNow: new Date().toISOString(),
     preview: false,
+    readOnly: scene === "closed",
   },
   evaluation: {
     id: STUDENT_EVAL,
@@ -2705,7 +2707,12 @@ on("POST", "/app/api/evaluations/:id/attempt", () =>
     : { kind: "attempt", view: studentAttemptView() },
 );
 
-on("GET", "/app/api/attempts/:id", () => studentAttemptView());
+// Like the API: the lobby until the evaluation starts, the attempt after.
+on("GET", "/app/api/attempts/:id", () =>
+  scene === "lobby"
+    ? { kind: "lobby", view: studentLobbyView() }
+    : { kind: "attempt", view: studentAttemptView() },
+);
 
 on("PUT", "/app/api/attempts/:id/answers/:itemId", (m, body): AutosaveResponse => {
   const itemId = m.groups!.itemId!;

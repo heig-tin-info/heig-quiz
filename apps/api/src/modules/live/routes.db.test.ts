@@ -15,7 +15,8 @@ import { registerForTests } from "@quiz/registry/server";
 import { evaluations } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
-import { seedLive } from "../../test/live.js";
+import { reload, seedLive } from "../../test/live.js";
+import { applyState } from "../evaluation/service.js";
 
 let server: TestServer;
 let restore: () => void;
@@ -153,7 +154,8 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
     expect(stale.json()).toMatchObject({ accepted: false, revision: 4, payload: "Rome" });
 
     const restored = await get(`/app/api/attempts/${attemptId}`, student.headers);
-    const item = restored.json().items.find((i: { id: string }) => i.id === itemId);
+    expect(restored.json().kind).toBe("attempt");
+    const item = restored.json().view.items.find((i: { id: string }) => i.id === itemId);
     expect(item.answer).toBe("Rome");
     expect(item.revision).toBe(4);
   });
@@ -198,7 +200,7 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
 
   it("answers 410 attempt_closed past the deadline and its grace", async () => {
     const view = await get(`/app/api/attempts/${attemptId}`, student.headers);
-    const deadline = new Date(view.json().attempt.deadlineAt as string);
+    const deadline = new Date(view.json().view.attempt.deadlineAt as string);
     server.clock.set(new Date(deadline.getTime() + GRACE_MS + 1));
 
     const late = await server.app.inject({
@@ -312,5 +314,61 @@ describe("running code from an attempt (decision D14)", () => {
     // `live.db.test.ts` asserts against the real `UnavailableRunner`.
     expect([422, 503]).toContain(run.statusCode);
     expect(["not_runnable", "runner_unavailable"]).toContain(run.json().error);
+  });
+});
+
+/**
+ * Finding C1 of the security review: an attempt row exists as soon as the
+ * student joins the LOBBY, and its id is public to its owner (the student
+ * home carries it). Neither the route nor the stream may turn that id into
+ * the question paper before the teacher presses Start.
+ */
+describe("the lobby hands out no question content (C1)", () => {
+  it("answers the lobby view, then the attempt, then a read-only attempt", async () => {
+    const learner = await server.signIn("student");
+    const own = await seedLive(server.app.db, {
+      teacherId: teacher.id,
+      studentIds: [learner.id],
+      questions: 2,
+    });
+    await applyState(
+      server.app.db,
+      await reload(server.app.db, own.evaluationId),
+      "lobby",
+      server.clock.now(),
+    );
+
+    const entered = await post(`/app/api/evaluations/${own.evaluationId}/attempt`, learner.headers, {});
+    expect(entered.statusCode).toBe(200);
+    expect(entered.json().kind).toBe("lobby");
+
+    // The id the student legitimately knows, straight from their own home.
+    const home = await get("/app/api/student/home", learner.headers);
+    const card = home
+      .json()
+      .open.find((c: { id: string }) => c.id === own.evaluationId) as { attemptId: string };
+    expect(card.attemptId).not.toBeNull();
+
+    const inLobby = await get(`/app/api/attempts/${card.attemptId}`, learner.headers);
+    expect(inLobby.statusCode).toBe(200);
+    expect(inLobby.json().kind).toBe("lobby");
+    expect(inLobby.json().view.items).toBeUndefined();
+    // Neither the statements nor the key travel before the start.
+    expect(inLobby.payload).not.toContain("Statement of q0");
+    expect(inLobby.payload).not.toContain("answer-q0");
+
+    await post(`/app/api/evaluations/${own.evaluationId}/start`, teacher.headers, { confirm: true });
+    const running = await get(`/app/api/attempts/${card.attemptId}`, learner.headers);
+    expect(running.json().kind).toBe("attempt");
+    expect(running.json().view.items).toHaveLength(2);
+    expect(running.json().view.attempt.readOnly).toBe(false);
+    expect(running.payload).toContain("Statement of q0");
+
+    // After the end the content comes back read-only, still without the key.
+    await post(`/app/api/evaluations/${own.evaluationId}/close`, teacher.headers);
+    const closed = await get(`/app/api/attempts/${card.attemptId}`, learner.headers);
+    expect(closed.json().kind).toBe("attempt");
+    expect(closed.json().view.attempt.readOnly).toBe(true);
+    expect(closed.payload).not.toContain("answer-q0");
   });
 });

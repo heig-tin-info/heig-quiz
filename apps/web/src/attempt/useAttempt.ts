@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import type {
   AttemptClosed,
   AttemptEventKind,
+  AttemptOrLobby,
   AttemptView,
   AutosaveResponse,
   MarkDoneResponse,
@@ -47,7 +48,7 @@ export interface ClosedInfo {
 export interface UseAttempt {
   state: PlayerState;
   view: AttemptView | null;
-  query: UseQueryResult<AttemptView>;
+  query: UseQueryResult<AttemptOrLobby>;
   sync: SyncState;
   /** The server's time, re-read every second. */
   now: number;
@@ -101,15 +102,19 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
   const autosave = useRef<Autosave | null>(null);
   const preview = initial?.attempt.preview === true;
 
-  const query = useQuery<AttemptView>({
+  const query = useQuery<AttemptOrLobby>({
     queryKey: ["attempt", attemptId],
-    queryFn: () => api<AttemptView>(`/app/api/attempts/${attemptId}`),
-    ...(initial ? { initialData: initial } : {}),
+    queryFn: () => api<AttemptOrLobby>(`/app/api/attempts/${attemptId}`),
+    ...(initial ? { initialData: { kind: "attempt", view: initial } } : {}),
     // The stream is the live channel; this is only the safety net of §6.5.
     refetchInterval: 60_000,
     staleTime: 5_000,
   });
-  const view = query.data ?? null;
+  // The route answers the LOBBY while the evaluation has not started: an
+  // attempt id never carries question content by itself (API finding C1).
+  // There is nothing to play in that case, and the entry query of
+  // `student/Attempt.tsx` is what puts the student back on the lobby screen.
+  const view = query.data?.kind === "attempt" ? query.data.view : null;
 
   // --- The autosave, one per attempt ---------------------------------------
   if (autosave.current === null) {

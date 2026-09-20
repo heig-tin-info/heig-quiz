@@ -30,6 +30,7 @@ const attemptView = (over: Partial<AttemptView["attempt"]> = {}): AttemptView =>
     lastItemId: "i2",
     serverNow: "2026-09-20T10:00:00.000Z",
     preview: false,
+    readOnly: false,
     ...over,
   },
   evaluation: {
@@ -111,7 +112,7 @@ const entry = (view: AttemptView): AttemptOrLobby => ({ kind: "attempt", view })
 function stubs(view: AttemptView) {
   return mockFetch({
     [`POST /app/api/evaluations/${EVAL}/attempt`]: ok(entry(view)),
-    [`GET /app/api/attempts/${ATTEMPT}`]: ok(view),
+    [`GET /app/api/attempts/${ATTEMPT}`]: ok(entry(view)),
     [`POST /app/api/attempts/${ATTEMPT}/position`]: noContent(),
     [`POST /app/api/attempts/${ATTEMPT}/events`]: noContent(),
     [`POST /app/api/attempts/${ATTEMPT}/answers/i1/done`]: ok({

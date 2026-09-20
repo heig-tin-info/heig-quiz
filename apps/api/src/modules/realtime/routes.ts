@@ -197,12 +197,13 @@ async function snapshotOf(
   if (watch.kind === "attempt") {
     const attempt = await live.attemptById(app.db, watch.attemptId);
     if (!attempt) return null;
-    return {
-      type: "snapshot",
-      serverNow: iso(now),
-      subject,
-      state: await live.attemptView(app.db, row, attempt, now),
-    };
+    // The same gate as `GET /attempts/:id`: before the start the snapshot is
+    // the lobby, question content and all (`attemptOrLobbyView`). A staff
+    // inspector holds the teacher routes for the rest.
+    const state = stream.staff
+      ? await live.attemptView(app.db, row, attempt, now)
+      : (await live.attemptOrLobbyView(app.db, row, attempt, now)).view;
+    return { type: "snapshot", serverNow: iso(now), subject, state };
   }
   if (stream.staff) {
     return {

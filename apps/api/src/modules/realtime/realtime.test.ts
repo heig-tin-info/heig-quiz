@@ -260,6 +260,26 @@ describe("snapshot on connect", () => {
     expect((state["evaluation"] as Record<string, unknown>)["state"]).toBe("lobby");
   });
 
+  /** Finding C1: the `attempt:` snapshot obeys the same gate as the route. */
+  it("gives a student in the lobby no question content on their own attempt", async () => {
+    const live = await import("../live/service.js");
+    const row = await reload(server.app.db, seed.evaluationId);
+    const participant = (await live.participantOf(server.app.db, row, student.id))!;
+    const attempt = await live.ensureAttempt(server.app.db, row, participant, server.clock.now());
+
+    const stream = await openStream(student.headers, `attempt:${attempt.id}`);
+    expect(stream.statusCode).toBe(200);
+    await settle();
+    const snapshot = frame(stream.text, "snapshot");
+    expect(snapshot).not.toBeNull();
+    expect(snapshot!["subject"]).toBe(`attempt:${attempt.id}`);
+    const state = snapshot!["state"] as Record<string, unknown>;
+    // The lobby view, exactly as `POST /evaluations/:id/attempt` answers it.
+    expect(state["items"]).toBeUndefined();
+    expect(state["enrolled"]).toBe(1);
+    expect(stream.text).not.toContain("Statement of q0");
+  });
+
   it("gives a student the lobby view, never the grid", async () => {
     const stream = await openStream(student.headers, `evaluation:${seed.evaluationId}`);
     await settle();
