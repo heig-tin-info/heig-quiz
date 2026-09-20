@@ -318,6 +318,50 @@ describe("running code from an attempt (decision D14)", () => {
 });
 
 /**
+ * Finding H2: Caddy APPENDS to `X-Forwarded-For`, so the left-most entry is
+ * whatever the client typed. `trustProxy: 1` makes `req.ip` the address the
+ * one trusted hop actually saw — the right-most entry — and the room
+ * restriction of F-EVAL-12 stops being a header away.
+ */
+describe("the room restriction reads the address Caddy saw (H2)", () => {
+  it("ignores a forged left-most X-Forwarded-For", async () => {
+    const learner = await server.signIn("student");
+    const own = await seedLive(server.app.db, {
+      teacherId: teacher.id,
+      studentIds: [learner.id],
+      questions: 1,
+    });
+    await server.app.db
+      .update(evaluations)
+      .set({ ipAllowlist: ["10.20."] })
+      .where(eq(evaluations.id, own.evaluationId));
+    await post(`/app/api/evaluations/${own.evaluationId}/start`, teacher.headers, { confirm: true });
+
+    // What a student would send from home, with Caddy appending their real
+    // address after it.
+    const forged = await server.app.inject({
+      method: "POST",
+      url: `/app/api/evaluations/${own.evaluationId}/attempt`,
+      headers: { ...learner.headers, "x-forwarded-for": "10.20.0.1, 203.0.113.9" },
+      payload: {},
+    });
+    expect(forged.statusCode).toBe(403);
+    expect(forged.json().error).toBe("ip_not_allowed");
+
+    // The same request from a machine in the room passes, whatever the
+    // left-most entry claims.
+    const inRoom = await server.app.inject({
+      method: "POST",
+      url: `/app/api/evaluations/${own.evaluationId}/attempt`,
+      headers: { ...learner.headers, "x-forwarded-for": "1.2.3.4, 10.20.0.7" },
+      payload: {},
+    });
+    expect(inRoom.statusCode).toBe(200);
+    expect(inRoom.json().kind).toBe("attempt");
+  });
+});
+
+/**
  * Finding C1 of the security review: an attempt row exists as soon as the
  * student joins the LOBBY, and its id is public to its owner (the student
  * home carries it). Neither the route nor the stream may turn that id into

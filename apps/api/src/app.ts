@@ -48,7 +48,11 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
       // Never put credentials in the logs.
       redact: ["req.headers.authorization", "req.headers.cookie"],
     },
-    trustProxy: true, // always behind Caddy (ADR-009)
+    // ONE hop, named by its address (ADR-009, `TRUSTED_PROXIES`). `true`
+    // would make `req.ip` the LEFT-MOST X-Forwarded-For entry, which is the
+    // value the client itself sent — Caddy appends, it does not replace —
+    // and the `ipAllowlist` of F-EVAL-12 would be one header away.
+    trustProxy: config.TRUSTED_PROXIES,
   });
 
   const handle = createDb(config.DATABASE_URL, app.log);

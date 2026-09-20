@@ -29,6 +29,24 @@ const EnvSchema = z.object({
   /** Public URL of the portal (base for OIDC/OAuth redirect URIs). */
   PUBLIC_URL: z.string().default("http://localhost:3000"),
 
+  /**
+   * The addresses Caddy reaches the API from — and NOTHING else.
+   *
+   * `req.ip` is the room restriction of F-EVAL-12 and the address the journal
+   * records, so it must be the address the reverse proxy actually saw. Caddy
+   * APPENDS to `X-Forwarded-For`, so the right-most entry is the real one and
+   * the left-most is whatever the client typed: fastify walks the chain from
+   * the socket and stops at the first hop that is not trusted, which gives
+   * the right answer exactly when this list holds the proxy and no client.
+   *
+   * Comma-separated addresses, CIDRs or the names `loopback`, `linklocal`,
+   * `uniquelocal`. The default covers both shipped deployments: a native
+   * Caddy on `localhost:3000` and the container of `compose.prod.yml`, whose
+   * peer is the Docker bridge gateway. Never add a range a STUDENT machine
+   * can sit on — that is what would make the header forgeable again.
+   */
+  TRUSTED_PROXIES: z.string().min(1).default("loopback,172.16.0.0/12"),
+
   /** Directory of the built SPA (apps/web/dist); empty = API only (Vite dev). */
   STATIC_DIR: z.string().default(""),
 
