@@ -65,19 +65,20 @@ afterEach(() => {
 describe("LiveDashboard — the grid", () => {
   it("renders 30 students by 12 questions without fetching one cell", async () => {
     const { calls } = setup(makeDashboard(30, 12));
-    // 30 rows + the header row + the class row. The generous timeout is about
-    // the machine, not about the assertion: 360 cells is the biggest render
-    // of the suite and it lands well past a second when the whole workspace
-    // runs at once. Waiting LONGER can only reveal more fetches, so the three
-    // zero-fetch expectations below are not weakened by it.
-    await waitFor(() => expect(screen.getAllByRole("row")).toHaveLength(32), { timeout: 15_000 });
+    // 30 rows + the header row + the class row. The generous timeouts (here
+    // and on the test itself, below) are about the machine, not about the
+    // assertion: 360 cells is the biggest render of the suite and it lands
+    // well past the default second when the whole workspace runs at once.
+    // Waiting LONGER can only reveal more fetches, so the three zero-fetch
+    // expectations below are not weakened by it.
+    await waitFor(() => expect(screen.getAllByRole("row")).toHaveLength(32), { timeout: 20_000 });
     expect(screen.getAllByRole("columnheader")).toHaveLength(15);
     // Only the evaluation's own detail; the grid came from the cache and no
     // cell asked for anything of its own.
     expect(calls.filter((c) => c.url.includes("/dashboard"))).toHaveLength(0);
     expect(calls.filter((c) => c.method === "GET")).toHaveLength(1);
     expect(calls.every((c) => !c.url.includes("/attempts/"))).toBe(true);
-  });
+  }, 30_000);
 
   it("shows the class totals row and the legend", async () => {
     setup();
