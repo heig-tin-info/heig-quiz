@@ -1161,6 +1161,18 @@ export async function extendTime(
 ): Promise<number> {
   const seconds = input.minutes * 60;
   const target = input.attemptId;
+  // In `deadline` timing the attempts hang off `closes_at` (§5.2): extending
+  // everybody without moving it would hand the minutes out and let the
+  // ticker take them back at the old instant.
+  if (target === undefined && settingsOf(evaluation).timing === "deadline" && evaluation.closesAt) {
+    const closesAt = new Date(evaluation.closesAt.getTime() + seconds * 1000);
+    await db
+      .update(evaluations)
+      .set({ closesAt, updatedAt: now })
+      .where(eq(evaluations.id, evaluation.id));
+    // The dashboard and the players read the new end from this frame.
+    events.stateChanged({ ...evaluation, closesAt }, now);
+  }
   const where =
     target === undefined
       ? and(eq(attempts.evaluationId, evaluation.id), inArray(attempts.state, ["not_started", "in_progress"]))
@@ -1614,6 +1626,20 @@ export async function autoStartFullLobbies(db: Db, now: Date): Promise<Evaluatio
   return moved;
 }
 
+/**
+ * When the ticker may close an evaluation: the last deadline anybody holds,
+ * plus the grace of the autosave gate (D12). An accommodation and every
+ * `+1/+5/+10 min` push an attempt past `closes_at`, and closing on
+ * `closes_at` alone would take those minutes straight back (F-ORG-07).
+ */
+export function autoCloseAt(closesAt: Date, latestAttemptDeadline: Date | null): Date {
+  const last =
+    latestAttemptDeadline !== null && latestAttemptDeadline.getTime() > closesAt.getTime()
+      ? latestAttemptDeadline
+      : closesAt;
+  return new Date(last.getTime() + GRACE_MS);
+}
+
 /** Step 4: `running|paused` past `closes_at` → `closed` (+ enqueue grading). */
 export async function autoCloseDue(
   db: Db,
@@ -1631,7 +1657,24 @@ export async function autoCloseDue(
       ),
     );
   const moved: EvaluationRecord[] = [];
-  for (const row of due) moved.push(await closeEvaluation(db, row, now, "server", app));
+  for (const row of due) {
+    // Step 1 expired everything whose own deadline has passed, so what is
+    // still `in_progress` here is a student who genuinely has time left.
+    const [latest] = await db
+      .select({ deadlineAt: attempts.deadlineAt })
+      .from(attempts)
+      .where(
+        and(
+          eq(attempts.evaluationId, row.id),
+          eq(attempts.state, "in_progress"),
+          isNotNull(attempts.deadlineAt),
+        ),
+      )
+      .orderBy(desc(attempts.deadlineAt))
+      .limit(1);
+    if (autoCloseAt(row.closesAt!, latest?.deadlineAt ?? null).getTime() > now.getTime()) continue;
+    moved.push(await closeEvaluation(db, row, now, "server", app));
+  }
   return moved;
 }
 

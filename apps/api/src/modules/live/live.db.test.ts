@@ -347,6 +347,59 @@ describe("teacher controls (F-LIVE-11, F-LIVE-12)", () => {
     expect(stillFirst!.deadlineAt!.getTime()).toBe(afterAll_!.deadlineAt!.getTime());
   });
 
+  /**
+   * Finding H4: in `deadline` timing every attempt hangs off `closes_at`, so
+   * an accommodation (F-ORG-07, legally sensitive) and every `+5 min` only
+   * survive if the evaluation itself waits for them.
+   */
+  it("moves closes_at with everybody, and waits for the accommodated student", async () => {
+    const opensAt = clock.now();
+    const closesAt = new Date(opensAt.getTime() + 3_600_000);
+    const seed = await seedLive(db, {
+      students: 2,
+      settings: { timing: "deadline" },
+      durationS: null,
+      opensAt,
+      closesAt,
+      // 25 % of the announced hour: a quarter of an hour more (decision D8).
+      timeBonusPercent: 25,
+    });
+    const row = await applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
+    const started = [];
+    for (const userId of seed.studentIds) {
+      const participant = (await service.participantOf(db, row, userId))!;
+      const created = await service.ensureAttempt(db, row, participant, clock.now());
+      started.push(await service.beginAttempt(db, row, created, participant, clock.now()));
+    }
+    const [accommodated, ordinary] = started;
+    expect(accommodated!.deadlineAt!.getTime()).toBe(closesAt.getTime() + 15 * 60_000);
+    expect(ordinary!.deadlineAt!.getTime()).toBe(closesAt.getTime());
+
+    // +10 minutes to everybody moves the end of the evaluation too.
+    expect(await service.extendTime(db, row, { minutes: 10 }, clock.now())).toBe(2);
+    const extended = await reload(db, seed.evaluationId);
+    expect(extended.closesAt!.getTime()).toBe(closesAt.getTime() + 10 * 60_000);
+    const both = await Promise.all(started.map((a) => service.attemptById(db, a!.id)));
+    for (const [i, attempt] of both.entries()) {
+      expect(attempt!.deadlineAt!.getTime()).toBe(started[i]!.deadlineAt!.getTime() + 10 * 60_000);
+    }
+
+    // The ordinary student's hour is over, the accommodated one's is not:
+    // the ticker leaves the evaluation running.
+    clock.set(new Date(extended.closesAt!.getTime() + GRACE_MS + 1));
+    await service.expireDueAttempts(db, clock.now());
+    expect(await service.autoCloseDue(db, clock.now())).toHaveLength(0);
+    expect((await reload(db, seed.evaluationId)).state).toBe("running");
+    expect((await service.attemptById(db, accommodated!.id))!.state).toBe("in_progress");
+    expect((await service.attemptById(db, ordinary!.id))!.state).toBe("expired");
+
+    // Once the last deadline plus the grace has passed, it closes.
+    clock.set(new Date(both[0]!.deadlineAt!.getTime() + GRACE_MS + 1));
+    await service.expireDueAttempts(db, clock.now());
+    expect(await service.autoCloseDue(db, clock.now())).toHaveLength(1);
+    expect((await reload(db, seed.evaluationId)).state).toBe("closed");
+  });
+
   it("closing the evaluation expires every open attempt", async () => {
     const { evaluation, attempt } = await running();
     const closed = await service.closeEvaluation(db, evaluation, clock.now());

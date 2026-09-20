@@ -166,7 +166,13 @@ describe("opening and closing on time (§5.3 steps 2 and 4)", () => {
     await tick();
     expect((await reload(db, seed.evaluationId)).state).toBe("running");
 
+    // The autosave gate accepts a write until `deadline + GRACE_MS`, so the
+    // ticker waits for the same instant before closing (finding H4).
     clock.set(closesAt);
+    await tick();
+    expect((await reload(db, seed.evaluationId)).state).toBe("running");
+
+    clock.set(new Date(closesAt.getTime() + GRACE_MS + 1));
     await tick();
     expect((await reload(db, seed.evaluationId)).state).toBe("closed");
     const closed = (await live.attemptById(db, attempt.id))!;
