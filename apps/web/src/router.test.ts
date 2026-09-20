@@ -13,7 +13,8 @@ describe("routeToPath / parsePath", () => {
     { view: "question", id: "q-1" },
     // WP9: student player
     { view: "attempt", evaluationId: "e-1" },
-    { view: "studentResults", attemptId: "a-1" },
+    // WP10 replaced WP9's `/results/:id` with the one feedback route.
+    { view: "feedback", attemptId: "a-1" },
     { view: "devUi" },
   ];
 
@@ -43,18 +44,20 @@ describe("routeToPath / parsePath", () => {
     expect(parsePath("/dev")).toEqual({ view: "home" });
   });
 
-  // WP9: student player
+  // WP9: student player — WP10 owns the results half (one route, below).
   it("parses the two student paths", () => {
     expect(parsePath("/take/e-1")).toEqual({ view: "attempt", evaluationId: "e-1" });
-    expect(parsePath("/results/a-1")).toEqual({ view: "studentResults", attemptId: "a-1" });
+    expect(parsePath("/attempts/a-1/feedback")).toEqual({ view: "feedback", attemptId: "a-1" });
     expect(routeToPath({ view: "attempt", evaluationId: "e-1" })).toBe("/take/e-1");
-    expect(routeToPath({ view: "studentResults", attemptId: "a-1" })).toBe("/results/a-1");
+    expect(routeToPath({ view: "feedback", attemptId: "a-1" })).toBe("/attempts/a-1/feedback");
   });
 
   // WP9: student player
   it("falls back to home when a student path has no id", () => {
     expect(parsePath("/take")).toEqual({ view: "home" });
-    expect(parsePath("/results")).toEqual({ view: "home" });
+    expect(parsePath("/attempts")).toEqual({ view: "home" });
+    // WP9's own `/results/:id` is gone: one feedback page, one route.
+    expect(parsePath("/results/a-1")).toEqual({ view: "home" });
   });
 
   it("ignores anything past the classroom id", () => {

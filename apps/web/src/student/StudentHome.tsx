@@ -32,6 +32,7 @@ import type {
 } from "@quiz/contracts";
 
 import { api, apiErrorMessage } from "../api";
+import { feedbackLink } from "../grading";
 import { formatDuration, useT, type TFunction } from "../i18n";
 import { useToast } from "../notify";
 import type { Route } from "../router";
@@ -260,8 +261,10 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
                     ? {
                         action: {
                           label: t("shome.review"),
-                          onClick: () =>
-                            navigate({ view: "studentResults", attemptId: card.attemptId! }),
+                          // WP10: the ONE student results page. The API says
+                          // `available: false` while the grades are not out,
+                          // and the page renders that on its own.
+                          onClick: () => navigate(feedbackLink(card.attemptId!).route),
                         },
                       }
                     : {})}

@@ -38,6 +38,17 @@ const EvaluationConfig = lazy(() =>
 const LiveDashboard = lazy(() =>
   import("./live/LiveDashboard").then((m) => ({ default: m.LiveDashboard })),
 );
+// WP10: grading + results. Two more page chunks, for the same reason as the
+// pool ones: a student never downloads the grading panel, and a teacher who
+// only runs quizzes never downloads the results view. (`Feedback` is already
+// lazy above: it is the student's page and a teacher only reaches it through
+// the student view.)
+const GradingPanel = lazy(() =>
+  import("./grading/GradingPanel").then((m) => ({ default: m.GradingPanel })),
+);
+const ResultsView = lazy(() =>
+  import("./results/ResultsView").then((m) => ({ default: m.ResultsView })),
+);
 const SettingsPage = lazy(() => import("./SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const AdminPage = lazy(() => import("./AdminPanel").then((m) => ({ default: m.AdminPage })));
 // Development only. The chunk is still built in production (Vite has no way
@@ -138,9 +149,11 @@ export default function App() {
   const page =
     route.view === "settings" ? (
       <SettingsPage me={me.data} />
-    ) : // WP9: student player
-    route.view === "studentResults" ? (
-      <Feedback attemptId={route.attemptId} navigate={navigate} />
+    ) : // WP10: the student's own feedback page, reachable in either UI — a
+    // teacher checking the student view opens the same page a student does.
+    // It is the ONE student results page: WP9's `/results/:id` is gone.
+    route.view === "feedback" ? (
+      <Feedback attemptId={route.attemptId} />
     ) : !teacherUi ? (
       <StudentHome me={me.data} navigate={navigate} />
     ) : route.view === "devUi" && import.meta.env.DEV ? (
@@ -160,6 +173,11 @@ export default function App() {
       <EvaluationConfig id={route.id} navigate={navigate} />
     ) : route.view === "live" ? (
       <LiveDashboard id={route.id} navigate={navigate} />
+    ) : // WP10: grading + results
+    route.view === "grading" ? (
+      <GradingPanel evaluationId={route.evaluationId} navigate={navigate} />
+    ) : route.view === "results" ? (
+      <ResultsView evaluationId={route.evaluationId} navigate={navigate} />
     ) : (
       <TeacherHome navigate={navigate} />
     );

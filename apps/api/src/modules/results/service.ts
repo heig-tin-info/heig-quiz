@@ -459,6 +459,7 @@ export async function studentFeedback(
     return {
       itemId: item.item.id,
       position: item.item.position,
+      type: item.question.type,
       points: grading ? grading.points : null,
       maxPoints: item.item.points,
       verdict: grading ? verdictOf(grading) : null,

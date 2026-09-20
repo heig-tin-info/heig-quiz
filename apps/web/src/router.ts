@@ -17,13 +17,18 @@ export type Route =
   // WP9: student player
   /** The student's attempt: the server decides between the lobby and the player. */
   | { view: "attempt"; evaluationId: string }
-  /** The student's own feedback on a finished attempt. */
-  | { view: "studentResults"; attemptId: string }
   // WP8: evaluation + dashboard
   /** The three-step configuration; the step lives in `?step=`. */
   | { view: "evaluation"; id: string }
   /** The live grid of one evaluation. */
   | { view: "live"; id: string }
+  // WP10: grading + results
+  /** The teacher's grading panel for one evaluation. */
+  | { view: "grading"; evaluationId: string }
+  /** The teacher's results table for one evaluation. */
+  | { view: "results"; evaluationId: string }
+  /** The student's own feedback on one finished attempt (the ONE such page). */
+  | { view: "feedback"; attemptId: string }
   /** Development only: the gallery of the shared primitives (App.tsx gates it). */
   | { view: "devUi" };
 
@@ -46,13 +51,18 @@ export function routeToPath(r: Route): string {
     // WP9: student player
     case "attempt":
       return `/take/${r.evaluationId}`;
-    case "studentResults":
-      return `/results/${r.attemptId}`;
     // WP8: evaluation + dashboard
     case "evaluation":
       return `/evaluations/${r.id}`;
     case "live":
       return `/evaluations/${r.id}/live`;
+    // WP10: grading + results
+    case "grading":
+      return `/evaluations/${r.evaluationId}/grading`;
+    case "results":
+      return `/evaluations/${r.evaluationId}/results`;
+    case "feedback":
+      return `/attempts/${r.attemptId}/feedback`;
     case "devUi":
       return "/dev/ui";
   }
@@ -67,12 +77,23 @@ export function parsePath(path: string): Route {
   if (parts[0] === "questions" && parts[1]) return { view: "question", id: parts[1] };
   // WP9: student player
   if (parts[0] === "take" && parts[1]) return { view: "attempt", evaluationId: parts[1] };
-  if (parts[0] === "results" && parts[1]) return { view: "studentResults", attemptId: parts[1] };
-  // WP8: evaluation + dashboard
+  // WP10: the student's feedback on one attempt — the ONE student results page.
+  if (parts[0] === "attempts" && parts[1] && parts[2] === "feedback")
+    return { view: "feedback", attemptId: parts[1] };
+  // WP8 + WP10: ONE place decides what follows an evaluation id, so a new
+  // tail is added here and nowhere else. `evaluation` is the fallback: an
+  // unknown tail lands on the configuration screen rather than on the home.
   if (parts[0] === "evaluations" && parts[1]) {
-    return parts[2] === "live"
-      ? { view: "live", id: parts[1] }
-      : { view: "evaluation", id: parts[1] };
+    switch (parts[2]) {
+      case "live":
+        return { view: "live", id: parts[1] };
+      case "grading":
+        return { view: "grading", evaluationId: parts[1] };
+      case "results":
+        return { view: "results", evaluationId: parts[1] };
+      default:
+        return { view: "evaluation", id: parts[1] };
+    }
   }
   // Parsed in every build so the route is one pure function; App.tsx is what
   // refuses to render it outside development.

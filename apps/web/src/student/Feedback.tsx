@@ -1,46 +1,171 @@
-/**
- * `/results/:attemptId` — the student's own feedback.
- *
- * TODO(WP10): `packages/contracts` carries no `GET /attempts/:id/feedback`
- * yet — the `results` module and its per-item review are WP10's. Until it
- * lands this page states the one true thing (the answers are in, the result
- * is not published) instead of inventing a grade or 404-ing a link the home
- * page already offers.
- *
- * When the endpoint exists, this becomes: the grade header (`Stat` points +
- * grade), then one card per item rendered by the type's own `Review`, and the
- * feedback policy decides what each card may show.
- */
+import { useQuery } from "@tanstack/react-query";
 import { Hourglass } from "lucide-react";
 
-import { useT } from "../i18n";
-import type { Route } from "../router";
-import { Button, Card, EmptyState, PageHeader } from "../ui";
+import type { FeedbackPending, StudentFeedback } from "@quiz/contracts";
 
-export function Feedback({
-  navigate,
-}: {
-  /** Read once the WP10 endpoint exists; the placeholder needs nothing. */
-  attemptId: string;
-  navigate: (r: Route) => void;
-}) {
+import { api } from "../api";
+import { useT, type Dict } from "../i18n";
+import { MarkdownView } from "../markdown/MarkdownView";
+import { QuestionReviewHost } from "../questionTypes";
+import { Badge, Card, EmptyState, isoDateTime, QueryError, Skeleton, Stat } from "../ui";
+
+/**
+ * What a student sees of their own attempt (F-RES-04).
+ *
+ * Zen, like the player it follows: one column, one reading order, nothing to
+ * decide. There is no primary action on this page on purpose — the student
+ * came to read, and the only things they can do from here are elsewhere.
+ *
+ * What is shown is entirely the server's call. `available: false` carries a
+ * reason and NO question content at all (deviation W6-9), and on the other
+ * branch the answer, the key, the explanation and the teacher's comment are
+ * each present only when the feedback policy let them through. This page
+ * never reconstructs one from another.
+ */
+
+const PENDING_TITLE: Record<FeedbackPending["reason"], keyof Dict> = {
+  results_pending: "feedback.pending.results_pending.title",
+  no_feedback: "feedback.pending.no_feedback.title",
+  attempt_open: "feedback.pending.attempt_open.title",
+};
+
+const PENDING_BODY: Record<FeedbackPending["reason"], keyof Dict> = {
+  results_pending: "feedback.pending.results_pending.body",
+  no_feedback: "feedback.pending.no_feedback.body",
+  attempt_open: "feedback.pending.attempt_open.body",
+};
+
+export function Feedback({ attemptId }: { attemptId: string }) {
   const t = useT();
+  const feedback = useQuery<StudentFeedback>({
+    queryKey: ["attempt", attemptId, "feedback"],
+    queryFn: () => api(`/app/api/attempts/${attemptId}/feedback`),
+  });
+
+  if (feedback.isLoading) {
+    return (
+      <div className="mx-auto max-w-180 space-y-4">
+        <Skeleton className="h-8 w-56" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    );
+  }
+  if (feedback.isError || !feedback.data) {
+    return (
+      <div className="mx-auto max-w-180">
+        <QueryError
+          title={t("feedback.loadFailed")}
+          error={feedback.error}
+          onRetry={() => void feedback.refetch()}
+          retrying={feedback.isFetching}
+          fallback={t("error.server")}
+        />
+      </div>
+    );
+  }
+
+  const data = feedback.data;
+
+  // The same page header on both branches: a student who opens this from a
+  // notification must know what they are looking at before they know whether
+  // there is anything in it.
+  const header = (released: string | null) => (
+    <header>
+      <p className="text-[13px] text-fg-muted">{data.evaluation.title}</p>
+      <h1 className="mt-1 text-[28px] font-bold leading-tight tracking-[-0.02em]">
+        {t("feedback.title")}
+      </h1>
+      {released ? (
+        <p className="mt-1.5 text-sm text-fg-muted">
+          {t("feedback.released", { date: isoDateTime(released) })}
+        </p>
+      ) : null}
+    </header>
+  );
+
+  if (!data.available) {
+    return (
+      <div className="mx-auto max-w-180 space-y-8">
+        {header(null)}
+        <Card>
+          <EmptyState icon={Hourglass} title={t(PENDING_TITLE[data.reason])}>
+            {t(PENDING_BODY[data.reason], { title: data.evaluation.title })}
+          </EmptyState>
+        </Card>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
-      <PageHeader title={t("feedback.title")} />
-      <Card>
-        <EmptyState
-          icon={Hourglass}
-          title={t("feedback.pending.title")}
-          action={
-            <Button variant="primary" onClick={() => navigate({ view: "home" })}>
-              {t("feedback.home")}
-            </Button>
-          }
-        >
-          {t("feedback.pending.body")}
-        </EmptyState>
-      </Card>
+    <div className="mx-auto max-w-180 space-y-8">
+      {header(data.evaluation.releasedAt)}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Stat label={t("feedback.grade")} value={data.grade.toFixed(1)} />
+        <Stat
+          label={t("feedback.points")}
+          value={`${Math.round(data.points * 100) / 100} / ${data.totalPoints}`}
+        />
+      </div>
+
+      {data.items.length === 0 ? (
+        <Card>
+          <EmptyState icon={Hourglass} title={t("feedback.empty.title")}>
+            {t("feedback.empty.body")}
+          </EmptyState>
+        </Card>
+      ) : (
+        <div className="space-y-5">
+          {data.items.map((item) => (
+            <Card key={item.itemId} className="space-y-4 p-5 sm:p-6">
+              <div className="flex items-center gap-3">
+                <h2 className="text-base font-bold tracking-tight">
+                  {t("feedback.question", { n: item.position })}
+                </h2>
+                <span className="flex-1" />
+                {item.points === null ? (
+                  <Badge tone="zinc">{t("feedback.notGraded")}</Badge>
+                ) : (
+                  <span className="text-[15px] font-semibold tabular-nums">
+                    {Math.round(item.points * 100) / 100} / {item.maxPoints}
+                  </span>
+                )}
+              </div>
+
+              <QuestionReviewHost
+                t={t}
+                type={item.type}
+                student={item.student}
+                answer={item.answer}
+                solution={item.solution}
+                details={item.details}
+                points={item.points}
+                maxPoints={item.maxPoints}
+                audience="student"
+              />
+
+              {item.explanation ? (
+                <div className="rounded-field bg-surface-2 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                    {t("feedback.explanation")}
+                  </p>
+                  <MarkdownView size="sm" className="mt-1.5" source={item.explanation} />
+                </div>
+              ) : null}
+
+              {item.comment ? (
+                <div className="rounded-field border border-line-strong p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
+                    {t("feedback.comment")}
+                  </p>
+                  <p className="mt-1.5 text-sm">{item.comment}</p>
+                </div>
+              ) : null}
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -130,6 +130,13 @@ export type ReleasedGrades = z.infer<typeof ReleasedGrades>;
 export const StudentResultItem = z.object({
   itemId: z.uuid(),
   position: z.number().int(),
+  /**
+   * The question type id, so the client can mount the right `Review`. It is
+   * not a secret — the student already saw the widget it names — and without
+   * it the browser would have to guess the type from the shape of `student`
+   * (deviation W10-1).
+   */
+  type: z.string(),
   points: z.number().nullable(),
   maxPoints: z.number(),
   verdict: Verdict.nullable(),

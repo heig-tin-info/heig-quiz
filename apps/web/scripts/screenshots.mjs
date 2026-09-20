@@ -44,6 +44,13 @@ const widths = opt("width").map(Number).filter(Boolean);
 
 /** The mock's evaluation, taken by the student persona (WP9). */
 const TAKE = "/take/11111111-1111-4111-8111-111111111111";
+/**
+ * The student persona's two attempts (WP9 + WP10). The first is pinned on the
+ * evaluation the mock leaves CLOSED and unreleased — its feedback page is the
+ * "not published yet" state — and the second on the RELEASED one.
+ */
+const ATTEMPT_OPEN = "22222222-2222-4222-8222-222222222222";
+const ATTEMPT_PAST = "22222222-2222-4222-8222-222222222223";
 
 const scenes = [
   // Teacher home (the courses)
@@ -106,7 +113,6 @@ const scenes = [
   { name: "player-submit", role: "student", path: `${TAKE}?scene=running`, fold: true, act: (p) => p.getByRole("button", { name: /hand in/i }).first().click() },
   { name: "player-paused", role: "student", path: `${TAKE}?scene=paused`, fold: true },
   { name: "player-timeup", role: "student", path: `${TAKE}?scene=closed` },
-  { name: "student-results", role: "student", path: "/results/22222222-2222-4222-8222-222222222223" },
 
   // Command palette (Ctrl+K from anywhere; the mock persona decides the groups)
   { name: "palette", role: "teacher", path: "/", fold: true, act: (p) => p.keyboard.press("Control+k") },
@@ -164,6 +170,36 @@ const scenes = [
   // pointer can reach — the same thing a mouse hits on the screen.
   { name: "dev-ui-preview", role: "teacher", path: "/dev/ui", act: (p) => p.locator("label").filter({ hasText: /^(Preview|Aper\u00e7u)$/ }).first().click() },
 
+  // Grading panel, results and the student feedback (WP10). An evaluation is
+  // addressable by its STATE in the mock: `closed` is the one still being
+  // graded and `released` the published one, and both are the very
+  // evaluations the classroom list shows.
+  { name: "grading", role: "teacher", path: "/evaluations/closed/grading" },
+  { name: "grading-short", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 1) },
+  { name: "grading-cloze", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 2) },
+  { name: "grading-code", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 3) },
+  { name: "grading-by-student", role: "teacher", path: "/evaluations/closed/grading", act: (p) => p.locator("label").filter({ hasText: /^(By student|Par étudiant)$/ }).first().click() },
+  { name: "grading-override", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: (p) => p.getByRole("button", { name: /^(Adjust|Modifier)$/ }).first().click() },
+  { name: "grading-batch-confirm", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await nextQuestion(p, 3);
+      await p.getByRole("button", { name: /^(Validate|Valider) \d+/ }).first().click();
+    } },
+  { name: "grading-regrade", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: (p) => p.getByRole("button", { name: /re-grade this question|re-corriger cette question/i }).first().click() },
+  { name: "grading-empty", role: "teacher", path: "/evaluations/closed/grading?empty=1", settle: 800 },
+  { name: "grading-error", role: "teacher", path: "/evaluations/closed/grading?fail=1", settle: 2500 },
+  { name: "grading-loading", role: "teacher", path: "/evaluations/closed/grading?slow=1", settle: 300 },
+
+  { name: "results", role: "teacher", path: "/evaluations/closed/results" },
+  { name: "results-released", role: "teacher", path: "/evaluations/released/results" },
+  { name: "results-questions", role: "teacher", path: "/evaluations/closed/results?tab=questions", settle: 2500 },
+  { name: "results-release-confirm", role: "teacher", path: "/evaluations/closed/results", fold: true, act: (p) => p.getByRole("button", { name: /publish results|publier les résultats/i }).first().click() },
+  { name: "results-empty", role: "teacher", path: "/evaluations/closed/results?empty=1", settle: 800 },
+  { name: "results-error", role: "teacher", path: "/evaluations/closed/results?fail=1", settle: 2500 },
+
+  { name: "feedback", role: "student", path: `/attempts/${ATTEMPT_PAST}/feedback` },
+  { name: "feedback-pending", role: "student", path: `/attempts/${ATTEMPT_OPEN}/feedback` },
+  { name: "feedback-error", role: "student", path: `/attempts/${ATTEMPT_PAST}/feedback?fail=1`, settle: 2500 },
+
   // Settings and administration
   { name: "settings", role: "teacher", path: "/settings" },
   { name: "settings-avatar", role: "teacher", path: "/settings", act: (p) => p.getByRole("button", { name: /change picture/i }).first().click() },
@@ -194,6 +230,18 @@ async function openRowMenu(page, triggerName, item) {
   await trigger.scrollIntoViewIfNeeded();
   await trigger.click();
   if (item) await page.getByRole("menuitem", { name: item }).click();
+}
+
+/**
+ * Walks the grading panel forward `n` questions. The traversal is the
+ * screen's own "next question" control, so the scene exercises the same path
+ * a teacher does.
+ */
+async function nextQuestion(page, n) {
+  for (let i = 0; i < n; i += 1) {
+    await page.getByRole("button", { name: /next question|question suivante/i }).first().click();
+    await page.waitForTimeout(400);
+  }
 }
 
 if (flag("list")) {

@@ -91,14 +91,15 @@ describe("the student home", () => {
     expect(await screen.findByRole("button", { name: "Continuer" })).toBeInTheDocument();
   });
 
-  it("opens a past attempt's result", async () => {
+  // WP10: the one student results page, `/attempts/:id/feedback`.
+  it("opens a past attempt's feedback", async () => {
     mockFetch({
       "GET /app/api/student/home": ok(home),
       "GET /app/api/student/classrooms": ok([]),
     });
     const { navigate } = render();
     await userEvent.click(await screen.findByRole("button", { name: "Voir" }));
-    expect(navigate).toHaveBeenCalledWith({ view: "studentResults", attemptId: "a3" });
+    expect(navigate).toHaveBeenCalledWith({ view: "feedback", attemptId: "a3" });
   });
 
   it("shows the empty state when nothing is open", async () => {
