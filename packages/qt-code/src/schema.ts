@@ -1,0 +1,218 @@
+/**
+ * The `code` question type: schemas (PLAN-MVP §2.4, docs/spec/04 §4.7).
+ *
+ * Four shapes travel through the platform and each one has its own schema:
+ *
+ * - {@link CodeConfig}   what the teacher authors (the answer key lives here);
+ * - {@link CodeAnswer}   what the student sends back: the editable regions only;
+ * - {@link CodeStudent}  what `toStudent` is allowed to hand to a student;
+ * - {@link CodeSolution} the key, served only when the feedback policy allows it;
+ * - {@link CodeDetails}  the breakdown stored in `gradings.details`.
+ *
+ * The template carries `@@lock` / `@@endlock` comment markers; the split and
+ * the reassembly live in `@quiz/domain/lockedTemplate` and are never
+ * re-implemented here (invariant 14: the source is rebuilt server-side).
+ */
+import { z } from "zod";
+
+/** The languages of phase 1; the same list as `RunnerLanguage` in `@quiz/core`. */
+export const CODE_LANGUAGES = ["c", "cpp", "python", "js", "rust"] as const;
+export const CodeLanguage = z.enum(CODE_LANGUAGES);
+export type CodeLanguage = z.infer<typeof CodeLanguage>;
+
+/** Bumped when the shape below changes; stored in `question_versions.config_version`. */
+export const CODE_CONFIG_VERSION = 1;
+
+export const CodeLimits = z.object({
+  timeMs: z.number().int().min(100).max(10_000).default(2000),
+  memoryMb: z.number().int().min(16).max(512).default(128),
+  outputKb: z.number().int().min(1).max(256).default(64),
+});
+export type CodeLimits = z.infer<typeof CodeLimits>;
+
+export const DEFAULT_LIMITS: CodeLimits = { timeMs: 2000, memoryMb: 128, outputKb: 64 };
+
+export const CodeCompare = z.object({
+  trimTrailing: z.boolean().default(true),
+  ignoreCase: z.boolean().default(false),
+  numeric: z
+    .object({ epsilon: z.number().min(0), mode: z.enum(["abs", "rel"]) })
+    .nullable()
+    .default(null),
+});
+export type CodeCompare = z.infer<typeof CodeCompare>;
+
+export const DEFAULT_COMPARE: CodeCompare = {
+  trimTrailing: true,
+  ignoreCase: false,
+  numeric: null,
+};
+
+/**
+ * One input/output test case.
+ *
+ * `visible` is the stored spelling (docs/spec/04 §4.7); the editor shows the
+ * opposite switch ("hidden"), because that is the decision a teacher makes.
+ * `timeMs` overrides `limits.timeMs` for this case alone — `null` means "use
+ * the question limit".
+ */
+export const CodeCase = z.object({
+  name: z.string().min(1).max(60),
+  stdin: z.string().max(16_000).default(""),
+  expected: z.string().max(16_000),
+  visible: z.boolean().default(false),
+  points: z.number().min(0).max(100).default(1),
+  timeMs: z.number().int().min(100).max(20_000).nullable().default(null),
+});
+export type CodeCase = z.infer<typeof CodeCase>;
+
+export const CodeFile = z.object({
+  name: z.string().regex(/^[\w.-]{1,40}$/),
+  content: z.string().max(64_000),
+});
+export type CodeFile = z.infer<typeof CodeFile>;
+
+export const CodeConfig = z.object({
+  configVersion: z.literal(CODE_CONFIG_VERSION),
+  prompt: z.string().min(1).max(20_000),
+  language: CodeLanguage,
+  /** Starting code, with the locked regions marked by `@@lock` / `@@endlock`. */
+  template: z.string().max(40_000).default(""),
+  /** Extra files the program reads; injected server-side, never by the client. */
+  files: z.array(CodeFile).max(4).default([]),
+  action: z.enum(["check", "run"]).default("run"),
+  compileArgs: z.string().max(400).default(""),
+  limits: CodeLimits.default(DEFAULT_LIMITS),
+  runsPerMinute: z.number().int().min(1).max(30).default(10),
+  allOrNothing: z.boolean().default(false),
+  /**
+   * The teacher's own solution. It exists for ONE purpose: the "try" button of
+   * the editor, which runs it against the cases to check that they pass. It is
+   * never sent to a student, in any view.
+   */
+  referenceSolution: z.string().max(40_000).default(""),
+  tests: z.object({
+    mode: z.literal("io"), // "tap" is phase 3
+    compare: CodeCompare.default(DEFAULT_COMPARE),
+    cases: z.array(CodeCase).min(1).max(30),
+  }),
+});
+export type CodeConfig = z.infer<typeof CodeConfig>;
+
+export const CodeAnswer = z.object({
+  /** One entry per EDITABLE region of the template, in order. */
+  regions: z.array(z.string().max(20_000)).max(20),
+  /** Summary of the last interactive run, for the live dashboard. */
+  lastRun: z
+    .object({
+      at: z.iso.datetime(),
+      requestId: z.uuid(),
+      compileOk: z.boolean(),
+      passed: z.number().int(),
+      total: z.number().int(),
+    })
+    .nullable()
+    .optional(),
+});
+export type CodeAnswer = z.infer<typeof CodeAnswer>;
+
+export const CodeSegment = z.object({
+  kind: z.enum(["locked", "editable"]),
+  index: z.number().int().nullable(),
+  text: z.string(),
+});
+export type CodeSegment = z.infer<typeof CodeSegment>;
+
+/**
+ * What a student receives. Everything that could carry the key is gone:
+ * hidden `stdin`/`expected`, the comparison options, `compileArgs`, the
+ * contents of the extra files and the reference solution (decision D15).
+ */
+export const CodeStudent = z.object({
+  prompt: z.string(),
+  language: CodeLanguage,
+  segments: z.array(CodeSegment),
+  limits: CodeLimits,
+  runsPerMinute: z.number().int(),
+  visibleCases: z.array(
+    z.object({ name: z.string(), stdin: z.string(), expected: z.string(), points: z.number() }),
+  ),
+  /** Hidden cases exist but stay opaque during the attempt (docs/06 Q8). */
+  hiddenCount: z.number().int(),
+  hiddenPoints: z.number(),
+  /** Enough to say "data.csv is available", never the bytes themselves. */
+  filesPreview: z.array(z.object({ name: z.string(), bytes: z.number().int() })),
+  allOrNothing: z.boolean(),
+});
+export type CodeStudent = z.infer<typeof CodeStudent>;
+
+export const CodeSolution = z.object({
+  referenceSolution: z.string(),
+  cases: z.array(
+    z.object({
+      name: z.string(),
+      stdin: z.string(),
+      expected: z.string(),
+      points: z.number(),
+      visible: z.boolean(),
+    }),
+  ),
+  compare: CodeCompare,
+});
+export type CodeSolution = z.infer<typeof CodeSolution>;
+
+export const CodeCaseDetail = z.object({
+  name: z.string(),
+  visible: z.boolean(),
+  points: z.number(),
+  ok: z.boolean(),
+  exitCode: z.number().nullable(),
+  ms: z.number(),
+  timedOut: z.boolean(),
+  oom: z.boolean(),
+  expected: z.string().optional(),
+  actual: z.string().optional(),
+  stderr: z.string().optional(),
+});
+export type CodeCaseDetail = z.infer<typeof CodeCaseDetail>;
+
+export const CodeDetails = z.object({
+  runner: z.enum(["ok", "unavailable", "busy", "error"]),
+  compile: z.object({ ok: z.boolean(), stderr: z.string().max(4000), ms: z.number() }).nullable(),
+  cases: z.array(CodeCaseDetail),
+  earned: z.number(),
+  total: z.number(),
+  /**
+   * sha256 of the source the runner compiled. `null` when no source was ever
+   * assembled (an unanswered question, or a stale answer that does not fit the
+   * template any more).
+   */
+  sourceSha256: z.string().length(64).nullable(),
+  /** Machine reason when `runner !== "ok"`, e.g. `template_region_mismatch`. */
+  reason: z.string().optional(),
+});
+export type CodeDetails = z.infer<typeof CodeDetails>;
+
+/** The total the cases are worth, before the item scale is applied. */
+export function totalCasePoints(config: CodeConfig): number {
+  return config.tests.cases.reduce((sum, c) => sum + c.points, 0);
+}
+
+/** The wall-clock budget of one case: its own, or the question's. */
+export function caseTimeMs(config: CodeConfig, testCase: CodeCase): number {
+  return testCase.timeMs ?? config.limits.timeMs;
+}
+
+/** A fresh draft: valid against {@link CodeConfig}, and runnable as it stands. */
+export function emptyCodeConfig(): CodeConfig {
+  return CodeConfig.parse({
+    configVersion: CODE_CONFIG_VERSION,
+    prompt: "Describe the exercise here.",
+    language: "c",
+    template: "#include <stdio.h>\n\nint main(void) {\n    // your code here\n    return 0;\n}\n",
+    tests: {
+      mode: "io",
+      cases: [{ name: "case 1", stdin: "", expected: "", visible: true, points: 1 }],
+    },
+  });
+}

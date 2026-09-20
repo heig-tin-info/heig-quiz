@@ -16,6 +16,7 @@ import { adminPlugin } from "./modules/admin.js";
 import { avatarPlugin } from "./modules/avatar.js";
 import { coursesPlugin } from "./modules/courses.js";
 import { eventsPlugin } from "./modules/events.js";
+import { createRunner, runnerCheck } from "./modules/runner/index.js";
 import { studentPlugin } from "./modules/student.js";
 import { startJobs } from "./jobs.js";
 import { startTicker } from "./ticker.js";
@@ -36,6 +37,9 @@ export async function buildApp({ config }: AppDeps): Promise<FastifyInstance> {
 
   const handle = createDb(config.DATABASE_URL, app.log);
   app.decorate("db", handle.db);
+  // One runner for the whole process, chosen once by RUNNER_MODE. Everything
+  // that grades code takes `app.runner` and never reads the configuration.
+  app.decorate("runner", createRunner(config));
   app.addHook("onClose", async () => {
     await handle.close();
   });
@@ -145,11 +149,16 @@ export async function buildApp({ config }: AppDeps): Promise<FastifyInstance> {
 
   app.get("/healthz", async (_req, reply) => {
     const databaseOk = await checkDatabase();
+    // The runner never decides the overall status: `stub` is the default
+    // configuration and an unreachable runner only degrades code grading to a
+    // manual one (decision D14). A container must not be restarted for that.
+    const runner = await runnerCheck(config, app.runner);
     const body: HealthResponse = {
       status: databaseOk ? "ok" : "degraded",
       checks: {
         database: databaseOk ? "up" : "down",
         jobs: app.boss ? "up" : "down",
+        runner,
       },
       uptimeSeconds: Math.round(process.uptime()),
     };

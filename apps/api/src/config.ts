@@ -66,6 +66,17 @@ const EnvSchema = z.object({
    */
   SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(720).default(12),
   /**
+   * Code runner (PLAN-MVP §1.7, decision D14). `stub` everywhere until a
+   * machine with Podman exists: `run()` throws `RunnerUnavailable`, grading
+   * degrades to a proposed grade, and nothing blocks. `http` talks to the
+   * runner service and then `RUNNER_URL` is required.
+   */
+  RUNNER_MODE: z.enum(["stub", "http"]).default("stub"),
+  RUNNER_URL: z.string().default(""),
+  /** Wall-clock budget of one runner call, compilation and every case included. */
+  RUNNER_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
+
+  /**
    * Super administrator: the only email managed through the environment.
    * Teachers are managed in the database, from the admin screen.
    */
@@ -109,8 +120,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       throw new Error("Invalid configuration: dev DATABASE_URL (pglite) forbidden in production");
     }
   }
+  // `http` without an address is a runner that is silently never called: the
+  // process refuses to start rather than grade every code question by hand
+  // without saying so.
+  if (parsed.data.RUNNER_MODE === "http" && parsed.data.RUNNER_URL.trim() === "") {
+    throw new Error("Invalid configuration: RUNNER_URL is required when RUNNER_MODE=http");
+  }
   return {
     ...parsed.data,
+    RUNNER_URL: parsed.data.RUNNER_URL.trim().replace(/\/+$/, ""),
     SUPER_ADMIN_EMAIL: parsed.data.SUPER_ADMIN_EMAIL.trim().toLowerCase(),
     // PEM path made absolute at load time: the process no longer depends on
     // its launch directory (ADR-010, secret in a file).

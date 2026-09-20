@@ -43,7 +43,9 @@ describe("app (without a database)", () => {
     expect(res.statusCode).toBe(503);
     expect(res.json()).toMatchObject({
       status: "degraded",
-      checks: { database: "down" },
+      // The default runner is the stub: reported as disabled, never as a
+      // failure, so a machine without a container engine stays healthy.
+      checks: { database: "down", runner: "disabled" },
     });
   });
 

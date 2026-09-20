@@ -6,9 +6,10 @@
  * inside `@quiz/core`, or the package graph would cycle.
  *
  * TODO(WP2): register `mcq`, `short` and `cloze` from `@quiz/qt-<id>` server entry.
- * TODO(WP3): register `code` from `@quiz/qt-code/server`.
  * Registering a type is two lines: an import and an entry in `serverRegistry`.
  */
+import { codeServer } from "@quiz/qt-code/server";
+
 import {
   defineServerRegistry,
   makeLookup,
@@ -19,13 +20,14 @@ import {
 
 export const serverRegistry: Partial<Record<QuestionTypeId, AnyQuestionTypeServer>> =
   defineServerRegistry({
-    // TODO(WP2/WP3): mcq: mcqServer, short: shortServer, cloze: clozeServer, code: codeServer
+    // TODO(WP2): mcq: mcqServer, short: shortServer, cloze: clozeServer
+    code: codeServer,
   });
 
 /** Total lookup; an unregistered id throws `UnknownQuestionType`. */
 export const questionType = makeLookup<AnyQuestionTypeServer>(serverRegistry);
 
-/** The ids that are actually wired up right now (empty until WP2/WP3 land). */
+/** The ids that are actually wired up right now (`mcq`, `short` and `cloze` land with WP2). */
 export const registeredServerIds = (): string[] => registeredIds(serverRegistry);
 
 export { QUESTION_TYPE_IDS } from "@quiz/core/server";
