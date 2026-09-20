@@ -204,15 +204,17 @@ describe("the draft and publication routes", () => {
     expect(list.json()).toHaveLength(1);
   });
 
-  it("refuses an unknown question type with 422, not 500", async () => {
-    const res = await server.app.inject({
-      method: "POST",
-      url: `/app/api/pools/${poolId}/questions`,
-      headers: owner.headers,
-      payload: { type: "cloze", internalName: "not registered here" },
-    });
-    expect(res.statusCode).toBe(422);
-    expect(res.json().error).toBe("unknown_question_type");
+  it("creates a draft for every registered MVP type from its emptyDraft()", async () => {
+    for (const type of ["mcq", "short", "cloze", "code"]) {
+      const res = await server.app.inject({
+        method: "POST",
+        url: `/app/api/pools/${poolId}/questions`,
+        headers: owner.headers,
+        payload: { type, internalName: `draft ${type}` },
+      });
+      expect(res.statusCode, type).toBe(201);
+      expect(res.json().meta.type).toBe(type);
+    }
   });
 });
 
