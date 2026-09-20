@@ -111,6 +111,9 @@ importers:
       '@quiz/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@quiz/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@quiz/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -126,6 +129,9 @@ importers:
       '@quiz/qt-short':
         specifier: workspace:*
         version: link:../../packages/qt-short
+      '@quiz/registry':
+        specifier: workspace:*
+        version: link:../../packages/registry
       '@tanstack/react-query':
         specifier: ^5.101.2
         version: 5.101.2(react@19.2.7)

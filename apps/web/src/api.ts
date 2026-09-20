@@ -31,6 +31,9 @@ export async function api<T>(
   }
   if (init.body instanceof Blob) {
     headers.set("content-type", init.body.type || "application/octet-stream");
+  } else if (init.body instanceof FormData) {
+    // Multipart: the browser writes the content type WITH its boundary, and
+    // a hand-set header would leave the server unable to split the parts.
   } else if (init.body && !init.csv) {
     headers.set("content-type", "application/json");
   }
