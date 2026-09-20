@@ -41,6 +41,19 @@ const EnvSchema = z.object({
   /** Hard cap on one uploaded image, in bytes (PLAN-MVP §4.2: 5 MB). */
   ASSETS_MAX_BYTES: z.coerce.number().int().min(1024).max(50_000_000).default(5_000_000),
 
+  /**
+   * Skip the job queue entirely. The tests point the API at a database that
+   * is not there on purpose (`app.test.ts` checks that /healthz degrades
+   * instead of crashing), and pg-boss answers that by retrying the
+   * connection and printing an ECONNREFUSED stack trace every time. There is
+   * nothing to diagnose in those traces and they drown the real output, so
+   * the test helpers set this flag and `startJobs` returns cleanly.
+   */
+  JOBS_DISABLED: z
+    .string()
+    .default("")
+    .transform((v) => v === "1" || v === "true"),
+
   /** Deadline ticker period, in milliseconds (docs/spec/05, 5.4). */
   TICK_MS: z.coerce.number().int().min(100).max(600_000).default(1000),
 

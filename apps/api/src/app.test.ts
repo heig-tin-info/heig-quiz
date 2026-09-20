@@ -14,6 +14,14 @@ describe("app (without a database)", () => {
   const config = loadConfig({
     NODE_ENV: "test",
     DATABASE_URL: "postgres://nobody:nope@127.0.0.1:59999/absent",
+    // The database is deliberately absent; pg-boss would answer that by
+    // retrying and printing an ECONNREFUSED stack trace per attempt, which
+    // says nothing and drowns the output of every other test file.
+    JOBS_DISABLED: "1",
+    // No background worker either: the ticker would re-read the absent
+    // database every second and log one failure per task per tick. What this
+    // file is about is the REQUEST path surviving a dead database.
+    WORKER_MODE: "web",
   });
   let app: Awaited<ReturnType<typeof buildApp>>;
 
@@ -111,6 +119,14 @@ describe("app (serving the built SPA)", () => {
       config: loadConfig({
         NODE_ENV: "test",
         DATABASE_URL: "postgres://nobody:nope@127.0.0.1:59999/absent",
+    // The database is deliberately absent; pg-boss would answer that by
+    // retrying and printing an ECONNREFUSED stack trace per attempt, which
+    // says nothing and drowns the output of every other test file.
+    JOBS_DISABLED: "1",
+    // No background worker either: the ticker would re-read the absent
+    // database every second and log one failure per task per tick. What this
+    // file is about is the REQUEST path surviving a dead database.
+    WORKER_MODE: "web",
         STATIC_DIR: dir,
       }),
     });

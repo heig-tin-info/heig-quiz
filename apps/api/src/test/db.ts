@@ -11,6 +11,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import type { FastifyInstance } from "fastify";
 
+import { TestClock } from "../clock.js";
 import * as schema from "../db/schema.js";
 
 export type TestDb = ReturnType<typeof drizzle<typeof schema>>;
@@ -26,12 +27,21 @@ export async function testDb(): Promise<TestDb> {
 
 const silent = () => {};
 
-/** Minimal app stub for functions that take a FastifyInstance. */
-export async function testApp(): Promise<FastifyInstance & { db: TestDb }> {
+/**
+ * Minimal app stub for functions that take a FastifyInstance.
+ *
+ * It carries a {@link TestClock}: the live tasks of the ticker read
+ * `app.clock.now()`, so a test drives a deadline by moving one object rather
+ * than by sleeping (invariant 5).
+ */
+export async function testApp(): Promise<
+  FastifyInstance & { db: TestDb; clock: TestClock }
+> {
   const db = await testDb();
   return {
     db,
     boss: null,
+    clock: new TestClock(),
     log: { info: silent, warn: silent, error: silent, debug: silent },
-  } as unknown as FastifyInstance & { db: TestDb };
+  } as unknown as FastifyInstance & { db: TestDb; clock: TestClock };
 }

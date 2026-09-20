@@ -131,3 +131,92 @@ export const fakeRunnerType: QuestionTypeServer<
 
   searchText: (config) => config.source,
 };
+
+const RunnableConfig = z.object({
+  template: z.string(),
+  runsPerMinute: z.number().int().default(2),
+  cases: z.array(z.object({ name: z.string(), expected: z.string(), visible: z.boolean() })),
+});
+
+/**
+ * A runner-backed type whose answer has the `{ regions }` shape of
+ * `POST /attempts/:id/run`, with BOTH halves of the runner protocol
+ * (`grade` → `pending`, then `finalizeRunner`). It is what makes the WP5 run
+ * route testable without `@quiz/qt-code`: the live module must work for any
+ * type that declares `finalizeRunner`, not for one package in particular.
+ */
+export const fakeRunnableCode: QuestionTypeServer<
+  z.infer<typeof RunnableConfig>,
+  { regions: string[] },
+  { template: string; runsPerMinute: number; visibleCases: { name: string; stdin: string; expected: string }[] },
+  { cases: { name: string; expected: string }[] },
+  { passed: number }
+> = {
+  id: "code",
+  configVersion: 1,
+  configSchema: RunnableConfig,
+  answerSchema: z.object({ regions: z.array(z.string()) }),
+  studentSchema: z.object({
+    template: z.string(),
+    runsPerMinute: z.number().int(),
+    visibleCases: z.array(
+      z.object({ name: z.string(), stdin: z.string(), expected: z.string() }),
+    ),
+  }),
+  solutionSchema: z.object({
+    cases: z.array(z.object({ name: z.string(), expected: z.string() })),
+  }),
+  detailsSchema: z.object({ passed: z.number().int() }),
+
+  emptyDraft: () => ({
+    template: "",
+    runsPerMinute: 2,
+    cases: [{ name: "visible-1", expected: "ok", visible: true }],
+  }),
+  migrate: (config) => RunnableConfig.parse(config),
+  defaultPoints: (config) => config.cases.length,
+  shuffleable: () => false,
+
+  toStudent(config) {
+    return {
+      template: config.template,
+      runsPerMinute: config.runsPerMinute,
+      // Only the visible half, exactly like `qt-code` (decision D15).
+      visibleCases: config.cases
+        .filter((c) => c.visible)
+        .map((c) => ({ name: c.name, stdin: "", expected: c.expected })),
+    };
+  },
+  toSolution: (config) => ({
+    cases: config.cases.map((c) => ({ name: c.name, expected: c.expected })),
+  }),
+
+  grade(config, answer) {
+    return {
+      kind: "pending",
+      via: "runner",
+      request: {
+        language: "c",
+        files: [{ name: "main.c", content: (answer?.regions ?? []).join("\n") }],
+        compileArgs: "",
+        action: "run",
+        limits: { timeMs: 1000, memoryMb: 64, outputKb: 8 },
+        cases: config.cases.map((c) => ({ name: c.name, stdin: "" })),
+        priority: "grading",
+      },
+    };
+  },
+
+  finalizeRunner(config, _answer, ctx, outcome) {
+    const passed = outcome.cases.filter((c) => c.exitCode === 0).length;
+    return {
+      kind: "graded",
+      points: (passed / Math.max(1, config.cases.length)) * ctx.itemPoints,
+      maxPoints: ctx.itemPoints,
+      details: { passed },
+      state: "validated",
+    };
+  },
+
+  searchText: (config) => config.template,
+};

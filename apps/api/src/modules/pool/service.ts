@@ -41,6 +41,7 @@ import type { Db } from "../../db/client.js";
 import {
   categories,
   coursePools,
+  evaluationItems,
   pools,
   questionTags,
   questionVersions,
@@ -863,28 +864,29 @@ export async function deprecateVersion(
 /**
  * Is a published version referenced by an evaluation?
  *
- * TODO(WP5): `evaluation_items` does not exist yet — the table lands with the
- * `evaluation` module, and this becomes
- * `select 1 from evaluation_items where question_version_id = $1`. Until
- * then nothing can reference a version, so the honest answer is `false` and
- * the `409 in_use` branch is already wired and tested by its caller.
+ * This is what makes `409 in_use` real: a version an evaluation froze
+ * (F-EVAL-03) must stay readable forever, because a student answered THAT
+ * wording. `evaluation_items` belongs to the `evaluation` module; the `pool`
+ * module reads it by join and never writes it (CLAUDE.md, Conventions).
  */
-export async function isVersionInUse(_db: Db, _versionId: string): Promise<boolean> {
-  return false;
+export async function isVersionInUse(db: Db, versionId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: evaluationItems.id })
+    .from(evaluationItems)
+    .where(eq(evaluationItems.questionVersionId, versionId))
+    .limit(1);
+  return row !== undefined;
 }
 
-/** True when ANY published version of the question is referenced (WP5). */
+/** True when ANY published version of the question is referenced (F-QST-11). */
 export async function isQuestionInUse(db: Db, questionId: string): Promise<boolean> {
-  const rows = await db
-    .select({ id: questionVersions.id })
-    .from(questionVersions)
-    .where(
-      and(eq(questionVersions.questionId, questionId), isNotNull(questionVersions.number)),
-    );
-  for (const row of rows) {
-    if (await isVersionInUse(db, row.id)) return true;
-  }
-  return false;
+  const [row] = await db
+    .select({ id: evaluationItems.id })
+    .from(evaluationItems)
+    .innerJoin(questionVersions, eq(evaluationItems.questionVersionId, questionVersions.id))
+    .where(eq(questionVersions.questionId, questionId))
+    .limit(1);
+  return row !== undefined;
 }
 
 /**

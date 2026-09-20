@@ -12,12 +12,14 @@ import { and, eq, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import {
+  attempts,
   categories,
   classrooms,
   coursePools,
   courseStaff,
   courses,
   enrollments,
+  evaluations,
   pools,
   questions,
 } from "../db/schema.js";
@@ -236,4 +238,131 @@ export async function accessibleCategory(
     .limit(1);
   if (!row) return notFound(reply);
   return row;
+}
+
+// ---------------------------------------------------------------------------
+// Evaluation and attempt loaders (WP5) — same motif as everything above: the
+// entity is LOADED only if access holds, and the failure is a 404 that a
+// missing entity would produce too (invariant 6).
+// ---------------------------------------------------------------------------
+
+export interface EvaluationScope {
+  evaluation: typeof evaluations.$inferSelect;
+  classroom: typeof classrooms.$inferSelect;
+}
+
+/** Loads an evaluation by id for a member of its course's teaching staff. */
+export async function loadEvaluation(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  evaluationId: string,
+): Promise<EvaluationScope | null> {
+  const [row] = await app.db
+    .select({ evaluation: evaluations, classroom: classrooms })
+    .from(evaluations)
+    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
+    .innerJoin(courses, eq(classrooms.courseId, courses.id))
+    .where(and(eq(evaluations.id, evaluationId), accessWhere(req, staffAccess(req.user!.id))))
+    .limit(1);
+  if (!row) return notFound(reply);
+  return row;
+}
+
+/** `/evaluations/:id` — teacher side. */
+export async function accessibleEvaluation(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  reply: FastifyReply,
+): Promise<EvaluationScope | null> {
+  const params = IdParam.safeParse(req.params);
+  if (!params.success) return notFound(reply);
+  return loadEvaluation(app, req, reply, params.data.id);
+}
+
+/**
+ * The same evaluation seen from the student side: reachable through a CLAIMED
+ * roster seat in its classroom, and nothing else. A staff member also passes,
+ * which is what makes the teacher preview and the dashboard share one loader.
+ */
+export async function reachableEvaluation(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  evaluationId: string,
+): Promise<{ evaluation: typeof evaluations.$inferSelect; staff: boolean } | null> {
+  const [row] = await app.db
+    .select({ evaluation: evaluations, classroom: classrooms })
+    .from(evaluations)
+    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
+    .innerJoin(courses, eq(classrooms.courseId, courses.id))
+    .where(and(eq(evaluations.id, evaluationId), accessWhere(req, staffAccess(req.user!.id))))
+    .limit(1);
+  if (row) return { evaluation: row.evaluation, staff: true };
+
+  const [student] = await app.db
+    .select({ evaluation: evaluations })
+    .from(evaluations)
+    .innerJoin(
+      enrollments,
+      and(
+        eq(enrollments.classroomId, evaluations.classroomId),
+        eq(enrollments.userId, req.user!.id),
+        eq(enrollments.status, "claimed"),
+      ),
+    )
+    .where(eq(evaluations.id, evaluationId))
+    .limit(1);
+  if (!student) return notFound(reply);
+  return { evaluation: student.evaluation, staff: false };
+}
+
+/**
+ * `/attempts/:id` — the student's own attempt. A teacher does NOT reach a
+ * student route: they have `/evaluations/:id/attempts/:attemptId` instead,
+ * which is read-only and audited.
+ */
+export async function ownAttempt(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  attemptId: string,
+): Promise<{
+  attempt: typeof attempts.$inferSelect;
+  evaluation: typeof evaluations.$inferSelect;
+} | null> {
+  const [row] = await app.db
+    .select({ attempt: attempts, evaluation: evaluations })
+    .from(attempts)
+    .innerJoin(evaluations, eq(attempts.evaluationId, evaluations.id))
+    .where(and(eq(attempts.id, attemptId), eq(attempts.userId, req.user!.id)))
+    .limit(1);
+  if (!row) return notFound(reply);
+  return row;
+}
+
+/** Any attempt of an evaluation the caller is staff of (dashboard, controls). */
+export async function staffAttempt(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  evaluationId: string,
+  attemptId: string,
+): Promise<typeof attempts.$inferSelect | null> {
+  const [row] = await app.db
+    .select({ attempt: attempts })
+    .from(attempts)
+    .innerJoin(evaluations, eq(attempts.evaluationId, evaluations.id))
+    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
+    .innerJoin(courses, eq(classrooms.courseId, courses.id))
+    .where(
+      and(
+        eq(attempts.id, attemptId),
+        eq(attempts.evaluationId, evaluationId),
+        accessWhere(req, staffAccess(req.user!.id)),
+      ),
+    )
+    .limit(1);
+  if (!row) return notFound(reply);
+  return row.attempt;
 }

@@ -134,8 +134,15 @@ class InProcessQueue implements JobQueue {
 
 export async function startJobs(
   app: FastifyInstance,
-  opts: { databaseUrl: string; embedded: boolean; runWorkers: boolean },
-): Promise<JobQueue> {
+  opts: { databaseUrl: string; embedded: boolean; runWorkers: boolean; disabled?: boolean },
+): Promise<JobQueue | null> {
+  // `JOBS_DISABLED=1`: no queue at all, and `app.boss` stays undefined —
+  // exactly the state a failed start leaves behind, so nothing downstream
+  // learns a new case. /healthz reports `jobs: "down"`, which is true.
+  if (opts.disabled) {
+    app.log.info("JOBS_DISABLED=1: job queue not started");
+    return null;
+  }
   let queue: JobQueue;
   if (opts.embedded) {
     app.log.warn(

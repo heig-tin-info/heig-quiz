@@ -8,16 +8,21 @@ import { sql } from "drizzle-orm";
 import { collectDefaultMetrics, Gauge, Registry } from "prom-client";
 
 import type { HealthResponse } from "@quiz/contracts";
+import type { Clock } from "./clock.js";
 import { authPlugin } from "./auth/plugin.js";
+import { systemClock } from "./clock.js";
 import type { AppConfig } from "./config.js";
 import { createDb } from "./db/client.js";
 import { publish } from "./events.js";
 import { adminPlugin } from "./modules/admin.js";
 import { avatarPlugin } from "./modules/avatar.js";
 import { coursesPlugin } from "./modules/courses.js";
-import { eventsPlugin } from "./modules/events.js";
+import { evaluationPlugin } from "./modules/evaluation/routes.js";
+import { livePlugin } from "./modules/live/routes.js";
 import { orgPlugin } from "./modules/org/routes.js";
 import { poolPlugin } from "./modules/pool/routes.js";
+import { flushCoalescers } from "./modules/realtime/bus.js";
+import { realtimePlugin } from "./modules/realtime/routes.js";
 import { createRunner, runnerCheck } from "./modules/runner/index.js";
 import { studentPlugin } from "./modules/student.js";
 import { startJobs } from "./jobs.js";
@@ -25,9 +30,15 @@ import { startTicker } from "./ticker.js";
 
 export interface AppDeps {
   config: AppConfig;
+  /**
+   * The server clock (invariant 5). Production passes nothing and gets the
+   * system clock; a test passes a `TestClock` and drives every deadline,
+   * grace window and pause shift without waiting for the wall clock.
+   */
+  clock?: Clock;
 }
 
-export async function buildApp({ config }: AppDeps): Promise<FastifyInstance> {
+export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({
     logger: {
       level: config.LOG_LEVEL,
@@ -39,10 +50,14 @@ export async function buildApp({ config }: AppDeps): Promise<FastifyInstance> {
 
   const handle = createDb(config.DATABASE_URL, app.log);
   app.decorate("db", handle.db);
+  app.decorate("clock", clock ?? systemClock);
   // One runner for the whole process, chosen once by RUNNER_MODE. Everything
   // that grades code takes `app.runner` and never reads the configuration.
   app.decorate("runner", createRunner(config));
   app.addHook("onClose", async () => {
+    // Anything still inside a coalescing window is emitted before the bus
+    // goes away, so a shutdown never eats the last dashboard frame.
+    flushCoalescers();
     await handle.close();
   });
 
@@ -100,12 +115,14 @@ export async function buildApp({ config }: AppDeps): Promise<FastifyInstance> {
 
   await app.register(fastifyCookie, { secret: config.COOKIE_SECRET });
   await app.register(authPlugin, { config });
-  await app.register(eventsPlugin);
+  await app.register(realtimePlugin);
   await app.register(adminPlugin, { config });
   await app.register(avatarPlugin);
   await app.register(coursesPlugin, { config });
   await app.register(orgPlugin);
   await app.register(poolPlugin, { config });
+  await app.register(evaluationPlugin);
+  await app.register(livePlugin);
   await app.register(studentPlugin);
 
   // Job queue + ticker. A database that is unreachable at boot does not kill
@@ -116,6 +133,7 @@ export async function buildApp({ config }: AppDeps): Promise<FastifyInstance> {
       databaseUrl: config.DATABASE_URL,
       embedded: handle.embedded,
       runWorkers,
+      disabled: config.JOBS_DISABLED,
     });
     if (runWorkers) startTicker(app, config);
   } catch (err) {

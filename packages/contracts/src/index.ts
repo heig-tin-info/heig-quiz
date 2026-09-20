@@ -2,5 +2,8 @@ export * from "./health.js";
 export * from "./common.js";
 export * from "./org.js";
 export * from "./pool.js";
+export * from "./evaluation.js";
+export * from "./live.js";
+export * from "./realtime.js";
 export * from "./api.js";
 export * from "./notifications.js";

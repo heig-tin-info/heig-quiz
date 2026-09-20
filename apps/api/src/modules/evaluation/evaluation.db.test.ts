@@ -1,0 +1,300 @@
+/**
+ * The `evaluation` module against the real migrations (PLAN-MVP §8, WP5).
+ *
+ * What is asserted here is the part a screenshot cannot show: the state
+ * machine including the moves it REFUSES, the version freeze of F-EVAL-03,
+ * and the two doors that close as soon as a student has an attempt.
+ */
+import { randomUUID } from "node:crypto";
+
+import { eq } from "drizzle-orm";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { registerForTests } from "@quiz/registry/server";
+
+import { TestClock } from "../../clock.js";
+import type { Db } from "../../db/client.js";
+import { attempts, evaluationItems, evaluations, questions } from "../../db/schema.js";
+import { testDb } from "../../test/db.js";
+import { fakeShort } from "../../test/fakeType.js";
+import { reload, seedLive } from "../../test/live.js";
+import { loadConfig, typeOf } from "../pool/config.js";
+import * as poolService from "../pool/service.js";
+import * as service from "./service.js";
+
+let db: Db;
+let restore: () => void;
+const clock = new TestClock();
+
+const points = (type: string, version: { config: unknown; configVersion: number }) =>
+  typeOf(type).defaultPoints(loadConfig(type, version));
+
+beforeAll(async () => {
+  restore = registerForTests(fakeShort);
+  db = (await testDb()) as unknown as Db;
+});
+afterAll(() => restore());
+
+/** Gives the evaluation an attempt, which is what freezes its structure. */
+async function addAttempt(evaluationId: string, userId: string): Promise<string> {
+  const id = randomUUID();
+  await db.insert(attempts).values({ id, evaluationId, userId, seed: 1 });
+  return id;
+}
+
+describe("state machine (§5.1)", () => {
+  it("walks draft → scheduled → lobby → running ⇄ paused → closed", async () => {
+    const seed = await seedLive(db);
+    let row = await reload(db, seed.evaluationId);
+
+    row = await service.transition(db, row, "scheduled", clock.now());
+    expect(row.state).toBe("scheduled");
+    row = await service.transition(db, row, "lobby", clock.now());
+    expect(row.state).toBe("lobby");
+    row = await service.applyState(db, row, "running", clock.now());
+    expect(row.state).toBe("running");
+    expect(row.startedAt).not.toBeNull();
+    row = await service.applyState(db, row, "paused", clock.now());
+    expect(row.pausedAt).not.toBeNull();
+    row = await service.applyState(db, row, "running", clock.now());
+    // Resuming clears the pause instant: nothing downstream has to remember
+    // which of two "paused_at" values was the current one.
+    expect(row.pausedAt).toBeNull();
+    row = await service.applyState(db, row, "closed", clock.now());
+    expect(row.closedAt).not.toBeNull();
+  });
+
+  it("refuses the illegal transitions", async () => {
+    const seed = await seedLive(db);
+    const draft = await reload(db, seed.evaluationId);
+    // draft → paused, draft → closed, closed → running: not in the table.
+    expect(service.isLegalTransition("draft", "paused")).toBe(false);
+    expect(service.isLegalTransition("closed", "running")).toBe(false);
+    expect(service.isLegalTransition("released", "draft")).toBe(false);
+    await expect(service.transition(db, draft, "paused" as never, clock.now())).rejects.toThrow(
+      service.IllegalTransition,
+    );
+  });
+
+  it("refuses to schedule an evaluation with no question", async () => {
+    const seed = await seedLive(db, { questions: 0 });
+    const row = await reload(db, seed.evaluationId);
+    await expect(service.transition(db, row, "scheduled", clock.now())).rejects.toMatchObject({
+      code: "illegal_transition",
+    });
+  });
+
+  it("refuses to schedule an exam whose timing says nothing (F-EVAL-04)", async () => {
+    const seed = await seedLive(db, { durationS: null });
+    const row = await reload(db, seed.evaluationId);
+    await expect(service.transition(db, row, "scheduled", clock.now())).rejects.toMatchObject({
+      code: "illegal_transition",
+    });
+    // The same evaluation with a common end instead of a duration passes.
+    await db
+      .update(evaluations)
+      .set({
+        settings: { ...service.settingsOf(row), timing: "deadline" },
+        opensAt: clock.now(),
+        closesAt: new Date(clock.now().getTime() + 3_600_000),
+      })
+      .where(eq(evaluations.id, row.id));
+    const fixed = await reload(db, seed.evaluationId);
+    expect((await service.transition(db, fixed, "scheduled", clock.now())).state).toBe("scheduled");
+  });
+
+  it("refuses to pause anything but an exam", async () => {
+    const seed = await seedLive(db, { mode: "exercise" });
+    const row = await service.applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
+    expect(() =>
+      service.guardTransition(row, "paused", { itemCount: 2, attemptCount: 0 }),
+    ).toThrow(service.IllegalTransition);
+  });
+
+  it("reopens a closed evaluation only while no attempt exists", async () => {
+    const seed = await seedLive(db);
+    let row = await service.applyState(db, await reload(db, seed.evaluationId), "closed", clock.now());
+    row = await service.transition(db, row, "draft", clock.now());
+    expect(row.state).toBe("draft");
+
+    await addAttempt(seed.evaluationId, seed.studentIds[0]!);
+    const closed = await service.applyState(db, await reload(db, seed.evaluationId), "closed", clock.now());
+    await expect(service.transition(db, closed, "draft", clock.now())).rejects.toMatchObject({
+      code: "illegal_transition",
+    });
+  });
+
+  it("refuses every operation on a poll (decision D7)", async () => {
+    const seed = await seedLive(db);
+    await db.update(evaluations).set({ mode: "poll" }).where(eq(evaluations.id, seed.evaluationId));
+    const row = await reload(db, seed.evaluationId);
+    await expect(service.transition(db, row, "scheduled", clock.now())).rejects.toMatchObject({
+      code: "not_implemented",
+      status: 501,
+    });
+  });
+});
+
+describe("items (F-EVAL-02, F-EVAL-03)", () => {
+  it("freezes the published version an item was added on", async () => {
+    const seed = await seedLive(db, { questions: 1 });
+    const rows = await service.itemRows(db, seed.evaluationId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.versionNumber).toBe(1);
+    expect(rows[0]!.latestVersionNumber).toBe(1);
+
+    // A second publication does NOT move the item; it only makes it stale.
+    const [question] = await db
+      .select()
+      .from(questions)
+      .where(eq(questions.id, seed.questionIds[0]!));
+    await poolService.putDraft(db, question!, {
+      config: { statement: "Reworded", answer: "answer-q0" },
+    });
+    await poolService.publishQuestion(db, question!, { userId: seed.teacherId });
+
+    const stale = await service.itemRows(db, seed.evaluationId);
+    expect(stale[0]!.versionNumber).toBe(1);
+    expect(stale[0]!.latestVersionNumber).toBe(2);
+    expect(service.staleOf(stale)).toEqual([stale[0]!.id]);
+
+    const updated = await service.updateVersions(
+      db,
+      await reload(db, seed.evaluationId),
+      undefined,
+      { attemptCount: 0 },
+    );
+    expect(updated[0]!.versionNumber).toBe(2);
+    expect(service.staleOf(updated)).toEqual([]);
+  });
+
+  it("blocks update-versions once an attempt exists (F-EVAL-03)", async () => {
+    const seed = await seedLive(db, { questions: 1 });
+    await addAttempt(seed.evaluationId, seed.studentIds[0]!);
+    await expect(
+      service.updateVersions(db, await reload(db, seed.evaluationId), undefined, {
+        attemptCount: 1,
+      }),
+    ).rejects.toMatchObject({ code: "attempts_exist", status: 409 });
+  });
+
+  it("refuses a question that has no published version, and one from another course", async () => {
+    const seed = await seedLive(db, { questions: 0 });
+    const row = await reload(db, seed.evaluationId);
+    const draftOnly = await poolService.createQuestion(db, {
+      poolId: seed.poolId,
+      type: "short",
+      internalName: "never-published",
+      createdBy: seed.teacherId,
+    });
+    await expect(
+      service.addItems(db, row, [draftOnly], points, { attemptCount: 0 }),
+    ).rejects.toMatchObject({ code: "no_published_version", status: 422 });
+
+    // A question of a pool that is not linked to this course is invisible.
+    const other = await seedLive(db, { questions: 1 });
+    await expect(
+      service.addItems(db, row, [other.questionIds[0]!], points, { attemptCount: 0 }),
+    ).rejects.toMatchObject({ code: "question_not_in_course", status: 422 });
+  });
+
+  it("reorders in one transaction, without colliding with its own unique index", async () => {
+    const seed = await seedLive(db, { questions: 3 });
+    const before = await service.itemRows(db, seed.evaluationId);
+    const reversed = [...before].reverse().map((i) => i.id);
+    const after = await service.reorderItems(
+      db,
+      await reload(db, seed.evaluationId),
+      reversed,
+      { attemptCount: 0 },
+    );
+    expect(after.map((i) => i.id)).toEqual(reversed);
+    expect(after.map((i) => i.position)).toEqual([0, 1, 2]);
+  });
+
+  it("keeps positions dense after a deletion", async () => {
+    const seed = await seedLive(db, { questions: 3 });
+    const before = await service.itemRows(db, seed.evaluationId);
+    const after = await service.deleteItem(
+      db,
+      await reload(db, seed.evaluationId),
+      before[1]!.id,
+      { attemptCount: 0 },
+    );
+    expect(after.map((i) => i.position)).toEqual([0, 1]);
+  });
+
+  it("freezes the structure as soon as an attempt exists", async () => {
+    const seed = await seedLive(db, { questions: 1 });
+    await addAttempt(seed.evaluationId, seed.studentIds[0]!);
+    const row = await reload(db, seed.evaluationId);
+    const ctx = { attemptCount: 1 };
+    await expect(service.addItems(db, row, seed.questionIds, points, ctx)).rejects.toMatchObject({
+      code: "locked",
+    });
+    const items = await service.itemRows(db, seed.evaluationId);
+    await expect(
+      service.patchItem(db, row, items[0]!.id, { points: 9 }, ctx),
+    ).rejects.toMatchObject({ code: "locked" });
+    await expect(service.deleteItem(db, row, items[0]!.id, ctx)).rejects.toMatchObject({
+      code: "locked",
+    });
+  });
+});
+
+describe("patch and duplicate", () => {
+  it("accepts a title but refuses a structural change once an attempt exists", async () => {
+    const seed = await seedLive(db);
+    await addAttempt(seed.evaluationId, seed.studentIds[0]!);
+    const row = await reload(db, seed.evaluationId);
+    const renamed = await service.patchEvaluation(db, row, { title: "New" }, { attemptCount: 1 });
+    expect(renamed.title).toBe("New");
+    await expect(
+      service.patchEvaluation(db, renamed, { durationS: 60 }, { attemptCount: 1 }),
+    ).rejects.toMatchObject({ code: "locked", status: 409 });
+  });
+
+  it("never lets an exam give immediate feedback (F-EVAL-11)", async () => {
+    const seed = await seedLive(db);
+    const row = await service.patchEvaluation(
+      db,
+      await reload(db, seed.evaluationId),
+      { feedbackPolicy: { when: "immediate" } },
+      { attemptCount: 0 },
+    );
+    expect(service.feedbackOf(row).when).toBe("on_release");
+  });
+
+  it("duplicates the items on the SAME frozen versions (F-EVAL-14)", async () => {
+    const seed = await seedLive(db, { questions: 2 });
+    const source = await reload(db, seed.evaluationId);
+    const copy = await service.duplicateEvaluation(db, source, {
+      classroomId: seed.classroomId,
+      title: "Copy",
+      createdBy: seed.teacherId,
+    });
+    expect(copy.state).toBe("draft");
+    const sourceItems = await db
+      .select()
+      .from(evaluationItems)
+      .where(eq(evaluationItems.evaluationId, source.id));
+    const copyItems = await db
+      .select()
+      .from(evaluationItems)
+      .where(eq(evaluationItems.evaluationId, copy.id));
+    expect(copyItems.map((i) => i.questionVersionId).sort()).toEqual(
+      sourceItems.map((i) => i.questionVersionId).sort(),
+    );
+  });
+});
+
+describe("the pool module sees the freeze", () => {
+  it("refuses to delete a question an evaluation points at (409 in_use)", async () => {
+    const seed = await seedLive(db, { questions: 1 });
+    const [question] = await db
+      .select()
+      .from(questions)
+      .where(eq(questions.id, seed.questionIds[0]!));
+    await expect(poolService.softDeleteQuestion(db, question!)).rejects.toThrow();
+  });
+});

@@ -58,6 +58,7 @@ import {
   teacherGuard,
 } from "../guards.js";
 import { isAllowedMime, pathForHash, readAsset, sha256Of, sniffImage, writeAsset } from "./assets.js";
+import { studentViewOf } from "../live/studentView.js";
 import { issuesOf, loadConfig, tryLoadConfig, typeOf } from "./config.js";
 import { poolChanged } from "./events.js";
 import * as service from "./service.js";
@@ -615,8 +616,14 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       const t = typeOf(scope.question.type);
       return {
         // Teacher preview: seed 0 and no shuffle, so the view is stable
-        // between two reloads (decision D19).
-        student: t.toStudent(loaded.config, { seed: 0, itemId: scope.question.id, shuffle: false }),
+        // between two reloads (decision D19). It goes through the ONE student
+        // exit of the API (`live/studentView.ts`), like every other payload a
+        // student could ever see (invariant 4, WP5).
+        student: studentViewOf(scope.question.type, loaded.config, {
+          seed: 0,
+          itemId: scope.question.id,
+          shuffle: false,
+        }),
         itemPoints: t.defaultPoints(loaded.config),
       };
     } catch (error) {

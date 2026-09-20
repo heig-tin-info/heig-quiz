@@ -1,0 +1,730 @@
+/**
+ * The `evaluation` module's business layer (PLAN-MVP §3.3, §4.3, §5.1).
+ *
+ * Three rules shape this file:
+ *   - an item freezes ONE published question version at the moment it is
+ *     added (F-EVAL-03); the only way to move it is `updateVersions`, and
+ *     that door closes as soon as an attempt exists;
+ *   - the state machine is a table, not a pile of `if`s: {@link TRANSITIONS}
+ *     says what is legal and {@link guardTransition} says why an otherwise
+ *     legal move is refused. The operational half (start, pause, close) is in
+ *     `modules/live/service.ts`, which calls back into `applyState` here;
+ *   - a structural change is refused once an attempt exists, because the
+ *     wording, the order and the scale a student saw can never move under
+ *     them.
+ */
+import { randomUUID } from "node:crypto";
+
+import { and, asc, count, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+
+import {
+  EvaluationSettings,
+  FeedbackPolicy,
+  GradingScale,
+  defaultFeedbackPolicy,
+  defaultGradingScale,
+  defaultSettings,
+  type Evaluation,
+  type EvaluationDetail,
+  type EvaluationMode,
+  type EvaluationPatch,
+  type EvaluationState,
+  type EvaluationSummary,
+  type ItemPatch,
+  type ItemRow,
+} from "@quiz/contracts";
+
+import { iso, isoOrNull } from "../../clock.js";
+import type { Db } from "../../db/client.js";
+import {
+  attempts,
+  coursePools,
+  classrooms,
+  evaluationItems,
+  evaluations,
+  questionVersions,
+  questions,
+} from "../../db/schema.js";
+
+export type EvaluationRecord = typeof evaluations.$inferSelect;
+export type ItemRecord = typeof evaluationItems.$inferSelect;
+
+// --- Failures -------------------------------------------------------------
+
+/** Base of everything this module refuses; the routes map `code` to a status. */
+export class EvaluationError extends Error {
+  constructor(
+    readonly code: string,
+    readonly status: number,
+    message?: string,
+  ) {
+    super(message ?? code);
+    this.name = "EvaluationError";
+  }
+}
+
+export class IllegalTransition extends EvaluationError {
+  constructor(
+    readonly from: EvaluationState,
+    readonly to: EvaluationState,
+    reason?: string,
+  ) {
+    super("illegal_transition", 409, reason ?? `${from} -> ${to} is not a legal transition`);
+  }
+}
+
+export class Locked extends EvaluationError {
+  constructor(message = "an attempt exists: the structure is frozen") {
+    super("locked", 409, message);
+  }
+}
+
+export class AttemptsExist extends EvaluationError {
+  constructor() {
+    super("attempts_exist", 409, "versions cannot be updated once an attempt exists");
+  }
+}
+
+export class NoPublishedVersion extends EvaluationError {
+  constructor(readonly questionId: string) {
+    super("no_published_version", 422, `question ${questionId} has no published version`);
+  }
+}
+
+export class QuestionNotInCourse extends EvaluationError {
+  constructor(readonly questionId: string) {
+    super("question_not_in_course", 422, `question ${questionId} is not in a pool of this course`);
+  }
+}
+
+export class PollNotImplemented extends EvaluationError {
+  constructor() {
+    super("not_implemented", 501, "poll mode is phase 2 (decision D7)");
+  }
+}
+
+// --- State machine (§5.1) -------------------------------------------------
+
+/**
+ * The legal moves. `closed → draft` is the "reopen" arrow of §5.1 and is
+ * guarded by "no attempt exists"; `closed → grading → closed → released`
+ * belongs to WP6 and is listed so the table stays the one definition.
+ */
+export const TRANSITIONS: Readonly<Record<EvaluationState, readonly EvaluationState[]>> = {
+  draft: ["scheduled", "lobby", "running"],
+  scheduled: ["draft", "lobby", "running", "closed"],
+  lobby: ["draft", "running", "closed"],
+  running: ["paused", "closed"],
+  paused: ["running", "closed"],
+  closed: ["draft", "grading", "released"],
+  grading: ["closed", "released"],
+  released: ["released"],
+};
+
+export function isLegalTransition(from: EvaluationState, to: EvaluationState): boolean {
+  return TRANSITIONS[from].includes(to);
+}
+
+/** F-EVAL-04: an `exam` must announce when it ends, one way or the other. */
+export function timingIsValid(row: {
+  mode: EvaluationMode;
+  settings: EvaluationSettings;
+  durationS: number | null;
+  opensAt: Date | null;
+  closesAt: Date | null;
+}): boolean {
+  switch (row.settings.timing) {
+    case "duration":
+      return row.durationS !== null && row.durationS > 0;
+    case "deadline":
+      // `opensAt` is required too: it is the base of the accommodation
+      // window in this timing (decision D8).
+      return row.closesAt !== null && row.opensAt !== null;
+    case "manual":
+      return row.mode !== "exam";
+  }
+}
+
+export interface TransitionContext {
+  itemCount: number;
+  attemptCount: number;
+}
+
+/**
+ * Why an otherwise legal move is refused. Separated from
+ * {@link isLegalTransition} so the error tells a teacher what to fix.
+ */
+export function guardTransition(
+  row: EvaluationRecord,
+  to: EvaluationState,
+  ctx: TransitionContext,
+): void {
+  const from = row.state;
+  if (!isLegalTransition(from, to)) throw new IllegalTransition(from, to);
+
+  if (to === "scheduled" || to === "lobby" || to === "running") {
+    if (ctx.itemCount === 0) {
+      throw new IllegalTransition(from, to, "an evaluation needs at least one question");
+    }
+    if (!timingIsValid({ ...row, settings: settingsOf(row) })) {
+      throw new IllegalTransition(from, to, "the timing settings are incomplete (F-EVAL-04)");
+    }
+  }
+  if (to === "paused" && row.mode !== "exam") {
+    throw new IllegalTransition(from, to, "only an exam can be paused");
+  }
+  if (to === "draft" && ctx.attemptCount > 0) {
+    throw new IllegalTransition(from, to, "an attempt exists: the evaluation cannot be reopened");
+  }
+}
+
+// --- Reads ----------------------------------------------------------------
+
+export function settingsOf(row: EvaluationRecord): EvaluationSettings {
+  return EvaluationSettings.parse(row.settings);
+}
+
+export function feedbackOf(row: EvaluationRecord): FeedbackPolicy {
+  return FeedbackPolicy.parse(row.feedbackPolicy);
+}
+
+export function toEvaluation(row: EvaluationRecord): Evaluation {
+  return {
+    id: row.id,
+    classroomId: row.classroomId,
+    title: row.title,
+    mode: row.mode,
+    state: row.state,
+    settings: settingsOf(row),
+    gradingScale: GradingScale.parse(row.gradingScale),
+    feedbackPolicy: feedbackOf(row),
+    opensAt: isoOrNull(row.opensAt),
+    closesAt: isoOrNull(row.closesAt),
+    durationS: row.durationS,
+    accessCode: row.accessCode,
+    ipAllowlist: row.ipAllowlist,
+    startedAt: isoOrNull(row.startedAt),
+    pausedAt: isoOrNull(row.pausedAt),
+    closedAt: isoOrNull(row.closedAt),
+    releasedAt: isoOrNull(row.releasedAt),
+    modifiedAfterRelease: row.modifiedAfterRelease,
+    createdAt: iso(row.createdAt),
+  };
+}
+
+export async function attemptCount(db: Db, evaluationId: string): Promise<number> {
+  const [row] = await db
+    .select({ n: count() })
+    .from(attempts)
+    .where(eq(attempts.evaluationId, evaluationId));
+  return row?.n ?? 0;
+}
+
+/** The frozen version of every item, joined with the question it came from. */
+export interface JoinedItem {
+  item: ItemRecord;
+  version: typeof questionVersions.$inferSelect;
+  question: typeof questions.$inferSelect;
+}
+
+export async function joinedItems(db: Db, evaluationId: string): Promise<JoinedItem[]> {
+  const rows = await db
+    .select({ item: evaluationItems, version: questionVersions, question: questions })
+    .from(evaluationItems)
+    .innerJoin(questionVersions, eq(evaluationItems.questionVersionId, questionVersions.id))
+    .innerJoin(questions, eq(questionVersions.questionId, questions.id))
+    .where(eq(evaluationItems.evaluationId, evaluationId))
+    .orderBy(asc(evaluationItems.position));
+  return rows;
+}
+
+/** The highest published version number of each question, in one query. */
+async function latestNumbers(db: Db, questionIds: string[]): Promise<Map<string, number>> {
+  if (questionIds.length === 0) return new Map();
+  const rows = await db
+    .select({
+      questionId: questionVersions.questionId,
+      latest: sql<number>`max(${questionVersions.number})`,
+    })
+    .from(questionVersions)
+    .where(
+      and(
+        inArray(questionVersions.questionId, questionIds),
+        isNotNull(questionVersions.number),
+      ),
+    )
+    .groupBy(questionVersions.questionId);
+  return new Map(rows.map((r) => [r.questionId, Number(r.latest)]));
+}
+
+export async function itemRows(db: Db, evaluationId: string): Promise<ItemRow[]> {
+  const joined = await joinedItems(db, evaluationId);
+  const latest = await latestNumbers(db, [...new Set(joined.map((j) => j.question.id))]);
+  return joined.map((j) => ({
+    id: j.item.id,
+    position: j.item.position,
+    points: j.item.points,
+    milestone: j.item.milestone,
+    questionId: j.question.id,
+    questionVersionId: j.version.id,
+    type: j.question.type,
+    internalName: j.question.internalName,
+    versionNumber: j.version.number ?? 0,
+    latestVersionNumber: latest.get(j.question.id) ?? null,
+    deprecated: j.version.deprecatedAt !== null,
+  }));
+}
+
+export const totalPointsOf = (rows: readonly { points: number }[]): number =>
+  Math.round(rows.reduce((sum, r) => sum + r.points, 0) * 100) / 100;
+
+export const staleOf = (rows: readonly ItemRow[]): string[] =>
+  rows.filter((r) => r.latestVersionNumber !== null && r.latestVersionNumber > r.versionNumber)
+    .map((r) => r.id);
+
+export async function evaluationDetail(
+  db: Db,
+  row: EvaluationRecord,
+): Promise<EvaluationDetail> {
+  const items = await itemRows(db, row.id);
+  const attemptsSoFar = await attemptCount(db, row.id);
+  return {
+    evaluation: toEvaluation(row),
+    items,
+    totalPoints: totalPointsOf(items),
+    staleItems: staleOf(items),
+    attemptCount: attemptsSoFar,
+    editable: attemptsSoFar === 0,
+  };
+}
+
+export async function listEvaluations(
+  db: Db,
+  classroomId: string,
+): Promise<EvaluationSummary[]> {
+  const rows = await db
+    .select()
+    .from(evaluations)
+    .where(eq(evaluations.classroomId, classroomId))
+    .orderBy(desc(evaluations.createdAt));
+  if (rows.length === 0) return [];
+  const ids = rows.map((r) => r.id);
+  const itemStats = await db
+    .select({
+      evaluationId: evaluationItems.evaluationId,
+      n: count(),
+      points: sql<number>`coalesce(sum(${evaluationItems.points}), 0)`,
+    })
+    .from(evaluationItems)
+    .where(inArray(evaluationItems.evaluationId, ids))
+    .groupBy(evaluationItems.evaluationId);
+  const attemptStats = await db
+    .select({ evaluationId: attempts.evaluationId, n: count() })
+    .from(attempts)
+    .where(inArray(attempts.evaluationId, ids))
+    .groupBy(attempts.evaluationId);
+  const items = new Map(itemStats.map((s) => [s.evaluationId, s]));
+  const tries = new Map(attemptStats.map((s) => [s.evaluationId, s.n]));
+  return rows.map((r) => ({
+    id: r.id,
+    classroomId: r.classroomId,
+    title: r.title,
+    mode: r.mode,
+    state: r.state,
+    itemCount: items.get(r.id)?.n ?? 0,
+    totalPoints: Number(items.get(r.id)?.points ?? 0),
+    attemptCount: tries.get(r.id) ?? 0,
+    opensAt: isoOrNull(r.opensAt),
+    closesAt: isoOrNull(r.closesAt),
+    createdAt: iso(r.createdAt),
+  }));
+}
+
+// --- Writes ---------------------------------------------------------------
+
+/**
+ * The two presets of §4.3. An exam is timed, forward-only-ish and silent
+ * until release; an exercise is open and gives feedback immediately.
+ */
+export function presetSettings(preset: "exam" | "exercise"): {
+  settings: EvaluationSettings;
+  feedbackPolicy: FeedbackPolicy;
+} {
+  if (preset === "exercise") {
+    return {
+      settings: EvaluationSettings.parse({ timing: "manual", lobby: "skip", navigation: "free" }),
+      feedbackPolicy: FeedbackPolicy.parse({
+        when: "immediate",
+        showKey: true,
+        showExplanation: true,
+      }),
+    };
+  }
+  return { settings: defaultSettings(), feedbackPolicy: defaultFeedbackPolicy() };
+}
+
+export async function createEvaluation(
+  db: Db,
+  input: {
+    classroomId: string;
+    title: string;
+    mode: EvaluationMode;
+    preset?: "exam" | "exercise" | undefined;
+    createdBy: string;
+  },
+): Promise<EvaluationRecord> {
+  if (input.mode === "poll") throw new PollNotImplemented();
+  const preset = presetSettings(input.preset ?? (input.mode === "exercise" ? "exercise" : "exam"));
+  const id = randomUUID();
+  await db.insert(evaluations).values({
+    id,
+    classroomId: input.classroomId,
+    title: input.title,
+    mode: input.mode,
+    state: "draft",
+    settings: preset.settings,
+    gradingScale: defaultGradingScale(),
+    feedbackPolicy: preset.feedbackPolicy,
+    createdBy: input.createdBy,
+  });
+  return (await byId(db, id))!;
+}
+
+export async function byId(db: Db, id: string): Promise<EvaluationRecord | null> {
+  const [row] = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
+  return row ?? null;
+}
+
+/**
+ * Fields a teacher may still change once a student has an attempt: the title,
+ * the access control and the feedback policy. Everything else decides what a
+ * student sees or how long they have, and is frozen (F-EVAL-03).
+ */
+const SAFE_FIELDS = new Set(["title", "accessCode", "ipAllowlist", "feedbackPolicy"]);
+
+export function isStructural(patch: EvaluationPatch): boolean {
+  return Object.keys(patch).some((k) => !SAFE_FIELDS.has(k));
+}
+
+export async function patchEvaluation(
+  db: Db,
+  row: EvaluationRecord,
+  patch: EvaluationPatch,
+  ctx: { attemptCount: number },
+): Promise<EvaluationRecord> {
+  if (ctx.attemptCount > 0 && isStructural(patch)) throw new Locked();
+  const next: Partial<typeof evaluations.$inferInsert> = { updatedAt: new Date() };
+  if (patch.title !== undefined) next.title = patch.title;
+  if (patch.settings !== undefined) {
+    next.settings = EvaluationSettings.parse({ ...settingsOf(row), ...patch.settings });
+  }
+  if (patch.gradingScale !== undefined) next.gradingScale = patch.gradingScale;
+  if (patch.feedbackPolicy !== undefined) {
+    next.feedbackPolicy = FeedbackPolicy.parse({ ...feedbackOf(row), ...patch.feedbackPolicy });
+  }
+  if (patch.opensAt !== undefined) next.opensAt = patch.opensAt === null ? null : new Date(patch.opensAt);
+  if (patch.closesAt !== undefined) {
+    next.closesAt = patch.closesAt === null ? null : new Date(patch.closesAt);
+  }
+  if (patch.durationS !== undefined) next.durationS = patch.durationS;
+  if (patch.accessCode !== undefined) next.accessCode = patch.accessCode;
+  if (patch.ipAllowlist !== undefined) next.ipAllowlist = patch.ipAllowlist;
+
+  // `immediate` feedback during an exam would hand the key out mid-exam
+  // (F-EVAL-11): the policy is silently clamped, never accepted as written.
+  const feedback = (next.feedbackPolicy ?? feedbackOf(row)) as FeedbackPolicy;
+  const mode = row.mode;
+  if (mode === "exam" && feedback.when === "immediate") {
+    next.feedbackPolicy = { ...feedback, when: "on_release" };
+  }
+
+  await db.update(evaluations).set(next).where(eq(evaluations.id, row.id));
+  return (await byId(db, row.id))!;
+}
+
+export async function deleteEvaluation(db: Db, row: EvaluationRecord): Promise<void> {
+  await db.delete(evaluations).where(eq(evaluations.id, row.id));
+}
+
+/**
+ * Applies a state change with its side effects on the row itself. The
+ * side effects on the ATTEMPTS (starting them, shifting their deadlines,
+ * expiring them) belong to `modules/live/service.ts`, which calls this.
+ */
+export async function applyState(
+  db: Db,
+  row: EvaluationRecord,
+  to: EvaluationState,
+  now: Date,
+): Promise<EvaluationRecord> {
+  const next: Partial<typeof evaluations.$inferInsert> = { state: to, updatedAt: now };
+  if (to === "running") {
+    if (row.startedAt === null) next.startedAt = now;
+    next.pausedAt = null;
+  }
+  if (to === "paused") next.pausedAt = now;
+  if (to === "closed") next.closedAt = now;
+  if (to === "draft") {
+    // A reopened evaluation forgets that it ever ran; no attempt exists, so
+    // there is nothing whose clock those instants would contradict.
+    next.startedAt = null;
+    next.pausedAt = null;
+    next.closedAt = null;
+  }
+  await db.update(evaluations).set(next).where(eq(evaluations.id, row.id));
+  return (await byId(db, row.id))!;
+}
+
+/** The authoring transitions of §4.3; guards included. */
+export async function transition(
+  db: Db,
+  row: EvaluationRecord,
+  to: EvaluationState,
+  now: Date,
+): Promise<EvaluationRecord> {
+  if (row.mode === "poll") throw new PollNotImplemented();
+  const items = await db
+    .select({ n: count() })
+    .from(evaluationItems)
+    .where(eq(evaluationItems.evaluationId, row.id));
+  guardTransition(row, to, {
+    itemCount: items[0]?.n ?? 0,
+    attemptCount: await attemptCount(db, row.id),
+  });
+  return applyState(db, row, to, now);
+}
+
+// --- Items ----------------------------------------------------------------
+
+/** The pools this evaluation may draw questions from (F-EVAL-01). */
+async function coursePoolIds(db: Db, evaluationId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ poolId: coursePools.poolId })
+    .from(evaluations)
+    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
+    .innerJoin(coursePools, eq(coursePools.courseId, classrooms.courseId))
+    .where(eq(evaluations.id, evaluationId));
+  return new Set(rows.map((r) => r.poolId));
+}
+
+/** The latest PUBLISHED version of each question, or null when there is none. */
+async function latestPublished(
+  db: Db,
+  questionIds: string[],
+): Promise<Map<string, typeof questionVersions.$inferSelect>> {
+  if (questionIds.length === 0) return new Map();
+  const rows = await db
+    .select()
+    .from(questionVersions)
+    .where(
+      and(inArray(questionVersions.questionId, questionIds), isNotNull(questionVersions.number)),
+    )
+    .orderBy(asc(questionVersions.questionId), desc(questionVersions.number));
+  const out = new Map<string, typeof questionVersions.$inferSelect>();
+  for (const row of rows) if (!out.has(row.questionId)) out.set(row.questionId, row);
+  return out;
+}
+
+async function nextPosition(db: Db, evaluationId: string): Promise<number> {
+  const [row] = await db
+    .select({ max: sql<number | null>`max(${evaluationItems.position})` })
+    .from(evaluationItems)
+    .where(eq(evaluationItems.evaluationId, evaluationId));
+  return (row?.max === null || row?.max === undefined ? -1 : Number(row.max)) + 1;
+}
+
+/**
+ * Adds questions at the end, each frozen on its current published version
+ * (F-EVAL-03). Points default to `type.defaultPoints` — supplied by the
+ * caller, so this file never imports the registry.
+ */
+export async function addItems(
+  db: Db,
+  row: EvaluationRecord,
+  questionIds: string[],
+  defaultPoints: (type: string, version: typeof questionVersions.$inferSelect) => number,
+  ctx: { attemptCount: number },
+): Promise<ItemRow[]> {
+  if (ctx.attemptCount > 0) throw new Locked();
+  const allowed = await coursePoolIds(db, row.id);
+  const found = await db.select().from(questions).where(inArray(questions.id, questionIds));
+  const byQuestion = new Map(found.map((q) => [q.id, q]));
+  const versions = await latestPublished(db, questionIds);
+
+  let position = await nextPosition(db, row.id);
+  const values: (typeof evaluationItems.$inferInsert)[] = [];
+  for (const questionId of questionIds) {
+    const question = byQuestion.get(questionId);
+    if (!question || question.deletedAt !== null || !allowed.has(question.poolId)) {
+      throw new QuestionNotInCourse(questionId);
+    }
+    const version = versions.get(questionId);
+    if (!version) throw new NoPublishedVersion(questionId);
+    values.push({
+      id: randomUUID(),
+      evaluationId: row.id,
+      position: position++,
+      questionVersionId: version.id,
+      points: defaultPoints(question.type, version),
+      milestone: false,
+    });
+  }
+  if (values.length > 0) await db.insert(evaluationItems).values(values);
+  return itemRows(db, row.id);
+}
+
+export async function patchItem(
+  db: Db,
+  row: EvaluationRecord,
+  itemId: string,
+  patch: ItemPatch,
+  ctx: { attemptCount: number },
+): Promise<ItemRow[]> {
+  if (ctx.attemptCount > 0) throw new Locked();
+  const next: Partial<typeof evaluationItems.$inferInsert> = {};
+  if (patch.points !== undefined) next.points = patch.points;
+  if (patch.milestone !== undefined) next.milestone = patch.milestone;
+  await db
+    .update(evaluationItems)
+    .set(next)
+    .where(and(eq(evaluationItems.id, itemId), eq(evaluationItems.evaluationId, row.id)));
+  return itemRows(db, row.id);
+}
+
+export async function deleteItem(
+  db: Db,
+  row: EvaluationRecord,
+  itemId: string,
+  ctx: { attemptCount: number },
+): Promise<ItemRow[]> {
+  if (ctx.attemptCount > 0) throw new Locked();
+  await db
+    .delete(evaluationItems)
+    .where(and(eq(evaluationItems.id, itemId), eq(evaluationItems.evaluationId, row.id)));
+  // Positions stay dense: the grid, the CSV export and `forward_only` all
+  // read `position` as an index, not as an opaque sort key.
+  const remaining = await db
+    .select()
+    .from(evaluationItems)
+    .where(eq(evaluationItems.evaluationId, row.id))
+    .orderBy(asc(evaluationItems.position));
+  await renumber(db, row.id, remaining.map((r) => r.id));
+  return itemRows(db, row.id);
+}
+
+/**
+ * Two-phase renumbering: every row is first pushed out of the way, then
+ * given its final position. `(evaluation_id, position)` is unique and NOT
+ * deferrable (see `db/evaluation.ts`), so a one-pass UPDATE would collide
+ * with itself on any swap.
+ */
+async function renumber(db: Db, evaluationId: string, orderedIds: string[]): Promise<void> {
+  if (orderedIds.length === 0) return;
+  await db.transaction(async (tx) => {
+    await tx
+      .update(evaluationItems)
+      .set({ position: sql`${evaluationItems.position} + 100000` })
+      .where(eq(evaluationItems.evaluationId, evaluationId));
+    for (const [index, id] of orderedIds.entries()) {
+      await tx
+        .update(evaluationItems)
+        .set({ position: index })
+        .where(
+          and(eq(evaluationItems.id, id), eq(evaluationItems.evaluationId, evaluationId)),
+        );
+    }
+  });
+}
+
+export async function reorderItems(
+  db: Db,
+  row: EvaluationRecord,
+  itemIds: string[],
+  ctx: { attemptCount: number },
+): Promise<ItemRow[]> {
+  if (ctx.attemptCount > 0) throw new Locked();
+  const existing = await db
+    .select({ id: evaluationItems.id })
+    .from(evaluationItems)
+    .where(eq(evaluationItems.evaluationId, row.id));
+  const known = new Set(existing.map((e) => e.id));
+  // Anything the caller forgot keeps its relative place at the end, so a
+  // stale browser tab can never drop an item by omitting it.
+  const ordered = [...itemIds.filter((id) => known.has(id))];
+  for (const id of existing.map((e) => e.id)) if (!ordered.includes(id)) ordered.push(id);
+  await renumber(db, row.id, ordered);
+  return itemRows(db, row.id);
+}
+
+/**
+ * The one-click "update to the latest version" of F-EVAL-03. Refused as soon
+ * as an attempt exists: a student who already answered would silently be
+ * answering another question.
+ */
+export async function updateVersions(
+  db: Db,
+  row: EvaluationRecord,
+  itemIds: string[] | undefined,
+  ctx: { attemptCount: number },
+): Promise<ItemRow[]> {
+  if (ctx.attemptCount > 0) throw new AttemptsExist();
+  const joined = await joinedItems(db, row.id);
+  const targets = itemIds === undefined ? joined : joined.filter((j) => itemIds.includes(j.item.id));
+  const versions = await latestPublished(db, [...new Set(targets.map((j) => j.question.id))]);
+  for (const target of targets) {
+    const latest = versions.get(target.question.id);
+    if (!latest || latest.id === target.version.id) continue;
+    await db
+      .update(evaluationItems)
+      .set({ questionVersionId: latest.id })
+      .where(eq(evaluationItems.id, target.item.id));
+  }
+  return itemRows(db, row.id);
+}
+
+/** F-EVAL-14: same items, same settings, new draft, possibly another classroom. */
+export async function duplicateEvaluation(
+  db: Db,
+  row: EvaluationRecord,
+  input: { classroomId: string; title: string; createdBy: string },
+): Promise<EvaluationRecord> {
+  const id = randomUUID();
+  const items = await db
+    .select()
+    .from(evaluationItems)
+    .where(eq(evaluationItems.evaluationId, row.id))
+    .orderBy(asc(evaluationItems.position));
+  await db.transaction(async (tx) => {
+    await tx.insert(evaluations).values({
+      id,
+      classroomId: input.classroomId,
+      title: input.title,
+      mode: row.mode,
+      state: "draft",
+      settings: row.settings,
+      gradingScale: row.gradingScale,
+      feedbackPolicy: row.feedbackPolicy,
+      opensAt: row.opensAt,
+      closesAt: row.closesAt,
+      durationS: row.durationS,
+      accessCode: row.accessCode,
+      ipAllowlist: row.ipAllowlist,
+      createdBy: input.createdBy,
+    });
+    if (items.length > 0) {
+      await tx.insert(evaluationItems).values(
+        items.map((item) => ({
+          id: randomUUID(),
+          evaluationId: id,
+          position: item.position,
+          // The copy points at the SAME frozen versions: duplicating an
+          // evaluation must not silently upgrade its questions.
+          questionVersionId: item.questionVersionId,
+          points: item.points,
+          milestone: item.milestone,
+        })),
+      );
+    }
+  });
+  return (await byId(db, id))!;
+}

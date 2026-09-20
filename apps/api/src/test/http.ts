@@ -11,6 +11,7 @@ import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 
 import { buildApp } from "../app.js";
+import { TestClock } from "../clock.js";
 import { CSRF_COOKIE, SESSION_COOKIE, createSession } from "../auth/session.js";
 import { loadConfig } from "../config.js";
 import { createDb } from "../db/client.js";
@@ -20,6 +21,8 @@ import { MIGRATIONS_DIR } from "../paths.js";
 export interface TestServer {
   app: FastifyInstance;
   assetsDir: string;
+  /** The server clock, moved by hand: no test ever sleeps (invariant 5). */
+  clock: TestClock;
   /** Creates an account and returns the headers that authenticate it. */
   signIn: (
     role: "student" | "teacher" | "admin",
@@ -29,6 +32,7 @@ export interface TestServer {
 }
 
 export async function testServer(): Promise<TestServer> {
+  const clock = new TestClock();
   const dir = await mkdtemp(join(tmpdir(), "quiz-api-"));
   const config = loadConfig({
     NODE_ENV: "test",
@@ -37,6 +41,9 @@ export async function testServer(): Promise<TestServer> {
     // No ticker and no job worker: a route test must not race a background
     // loop it did not ask for.
     WORKER_MODE: "web",
+    // No job queue either: nothing under test enqueues one, and a queue that
+    // is not started cannot print a connection failure (see config.ts).
+    JOBS_DISABLED: "1",
     LOG_LEVEL: "fatal",
   });
   // The real migration chain, exactly as `server.ts` applies it at boot.
@@ -44,12 +51,13 @@ export async function testServer(): Promise<TestServer> {
   await handle.migrate(MIGRATIONS_DIR);
   await handle.close();
 
-  const app = await buildApp({ config });
+  const app = await buildApp({ config, clock });
   await app.ready();
 
   return {
     app,
     assetsDir: config.ASSETS_DIR,
+    clock,
     async signIn(role, email = `${role}-${randomUUID().slice(0, 8)}@heig.test`) {
       const id = randomUUID();
       await app.db.insert(users).values({

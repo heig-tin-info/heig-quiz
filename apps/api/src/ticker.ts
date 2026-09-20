@@ -16,6 +16,7 @@ import type { FastifyInstance } from "fastify";
 
 import type { AppConfig } from "./config.js";
 import { purgeExpiredSessions } from "./auth/session.js";
+import { LIVE_TASKS } from "./modules/live/jobs.js";
 
 export interface TickTask {
   name: string;
@@ -24,7 +25,15 @@ export interface TickTask {
   run: (app: FastifyInstance, config: AppConfig) => Promise<void>;
 }
 
-/** Tasks every deployment runs. Modules add theirs at registration time. */
+/**
+ * Tasks every deployment runs.
+ *
+ * The live half (`LIVE_TASKS`) is what makes the one-second period
+ * worthwhile: expiring attempts past `deadline + GRACE_MS`, opening the
+ * evaluations whose `opens_at` has come and closing those past `closes_at`.
+ * A module contributes its tasks as a list, so the order stays readable and
+ * the ticker itself stays ignorant of the domain.
+ */
 export const CORE_TASKS: TickTask[] = [
   {
     name: "sessions.purge",
@@ -33,6 +42,7 @@ export const CORE_TASKS: TickTask[] = [
       await purgeExpiredSessions(app.db);
     },
   },
+  ...LIVE_TASKS,
 ];
 
 export function startTicker(
