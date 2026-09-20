@@ -9,7 +9,7 @@
  */
 import { useId, useState } from "react";
 
-import type { EditorProps } from "@quiz/core/client";
+import type { EditorProps, MarkdownRenderer } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 import { compareOutput } from "@quiz/domain";
 
@@ -35,6 +35,12 @@ export interface CodeEditorProps extends EditorProps<CodeConfig> {
    */
   onTry?: ((config: CodeConfig) => Promise<RunnerOutcome | "unavailable">) | undefined;
   strings?: Partial<CodeEditorStrings> | undefined;
+  /**
+   * The host's sanitised markdown view, used to preview the statement under
+   * its textarea. Absent, the preview is not drawn at all: the textarea
+   * already shows the source, so there is nothing to fall back to.
+   */
+  renderMarkdown?: MarkdownRenderer | undefined;
   /** Forces the Monaco path on or off (tests use the textarea). */
   monaco?: boolean | undefined;
 }
@@ -55,7 +61,15 @@ const NEW_CASE: CodeCase = {
   timeMs: null,
 };
 
-export function CodeEditor({ config, onChange, disabled, onTry, strings, monaco }: CodeEditorProps) {
+export function CodeEditor({
+  config,
+  onChange,
+  disabled,
+  onTry,
+  strings,
+  renderMarkdown,
+  monaco,
+}: CodeEditorProps) {
   const s = withStrings(EDITOR_STRINGS, strings);
   const ids = useId();
   const [tryState, setTryState] = useState<TryState>({ status: "idle" });
@@ -117,6 +131,16 @@ export function CodeEditor({ config, onChange, disabled, onTry, strings, monaco 
             className={cx(input, "w-full py-2 leading-relaxed")}
           />
           <p className={hint}>{s.promptHint}</p>
+          {/*
+           * No caption above the preview: a new string key would need a French
+           * entry in the host's dictionary, and the rendered statement sitting
+           * directly under its source needs no naming.
+           */}
+          {renderMarkdown ? (
+            <div className="border-t border-line pt-2 text-sm text-fg">
+              {renderMarkdown(config.prompt)}
+            </div>
+          ) : null}
         </div>
         <div className="flex flex-col gap-1.5">
           <label className={label} htmlFor={`${ids}-language`}>

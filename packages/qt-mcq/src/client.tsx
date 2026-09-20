@@ -56,10 +56,16 @@ export const mcqClient: McqClient = {
   },
 };
 
-export { McqEditor, type McqEditorProps } from "./Editor.js";
-export { McqPlayer, type McqPlayerProps } from "./Player.js";
-export { McqReview, type McqReviewProps } from "./Review.js";
-export { McqStats, type McqStatsProps } from "./Stats.js";
+/*
+ * The surfaces above are deliberately NOT re-exported as values: a static
+ * `export { X } from "./Editor.js"` would pull them back into whatever imports
+ * this module, undoing the `lazy` above (rollup: INEFFECTIVE_DYNAMIC_IMPORT).
+ * A host that genuinely needs one imports the file directly. Types only here.
+ */
+export type { McqEditorProps } from "./Editor.js";
+export type { McqPlayerProps } from "./Player.js";
+export type { McqReviewProps } from "./Review.js";
+export type { McqStatsProps } from "./Stats.js";
 export {
   mcqEditorStrings,
   mcqPlayerStrings,

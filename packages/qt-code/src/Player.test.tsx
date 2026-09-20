@@ -124,4 +124,15 @@ describe("CodePlayer", () => {
     setup({ strings: { run: "Exécuter" }, onRun: async () => outcome([]) });
     expect(screen.getByRole("button", { name: "Exécuter" })).toBeInTheDocument();
   });
+
+  it("renders the prompt through the host's markdown renderer", () => {
+    setup({ renderMarkdown: (source) => <em data-testid="md">{source}</em> });
+    expect(screen.getByTestId("md")).toHaveTextContent("Sum the integers read on stdin.");
+  });
+
+  it("falls back to plain text when the host passes no renderer", () => {
+    setup();
+    expect(screen.queryByTestId("md")).toBeNull();
+    expect(screen.getByText("Sum the integers read on stdin.")).toBeInTheDocument();
+  });
 });

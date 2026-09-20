@@ -58,9 +58,15 @@ export const shortClient: ShortClient = {
   },
 };
 
-export { ShortEditor, type ShortEditorProps } from "./Editor.js";
-export { ShortPlayer, type ShortPlayerProps } from "./Player.js";
-export { ShortReview, type ShortReviewProps } from "./Review.js";
+/*
+ * The surfaces above are deliberately NOT re-exported as values: a static
+ * `export { X } from "./Editor.js"` would pull them back into whatever imports
+ * this module, undoing the `lazy` above (rollup: INEFFECTIVE_DYNAMIC_IMPORT).
+ * A host that genuinely needs one imports the file directly. Types only here.
+ */
+export type { ShortEditorProps } from "./Editor.js";
+export type { ShortPlayerProps } from "./Player.js";
+export type { ShortReviewProps } from "./Review.js";
 export {
   shortEditorStrings,
   shortPlayerStrings,

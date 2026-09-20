@@ -63,9 +63,15 @@ export const clozeClient: ClozeClient = {
   },
 };
 
-export { ClozeEditor, type ClozeEditorProps } from "./Editor.js";
-export { ClozePlayer, type ClozePlayerProps } from "./Player.js";
-export { ClozeReview, type ClozeReviewProps } from "./Review.js";
+/*
+ * The surfaces above are deliberately NOT re-exported as values: a static
+ * `export { X } from "./Editor.js"` would pull them back into whatever imports
+ * this module, undoing the `lazy` above (rollup: INEFFECTIVE_DYNAMIC_IMPORT).
+ * A host that genuinely needs one imports the file directly. Types only here.
+ */
+export type { ClozeEditorProps } from "./Editor.js";
+export type { ClozePlayerProps } from "./Player.js";
+export type { ClozeReviewProps } from "./Review.js";
 export { ClozeFallbackText, splitBlocks, type ClozeTextProps, type ClozeTextRenderer } from "./text.js";
 export {
   clozeEditorStrings,

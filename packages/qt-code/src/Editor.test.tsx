@@ -129,4 +129,16 @@ describe("CodeEditor", () => {
     setup({ strings: { prompt: "Énoncé" } });
     expect(screen.getByLabelText("Énoncé")).toBeInTheDocument();
   });
+
+  it("previews the statement through the host's markdown renderer", () => {
+    const { config } = setup({
+      renderMarkdown: (source) => <em data-testid="md">{source}</em>,
+    });
+    expect(screen.getByTestId("md")).toHaveTextContent(config.prompt);
+  });
+
+  it("draws no preview when the host passes no renderer", () => {
+    setup();
+    expect(screen.queryByTestId("md")).toBeNull();
+  });
 });

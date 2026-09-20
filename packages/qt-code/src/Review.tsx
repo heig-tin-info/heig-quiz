@@ -7,7 +7,7 @@
  * filtering itself happened server-side in `studentDetails`; this component
  * renders what it was given and never reconstructs a key.
  */
-import type { ReviewProps } from "@quiz/core/client";
+import type { MarkdownRenderer, ReviewProps } from "@quiz/core/client";
 
 import type { CodeAnswer, CodeCaseDetail, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
 import { REVIEW_STRINGS, withStrings, type CodeReviewStrings } from "./strings.js";
@@ -18,6 +18,8 @@ export interface CodeReviewProps
   /** docs/06 Q8: the policy may name the hidden cases once the results are out. */
   showHiddenCaseNames?: boolean | undefined;
   strings?: Partial<CodeReviewStrings> | undefined;
+  /** The host's sanitised markdown view; plain text when absent. */
+  renderMarkdown?: MarkdownRenderer | undefined;
 }
 
 function verdictOf(detail: CodeCaseDetail, s: CodeReviewStrings): string {
@@ -27,6 +29,7 @@ function verdictOf(detail: CodeCaseDetail, s: CodeReviewStrings): string {
 }
 
 export function CodeReview({
+  student,
   answer,
   solution,
   details,
@@ -35,12 +38,25 @@ export function CodeReview({
   audience,
   showHiddenCaseNames,
   strings,
+  renderMarkdown,
 }: CodeReviewProps) {
   const s = withStrings(REVIEW_STRINGS, strings);
   const reveal = audience === "teacher" || showHiddenCaseNames === true;
 
+  /* The statement, so a verdict is never read without the question it judges. */
+  const statement = (
+    <div className="whitespace-pre-wrap text-sm text-fg">
+      {renderMarkdown ? renderMarkdown(student.prompt) : student.prompt}
+    </div>
+  );
+
   if (details === null) {
-    return <p className={hint}>{answer === null ? s.notAnswered : s.runnerError}</p>;
+    return (
+      <div className="flex flex-col gap-3">
+        {statement}
+        <p className={hint}>{answer === null ? s.notAnswered : s.runnerError}</p>
+      </div>
+    );
   }
 
   const shown = details.cases.filter((c) => c.visible || reveal);
@@ -49,6 +65,8 @@ export function CodeReview({
 
   return (
     <div className="flex flex-col gap-4">
+      {statement}
+
       <div className="flex flex-wrap items-center gap-2">
         <span className={cx(sectionTitle, "tabular-nums")}>
           {s.score(points ?? 0, maxPoints)}

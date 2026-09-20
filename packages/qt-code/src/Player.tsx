@@ -14,7 +14,7 @@
  */
 import { useState } from "react";
 
-import type { PlayerProps } from "@quiz/core/client";
+import type { MarkdownRenderer, PlayerProps } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 import { compareOutput } from "@quiz/domain";
 
@@ -33,6 +33,8 @@ export interface CodePlayerProps extends PlayerProps<CodeStudent, CodeAnswer> {
    */
   onRun?: ((answer: CodeAnswer) => Promise<RunnerOutcome | "unavailable">) | undefined;
   strings?: Partial<CodePlayerStrings> | undefined;
+  /** The host's sanitised markdown view; plain text when absent. */
+  renderMarkdown?: MarkdownRenderer | undefined;
   /** Forces the Monaco path on or off (tests use the textarea). */
   monaco?: boolean | undefined;
 }
@@ -51,6 +53,7 @@ export function CodePlayer({
   readOnly,
   onRun,
   strings,
+  renderMarkdown,
   monaco,
 }: CodePlayerProps) {
   const s = withStrings(PLAYER_STRINGS, strings);
@@ -83,7 +86,9 @@ export function CodePlayer({
 
   return (
     <div className="flex flex-col gap-5">
-      <p className="whitespace-pre-wrap text-sm text-fg">{student.prompt}</p>
+      <div className="whitespace-pre-wrap text-sm text-fg">
+        {renderMarkdown ? renderMarkdown(student.prompt) : student.prompt}
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <span className={badge()}>{student.language}</span>

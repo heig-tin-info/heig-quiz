@@ -100,4 +100,17 @@ describe("CodeReview", () => {
     setup(null, { answer: null });
     expect(screen.getByText("Not answered.")).toBeInTheDocument();
   });
+
+  it("renders the statement through the host's markdown renderer", () => {
+    setup(studentDetails(graded.details), {
+      renderMarkdown: (source) => <em data-testid="md">{source}</em>,
+    });
+    expect(screen.getByTestId("md")).toHaveTextContent(student.prompt);
+  });
+
+  it("falls back to plain text, and still states the question with no details", () => {
+    setup(null, { answer: null });
+    expect(screen.queryByTestId("md")).toBeNull();
+    expect(screen.getByText(student.prompt)).toBeInTheDocument();
+  });
 });
