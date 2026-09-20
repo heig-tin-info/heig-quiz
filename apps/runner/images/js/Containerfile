@@ -1,0 +1,11 @@
+# quiz-runner-js: Node 22, the same major as the platform itself.
+#
+# The official alpine image already ships a `node` user at uid 1000; it is
+# reused as it is rather than created a second time.
+FROM docker.io/library/node:22-alpine
+
+RUN mkdir -p /work && chown 1000:1000 /work
+
+USER 1000:1000
+WORKDIR /work
+CMD ["sleep", "60"]

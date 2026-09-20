@@ -1,0 +1,17 @@
+# quiz-runner-rust: rustc alone, no cargo registry.
+#
+# This image is an order of magnitude larger than the other four (the Rust
+# toolchain is ~700 MB installed), so images/build.sh builds it only when it
+# is named explicitly:
+#   images/build.sh rust
+# `GET /health` reports the languages whose image is present, so a deployment
+# without this one simply does not offer Rust.
+FROM docker.io/library/alpine:3.20
+
+RUN apk add --no-cache rust
+
+RUN adduser -D -u 1000 -h /work runner && mkdir -p /work && chown 1000:1000 /work
+
+USER 1000:1000
+WORKDIR /work
+CMD ["sleep", "60"]

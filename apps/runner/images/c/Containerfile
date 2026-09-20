@@ -1,0 +1,26 @@
+# quiz-runner-c: the C toolchain, and nothing else.
+#
+# Derived from the structure of the sibling project's `c-dev` image
+# (apps/runner/README.md) with code-server, gdb, git and the network tooling
+# dropped: this image never serves an editor, it compiles one file and runs it
+# with `--network none`.
+#
+# Built by images/build.sh:
+#   podman build -t quiz-runner-c:latest images/c
+FROM docker.io/library/alpine:3.20
+
+# gcc + musl-dev is the whole toolchain (musl-dev brings the C headers and the
+# startup files). No curl, no ca-certificates, no git: the container has no
+# network, so a network client in it would only be a tool for an attacker.
+RUN apk add --no-cache gcc musl-dev
+
+# uid 1000, non-root, owning nothing outside the work directory. /work is
+# replaced at run time by a tmpfs (mode 1777, size RUNNER_WORKDIR_MB); the
+# directory here only exists so that WORKDIR resolves on an unmounted image.
+RUN adduser -D -u 1000 -h /work runner && mkdir -p /work && chown 1000:1000 /work
+
+USER 1000:1000
+WORKDIR /work
+# No ENTRYPOINT and no CMD that matter: the runner starts the container with
+# `sleep <budget>` and drives it with `podman exec`.
+CMD ["sleep", "60"]

@@ -1,0 +1,14 @@
+# quiz-runner-python: CPython, no pip, no site-packages of our own.
+#
+# `pip` is deliberately absent: the container has no network, so pip could not
+# install anything anyway, and its absence removes a large attack surface from
+# a process that only has to run one student file.
+FROM docker.io/library/alpine:3.20
+
+RUN apk add --no-cache python3
+
+RUN adduser -D -u 1000 -h /work runner && mkdir -p /work && chown 1000:1000 /work
+
+USER 1000:1000
+WORKDIR /work
+CMD ["sleep", "60"]

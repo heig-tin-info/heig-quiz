@@ -1,0 +1,10 @@
+# quiz-runner-cpp: the C++ toolchain. Same shape as images/c/Containerfile.
+FROM docker.io/library/alpine:3.20
+
+RUN apk add --no-cache g++ musl-dev
+
+RUN adduser -D -u 1000 -h /work runner && mkdir -p /work && chown 1000:1000 /work
+
+USER 1000:1000
+WORKDIR /work
+CMD ["sleep", "60"]
