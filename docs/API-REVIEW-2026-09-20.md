@@ -44,3 +44,21 @@ Paths are relative to `~/quiz`. Nothing was modified.
 - **Error surface.** `app.setErrorHandler` replaces every ≥500 body with `{error:"internal_error"}`, so Drizzle's `Failed query: <SQL>` never reaches the browser; `invalid()` echoes only `{path, code, message}` from zod, never the submitted config or the expected literal.
 - **Migrations.** `drizzle/0000..0003` are additive; no `DROP` anywhere.
 - **Job parity.** `InProcessQueue` honours `singletonKey` for pending jobs, and `enqueueEvaluationGrading`/`enqueueRunnerGrading` fall back to inline execution when `app.boss` is absent rather than dropping the work.
+
+## Follow-ups
+
+Everything else in the table above was fixed on `main` (one commit per
+finding, `2026-09-20`). These eight are deliberately left open; each line says
+why, so that the next pass starts from a decision rather than from a
+re-reading.
+
+| id | why it waits |
+|---|---|
+| **M5** | Cross-course asset reads by any staff session. The link table the fix needs (`question_version_assets`) now exists and is filled at publication by the H3 fix, so the check is one join away — but tightening it is a behaviour change for teachers who share images across courses, and it needs the "reachable question" predicate the pool module does not expose yet. Do it with the pool-sharing work. |
+| **M6** | `gradingQueue` materialises `attempts × items` with no cursor. It is a performance ceiling (200 × 40), not a correctness or safety problem, and paging it changes `GradingQuery`, the panel's fetching and its keyboard navigation at once. It belongs to the grading panel's own iteration, with a fixture big enough to measure. |
+| **L1** | The CSRF token is never persisted, so the check is a pure double submit. `SameSite=lax` plus the cookie prefix is the real defence today and there is no sibling subdomain on the deployment; storing the token next to `sid_hash` touches the session table and the renewal path, which is the authentication work package's ground. |
+| **L3** | Login-CSRF on `POST /app/auth/dev`. Development only by construction: `config.ts` refuses `AUTH_DEV_LOGIN` under `NODE_ENV=production` and the routes are not even registered there. Nothing to protect in production. |
+| **L5** | Any session reads any avatar by uuid. Minor personal-data exposure inside one school, with unguessable ids; restricting it to users sharing a classroom needs a predicate the `avatar` module has no reason to own yet. Revisit if avatars ever leave the SPA. |
+| **L6** | A strict CSP for the SPA belongs in the `Caddyfile`, which is deployed by hand on the VM (`deploy.md`) and not exercised by any test here. Writing it blind would either break Vite's dev origin or ship a policy nobody has loaded a page against. Do it on the VM, with the browser open. |
+| **L8** | The two N+1 listings (`studentHome`, `studentResultCards`) cost a few dozen queries on pages a student opens a handful of times a day, against PGlite or a local Postgres. Worth one grouped query, not worth a rewrite before there is a class-sized dataset to measure it on. |
+| **L9** | `ALPHABET[b % 31]` biases eight characters by ~3 %: 39.9 effective bits instead of 40 on a join code that is already rate-limited and revocable. Rejection sampling is three lines; it is listed here so it is a decision, not an oversight. |
