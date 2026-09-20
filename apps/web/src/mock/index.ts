@@ -2111,8 +2111,20 @@ const runningEvaluation = () => evaluations.find((e) => e.state === "running") ?
  * stable URLs for the screenshot script and for a quick look. The real API
  * only knows uuids, and so does every id the mock puts on the wire.
  */
-const findEvaluation = (key: string): MockEvaluation | null =>
-  evaluations.find((x) => x.id === key) ?? evaluations.find((x) => x.state === key) ?? null;
+const aliased = new Map<string, string>();
+const findEvaluation = (key: string): MockEvaluation | null => {
+  const byId = evaluations.find((x) => x.id === key);
+  if (byId) return byId;
+  // An alias is resolved ONCE and then pinned to the evaluation it found.
+  // Otherwise pausing `/evaluations/running/live` moves that evaluation out
+  // of the `running` state, the next request on the same URL matches nothing,
+  // and the dashboard that just issued the command gets a 404 (W17).
+  const pinned = aliased.get(key);
+  if (pinned !== undefined) return evaluations.find((x) => x.id === pinned) ?? null;
+  const byState = evaluations.find((x) => x.state === key) ?? null;
+  if (byState) aliased.set(key, byState.id);
+  return byState;
+};
 
 const evaluationOr404 = (id: string) => {
   const e = findEvaluation(id);
