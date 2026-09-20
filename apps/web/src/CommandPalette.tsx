@@ -10,6 +10,7 @@ import {
   type Command,
   type CommandContext,
 } from "./commands";
+import type { TFunction } from "./i18n";
 import { screenCommands } from "./screenCommands";
 import { cx, Kbd, useLayer, useScrollLock, Z } from "./ui";
 
@@ -27,12 +28,21 @@ import { cx, Kbd, useLayer, useScrollLock, Z } from "./ui";
  *   panel floats, so it is the one thing here allowed a shadow.
  */
 
-export function CommandPalette({
-  open,
-  onClose,
-  ...ctx
-}: { open: boolean; onClose: () => void } & CommandContext) {
-  const { t } = ctx;
+/**
+ * Two shapes, one panel. The Shell hands over the whole `CommandContext` and
+ * the palette builds the global list from it. The zen player hands over a
+ * FIXED list instead: during an attempt there is no sidebar, no theme switch
+ * and no other page to jump to, and the four things a student can do from
+ * here are the four things the palette offers (W15). It still needs `t`, for
+ * its own chrome.
+ */
+export type CommandPaletteProps = { open: boolean; onClose: () => void } & (
+  | ({ commands?: undefined } & CommandContext)
+  | { commands: Command[]; t: TFunction }
+);
+
+export function CommandPalette(props: CommandPaletteProps) {
+  const { open, onClose, t } = props;
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const panel = useRef<HTMLDivElement>(null);
@@ -53,7 +63,11 @@ export function CommandPalette({
   // The global registry, plus whatever the screen under the palette declared
   // while it was mounted (`screenCommands`): "Publish this question" exists
   // in the editor and nowhere else.
-  const all = [...screenCommands(), ...buildCommands(ctx)];
+  const all =
+    props.commands ??
+    // The union above guarantees the context is there when `commands` is not;
+    // TypeScript cannot narrow a rest-free union by an absent property.
+    [...screenCommands(), ...buildCommands(props as unknown as CommandContext)];
   const groups = groupCommands(capClassrooms(filterCommands(query, all), query));
   // The list the arrows walk is the one the eye walks: the groups in their
   // fixed order, not the score order the filter returned.

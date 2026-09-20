@@ -19,12 +19,13 @@
  * or from an `attempt.closed` frame, and then this renders `ClosedScreen`.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Home, Send } from "lucide-react";
 
 import type { AttemptView } from "@quiz/contracts";
 import { questionTypeClient } from "@quiz/registry/client";
 
 import { useAttempt } from "../attempt/useAttempt";
+import type { Command } from "../commands";
 import { currentItem, isLocked, neighbour, type PlayerItem, type PlayerState } from "../attempt/playerReducer";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
@@ -140,6 +141,52 @@ export function Player({
 
   const previous = neighbour(state, -1);
   const next = neighbour(state, 1);
+  /*
+   * What `Ctrl+K` offers during an attempt (W15). Deliberately short: an exam
+   * is the one screen the rest of the app must stay out of, so there is no
+   * navigation, no theme, no help — only the four moves the footer and the
+   * bar already carry, for a student who reaches for the keyboard first.
+   * Built here rather than in `commands.ts`, which knows nothing of an
+   * attempt and should not learn.
+   */
+  const commands: Command[] = [
+    {
+      id: "player:submit",
+      label: t("player.command.submit"),
+      icon: Send,
+      group: "action",
+      run: () => setSubmitting(true),
+    },
+    ...(next !== null
+      ? [
+          {
+            id: "player:next",
+            label: t("player.command.next"),
+            icon: ChevronRight,
+            group: "action" as const,
+            run: () => dispatch({ type: "move", delta: 1 }),
+          },
+        ]
+      : []),
+    ...(previous !== null
+      ? [
+          {
+            id: "player:prev",
+            label: t("player.command.prev"),
+            icon: ChevronLeft,
+            group: "action" as const,
+            run: () => dispatch({ type: "move", delta: -1 }),
+          },
+        ]
+      : []),
+    {
+      id: "player:home",
+      label: t("player.command.home"),
+      icon: Home,
+      group: "navigate",
+      run: onHome,
+    },
+  ];
   const hint = locked
     ? t("player.hint.locked")
     : state.navigation === "free"
@@ -152,10 +199,12 @@ export function Player({
         title={initial.evaluation.title}
         deadlineAt={deadlineAt}
         now={now}
+        paused={paused}
         sync={sync}
         segments={segments}
         onSelectSegment={(itemId) => dispatch({ type: "goto", itemId })}
         progressLabel={t("player.progress", { n: state.index + 1, total })}
+        commands={commands}
         headerAction={
           <Button variant="secondary" size="sm" onClick={() => setSubmitting(true)}>
             {t("player.finish")}
@@ -198,10 +247,17 @@ export function Player({
         {item ? (
           <>
             <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-              <h1 className="text-[13px] font-semibold uppercase tracking-wide text-fg-faint">
+              {/* Not a heading: "Question 2 of 4" names a position, not a
+                  section, and as an `h1` it renamed the document on every
+                  move (W5). It is announced instead — politely, because the
+                  student is reading, not waiting. */}
+              <p
+                aria-live="polite"
+                className="text-[13px] font-semibold uppercase tracking-wide text-fg-muted"
+              >
                 {t("player.question", { n: state.index + 1, total })}
-              </h1>
-              <span className="text-[13px] text-fg-faint">
+              </p>
+              <span className="text-[13px] text-fg-muted">
                 {item.points === 1 ? t("player.point") : t("player.points", { n: item.points })}
               </span>
               {item.markedDone ? (
@@ -226,7 +282,7 @@ export function Player({
                   : {})}
               />
             </Card>
-            <p className="mt-3 text-[13px] leading-relaxed text-fg-faint">{hint}</p>
+            <p className="mt-3 text-[13px] leading-relaxed text-fg-muted">{hint}</p>
           </>
         ) : null}
       </PlayerShell>

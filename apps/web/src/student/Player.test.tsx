@@ -229,6 +229,49 @@ describe("the zen player", () => {
     ).toBeInTheDocument();
   });
 
+  /*
+   * W5: the only `<h1>` used to be "Question 2 of 3" — 13 px, `fg-faint`, and
+   * rewritten on every move. The heading now names the page (the evaluation)
+   * and the counter is announced instead, politely.
+   */
+  it("makes the evaluation the heading and the counter a live line", async () => {
+    const view = attemptView();
+    stubs(view);
+    render(view);
+    await screen.findByText("Question 2 sur 3");
+    const headings = screen.getAllByRole("heading", { level: 1 });
+    expect(headings).toHaveLength(1);
+    expect(headings[0]).toHaveTextContent("Quiz 3 — Pointeurs");
+    const counter = screen.getByText("Question 2 sur 3");
+    expect(counter.tagName).toBe("P");
+    expect(counter).toHaveAttribute("aria-live", "polite");
+  });
+
+  /*
+   * W15: DESIGN.md promises the palette "from anywhere", and the player is
+   * rendered outside the Shell that used to be the only place it existed.
+   * The list is short on purpose: during an exam there is nowhere else to go.
+   */
+  it("opens a student-only command palette on Ctrl+K", async () => {
+    const view = attemptView();
+    stubs(view);
+    render(view);
+    await screen.findByText("Question 2 sur 3");
+
+    await userEvent.keyboard("{Control>}k{/Control}");
+    const palette = await screen.findByRole("dialog");
+    expect(within(palette).getByRole("option", { name: /Rendre mes réponses/ })).toBeVisible();
+    expect(within(palette).getByRole("option", { name: /Question suivante/ })).toBeVisible();
+    expect(within(palette).getByRole("option", { name: /Question précédente/ })).toBeVisible();
+    expect(within(palette).getByRole("option", { name: /Revenir à mes quiz/ })).toBeVisible();
+    // No teacher command anywhere near it.
+    expect(within(palette).queryByRole("option", { name: /Administration/ })).toBeNull();
+
+    // And it runs: the next question is one Enter away.
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
   it("has no axe violation", async () => {
     const view = attemptView();
     stubs(view);

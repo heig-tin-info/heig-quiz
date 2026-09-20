@@ -24,7 +24,7 @@ import { questionTypeClient } from "@quiz/registry/client";
 
 import { useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
-import { Alert, Spinner } from "../ui";
+import { Alert, ScrollableCode, Spinner } from "../ui";
 import { playerStringsFor } from "./questionStrings";
 
 /** What every shipped player accepts on top of the core contract. */
@@ -70,16 +70,22 @@ export function QuestionHost({
     );
   }
   return (
-    <Suspense fallback={<Spinner className="py-16" />}>
-      <Player
-        student={student}
-        answer={answer}
-        onChange={onChange}
-        readOnly={readOnly}
-        strings={playerStringsFor(type, t)}
-        renderMarkdown={renderMarkdown}
-        {...(onRun ? { onRun } : {})}
-      />
-    </Suspense>
+    // `qt-code` shows the provided, locked part of the program in `<pre>`
+    // blocks that scroll sideways at 390 px. A scroll container holding
+    // nothing focusable is unreachable from a keyboard, and this is a student
+    // under exam conditions (W10).
+    <ScrollableCode label={t("markdown.codeBlock")}>
+      <Suspense fallback={<Spinner className="py-16" />}>
+        <Player
+          student={student}
+          answer={answer}
+          onChange={onChange}
+          readOnly={readOnly}
+          strings={playerStringsFor(type, t)}
+          renderMarkdown={renderMarkdown}
+          {...(onRun ? { onRun } : {})}
+        />
+      </Suspense>
+    </ScrollableCode>
   );
 }

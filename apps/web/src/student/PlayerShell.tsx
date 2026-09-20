@@ -16,11 +16,17 @@
  *   - Finish: hairlines top and bottom, `surface` bars on the warm canvas, no
  *     shadow — both bars are in the page flow, not above it.
  *
- * It holds no state: the shell is what the player looks like, and the player
- * is what it does.
+ * It holds no state of the attempt: the shell is what the player looks like,
+ * and the player is what it does. The one thing it does own is `Ctrl+K` —
+ * DESIGN.md promises the palette "from anywhere", and the player is rendered
+ * outside the Shell that used to be the only place it existed (W15). The list
+ * is the player's, and it is four entries long: there is nowhere else to go
+ * during an exam.
  */
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
+import { CommandPalette } from "../CommandPalette";
+import type { Command } from "../commands";
 import { useT } from "../i18n";
 import {
   Countdown,
@@ -35,11 +41,13 @@ export function PlayerShell({
   subtitle,
   deadlineAt,
   now,
+  paused = false,
   sync,
   segments,
   onSelectSegment,
   progressLabel,
   headerAction,
+  commands,
   banner,
   footer,
   children,
@@ -49,6 +57,8 @@ export function PlayerShell({
   /** Epoch ms on the server's clock; `null` in a `manual` evaluation. */
   deadlineAt: number | null;
   now: number;
+  /** The teacher paused the evaluation: the countdown freezes with it (W16). */
+  paused?: boolean;
   sync: SyncState;
   segments: Segment[];
   /** Absent when navigation is locked: the strip becomes an indicator. */
@@ -56,24 +66,49 @@ export function PlayerShell({
   progressLabel: string;
   /** "Hand in", the only action of the bar. */
   headerAction?: ReactNode;
+  /** What `Ctrl+K` offers here. Empty means no palette at all. */
+  commands?: Command[];
   /** The offline alert, in the flow under the bar. */
   banner?: ReactNode;
   footer: ReactNode;
   children: ReactNode;
 }) {
   const t = useT();
+  const [palette, setPalette] = useState(false);
+  const hasPalette = (commands?.length ?? 0) > 0;
+  useEffect(() => {
+    if (!hasPalette) return;
+    const onKey = (e: KeyboardEvent) => {
+      // Same contract as the Shell's: bare Ctrl/⌘+K, from inside a field too,
+      // and prevented because Firefox otherwise opens its own search bar.
+      if (e.altKey || e.shiftKey) return;
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "k") return;
+      e.preventDefault();
+      setPalette((open) => !open);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [hasPalette]);
   return (
     <div className="flex min-h-dvh flex-col bg-canvas">
       <header className="sticky top-0 z-20 border-b border-line bg-surface">
         <div className="mx-auto w-full max-w-190 px-4 pt-2.5 sm:px-6">
           <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-semibold leading-tight">{title}</p>
+              {/* The page's heading is what the page IS — the evaluation the
+                  student is sitting. It is quiet on purpose (13 px, the bar's
+                  own size): the zen player gives the reading size to the
+                  question, not to the chrome. The per-question counter used to
+                  hold this `h1`, which made the document heading change on
+                  every navigation and named the wrong thing (W5). */}
+              <h1 className="truncate text-[13px] font-semibold leading-tight">{title}</h1>
               {subtitle ? (
-                <p className="truncate text-[12px] leading-tight text-fg-faint">{subtitle}</p>
+                <p className="truncate text-[12px] leading-tight text-fg-muted">{subtitle}</p>
               ) : null}
             </div>
-            {deadlineAt === null ? null : <Countdown deadlineAt={deadlineAt} now={now} />}
+            {deadlineAt === null ? null : (
+              <Countdown deadlineAt={deadlineAt} now={now} paused={paused} />
+            )}
             <SyncBadge state={sync} />
             {headerAction}
           </div>
@@ -97,6 +132,9 @@ export function PlayerShell({
         </div>
         <p className="sr-only">{t("player.shortcuts")}</p>
       </footer>
+      {palette && commands ? (
+        <CommandPalette open onClose={() => setPalette(false)} t={t} commands={commands} />
+      ) : null}
     </div>
   );
 }

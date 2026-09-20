@@ -67,6 +67,10 @@ export function ClosedScreen({
         <EmptyState
           icon={copy.icon}
           title={t(copy.title)}
+          // This screen REPLACES the player: it is the whole page, so its
+          // title is the page's heading. Without it the document had no
+          // heading of any level (W4).
+          titleAs="h1"
           action={
             <div className="flex flex-wrap items-center justify-center gap-2">
               {onResults ? (
