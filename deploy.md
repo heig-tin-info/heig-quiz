@@ -8,7 +8,7 @@ heig-classroom is, on the same machines (ADR-016):
 | Already runs | heig-classroom (`:3000`), evaluation-tb (`:3001`), a native Caddy | heig-codespace, rootful Podman 5.7, a native Caddy |
 | Gets | `/opt/quiz`: `app` (`127.0.0.1:3002`), `postgres`, `backup` — Docker Compose | `/opt/quiz-runner`: the runner as a Podman quadlet on `127.0.0.1:3200` |
 | Vhost | `/etc/caddy/conf.d/quiz.caddy` → `quiz.chevallier.io` | `/etc/caddy/conf.d/quiz-runner.caddy` → `quiz-runner.chevallier.io` |
-| Deploys through | `/opt/quiz/deploy.sh` (forced command) | `/opt/quiz-runner/deploy.sh` (forced command) |
+| Deploys through | `/opt/quiz/deploy.sh` (forced command) | `/opt/quiz-runner/apps/runner/deploy/deploy.sh` (forced command) |
 
 Neither VM ever builds anything of ours: the two images come from GHCR, built
 by CI. The neighbours are not touched — the classroom VM's Caddy already
@@ -93,7 +93,7 @@ gh variable set DEPLOY_RUNNER_HOST_KEY --repo heig-tin-info/heig-quiz --body "$(
 # on the application VM
 printf 'command="/opt/quiz/deploy.sh",restrict %s\n' "$(cat ci_deploy.pub)" >> /root/.ssh/authorized_keys
 # on the runner VM
-printf 'command="/opt/quiz-runner/deploy.sh",restrict %s\n' "$(cat ci_deploy.pub)" >> /root/.ssh/authorized_keys
+printf 'command="/opt/quiz-runner/apps/runner/deploy/deploy.sh",restrict %s\n' "$(cat ci_deploy.pub)" >> /root/.ssh/authorized_keys
 shred -u ci_deploy
 ```
 

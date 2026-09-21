@@ -68,7 +68,7 @@ jobs:
 
   # Deploy: the runner SSHes to the two VMs (ADR-016), whose authorized_keys
   # pin the CI key to /opt/quiz/deploy.sh on the quiz VM and to
-  # /opt/quiz-runner/deploy.sh on the code VM (forced commands) — the key can
+  # /opt/quiz-runner/apps/runner/deploy/deploy.sh on the code VM (forced commands) — the key can
   # ONLY deploy, never open a shell. The ephemeral GHCR token is passed as the
   # SSH command (→ $SSH_ORIGINAL_COMMAND) so the private images pull without
   # any credential stored on either VM. Without DEPLOY_SSH_KEY the job no-ops,

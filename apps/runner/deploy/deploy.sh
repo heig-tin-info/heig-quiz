@@ -2,7 +2,7 @@
 # Deploy target of the code runner on the code VM (ADR-016), the twin of the
 # root deploy.sh of the quiz VM. The VM's authorized_keys pins the CI key to
 # this script:
-#   command="/opt/quiz-runner/deploy.sh",restrict ssh-ed25519 AAAA… ci-deploy
+#   command="/opt/quiz-runner/apps/runner/deploy/deploy.sh",restrict ssh-ed25519 AAAA… ci-deploy
 # so the CI can ONLY deploy — never open a shell, even if the key leaks.
 #
 # The CI passes its ephemeral GHCR token as the SSH "command"; it lands in

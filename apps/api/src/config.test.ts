@@ -44,6 +44,22 @@ describe("loadConfig", () => {
     );
   });
 
+  it("ignores the unused client secret when private_key_jwt is configured", () => {
+    // edu-ID: the secret is never sent, so its dev default is no secret in use.
+    const { OIDC_CLIENT_SECRET: _unused, ...withoutSecret } = PROD;
+    expect(() =>
+      loadConfig({ ...withoutSecret, OIDC_PRIVATE_KEY_PATH: "secrets/eduid-private-key.pem" }),
+    ).not.toThrow();
+    // The cookie secret is in use either way.
+    expect(() =>
+      loadConfig({
+        ...withoutSecret,
+        OIDC_PRIVATE_KEY_PATH: "secrets/eduid-private-key.pem",
+        COOKIE_SECRET: "dev-cookie-secret-change-me",
+      }),
+    ).toThrow(/COOKIE_SECRET/);
+  });
+
   it("lets the development login through outside production", () => {
     expect(loadConfig({ NODE_ENV: "development", AUTH_DEV_LOGIN: "1" }).AUTH_DEV_LOGIN).toBe(true);
   });

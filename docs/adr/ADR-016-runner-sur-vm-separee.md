@@ -41,7 +41,7 @@ compose network only.
    either side (`config.ts` of both). `/health` is guarded too, so a wrong token is a
    runner reported `down` by `/healthz`, not one that says `up` and refuses every run.
 4. **One CI key, two forced commands.** The `deploy` job SSHes to both VMs with the
-   same key, pinned to `/opt/quiz/deploy.sh` on one and `/opt/quiz-runner/deploy.sh`
+   same key, pinned to `/opt/quiz/deploy.sh` on one and `/opt/quiz-runner/apps/runner/deploy/deploy.sh`
    on the other; each pulls its image with the CI's ephemeral GHCR token and restarts.
    The code VM's `/etc/caddy/Caddyfile` — owned by heig-codespace — gained a single
    `import /etc/caddy/conf.d/*.caddy` line, the convention the classroom VM already

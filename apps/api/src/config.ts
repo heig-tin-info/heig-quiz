@@ -169,10 +169,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new Error(`Invalid configuration: ${issues}`);
   }
   if (parsed.data.NODE_ENV === "production") {
-    for (const [key, marker] of [
-      ["OIDC_CLIENT_SECRET", "not-for-production"],
-      ["COOKIE_SECRET", "change-me"],
-    ] as const) {
+    // With `private_key_jwt` (edu-ID) the client secret is never sent, so its
+    // dev default is not a secret in use and is not what to refuse.
+    const secretsInUse = [
+      ...(parsed.data.OIDC_PRIVATE_KEY_PATH
+        ? []
+        : [["OIDC_CLIENT_SECRET", "not-for-production"] as const]),
+      ["COOKIE_SECRET", "change-me"] as const,
+    ];
+    for (const [key, marker] of secretsInUse) {
       if (parsed.data[key].includes(marker)) {
         throw new Error(`Invalid configuration: dev ${key} forbidden in production`);
       }
