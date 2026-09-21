@@ -27,7 +27,7 @@ import {
   SearchInput,
   Select,
   SettingRow,
-  Sheet,
+  PageHeader,
   Skeleton,
   Switch,
   Tabs,
@@ -150,13 +150,7 @@ function QuestionRow({
   );
 }
 
-export function PollLauncher({
-  onClose,
-  navigate,
-}: {
-  onClose: () => void;
-  navigate: (r: Route) => void;
-}) {
+export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
   const t = useT();
   const [tab, setTab] = useState<"pick" | "new">("pick");
   const [query, setQuery] = useState("");
@@ -200,7 +194,6 @@ export function PollLauncher({
       }),
     onSuccess: (view) => {
       writeRoom(view.evaluation.classroomId);
-      onClose();
       navigate({ view: "poll", id: view.evaluation.id });
     },
   });
@@ -212,42 +205,34 @@ export function PollLauncher({
         body: JSON.stringify({ type, internalName: name.trim() }),
       }),
     onSuccess: (question) => {
-      onClose();
       navigate({ view: "question", id: question.meta.id });
     },
   });
 
-  const footer =
+  // ONE primary action per screen, and it follows the tab: start the poll
+  // from a picked question, or create the question that will be polled.
+  const primary =
     tab === "pick" ? (
-      <>
-        <Button variant="secondary" onClick={onClose}>
-          {t("common.cancel")}
-        </Button>
-        <Button
-          onClick={() => start.mutate()}
-          loading={start.isPending}
-          disabled={questionId === null || classroomId === ""}
-        >
-          {t("poll.startAction")}
-        </Button>
-      </>
+      <Button
+        onClick={() => start.mutate()}
+        loading={start.isPending}
+        disabled={questionId === null || classroomId === ""}
+      >
+        {t("poll.startAction")}
+      </Button>
     ) : (
-      <>
-        <Button variant="secondary" onClick={onClose}>
-          {t("common.cancel")}
-        </Button>
-        <Button
-          onClick={() => create.mutate()}
-          loading={create.isPending}
-          disabled={name.trim() === ""}
-        >
-          {t("poll.createQuestion")}
-        </Button>
-      </>
+      <Button
+        onClick={() => create.mutate()}
+        loading={create.isPending}
+        disabled={name.trim() === ""}
+      >
+        {t("poll.createQuestion")}
+      </Button>
     );
 
   return (
-    <Sheet title={t("poll.launcher")} subtitle={t("poll.launcherHint")} onClose={onClose} footer={footer}>
+    <div className="mx-auto w-full max-w-3xl space-y-6">
+      <PageHeader title={t("poll.launcher")} description={t("poll.launcherHint")} actions={primary} />
       <Tabs
         value={tab}
         onChange={setTab}
@@ -364,6 +349,6 @@ export function PollLauncher({
           ) : null}
         </div>
       )}
-    </Sheet>
+    </div>
   );
 }

@@ -51,7 +51,7 @@ const courses: CourseSummary[] = [
 describe("PollLauncher", () => {
   it("lists the pollable questions with how often they have been asked", async () => {
     mockFetch({ [`GET ${QUESTIONS}`]: ok(picks), [`GET ${COURSES}`]: ok(courses) });
-    renderWithProviders(<PollLauncher onClose={vi.fn()} navigate={vi.fn()} />);
+    renderWithProviders(<PollLauncher navigate={vi.fn()} />);
 
     expect(await screen.findByText("sizeof-ptr-64")).toBeVisible();
     expect(screen.getByText(/Polled 4 times/)).toBeVisible();
@@ -72,7 +72,7 @@ describe("PollLauncher", () => {
       }),
     });
     const navigate = vi.fn();
-    renderWithProviders(<PollLauncher onClose={vi.fn()} navigate={navigate} />);
+    renderWithProviders(<PollLauncher navigate={navigate} />);
 
     // Nothing picked yet: the one primary action is not available.
     await screen.findByText("sizeof-ptr-64");
@@ -90,7 +90,7 @@ describe("PollLauncher", () => {
 
   it("filters the list rather than re-fetching it", async () => {
     mockFetch({ [`GET ${QUESTIONS}`]: ok(picks), [`GET ${COURSES}`]: ok(courses) });
-    renderWithProviders(<PollLauncher onClose={vi.fn()} navigate={vi.fn()} />);
+    renderWithProviders(<PollLauncher navigate={vi.fn()} />);
     await screen.findByText("sizeof-ptr-64");
 
     await userEvent.type(screen.getByLabelText("Search the questions"), "binary");
@@ -105,7 +105,7 @@ describe("PollLauncher", () => {
       [`POST ${QUESTIONS}`]: ok({ meta: { id: "q-new" }, draft: {}, versions: [] }),
     });
     const navigate = vi.fn();
-    renderWithProviders(<PollLauncher onClose={vi.fn()} navigate={navigate} />);
+    renderWithProviders(<PollLauncher navigate={navigate} />);
 
     await userEvent.click(await screen.findByRole("tab", { name: /Ask a new question/ }));
     expect(screen.getByText(/come back here to run it/)).toBeVisible();

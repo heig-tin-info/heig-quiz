@@ -22,6 +22,8 @@ export type Route =
   | { view: "evaluation"; id: string }
   /** The live grid of one evaluation. */
   | { view: "live"; id: string }
+  /** The poll launcher: pick or write the question, then the wall (F-LIVE-13). */
+  | { view: "polls" }
   /** The projection of a poll: the question, the tally, the QR (F-LIVE-14). */
   | { view: "poll"; id: string }
   /** A participant joining a poll by its session code — with or without an account. */
@@ -60,6 +62,8 @@ export function routeToPath(r: Route): string {
       return `/evaluations/${r.id}`;
     case "live":
       return `/evaluations/${r.id}/live`;
+    case "polls":
+      return "/polls";
     case "poll":
       return `/evaluations/${r.id}/poll`;
     case "join":
@@ -82,6 +86,7 @@ export function parsePath(path: string): Route {
   if (parts[0] === "admin") return { view: "admin" };
   if (parts[0] === "classrooms" && parts[1]) return { view: "classroom", id: parts[1] };
   if (parts[0] === "pools") return parts[1] ? { view: "pool", id: parts[1] } : { view: "pools" };
+  if (parts[0] === "polls") return { view: "polls" };
   if (parts[0] === "questions" && parts[1]) return { view: "question", id: parts[1] };
   // WP9: student player
   if (parts[0] === "take" && parts[1]) return { view: "attempt", evaluationId: parts[1] };

@@ -127,6 +127,9 @@ const PollProjection = lazy(() =>
   import("./poll/PollProjection").then((m) => ({ default: m.PollProjection })),
 );
 const PollJoin = lazy(() => import("./poll/PollJoin").then((m) => ({ default: m.PollJoin })));
+const PollLauncher = lazy(() =>
+  import("./poll/PollLauncher").then((m) => ({ default: m.PollLauncher })),
+);
 
 export default function App() {
   const me = useMe();
@@ -217,6 +220,8 @@ export default function App() {
       <AdminPage />
     ) : route.view === "classroom" ? (
       <ClassroomView id={route.id} navigate={navigate} />
+    ) : route.view === "polls" ? (
+      <PollLauncher navigate={navigate} />
     ) : route.view === "pools" ? (
       <PoolsPage navigate={navigate} />
     ) : route.view === "pool" ? (

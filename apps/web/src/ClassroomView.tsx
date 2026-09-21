@@ -32,7 +32,6 @@ import {
   Modal,
   PageHeader,
   QueryError,
-  SectionHeading,
   Skeleton,
   Tabs,
 } from "./ui";
@@ -269,14 +268,7 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
 
         {tab === "roster" ? (
           <section className="space-y-3">
-            {/* The same shape as the evaluation panel beside it: a heading
-                that carries the count and the "?" of its documentation. */}
-            <SectionHeading
-              icon={Users}
-              title={t("roster.title")}
-              count={students.length}
-              help="roster"
-            />
+            {/* No heading: the tab above already names and counts it. */}
             <Card>
               {data.roster.length === 0 ? (
                 <EmptyState
