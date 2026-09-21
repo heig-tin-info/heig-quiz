@@ -133,5 +133,5 @@ export function UserMenu({
 }
 
 /** The two external destinations, shared with the command palette. */
-export const DOCS_URL = "https://github.com/heig-tin-info/quiz/tree/main/docs";
-export const SOURCES_URL = "https://github.com/heig-tin-info/quiz";
+export const DOCS_URL = "https://heig-tin-info.github.io/heig-quiz/";
+export const SOURCES_URL = "https://github.com/heig-tin-info/heig-quiz";

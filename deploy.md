@@ -168,7 +168,7 @@ the pull — no registry credential is stored on the VM.
    ```
 2. **Private** key → **Actions secret** (⚠ not a Deploy Key):
    ```bash
-   gh secret set DEPLOY_SSH_KEY --repo heig-tin-info/quiz < ci_deploy
+   gh secret set DEPLOY_SSH_KEY --repo heig-tin-info/heig-quiz < ci_deploy
    ```
 3. **Public** key → the VM's `authorized_keys`, pinned to `deploy.sh`:
    ```bash
