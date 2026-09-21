@@ -41,7 +41,14 @@ export function AttemptPage({
 
   const entry = useQuery<AttemptOrLobby>({
     queryKey: ["attempt", "enter", evaluationId, sent],
-    retry: false,
+    // A refusal the server SPELLS OUT (a wrong access code, a blocked network,
+    // an evaluation that is not open) has its own screen below and must never
+    // be retried. A failure with no answer at all — the socket died, a proxy
+    // dropped the request — is worth three goes before the student is shown a
+    // dead end: this is the door to an exam, and the alternative is a page
+    // that says "the server did not answer" over one lost packet.
+    retry: (count, error) => !(error instanceof ApiError) && count < 3,
+    retryDelay: (count) => Math.min(500 * 2 ** count, 4_000),
     // A POST behind a query: the route is idempotent by design, and this is
     // the only way the same refetch path serves the lobby and the player.
     queryFn: () =>

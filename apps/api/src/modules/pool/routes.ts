@@ -62,6 +62,7 @@ import {
 import { isAllowedMime, pathForHash, readAsset, sha256Of, sniffImage, writeAsset } from "./assets.js";
 import { studentViewOf } from "../live/studentView.js";
 import { issuesOf, loadConfig, tryLoadConfig, typeOf } from "./config.js";
+import { publish } from "../../events.js";
 import { poolChanged } from "./events.js";
 import * as service from "./service.js";
 
@@ -131,6 +132,10 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       subjectId: pool.id,
       payload: { name: pool.name, visibility: pool.visibility },
     });
+    // A brand-new pool has no `pool:<id>` subscriber yet — topics are computed
+    // at connection time — so the teacher's own topic is the only one that can
+    // carry it. It refreshes `GET /app/api/pools`, which emits nothing back.
+    publish("mutation", [`user:${req.user!.id}`]);
     return reply.code(201).send(pool);
   });
 

@@ -112,13 +112,31 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
     },
   );
 
-  // Every successful HTTP mutation emits an SSE refresh hint (ADR-005).
+  // Every successful HTTP mutation under a SHARED scope emits an SSE refresh
+  // hint (ADR-005): a pool, a classroom or a course is read by people who did
+  // not do the write, and that is the whole point of a hint.
   //
-  // A route that is a READ behind a POST (a preview, a dry run: the verb only
-  // carries a body) declares `config: { readOnly: true }` and is skipped. Its
-  // hint would otherwise reach the very tab that asked, which invalidates its
-  // queries on any hint and re-issues the same POST: an endless round trip
-  // that showed as "Saving…" forever in the question editor.
+  // There is deliberately NO catch-all `else`. A hint addressed to the
+  // actor's own `user:<id>` topic reaches the very tab that issued the
+  // request, `useLiveUpdates` answers any hint with `invalidateQueries()`, and
+  // a route that is a READ BEHIND A POST then re-issues itself for ever.
+  // `POST /evaluations/:id/attempt` is exactly that shape (deviation W5-14:
+  // the student asks, the server decides lobby or player), and the fallback
+  // turned "Start now" into ~215 requests per second on the student's tab,
+  // each invalidation cancelling the in-flight refetch so the lobby never
+  // advanced. `config: { readOnly: true }` still exists for the same family
+  // one scope up (`POST /questions/:id/preview`, `/try`).
+  //
+  // The `else` bucket was audited route by route before it went. Most of it
+  // already publishes its own, better-addressed hint — the question and
+  // category routes through `poolChanged`, the evaluation ones through
+  // `evaluationChanged`/`stateChanged`, the grading and release ones through
+  // `gradingChanged`/`resultsChanged` — and every screen invalidates its own
+  // queries after its own mutation anyway. The four that had nothing left say
+  // so themselves now: `PATCH /me` and the avatar (the actor's own topic, and
+  // safe because they only refresh GETs), the admin teacher list (`admin`,
+  // which reaches every administrator and not just the actor), and
+  // `POST /pools`, whose brand-new pool has no `pool:<id>` subscriber yet.
   app.addHook("onResponse", async (req, reply) => {
     if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return;
     if (reply.statusCode >= 400 || !req.user) return;
@@ -130,7 +148,6 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
     else if (classroom) publish("mutation", [`classroom:${classroom[1]}`]);
     else if (course) publish("mutation", [`course:${course[1]}`, `teacher:${req.user.id}`]);
     else if (req.url.startsWith("/app/api/courses")) publish("mutation", [`teacher:${req.user.id}`]);
-    else publish("mutation", [`user:${req.user.id}`]);
   });
 
   await app.register(fastifyCookie, { secret: config.COOKIE_SECRET });

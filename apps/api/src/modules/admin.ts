@@ -7,6 +7,7 @@ import { z } from "zod";
 import { audit } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import { courseStaff, teacherGrants, users } from "../db/schema.js";
+import { publish } from "../events.js";
 import { syncUserRole } from "../roles.js";
 import { adminGuard } from "./guards.js";
 
@@ -75,6 +76,10 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
       subjectId: created.id,
       payload: { email },
     });
+    // The teacher list is shared by every administrator, not just the actor:
+    // the `admin` topic is what the topic grammar has for that, and it is
+    // what the deleted `onResponse` fallback never reached.
+    publish("admin", ["admin"]);
     return reply.code(201).send(created);
   });
 
@@ -100,6 +105,7 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
       subjectId: grant.id,
       payload: { email: grant.email },
     });
+    publish("admin", ["admin"]);
     return reply.code(204).send();
   });
 }

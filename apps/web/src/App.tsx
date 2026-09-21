@@ -128,7 +128,15 @@ export default function App() {
     () => localStorage.getItem(VIEW_AS_KEY) === "student",
   );
   const { setLocale } = useI18n();
-  useLiveUpdates(me.data != null);
+  // The hint stream drives a blanket `invalidateQueries()`, which is right on
+  // a teacher screen and wrong during an exam: `/take/:id` runs on a POST
+  // behind a query (`AttemptPage`), and invalidating it mid-flight cancels the
+  // in-flight refetch — the lobby then never advances to the player, however
+  // many 200s the server sends. The player and the lobby carry their own watch
+  // stream (`attempt:`/`evaluation:`), which delivers the start, the deadline,
+  // the pause and the closure as typed frames, so the attempt route needs no
+  // hints at all.
+  useLiveUpdates(me.data != null && route.view !== "attempt");
   // The account's saved language wins on load, so the choice follows the user
   // across devices (no re-persist: adopt only).
   const serverLocale = me.data?.locale ?? null;

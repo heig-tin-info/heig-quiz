@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { audit } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import { avatars, users } from "../db/schema.js";
+import { publish } from "../events.js";
 import { MePatch, type PublicConfig } from "@quiz/contracts";
 
 import { claimEnrollments } from "../modules/roster.js";
@@ -311,6 +312,11 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
       const patch = parsed.data;
       await app.db.update(users).set(patch).where(eq(users.id, req.user!.id));
       const before = req.user!;
+      // The language, the date format and the MCQ policy are read by every
+      // tab of the same account. This is the one place a hint to the actor's
+      // own topic is wanted, and it is safe: it only refreshes `GET /me`,
+      // which emits nothing in return (see the `onResponse` hook in app.ts).
+      publish("mutation", [`user:${before.id}`]);
       return {
         locale: patch.locale === undefined ? before.locale : patch.locale,
         dateFormat: patch.dateFormat === undefined ? before.dateFormat : patch.dateFormat,

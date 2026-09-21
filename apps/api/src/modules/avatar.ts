@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { audit } from "../audit.js";
 import { avatars } from "../db/schema.js";
+import { publish } from "../events.js";
 
 const ACCEPTED = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_BYTES = 1_000_000; // cropped to 256x256 client-side: ~30-80 KB in practice
@@ -45,6 +46,11 @@ export async function avatarPlugin(app: FastifyInstance) {
         subjectId: req.user!.id,
         payload: { bytes: body.length, contentType },
       });
+      // The actor's OTHER tabs show the same avatar in the shell. The generic
+      // `onResponse` fallback used to cover this; it does not any more (see
+      // `app.ts`), so the route says it itself. It only ever refreshes GETs,
+      // so it cannot feed itself.
+      publish("mutation", [`user:${req.user!.id}`]);
       return reply.code(204).send();
     },
   );
@@ -61,6 +67,7 @@ export async function avatarPlugin(app: FastifyInstance) {
         subjectType: "user",
         subjectId: req.user!.id,
       });
+      publish("mutation", [`user:${req.user!.id}`]);
       return reply.code(204).send();
     },
   );

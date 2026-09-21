@@ -13,6 +13,7 @@ import { GRACE_MS } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
 import { evaluations } from "../../db/schema.js";
+import { subscribe, type Topic } from "../../events.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
@@ -125,6 +126,40 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
     // Idempotent over HTTP too.
     const again = await post(`/app/api/evaluations/${seed.evaluationId}/attempt`, student.headers, {});
     expect(again.json().view.attempt.id).toBe(attemptId);
+  });
+
+  /**
+   * The loop of the "Start now" incident. `POST /evaluations/:id/attempt` is a
+   * READ behind a POST (deviation W5-14): the client asks and the server
+   * decides lobby or player, so the student's tab re-issues it whenever
+   * anything invalidates its queries. The generic `onResponse` hook in
+   * `app.ts` used to answer every unmatched mutation with a hint on the
+   * ACTOR'S OWN `user:<id>` topic — which is exactly the tab that asked — and
+   * the two fed each other at ~215 requests per second.
+   *
+   * No student write may hint the student. Everything a running attempt needs
+   * travels as a typed frame on `attempt:`/`evaluation:` instead.
+   */
+  it("emits no refresh hint to the student on any of their own writes", async () => {
+    const hints: { type: string; topics: Topic[] }[] = [];
+    const stop = subscribe((m) => {
+      if (m.kind === "hint") hints.push({ type: m.type, topics: m.topics });
+    });
+    try {
+      const writes: [string, unknown][] = [
+        [`/app/api/evaluations/${seed.evaluationId}/attempt`, {}],
+        [`/app/api/attempts/${attemptId}/position`, { itemId }],
+        [`/app/api/attempts/${attemptId}/events`, { kind: "reconnect" }],
+      ];
+      for (const [url, payload] of writes) {
+        const res = await post(url, student.headers, payload);
+        expect(res.statusCode, url).toBeLessThan(400);
+      }
+      expect(hints.filter((h) => h.topics.includes(`user:${student.id}`))).toEqual([]);
+      expect(hints).toEqual([]);
+    } finally {
+      stop();
+    }
   });
 
   it("keeps a student out of someone else's classroom and attempt", async () => {
