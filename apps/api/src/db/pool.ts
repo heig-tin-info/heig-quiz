@@ -173,6 +173,26 @@ export const questions = pgTable(
   ],
 );
 
+/**
+ * The tag vocabulary of a pool: one row per distinct tag, with the optional
+ * one-line description a teacher writes for it. A row is created LAZILY by
+ * `patchQuestion`/`copyQuestion` when a question receives a tag the pool has
+ * never seen, so `question_tags` stays the source of truth for usage and this
+ * table only carries the documentation.
+ */
+export const poolTags = pgTable(
+  "pool_tags",
+  {
+    poolId: uuid("pool_id")
+      .notNull()
+      .references(() => pools.id, { onDelete: "cascade" }),
+    tag: text("tag").notNull(),
+    description: text("description").notNull().default(""),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.poolId, t.tag] })],
+);
+
 export const questionTags = pgTable(
   "question_tags",
   {

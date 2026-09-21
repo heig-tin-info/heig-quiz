@@ -4,6 +4,10 @@
  * becomes a compile error on the side that diverges.
  */
 
+import { z } from "zod";
+
+import { McqPolicy } from "./evaluation.js";
+
 /** Display format for date-times; null falls back to ISO (`2026-09-01 08:00`). */
 export const DATE_FORMATS = ["iso", "eu", "uk", "us"] as const;
 export type DateFormat = (typeof DATE_FORMATS)[number];
@@ -33,7 +37,30 @@ export interface Me {
   hasUploadedAvatar: boolean;
   locale: "en" | "fr" | null;
   dateFormat: DateFormat | null;
+  /**
+   * Default MCQ scoring policy for the evaluations this user creates; null
+   * means `all_or_nothing`. Only the creation of an evaluation reads it —
+   * changing it never moves an evaluation that already exists.
+   */
+  mcqPolicy: McqPolicy | null;
 }
+
+/**
+ * `PATCH /app/api/me` — the account preferences, persisted server-side so
+ * they follow the user across devices (invariant 7: the route validates with
+ * this schema and the SPA sends what it types).
+ *
+ * Every field is optional and each one is nullable: a null is "no preference,
+ * fall back to the default", which is a value the user can set back.
+ */
+export const MePatch = z
+  .object({
+    locale: z.enum(["en", "fr"]).nullable().optional(),
+    dateFormat: z.enum(DATE_FORMATS).nullable().optional(),
+    mcqPolicy: McqPolicy.nullable().optional(),
+  })
+  .refine((b) => Object.keys(b).length > 0, { message: "Nothing to update" });
+export type MePatch = z.infer<typeof MePatch>;
 
 // --- Courses and classrooms (teacher) ---
 

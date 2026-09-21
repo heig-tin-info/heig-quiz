@@ -298,12 +298,24 @@ with a keyboard-reachable dismiss button.
   is the dense variant for a table cell or an inspection panel.
   `markdown.tsx` beside it is a different thing: trusted help text turned into
   React elements, never into HTML.
-- MarkdownField: the teacher's editor (decision D11). A textarea, a six-button
-  toolbar, `Ctrl+B` / `Ctrl+I`, Tab as two spaces, and an image pasted or
-  dropped going through `onUploadImage` and coming back as `![](asset:<id>)`.
-  Its segmented control already names the three panes — Write, Preview,
-  Source — that the later Tiptap split will need: the day it lands, "Write"
-  changes and "Source" does not, and no stored value moves.
+- RichText: the teacher's editor (decision D11, Tiptap). Markdown in, markdown
+  out; the surface renders with the student's own `.md-body`, so the field IS
+  the preview. Its toolbar ends with ONE toggle to the markdown source — a
+  textarea with the caret-level toolbar of `insert.ts`, `Ctrl+B` / `Ctrl+I`,
+  Tab as two spaces — because "Write / Source" as two named panes was the one
+  thing a teacher did not understand. An image pasted, dropped or picked goes
+  through `uploadImage` and comes back as `![](asset:<id>)`, and a drop lands
+  where it was dropped, not at the caret. `toolbar="focus"` folds the toolbar
+  INSIDE the field and shows it while the field has the caret: that is what a
+  row of a list (an mcq choice) wears, since six permanent toolbars are a wall
+  of icons. MarkdownField around it is a label, a hint and the upload adapter.
+- FormulaDialog: the one surface a formula is written on. A LaTeX box (which
+  takes the focus — experts type), a MathLive `<math-field>` with its symbol
+  palette (novices point), a live KaTeX preview of what the student will see,
+  and Inline / Display. It opens from the Σ button, from a click on a formula
+  already in the text, and by itself when `$$` on an empty line makes an empty
+  one. MathLive is loaded on first open and dressed in the tokens through
+  `markdown/formula.css`; its fonts are the KaTeX fonts the page already has.
 
 ## Voice
 

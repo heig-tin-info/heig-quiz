@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, X } from "lucide-react";
 import { useState } from "react";
 
 import type { CategoryNode, QuestionMeta, QuestionPatch } from "@quiz/contracts";
@@ -8,6 +7,7 @@ import { api, apiErrorMessage } from "../api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { Card, Field, SectionHeading, Segmented, Select, SettingRow, Switch } from "../ui";
+import { TagInput } from "./TagInput";
 
 /**
  * What a question IS, next to what it says: name, category, difficulty, tags
@@ -40,27 +40,18 @@ export function MetaPanel({
   const qc = useQueryClient();
   const toast = useToast();
   const [name, setName] = useState(meta.internalName);
-  const [tag, setTag] = useState("");
 
   const patch = useMutation({
     mutationFn: (body: QuestionPatch) =>
       api(`/app/api/questions/${meta.id}`, { method: "PATCH", body: JSON.stringify(body) }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ["question", meta.id] });
+      // Prefix match: this also refreshes `["pool", id, "tags"]`, the
+      // vocabulary the tag field suggests from, which a new tag just joined.
       await qc.invalidateQueries({ queryKey: ["pool", meta.poolId] });
     },
     onError: (error) => toast(apiErrorMessage(error, t("question.meta.saveFailed")), "error"),
   });
-
-  const addTag = () => {
-    const value = tag.trim().replace(/^#/, "");
-    if (!value || meta.tags.includes(value)) {
-      setTag("");
-      return;
-    }
-    setTag("");
-    patch.mutate({ tags: [...meta.tags, value] });
-  };
 
   return (
     <Card className="space-y-4 p-4">
@@ -107,54 +98,12 @@ export function MetaPanel({
         </div>
       </div>
 
-      <div className="space-y-1.5">
-        <span className="text-[13px] font-medium">{t("question.meta.tags")}</span>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {meta.tags.length === 0 ? <span className="text-sm text-fg-faint">—</span> : null}
-          {meta.tags.map((existing) => (
-            <span
-              key={existing}
-              className="inline-flex h-6 items-center gap-1 rounded-full bg-surface-3 pl-2.5 pr-1 text-xs font-medium text-fg-muted"
-            >
-              #{existing}
-              <button
-                type="button"
-                disabled={disabled}
-                aria-label={t("question.meta.tagRemove", { name: existing })}
-                onClick={() => patch.mutate({ tags: meta.tags.filter((x) => x !== existing) })}
-                className="rounded-full p-0.5 text-fg-faint transition-colors hover:bg-line-strong hover:text-fg"
-              >
-                <X className="size-3" />
-              </button>
-            </span>
-          ))}
-        </div>
-        <div className="flex items-end gap-2">
-          <Field
-            label={t("question.meta.tagAdd")}
-            size="sm"
-            fullWidth
-            disabled={disabled}
-            value={tag}
-            onChange={(e) => setTag(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addTag();
-              }
-            }}
-          />
-          <button
-            type="button"
-            aria-label={t("question.meta.tagAdd")}
-            disabled={disabled}
-            onClick={addTag}
-            className="mb-0.5 rounded-full p-1.5 text-fg-faint transition-colors hover:bg-surface-2 hover:text-fg"
-          >
-            <Plus className="size-4" />
-          </button>
-        </div>
-      </div>
+      <TagInput
+        poolId={meta.poolId}
+        tags={meta.tags}
+        {...(disabled ? { disabled } : {})}
+        onChange={(tags) => patch.mutate({ tags })}
+      />
 
       <SettingRow
         title={t("question.meta.shuffleable")}

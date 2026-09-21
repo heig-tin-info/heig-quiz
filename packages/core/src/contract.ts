@@ -85,6 +85,13 @@ export interface GradeContext {
   runner: RunnerService;
   /** Phase 2; undefined in MVP. */
   llm?: LlmService;
+  /**
+   * Per-type settings of the EVALUATION being graded, keyed by type id — what
+   * a config that says "inherit" defers to (an mcq's scoring policy). The
+   * core does not know their shape: each type reads and parses its own entry
+   * and falls back to its built-in default when it is absent.
+   */
+  defaults?: Readonly<Record<string, unknown>>;
 }
 
 /** The context of the second half of a runner grading: no service is reachable from there. */

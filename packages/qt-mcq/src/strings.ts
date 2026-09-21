@@ -18,20 +18,29 @@ export const mcqEditorStrings = {
   removeChoice: "Remove choice",
   /** Accessible name of the drag handle; the keyboard reorders through it too. */
   reorderChoice: "Reorder choice",
-  /**
-   * The mode is DERIVED from the key set, never chosen (docs/04 §4.4): these
-   * two sentences are how the teacher is told what they have just built.
-   */
-  modeHintSingle: "One correct answer: the student picks one.",
-  modeHintMultiple: "Several correct answers: the student ticks every one that applies.",
+  /** Enter walks to the next choice; shown in the app's shortcut strip. */
+  nextChoice: "Next choice",
   scoring: "Scoring",
-  policy: "Policy",
+  policy: "Scoring policy",
+  /** Accessible name of the "?" beside the policy label. */
+  policyHelp: "About the scoring policies",
+  /*
+   * The six values of `McqQuestionPolicy`, and one line each for what they do
+   * to a score. The order is the order of the <select>: the default first,
+   * then from the strictest to the most forgiving.
+   */
+  policyInherit: "Inherited from the evaluation",
   policyAllOrNothing: "All or nothing",
-  policyPartial: "Partial",
-  policyPenalized: "Penalized",
-  penalty: "Penalty factor",
-  penaltyHint: "Share of a wrong choice removed from the score.",
-  allowNegative: "Allow a negative score",
+  policyTrueFalse: "True/false per choice",
+  policyDiscordance: "Discordances",
+  policySymmetric: "Symmetric",
+  policyRipkey: "Ripkey",
+  policyDescInherit: "Uses the policy set on the evaluation.",
+  policyDescAllOrNothing: "The exact set of correct choices, or nothing.",
+  policyDescTrueFalse: "Each choice is a true/false item; the share answered right.",
+  policyDescDiscordance: "By distance to the key: 0 → 1, 1 → 0.5, 2 → 0.2, more → 0.",
+  policyDescSymmetric: "+1/C per correct tick, −1/W per wrong tick, floored at 0.",
+  policyDescRipkey: "The share of correct ticks, cancelled by any wrong tick.",
   maxSelections: "Maximum selections",
   maxSelectionsHint: "Empty means no limit.",
   shuffleChoices: "Shuffle the choices",

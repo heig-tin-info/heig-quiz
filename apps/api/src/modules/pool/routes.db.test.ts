@@ -495,3 +495,103 @@ describe("pool lifecycle", () => {
     expect(await server.app.db.select().from(pools).where(eq(pools.id, id))).toEqual([]);
   });
 });
+
+describe("the tag vocabulary of a pool", () => {
+  let tagPool: string;
+  let outsider: Awaited<ReturnType<TestServer["signIn"]>>;
+
+  beforeAll(async () => {
+    outsider = await server.signIn("teacher");
+    const created = await server.app.inject({
+      method: "POST",
+      url: "/app/api/pools",
+      headers: owner.headers,
+      payload: { name: "Tagged pool" },
+    });
+    tagPool = created.json().id;
+    const question = await server.app.inject({
+      method: "POST",
+      url: `/app/api/pools/${tagPool}/questions`,
+      headers: owner.headers,
+      payload: { type: "short", internalName: "tagged" },
+    });
+    await server.app.inject({
+      method: "PATCH",
+      url: `/app/api/questions/${question.json().meta.id}`,
+      headers: owner.headers,
+      payload: { tags: ["Malloc", "pointers"] },
+    });
+  });
+
+  it("lists every tag with its description and its usage count", async () => {
+    const res = await server.app.inject({
+      method: "GET",
+      url: `/app/api/pools/${tagPool}/tags`,
+      headers: owner.headers,
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([
+      { tag: "malloc", description: "", count: 1 },
+      { tag: "pointers", description: "", count: 1 },
+    ]);
+  });
+
+  it("writes the description of a tag, and the pool detail still lists plain names", async () => {
+    const res = await server.app.inject({
+      method: "PATCH",
+      url: `/app/api/pools/${tagPool}/tags/malloc`,
+      headers: owner.headers,
+      payload: { description: "Allocates memory on the heap" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      tag: "malloc",
+      description: "Allocates memory on the heap",
+      count: 1,
+    });
+
+    const detail = await server.app.inject({
+      method: "GET",
+      url: `/app/api/pools/${tagPool}`,
+      headers: owner.headers,
+    });
+    expect(detail.json().tags).toEqual(["malloc", "pointers"]);
+  });
+
+  it("refuses a description that is not a string", async () => {
+    const res = await server.app.inject({
+      method: "PATCH",
+      url: `/app/api/pools/${tagPool}/tags/malloc`,
+      headers: owner.headers,
+      payload: { description: 42 },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("validation");
+  });
+
+  it("answers 404 to a stranger, on the listing as on the description", async () => {
+    const listed = await server.app.inject({
+      method: "GET",
+      url: `/app/api/pools/${tagPool}/tags`,
+      headers: outsider.headers,
+    });
+    expect(listed.statusCode).toBe(404);
+
+    const described = await server.app.inject({
+      method: "PATCH",
+      url: `/app/api/pools/${tagPool}/tags/malloc`,
+      headers: outsider.headers,
+      payload: { description: "mine now" },
+    });
+    expect(described.statusCode).toBe(404);
+    expect(described.json()).toEqual({ error: "not_found" });
+
+    // And nothing was written behind the 404.
+    const still = await server.app.inject({
+      method: "GET",
+      url: `/app/api/pools/${tagPool}/tags`,
+      headers: owner.headers,
+    });
+    expect(still.json()[0].description).toBe("Allocates memory on the heap");
+  });
+});

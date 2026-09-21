@@ -1,16 +1,41 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
-import { courses, pools, questionTags, questionVersions, questions, users } from "../../db/schema.js";
+import {
+  courses,
+  poolTags,
+  pools,
+  questionTags,
+  questionVersions,
+  questions,
+  users,
+} from "../../db/schema.js";
 import { testDb } from "../../test/db.js";
 import { fakeShort, fakeV1Config } from "../../test/fakeType.js";
 import { loadConfig, tryLoadConfig } from "./config.js";
 import * as service from "./service.js";
+
+/**
+ * The backfill of the `pool_tags` migration, read from the shipped SQL: the
+ * test exercises the statement that really runs, not a copy of it.
+ */
+function backfillStatement(): string {
+  const file = fileURLToPath(
+    new URL("../../../drizzle/0004_goofy_george_stacy.sql", import.meta.url),
+  );
+  const statement = readFileSync(file, "utf8")
+    .split("--> statement-breakpoint")
+    .find((part) => part.includes("INSERT INTO \"pool_tags\""));
+  if (!statement) throw new Error("the pool_tags migration no longer carries its backfill");
+  return statement;
+}
 
 const search = (extra: Record<string, unknown> = {}) =>
   ({ limit: 50, ...extra }) as Parameters<typeof service.listQuestions>[2];
@@ -278,7 +303,12 @@ describe("search", () => {
   });
 
   it("lists the tags of the pool, deduplicated and sorted", async () => {
-    expect(await service.poolTags(db, searchPool)).toEqual(["c", "memory", "theory"]);
+    expect(await service.poolTagNames(db, searchPool)).toEqual(["c", "memory", "theory"]);
+    expect(await service.poolTags(db, searchPool)).toEqual([
+      { tag: "c", description: "", count: 1 },
+      { tag: "memory", description: "", count: 1 },
+      { tag: "theory", description: "", count: 1 },
+    ]);
   });
 
   it("paginates with an opaque cursor", async () => {
@@ -353,6 +383,92 @@ describe("categories and copies", () => {
     expect(rows.map((r) => r.tag).sort()).toEqual(["a", "b"]);
     await service.patchQuestion(db, await questionRow(id), { tags: [] });
     expect(await db.select().from(questionTags).where(eq(questionTags.questionId, id))).toEqual([]);
+  });
+});
+
+describe("the tag vocabulary of a pool", () => {
+  it("creates the row of a tag the pool has never seen, and keeps it when the tag is dropped", async () => {
+    const vocabulary = await seedPool();
+    const id = await seedQuestion("lazy tag", vocabulary);
+    await service.patchQuestion(db, await questionRow(id), { tags: ["Fork", "pipe"] });
+
+    const rows = await db.select().from(poolTags).where(eq(poolTags.poolId, vocabulary));
+    expect(rows.map((r) => r.tag).sort()).toEqual(["fork", "pipe"]);
+    expect(rows.every((r) => r.description === "")).toBe(true);
+
+    // The documentation of a tag outlives its last use: the row stays, the
+    // count falls to zero, and re-adding the tag finds its description again.
+    await service.describeTag(db, vocabulary, "fork", "Creates a child process");
+    await service.patchQuestion(db, await questionRow(id), { tags: ["pipe"] });
+    expect(await service.poolTags(db, vocabulary)).toEqual([
+      { tag: "fork", description: "Creates a child process", count: 0 },
+      { tag: "pipe", description: "", count: 1 },
+    ]);
+  });
+
+  it("counts the live questions of each tag, never the deleted ones", async () => {
+    const counted = await seedPool();
+    const one = await seedQuestion("counted one", counted);
+    const two = await seedQuestion("counted two", counted);
+    await service.patchQuestion(db, await questionRow(one), { tags: ["shared", "solo"] });
+    await service.patchQuestion(db, await questionRow(two), { tags: ["shared"] });
+    expect(await service.poolTags(db, counted)).toEqual([
+      { tag: "shared", description: "", count: 2 },
+      { tag: "solo", description: "", count: 1 },
+    ]);
+
+    await service.softDeleteQuestion(db, await questionRow(two));
+    expect((await service.poolTags(db, counted)).find((t) => t.tag === "shared")?.count).toBe(1);
+  });
+
+  it("normalizes the tag it documents and overwrites an existing description", async () => {
+    const documented = await seedPool();
+    const id = await seedQuestion("documented", documented);
+    await service.patchQuestion(db, await questionRow(id), { tags: ["malloc"] });
+
+    expect(await service.describeTag(db, documented, "#MALLOC", "Allocates memory")).toEqual({
+      tag: "malloc",
+      description: "Allocates memory",
+      count: 1,
+    });
+    await service.describeTag(db, documented, "malloc", "Allocates on the heap");
+    expect(await service.poolTags(db, documented)).toEqual([
+      { tag: "malloc", description: "Allocates on the heap", count: 1 },
+    ]);
+  });
+
+  it("gives a row to a tag that only exists on a copied question", async () => {
+    const source = await seedPool();
+    const target = await seedPool();
+    const id = await seedQuestion("copied tags", source);
+    await service.patchQuestion(db, await questionRow(id), { tags: ["ipc"] });
+
+    await service.copyQuestion(db, await questionRow(id), {
+      targetPoolId: target,
+      userId: ownerId,
+    });
+    expect(await service.poolTags(db, target)).toEqual([
+      { tag: "ipc", description: "", count: 1 },
+    ]);
+  });
+
+  it("backfills the pools written before the table existed, exactly as the migration does", async () => {
+    const legacy = await seedPool();
+    const id = await seedQuestion("legacy tags", legacy);
+    await service.patchQuestion(db, await questionRow(id), { tags: ["legacy"] });
+    // Back to the state of a database migrated from before `pool_tags`: the
+    // questions wear their tags and no vocabulary row exists.
+    await db.delete(poolTags).where(eq(poolTags.poolId, legacy));
+    expect(await db.select().from(poolTags).where(eq(poolTags.poolId, legacy))).toEqual([]);
+
+    await db.execute(sql.raw(backfillStatement()));
+
+    const rows = await db.select().from(poolTags).where(eq(poolTags.poolId, legacy));
+    expect(rows.map((r) => r.tag)).toEqual(["legacy"]);
+    // `ON CONFLICT DO NOTHING`: replaying the migration keeps the descriptions.
+    await service.describeTag(db, legacy, "legacy", "From the old world");
+    await db.execute(sql.raw(backfillStatement()));
+    expect((await service.poolTags(db, legacy))[0]!.description).toBe("From the old world");
   });
 });
 

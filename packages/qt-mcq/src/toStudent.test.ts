@@ -48,7 +48,10 @@ describe("toStudent", () => {
     // Every choice text is legitimately present, so the secret is not a text:
     // it is which index carries `correct`, and the truthy marker itself.
     expect(out).not.toContain("true");
-    expect(out).not.toContain("0.5");
+    // The scoring policy is a secret of its own: knowing it would tell a
+    // student whether guessing costs anything.
+    expect(out).not.toContain("discordance");
+    expect(out).not.toContain("inherit");
   });
 
   it("keeps exactly the four fields the player needs", () => {

@@ -28,12 +28,12 @@ import {
 import { BulkBar } from "./BulkBar";
 import { EMPTY_FILTERS, questionQuery, type QuestionFilters } from "./filters";
 import { FilterBar } from "./FilterBar";
-import { QuestionSidePanel } from "./QuestionSidePanel";
 import { QuestionTable, QuestionTableSkeleton } from "./QuestionTable";
 
 /**
  * The pool screen (mockup `08-pool.html`): the questions across the full
- * content width, the selected question's statement in a side panel.
+ * content width. Clicking a row opens the question; the row also carries its
+ * three actions (edit, duplicate, delete) at its end.
  *
  * The category tree is NOT here: it lives in the app sidebar, beside the
  * other navigation, and the category it selects travels in the `category`
@@ -156,7 +156,6 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const [categoryParam] = useSearchParam("category", "");
   const categoryId = categoryParam === "" ? null : categoryParam;
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
-  const [selected, setSelected] = useState<QuestionRow | null>(null);
   const [creating, setCreating] = useState<string | null>(null);
 
   // What this screen adds to the command palette while it is open
@@ -217,7 +216,6 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const remove = useMutation({
     mutationFn: (row: QuestionRow) => api(`/app/api/questions/${row.id}`, { method: "DELETE" }),
     onSuccess: async () => {
-      setSelected(null);
       await qc.invalidateQueries({ queryKey: ["pool", id] });
     },
     onError: (error) => toast(apiErrorMessage(error, t("question.deleteFailed")), "error"),
@@ -332,7 +330,6 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
           <>
             <QuestionTable
               rows={rows}
-              selectedId={selected?.id ?? null}
               checked={checked}
               onToggleCheck={toggleCheck}
               onToggleAll={() =>
@@ -340,7 +337,6 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                   rows.every((r) => prev.has(r.id)) ? new Set() : new Set(rows.map((r) => r.id)),
                 )
               }
-              onSelect={setSelected}
               onEdit={(row) => navigate({ view: "question", id: row.id })}
               onDuplicate={(row) => duplicate.mutate(row)}
               onDelete={(row) => void askDelete(row)}
@@ -362,14 +358,6 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
           </>
         )}
       </div>
-
-      {selected ? (
-        <QuestionSidePanel
-          row={selected}
-          onClose={() => setSelected(null)}
-          onEdit={() => navigate({ view: "question", id: selected.id })}
-        />
-      ) : null}
 
       {checkedIds.length > 0 ? (
         <BulkBar

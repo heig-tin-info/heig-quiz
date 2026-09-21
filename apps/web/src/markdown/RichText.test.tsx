@@ -4,6 +4,8 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { renderWithProviders } from "../test/render";
+import { resetShortcuts, useActiveShortcuts } from "../shortcuts";
+import { modKey } from "../ui";
 import { RichText } from "./RichText";
 
 /*
@@ -188,23 +190,40 @@ describe("RichText — the toolbar", () => {
     expect(onValue.mock.lastCall?.[0]).toContain("(https://heig-vd.ch)");
   });
 
-  it("asks for the LaTeX before it makes a formula, and Escape cancels", async () => {
+  it("opens the formula dialog, and Escape leaves the prompt alone", async () => {
     const onValue = vi.fn();
     renderWithProviders(<Host initial="x" onValue={onValue} />);
     await userEvent.click(screen.getByRole("button", { name: "Equation" }));
-    await userEvent.type(screen.getByLabelText("LaTeX"), "\\sqrt{{2}{Escape}");
-    expect(screen.queryByLabelText("LaTeX")).toBeNull();
+    const latex = await screen.findByLabelText("LaTeX");
+    await userEvent.type(latex, "\\sqrt{{2}");
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(screen.queryByLabelText("LaTeX")).toBeNull());
     expect(onValue).not.toHaveBeenCalled();
+  });
 
+  it("writes the formula the dialog collected", async () => {
+    const onValue = vi.fn();
+    renderWithProviders(<Host initial="x" onValue={onValue} />);
     await userEvent.click(screen.getByRole("button", { name: "Equation" }));
-    await userEvent.type(screen.getByLabelText("LaTeX"), "\\sqrt{{2}{Enter}");
+    await userEvent.type(await screen.findByLabelText("LaTeX"), "\\sqrt{{2}{Enter}");
     await waitFor(() => expect(onValue).toHaveBeenCalled());
     expect(onValue.mock.lastCall?.[0]).toContain("$\\sqrt{2}$");
   });
 
+  it("puts the formula on a line of its own when Display is picked", async () => {
+    const onValue = vi.fn();
+    renderWithProviders(<Host initial="x" onValue={onValue} />);
+    await userEvent.click(screen.getByRole("button", { name: "Equation" }));
+    await userEvent.type(await screen.findByLabelText("LaTeX"), "\\sqrt{{2}");
+    await userEvent.click(screen.getByRole("radio", { name: "Display" }));
+    await userEvent.click(screen.getByRole("button", { name: "Insert" }));
+    await waitFor(() => expect(onValue).toHaveBeenCalled());
+    expect(onValue.mock.lastCall?.[0]).toContain("$$\n\\sqrt{2}\n$$");
+  });
+
   it("is hidden when the host asks for no toolbar, and Ctrl+B still works", async () => {
     const onValue = vi.fn();
-    renderWithProviders(<Host initial="abc" toolbar={false} onValue={onValue} />);
+    renderWithProviders(<Host initial="abc" toolbar="never" onValue={onValue} />);
     expect(screen.queryByRole("toolbar")).toBeNull();
     selectAll();
     await userEvent.keyboard("{Control>}b{/Control}");
@@ -235,7 +254,7 @@ describe("RichText — inline mode, the row of a choice", () => {
   it("calls onEnter instead of splitting the paragraph", async () => {
     const onEnter = vi.fn();
     const onValue = vi.fn();
-    renderWithProviders(<Host initial="abc" inline toolbar={false} onEnter={onEnter} onValue={onValue} />);
+    renderWithProviders(<Host initial="abc" inline toolbar="never" onEnter={onEnter} onValue={onValue} />);
     surface().focus();
     await userEvent.keyboard("{Enter}");
     expect(onEnter).toHaveBeenCalledTimes(1);
@@ -244,7 +263,7 @@ describe("RichText — inline mode, the row of a choice", () => {
 
   it("gives Tab to the host, and lets it through when the host declines", async () => {
     const onTab = vi.fn(() => false);
-    renderWithProviders(<Host initial="abc" inline toolbar={false} onTab={onTab} />);
+    renderWithProviders(<Host initial="abc" inline toolbar="never" onTab={onTab} />);
     surface().focus();
     await userEvent.tab();
     expect(onTab).toHaveBeenCalledWith(false);
@@ -253,7 +272,7 @@ describe("RichText — inline mode, the row of a choice", () => {
 
   it("keeps the caret when the host handled Tab", async () => {
     const onTab = vi.fn(() => true);
-    renderWithProviders(<Host initial="abc" inline toolbar={false} onTab={onTab} />);
+    renderWithProviders(<Host initial="abc" inline toolbar="never" onTab={onTab} />);
     surface().focus();
     await userEvent.tab();
     expect(onTab).toHaveBeenCalledWith(false);
@@ -264,6 +283,94 @@ describe("RichText — inline mode, the row of a choice", () => {
     renderWithProviders(<Host initial="abc" inline />);
     expect(screen.queryByRole("button", { name: "Code block" })).toBeNull();
     expect(screen.getByRole("button", { name: /^Bold/ })).toBeInTheDocument();
+  });
+});
+
+describe("RichText — the markdown source", () => {
+  const toggle = () => screen.getByRole("button", { name: "Markdown source" });
+
+  it("swaps the surface for the very same string in a textarea, and back", async () => {
+    renderWithProviders(<Host initial="**bold** and `code`" />);
+    expect(toggle()).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(toggle());
+    const area = screen.getByRole("textbox", { name: "Prompt" });
+    expect(area.tagName).toBe("TEXTAREA");
+    expect(area).toHaveValue("**bold** and `code`");
+    expect(toggle()).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(toggle());
+    expect(screen.getByRole("textbox", { name: "Prompt" }).tagName).not.toBe("TEXTAREA");
+  });
+
+  it("carries an edit made in the source back into the rich surface", async () => {
+    renderWithProviders(<Host initial="plain" />);
+    await userEvent.click(toggle());
+    const area = screen.getByRole("textbox", { name: "Prompt" });
+    await userEvent.clear(area);
+    await userEvent.type(area, "**loud**");
+    await userEvent.click(toggle());
+    expect(screen.getByText("loud").tagName).toBe("STRONG");
+  });
+
+  it("keeps Tab as an indent in the source pane", async () => {
+    renderWithProviders(<Host initial="" />);
+    await userEvent.click(toggle());
+    const area = screen.getByRole("textbox", { name: "Prompt" }) as HTMLTextAreaElement;
+    area.focus();
+    await userEvent.keyboard("{Tab}");
+    expect(area).toHaveValue("  ");
+    expect(area).toHaveFocus();
+  });
+
+  it("is not offered on an inline field, which has no room for a second pane", () => {
+    renderWithProviders(<Host initial="abc" inline toolbar="always" />);
+    expect(screen.queryByRole("button", { name: "Markdown source" })).toBeNull();
+  });
+});
+
+describe("RichText — the toolbar of an inline field", () => {
+  it("appears only while the field has the caret", async () => {
+    renderWithProviders(<Host initial="abc" inline toolbar="focus" />);
+    expect(screen.queryByRole("toolbar")).toBeNull();
+    surface().focus();
+    await waitFor(() =>
+      expect(screen.getByRole("toolbar", { name: "Formatting" })).toBeInTheDocument(),
+    );
+    // What a row of a list gets: the marks, a formula, a link. No fence.
+    expect(screen.getByRole("button", { name: /^Bold/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Code block" })).toBeNull();
+  });
+
+  it("does not take the caret out of the field when a button is pressed", async () => {
+    renderWithProviders(<Host initial="abc" inline toolbar="focus" />);
+    surface().focus();
+    const bold = await screen.findByRole("button", { name: /^Bold/ });
+    // A default-prevented mousedown is the whole trick: the field keeps the
+    // focus, so the button formats a selection instead of losing it.
+    expect(fireEvent.mouseDown(bold)).toBe(false);
+    expect(surface()).toHaveFocus();
+  });
+});
+
+describe("RichText — what the shortcut strip shows", () => {
+  function Strip() {
+    const live = useActiveShortcuts();
+    return <ul data-testid="strip">{live.map((s) => <li key={s.keys}>{`${s.keys} ${s.label}`}</li>)}</ul>;
+  }
+
+  it("publishes the formatting keys while the field has the focus, and the host's on top", async () => {
+    resetShortcuts();
+    renderWithProviders(
+      <>
+        <Host initial="abc" inline toolbar="focus" shortcuts={[{ keys: "Tab", label: "Add a choice" }]} />
+        <Strip />
+      </>,
+    );
+    expect(screen.getByTestId("strip")).toBeEmptyDOMElement();
+    surface().focus();
+    await waitFor(() =>
+      expect(screen.getByTestId("strip")).toHaveTextContent("Tab Add a choice"),
+    );
+    expect(screen.getByTestId("strip")).toHaveTextContent(`${modKey()}+B Bold`);
   });
 });
 

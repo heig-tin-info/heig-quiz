@@ -118,6 +118,7 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
         showHiddenCaseNames: false,
         showTeacherComment: true,
       },
+      mcqPolicy: "all_or_nothing",
       opensAt: null,
       closesAt: null,
       durationS: null,

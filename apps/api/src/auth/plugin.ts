@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 import { audit } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import { avatars, users } from "../db/schema.js";
-import { isDateFormat, type DateFormat, type PublicConfig } from "@quiz/contracts";
+import { MePatch, type PublicConfig } from "@quiz/contracts";
 
 import { claimEnrollments } from "../modules/roster.js";
 import { roleForIdentity } from "../roles.js";
@@ -289,6 +289,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
         hasUploadedAvatar: Boolean(uploaded),
         locale: u.locale,
         dateFormat: u.dateFormat,
+        mcqPolicy: u.mcqPolicy,
       };
     },
   );
@@ -299,29 +300,21 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     "/app/api/me",
     { preHandler: (req, reply) => app.requireSession(req, reply) },
     async (req, reply) => {
-      const body = (req.body ?? {}) as { locale?: unknown; dateFormat?: unknown };
-      const patch: Partial<{ locale: "en" | "fr" | null; dateFormat: DateFormat | null }> = {};
-      if ("locale" in body) {
-        const locale = body.locale;
-        if (locale !== "en" && locale !== "fr" && locale !== null) {
-          return reply.code(400).send({ error: "validation", message: "Unsupported locale" });
-        }
-        patch.locale = locale;
+      // Invariant 7: the body is validated by the contract schema the SPA
+      // sends against, never by a hand-rolled chain of `in` checks.
+      const parsed = MePatch.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: "validation", message: "Unsupported preference", details: parsed.error.issues });
       }
-      if ("dateFormat" in body) {
-        const dateFormat = body.dateFormat;
-        if (dateFormat !== null && !isDateFormat(dateFormat)) {
-          return reply.code(400).send({ error: "validation", message: "Unsupported date format" });
-        }
-        patch.dateFormat = dateFormat;
-      }
-      if (Object.keys(patch).length === 0) {
-        return reply.code(400).send({ error: "validation", message: "Nothing to update" });
-      }
+      const patch = parsed.data;
       await app.db.update(users).set(patch).where(eq(users.id, req.user!.id));
+      const before = req.user!;
       return {
-        locale: patch.locale ?? req.user!.locale,
-        dateFormat: patch.dateFormat ?? req.user!.dateFormat,
+        locale: patch.locale === undefined ? before.locale : patch.locale,
+        dateFormat: patch.dateFormat === undefined ? before.dateFormat : patch.dateFormat,
+        mcqPolicy: patch.mcqPolicy === undefined ? before.mcqPolicy : patch.mcqPolicy,
       };
     },
   );

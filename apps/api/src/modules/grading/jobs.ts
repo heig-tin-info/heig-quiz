@@ -37,7 +37,7 @@ import {
   GRADING_RUNNER_QUEUE,
   type JobQueue,
 } from "../../jobs.js";
-import { byId, joinedItems } from "../evaluation/service.js";
+import { byId, gradeDefaults, joinedItems } from "../evaluation/service.js";
 import { loadConfig, typeOf } from "../pool/config.js";
 import * as events from "./events.js";
 import { pairKey, standingGradings, writeGrading, type PairKey } from "./service.js";
@@ -217,6 +217,9 @@ export async function runEvaluationGrading(
             itemPoints: item.item.points,
             now: base.now,
             runner: app.runner,
+            // The evaluation's per-type settings: what a question config
+            // that says "inherit" defers to (an mcq's scoring policy).
+            defaults: gradeDefaults(evaluation),
           },
         });
         if (outcome.kind === "written") {
@@ -442,6 +445,7 @@ export async function runRunnerGrading(
         attemptId: job.attemptId,
         itemPoints: item.item.points,
         now,
+        defaults: gradeDefaults(evaluation),
       },
       outcome,
     );

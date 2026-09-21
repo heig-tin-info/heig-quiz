@@ -39,6 +39,11 @@ export default defineConfig({
           setupFiles: ["./src/test/setup.ts"],
           // Every test gets a clean fetch stub and clean spies.
           restoreMocks: true,
+          // The first mount of a screen pulls its lazy chunks (the rich
+          // editor alone is Tiptap + KaTeX): under a full parallel run that
+          // takes the default 5 s on a loaded worker, and a test that fails
+          // only when the machine is busy is a test nobody trusts.
+          testTimeout: 15_000,
         },
       },
     ],

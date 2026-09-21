@@ -22,8 +22,9 @@ import { helpTopics, useHelp } from "./help";
 import { useI18n, useT } from "./i18n";
 import type { Route } from "./router";
 import { SidebarCategories } from "./pool/CategoryTree";
+import { shortcutCaps, useActiveShortcuts, useGlobalShortcuts } from "./shortcuts";
 import { setThemeChoice, useResolvedTheme, useThemeChoice } from "./theme";
-import { Button, cx, IconButton, useLayer, Z, type IconType } from "./ui";
+import { Button, cx, IconButton, Kbd, modKey, useLayer, Z, type IconType } from "./ui";
 
 /**
  * Application frame: a 240 px sidebar on desktop (navigation, the teacher's
@@ -197,6 +198,48 @@ function Nav({
   );
 }
 
+/**
+ * How many lines the strip shows. The account row under it is the bottom of
+ * the frame and must never be pushed off — the navigation above already
+ * scrolls — and a hint longer than a glance is a manual, not a hint.
+ */
+const SHORTCUT_STRIP_CAP = 10;
+
+/**
+ * The shortcuts that are live on this page, above the account row: the
+ * global Ctrl+K first, then what the mounted screen registered and what the
+ * focused field added on top (`shortcuts.tsx`).
+ *
+ * It is the one place the palette is still taught since the sidebar lost its
+ * search row, so it is shown even when Ctrl+K is the only line. Desktop
+ * only: the mobile drawer opens on a device with no keyboard to hold any of
+ * this.
+ */
+function ShortcutStrip() {
+  const t = useT();
+  const shortcuts = useActiveShortcuts().slice(0, SHORTCUT_STRIP_CAP);
+  if (shortcuts.length === 0) return null;
+  return (
+    <div className="border-t border-line px-3 py-2.5">
+      <p className="mb-1.5 px-0.5 text-[11px] font-semibold uppercase tracking-wider text-fg-faint">
+        {t("shortcuts.title")}
+      </p>
+      <ul className="space-y-1">
+        {shortcuts.map((shortcut, i) => (
+          <li key={`${shortcut.keys}-${shortcut.label}-${i}`} className="flex items-center gap-2">
+            <span className="flex shrink-0 items-center gap-0.5">
+              {shortcutCaps(shortcut.keys).map((cap, j) => (
+                <Kbd key={`${cap}-${j}`}>{cap}</Kbd>
+              ))}
+            </span>
+            <span className="min-w-0 flex-1 truncate text-xs text-fg-muted">{shortcut.label}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function Shell({
   me,
   route,
@@ -238,6 +281,9 @@ export function Shell({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+  // The palette is the one shortcut that works on every page, so the frame
+  // registers it and the strip below shows it first.
+  useGlobalShortcuts([{ keys: `${modKey()}+K`, label: t("palette.title") }]);
 
   // The same query `Nav` runs, deduplicated by react-query on the shared key:
   // the palette lists the classrooms the sidebar lists, at no extra request.
@@ -297,6 +343,7 @@ export function Shell({
             navigation. The phone keeps its own trigger in the top bar, where
             there is no keyboard to hold a shortcut. */}
         <Nav me={me} route={route} navigate={navigate} teacherUi={teacherUi} />
+        <ShortcutStrip />
         <div className="border-t border-line p-2">{userMenu(false)}</div>
       </aside>
 

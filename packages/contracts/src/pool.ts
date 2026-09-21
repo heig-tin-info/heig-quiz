@@ -302,3 +302,30 @@ export const PoolDetail = z.object({
   questionCount: z.number().int(),
 });
 export type PoolDetail = z.infer<typeof PoolDetail>;
+
+// --- Tags ----------------------------------------------------------------
+
+/**
+ * The tag vocabulary of a pool (`GET /pools/:id/tags`): the tag, the one-line
+ * description a teacher wrote for it and how many live questions wear it.
+ * `PoolDetail.tags` stays a plain list of names — the filter bar needs
+ * nothing more, and only the tag editor pays for the counts.
+ */
+export const PoolTag = z.object({
+  tag: z.string(),
+  description: z.string(),
+  count: z.number().int(),
+});
+export type PoolTag = z.infer<typeof PoolTag>;
+
+export const TagPatch = z.object({
+  description: z.string().trim().max(200),
+});
+export type TagPatch = z.infer<typeof TagPatch>;
+
+/** `:tag` of `PATCH /pools/:id/tags/:tag`, normalized like a stored tag. */
+export const TagParam = z.object({
+  id: z.uuid(),
+  tag: z.string().trim().min(1).max(64),
+});
+export type TagParam = z.infer<typeof TagParam>;

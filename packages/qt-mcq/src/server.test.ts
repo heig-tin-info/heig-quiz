@@ -7,13 +7,14 @@ import { ConfigMigrationError } from "@quiz/core/server";
 import { describe, expect, it } from "vitest";
 import { fromCanonical, toCanonical } from "./canonical.js";
 import { multipleConfig, SECRET_CONFIG } from "./fixtures.js";
-import { McqConfigSchema, emptyMcqDraft } from "./schema.js";
+import { MCQ_CONFIG_VERSION, McqConfigSchema, emptyMcqDraft } from "./schema.js";
 import { choiceOrder, mcqServer } from "./server.js";
 
 describe("the contract", () => {
   it("is registered under its own id and version", () => {
     expect(mcqServer.id).toBe("mcq");
-    expect(mcqServer.configVersion).toBe(1);
+    expect(mcqServer.configVersion).toBe(MCQ_CONFIG_VERSION);
+    expect(MCQ_CONFIG_VERSION).toBe(2);
   });
 
   it("emits an EMPTY draft, stored as it stands (D16)", () => {
@@ -21,9 +22,9 @@ describe("the contract", () => {
     expect(mcqServer.configSchema.safeParse(mcqServer.emptyDraft()).success).toBe(false);
   });
 
-  it("migrates a v1 config by identity", () => {
+  it("returns a config already at the current version as it stands (D16)", () => {
     const config = emptyMcqDraft();
-    expect(mcqServer.migrate(config, 1)).toBe(config);
+    expect(mcqServer.migrate(config, MCQ_CONFIG_VERSION)).toBe(config);
   });
 
   it("refuses a version it never emitted", () => {
@@ -54,14 +55,24 @@ describe("the contract", () => {
 
 describe("the canonical mapping", () => {
   it("round-trips a full config", () => {
-    const config = multipleConfig({ maxSelections: 3, allowNegative: true, shuffleChoices: false });
+    const config = multipleConfig({
+      policy: "discordance",
+      maxSelections: 3,
+      shuffleChoices: false,
+    });
+    expect(fromCanonical(toCanonical(config))).toEqual(config);
+  });
+
+  it("round-trips a question that inherits its policy", () => {
+    const config = multipleConfig({ policy: "inherit" });
+    expect(toCanonical(config)).not.toHaveProperty("policy");
     expect(fromCanonical(toCanonical(config))).toEqual(config);
   });
 
   it("omits the defaults, so the YAML reads like the spec example", () => {
     const canonical = toCanonical(emptyMcqDraft());
     expect(canonical).toEqual({
-      configVersion: 1,
+      configVersion: MCQ_CONFIG_VERSION,
       prompt: "",
       choices: [{ text: "", correct: true }, { text: "" }],
     });
@@ -99,6 +110,56 @@ describe("the shuffle", () => {
       ),
     );
     expect(orders.size).toBeGreaterThan(1);
+  });
+});
+
+describe("the v1 -> v2 migration", () => {
+  /** A v1 config, exactly as the column stored it before the bump. */
+  const v1 = (over: Record<string, unknown> = {}) => ({
+    configVersion: 1,
+    prompt: "Which declarations are valid?",
+    choices: [
+      { text: "a", correct: true },
+      { text: "b", correct: true },
+      { text: "c", correct: false },
+    ],
+    mode: "multiple",
+    policy: "all_or_nothing",
+    penalty: 1,
+    allowNegative: false,
+    shuffleChoices: true,
+    ...over,
+  });
+
+  const migrated = (over: Record<string, unknown> = {}) => mcqServer.migrate(v1(over), 1);
+
+  it("maps partial and penalized onto symmetric, the closest of the five", () => {
+    expect(migrated({ policy: "partial" }).policy).toBe("symmetric");
+    expect(migrated({ policy: "penalized", penalty: 0.5 }).policy).toBe("symmetric");
+  });
+
+  it("leaves all_or_nothing alone", () => {
+    expect(migrated().policy).toBe("all_or_nothing");
+  });
+
+  it("drops penalty and allowNegative, and bumps the version", () => {
+    const config = migrated({ policy: "penalized", penalty: 0.25, allowNegative: true });
+    expect(config).not.toHaveProperty("penalty");
+    expect(config).not.toHaveProperty("allowNegative");
+    expect(config.configVersion).toBe(MCQ_CONFIG_VERSION);
+  });
+
+  it("keeps everything else, and the result parses", () => {
+    const config = migrated({ policy: "partial", maxSelections: 2 });
+    expect(config.prompt).toBe("Which declarations are valid?");
+    expect(config.choices).toHaveLength(3);
+    expect(config.mode).toBe("multiple");
+    expect(McqConfigSchema.safeParse(config).success).toBe(true);
+  });
+
+  it("is total: a row with an unreadable policy still comes out valid", () => {
+    expect(migrated({ policy: "whatever" }).policy).toBe("all_or_nothing");
+    expect((mcqServer.migrate({}, 1) as { policy: string }).policy).toBe("all_or_nothing");
   });
 });
 

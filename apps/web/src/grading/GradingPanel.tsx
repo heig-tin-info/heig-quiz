@@ -18,6 +18,7 @@ import { useT } from "../i18n";
 import { useToast } from "../notify";
 import type { Route } from "../router";
 import { useScreenCommands } from "../screenCommands";
+import { useShortcuts } from "../shortcuts";
 import { typeLabel } from "../questionTypes";
 import {
   Badge,
@@ -282,6 +283,14 @@ export function GradingPanel({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [move, selected, selectedEntry, validate]);
+
+  // The same four in the sidebar strip, while this screen is mounted.
+  useShortcuts([
+    { keys: "←", label: t("shortcuts.prevEntry") },
+    { keys: "→", label: t("shortcuts.nextEntry") },
+    { keys: "V", label: t("grading.validate") },
+    { keys: "O", label: t("grading.override") },
+  ]);
 
   // --- Palette commands of this screen ----------------------------------
 

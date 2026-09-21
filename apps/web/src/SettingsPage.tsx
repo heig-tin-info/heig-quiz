@@ -5,7 +5,13 @@ import { BellRing, GraduationCap, School, ShieldCheck, SlidersHorizontal } from 
 import { AvatarEditor } from "./AvatarEditor";
 import { api, apiErrorMessage } from "./api";
 import { useI18n, LOCALES } from "./i18n";
-import { DATE_FORMATS, type DateFormat, type Me, type NoticeKind } from "@quiz/contracts";
+import {
+  DATE_FORMATS,
+  McqPolicy,
+  type DateFormat,
+  type Me,
+  type NoticeKind,
+} from "@quiz/contracts";
 
 import { NOTICE_KINDS, notifyPrefs, setNotifyPref } from "./notify";
 import { setThemeChoice, useThemeChoice } from "./theme";
@@ -25,7 +31,50 @@ import {
   Tip,
 } from "./ui";
 
-/** Language, appearance and date format: three rows, one card. */
+/**
+ * How a multiple-answer MCQ is scored, by default, in the evaluations this
+ * teacher creates (docs/04 §4.4).
+ *
+ * It is a SEED and says so: an evaluation copies it once, at creation, and
+ * then owns its own. Changing it here never moves a quiz that exists, which
+ * is the one thing a teacher needs to be sure of before touching it. A
+ * student creates no evaluation, so the row is not on their settings page.
+ */
+function McqPolicyRow({ me }: { me: Me }) {
+  const { t } = useI18n();
+  const qc = useQueryClient();
+  const save = useMutation({
+    mutationFn: (mcqPolicy: McqPolicy) =>
+      api("/app/api/me", { method: "PATCH", body: JSON.stringify({ mcqPolicy }) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["me"] }),
+  });
+  // A teacher who never opened this page has no preference: the default is
+  // the one nobody has to be told about.
+  const current = me.mcqPolicy ?? "all_or_nothing";
+  return (
+    <SettingRow
+      title={t("mcq.policy.title")}
+      desc={t(`mcq.policy.desc.${current}` as Parameters<typeof t>[0])}
+      help="mcq-policies"
+    >
+      <Select
+        value={current}
+        disabled={save.isPending}
+        onChange={(e) => save.mutate(e.target.value as McqPolicy)}
+        width="w-52"
+        aria-label={t("mcq.policy.title")}
+      >
+        {McqPolicy.options.map((policy) => (
+          <option key={policy} value={policy}>
+            {t(`mcq.policy.${policy}` as Parameters<typeof t>[0])}
+          </option>
+        ))}
+      </Select>
+    </SettingRow>
+  );
+}
+
+/** Language, appearance, date format — and, for a teacher, MCQ scoring. */
 function PreferencesCard({ me }: { me: Me }) {
   const { t, locale, setLocale } = useI18n();
   const qc = useQueryClient();
@@ -82,6 +131,7 @@ function PreferencesCard({ me }: { me: Me }) {
             ))}
           </Select>
         </SettingRow>
+        {me.role === "student" ? null : <McqPolicyRow me={me} />}
       </Card>
       {saveDate.isError ? (
         <p className="text-[13px] text-danger">{apiErrorMessage(saveDate.error, t("error.save"))}</p>

@@ -29,6 +29,8 @@
  */
 import { InputRule } from "@tiptap/core";
 import type { AnyExtension } from "@tiptap/core";
+import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
+import type { Transaction } from "@tiptap/pm/state";
 import { Markdown } from "@tiptap/markdown";
 import StarterKit from "@tiptap/starter-kit";
 import Image from "@tiptap/extension-image";
@@ -117,30 +119,97 @@ const InlineMathTyping = InlineMath.extend({
   },
 });
 
+/**
+ * Replaces the paragraph the range sits in with `node`, when the range covers
+ * the whole of it and the parent accepts a block there. Returns false when it
+ * does not, so a caller can leave the text alone rather than drop a block node
+ * inside a textblock.
+ */
+function replaceWholeParagraph(
+  tr: Transaction,
+  doc: ProseMirrorNode,
+  from: number,
+  to: number,
+  node: ProseMirrorNode,
+): boolean {
+  const $from = doc.resolve(from);
+  if ($from.depth === 0 || !$from.parent.isTextblock) return false;
+  if (from !== $from.start() || to !== $from.end()) return false;
+  if (!$from.node(-1).canReplaceWith($from.index(-1), $from.indexAfter(-1), node.type)) return false;
+  tr.replaceWith($from.before(), $from.after(), node);
+  return true;
+}
+
+/** The two shapes a line that is nothing but dollars can have while typing. */
+const EMPTY_FENCE = /^\$\$$/;
+const FULL_FENCE = /^\$\$([^$]+)\$\$$/;
+
 const BlockMathTyping = BlockMath.extend({
   addInputRules() {
     return [
       new InputRule({
-        find: /^\$\$([^$]+)\$\$$/,
+        find: FULL_FENCE,
         handler: ({ state, range, match }) => {
           const latex = (match[1] ?? "").trim();
           if (!latex) return;
           const { tr } = state;
-          const $from = state.doc.resolve(range.from);
           const node = this.type.create({ latex });
           // Replace the host paragraph when the rule consumed the whole of it;
           // otherwise a block node would land inside a textblock.
-          const whole =
-            $from.depth > 0 &&
-            $from.parent.isTextblock &&
-            range.from === $from.start() &&
-            range.to === $from.end() &&
-            $from.node(-1).canReplaceWith($from.index(-1), $from.indexAfter(-1), this.type);
-          if (whole) tr.replaceWith($from.before(), $from.after(), node);
-          else tr.replaceWith(range.from, range.to, node);
+          if (!replaceWholeParagraph(tr, state.doc, range.from, range.to, node))
+            tr.replaceWith(range.from, range.to, node);
+        },
+      }),
+      /*
+       * `$$` ALONE on a line, the moment the second dollar is typed. This is
+       * how a teacher actually writes a display formula — `$$`, Enter, the
+       * latex, Enter, `$$` — and with only the rule above they got three
+       * paragraphs of dollars and no formula, because the closing fence was
+       * never on the same line as the opening one.
+       *
+       * The node is created EMPTY and `RichText` opens the formula dialog on
+       * it: there is nothing to type into a rendered formula, so the editor
+       * hands over to the one surface that can edit it.
+       */
+      new InputRule({
+        find: EMPTY_FENCE,
+        handler: ({ state, range }) => {
+          replaceWholeParagraph(
+            state.tr,
+            state.doc,
+            range.from,
+            range.to,
+            this.type.create({ latex: "" }),
+          );
         },
       }),
     ];
+  },
+
+  /**
+   * The same conversion on Enter, for the `$$` that the input rule could not
+   * see: one pasted, one typed before the caret came back to the line, one
+   * left over from an older version of the prompt. An inline field never
+   * reaches this — `RichText` answers Enter first, from `editorProps`, which
+   * ProseMirror consults before any plugin keymap.
+   */
+  addKeyboardShortcuts() {
+    return {
+      Enter: ({ editor }) => {
+        const { state } = editor;
+        const { $from, empty } = state.selection;
+        if (!empty || $from.depth === 0 || !$from.parent.isTextblock) return false;
+        const text = $from.parent.textContent;
+        const full = FULL_FENCE.exec(text);
+        const latex = full ? (full[1] ?? "").trim() : EMPTY_FENCE.test(text) ? "" : null;
+        if (latex === null) return false;
+        const { tr } = state;
+        if (!replaceWholeParagraph(tr, state.doc, $from.start(), $from.end(), this.type.create({ latex })))
+          return false;
+        editor.view.dispatch(tr);
+        return true;
+      },
+    };
   },
 });
 

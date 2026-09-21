@@ -10,11 +10,12 @@ import { MarkdownField } from "./MarkdownField";
  * The field is controlled, so every test drives it through a tiny stateful
  * host: what is asserted is what the parent would have been told to store.
  *
- * There are two panes now. "Write" is the Tiptap surface, which has its own
- * suite in RichText.test.tsx; what is tested HERE is the field around it —
- * the pane switch and the Source pane, whose textarea and caret-level toolbar
- * are exactly what they were before Tiptap landed. So most tests below open
- * Source first, and `area()` is the textarea of that pane.
+ * `MarkdownField` is a label, a hint and an upload adapter around `RichText`
+ * now — both surfaces live in the editor itself (RichText.test.tsx has the
+ * toggle's own suite). What is tested HERE is that the whole thing still adds
+ * up through the field a teacher actually meets: the same caret-level toolbar
+ * of `insert.ts` under the same textarea, reached from the same field. So
+ * most tests below open the source first, and `area()` is its textarea.
  */
 
 /*
@@ -54,9 +55,14 @@ function Host({
 
 const area = () => screen.getByRole("textbox", { name: "Prompt" }) as HTMLTextAreaElement;
 
-/** Switches to the Source pane, where the textarea and insert.ts live. */
+/**
+ * Switches to the markdown source, where the textarea and `insert.ts` live.
+ * One toggle at the end of the toolbar now, not a segmented control naming
+ * two panes: "Write / Source" was the one thing the teacher did not
+ * understand in the whole field.
+ */
 async function openSource() {
-  await userEvent.click(screen.getByRole("radio", { name: "Source" }));
+  await userEvent.click(screen.getByRole("button", { name: "Markdown source" }));
 }
 
 /** Puts the caret (or a selection) where a test needs it. */
@@ -186,13 +192,13 @@ describe("MarkdownField — Source pane images", () => {
 });
 
 describe("MarkdownField — panes", () => {
-  it("offers two panes, Write first; there is no Preview any more", () => {
+  it("names no pane at all: one toggle, where the formatting buttons are", () => {
     renderWithProviders(<Host initial="x" />);
-    expect(screen.getByRole("radio", { name: "Write" })).toBeChecked();
-    expect(screen.getByRole("radio", { name: "Source" })).toBeInTheDocument();
-    // The Write pane IS the preview: a third pane showing the same thing is a
-    // button nobody presses.
+    expect(screen.queryByRole("radio", { name: "Write" })).toBeNull();
+    expect(screen.queryByRole("radio", { name: "Source" })).toBeNull();
     expect(screen.queryByRole("radio", { name: "Preview" })).toBeNull();
+    const toggle = screen.getByRole("button", { name: "Markdown source" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
   });
 
   it("Write renders the markdown as nodes, not as characters", () => {
@@ -216,19 +222,26 @@ describe("MarkdownField — panes", () => {
     expect(screen.getByRole("toolbar", { name: "Formatting" })).toBeInTheDocument();
   });
 
+  it("keeps the label and the hint whichever surface shows", async () => {
+    renderWithProviders(<Host initial="x" />);
+    expect(screen.getByText("Bold, italic, code and $math$ as you type; Source shows the markdown underneath.")).toBeInTheDocument();
+    await openSource();
+    expect(screen.getByRole("textbox", { name: "Prompt" }).tagName).toBe("TEXTAREA");
+  });
+
   it("carries an edit made in Source back into Write", async () => {
     renderWithProviders(<Host initial="plain" />);
     await openSource();
     await userEvent.clear(area());
     await userEvent.type(area(), "**loud**");
-    await userEvent.click(screen.getByRole("radio", { name: "Write" }));
+    await openSource();
     expect(screen.getByText("loud").tagName).toBe("STRONG");
   });
 
   it("shows the French labels under the French locale (N-I18N-01)", () => {
     renderWithProviders(<Host initial="" />, { locale: "fr" });
-    expect(screen.getByRole("radio", { name: "Écrire" })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "Source" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Source markdown" })).toBeInTheDocument();
+    expect(screen.getByRole("toolbar", { name: "Mise en forme" })).toBeInTheDocument();
   });
 });
 

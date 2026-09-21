@@ -235,6 +235,11 @@ const en = {
   "palette.group.action": "Actions",
   "palette.group.help": "Help",
 
+  // --- Shortcut strip (shortcuts.tsx, Shell.tsx) ---
+  "shortcuts.title": "Shortcuts",
+  "shortcuts.prevEntry": "Previous entry",
+  "shortcuts.nextEntry": "Next entry",
+
   "help.title": "Help",
 
   "dur.day": "{n} day",
@@ -272,8 +277,7 @@ const en = {
   // --- Markdown field (markdown/) ---
   "md.label": "Markdown",
   "md.toolbar": "Formatting",
-  "md.mode.write": "Write",
-  "md.mode.source": "Source",
+  "md.source": "Markdown source",
   "md.bold": "Bold",
   "md.italic": "Italic",
   "md.code": "Code",
@@ -283,6 +287,17 @@ const en = {
   "md.link": "Link",
   "md.url": "Address",
   "md.latex": "LaTeX",
+  "md.formula.title": "Formula",
+  "md.formula.hint": "Type the LaTeX, or build it in the visual field. Both show the same formula.",
+  "md.formula.placement": "Placement",
+  "md.formula.inline": "Inline",
+  "md.formula.display": "Display",
+  "md.formula.visual": "Visual editor",
+  "md.formula.keyboard": "Symbols",
+  "md.formula.loading": "Loading the formula editor…",
+  "md.formula.preview": "Preview",
+  "md.formula.empty": "Nothing to preview yet.",
+  "md.formula.insert": "Insert",
   "md.uploading": "Uploading…",
   "md.hint": "Bold, italic, code and $math$ as you type; Source shows the markdown underneath.",
   "md.hint.withImages": "Bold, italic, code and $math$ as you type. Paste or drop an image to upload it.",
@@ -362,23 +377,16 @@ const en = {
   "pool.draftOnly": "draft",
   "pool.draftChanges": "unpublished changes",
   "pool.deleted": "deleted",
-  "pool.rowActions": "Actions for {name}",
   "pool.select": "Select {name}",
   "pool.selectAll": "Select every question shown",
-  "pool.open": "Open the editor",
-  "pool.duplicate": "Duplicate",
+  "pool.editRow": "Edit {name}",
+  "pool.duplicateRow": "Duplicate {name}",
+  "pool.deleteRow": "Delete {name}",
   "pool.empty.title": "No question yet",
   "pool.empty.body":
     "Write the first question of this pool; you choose its type as you create it.",
   "pool.emptyFiltered.title": "No question matches",
   "pool.emptyFiltered.body": "Clear a filter, or search for something else.",
-  "pool.panel.title": "Question preview",
-  "pool.panel.statement": "Statement",
-  "pool.panel.none": "Select a question to preview it here.",
-  "pool.panel.close": "Close the preview",
-  "pool.panel.versions": "Versions",
-  "pool.panel.noVersion": "Never published.",
-  "pool.panel.edit": "Edit the question",
   "pool.bulk.selected": "{n} selected",
   "pool.bulk.move": "Move to a category",
   "pool.bulk.tag": "Add a tag",
@@ -427,9 +435,20 @@ const en = {
     "Choices and options are drawn in a different order per student.",
   "question.meta.pool": "Pool",
   "question.meta.saveFailed": "This property could not be saved.",
+  "question.tag.placeholder": "Add a tag…",
+  "question.tag.suggestions": "Tags of this pool",
+  "question.tag.create": "Create “{name}”",
+  "question.tag.count": "{n} questions",
+  "question.tag.count.one": "{n} question",
+  "question.tag.none": "This pool has no tag yet.",
+  "question.tag.noMatch": "No tag matches.",
+  "question.tag.loadFailed": "The tags of this pool could not be loaded.",
+  "question.tag.describe": "Add a description",
+  "question.tag.describeOne": "Describe the tag {name}",
+  "question.tag.describeInput": "Description of the tag {name}",
+  "question.tag.describePlaceholder": "What this tag means, in one line",
+  "question.tag.describeFailed": "This description could not be saved.",
   "question.explanation": "Explanation",
-  "question.explanationHint":
-    "Shown to the student after grading, when the evaluation allows it.",
   "question.duplicate": "Duplicate",
   "question.duplicated": "Copy created.",
   "question.delete": "Delete question",
@@ -469,9 +488,36 @@ const en = {
   "question.preview": "Student preview",
   "question.previewToggle": "Show the student preview",
   "question.previewFailed": "The preview could not be built.",
-  "question.shortcuts":
-    "Ctrl+S saves, Ctrl+Enter tries the question, Ctrl+Shift+P publishes, Ctrl+Shift+M shows the student preview.",
   "question.uploadFailed": "The image could not be uploaded.",
+
+  // --- MCQ scoring policies (docs/04 §4.4) ---
+  //
+  // Three screens offer the same five policies and must word them the same
+  // way: the teacher's preferences, an evaluation's advanced options and the
+  // MCQ editor. The editor reads them through the `editorStrings.mcq`
+  // mapping of `questionTypes.tsx`, which is why they live here and not
+  // under `qt.mcq.e`. The formulas themselves are the help topic
+  // `mcq-policies`.
+  "mcq.policy.title": "Multiple-answer scoring",
+  "mcq.policy.settingsHint":
+    "The default for the evaluations you create. Each evaluation keeps its own.",
+  "mcq.policy.inherit": "Inherited from the evaluation",
+  "mcq.policy.all_or_nothing": "All or nothing",
+  "mcq.policy.true_false": "True/false per choice",
+  "mcq.policy.discordance": "Discordances",
+  "mcq.policy.symmetric": "Symmetric",
+  "mcq.policy.ripkey": "Ripkey",
+  "mcq.policy.desc.inherit": "This question is scored the way the evaluation that plays it is.",
+  "mcq.policy.desc.all_or_nothing":
+    "Full marks for the exact set of correct choices, nothing otherwise.",
+  "mcq.policy.desc.true_false":
+    "Every choice counts as its own true/false question, ticked or left alone.",
+  "mcq.policy.desc.discordance":
+    "Full marks with no mistake, half with one, a fifth with two, nothing beyond.",
+  "mcq.policy.desc.symmetric":
+    "A wrong tick costs what a right one earns: ticking at random is worth nothing.",
+  "mcq.policy.desc.ripkey":
+    "The share of correct choices ticked, cancelled by a single wrong tick.",
 
   // --- Question types (questionTypes.ts) ---
   "qt.mcq.label": "Multiple choice",
@@ -495,17 +541,10 @@ const en = {
   "qt.mcq.e.addChoice": "Add a choice",
   "qt.mcq.e.removeChoice": "Remove choice",
   "qt.mcq.e.reorderChoice": "Reorder choice",
-  "qt.mcq.e.modeHintSingle": "One correct answer: the student picks one.",
-  "qt.mcq.e.modeHintMultiple":
-    "Several correct answers: the student ticks every one that applies.",
+  "qt.mcq.e.nextChoice": "Next choice",
   "qt.mcq.e.scoring": "Scoring",
-  "qt.mcq.e.policy": "Policy",
-  "qt.mcq.e.policyAllOrNothing": "All or nothing",
-  "qt.mcq.e.policyPartial": "Partial",
-  "qt.mcq.e.policyPenalized": "Penalized",
-  "qt.mcq.e.penalty": "Penalty factor",
-  "qt.mcq.e.penaltyHint": "Share of a wrong choice removed from the score.",
-  "qt.mcq.e.allowNegative": "Allow a negative score",
+  "qt.mcq.e.policy": "Scoring policy",
+  "qt.mcq.e.policyHelp": "About the scoring policies",
   "qt.mcq.e.maxSelections": "Maximum selections",
   "qt.mcq.e.maxSelectionsHint": "Empty means no limit.",
   "qt.mcq.e.shuffleChoices": "Shuffle the choices",
@@ -717,7 +756,8 @@ const en = {
   // --- Schema messages of the question types (question/issues.ts) ---
   "issue.mcq.no_correct_choice": "Tick at least one correct choice.",
   "issue.mcq.single_needs_one": "A single-answer question has exactly one correct choice.",
-  "issue.mcq.single_policy": "A single-answer question is scored all or nothing.",
+  "issue.mcq.max_below_correct":
+    "The maximum number of selections is below the number of correct choices.",
   "issue.cloze.no_blank": "Write at least one blank, between {{ and }}.",
   "issue.cloze.too_many_blanks": "Too many blanks in this text.",
   "issue.short.invalid_pattern": "This regular expression cannot be compiled.",
@@ -1540,6 +1580,11 @@ const fr: Record<keyof Dict, string> = {
   "palette.group.action": "Actions",
   "palette.group.help": "Aide",
 
+  // --- Shortcut strip (shortcuts.tsx, Shell.tsx) ---
+  "shortcuts.title": "Raccourcis",
+  "shortcuts.prevEntry": "Entrée précédente",
+  "shortcuts.nextEntry": "Entrée suivante",
+
   "help.title": "Aide",
 
   "dur.day": "{n} jour",
@@ -1577,8 +1622,7 @@ const fr: Record<keyof Dict, string> = {
   // --- Markdown field (markdown/) ---
   "md.label": "Markdown",
   "md.toolbar": "Mise en forme",
-  "md.mode.write": "Écrire",
-  "md.mode.source": "Source",
+  "md.source": "Source markdown",
   "md.bold": "Gras",
   "md.italic": "Italique",
   "md.code": "Code",
@@ -1588,6 +1632,17 @@ const fr: Record<keyof Dict, string> = {
   "md.link": "Lien",
   "md.url": "Adresse",
   "md.latex": "LaTeX",
+  "md.formula.title": "Formule",
+  "md.formula.hint": "Saisissez le LaTeX, ou construisez la formule dans le champ visuel. Les deux montrent la même chose.",
+  "md.formula.placement": "Emplacement",
+  "md.formula.inline": "Dans le texte",
+  "md.formula.display": "Bloc",
+  "md.formula.visual": "Éditeur visuel",
+  "md.formula.keyboard": "Symboles",
+  "md.formula.loading": "Chargement de l'éditeur de formules…",
+  "md.formula.preview": "Aperçu",
+  "md.formula.empty": "Rien à prévisualiser pour l'instant.",
+  "md.formula.insert": "Insérer",
   "md.uploading": "Envoi…",
   "md.hint": "Gras, italique, code et $maths$ au fil de la frappe ; Source montre le markdown sous-jacent.",
   "md.hint.withImages": "Gras, italique, code et $maths$ au fil de la frappe. Collez ou déposez une image pour l'envoyer.",
@@ -1668,23 +1723,16 @@ const fr: Record<keyof Dict, string> = {
   "pool.draftOnly": "brouillon",
   "pool.draftChanges": "modifications non publiées",
   "pool.deleted": "supprimée",
-  "pool.rowActions": "Actions sur {name}",
   "pool.select": "Sélectionner {name}",
   "pool.selectAll": "Sélectionner toutes les questions affichées",
-  "pool.open": "Ouvrir l'éditeur",
-  "pool.duplicate": "Dupliquer",
+  "pool.editRow": "Modifier {name}",
+  "pool.duplicateRow": "Dupliquer {name}",
+  "pool.deleteRow": "Supprimer {name}",
   "pool.empty.title": "Aucune question",
   "pool.empty.body":
     "Écrivez la première question de cette banque ; son type se choisit à la création.",
   "pool.emptyFiltered.title": "Aucune question ne correspond",
   "pool.emptyFiltered.body": "Retirez un filtre, ou cherchez autre chose.",
-  "pool.panel.title": "Aperçu de la question",
-  "pool.panel.statement": "Énoncé",
-  "pool.panel.none": "Sélectionnez une question pour l'afficher ici.",
-  "pool.panel.close": "Fermer l'aperçu",
-  "pool.panel.versions": "Versions",
-  "pool.panel.noVersion": "Jamais publiée.",
-  "pool.panel.edit": "Modifier la question",
   "pool.bulk.selected": "{n} sélectionnées",
   "pool.bulk.move": "Déplacer",
   "pool.bulk.tag": "Ajouter un tag",
@@ -1734,9 +1782,20 @@ const fr: Record<keyof Dict, string> = {
     "Les choix et les options sont tirés dans un ordre différent par étudiant.",
   "question.meta.pool": "Banque",
   "question.meta.saveFailed": "Cette propriété n'a pas pu être enregistrée.",
+  "question.tag.placeholder": "Ajouter un tag…",
+  "question.tag.suggestions": "Tags de cette banque",
+  "question.tag.create": "Créer « {name} »",
+  "question.tag.count": "{n} questions",
+  "question.tag.count.one": "{n} question",
+  "question.tag.none": "Cette banque n'a encore aucun tag.",
+  "question.tag.noMatch": "Aucun tag ne correspond.",
+  "question.tag.loadFailed": "Les tags de cette banque n'ont pas pu être chargés.",
+  "question.tag.describe": "Ajouter une description",
+  "question.tag.describeOne": "Décrire le tag {name}",
+  "question.tag.describeInput": "Description du tag {name}",
+  "question.tag.describePlaceholder": "Ce que ce tag signifie, en une ligne",
+  "question.tag.describeFailed": "Cette description n'a pas pu être enregistrée.",
   "question.explanation": "Explication",
-  "question.explanationHint":
-    "Montrée à l'étudiant après la correction, si l'évaluation l'autorise.",
   "question.duplicate": "Dupliquer",
   "question.duplicated": "Copie créée.",
   "question.delete": "Supprimer la question",
@@ -1777,9 +1836,29 @@ const fr: Record<keyof Dict, string> = {
   "question.preview": "Aperçu étudiant",
   "question.previewToggle": "Afficher l'aperçu étudiant",
   "question.previewFailed": "L'aperçu n'a pas pu être construit.",
-  "question.shortcuts":
-    "Ctrl+S enregistre, Ctrl+Entrée essaie la question, Ctrl+Shift+P publie, Ctrl+Shift+M affiche l'aperçu étudiant.",
   "question.uploadFailed": "L'image n'a pas pu être envoyée.",
+
+  // --- Politiques de notation des QCM (docs/04 §4.4) ---
+  "mcq.policy.title": "Notation des réponses multiples",
+  "mcq.policy.settingsHint":
+    "La valeur par défaut des évaluations que vous créez. Chacune garde la sienne.",
+  "mcq.policy.inherit": "Héritée de l'évaluation",
+  "mcq.policy.all_or_nothing": "Tout ou rien",
+  "mcq.policy.true_false": "Vrai-faux par proposition",
+  "mcq.policy.discordance": "Discordances",
+  "mcq.policy.symmetric": "Symétrique",
+  "mcq.policy.ripkey": "Ripkey",
+  "mcq.policy.desc.inherit": "Cette question se note comme l'évaluation qui la pose.",
+  "mcq.policy.desc.all_or_nothing":
+    "Tous les points pour l'ensemble exact des choix corrects, rien sinon.",
+  "mcq.policy.desc.true_false":
+    "Chaque proposition compte comme un vrai-faux à part entière, cochée ou laissée.",
+  "mcq.policy.desc.discordance":
+    "Tous les points sans erreur, la moitié avec une, un cinquième avec deux, rien au-delà.",
+  "mcq.policy.desc.symmetric":
+    "Une croix fausse coûte ce qu'une croix juste rapporte : cocher au hasard ne vaut rien.",
+  "mcq.policy.desc.ripkey":
+    "La part des choix corrects cochés, annulée par une seule croix fausse.",
 
   // --- Question types (questionTypes.ts) ---
   "qt.mcq.label": "Choix multiple",
@@ -1804,17 +1883,10 @@ const fr: Record<keyof Dict, string> = {
   "qt.mcq.e.addChoice": "Ajouter un choix",
   "qt.mcq.e.removeChoice": "Retirer le choix",
   "qt.mcq.e.reorderChoice": "Réordonner le choix",
-  "qt.mcq.e.modeHintSingle": "Une seule réponse correcte : l'étudiant en choisit une.",
-  "qt.mcq.e.modeHintMultiple":
-    "Plusieurs réponses correctes : l'étudiant coche toutes celles qui conviennent.",
+  "qt.mcq.e.nextChoice": "Choix suivant",
   "qt.mcq.e.scoring": "Notation",
-  "qt.mcq.e.policy": "Politique",
-  "qt.mcq.e.policyAllOrNothing": "Tout ou rien",
-  "qt.mcq.e.policyPartial": "Partiel",
-  "qt.mcq.e.policyPenalized": "Pénalisé",
-  "qt.mcq.e.penalty": "Facteur de pénalité",
-  "qt.mcq.e.penaltyHint": "Part d'un choix faux retirée du score.",
-  "qt.mcq.e.allowNegative": "Autoriser un score négatif",
+  "qt.mcq.e.policy": "Politique de notation",
+  "qt.mcq.e.policyHelp": "À propos des politiques de notation",
   "qt.mcq.e.maxSelections": "Sélections maximum",
   "qt.mcq.e.maxSelectionsHint": "Vide : pas de limite.",
   "qt.mcq.e.shuffleChoices": "Mélanger les choix",
@@ -2029,7 +2101,8 @@ const fr: Record<keyof Dict, string> = {
   // --- Schema messages of the question types (question/issues.ts) ---
   "issue.mcq.no_correct_choice": "Cochez au moins un choix correct.",
   "issue.mcq.single_needs_one": "Une question à réponse unique a exactement un choix correct.",
-  "issue.mcq.single_policy": "Une question à réponse unique se note en tout ou rien.",
+  "issue.mcq.max_below_correct":
+    "Le nombre maximum de sélections est inférieur au nombre de choix corrects.",
   "issue.cloze.no_blank": "Écrivez au moins un trou, entre {{ et }}.",
   "issue.cloze.too_many_blanks": "Trop de trous dans ce texte.",
   "issue.short.invalid_pattern": "Cette expression régulière ne compile pas.",

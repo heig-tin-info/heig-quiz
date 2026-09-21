@@ -58,6 +58,17 @@ export const evaluations = pgTable(
     settings: jsonb("settings").notNull(),
     gradingScale: jsonb("grading_scale").notNull(),
     feedbackPolicy: jsonb("feedback_policy").notNull(),
+    /**
+     * How a multiple-answer MCQ of this evaluation is scored, for every
+     * question that says `inherit` (docs/04 §4.4). Seeded from the creator's
+     * preference (`users.mcq_policy`) and then owned by the evaluation: the
+     * grading pass hands it to the type through `GradeContext.defaults`.
+     */
+    mcqPolicy: text("mcq_policy", {
+      enum: ["all_or_nothing", "true_false", "discordance", "symmetric", "ripkey"],
+    })
+      .notNull()
+      .default("all_or_nothing"),
     opensAt: timestamp("opens_at", { withTimezone: true }),
     closesAt: timestamp("closes_at", { withTimezone: true }),
     durationS: integer("duration_s"),

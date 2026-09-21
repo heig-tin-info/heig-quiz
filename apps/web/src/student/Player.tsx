@@ -30,7 +30,8 @@ import { currentItem, isLocked, neighbour, type PlayerItem, type PlayerState } f
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { Badge, Button, Card, type Segment } from "../ui";
+import { useShortcuts } from "../shortcuts";
+import { Badge, Button, Card, modKey, type Segment } from "../ui";
 import { ClosedScreen } from "./ClosedScreen";
 import { OfflineBanner } from "./OfflineBanner";
 import { PausedOverlay } from "./PausedOverlay";
@@ -125,6 +126,15 @@ export function Player({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [dispatch, toggleDone, submitting]);
+
+  // The same three, for the sidebar strip. The zen player runs outside the
+  // Shell and therefore shows no strip of its own; registering them anyway
+  // costs nothing and keeps the day the frame comes back one line of work.
+  useShortcuts([
+    { keys: "Alt+←", label: t("player.command.prev") },
+    { keys: "Alt+→", label: t("player.command.next") },
+    { keys: `${modKey()}+Enter`, label: t("player.markDone") },
+  ]);
 
   if (closed !== null) {
     return (

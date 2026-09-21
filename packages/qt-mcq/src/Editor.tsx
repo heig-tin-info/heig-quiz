@@ -17,7 +17,7 @@
  *    drag handle, and that handle is a BUTTON, so the keyboard reorders
  *    through the very same affordance (focus it, Space, arrows, Space).
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   closestCenter,
   DndContext,
@@ -44,12 +44,19 @@ import type {
   StringOverrides,
 } from "@quiz/core/client";
 import { resolveStrings } from "@quiz/core/client";
-import { MCQ_MAX_CHOICES, MCQ_MIN_CHOICES, type McqChoice, type McqConfig } from "./schema.js";
+import {
+  MCQ_MAX_CHOICES,
+  MCQ_MIN_CHOICES,
+  type McqChoice,
+  type McqConfig,
+  type McqQuestionPolicy,
+} from "./schema.js";
 import { mcqEditorStrings, type McqEditorStringKey } from "./strings.js";
 import {
   buttonClass,
   choiceLetter,
   cx,
+  gripClass,
   GripIcon,
   helpClass,
   iconButtonClass,
@@ -59,7 +66,8 @@ import {
   labelClass,
   rootIssues,
   sectionClass,
-  Segmented,
+  selectClass,
+  Tip,
   TrashIcon,
 } from "./ui.js";
 
@@ -71,6 +79,8 @@ export type McqEditorProps = Omit<EditorProps<McqConfig>, "uploadAsset"> & {
   strings?: StringOverrides<McqEditorStringKey>;
   /** The host's sanitised markdown view; plain text when absent. */
   renderMarkdown?: MarkdownRenderer;
+  /** The host's contextual help; without it the "?" beside a label is not drawn. */
+  renderHelp?: EditorProps<McqConfig>["renderHelp"];
 };
 
 type Strings = Readonly<Record<McqEditorStringKey, string>>;
@@ -78,10 +88,61 @@ type Strings = Readonly<Record<McqEditorStringKey, string>>;
 /** The DOM id of one choice's editing surface, so a sibling can focus it. */
 const choiceId = (index: number) => `mcq-choice-${index}`;
 
-/** Focuses a choice, whether it is a rich surface or the plain input fallback. */
-function focusChoice(index: number) {
-  document.getElementById(choiceId(index))?.focus();
+/**
+ * Focuses a choice, whether it is a rich surface or the plain input fallback.
+ *
+ * With RETRIES, because the rich editor is lazy twice over: the host loads its
+ * chunk on demand, and Tiptap then builds its ProseMirror view in an effect of
+ * its own. A choice added by Tab or by Enter therefore has no editing surface
+ * at all on the frame the list grew — which is exactly what the teacher hit:
+ * the row appeared and the caret stayed behind.
+ *
+ * And the retry does not stop at the first `focus()`: under React's strict
+ * mode the editor is built, thrown away and built again, so the surface that
+ * took the caret can be destroyed a frame later and the focus fall back to the
+ * body. The loop therefore keeps asking until the SAME element still has the
+ * focus one frame on. Twenty frames is a third of a second, after which the
+ * surface is simply not coming.
+ */
+function focusChoice(
+  index: number,
+  framesLeft = 20,
+  held = 0,
+  origin: Element | null = document.activeElement,
+) {
+  const el = document.getElementById(choiceId(index));
+  const active = document.activeElement;
+  if (el !== null && active === el) {
+    // Focused, and still focused a frame later: the surface is the final one.
+    if (held >= 1) return;
+    if (framesLeft > 0 && typeof requestAnimationFrame === "function") {
+      requestAnimationFrame(() => focusChoice(index, framesLeft - 1, held + 1, origin));
+    }
+    return;
+  }
+  // Somebody else has the caret now — the teacher pressed a handle, a
+  // checkbox, another row — so the row that was asked for has lost its claim.
+  // Without this the loop would go on stealing the focus for a third of a
+  // second after the teacher moved on.
+  if (active !== null && active !== document.body && active !== origin) return;
+  el?.focus();
+  if (framesLeft <= 0 || typeof requestAnimationFrame !== "function") return;
+  requestAnimationFrame(() => focusChoice(index, framesLeft - 1, 0, origin));
 }
+
+/** The policies a question can carry, in the order the select offers them. */
+const POLICY_OPTIONS: {
+  value: McqQuestionPolicy;
+  label: McqEditorStringKey;
+  desc: McqEditorStringKey;
+}[] = [
+  { value: "inherit", label: "policyInherit", desc: "policyDescInherit" },
+  { value: "all_or_nothing", label: "policyAllOrNothing", desc: "policyDescAllOrNothing" },
+  { value: "true_false", label: "policyTrueFalse", desc: "policyDescTrueFalse" },
+  { value: "discordance", label: "policyDiscordance", desc: "policyDescDiscordance" },
+  { value: "symmetric", label: "policySymmetric", desc: "policyDescSymmetric" },
+  { value: "ripkey", label: "policyRipkey", desc: "policyDescRipkey" },
+];
 
 export function McqEditor({
   config,
@@ -90,6 +151,7 @@ export function McqEditor({
   issues = [],
   strings,
   renderMarkdown,
+  renderHelp,
   RichText,
   uploadAsset,
 }: McqEditorProps) {
@@ -225,6 +287,7 @@ export function McqEditor({
                   disabled={disabled === true}
                   removable={config.choices.length > MCQ_MIN_CHOICES}
                   {...(RichText === undefined ? {} : { RichText })}
+                  {...(uploadAsset === undefined ? {} : { uploadAsset })}
                   onText={(text) =>
                     setChoices(config.choices.map((c, i) => (i === index ? { ...c, text } : c)))
                   }
@@ -260,15 +323,6 @@ export function McqEditor({
           </SortableContext>
         </DndContext>
 
-        {/*
-         * What the student will see, in one line, derived from the boxes just
-         * ticked. It replaces the mode radio group: the fact is already on the
-         * screen, it only needed saying.
-         */}
-        <p className={helpClass} data-testid="mcq-mode-hint">
-          {multiple ? s.modeHintMultiple : s.modeHintSingle}
-        </p>
-
         <IssueList issues={issuesAt(issues, "choices")} />
         <div>
           <button
@@ -288,61 +342,42 @@ export function McqEditor({
       <section className={sectionClass}>
         <h3 className={labelClass}>{s.scoring}</h3>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <span id="mcq-policy-label" className={labelClass}>
-            {s.policy}
-          </span>
-          {/*
-           * Three options, always visible: a segmented control shows what the
-           * alternatives ARE, where a <select> hides two of the three behind a
-           * click. In `single` mode the policy is not a choice at all (the
-           * schema refines it to all or nothing), so the control is disabled
-           * rather than removed — the teacher sees why it cannot be touched.
-           */}
-          <Segmented
-            name="mcq-policy"
-            value={config.policy}
-            disabled={disabled || !multiple}
-            onChange={(policy) => patch({ policy })}
-            options={[
-              { value: "all_or_nothing", label: s.policyAllOrNothing },
-              { value: "partial", label: s.policyPartial },
-              { value: "penalized", label: s.policyPenalized },
-            ]}
-          />
-        </div>
-
-        {config.policy === "penalized" ? (
-          <>
-            <label className={labelClass} htmlFor="mcq-penalty">
-              {s.penalty}
-            </label>
-            <input
-              id="mcq-penalty"
-              type="number"
-              min={0}
-              max={1}
-              step={0.1}
-              className={cx(inputClass, "w-28 tabular-nums")}
-              value={config.penalty}
+        {/*
+         * The policy, and only in `multiple` mode: with one key there is
+         * nothing to be partial about, the schema refines it to all or
+         * nothing, and a control that can hold exactly one value is a sentence
+         * pretending to be a question. A <select> and no longer a segmented
+         * control — six options is a paragraph of chips, and five of them are
+         * formulas a teacher reads once and picks from a list.
+         */}
+        {multiple ? (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <label className={labelClass} htmlFor="mcq-policy">
+                {s.policy}
+              </label>
+              {renderHelp ? renderHelp("mcq-policies") : null}
+            </div>
+            <select
+              id="mcq-policy"
+              className={cx(selectClass, "w-full max-w-80")}
+              value={config.policy}
               disabled={disabled}
-              onChange={(e) => patch({ penalty: Number(e.target.value) })}
-            />
-            <p className={helpClass}>{s.penaltyHint}</p>
-          </>
-        ) : null}
-
-        {config.policy !== "all_or_nothing" ? (
-          <label className="inline-flex items-center gap-1.5 text-sm text-fg-muted">
-            <input
-              type="checkbox"
-              className="size-4 accent-accent"
-              checked={config.allowNegative}
-              disabled={disabled}
-              onChange={(e) => patch({ allowNegative: e.target.checked })}
-            />
-            {s.allowNegative}
-          </label>
+              onChange={(e) => patch({ policy: e.target.value as McqQuestionPolicy })}
+            >
+              {POLICY_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {s[o.label]}
+                </option>
+              ))}
+            </select>
+            {/* What the one chosen policy does, in one line: a legend of six
+                lines is a table nobody reads, and the help "?" holds the long
+                form. */}
+            <p className={helpClass} data-testid="mcq-policy-desc">
+              {s[(POLICY_OPTIONS.find((o) => o.value === config.policy) ?? POLICY_OPTIONS[0]!).desc]}
+            </p>
+          </div>
         ) : null}
 
         {multiple ? (
@@ -366,6 +401,9 @@ export function McqEditor({
               }}
             />
             <p className={helpClass}>{s.maxSelectionsHint}</p>
+            {/* A cap below the number of correct choices makes the full mark
+                unreachable; the schema refuses it and says so here. */}
+            <IssueList issues={issuesAt(issues, "maxSelections")} />
           </>
         ) : null}
 
@@ -399,6 +437,7 @@ function ChoiceRow({
   disabled,
   removable,
   RichText,
+  uploadAsset,
   onText,
   onCorrect,
   onRemove,
@@ -411,6 +450,8 @@ function ChoiceRow({
   disabled: boolean;
   removable: boolean;
   RichText?: RichTextComponent;
+  /** A choice holds a figure as often as a statement does (a circuit, a plot). */
+  uploadAsset?: EditorProps<McqConfig>["uploadAsset"];
   onText: (text: string) => void;
   onCorrect: (correct: boolean) => void;
   onRemove: () => void;
@@ -429,26 +470,33 @@ function ChoiceRow({
       ref={setNodeRef}
       style={style}
       className={cx(
-        "flex items-center gap-2 rounded-field",
+        "group/choice flex items-start gap-2 rounded-field",
         isDragging && "relative z-10 bg-surface ring-1 ring-line-strong",
       )}
     >
-      <button
-        type="button"
-        className={cx(iconButtonClass, "cursor-grab active:cursor-grabbing")}
-        aria-label={`${s.reorderChoice} ${letter}`}
-        disabled={disabled}
-        {...attributes}
-        {...listeners}
-      >
-        <GripIcon />
-      </button>
+      {/*
+       * The handle IS the letter cell: the grip and the "B" are one target, so
+       * a pointer aiming at the letter of the row it wants to move grabs it
+       * instead of missing by four pixels. The tooltip names the gesture; the
+       * accessible name is what the keyboard sensor announces.
+       */}
+      <Tip label={`${s.reorderChoice} ${letter}`}>
+        <button
+          type="button"
+          className={cx(gripClass, "mt-0.75 w-auto gap-0.5 pl-0.5 pr-1")}
+          aria-label={`${s.reorderChoice} ${letter}`}
+          disabled={disabled}
+          {...attributes}
+          {...listeners}
+        >
+          <GripIcon />
+          <span aria-hidden className="w-4 text-center text-[13px] font-medium">
+            {letter}
+          </span>
+        </button>
+      </Tip>
 
-      <span className="w-4 shrink-0 text-center text-[13px] font-medium text-fg-faint">
-        {letter}
-      </span>
-
-      <label className="inline-flex shrink-0 items-center gap-1.5 text-[13px] text-fg-muted">
+      <label className="mt-1.5 inline-flex shrink-0 items-center gap-1.5 text-[13px] text-fg-muted">
         <input
           type="checkbox"
           className="size-4 accent-accent"
@@ -463,7 +511,10 @@ function ChoiceRow({
       {RichText ? (
         <RichText
           inline
-          toolbar={false}
+          // The toolbar of a choice appears INSIDE the field while it has the
+          // caret: six rows each carrying a permanent one is a wall of icons,
+          // and a row with no affordance at all is what the teacher met.
+          toolbar="focus"
           id={choiceId(index)}
           aria-label={`${s.choiceText} ${letter}`}
           value={choice.text}
@@ -471,6 +522,13 @@ function ChoiceRow({
           disabled={disabled}
           onEnter={onEnter}
           onTab={onTab}
+          {...(uploadAsset === undefined ? {} : { uploadImage: uploadAsset })}
+          // What the app's shortcut strip shows while the caret is in a
+          // choice, on top of the formatting keys the field registers itself.
+          shortcuts={[
+            { keys: "Tab", label: s.addChoice },
+            { keys: "Enter", label: s.nextChoice },
+          ]}
           className="min-w-0 flex-1"
         />
       ) : (
@@ -495,7 +553,7 @@ function ChoiceRow({
 
       <button
         type="button"
-        className={cx(iconButtonClass, "hover:bg-danger-soft hover:text-danger")}
+        className={cx(iconButtonClass, "mt-0.75 hover:bg-danger-soft hover:text-danger")}
         aria-label={`${s.removeChoice} ${letter}`}
         disabled={disabled || !removable}
         onClick={onRemove}

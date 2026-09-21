@@ -50,8 +50,11 @@ import {
   describeBlank,
   histogram,
   matchBlank,
+  mcqFraction,
   parseCloze,
   splitTemplate,
+  truncateSelection,
+  type McqScorePolicy,
 } from "@quiz/domain";
 import type {
   AdminTeacher,
@@ -348,6 +351,7 @@ let me: Me | null = {
   hasUploadedAvatar: false,
   locale: null,
   dateFormat: null,
+  mcqPolicy: null,
 };
 
 // --- Views ---
@@ -716,13 +720,12 @@ const mcqConfig = (
   choices: [string, boolean][],
   over: Record<string, unknown> = {},
 ) => ({
-  configVersion: 1,
+  configVersion: 2,
   prompt,
   choices: choices.map(([text, correct]) => ({ text, correct })),
   mode: "single",
-  policy: "all_or_nothing",
-  penalty: 1,
-  allowNegative: false,
+  // The default: the evaluation that plays the question decides.
+  policy: "inherit",
   shuffleChoices: true,
   ...over,
 });
@@ -1122,6 +1125,26 @@ const categoryTree = (poolId: string): TreeNode[] => {
 const poolTags = (poolId: string) =>
   [...new Set(liveQuestions(poolId).flatMap((q) => q.tags))].sort();
 
+/**
+ * The descriptions a teacher wrote in this session, keyed `poolId\u0000tag`.
+ * A few are pre-written: the tag field is about a documented vocabulary, and
+ * an empty column would show none of it.
+ */
+const tagDescriptions = new Map<string, string>([
+  ["p1\u0000pointeurs", "Adresses, déréférencement, arithmétique de pointeurs"],
+  ["p1\u0000memoire", "malloc, free et la durée de vie des objets"],
+  ["p1\u0000securite", "Débordements, entrées non validées, comportements indéfinis"],
+  ["p1\u0000tableaux", "Tableaux, indices et leur relation aux pointeurs"],
+]);
+
+/** `GET /pools/:id/tags`: the vocabulary of the pool, with its usage counts. */
+const poolTagDetails = (poolId: string) =>
+  poolTags(poolId).map((tag) => ({
+    tag,
+    description: tagDescriptions.get(`${poolId}\u0000${tag}`) ?? "",
+    count: liveQuestions(poolId).filter((q) => q.tags.includes(tag)).length,
+  }));
+
 const questionRow = (q: MockQuestion) => ({
   id: q.id,
   type: q.type,
@@ -1277,30 +1300,53 @@ interface CodeCaseLike {
  * `runner_unavailable` a machine without a container engine answers
  * (decision D14).
  */
-function tryAnswer(q: MockQuestion, config: Record<string, unknown>, answer: unknown): unknown {
+/**
+ * The applied MCQ policy (docs/04 §4.4): the question's own, or the
+ * evaluation's when it says `inherit`, or `all_or_nothing` when there is no
+ * evaluation at all — which is what the teacher's Try panel is.
+ */
+function mcqPolicyOf(
+  config: Record<string, unknown>,
+  evaluationPolicy: McqScorePolicy | null,
+): McqScorePolicy {
+  if (config.mode === "single") return "all_or_nothing";
+  const own = config.policy;
+  if (typeof own === "string" && own !== "inherit") return own as McqScorePolicy;
+  return evaluationPolicy ?? "all_or_nothing";
+}
+
+function tryAnswer(
+  q: MockQuestion,
+  config: Record<string, unknown>,
+  answer: unknown,
+  evaluationPolicy: McqScorePolicy | null = null,
+): unknown {
   if (q.type === "code") return { status: "runner_unavailable", reason: "not_configured" };
   if (q.type === "mcq") {
     const choices = (config.choices ?? []) as { text: string; correct: boolean }[];
     const correct = choices.flatMap((c, i) => (c.correct ? [i] : []));
-    const selected = ((answer as { selected?: number[] } | null)?.selected ?? []).slice().sort();
-    const hits = selected.filter((i) => correct.includes(i)).length;
-    const wrong = selected.filter((i) => !correct.includes(i)).length;
-    const exact = hits === correct.length && wrong === 0;
-    const fraction = config.policy === "partial" ? Math.max(0, (hits - wrong) / correct.length) : exact ? 1 : 0;
+    // The five formulas come from `@quiz/domain`, never reimplemented here:
+    // the mock must score exactly what the server would.
+    const policy = mcqPolicyOf(config, evaluationPolicy);
+    const { selected, truncated } = truncateSelection(
+      (answer as { selected?: number[] } | null)?.selected ?? [],
+      (config.maxSelections as number | undefined) ?? null,
+    );
+    const score = mcqFraction({ correct, selected, choiceCount: choices.length, policy });
     return {
       status: "graded",
-      points: Math.round(fraction * 100) / 100,
+      points: Math.round(score.fraction * 100) / 100,
       maxPoints: 1,
       details: {
-        policy: config.policy,
+        policy,
         correct,
         selected,
-        c: hits,
-        w: wrong,
-        C: correct.length,
-        W: choices.length - correct.length,
-        fraction,
-        truncated: false,
+        c: score.c,
+        w: score.w,
+        C: score.C,
+        W: score.W,
+        fraction: score.fraction,
+        truncated,
       },
       solution: { correct },
     };
@@ -1390,7 +1436,18 @@ on("DELETE", "/app/api/pools/:id", (m) => {
   if (i >= 0) pools.splice(i, 1);
   return undefined;
 });
-on("GET", "/app/api/pools/:id/tags", (m) => poolTags(poolOr404(m.groups!.id!).id));
+on("GET", "/app/api/pools/:id/tags", (m) => poolTagDetails(poolOr404(m.groups!.id!).id));
+on("PATCH", "/app/api/pools/:id/tags/:tag", (m, body) => {
+  const pool = poolOr404(m.groups!.id!);
+  const tag = decodeURIComponent(m.groups!.tag!).toLowerCase();
+  const description = String(body.description ?? "");
+  tagDescriptions.set(`${pool.id}\u0000${tag}`, description);
+  return {
+    tag,
+    description,
+    count: liveQuestions(pool.id).filter((q) => q.tags.includes(tag)).length,
+  };
+});
 
 on("POST", "/app/api/pools/:id/categories", (m, body) => {
   const pool = poolOr404(m.groups!.id!);
@@ -1892,6 +1949,7 @@ interface MockEvaluation {
   settings: Record<string, unknown>;
   gradingScale: Record<string, unknown>;
   feedbackPolicy: Record<string, unknown>;
+  mcqPolicy: McqScorePolicy;
   opensAt: string | null;
   closesAt: string | null;
   durationS: number | null;
@@ -2018,6 +2076,7 @@ function makeEvaluation(
       showHiddenCaseNames: true,
       showTeacherComment: true,
     },
+    mcqPolicy: "all_or_nothing",
     opensAt: null,
     closesAt: null,
     durationS: 45 * 60,
@@ -2144,6 +2203,7 @@ const toEvaluation = (e: MockEvaluation) => ({
   settings: e.settings,
   gradingScale: e.gradingScale,
   feedbackPolicy: e.feedbackPolicy,
+  mcqPolicy: e.mcqPolicy,
   opensAt: e.opensAt,
   closesAt: e.closesAt,
   durationS: e.durationS,
@@ -2305,7 +2365,11 @@ on("POST", "/app/api/classrooms/:id/evaluations", (m, body) => {
     String(body.title),
     "draft",
     0,
-    { mode: (body.mode as MockEvaluation["mode"]) ?? "exam" },
+    {
+      mode: (body.mode as MockEvaluation["mode"]) ?? "exam",
+      // Seeded from the creator's preference, exactly like `createEvaluation`.
+      mcqPolicy: me?.mcqPolicy ?? "all_or_nothing",
+    },
   );
   evaluations.push(e);
   return toEvaluation(e);
@@ -2323,6 +2387,7 @@ on("PATCH", "/app/api/evaluations/:id", (m, body) => {
     }
   }
   if (body.gradingScale) e.gradingScale = body.gradingScale as Record<string, unknown>;
+  if (body.mcqPolicy) e.mcqPolicy = body.mcqPolicy as McqScorePolicy;
   if ("opensAt" in body) e.opensAt = body.opensAt as string | null;
   if ("closesAt" in body) e.closesAt = body.closesAt as string | null;
   if ("durationS" in body) e.durationS = body.durationS as number | null;
@@ -3051,7 +3116,10 @@ function buildGradingWorld(
         points = halfPoints(built.fraction * item.points);
         details = built.details;
       } else {
-        const graded = tryAnswer(q, config, answer) as { points: number; details: unknown };
+        const graded = tryAnswer(q, config, answer, evaluation.mcqPolicy) as {
+          points: number;
+          details: unknown;
+        };
         points = halfPoints(graded.points * item.points);
         details = graded.details;
       }
@@ -3184,7 +3252,8 @@ function gradingEntry(e: MockGradingWorld, attempt: MockAttempt, item: MockEvalI
   const solution =
     q.type === "code"
       ? mockCodeDetails(config, 1).solution
-      : (tryAnswer(q, config, answer) as { solution?: unknown }).solution ?? null;
+      : (tryAnswer(q, config, answer, e.evaluation.mcqPolicy) as { solution?: unknown }).solution ??
+        null;
   return {
     answerId: answer === null ? null : `${key}-ans`,
     attemptId: attempt.id,
@@ -3570,7 +3639,7 @@ on("GET", "/app/api/attempts/:id/feedback", (m) => {
       const solution =
         q.type === "code"
           ? mockCodeDetails(config, 1).solution
-          : (tryAnswer(q, config, answer) as { solution?: unknown }).solution ?? null;
+          : (tryAnswer(q, config, answer, e.evaluation.mcqPolicy) as { solution?: unknown }).solution ?? null;
       return {
         itemId: item.id,
         position: item.position,

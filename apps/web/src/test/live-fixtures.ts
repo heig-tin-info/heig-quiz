@@ -132,6 +132,7 @@ export function makeEvaluationDetail(overrides: Partial<EvaluationDetail> = {}):
         showHiddenCaseNames: true,
         showTeacherComment: true,
       },
+      mcqPolicy: "all_or_nothing",
       opensAt: null,
       closesAt: null,
       durationS: 45 * 60,

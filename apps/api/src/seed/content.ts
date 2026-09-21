@@ -135,7 +135,7 @@ export const C_POOL: PoolSpec = {
         "Un pointeur automatique contient ce qui traînait sur la pile : le déréférencer " +
         "est un comportement indéfini, pas un plantage garanti.",
       config: {
-        configVersion: 1,
+        configVersion: 2,
         prompt: "Que vaut un pointeur non initialisé déclaré à l'intérieur d'une fonction ?",
         mode: "single",
         policy: "all_or_nothing",
@@ -161,7 +161,7 @@ export const C_POOL: PoolSpec = {
         "Un paramètre de type tableau est ajusté en pointeur : `int t[10]` devient `int *t`. " +
         "`sizeof` mesure donc un pointeur, soit 8 octets sur une machine 64 bits.",
       config: {
-        configVersion: 1,
+        configVersion: 2,
         prompt:
           "```c\nvoid f(int t[10]) {\n    printf(\"%zu\\n\", sizeof t);\n}\n```\n\n" +
           "Qu'affiche cet appel sur une machine 64 bits ?",
@@ -186,11 +186,11 @@ export const C_POOL: PoolSpec = {
         "`x` vaut `0b110`. `x >> 2` vaut 1, `x & 1` vaut 0 donc `!(x & 1)` vaut 1, " +
         "et `6 % 5` vaut 1. En revanche `x & 3` vaut 2 et `x ^ 6` vaut 0.",
       config: {
-        configVersion: 1,
+        configVersion: 2,
         prompt:
           "Soit `unsigned x = 6;`. Cochez **toutes** les expressions qui valent `1`.",
         mode: "multiple",
-        policy: "partial",
+        policy: "true_false",
         shuffleChoices: true,
         choices: [
           { text: "`x >> 2`", correct: true },
@@ -402,7 +402,7 @@ export const ELECTRONICS_POOL: PoolSpec = {
       tags: ["loi d'ohm", "régime continu"],
       explanation: "U = R · I = 2200 Ω × 0,005 A = 11 V.",
       config: {
-        configVersion: 1,
+        configVersion: 2,
         prompt:
           "Une résistance de 2,2 kΩ est traversée par un courant de 5 mA. " +
           "Quelle tension mesure-t-on à ses bornes ?",
@@ -442,7 +442,7 @@ export const ELECTRONICS_POOL: PoolSpec = {
       tags: ["diviseur de tension", "régime continu"],
       explanation: "U_sortie = 12 V × 1k / (1k + 2k) = 4 V, à vide.",
       config: {
-        configVersion: 1,
+        configVersion: 2,
         prompt:
           "Un pont diviseur alimenté sous 12 V est formé de R1 = 2 kΩ (côté source) et " +
           "R2 = 1 kΩ (côté masse). Quelle tension lit-on aux bornes de R2, à vide ?",

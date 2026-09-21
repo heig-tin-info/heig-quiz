@@ -29,6 +29,20 @@
       "when": 1789903370790,
       "tag": "0003_grading",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789980538153,
+      "tag": "0004_goofy_george_stacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789981227115,
+      "tag": "0005_strange_master_chief",
+      "breakpoints": true
     }
   ]
 }

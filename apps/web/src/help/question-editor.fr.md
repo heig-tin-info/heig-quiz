@@ -18,12 +18,32 @@ publication qui réclame ce qui manque.
   pouvez la consulter, la restaurer dans le brouillon, ou la déprécier en
   indiquant pourquoi.
 
+## Les tags
+
+Le champ des tags propose le vocabulaire déjà utilisé dans la banque, avec le
+nombre de questions portant chaque tag et la description en une ligne de ce
+qu'il désigne. Choisissez-en un plutôt que de taper un synonyme : deux
+orthographes de la même idée coupent la banque en deux. Un mot que personne
+n'a encore employé est proposé comme **Créer « … »**, et la description vous
+est demandée dans la foulée — c'est elle que lira le prochain enseignant.
+Cliquez un tag pour écrire ou modifier sa description ; appuyez sur Retour
+arrière dans le champ vide pour retirer le dernier.
+
 ## Écrire l'énoncé
 
 L'énoncé et l'explication s'écrivent comme dans un traitement de texte. Le
 markdown est ce qui est stocké en dessous : `**gras**`, `$math$` et les
 blocs de code délimités fonctionnent si vous préférez les taper. Une image
 collée est envoyée au serveur et référencée par un identifiant stable.
+
+## Noter une question à réponses multiples
+
+Une question à choix multiples qui a plusieurs bonnes réponses se note selon
+une politique, et sa valeur par défaut est **héritée de l'évaluation** :
+vous la réglez une fois par quiz, ou une fois pour tous les quiz que vous
+créez, et une question ne nomme la sienne que lorsqu'il le faut vraiment.
+Les cinq politiques, et ce que chacune donne pour une réponse à moitié
+juste, sont expliquées dans « Notation des réponses multiples ».
 
 ## Publier
 

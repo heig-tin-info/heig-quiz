@@ -9,7 +9,7 @@
 import { z } from "zod";
 
 /** Bumped when the shape of `McqConfig` changes (stored in `question_versions.config_version`). */
-export const MCQ_CONFIG_VERSION = 1;
+export const MCQ_CONFIG_VERSION = 2;
 
 /** docs/04 §4.4: at least two choices, at most twelve (a longer list is a reading exercise). */
 export const MCQ_MIN_CHOICES = 2;
@@ -25,8 +25,48 @@ export type McqChoice = z.infer<typeof McqChoiceSchema>;
 export const McqModeSchema = z.enum(["single", "multiple"]);
 export type McqMode = z.infer<typeof McqModeSchema>;
 
-export const McqPolicySchema = z.enum(["all_or_nothing", "partial", "penalized"]);
+/**
+ * How a `multiple` question is scored (docs/04 §4.4; `@quiz/domain/mcqScore`
+ * holds the formulas). A `single` question is always all or nothing, whatever
+ * this says: with one key there is nothing to be partial about.
+ *
+ *   all_or_nothing : the exact key set, or nothing
+ *   true_false     : every choice is its own true/false item; the share of
+ *                    choices answered right
+ *   discordance    : by distance to the key: 0 → 1, 1 → 0.5, 2 → 0.2, more → 0
+ *   symmetric      : +1/C per correct tick, −1/W per wrong tick, floored at 0
+ *                    (random ticking has a zero expectation)
+ *   ripkey         : the share of correct ticks, cancelled by any wrong tick
+ */
+export const McqPolicySchema = z.enum([
+  "all_or_nothing",
+  "true_false",
+  "discordance",
+  "symmetric",
+  "ripkey",
+]);
 export type McqPolicy = z.infer<typeof McqPolicySchema>;
+
+/**
+ * What a QUESTION stores: one of the policies, or `inherit` — the evaluation
+ * that plays it decides (its own setting, seeded from the teacher's
+ * preference). The grader resolves it through `GradeContext.defaults`.
+ */
+export const McqQuestionPolicySchema = z.enum(["inherit", ...McqPolicySchema.options]);
+export type McqQuestionPolicy = z.infer<typeof McqQuestionPolicySchema>;
+
+/**
+ * The `mcq` entry of `GradeContext.defaults`: the evaluation's own policy,
+ * what an `inherit` question defers to. `GradeContext.defaults` is typed
+ * `Record<string, unknown>` — the core knows no type's settings — so the type
+ * parses its own entry and falls back to `all_or_nothing` when it is absent
+ * (the teacher's Try panel, which has no evaluation).
+ */
+export const McqDefaultsSchema = z.object({ policy: McqPolicySchema });
+export type McqDefaults = z.infer<typeof McqDefaultsSchema>;
+
+/** The fallback everywhere `inherit` cannot be resolved. */
+export const MCQ_DEFAULT_POLICY: McqPolicy = "all_or_nothing";
 
 /**
  * The refinements encode the rules that a shape alone cannot: a question with
@@ -42,19 +82,18 @@ export const McqConfigSchema = z
     mode: McqModeSchema.default("single"),
     /** Player-side guard only; a longer payload is truncated, never refused. */
     maxSelections: z.number().int().min(1).max(MCQ_MAX_CHOICES).optional(),
-    policy: McqPolicySchema.default("all_or_nothing"),
-    /** Fraction of a wrong choice's weight removed under `penalized`. */
-    penalty: z.number().min(0).max(1).default(1),
-    allowNegative: z.boolean().default(false),
+    policy: McqQuestionPolicySchema.default("inherit"),
     shuffleChoices: z.boolean().default(true),
   })
   .refine((c) => c.choices.some((x) => x.correct), { message: "mcq.no_correct_choice" })
   .refine((c) => c.mode !== "single" || c.choices.filter((x) => x.correct).length === 1, {
     message: "mcq.single_needs_one",
   })
-  .refine((c) => c.mode !== "single" || c.policy === "all_or_nothing", {
-    message: "mcq.single_policy",
-  });
+  // A cap below the size of the key would make the full mark unreachable.
+  .refine(
+    (c) => c.maxSelections === undefined || c.maxSelections >= c.choices.filter((x) => x.correct).length,
+    { message: "mcq.max_below_correct", path: ["maxSelections"] },
+  );
 export type McqConfig = z.infer<typeof McqConfigSchema>;
 
 /** Canonical indices into `config.choices`, ascending and unique (decision D3). */
@@ -81,6 +120,7 @@ export type McqSolution = z.infer<typeof McqSolutionSchema>;
 
 /** `C`/`W` are the key's counts, `c`/`w` the student's hits and misses (§7.3). */
 export const McqDetailsSchema = z.object({
+  /** The policy that was APPLIED, `inherit` resolved. */
   policy: McqPolicySchema,
   correct: z.array(z.number().int()),
   selected: z.array(z.number().int()),
@@ -111,9 +151,7 @@ export function emptyMcqDraft(): McqConfig {
       { text: "", correct: false },
     ],
     mode: "single",
-    policy: "all_or_nothing",
-    penalty: 1,
-    allowNegative: false,
+    policy: "inherit",
     shuffleChoices: true,
   };
 }

@@ -36,6 +36,7 @@ export function makeMe(overrides: Partial<Me> = {}): Me {
     hasUploadedAvatar: false,
     locale: "en",
     dateFormat: "iso",
+    mcqPolicy: null,
     ...overrides,
   };
 }

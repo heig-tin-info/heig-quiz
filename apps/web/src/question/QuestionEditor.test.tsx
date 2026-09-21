@@ -339,6 +339,18 @@ describe("QuestionEditor — code", () => {
 });
 
 describe("QuestionEditor — keyboard", () => {
+  it("teaches its shortcuts through the sidebar strip, not through a sentence", async () => {
+    mockFetch(routes(mcqDetail()));
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    await screen.findByRole("heading", { name: "ptr-null-check" });
+    // The page itself says nothing about the keys any more: the frame does
+    // (Shell.test.tsx), and it follows the focus.
+    expect(screen.queryByText(/Ctrl\+S/)).toBeNull();
+    // The explanation keeps its label and loses the sentence above it.
+    expect(await screen.findByLabelText("Explanation")).toBeInTheDocument();
+    expect(screen.queryByText(/Shown to the student after grading/)).toBeNull();
+  }, 20_000);
+
   it("Ctrl+S saves without waiting for the debounce", async () => {
     const user = userEvent.setup();
     const { calls } = mockFetch(routes(mcqDetail()));

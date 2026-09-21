@@ -45,6 +45,30 @@ export type LobbyMode = z.infer<typeof LobbyMode>;
 export const Timing = z.enum(["duration", "deadline", "manual"]);
 export type Timing = z.infer<typeof Timing>;
 
+/**
+ * How a multiple-answer MCQ is scored (docs/04 §4.4). The five formulas live
+ * in `@quiz/domain/mcqScore`, which is their reference; this enum is the WIRE
+ * name of the same five — `packages/contracts` depends on no question type.
+ *
+ * It appears at two levels of a three-level hierarchy:
+ *   1. the teacher's preference (`Me.mcqPolicy`), which seeds
+ *   2. the evaluation's own setting (`Evaluation.mcqPolicy`), which
+ *   3. a question configured `inherit` defers to.
+ * A question that names a policy overrides both, and a `single` question is
+ * always all or nothing.
+ */
+export const McqPolicy = z.enum([
+  "all_or_nothing",
+  "true_false",
+  "discordance",
+  "symmetric",
+  "ripkey",
+]);
+export type McqPolicy = z.infer<typeof McqPolicy>;
+
+/** What an evaluation gets when its creator expressed no preference. */
+export const DEFAULT_MCQ_POLICY: McqPolicy = "all_or_nothing";
+
 export const EvaluationSettings = z.object({
   navigation: Navigation.default("free"),
   presentation: Presentation.default("zen"),
@@ -108,6 +132,8 @@ export const Evaluation = z.object({
   settings: EvaluationSettings,
   gradingScale: GradingScale,
   feedbackPolicy: FeedbackPolicy,
+  /** Seeded at creation from the creator's preference; an `inherit` question takes it. */
+  mcqPolicy: McqPolicy,
   opensAt: z.iso.datetime().nullable(),
   closesAt: z.iso.datetime().nullable(),
   durationS: z.number().int().nullable(),
@@ -186,6 +212,7 @@ export const EvaluationPatch = z
     settings: EvaluationSettings.partial().optional(),
     gradingScale: GradingScale.optional(),
     feedbackPolicy: FeedbackPolicy.partial().optional(),
+    mcqPolicy: McqPolicy.optional(),
     opensAt: z.iso.datetime().nullable().optional(),
     closesAt: z.iso.datetime().nullable().optional(),
     durationS: z.number().int().min(30).max(24 * 3600).nullable().optional(),

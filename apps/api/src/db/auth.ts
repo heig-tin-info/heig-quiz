@@ -39,6 +39,14 @@ export const users = pgTable(
     locale: text("locale", { enum: ["en", "fr"] }),
     /** Date-time display format; null falls back to ISO (YYYY-MM-DD HH:mm). */
     dateFormat: text("date_format", { enum: ["iso", "eu", "uk", "us"] }),
+    /**
+     * Default MCQ scoring policy of the evaluations this teacher creates
+     * (docs/04 §4.4); null falls back to `all_or_nothing`. It is a SEED, read
+     * once at creation: changing it never moves an existing evaluation.
+     */
+    mcqPolicy: text("mcq_policy", {
+      enum: ["all_or_nothing", "true_false", "discordance", "symmetric", "ripkey"],
+    }),
     anonymizedAt: timestamp("anonymized_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

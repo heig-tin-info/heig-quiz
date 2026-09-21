@@ -4,7 +4,7 @@ import type { QuestionRow } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { typeIcon, typeLabel } from "../questionTypes";
-import { Badge, Checkbox, cx, isoDateTime, Menu, pressable, Skeleton, T } from "../ui";
+import { Badge, Checkbox, cx, IconButton, isoDateTime, pressable, Skeleton, T } from "../ui";
 
 /**
  * The questions of a pool (mockup `08-pool.html`).
@@ -12,8 +12,14 @@ import { Badge, Checkbox, cx, isoDateTime, Menu, pressable, Skeleton, T } from "
  * Seven columns, the internal name dominant and monospaced (it is what a
  * teacher types in the palette), the type as a badge, the difficulty as five
  * dots — a shape, never a colour — and the actions last. A click on the row
- * opens the preview panel; the editor is one menu item away, so a mis-click
- * never navigates out of the list.
+ * opens the EDITOR: reading a question means opening it, and the inspection
+ * panel that used to intercept the click was one step between the teacher
+ * and the only thing they came for.
+ *
+ * The last column carries three icon buttons rather than the overflow menu
+ * DESIGN.md's "three icon buttons = a menu" rule would ask for: the teacher
+ * asked for edit, duplicate and delete visible on the row, and a rule loses
+ * to the person who uses the screen every week.
  */
 
 export function DifficultyDots({ value }: { value: number }) {
@@ -44,23 +50,19 @@ export function QuestionTableSkeleton({ rows = 5 }: { rows?: number }) {
 
 export function QuestionTable({
   rows,
-  selectedId,
   checked,
   onToggleCheck,
   onToggleAll,
-  onSelect,
   onEdit,
   onDuplicate,
   onDelete,
 }: {
   rows: QuestionRow[];
-  /** The row whose preview panel is open. */
-  selectedId: string | null;
   /** The ids ticked for a bulk action. */
   checked: ReadonlySet<string>;
   onToggleCheck: (id: string) => void;
   onToggleAll: () => void;
-  onSelect: (row: QuestionRow) => void;
+  /** Opening the question: the row itself, and the pencil. */
   onEdit: (row: QuestionRow) => void;
   onDuplicate: (row: QuestionRow) => void;
   onDelete: (row: QuestionRow) => void;
@@ -96,15 +98,9 @@ export function QuestionTable({
             return (
               <tr
                 key={row.id}
-                aria-selected={selectedId === row.id}
-                onClick={() => onSelect(row)}
-                {...pressable(() => onSelect(row), "row")}
-                className={cx(
-                  T.row,
-                  T.rowHover,
-                  "cursor-pointer",
-                  selectedId === row.id && "bg-accent-soft hover:bg-accent-soft",
-                )}
+                onClick={() => onEdit(row)}
+                {...pressable(() => onEdit(row), "row")}
+                className={cx(T.row, T.rowHover, "cursor-pointer")}
               >
                 <td className={T.td} onClick={(e) => e.stopPropagation()}>
                   <Checkbox
@@ -164,20 +160,30 @@ export function QuestionTable({
                   {isoDateTime(row.updatedAt)}
                 </td>
                 <td className={cx(T.td, "text-right")} onClick={(e) => e.stopPropagation()}>
-                  <Menu
-                    label={t("pool.rowActions", { name: row.internalName })}
-                    items={[
-                      { label: t("pool.open"), icon: Pencil, onSelect: () => onEdit(row) },
-                      { label: t("pool.duplicate"), icon: Copy, onSelect: () => onDuplicate(row) },
-                      {
-                        label: t("common.delete"),
-                        icon: Trash2,
-                        danger: true,
-                        separator: true,
-                        onSelect: () => onDelete(row),
-                      },
-                    ]}
-                  />
+                  <span className="inline-flex items-center gap-0.5">
+                    <IconButton
+                      size="sm"
+                      label={t("pool.editRow", { name: row.internalName })}
+                      onClick={() => onEdit(row)}
+                    >
+                      <Pencil />
+                    </IconButton>
+                    <IconButton
+                      size="sm"
+                      label={t("pool.duplicateRow", { name: row.internalName })}
+                      onClick={() => onDuplicate(row)}
+                    >
+                      <Copy />
+                    </IconButton>
+                    <IconButton
+                      size="sm"
+                      danger
+                      label={t("pool.deleteRow", { name: row.internalName })}
+                      onClick={() => onDelete(row)}
+                    >
+                      <Trash2 />
+                    </IconButton>
+                  </span>
                 </td>
               </tr>
             );

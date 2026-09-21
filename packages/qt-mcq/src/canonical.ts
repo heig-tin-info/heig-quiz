@@ -24,8 +24,6 @@ export interface McqCanonical {
   mode?: McqConfig["mode"];
   maxSelections?: number;
   policy?: McqConfig["policy"];
-  penalty?: number;
-  allowNegative?: boolean;
   shuffleChoices?: boolean;
 }
 
@@ -39,9 +37,9 @@ export function toCanonical(config: McqConfig): McqCanonical {
   };
   if (config.mode !== "single") out.mode = config.mode;
   if (config.maxSelections !== undefined) out.maxSelections = config.maxSelections;
-  if (config.policy !== "all_or_nothing") out.policy = config.policy;
-  if (config.penalty !== 1) out.penalty = config.penalty;
-  if (config.allowNegative) out.allowNegative = true;
+  // `inherit` is the default: a file that names no policy is a question that
+  // takes the evaluation's.
+  if (config.policy !== "inherit") out.policy = config.policy;
   if (!config.shuffleChoices) out.shuffleChoices = false;
   return out;
 }

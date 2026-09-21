@@ -9,8 +9,8 @@ import { PoolView } from "./PoolView";
 
 /*
  * The pool screen against a stubbed API: what the table shows, what the
- * filter bar sends, and the two surfaces that only exist on demand — the
- * preview panel and the bulk bar.
+ * filter bar sends, the three actions each row carries, and the bulk bar
+ * that only exists once something is ticked.
  *
  * The category tree is NOT part of this screen any more: it lives in the app
  * sidebar and hands its selection over through the `category` query-string
@@ -150,27 +150,45 @@ describe("PoolView", () => {
     );
   });
 
-  it("opens the preview panel on the selected question", async () => {
+  it("opens the editor when the row is clicked", async () => {
     const user = userEvent.setup();
-    mockFetch(
-      routes({
-        "POST /app/api/questions/q2/preview": ok({
-          student: { prompt: "Que vaut un pointeur non initialisé ?", choices: [], mode: "single" },
-          itemPoints: 1,
-        }),
-        "GET /app/api/questions/q2": ok({
-          meta: {},
-          draft: {},
-          versions: [],
-          latestPublished: null,
-        }),
-      }),
-    );
-    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    const navigate = vi.fn();
+    mockFetch(routes());
+    renderWithProviders(<PoolView id="p1" navigate={navigate} />);
     await user.click(await screen.findByText("ptr-null-check"));
-    const panel = await screen.findByRole("dialog");
-    expect(panel).toHaveAccessibleName("ptr-null-check");
-    expect(await within(panel).findByText(/pointeur non initialisé/)).toBeInTheDocument();
+    expect(navigate).toHaveBeenCalledWith({ view: "question", id: "q2" });
+    // The inspection panel is gone with the click that used to open it.
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("carries edit, duplicate and delete on every row", async () => {
+    const user = userEvent.setup();
+    const navigate = vi.fn();
+    const { calls } = mockFetch(
+      routes({ "POST /app/api/questions/q1/copy": ok({ meta: { id: "q9" } }) }),
+    );
+    renderWithProviders(<PoolView id="p1" navigate={navigate} />);
+    await screen.findByText("ptr-arith-01");
+    // The pencil opens the editor, like the row itself.
+    await user.click(screen.getByRole("button", { name: "Edit ptr-arith-01" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "question", id: "q1" });
+    // The copy button copies, and does not navigate anywhere on its own.
+    await user.click(screen.getByRole("button", { name: "Duplicate ptr-arith-01" }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.url === "/app/api/questions/q1/copy")).toBe(true),
+    );
+  });
+
+  it("asks before deleting a question from its row", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch(routes());
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    await screen.findByText("ptr-arith-01");
+    await user.click(screen.getByRole("button", { name: "Delete ptr-arith-01" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent("ptr-arith-01");
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(calls.some((c) => c.method === "DELETE")).toBe(false);
   });
 
   it("shows the bulk bar once questions are ticked", async () => {

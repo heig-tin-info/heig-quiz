@@ -23,6 +23,15 @@ export function cx(...parts: (string | false | null | undefined)[]): string {
 export const inputClass =
   "rounded-field border border-line-strong bg-surface px-3 py-1.5 text-sm text-fg transition-colors placeholder:text-fg-faint hover:border-fg-faint focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-50";
 
+/**
+ * A native <select> in the same chrome as the inputs, with room on the right
+ * for the browser's own arrow. `apps/web`'s `Select` draws its own chevron
+ * over an `appearance-none` control; a leaf package copies the TOKENS, not the
+ * icon set, so this one keeps the platform arrow and only reserves the space.
+ */
+export const selectClass =
+  "rounded-field border border-line-strong bg-surface py-1.5 pl-3 pr-8 text-sm text-fg transition-colors hover:border-fg-faint focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-50";
+
 export const labelClass = "text-[13px] font-medium text-fg";
 export const helpClass = "text-xs text-fg-faint";
 export const sectionClass = "flex flex-col gap-2";
@@ -124,6 +133,32 @@ export function Segmented<T extends string>({
 }
 
 /**
+ * The app's tooltip, in the little that a leaf package can carry of it: a
+ * bubble on `fg` with `canvas` ink, shown on hover and on focus, out of the
+ * accessibility tree (the control it wraps already carries the same sentence
+ * as its accessible name) and out of the pointer's way.
+ *
+ * `apps/web`'s `Tip` portals itself and arms on a timer; a package cannot
+ * import it (`packages/ui` is a later work package), so what is mirrored here
+ * are the TOKENS and the two rules that matter — never focusable, never
+ * clickable. The absolute position is enough for the one place this is used:
+ * a row of a list nothing clips.
+ */
+export function Tip({ label, children }: { label: string; children: ReactNode }): ReactNode {
+  return (
+    <span className="group/tip relative inline-flex">
+      {children}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-lg bg-fg px-2.5 py-1.5 text-xs font-medium leading-snug text-canvas opacity-0 transition-opacity duration-150 group-hover/tip:opacity-100 group-focus-within/tip:opacity-100"
+      >
+        {label}
+      </span>
+    </span>
+  );
+}
+
+/**
  * Two icons, drawn here rather than imported: `lucide-react` is a dependency
  * of `apps/web`, not of this package, and a leaf question type has no business
  * pulling an icon set of its own (`McqIcon` in `client.tsx` does the same).
@@ -160,6 +195,18 @@ export function TrashIcon({ className = "size-3.5" }: { className?: string }) {
     </svg>
   );
 }
+
+/**
+ * The drag handle of a choice row.
+ *
+ * VISIBLE at rest, which the first version was not: the grip was drawn in the
+ * hover colour only, so a teacher looking at the list saw no affordance at all
+ * and the reordering might as well not have existed. `fg-muted` at rest,
+ * `fg` as soon as the pointer is anywhere on the row or the handle has the
+ * focus, and the two cursors that say what the thing does.
+ */
+export const gripClass =
+  "inline-flex h-7 w-6 shrink-0 cursor-grab items-center justify-center rounded-md text-fg-muted transition-colors group-hover/choice:text-fg hover:bg-surface-2 focus-visible:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:cursor-grabbing disabled:pointer-events-none disabled:opacity-40";
 
 /** Round, borderless control the size of a row: the handle and the bin. */
 export const iconButtonClass =

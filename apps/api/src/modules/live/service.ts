@@ -74,7 +74,7 @@ import {
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
-import { joinedItems } from "../evaluation/service.js";
+import { gradeDefaults, joinedItems } from "../evaluation/service.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
 import {
@@ -1018,6 +1018,9 @@ export async function runVisibleCases(
     itemPoints: joined.item.points,
     now,
     runner: input.runner,
+    // Same per-type settings as the grading pass: a run from the player must
+    // not be scored under a different policy than the final grading.
+    defaults: gradeDefaults(evaluation),
   });
   // `grade` assembles the request server-side from the template and the
   // regions (invariant 14); nothing the browser sent becomes a file name.

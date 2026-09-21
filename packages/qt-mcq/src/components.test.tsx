@@ -88,7 +88,7 @@ describe("McqEditor — the derived mode", () => {
     const onChange = vi.fn();
     render(
       <McqEditor
-        config={multipleConfig({ policy: "penalized", maxSelections: 2 })}
+        config={multipleConfig({ policy: "true_false", maxSelections: 2 })}
         onChange={onChange}
       />,
     );
@@ -115,18 +115,6 @@ describe("McqEditor — the derived mode", () => {
     expect(next.mode).toBe("multiple");
   });
 
-  it("says in one line what the student will see", () => {
-    const { unmount } = render(<McqEditor config={SECRET_CONFIG} onChange={() => {}} />);
-    expect(screen.getByTestId("mcq-mode-hint")).toHaveTextContent(
-      "One correct answer: the student picks one.",
-    );
-    unmount();
-    render(<McqEditor config={multipleConfig()} onChange={() => {}} />);
-    expect(screen.getByTestId("mcq-mode-hint")).toHaveTextContent(
-      "Several correct answers: the student ticks every one that applies.",
-    );
-  });
-
   it("offers a checkbox and never a radio, so the key set can go back to empty", () => {
     render(<McqEditor config={SECRET_CONFIG} onChange={() => {}} />);
     expect(screen.queryAllByRole("radio", { name: /^Correct/ })).toHaveLength(0);
@@ -134,26 +122,85 @@ describe("McqEditor — the derived mode", () => {
   });
 });
 
+/*
+ * The policy is a <select> and no longer a segmented control: there are six of
+ * them now (`McqQuestionPolicy`), five of which are formulas, and a row of six
+ * chips is a paragraph. `inherit` is the default — the evaluation decides —
+ * and the line under the control says what the chosen one does.
+ */
 describe("McqEditor — the scoring policy", () => {
-  it("is a segmented control showing the three options", () => {
-    render(<McqEditor config={multipleConfig()} onChange={() => {}} />);
-    for (const name of ["All or nothing", "Partial", "Penalized"]) {
-      expect(screen.getByRole("radio", { name })).toBeInTheDocument();
-    }
-    expect(screen.getByRole("radio", { name: "Partial" })).toBeChecked();
+  const policy = () => screen.getByLabelText("Scoring policy") as HTMLSelectElement;
+
+  it("offers the six policies, in order, inherit first", () => {
+    render(<McqEditor config={multipleConfig({ policy: "inherit" })} onChange={() => {}} />);
+    expect(
+      Array.from(policy().options).map((o) => o.textContent),
+    ).toEqual([
+      "Inherited from the evaluation",
+      "All or nothing",
+      "True/false per choice",
+      "Discordances",
+      "Symmetric",
+      "Ripkey",
+    ]);
+    expect(policy()).toHaveValue("inherit");
   });
 
   it("reports the picked policy", async () => {
     const onChange = vi.fn();
     render(<McqEditor config={multipleConfig()} onChange={onChange} />);
-    await userEvent.click(screen.getByRole("radio", { name: "Penalized" }));
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ policy: "penalized" }));
+    await userEvent.selectOptions(policy(), "ripkey");
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ policy: "ripkey" }));
   });
 
-  it("is disabled in single mode, where the schema allows one policy only", () => {
+  it("says in one line what the chosen policy does", () => {
+    const { unmount } = render(
+      <McqEditor config={multipleConfig({ policy: "inherit" })} onChange={() => {}} />,
+    );
+    expect(screen.getByTestId("mcq-policy-desc")).toHaveTextContent(
+      "Uses the policy set on the evaluation.",
+    );
+    unmount();
+    render(<McqEditor config={multipleConfig({ policy: "ripkey" })} onChange={() => {}} />);
+    expect(screen.getByTestId("mcq-policy-desc")).toHaveTextContent(
+      "The share of correct ticks, cancelled by any wrong tick.",
+    );
+  });
+
+  it("is not there at all in single mode, where one key leaves nothing to choose", () => {
     render(<McqEditor config={SECRET_CONFIG} onChange={() => {}} />);
-    expect(screen.getByRole("radio", { name: "All or nothing" })).toBeDisabled();
-    expect(screen.getByRole("radio", { name: "All or nothing" })).toBeChecked();
+    expect(screen.queryByLabelText("Scoring policy")).toBeNull();
+    // What single mode DOES keep beside it.
+    expect(screen.getByLabelText("Shuffle the choices")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Maximum selections")).toBeNull();
+  });
+
+  it("opens the host's help topic beside the label, and draws nothing without one", () => {
+    const { unmount } = render(<McqEditor config={multipleConfig()} onChange={() => {}} />);
+    expect(screen.queryByTestId("help")).toBeNull();
+    unmount();
+    render(
+      <McqEditor
+        config={multipleConfig()}
+        onChange={() => {}}
+        renderHelp={(topic) => <span data-testid="help">{topic}</span>}
+      />,
+    );
+    expect(screen.getByTestId("help")).toHaveTextContent("mcq-policies");
+  });
+
+  it("puts the answer-limit issue under the answer limit", () => {
+    // Built by hand and not through the schema: a cap below the key set is
+    // exactly what `configSchema` refuses, and an invalid draft is a normal
+    // state of this editor (decision D16).
+    render(
+      <McqEditor
+        config={{ ...multipleConfig(), maxSelections: 1 }}
+        onChange={() => {}}
+        issues={[{ path: ["maxSelections"], message: "mcq.max_below_correct" }]}
+      />,
+    );
+    expect(screen.getByText("mcq.max_below_correct")).toBeInTheDocument();
   });
 });
 
@@ -327,14 +374,17 @@ describe("McqPlayer", () => {
   });
 
   it("stops at maxSelections without losing what is already ticked", () => {
-    const config = multipleConfig({ maxSelections: 1 });
+    // Two keys, so the cap cannot go below two (`mcq.max_below_correct`): the
+    // student has spent it, and only the boxes they did NOT tick lock.
+    const config = multipleConfig({ maxSelections: 2 });
     const view = mcqServer.toStudent(config, { seed: 1, itemId: "i", shuffle: false });
     render(
-      <McqPlayer student={view} answer={{ selected: [0] }} onChange={() => {}} readOnly={false} />,
+      <McqPlayer student={view} answer={{ selected: [0, 1] }} onChange={() => {}} readOnly={false} />,
     );
     const boxes = screen.getAllByRole("checkbox");
     expect(boxes[0]).toBeEnabled();
-    expect(boxes[1]).toBeDisabled();
+    expect(boxes[1]).toBeEnabled();
+    expect(boxes[2]).toBeDisabled();
   });
 
   it("is read-only once the attempt is closed", () => {

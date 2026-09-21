@@ -193,7 +193,6 @@ export function DevGallery() {
             value={source}
             onChange={setSource}
             label={t("dev.ui.markdown")}
-            rows={14}
             onUploadImage={async (file) => {
               await new Promise((r) => setTimeout(r, 400));
               return { id: `demo-${file.name.replace(/\W+/g, "-").toLowerCase()}` };

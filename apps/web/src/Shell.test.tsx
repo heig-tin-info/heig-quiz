@@ -1,10 +1,13 @@
 import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { CourseSummary, PoolDetail } from "@quiz/contracts";
 
 import { Shell } from "./Shell";
+import { resetShortcuts, useShortcuts } from "./shortcuts";
+import { modKey } from "./ui";
 import { makeClassroomSummary, makeCourseSummary, makeMe } from "./test/fixtures";
 import { makeQueryClient, renderWithProviders } from "./test/render";
 import type { Route } from "./router";
@@ -65,6 +68,7 @@ function renderShell({
   onToggleStudentView = vi.fn(),
   pool,
   path,
+  children,
 }: {
   route?: Route;
   courses?: CourseSummary[];
@@ -77,6 +81,8 @@ function renderShell({
   pool?: PoolDetail;
   /** URL the frame reads `?category=` from. */
   path?: string;
+  /** What the frame wraps; a screen registering its own shortcuts, here. */
+  children?: ReactNode;
 } = {}) {
   const queryClient = makeQueryClient();
   queryClient.setQueryData(["courses"], courses);
@@ -90,7 +96,7 @@ function renderShell({
       studentView={studentView}
       onToggleStudentView={onToggleStudentView}
     >
-      <p>Page content</p>
+      {children ?? <p>Page content</p>}
     </Shell>,
     { queryClient, ...(path ? { route: path } : {}) },
   );
@@ -325,5 +331,55 @@ describe("Shell command palette", () => {
     );
     expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "c2" });
     expect(palette()).toBeNull();
+  });
+});
+
+/** A screen that answers to two keys while it is on. */
+function ScreenWithShortcuts() {
+  useShortcuts([
+    { keys: "Ctrl+S", label: "Save" },
+    { keys: "Ctrl+Shift+P", label: "Publish" },
+  ]);
+  return <p>Page content</p>;
+}
+
+describe("Shell shortcut strip", () => {
+  afterEach(() => resetShortcuts());
+
+  /** The strip, named by its own heading. */
+  const strip = () => screen.getByText("Shortcuts").closest("div")!;
+
+  it("teaches the palette even when it is the only live shortcut", () => {
+    renderShell();
+    const caps = within(strip())
+      .getAllByRole("listitem")
+      .map((el) => el.textContent);
+    expect(caps).toEqual([`${modKey()}KCommand palette`]);
+    expect(within(strip()).getByText("Command palette")).toBeInTheDocument();
+  });
+
+  it("adds what the mounted screen registered, after the palette", () => {
+    renderShell({ children: <ScreenWithShortcuts /> });
+    const labels = within(strip())
+      .getAllByRole("listitem")
+      .map((el) => el.textContent);
+    expect(labels).toEqual([`${modKey()}KCommand palette`, "CtrlSSave", "CtrlShiftPPublish"]);
+  });
+
+  it("splits a combination into one cap per key", () => {
+    renderShell({ children: <ScreenWithShortcuts /> });
+    const publish = within(strip()).getByText("Publish").closest("li")!;
+    expect(within(publish).getAllByText(/^(Ctrl|Shift|P)$/).map((el) => el.tagName)).toEqual([
+      "KBD",
+      "KBD",
+      "KBD",
+    ]);
+  });
+
+  it("keeps the strip out of the mobile drawer", async () => {
+    renderShell({ children: <ScreenWithShortcuts /> });
+    await userEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    const drawer = screen.getByRole("dialog", { name: "Quiz" });
+    expect(within(drawer).queryByText("Shortcuts")).toBeNull();
   });
 });

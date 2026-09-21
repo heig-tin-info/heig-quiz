@@ -11,6 +11,7 @@ import { gradingLinks } from "../grading";
 import { useT } from "../i18n";
 import { presence } from "../realtime/grid";
 import type { Route } from "../router";
+import { useShortcuts } from "../shortcuts";
 import {
   Card,
   cx,
@@ -186,6 +187,19 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
     // needs through the closure, which is refreshed by the same render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live, evaluationState, selected, toggleFullscreen]);
+
+  // The same keys in the sidebar strip. Reactive to the state: Space only
+  // means something while the quiz runs, and Escape only while a cell is open.
+  useShortcuts([
+    { keys: "N", label: t("live.toggle.names") },
+    { keys: "R", label: t("live.toggle.answers") },
+    { keys: "S", label: t("live.toggle.results") },
+    ...(live
+      ? [{ keys: "Space", label: evaluationState === "paused" ? t("live.resume") : t("live.pause") }]
+      : []),
+    { keys: "F", label: t("live.fullscreen") },
+    ...(selected ? [{ keys: "Esc", label: t("live.inspect.close") }] : []),
+  ]);
 
   if (query.isLoading) {
     return (

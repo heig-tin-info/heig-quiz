@@ -6,7 +6,15 @@ import { clozeEditorStrings, clozePlayerStrings, clozeReviewStrings } from "@qui
 import { EDITOR_STRINGS, PLAYER_STRINGS, REVIEW_STRINGS } from "@quiz/qt-code/client";
 
 import { DICTS, type Locale, type TFunction } from "./i18n";
-import { editorStrings, playerStrings, questionType, QUESTION_TYPE_IDS, typeHint, typeLabel } from "./questionTypes";
+import {
+  editorStrings,
+  MCQ_HOST_MAPPED_KEYS,
+  playerStrings,
+  questionType,
+  QUESTION_TYPE_IDS,
+  typeHint,
+  typeLabel,
+} from "./questionTypes";
 
 /*
  * A `qt-*` package ships English defaults and takes a `strings` override
@@ -39,9 +47,19 @@ const DICTIONARIES: [string, object][] = [
   ["qt.code.r", REVIEW_STRINGS],
 ];
 
+/**
+ * A few keys are NOT looked up under `<prefix>.<key>`: the MCQ scoring
+ * policies are worded once under `mcq.policy.*`, because the settings page
+ * and an evaluation's advanced options show the same five, and
+ * `editorStrings.mcq` maps the editor's keys onto them. They are checked by
+ * their own case below.
+ */
+const MAPPED_ELSEWHERE: Record<string, readonly string[]> = { "qt.mcq.e": MCQ_HOST_MAPPED_KEYS };
+
 describe("question type strings", () => {
   it.each(DICTIONARIES)("%s is translated key by key", (prefix, defaults) => {
     for (const [key, value] of Object.entries(defaults)) {
+      if (MAPPED_ELSEWHERE[prefix]?.includes(key)) continue;
       // A parameterized sentence is rebuilt by hand in `questionTypes.tsx`;
       // its key still has to exist, with or without the `.one` variant.
       const full = `${prefix}.${key}`;
@@ -59,6 +77,16 @@ describe("question type strings", () => {
         const client = questionType(id)!;
         expect(typeLabel(t, id)).not.toBe(client.labelKey);
         expect(typeHint(t, id)).not.toBe(client.hintKey);
+      }
+    }
+  });
+
+  it("words the MCQ policies once, for the editor and the two settings screens", () => {
+    for (const locale of ["en", "fr"] as const) {
+      const strings = editorStrings.mcq(makeT(locale)) as unknown as Record<string, string>;
+      for (const key of MCQ_HOST_MAPPED_KEYS) {
+        expect(strings[key], `${key} (${locale})`).toBeTruthy();
+        expect(strings[key]).not.toMatch(/^mcq\.policy\./);
       }
     }
   });

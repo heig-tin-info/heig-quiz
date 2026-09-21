@@ -18,6 +18,7 @@ import { randomUUID } from "node:crypto";
 import { and, asc, count, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import {
+  DEFAULT_MCQ_POLICY,
   EvaluationSettings,
   FeedbackPolicy,
   GradingScale,
@@ -32,6 +33,7 @@ import {
   type EvaluationSummary,
   type ItemPatch,
   type ItemRow,
+  type McqPolicy,
 } from "@quiz/contracts";
 
 import { iso, isoOrNull } from "../../clock.js";
@@ -44,6 +46,7 @@ import {
   evaluations,
   questionVersions,
   questions,
+  users,
 } from "../../db/schema.js";
 
 export type EvaluationRecord = typeof evaluations.$inferSelect;
@@ -204,6 +207,7 @@ export function toEvaluation(row: EvaluationRecord): Evaluation {
     settings: settingsOf(row),
     gradingScale: GradingScale.parse(row.gradingScale),
     feedbackPolicy: feedbackOf(row),
+    mcqPolicy: row.mcqPolicy,
     opensAt: isoOrNull(row.opensAt),
     closesAt: isoOrNull(row.closesAt),
     durationS: row.durationS,
@@ -216,6 +220,32 @@ export function toEvaluation(row: EvaluationRecord): Evaluation {
     modifiedAfterRelease: row.modifiedAfterRelease,
     createdAt: iso(row.createdAt),
   };
+}
+
+/**
+ * The per-type settings of this evaluation, as `GradeContext.defaults` — what
+ * a question config that says "inherit" defers to (invariant: the core knows
+ * no type's shape, each type parses its own entry).
+ *
+ * One entry today, `mcq`; a second type with an evaluation-level setting adds
+ * its key here and nowhere else.
+ */
+export function gradeDefaults(row: EvaluationRecord): Readonly<Record<string, unknown>> {
+  return { mcq: { policy: row.mcqPolicy } };
+}
+
+/**
+ * The MCQ policy a NEW evaluation of this teacher starts with. A user who
+ * never opened the settings page has none, and the default is the one nobody
+ * has to be told about.
+ */
+export async function preferredMcqPolicy(db: Db, userId: string): Promise<McqPolicy> {
+  const [row] = await db
+    .select({ policy: users.mcqPolicy })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return row?.policy ?? DEFAULT_MCQ_POLICY;
 }
 
 export async function attemptCount(db: Db, evaluationId: string): Promise<number> {
@@ -382,6 +412,9 @@ export async function createEvaluation(
   if (input.mode === "poll") throw new PollNotImplemented();
   const preset = presetSettings(input.preset ?? (input.mode === "exercise" ? "exercise" : "exam"));
   const id = randomUUID();
+  // The creator's preference SEEDS the evaluation and is then forgotten:
+  // changing the preference later never moves an evaluation that exists.
+  const mcqPolicy = await preferredMcqPolicy(db, input.createdBy);
   await db.insert(evaluations).values({
     id,
     classroomId: input.classroomId,
@@ -391,6 +424,7 @@ export async function createEvaluation(
     settings: preset.settings,
     gradingScale: defaultGradingScale(),
     feedbackPolicy: preset.feedbackPolicy,
+    mcqPolicy,
     createdBy: input.createdBy,
   });
   return (await byId(db, id))!;
@@ -425,6 +459,7 @@ export async function patchEvaluation(
     next.settings = EvaluationSettings.parse({ ...settingsOf(row), ...patch.settings });
   }
   if (patch.gradingScale !== undefined) next.gradingScale = patch.gradingScale;
+  if (patch.mcqPolicy !== undefined) next.mcqPolicy = patch.mcqPolicy;
   if (patch.feedbackPolicy !== undefined) {
     next.feedbackPolicy = FeedbackPolicy.parse({ ...feedbackOf(row), ...patch.feedbackPolicy });
   }
@@ -735,6 +770,7 @@ export async function duplicateEvaluation(
       settings: row.settings,
       gradingScale: row.gradingScale,
       feedbackPolicy: row.feedbackPolicy,
+      mcqPolicy: row.mcqPolicy,
       opensAt: row.opensAt,
       closesAt: row.closesAt,
       durationS: row.durationS,

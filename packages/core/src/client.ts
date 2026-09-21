@@ -28,7 +28,34 @@ export interface EditorProps<TConfig> {
    * gets. The stored value is markdown either way (docs/spec/05 §5.10).
    */
   RichText?: RichTextComponent;
+  /**
+   * The host's contextual help, injected for the same reason `RichText` is: a
+   * `qt-*` package cannot import `apps/web/src/help.tsx`, and the "?" that
+   * opens a topic is part of the app's chrome, not of the question type.
+   *
+   * The editor calls it with a TOPIC NAME (`"mcq-policies"`) and places what
+   * comes back beside the label it documents. Absent, the editor simply shows
+   * no "?" — the label and the one-line description still say what the field
+   * does, so nothing is lost but the long form.
+   */
+  renderHelp?: (topic: string) => ReactNode;
 }
+
+/**
+ * One shortcut a focused rich-text field contributes to the app's shortcut
+ * strip. Structural, not imported: `apps/web/src/shortcuts.tsx` owns the
+ * registry, and a `qt-*` package only describes the two keys its inline field
+ * answers to ("Tab: add a choice").
+ */
+export interface RichTextShortcut {
+  /** As shown: "Ctrl+B", "Tab", "Enter". The host spells Ctrl/⌘. */
+  keys: string;
+  /** Translated and short. */
+  label: string;
+}
+
+/** Where the rich editor puts its toolbar (`RichTextProps.toolbar`). */
+export type RichTextToolbar = "always" | "focus" | "never";
 
 /**
  * The props of the host's rich-text editor. Its interface is a MARKDOWN
@@ -63,8 +90,26 @@ export interface RichTextProps {
    * is worse than one that is not there.
    */
   uploadImage?: (file: File) => Promise<string>;
-  /** Default true. The inline choice editors hide it; Ctrl+B / Ctrl+I still work. */
-  toolbar?: boolean;
+  /**
+   * Where the toolbar lives. `"always"` (the default) keeps it above the
+   * field; `"focus"` shows a compact one INSIDE the field while it has the
+   * caret, which is what an inline row of choices wants — a toolbar per row,
+   * always visible, is a wall of icons; `"never"` hides it altogether.
+   * Ctrl+B / Ctrl+I work in all three.
+   */
+  toolbar?: RichTextToolbar;
+  /**
+   * The last button of the toolbar swaps the surface for the markdown source
+   * and back. Default true for a block field, false for an inline one (a
+   * choice has no room for a second pane). Ignored when there is no toolbar.
+   */
+  sourceToggle?: boolean;
+  /**
+   * Extra shortcuts to publish while this field has the focus, on top of the
+   * formatting ones it registers itself. A list of choices passes the two keys
+   * it answers to, so the app's strip shows them wherever the caret is.
+   */
+  shortcuts?: readonly RichTextShortcut[];
 }
 
 export type RichTextComponent = ComponentType<RichTextProps>;

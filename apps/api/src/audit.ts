@@ -67,6 +67,7 @@ export type AuditAction =
   | "roster.self_enroll"
   | "roster.unclaim"
   | "roster.update"
+  | "tag.describe"
   | "teacher.grant"
   | "teacher.revoke";
 

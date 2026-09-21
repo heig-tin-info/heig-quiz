@@ -16,7 +16,7 @@ import type { Dict, TFunction } from "../i18n";
 const KNOWN: Record<string, keyof Dict> = {
   "mcq.no_correct_choice": "issue.mcq.no_correct_choice",
   "mcq.single_needs_one": "issue.mcq.single_needs_one",
-  "mcq.single_policy": "issue.mcq.single_policy",
+  "mcq.max_below_correct": "issue.mcq.max_below_correct",
   "cloze.no_blank": "issue.cloze.no_blank",
   "cloze.too_many_blanks": "issue.cloze.too_many_blanks",
   "short.invalid_pattern": "issue.short.invalid_pattern",

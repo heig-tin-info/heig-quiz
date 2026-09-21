@@ -2,15 +2,17 @@ import { describe, expect, it } from "vitest";
 import {
   correctIndices,
   emptyMcqDraft,
+  MCQ_CONFIG_VERSION,
   McqAnswerSchema,
   McqConfigSchema,
+  McqDefaultsSchema,
   type McqConfig,
 } from "./schema.js";
 
 /** A valid config, with the field under test overridden by each row. */
 function base(): Record<string, unknown> {
   return {
-    configVersion: 1,
+    configVersion: MCQ_CONFIG_VERSION,
     prompt: "Which one?",
     choices: [
       { text: "a", correct: true },
@@ -19,22 +21,31 @@ function base(): Record<string, unknown> {
   };
 }
 
+const twoKeys = [
+  { text: "a", correct: true },
+  { text: "b", correct: true },
+];
+
 describe("McqConfigSchema", () => {
   const accepted: [string, Record<string, unknown>][] = [
     ["the minimum: two choices and one key", base()],
-    ["a partial multiple", { ...base(), mode: "multiple", policy: "partial" }],
-    [
-      "a penalized multiple with a negative floor",
-      { ...base(), mode: "multiple", policy: "penalized", penalty: 0.5, allowNegative: true },
-    ],
-    ["several keys in multiple mode", { ...base(), mode: "multiple", choices: [
-      { text: "a", correct: true },
-      { text: "b", correct: true },
-    ] }],
+    ...(["all_or_nothing", "true_false", "discordance", "symmetric", "ripkey", "inherit"] as const).map(
+      (policy): [string, Record<string, unknown>] => [
+        `a multiple scored ${policy}`,
+        { ...base(), mode: "multiple", policy },
+      ],
+    ),
+    // The `mcq.single_policy` refinement is gone: a `single` question is all
+    // or nothing at GRADING time, whatever the stored policy says.
+    ["a policy other than all_or_nothing in single mode", { ...base(), policy: "ripkey" }],
+    ["several keys in multiple mode", { ...base(), mode: "multiple", choices: twoKeys }],
     ["an explicit maxSelections", { ...base(), mode: "multiple", maxSelections: 2 }],
+    [
+      "a maxSelections equal to the key size",
+      { ...base(), mode: "multiple", choices: twoKeys, maxSelections: 2 },
+    ],
     ["shuffling turned off", { ...base(), shuffleChoices: false }],
     ["twelve choices", { ...base(), choices: Array.from({ length: 12 }, (_, i) => ({ text: `c${i}`, correct: i === 0 })) }],
-    ["a penalty of exactly 0", { ...base(), mode: "multiple", policy: "penalized", penalty: 0 }],
   ];
 
   for (const [name, input] of accepted) {
@@ -50,21 +61,23 @@ describe("McqConfigSchema", () => {
       { text: "a", correct: false },
       { text: "b", correct: false },
     ] }],
-    ["two keys in single mode", { ...base(), choices: [
-      { text: "a", correct: true },
-      { text: "b", correct: true },
-    ] }],
-    ["a policy other than all_or_nothing in single mode", { ...base(), policy: "partial" }],
+    ["two keys in single mode", { ...base(), choices: twoKeys }],
+    ["an unknown policy", { ...base(), mode: "multiple", policy: "curve" }],
+    ["a v1 policy the migration should have rewritten", { ...base(), mode: "multiple", policy: "partial" }],
+    ["the dropped penalty field is no longer a policy", { ...base(), mode: "multiple", policy: "penalized" }],
     ["an empty prompt", { ...base(), prompt: "" }],
     ["an empty choice text", { ...base(), choices: [
       { text: "", correct: true },
       { text: "b", correct: false },
     ] }],
-    ["a penalty above 1", { ...base(), mode: "multiple", policy: "penalized", penalty: 1.5 }],
-    ["an unknown policy", { ...base(), mode: "multiple", policy: "curve" }],
     ["a missing configVersion", { prompt: "x", choices: base().choices }],
-    ["a future configVersion", { ...base(), configVersion: 2 }],
+    ["a v1 configVersion", { ...base(), configVersion: 1 }],
+    ["a future configVersion", { ...base(), configVersion: MCQ_CONFIG_VERSION + 1 }],
     ["maxSelections of 0", { ...base(), mode: "multiple", maxSelections: 0 }],
+    [
+      "maxSelections below the number of correct choices",
+      { ...base(), mode: "multiple", choices: twoKeys, maxSelections: 1 },
+    ],
   ];
 
   for (const [name, input] of rejected) {
@@ -76,23 +89,47 @@ describe("McqConfigSchema", () => {
   it("applies the documented defaults", () => {
     const config: McqConfig = McqConfigSchema.parse(base());
     expect(config.mode).toBe("single");
-    expect(config.policy).toBe("all_or_nothing");
-    expect(config.penalty).toBe(1);
-    expect(config.allowNegative).toBe(false);
+    expect(config.policy).toBe("inherit");
     expect(config.shuffleChoices).toBe(true);
     expect(config.maxSelections).toBeUndefined();
   });
 
+  it("no longer carries a penalty or a negative floor", () => {
+    const config = McqConfigSchema.parse({ ...base(), penalty: 0.5, allowNegative: true });
+    expect(config).not.toHaveProperty("penalty");
+    expect(config).not.toHaveProperty("allowNegative");
+  });
+
   it("reports the failing refinement by its i18n key", () => {
-    const result = McqConfigSchema.safeParse({
+    const noKey = McqConfigSchema.safeParse({
       ...base(),
       choices: [
         { text: "a", correct: false },
         { text: "b", correct: false },
       ],
     });
-    expect(result.success).toBe(false);
-    expect(result.error?.issues.map((i) => i.message)).toContain("mcq.no_correct_choice");
+    expect(noKey.error?.issues.map((i) => i.message)).toContain("mcq.no_correct_choice");
+
+    const capped = McqConfigSchema.safeParse({
+      ...base(),
+      mode: "multiple",
+      choices: twoKeys,
+      maxSelections: 1,
+    });
+    const issue = capped.error?.issues.find((i) => i.message === "mcq.max_below_correct");
+    expect(issue?.path).toEqual(["maxSelections"]);
+  });
+});
+
+describe("McqDefaultsSchema", () => {
+  it("reads the evaluation's policy out of GradeContext.defaults", () => {
+    expect(McqDefaultsSchema.parse({ policy: "discordance" })).toEqual({ policy: "discordance" });
+  });
+
+  it("refuses anything that is not one of the five", () => {
+    expect(McqDefaultsSchema.safeParse({ policy: "inherit" }).success).toBe(false);
+    expect(McqDefaultsSchema.safeParse({ policy: "partial" }).success).toBe(false);
+    expect(McqDefaultsSchema.safeParse({}).success).toBe(false);
   });
 });
 
@@ -119,9 +156,9 @@ describe("emptyMcqDraft", () => {
 
   it("still carries the shape and the defaults the editor binds to", () => {
     const draft = emptyMcqDraft();
-    expect(draft.configVersion).toBe(1);
+    expect(draft.configVersion).toBe(MCQ_CONFIG_VERSION);
     expect(draft.mode).toBe("single");
-    expect(draft.policy).toBe("all_or_nothing");
+    expect(draft.policy).toBe("inherit");
     expect(correctIndices(draft)).toEqual([0]);
   });
 });

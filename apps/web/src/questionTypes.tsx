@@ -54,6 +54,7 @@ import {
   type CodeReviewStrings,
 } from "@quiz/qt-code/client";
 
+import { HelpIcon } from "./help";
 import type { Dict, TFunction } from "./i18n";
 import { MarkdownView } from "./markdown/MarkdownView";
 import { ScrollableCode, Skeleton, type IconType } from "./ui";
@@ -119,8 +120,33 @@ function translated<T extends object>(t: TFunction, defaults: T, prefix: string)
   return out as T;
 }
 
+/**
+ * The five MCQ scoring policies and their one-line descriptions, shared with
+ * the teacher's preferences (`SettingsPage`) and an evaluation's advanced
+ * options (`AdvancedDisclosure`). One wording, one place: they live under
+ * `mcq.policy.*` in `i18n.tsx`, and the editor's own string keys are mapped
+ * onto them here rather than duplicated under `qt.mcq.e`.
+ */
+const mcqPolicyStrings = (t: TFunction) => ({
+  policyInherit: t("mcq.policy.inherit"),
+  policyAllOrNothing: t("mcq.policy.all_or_nothing"),
+  policyTrueFalse: t("mcq.policy.true_false"),
+  policyDiscordance: t("mcq.policy.discordance"),
+  policySymmetric: t("mcq.policy.symmetric"),
+  policyRipkey: t("mcq.policy.ripkey"),
+  policyDescInherit: t("mcq.policy.desc.inherit"),
+  policyDescAllOrNothing: t("mcq.policy.desc.all_or_nothing"),
+  policyDescTrueFalse: t("mcq.policy.desc.true_false"),
+  policyDescDiscordance: t("mcq.policy.desc.discordance"),
+  policyDescSymmetric: t("mcq.policy.desc.symmetric"),
+  policyDescRipkey: t("mcq.policy.desc.ripkey"),
+});
+
+/** The keys of `mcqEditorStrings` the mapping above answers for. */
+export const MCQ_HOST_MAPPED_KEYS = Object.keys(mcqPolicyStrings(((k) => String(k)) as TFunction));
+
 export const editorStrings = {
-  mcq: (t: TFunction) => translated(t, mcqEditorStrings, "qt.mcq.e"),
+  mcq: (t: TFunction) => ({ ...translated(t, mcqEditorStrings, "qt.mcq.e"), ...mcqPolicyStrings(t) }),
   short: (t: TFunction) => translated(t, shortEditorStrings, "qt.short.e"),
   cloze: (t: TFunction) => translated(t, clozeEditorStrings, "qt.cloze.e"),
   code: (t: TFunction): CodeEditorStrings => ({
@@ -192,6 +218,7 @@ interface EditorHostProps {
   issues?: readonly ConfigIssue[];
   strings?: unknown;
   renderMarkdown?: (source: string) => ReactNode;
+  renderHelp?: (topic: string) => ReactNode;
   RichText?: RichTextComponent;
   uploadAsset?: (file: File) => Promise<string>;
   onTry?: (config: unknown) => Promise<RunnerOutcome | "unavailable">;
@@ -208,6 +235,13 @@ interface EditorHostProps {
  */
 const renderBlock = (source: string) => <MarkdownView source={source} />;
 const renderInline = (source: string) => <MarkdownView as="span" size="sm" source={source} />;
+
+/**
+ * The app's contextual help, lent to an editor the same way: a `qt-*` package
+ * cannot import `help.tsx`, but the "?" next to a label belongs to the app's
+ * chrome and opens the app's drawer (`EditorProps.renderHelp`).
+ */
+const renderHelp = (topic: string) => <HelpIcon topic={topic} />;
 
 export function QuestionEditorHost({
   t,
@@ -241,6 +275,7 @@ export function QuestionEditorHost({
         {...(issues === undefined ? {} : { issues })}
         strings={strings}
         renderMarkdown={renderBlock}
+        renderHelp={renderHelp}
         RichText={LazyRichText}
         uploadAsset={uploadAsset}
         {...(onTry === undefined ? {} : { onTry })}

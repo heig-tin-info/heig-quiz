@@ -135,6 +135,34 @@ describe("EvaluationConfig", () => {
     expect(screen.queryByRole("radio", { name: /^right away$/i })).not.toBeInTheDocument();
   });
 
+  /*
+   * docs/04 §4.4: the evaluation level of the MCQ scoring hierarchy. The
+   * select shows the five policies and the row describes the one in force,
+   * so a teacher reads what it does without opening the help.
+   */
+  it("changes the MCQ scoring policy of the evaluation", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch(
+      routes(makeEvaluationDetail(), {
+        [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(makeEvaluationDetail()),
+      }),
+    );
+    renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+      route: "/evaluations/x?step=timing",
+    });
+
+    await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
+    const select = await screen.findByRole("combobox", { name: /multiple-answer scoring/i });
+    expect(
+      screen.getByText(/full marks for the exact set of correct choices/i),
+    ).toBeInTheDocument();
+    await user.selectOptions(select, "discordance");
+    await waitFor(() => {
+      const patch = calls.find((c) => c.method === "PATCH");
+      expect(patch?.body).toMatchObject({ mcqPolicy: "discordance" });
+    });
+  });
+
   it("the launch step opens the waiting room", async () => {
     const user = userEvent.setup();
     const { calls } = mockFetch(

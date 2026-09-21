@@ -186,3 +186,90 @@ describe("an inline field drops nothing", () => {
     },
   );
 });
+
+/*
+ * What the KEYBOARD makes, which is a different question from what the parser
+ * reads: an input rule fires on a character, and `$$` on an empty line is the
+ * one shape a teacher writes a display formula in. It used to produce three
+ * paragraphs of dollars and no formula at all.
+ */
+function editorFor(markdown = "", inline = false): Editor {
+  return new Editor({
+    element: document.createElement("div"),
+    extensions: richTextExtensions(),
+    enableInputRules: inline ? [...INLINE_INPUT_RULES] : true,
+    content: markdown,
+    contentType: "markdown",
+  });
+}
+
+/**
+ * Types `text` one character at a time, the way ProseMirror sees a keystroke:
+ * `handleTextInput` first (that is where the input rules live), a plain
+ * insertion when nothing took it.
+ */
+function type(editor: Editor, text: string): void {
+  for (const ch of text) {
+    const { from, to } = editor.state.selection;
+    const handled = editor.view.someProp("handleTextInput", (f) =>
+      f(editor.view, from, to, ch, () => editor.state.tr),
+    );
+    if (!handled) editor.view.dispatch(editor.state.tr.insertText(ch, from, to));
+  }
+}
+
+const firstChild = (editor: Editor) => editor.state.doc.firstChild!;
+
+describe("typing a formula", () => {
+  it("turns `$$` alone on a line into an empty display formula", () => {
+    const editor = editorFor();
+    try {
+      type(editor, "$$");
+      expect(firstChild(editor).type.name).toBe("blockMath");
+      expect(firstChild(editor).attrs.latex).toBe("");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("keeps `$…$` inline while it is typed", () => {
+    const editor = editorFor();
+    try {
+      type(editor, "a $\\sqrt{2}$");
+      const paragraph = firstChild(editor);
+      expect(paragraph.type.name).toBe("paragraph");
+      expect(paragraph.lastChild?.type.name).toBe("inlineMath");
+      expect(paragraph.lastChild?.attrs.latex).toBe("\\sqrt{2}");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it.each([
+    ["$$", ""],
+    ["$$x^2$$", "x^2"],
+  ])("converts %j on Enter, for the fence the input rule never saw", (text, latex) => {
+    const editor = editorFor();
+    try {
+      // Pasted, not typed: no input rule fires on this.
+      editor.view.dispatch(editor.state.tr.insertText(text));
+      expect(firstChild(editor).type.name).toBe("paragraph");
+      editor.commands.keyboardShortcut("Enter");
+      expect(firstChild(editor).type.name).toBe("blockMath");
+      expect(firstChild(editor).attrs.latex).toBe(latex);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("makes no block in an inline field, whose rules cannot", () => {
+    const editor = editorFor("", true);
+    try {
+      type(editor, "$$");
+      expect(firstChild(editor).type.name).toBe("paragraph");
+      expect(editor.getMarkdown()).toBe("$$");
+    } finally {
+      editor.destroy();
+    }
+  });
+});

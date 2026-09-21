@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
-import type { EvaluationDetail, EvaluationSettings, FeedbackPolicy } from "@quiz/contracts";
+import { McqPolicy, type EvaluationDetail, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
 
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
-import { Button, Card, cx, inputClass, inputSize, Segmented, SettingRow, Switch } from "../ui";
+import { Button, Card, cx, inputClass, inputSize, Segmented, Select, SettingRow, Switch } from "../ui";
 import type { useEvaluationPatch } from "./usePatch";
 
 /**
@@ -27,7 +27,7 @@ export function AdvancedDisclosure({
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const { settings, feedbackPolicy, accessCode, mode } = detail.evaluation;
+  const { settings, feedbackPolicy, accessCode, mode, mcqPolicy } = detail.evaluation;
   const [code, setCode] = useState(accessCode ?? "");
 
   const set = (next: Partial<EvaluationSettings>) => patch.mutate({ settings: next });
@@ -175,6 +175,32 @@ export function AdvancedDisclosure({
             label={t("eval.feedback.showExplanation")}
             onChange={(showExplanation) => feedback({ showExplanation })}
           />
+        </SettingRow>
+
+        {/* docs/04 §4.4: what every mcq item of this evaluation that says
+            "inherited" is scored with. A question that names its own policy
+            overrides it, and a single-answer question is always all or
+            nothing. Frozen once an attempt exists, like the rest of what
+            decides a score. */}
+        <SettingRow
+          title={t("mcq.policy.title")}
+          desc={t(`mcq.policy.desc.${mcqPolicy}` as keyof Dict)}
+          help="mcq-policies"
+        >
+          <Select
+            value={mcqPolicy}
+            disabled={disabled}
+            size="sm"
+            width="w-52"
+            aria-label={t("mcq.policy.title")}
+            onChange={(e) => patch.mutate({ mcqPolicy: e.target.value as McqPolicy })}
+          >
+            {McqPolicy.options.map((policy) => (
+              <option key={policy} value={policy}>
+                {t(`mcq.policy.${policy}` as keyof Dict)}
+              </option>
+            ))}
+          </Select>
         </SettingRow>
 
         <SettingRow title={t("eval.accessCode")} desc={t("eval.accessCode.desc")}>

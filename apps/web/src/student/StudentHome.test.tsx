@@ -18,6 +18,7 @@ const me: Me = {
   hasUploadedAvatar: false,
   locale: "fr",
   dateFormat: null,
+  mcqPolicy: null,
 };
 
 const card = (over: Partial<EvaluationCard>): EvaluationCard => ({

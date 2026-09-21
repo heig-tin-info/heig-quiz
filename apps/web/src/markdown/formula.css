@@ -1,0 +1,74 @@
+/*
+ * MathLive, dressed in this app's tokens.
+ *
+ * Imported by `FormulaDialog.tsx` alone, so it travels in the dialog's own
+ * lazy chunk and never in the editor's: a teacher who writes no formula
+ * downloads neither the web component nor these rules.
+ *
+ * MathLive draws itself inside a shadow root and exposes the colours it uses
+ * as custom properties on the host element. Every one of them is mapped to a
+ * token here — there is no raw colour and no `dark:` variant, the tokens swap
+ * by themselves (DESIGN.md).
+ */
+
+.formula-dialog math-field {
+  color: var(--fg);
+  background: transparent;
+  font-size: 1.05rem;
+
+  --caret-color: var(--accent);
+  --selection-background-color: var(--accent-soft);
+  --selection-color: var(--fg);
+  --contains-highlight-background-color: var(--surface-3);
+  --placeholder-color: var(--fg-faint);
+  --smart-fence-color: var(--fg-muted);
+  --smart-fence-opacity: 1;
+  --latex-color: var(--fg-muted);
+  --correct-color: var(--success);
+  --incorrect-color: var(--danger);
+  --primary: var(--accent);
+  --text-font-family: var(--font-sans);
+}
+
+/* The element's own focus ring would sit inside the field chrome that already
+   draws one, exactly as the ProseMirror surface does (richtext.css). */
+.formula-dialog math-field:focus,
+.formula-dialog math-field:focus-within {
+  outline: none;
+}
+
+/* The two buttons MathLive draws inside its shadow root — the virtual
+   keyboard and its menu. They are exposed as parts, and without this they
+   keep the platform's own blue, the one raw colour on the dialog. */
+.formula-dialog math-field::part(menu-toggle),
+.formula-dialog math-field::part(virtual-keyboard-toggle) {
+  color: var(--fg-faint);
+}
+.formula-dialog math-field::part(menu-toggle):hover,
+.formula-dialog math-field::part(virtual-keyboard-toggle):hover {
+  color: var(--fg);
+  background: var(--surface-2);
+}
+
+/*
+ * The virtual keyboard is portalled to the document, not to the dialog, so it
+ * is themed from the root. It floats above everything (its own z-index is
+ * 105, over the z-50 dialog layer), which is what a keyboard has to do.
+ */
+body {
+  --keyboard-background: var(--surface);
+  --keyboard-text: var(--fg);
+  --keyboard-text-active: var(--on-fill);
+  --keyboard-border: var(--line);
+  --keycap-background: var(--surface-2);
+  --keycap-background-hover: var(--surface-3);
+  --keycap-background-active: var(--accent);
+  --keycap-border: var(--line-strong);
+  --keycap-text: var(--fg);
+  --keycap-text-active: var(--on-fill);
+  --keycap-secondary-text: var(--fg-muted);
+  --keycap-shift-text: var(--accent);
+  --keyboard-toolbar-text: var(--fg-muted);
+  --keyboard-toolbar-text-active: var(--accent);
+  --keyboard-toolbar-background-hover: var(--surface-2);
+}

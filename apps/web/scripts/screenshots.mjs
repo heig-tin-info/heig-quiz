@@ -140,7 +140,10 @@ const scenes = [
   { name: "pool-loading", role: "teacher", path: "/pools/p1?slow=1", settle: 300 },
   { name: "pool-many", role: "teacher", path: "/pools/p1?many=1" },
   { name: "pool-filters", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("button", { name: /^filtres|^filters/i }).first().click() },
-  { name: "pool-panel", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("row", { name: /ptr-arith-01/ }).first().click() },
+  // The row no longer opens an inspection panel: it opens the question. What
+  // is worth a scene here is the row's own three actions, and the confirm
+  // dialog the last one goes through.
+  { name: "pool-row-delete", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("button", { name: /^(Delete|Supprimer) ptr-arith-01$/ }).first().click() },
   { name: "pool-bulk", role: "teacher", path: "/pools/p1", act: async (p) => {
       await p.getByLabel(/ptr-arith-01/).first().check();
       await p.getByLabel(/ptr-null-check/).first().check();

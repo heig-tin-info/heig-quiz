@@ -9,7 +9,6 @@ import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { useToast } from "../notify";
-import { statementOf } from "../pool/QuestionSidePanel";
 import {
   Alert,
   Badge,
@@ -25,6 +24,18 @@ import {
   Skeleton,
   T,
 } from "../ui";
+
+/**
+ * Where a student view keeps its statement: `prompt`, or `template` for a
+ * cloze. It lived beside the pool's inspection panel until that panel went;
+ * this is its only reader now.
+ */
+export function statementOf(student: unknown): string {
+  if (typeof student !== "object" || student === null) return "";
+  const record = student as Record<string, unknown>;
+  const value = record.prompt ?? record.template;
+  return typeof value === "string" ? value : "";
+}
 
 /**
  * Every published version of the question (F-QST-04): what was published,

@@ -20,12 +20,14 @@ import { QuestionEditorHost, QuestionPlayerHost, typeIcon, typeLabel } from "../
 import type { Route } from "../router";
 import { useSearchParam } from "../router";
 import { useScreenCommands } from "../screenCommands";
+import { useShortcuts } from "../shortcuts";
 import {
   Alert,
   Badge,
   Button,
   Card,
   Menu,
+  modKey,
   PageError,
   PageHeader,
   SectionHeading,
@@ -238,6 +240,16 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
     return () => window.removeEventListener("keydown", onKey);
   }, [flush, setTab]);
 
+  // The same four, shown in the sidebar strip while this screen is mounted.
+  // The sentence that used to spell them out under the form is gone: a hint
+  // that only the editor carried is now the frame's, and it follows the page.
+  useShortcuts([
+    { keys: `${modKey()}+S`, label: t("common.save") },
+    { keys: `${modKey()}+Enter`, label: t("question.tab.try") },
+    { keys: `${modKey()}+Shift+P`, label: t("question.publish") },
+    { keys: `${modKey()}+Shift+M`, label: t("question.preview") },
+  ]);
+
   useEffect(() => {
     if (!followToPanel.current) return;
     followToPanel.current = false;
@@ -408,7 +420,6 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
             </Card>
 
             <Card className="space-y-3 p-5">
-              <p className="text-sm text-fg-muted">{t("question.explanationHint")}</p>
               <MarkdownField
                 label={t("question.explanation")}
                 value={draft?.explanation ?? ""}
@@ -419,8 +430,6 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
                 onUploadImage={async (file) => ({ id: (await uploadAsset(file)).slice("asset:".length) })}
               />
             </Card>
-
-            <p className="text-xs text-fg-faint">{t("question.shortcuts")}</p>
           </div>
 
           <aside aria-label={t("aside.questionMeta")} className="space-y-5">

@@ -40,7 +40,7 @@ const HIDDEN_EXPECTED = "42";
 
 const CONFIGS: Record<string, unknown> = {
   mcq: {
-    configVersion: 1,
+    configVersion: 2,
     prompt: "Which one is the capital of France?",
     choices: [
       { text: "Paris", correct: true },

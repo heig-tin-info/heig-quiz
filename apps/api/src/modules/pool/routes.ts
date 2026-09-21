@@ -31,6 +31,8 @@ import {
   QuestionCreate,
   QuestionPatch,
   QuestionSearch,
+  TagParam,
+  TagPatch,
   TryBody,
   VersionParam,
   type Asset,
@@ -177,10 +179,41 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     return reply.code(204).send();
   });
 
+  /** The tag vocabulary of the pool: name, description, usage count. */
   app.get("/app/api/pools/:id/tags", { preHandler: requireTeacher }, async (req, reply) => {
     const pool = await accessiblePool(app, req, reply);
     if (!pool) return reply;
     return service.poolTags(app.db, pool.id);
+  });
+
+  /**
+   * Documents one tag of the pool. The row is created on the spot when the
+   * tag only existed on questions so far, so a teacher never has to "declare"
+   * a tag before describing it.
+   */
+  app.patch("/app/api/pools/:id/tags/:tag", { preHandler: requireTeacher }, async (req, reply) => {
+    const pool = await accessiblePool(app, req, reply);
+    if (!pool) return reply;
+    const params = TagParam.safeParse(req.params);
+    if (!params.success) return invalid(reply, params.error);
+    const body = TagPatch.safeParse(req.body);
+    if (!body.success) return invalid(reply, body.error);
+    const tag = await service.describeTag(
+      app.db,
+      pool.id,
+      params.data.tag,
+      body.data.description,
+    );
+    await audit(app.db, {
+      actorUserId: req.user!.id,
+      actorType: "user",
+      action: "tag.describe",
+      subjectType: "pool",
+      subjectId: pool.id,
+      payload: { tag: tag.tag, description: tag.description },
+    });
+    poolChanged(pool.id);
+    return tag;
   });
 
   // --- Categories --------------------------------------------------------
