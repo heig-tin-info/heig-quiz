@@ -2057,7 +2057,10 @@ function makeItems(count: number): MockItem[] {
       id: uuid(),
       position: i + 1,
       points: q.type === "code" ? 3 : 1 + (i % 3),
-      milestone: i === 4,
+      // Two section breaks, the first early enough that the four-item draft
+      // shows one: the milestone separator is a shape of the list and has to
+      // appear on the screenshot that documents it.
+      milestone: i === 1 || i === 4,
       questionId: q.id,
       questionVersionId: uuid(),
       type: q.type,

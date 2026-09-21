@@ -12,8 +12,19 @@ question freezes it on its published version — a later version of the
 question does not change an evaluation behind your back; a banner offers to
 move one item, or all of them, forward, as long as nobody has started.
 
-Each item carries its points, an order you change with the two arrows, and
-an optional **Milestone** flag, past which the student does not come back.
+Each item carries its points and an order you change by dragging the grip at
+the left of the row — with the mouse, or with the keyboard: focus the grip,
+press Space, move with the arrows, press Space again.
+
+A **milestone** is drawn as a separator across the list: everything above it
+closes once the student has passed it, and they do not come back. Hover the
+space between two rows and click **Add a milestone** to put one there; the ×
+on a separator removes it. A separator belongs to the row above it and
+travels with it when you drag that row.
+
+The row shows a **refresh** button only when a newer published version of the
+question exists, and a **bin** that takes the item out of this evaluation —
+the question itself stays in its pool.
 
 ## Time and mode
 

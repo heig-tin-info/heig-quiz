@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { makeClassroomDetail } from "../test/fixtures";
 import {
@@ -9,7 +9,14 @@ import {
   makeEvaluationDetail,
   makeItemRow,
 } from "../test/live-fixtures";
-import { mockFetch, ok, renderWithProviders, type RouteHandler } from "../test/render";
+import {
+  fail,
+  mockFetch,
+  noContent,
+  ok,
+  renderWithProviders,
+  type RouteHandler,
+} from "../test/render";
 import { EvaluationConfig } from "./EvaluationConfig";
 
 /*
@@ -202,5 +209,218 @@ describe("EvaluationConfig", () => {
     mockFetch({});
     renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />);
     expect(await screen.findByText(/evaluation not found/i)).toBeInTheDocument();
+  });
+
+  /*
+   * The three steps say where they lead, by name. "Next" and "Back" were a
+   * wizard's words on a screen that is a tab strip.
+   */
+  it("names the step each navigation button leads to", async () => {
+    mockFetch(routes());
+    const { unmount } = renderWithProviders(
+      <EvaluationConfig id={EVALUATION_ID} navigate={navigate} />,
+      { route: "/evaluations/x?step=questions" },
+    );
+    expect(await screen.findByRole("button", { name: /^go to time and mode$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^next$/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^back to/i })).toBeNull();
+    unmount();
+
+    renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+      route: "/evaluations/x?step=timing",
+    });
+    expect(await screen.findByRole("button", { name: /^back to questions$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^go to launch$/i })).toBeInTheDocument();
+  });
+
+  it("the launch step offers only the way back", async () => {
+    mockFetch(routes());
+    renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+      route: "/evaluations/x?step=launch",
+    });
+    expect(
+      await screen.findByRole("button", { name: /^back to time and mode$/i }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^go to /i })).toBeNull();
+  });
+});
+
+/**
+ * `@dnd-kit` reorders by comparing the RECTANGLES of the rows, and jsdom runs
+ * no layout: every element reports a zero-sized box at the origin, so the
+ * keyboard sensor has nowhere to move to and no collision to detect. This
+ * stub lays the item rows out in a column — 56 px each, in DOM order — for the
+ * duration of the reordering suite. It fakes geometry, nothing else: the
+ * sensor, the collision detection and `onDragEnd` are the real ones.
+ */
+function stubRowLayout() {
+  const real = Element.prototype.getBoundingClientRect;
+  beforeEach(() => {
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      const parent = this.parentElement;
+      const row = this.tagName === "LI" && parent ? Array.from(parent.children).indexOf(this) : 0;
+      const top = this.tagName === "LI" ? row * 56 : 0;
+      const height = this.tagName === "LI" ? 56 : 0;
+      return {
+        x: 0, y: top, top, left: 0, right: 800, bottom: top + height,
+        width: 800, height, toJSON: () => ({}),
+      } as DOMRect;
+    };
+  });
+  afterEach(() => {
+    Element.prototype.getBoundingClientRect = real;
+  });
+}
+
+describe("EvaluationConfig — the questions step", () => {
+  stubRowLayout();
+
+  const THREE = [makeItemRow(0), makeItemRow(1), makeItemRow(2)];
+
+  function renderQuestions(
+    detail = makeEvaluationDetail({ items: THREE }),
+    extra: Record<string, RouteHandler> = {},
+  ) {
+    const mocked = mockFetch(routes(detail, extra));
+    renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+      route: "/evaluations/x?step=questions",
+    });
+    return mocked;
+  }
+
+  it("offers one named drag handle per row and no arrows", async () => {
+    renderQuestions();
+    const handles = await screen.findAllByRole("button", { name: /^reorder /i });
+    expect(handles).toHaveLength(3);
+    for (const handle of handles) {
+      expect(handle.tagName).toBe("BUTTON");
+      expect(handle).toHaveAttribute("aria-roledescription", "sortable");
+    }
+    expect(screen.queryByRole("button", { name: /^move (up|down)$/i })).toBeNull();
+  });
+
+  it("writes the whole new order in one PUT, from the keyboard alone", async () => {
+    const { calls } = renderQuestions(undefined, {
+      [`PUT /app/api/evaluations/${EVALUATION_ID}/items/order`]: ok(THREE),
+    });
+
+    (await screen.findByRole("button", { name: "Reorder Question 1" })).focus();
+    await userEvent.keyboard(" ");
+    await userEvent.keyboard("{ArrowDown}");
+    await userEvent.keyboard(" ");
+
+    await waitFor(() => {
+      const puts = calls.filter((c) => c.method === "PUT" && c.url.endsWith("/items/order"));
+      expect(puts).toHaveLength(1);
+      expect(puts[0]?.body).toEqual({
+        itemIds: [THREE[1]!.id, THREE[0]!.id, THREE[2]!.id],
+      });
+    });
+    // The list shows the new order before the server has answered.
+    const names = screen.getAllByRole("listitem").map((li) => li.textContent ?? "");
+    expect(names[0]).toContain("Question 2");
+    expect(names[1]).toContain("Question 1");
+  });
+
+  it("puts the rows back and says so when the reorder fails", async () => {
+    renderQuestions(undefined, {
+      [`PUT /app/api/evaluations/${EVALUATION_ID}/items/order`]: fail(409, {
+        message: "locked",
+      }),
+    });
+
+    (await screen.findByRole("button", { name: "Reorder Question 1" })).focus();
+    await userEvent.keyboard(" ");
+    await userEvent.keyboard("{ArrowDown}");
+    await userEvent.keyboard(" ");
+
+    expect(await screen.findByText(/new order could not be saved/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getAllByRole("listitem")[0]?.textContent).toContain("Question 1");
+    });
+  });
+
+  /*
+   * F-EVAL-07 is a boolean on the item; the SCREEN is a separator between two
+   * of them. Adding one patches the row above the gap, removing one patches
+   * the same row back to false.
+   */
+  it("adds a milestone in the gap under a row", async () => {
+    const user = userEvent.setup();
+    const { calls } = renderQuestions(undefined, {
+      [`PATCH /app/api/evaluations/${EVALUATION_ID}/items/${THREE[0]!.id}`]: ok(THREE[0]),
+    });
+
+    await user.click(
+      await screen.findByRole("button", { name: /add a milestone after question 1/i }),
+    );
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PATCH")).toMatchObject({
+        body: { milestone: true },
+      }),
+    );
+  });
+
+  it("shows the separator of a milestone item, and removes it", async () => {
+    const user = userEvent.setup();
+    const flagged = [makeItemRow(0, { milestone: true }), makeItemRow(1), makeItemRow(2)];
+    const { calls } = renderQuestions(makeEvaluationDetail({ items: flagged }), {
+      [`PATCH /app/api/evaluations/${EVALUATION_ID}/items/${flagged[0]!.id}`]: ok(flagged[0]),
+    });
+
+    expect(await screen.findByText(/^milestone$/i)).toBeInTheDocument();
+    // The gap "+" is gone where a separator already stands.
+    expect(screen.queryByRole("button", { name: /add a milestone after question 1/i })).toBeNull();
+    // ...and there is no per-row switch left to disagree with the separator.
+    expect(screen.queryByRole("switch", { name: /milestone/i })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: /remove the milestone after question 1/i }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PATCH")).toMatchObject({
+        body: { milestone: false },
+      }),
+    );
+  });
+
+  it("offers the refresh button only on a row with a newer version", async () => {
+    const user = userEvent.setup();
+    const stale = makeItemRow(1, { versionNumber: 1, latestVersionNumber: 4 });
+    const { calls } = renderQuestions(
+      makeEvaluationDetail({ items: [makeItemRow(0), stale], staleItems: [stale.id] }),
+      {
+        [`POST /app/api/evaluations/${EVALUATION_ID}/items/update-versions`]: ok([]),
+      },
+    );
+
+    const refresh = await screen.findAllByRole("button", { name: /^use the latest version of/i });
+    expect(refresh).toHaveLength(1);
+    expect(refresh[0]).toHaveAccessibleName("Use the latest version of Question 2");
+
+    await user.click(refresh[0]!);
+    await waitFor(() =>
+      expect(
+        calls.find((c) => c.method === "POST" && c.url.endsWith("/items/update-versions")),
+      ).toMatchObject({ body: { itemIds: [stale.id] } }),
+    );
+  });
+
+  /*
+   * Taking an item out of an evaluation nobody has started takes nothing
+   * away: the question stays in its pool. The dialog is what a change to
+   * something a class has already answered deserves, and nothing less.
+   */
+  it("removes an item in one click while no attempt exists", async () => {
+    const user = userEvent.setup();
+    const { calls } = renderQuestions(undefined, {
+      [`DELETE /app/api/evaluations/${EVALUATION_ID}/items/${THREE[0]!.id}`]: noContent(),
+    });
+
+    await user.click(
+      await screen.findByRole("button", { name: /remove question 1 from the evaluation/i }),
+    );
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === "DELETE" && c.url.endsWith(THREE[0]!.id))).toBe(true),
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 });

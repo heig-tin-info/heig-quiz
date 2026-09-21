@@ -1,5 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, ClipboardCheck, Copy, Eye, MonitorPlay, Pencil, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  BarChart3,
+  ClipboardCheck,
+  Copy,
+  Eye,
+  MonitorPlay,
+  Pencil,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
 
 import type { ClassroomDetail, EvaluationDetail } from "@quiz/contracts";
@@ -14,6 +24,7 @@ import {
   Alert,
   Badge,
   Button,
+  cx,
   Field,
   Menu,
   Modal,
@@ -37,10 +48,12 @@ import { useEvaluationPatch } from "./usePatch";
  * they left, which a wizard would make them walk through again. The step
  * lives in `?step=`, so that reload keeps it and a link can point at it.
  *
- * The one primary action belongs to the STEP, never to the page frame: "Add
+ * The one primary action belongs to the STEP, never to the page HEADER: "Add
  * questions" on the first, a preset on the second, "Open the waiting room" on
  * the third. The header therefore holds no primary at all, only the preview
- * and the overflow menu.
+ * and the overflow menu. The foot of the frame carries the way FORWARD, which
+ * names the step it leads to; on Launch it carries only the way back, because
+ * the primary there is the launch itself.
  */
 
 const STEPS = ["questions", "timing", "launch"] as const;
@@ -275,16 +288,31 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
         )}
       </TabPanel>
 
-      {step !== "launch" ? (
-        <div className="flex justify-end">
+      {/*
+       * The two buttons NAME the step they lead to. "Next" and "Back" said
+       * only that there was one more screen; a teacher who came back to a
+       * half-configured quiz had to read the tab strip to find out which. The
+       * forward one is the primary of the step frame and the backward one is
+       * always secondary — on Launch the primary belongs to the launch action
+       * itself, so the frame keeps only the way back.
+       */}
+      <div className={cx("flex gap-2", step === "questions" ? "justify-end" : "justify-between")}>
+        {step === "questions" ? null : (
           <Button
             variant="secondary"
-            onClick={() => setStep(step === "questions" ? "timing" : "launch")}
+            onClick={() => setStep(step === "timing" ? "questions" : "timing")}
           >
-            {t("eval.next")}
+            <ArrowLeft />
+            {step === "timing" ? t("eval.backTo.questions") : t("eval.backTo.timing")}
           </Button>
-        </div>
-      ) : null}
+        )}
+        {step === "launch" ? null : (
+          <Button onClick={() => setStep(step === "questions" ? "timing" : "launch")}>
+            {step === "questions" ? t("eval.goTo.timing") : t("eval.goTo.launch")}
+            <ArrowRight />
+          </Button>
+        )}
+      </div>
 
       {previewing ? (
         <PreviewSheet evaluationId={id} onClose={() => setPreviewing(false)} />

@@ -252,6 +252,23 @@ with a keyboard-reachable dismiss button.
   stays for actions. When the strip is wider than the screen it scrolls, the
   hidden side is faded out over 36 px (a mask, so it works on either theme)
   and the tabs snap: a fourth tab must never simply stop at the screen edge.
+- Row grip: the handle that reorders a list of rows (the evaluation's items,
+  an mcq's choices), at the LEFT of the row, `GripVertical` in `fg-faint` on a
+  28 px round hover target. It is a real `<button>` carrying the @dnd-kit
+  listeners, which is the whole point: the keyboard sensor reorders through
+  that same affordance (focus, Space, arrows, Space), so the ↑ / ↓ pair it
+  replaces is removed rather than kept beside it — two controls for one
+  gesture means one of them is lying. Pointer sensor at 4 px of slop so a
+  click in the row is still a click, and `restrictToVerticalAxis`.
+- Milestone separator: the evaluation's `milestone` boolean, drawn as a BAND
+  across the list under the row it belongs to — `surface-2`, a dashed
+  `line-strong` hairline, a `Flag` and the word in 11 px uppercase
+  `fg-muted`, an × at the end. Not red: the one accent on that screen is
+  "Add questions", and a rule in brand red running across a list wins the
+  squint test against it. The way to make one is a "+" pill revealed in the
+  GAP it would fill (row hover, its own focus, or always under a coarse
+  pointer), because a section break is a thing you put BETWEEN two rows, not
+  a property you tick on one.
 - Settings row: label and the description of the current choice on the left,
   the control on the right. The row wraps rather than squeezing — the text
   keeps a 14 rem floor, so a segmented control or a select drops to its own

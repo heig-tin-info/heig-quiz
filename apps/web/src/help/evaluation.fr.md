@@ -13,8 +13,19 @@ une question la fige sur sa version publiée — une version plus récente ne
 change pas une évaluation dans votre dos ; un bandeau propose de faire
 avancer un item, ou tous, tant que personne n'a commencé.
 
-Chaque item porte ses points, un ordre que vous changez avec les deux
-flèches, et un **Jalon** facultatif, au-delà duquel on ne revient plus.
+Chaque item porte ses points et un ordre que vous changez en glissant la
+poignée à gauche de la ligne — à la souris, ou au clavier : placez le focus
+sur la poignée, Espace, les flèches pour déplacer, Espace à nouveau.
+
+Un **jalon** est dessiné comme un séparateur en travers de la liste : tout ce
+qui est au-dessus se ferme une fois l'étudiant passé, et il ne revient plus.
+Survolez l'espace entre deux lignes et cliquez **Ajouter un jalon** pour en
+poser un ; le × d'un séparateur le retire. Un séparateur appartient à la
+ligne au-dessus de lui et la suit quand vous déplacez cette ligne.
+
+La ligne montre un bouton **rafraîchir** seulement lorsqu'une version publiée
+plus récente de la question existe, et une **corbeille** qui retire l'item de
+cette évaluation — la question, elle, reste dans sa banque.
 
 ## Temps et mode
 

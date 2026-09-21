@@ -84,6 +84,7 @@ const scenes = [
   { name: "eval-list", role: "teacher", path: "/classrooms/r1" },
   { name: "eval-config-questions", role: "teacher", path: "/evaluations/draft?step=questions" },
   { name: "eval-config-picker", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { name: /add questions/i }).first().click() },
+  { name: "eval-config-milestone-gap", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { name: /^reorder /i }).first().hover() },
   { name: "eval-config-timing", role: "teacher", path: "/evaluations/draft?step=timing" },
   { name: "eval-config-advanced", role: "teacher", path: "/evaluations/draft?step=timing", act: (p) => p.getByRole("button", { name: /^advanced options$/i }).first().click() },
   { name: "eval-config-launch", role: "teacher", path: "/evaluations/draft?step=launch" },
