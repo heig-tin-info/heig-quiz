@@ -90,3 +90,11 @@ refuses a `pglite://` URL there, and refuses `AUTH_DEV_LOGIN=1` outright.
 
 Bootstrap. Identity, courses, classrooms and rosters work; pools, evaluations,
 grading and the runner are the work ahead. See `docs/spec/`.
+
+## Documentation
+
+The specification, the architecture decision records and the plan are
+published at <https://heig-tin-info.github.io/heig-quiz/> from `docs/` on
+every push to `main` (`.github/workflows/docs.yml`, site generator
+[zensical](https://zensical.org), configuration in `zensical.toml`).
+Locally: `uvx zensical serve` or `pip install zensical && pnpm docs:serve`.

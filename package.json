@@ -15,7 +15,9 @@
     "dev:mock": "pnpm --filter @quiz/web dev:mock",
     "seed": "pnpm --filter @quiz/api seed",
     "smoke": "bash scripts/smoke.sh",
-    "db:generate": "pnpm --filter @quiz/api db:generate"
+    "db:generate": "pnpm --filter @quiz/api db:generate",
+    "docs:build": "zensical build",
+    "docs:serve": "zensical serve"
   },
   "pnpm": {
     "overrides": {

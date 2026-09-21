@@ -1,0 +1,101 @@
+[project]
+site_name = "HEIG Quiz"
+site_description = "A quiz platform for HEIG-VD teachers: question pools, live evaluations with a server-side clock, automatic grading with sandboxed code execution, live polls."
+site_author = "Yves Chevallier"
+site_url = "https://heig-tin-info.github.io/heig-quiz/"
+repo_url = "https://github.com/heig-tin-info/heig-quiz"
+copyright = """
+Copyright &copy; 2026 HEIG-VD, TIN department
+"""
+
+# The specification is written in French (it is the product spec of a
+# French-speaking school); the plan and the decision records are in English,
+# as everything else in the repository (CLAUDE.md, invariant 1).
+nav = [
+  { "Home" = "index.md" },
+  { "Specification" = [
+    { "0. Cadre, objectifs et périmètre" = "spec/00-cadre-et-perimetre.md" },
+    { "1. Glossaire et modèle de domaine" = "spec/01-glossaire-et-domaine.md" },
+    { "2. Exigences fonctionnelles" = "spec/02-exigences-fonctionnelles.md" },
+    { "3. Exigences non fonctionnelles" = "spec/03-exigences-non-fonctionnelles.md" },
+    { "4. Types de questions" = "spec/04-types-de-questions.md" },
+    { "5. Architecture" = "spec/05-architecture.md" },
+    { "6. Questions ouvertes" = "spec/06-questions-ouvertes.md" },
+    { "7. Réutilisation de heig-classroom" = "spec/07-reutilisation-heig-classroom.md" },
+    { "8. Expérience à deux niveaux" = "spec/08-experience-deux-niveaux.md" },
+  ] },
+  { "Decisions" = [
+    { "ADR-001 Modular monolith" = "adr/ADR-001-monolithe-modulaire.md" },
+    { "ADR-002 Fastify backend" = "adr/ADR-002-stack-backend-fastify.md" },
+    { "ADR-003 PostgreSQL and Drizzle" = "adr/ADR-003-postgresql-drizzle.md" },
+    { "ADR-004 pg-boss jobs" = "adr/ADR-004-jobs-pg-boss.md" },
+    { "ADR-005 SSE, not WebSocket" = "adr/ADR-005-sse-sans-websocket.md" },
+    { "ADR-006 Deadline ticker" = "adr/ADR-006-deadline-ticker.md" },
+    { "ADR-007 Self-hosted runner" = "adr/ADR-007-runner-self-hosted.md" },
+    { "ADR-008 React SPA" = "adr/ADR-008-frontend-spa-react.md" },
+    { "ADR-009 One VM, Compose" = "adr/ADR-009-deploiement-vm-compose.md" },
+    { "ADR-010 Secrets" = "adr/ADR-010-stockage-secrets.md" },
+    { "ADR-012 Two-step grade freeze" = "adr/ADR-012-gel-note-deux-temps.md" },
+    { "ADR-013 Pool sharing" = "adr/ADR-013-partage-des-pools.md" },
+    { "ADR-014 Live polls" = "adr/ADR-014-sondages-en-direct.md" },
+  ] },
+  { "Development" = [
+    { "MVP plan" = "PLAN-MVP.md" },
+    { "API review (2026-09-20)" = "API-REVIEW-2026-09-20.md" },
+  ] },
+]
+
+[project.theme]
+language = "en"
+features = [
+  "content.code.copy",
+  "content.footnote.tooltips",
+  "content.tooltips",
+  "navigation.footer",
+  "navigation.indexes",
+  "navigation.instant",
+  "navigation.instant.prefetch",
+  "navigation.path",
+  "navigation.top",
+  "navigation.tracking",
+  "search.highlight",
+]
+
+[project.theme.icon]
+logo = "lucide/list-checks"
+
+[[project.theme.palette]]
+scheme = "default"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+scheme = "slate"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/github"
+link = "https://github.com/heig-tin-info/heig-quiz"
+
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.attr_list]
+[project.markdown_extensions.def_list]
+[project.markdown_extensions.footnotes]
+[project.markdown_extensions.md_in_html]
+[project.markdown_extensions.toc]
+permalink = true
+[project.markdown_extensions.pymdownx.betterem]
+[project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.highlight]
+anchor_linenums = true
+line_spans = "__span"
+pygments_lang_class = true
+[project.markdown_extensions.pymdownx.inlinehilite]
+[project.markdown_extensions.pymdownx.magiclink]
+[project.markdown_extensions.pymdownx.superfences]
+custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
+[project.markdown_extensions.pymdownx.tasklist]
+custom_checkbox = true

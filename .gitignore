@@ -16,3 +16,4 @@ coverage/
 
 # Local secrets -- ADR-010
 secrets/
+site/
