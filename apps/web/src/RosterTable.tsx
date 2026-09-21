@@ -115,7 +115,10 @@ function Row({ classroomId, entry }: { classroomId: string; entry: RosterEntry }
             onChange={(e) => setForm({ ...form, prenom: e.target.value })}
           />
         </td>
-        <td className={T.td} colSpan={2}>
+        {/* One cell per column, colSpan-free: a cell spanning a column the
+            container has hidden leaves this row one column wider than every
+            other one, and the table shears. */}
+        <td className={cx(T.td, T.colHigh)}>
           <input
             className={small}
             aria-label={t("roster.col.email")}
@@ -128,7 +131,8 @@ function Row({ classroomId, entry }: { classroomId: string; entry: RosterEntry }
             <p className="mt-1 text-xs text-warning">{t("roster.emailChangeWarning")}</p>
           ) : null}
         </td>
-        <td className={T.td}>
+        <td className={T.td} />
+        <td className={cx(T.td, T.colMid)}>
           <input
             className={cx(small, "text-right tabular-nums")}
             aria-label={t("roster.col.bonus")}
@@ -139,7 +143,8 @@ function Row({ classroomId, entry }: { classroomId: string; entry: RosterEntry }
             onChange={(e) => setForm({ ...form, timeBonusPercent: e.target.value })}
           />
         </td>
-        <td className={`${T.td} whitespace-nowrap text-right`} colSpan={2}>
+        <td className={cx(T.td, T.colLow)} />
+        <td className={cx(T.td, "whitespace-nowrap text-right sticky right-0 bg-surface-2")}>
           <IconButton label={t("common.save")} onClick={() => save.mutate()} disabled={save.isPending}>
             <Check />
           </IconButton>
@@ -181,7 +186,7 @@ function Row({ classroomId, entry }: { classroomId: string; entry: RosterEntry }
           </span>
         </td>
         <td className={T.td}>{entry.prenom}</td>
-        <td className={`${T.td} text-fg-muted`}>
+        <td className={cx(T.td, "text-fg-muted", T.colHigh)}>
           <a href={`mailto:${entry.email}`} className="hover:text-fg hover:underline">
             {entry.email}
           </a>
@@ -211,17 +216,17 @@ function Row({ classroomId, entry }: { classroomId: string; entry: RosterEntry }
         {/* The accommodation, right-aligned and tabular like every number.
             Zero shows an em dash: a column of "0 %" reads as data when it is
             in fact the absence of any. */}
-        <td className={`${T.td} text-right tabular-nums`}>
+        <td className={cx(T.td, "text-right tabular-nums", T.colMid)}>
           {entry.timeBonusPercent > 0 ? (
             <span className="font-semibold text-accent">+{entry.timeBonusPercent}%</span>
           ) : (
             <span className="text-fg-faint">—</span>
           )}
         </td>
-        <td className={`${T.td} whitespace-nowrap text-fg-muted`}>
+        <td className={cx(T.td, "whitespace-nowrap text-fg-muted", T.colLow)}>
           {entry.lastLoginAt ? isoDateTime(entry.lastLoginAt) : "—"}
         </td>
-        <td className={`${T.td} whitespace-nowrap text-right`}>
+        <td className={cx(T.td, "whitespace-nowrap text-right", T.stickyEnd)}>
           {/* The menu is gone by the time the request answers, so the row
               itself carries the fact that something is running. */}
           {busy ? (
@@ -309,25 +314,38 @@ export function RosterTable({
         ? x - y
         : String(x).localeCompare(String(y), undefined, { sensitivity: "base" }),
   );
-  const Th = ({ k, children }: { k: SortKey; children: React.ReactNode }) => (
-    <SortHeader k={k} sort={sort} onToggle={toggle}>
+  const Th = ({
+    k,
+    children,
+    className,
+  }: {
+    k: SortKey;
+    children: React.ReactNode;
+    className?: string;
+  }) => (
+    <SortHeader k={k} sort={sort} onToggle={toggle} className={className}>
       {children}
     </SortHeader>
   );
 
   return (
-    /* Seven columns never fit a phone: the table scrolls, the page does not. */
-    <div className="overflow-x-auto">
-      <table className={cx(T.table, "min-w-220")}>
+    /* Seven columns never fit a phone. The three the teacher can read later
+       leave in turn as the table's own container shrinks (`T` › column
+       priority): the last sign-in, then the accommodation, then the e-mail.
+       The name, the first name, the status and the row menu stay, and the
+       menu is pinned to the right edge for the widths where even that four
+       scrolls. */
+    <div className={cx(T.container, "overflow-x-auto")}>
+      <table className={T.table}>
         <thead>
           <tr className={T.head}>
             <Th k="nom">{t("roster.col.lastName")}</Th>
             <Th k="prenom">{t("roster.col.firstName")}</Th>
-            <Th k="email">{t("roster.col.email")}</Th>
+            <Th k="email" className={T.colHigh}>{t("roster.col.email")}</Th>
             <Th k="status">{t("roster.col.status")}</Th>
-            <Th k="timeBonusPercent">{t("roster.col.bonus")}</Th>
-            <Th k="lastLoginAt">{t("roster.col.lastSignIn")}</Th>
-            <th className={T.th}>
+            <Th k="timeBonusPercent" className={T.colMid}>{t("roster.col.bonus")}</Th>
+            <Th k="lastLoginAt" className={T.colLow}>{t("roster.col.lastSignIn")}</Th>
+            <th className={cx(T.th, T.stickyEnd)}>
               <span className="sr-only">{t("common.actions")}</span>
             </th>
           </tr>

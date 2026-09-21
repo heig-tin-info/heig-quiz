@@ -194,6 +194,15 @@ with a keyboard-reachable dismiss button.
 - Badge: pill, soft background, 12 px, tones green / amber / red / zinc /
   accent. Status is a badge; a count is plain text.
 - Card: `surface` + hairline + 16 px radius; padding 16–20.
+- Logo: the product's wordmark (`src/assets/quiz.svg`), four speech bubbles
+  spelling Q U I Z, as an `<img alt="Quiz">`. It is the file, not inline JSX:
+  the same mark is delivered elsewhere, and a retyped copy is a second
+  version to keep in step. Its four colours are its own and live outside the
+  token scale — nothing else on a screen may use them. `className` carries
+  the WIDTH and the height follows, because it is a drawn word and is sized
+  like a word: 100 % of the sidebar (about 200 px), 112 px in the phone top
+  bar and in the drawer, 220 px on the signed-out page, where it IS the `h1`
+  and the 28 px title under it is gone — it said "Quiz" a second time.
 - Alert: hairline + soft tone fill, an icon, a title and one paragraph. Its
   `action` slot holds one button, beside the text from `sm` up and on a line
   of its own below it: a long label inline squeezes the body to one word per
@@ -211,7 +220,20 @@ with a keyboard-reachable dismiss button.
   Width is a prop, never a class beside `inputClass`: Tailwind settles two
   width or height utilities on one element by their order in the generated
   stylesheet, not by the order they were written in.
+- ToggleChip: a value you switch on, as a pill — `border-line-strong` on
+  `surface` in `fg-muted` at rest, `accent-soft` on an `accent` border in
+  `accent` when pressed, 28 px tall, 13 px, an optional leading icon.
+  Containers lay them out with `flex flex-wrap gap-2`. It exists because a
+  column of checkboxes is the shape of independent SETTINGS, and the filter
+  sheet holds SETS — the type of a question, a difficulty, a tag: the reader
+  wants to see what is on at a glance, and two-word labels beside small boxes
+  collided the moment the sheet was narrower than the longest of them. It is
+  a real `aria-pressed` button, so the state and the label are never
+  separated; `pressed` left undefined drops `aria-pressed` for the one pill
+  in a row that is an action and not a value ("Show all (37)").
 - Segmented: `surface-3` pill track, selected chip raised to `surface`.
+  Segmented is one choice out of two or three, ToggleChip is any number out
+  of many; do not use one for the other's job.
 - Switch: `success` when on (a state, not an action, so not the accent),
   `line-strong` when off.
 - Tabs: text tabs with a 2 px ink (`fg`) underline, counts in `fg-faint`; red
@@ -356,6 +378,44 @@ with a keyboard-reachable dismiss button.
   already in the text, and by itself when `$$` on an empty line makes an empty
   one. MathLive is loaded on first open and dressed in the tokens through
   `markdown/formula.css`; its fonts are the KaTeX fonts the page already has.
+
+## Tables
+
+At most seven visible columns, one dominant identity column, numbers right
+aligned and tabular, status as a `Badge`, actions last, `—` for an empty
+cell. All of it lives in `T` in `ui.tsx`.
+
+Seven columns do not fit every width, and the width that matters is the
+TABLE's, never the viewport's: the same pool table is 1120 px wide on a
+1440 px screen, 720 px beside the sidebar on a 1024 px one and 704 px on a
+768 px tablet with no sidebar at all — the viewport told us nothing in two of
+those three. So the wrapper that scrolls the table carries `T.container`
+(`@container`) and the columns carry a PRIORITY, measured against it:
+
+| Class | Shown while the container is | Goes |
+| --- | --- | --- |
+| `T.colLow` | ≥ 64rem (1024 px) | first |
+| `T.colMid` | ≥ 56rem (896 px) | second |
+| `T.colHigh` | ≥ 42rem (672 px) | last |
+| `T.wordFrom` | ≥ 32rem (512 px) | gives a badge its word back |
+
+The thresholds are measured, not picked: 1120 px of content keeps everything,
+the pool table started clipping its actions at about 800 px, and 672 px is
+what the tablet width leaves. The identity column, the tick box and the
+ACTIONS never carry a priority — they are the row and what you do with it.
+
+Below the last threshold the table still scrolls sideways. The actions cell
+then takes `T.stickyEnd` (`sticky right-0` on the row's own fill, hover
+included), because a row whose actions are off screen is a row you cannot
+act on, and that was the bug the priorities were added for.
+
+A row with a `colSpan` needs care: a cell spanning a column the container has
+hidden leaves that row one column wider than every other one, and the table
+shears. An inline edit row gets one cell per column, empty ones included.
+
+Applied today: the pool table (version, updated, tags), the roster (last
+sign-in, accommodation, e-mail), the evaluation list (attempts, points,
+questions) and the grade table (duration, e-mail).
 
 ## Voice
 

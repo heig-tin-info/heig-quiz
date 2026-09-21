@@ -42,6 +42,19 @@ names its own when it really needs to. The five policies, and what each one
 gives for a half-right answer, are explained under "Multiple-answer
 scoring".
 
+## A short-answer question
+
+The kind of answer — text, number, date or time — decides what the student's
+field is, and the constraints beside it decide what that field takes: a length
+window, a numeric range, a window of dates. The student is stopped while
+typing rather than told afterwards, and none of it gives the answer away.
+
+The two **prefilters**, Trim and Lowercase, are decided once for the whole
+question: they are applied to the student's answer and to every accepted text
+before the comparison, so a key with five accepted answers no longer asks the
+same question about the case five times. Only "Integer" also reaches the
+grade: a non-integer answer to a whole-number question is wrong.
+
 ## Publishing
 
 **Publish** validates the draft against the type's schema and creates the

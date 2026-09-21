@@ -268,14 +268,47 @@ export function useSortableTable<T, K extends string>(
   return { sorted, sort, toggle };
 }
 
-/** Table styles (DESIGN.md › Components): dense 13 px rows, hairline dividers. */
+/**
+ * Table styles (DESIGN.md › Components and › Tables): dense 13 px rows,
+ * hairline dividers, and the column priority that lets a seven-column table
+ * survive a narrow column.
+ *
+ * `container` goes on the element that scrolls the table, so `colLow`,
+ * `colMid` and `colHigh` measure the SPACE THE TABLE HAS and not the
+ * viewport: the same table sits in a 1120 px page, in a 720 px page beside
+ * the sidebar and in a 480 px sheet, and only the first of those is a
+ * viewport question. Thresholds and the order columns leave in are in
+ * DESIGN.md › Tables.
+ */
 export const T = {
   table: "w-full text-[13px]",
   head: "text-left text-xs text-fg-muted",
   th: "px-3 py-2 font-medium",
   td: "px-3 py-2.5 align-middle",
   row: "border-t border-line transition-colors",
-  rowHover: "hover:bg-surface-2/70",
+  rowHover: "group hover:bg-surface-2/70",
+  /** On the wrapper that scrolls: turns it into the query container. */
+  container: "@container",
+  /** Lowest priority — the first column to go (container under 64rem). */
+  colLow: "hidden @5xl:table-cell",
+  /** Goes second (container under 56rem). */
+  colMid: "hidden @4xl:table-cell",
+  /** Goes last (container under 42rem). */
+  colHigh: "hidden @2xl:table-cell",
+  /**
+   * On an `sr-only` span inside a cell: gives the word back once the table
+   * has room for it. A badge that keeps its icon and drops its label is a
+   * column that costs 20 px instead of 110, and the label is still in the
+   * accessible name the whole time.
+   */
+  wordFrom: "@lg:not-sr-only",
+  /**
+   * The actions cell, pinned to the right edge. Past the last threshold the
+   * table still scrolls sideways, and a row whose actions are off screen is
+   * a row you cannot act on. The fill is the one the row wears, hover
+   * included, or the pinned cell reads as a seam.
+   */
+  stickyEnd: "sticky right-0 bg-surface group-hover:bg-surface-2/70",
 } as const;
 
 /** Clickable column header bound to useSortableTable. */
@@ -1938,6 +1971,62 @@ export function SearchInput({
         className={cx(inputClass, inputSize.md, "w-full rounded-full pl-9 pr-3")}
       />
     </label>
+  );
+}
+
+/**
+ * A value you switch on, drawn as a pill rather than as a box with a label
+ * beside it (DESIGN.md › Components).
+ *
+ * A column of checkboxes is the right shape for a list of independent
+ * settings; it is the wrong shape for a SET of values — the type of a
+ * question, a difficulty, a tag — where the reader wants to see what is on
+ * at a glance and where the labels are two words long. Ticked boxes laid out
+ * in rows collide as soon as one label is long; pills carry their own
+ * bounds, wrap cleanly and say "pressed" with a fill instead of a glyph.
+ *
+ * It is a real `aria-pressed` button, so a screen reader hears the state and
+ * the label without the two ever getting separated. Containers lay them out
+ * with `flex flex-wrap gap-2`.
+ */
+export function ToggleChip({
+  label,
+  icon: Icon,
+  pressed,
+  onToggle,
+  className = "",
+  "aria-label": ariaLabel,
+}: {
+  label: ReactNode;
+  icon?: IconType;
+  /**
+   * On or off. `undefined` drops `aria-pressed` altogether, for the one pill
+   * in a row that is an ACTION and not a value ("Show all (37)"): announcing
+   * it as an unpressed toggle would promise a state it does not have.
+   */
+  pressed?: boolean;
+  onToggle: () => void;
+  className?: string;
+  /** For a chip whose visible label is a bare number ("3" is not a name). */
+  "aria-label"?: string;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={pressed}
+      aria-label={ariaLabel}
+      onClick={onToggle}
+      className={cx(
+        "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[13px] font-medium transition-colors duration-150",
+        pressed
+          ? "border-accent bg-accent-soft text-accent"
+          : "border-line-strong bg-surface text-fg-muted hover:border-fg-faint hover:text-fg",
+        className,
+      )}
+    >
+      {Icon ? <Icon className="size-3.5 shrink-0" /> : null}
+      {label}
+    </button>
   );
 }
 

@@ -1,9 +1,10 @@
 import { SlidersHorizontal, X } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
+import { fuzzyFilter } from "../fuzzy";
 import { useT } from "../i18n";
-import { typeLabel, QUESTION_TYPE_IDS } from "../questionTypes";
-import { Badge, Button, Checkbox, SearchInput, Sheet, Switch, cx } from "../ui";
+import { typeIcon, typeLabel, QUESTION_TYPE_IDS } from "../questionTypes";
+import { Badge, Button, SearchInput, Sheet, Switch, ToggleChip } from "../ui";
 import { activeFilterCount, toggle, type QuestionFilters } from "./filters";
 
 /**
@@ -12,10 +13,19 @@ import { activeFilterCount, toggle, type QuestionFilters } from "./filters";
  * four lists — type, tag, difficulty, deleted — live in a sheet, because
  * more than three controls in a row is a control panel, not a toolbar.
  *
+ * Inside the sheet the three lists are rows of `ToggleChip`, not rows of
+ * checkboxes. A checkbox is the shape of an independent setting; these are
+ * SETS of values, and "Multiple choice" beside "Short answer" beside a box
+ * each collide the moment the sheet is narrower than the labels. A pill
+ * carries its own bounds and wraps.
+ *
  * Whatever is active comes back as chips under the bar, each one removable:
  * a filter you cannot see is a filter you will blame the data for.
  */
 const DIFFICULTIES = [1, 2, 3, 4, 5];
+
+/** How many tag chips the sheet shows before "Show all (N)". */
+const TAG_LIMIT = 20;
 
 function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
   const t = useT();
@@ -31,6 +41,77 @@ function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
         <X className="size-3" />
       </button>
     </span>
+  );
+}
+
+/**
+ * The tags of the pool as chips, with a search above them.
+ *
+ * A pool of a few hundred questions has more tags than a sheet can hold, so
+ * the list is capped at twenty and the field searches ALL of them, fuzzily:
+ * a teacher who knows the tag types three letters instead of scrolling a
+ * wall. The selected ones are always in the list, and first — a filter you
+ * cannot see in the panel that sets it is a filter you cannot take off.
+ */
+function TagChips({
+  tags,
+  selected,
+  onToggle,
+}: {
+  tags: string[];
+  selected: string[];
+  onToggle: (tag: string) => void;
+}) {
+  const t = useT();
+  const [query, setQuery] = useState("");
+  const [showAll, setShowAll] = useState(false);
+  const ordered = useMemo(() => {
+    const matches = fuzzyFilter(query, tags, (tag) => tag);
+    const picked = matches.filter((tag) => selected.includes(tag));
+    return [...picked, ...matches.filter((tag) => !selected.includes(tag))];
+  }, [query, tags, selected]);
+  const shown = showAll ? ordered : ordered.slice(0, TAG_LIMIT);
+  const hidden = ordered.length - shown.length;
+
+  return (
+    <div className="space-y-2.5">
+      <SearchInput
+        className="w-full"
+        aria-label={t("pool.filter.tagSearch")}
+        placeholder={t("pool.filter.tagSearch")}
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        onKeyDown={(e) => {
+          // Enter takes the first match: the fastest way through a long list
+          // is to type it, and a search that answers nothing to Enter makes
+          // the reader reach for the mouse anyway.
+          if (e.key !== "Enter") return;
+          e.preventDefault();
+          const first = ordered[0];
+          if (first !== undefined) onToggle(first);
+        }}
+      />
+      {ordered.length === 0 ? (
+        <p className="text-sm text-fg-muted">{t("pool.filter.noTag")}</p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {shown.map((tag) => (
+            <ToggleChip
+              key={tag}
+              label={`#${tag}`}
+              pressed={selected.includes(tag)}
+              onToggle={() => onToggle(tag)}
+            />
+          ))}
+          {hidden > 0 ? (
+            <ToggleChip
+              label={t("common.showAll", { n: ordered.length })}
+              onToggle={() => setShowAll(true)}
+            />
+          ) : null}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -142,13 +223,14 @@ export function FilterBar({
           <div className="space-y-6">
             <fieldset>
               <legend className="mb-2 text-[13px] font-medium">{t("pool.filter.type")}</legend>
-              <div className="space-y-2">
+              <div className="flex flex-wrap gap-2">
                 {QUESTION_TYPE_IDS.map((id) => (
-                  <Checkbox
+                  <ToggleChip
                     key={id}
+                    icon={typeIcon(id)}
                     label={typeLabel(t, id)}
-                    checked={filters.types.includes(id)}
-                    onChange={() => set({ types: toggle(filters.types, id) })}
+                    pressed={filters.types.includes(id)}
+                    onToggle={() => set({ types: toggle(filters.types, id) })}
                   />
                 ))}
               </div>
@@ -158,13 +240,15 @@ export function FilterBar({
               <legend className="mb-2 text-[13px] font-medium">
                 {t("pool.filter.difficulty")}
               </legend>
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-2">
                 {DIFFICULTIES.map((d) => (
-                  <Checkbox
+                  <ToggleChip
                     key={d}
                     label={d}
-                    checked={filters.difficulties.includes(d)}
-                    onChange={() => set({ difficulties: toggle(filters.difficulties, d) })}
+                    // A bare digit is not a name: the reader hears the scale.
+                    aria-label={t("pool.difficultyOf", { n: d })}
+                    pressed={filters.difficulties.includes(d)}
+                    onToggle={() => set({ difficulties: toggle(filters.difficulties, d) })}
                   />
                 ))}
               </div>
@@ -175,16 +259,11 @@ export function FilterBar({
               {tags.length === 0 ? (
                 <p className="text-sm text-fg-muted">—</p>
               ) : (
-                <div className={cx("flex flex-wrap gap-x-4 gap-y-2")}>
-                  {tags.map((tag) => (
-                    <Checkbox
-                      key={tag}
-                      label={`#${tag}`}
-                      checked={filters.tags.includes(tag)}
-                      onChange={() => set({ tags: toggle(filters.tags, tag) })}
-                    />
-                  ))}
-                </div>
+                <TagChips
+                  tags={tags}
+                  selected={filters.tags}
+                  onToggle={(tag) => set({ tags: toggle(filters.tags, tag) })}
+                />
               )}
             </fieldset>
 

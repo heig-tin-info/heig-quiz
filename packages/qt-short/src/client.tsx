@@ -78,8 +78,11 @@ export {
 export type {
   ShortAnswer,
   ShortConfig,
+  ShortConstraints,
   ShortDetails,
+  ShortKind,
   ShortMatcher,
+  ShortPrefilters,
   ShortSolution,
   ShortStudent,
 } from "./schema.js";

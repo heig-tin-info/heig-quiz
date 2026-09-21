@@ -730,10 +730,30 @@ const mcqConfig = (
   ...over,
 });
 
+/** The v2 defaults of a `short` config, for a mock question that omits them. */
+const shortConstraints = (config: Record<string, unknown>) => ({
+  minLength: 0,
+  maxLength: 255,
+  integer: false,
+  ...((config.constraints ?? {}) as Record<string, unknown>),
+});
+
+const shortPrefilter = (config: Record<string, unknown>) => {
+  const p = { trim: true, lowercase: true, ...((config.prefilters ?? {}) as Record<string, unknown>) };
+  return (raw: string): string => {
+    let out = raw.normalize("NFC");
+    if (p.trim) out = out.trim();
+    if (p.lowercase) out = out.toLocaleLowerCase("fr");
+    return out;
+  };
+};
+
 const shortNumber = (prompt: string, value: number, unit?: string) => ({
-  configVersion: 1,
+  configVersion: 2,
   prompt,
   kind: "number",
+  constraints: { min: 0, integer: true },
+  prefilters: { trim: true, lowercase: true },
   ...(unit ? { placeholder: unit } : {}),
   matchers: [
     {
@@ -1270,6 +1290,9 @@ function studentView(q: MockQuestion, config: Record<string, unknown>): unknown 
       return {
         prompt: config.prompt,
         kind: config.kind,
+        // Not part of the key: what the FIELD takes (`toStudent` in
+        // `@quiz/qt-short/server` sends the same thing).
+        constraints: shortConstraints(config),
         ...(config.placeholder === undefined ? {} : { placeholder: config.placeholder }),
       };
     case "cloze": {
@@ -1368,9 +1391,14 @@ function tryAnswer(
   }
   if (q.type === "short") {
     const matchers = (config.matchers ?? []) as { kind: string; value?: unknown }[];
-    const text = String((answer as { text?: string } | null)?.text ?? "").trim().replace(",", ".");
+    // The v2 prefilters, applied to the answer AND to every expected text,
+    // exactly as `@quiz/qt-short` does it.
+    const filter = shortPrefilter(config);
+    const text = filter(String((answer as { text?: string } | null)?.text ?? ""));
     const index = matchers.findIndex((m) =>
-      m.kind === "number" ? Number(text) === Number(m.value) : text.toLowerCase() === String(m.value).toLowerCase(),
+      m.kind === "number"
+        ? Number(text.replace(",", ".")) === Number(m.value)
+        : text === filter(String(m.value)),
     );
     return {
       status: "graded",
@@ -1580,10 +1608,12 @@ function emptyConfig(type: MockQuestion["type"]): Record<string, unknown> {
       ]);
     case "short":
       return {
-        configVersion: 1,
+        configVersion: 2,
         prompt: "",
         kind: "text",
-        matchers: [{ kind: "exact", value: "", caseSensitive: false, trim: true, collapseSpaces: true, points: 1 }],
+        constraints: { minLength: 0, maxLength: 255, integer: false },
+        prefilters: { trim: true, lowercase: true },
+        matchers: [{ kind: "exact", value: "", points: 1 }],
       };
     case "cloze":
       return { configVersion: 1, text: "", caseSensitive: false, shuffleOptions: true };

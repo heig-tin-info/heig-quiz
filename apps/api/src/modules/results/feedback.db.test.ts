@@ -49,7 +49,7 @@ const CONFIGS: Record<string, unknown> = {
     mode: "single",
   },
   short: {
-    configVersion: 1,
+    configVersion: 2,
     prompt: "Capital of France?",
     kind: "text",
     matchers: [

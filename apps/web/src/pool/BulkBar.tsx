@@ -2,9 +2,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { FolderInput, Tag, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
-import type { CategoryNode, QuestionRow } from "@quiz/contracts";
+import type { Category, CategoryNode, QuestionRow } from "@quiz/contracts";
 
-import { api } from "../api";
+import { api, apiErrorMessage } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
@@ -30,12 +30,17 @@ function flatten(nodes: CategoryNode[], prefix = ""): { id: string; label: strin
   });
 }
 
+/** The `<option>` value that opens the "name it" field instead of picking. */
+const NEW_CATEGORY = "__new__";
+
 export function BulkBar({
+  poolId,
   ids,
   rows,
   categories,
   onClear,
 }: {
+  poolId: string;
   ids: string[];
   /** The loaded rows, so "add a tag" can keep the tags a question already has. */
   rows: QuestionRow[];
@@ -49,6 +54,7 @@ export function BulkBar({
   const [dialog, setDialog] = useState<"tag" | "move" | null>(null);
   const [tag, setTag] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
 
   /** Runs one call per question, counts the failures, reports once. */
@@ -80,13 +86,42 @@ export function BulkBar({
     });
   };
 
-  const move = () =>
-    void runAll((id) =>
+  /**
+   * Moves the selection, creating the destination first when the teacher
+   * asked for one. Filing twenty questions under a category that does not
+   * exist yet is the ordinary case — coming here, leaving for the sidebar to
+   * create it and coming back is three screens for one intention — so the
+   * dialog does both in the click that says "Move".
+   *
+   * The category is created through the SAME route the tree uses, and the
+   * pool query is invalidated so the sidebar shows it immediately.
+   */
+  const move = async () => {
+    let target = categoryId === "" ? null : categoryId;
+    if (categoryId === NEW_CATEGORY) {
+      const name = newName.trim();
+      if (!name) return;
+      setBusy(true);
+      try {
+        const created = await api<Category>(`/app/api/pools/${poolId}/categories`, {
+          method: "POST",
+          body: JSON.stringify({ name, parentId: null }),
+        });
+        target = created.id;
+      } catch (error) {
+        setBusy(false);
+        toast(apiErrorMessage(error, t("pool.categoryFailed")), "error");
+        return;
+      }
+      await qc.invalidateQueries({ queryKey: ["pool", poolId] });
+    }
+    await runAll((id) =>
       api(`/app/api/questions/${id}`, {
         method: "PATCH",
-        body: JSON.stringify({ categoryId: categoryId === "" ? null : categoryId }),
+        body: JSON.stringify({ categoryId: target }),
       }),
     );
+  };
 
   const remove = async () => {
     const ok = await confirm({
@@ -127,7 +162,7 @@ export function BulkBar({
 
       {dialog === "tag" ? (
         <Modal
-          title={t("pool.bulk.tagTitle", { n: ids.length })}
+          title={t(ids.length === 1 ? "pool.bulk.tagTitle.one" : "pool.bulk.tagTitle", { n: ids.length })}
           onClose={() => setDialog(null)}
           footer={
             <>
@@ -152,31 +187,49 @@ export function BulkBar({
 
       {dialog === "move" ? (
         <Modal
-          title={t("pool.bulk.moveTitle", { n: ids.length })}
+          title={t(ids.length === 1 ? "pool.bulk.moveTitle.one" : "pool.bulk.moveTitle", { n: ids.length })}
           onClose={() => setDialog(null)}
           footer={
             <>
               <Button variant="secondary" onClick={() => setDialog(null)}>
                 {t("common.cancel")}
               </Button>
-              <Button onClick={move} loading={busy}>
+              <Button
+                onClick={() => void move()}
+                loading={busy}
+                disabled={categoryId === NEW_CATEGORY && newName.trim() === ""}
+              >
                 {t("pool.bulk.move")}
               </Button>
             </>
           }
         >
-          <Select
-            label={t("question.meta.category")}
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-          >
-            <option value="">{t("pool.bulk.root")}</option>
-            {flatten(categories).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.label}
-              </option>
-            ))}
-          </Select>
+          <div className="space-y-3">
+            <Select
+              label={t("question.meta.category")}
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+            >
+              <option value="">{t("pool.bulk.root")}</option>
+              {flatten(categories).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+              {/* Last, and named with an ellipsis: it is the one entry that
+                  asks a question instead of answering one. */}
+              <option value={NEW_CATEGORY}>{t("pool.bulk.newCategory")}</option>
+            </Select>
+            {categoryId === NEW_CATEGORY ? (
+              <Field
+                label={t("pool.categoryName")}
+                fullWidth
+                autoFocus
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+              />
+            ) : null}
+          </div>
         </Modal>
       ) : null}
     </>

@@ -9,7 +9,7 @@ import {
 
 function base(): Record<string, unknown> {
   return {
-    configVersion: 1,
+    configVersion: 2,
     prompt: "Give the directive.",
     matchers: [{ kind: "exact", value: "#include <stdio.h>" }],
   };
@@ -27,6 +27,10 @@ describe("ShortConfigSchema", () => {
     ["a placeholder", { ...base(), placeholder: "#include …" }],
     ["twenty matchers", { ...base(), matchers: Array.from({ length: 20 }, (_, i) => ({ kind: "exact", value: `v${i}` })) }],
     ["a unit that is required", { ...base(), matchers: [{ kind: "number", value: 4, unit: "octets", unitRequired: true }] }],
+    ["explicit prefilters", { ...base(), prefilters: { trim: false, lowercase: false } }],
+    ["a text length window", { ...base(), constraints: { minLength: 2, maxLength: 40 } }],
+    ["an unbounded number window", { ...base(), kind: "number", constraints: { integer: true }, matchers: [{ kind: "number", value: 4 }] }],
+    ["a date window", { ...base(), kind: "date", constraints: { from: "2026-01-01", to: "2026-12-31" }, matchers: [{ kind: "date", value: "2026-09-20" }] }],
   ];
 
   for (const [name, input] of accepted) {
@@ -48,7 +52,13 @@ describe("ShortConfigSchema", () => {
     ["matcher points above 1", { ...base(), matchers: [{ kind: "exact", value: "x", points: 2 }] }],
     ["a negative tolerance", { ...base(), matchers: [{ kind: "number", value: 1, tolerance: -1 }] }],
     ["an unknown answer kind", { ...base(), kind: "colour" }],
-    ["a future configVersion", { ...base(), configVersion: 2 }],
+    ["a future configVersion", { ...base(), configVersion: 3 }],
+    ["a v1 config, which must go through migrate() first", { ...base(), configVersion: 1 }],
+    ["a max length above the hard cap", { ...base(), constraints: { maxLength: 501 } }],
+    ["a min length above the max length", { ...base(), constraints: { minLength: 10, maxLength: 5 } }],
+    ["a min above the max", { ...base(), kind: "number", constraints: { min: 10, max: 5 }, matchers: [{ kind: "number", value: 7 }] }],
+    ["a from after the to", { ...base(), kind: "date", constraints: { from: "2026-12-31", to: "2026-01-01" }, matchers: [{ kind: "date", value: "2026-09-20" }] }],
+    ["a non-integer expected value in an integer question", { ...base(), kind: "number", constraints: { integer: true }, matchers: [{ kind: "number", value: 3.5 }] }],
   ];
 
   for (const [name, input] of rejected) {
@@ -69,12 +79,28 @@ describe("ShortConfigSchema", () => {
   it("applies the documented defaults", () => {
     const config = ShortConfigSchema.parse(base());
     expect(config.kind).toBe("text");
-    expect(config.matchers[0]).toMatchObject({
-      caseSensitive: false,
-      trim: true,
-      collapseSpaces: true,
-      points: 1,
+    expect(config.constraints).toEqual({ minLength: 0, maxLength: 255, integer: false });
+    expect(config.prefilters).toEqual({ trim: true, lowercase: true });
+    expect(config.matchers[0]).toEqual({ kind: "exact", value: "#include <stdio.h>", points: 1 });
+  });
+
+  it("names the integer rule with its own issue key", () => {
+    const result = ShortConfigSchema.safeParse({
+      ...base(),
+      kind: "number",
+      constraints: { integer: true },
+      matchers: [{ kind: "number", value: 3.5 }],
     });
+    expect(result.error?.issues[0]?.path).toEqual(["matchers", 0, "value"]);
+    expect(result.error?.issues[0]?.message).toBe("short.integer_expected");
+  });
+
+  it("drops the v1 text options an old payload still carries", () => {
+    const config = ShortConfigSchema.parse({
+      ...base(),
+      matchers: [{ kind: "exact", value: "const", caseSensitive: true, trim: false }],
+    });
+    expect(config.matchers[0]).toEqual({ kind: "exact", value: "const", points: 1 });
   });
 
   it("stores an llm matcher but flags it for the publication guard", () => {
@@ -105,9 +131,10 @@ describe("emptyShortDraft", () => {
   it("is empty, and therefore does NOT validate (D16)", () => {
     const draft = emptyShortDraft();
     expect(draft.prompt).toBe("");
-    expect(draft.matchers).toEqual([
-      { kind: "exact", value: "", caseSensitive: false, trim: true, collapseSpaces: true, points: 1 },
-    ]);
+    expect(draft.configVersion).toBe(2);
+    expect(draft.constraints).toEqual({ minLength: 0, maxLength: 255, integer: false });
+    expect(draft.prefilters).toEqual({ trim: true, lowercase: true });
+    expect(draft.matchers).toEqual([{ kind: "exact", value: "", points: 1 }]);
     expect(ShortConfigSchema.safeParse(draft).success).toBe(false);
   });
 });

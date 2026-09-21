@@ -200,15 +200,19 @@ export function EvaluationList({
           </EmptyState>
         </Card>
       ) : (
-        <Card className="overflow-hidden">
+        /* The three counts leave in turn as the card narrows (`T` › column
+           priority): the attempts first, then the points, then the number of
+           questions. The title with its state badge, the mode and the row
+           menu are what the list is for, and they stay. */
+        <Card className={`${T.container} overflow-hidden`}>
           <table className={T.table}>
             <thead className={T.head}>
               <tr>
                 <th className={T.th}>{t("eval.titleLabel")}</th>
                 <th className={T.th}>{t("eval.mode")}</th>
-                <th className={`${T.th} text-right`}>{t("eval.step.questions")}</th>
-                <th className={`${T.th} text-right`}>{t("eval.col.points")}</th>
-                <th className={`${T.th} text-right`}>{t("eval.col.attempts")}</th>
+                <th className={`${T.th} ${T.colHigh} text-right`}>{t("eval.step.questions")}</th>
+                <th className={`${T.th} ${T.colMid} text-right`}>{t("eval.col.points")}</th>
+                <th className={`${T.th} ${T.colLow} text-right`}>{t("eval.col.attempts")}</th>
                 <th className={`${T.th} w-10`}>
                   <span className="sr-only">{t("common.actions")}</span>
                 </th>
@@ -229,9 +233,9 @@ export function EvaluationList({
                     </span>
                   </td>
                   <td className={`${T.td} text-fg-muted`}>{t(`eval.mode.${row.mode}`)}</td>
-                  <td className={`${T.td} text-right tabular-nums`}>{row.itemCount}</td>
-                  <td className={`${T.td} text-right tabular-nums`}>{row.totalPoints}</td>
-                  <td className={`${T.td} text-right tabular-nums`}>
+                  <td className={`${T.td} ${T.colHigh} text-right tabular-nums`}>{row.itemCount}</td>
+                  <td className={`${T.td} ${T.colMid} text-right tabular-nums`}>{row.totalPoints}</td>
+                  <td className={`${T.td} ${T.colLow} text-right tabular-nums`}>
                     {row.attemptCount === 0 ? "—" : row.attemptCount}
                   </td>
                   <td className={`${T.td} text-right`} onClick={(e) => e.stopPropagation()}>

@@ -24,7 +24,7 @@ export function gradeContext(itemPoints: number): GradeContext {
 
 export function config(over: Partial<ShortConfig> = {}): ShortConfig {
   return ShortConfigSchema.parse({
-    configVersion: 1,
+    configVersion: 2,
     prompt: "Which directive includes the standard I/O header?",
     matchers: [{ kind: "exact", value: "#include <stdio.h>" }],
     ...over,
@@ -33,12 +33,14 @@ export function config(over: Partial<ShortConfig> = {}): ShortConfig {
 
 /** One matcher of every kind, every secret a `short` config can hold. */
 export const SECRET_CONFIG: ShortConfig = ShortConfigSchema.parse({
-  configVersion: 1,
+  configVersion: 2,
   prompt: "How many bytes does an `int` take on a 32-bit target?",
   kind: "number",
   placeholder: "bytes",
+  constraints: { min: 1, max: 100, integer: true },
+  prefilters: { trim: true, lowercase: false },
   matchers: [
-    { kind: "exact", value: "0x1004", caseSensitive: true },
+    { kind: "exact", value: "0x1004" },
     { kind: "regex", pattern: "^N[0-9]+$", flags: "i" },
     { kind: "number", value: 4, tolerance: 0.5, toleranceMode: "abs", unit: "bytes" },
     { kind: "date", value: "1970-01-01", toleranceDays: 2 },

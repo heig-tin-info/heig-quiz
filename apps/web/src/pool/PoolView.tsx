@@ -361,6 +361,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
 
       {checkedIds.length > 0 ? (
         <BulkBar
+          poolId={id}
           ids={checkedIds}
           rows={rows}
           categories={detail.categories}

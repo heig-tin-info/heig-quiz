@@ -69,6 +69,59 @@ describe("ShortEditor", () => {
     expect(screen.getByText("short.invalid_pattern")).toBeInTheDocument();
   });
 
+  it("offers the four kinds as one segmented control", async () => {
+    const onChange = vi.fn();
+    render(<ShortEditor config={config()} onChange={onChange} />);
+    const group = screen.getByRole("radiogroup", { name: "Expected answer" });
+    expect(group).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Text" })).toBeChecked();
+    await userEvent.click(screen.getByRole("radio", { name: "Number" }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ kind: "number" }));
+  });
+
+  it("shows the constraints of the current kind, and only those", () => {
+    const { rerender } = render(<ShortEditor config={config()} onChange={() => {}} />);
+    expect(screen.getByLabelText("Min length")).toHaveValue(0);
+    expect(screen.getByLabelText("Max length")).toHaveValue(255);
+    expect(screen.queryByLabelText("Integer")).not.toBeInTheDocument();
+
+    rerender(<ShortEditor config={config({ kind: "number" })} onChange={() => {}} />);
+    expect(screen.getByLabelText("Min")).toBeInTheDocument();
+    expect(screen.getByLabelText("Integer")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Min length")).not.toBeInTheDocument();
+
+    rerender(<ShortEditor config={config({ kind: "date" })} onChange={() => {}} />);
+    expect(screen.getByLabelText("From")).toHaveAttribute("type", "date");
+    expect(screen.getByLabelText("To")).toHaveAttribute("type", "date");
+
+    rerender(<ShortEditor config={config({ kind: "time" })} onChange={() => {}} />);
+    expect(screen.queryByLabelText("From")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Min")).not.toBeInTheDocument();
+  });
+
+  it("empties a number bound rather than storing a zero", async () => {
+    const onChange = vi.fn();
+    render(
+      <ShortEditor
+        config={config({ kind: "number", constraints: { minLength: 0, maxLength: 255, integer: false, min: 3 } })}
+        onChange={onChange}
+      />,
+    );
+    await userEvent.clear(screen.getByLabelText("Min"));
+    expect(onChange.mock.calls.at(-1)?.[0].constraints).not.toHaveProperty("min");
+  });
+
+  it("carries the two prefilters, and no per-matcher case box", async () => {
+    const onChange = vi.fn();
+    render(<ShortEditor config={config()} onChange={onChange} />);
+    expect(screen.queryByLabelText("Case sensitive")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Trim")).toBeChecked();
+    await userEvent.click(screen.getByLabelText("Lowercase"));
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ prefilters: { trim: true, lowercase: false } }),
+    );
+  });
+
   it("takes the host's French strings", () => {
     render(<ShortEditor config={config()} onChange={() => {}} strings={{ prompt: "Énoncé" }} />);
     expect(screen.getByLabelText("Énoncé")).toBeInTheDocument();
@@ -83,14 +136,32 @@ describe("ShortPlayer", () => {
     expect(onChange).toHaveBeenCalledWith({ text: "4" });
   });
 
-  it("keeps a numeric question on a text input, so a comma survives", () => {
+  it("enforces the numeric window and the whole-number step", () => {
+    render(<ShortPlayer student={student} answer={null} onChange={() => {}} readOnly={false} />);
+    const input = screen.getByLabelText("Your answer");
+    expect(input).toHaveAttribute("type", "number");
+    expect(input).toHaveAttribute("min", "1");
+    expect(input).toHaveAttribute("max", "100");
+    expect(input).toHaveAttribute("step", "1");
+    expect(input).toHaveAttribute("inputmode", "numeric");
+  });
+
+  it("enforces the length window of a text question", () => {
     render(
-      <ShortPlayer student={student} answer={{ text: "3,14" }} onChange={() => {}} readOnly={false} />,
+      <ShortPlayer
+        student={{
+          prompt: "Which directive?",
+          kind: "text",
+          constraints: { minLength: 3, maxLength: 40, integer: false },
+        }}
+        answer={null}
+        onChange={() => {}}
+        readOnly={false}
+      />,
     );
     const input = screen.getByLabelText("Your answer");
-    expect(input).toHaveAttribute("type", "text");
-    expect(input).toHaveAttribute("inputmode", "decimal");
-    expect(input).toHaveValue("3,14");
+    expect(input).toHaveAttribute("maxlength", "40");
+    expect(input).toHaveAttribute("minlength", "3");
   });
 
   it("shows the placeholder the teacher wrote, never an answer", () => {
@@ -107,13 +178,20 @@ describe("ShortPlayer", () => {
   it("switches to a date field for a date question", () => {
     render(
       <ShortPlayer
-        student={{ prompt: "When?", kind: "date" }}
+        student={{
+          prompt: "When?",
+          kind: "date",
+          constraints: { minLength: 0, maxLength: 255, integer: false, from: "2026-01-01", to: "2026-12-31" },
+        }}
         answer={null}
         onChange={() => {}}
         readOnly={false}
       />,
     );
-    expect(screen.getByLabelText("Your answer")).toHaveAttribute("type", "date");
+    const input = screen.getByLabelText("Your answer");
+    expect(input).toHaveAttribute("type", "date");
+    expect(input).toHaveAttribute("min", "2026-01-01");
+    expect(input).toHaveAttribute("max", "2026-12-31");
   });
 });
 

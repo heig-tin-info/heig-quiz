@@ -307,17 +307,22 @@ export function Shell({
   // enough. The teacher UI decides which topics are reachable at all.
   const topics = useMemo(() => helpTopics(locale, teacherUi), [locale, teacherUi]);
 
-  /** `titleId` names the drawer through its own brand line. */
-  const brand = (titleId?: string) => (
+  /**
+   * The home link, drawn as the wordmark. `titleId` lands on the image, whose
+   * `alt` is then what names the drawer through `aria-labelledby`.
+   *
+   * `width` is the one thing that changes between the three places it
+   * appears: the sidebar gives it the whole column, the phone top bar and the
+   * drawer a third of it.
+   */
+  const brand = (titleId?: string, width = "w-28") => (
     <button
       type="button"
       onClick={() => navigate({ view: "home" })}
-      className="flex items-center gap-2.5 rounded-[10px] px-2 py-1 text-left transition-opacity hover:opacity-80"
+      aria-label={t("app.title")}
+      className="flex shrink-0 items-center rounded-[10px] text-left transition-opacity hover:opacity-80"
     >
-      <Logo />
-      <span id={titleId} className="text-[15px] font-bold tracking-tight">
-        {t("app.title")}
-      </span>
+      <Logo id={titleId} className={width} />
     </button>
   );
   const userMenu = (compact: boolean) => (
@@ -337,7 +342,9 @@ export function Shell({
         aria-label={t("aside.sidebar")}
         className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-line bg-canvas lg:flex"
       >
-        <div className="px-3 pb-2 pt-4">{brand()}</div>
+        {/* The mark takes the sidebar's full width, with the air a wordmark
+            needs: it is the only thing above the navigation. */}
+        <div className="px-5 pb-3 pt-5">{brand(undefined, "w-full")}</div>
         {/* No search row here: Ctrl/⌘+K opens the palette from anywhere, and a
             permanent button for it took the top of the sidebar away from the
             navigation. The phone keeps its own trigger in the top bar, where

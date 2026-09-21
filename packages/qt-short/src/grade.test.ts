@@ -20,7 +20,6 @@ function gradedNow(cfg: ShortConfig, text: string | null, points = 10) {
 /** [matcher, match, near miss, miss] */
 const TABLE: [string, Record<string, unknown>, string, string, string][] = [
   ["exact", { kind: "exact", value: "#include <stdio.h>" }, "#include   <stdio.h>", "#include <stdlib.h>", ""],
-  ["exact, case sensitive", { kind: "exact", value: "Newton", caseSensitive: true }, "Newton", "newton", "Galilée"],
   ["regex", { kind: "regex", pattern: "#\\s*include\\s*[<\"]stdio\\.h[>\"]" }, "#include <stdio.h>", "include <stdio.h>", "printf"],
   ["number", { kind: "number", value: 4, tolerance: 0.5, unit: "bytes" }, "4 bytes", "5", "four"],
   ["number, relative tolerance", { kind: "number", value: 3.14, tolerance: 0.01, toleranceMode: "rel" }, "3,15", "3.2", "pi"],
@@ -70,6 +69,71 @@ describe("the matcher order", () => {
     expect(result.details.matchedIndex).toBe(2);
     expect(result.details.fraction).toBe(0.5);
     expect(result.points).toBe(1);
+  });
+});
+
+/**
+ * The v2 prefilters: ONE decision for the whole question, applied to the
+ * student's answer and to every exact value before the comparison.
+ */
+describe("the prefilters", () => {
+  const withPrefilters = (trim: boolean, lowercase: boolean, value = "Newton") =>
+    config({
+      prefilters: { trim, lowercase },
+      matchers: [{ kind: "exact", value }],
+    } as Partial<ShortConfig>);
+
+  it("fold the case on both sides when `lowercase` is on (the default)", () => {
+    expect(gradedNow(withPrefilters(true, true), "newton", 1).points).toBe(1);
+    expect(gradedNow(withPrefilters(true, true), "NEWTON", 1).points).toBe(1);
+  });
+
+  it("make the case count when `lowercase` is off", () => {
+    expect(gradedNow(withPrefilters(true, false), "Newton", 1).points).toBe(1);
+    expect(gradedNow(withPrefilters(true, false), "newton", 1).points).toBe(0);
+  });
+
+  it("strip the outer spaces when `trim` is on (the default)", () => {
+    expect(gradedNow(withPrefilters(true, true), "  newton  ", 1).points).toBe(1);
+  });
+
+  it("keep them when `trim` is off, on both sides", () => {
+    expect(gradedNow(withPrefilters(false, true), " newton", 1).points).toBe(0);
+    expect(gradedNow(withPrefilters(false, true, " Newton"), " newton", 1).points).toBe(1);
+  });
+
+  it("reach the regex input too, never its own flags", () => {
+    const cfg = config({
+      prefilters: { trim: true, lowercase: true },
+      matchers: [{ kind: "regex", pattern: "newton", flags: "" }],
+    } as Partial<ShortConfig>);
+    expect(gradedNow(cfg, "  NEWTON  ", 1).points).toBe(1);
+  });
+});
+
+describe("the integer rule", () => {
+  const cfg = config({
+    kind: "number",
+    constraints: { integer: true },
+    matchers: [{ kind: "number", value: 4, tolerance: 1 }],
+  } as Partial<ShortConfig>);
+
+  it("accepts a whole number inside the tolerance", () => {
+    expect(gradedNow(cfg, "5", 2).points).toBe(2);
+  });
+
+  it("refuses a non-integer answer, tolerance or not", () => {
+    const result = gradedNow(cfg, "4.5", 2);
+    expect(result.points).toBe(0);
+    expect(result.details.matchedIndex).toBeNull();
+  });
+
+  it("leaves a plain number question alone", () => {
+    const loose = config({
+      kind: "number",
+      matchers: [{ kind: "number", value: 4, tolerance: 1 }],
+    } as Partial<ShortConfig>);
+    expect(gradedNow(loose, "4,5", 2).points).toBe(2);
   });
 });
 

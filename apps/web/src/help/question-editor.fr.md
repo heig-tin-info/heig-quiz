@@ -45,6 +45,21 @@ créez, et une question ne nomme la sienne que lorsqu'il le faut vraiment.
 Les cinq politiques, et ce que chacune donne pour une réponse à moitié
 juste, sont expliquées dans « Notation des réponses multiples ».
 
+## Une question à réponse courte
+
+Le type de réponse — texte, nombre, date ou heure — décide de ce qu'est le
+champ de l'étudiant, et les contraintes posées à côté décident de ce que ce
+champ accepte : une longueur, un intervalle de valeurs, une fenêtre de dates.
+L'étudiant est arrêté pendant qu'il tape plutôt qu'averti après coup, et rien
+de tout cela ne livre la réponse.
+
+Les deux **prétraitements**, « Rogner les espaces » et « Minuscules », se
+décident une fois pour toute la question : ils s'appliquent à la réponse de
+l'étudiant et à chaque texte accepté avant la comparaison, si bien qu'une clé
+à cinq réponses acceptées ne repose plus cinq fois la même question sur la
+casse. Seul « Entier » touche aussi la note : une réponse non entière à une
+question entière est fausse.
+
 ## Publier
 
 **Publier** valide le brouillon contre le schéma du type et crée la version

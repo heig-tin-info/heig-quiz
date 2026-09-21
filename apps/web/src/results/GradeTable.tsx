@@ -52,18 +52,20 @@ export function GradeTable({ rows }: { rows: ResultRow[] }) {
   );
 
   return (
-    <div className="overflow-x-auto rounded-card border border-line bg-surface">
+    <div className={cx(T.container, "overflow-x-auto rounded-card border border-line bg-surface")}>
       <table className={T.table}>
         <thead className={T.head}>
           <tr>
             <SortHeader k="name" sort={sort} onToggle={toggle}>
               {t("results.col.student")}
             </SortHeader>
-            {/* The e-mail is the column a phone can do without: hiding it
-                brings the grade back on screen without a sideways scroll.
-                It lives on the cell, which carries no display utility of its
-                own, so `hidden` is not competing with anything. */}
-            <SortHeader k="email" sort={sort} onToggle={toggle} className="hidden sm:table-cell">
+            {/* The e-mail is the column the table can do without: hiding it
+                brings the grade back on screen without a sideways scroll. It
+                goes last of the two, after the duration — a grade sheet is
+                read by name, and the duration is the figure a teacher looks
+                at once. Both measure the TABLE's width, not the phone's:
+                this table also lives inside a tab beside a histogram. */}
+            <SortHeader k="email" sort={sort} onToggle={toggle} className={T.colHigh}>
               {t("results.col.email")}
             </SortHeader>
             <SortHeader k="points" sort={sort} onToggle={toggle} right>
@@ -72,7 +74,7 @@ export function GradeTable({ rows }: { rows: ResultRow[] }) {
             <SortHeader k="grade" sort={sort} onToggle={toggle} right>
               {t("results.col.grade")}
             </SortHeader>
-            <SortHeader k="duration" sort={sort} onToggle={toggle} right>
+            <SortHeader k="duration" sort={sort} onToggle={toggle} right className={T.colLow}>
               {t("results.col.duration")}
             </SortHeader>
             <SortHeader k="state" sort={sort} onToggle={toggle}>
@@ -84,14 +86,14 @@ export function GradeTable({ rows }: { rows: ResultRow[] }) {
           {sorted.map((row) => (
             <tr key={row.userId} className={T.row}>
               <td className={cx(T.td, "font-semibold")}>{row.displayName}</td>
-              <td className={cx(T.td, "hidden text-fg-muted sm:table-cell")}>{row.email}</td>
+              <td className={cx(T.td, "text-fg-muted", T.colHigh)}>{row.email}</td>
               <td className={cx(T.td, "text-right tabular-nums")}>
                 {Math.round(row.points * 100) / 100}
               </td>
               <td className={cx(T.td, "text-right font-semibold tabular-nums")}>
                 {row.grade.toFixed(1)}
               </td>
-              <td className={cx(T.td, "text-right tabular-nums text-fg-muted")}>
+              <td className={cx(T.td, "text-right tabular-nums text-fg-muted", T.colLow)}>
                 {row.durationS === null ? "—" : formatDuration(row.durationS * 1000, t)}
               </td>
               <td className={T.td}>

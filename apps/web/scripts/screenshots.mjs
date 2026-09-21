@@ -148,6 +148,14 @@ const scenes = [
       await p.getByLabel(/ptr-arith-01/).first().check();
       await p.getByLabel(/ptr-null-check/).first().check();
     } },
+  // The bulk bar's move dialog, on its "New category…" branch: the option is
+  // last in the select and reveals the name field.
+  { name: "pool-bulk-move", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
+      await p.getByLabel(/ptr-arith-01/).first().check();
+      await p.getByRole("button", { name: /^(move to a category|déplacer)$/i }).first().click();
+      await p.getByLabel(/^(Category|Catégorie)$/).selectOption("__new__");
+      await p.getByLabel(/^(Category name|Nom de la catégorie)$/).fill("Tableaux");
+    } },
   { name: "pool-new-question", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("button", { name: /nouvelle question|new question/i }).first().click() },
   // The categories live in the frame's sidebar now, so on a phone they are
   // inside the drawer: the scene opens it first when there is one.
@@ -218,6 +226,14 @@ const scenes = [
   { name: "feedback", role: "student", path: `/attempts/${ATTEMPT_PAST}/feedback` },
   { name: "feedback-pending", role: "student", path: `/attempts/${ATTEMPT_OPEN}/feedback` },
   { name: "feedback-error", role: "student", path: `/attempts/${ATTEMPT_PAST}/feedback?fail=1`, settle: 2500 },
+
+  // The signed-out door. The mock has no "no persona" mode: signing out from
+  // the account menu is how a browser gets there, and it is the same path a
+  // teacher takes.
+  { name: "landing", role: "teacher", path: "/", act: async (p) => {
+      await p.getByRole("button", { name: /^(user menu|menu du compte)$/i }).first().click();
+      await p.getByRole("menuitem", { name: /sign out|se déconnecter/i }).click();
+    } },
 
   // Settings and administration
   { name: "settings", role: "teacher", path: "/settings" },

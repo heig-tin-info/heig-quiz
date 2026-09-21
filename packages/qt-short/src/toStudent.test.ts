@@ -16,7 +16,6 @@ const FORBIDDEN_KEYS = [
   "toleranceMinutes",
   "unit",
   "unitRequired",
-  "caseSensitive",
   "policy",
   "penalty",
   "compare",
@@ -44,8 +43,19 @@ describe("toStudent", () => {
 
   it("keeps exactly what the player needs", () => {
     const student = shortServer.toStudent(SECRET_CONFIG, view);
-    expect(Object.keys(student).sort()).toEqual(["kind", "placeholder", "prompt"]);
+    expect(Object.keys(student).sort()).toEqual(["constraints", "kind", "placeholder", "prompt"]);
     expect(shortServer.studentSchema.safeParse(student).success).toBe(true);
+  });
+
+  it("carries the constraints, which are what the FIELD takes and not the key", () => {
+    const student = shortServer.toStudent(SECRET_CONFIG, view);
+    expect(student.constraints).toEqual({
+      minLength: 0,
+      maxLength: 255,
+      integer: true,
+      min: 1,
+      max: 100,
+    });
   });
 
   it("omits the placeholder when the teacher set none", () => {

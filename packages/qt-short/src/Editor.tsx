@@ -10,11 +10,22 @@
  */
 import type { ConfigIssue, EditorProps, MarkdownRenderer, StringOverrides } from "@quiz/core/client";
 import { resolveStrings } from "@quiz/core/client";
-import { SHORT_MAX_MATCHERS, type ShortConfig, type ShortMatcher } from "./schema.js";
+import {
+  defaultShortConstraints,
+  defaultShortPrefilters,
+  SHORT_MAX_ANSWER_LENGTH,
+  SHORT_MAX_MATCHERS,
+  type ShortConfig,
+  type ShortConstraints,
+  type ShortKind,
+  type ShortMatcher,
+} from "./schema.js";
 import { shortEditorStrings, type ShortEditorStringKey } from "./strings.js";
 import {
   buttonClass,
+  CheckboxField,
   cx,
+  FieldCell,
   helpClass,
   inputClass,
   IssueList,
@@ -22,6 +33,7 @@ import {
   labelClass,
   rootIssues,
   sectionClass,
+  Segmented,
 } from "./ui.js";
 
 export type ShortEditorProps = Omit<EditorProps<ShortConfig>, "uploadAsset"> & {
@@ -44,7 +56,7 @@ type Strings = Readonly<Record<ShortEditorStringKey, string>>;
 function blankMatcher(kind: ShortMatcher["kind"]): ShortMatcher {
   switch (kind) {
     case "exact":
-      return { kind, value: "", caseSensitive: false, trim: true, collapseSpaces: true, points: 1 };
+      return { kind, value: "", points: 1 };
     case "regex":
       return { kind, pattern: "", flags: "i", points: 1 };
     case "number":
@@ -84,28 +96,20 @@ function MatcherFields({
   const field = cx(inputClass, "w-full");
 
   switch (matcher.kind) {
+    /*
+     * One field, and nothing else: the question's prefilters decide whether
+     * the case and the outer spaces count, once, for every row of the key.
+     */
     case "exact":
       return (
-        <>
-          <input
-            type="text"
-            className={field}
-            aria-label={at(s.value)}
-            value={matcher.value}
-            disabled={disabled}
-            onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
-          />
-          <label className="inline-flex items-center gap-1.5 text-[13px] text-fg-muted">
-            <input
-              type="checkbox"
-              className="size-4 accent-accent"
-              checked={matcher.caseSensitive}
-              disabled={disabled}
-              onChange={(e) => onPatch({ ...matcher, caseSensitive: e.target.checked })}
-            />
-            {s.caseSensitive}
-          </label>
-        </>
+        <input
+          type="text"
+          className={field}
+          aria-label={at(s.value)}
+          value={matcher.value}
+          disabled={disabled}
+          onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
+        />
       );
     case "regex":
       return (
@@ -247,6 +251,143 @@ function MatcherFields({
   }
 }
 
+/**
+ * The constraints of the current kind, as the cells of the row the segmented
+ * control opens. An empty number or date field means UNBOUNDED, which is why
+ * the key is deleted rather than set to 0 or to "".
+ */
+function withOptionalNumber(
+  constraints: ShortConstraints,
+  key: "min" | "max",
+  raw: string,
+): ShortConstraints {
+  const next = { ...constraints };
+  const value = Number(raw);
+  if (raw.trim() === "" || !Number.isFinite(value)) delete next[key];
+  else next[key] = value;
+  return next;
+}
+
+function withOptionalDate(
+  constraints: ShortConstraints,
+  key: "from" | "to",
+  raw: string,
+): ShortConstraints {
+  const next = { ...constraints };
+  if (raw === "") delete next[key];
+  else next[key] = raw;
+  return next;
+}
+
+function ConstraintFields({
+  kind,
+  constraints,
+  disabled,
+  s,
+  onPatch,
+}: {
+  kind: ShortKind;
+  constraints: ShortConstraints;
+  disabled: boolean | undefined;
+  s: Strings;
+  onPatch: (next: ShortConstraints) => void;
+}) {
+  const numberField = cx(inputClass, "w-28 tabular-nums");
+
+  switch (kind) {
+    case "text":
+      return (
+        <>
+          <FieldCell label={s.minLength} htmlFor="short-min-length">
+            <input
+              id="short-min-length"
+              type="number"
+              min={0}
+              max={SHORT_MAX_ANSWER_LENGTH}
+              className={numberField}
+              value={constraints.minLength}
+              disabled={disabled}
+              onChange={(e) => onPatch({ ...constraints, minLength: Number(e.target.value) })}
+            />
+          </FieldCell>
+          <FieldCell label={s.maxLength} htmlFor="short-max-length">
+            <input
+              id="short-max-length"
+              type="number"
+              min={1}
+              max={SHORT_MAX_ANSWER_LENGTH}
+              className={numberField}
+              value={constraints.maxLength}
+              disabled={disabled}
+              onChange={(e) => onPatch({ ...constraints, maxLength: Number(e.target.value) })}
+            />
+          </FieldCell>
+        </>
+      );
+    case "number":
+      return (
+        <>
+          <FieldCell label={s.min} htmlFor="short-min">
+            <input
+              id="short-min"
+              type="number"
+              step="any"
+              className={numberField}
+              value={constraints.min ?? ""}
+              disabled={disabled}
+              onChange={(e) => onPatch(withOptionalNumber(constraints, "min", e.target.value))}
+            />
+          </FieldCell>
+          <FieldCell label={s.max} htmlFor="short-max">
+            <input
+              id="short-max"
+              type="number"
+              step="any"
+              className={numberField}
+              value={constraints.max ?? ""}
+              disabled={disabled}
+              onChange={(e) => onPatch(withOptionalNumber(constraints, "max", e.target.value))}
+            />
+          </FieldCell>
+          <CheckboxField
+            label={s.integer}
+            checked={constraints.integer}
+            disabled={disabled}
+            onChange={(integer) => onPatch({ ...constraints, integer })}
+          />
+        </>
+      );
+    case "date":
+      return (
+        <>
+          <FieldCell label={s.from} htmlFor="short-from">
+            <input
+              id="short-from"
+              type="date"
+              className={cx(inputClass, "w-40")}
+              value={constraints.from ?? ""}
+              disabled={disabled}
+              onChange={(e) => onPatch(withOptionalDate(constraints, "from", e.target.value))}
+            />
+          </FieldCell>
+          <FieldCell label={s.to} htmlFor="short-to">
+            <input
+              id="short-to"
+              type="date"
+              className={cx(inputClass, "w-40")}
+              value={constraints.to ?? ""}
+              disabled={disabled}
+              onChange={(e) => onPatch(withOptionalDate(constraints, "to", e.target.value))}
+            />
+          </FieldCell>
+        </>
+      );
+    /* A time field takes a time. There is nothing to narrow. */
+    case "time":
+      return null;
+  }
+}
+
 export function ShortEditor({
   config,
   onChange,
@@ -258,6 +399,15 @@ export function ShortEditor({
 }: ShortEditorProps) {
   const s = resolveStrings(shortEditorStrings, strings);
   const patch = (next: Partial<ShortConfig>) => onChange({ ...config, ...next });
+  /*
+   * A draft is stored exactly as it was typed (D16) and a config written by
+   * hand, imported, or migrated from v1 may carry a PARTIAL `constraints` —
+   * the schema fills the defaults when it parses, the editor never sees that
+   * parse. Reading a `value` off an absent key is what turns a controlled
+   * input into an uncontrolled one, so the defaults are filled in here.
+   */
+  const constraints = { ...defaultShortConstraints(), ...config.constraints };
+  const prefilters = { ...defaultShortPrefilters(), ...config.prefilters };
   const setMatchers = (matchers: ShortMatcher[]) => patch({ matchers });
   const replace = (index: number, next: ShortMatcher) =>
     setMatchers(config.matchers.map((m, i) => (i === index ? next : m)));
@@ -298,24 +448,42 @@ export function ShortEditor({
         <IssueList issues={issuesAt(issues, "prompt")} />
       </section>
 
-      <section className={cx(sectionClass, "flex-row flex-wrap items-end gap-4")}>
-        <div className="flex flex-col gap-1.5">
-          <label className={labelClass} htmlFor="short-kind">
-            {s.kind}
-          </label>
-          <select
-            id="short-kind"
-            className={cx(inputClass, "w-40")}
-            value={config.kind}
+      {/*
+        * The kind and the constraints of that kind, on ONE row: they are one
+        * decision ("what does this field take?"), and the constraints are
+        * meaningless without the kind beside them. `items-end` plus a 34 px
+        * segmented track puts every control of the row on one baseline.
+        */}
+      <section className={sectionClass}>
+        <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
+          <div className="flex flex-col gap-1.5">
+            <span className={labelClass} id="short-kind-label">
+              {s.kind}
+            </span>
+            <Segmented
+              name="short-kind"
+              labelledBy="short-kind-label"
+              value={config.kind ?? "text"}
+              disabled={disabled}
+              onChange={(kind) => patch({ kind })}
+              options={[
+                { value: "text", label: s.kindText },
+                { value: "number", label: s.kindNumber },
+                { value: "date", label: s.kindDate },
+                { value: "time", label: s.kindTime },
+              ]}
+            />
+          </div>
+          <ConstraintFields
+            kind={config.kind}
+            constraints={constraints}
             disabled={disabled}
-            onChange={(e) => patch({ kind: e.target.value as ShortConfig["kind"] })}
-          >
-            <option value="text">{s.kindText}</option>
-            <option value="number">{s.kindNumber}</option>
-            <option value="date">{s.kindDate}</option>
-            <option value="time">{s.kindTime}</option>
-          </select>
+            s={s}
+            onPatch={(constraints) => patch({ constraints })}
+          />
         </div>
+        <IssueList issues={issuesAt(issues, "constraints")} />
+
         <div className="flex flex-col gap-1.5">
           <label className={labelClass} htmlFor="short-placeholder">
             {s.placeholder}
@@ -323,7 +491,7 @@ export function ShortEditor({
           <input
             id="short-placeholder"
             type="text"
-            className={cx(inputClass, "w-56")}
+            className={cx(inputClass, "w-full")}
             value={config.placeholder ?? ""}
             disabled={disabled}
             onChange={(e) => {
@@ -333,7 +501,25 @@ export function ShortEditor({
               onChange(next);
             }}
           />
-          <p className={helpClass}>{s.placeholderHint}</p>
+        </div>
+      </section>
+
+      <section className={sectionClass}>
+        <h3 className={labelClass}>{s.prefilters}</h3>
+        <p className={helpClass}>{s.prefiltersHint}</p>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+          <CheckboxField
+            label={s.prefilterTrim}
+            checked={prefilters.trim}
+            disabled={disabled}
+            onChange={(trim) => patch({ prefilters: { ...prefilters, trim } })}
+          />
+          <CheckboxField
+            label={s.prefilterLowercase}
+            checked={prefilters.lowercase}
+            disabled={disabled}
+            onChange={(lowercase) => patch({ prefilters: { ...prefilters, lowercase } })}
+          />
         </div>
       </section>
 

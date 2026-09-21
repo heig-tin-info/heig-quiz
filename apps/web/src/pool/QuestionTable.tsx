@@ -19,7 +19,17 @@ import { Badge, Checkbox, cx, IconButton, isoDateTime, pressable, Skeleton, T } 
  * The last column carries three icon buttons rather than the overflow menu
  * DESIGN.md's "three icon buttons = a menu" rule would ask for: the teacher
  * asked for edit, duplicate and delete visible on the row, and a rule loses
- * to the person who uses the screen every week.
+ * to the person who uses the screen every week. It is also the column that
+ * is PINNED to the right edge (`T.stickyEnd`): past the last threshold the
+ * table scrolls, and the three actions were the first thing the scroll cut
+ * off.
+ *
+ * Which columns survive a narrow page is `T`'s column priority, measured on
+ * the table's own container and not on the viewport — the pool page is 1120
+ * px wide at 1440 and 720 px beside the sidebar at 1024, and the viewport
+ * says nothing about that. Version goes first (`T.colLow`), then Updated
+ * (`T.colMid`), then Tags (`T.colHigh`); the name, the type, the difficulty,
+ * the tick box and the actions never go.
  */
 
 export function DifficultyDots({ value }: { value: number }) {
@@ -70,7 +80,7 @@ export function QuestionTable({
   const t = useT();
   const allChecked = rows.length > 0 && rows.every((r) => checked.has(r.id));
   return (
-    <div className="overflow-x-auto rounded-card border border-line bg-surface">
+    <div className={cx(T.container, "overflow-x-auto rounded-card border border-line bg-surface")}>
       <table className={T.table}>
         <thead className={T.head}>
           <tr>
@@ -83,11 +93,11 @@ export function QuestionTable({
             </th>
             <th className={T.th}>{t("pool.col.name")}</th>
             <th className={T.th}>{t("pool.col.type")}</th>
-            <th className={cx(T.th, "hidden md:table-cell")}>{t("pool.col.tags")}</th>
-            <th className={cx(T.th, "hidden sm:table-cell")}>{t("pool.col.difficulty")}</th>
-            <th className={cx(T.th, "hidden lg:table-cell")}>{t("pool.col.version")}</th>
-            <th className={cx(T.th, "hidden lg:table-cell")}>{t("pool.col.updated")}</th>
-            <th className={T.th}>
+            <th className={cx(T.th, T.colHigh)}>{t("pool.col.tags")}</th>
+            <th className={T.th}>{t("pool.col.difficulty")}</th>
+            <th className={cx(T.th, T.colLow)}>{t("pool.col.version")}</th>
+            <th className={cx(T.th, T.colMid)}>{t("pool.col.updated")}</th>
+            <th className={cx(T.th, T.stickyEnd)}>
               <span className="sr-only">{t("common.actions")}</span>
             </th>
           </tr>
@@ -122,10 +132,10 @@ export function QuestionTable({
                       the name and the actions are what must fit there, and
                       the label stays in the accessible name. */}
                   <Badge tone="zinc" icon={Icon}>
-                    <span className="sr-only sm:not-sr-only">{typeLabel(t, row.type)}</span>
+                    <span className={cx("sr-only", T.wordFrom)}>{typeLabel(t, row.type)}</span>
                   </Badge>
                 </td>
-                <td className={cx(T.td, "hidden max-w-56 md:table-cell")}>
+                <td className={cx(T.td, "max-w-56", T.colHigh)}>
                   {row.tags.length === 0 ? (
                     <span className="text-fg-faint">—</span>
                   ) : (
@@ -138,10 +148,10 @@ export function QuestionTable({
                     </span>
                   )}
                 </td>
-                <td className={cx(T.td, "hidden sm:table-cell")}>
+                <td className={T.td}>
                   <DifficultyDots value={row.difficulty} />
                 </td>
-                <td className={cx(T.td, "hidden lg:table-cell")}>
+                <td className={cx(T.td, T.colLow)}>
                   {row.latestNumber === null ? (
                     <Badge tone="amber">{t("pool.draftOnly")}</Badge>
                   ) : (
@@ -156,10 +166,10 @@ export function QuestionTable({
                     </span>
                   )}
                 </td>
-                <td className={cx(T.td, "hidden whitespace-nowrap tabular-nums text-fg-muted lg:table-cell")}>
+                <td className={cx(T.td, "whitespace-nowrap tabular-nums text-fg-muted", T.colMid)}>
                   {isoDateTime(row.updatedAt)}
                 </td>
-                <td className={cx(T.td, "text-right")} onClick={(e) => e.stopPropagation()}>
+                <td className={cx(T.td, "text-right", T.stickyEnd)} onClick={(e) => e.stopPropagation()}>
                   <span className="inline-flex items-center gap-0.5">
                     <IconButton
                       size="sm"

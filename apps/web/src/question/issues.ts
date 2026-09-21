@@ -20,6 +20,10 @@ const KNOWN: Record<string, keyof Dict> = {
   "cloze.no_blank": "issue.cloze.no_blank",
   "cloze.too_many_blanks": "issue.cloze.too_many_blanks",
   "short.invalid_pattern": "issue.short.invalid_pattern",
+  "short.integer_expected": "issue.short.integer_expected",
+  "short.length_range": "issue.short.length_range",
+  "short.number_range": "issue.short.number_range",
+  "short.date_range": "issue.short.date_range",
 };
 
 export function issueMessage(t: TFunction, message: string): string {

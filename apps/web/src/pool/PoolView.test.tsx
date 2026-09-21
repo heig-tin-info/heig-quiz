@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { PoolDetail, QuestionPage } from "@quiz/contracts";
 
-import { mockFetch, ok, renderWithProviders } from "../test/render";
+import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { PoolView } from "./PoolView";
 
 /*
@@ -142,7 +142,8 @@ describe("PoolView", () => {
     await screen.findByText("ptr-arith-01");
     await user.click(screen.getByRole("button", { name: /Filters/ }));
     const sheet = await screen.findByRole("dialog");
-    await user.click(within(sheet).getByLabelText("Code"));
+    // The type list is a row of pressed-or-not pills, not of checkboxes.
+    await user.click(within(sheet).getByRole("button", { name: "Code" }));
     await waitFor(() =>
       expect(calls.some((c) => c.url === "/app/api/pools/p1/questions?type=code&limit=25")).toBe(
         true,
@@ -199,6 +200,66 @@ describe("PoolView", () => {
     expect(screen.queryByRole("region")).not.toBeInTheDocument();
     await user.click(screen.getByLabelText("Select ptr-arith-01"));
     expect(await screen.findByRole("region", { name: "1 selected" })).toBeInTheDocument();
+  });
+
+  it("creates a category from the move dialog and files the selection into it", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch(
+      routes({
+        "POST /app/api/pools/p1/categories": ok({
+          id: "k9",
+          poolId: "p1",
+          parentId: null,
+          name: "Tableaux",
+          position: 1,
+        }),
+        "PATCH /app/api/questions/q1": ok({}),
+      }),
+    );
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    await screen.findByText("ptr-arith-01");
+    await user.click(screen.getByLabelText("Select ptr-arith-01"));
+    const bar = await screen.findByRole("region", { name: "1 selected" });
+    await user.click(within(bar).getByRole("button", { name: "Move to a category" }));
+    const dialog = await screen.findByRole("dialog");
+    // The last option asks a question instead of answering one.
+    await user.selectOptions(within(dialog).getByLabelText("Category"), "New category…");
+    await user.type(within(dialog).getByLabelText("Category name"), "Tableaux");
+    await user.click(within(dialog).getByRole("button", { name: "Move to a category" }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.url === "/app/api/pools/p1/categories")).toBe(true),
+    );
+    expect(calls.find((c) => c.url === "/app/api/pools/p1/categories")?.body).toEqual({
+      name: "Tableaux",
+      parentId: null,
+    });
+    // ...and the questions land in the category that click just created.
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === "PATCH" && c.url === "/app/api/questions/q1")).toBe(
+        true,
+      ),
+    );
+    expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ categoryId: "k9" });
+  });
+
+  it("reports a category that could not be created, and moves nothing", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch(
+      routes({
+        "POST /app/api/pools/p1/categories": fail(409, { message: "Name already used" }),
+      }),
+    );
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    await screen.findByText("ptr-arith-01");
+    await user.click(screen.getByLabelText("Select ptr-arith-01"));
+    const bar = await screen.findByRole("region", { name: "1 selected" });
+    await user.click(within(bar).getByRole("button", { name: "Move to a category" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.selectOptions(within(dialog).getByLabelText("Category"), "New category…");
+    await user.type(within(dialog).getByLabelText("Category name"), "Tableaux");
+    await user.click(within(dialog).getByRole("button", { name: "Move to a category" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Name already used");
+    expect(calls.some((c) => c.method === "PATCH")).toBe(false);
   });
 
   it("offers the one action of an empty pool", async () => {

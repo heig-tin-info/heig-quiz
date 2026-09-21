@@ -90,17 +90,39 @@ Si `allowNegative` est vrai, la borne inférieure devient −1. Le résultat est
 
 ## 4.5 Texte court `short`
 
-**Configuration** : `prompt`, `kind` `text` / `number` / `date` / `time`, `matchers[]` évalués dans l'ordre, la première correspondance donne les points.
+**Configuration** (`configVersion: 2`) : `prompt`, `kind` `text` / `number` / `date` / `time`, les `constraints` de ce `kind`, les `prefilters` de la question, et `matchers[]` évalués dans l'ordre, la première correspondance donne les points.
+
+**Contraintes du champ** — elles disent ce que le champ ACCEPTE, jamais ce qu'il attend. Elles ne font donc pas partie de la clé : `toStudent` les transmet et le player les impose dans l'input, où le navigateur les applique lui-même.
+
+| `kind` | Contraintes | Champ de l'étudiant |
+|---|---|---|
+| `text` | `minLength` défaut 0, `maxLength` défaut 255, plafond dur 500 | `input type="text"` avec `minlength` et `maxlength` |
+| `number` | `min` et `max` facultatives (vides = non bornées), `integer` défaut faux | `input type="number"` avec `min`, `max` et `step` |
+| `date` | `from` et `to` facultatives | `input type="date"` avec `min` et `max` |
+| `time` | aucune | `input type="time"` |
+
+Une seule contrainte pèse sur la correction : `integer`. Une réponse non entière à une question entière vaut 0, quels que soient les matchers. Les autres appartiennent au champ, jamais au barème — une réponse enregistrée avant qu'une contrainte soit resserrée est corrigée sur son mérite. Un matcher `number` dont la valeur attendue n'est pas entière dans une question entière est refusé à la publication, avec la clé `short.integer_expected`.
+
+**Prefilters** — deux normalisations décidées UNE fois pour la question, appliquées à la réponse de l'étudiant ET à chaque valeur `exact` avant la comparaison. L'entrée d'un `regex` les subit aussi ; son drapeau `i`, lui, reste le sien.
+
+| Prefilter | Défaut | Effet |
+|---|---|---|
+| `trim` | vrai | Retire les espaces de début et de fin, des deux côtés |
+| `lowercase` | vrai | Compare en minuscules, pliage français, les accents restent significatifs (décision D9) |
+
+Les suites d'espaces à l'intérieur d'une réponse sont toujours réduites à un seul espace. En v1 ces trois réglages vivaient sur chaque matcher `exact` (`caseSensitive`, `trim`, `collapseSpaces`) : la migration v1 → v2 lit `trim` et `caseSensitive` du PREMIER matcher `exact` pour en faire les prefilters de la question, puis les retire de tous les matchers.
 
 | Matcher | Champs | Sémantique |
 |---|---|---|
-| `exact` | `value`, `caseSensitive` défaut faux, `trim` défaut vrai, `collapseSpaces` défaut vrai | Égalité après normalisation |
-| `regex` | `pattern`, `flags` | Correspondance complète |
+| `exact` | `value` | Égalité après les prefilters de la question |
+| `regex` | `pattern`, `flags` | Correspondance complète, sur l'entrée préfiltrée |
 | `number` | `value`, `tolerance`, `toleranceMode` `abs` / `rel`, `unit` facultative acceptée ou ignorée | Comparaison numérique, virgule et point acceptés |
 | `date`, `time` | `value`, `tolerance` en jours ou minutes | Formats locaux acceptés, normalisés en ISO |
 | `llm` | `rubric` markdown, `reference` facultative | Correction LLM proposée, phase 2 |
 
 Chaque matcher peut porter `points` en fraction, défaut 1, pour accepter une réponse partiellement juste.
+
+**Éditeur** : le `kind` est un contrôle segmenté, les contraintes de ce `kind` sont sur la même ligne, à sa droite ; les prefilters sont deux cases au-dessous de la liste des réponses acceptées.
 
 **Réponse** : `text` chaîne.
 

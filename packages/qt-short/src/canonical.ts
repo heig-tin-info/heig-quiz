@@ -7,6 +7,7 @@
  */
 import {
   SHORT_CONFIG_VERSION,
+  SHORT_DEFAULT_MAX_LENGTH,
   ShortConfigSchema,
   type ShortConfig,
   type ShortMatcher,
@@ -18,6 +19,8 @@ export interface ShortCanonical {
   configVersion: number;
   prompt: string;
   kind?: ShortConfig["kind"];
+  constraints?: Record<string, unknown>;
+  prefilters?: Record<string, unknown>;
   placeholder?: string;
   matchers: ShortCanonicalMatcher[];
 }
@@ -27,9 +30,6 @@ function canonicalMatcher(matcher: ShortMatcher): ShortCanonicalMatcher {
   switch (matcher.kind) {
     case "exact":
       out.value = matcher.value;
-      if (matcher.caseSensitive) out.caseSensitive = true;
-      if (!matcher.trim) out.trim = false;
-      if (!matcher.collapseSpaces) out.collapseSpaces = false;
       break;
     case "regex":
       out.pattern = matcher.pattern;
@@ -59,6 +59,27 @@ function canonicalMatcher(matcher: ShortMatcher): ShortCanonicalMatcher {
   return out;
 }
 
+/** Only what the teacher moved off its default; an empty map is omitted. */
+function canonicalConstraints(config: ShortConfig): Record<string, unknown> {
+  const c = config.constraints;
+  const out: Record<string, unknown> = {};
+  if (c.minLength !== 0) out.minLength = c.minLength;
+  if (c.maxLength !== SHORT_DEFAULT_MAX_LENGTH) out.maxLength = c.maxLength;
+  if (c.min !== undefined) out.min = c.min;
+  if (c.max !== undefined) out.max = c.max;
+  if (c.integer) out.integer = true;
+  if (c.from !== undefined) out.from = c.from;
+  if (c.to !== undefined) out.to = c.to;
+  return out;
+}
+
+function canonicalPrefilters(config: ShortConfig): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (!config.prefilters.trim) out.trim = false;
+  if (!config.prefilters.lowercase) out.lowercase = false;
+  return out;
+}
+
 export function toCanonical(config: ShortConfig): ShortCanonical {
   const out: ShortCanonical = {
     configVersion: SHORT_CONFIG_VERSION,
@@ -66,6 +87,10 @@ export function toCanonical(config: ShortConfig): ShortCanonical {
     matchers: config.matchers.map(canonicalMatcher),
   };
   if (config.kind !== "text") out.kind = config.kind;
+  const constraints = canonicalConstraints(config);
+  if (Object.keys(constraints).length > 0) out.constraints = constraints;
+  const prefilters = canonicalPrefilters(config);
+  if (Object.keys(prefilters).length > 0) out.prefilters = prefilters;
   if (config.placeholder !== undefined) out.placeholder = config.placeholder;
   return out;
 }

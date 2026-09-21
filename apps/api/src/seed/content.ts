@@ -211,12 +211,14 @@ export const C_POOL: PoolSpec = {
         "`const` qualifie le type : le compilateur refuse toute écriture à travers " +
         "ce nom. Il ne place pas forcément la valeur en mémoire morte.",
       config: {
-        configVersion: 1,
+        configVersion: 2,
         prompt:
           "Quel mot-clé du C déclare une variable dont la valeur ne doit pas être modifiée ?",
         kind: "text",
         placeholder: "un mot-clé",
-        matchers: [{ kind: "exact", value: "const", caseSensitive: false }],
+        constraints: { maxLength: 20 },
+        prefilters: { trim: true, lowercase: true },
+        matchers: [{ kind: "exact", value: "const" }],
       },
     },
     {
@@ -229,11 +231,12 @@ export const C_POOL: PoolSpec = {
         "Quatre caractères plus le `\\0` terminal : une chaîne littérale de n caractères " +
         "occupe n + 1 octets.",
       config: {
-        configVersion: 1,
+        configVersion: 2,
         prompt:
           "Combien d'octets la chaîne littérale `\"HEIG\"` occupe-t-elle en mémoire ?",
         kind: "number",
         placeholder: "un nombre d'octets",
+        constraints: { min: 1, integer: true },
         matchers: [{ kind: "number", value: 5, tolerance: 0 }],
       },
     },
@@ -425,12 +428,13 @@ export const ELECTRONICS_POOL: PoolSpec = {
       tags: ["résistances", "régime continu"],
       explanation: "Deux résistances égales en parallèle valent la moitié de l'une d'elles.",
       config: {
-        configVersion: 1,
+        configVersion: 2,
         prompt:
           "Deux résistances de 1 kΩ sont montées en parallèle. " +
           "Quelle est la résistance équivalente, en ohms ?",
         kind: "number",
         placeholder: "en ohms",
+        constraints: { min: 0 },
         matchers: [{ kind: "number", value: 500, tolerance: 1 }],
       },
     },

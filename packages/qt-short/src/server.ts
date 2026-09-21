@@ -8,6 +8,8 @@ import { describeMatcher } from "@quiz/domain";
 import { fromCanonical, toCanonical } from "./canonical.js";
 import { gradeShort } from "./grade.js";
 import {
+  defaultShortConstraints,
+  defaultShortPrefilters,
   emptyShortDraft,
   SHORT_CONFIG_VERSION,
   ShortAnswerSchema,
@@ -25,6 +27,58 @@ import {
 /** The key as a teacher reads it: one line per matcher, in evaluation order. */
 export function expectedAnswers(config: ShortConfig): string[] {
   return config.matchers.map(describeMatcher);
+}
+
+/** The v1 shape, as it was stored: the text options lived on every matcher. */
+interface ShortConfigV1 {
+  prompt?: unknown;
+  kind?: unknown;
+  placeholder?: unknown;
+  matchers?: unknown;
+}
+
+interface ExactV1 {
+  kind: "exact";
+  value?: unknown;
+  caseSensitive?: unknown;
+  trim?: unknown;
+  collapseSpaces?: unknown;
+  points?: unknown;
+}
+
+const isExactV1 = (m: unknown): m is ExactV1 =>
+  typeof m === "object" && m !== null && (m as { kind?: unknown }).kind === "exact";
+
+/**
+ * v1 -> v2 (decision D16: the result is handed to `loadConfig`, which parses;
+ * a draft that was invalid in v1 stays invalid in v2, it does not throw here).
+ *
+ * The two question-level prefilters are read off the FIRST exact matcher,
+ * which is the only one a teacher ever configured in practice — the editor
+ * showed the same "Case sensitive" box on every row and they all carried the
+ * same answer. `collapseSpaces` has no v2 home: collapsing runs of whitespace
+ * became unconditional, which is what its `true` default already meant.
+ */
+export function migrateShortV1(raw: unknown): ShortConfig {
+  const v1 = (typeof raw === "object" && raw !== null ? raw : {}) as ShortConfigV1;
+  const matchers = Array.isArray(v1.matchers) ? (v1.matchers as unknown[]) : [];
+  const firstExact = matchers.find(isExactV1);
+
+  const next: Record<string, unknown> = {
+    ...(v1 as Record<string, unknown>),
+    configVersion: SHORT_CONFIG_VERSION,
+    constraints: defaultShortConstraints(),
+    prefilters: {
+      trim: typeof firstExact?.trim === "boolean" ? firstExact.trim : true,
+      lowercase: typeof firstExact?.caseSensitive === "boolean" ? !firstExact.caseSensitive : true,
+    },
+    matchers: matchers.map((matcher) => {
+      if (!isExactV1(matcher)) return matcher;
+      const { caseSensitive: _c, trim: _t, collapseSpaces: _s, ...rest } = matcher;
+      return rest;
+    }),
+  };
+  return next as unknown as ShortConfig;
 }
 
 export const shortServer: QuestionTypeServer<
@@ -45,9 +99,10 @@ export const shortServer: QuestionTypeServer<
 
   emptyDraft: emptyShortDraft,
 
-  /** v1 is the only shape that ever existed; `loadConfig` parses right after. */
+  /** Same version: identity, even for an invalid draft (D16). v1: see above. */
   migrate(config: unknown, fromVersion: number): ShortConfig {
     if (fromVersion === SHORT_CONFIG_VERSION) return config as ShortConfig;
+    if (fromVersion === 1) return migrateShortV1(config);
     throw new ConfigMigrationError(
       "short",
       fromVersion,
@@ -67,7 +122,14 @@ export const shortServer: QuestionTypeServer<
    * tolerance a number carries, or how many alternatives are accepted.
    */
   toStudent(config): ShortStudent {
-    const student: ShortStudent = { prompt: config.prompt, kind: config.kind };
+    const student: ShortStudent = {
+      prompt: config.prompt,
+      kind: config.kind,
+      // What the FIELD accepts, never what it expects: a length, a range or a
+      // window of dates says nothing about the answer, and the player needs
+      // them to enforce the same thing the teacher typed.
+      constraints: { ...config.constraints },
+    };
     if (config.placeholder !== undefined) student.placeholder = config.placeholder;
     return student;
   },

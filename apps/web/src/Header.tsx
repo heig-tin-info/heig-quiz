@@ -14,33 +14,25 @@ import {
 import type { Me } from "@quiz/contracts";
 
 import { api } from "./api";
+import quizLogo from "./assets/quiz.svg";
 import { useT } from "./i18n";
 import { setThemeChoice, useResolvedTheme } from "./theme";
 import { Avatar, cx, Menu, type MenuItem } from "./ui";
 
 /**
- * The mark: a question mark inside the accent square. One glyph, drawn here
- * rather than borrowed from an icon set, because it is the only thing on the
- * page that is allowed to be the product's own.
+ * The mark: the product's wordmark — four speech bubbles spelling Q U I Z,
+ * the first of them the HEIG red. It is an <img>, not inline SVG: the file is
+ * the identity as it is delivered elsewhere (slides, the intranet), and a
+ * copy retyped into JSX is a second version to keep in step. Its four colours
+ * are its own, outside the token scale, which is why nothing else on a screen
+ * is allowed them.
+ *
+ * `className` carries the WIDTH; the height follows. It is a drawn word, so
+ * it is sized like a word — about 200 px in the sidebar, 110 px in the phone
+ * top bar, 220 px on the door — and never like a 20 px icon.
  */
-export function Logo({ className = "size-5" }: { className?: string }) {
-  return (
-    <span className="inline-flex shrink-0 items-center justify-center rounded-[10px] bg-accent p-1.5 text-on-fill">
-      <svg
-        viewBox="0 0 24 24"
-        aria-hidden="true"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className={className}
-      >
-        <path d="M8.5 8.5a3.5 3.5 0 1 1 4.6 3.33c-.9.3-1.6 1.1-1.6 2.05v.62" />
-        <circle cx="11.5" cy="18" r="0.2" fill="currentColor" />
-      </svg>
-    </span>
-  );
+export function Logo({ className = "w-28", id }: { className?: string; id?: string }) {
+  return <img src={quizLogo} id={id} alt="Quiz" className={cx("h-auto", className)} />;
 }
 
 /**
