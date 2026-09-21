@@ -76,6 +76,32 @@
   border-radius: 4px;
 }
 
+/* The frame of a code block (markdown/CodeBlockView.tsx). The node view wraps
+   the <pre> in a div, so the block's own bottom margin has to move out to the
+   frame — otherwise `.md-body > :last-child` no longer reaches the <pre> and a
+   fence at the end of a field left a 12 px gap under itself. The frame is also
+   what the language field is positioned against. */
+.rt-surface .rt-code {
+  position: relative;
+  margin: 0 0 12px;
+}
+.rt-surface .rt-code > pre {
+  margin: 0;
+}
+.rt-surface.md-sm .rt-code {
+  margin-bottom: 8px;
+}
+.rt-surface .rt-code:last-child {
+  margin-bottom: 0;
+}
+/* The element @tiptap/react puts around the contenteditable half of a node
+   view is a plain block; inside <code> it must not start a line of its own or
+   reset what <pre> decided about the spaces. */
+.rt-surface .rt-code pre code > [data-node-view-content-react] {
+  display: block;
+  white-space: inherit;
+}
+
 /* An atom the caret sits on: an image, a formula. The accent ring says which
    one Backspace would remove. */
 .rt-surface .ProseMirror-selectednode {

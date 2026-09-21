@@ -67,6 +67,7 @@ import {
   IssueList,
   issuesAt,
   labelClass,
+  Pastille,
   rootIssues,
   sectionClass,
   Segmented,
@@ -492,7 +493,13 @@ export function McqEditor({
 }
 
 /**
- * One row: handle, letter, "correct", the text, the bin.
+ * One row: the handle, the letter, the text, the bin.
+ *
+ * The LETTER IS THE CHECKBOX (`Pastille`). The row used to carry a grip, a
+ * letter, a box labelled "Correct" and the field: four things for two, and the
+ * word "Correct" said nothing to the teacher reading a list of answers. The
+ * round letter is the toggle now — ticked, it is the accent disc the student
+ * will see under the same letter in the player.
  *
  * The checkbox is ALWAYS a checkbox, never a radio, even when exactly one
  * answer is correct. A radio cannot be un-ticked, so a teacher who ticked the
@@ -544,37 +551,40 @@ function ChoiceRow({
       )}
     >
       {/*
-       * The handle IS the letter cell: the grip and the "B" are one target, so
-       * a pointer aiming at the letter of the row it wants to move grabs it
-       * instead of missing by four pixels. The tooltip names the gesture; the
+       * The handle stays a grip and nothing else: the letter moved into the
+       * pastille beside it, which is a control of its own and must not be
+       * something a drag can start from. The tooltip names the gesture; the
        * accessible name is what the keyboard sensor announces.
        */}
       <Tip label={`${s.reorderChoice} ${letter}`}>
         <button
           type="button"
-          className={cx(gripClass, "mt-0.75 w-auto gap-0.5 pl-0.5 pr-1")}
+          className={cx(gripClass, "mt-1.25")}
           aria-label={`${s.reorderChoice} ${letter}`}
           disabled={disabled}
           {...attributes}
           {...listeners}
         >
           <GripIcon />
-          <span aria-hidden className="w-4 text-center text-[13px] font-medium">
-            {letter}
-          </span>
         </button>
       </Tip>
 
-      <label className="mt-1.5 inline-flex shrink-0 items-center gap-1.5 text-[13px] text-fg-muted">
-        <input
-          type="checkbox"
-          className="size-4 accent-accent"
-          aria-label={`${s.correct} ${letter}`}
+      <label
+        className={cx(
+          // 3 px: the field is 38 px tall and the pastille 32, and the disc
+          // belongs on the FIRST line of a field that has grown, not in the
+          // middle of the block.
+          "relative mt-0.75 inline-grid shrink-0 place-items-center",
+          disabled ? "cursor-default" : "group/opt cursor-pointer",
+        )}
+      >
+        <Pastille
+          letter={letter}
           checked={choice.correct}
           disabled={disabled}
-          onChange={(e) => onCorrect(e.target.checked)}
+          aria-label={s.correctChoice.replace("{letter}", letter)}
+          onChange={onCorrect}
         />
-        <span aria-hidden>{s.correct}</span>
       </label>
 
       {RichText ? (

@@ -12,6 +12,7 @@
  * is how vitest is told, per file, without moving the whole suite.
  */
 import { Editor } from "@tiptap/core";
+import type { JSONContent } from "@tiptap/core";
 import { describe, expect, it } from "vitest";
 
 import { INLINE_INPUT_RULES, richTextExtensions } from "./tiptap";
@@ -34,7 +35,7 @@ document.elementFromPoint ??= () => null;
 function roundTrip(markdown: string, inline = false): string {
   const editor = new Editor({
     element: document.createElement("div"),
-    extensions: richTextExtensions(),
+    extensions: richTextExtensions({ inline }),
     enableInputRules: inline ? [...INLINE_INPUT_RULES] : true,
     content: markdown,
     contentType: "markdown",
@@ -200,7 +201,7 @@ describe("an inline field drops nothing", () => {
 function editorFor(markdown = "", inline = false): Editor {
   return new Editor({
     element: document.createElement("div"),
-    extensions: richTextExtensions(),
+    extensions: richTextExtensions({ inline }),
     enableInputRules: inline ? [...INLINE_INPUT_RULES] : true,
     content: markdown,
     contentType: "markdown",
@@ -303,6 +304,234 @@ describe("the input rules of an inline field", () => {
     try {
       type(editor, source);
       expect(firstChild(editor).type.name).toBe("paragraph");
+    } finally {
+      editor.destroy();
+    }
+  });
+});
+
+/*
+ * THE FENCE, as a teacher writes one: ```c, the lines, ```. What used to come
+ * out of that was five paragraphs of literal backticks — the shipped rule of
+ * StarterKit only fires on a fence followed by a SPACE, and an inline field
+ * never reaches it at all, since its Enter belongs to the host.
+ *
+ * `tiptap.ts` answers with two mechanisms, and both are checked here: the
+ * fence that OPENS a block under the caret, and the closing fence that
+ * GATHERS what was written above it.
+ */
+describe("typing a fence", () => {
+  const language = (editor: Editor) => firstChild(editor).attrs.language;
+
+  /*
+   * These documents are built as NODES and not from markdown: the whole point
+   * is a document whose fences are literal text, and a markdown fixture would
+   * have been parsed into the very block the test is about to build.
+   */
+  const para = (text: string) => ({
+    type: "paragraph",
+    content: text === "" ? [] : [{ type: "text", text }],
+  });
+  const fenceNode = (language: string, text: string) => ({
+    type: "codeBlock",
+    attrs: { language },
+    content: [{ type: "text", text }],
+  });
+  function editorWith(content: JSONContent[], inline = false): Editor {
+    const editor = editorFor("", inline);
+    editor.commands.setContent({ type: "doc", content }, { emitUpdate: false });
+    return editor;
+  }
+
+  it.each([["```c "], ["```c++ "], ["```python3 "]])(
+    "opens a block with its language on %j",
+    (source) => {
+      const editor = editorFor();
+      try {
+        type(editor, source);
+        expect(firstChild(editor).type.name).toBe("codeBlock");
+        expect(language(editor)).toBe(source.trim().slice(3));
+      } finally {
+        editor.destroy();
+      }
+    },
+  );
+
+  it("opens a block on Enter, which is how a fence is actually written", () => {
+    const editor = editorFor();
+    try {
+      // The input-rule plugin runs the rules on Enter too, with "\n" as the
+      // text; what the teacher typed is still only the fence.
+      type(editor, "```c");
+      expect(firstChild(editor).type.name).toBe("paragraph");
+      editor.commands.keyboardShortcut("Enter");
+      expect(firstChild(editor).type.name).toBe("codeBlock");
+      expect(language(editor)).toBe("c");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it.each([["Mod-Enter"], ["Shift-Enter"]])("opens a block on %s too", (keys) => {
+    const editor = editorFor();
+    try {
+      editor.view.dispatch(editor.state.tr.insertText("```c"));
+      editor.commands.keyboardShortcut(keys);
+      expect(firstChild(editor).type.name).toBe("codeBlock");
+      expect(language(editor)).toBe("c");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("serializes the block it just opened as a fence with its language", () => {
+    const editor = editorFor();
+    try {
+      type(editor, "```c ");
+      type(editor, "int x = 1;");
+      expect(editor.getMarkdown().trimEnd()).toBe("```c\nint x = 1;\n```");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  /*
+   * The retroactive half: the paragraphs are already there — pasted, or typed
+   * before any of this existed — and the closing fence is what turns them into
+   * a block, the moment its third backtick lands.
+   */
+  it("gathers the paragraphs above it when the closing fence is typed", () => {
+    // The five paragraphs a teacher was left with before any of this existed:
+    // literal backticks, and no block anywhere.
+    const editor = editorWith([
+      para("```c"),
+      para("int main(void)"),
+      para("{"),
+      para("    return 0;"),
+      para("}"),
+    ]);
+    try {
+      // The caret goes to the end, on a new paragraph, and the fence is typed.
+      editor.commands.focus("end");
+      editor.commands.keyboardShortcut("Enter");
+      type(editor, "```");
+      const block = firstChild(editor);
+      expect(block.type.name).toBe("codeBlock");
+      expect(block.attrs.language).toBe("c");
+      expect(block.textContent).toBe("int main(void)\n{\n    return 0;\n}");
+      expect(editor.getMarkdown().trimEnd()).toBe(
+        "```c\nint main(void)\n{\n    return 0;\n}\n```",
+      );
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("gathers nothing when there is no fence above: the backticks are typed", () => {
+    const editor = editorFor("Une phrase\n\n");
+    try {
+      editor.commands.focus("end");
+      type(editor, "```");
+      expect(editor.state.doc.lastChild?.type.name).toBe("paragraph");
+      expect(editor.state.doc.lastChild?.textContent).toBe("```");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  /*
+   * A CHOICE reaches back over a code block, a PROMPT does not. In a choice
+   * the flow is one snippet: the opening fence has already become a block, the
+   * lines after it are paragraphs (Ctrl+Enter leaves a block), and the closing
+   * fence has to gather them back. In a prompt, a teacher typing ``` under a
+   * block they wrote earlier is opening a SECOND one, and swallowing the prose
+   * between the two would be the worst thing this could do.
+   */
+  it("reaches back over a block already opened, in an inline field", () => {
+    // What a CHOICE looks like mid-flow: the fence opened a block, Ctrl+Enter
+    // left it, and the two lines after it are paragraphs.
+    const editor = editorWith(
+      [fenceNode("c", "int main(void) {"), para("    return 0;"), para("}")],
+      true,
+    );
+    try {
+      editor.commands.focus("end");
+      editor.commands.keyboardShortcut("Enter");
+      type(editor, "```");
+      expect(firstChild(editor).type.name).toBe("codeBlock");
+      expect(editor.getMarkdown().trimEnd()).toBe(
+        "```c\nint main(void) {\n    return 0;\n}\n```",
+      );
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("leaves the prose alone in a block field, where ``` opens a second fence", () => {
+    const editor = editorWith([fenceNode("c", "int x;"), para("Corrigez-le :")]);
+    try {
+      editor.commands.focus("end");
+      editor.commands.keyboardShortcut("Enter");
+      type(editor, "```");
+      expect(editor.state.doc.child(1).textContent).toBe("Corrigez-le :");
+      expect(editor.state.doc.lastChild?.textContent).toBe("```");
+    } finally {
+      editor.destroy();
+    }
+  });
+});
+
+/*
+ * Leaving a block, which is the other half of being able to open one. Two of
+ * these are Tiptap's own rules and are asserted because they are OPTIONS: they
+ * are off by default in some versions of the extension, and a teacher stuck
+ * inside a fenced block at the end of a prompt has no way out at all.
+ */
+describe("getting out of a fenced block", () => {
+  /*
+   * The DOCUMENT is what these read, never the caret: `keyboardShortcut`
+   * replays the STEPS of the command it ran and drops the selection it set, so
+   * a caret assertion here would measure the test helper. Where the caret
+   * lands is checked in the browser, on the real editor.
+   */
+  it("makes a paragraph on ArrowDown when nothing follows (exitOnArrowDown)", () => {
+    const editor = editorFor("```c\nint x;\n```");
+    try {
+      expect(editor.state.doc.childCount).toBe(1);
+      editor.commands.focus("end");
+      editor.commands.keyboardShortcut("ArrowDown");
+      expect(editor.state.doc.lastChild?.type.name).toBe("paragraph");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("makes a paragraph on the third Enter of an empty last line (exitOnTripleEnter)", () => {
+    const editor = editorFor("```c\nint x;\n```");
+    try {
+      editor.commands.focus("end");
+      editor.commands.keyboardShortcut("Enter");
+      editor.commands.keyboardShortcut("Enter");
+      expect(firstChild(editor).textContent).toBe("int x;\n\n");
+      editor.commands.keyboardShortcut("Enter");
+      // The two empty lines go with the exit: they were the gesture.
+      expect(firstChild(editor).textContent).toBe("int x;");
+      expect(editor.state.doc.lastChild?.type.name).toBe("paragraph");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("indents by two spaces on Tab and back on Shift+Tab", () => {
+    const editor = editorFor("```c\nint x;\n```");
+    try {
+      editor.commands.focus("start");
+      editor.commands.keyboardShortcut("Tab");
+      expect(firstChild(editor).textContent).toBe("  int x;");
+      editor.commands.keyboardShortcut("Shift-Tab");
+      expect(firstChild(editor).textContent).toBe("int x;");
+      // Nothing left to remove: the key is spent, not handed to the page.
+      expect(editor.commands.keyboardShortcut("Shift-Tab")).toBe(true);
     } finally {
       editor.destroy();
     }

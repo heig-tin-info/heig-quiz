@@ -79,7 +79,7 @@ describe("McqEditor — the derived mode", () => {
   it("goes to multiple as soon as a second key is ticked", async () => {
     const onChange = vi.fn();
     render(<McqEditor config={SECRET_CONFIG} onChange={onChange} />);
-    await userEvent.click(screen.getByLabelText("Correct A"));
+    await userEvent.click(screen.getByLabelText("Choice A is correct"));
     const next = onChange.mock.calls[0]?.[0];
     expect(next.mode).toBe("multiple");
   });
@@ -93,7 +93,7 @@ describe("McqEditor — the derived mode", () => {
       />,
     );
     // The fixture has two keys, A and B; un-ticking B leaves exactly one.
-    await userEvent.click(screen.getByLabelText("Correct B"));
+    await userEvent.click(screen.getByLabelText("Choice B is correct"));
     const next = onChange.mock.calls[0]?.[0];
     expect(next.mode).toBe("single");
     expect(next.policy).toBe("all_or_nothing");
@@ -107,7 +107,7 @@ describe("McqEditor — the derived mode", () => {
       { text: "a", correct: true },
       { text: "b", correct: false },
     ] })} onChange={onChange} />);
-    await userEvent.click(screen.getByLabelText("Correct A"));
+    await userEvent.click(screen.getByLabelText("Choice A is correct"));
     const next = onChange.mock.calls[0]?.[0];
     expect(next.choices.some((c: { correct: boolean }) => c.correct)).toBe(false);
     // The validation issue says what is missing; the mode is not flipped
@@ -117,8 +117,42 @@ describe("McqEditor — the derived mode", () => {
 
   it("offers a checkbox and never a radio, so the key set can go back to empty", () => {
     render(<McqEditor config={SECRET_CONFIG} onChange={() => {}} />);
-    expect(screen.queryAllByRole("radio", { name: /^Correct/ })).toHaveLength(0);
-    expect(screen.getAllByRole("checkbox", { name: /^Correct/ })).toHaveLength(3);
+    expect(screen.queryAllByRole("radio", { name: /is correct$/ })).toHaveLength(0);
+    expect(screen.getAllByRole("checkbox", { name: /is correct$/ })).toHaveLength(3);
+  });
+
+  /*
+   * The LETTER is that checkbox: one pastille per row, no second control and
+   * no "Correct" label — a word that named nothing a teacher was looking for.
+   */
+  it("makes the letter itself the toggle, with no 'Correct' label left", () => {
+    render(<McqEditor config={multipleConfig()} onChange={() => {}} />);
+    expect(screen.queryByText("Correct")).toBeNull();
+    for (const letter of ["A", "B", "C"]) {
+      const box = screen.getByRole("checkbox", { name: `Choice ${letter} is correct` });
+      // The visible face of the hidden input is the letter beside it.
+      expect(box.closest("label")).toHaveTextContent(letter);
+    }
+  });
+
+  it("ticks and un-ticks through the letter", async () => {
+    const onChange = vi.fn();
+    render(<McqEditor config={multipleConfig()} onChange={onChange} />);
+    const a = screen.getByRole("checkbox", { name: "Choice A is correct" });
+    const c = screen.getByRole("checkbox", { name: "Choice C is correct" });
+    // The fixture's key set is A and B.
+    expect(a).toBeChecked();
+    expect(c).not.toBeChecked();
+    await userEvent.click(c);
+    expect(onChange.mock.calls[0]?.[0].choices[2].correct).toBe(true);
+    await userEvent.click(a);
+    expect(onChange.mock.calls[1]?.[0].choices[0].correct).toBe(false);
+  });
+
+  it("names the drag handle alone, now that it carries no letter", () => {
+    render(<McqEditor config={SECRET_CONFIG} onChange={() => {}} />);
+    const handle = screen.getByRole("button", { name: "Reorder choice B" });
+    expect(handle.textContent).toBe("");
   });
 });
 
@@ -472,6 +506,21 @@ describe("McqPlayer", () => {
   it("is read-only once the attempt is closed", () => {
     render(<McqPlayer student={student} answer={{ selected: [0] }} onChange={() => {}} readOnly />);
     for (const radio of screen.getAllByRole("radio")) expect(radio).toBeDisabled();
+  });
+
+  /*
+   * The student meets the same pastille as the teacher: the letter IS the
+   * control, at 40 px, and the accessible name stays the TEXT of the choice —
+   * the letter is an index of the list, not something to read out.
+   */
+  it("shows one lettered pastille per choice and selects through it", async () => {
+    const onChange = vi.fn();
+    render(<McqPlayer student={student} answer={null} onChange={onChange} readOnly={false} />);
+    const first = screen.getByRole("radio", { name: student.choices[0]!.text });
+    expect(first.closest("label")).toHaveTextContent("A");
+    await userEvent.click(first);
+    expect(onChange).toHaveBeenCalledWith({ selected: [student.choices[0]!.id] });
+    expect(screen.queryByRole("radio", { name: /^A$/ })).toBeNull();
   });
 
   it("lets the host render the markdown", () => {

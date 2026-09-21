@@ -80,10 +80,14 @@ describe("RichText — it shows the markdown, it does not print it", () => {
     expect(surface().textContent).not.toContain("$");
   });
 
-  it("renders a fenced block with its language", () => {
+  // Awaited since the block became a React node view (its own language field):
+  // @tiptap/react mounts one through a portal, one store notification after
+  // the document itself.
+  it("renders a fenced block with its language", async () => {
     const { container } = renderWithProviders(<Host initial={"```c\nint x = 1;\n```"} />);
+    await waitFor(() => expect(container.querySelector("pre code")).not.toBeNull());
     const code = container.querySelector("pre code");
-    expect(code).not.toBeNull();
+    expect(code).toHaveClass("language-c");
     expect(code?.textContent).toBe("int x = 1;");
   });
 
@@ -522,5 +526,218 @@ describe("RichText — disabled", () => {
     renderWithProviders(<Host initial="abc" disabled />);
     expect(surface()).toHaveAttribute("contenteditable", "false");
     expect(screen.getByRole("button", { name: /^Bold/ })).toBeDisabled();
+  });
+});
+
+
+/*
+ * A FENCED BLOCK inside a choice — the one thing an inline field could not
+ * build. A teacher writes ```c, the lines, ```; every key in between means
+ * something else than it does in prose, and the row of choices around the
+ * field must not steal any of them.
+ */
+describe("RichText — a fenced block in a choice", () => {
+  /**
+   * A paragraph whose text IS the three backticks: `\`` is how the serializer
+   * escapes one, so this is the document a teacher has under the caret the
+   * instant before they press the key, and not a block already.
+   */
+  const fenceLine = (language = "c") => `\\\`\\\`\\\`${language}`;
+
+  /**
+   * The caret, put where a test needs it through the real DOM selection — on
+   * the last TEXT NODE inside `node`, and not on the element: the decorations
+   * of the highlighter and the content element of the node view stand between
+   * the two, and ProseMirror maps a position on the element itself to the
+   * start of the block.
+   */
+  function caretAtEndOf(node: Node) {
+    const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT);
+    let last: Node | null = null;
+    for (let found = walker.nextNode(); found; found = walker.nextNode()) last = found;
+    const range = document.createRange();
+    if (last) range.setStart(last, (last as Text).data.length);
+    else range.selectNodeContents(node);
+    range.collapse(!!last);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    document.dispatchEvent(new Event("selectionchange"));
+  }
+
+  /** The block, once @tiptap/react has mounted its node view through a portal. */
+  async function code(container: HTMLElement): Promise<HTMLElement> {
+    await waitFor(() => expect(container.querySelectorAll("pre code")).toHaveLength(1));
+    return container.querySelector("pre code") as HTMLElement;
+  }
+
+  /** A field holding one block, with the caret at the end of its last line. */
+  async function withBlock(props: Partial<Parameters<typeof Host>[0]> = {}) {
+    const rendered = renderWithProviders(
+      <Host initial={"```c\nint x;\n```"} inline toolbar="never" {...props} />,
+    );
+    const block = await code(rendered.container);
+    surface().focus();
+    caretAtEndOf(block);
+    return rendered;
+  }
+
+  it.each([
+    ["{Control>}{Enter}{/Control}"],
+    ["{Shift>}{Enter}{/Shift}"],
+    ["{Enter}"],
+  ])("opens a block on %s, and never moves to the next choice", async (keys) => {
+    const onEnter = vi.fn();
+    const { container } = renderWithProviders(
+      <Host initial={fenceLine()} inline toolbar="never" onEnter={onEnter} />,
+    );
+    expect(surface().textContent).toBe("```c");
+    surface().focus();
+    await userEvent.keyboard(keys);
+    expect(await code(container)).toHaveClass("language-c");
+    expect(onEnter).not.toHaveBeenCalled();
+  });
+
+  it("takes the language as it is written, `c++` included", async () => {
+    const { container } = renderWithProviders(
+      <Host initial={fenceLine("c++")} inline toolbar="never" />,
+    );
+    surface().focus();
+    await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    expect(await code(container)).toHaveClass("language-c++");
+  });
+
+  it("colours the code with the student's own token classes", async () => {
+    const { container } = renderWithProviders(
+      <Host initial={"```c\nint x = 42; // note\n```"} inline toolbar="never" />,
+    );
+    const block = await code(container);
+    expect(block.querySelector(".tok-kw")?.textContent).toBe("int");
+    expect(block.querySelector(".tok-num")?.textContent).toBe("42");
+    expect(block.querySelector(".tok-com")?.textContent).toBe("// note");
+  });
+
+  it("makes a line of code on Enter, instead of going to the next choice", async () => {
+    const onEnter = vi.fn();
+    const onValue = vi.fn();
+    await withBlock({ onEnter, onValue });
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() => expect(onValue.mock.lastCall?.[0]).toBe("```c\nint x;\n\n```"));
+    expect(onEnter).not.toHaveBeenCalled();
+  });
+
+  it("indents on Tab, instead of adding a choice", async () => {
+    const onTab = vi.fn(() => true);
+    const onValue = vi.fn();
+    await withBlock({ onTab, onValue });
+    await userEvent.keyboard("{Tab}");
+    await waitFor(() => expect(onValue.mock.lastCall?.[0]).toBe("```c\nint x;  \n```"));
+    expect(onTab).not.toHaveBeenCalled();
+    expect(surface()).toHaveFocus();
+  });
+
+  it("leaves the block on Ctrl+Enter, into a paragraph of its own", async () => {
+    const onEnter = vi.fn();
+    await withBlock({ onEnter });
+    const paragraphs = () => surface().querySelectorAll("p").length;
+    const before = paragraphs();
+    await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    await waitFor(() => expect(paragraphs()).toBe(before + 1));
+    expect(onEnter).not.toHaveBeenCalled();
+  });
+
+  it("says what the keys do while the caret is in the block, and only then", async () => {
+    resetShortcuts();
+    function Strip() {
+      const live = useActiveShortcuts();
+      return (
+        <ul data-testid="strip3">
+          {live.map((s) => (
+            <li key={s.keys}>{`${s.keys} ${s.label}`}</li>
+          ))}
+        </ul>
+      );
+    }
+    const rendered = renderWithProviders(
+      <>
+        <Host
+          initial={"```c\nint x;\n```"}
+          inline
+          toolbar="never"
+          shortcuts={[{ keys: "Tab", label: "Add a choice" }]}
+        />
+        <Strip />
+      </>,
+    );
+    const block = await code(rendered.container);
+    surface().focus();
+    caretAtEndOf(block);
+    const strip = () => screen.getByTestId("strip3");
+    await waitFor(() => expect(strip()).toHaveTextContent("Enter New line"));
+    expect(strip()).toHaveTextContent(`${modKey()}+Enter Leave the block`);
+    expect(strip()).toHaveTextContent("Tab Indent");
+    // The host's own key is not shown while it would be a lie.
+    expect(strip()).not.toHaveTextContent("Add a choice");
+    // Out of the block, the row of choices owns its keys again.
+    await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    await waitFor(() => expect(strip()).toHaveTextContent("Tab Add a choice"));
+  });
+
+  it("writes the fence language from the block's own field", async () => {
+    const onValue = vi.fn();
+    renderWithProviders(
+      <Host initial={"```\nint x;\n```"} inline toolbar="never" onValue={onValue} />,
+    );
+    const field = await screen.findByLabelText("Code language");
+    await userEvent.type(field, "c");
+    await waitFor(() => expect(onValue.mock.lastCall?.[0]).toBe("```c\nint x;\n```"));
+  });
+
+  it("gives the caret back when the language field is left", async () => {
+    renderWithProviders(<Host initial={"```c\nint x;\n```"} inline toolbar="never" />);
+    const field = await screen.findByLabelText("Code language");
+    field.focus();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(surface()).toHaveFocus());
+  });
+
+  it("names the field in French too (N-I18N-01)", async () => {
+    renderWithProviders(<Host initial={"```c\nint x;\n```"} inline toolbar="never" />, {
+      locale: "fr",
+    });
+    expect(await screen.findByLabelText("Langage du code")).toBeInTheDocument();
+  });
+});
+
+describe("RichText — pasting markdown", () => {
+  /** A plain-text clipboard, which is what a copy out of an editor gives. */
+  const clipboard = (text: string) => ({
+    getData: (type: string) => (type === "text/plain" ? text : ""),
+    files: [],
+    types: ["text/plain"],
+  });
+
+  it("lands a copied fence as a block, not as three lines of backticks", async () => {
+    const onValue = vi.fn();
+    const { container } = renderWithProviders(
+      <Host initial="" inline toolbar="never" onValue={onValue} />,
+    );
+    surface().focus();
+    fireEvent.paste(surface(), { clipboardData: clipboard("```c\nint x;\n```") });
+    await waitFor(() => expect(container.querySelectorAll("pre code")).toHaveLength(1));
+    expect(container.querySelector("pre code")).toHaveClass("language-c");
+    await waitFor(() => expect(onValue.mock.lastCall?.[0]).toBe("```c\nint x;\n```"));
+  });
+
+  it("leaves ordinary text alone", async () => {
+    const onValue = vi.fn();
+    const { container } = renderWithProviders(
+      <Host initial="" inline toolbar="never" onValue={onValue} />,
+    );
+    surface().focus();
+    fireEvent.paste(surface(), { clipboardData: clipboard("Deux fois trois.") });
+    await waitFor(() => expect(onValue).toHaveBeenCalled());
+    expect(onValue.mock.lastCall?.[0]).toBe("Deux fois trois.");
+    expect(container.querySelectorAll("pre")).toHaveLength(0);
   });
 });

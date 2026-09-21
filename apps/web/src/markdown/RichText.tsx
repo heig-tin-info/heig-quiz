@@ -1,6 +1,6 @@
 import type { Editor } from "@tiptap/core";
-import { splitBlock } from "@tiptap/pm/commands";
-import { NodeSelection } from "@tiptap/pm/state";
+import { exitCode, newlineInCode, splitBlock } from "@tiptap/pm/commands";
+import { NodeSelection, type EditorState } from "@tiptap/pm/state";
 import { EditorContent, ReactNodeViewRenderer, useEditor, useEditorState } from "@tiptap/react";
 import {
   Bold,
@@ -19,11 +19,12 @@ import type { RichTextProps } from "@quiz/core/client";
 import { useT } from "../i18n";
 import { useShortcuts, type Shortcut } from "../shortcuts";
 import { Button, cx, IconButton, inputClass, modKey, type IconType } from "../ui";
+import { CodeBlockView } from "./CodeBlockView";
 import type { Formula, FormulaDialog } from "./FormulaDialog";
 import { ImageToolsContext, ImageView } from "./ImageView";
 import "./richtext.css";
 import { SourcePane } from "./SourcePane";
-import { INLINE_INPUT_RULES, richTextExtensions } from "./tiptap";
+import { INLINE_INPUT_RULES, openCodeFence, richTextExtensions } from "./tiptap";
 
 /*
  * The WYSIWYG half of the markdown field (docs/spec/05 §5.10, decision
@@ -95,6 +96,10 @@ interface Action {
 /** The two node types a formula can be, as the schema names them. */
 const MATH_TYPES = ["inlineMath", "blockMath"] as const;
 const isMathNode = (name: string): boolean => (MATH_TYPES as readonly string[]).includes(name);
+
+/** Whether the caret sits inside a fenced block, where every key means something else. */
+const inCodeBlock = (state: EditorState): boolean =>
+  state.selection.$from.parent.type.name === "codeBlock";
 
 /** Where the formula dialog will write, and what it starts from. */
 interface FormulaTarget extends Formula {
@@ -187,14 +192,23 @@ export function RichText({
   const upload = useRef<((files: File[], at?: number) => void) | null>(null);
   /** How many empty formulas the document held at the previous transaction. */
   const emptyCount = useRef(0);
+  /**
+   * The editor itself, for the handlers of `editorProps` — they are built
+   * BEFORE it exists, and a pasted markdown fence has to go through the very
+   * parser this editor was configured with.
+   */
+  const editorRef = useRef<Editor | null>(null);
 
   const editor = useEditor({
     extensions: richTextExtensions({
       placeholder: placeholder ?? "",
+      inline,
       // The picture's own toolbar (rotate, size, delete) lives in the node
       // view; `ImageToolsContext` below is how it reaches this field's
       // uploader, which is what a rotation writes its result through.
       imageNodeView: () => ReactNodeViewRenderer(ImageView),
+      // The block's own language field, at its top-right corner.
+      codeBlockNodeView: () => ReactNodeViewRenderer(CodeBlockView),
     }),
     content: value,
     contentType: "markdown",
@@ -218,6 +232,10 @@ export function RichText({
       },
       handleKeyDown(view, event) {
         if (event.key === "Tab" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+          // Inside a fenced block Tab is an INDENT — two spaces, or one level
+          // back on Shift+Tab (`enableTabIndentation` in tiptap.ts). A teacher
+          // writing C there is not asking for another choice.
+          if (inCodeBlock(view.state)) return false;
           // The host answers first (a list of choices adds a row, or moves on)
           // and says whether it took the key. Unhandled, Tab leaves the field,
           // which is what a keyboard user expects of a rich text box.
@@ -235,6 +253,56 @@ export function RichText({
             event.preventDefault();
             openMath(selection.from, selection.node.attrs.latex, selection.node.type.name);
             return true;
+          }
+          /*
+           * A FENCE opens, whichever of the three spellings the teacher used —
+           * plain Enter included, because a line that is nothing but ``` or
+           * ```c is not a choice waiting for the next one (tiptap.ts,
+           * `openCodeFence`, which also closes a fence over what is above it).
+           */
+          if (inline && openCodeFence(view.state, view.dispatch, true)) {
+            event.preventDefault();
+            event.stopPropagation();
+            return true;
+          }
+          /*
+           * The same thing on Ctrl+Enter in a BLOCK field, and here rather
+           * than in the extension's keymap because only this handler has the
+           * EVENT: the question editor answers Ctrl+Enter on `window` with
+           * "Try the question", and a teacher who just opened a fence must not
+           * be carried off to another tab. Plain Enter there is the input
+           * rule's, which needs no such care.
+           */
+          if (
+            !inline &&
+            (event.ctrlKey || event.metaKey) &&
+            openCodeFence(view.state, view.dispatch, false)
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            return true;
+          }
+          /*
+           * INSIDE a block, Enter is a line of code and never the next choice.
+           * Ctrl+Enter is the way OUT (a paragraph after the block), plain
+           * Enter falls through to Tiptap — which is what keeps its own
+           * three-empty-lines exit working — and Shift+Enter, which no keymap
+           * binds inside code, is spelled out as the newline it looks like.
+           */
+          if (inline && inCodeBlock(view.state)) {
+            if (event.ctrlKey || event.metaKey) {
+              event.preventDefault();
+              event.stopPropagation();
+              exitCode(view.state, view.dispatch);
+              return true;
+            }
+            if (event.shiftKey) {
+              event.preventDefault();
+              event.stopPropagation();
+              newlineInCode(view.state, view.dispatch);
+              return true;
+            }
+            return false;
           }
           /*
            * A SECOND LINE inside a choice. Plain Enter belongs to the host (it
@@ -274,9 +342,40 @@ export function RichText({
       },
       handlePaste(_view, event) {
         const files = Array.from(event.clipboardData?.files ?? []);
-        if (!files.some((f) => f.type.startsWith("image/"))) return false;
+        if (files.some((f) => f.type.startsWith("image/"))) {
+          event.preventDefault();
+          upload.current?.(files);
+          return true;
+        }
+        /*
+         * MARKDOWN on the clipboard. A teacher copying a snippet out of a
+         * slide deck, a README or another question pastes ```c and three lines
+         * of C; ProseMirror sees plain text and lays down four paragraphs of
+         * backticks, which is the bug this field was reported for.
+         *
+         * A FENCE is the trigger, and deliberately the only one: every other
+         * markdown shape (a `-` list, a `#` heading) is also something a
+         * teacher may want as the characters they pasted, and a paste that
+         * silently restructures ordinary text is worse than one that does
+         * nothing. Rich clipboard content is left to ProseMirror, which has
+         * the HTML and knows more than we do; so is VS Code's, which the code
+         * block extension handles with the language it came with.
+         *
+         * In an inline field the parser is the same, so a pasted list or
+         * heading does land as one INSIDE the choice — the schema has always
+         * been able to hold them (the head of tiptap.ts says why), and what a
+         * teacher pasted deliberately is not what an input rule builds by
+         * accident.
+         */
+        const clipboard = event.clipboardData;
+        const text = clipboard?.getData("text/plain") ?? "";
+        if (!text.includes("```")) return false;
+        if (clipboard?.getData("text/html")) return false;
+        if (clipboard?.getData("vscode-editor-data")) return false;
+        const target = editorRef.current;
+        if (!target) return false;
         event.preventDefault();
-        upload.current?.(files);
+        target.commands.insertContent(text, { contentType: "markdown" });
         return true;
       },
       handleDrop(view, event) {
@@ -321,6 +420,8 @@ export function RichText({
       emptyCount.current = empties.length;
     },
   });
+
+  editorRef.current = editor;
 
   /** Opens the dialog on the math node at `pos`. */
   function openMath(pos: number, latex: unknown, typeName: string) {
@@ -435,14 +536,31 @@ export function RichText({
    * added (a list of choices answers Tab and Enter). Registered on focus, so
    * the strip follows the caret and not merely the screen.
    */
-  const live: Shortcut[] = [
-    { keys: `${modKey()}+B`, label: t("md.bold") },
-    { keys: `${modKey()}+I`, label: t("md.italic") },
-    // Only an inline field: a block field splits its paragraph on plain Enter,
-    // and teaching a second key for the same thing is noise.
-    ...(inline ? [{ keys: `${modKey()}+Enter`, label: t("md.newLine") }] : []),
-    ...shortcuts.map((s) => ({ keys: s.keys, label: s.label })),
-  ];
+  /*
+   * INSIDE A FENCED BLOCK the strip says something else entirely, and it has
+   * to: Enter is a line of code and not the next choice, Tab is an indent and
+   * not a new row, and a host's "Tab — Add a choice" would be a lie while the
+   * caret is in there. The marks are dropped with them — a code block carries
+   * none, so Ctrl+B does nothing in it.
+   */
+  const live: Shortcut[] = marks.codeBlock
+    ? [
+        ...(inline
+          ? [
+              { keys: "Enter", label: t("md.code.newLine") },
+              { keys: `${modKey()}+Enter`, label: t("md.code.leave") },
+            ]
+          : []),
+        { keys: "Tab", label: t("md.code.indent") },
+      ]
+    : [
+        { keys: `${modKey()}+B`, label: t("md.bold") },
+        { keys: `${modKey()}+I`, label: t("md.italic") },
+        // Only an inline field: a block field splits its paragraph on plain
+        // Enter, and teaching a second key for the same thing is noise.
+        ...(inline ? [{ keys: `${modKey()}+Enter`, label: t("md.newLine") }] : []),
+        ...shortcuts.map((s) => ({ keys: s.keys, label: s.label })),
+      ];
   useShortcuts(live, focused && !disabled && !source);
 
   function run(key: string) {
@@ -559,7 +677,12 @@ export function RichText({
           key={a.key}
           size="sm"
           label={a.shortcut ? `${t(a.labelKey)} (${a.shortcut})` : t(a.labelKey)}
-          disabled={disabled || editor === null}
+          // A code block carries no mark and holds no node: bold, a formula
+          // and a picture cannot land in one. The fence toggle stays, since it
+          // is the way back out of the block.
+          disabled={
+            disabled || editor === null || (marks.codeBlock === true && a.key !== "codeBlock")
+          }
           {...(marks[a.key] === undefined ? {} : { active: marks[a.key] })}
           // The toolbar of an inline field lives INSIDE it: pressing a button
           // must format the selection, not take the caret out of the row.

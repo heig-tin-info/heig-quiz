@@ -12,7 +12,13 @@ export const mcqEditorStrings = {
   choices: "Choices",
   choicesHint: "Tick the correct answers.",
   choiceText: "Text of choice",
-  correct: "Correct",
+  /**
+   * The accessible name of the LETTER, which is the correct/incorrect toggle
+   * itself. `{letter}` is filled in by the row; a whole sentence and not a
+   * label plus a letter, because the two halves do not fall in the same order
+   * in every language.
+   */
+  correctChoice: "Choice {letter} is correct",
   addChoice: "Add a choice",
   removeChoice: "Remove choice",
   /** Accessible name of the drag handle; the keyboard reorders through it too. */

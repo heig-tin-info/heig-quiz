@@ -87,6 +87,93 @@ export function choiceLetter(index: number): string {
 }
 
 /**
+ * The choice pastille: the LETTER IS THE CONTROL.
+ *
+ * A row used to carry a letter AND a checkbox labelled "Correct" — a word that
+ * says nothing to a teacher reading a list of answers, and a second target for
+ * one fact. The round letter is now the toggle itself: ticked, it is the
+ * accent disc; at rest, a hairline circle. The student's player wears the same
+ * face, so "the disc is the chosen one" is learnt once.
+ *
+ * It is a NATIVE input, visually hidden inside the `<label>` the caller draws,
+ * with the disc as its visible face: the keyboard, the grouping of the radios,
+ * the announcement and the `checkbox`/`radio` role all come from the platform.
+ * The face is `aria-hidden`, so the letter never joins the accessible name —
+ * in the player that name is the text of the choice, and nothing else.
+ *
+ * The caller owns the `<label>`, because the clickable area differs: a small
+ * pill beside the editor's field, the WHOLE row in the player. Two things that
+ * label must carry — `relative`, so the hidden input has an origin, and
+ * `group/opt` while it is enabled, which is what lights the border on hover.
+ *
+ * The focus ring is the app's own (2 px accent at 2 px offset), forwarded to
+ * the face: an `sr-only` input is a clipped pixel, and a ring drawn on it is a
+ * ring nobody sees.
+ */
+export function Pastille({
+  letter,
+  checked,
+  size = "sm",
+  disabled,
+  type = "checkbox",
+  name,
+  id,
+  onChange,
+  "aria-label": ariaLabel,
+}: {
+  letter: string;
+  checked: boolean;
+  /** `sm` 32 px in the editor's row, `md` 40 px under the student's finger. */
+  size?: "sm" | "md";
+  disabled?: boolean;
+  /** A radio when the question takes ONE answer; a checkbox otherwise. */
+  type?: "checkbox" | "radio";
+  name?: string;
+  id?: string;
+  onChange: (checked: boolean) => void;
+  /**
+   * The name of the control, when the `<label>` around it does not already
+   * give it one. The editor's row says "Choice B is correct" — a pill beside a
+   * field names nothing by itself. The player's whole row IS the label, and
+   * the text of the choice is the name there: an `aria-label` would replace it
+   * with a letter, which is the one thing a reader does not need to hear.
+   */
+  "aria-label"?: string;
+}): ReactNode {
+  return (
+    <>
+      <input
+        type={type}
+        className="peer sr-only"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+        {...(ariaLabel === undefined ? {} : { "aria-label": ariaLabel })}
+        {...(name === undefined ? {} : { name })}
+        {...(id === undefined ? {} : { id })}
+      />
+      <span
+        aria-hidden
+        className={cx(
+          "grid shrink-0 select-none place-items-center rounded-full border-2 font-bold leading-none",
+          // 120 ms of micro feedback, and none at all for a reader who asked
+          // the system for none (DESIGN.md, Motion).
+          "transition-[background-color,border-color,color,transform] duration-120 motion-reduce:transition-none",
+          size === "md" ? "size-10 text-sm" : "size-8 text-[13px]",
+          "border-line-strong bg-surface text-fg-muted group-hover/opt:border-accent",
+          "peer-checked:border-accent peer-checked:bg-accent peer-checked:text-on-fill",
+          "peer-active:scale-[.94]",
+          "peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-accent",
+          "peer-disabled:opacity-50",
+        )}
+      >
+        {letter}
+      </span>
+    </>
+  );
+}
+
+/**
  * The segmented control of `apps/web/src/ui.tsx`, mirrored here class for
  * class: a pill track on `surface-3`, the selected option lifted onto
  * `surface` with a hairline ring. A `qt-*` package cannot import the app's

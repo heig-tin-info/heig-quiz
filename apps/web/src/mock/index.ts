@@ -2588,14 +2588,17 @@ const studentEvaluationState = () =>
 
 /** One question of each MVP type, in French, as `toStudent` would publish it. */
 const studentPayloads: Record<number, unknown> = {
+  // The mcq whose choices hold a FENCED BLOCK, which is what the rich editor
+  // can now write into one (markdown/tiptap.ts): a lead line and a snippet,
+  // rendered by `MarkdownView` inside the label of the choice.
   1: {
-    prompt: "Quelle expression donne **l'adresse** de la variable `x` ?",
+    prompt: "Quel extrait affiche **l'adresse** de la variable `x` ?",
     mode: "single",
     choices: [
-      { id: 0, text: "`&x`" },
-      { id: 1, text: "`*x`" },
-      { id: 2, text: "`x[0]`" },
-      { id: 3, text: "`addr(x)`" },
+      { id: 0, text: 'Avec l\'opérateur d\'adresse :\n\n```c\nprintf("%p\\n", (void *)&x);\n```' },
+      { id: 1, text: 'Avec l\'opérateur d\'indirection :\n\n```c\nprintf("%p\\n", (void *)*x);\n```' },
+      { id: 2, text: 'En convertissant la valeur :\n\n```c\nprintf("%p\\n", (void *)x);\n```' },
+      { id: 3, text: 'Avec une fonction de la bibliothèque :\n\n```c\nprintf("%p\\n", addr(x));\n```' },
     ],
   },
   2: {

@@ -10,7 +10,7 @@ import type { MarkdownRenderer, PlayerProps, StringOverrides } from "@quiz/core/
 import { resolveStrings } from "@quiz/core/client";
 import type { McqAnswer, McqStudent } from "./schema.js";
 import { mcqPlayerStrings, type McqPlayerStringKey } from "./strings.js";
-import { cx, helpClass } from "./ui.js";
+import { choiceLetter, cx, helpClass, Pastille } from "./ui.js";
 
 export type McqPlayerProps = PlayerProps<McqStudent, McqAnswer> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
@@ -53,28 +53,42 @@ export function McqPlayer({
       </legend>
       <p className={helpClass}>{instructions}</p>
       <ul className="flex flex-col gap-2">
-        {student.choices.map((choice) => {
+        {student.choices.map((choice, index) => {
           const checked = selected.includes(choice.id);
+          const frozen = locked || (atLimit && !checked);
           return (
             <li key={choice.id}>
+              {/*
+               * The WHOLE row is the label: the pastille, the text and the
+               * space between them all answer a click, and the accessible name
+               * is the text of the choice — the letter is the teacher's index
+               * of the list, not a word the reader needs.
+               */}
               <label
                 className={cx(
-                  "flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2.5 text-sm transition-colors",
+                  "relative flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2.5 text-sm transition-colors",
                   checked
                     ? "border-accent bg-accent-soft text-fg"
                     : "border-line-strong bg-surface text-fg hover:bg-surface-2",
                   locked && "cursor-default opacity-80",
+                  !frozen && "group/opt",
                 )}
               >
-                <input
+                <Pastille
+                  letter={choiceLetter(index)}
+                  size="md"
                   type={multiple ? "checkbox" : "radio"}
                   name="mcq-answer"
-                  className="mt-0.5 size-4 shrink-0 accent-accent"
                   checked={checked}
-                  disabled={locked || (atLimit && !checked)}
-                  onChange={(e) => toggle(choice.id, e.target.checked)}
+                  disabled={frozen}
+                  onChange={(next) => toggle(choice.id, next)}
                 />
-                <span className="min-w-0">
+                {/*
+                 * The first line of the text, and not the block, is what the
+                 * 40 px disc lines up with: half of what it is taller than one
+                 * line of `.md-body` at this size (40 − 22).
+                 */}
+                <span className="mt-2.25 min-w-0">
                   {renderMarkdown ? renderMarkdown(choice.text) : choice.text}
                 </span>
               </label>

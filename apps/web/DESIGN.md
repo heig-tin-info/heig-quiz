@@ -279,6 +279,18 @@ with a keyboard-reachable dismiss button.
   bars share the width so twenty fit 360 px; roving tabindex like `Tabs`,
   because twenty questions must not be twenty stops on the way to the answer
   field; the state is in the accessible name, not only in the height.
+- Pastille (`packages/qt-mcq/src/ui.tsx`): the letter of a choice IS its
+  checkbox — a circle, 32 px in the teacher's editor, 40 px under a student's
+  finger. A hairline `line-strong` circle on `surface` with a bold `fg-muted`
+  letter at rest, `accent` border on hover of the row, an `accent` fill with
+  `on-fill` ink when it is ticked, 0.94 on press, 120 ms and none under
+  reduced motion. It is a native input, visually hidden inside the `<label>`
+  the caller draws (the pill in the editor, the WHOLE row in the player), so
+  the roles, the grouping of the radios and the keyboard are the platform's;
+  the disc is `aria-hidden`, because in the player the name of the control is
+  the text of the choice and not a letter. It replaced a letter plus a box
+  labelled "Correct": two targets and a word that named nothing a teacher was
+  looking for.
 - VerdictCell: one cell of the live grid and of the grading list, seven
   states (`blank`, `inProgress`, `answered`, `correct`, `partial`, `wrong`,
   `pending`). Icon **and** tint **and** word, never a tint alone: a dashboard
@@ -323,6 +335,20 @@ with a keyboard-reachable dismiss button.
   field answers `Ctrl+Enter` with a NEW PARAGRAPH, so a choice can hold a
   second line or a fenced block; plain Enter still belongs to the list around
   it.
+  A FENCE is written as markdown is written, in either field: a line that is
+  nothing but ``` or ```c becomes a code block on Enter, Ctrl+Enter or
+  Shift+Enter, and a closing ``` gathers the paragraphs above it into one
+  block the moment its third backtick lands — which is what rescues the lines
+  a teacher already typed. Inside the block the keys mean code, and the
+  shortcut strip says so while the caret is there: Enter is a new line,
+  `Ctrl+Enter` leaves the block, Tab indents by two spaces. The block carries
+  its LANGUAGE in a small field at its top-right corner — the same placement
+  as the picture's toolbar, for the same reason — because the tag of the fence
+  is what colours the code and what the student's `render.ts` reads, and it
+  was the one thing the block could not say. The colour is the STUDENT's
+  tokenizer (`markdown/highlight.ts`, four classes), drawn over the document
+  as ProseMirror decorations: the same four token colours the reader gets,
+  and not one character of it in the markdown.
 - FormulaDialog: the one surface a formula is written on. A LaTeX box (which
   takes the focus — experts type), a MathLive `<math-field>` with its symbol
   palette (novices point), a live KaTeX preview of what the student will see,

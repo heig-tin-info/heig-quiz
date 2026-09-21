@@ -72,26 +72,41 @@ export function languageFamily(lang: string | undefined | null): keyof typeof KE
 }
 
 /**
- * Escaped HTML for one fenced block: the four token spans, everything else as
- * text. The scan is a single left-to-right pass, so a keyword inside a string
- * or a comment stays inside it — the one mistake a regex-per-class approach
- * always makes.
+ * One coloured run inside a fenced block: OFFSETS INTO THE RAW TEXT, and the
+ * class the stylesheet already styles under `.md-body` (`tok-com`, `tok-str`,
+ * `tok-kw`, `tok-num`).
+ *
+ * Offsets and not strings, because this tokenizer has two readers now: the
+ * student view, which turns them into `<span>`s (`highlight` below), and the
+ * teacher's editor, which turns them into ProseMirror decorations over a text
+ * it does not own (`codeHighlight.ts`). A decoration is a position range; a
+ * highlighter that only returns HTML cannot serve it.
  */
-export function highlight(code: string, lang?: string | null): string {
+export interface CodeToken {
+  /** Offset of the first character of the run, in the raw code. */
+  from: number;
+  /** Offset one past its last character. */
+  to: number;
+  /** `tok-com` | `tok-str` | `tok-kw` | `tok-num`. */
+  cls: string;
+}
+
+/**
+ * The four token classes of one fenced block, in document order and never
+ * overlapping. The scan is a single left-to-right pass, so a keyword inside a
+ * string or a comment stays inside it — the one mistake a regex-per-class
+ * approach always makes. An unknown language has no tokens at all, which is
+ * the correct answer for a block of shell output.
+ */
+export function tokenize(code: string, lang?: string | null): CodeToken[] {
   const family = languageFamily(lang);
-  if (!family) return escapeHtml(code);
+  if (!family) return [];
   const keywords = new Set(KEYWORDS[family].split(" "));
   const lineComment = LINE_COMMENT[family];
   const blockComments = family !== "python" && family !== "sql";
-  const out: string[] = [];
-  let plain = "";
-  const flush = () => {
-    if (plain) out.push(escapeHtml(plain));
-    plain = "";
-  };
-  const token = (cls: string, text: string) => {
-    flush();
-    out.push(`<span class="tok-${cls}">${escapeHtml(text)}</span>`);
+  const out: CodeToken[] = [];
+  const token = (cls: string, from: number, to: number) => {
+    if (to > from) out.push({ from, to, cls: `tok-${cls}` });
   };
 
   let i = 0;
@@ -100,14 +115,14 @@ export function highlight(code: string, lang?: string | null): string {
     if (rest.startsWith(lineComment)) {
       const end = code.indexOf("\n", i);
       const stop = end === -1 ? code.length : end;
-      token("com", code.slice(i, stop));
+      token("com", i, stop);
       i = stop;
       continue;
     }
     if (blockComments && rest.startsWith("/*")) {
       const end = code.indexOf("*/", i + 2);
       const stop = end === -1 ? code.length : end + 2;
-      token("com", code.slice(i, stop));
+      token("com", i, stop);
       i = stop;
       continue;
     }
@@ -116,27 +131,42 @@ export function highlight(code: string, lang?: string | null): string {
       let j = i + 1;
       while (j < code.length && code[j] !== quote) j += code[j] === "\\" ? 2 : 1;
       const stop = Math.min(j + 1, code.length);
-      token("str", code.slice(i, stop));
+      token("str", i, stop);
       i = stop;
       continue;
     }
     const word = /^[A-Za-z_][A-Za-z0-9_]*/.exec(rest);
     if (word) {
       const text = word[0];
-      if (keywords.has(text)) token("kw", text);
-      else plain += text;
+      if (keywords.has(text)) token("kw", i, i + text.length);
       i += text.length;
       continue;
     }
     const num = /^(?:0[xX][0-9a-fA-F]+|\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/.exec(rest);
     if (num) {
-      token("num", num[0]);
+      token("num", i, i + num[0].length);
       i += num[0].length;
       continue;
     }
-    plain += quote;
     i += 1;
   }
-  flush();
-  return out.join("");
+  return out;
+}
+
+/**
+ * Escaped HTML for one fenced block: the token spans of `tokenize`, everything
+ * between them as escaped text. This is what the STUDENT reads, through
+ * `render.ts`.
+ */
+export function highlight(code: string, lang?: string | null): string {
+  const tokens = tokenize(code, lang);
+  if (tokens.length === 0) return escapeHtml(code);
+  let out = "";
+  let last = 0;
+  for (const { from, to, cls } of tokens) {
+    if (from > last) out += escapeHtml(code.slice(last, from));
+    out += `<span class="${cls}">${escapeHtml(code.slice(from, to))}</span>`;
+    last = to;
+  }
+  return out + escapeHtml(code.slice(last));
 }
