@@ -4,10 +4,11 @@
 #   docker build -f apps/runner/Dockerfile -t quiz-runner .
 #
 # This image contains no container engine of its own: it drives the HOST's
-# Podman through the socket `compose.prod.yml` mounts, with
-# `podman-remote --url unix:///run/podman/podman.sock` (invariant 13). The
-# language images (`quiz-runner-c:latest` and friends) are built on the host
-# with `apps/runner/images/build.sh` and live in the host's image store.
+# rootful Podman through the socket the quadlet `deploy/quiz-runner.container`
+# mounts, with `podman-remote --url unix:///run/podman/podman.sock`
+# (invariant 13). The language images (`quiz-runner-c:latest` and friends)
+# are built on the host with `apps/runner/images/build.sh` and live in the
+# host's image store. Where it runs, and why on a VM of its own: ADR-016.
 FROM node:24-slim AS build
 RUN corepack enable pnpm
 WORKDIR /src
@@ -39,10 +40,11 @@ FROM node:24-slim
 # and an unverified download of it would be the weakest link of the whole
 # hardening.
 #
-# The version matches the engine of the VM (Ubuntu 24.04 ships Podman 4.9.3).
-# Bump both together, or the client talks an API the service does not answer.
-ARG PODMAN_VERSION=4.9.3
-ARG PODMAN_SHA256=b21cad103bda0c71648e424b40730bb59e668fc5bb98ed17209c9b1c93880991
+# The version matches the engine of the runner VM (`podman --version` there:
+# 5.7.0 on Ubuntu 26.04). Bump both together, or the client talks an API the
+# service does not answer. The checksum is the `shasums` file of the release.
+ARG PODMAN_VERSION=5.7.0
+ARG PODMAN_SHA256=0d1759e3fc42b0e3a4496176dabc7b65f0f334a0ab2b22eaed7c36afeece8b0c
 RUN apt-get update \
   && apt-get install -y --no-install-recommends curl ca-certificates \
   && rm -rf /var/lib/apt/lists/* \
@@ -65,6 +67,8 @@ ENV PODMAN_BIN=podman-remote \
     RUNNER_USERNS_AUTO=true \
     PORT=3200
 EXPOSE 3200
+# The bearer is the one the routes check when RUNNER_TOKEN is set; without one
+# the header is empty and ignored.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
-  CMD curl -sf http://localhost:3200/health || exit 1
+  CMD curl -sf -H "Authorization: Bearer ${RUNNER_TOKEN}" http://localhost:3200/health || exit 1
 CMD ["node", "dist/server.js"]

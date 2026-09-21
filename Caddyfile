@@ -1,6 +1,10 @@
-# NATIVE Caddy (apt) -- copy to /etc/caddy/Caddyfile, then:
-#   sudo systemctl reload caddy
-quiz.example.ch {
+# Vhost of quiz.chevallier.io.
+#
+# The VM hosts three services behind one NATIVE Caddy (apt). The host's
+# /etc/caddy/Caddyfile only holds `import /etc/caddy/conf.d/*.caddy`: each
+# project drops its own fragment and never overwrites a neighbour's.
+#   sudo cp Caddyfile /etc/caddy/conf.d/quiz.caddy && sudo systemctl reload caddy
+quiz.chevallier.io {
 	encode gzip
 
 	header {
@@ -12,12 +16,13 @@ quiz.example.ch {
 	# SSE: unbuffered stream (ADR-005). HTTP/2 is what lifts the six-connection
 	# limit a long-lived stream would otherwise eat into (docs/spec/05, 5.4).
 	handle /app/events {
-		reverse_proxy localhost:3000 {
+		reverse_proxy localhost:3002 {
 			flush_interval -1
 		}
 	}
 
+	# 3000 is heig-classroom, 3001 is tb: quiz listens on 3002 (loopback).
 	handle {
-		reverse_proxy localhost:3000
+		reverse_proxy localhost:3002
 	}
 }

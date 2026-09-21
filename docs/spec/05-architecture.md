@@ -297,7 +297,7 @@ Un seul point de sortie du contenu vers un étudiant : `toStudent` du type, appe
 
 ## 5.9 Déploiement
 
-`compose.prod.yml` repris de heig-classroom : `caddy`, `app`, `postgres`, `backup`, plus `runner` avec accès au socket Podman de l'hôte. Keycloak est retiré de la production. `deploy.sh` refuse une mise à jour si une évaluation est `running` ou `lobby`, sauf `--force`. Les migrations sont additives pour permettre un retour à l'image précédente.
+`compose.prod.yml` repris de heig-classroom : `caddy`, `app`, `postgres`, `backup`, plus `runner` avec accès au socket Podman de l'hôte. *Amendement (ADR-016) : en production le `runner` ne tourne pas dans ce compose mais sur la VM `code.chevallier.io`, derrière son propre Caddy, et l'API l'atteint en HTTPS avec un jeton partagé (`RUNNER_TOKEN`) ; Caddy est natif sur l'hôte, pas un service compose.* Keycloak est retiré de la production. `deploy.sh` refuse une mise à jour si une évaluation est `running` ou `lobby`, sauf `--force`. Les migrations sont additives pour permettre un retour à l'image précédente.
 
 ## 5.10 Décisions d'architecture
 

@@ -79,6 +79,20 @@ describe("createRunner", () => {
     expect(createRunner(config)).toBeInstanceOf(HttpRunner);
   });
 
+  it("requires the shared token in production, and only there", () => {
+    const prod = {
+      NODE_ENV: "production",
+      DATABASE_URL: "postgres://quiz@db/quiz",
+      OIDC_CLIENT_SECRET: "a-real-one",
+      COOKIE_SECRET: "a-real-cookie-secret",
+      RUNNER_MODE: "http",
+      RUNNER_URL: "https://r.example",
+    };
+    expect(() => loadConfig(prod)).toThrow(/RUNNER_TOKEN/);
+    expect(loadConfig({ ...prod, RUNNER_TOKEN: " s3cret " }).RUNNER_TOKEN).toBe("s3cret");
+    expect(loadConfig({ RUNNER_MODE: "http", RUNNER_URL: "http://localhost:3200" }).RUNNER_TOKEN).toBe("");
+  });
+
   it("refuses to boot with RUNNER_MODE=http and no address", () => {
     expect(() => loadConfig({ RUNNER_MODE: "http" })).toThrow(/RUNNER_URL/);
     expect(() => loadConfig({ RUNNER_MODE: "http", RUNNER_URL: "  " })).toThrow(/RUNNER_URL/);
@@ -94,11 +108,13 @@ describe("HttpRunner", () => {
   let server: FastifyInstance;
   let url: string;
   let hits: string[] = [];
+  let auths: Array<string | undefined> = [];
 
   beforeAll(async () => {
     server = Fastify();
     server.addHook("onRequest", async (req) => {
       hits.push(req.url);
+      auths.push(req.headers.authorization);
     });
     server.post("/run", async (_req, reply) => reply.send(OUTCOME));
     server.post("/garbage/run", async (_req, reply) => reply.send({ nothing: "useful" }));
@@ -131,6 +147,18 @@ describe("HttpRunner", () => {
 
   it("returns the parsed outcome on 200", async () => {
     expect(await runnerAt().run(REQUEST)).toEqual(OUTCOME);
+  });
+
+  it("sends the shared token as a bearer on both routes, and nothing without one", async () => {
+    auths = [];
+    const withToken = new HttpRunner({ url, timeoutMs: 2000, token: "s3cret" });
+    await withToken.run(REQUEST);
+    await withToken.health();
+    expect(auths).toEqual(["Bearer s3cret", "Bearer s3cret"]);
+
+    auths = [];
+    await runnerAt().run(REQUEST);
+    expect(auths).toEqual([undefined]);
   });
 
   it("ignores a trailing slash in the configured URL", async () => {

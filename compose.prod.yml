@@ -1,14 +1,17 @@
-# Production.
-# Caddy runs NATIVELY on the host (see deploy.md): only loopback ports are
-# published here. Start with:
+# Production -- quiz.chevallier.io, on the VM it shares with heig-classroom
+# and evaluation-tb (ADR-016). Caddy runs NATIVELY on the host and imports
+# one fragment per service from /etc/caddy/conf.d/: only loopback ports are
+# published here, and 3002 because 3000 and 3001 belong to the neighbours.
+# Start with:
 #   docker compose -f compose.prod.yml --env-file .env.prod up -d
 #
 # Production uses a REAL PostgreSQL. The embedded pglite database of `pnpm dev`
 # is refused by config.ts under NODE_ENV=production, and pg-boss needs a real
 # server anyway. No Keycloak here: it is a development identity provider.
-# The `runner` service (docs/spec/05-architecture.md, 5.5) drives the HOST's
-# ROOTFUL Podman over the socket mounted below. It is on the internal compose
-# network only: Caddy never routes to it and no port of it is published.
+#
+# The code runner is NOT in this file: it runs on the code VM, behind its own
+# Caddy, and the API reaches it over HTTPS with the shared RUNNER_TOKEN of
+# .env.prod (apps/runner/deploy/, deploy.md § Runner).
 services:
   app:
     # Image built in CI and pulled from GHCR -- never built on the VM.
@@ -18,40 +21,21 @@ services:
     env_file: .env.prod
     environment:
       DATABASE_URL: postgres://quiz:${POSTGRES_PASSWORD:?}@postgres:5432/quiz
-      PUBLIC_URL: https://quiz.example.ch
+      PUBLIC_URL: https://quiz.chevallier.io
       NODE_ENV: production
-      # The runner is reached by its compose service name. Drop these two and
-      # the platform falls back to RUNNER_MODE=stub: code questions are still
-      # authorable, playable and releasable, and their grading is proposed for
-      # a manual review (decision D14).
-      RUNNER_MODE: http
-      RUNNER_URL: http://runner:3200
+      # The bind mount below; the default (`.data/assets`, relative to /app)
+      # would live inside the container and vanish with it.
+      ASSETS_DIR: /app/assets
     ports:
-      - "127.0.0.1:3000:3000" # native Caddy -> reverse_proxy localhost:3000
+      - "127.0.0.1:3002:3000" # native Caddy -> reverse_proxy localhost:3002
     volumes:
       - ./secrets:/app/secrets:ro
+      # Uploaded question images, content-addressed: a backup is an rsync.
+      # Owned by uid 1000 on the host (`node` in the image).
       - ./assets:/app/assets
     depends_on:
       postgres:
         condition: service_healthy
-
-  # Code execution. Holds no secret, reaches no database, and is never
-  # published: `deploy.md` § Runner has the host-side recipe (rootful Podman,
-  # the socket, and `apps/runner/images/build.sh` for the language images).
-  runner:
-    image: ghcr.io/heig-tin-info/quiz-runner:${IMAGE_TAG:-latest}
-    restart: always
-    environment:
-      # Rootful, so `--userns=auto` is always available: no probe at startup.
-      RUNNER_USERNS_AUTO: "true"
-      PODMAN_SOCKET: /run/podman/podman.sock
-      RUNNER_CONCURRENCY: ${RUNNER_CONCURRENCY:-4}
-      RUNNER_QUEUE_MAX: ${RUNNER_QUEUE_MAX:-32}
-    volumes:
-      # The ONLY thing this container gets from the host. The containers it
-      # then starts mount nothing at all.
-      - /run/podman/podman.sock:/run/podman/podman.sock
-    # No `ports:` on purpose: internal network only, never exposed by Caddy.
 
   postgres:
     image: postgres:17
@@ -60,20 +44,34 @@ services:
       POSTGRES_USER: quiz
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
       POSTGRES_DB: quiz
-    # Tuned for a small VM: correctness over throughput. These are runtime
-    # GUCs (no re-init, data untouched).
+    # The VM is 1 CPU / 956 MiB and already runs the classroom's PostgreSQL:
+    # the same tuning as there (correctness over throughput). Runtime GUCs,
+    # no re-init, data untouched. max_connections 40 fits app(10)+pg-boss(10)+
+    # backup with headroom; parallel query is pointless on one CPU.
     command:
       - postgres
       - -c
-      - shared_buffers=64MB
+      - shared_buffers=32MB
       - -c
-      - effective_cache_size=192MB
+      - effective_cache_size=96MB
       - -c
-      - maintenance_work_mem=32MB
+      - maintenance_work_mem=16MB
       - -c
-      - work_mem=4MB
+      - work_mem=2MB
       - -c
       - max_connections=40
+      - -c
+      - max_worker_processes=2
+      - -c
+      - max_parallel_workers=0
+      - -c
+      - max_parallel_workers_per_gather=0
+      - -c
+      - max_parallel_maintenance_workers=0
+      - -c
+      - autovacuum_max_workers=1
+      - -c
+      - wal_buffers=2MB
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

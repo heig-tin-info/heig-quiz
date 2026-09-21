@@ -35,6 +35,8 @@ export interface HttpRunnerOptions {
   fetch?: FetchLike;
   /** Retries on 502/503. One by default; zero in the tests that assert the mapping. */
   retries?: number;
+  /** Shared secret, sent as `Authorization: Bearer` on every call (ADR-016). Empty = none. */
+  token?: string;
 }
 
 const RETRYABLE = new Set([502, 503, 504]);
@@ -66,12 +68,14 @@ export class HttpRunner implements RunnerService {
   private readonly timeoutMs: number;
   private readonly fetch: FetchLike;
   private readonly retries: number;
+  private readonly headers: Record<string, string>;
 
   constructor(options: HttpRunnerOptions) {
     this.base = options.url.replace(/\/+$/, "");
     this.timeoutMs = options.timeoutMs;
     this.fetch = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
     this.retries = options.retries ?? 1;
+    this.headers = options.token ? { authorization: `Bearer ${options.token}` } : {};
   }
 
   async run(req: RunnerRequest): Promise<RunnerOutcome> {
@@ -96,6 +100,7 @@ export class HttpRunner implements RunnerService {
     try {
       const res = await this.fetch(`${this.base}/health`, {
         method: "GET",
+        headers: this.headers,
         signal: AbortSignal.timeout(Math.min(this.timeoutMs, 5000)),
       });
       if (!res.ok) {
@@ -115,7 +120,7 @@ export class HttpRunner implements RunnerService {
     try {
       return await this.fetch(url, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { ...this.headers, "content-type": "application/json" },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(this.timeoutMs),
       });

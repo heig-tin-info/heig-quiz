@@ -1,0 +1,43 @@
+# Podman quadlet of the code runner (ADR-016). Installed by deploy.sh as
+# /etc/containers/systemd/quiz-runner.container; systemd generates
+# quiz-runner.service from it at daemon-reload.
+#
+# The service is the only process on this VM that talks to the rootful Podman
+# socket besides the codespace portal. It holds no secret other than the
+# shared RUNNER_TOKEN of /etc/quiz-runner/env, reaches no database, and the
+# containers it starts get the closed environment of invariant 10.
+[Unit]
+Description=quiz — code execution service (hardened Podman containers)
+Documentation=https://github.com/heig-tin-info/heig-quiz/blob/main/apps/runner/README.md
+Requires=podman.socket
+After=podman.socket network-online.target
+
+[Container]
+Image=ghcr.io/heig-tin-info/quiz-runner:latest
+ContainerName=quiz-runner
+# Pulled by deploy.sh with the CI's ephemeral token; never at boot.
+Pull=never
+EnvironmentFile=/etc/quiz-runner/env
+Environment=NODE_ENV=production
+# Loopback only: Caddy is the single way in from outside (deploy/Caddyfile).
+# Host networking, so 127.0.0.1 here IS the host's and nothing is NAT-ed.
+Network=host
+Environment=HOST=127.0.0.1
+Environment=PORT=3200
+# The ONLY thing the service gets from the host. The containers it then
+# starts mount nothing at all.
+Volume=/run/podman/podman.sock:/run/podman/podman.sock
+# The service itself: nothing to write, nothing to escalate.
+ReadOnly=true
+Tmpfs=/tmp
+NoNewPrivileges=true
+DropCapability=ALL
+PodmanArgs=--memory=512m
+
+[Service]
+Restart=always
+RestartSec=3
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

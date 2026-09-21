@@ -58,6 +58,14 @@ const EnvSchema = z.object({
    */
   PODMAN_REMOTE: z.enum(["auto", "true", "false"]).default("auto"),
 
+  /**
+   * Shared secret the API presents as `Authorization: Bearer` (ADR-016). The
+   * service sits on its own VM behind TLS: without this, whoever finds the
+   * address has a free compute service. Empty = no check, which is only
+   * acceptable on a development workstation — production refuses to start.
+   */
+  RUNNER_TOKEN: z.string().default(""),
+
   /** Containers running at the same time. Each one is 1 CPU and `memoryMb`. */
   RUNNER_CONCURRENCY: z.coerce.number().int().min(1).max(64).default(4),
   /** Requests waiting in the two queues before `POST /run` answers 429. */
@@ -119,8 +127,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): RunnerConfig {
     throw new Error(`Invalid configuration: seccomp profile not found at ${seccomp}`);
   }
 
+  const token = data.RUNNER_TOKEN.trim();
+  if (data.NODE_ENV === "production" && token === "") {
+    throw new Error("Invalid configuration: RUNNER_TOKEN is required in production");
+  }
+
   return {
     ...data,
+    RUNNER_TOKEN: token,
     PODMAN_SOCKET: data.PODMAN_REMOTE === "false" ? null : socket,
     RUNNER_SECCOMP: seccomp,
   };

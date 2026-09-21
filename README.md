@@ -84,7 +84,16 @@ refuses a `pglite://` URL there, and refuses `AUTH_DEV_LOGIN=1` outright.
 | `mockups` | HTML mockups of the main screens |
 
 `CLAUDE.md` holds the working conventions and the invariants.
-`deploy.md` covers the production VM.
+
+## Deployment
+
+Production is <https://quiz.chevallier.io>, on the VM that already hosts
+heig-classroom, with the code runner on the codespace VM behind
+`https://quiz-runner.chevallier.io` (ADR-016). Every push to `main` runs the
+checks, builds the two images on GitHub Actions, pushes them to GHCR and
+SSHes to both VMs, where a forced-command key can only run `deploy.sh`.
+Nothing is ever built on a VM. `deploy.md` has the whole of it: the two
+machines, the secrets, the DNS records, the CI key, backups and rollback.
 
 ## Status
 

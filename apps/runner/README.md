@@ -154,5 +154,20 @@ has gVisor), `RUNNER_MAX_OUTPUT_KB` (256), `RUNNER_WORKDIR_MB` (32),
 `RUNNER_COMPILE_TIMEOUT_MS` (20 000), `RUNNER_CASE_GRACE_MS` (2000),
 `RUNNER_REQUEST_TIMEOUT_MS` (120 000).
 
-**No secret belongs here.** The runner holds no credential, reaches no
+`RUNNER_TOKEN` is the one exception to "no secret": the shared bearer the API
+presents on every call, checked on both routes in constant time, required in
+production (`loadConfig` refuses to start without it there) and never passed
+into a container. It exists because the service runs on a VM of its own,
+behind TLS, and would otherwise answer anyone (ADR-016).
+
+**No other secret belongs here.** The runner holds no credential, reaches no
 database and passes nothing of its own environment into a container.
+
+## In production
+
+`deploy/` holds the whole of it (ADR-016, `deploy.md` § Runner): a Podman
+quadlet (`quiz-runner.container`) that runs this image on the code VM against
+its rootful socket, a Caddy fragment that exposes it as
+`https://quiz-runner.chevallier.io` to the quiz VM's address only, an
+`env.example` for `/etc/quiz-runner/env`, and the `deploy.sh` the CI's
+forced-command key is pinned to.

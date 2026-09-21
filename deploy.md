@@ -1,192 +1,131 @@
-# Deployment on a single VM
+# Deployment: two VMs, one CI
 
-## 1. Create an Ubuntu/Debian VM
+Production is `https://quiz.chevallier.io`, deployed the way its sibling
+heig-classroom is, on the same machines (ADR-016):
 
-```bash
-# 2 GB of swap (useful below 2 GB of RAM)
-fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
-echo '/swapfile none swap sw 0 0' >> /etc/fstab
+| | `classroom.chevallier.io` (DigitalOcean, 1 CPU / 956 MiB) | `code.chevallier.io` (Hetzner, 2 CPU / 4 GB) |
+| --- | --- | --- |
+| Already runs | heig-classroom (`:3000`), evaluation-tb (`:3001`), a native Caddy | heig-codespace, rootful Podman 5.7, a native Caddy |
+| Gets | `/opt/quiz`: `app` (`127.0.0.1:3002`), `postgres`, `backup` — Docker Compose | `/opt/quiz-runner`: the runner as a Podman quadlet on `127.0.0.1:3200` |
+| Vhost | `/etc/caddy/conf.d/quiz.caddy` → `quiz.chevallier.io` | `/etc/caddy/conf.d/quiz-runner.caddy` → `quiz-runner.chevallier.io` |
+| Deploys through | `/opt/quiz/deploy.sh` (forced command) | `/opt/quiz-runner/deploy.sh` (forced command) |
 
-# Update + basic tools
-apt update && apt upgrade -y
-apt install -y curl git ufw gnupg ca-certificates
+Neither VM ever builds anything of ours: the two images come from GHCR, built
+by CI. The neighbours are not touched — the classroom VM's Caddy already
+imported one fragment per service, and the code VM's Caddyfile (owned by
+heig-codespace) gained that one `import /etc/caddy/conf.d/*.caddy` line.
 
-# Dedicated application user
-adduser --system --group --home /opt/quiz quiz
+## 1. DNS
 
-# Firewall: SSH + HTTP + HTTPS only
-ufw allow OpenSSH && ufw allow 80 && ufw allow 443 && ufw --force enable
-```
+Two A records: `quiz.chevallier.io` → the classroom VM, `quiz-runner.chevallier.io`
+→ the code VM. Caddy obtains the certificates on its own once they resolve
+(`dig +short <name>`).
 
-```bash
-root@quiz:~# ufw status
-Status: active
-
-To                         Action      From
---                         ------      ----
-OpenSSH                    ALLOW       Anywhere
-80                         ALLOW       Anywhere
-443                        ALLOW       Anywhere
-OpenSSH (v6)               ALLOW       Anywhere (v6)
-80 (v6)                    ALLOW       Anywhere (v6)
-443 (v6)                   ALLOW       Anywhere (v6)
-```
-
-No Node.js and no pnpm on the VM: the application only ever runs as a container built in CI
-(see §7), so Docker and Caddy are all that is installed.
+## 2. The application VM (`/opt/quiz`)
 
 ```bash
-# Docker + compose plugin (official repository)
-install -m0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
-apt update && apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
-
-# Caddy (reverse proxy + automatic TLS)
-apt install -y debian-keyring debian-archive-keyring apt-transport-https
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
-apt update && apt install -y caddy
-```
-
-```
-root@quiz:~# docker --version
-Docker version 29.6.1, build 8900f1d
-root@quiz:~# caddy version
-v2.11.4 h1:XKxkMTgNSizEvKG6QHue6cAsFOteU2qA61w2tKkCWi0=
-```
-
-## 2. DNS: `quiz.example.ch` → the VM's IP (A/AAAA), propagation checked
-(`dig +short quiz.example.ch`).
-
-## 3. Code and secrets
-
-```bash
-cd /opt/quiz
-sudo -u quiz git clone <repository-url> app && cd app
-mkdir -p secrets backups
-# Drop in (never in git), then chmod 600:
-#   secrets/eduid-private-key.pem   (private_key_jwt for Switch edu-ID)
+cd /opt && git clone https://github.com/heig-tin-info/heig-quiz.git quiz && cd quiz
+mkdir -p secrets backups assets && chown 1000:1000 assets backups    # uid 1000 = `node` in the image
+# edu-ID: the client shares the classroom's public JWK, so the same key and kid.
+cp /opt/heig-classroom/secrets/eduid-private-key.pem secrets/ && chown 1000:1000 secrets/*.pem && chmod 600 secrets/*.pem
 cp .env.prod.example .env.prod && chmod 600 .env.prod
-nano .env.prod    # POSTGRES_PASSWORD/COOKIE_SECRET: openssl rand -base64 32
+nano .env.prod    # POSTGRES_PASSWORD, COOKIE_SECRET: openssl rand -base64 32
+                  # OIDC_CLIENT_ID: from the SWITCH Resource Registry
+                  # RUNNER_TOKEN: openssl rand -hex 32 — the SAME value goes to the code VM
+cp Caddyfile /etc/caddy/conf.d/quiz.caddy && caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && systemctl reload caddy
 ```
 
-An encrypted copy of the secrets in the vault (`age`) is a precondition of the 4 h RTO
-(ADR-010).
+The edu-ID client is registered with the redirect URI
+`https://quiz.chevallier.io/app/auth/callback` and authenticates with
+`private_key_jwt` (`OIDC_PRIVATE_KEY_PATH`, `OIDC_PRIVATE_KEY_KID`). Keycloak is
+a development identity provider and is not deployed. `AUTH_DEV_LOGIN` and a
+`pglite://` database are both refused by `config.ts` under
+`NODE_ENV=production`: setting either in `.env.prod` stops the container from
+starting, on purpose. The super administrator is `SUPER_ADMIN_EMAIL`; teachers
+are managed from the Admin screen.
 
-## 4. Caddy (native): the vhost is versioned in [Caddyfile](Caddyfile)
+An encrypted copy of `.env.prod` and `secrets/` in the vault (`age`) is a
+precondition of the 4 h RTO (ADR-010).
+
+## 3. The runner VM (`/opt/quiz-runner`)
 
 ```bash
-sudo cp Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+cd /opt && git clone https://github.com/heig-tin-info/heig-quiz.git quiz-runner && cd quiz-runner
+install -d -m 0700 /etc/quiz-runner
+cp apps/runner/deploy/env.example /etc/quiz-runner/env && chmod 600 /etc/quiz-runner/env
+nano /etc/quiz-runner/env      # RUNNER_TOKEN: the value of the application VM
+# The host Caddyfile belongs to heig-codespace: add ONE line to it, once.
+grep -q 'conf.d/\*.caddy' /etc/caddy/Caddyfile || sed -i '1i import /etc/caddy/conf.d/*.caddy\n' /etc/caddy/Caddyfile
+mkdir -p /etc/caddy/conf.d && cp apps/runner/deploy/Caddyfile /etc/caddy/conf.d/quiz-runner.caddy
+caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && systemctl reload caddy
+# The language images: the runner's only supply chain, built HERE, never pulled.
+PODMAN_REMOTE_URL=unix:///run/podman/podman.sock apps/runner/images/build.sh c cpp python js
+podman images | grep quiz-runner
 ```
 
-## 5. First deployment
+The quadlet (`apps/runner/deploy/quiz-runner.container`) is installed by
+`deploy.sh` at every deploy: host networking bound to loopback, the rootful
+socket as its only mount, read-only root, no capability, `Pull=never` (the
+image is pulled by the deploy, with the CI's token, never at boot). The
+runner holds one secret, `RUNNER_TOKEN`, checked on both routes; it reaches no
+database and passes nothing of its environment into the sandbox containers
+(`apps/runner/README.md`).
 
-The image is **never built on the VM**: it is built in CI and pulled from GHCR (§7), so the
-first start is a pull followed by an `up -d`, exactly like every later deployment. Log in to
-GHCR first if the package is still private (see the manual deployment in §7).
+Caddy answers 403 to any address but the application VM's, and the runner
+answers 401 to any call without the token: two gates, either one enough.
+
+## 4. CI → the two VMs (once)
+
+The `deploy` job of `.github/workflows/ci.yml` SSHes to both VMs with one key,
+pinned to a script on each (`command="…",restrict`): the key can ONLY deploy,
+never open a shell, even if it leaks. The images stay private on GHCR: the
+runner passes its ephemeral token as the SSH "command" (→
+`$SSH_ORIGINAL_COMMAND`), which each `deploy.sh` pipes into `docker login` /
+`podman login` for the pull — no registry credential is stored on either VM.
 
 ```bash
-docker compose -f compose.prod.yml --env-file .env.prod pull app
-docker compose -f compose.prod.yml --env-file .env.prod up -d
-docker compose -f compose.prod.yml logs -f app   # migrations, then "quiz-server started"
-curl -s https://quiz.example.ch/healthz  # {"status":"ok",...}
+ssh-keygen -t ed25519 -f ci_deploy -N "" -C ci-deploy@quiz
+gh secret set DEPLOY_SSH_KEY --repo heig-tin-info/heig-quiz < ci_deploy          # PRIVATE key, an Actions secret
+gh variable set DEPLOY_HOST --repo heig-tin-info/heig-quiz --body classroom.chevallier.io
+gh variable set DEPLOY_HOST_KEY --repo heig-tin-info/heig-quiz --body "$(ssh-keyscan -t ed25519 classroom.chevallier.io | awk '{print $2" "$3}')"
+gh variable set DEPLOY_RUNNER_HOST --repo heig-tin-info/heig-quiz --body code.chevallier.io
+gh variable set DEPLOY_RUNNER_HOST_KEY --repo heig-tin-info/heig-quiz --body "$(ssh-keyscan -t ed25519 code.chevallier.io | awk '{print $2" "$3}')"
+# on the application VM
+printf 'command="/opt/quiz/deploy.sh",restrict %s\n' "$(cat ci_deploy.pub)" >> /root/.ssh/authorized_keys
+# on the runner VM
+printf 'command="/opt/quiz-runner/deploy.sh",restrict %s\n' "$(cat ci_deploy.pub)" >> /root/.ssh/authorized_keys
+shred -u ci_deploy
 ```
 
-This starts the `app`, `postgres` and `backup` services — and only those. Keycloak is a
-DEVELOPMENT identity provider and is not deployed here; production authenticates against
-Switch edu-ID. The development persona picker (`AUTH_DEV_LOGIN`) and the embedded pglite
-database are both REFUSED by `config.ts` under `NODE_ENV=production`: setting either of them
-in `.env.prod` stops the container from starting, on purpose.
+Without the secret the job skips cleanly (the images are published anyway);
+without `DEPLOY_RUNNER_HOST` only the application is deployed.
 
-The super administrator is `SUPER_ADMIN_EMAIL`; teachers are managed from the Admin screen.
+## 5. First deployment, and every one after
 
-## 5b. The runner (code execution)
-
-The `runner` service of `compose.prod.yml` executes student code. It contains no engine of
-its own: it drives the **host's rootful Podman** through the socket it mounts, and the
-containers it starts are the hardened ones (`apps/runner/README.md` has the flag list). It is
-on the internal compose network only — never published, never behind Caddy — and holds no
-secret, no database access and no credential.
+Push to `main`: checks, two images, two SSH calls. Then:
 
 ```bash
-# On the VM, once. Rootful Podman: the socket is root-owned, which is why the
-# runner container is the only one that gets to see it.
-sudo apt-get install -y podman
-sudo systemctl enable --now podman.socket      # /run/podman/podman.sock
-
-# The language images, built ON THE VM but NOT from a Dockerfile of ours: they
-# are three `apk add` on Alpine, a few seconds each, and no Node build.
-sudo -u root env PODMAN_REMOTE_URL=unix:///run/podman/podman.sock \
-  /opt/quiz/apps/runner/images/build.sh c cpp python js
-
-sudo podman images | grep quiz-runner          # c, cpp, python, js
+curl -s https://quiz.chevallier.io/healthz | jq .              # database, jobs, runner: "up"
+ssh root@classroom.chevallier.io 'cd /opt/quiz && docker compose -f compose.prod.yml --env-file .env.prod logs --tail 50 app'
+ssh root@code.chevallier.io 'journalctl -u quiz-runner -n 30'   # "podman engine ready", "quiz-runner started"
 ```
 
-Then bring the stack up as usual. Checks:
+`/healthz` reports the runner `down` when it is unreachable or refuses the
+token, and `disabled` when `RUNNER_MODE` is left at `stub`; neither degrades
+the platform: a code question stays authorable, playable and releasable, and
+its grading is proposed for a manual review (decision D14).
+
+### Manually (if CI is unavailable)
 
 ```bash
-docker compose -f compose.prod.yml exec app curl -sf http://runner:3200/health
-curl -sf https://quiz.example.ch/healthz | jq .checks.runner     # "up"
-```
-
-`/healthz` reports `disabled` when `RUNNER_MODE` is left at `stub`, `down` when the service
-is unreachable, and neither of those degrades the platform: a code question stays authorable,
-playable and releasable, and its grading is proposed for a manual review (decision D14). So a
-VM where Podman is not installed yet runs the whole platform minus the automatic grading of
-code — remove `RUNNER_MODE`/`RUNNER_URL` from the `app` service and drop the `runner` service.
-
-**The images are the runner's only supply chain.** They are built from
-`apps/runner/images/*/Containerfile` on the VM, never pulled from a registry: the runner has
-no registry credential and the sandbox containers have no network at all.
-
-## 6. Update / rollback
-
-Deployment is done by CI (`.github/workflows/ci.yml`): every push to `main` passes the
-checks, builds the two images on GitHub Actions, pushes them to GHCR
-(`ghcr.io/heig-tin-info/quiz` and `ghcr.io/heig-tin-info/quiz-runner`, tags `latest` + sha), and then the `deploy` job
-connects to the VM over SSH and triggers `deploy.sh` (image pull + `up -d`) — a few seconds,
-zero contention.
-
-**Never build on the VM** (453 MiB / 1 CPU): a local build makes the host swap and strangles
-Postgres — `Connection terminated` timeouts on login/ticker/pg-boss, experienced on
-2026-07-10 — and fills the disk (~1 GB of builder cache per cycle).
-
-### Security of the CI → VM access (forced command)
-
-The CI key is pinned to `deploy.sh` in `authorized_keys`: with that key the runner can
-**only** deploy, never open a shell (even if the secret leaks). The GHCR package stays
-private: the runner passes its ephemeral token as the SSH "command" (→
-`$SSH_ORIGINAL_COMMAND`), which `deploy.sh` uses for the `docker login` for the duration of
-the pull — no registry credential is stored on the VM.
-
-### Setup (once)
-
-1. Generate a dedicated key pair:
-   ```bash
-   ssh-keygen -t ed25519 -f ci_deploy -N "" -C ci-deploy@quiz
-   ```
-2. **Private** key → **Actions secret** (⚠ not a Deploy Key):
-   ```bash
-   gh secret set DEPLOY_SSH_KEY --repo heig-tin-info/heig-quiz < ci_deploy
-   ```
-3. **Public** key → the VM's `authorized_keys`, pinned to `deploy.sh`:
-   ```bash
-   # on the VM
-   printf 'command="/opt/quiz/deploy.sh",restrict %s\n' \
-     "$(cat ci_deploy.pub)" >> /root/.ssh/authorized_keys
-   ```
-   (`deploy.sh` arrives through `git pull`; it is versioned and already executable.)
-
-Without the secret, the `deploy` job skips cleanly (the image is published to GHCR anyway).
-
-### Manual deployment (if CI is unavailable)
-
-```bash
+# application VM
 cd /opt/quiz && git pull --ff-only
 echo <PAT read:packages> | docker login ghcr.io -u heig-tin-info --password-stdin
 docker compose -f compose.prod.yml --env-file .env.prod pull app
 docker compose -f compose.prod.yml --env-file .env.prod up -d
+# runner VM
+cd /opt/quiz-runner && echo <PAT read:packages> | podman login ghcr.io -u heig-tin-info --password-stdin
+SSH_ORIGINAL_COMMAND= ./apps/runner/deploy/deploy.sh
 ```
 
 ### Rollback
@@ -194,25 +133,28 @@ docker compose -f compose.prod.yml --env-file .env.prod up -d
 The sha tags stay on GHCR:
 
 ```bash
-IMAGE_TAG=<sha of the healthy commit> docker compose -f compose.prod.yml \
-  --env-file .env.prod up -d
-# additive migrations — when in doubt, restore the database (§8).
+IMAGE_TAG=<sha of the healthy commit> docker compose -f compose.prod.yml --env-file .env.prod up -d   # application VM
+# runner VM: podman pull ghcr.io/heig-tin-info/quiz-runner:<sha> && podman tag … :latest && systemctl restart quiz-runner
+# additive migrations — when in doubt, restore the database (§6).
 ```
 
-## 7. Backups (NFR-16: RPO 24 h, RTO 4 h)
+**Never build on the application VM**: an on-VM build makes the host swap and
+strangles PostgreSQL — the classroom learned it on 2026-07-10 — and fills the
+disk. The runner VM could build, and does build the small Alpine language
+images; the runner image itself still comes from CI so that both VMs run the
+commit the checks passed on.
 
-Two complementary layers:
+## 6. Backups (RPO 24 h, RTO 4 h)
 
-- **A daily provider snapshot of the VM**, taken off the machine. It
-  covers losing the machine outright: the whole VM comes back, secrets and
-  volumes included. It is a disk image of a *running* Postgres, so it is
-  crash-consistent — Postgres replays its WAL on the way up. That is sound, but
-  it is not the equivalent of a clean dump, and the granularity is the day.
-- **A daily `pg_dump -Fc`** from the compose `backup` service into `./backups/`
-  (30-day retention). A logical dump, restorable table by table: the right tool
-  for backing out of a migration or recovering precise data. It lives **on the
-  VM it protects**, so if the machine is lost it is the provider snapshot that saves
-  you.
+- **A daily provider snapshot of the application VM**, off the machine: the
+  whole VM comes back, secrets and volumes included, crash-consistent.
+- **A daily `pg_dump -Fc`** from the compose `backup` service into
+  `/opt/quiz/backups/` (30-day retention): a logical dump, restorable table
+  by table. It lives on the VM it protects.
+- `/opt/quiz/assets/` (question images, content-addressed) is part of what to
+  copy: `rsync` is enough.
+- The runner VM holds nothing to back up: the language images rebuild in a
+  minute from `apps/runner/images/`.
 - **Before any migration**, take a fresh dump rather than trusting the daily one:
 
 ```bash
@@ -220,10 +162,6 @@ cd /opt/quiz && docker compose -f compose.prod.yml --env-file .env.prod \
   exec -T postgres pg_dump -Fc -U quiz quiz > "backups/pre-<migration>-$(date +%F-%H%M).dump"
 ```
 
-- **Still to wire**, for a logical dump off the VM: `rclone copy backups
-  remote:quiz-backups` in cron (Hetzner object storage, SWITCH storage, etc.). The
-  provider snapshot already covers the machine-loss case, so this is no longer a
-  gaping hole — but restoring a single table out of a snapshot stays laborious.
 - Restore:
 
 ```bash
@@ -233,18 +171,14 @@ docker compose -f compose.prod.yml exec -T postgres \
 docker compose -f compose.prod.yml start app
 ```
 
-- VM lost: new VM → §1 → secrets from the vault → restore the dump → re-point the
-  DNS. Timed restore test every semester.
+- **Still to wire**: an off-VM copy of the dumps (`rclone copy backups
+  remote:quiz-backups` in cron). VM lost: new VM → §2 → secrets from the
+  vault → restore the dump → re-point the DNS. Timed restore test every
+  semester.
 
-## 8. SWITCH edu-ID switchover (as soon as the resource is approved) — in `.env.prod`:
+## 7. Monitoring
 
-```bash
-OIDC_ISSUER=<edu-ID issuer>
-OIDC_CLIENT_ID=<issued client id>
-OIDC_PRIVATE_KEY_PATH=secrets/eduid-private-key.pem
-OIDC_PRIVATE_KEY_KID=quiz-eduid-2026
-```
-
-`docker compose -f compose.prod.yml --env-file .env.prod up -d app`, then test a real login.
-
-## 9. Monitoring: an external 60 s probe on `/healthz` (Uptime-Kuma, or the hosting provider's own monitor); logs through `docker compose logs -f app` (credentials masked).
+An external 60 s probe on `https://quiz.chevallier.io/healthz`; logs through
+`docker compose logs -f app` on one VM and `journalctl -u quiz-runner -f` on
+the other (credentials masked). `GET /metrics` needs an admin session or
+`METRICS_TOKEN`.

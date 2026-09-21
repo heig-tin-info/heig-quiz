@@ -126,6 +126,13 @@ const EnvSchema = z.object({
    */
   RUNNER_MODE: z.enum(["stub", "http"]).default("stub"),
   RUNNER_URL: z.string().default(""),
+  /**
+   * Shared secret sent as `Authorization: Bearer` to the runner (ADR-016).
+   * The runner lives on another machine in production, behind TLS: the
+   * token is what keeps it from being a free compute service for whoever
+   * finds the address. Required in production when `RUNNER_MODE=http`.
+   */
+  RUNNER_TOKEN: z.string().default(""),
   /** Wall-clock budget of one runner call, compilation and every case included. */
   RUNNER_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120_000).default(30_000),
 
@@ -187,6 +194,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   if (parsed.data.RUNNER_MODE === "http" && parsed.data.RUNNER_URL.trim() === "") {
     throw new Error("Invalid configuration: RUNNER_URL is required when RUNNER_MODE=http");
   }
+  // A runner reached over the network without a token would answer anyone:
+  // in production the two sides must share one (ADR-016).
+  if (
+    parsed.data.NODE_ENV === "production" &&
+    parsed.data.RUNNER_MODE === "http" &&
+    parsed.data.RUNNER_TOKEN.trim() === ""
+  ) {
+    throw new Error("Invalid configuration: RUNNER_TOKEN is required when RUNNER_MODE=http");
+  }
   return {
     ...parsed.data,
     // Empty means "the SPA is served where the API is" (production).
@@ -195,6 +211,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     // must not follow the process around.
     ASSETS_DIR: resolve(parsed.data.ASSETS_DIR),
     RUNNER_URL: parsed.data.RUNNER_URL.trim().replace(/\/+$/, ""),
+    RUNNER_TOKEN: parsed.data.RUNNER_TOKEN.trim(),
     SUPER_ADMIN_EMAIL: parsed.data.SUPER_ADMIN_EMAIL.trim().toLowerCase(),
     // PEM path made absolute at load time: the process no longer depends on
     // its launch directory (ADR-010, secret in a file).

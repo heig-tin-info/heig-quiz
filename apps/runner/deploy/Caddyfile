@@ -1,0 +1,28 @@
+# Vhost of quiz-runner.chevallier.io, on the code VM (ADR-016).
+#
+# That VM's /etc/caddy/Caddyfile belongs to heig-codespace; it gained one
+# `import /etc/caddy/conf.d/*.caddy` line and this fragment lives there:
+#   sudo cp Caddyfile /etc/caddy/conf.d/quiz-runner.caddy && sudo systemctl reload caddy
+#
+# Two gates, both required: only the quiz VM may talk to it (the source
+# address of a TLS connection cannot be spoofed), and the API must present the
+# shared RUNNER_TOKEN, which the runner itself checks. Losing either one
+# leaves the other.
+quiz-runner.chevallier.io {
+	encode gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+
+	@quiz remote_ip 165.245.246.213
+	handle @quiz {
+		reverse_proxy 127.0.0.1:3200
+	}
+
+	handle {
+		respond 403
+	}
+}

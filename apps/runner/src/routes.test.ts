@@ -34,6 +34,35 @@ afterEach(async () => {
   app = null;
 });
 
+describe("RUNNER_TOKEN", () => {
+  it("is not asked for when none is configured", async () => {
+    const server = await start(createFakeEngine());
+    expect((await server.inject({ url: "/health" })).statusCode).toBe(200);
+  });
+
+  it("guards both routes with a bearer, and rejects a wrong or missing one", async () => {
+    const server = await start(createFakeEngine(), { RUNNER_TOKEN: "s3cret" });
+    expect((await server.inject({ url: "/health" })).statusCode).toBe(401);
+    expect(
+      (await server.inject({ url: "/health", headers: { authorization: "Bearer nope" } }))
+        .statusCode,
+    ).toBe(401);
+    expect(
+      (await server.inject({ url: "/health", headers: { authorization: "Basic s3cret" } }))
+        .statusCode,
+    ).toBe(401);
+    const run = await server.inject({ method: "POST", url: "/run", payload: REQUEST });
+    expect(run.statusCode).toBe(401);
+    expect(run.json()).toEqual({ error: "unauthorized" });
+
+    const ok = { authorization: "Bearer s3cret" };
+    expect((await server.inject({ url: "/health", headers: ok })).statusCode).toBe(200);
+    const ran = await server.inject({ method: "POST", url: "/run", payload: REQUEST, headers: ok });
+    expect(ran.statusCode).toBe(200);
+    RunnerOutcome.parse(ran.json());
+  });
+});
+
 describe("GET /health", () => {
   it("answers a RunnerHealth listing the languages that have an image", async () => {
     const server = await start(createFakeEngine());

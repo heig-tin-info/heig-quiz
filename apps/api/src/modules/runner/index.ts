@@ -26,6 +26,7 @@ export function createRunner(config: AppConfig, fetchImpl?: FetchLike): RunnerSe
     return new HttpRunner({
       url: config.RUNNER_URL,
       timeoutMs: config.RUNNER_TIMEOUT_MS,
+      ...(config.RUNNER_TOKEN === "" ? {} : { token: config.RUNNER_TOKEN }),
       ...(fetchImpl === undefined ? {} : { fetch: fetchImpl }),
     });
   }

@@ -9,7 +9,8 @@
 # then expires with the job — no registry credential is ever stored on the VM.
 #
 # NEVER build here: an on-VM build starves PostgreSQL and fills the disk.
-# This only pulls a prebuilt image and restarts.
+# This only pulls a prebuilt image and restarts. The code runner is deployed
+# the same way on ITS VM by apps/runner/deploy/deploy.sh (ADR-016).
 set -euo pipefail
 
 cd /opt/quiz
@@ -22,11 +23,11 @@ if [ -n "${SSH_ORIGINAL_COMMAND:-}" ]; then
 fi
 
 git pull --ff-only
-# `pull app runner`, not `pull`: postgres and backup are public images that
-# compose already has, and naming the two of ours keeps the login scoped to
-# what the token was issued for. `--ignore-pull-failures` is deliberately NOT
-# used: a missing image must stop the deploy, not half-restart the stack.
-docker compose -f compose.prod.yml --env-file .env.prod pull app runner
+# `pull app`, not `pull`: postgres and backup are public images that compose
+# already has, and naming ours keeps the login scoped to what the token was
+# issued for. `--ignore-pull-failures` is deliberately NOT used: a missing
+# image must stop the deploy, not half-restart the stack.
+docker compose -f compose.prod.yml --env-file .env.prod pull app
 docker compose -f compose.prod.yml --env-file .env.prod up -d
 docker image prune -f
 echo "deploy: done ($(git rev-parse --short HEAD))"

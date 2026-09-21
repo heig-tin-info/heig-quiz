@@ -33,6 +33,19 @@ describe("loadConfig", () => {
     expect(config.PODMAN_SOCKET).toBeNull();
   });
 
+  it("requires the shared token in production, and trims it", () => {
+    const base = { PODMAN_SOCKET: "/tmp/x.sock", RUNNER_SECCOMP: SECCOMP };
+    expect(loadConfig(base).RUNNER_TOKEN).toBe("");
+    expect(loadConfig({ ...base, RUNNER_TOKEN: " s3cret " }).RUNNER_TOKEN).toBe("s3cret");
+    expect(() => loadConfig({ ...base, NODE_ENV: "production" })).toThrow(/RUNNER_TOKEN/);
+    expect(() => loadConfig({ ...base, NODE_ENV: "production", RUNNER_TOKEN: "  " })).toThrow(
+      /RUNNER_TOKEN/,
+    );
+    expect(loadConfig({ ...base, NODE_ENV: "production", RUNNER_TOKEN: "x" }).RUNNER_TOKEN).toBe(
+      "x",
+    );
+  });
+
   it("refuses a configuration it cannot make sense of", () => {
     expect(() =>
       loadConfig({ PORT: "not-a-port", PODMAN_SOCKET: "/tmp/x.sock", RUNNER_SECCOMP: SECCOMP }),

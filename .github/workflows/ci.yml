@@ -66,12 +66,14 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # Deploy: the runner SSHes to the VM, whose authorized_keys pins the CI key
-  # to /opt/quiz/deploy.sh (forced command) — the key can ONLY deploy, never
-  # open a shell. The ephemeral GHCR token is passed as the SSH command
-  # (→ $SSH_ORIGINAL_COMMAND) so the private image pulls without any
-  # credential stored on the VM. Without DEPLOY_SSH_KEY the job no-ops, so the
-  # pipeline stays green until the key is provisioned.
+  # Deploy: the runner SSHes to the two VMs (ADR-016), whose authorized_keys
+  # pin the CI key to /opt/quiz/deploy.sh on the quiz VM and to
+  # /opt/quiz-runner/deploy.sh on the code VM (forced commands) — the key can
+  # ONLY deploy, never open a shell. The ephemeral GHCR token is passed as the
+  # SSH command (→ $SSH_ORIGINAL_COMMAND) so the private images pull without
+  # any credential stored on either VM. Without DEPLOY_SSH_KEY the job no-ops,
+  # so the pipeline stays green until the key is provisioned; without
+  # DEPLOY_RUNNER_HOST only the application is deployed.
   deploy:
     needs: image
     runs-on: ubuntu-latest
@@ -85,6 +87,8 @@ jobs:
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
       DEPLOY_HOST_KEY: ${{ vars.DEPLOY_HOST_KEY }}
+      DEPLOY_RUNNER_HOST: ${{ vars.DEPLOY_RUNNER_HOST }}
+      DEPLOY_RUNNER_HOST_KEY: ${{ vars.DEPLOY_RUNNER_HOST_KEY }}
     steps:
       - name: Skip when the deploy key is not configured
         if: env.DEPLOY_SSH_KEY == '' || env.DEPLOY_HOST == ''
@@ -96,8 +100,16 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           printf '%s %s\n' "$DEPLOY_HOST" "$DEPLOY_HOST_KEY" >> ~/.ssh/known_hosts
-      - name: Trigger deploy (forced command runs deploy.sh on the VM)
+          if [ -n "$DEPLOY_RUNNER_HOST" ]; then
+            printf '%s %s\n' "$DEPLOY_RUNNER_HOST" "$DEPLOY_RUNNER_HOST_KEY" >> ~/.ssh/known_hosts
+          fi
+      - name: Deploy the application (forced command runs deploy.sh on the quiz VM)
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != ''
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_HOST" "$GHCR_TOKEN"
+      - name: Deploy the runner (forced command runs apps/runner/deploy/deploy.sh on the code VM)
+        if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != '' && env.DEPLOY_RUNNER_HOST != ''
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "$GHCR_TOKEN"
