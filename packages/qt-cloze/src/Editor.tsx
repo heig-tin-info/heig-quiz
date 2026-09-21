@@ -39,6 +39,16 @@ export function ClozeEditor({
         <label className={labelClass} htmlFor="cloze-text">
           {s.text}
         </label>
+        {/*
+         * A textarea, and it stays one even though the host lends a WYSIWYG
+         * editor (`EditorProps.RichText`) to the other three types. The hole
+         * syntax of this type — `{{malloc|calloc}}`, `{{=free|delete}}` — is
+         * not markdown: a rich editor would parse those braces as ordinary
+         * text, re-serialize them with the markdown escapes its serializer
+         * owes to a literal delimiter, and hand back a template whose holes no
+         * longer parse. The source IS the interface here, and `parse.errors`
+         * below is what makes it readable.
+         */}
         <textarea
           id="cloze-text"
           rows={8}

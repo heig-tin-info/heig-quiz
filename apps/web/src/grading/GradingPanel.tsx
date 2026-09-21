@@ -352,6 +352,7 @@ export function GradingPanel({
       <PageHeader
         eyebrow={title}
         title={t("grading.title")}
+        help="grading"
         description={t("grading.subtitle")}
         actions={
           <Button variant="secondary" onClick={() => navigate(links.results)}>

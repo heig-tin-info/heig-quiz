@@ -9,20 +9,22 @@
 
 export const mcqEditorStrings = {
   prompt: "Statement",
-  promptHint: "Markdown. The students see it as written.",
-  preview: "Preview",
+  promptHint: "The students see it as written.",
   choices: "Choices",
   choicesHint: "Tick the correct answers. The order is shuffled per student.",
   choiceText: "Text of choice",
   correct: "Correct",
   addChoice: "Add a choice",
   removeChoice: "Remove choice",
-  moveUp: "Move up",
-  moveDown: "Move down",
+  /** Accessible name of the drag handle; the keyboard reorders through it too. */
+  reorderChoice: "Reorder choice",
+  /**
+   * The mode is DERIVED from the key set, never chosen (docs/04 §4.4): these
+   * two sentences are how the teacher is told what they have just built.
+   */
+  modeHintSingle: "One correct answer: the student picks one.",
+  modeHintMultiple: "Several correct answers: the student ticks every one that applies.",
   scoring: "Scoring",
-  mode: "Answers",
-  modeSingle: "One answer",
-  modeMultiple: "Several answers",
   policy: "Policy",
   policyAllOrNothing: "All or nothing",
   policyPartial: "Partial",

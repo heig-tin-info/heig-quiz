@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { CourseSummary } from "@quiz/contracts";
+import type { CourseSummary, PoolDetail } from "@quiz/contracts";
 
 import { Shell } from "./Shell";
 import { makeClassroomSummary, makeCourseSummary, makeMe } from "./test/fixtures";
@@ -28,6 +28,33 @@ const rooms = (n: number): CourseSummary[] => [
   }),
 ];
 
+/** A pool with one two-level category tree, as the sidebar unfolds it. */
+const POOL: PoolDetail = {
+  pool: {
+    id: "p1",
+    name: "Pointers",
+    visibility: "private",
+    ownerId: "u1",
+    isPersonal: true,
+    createdAt: "2026-01-01T08:00:00.000Z",
+  },
+  categories: [
+    {
+      id: "k1",
+      poolId: "p1",
+      parentId: null,
+      name: "Arrays",
+      position: 0,
+      children: [
+        { id: "k2", poolId: "p1", parentId: "k1", name: "Strings", position: 0, children: [] },
+      ],
+    },
+    { id: "k3", poolId: "p1", parentId: null, name: "Structs", position: 1, children: [] },
+  ],
+  tags: [],
+  questionCount: 7,
+};
+
 function renderShell({
   route = { view: "home" } as Route,
   courses = rooms(3),
@@ -36,6 +63,8 @@ function renderShell({
   me = makeMe(),
   navigate = vi.fn(),
   onToggleStudentView = vi.fn(),
+  pool,
+  path,
 }: {
   route?: Route;
   courses?: CourseSummary[];
@@ -44,9 +73,14 @@ function renderShell({
   me?: ReturnType<typeof makeMe>;
   navigate?: (r: Route) => void;
   onToggleStudentView?: () => void;
+  /** Seeds the pool the sidebar unfolds on a `pool` route. */
+  pool?: PoolDetail;
+  /** URL the frame reads `?category=` from. */
+  path?: string;
 } = {}) {
   const queryClient = makeQueryClient();
   queryClient.setQueryData(["courses"], courses);
+  if (pool) queryClient.setQueryData(["pool", pool.pool.id], pool);
   renderWithProviders(
     <Shell
       me={me}
@@ -58,7 +92,7 @@ function renderShell({
     >
       <p>Page content</p>
     </Shell>,
-    { queryClient },
+    { queryClient, ...(path ? { route: path } : {}) },
   );
   return { navigate, onToggleStudentView };
 }
@@ -71,7 +105,10 @@ describe("Shell sidebar", () => {
     renderShell();
     const nav = within(sidebar());
     expect(nav.getByRole("button", { name: "Courses" })).toHaveAttribute("aria-current", "page");
-    expect(nav.getByRole("button", { name: "Settings" })).toBeInTheDocument();
+    expect(nav.getByRole("button", { name: "Question pools" })).toBeInTheDocument();
+    // Settings is not a section of the product: it lives in the account menu
+    // at the bottom of the sidebar, and in the palette.
+    expect(nav.queryByRole("button", { name: "Settings" })).toBeNull();
     expect(nav.getByRole("button", { name: /^Classroom 1(?!\d)/ })).toBeInTheDocument();
     expect(nav.getByRole("button", { name: /^Classroom 3(?!\d)/ })).toBeInTheDocument();
   });
@@ -132,6 +169,58 @@ describe("Shell sidebar", () => {
     // WP9: "Home" is the student heading; the teacher sections are gone.
     expect(nav.getByRole("button", { name: "Home" })).toBeInTheDocument();
     expect(nav.queryByRole("button", { name: /^Classroom 1(?!\d)/ })).toBeNull();
+  });
+});
+
+describe("Shell pool categories", () => {
+  it("stays folded away outside a pool route", () => {
+    renderShell({ pool: POOL });
+    expect(within(sidebar()).queryByRole("button", { name: "All questions" })).toBeNull();
+  });
+
+  it("unfolds the pool and its categories under Question pools", () => {
+    renderShell({ route: { view: "pool", id: "p1" }, pool: POOL, path: "/pools/p1" });
+    const nav = within(sidebar());
+    expect(nav.getByText("Pointers")).toBeVisible();
+    expect(nav.getByRole("button", { name: "All questions" })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+    expect(nav.getByRole("button", { name: "Arrays" })).toBeInTheDocument();
+    expect(nav.getByRole("button", { name: "Strings" })).toBeInTheDocument();
+    expect(nav.getByRole("button", { name: /New category/ })).toBeInTheDocument();
+  });
+
+  it("writes the picked category to the URL the pool page reads", async () => {
+    renderShell({ route: { view: "pool", id: "p1" }, pool: POOL, path: "/pools/p1" });
+    await userEvent.click(within(sidebar()).getByRole("button", { name: "Structs" }));
+    expect(new URLSearchParams(window.location.search).get("category")).toBe("k3");
+    expect(within(sidebar()).getByRole("button", { name: "Structs" })).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+  });
+
+  it("reads the selection back from the URL", () => {
+    renderShell({
+      route: { view: "pool", id: "p1" },
+      pool: POOL,
+      path: "/pools/p1?category=k1",
+    });
+    const nav = within(sidebar());
+    expect(nav.getByRole("button", { name: "Arrays" })).toHaveAttribute("aria-current", "true");
+    expect(nav.getByRole("button", { name: "All questions" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("keeps every edit of a category in its overflow menu", async () => {
+    renderShell({ route: { view: "pool", id: "p1" }, pool: POOL, path: "/pools/p1" });
+    await userEvent.click(within(sidebar()).getAllByRole("button", { name: "Actions" })[0]!);
+    const menu = within(screen.getByRole("menu"));
+    expect(menu.getByRole("menuitem", { name: "Rename category" })).toBeVisible();
+    expect(menu.getByRole("menuitem", { name: "New subcategory" })).toBeVisible();
+    expect(menu.getByRole("menuitem", { name: "Move up" })).toBeVisible();
+    expect(menu.getByRole("menuitem", { name: "Move down" })).toBeVisible();
+    expect(menu.getByRole("menuitem", { name: "Delete category" })).toBeVisible();
   });
 });
 
@@ -211,23 +300,19 @@ describe("Shell command palette", () => {
     expect(palette()).toBeNull();
   });
 
-  it("opens the palette from the sidebar trigger, which teaches the shortcut", async () => {
+  it("keeps no search trigger in the desktop sidebar", () => {
     renderShell();
-    // The only "Search…" button of the desktop sidebar; the mobile one below
-    // sits in the top bar and is named by the label alone.
-    const trigger = within(sidebar().closest("aside")!).getByRole("button", { name: /^Search/ });
-    // One cap per key, as in the palette footer. jsdom reports no platform,
-    // so `modKey()` spells the PC key.
-    expect(within(trigger).getByText("Ctrl").tagName).toBe("KBD");
-    expect(within(trigger).getByText("K").tagName).toBe("KBD");
-    await userEvent.click(trigger);
-    expect(palette()).toBeInTheDocument();
+    // The sidebar is navigation; the palette answers Ctrl/⌘+K from anywhere,
+    // and a permanent button for it was one row of chrome above the nav.
+    expect(
+      within(sidebar().closest("aside")!).queryByRole("button", { name: /^Search/ }),
+    ).toBeNull();
   });
 
   it("opens the palette from the search button of the mobile top bar", async () => {
     renderShell();
-    // The top bar's icon button carries the label alone; the sidebar trigger
-    // spells the shortcut after it, so an exact name tells the two apart.
+    // A phone has no Ctrl+K, so the top bar keeps its own trigger — and it is
+    // now the only "Search" button of the frame.
     await userEvent.click(screen.getByRole("button", { name: "Search" }));
     expect(palette()).toBeInTheDocument();
   });

@@ -273,18 +273,19 @@ const en = {
   "md.label": "Markdown",
   "md.toolbar": "Formatting",
   "md.mode.write": "Write",
-  "md.mode.preview": "Preview",
   "md.mode.source": "Source",
   "md.bold": "Bold",
   "md.italic": "Italic",
   "md.code": "Code",
+  "md.codeBlock": "Code block",
   "md.math": "Equation",
   "md.image": "Insert an image",
   "md.link": "Link",
+  "md.url": "Address",
+  "md.latex": "LaTeX",
   "md.uploading": "Uploading…",
-  "md.previewEmpty": "Nothing to preview yet.",
-  "md.hint": "Markdown, $math$ and code fences. Tab indents.",
-  "md.hint.withImages": "Markdown, $math$ and code fences. Paste or drop an image to upload it.",
+  "md.hint": "Bold, italic, code and $math$ as you type; Source shows the markdown underneath.",
+  "md.hint.withImages": "Bold, italic, code and $math$ as you type. Paste or drop an image to upload it.",
   "md.placeholder.body": "Write the question…",
   "md.placeholder.bold": "bold text",
   "md.placeholder.italic": "italic text",
@@ -315,7 +316,6 @@ const en = {
   "pools.linkNone": "No pool is linked to this course yet.",
   "pools.unlink": "Unlink from this course",
   "pools.unlinkConfirm": "Unlink “{name}” from “{course}”? The pool itself is kept.",
-  "pools.linkPick": "Pool to link",
   "pools.linkSaveFailed": "The link could not be saved.",
 
   // --- Pool view ---
@@ -487,20 +487,18 @@ const en = {
 
   // --- qt-mcq strings ---
   "qt.mcq.e.prompt": "Statement",
-  "qt.mcq.e.promptHint": "Markdown. The students see it as written.",
-  "qt.mcq.e.preview": "Preview",
+  "qt.mcq.e.promptHint": "The students see it as written.",
   "qt.mcq.e.choices": "Choices",
   "qt.mcq.e.choicesHint": "Tick the correct answers. The order is shuffled per student.",
   "qt.mcq.e.choiceText": "Text of choice",
   "qt.mcq.e.correct": "Correct",
   "qt.mcq.e.addChoice": "Add a choice",
   "qt.mcq.e.removeChoice": "Remove choice",
-  "qt.mcq.e.moveUp": "Move up",
-  "qt.mcq.e.moveDown": "Move down",
+  "qt.mcq.e.reorderChoice": "Reorder choice",
+  "qt.mcq.e.modeHintSingle": "One correct answer: the student picks one.",
+  "qt.mcq.e.modeHintMultiple":
+    "Several correct answers: the student ticks every one that applies.",
   "qt.mcq.e.scoring": "Scoring",
-  "qt.mcq.e.mode": "Answers",
-  "qt.mcq.e.modeSingle": "One answer",
-  "qt.mcq.e.modeMultiple": "Several answers",
   "qt.mcq.e.policy": "Policy",
   "qt.mcq.e.policyAllOrNothing": "All or nothing",
   "qt.mcq.e.policyPartial": "Partial",
@@ -531,7 +529,7 @@ const en = {
 
   // --- qt-short strings ---
   "qt.short.e.prompt": "Statement",
-  "qt.short.e.promptHint": "Markdown. The students see it as written.",
+  "qt.short.e.promptHint": "The students see it as written.",
   "qt.short.e.preview": "Preview",
   "qt.short.e.kind": "Expected answer",
   "qt.short.e.kindText": "Text",
@@ -609,7 +607,7 @@ const en = {
   // --- qt-code editor strings ---
   "qt.code.e.questionSection": "Question",
   "qt.code.e.prompt": "Statement",
-  "qt.code.e.promptHint": "Markdown. What the student reads above the editor.",
+  "qt.code.e.promptHint": "What the student reads above the editor.",
   "qt.code.e.language": "Language",
   "qt.code.e.template": "Starting code",
   "qt.code.e.templateHint":
@@ -1315,6 +1313,15 @@ const en = {
 
   "palette.openGrading": "Open the grading panel",
   "palette.openResults": "Open the results",
+
+  // Two readings of one list (the courses), the tabs of a classroom, and the
+  // teacher taking a seat in their own class.
+  "view.cards": "Cards",
+  "view.list": "List",
+  "classrooms.tabs": "Classroom sections",
+  "roster.joinDone": "You now see this classroom in the student view.",
+  "roster.joinFailed": "You could not be enrolled in this classroom.",
+  "pools.linkEmpty": "No pool to link",
 };
 
 export type Dict = typeof en;
@@ -1571,18 +1578,19 @@ const fr: Record<keyof Dict, string> = {
   "md.label": "Markdown",
   "md.toolbar": "Mise en forme",
   "md.mode.write": "Écrire",
-  "md.mode.preview": "Aperçu",
   "md.mode.source": "Source",
   "md.bold": "Gras",
   "md.italic": "Italique",
   "md.code": "Code",
+  "md.codeBlock": "Bloc de code",
   "md.math": "Équation",
   "md.image": "Insérer une image",
   "md.link": "Lien",
+  "md.url": "Adresse",
+  "md.latex": "LaTeX",
   "md.uploading": "Envoi…",
-  "md.previewEmpty": "Rien à prévisualiser pour l'instant.",
-  "md.hint": "Markdown, $maths$ et blocs de code. Tab indente.",
-  "md.hint.withImages": "Markdown, $maths$ et blocs de code. Collez ou déposez une image pour l'envoyer.",
+  "md.hint": "Gras, italique, code et $maths$ au fil de la frappe ; Source montre le markdown sous-jacent.",
+  "md.hint.withImages": "Gras, italique, code et $maths$ au fil de la frappe. Collez ou déposez une image pour l'envoyer.",
   "md.placeholder.body": "Rédigez la question…",
   "md.placeholder.bold": "texte en gras",
   "md.placeholder.italic": "texte en italique",
@@ -1614,7 +1622,6 @@ const fr: Record<keyof Dict, string> = {
   "pools.linkNone": "Aucune banque n'est liée à ce cours.",
   "pools.unlink": "Délier de ce cours",
   "pools.unlinkConfirm": "Délier « {name} » de « {course} » ? La banque elle-même est conservée.",
-  "pools.linkPick": "Banque à lier",
   "pools.linkSaveFailed": "Le lien n'a pas pu être enregistré.",
 
   // --- Pool view ---
@@ -1788,8 +1795,7 @@ const fr: Record<keyof Dict, string> = {
 
   // --- qt-mcq strings ---
   "qt.mcq.e.prompt": "Énoncé",
-  "qt.mcq.e.promptHint": "Markdown. Les étudiants le voient tel quel.",
-  "qt.mcq.e.preview": "Aperçu",
+  "qt.mcq.e.promptHint": "Les étudiants le voient tel quel.",
   "qt.mcq.e.choices": "Choix",
   "qt.mcq.e.choicesHint":
     "Cochez la ou les réponses correctes. L'ordre est mélangé pour chaque étudiant.",
@@ -1797,12 +1803,11 @@ const fr: Record<keyof Dict, string> = {
   "qt.mcq.e.correct": "Correct",
   "qt.mcq.e.addChoice": "Ajouter un choix",
   "qt.mcq.e.removeChoice": "Retirer le choix",
-  "qt.mcq.e.moveUp": "Monter",
-  "qt.mcq.e.moveDown": "Descendre",
+  "qt.mcq.e.reorderChoice": "Réordonner le choix",
+  "qt.mcq.e.modeHintSingle": "Une seule réponse correcte : l'étudiant en choisit une.",
+  "qt.mcq.e.modeHintMultiple":
+    "Plusieurs réponses correctes : l'étudiant coche toutes celles qui conviennent.",
   "qt.mcq.e.scoring": "Notation",
-  "qt.mcq.e.mode": "Réponses",
-  "qt.mcq.e.modeSingle": "Une réponse",
-  "qt.mcq.e.modeMultiple": "Plusieurs réponses",
   "qt.mcq.e.policy": "Politique",
   "qt.mcq.e.policyAllOrNothing": "Tout ou rien",
   "qt.mcq.e.policyPartial": "Partiel",
@@ -1833,7 +1838,7 @@ const fr: Record<keyof Dict, string> = {
 
   // --- qt-short strings ---
   "qt.short.e.prompt": "Énoncé",
-  "qt.short.e.promptHint": "Markdown. Les étudiants le voient tel quel.",
+  "qt.short.e.promptHint": "Les étudiants le voient tel quel.",
   "qt.short.e.preview": "Aperçu",
   "qt.short.e.kind": "Réponse attendue",
   "qt.short.e.kindText": "Texte",
@@ -1913,7 +1918,7 @@ const fr: Record<keyof Dict, string> = {
   // --- qt-code editor strings ---
   "qt.code.e.questionSection": "Question",
   "qt.code.e.prompt": "Énoncé",
-  "qt.code.e.promptHint": "Markdown. Ce que l'étudiant lit au-dessus de l'éditeur.",
+  "qt.code.e.promptHint": "Ce que l'étudiant lit au-dessus de l'éditeur.",
   "qt.code.e.language": "Langage",
   "qt.code.e.template": "Code de départ",
   "qt.code.e.templateHint":
@@ -2622,6 +2627,13 @@ const fr: Record<keyof Dict, string> = {
 
   "palette.openGrading": "Ouvrir le panneau de correction",
   "palette.openResults": "Ouvrir les résultats",
+
+  "view.cards": "Cartes",
+  "view.list": "Liste",
+  "classrooms.tabs": "Sections de la classe",
+  "roster.joinDone": "Vous voyez maintenant cette classe dans la vue étudiant.",
+  "roster.joinFailed": "Votre inscription à cette classe a échoué.",
+  "pools.linkEmpty": "Aucune banque à lier",
 };
 
 export const DICTS: Record<Locale, Record<string, string>> = { en, fr };

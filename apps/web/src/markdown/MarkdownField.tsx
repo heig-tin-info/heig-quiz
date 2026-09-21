@@ -5,33 +5,41 @@ import { useT, type TFunction } from "../i18n";
 import { cx, IconButton, inputClass, Segmented, type IconType } from "../ui";
 import { assetMarkdown } from "./render";
 import { indent, insertBlock, replace, wrap, type Selection } from "./insert";
-import { MarkdownView } from "./MarkdownView";
+import { RichText } from "./RichText";
 
 /*
  * The markdown field a teacher writes a prompt in (PLAN-MVP §6.7, decision
- * D11). The MVP deliberately ships a textarea and not a WYSIWYG: markdown is
- * the single source of truth either way (docs/05 §5.10), so the "Write" pane
- * can be swapped for a Tiptap surface later without touching the stored value
- * or migrating a single row. The segmented control already names the three
- * panes that split will need, which is why "Source" exists today even though
- * it shows the same textarea: the day Tiptap lands, "Write" changes and
- * "Source" does not.
+ * D11; docs/spec/05 §5.10 for the Tiptap decision).
  *
- * Everything the profane path needs is here and costs hours, not days: six
- * toolbar buttons that insert markdown at the caret, Ctrl+B / Ctrl+I, Tab as
- * two spaces, and an image pasted or dropped into the field going through
- * `onUploadImage` and coming back as `![](asset:<id>)`.
+ * Markdown is the single source of truth, and the two panes are two views of
+ * the same string:
+ *
+ *   Write   a Tiptap surface (RichText.tsx). `**foo**` shows as bold while it
+ *           is typed, `$\sqrt{2}$` becomes a formula, an image is a picture.
+ *   Source  the textarea this field shipped with, with the caret-level
+ *           toolbar of insert.ts. Nothing about it changed when Tiptap
+ *           landed, which is exactly what the earlier version of this comment
+ *           promised: "the day Tiptap lands, Write changes and Source does
+ *           not".
+ *
+ * There is no third "Preview" pane any more. The Write pane IS the preview —
+ * it renders with the student's own `.md-body` stylesheet — and a button that
+ * shows what the pane next to it already shows is a button nobody presses.
+ *
+ * An image pasted or dropped goes through `onUploadImage` and comes back as
+ * `![](asset:<id>)` in BOTH panes: the rich editor inserts the node, the
+ * textarea inserts the markdown, and the stored string is the same.
  */
 
-export type MarkdownMode = "write" | "preview" | "source";
+export type MarkdownMode = "write" | "source";
 
 export interface MarkdownFieldProps {
   value: string;
   onChange: (value: string) => void;
-  /** Accessible name of the textarea; also the visible label when `label` is set. */
+  /** Accessible name of the field; also the visible label when set. */
   label?: string;
   placeholder?: string;
-  /** Rows of the textarea at rest; it grows with the content. */
+  /** Rows of the Source textarea at rest; it grows with the content. */
   rows?: number;
   disabled?: boolean;
   id?: string;
@@ -50,13 +58,7 @@ interface ToolbarAction {
   key: string;
   icon: IconType;
   /** i18n key of the accessible name. */
-  labelKey:
-    | "md.bold"
-    | "md.italic"
-    | "md.code"
-    | "md.math"
-    | "md.image"
-    | "md.link";
+  labelKey: "md.bold" | "md.italic" | "md.code" | "md.math" | "md.image" | "md.link";
   /** Keyboard hint appended to the tooltip, if the action has one. */
   shortcut?: string;
   apply?: (sel: Selection, t: TFunction) => Selection;
@@ -67,6 +69,9 @@ interface ToolbarAction {
  * the two things a physics or an electronics prompt actually needs (a
  * formula and a figure), then a link. A seventh would start a second row on a
  * phone, and a toolbar that wraps is a toolbar nobody scans.
+ *
+ * These belong to the SOURCE pane: they edit characters around a caret. The
+ * Write pane has its own toolbar, which edits the document.
  */
 const ACTIONS: ToolbarAction[] = [
   { key: "bold", icon: Bold, labelKey: "md.bold", shortcut: "Ctrl+B",
@@ -154,6 +159,18 @@ export function MarkdownField({
     [onUploadImage, edit],
   );
 
+  /**
+   * What `RichText` expects: the asset REFERENCE, not the id. One line, and
+   * it keeps `onUploadImage` the shape every caller already passes.
+   */
+  const uploadForRichText = useCallback(
+    async (image: File) => {
+      const { id: assetId } = await onUploadImage!(image);
+      return `asset:${assetId}`;
+    },
+    [onUploadImage],
+  );
+
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Tab" && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
@@ -170,7 +187,6 @@ export function MarkdownField({
 
   const showImage = onUploadImage != null;
   const actions = ACTIONS.filter((a) => a.key !== "image" || showImage);
-  const editing = mode !== "preview";
 
   const textarea = (
     <textarea
@@ -237,7 +253,6 @@ export function MarkdownField({
             onChange={setMode}
             options={[
               { value: "write", label: t("md.mode.write") },
-              { value: "preview", label: t("md.mode.preview") },
               { value: "source", label: t("md.mode.source") },
             ]}
           />
@@ -245,37 +260,48 @@ export function MarkdownField({
       </div>
 
       {mode === "write" ? (
-        <div role="toolbar" aria-label={t("md.toolbar")} aria-controls={fieldId} className="flex flex-wrap items-center gap-0.5">
-          {actions.map((a) => (
-            <IconButton
-              key={a.key}
-              label={a.shortcut ? `${t(a.labelKey)} (${a.shortcut})` : t(a.labelKey)}
-              disabled={disabled}
-              onClick={() => (a.apply ? edit((sel) => a.apply!(sel, t)) : file.current?.click())}
-            >
-              <a.icon />
-            </IconButton>
-          ))}
-        </div>
-      ) : null}
-
-      {editing ? (
-        textarea
+        <RichText
+          id={fieldId}
+          value={value}
+          onChange={onChange}
+          {...(placeholder === undefined ? { placeholder: t("md.placeholder.body") } : { placeholder })}
+          aria-label={label ?? t("md.label")}
+          {...(disabled === undefined ? {} : { disabled })}
+          {...(showImage ? { uploadImage: uploadForRichText } : {})}
+        />
       ) : (
-        <div className="min-h-24 rounded-field border border-line bg-surface-2 px-3 py-2">
-          {value.trim() ? (
-            <MarkdownView source={value} />
-          ) : (
-            <p className="text-sm text-fg-faint">{t("md.previewEmpty")}</p>
-          )}
-        </div>
+        <>
+          <div
+            role="toolbar"
+            aria-label={t("md.toolbar")}
+            aria-controls={fieldId}
+            className="flex flex-wrap items-center gap-0.5"
+          >
+            {actions.map((a) => (
+              <IconButton
+                key={a.key}
+                label={a.shortcut ? `${t(a.labelKey)} (${a.shortcut})` : t(a.labelKey)}
+                disabled={disabled}
+                onClick={() => (a.apply ? edit((sel) => a.apply!(sel, t)) : file.current?.click())}
+              >
+                <a.icon />
+              </IconButton>
+            ))}
+          </div>
+          {textarea}
+        </>
       )}
 
       <p id={`${fieldId}-hint`} className="text-xs text-fg-faint">
         {showImage ? t("md.hint.withImages") : t("md.hint")}
       </p>
 
-      {showImage ? (
+      {/*
+       * The picker of the SOURCE toolbar only. The Write pane carries its own
+       * (inside `RichText`), and two hidden inputs with the same accessible
+       * name on one screen is two things called "Insert an image".
+       */}
+      {showImage && mode === "source" ? (
         <input
           ref={file}
           type="file"

@@ -2,15 +2,16 @@
  * Smoke tests of the three components: they render, they report every change
  * through their callback, and they hold no state of their own.
  */
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { useState } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { McqEditor } from "./Editor.js";
 import { McqPlayer } from "./Player.js";
 import { McqReview } from "./Review.js";
 import { McqStats } from "./Stats.js";
 import { multipleConfig, SECRET_CONFIG } from "./fixtures.js";
-import { emptyMcqDraft } from "./schema.js";
+import { emptyMcqDraft, MCQ_MAX_CHOICES } from "./schema.js";
 import { mcqServer } from "./server.js";
 
 const student = mcqServer.toStudent(SECRET_CONFIG, { seed: 3, itemId: "i", shuffle: false });
@@ -22,13 +23,19 @@ describe("McqEditor", () => {
     expect(screen.getByLabelText("Text of choice B")).toHaveValue("0x1004");
   });
 
+  it("renders an empty draft without crashing (decision D16)", () => {
+    render(<McqEditor config={emptyMcqDraft()} onChange={() => {}} />);
+    expect(screen.getByLabelText("Statement")).toHaveValue("");
+    expect(screen.getByLabelText("Text of choice A")).toHaveValue("");
+  });
+
   it("reports a typed statement without keeping it", async () => {
     const onChange = vi.fn();
     render(<McqEditor config={emptyMcqDraft()} onChange={onChange} />);
     await userEvent.type(screen.getByLabelText("Statement"), "?");
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ prompt: "…?" }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ prompt: "?" }));
     // Controlled: the value only changes when the host sends a new config back.
-    expect(screen.getByLabelText("Statement")).toHaveValue("…");
+    expect(screen.getByLabelText("Statement")).toHaveValue("");
   });
 
   it("adds a choice through onChange", async () => {
@@ -36,21 +43,6 @@ describe("McqEditor", () => {
     render(<McqEditor config={SECRET_CONFIG} onChange={onChange} />);
     await userEvent.click(screen.getByRole("button", { name: "Add a choice" }));
     expect(onChange.mock.calls[0]?.[0].choices).toHaveLength(4);
-  });
-
-  it("normalises the key set when the mode goes back to single", async () => {
-    const onChange = vi.fn();
-    render(
-      <McqEditor
-        config={multipleConfig({ policy: "penalized", maxSelections: 2 })}
-        onChange={onChange}
-      />,
-    );
-    await userEvent.click(screen.getByRole("radio", { name: "One answer" }));
-    const next = onChange.mock.calls[0]?.[0];
-    expect(next.policy).toBe("all_or_nothing");
-    expect(next.choices.filter((c: { correct: boolean }) => c.correct)).toHaveLength(1);
-    expect(next.maxSelections).toBeUndefined();
   });
 
   it("shows the issues the host reported, verbatim", () => {
@@ -74,6 +66,242 @@ describe("McqEditor", () => {
   it("disables every control when the host says so", () => {
     render(<McqEditor config={SECRET_CONFIG} onChange={() => {}} disabled />);
     expect(screen.getByLabelText("Statement")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Reorder choice A" })).toBeDisabled();
+  });
+});
+
+/*
+ * The mode is DERIVED from the key set and never asked for (docs/04 §4.4):
+ * there is no radio group left to click, so these tests drive the checkboxes
+ * and read the mode back out of what the editor emitted.
+ */
+describe("McqEditor — the derived mode", () => {
+  it("goes to multiple as soon as a second key is ticked", async () => {
+    const onChange = vi.fn();
+    render(<McqEditor config={SECRET_CONFIG} onChange={onChange} />);
+    await userEvent.click(screen.getByLabelText("Correct A"));
+    const next = onChange.mock.calls[0]?.[0];
+    expect(next.mode).toBe("multiple");
+  });
+
+  it("comes back to single — all or nothing, no limit — when one key is left", async () => {
+    const onChange = vi.fn();
+    render(
+      <McqEditor
+        config={multipleConfig({ policy: "penalized", maxSelections: 2 })}
+        onChange={onChange}
+      />,
+    );
+    // The fixture has two keys, A and B; un-ticking B leaves exactly one.
+    await userEvent.click(screen.getByLabelText("Correct B"));
+    const next = onChange.mock.calls[0]?.[0];
+    expect(next.mode).toBe("single");
+    expect(next.policy).toBe("all_or_nothing");
+    expect(next.choices.filter((c: { correct: boolean }) => c.correct)).toHaveLength(1);
+    expect(next.maxSelections).toBeUndefined();
+  });
+
+  it("keeps the previous mode when nothing is ticked at all", async () => {
+    const onChange = vi.fn();
+    render(<McqEditor config={multipleConfig({ choices: [
+      { text: "a", correct: true },
+      { text: "b", correct: false },
+    ] })} onChange={onChange} />);
+    await userEvent.click(screen.getByLabelText("Correct A"));
+    const next = onChange.mock.calls[0]?.[0];
+    expect(next.choices.some((c: { correct: boolean }) => c.correct)).toBe(false);
+    // The validation issue says what is missing; the mode is not flipped
+    // behind the teacher's back on the way to ticking another box.
+    expect(next.mode).toBe("multiple");
+  });
+
+  it("says in one line what the student will see", () => {
+    const { unmount } = render(<McqEditor config={SECRET_CONFIG} onChange={() => {}} />);
+    expect(screen.getByTestId("mcq-mode-hint")).toHaveTextContent(
+      "One correct answer: the student picks one.",
+    );
+    unmount();
+    render(<McqEditor config={multipleConfig()} onChange={() => {}} />);
+    expect(screen.getByTestId("mcq-mode-hint")).toHaveTextContent(
+      "Several correct answers: the student ticks every one that applies.",
+    );
+  });
+
+  it("offers a checkbox and never a radio, so the key set can go back to empty", () => {
+    render(<McqEditor config={SECRET_CONFIG} onChange={() => {}} />);
+    expect(screen.queryAllByRole("radio", { name: /^Correct/ })).toHaveLength(0);
+    expect(screen.getAllByRole("checkbox", { name: /^Correct/ })).toHaveLength(3);
+  });
+});
+
+describe("McqEditor — the scoring policy", () => {
+  it("is a segmented control showing the three options", () => {
+    render(<McqEditor config={multipleConfig()} onChange={() => {}} />);
+    for (const name of ["All or nothing", "Partial", "Penalized"]) {
+      expect(screen.getByRole("radio", { name })).toBeInTheDocument();
+    }
+    expect(screen.getByRole("radio", { name: "Partial" })).toBeChecked();
+  });
+
+  it("reports the picked policy", async () => {
+    const onChange = vi.fn();
+    render(<McqEditor config={multipleConfig()} onChange={onChange} />);
+    await userEvent.click(screen.getByRole("radio", { name: "Penalized" }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ policy: "penalized" }));
+  });
+
+  it("is disabled in single mode, where the schema allows one policy only", () => {
+    render(<McqEditor config={SECRET_CONFIG} onChange={() => {}} />);
+    expect(screen.getByRole("radio", { name: "All or nothing" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "All or nothing" })).toBeChecked();
+  });
+});
+
+describe("McqEditor — the keyboard writes the whole list", () => {
+  it("Enter walks to the next choice", async () => {
+    render(<McqEditor config={SECRET_CONFIG} onChange={() => {}} />);
+    const first = screen.getByLabelText("Text of choice A");
+    first.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(screen.getByLabelText("Text of choice B")).toHaveFocus();
+  });
+
+  it("Enter on the LAST choice adds one", async () => {
+    const onChange = vi.fn();
+    render(<McqEditor config={SECRET_CONFIG} onChange={onChange} />);
+    screen.getByLabelText("Text of choice C").focus();
+    await userEvent.keyboard("{Enter}");
+    expect(onChange.mock.calls[0]?.[0].choices).toHaveLength(4);
+  });
+
+  it("Tab at the end of the last choice adds one and focuses it", async () => {
+    const onChange = vi.fn();
+    function Host() {
+      const [config, setConfig] = useState(SECRET_CONFIG);
+      return (
+        <McqEditor
+          config={config}
+          onChange={(next) => {
+            onChange(next);
+            setConfig(next);
+          }}
+        />
+      );
+    }
+    render(<Host />);
+    screen.getByLabelText("Text of choice C").focus();
+    await userEvent.tab();
+    expect(onChange.mock.calls[0]?.[0].choices).toHaveLength(4);
+    await waitFor(() => expect(screen.getByLabelText("Text of choice D")).toHaveFocus());
+  });
+
+  it("Shift+Tab is the ordinary backwards Tab and adds nothing", async () => {
+    const onChange = vi.fn();
+    render(<McqEditor config={SECRET_CONFIG} onChange={onChange} />);
+    screen.getByLabelText("Text of choice C").focus();
+    await userEvent.tab({ shift: true });
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("stops adding at the maximum", async () => {
+    const onChange = vi.fn();
+    const full = multipleConfig({
+      choices: Array.from({ length: MCQ_MAX_CHOICES }, (_, i) => ({
+        text: `c${i}`,
+        correct: i < 2,
+      })),
+    });
+    render(<McqEditor config={full} onChange={onChange} />);
+    expect(screen.getByRole("button", { name: "Add a choice" })).toBeDisabled();
+    screen.getByLabelText(`Text of choice ${String.fromCharCode(64 + MCQ_MAX_CHOICES)}`).focus();
+    await userEvent.keyboard("{Enter}");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * `@dnd-kit` reorders by comparing the RECTANGLES of the rows, and jsdom runs
+ * no layout: every element reports a zero-sized box at the origin, so the
+ * keyboard sensor has nowhere to move to and no collision to detect. This
+ * stub lays the choice rows out in a column — 40 px each, in DOM order — for
+ * the duration of the reordering suite. It fakes geometry, nothing else: the
+ * sensor, the collision detection and the editor's `onDragEnd` are the real
+ * ones.
+ */
+function stubRowLayout() {
+  const real = Element.prototype.getBoundingClientRect;
+  beforeEach(() => {
+    Element.prototype.getBoundingClientRect = function (this: Element) {
+      const parent = this.parentElement;
+      const row =
+        this.tagName === "LI" && parent ? Array.from(parent.children).indexOf(this) : 0;
+      const top = this.tagName === "LI" ? row * 40 : 0;
+      const height = this.tagName === "LI" ? 40 : 0;
+      return {
+        x: 0, y: top, top, left: 0, right: 600, bottom: top + height,
+        width: 600, height, toJSON: () => ({}),
+      } as DOMRect;
+    };
+  });
+  afterEach(() => {
+    Element.prototype.getBoundingClientRect = real;
+  });
+}
+
+describe("McqEditor — reordering", () => {
+  stubRowLayout();
+
+  it("offers one focusable drag handle per choice, named", () => {
+    render(<McqEditor config={SECRET_CONFIG} onChange={() => {}} />);
+    const handles = screen.getAllByRole("button", { name: /^Reorder choice/ });
+    expect(handles).toHaveLength(3);
+    // A BUTTON, not a div with a listener: that is what makes the keyboard
+    // sensor reachable at all (focus it, Space, arrows, Space).
+    for (const handle of handles) {
+      expect(handle.tagName).toBe("BUTTON");
+      expect(handle).toHaveAttribute("aria-roledescription", "sortable");
+    }
+    expect(screen.queryByRole("button", { name: /^Move (up|down)/ })).toBeNull();
+  });
+
+  it("moves a choice with the keyboard alone", async () => {
+    const onChange = vi.fn();
+    render(<McqEditor config={SECRET_CONFIG} onChange={onChange} />);
+    screen.getByRole("button", { name: "Reorder choice A" }).focus();
+    await userEvent.keyboard(" ");
+    await userEvent.keyboard("{ArrowDown}");
+    await userEvent.keyboard(" ");
+    await waitFor(() => expect(onChange).toHaveBeenCalled());
+    const next = onChange.mock.calls[0]?.[0];
+    expect(next.choices.map((c: { text: string }) => c.text)).toEqual([
+      "0x1004",
+      "0x1001",
+      "0x1008",
+    ]);
+  });
+
+  it("refuses to delete below the minimum", () => {
+    const two = multipleConfig({
+      choices: [
+        { text: "a", correct: true },
+        { text: "b", correct: false },
+      ],
+    });
+    const { unmount } = render(<McqEditor config={two} onChange={() => {}} />);
+    expect(screen.getByRole("button", { name: "Remove choice A" })).toBeDisabled();
+    unmount();
+    render(<McqEditor config={SECRET_CONFIG} onChange={() => {}} />);
+    expect(screen.getByRole("button", { name: "Remove choice A" })).toBeEnabled();
+  });
+
+  it("removes the choice the bin belongs to", async () => {
+    const onChange = vi.fn();
+    render(<McqEditor config={SECRET_CONFIG} onChange={onChange} />);
+    await userEvent.click(screen.getByRole("button", { name: "Remove choice B" }));
+    expect(onChange.mock.calls[0]?.[0].choices.map((c: { text: string }) => c.text)).toEqual([
+      "0x1001",
+      "0x1008",
+    ]);
   });
 });
 

@@ -1,0 +1,114 @@
+/*
+ * What the ProseMirror surface of `RichText.tsx` needs and Tailwind cannot
+ * express, for the same reason `.md-body` exists in `style.css`: these rules
+ * target elements the component never sees (ProseMirror builds them) or
+ * pseudo-elements whose content comes from an attribute.
+ *
+ * It is imported by `RichText.tsx` and therefore lands in the EDITOR chunk,
+ * never in the student player bundle. Every value is a token; there is no raw
+ * colour and no `dark:` variant here, the tokens swap by themselves.
+ */
+
+/* ProseMirror does not ship its base stylesheet, and these two lines are the
+   part of it an editing surface genuinely cannot work without: a run of
+   spaces must survive, and a long identifier must wrap instead of widening
+   the card. */
+.rt-surface {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* The focus ring belongs to the field chrome around the surface (inputClass),
+   not to the contenteditable: two rings, one inside the other, is a mistake
+   the browser makes for us. */
+.rt-surface:focus,
+.rt-surface:focus-visible {
+  outline: none;
+}
+
+/* ProseMirror inserts a 1×1 image to separate two adjacent block nodes. With
+   no stylesheet it renders as a broken-image glyph in the middle of the
+   prompt. */
+.rt-surface img.ProseMirror-separator {
+  display: inline !important;
+  border: none !important;
+  margin: 0 !important;
+  width: 1px !important;
+  height: 1px !important;
+}
+
+/* The placeholder of `@tiptap/extension-placeholder`, which puts the text in
+   `data-placeholder` and leaves the drawing to the host. `float` plus a zero
+   height is what keeps the caret at the start of the empty line. */
+.rt-surface p.is-editor-empty:first-child::before,
+.rt-surface p.is-empty.is-editor-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--fg-faint);
+}
+
+/* An atom the caret sits on: an image, a formula. The accent ring says which
+   one Backspace would remove. */
+.rt-surface .ProseMirror-selectednode {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+/* A formula is a single, atomic object in the flow of the sentence: it must
+   not look like text the caret can enter. */
+.rt-surface .tiptap-mathematics-render {
+  cursor: default;
+  padding: 0 2px;
+  border-radius: 4px;
+}
+.rt-surface .tiptap-mathematics-render--editable:hover {
+  background: var(--surface-3);
+}
+.rt-surface [data-type="block-math"] {
+  display: block;
+  margin: 12px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  text-align: center;
+}
+/* KaTeX could not parse it: show the source in the error colour rather than
+   an empty gap, exactly as `render.ts` does for the student. */
+.rt-surface .inline-math-error,
+.rt-surface .block-math-error {
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-size: 0.87em;
+}
+
+/* The gap cursor, for the position between two block nodes (under an image at
+   the end of the prompt, say) where there is no text to put a caret in. */
+.rt-surface .ProseMirror-gapcursor {
+  display: none;
+  pointer-events: none;
+  position: relative;
+}
+.rt-surface .ProseMirror-gapcursor::after {
+  content: "";
+  display: block;
+  position: absolute;
+  top: -2px;
+  width: 20px;
+  border-top: 1px solid var(--fg);
+  animation: rt-gapcursor 1.1s steps(2, start) infinite;
+}
+.rt-surface.ProseMirror-focused .ProseMirror-gapcursor {
+  display: block;
+}
+@keyframes rt-gapcursor {
+  to {
+    visibility: hidden;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rt-surface .ProseMirror-gapcursor::after {
+    animation: none;
+  }
+}

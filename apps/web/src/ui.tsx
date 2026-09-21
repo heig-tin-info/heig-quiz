@@ -1435,12 +1435,15 @@ export function PageHeader({
   eyebrow,
   title,
   description,
+  help,
   actions,
   className = "",
 }: {
   eyebrow?: ReactNode;
   title: ReactNode;
   description?: ReactNode;
+  /** Help topic (`src/help/<topic>.md`) opened by a "?" beside the title. */
+  help?: string;
   actions?: ReactNode;
   className?: string;
 }) {
@@ -1448,7 +1451,10 @@ export function PageHeader({
     <header className={cx("flex flex-wrap items-end justify-between gap-x-6 gap-y-3", className)}>
       <div className="min-w-0">
         {eyebrow ? <div className="mb-1.5 text-[13px] text-fg-muted">{eyebrow}</div> : null}
-        <h1 className="text-[28px] font-bold leading-tight tracking-[-0.02em]">{title}</h1>
+        <h1 className="flex items-center gap-2 text-[28px] font-bold leading-tight tracking-[-0.02em]">
+          <span className="min-w-0">{title}</span>
+          {help ? <HelpIcon topic={help} className="shrink-0 self-center" /> : null}
+        </h1>
         {description ? <div className="mt-1.5 text-sm text-fg-muted">{description}</div> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
@@ -1620,7 +1626,11 @@ export function Tabs<V extends string>({
         role="tablist"
         aria-label={label}
         onKeyDown={onKeyDown}
-        className="flex snap-x snap-proximity gap-1 overflow-x-auto"
+        // `overflow-y-hidden` on top of the horizontal scroll: the active tab
+        // hangs one pixel below the strip (`-mb-px`, so its indicator covers
+        // the hairline), and an `overflow-x-auto` strip alone answers that
+        // pixel with a vertical scrollbar on hosts that draw them.
+        className="flex snap-x snap-proximity gap-1 overflow-x-auto overflow-y-hidden"
         style={mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined}
       >
         {items.map((it, i) => {

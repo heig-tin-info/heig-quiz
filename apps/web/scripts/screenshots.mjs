@@ -59,18 +59,25 @@ const scenes = [
   { name: "teacher-home-error", role: "teacher", path: "/?fail=1", settle: 2500 },
   { name: "teacher-home-loading", role: "teacher", path: "/?slow=1", settle: 300 },
   { name: "teacher-home-many", role: "teacher", path: "/?many=1" },
+  // The same list as a table; the choice lives in localStorage.
+  { name: "teacher-home-list", role: "teacher", path: "/", ls: { "quiz-courses-view": "list" } },
+  { name: "teacher-home-list-many", role: "teacher", path: "/?many=1", ls: { "quiz-courses-view": "list" } },
+  { name: "course-link-pool", role: "teacher", path: "/", fold: true, act: (p) => p.getByRole("button", { name: /link a pool|lier une banque/i }).first().click() },
   { name: "course-new", role: "teacher", path: "/", act: (p) => p.getByRole("button", { name: /new course/i }).first().click() },
   { name: "classroom-new", role: "teacher", path: "/", act: (p) => p.getByRole("button", { name: /new classroom/i }).first().click() },
 
-  // Classroom (the roster)
+  // Classroom. Two tabs: the roster and the evaluations. Without `?tab=` the
+  // page opens on the evaluations, which is where the work is once the
+  // classroom has students, so every roster scene names its tab.
   { name: "classroom", role: "teacher", path: "/classrooms/r1" },
+  { name: "classroom-roster", role: "teacher", path: "/classrooms/r1?tab=roster" },
   { name: "classroom-empty", role: "teacher", path: "/classrooms/r1?empty=1", settle: 800 },
   { name: "classroom-error", role: "teacher", path: "/classrooms/r1?fail=1", settle: 2500 },
   { name: "classroom-loading", role: "teacher", path: "/classrooms/r1?slow=1", settle: 300 },
-  { name: "classroom-roster-many", role: "teacher", path: "/classrooms/r1?many=1" },
-  { name: "classroom-import", role: "teacher", path: "/classrooms/r1", act: (p) => p.getByRole("button", { name: /add students/i }).first().click() },
+  { name: "classroom-roster-many", role: "teacher", path: "/classrooms/r1?tab=roster&many=1" },
+  { name: "classroom-import", role: "teacher", path: "/classrooms/r1?tab=roster", act: (p) => p.getByRole("button", { name: /add students/i }).first().click() },
   { name: "classroom-menu", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /^actions$/i }).first().click() },
-  { name: "classroom-row-menu", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => openRowMenu(p, /^Actions for /) },
+  { name: "classroom-row-menu", role: "teacher", path: "/classrooms/r1?tab=roster", fold: true, act: (p) => openRowMenu(p, /^Actions for /) },
 
   // WP8: evaluation + dashboard. The mock addresses an evaluation by its
   // state as well as by its id, so these URLs are stable across reloads.
@@ -139,7 +146,16 @@ const scenes = [
       await p.getByLabel(/ptr-null-check/).first().check();
     } },
   { name: "pool-new-question", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("button", { name: /nouvelle question|new question/i }).first().click() },
-  { name: "pool-category-menu", role: "teacher", path: "/pools/p1", fold: true, act: (p) => openRowMenu(p, /^actions$/i) },
+  // The categories live in the frame's sidebar now, so on a phone they are
+  // inside the drawer: the scene opens it first when there is one.
+  { name: "pool-category-menu", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
+      const drawer = p.getByRole("button", { name: /open menu|ouvrir le menu/i });
+      if (await drawer.isVisible()) {
+        await drawer.click();
+        await p.waitForTimeout(400);
+      }
+      await openRowMenu(p, /^actions$/i);
+    } },
 
   { name: "editor-mcq", role: "teacher", path: "/questions/q2" },
   { name: "editor-code", role: "teacher", path: "/questions/q1", settle: 5000 },

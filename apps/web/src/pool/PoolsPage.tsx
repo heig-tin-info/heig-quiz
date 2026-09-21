@@ -112,6 +112,7 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
   return (
     <div className="space-y-6">
       <PageHeader
+        help="pools"
         title={t("pools.title")}
         description={t("pools.subtitle")}
         actions={

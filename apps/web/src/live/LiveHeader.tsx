@@ -67,6 +67,7 @@ export function LiveHeader({
       // every second (W6). They sit under it now, on the same line as each
       // other, where they are still the first thing the eye lands on.
       title={title}
+      help="live"
       description={
         <span className="flex flex-wrap items-center gap-3">
           <Badge tone={stateTone(state)}>{stateLabel(state, t)}</Badge>

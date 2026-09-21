@@ -119,12 +119,23 @@ export function useRoute(): [Route, (r: Route) => void] {
 }
 
 /**
- * One query-string parameter as state (tabs inside a page). Reading survives
- * a reload; writing replaces the entry so Back still leaves the page.
+ * Fired by `useSearchParam` right after it rewrote the query string.
+ * `history.replaceState` emits no `popstate`, so two hooks reading the same
+ * parameter — the sidebar's category tree and the pool page it drives — each
+ * kept their own copy and never saw the other's write. One event, dispatched
+ * on `window`, is what makes the query string the single source of truth.
+ */
+export const SEARCH_PARAM_EVENT = "quiz:searchparam";
+
+/**
+ * One query-string parameter as state (tabs inside a page, the selected
+ * category of a pool). Reading survives a reload; writing replaces the entry
+ * so Back still leaves the page.
  *
- * It still listens to `popstate`: Back and Forward move between pages that
- * carry a `?tab=` of their own, and without this the value stayed on whatever
- * the previous page had selected.
+ * It listens to `popstate` — Back and Forward move between pages that carry a
+ * `?tab=` of their own, and without this the value stayed on whatever the
+ * previous page had selected — and to `SEARCH_PARAM_EVENT`, so every instance
+ * on the screen re-reads the URL whenever any of them writes it.
  */
 export function useSearchParam(name: string, fallback: string): [string, (v: string) => void] {
   const read = useCallback(
@@ -133,9 +144,13 @@ export function useSearchParam(name: string, fallback: string): [string, (v: str
   );
   const [value, setValue] = useState(read);
   useEffect(() => {
-    const onPop = () => setValue(read());
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
+    const sync = () => setValue(read());
+    window.addEventListener("popstate", sync);
+    window.addEventListener(SEARCH_PARAM_EVENT, sync);
+    return () => {
+      window.removeEventListener("popstate", sync);
+      window.removeEventListener(SEARCH_PARAM_EVENT, sync);
+    };
   }, [read]);
   const set = useCallback(
     (v: string) => {
@@ -145,6 +160,8 @@ export function useSearchParam(name: string, fallback: string): [string, (v: str
       const q = params.toString();
       window.history.replaceState(null, "", window.location.pathname + (q ? `?${q}` : ""));
       setValue(v);
+      // After the URL changed, never before: a listener reads `location`.
+      window.dispatchEvent(new Event(SEARCH_PARAM_EVENT));
     },
     [name, fallback],
   );

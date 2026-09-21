@@ -16,9 +16,22 @@ describe("helpTopics", () => {
     const topics = helpTopics("en").map((t) => t.topic);
     expect(new Set(topics).size).toBe(topics.length);
     // The sources that exist today; a new one is expected to show up here.
-    expect(topics).toContain("roster");
-    expect(topics).toContain("import-roster");
-    expect(topics).toContain("student-home");
+    for (const expected of [
+      "roster",
+      "import-roster",
+      "student-home",
+      "courses",
+      "classroom",
+      "pools",
+      "pool",
+      "question-editor",
+      "evaluation",
+      "live",
+      "grading",
+      "results",
+    ]) {
+      expect(topics).toContain(expected);
+    }
   });
 
   it("reads the title from the first heading of the source", () => {
@@ -62,7 +75,7 @@ describe("helpTopics outside the teacher UI", () => {
 
   it("keeps the teacher documentation out of it", () => {
     const topics = helpTopics("en", false).map((t) => t.topic);
-    for (const teacherOnly of ["import-roster", "roster"]) {
+    for (const teacherOnly of ["import-roster", "roster", "grading", "live", "pool"]) {
       expect(topics).not.toContain(teacherOnly);
     }
   });

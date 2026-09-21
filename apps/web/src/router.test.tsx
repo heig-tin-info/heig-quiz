@@ -66,6 +66,22 @@ describe("useSearchParam", () => {
     expect(result.current[0]).toBe("assignments");
   });
 
+  it("keeps two instances of the same parameter in sync", () => {
+    // The sidebar's category tree and the pool page are two hooks on one
+    // screen. `replaceState` fires no `popstate`, so without the event the
+    // hook dispatches, the one that did not write stayed on its stale value.
+    goTo("/pools/p1");
+    const sidebar = renderHook(() => useSearchParam("category", ""));
+    const page = renderHook(() => useSearchParam("category", ""));
+    act(() => sidebar.result.current[1]("cat-2"));
+    expect(sidebar.result.current[0]).toBe("cat-2");
+    expect(page.result.current[0]).toBe("cat-2");
+    // And back the other way, down to the fallback that clears the parameter.
+    act(() => page.result.current[1](""));
+    expect(sidebar.result.current[0]).toBe("");
+    expect(window.location.search).toBe("");
+  });
+
   it("leaves the other parameters of the URL alone", () => {
     goTo("/classrooms/c1?tab=staff&q=rochat");
     const { result } = renderHook(() => useSearchParam("tab", "assignments"));

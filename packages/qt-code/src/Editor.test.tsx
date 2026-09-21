@@ -130,15 +130,26 @@ describe("CodeEditor", () => {
     expect(screen.getByLabelText("Énoncé")).toBeInTheDocument();
   });
 
-  it("previews the statement through the host's markdown renderer", () => {
+  it("writes the statement in the host's rich editor when it lends one", () => {
     const { config } = setup({
-      renderMarkdown: (source) => <em data-testid="md">{source}</em>,
+      RichText: ({ value, "aria-label": label }) => (
+        <div data-testid="rich" aria-label={label}>
+          {value}
+        </div>
+      ),
     });
-    expect(screen.getByTestId("md")).toHaveTextContent(config.prompt);
+    expect(screen.getByTestId("rich")).toHaveTextContent(config.prompt);
+    expect(screen.getByTestId("rich")).toHaveAccessibleName("Statement");
   });
 
-  it("draws no preview when the host passes no renderer", () => {
-    setup();
+  it("falls back to its own textarea when the host lends none", () => {
+    const { config } = setup();
+    expect(screen.queryByTestId("rich")).toBeNull();
+    expect(screen.getByLabelText("Statement")).toHaveValue(config.prompt);
+  });
+
+  it("draws no preview under the statement: the field is the preview", () => {
+    setup({ renderMarkdown: (source) => <em data-testid="md">{source}</em> });
     expect(screen.queryByTestId("md")).toBeNull();
   });
 });

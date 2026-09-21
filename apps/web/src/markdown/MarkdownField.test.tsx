@@ -9,7 +9,26 @@ import { MarkdownField } from "./MarkdownField";
 /*
  * The field is controlled, so every test drives it through a tiny stateful
  * host: what is asserted is what the parent would have been told to store.
+ *
+ * There are two panes now. "Write" is the Tiptap surface, which has its own
+ * suite in RichText.test.tsx; what is tested HERE is the field around it —
+ * the pane switch and the Source pane, whose textarea and caret-level toolbar
+ * are exactly what they were before Tiptap landed. So most tests below open
+ * Source first, and `area()` is the textarea of that pane.
  */
+
+/*
+ * jsdom implements `Range` but none of its layout methods, and ProseMirror
+ * calls `getClientRects` while mapping the document to coordinates. The stubs
+ * live here and not in `src/test/setup.ts`: they are this editor's need, and a
+ * global stub would hide a real layout call in every other component test.
+ */
+if (typeof Range !== "undefined") {
+  Range.prototype.getClientRects = () =>
+    ({ length: 0, item: () => null, [Symbol.iterator]: function* () {} }) as unknown as DOMRectList;
+  Range.prototype.getBoundingClientRect = () => new DOMRect();
+}
+document.elementFromPoint ??= () => null;
 function Host({
   initial = "",
   onUploadImage,
@@ -35,6 +54,11 @@ function Host({
 
 const area = () => screen.getByRole("textbox", { name: "Prompt" }) as HTMLTextAreaElement;
 
+/** Switches to the Source pane, where the textarea and insert.ts live. */
+async function openSource() {
+  await userEvent.click(screen.getByRole("radio", { name: "Source" }));
+}
+
 /** Puts the caret (or a selection) where a test needs it. */
 function select(start: number, end = start) {
   const el = area();
@@ -42,9 +66,10 @@ function select(start: number, end = start) {
   el.setSelectionRange(start, end);
 }
 
-describe("MarkdownField — toolbar", () => {
+describe("MarkdownField — Source pane toolbar", () => {
   it("wraps the selection in bold and keeps it selected", async () => {
     renderWithProviders(<Host initial="Soit p un pointeur" />);
+    await openSource();
     select(5, 6);
     await userEvent.click(screen.getByRole("button", { name: /^Bold/ }));
     expect(area()).toHaveValue("Soit **p** un pointeur");
@@ -54,12 +79,14 @@ describe("MarkdownField — toolbar", () => {
 
   it("inserts a placeholder when nothing is selected", async () => {
     renderWithProviders(<Host initial="" />);
+    await openSource();
     await userEvent.click(screen.getByRole("button", { name: /^Italic/ }));
     expect(area()).toHaveValue("*italic text*");
   });
 
   it("wraps a single line in backticks and a multi-line selection in a fence", async () => {
     renderWithProviders(<Host initial="int n" />);
+    await openSource();
     select(0, 5);
     await userEvent.click(screen.getByRole("button", { name: "Code" }));
     expect(area()).toHaveValue("`int n`");
@@ -67,6 +94,7 @@ describe("MarkdownField — toolbar", () => {
 
   it("inserts a fenced block over a multi-line selection", async () => {
     renderWithProviders(<Host initial={"int a;\nint b;"} />);
+    await openSource();
     select(0, 13);
     await userEvent.click(screen.getByRole("button", { name: "Code" }));
     expect(area()).toHaveValue("```c\nint a;\nint b;\n```");
@@ -74,27 +102,31 @@ describe("MarkdownField — toolbar", () => {
 
   it("inserts inline math", async () => {
     renderWithProviders(<Host initial="" />);
+    await openSource();
     await userEvent.click(screen.getByRole("button", { name: "Equation" }));
     expect(area()).toHaveValue("$x^2$");
   });
 
   it("inserts a link and leaves the caret inside the URL", async () => {
     renderWithProviders(<Host initial="see here" />);
+    await openSource();
     select(4, 8);
     await userEvent.click(screen.getByRole("button", { name: "Link" }));
     expect(area()).toHaveValue("see [here](https://)");
     await waitFor(() => expect(area().selectionStart).toBe(19));
   });
 
-  it("hides the image button when no upload handler was given", () => {
+  it("hides the image button when no upload handler was given", async () => {
     renderWithProviders(<Host initial="" />);
+    await openSource();
     expect(screen.queryByRole("button", { name: /image/i })).toBeNull();
   });
 });
 
-describe("MarkdownField — keyboard", () => {
+describe("MarkdownField — Source pane keyboard", () => {
   it("Ctrl+B and Ctrl+I apply emphasis", async () => {
     renderWithProviders(<Host initial="abc" />);
+    await openSource();
     select(0, 3);
     await userEvent.keyboard("{Control>}b{/Control}");
     expect(area()).toHaveValue("**abc**");
@@ -105,6 +137,7 @@ describe("MarkdownField — keyboard", () => {
 
   it("Tab inserts two spaces instead of leaving the field", async () => {
     renderWithProviders(<Host initial="" />);
+    await openSource();
     select(0);
     await userEvent.keyboard("{Tab}");
     expect(area()).toHaveValue("  ");
@@ -113,18 +146,20 @@ describe("MarkdownField — keyboard", () => {
 
   it("Shift+Tab outdents the lines of the selection", async () => {
     renderWithProviders(<Host initial={"  - a\n  - b"} />);
+    await openSource();
     select(0, 11);
     await userEvent.keyboard("{Shift>}{Tab}{/Shift}");
     expect(area()).toHaveValue("- a\n- b");
   });
 });
 
-describe("MarkdownField — images", () => {
+describe("MarkdownField — Source pane images", () => {
   const png = () => new File(["x"], "schema.png", { type: "image/png" });
 
   it("uploads a pasted image and inserts its asset reference", async () => {
     const onUploadImage = vi.fn(async () => ({ id: "a1b2" }));
     renderWithProviders(<Host initial="Text" onUploadImage={onUploadImage} />);
+    await openSource();
     select(4);
     fireEvent.paste(area(), { clipboardData: { files: [png()], items: [], getData: () => "" } });
     await waitFor(() => expect(onUploadImage).toHaveBeenCalledTimes(1));
@@ -134,6 +169,7 @@ describe("MarkdownField — images", () => {
   it("uploads a dropped image too", async () => {
     const onUploadImage = vi.fn(async () => ({ id: "c3" }));
     renderWithProviders(<Host initial="" onUploadImage={onUploadImage} />);
+    await openSource();
     fireEvent.drop(area(), { dataTransfer: { files: [png()], items: [], types: ["Files"] } });
     await waitFor(() => expect(area()).toHaveValue("![schema](asset:c3)"));
   });
@@ -141,6 +177,7 @@ describe("MarkdownField — images", () => {
   it("ignores a pasted file that is not an image", async () => {
     const onUploadImage = vi.fn(async () => ({ id: "nope" }));
     renderWithProviders(<Host initial="" onUploadImage={onUploadImage} />);
+    await openSource();
     const pdf = new File(["x"], "notes.pdf", { type: "application/pdf" });
     fireEvent.paste(area(), { clipboardData: { files: [pdf], items: [], getData: () => "" } });
     await new Promise((r) => setTimeout(r, 10));
@@ -149,34 +186,64 @@ describe("MarkdownField — images", () => {
 });
 
 describe("MarkdownField — panes", () => {
-  it("offers the three panes, Write first", () => {
+  it("offers two panes, Write first; there is no Preview any more", () => {
     renderWithProviders(<Host initial="x" />);
-    for (const name of ["Write", "Preview", "Source"]) {
-      expect(screen.getByRole("radio", { name })).toBeInTheDocument();
-    }
     expect(screen.getByRole("radio", { name: "Write" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "Source" })).toBeInTheDocument();
+    // The Write pane IS the preview: a third pane showing the same thing is a
+    // button nobody presses.
+    expect(screen.queryByRole("radio", { name: "Preview" })).toBeNull();
   });
 
-  it("Preview renders the markdown and hides the textarea", async () => {
+  it("Write renders the markdown as nodes, not as characters", () => {
     renderWithProviders(<Host initial="**bold** and `code`" />);
-    await userEvent.click(screen.getByRole("radio", { name: "Preview" }));
-    expect(screen.queryByRole("textbox", { name: "Prompt" })).toBeNull();
     expect(screen.getByText("bold").tagName).toBe("STRONG");
     expect(screen.getByText("code").tagName).toBe("CODE");
   });
 
-  it("Source shows the same textarea without the toolbar, ready for Tiptap to take Write", async () => {
+  it("Write is a rich surface and carries no textarea", () => {
     renderWithProviders(<Host initial="x" />);
+    const box = screen.getByRole("textbox", { name: "Prompt" });
+    expect(box.tagName).not.toBe("TEXTAREA");
+    expect(box).toHaveAttribute("contenteditable", "true");
+  });
+
+  it("Source shows the very same string in a textarea, with its own toolbar", async () => {
+    renderWithProviders(<Host initial="**bold** and `code`" />);
+    await openSource();
+    expect(area().tagName).toBe("TEXTAREA");
+    expect(area()).toHaveValue("**bold** and `code`");
     expect(screen.getByRole("toolbar", { name: "Formatting" })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("radio", { name: "Source" }));
-    expect(area()).toHaveValue("x");
-    expect(screen.queryByRole("toolbar")).toBeNull();
+  });
+
+  it("carries an edit made in Source back into Write", async () => {
+    renderWithProviders(<Host initial="plain" />);
+    await openSource();
+    await userEvent.clear(area());
+    await userEvent.type(area(), "**loud**");
+    await userEvent.click(screen.getByRole("radio", { name: "Write" }));
+    expect(screen.getByText("loud").tagName).toBe("STRONG");
   });
 
   it("shows the French labels under the French locale (N-I18N-01)", () => {
     renderWithProviders(<Host initial="" />, { locale: "fr" });
     expect(screen.getByRole("radio", { name: "Écrire" })).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "Aperçu" })).toBeInTheDocument();
     expect(screen.getByRole("radio", { name: "Source" })).toBeInTheDocument();
+  });
+});
+
+describe("MarkdownField — the Write pane uploads images too", () => {
+  it("inserts the asset reference the upload returned", async () => {
+    const onUploadImage = vi.fn(async () => ({ id: "w1" }));
+    const onValue = vi.fn();
+    const { container } = renderWithProviders(
+      <Host initial="Text" onUploadImage={onUploadImage} onValue={onValue} />,
+    );
+    const input = container.querySelector("input[type=file]") as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { files: [new File(["x"], "schema.png", { type: "image/png" })] },
+    });
+    await waitFor(() => expect(onUploadImage).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(onValue.mock.lastCall?.[0]).toContain("![schema](asset:w1)"));
   });
 });

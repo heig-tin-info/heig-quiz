@@ -15,7 +15,59 @@ export interface EditorProps<TConfig> {
   /** Uploads an image and returns `asset:<uuid>` for the markdown. */
   uploadAsset: (file: File) => Promise<string>;
   disabled?: boolean;
+  /**
+   * The host's WYSIWYG markdown editor (`apps/web/src/markdown/RichText.tsx`),
+   * injected exactly as `renderMarkdown` is and for the same reason: a `qt-*`
+   * package cannot depend on `apps/web`, and the editor carries Tiptap,
+   * ProseMirror and KaTeX — a dependency four leaf packages have no business
+   * declaring four times.
+   *
+   * Absent, an editor falls back to its plain textarea or input. That is not a
+   * degraded mode to be removed later: it is what keeps the package's own test
+   * suite free of a DOM-heavy editor, and what a host with no Tiptap build
+   * gets. The stored value is markdown either way (docs/spec/05 §5.10).
+   */
+  RichText?: RichTextComponent;
 }
+
+/**
+ * The props of the host's rich-text editor. Its interface is a MARKDOWN
+ * STRING in and a markdown string out: the WYSIWYG surface is a rendering of
+ * the stored value, never a second source of truth.
+ */
+export interface RichTextProps {
+  /** Markdown. The editor parses it once and re-parses it when it changes underneath. */
+  value: string;
+  /** Called only when the serialized markdown actually differs from `value`. */
+  onChange: (markdown: string) => void;
+  /**
+   * One paragraph, no block nodes: a choice of an mcq, a cell of a table.
+   * Enter does not split the paragraph, it calls `onEnter`.
+   */
+  inline?: boolean;
+  placeholder?: string;
+  /** Accessible name of the editing surface. */
+  "aria-label"?: string;
+  /** Set on the contenteditable element itself, so a host can focus it by id. */
+  id?: string;
+  disabled?: boolean;
+  autoFocus?: boolean;
+  className?: string;
+  /** `inline` only: Enter, which a list of choices uses to reach the next row. */
+  onEnter?: () => void;
+  /** Tab inside the surface. Return true when handled; false lets focus leave. */
+  onTab?: (shift: boolean) => boolean;
+  /**
+   * Uploads a pasted, dropped or picked image and returns `asset:<id>`. The
+   * image affordances are hidden when it is absent: a button that cannot work
+   * is worse than one that is not there.
+   */
+  uploadImage?: (file: File) => Promise<string>;
+  /** Default true. The inline choice editors hide it; Ctrl+B / Ctrl+I still work. */
+  toolbar?: boolean;
+}
+
+export type RichTextComponent = ComponentType<RichTextProps>;
 
 export interface PlayerProps<TStudent, TAnswer> {
   student: TStudent;

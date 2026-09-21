@@ -1,12 +1,25 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FolderTree, Library, Link2, Plus, School, Trash2, Unlink, UserPlus, Users } from "lucide-react";
-import { useState } from "react";
+import {
+  FolderTree,
+  LayoutGrid,
+  Library,
+  Link2,
+  List,
+  Plus,
+  School,
+  Trash2,
+  Unlink,
+  UserPlus,
+  Users,
+} from "lucide-react";
+import { useState, type ReactNode } from "react";
 
 import type { CourseDetail, CourseSummary, PoolSummary } from "@quiz/contracts";
 
 import { api, apiErrorMessage } from "./api";
 import { useConfirm } from "./confirm";
 import { useT } from "./i18n";
+import { useToast } from "./notify";
 import type { Route } from "./router";
 import {
   Button,
@@ -15,13 +28,15 @@ import {
   Field,
   Initials,
   Menu,
+  type MenuItem,
   Modal,
   PageHeader,
-  Select,
   QueryError,
   SectionHeading,
+  Segmented,
   Skeleton,
   Spinner,
+  T,
 } from "./ui";
 
 /**
@@ -30,7 +45,30 @@ import {
  * The ONE primary action of this page is "New course"; everything a course
  * card offers (a classroom, a colleague, deletion) is secondary, because a
  * teacher arriving here with nothing must be shown one door, not five.
+ *
+ * Two readings of the same list: cards, which give each course room for its
+ * classrooms and its pools, and a table, which answers "which classroom, in
+ * which course" in one scan once a teacher has a dozen of them. The choice is
+ * the reader's and is remembered, because it is a habit and not a state of
+ * the data.
  */
+
+type CoursesView = "cards" | "list";
+
+const VIEW_KEY = "quiz-courses-view";
+
+function useCoursesView(): [CoursesView, (v: CoursesView) => void] {
+  const [view, setView] = useState<CoursesView>(() =>
+    localStorage.getItem(VIEW_KEY) === "list" ? "list" : "cards",
+  );
+  return [
+    view,
+    (v) => {
+      localStorage.setItem(VIEW_KEY, v);
+      setView(v);
+    },
+  ];
+}
 
 function NewCourseModal({ onClose }: { onClose: () => void }) {
   const t = useT();
@@ -219,8 +257,7 @@ function CoursePools({
   const t = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
-  const [linking, setLinking] = useState(false);
-  const [poolId, setPoolId] = useState("");
+  const toast = useToast();
 
   const detail = useQuery<CourseDetail>({
     queryKey: ["course", course.id],
@@ -241,10 +278,11 @@ function CoursePools({
         body: JSON.stringify({ poolIds }),
       }),
     onSuccess: async () => {
-      setLinking(false);
-      setPoolId("");
       await qc.invalidateQueries({ queryKey: ["course", course.id] });
     },
+    // The menu is closed by the time the call answers, so the failure has
+    // nowhere to render but a toast (DESIGN.md › Menu).
+    onError: (error) => toast(apiErrorMessage(error, t("pools.linkSaveFailed")), "error"),
   });
 
   const unlink = async (pool: { id: string; name: string }) => {
@@ -263,9 +301,28 @@ function CoursePools({
         <span className="text-[11px] font-semibold uppercase tracking-wider text-fg-faint">
           {t("pools.link")}
         </span>
-        <Button size="sm" variant="ghost" className="ml-auto" onClick={() => setLinking(true)}>
-          <Link2 /> {t("pools.linkAction")}
-        </Button>
+        {/* One click, no dialog: linking a pool is picking a name out of a
+            short list, and a modal with a select and two buttons was three
+            interactions for one decision. */}
+        <div className="ml-auto">
+          <Menu
+            label={t("pools.linkAction")}
+            trigger={
+              <Button size="sm" variant="ghost">
+                <Link2 /> {t("pools.linkAction")}
+              </Button>
+            }
+            items={
+              available.length > 0
+                ? available.map((pool) => ({
+                    label: pool.name,
+                    icon: FolderTree,
+                    onSelect: () => setLinks.mutate([...linked.map((l) => l.id), pool.id]),
+                  }))
+                : [{ label: t("pools.linkEmpty"), disabled: true }]
+            }
+          />
+        </div>
       </div>
       {detail.isLoading ? (
         <Skeleton className="mt-2 h-6 w-48" />
@@ -299,57 +356,21 @@ function CoursePools({
         </ul>
       )}
 
-      {linking ? (
-        <Modal
-          title={t("pools.linkAction")}
-          onClose={() => setLinking(false)}
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => setLinking(false)}>
-                {t("common.cancel")}
-              </Button>
-              <Button
-                loading={setLinks.isPending}
-                disabled={poolId === ""}
-                onClick={() => setLinks.mutate([...linked.map((l) => l.id), poolId])}
-              >
-                {t("pools.linkAction")}
-              </Button>
-            </>
-          }
-        >
-          <div className="space-y-3">
-            <Select
-              label={t("pools.linkPick")}
-              value={poolId}
-              onChange={(e) => setPoolId(e.target.value)}
-            >
-              <option value="">—</option>
-              {available.map((pool) => (
-                <option key={pool.id} value={pool.id}>
-                  {pool.name}
-                </option>
-              ))}
-            </Select>
-            {setLinks.isError ? (
-              <p className="text-[13px] text-danger">
-                {apiErrorMessage(setLinks.error, t("pools.linkSaveFailed"))}
-              </p>
-            ) : null}
-          </div>
-        </Modal>
-      ) : null}
     </div>
   );
 }
 
-function CourseCard({
-  course,
-  navigate,
-}: {
-  course: CourseSummary;
-  navigate: (r: Route) => void;
-}) {
+/**
+ * What a course offers beyond being opened: a classroom, a colleague, its own
+ * deletion. The card and the table row of the list view share this ONE copy,
+ * so the two readings of the same list cannot offer different things; the
+ * hook owns the two dialogs those items open as well.
+ */
+function useCourseActions(course: CourseSummary): {
+  items: MenuItem[];
+  newClassroom: () => void;
+  dialogs: ReactNode;
+} {
   const t = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
@@ -366,6 +387,93 @@ function CourseCard({
     onSuccess: invalidate,
   });
 
+  return {
+    newClassroom: () => setNewRoom(true),
+    items: [
+      {
+        label: t("courses.staffAdd"),
+        icon: UserPlus,
+        onSelect: () => setNewStaff(true),
+      },
+      ...course.staff.map((s) => ({
+        label: t("courses.staffRemove") + ` — ${s.givenName} ${s.familyName}`,
+        icon: Users,
+        onSelect: async () => {
+          if (
+            await confirm({
+              title: t("courses.staffRemoveConfirm", {
+                name: `${s.givenName} ${s.familyName}`,
+                course: course.name,
+              }),
+              confirmLabel: t("courses.staffRemove"),
+              cancelLabel: t("common.cancel"),
+            })
+          ) {
+            removeStaff.mutate(s.userId);
+          }
+        },
+      })),
+      {
+        label: t("courses.delete"),
+        icon: Trash2,
+        danger: true,
+        separator: true,
+        onSelect: async () => {
+          if (
+            await confirm({
+              title: t("courses.deleteConfirm", { name: course.name }),
+              confirmLabel: t("common.delete"),
+              cancelLabel: t("common.cancel"),
+              danger: true,
+            })
+          ) {
+            removeCourse.mutate();
+          }
+        },
+      },
+    ],
+    dialogs: (
+      <>
+        {newRoom ? <NewClassroomModal course={course} onClose={() => setNewRoom(false)} /> : null}
+        {newStaff ? <AddStaffModal course={course} onClose={() => setNewStaff(false)} /> : null}
+      </>
+    ),
+  };
+}
+
+/** The staff of a course as a row of avatars, the same in both views. */
+function StaffAvatars({ course }: { course: CourseSummary }) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      {course.staff.map((s) =>
+        s.avatarUrl ? (
+          <img
+            key={s.userId}
+            src={s.avatarUrl}
+            alt={`${s.givenName} ${s.familyName}`}
+            title={`${s.givenName} ${s.familyName}`}
+            className="size-6 rounded-full object-cover"
+          />
+        ) : (
+          <span key={s.userId} title={`${s.givenName} ${s.familyName}`}>
+            <Initials name={[s.givenName, s.familyName]} className="size-6 text-[10px]" />
+          </span>
+        ),
+      )}
+    </div>
+  );
+}
+
+function CourseCard({
+  course,
+  navigate,
+}: {
+  course: CourseSummary;
+  navigate: (r: Route) => void;
+}) {
+  const t = useT();
+  const { items, newClassroom, dialogs } = useCourseActions(course);
+
   return (
     <Card className="p-5">
       <SectionHeading
@@ -378,55 +486,10 @@ function CourseCard({
         }
         actions={
           <>
-            <Button size="sm" variant="secondary" onClick={() => setNewRoom(true)}>
+            <Button size="sm" variant="secondary" onClick={newClassroom}>
               <Plus /> {t("classrooms.new")}
             </Button>
-            <Menu
-              label={t("common.actions")}
-              items={[
-                {
-                  label: t("courses.staffAdd"),
-                  icon: UserPlus,
-                  onSelect: () => setNewStaff(true),
-                },
-                ...course.staff.map((s) => ({
-                  label: t("courses.staffRemove") + ` — ${s.givenName} ${s.familyName}`,
-                  icon: Users,
-                  onSelect: async () => {
-                    if (
-                      await confirm({
-                        title: t("courses.staffRemoveConfirm", {
-                          name: `${s.givenName} ${s.familyName}`,
-                          course: course.name,
-                        }),
-                        confirmLabel: t("courses.staffRemove"),
-                        cancelLabel: t("common.cancel"),
-                      })
-                    ) {
-                      removeStaff.mutate(s.userId);
-                    }
-                  },
-                })),
-                {
-                  label: t("courses.delete"),
-                  icon: Trash2,
-                  danger: true,
-                  separator: true,
-                  onSelect: async () => {
-                    if (
-                      await confirm({
-                        title: t("courses.deleteConfirm", { name: course.name }),
-                        confirmLabel: t("common.delete"),
-                        cancelLabel: t("common.cancel"),
-                        danger: true,
-                      })
-                    ) {
-                      removeCourse.mutate();
-                    }
-                  },
-                },
-              ]}
-            />
+            <Menu label={t("common.actions")} items={items} />
           </>
         }
       />
@@ -462,40 +525,96 @@ function CourseCard({
           <span className="text-[11px] font-semibold uppercase tracking-wider text-fg-faint">
             {t("courses.staff")}
           </span>
-          <div className="flex flex-wrap items-center gap-2">
-            {course.staff.map((s) =>
-              s.avatarUrl ? (
-                <img
-                  key={s.userId}
-                  src={s.avatarUrl}
-                  alt={`${s.givenName} ${s.familyName}`}
-                  title={`${s.givenName} ${s.familyName}`}
-                  className="size-6 rounded-full object-cover"
-                />
-              ) : (
-                <span key={s.userId} title={`${s.givenName} ${s.familyName}`}>
-                  <Initials name={[s.givenName, s.familyName]} className="size-6 text-[10px]" />
-                </span>
-              ),
-            )}
-          </div>
+          <StaffAvatars course={course} />
         </div>
       ) : null}
 
       <CoursePools course={course} navigate={navigate} />
 
-      {newRoom ? <NewClassroomModal course={course} onClose={() => setNewRoom(false)} /> : null}
-      {newStaff ? <AddStaffModal course={course} onClose={() => setNewStaff(false)} /> : null}
+      {dialogs}
     </Card>
+  );
+}
+
+/**
+ * One course as a table row: its identity, the classrooms it holds — each a
+ * link, because that is what a teacher came for — and its staff. The pools of
+ * a course are a card affair; the table answers "which classroom, where".
+ */
+function CourseRow({
+  course,
+  navigate,
+}: {
+  course: CourseSummary;
+  navigate: (r: Route) => void;
+}) {
+  const t = useT();
+  const { items, dialogs } = useCourseActions(course);
+  return (
+    <tr className={T.row}>
+      <td className={T.td}>
+        <span className="flex flex-wrap items-baseline gap-2">
+          <span className="font-semibold">{course.name}</span>
+          <span className="text-xs text-fg-faint">{course.code}</span>
+        </span>
+      </td>
+      <td className={T.td}>
+        {course.classrooms.length === 0 ? (
+          <span className="text-fg-faint">—</span>
+        ) : (
+          <span className="flex flex-wrap items-center gap-x-1 gap-y-1">
+            {course.classrooms.map((room) => (
+              <button
+                key={room.id}
+                type="button"
+                onClick={() => navigate({ view: "classroom", id: room.id })}
+                className="rounded-[10px] px-1.5 py-0.5 font-medium transition-colors hover:bg-surface-2 hover:underline"
+              >
+                <School className="mr-1 inline size-3.5 text-fg-faint" />
+                {room.name}
+              </button>
+            ))}
+          </span>
+        )}
+      </td>
+      <td className={T.td}>
+        {course.staff.length === 0 ? (
+          <span className="text-fg-faint">—</span>
+        ) : (
+          <StaffAvatars course={course} />
+        )}
+      </td>
+      <td className={`${T.td} w-10 text-right`}>
+        <Menu label={t("common.actions")} items={items} />
+        {dialogs}
+      </td>
+    </tr>
   );
 }
 
 export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
   const t = useT();
   const [creating, setCreating] = useState(false);
+  const [view, setView] = useCoursesView();
   const courses = useQuery<CourseSummary[]>({
     queryKey: ["courses"],
     queryFn: () => api("/app/api/courses"),
+  });
+  const rows = courses.data ?? [];
+
+  /**
+   * Two icons and no words: the choice is between two pictures of the same
+   * list, and a pair of labels beside them would weigh more than the switch
+   * itself. The name stays, for the pointer and for the screen reader.
+   */
+  const viewOption = (value: "cards" | "list", icon: ReactNode, label: string) => ({
+    value,
+    label: (
+      <span title={label} className="flex items-center">
+        {icon}
+        <span className="sr-only">{label}</span>
+      </span>
+    ),
   });
 
   return (
@@ -503,18 +622,35 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
       <PageHeader
         title={t("courses.title")}
         description={t("courses.subtitle")}
+        help="courses"
         actions={
           // Not while the list is empty: the empty state below carries the
           // same action, and two accent fills of the SAME action on one
           // screen is noise, not emphasis (W19). One button, in the place
           // the reader is already looking.
-          (courses.data ?? []).length > 0 ? (
+          rows.length > 0 ? (
             <Button onClick={() => setCreating(true)}>
               <Plus /> {t("courses.new")}
             </Button>
           ) : undefined
         }
       />
+
+      {/* Under the header and hard right: it changes how the list below is
+          drawn, so it belongs to the list, not to the title. */}
+      {rows.length > 0 && !courses.isError ? (
+        <div className="flex justify-end">
+          <Segmented
+            name="courses-view"
+            value={view}
+            onChange={setView}
+            options={[
+              viewOption("cards", <LayoutGrid className="size-4" />, t("view.cards")),
+              viewOption("list", <List className="size-4" />, t("view.list")),
+            ]}
+          />
+        </div>
+      ) : null}
 
       {courses.isLoading ? (
         <div className="space-y-3">
@@ -529,7 +665,7 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
           retrying={courses.isFetching}
           fallback={t("error.server")}
         />
-      ) : (courses.data ?? []).length === 0 ? (
+      ) : rows.length === 0 ? (
         <EmptyState
           icon={Library}
           title={t("courses.empty.title")}
@@ -541,9 +677,29 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
         >
           {t("courses.empty.body")}
         </EmptyState>
+      ) : view === "list" ? (
+        <Card className="overflow-hidden">
+          <table className={T.table}>
+            <thead className={T.head}>
+              <tr>
+                <th className={T.th}>{t("courses.name")}</th>
+                <th className={T.th}>{t("classrooms.title")}</th>
+                <th className={T.th}>{t("courses.staff")}</th>
+                <th className={`${T.th} w-10`}>
+                  <span className="sr-only">{t("common.actions")}</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((c) => (
+                <CourseRow key={c.id} course={c} navigate={navigate} />
+              ))}
+            </tbody>
+          </table>
+        </Card>
       ) : (
         <div className="space-y-4">
-          {courses.data!.map((c) => (
+          {rows.map((c) => (
             <CourseCard key={c.id} course={c} navigate={navigate} />
           ))}
         </div>

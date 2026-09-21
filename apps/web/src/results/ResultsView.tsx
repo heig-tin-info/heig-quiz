@@ -174,6 +174,7 @@ export function ResultsView({
           )
         }
         title={t("results.title")}
+        help="results"
         description={
           view.released && view.releasedAt
             ? t("results.released", { date: isoDateTime(view.releasedAt) })

@@ -1,23 +1,29 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, FolderPlus, Layers, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
-import type { CategoryNode } from "@quiz/contracts";
+import type { CategoryNode, PoolDetail } from "@quiz/contracts";
 
 import { api, apiErrorMessage } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { Button, cx, Field, Menu, Modal } from "../ui";
+import { useSearchParam } from "../router";
+import { Button, cx, Field, Menu, Modal, Skeleton } from "../ui";
 
 /**
- * The categories of a pool, on the left of the pool screen (mockup
- * `08-pool.html`): a folder tree that selects, creates, renames, reorders and
- * deletes, and nothing more — the questions themselves live in the table.
+ * The categories of a pool. They live in the application SIDEBAR, under the
+ * "Question pools" entry, while a pool is being read: a folder tree that
+ * selects, creates, renames, reorders and deletes, and nothing more — the
+ * questions themselves live in the table of the pool screen.
  *
  * Selection is the ONE thing a click does; every edit sits in the row's
  * overflow menu, because three icon buttons per row would make the tree read
  * as a toolbar (DESIGN.md › action tiers).
+ *
+ * The selected category is the `?category=` search parameter, not a state of
+ * either component: the sidebar writes it and the pool page reads it, and
+ * `useSearchParam` keeps every instance on the screen in sync.
  */
 
 /** Flattens the sibling list of a node, for a move that renumbers positions. */
@@ -144,7 +150,13 @@ function CategoryRow({
   );
 }
 
-export function CategoryTree({
+/**
+ * The list itself: the "all questions" row, the tree, the "new category" row
+ * and the one dialog that creates and renames. Every mutation lives here, so
+ * the sidebar and any other surface that shows the tree share one copy of the
+ * rules rather than two that can disagree.
+ */
+function CategoryList({
   poolId,
   categories,
   selected,
@@ -232,10 +244,7 @@ export function CategoryTree({
   };
 
   return (
-    <nav aria-label={t("pool.categories")} className="w-full lg:w-56 lg:shrink-0">
-      <p className="mb-1.5 px-2 text-[11px] font-semibold uppercase tracking-wider text-fg-faint">
-        {t("pool.categories")}
-      </p>
+    <>
       <ul className="space-y-0.5">
         <li>
           <button
@@ -312,6 +321,61 @@ export function CategoryTree({
           />
         </Modal>
       ) : null}
-    </nav>
+    </>
+  );
+}
+
+/**
+ * The pool being read, at the head of its own tree. It names where the reader
+ * is and is not a target, so it carries the WEIGHT of the current page
+ * without its accent: the one `accent-soft` chip of this column belongs to
+ * the selected category, or the whole list reads as two selections at once.
+ */
+function SidebarPool({ label }: { label: ReactNode }) {
+  return (
+    <div
+      aria-current="page"
+      className="flex w-full items-center gap-2 rounded-[10px] px-2.5 py-1.5 text-[13px] font-semibold text-fg"
+    >
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+    </div>
+  );
+}
+
+/**
+ * The tree inside the application sidebar, under "Question pools", while a
+ * pool is being read. It reads the pool on the SAME query key the pool page
+ * uses, so react-query serves both from one request, and it writes the
+ * selection to `?category=`, which is what the page reads back.
+ */
+export function SidebarCategories({ poolId }: { poolId: string }) {
+  const t = useT();
+  const [category, setCategory] = useSearchParam("category", "");
+  const detail = useQuery<PoolDetail>({
+    queryKey: ["pool", poolId],
+    queryFn: () => api(`/app/api/pools/${poolId}`),
+  });
+
+  return (
+    <div className="ml-3 space-y-0.5 border-l border-line pl-1.5">
+      <SidebarPool
+        label={detail.data ? detail.data.pool.name : <Skeleton className="h-4 w-24" />}
+      />
+      {detail.isLoading ? (
+        <div className="space-y-1 px-2.5 py-1.5">
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="h-4 w-20" />
+        </div>
+      ) : detail.isError || !detail.data ? (
+        <p className="px-2.5 py-1.5 text-[13px] text-fg-muted">{t("pools.notFound")}</p>
+      ) : (
+        <CategoryList
+          poolId={poolId}
+          categories={detail.data.categories}
+          selected={category === "" ? null : category}
+          onSelect={(id) => setCategory(id ?? "")}
+        />
+      )}
+    </div>
   );
 }

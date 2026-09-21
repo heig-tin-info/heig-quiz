@@ -67,7 +67,8 @@ export function CodeEditor({
   disabled,
   onTry,
   strings,
-  renderMarkdown,
+  RichText,
+  uploadAsset,
   monaco,
 }: CodeEditorProps) {
   const s = withStrings(EDITOR_STRINGS, strings);
@@ -122,25 +123,32 @@ export function CodeEditor({
           <label className={label} htmlFor={`${ids}-prompt`}>
             {s.prompt}
           </label>
-          <textarea
-            id={`${ids}-prompt`}
-            rows={5}
-            disabled={disabled}
-            value={config.prompt}
-            onChange={(e) => patch({ prompt: e.target.value })}
-            className={cx(input, "w-full py-2 leading-relaxed")}
-          />
-          <p className={hint}>{s.promptHint}</p>
           {/*
-           * No caption above the preview: a new string key would need a French
-           * entry in the host's dictionary, and the rendered statement sitting
-           * directly under its source needs no naming.
+           * The host's WYSIWYG editor when it lent one (`EditorProps.RichText`),
+           * the textarea otherwise. No preview under either: the rich field IS
+           * the preview, and under a textarea a second rendering of the string
+           * the teacher is looking at is noise.
            */}
-          {renderMarkdown ? (
-            <div className="border-t border-line pt-2 text-sm text-fg">
-              {renderMarkdown(config.prompt)}
-            </div>
-          ) : null}
+          {RichText ? (
+            <RichText
+              id={`${ids}-prompt`}
+              aria-label={s.prompt}
+              value={config.prompt}
+              onChange={(prompt) => patch({ prompt })}
+              {...(disabled === undefined ? {} : { disabled })}
+              {...(uploadAsset === undefined ? {} : { uploadImage: uploadAsset })}
+            />
+          ) : (
+            <textarea
+              id={`${ids}-prompt`}
+              rows={5}
+              disabled={disabled}
+              value={config.prompt}
+              onChange={(e) => patch({ prompt: e.target.value })}
+              className={cx(input, "w-full py-2 leading-relaxed")}
+            />
+          )}
+          <p className={hint}>{s.promptHint}</p>
         </div>
         <div className="flex flex-col gap-1.5">
           <label className={label} htmlFor={`${ids}-language`}>

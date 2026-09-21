@@ -8,7 +8,6 @@ import {
   Menu as MenuIcon,
   School,
   Search,
-  Settings as SettingsIcon,
   ShieldCheck,
   X,
 } from "lucide-react";
@@ -22,8 +21,9 @@ import { Logo, UserMenu, useSignOut } from "./Header";
 import { helpTopics, useHelp } from "./help";
 import { useI18n, useT } from "./i18n";
 import type { Route } from "./router";
+import { SidebarCategories } from "./pool/CategoryTree";
 import { setThemeChoice, useResolvedTheme, useThemeChoice } from "./theme";
-import { Button, cx, IconButton, Kbd, modKey, useLayer, Z, type IconType } from "./ui";
+import { Button, cx, IconButton, useLayer, Z, type IconType } from "./ui";
 
 /**
  * Application frame: a 240 px sidebar on desktop (navigation, the teacher's
@@ -132,21 +132,23 @@ function Nav({
           onClick={() => go({ view: "home" })}
         />
         {teacherUi ? (
-          <NavItem
-            icon={FolderTree}
-            label={t("pools.title")}
-            // The three pool routes are one place as far as navigation goes:
-            // a question is read inside its pool, not beside it.
-            active={route.view === "pools" || route.view === "pool" || route.view === "question"}
-            onClick={() => go({ view: "pools" })}
-          />
+          <>
+            <NavItem
+              icon={FolderTree}
+              label={t("pools.title")}
+              // The three pool routes are one place as far as navigation goes:
+              // a question is read inside its pool, not beside it.
+              active={route.view === "pools" || route.view === "pool" || route.view === "question"}
+              onClick={() => go({ view: "pools" })}
+            />
+            {/* Only on the pool screen: the categories are the navigation of
+                THAT page, and unfolding them anywhere else would put a tree
+                with no table beside it in the frame. */}
+            {route.view === "pool" ? <SidebarCategories poolId={route.id} /> : null}
+          </>
         ) : null}
-        <NavItem
-          icon={SettingsIcon}
-          label={t("menu.settings")}
-          active={route.view === "settings"}
-          onClick={() => go({ view: "settings" })}
-        />
+        {/* Settings is not a section of the product: it lives in the account
+            menu at the bottom of this sidebar, and in the palette. */}
         {me.role === "admin" && teacherUi ? (
           <NavItem
             icon={ShieldCheck}
@@ -290,30 +292,10 @@ export function Shell({
         className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-line bg-canvas lg:flex"
       >
         <div className="px-3 pb-2 pt-4">{brand()}</div>
-        {/* A palette nobody can see does not exist: the shortcut is written
-            on its own trigger, above the navigation it duplicates. */}
-        <div className="px-3 pb-2">
-          <button
-            type="button"
-            onClick={() => setPalette(true)}
-            className="group flex w-full items-center gap-2 rounded-[10px] border border-line bg-surface px-2.5 py-1.5 text-sm text-fg-faint transition-colors hover:text-fg"
-          >
-            <Search className="size-4 shrink-0" />
-            {/* `fg-muted`, not the `fg-faint` the icon rests at: this is the
-                only text the control carries, at body size, so it owes the
-                reader 4.5:1 and not the 3:1 DESIGN.md grants a lone icon. */}
-            <span className="flex-1 text-left text-fg-muted group-hover:text-fg">
-              {t("palette.open")}
-            </span>
-            {/* One cap per key, the way the palette footer spells them: a cap
-                is a picture of a key, and two keys in one is a picture of
-                nothing. */}
-            <span className="flex items-center gap-1">
-              <Kbd>{modKey()}</Kbd>
-              <Kbd>K</Kbd>
-            </span>
-          </button>
-        </div>
+        {/* No search row here: Ctrl/⌘+K opens the palette from anywhere, and a
+            permanent button for it took the top of the sidebar away from the
+            navigation. The phone keeps its own trigger in the top bar, where
+            there is no keyboard to hold a shortcut. */}
         <Nav me={me} route={route} navigate={navigate} teacherUi={teacherUi} />
         <div className="border-t border-line p-2">{userMenu(false)}</div>
       </aside>

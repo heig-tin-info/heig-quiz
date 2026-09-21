@@ -10,6 +10,7 @@ import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { QUESTION_TYPE_IDS, typeHint, typeIcon, typeLabel } from "../questionTypes";
 import type { Route } from "../router";
+import { useSearchParam } from "../router";
 import { useScreenCommands } from "../screenCommands";
 import {
   Button,
@@ -25,15 +26,20 @@ import {
   Spinner,
 } from "../ui";
 import { BulkBar } from "./BulkBar";
-import { CategoryTree } from "./CategoryTree";
 import { EMPTY_FILTERS, questionQuery, type QuestionFilters } from "./filters";
 import { FilterBar } from "./FilterBar";
 import { QuestionSidePanel } from "./QuestionSidePanel";
 import { QuestionTable, QuestionTableSkeleton } from "./QuestionTable";
 
 /**
- * The pool screen (mockup `08-pool.html`): categories on the left, the
- * questions in the middle, the selected question's statement on the right.
+ * The pool screen (mockup `08-pool.html`): the questions across the full
+ * content width, the selected question's statement in a side panel.
+ *
+ * The category tree is NOT here: it lives in the app sidebar, beside the
+ * other navigation, and the category it selects travels in the `category`
+ * query-string parameter. A tree is navigation, and navigation belongs in
+ * one place; the page then keeps its whole width for the table, which is
+ * what a screen made of seven columns needs.
  *
  * The ONE primary action is "New question". Importing, exporting and adding
  * to an evaluation are later work packages; nothing else here competes with
@@ -144,7 +150,11 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
+  // Everything but the category is local to the screen; the category is the
+  // sidebar's selection, and "" means "all questions".
   const [filters, setFilters] = useState<QuestionFilters>(EMPTY_FILTERS);
+  const [categoryParam] = useSearchParam("category", "");
+  const categoryId = categoryParam === "" ? null : categoryParam;
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
   const [selected, setSelected] = useState<QuestionRow | null>(null);
   const [creating, setCreating] = useState<string | null>(null);
@@ -167,11 +177,12 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
     queryFn: () => api(`/app/api/pools/${id}`),
   });
 
-  const query = questionQuery(filters);
+  const search = useMemo<QuestionFilters>(() => ({ ...filters, categoryId }), [filters, categoryId]);
+  const query = questionQuery(search);
   const questions = useInfiniteQuery<QuestionPage>({
     queryKey: ["pool", id, "questions", query],
     queryFn: ({ pageParam }) =>
-      api(`/app/api/pools/${id}/questions${questionQuery(filters, pageParam as string | null)}`),
+      api(`/app/api/pools/${id}/questions${questionQuery(search, pageParam as string | null)}`),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
   });
@@ -244,13 +255,12 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   }
 
   const detail = pool.data!;
-  const category = filters.categoryId
-    ? findCategory(detail.categories, filters.categoryId)
-    : null;
+  const category = categoryId ? findCategory(detail.categories, categoryId) : null;
 
   return (
     <div className="space-y-6">
       <PageHeader
+        help="pool"
         eyebrow={
           <button
             type="button"
@@ -275,91 +285,82 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
         }
       />
 
-      <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
-        <CategoryTree
-          poolId={id}
-          categories={detail.categories}
-          selected={filters.categoryId}
-          onSelect={(categoryId) => setFilters({ ...filters, categoryId })}
+      <div className="min-w-0 space-y-4">
+        <FilterBar
+          filters={filters}
+          onChange={(next) => {
+            setChecked(new Set());
+            setFilters(next);
+          }}
+          tags={detail.tags}
+          total={rows.length}
         />
 
-        <div className="min-w-0 flex-1 space-y-4">
-          <FilterBar
-            filters={filters}
-            onChange={(next) => {
-              setChecked(new Set());
-              setFilters(next);
-            }}
-            tags={detail.tags}
-            total={rows.length}
+        {questions.isLoading ? (
+          <Card>
+            <QuestionTableSkeleton />
+          </Card>
+        ) : questions.isError ? (
+          <QueryError
+            title={t("pool.title")}
+            error={questions.error}
+            onRetry={() => void questions.refetch()}
+            retrying={questions.isFetching}
+            fallback={t("error.server")}
           />
-
-          {questions.isLoading ? (
-            <Card>
-              <QuestionTableSkeleton />
-            </Card>
-          ) : questions.isError ? (
-            <QueryError
-              title={t("pool.title")}
-              error={questions.error}
-              onRetry={() => void questions.refetch()}
-              retrying={questions.isFetching}
-              fallback={t("error.server")}
-            />
-          ) : rows.length === 0 ? (
-            <Card>
-              <EmptyState
-                icon={FileQuestion}
-                title={t(detail.questionCount === 0 ? "pool.empty.title" : "pool.emptyFiltered.title")}
-                action={
-                  detail.questionCount === 0 ? (
-                    <Button onClick={() => setCreating(QUESTION_TYPE_IDS[0]!)}>
-                      <Plus /> {t("pool.newQuestion")}
-                    </Button>
-                  ) : (
-                    <Button variant="secondary" onClick={() => setFilters(EMPTY_FILTERS)}>
-                      {t("pool.filter.clear")}
-                    </Button>
-                  )
-                }
-              >
-                {t(detail.questionCount === 0 ? "pool.empty.body" : "pool.emptyFiltered.body")}
-              </EmptyState>
-            </Card>
-          ) : (
-            <>
-              <QuestionTable
-                rows={rows}
-                selectedId={selected?.id ?? null}
-                checked={checked}
-                onToggleCheck={toggleCheck}
-                onToggleAll={() =>
-                  setChecked((prev) =>
-                    rows.every((r) => prev.has(r.id)) ? new Set() : new Set(rows.map((r) => r.id)),
-                  )
-                }
-                onSelect={setSelected}
-                onEdit={(row) => navigate({ view: "question", id: row.id })}
-                onDuplicate={(row) => duplicate.mutate(row)}
-                onDelete={(row) => void askDelete(row)}
-              />
-              {questions.hasNextPage ? (
-                <div className="flex justify-center">
-                  <Button
-                    variant="secondary"
-                    loading={questions.isFetchingNextPage}
-                    onClick={() => void questions.fetchNextPage()}
-                  >
-                    {t("pool.loadMore")}
+        ) : rows.length === 0 ? (
+          <Card>
+            <EmptyState
+              icon={FileQuestion}
+              title={t(detail.questionCount === 0 ? "pool.empty.title" : "pool.emptyFiltered.title")}
+              action={
+                detail.questionCount === 0 ? (
+                  <Button onClick={() => setCreating(QUESTION_TYPE_IDS[0]!)}>
+                    <Plus /> {t("pool.newQuestion")}
                   </Button>
-                </div>
-              ) : null}
-              {questions.isFetching && !questions.isFetchingNextPage ? (
-                <Spinner className="py-2" />
-              ) : null}
-            </>
-          )}
-        </div>
+                ) : (
+                  <Button variant="secondary" onClick={() => setFilters(EMPTY_FILTERS)}>
+                    {t("pool.filter.clear")}
+                  </Button>
+                )
+              }
+            >
+              {t(detail.questionCount === 0 ? "pool.empty.body" : "pool.emptyFiltered.body")}
+            </EmptyState>
+          </Card>
+        ) : (
+          <>
+            <QuestionTable
+              rows={rows}
+              selectedId={selected?.id ?? null}
+              checked={checked}
+              onToggleCheck={toggleCheck}
+              onToggleAll={() =>
+                setChecked((prev) =>
+                  rows.every((r) => prev.has(r.id)) ? new Set() : new Set(rows.map((r) => r.id)),
+                )
+              }
+              onSelect={setSelected}
+              onEdit={(row) => navigate({ view: "question", id: row.id })}
+              onDuplicate={(row) => duplicate.mutate(row)}
+              onDelete={(row) => void askDelete(row)}
+            />
+            {questions.hasNextPage ? (
+              <div className="flex justify-center">
+                <Button
+                  variant="secondary"
+                  loading={questions.isFetchingNextPage}
+                  onClick={() => void questions.fetchNextPage()}
+                >
+                  {t("pool.loadMore")}
+                </Button>
+              </div>
+            ) : null}
+            {questions.isFetching && !questions.isFetchingNextPage ? (
+              <Spinner className="py-2" />
+            ) : null}
+          </>
+        )}
       </div>
 
       {selected ? (
@@ -382,7 +383,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
       {creating !== null ? (
         <NewQuestionModal
           poolId={id}
-          categoryId={filters.categoryId}
+          categoryId={categoryId}
           initialType={creating}
           onClose={() => setCreating(null)}
           onCreated={async (question) => {

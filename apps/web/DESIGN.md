@@ -111,8 +111,14 @@ Two pairs stay below their target, on purpose:
 ## Shape and elevation
 
 - Radii: controls (buttons, chips, segmented, avatars) are **pills**;
-  fields 12 px; cards 16 px; sheets and dialogs 20 px; menus 14 px.
+  fields 10 px; cards 12 px; sheets and dialogs 16 px; menus 12 px.
   Pills on everything you press, soft squares on everything that holds.
+  Each of those was one step larger (12 / 16 / 20 / 14) and the previous
+  radii read as soft and toy-like next to dense tables: the pool table, the
+  live grid and the grading list are the screens this product is for, and a
+  16 px corner around a 13 px row makes the card louder than its contents.
+  The pills are untouched — they mark what you press, and that distinction is
+  the point of the scale.
 - Separation language: **1 px hairlines** (`line`), one surface level below
   for recessed panels (`surface-2`). No shadows on anything in the page
   flow. Shadows exist only on floating layers (menu, popover, sheet, dialog,

@@ -69,6 +69,61 @@ describe("TeacherHome", () => {
     ]);
   });
 
+  it("reads the same list as a table, and remembers the choice", async () => {
+    mockFetch({
+      [`GET ${COURSES}`]: ok([
+        makeCourseSummary({ classrooms: [makeClassroomSummary({ id: "r1", name: "PRG1-2026" })] }),
+      ]),
+    });
+    const navigate = vi.fn();
+    const { unmount } = renderWithProviders(<TeacherHome navigate={navigate} />);
+
+    await userEvent.click(await screen.findByRole("radio", { name: "List" }));
+    // The table answers "which classroom, in which course" in one line, and
+    // the classroom name stays the way in.
+    const row = screen.getByRole("row", { name: /Programmation C/ });
+    await userEvent.click(within(row).getByRole("button", { name: /PRG1-2026/ }));
+    expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r1" });
+    expect(localStorage.getItem("quiz-courses-view")).toBe("list");
+
+    // A habit, not a state of the data: the next visit opens the same way.
+    unmount();
+    renderWithProviders(<TeacherHome navigate={vi.fn()} />);
+    expect(await screen.findByRole("radio", { name: "List" })).toBeChecked();
+  });
+
+  it("links a pool straight from the menu, with no dialog in the way", async () => {
+    const { calls } = mockFetch({
+      [`GET ${COURSES}`]: ok([makeCourseSummary()]),
+      "GET /app/api/courses/c1": ok({
+        course: { id: "c1", name: "Programmation C", code: "PRG1" },
+        staff: [],
+        pools: [],
+        classrooms: [],
+      }),
+      "GET /app/api/pools": ok([
+        {
+          id: "p1",
+          name: "Pointers",
+          visibility: "private",
+          ownerId: "u-1",
+          isPersonal: true,
+          createdAt: "2026-01-01T08:00:00.000Z",
+          questionCount: 7,
+        },
+      ]),
+      "PUT /app/api/courses/c1/pools": ok(undefined),
+    });
+    renderWithProviders(<TeacherHome navigate={vi.fn()} />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Link a pool" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Pointers" }));
+    // `PUT` replaces the WHOLE set, which is the only route there is.
+    expect(calls.filter((c) => c.method === "PUT")).toEqual([
+      { url: "/app/api/courses/c1/pools", method: "PUT", body: { poolIds: ["p1"] } },
+    ]);
+  });
+
   it("says so when the list cannot be read, and offers a retry", async () => {
     mockFetch({ [`GET ${COURSES}`]: { status: 500, body: { message: "boom" } } });
     renderWithProviders(<TeacherHome navigate={vi.fn()} />);

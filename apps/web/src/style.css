@@ -97,10 +97,12 @@ html.dark {
   --shadow-popover: var(--shadow-popover);
   --shadow-sheet: var(--shadow-sheet);
 
-  --radius-field: 12px;
-  --radius-card: 16px;
-  --radius-sheet: 20px;
-  --radius-menu: 14px;
+  /* Tightened one step (DESIGN.md, "Shape and elevation"): the previous
+     radii read as soft and toy-like next to dense tables. */
+  --radius-field: 10px;
+  --radius-card: 12px;
+  --radius-sheet: 16px;
+  --radius-menu: 12px;
   --radius-key: 6px;
 
   --ease-out-emphasized: cubic-bezier(0.2, 0, 0, 1);

@@ -253,7 +253,8 @@ export function ShortEditor({
   disabled,
   issues = [],
   strings,
-  renderMarkdown,
+  RichText,
+  uploadAsset,
 }: ShortEditorProps) {
   const s = resolveStrings(shortEditorStrings, strings);
   const patch = (next: Partial<ShortConfig>) => onChange({ ...config, ...next });
@@ -269,22 +270,33 @@ export function ShortEditor({
         <label className={labelClass} htmlFor="short-prompt">
           {s.prompt}
         </label>
-        <textarea
-          id="short-prompt"
-          rows={4}
-          className={cx(inputClass, "w-full resize-y font-mono text-[13px]")}
-          value={config.prompt}
-          disabled={disabled}
-          onChange={(e) => patch({ prompt: e.target.value })}
-        />
+        {/*
+         * The host's WYSIWYG editor when it lent one, the textarea otherwise.
+         * There is no preview block under either: with `RichText` the field IS
+         * the preview, and under a textarea a second rendering of the string
+         * the teacher is looking at is noise.
+         */}
+        {RichText ? (
+          <RichText
+            id="short-prompt"
+            aria-label={s.prompt}
+            value={config.prompt}
+            onChange={(prompt) => patch({ prompt })}
+            {...(disabled === undefined ? {} : { disabled })}
+            {...(uploadAsset === undefined ? {} : { uploadImage: uploadAsset })}
+          />
+        ) : (
+          <textarea
+            id="short-prompt"
+            rows={4}
+            className={cx(inputClass, "w-full resize-y font-mono text-[13px]")}
+            value={config.prompt}
+            disabled={disabled}
+            onChange={(e) => patch({ prompt: e.target.value })}
+          />
+        )}
         <p className={helpClass}>{s.promptHint}</p>
         <IssueList issues={issuesAt(issues, "prompt")} />
-        {renderMarkdown ? (
-          <div className="border-t border-line pt-2 text-sm text-fg">
-            <p className={cx(helpClass, "mb-1")}>{s.preview}</p>
-            {renderMarkdown(config.prompt)}
-          </div>
-        ) : null}
       </section>
 
       <section className={cx(sectionClass, "flex-row flex-wrap items-end gap-4")}>

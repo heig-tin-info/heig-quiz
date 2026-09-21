@@ -179,7 +179,9 @@ export function EvaluationList({
         icon={ClipboardList}
         title={t("eval.title")}
         count={list.data?.length}
-        actions={list.data && list.data.length > 0 ? newButton("secondary") : undefined}
+        // Primary: since the classroom split into tabs, this heading is the
+        // top of its own tab and "New evaluation" is the one thing it is for.
+        actions={list.data && list.data.length > 0 ? newButton("primary") : undefined}
       />
       {list.isLoading ? (
         <Skeleton className="h-40 w-full" />

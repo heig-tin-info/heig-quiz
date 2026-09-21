@@ -11,6 +11,10 @@ import { PoolView } from "./PoolView";
  * The pool screen against a stubbed API: what the table shows, what the
  * filter bar sends, and the two surfaces that only exist on demand — the
  * preview panel and the bulk bar.
+ *
+ * The category tree is NOT part of this screen any more: it lives in the app
+ * sidebar and hands its selection over through the `category` query-string
+ * parameter, which the last two tests here cover from the page's side.
  */
 
 const POOL: PoolDetail = {
@@ -81,17 +85,39 @@ function routes(over: Record<string, ReturnType<typeof ok>> = {}) {
 }
 
 describe("PoolView", () => {
-  it("lists the questions and the category tree", async () => {
+  it("lists the questions across the full width, without a category tree", async () => {
     mockFetch(routes());
     renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
     expect(await screen.findByRole("heading", { name: "Programmation C" })).toBeInTheDocument();
     expect(await screen.findByText("ptr-arith-01")).toBeInTheDocument();
     expect(screen.getByText("ptr-null-check")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Pointeurs" })).toBeInTheDocument();
+    // The tree moved to the sidebar: the page renders none of its rows.
+    expect(screen.queryByRole("button", { name: "Pointeurs" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "All questions" })).not.toBeInTheDocument();
     // A question with no published version reads as a draft, not as "v0".
     expect(screen.getByText("draft")).toBeInTheDocument();
     // A row with no tag shows a dash rather than an empty cell.
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+
+  it("reads the selected category from the query string", async () => {
+    const { calls } = mockFetch(
+      routes({ "GET /app/api/pools/p1/questions?categoryId=k2&limit=25": ok(PAGE) }),
+    );
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />, { route: "/?category=k2" });
+    await screen.findByText("ptr-arith-01");
+    expect(
+      calls.some((c) => c.url === "/app/api/pools/p1/questions?categoryId=k2&limit=25"),
+    ).toBe(true);
+    // The header names the category instead of counting the whole pool.
+    expect(screen.getByText("Arithmétique")).toBeInTheDocument();
+  });
+
+  it("counts the whole pool in the header when no category is selected", async () => {
+    mockFetch(routes());
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    await screen.findByText("ptr-arith-01");
+    expect(screen.getByText("2 questions")).toBeInTheDocument();
   });
 
   it("sends the search as a query parameter", async () => {

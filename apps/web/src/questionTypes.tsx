@@ -20,9 +20,9 @@
  * exported defaults, so a renamed key shows up as a missing key in
  * `questionTypes.test.ts`.
  */
-import { Suspense, type ComponentType, type ReactNode } from "react";
+import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
 
-import type { ConfigIssue } from "@quiz/core/client";
+import type { ConfigIssue, RichTextComponent } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 import {
   clientRegistry,
@@ -57,6 +57,22 @@ import {
 import type { Dict, TFunction } from "./i18n";
 import { MarkdownView } from "./markdown/MarkdownView";
 import { ScrollableCode, Skeleton, type IconType } from "./ui";
+
+/**
+ * The WYSIWYG editor, injected into a type's `Editor` exactly as
+ * `renderMarkdown` is: a `qt-*` package cannot depend on `apps/web`, so the
+ * host owns Tiptap and lends it (`EditorProps.RichText` in
+ * `packages/core/src/client.ts`).
+ *
+ * `lazy`, and not a plain import, for the reason the four types are lazy
+ * (N-PERF-05): this module is also what the student's player and the review
+ * screens go through, and a static import would drag ProseMirror, Tiptap and
+ * KaTeX into the chunk a student downloads to answer a question. It resolves
+ * inside the `Suspense` the editor host already opens.
+ */
+const LazyRichText = lazy(async () => ({
+  default: (await import("./markdown/RichText")).RichText,
+})) as unknown as RichTextComponent;
 
 export { QUESTION_TYPE_IDS };
 export type { QuestionTypeId };
@@ -176,6 +192,7 @@ interface EditorHostProps {
   issues?: readonly ConfigIssue[];
   strings?: unknown;
   renderMarkdown?: (source: string) => ReactNode;
+  RichText?: RichTextComponent;
   uploadAsset?: (file: File) => Promise<string>;
   onTry?: (config: unknown) => Promise<RunnerOutcome | "unavailable">;
 }
@@ -224,6 +241,7 @@ export function QuestionEditorHost({
         {...(issues === undefined ? {} : { issues })}
         strings={strings}
         renderMarkdown={renderBlock}
+        RichText={LazyRichText}
         uploadAsset={uploadAsset}
         {...(onTry === undefined ? {} : { onTry })}
       />

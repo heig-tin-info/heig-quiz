@@ -60,7 +60,7 @@ export interface CodeEditorStrings {
 export const EDITOR_STRINGS: CodeEditorStrings = {
   questionSection: "Question",
   prompt: "Statement",
-  promptHint: "Markdown. What the student reads above the editor.",
+  promptHint: "What the student reads above the editor.",
   language: "Language",
   template: "Starting code",
   templateHint:

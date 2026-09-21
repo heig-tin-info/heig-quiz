@@ -186,6 +186,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
             <Badge tone={stateTone(evaluation.state)}>{stateLabel(evaluation.state, t)}</Badge>
           </span>
         }
+        help="evaluation"
         actions={
           <>
             {/* WP10: once it is closed, the correction is where this screen
