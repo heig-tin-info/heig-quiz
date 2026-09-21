@@ -77,6 +77,12 @@ export const codeClient: QuestionTypeClient<
 };
 
 export { CodeIcon };
+/*
+ * The reference solution read as regions (docs/spec/04 §4.7) — the pure rule
+ * behind the editor's "try" button. A plain function, so it costs the bundle
+ * nothing and stays out of the lazy chunks.
+ */
+export { referenceRegionCount, referenceRegions } from "./reference.js";
 export type {
   CodeAnswer,
   CodeCase,

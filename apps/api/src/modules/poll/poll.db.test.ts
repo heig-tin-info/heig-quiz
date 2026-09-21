@@ -135,6 +135,13 @@ describe("creating and starting a poll", () => {
     evaluationId = body.evaluation.id;
     code = body.evaluation.code;
     expect(body.evaluation.state).toBe("running");
+    // Where the poll lives, in the same answer: the projection's context line
+    // never asks a second route for a name it already implies.
+    expect(body.evaluation).toMatchObject({
+      classroomId: seed.classroomId,
+      classroomName: "A",
+      courseName: "Programmation C",
+    });
     expect(code).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/);
     expect(body.joinUrl).toMatch(new RegExp(`/p/${code}$`));
     expect(body.settings).toEqual({ anonymous: true, revealed: false });
@@ -278,6 +285,8 @@ describe("the public page (F-AUTH-05)", () => {
     );
     expect(revealed.statusCode).toBe(200);
     expect(revealed.json().settings.revealed).toBe(true);
+    // Every exit builds the same teacher view, names included.
+    expect(revealed.json().evaluation.courseName).toBe("Programmation C");
     expect((await get(`/app/api/p/${code}`)).json().solution).toEqual({ correct: [0] });
   });
 
@@ -287,6 +296,7 @@ describe("the public page (F-AUTH-05)", () => {
     // The glossary sends a poll from `running` to the end in one move; the
     // release is deliberately not taken (ADR-014).
     expect(ended.json().evaluation.state).toBe("closed");
+    expect(ended.json().evaluation.classroomName).toBe("A");
 
     const view = await get(`/app/api/p/${code}`);
     expect(view.statusCode).toBe(200);
@@ -304,6 +314,10 @@ describe("the public page (F-AUTH-05)", () => {
     expect(again.statusCode).toBe(201);
     expect(again.json().evaluation.id).not.toBe(evaluationId);
     expect(again.json().evaluation.code).not.toBe(code);
+    expect(again.json().evaluation).toMatchObject({
+      classroomName: "A",
+      courseName: "Programmation C",
+    });
     expect(again.json().tally).toMatchObject({ joined: 0, answered: 0 });
     expect(again.json().question.id).toBe(questionId);
     await post(`/app/api/evaluations/${again.json().evaluation.id}/poll/end`, teacher.headers);

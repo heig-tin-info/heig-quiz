@@ -10,7 +10,7 @@ Chaque exigence est identifiée `F-DOMAINE-nn`, avec sa phase P1 / P2 / P3 et sa
 | F-AUTH-02 | À la première connexion, le compte est créé avec nom, email et rôle déduit de l'affiliation edu-ID : `staff` ou `faculty` donne `teacher`, `student` donne `student`. | P1 | M |
 | F-AUTH-03 | L'admin est identifié par une liste d'identifiants edu-ID en configuration. Il peut promouvoir ou rétrograder un utilisateur en `teacher`. | P1 | M |
 | F-AUTH-04 | La session persiste 30 jours. Une déconnexion explicite est disponible. Un examen en cours ne demande jamais de se reconnecter. | P1 | M |
-| F-AUTH-05 | Un participant sans compte peut rejoindre une évaluation en mode `poll` par un code de session, sous un pseudonyme ou anonymement selon le paramétrage. | P2 | M |
+| F-AUTH-05 | Un participant sans compte peut rejoindre une évaluation en mode `poll` par un code de session, anonymement : aucun pseudonyme n'est demandé ni stocké (voir 06 n° 18). | P2 | M |
 
 ## F-ORG Cours, classrooms, rosters
 

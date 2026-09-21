@@ -87,6 +87,9 @@ export const PollTeacherView = z.object({
   evaluation: z.object({
     id: z.uuid(),
     classroomId: z.uuid(),
+    /** For the projection's context line; spares the screen a second request. */
+    classroomName: z.string(),
+    courseName: z.string(),
     title: z.string(),
     state: z.string(),
     /** The session code shown on the beamer; the QR encodes `joinUrl`. */

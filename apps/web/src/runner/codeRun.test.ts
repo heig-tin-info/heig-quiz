@@ -4,9 +4,15 @@
  */
 import { describe, expect, it } from "vitest";
 
-import type { CodeStudent } from "@quiz/qt-code/client";
+import type { CodeConfig, CodeStudent } from "@quiz/qt-code/client";
 
-import { assembleSource, canRunManually, codeRunRequest, runCode } from "./codeRun";
+import {
+  assembleSource,
+  canRunManually,
+  codeRunRequest,
+  referenceRunRequest,
+  runCode,
+} from "./codeRun";
 
 const student = (over: Partial<CodeStudent> = {}): CodeStudent =>
   ({
@@ -99,5 +105,83 @@ describe("runCode", () => {
       },
     });
     expect(seen).toEqual([undefined]);
+  });
+});
+
+/*
+ * The teacher's try. The editor holds the whole config, so this request is
+ * the one place a run of a `code` question is allowed to be complete: the
+ * flags, the files and the hidden cases all travel, because the teacher wrote
+ * them and the point of the button is to check them.
+ */
+describe("referenceRunRequest", () => {
+  // Written out rather than parsed: `@quiz/qt-code/client` exports the SHAPE
+  // of a config, not its schema — the browser has no business carrying zod for
+  // a fixture.
+  const config = (): CodeConfig => ({
+    configVersion: 1,
+    prompt: "p",
+    language: "c",
+    runtime: "backend",
+    template: "// @@lock\nint f(void) {\n// @@endlock\n  return 0;\n// @@lock\n}\n// @@endlock\n",
+    files: [{ name: "data.csv", content: "1,2\n" }],
+    action: "run",
+    compileArgs: "-Wall -DSECRET=42",
+    limits: { timeMs: 2000, memoryMb: 128, outputKb: 64 },
+    runsPerMinute: 10,
+    allOrNothing: false,
+    referenceSolution: "  return 6;\n",
+    tests: {
+      mode: "io",
+      compare: { trimTrailing: true, ignoreCase: false, numeric: null },
+      cases: [
+        {
+          name: "visible",
+          args: [],
+          stdin: "1\n",
+          expected: "1",
+          compareStdout: true,
+          expectedExitCode: 0,
+          visible: true,
+          points: 1,
+          timeMs: null,
+        },
+        {
+          name: "hidden",
+          args: ["-x"],
+          stdin: "2\n",
+          expected: "2",
+          compareStdout: true,
+          expectedExitCode: 0,
+          visible: false,
+          points: 2,
+          timeMs: null,
+        },
+      ],
+    },
+  });
+
+  it("rebuilds the source from the template and the regions, never from a blob", () => {
+    const request = referenceRunRequest(config(), ["  return 6;\n"]);
+    expect(request.files[0]).toEqual({
+      name: "main",
+      content: "// @@lock\nint f(void) {\n// @@endlock\n  return 6;\n// @@lock\n}\n// @@endlock\n",
+    });
+  });
+
+  it("carries the teacher's flags and the real content of the extra files", () => {
+    const request = referenceRunRequest(config(), ["  return 6;\n"]);
+    expect(request.compileArgs).toBe("-Wall -DSECRET=42");
+    expect(request.files[1]).toEqual({ name: "data.csv", content: "1,2\n" });
+  });
+
+  it("runs every case in the config's order, hidden ones included", () => {
+    // The editor counts the passes by walking `outcome.cases[i]` beside
+    // `config.tests.cases[i]`, so a missing hidden case would shift the count.
+    const request = referenceRunRequest(config(), ["  return 6;\n"]);
+    expect(request.cases).toEqual([
+      { name: "visible", args: [], stdin: "1\n" },
+      { name: "hidden", args: ["-x"], stdin: "2\n" },
+    ]);
   });
 });

@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
+import { choiceLetter } from "@quiz/qt-mcq/client";
+
 import type { PollTally, PollTeacherView } from "@quiz/contracts";
 
 import {
   joinHost,
-  letterOf,
   percentOf,
   pollRows,
   promptOf,
@@ -149,7 +150,7 @@ describe("the arithmetic of the wall", () => {
   });
 
   it("letters the rows A, B, C…", () => {
-    expect([0, 1, 25].map(letterOf)).toEqual(["A", "B", "Z"]);
+    expect([0, 1, 25].map(choiceLetter)).toEqual(["A", "B", "Z"]);
   });
 });
 

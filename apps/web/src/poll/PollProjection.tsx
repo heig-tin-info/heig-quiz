@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { ClassroomDetail, PollTeacherView, WatchSubject } from "@quiz/contracts";
+import type { PollTeacherView, WatchSubject } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -165,14 +165,6 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
   });
 
   const view = poll.data ?? null;
-  const classroomId = view?.evaluation.classroomId ?? null;
-  // The room's name, which the poll view does not carry. One extra request,
-  // on the key the classroom screen already holds.
-  const classroom = useQuery<ClassroomDetail>({
-    queryKey: ["classroom", classroomId],
-    queryFn: () => api(`/app/api/classrooms/${classroomId}`),
-    enabled: classroomId !== null,
-  });
 
   const act = useMutation({
     mutationFn: (v: { path: "reveal" | "end" | "again"; body?: unknown }) =>
@@ -283,9 +275,14 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
 
   const { tally } = view;
   const waiting = waitingOf(tally);
-  const context = classroom.data
-    ? `${classroom.data.course.name} · ${classroom.data.name}`
-    : view.evaluation.title;
+  /*
+   * "PRG1 · PRG1-2026", from the poll view itself: the course and the room
+   * travel with `PollTeacherView.evaluation`. This screen used to fetch
+   * `GET /classrooms/:id` for those two words — a second request, and a
+   * second thing that can be in flight, on a page whose whole job is to be
+   * already there on a beamer.
+   */
+  const context = `${view.evaluation.courseName} · ${view.evaluation.classroomName}`;
 
   return (
     <main className={stage}>

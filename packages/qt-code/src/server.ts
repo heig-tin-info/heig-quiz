@@ -162,3 +162,9 @@ export const codeServer: QuestionTypeServer<
 export * from "./grade.js";
 export * from "./schema.js";
 export { fromCanonical, toCanonical } from "./canonical.js";
+/*
+ * The reference solution read as regions (docs/spec/04 §4.7). Exported from
+ * BOTH entry points: the editor's "try" button cuts it in the browser, and a
+ * server-side check of a config reads the same rule.
+ */
+export { referenceRegionCount, referenceRegions } from "./reference.js";

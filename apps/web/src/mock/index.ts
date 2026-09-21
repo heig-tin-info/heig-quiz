@@ -4466,6 +4466,19 @@ const tallyOf = (tp: MockTeacherPoll, _poll: MockPoll) => ({
   answers: tp.texts.map((a) => ({ ...a })),
 });
 
+/**
+ * Where the poll is being held, in the two words the beamer prints.
+ *
+ * `PollTeacherView.evaluation` carries them, so the projection no longer
+ * fetches the classroom just to write its context line; the mock has to hand
+ * them over for the same reason the API does.
+ */
+function pollWhere(classroomId: string): { classroomName: string; courseName: string } {
+  const room = rooms.find((r) => r.id === classroomId);
+  const course = room ? courses.find((c) => c.id === room.courseId) : undefined;
+  return { classroomName: room?.name ?? "—", courseName: course?.name ?? "—" };
+}
+
 /** The teacher's whole view: the same question the room has, plus the key. */
 function pollTeacherView(tp: MockTeacherPoll) {
   const poll = pollOfTeacher(tp)!;
@@ -4475,6 +4488,7 @@ function pollTeacherView(tp: MockTeacherPoll) {
     evaluation: {
       id: tp.id,
       classroomId: tp.classroomId,
+      ...pollWhere(tp.classroomId),
       title: poll.title,
       state: poll.state === "ended" ? "closed" : "running",
       code: poll.code,

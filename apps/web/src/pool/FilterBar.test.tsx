@@ -214,9 +214,13 @@ describe("FilterBar · how the list is drawn", () => {
 
   it("carries the grouping and the sort", async () => {
     const { onChange, onGroup, user } = setup();
-    await user.selectOptions(screen.getByLabelText("Group by"), "Group by type");
+    // Two segmented tracks, and "Type" is a choice in both: the radiogroup's
+    // own name is what tells them apart, for the test as for a screen reader.
+    const grouping = screen.getByRole("radiogroup", { name: "Group by" });
+    await user.click(within(grouping).getByRole("radio", { name: "Type" }));
     expect(onGroup).toHaveBeenCalledWith("type");
-    await user.selectOptions(screen.getByLabelText("Sort by"), "Name");
+    const sorting = screen.getByRole("radiogroup", { name: "Sort by" });
+    await user.click(within(sorting).getByRole("radio", { name: "Name" }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ sort: "name" }));
   });
 

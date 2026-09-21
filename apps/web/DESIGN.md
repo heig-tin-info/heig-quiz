@@ -253,8 +253,15 @@ with a keyboard-reachable dismiss button.
   separated; `pressed` left undefined drops `aria-pressed` for the one pill
   in a row that is an action and not a value ("Show all (37)").
 - Segmented: `surface-3` pill track, selected chip raised to `surface`.
-  Segmented is one choice out of two or three, ToggleChip is any number out
-  of many; do not use one for the other's job.
+  Segmented is ONE choice out of a set small enough to show whole — two or
+  three normally, five at most and only with one-word labels (the pool
+  toolbar's "Group by" and "Sort by"); ToggleChip is any number out of many.
+  Do not use one for the other's job, and do not reach for a `Select` just
+  because there are four options: a select hides the set until it is opened,
+  which is the wrong trade for a control the reader sets once and then reads.
+  A track with no visible caption takes `label`, which becomes the
+  `aria-label` of the radiogroup — two anonymous pill rows side by side are
+  indistinguishable to a screen reader.
 - Switch: `success` when on (a state, not an action, so not the accent),
   `line-strong` when off.
 - Tabs: text tabs with a 2 px ink (`fg`) underline, counts in `fg-faint`; red

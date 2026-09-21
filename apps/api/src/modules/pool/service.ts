@@ -67,7 +67,7 @@ import {
   users,
 } from "../../db/schema.js";
 import { audit } from "../../audit.js";
-import { notify } from "../notifications/service.js";
+import { dropPoolNotifications, notify } from "../notifications/service.js";
 import { userTopic } from "../realtime/bus.js";
 import { poolPeopleChanged } from "./events.js";
 import {
@@ -290,7 +290,16 @@ export async function updatePool(
   return poolJson(row!);
 }
 
+/**
+ * The pool, and the bells that point at it. A `pool_shared` or
+ * `pool_ownership` notification carries the pool in its jsonb payload, which
+ * is a union and therefore holds no foreign key: nothing would cascade, and a
+ * reader clicking such a row lands on a 404. The `notifications` module owns
+ * that delete (`dropPoolNotifications`); it runs FIRST, so a failure leaves
+ * the pool standing rather than a bell pointing at nothing.
+ */
 export async function deletePool(db: Db, poolId: string): Promise<void> {
+  await dropPoolNotifications(db, poolId);
   await db.delete(pools).where(eq(pools.id, poolId));
 }
 

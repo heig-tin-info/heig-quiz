@@ -49,6 +49,7 @@ import {
   EDITOR_STRINGS,
   PLAYER_STRINGS,
   REVIEW_STRINGS,
+  type CodeEditorProps,
   type CodeEditorStrings,
   type CodePlayerStrings,
   type CodeReviewStrings,
@@ -225,6 +226,15 @@ export function EditorSkeleton({ label }: { label: string }) {
   );
 }
 
+/**
+ * What the host may answer the `code` editor's "Try the reference solution".
+ *
+ * Read off that editor's own prop rather than restated here: the browser
+ * runner returns a raw `RunnerOutcome`, `POST /questions/:id/try` returns a
+ * grading, and which shapes exist is the question type's business.
+ */
+export type TryOutcome = Awaited<ReturnType<NonNullable<CodeEditorProps["onTry"]>>>;
+
 function Unknown({ children }: { children: ReactNode }) {
   return <p className="text-sm text-fg-muted">{children}</p>;
 }
@@ -245,7 +255,7 @@ interface EditorHostProps {
   RichText?: RichTextComponent;
   uploadAsset?: (file: File) => Promise<string>;
   aside?: HTMLElement | null;
-  onTry?: (config: unknown) => Promise<RunnerOutcome | "unavailable">;
+  onTry?: (config: unknown) => Promise<TryOutcome>;
 }
 
 /**
@@ -292,7 +302,12 @@ export function QuestionEditorHost({
    * simply keeps everything in one column.
    */
   aside?: HTMLElement | null;
-  onTry?: (config: unknown) => Promise<RunnerOutcome | "unavailable">;
+  /**
+   * `code` only: runs the teacher's reference solution (`CodeEditorProps`).
+   * The screen decides where it runs — `src/runner/` picks the browser or the
+   * backend from `CodeConfig.runtime`, exactly as it does for a student.
+   */
+  onTry?: (config: unknown) => Promise<TryOutcome>;
 }) {
   const client = questionType(type);
   if (!client) return <Unknown>{t("qt.unknown")}</Unknown>;

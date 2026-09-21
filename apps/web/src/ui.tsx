@@ -2177,10 +2177,10 @@ export function Switch({
 }
 
 /**
- * Segmented control for 2–3 mutually exclusive choices: the selected chip is
- * raised (surface + hairline) — selection is structure, never color, the
- * accent stays reserved for primary actions. Native radios underneath
- * (sr-only) keep it a keyboard-accessible radiogroup.
+ * Segmented control for a small set of mutually exclusive choices: the
+ * selected chip is raised (surface + hairline) — selection is structure,
+ * never color, the accent stays reserved for primary actions. Native radios
+ * underneath (sr-only) keep it a keyboard-accessible radiogroup.
  */
 export function Segmented<T extends string>({
   name,
@@ -2189,6 +2189,7 @@ export function Segmented<T extends string>({
   onChange,
   disabled,
   size = "md",
+  label,
 }: {
   /** Groups the native radios (one form can hold several groups). */
   name: string;
@@ -2197,10 +2198,17 @@ export function Segmented<T extends string>({
   onChange: (value: T) => void;
   disabled?: boolean;
   size?: "sm" | "md";
+  /**
+   * The name of the GROUP, for a radiogroup that has no visible caption of
+   * its own — two segmented controls side by side ("Group by", "Sort by")
+   * are otherwise two anonymous rows of pills to a screen reader.
+   */
+  label?: string;
 }) {
   return (
     <div
       role="radiogroup"
+      {...(label === undefined ? {} : { "aria-label": label })}
       className={cx(
         "inline-flex shrink-0 gap-0.5 rounded-full bg-surface-3 p-0.75",
         disabled && "opacity-60",

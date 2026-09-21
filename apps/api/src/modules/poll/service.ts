@@ -39,6 +39,8 @@ import type { Db } from "../../db/client.js";
 import {
   answers,
   attempts,
+  classrooms,
+  courses,
   evaluationItems,
   evaluations,
   guestParticipants,
@@ -502,16 +504,40 @@ function solutionOf(item: JoinedItem): unknown {
   });
 }
 
+/**
+ * Where the poll lives: the classroom and its course, in one join. The
+ * projection prints them in its context line, so the screen never has to ask
+ * a second route for a name it already implies.
+ */
+async function homeOf(
+  db: Db,
+  classroomId: string,
+): Promise<{ classroomName: string; courseName: string }> {
+  const [row] = await db
+    .select({ classroomName: classrooms.name, courseName: courses.name })
+    .from(classrooms)
+    .innerJoin(courses, eq(courses.id, classrooms.courseId))
+    .where(eq(classrooms.id, classroomId))
+    .limit(1);
+  return row ?? { classroomName: "", courseName: "" };
+}
+
 export async function teacherView(
   db: Db,
   scope: PollScope,
   webUrl: string,
 ): Promise<PollTeacherView> {
   const { evaluation, item } = scope;
+  const [home, tally] = await Promise.all([
+    homeOf(db, evaluation.classroomId),
+    tallyOf(db, evaluation),
+  ]);
   return {
     evaluation: {
       id: evaluation.id,
       classroomId: evaluation.classroomId,
+      classroomName: home.classroomName,
+      courseName: home.courseName,
       title: evaluation.title,
       state: evaluation.state,
       code: evaluation.accessCode ?? "",
@@ -527,7 +553,7 @@ export async function teacherView(
       // has seen it, and the projection decides when to draw it.
       solution: solutionOf(item),
     },
-    tally: await tallyOf(db, evaluation),
+    tally,
   };
 }
 

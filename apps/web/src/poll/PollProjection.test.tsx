@@ -23,6 +23,10 @@ function view(patch: Partial<PollTeacherView> = {}): PollTeacherView {
     evaluation: {
       id: ID,
       classroomId: ROOM,
+      // The context line reads these two off the poll view itself; the screen
+      // used to fetch `GET /classrooms/:id` for them.
+      classroomName: "PRG1-2026",
+      courseName: "Programmation C",
       title: "Warm-up — sizes",
       state: "running",
       code: "QZ4F7K",
@@ -74,6 +78,15 @@ describe("PollProjection", () => {
     expect(screen.queryByText("Correct answer")).toBeNull();
   });
 
+  it("writes where the poll is held without a second request", async () => {
+    const { calls } = mockFetch({ [`GET ${POLL}`]: ok(view()) });
+    renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
+    expect(await screen.findByText("Programmation C · PRG1-2026")).toBeVisible();
+    // The course and the room travel with the poll view; the classroom route
+    // is not touched, because a beamer must not wait on a second round trip.
+    expect(calls.some((c) => c.url.includes("/app/api/classrooms/"))).toBe(false);
+  });
+
   it("names the correct choice once the answer is revealed", async () => {
     mockFetch({ [`GET ${POLL}`]: ok(view({ settings: { anonymous: true, revealed: true } })) });
     renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
@@ -103,6 +116,8 @@ describe("PollProjection", () => {
           evaluation: {
             id: ID,
             classroomId: ROOM,
+            classroomName: "PRG1-2026",
+            courseName: "Programmation C",
             title: "Warm-up — sizes",
             state: "closed",
             code: "QZ4F7K",

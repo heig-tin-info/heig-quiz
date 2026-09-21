@@ -138,8 +138,39 @@ const scenes = [
   // Pools, the question editors and the try panel (WP7). The mock question
   // ids are stable: q1 code, q2 mcq, q3 short, q4 cloze.
   { name: "pools", role: "teacher", path: "/pools" },
+  { name: "pools-list", role: "teacher", path: "/pools", ls: { "quiz-pools-view": "list" } },
   { name: "pools-empty", role: "teacher", path: "/pools?empty=1" },
   { name: "pools-error", role: "teacher", path: "/pools?fail=1", settle: 2500 },
+  // The icon picker, reached the way a teacher reaches it: the New pool form
+  // first, then the round button beside the name.
+  { name: "pools-icon", role: "teacher", path: "/pools", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^(new pool|nouvelle banque)$/i }).first().click();
+      await p.waitForTimeout(300);
+      await p.getByRole("button", { name: /^(change the icon|changer l'icône)$/i }).first().click();
+      // The click leaves the pointer over whichever icon took that spot, and
+      // its tooltip then sits in the middle of the grid.
+      await p.mouse.move(0, 0);
+    } },
+  { name: "pool-share", role: "teacher", path: "/pools", fold: true, act: async (p) => {
+      await openRowMenu(p, /^(actions)$/i);
+      await p.getByRole("menuitem", { name: /^(share|partager)…$/i }).click();
+    } },
+
+  // The bell, and the same bell with more than nine unread ("9+").
+  { name: "notifications", role: "teacher", path: "/", fold: true, act: (p) => p.getByRole("button", { name: /^notifications/i }).first().click() },
+  { name: "notifications-many", role: "teacher", path: "/?many=1", fold: true, act: (p) => p.getByRole("button", { name: /^notifications/i }).first().click() },
+
+  // WP: live polls. The launcher is a sheet opened from the navigation; the
+  // projection is a page, and the mock addresses its three polls by name.
+  { name: "poll-launcher", role: "teacher", path: "/", act: (p) => p.getByRole("button", { name: /^(poll|sondage)$/i }).first().click() },
+  { name: "poll-projection", role: "teacher", path: "/evaluations/poll/poll", fold: true },
+  { name: "poll-projection-revealed", role: "teacher", path: "/evaluations/poll/poll?revealed=1", fold: true },
+  { name: "poll-ended", role: "teacher", path: "/evaluations/poll-ended/poll", fold: true },
+  // The participant's half, as a GUEST: no session at all, which is what a
+  // phone in the room has (`?as=guest` in src/mock/index.ts).
+  { name: "join-mcq", role: "teacher", path: "/p/QZ4F7K?as=guest" },
+  { name: "join-revealed", role: "teacher", path: "/p/QZ4F7K?as=guest&revealed=1" },
+  { name: "join-ended", role: "teacher", path: "/p/EN6D3D?as=guest" },
   { name: "pool", role: "teacher", path: "/pools/p1" },
   { name: "pool-empty", role: "teacher", path: "/pools/p1?empty=1", settle: 800 },
   { name: "pool-error", role: "teacher", path: "/pools/p1?fail=1", settle: 2500 },

@@ -11,7 +11,6 @@ import {
   IconButton,
   SearchInput,
   Segmented,
-  Select,
   Sheet,
   Switch,
   ToggleChip,
@@ -56,12 +55,21 @@ import {
  * carries its own bounds and wraps.
  *
  * The second row is not filtering at all: how the list is DRAWN (cards or
- * table), how it is CUT (group by) and how it is ORDERED. It is right
- * aligned and one size down, the way the courses page carries its own view
- * switch — those are the reader's habits, not the data's state, and they must
- * not compete with the field above them. The sort control repeats what the
- * table headers do, because the cards have no headers and because `type` lost
- * its column to an icon and has nowhere else to be clicked.
+ * table), how it is CUT (group by) and how it is ORDERED. It is one size down,
+ * the way the courses page carries its own view switch — those are the
+ * reader's habits, not the data's state, and they must not compete with the
+ * field above them. The sort control repeats what the table headers do,
+ * because the cards have no headers and because `type` lost its column to an
+ * icon and has nowhere else to be clicked.
+ *
+ * All three are `Segmented`, not two selects and a switch. Grouping and
+ * sorting are four and five SHORT, known choices: a select hides them behind
+ * a click and says nothing until it is opened, while a row of pills shows the
+ * whole set and the current one at a glance — which is what a habit control
+ * is for. It costs width, so the labels are one word each and the row wraps
+ * on a phone; the caption before each track ("Group by", "Sort by") is what
+ * keeps two anonymous rows of pills apart, and it is the `aria-label` of the
+ * radiogroup as well.
  */
 const DIFFICULTIES = [1, 2, 3, 4, 5];
 
@@ -387,30 +395,34 @@ export function FilterBar({
       <p className="text-[11px] leading-relaxed text-fg-faint">{t("search.syntax")}</p>
 
       <div className="flex flex-wrap items-center gap-2">
-        <Select
-          size="sm"
-          aria-label={t("pool.groupBy")}
-          value={group}
-          onChange={(e) => onGroup(e.target.value as GroupBy)}
-        >
-          {GROUP_BY.map((g) => (
-            <option key={g} value={g}>
-              {t(`pool.group.${g}` as "pool.group.none")}
-            </option>
-          ))}
-        </Select>
-        <Select
-          size="sm"
-          aria-label={t("pool.sortBy")}
-          value={filters.sort}
-          onChange={(e) => set({ sort: e.target.value as QuestionSort })}
-        >
-          {SORT_KEYS.map((key) => (
-            <option key={key} value={key}>
-              {t(`pool.sort.${key}` as "pool.sort.name")}
-            </option>
-          ))}
-        </Select>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] text-fg-faint">{t("pool.groupBy")}</span>
+          <Segmented
+            name="pool-group"
+            size="sm"
+            label={t("pool.groupBy")}
+            value={group}
+            onChange={(next) => onGroup(next)}
+            options={GROUP_BY.map((g) => ({
+              value: g,
+              label: t(`pool.group.${g}` as "pool.group.none"),
+            }))}
+          />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] text-fg-faint">{t("pool.sortBy")}</span>
+          <Segmented
+            name="pool-sort"
+            size="sm"
+            label={t("pool.sortBy")}
+            value={filters.sort}
+            onChange={(sort) => set({ sort })}
+            options={SORT_KEYS.map((key) => ({
+              value: key,
+              label: t(`pool.sort.${key}` as "pool.sort.name"),
+            }))}
+          />
+        </div>
         <IconButton
           size="sm"
           label={t(filters.dir === "asc" ? "pool.sort.asc" : "pool.sort.desc")}

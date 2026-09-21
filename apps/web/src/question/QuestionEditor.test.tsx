@@ -411,6 +411,65 @@ describe("QuestionEditor — code", () => {
       expect(calls.some((c) => c.url === "/app/api/questions/q2/publish")).toBe(true),
     );
   });
+
+  /*
+   * "Try the reference solution". The mock question says `runtime: "backend"`,
+   * so the screen posts the reference as an ANSWER — one region per editable
+   * part of the template — and turns the server's GRADING into the verdict the
+   * editor shows. The browser branch (`runtime: "runno"`) is the student's own
+   * path and is covered by `runner/index.test.ts`.
+   */
+  it("tries the reference solution through the server, as regions", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch(
+      routes(codeDetail(), {
+        "POST /app/api/questions/q2/try": ok({
+          status: "graded",
+          points: 1,
+          maxPoints: 1,
+          solution: null,
+          details: {
+            runner: "ok",
+            compile: { ok: true, stderr: "", ms: 4 },
+            cases: [{ name: "cas 1", visible: true, points: 1, ok: true, exitCode: 0, ms: 3, timedOut: false, oom: false }],
+            earned: 1,
+            total: 1,
+            sourceSha256: null,
+          },
+        }),
+      }),
+    );
+    renderWithProviders(<QuestionEditor id="q2" navigate={vi.fn()} />);
+    await screen.findByLabelText("Starting code");
+
+    await user.click(screen.getByRole("button", { name: "Try the reference solution" }));
+    expect(await screen.findByText("1 of 1 cases pass.")).toBeInTheDocument();
+    // The template is one editable region, so the whole reference is it.
+    expect(calls.find((c) => c.url === "/app/api/questions/q2/try")?.body).toEqual({
+      source: "draft",
+      answer: { regions: [""] },
+    });
+  });
+
+  it("says the runner is off rather than failing, when it is", async () => {
+    const user = userEvent.setup();
+    mockFetch(
+      routes(codeDetail(), {
+        "POST /app/api/questions/q2/try": ok({
+          status: "runner_unavailable",
+          reason: "stub",
+        }),
+      }),
+    );
+    renderWithProviders(<QuestionEditor id="q2" navigate={vi.fn()} />);
+    await screen.findByLabelText("Starting code");
+    await user.click(screen.getByRole("button", { name: "Try the reference solution" }));
+    expect(
+      await screen.findByText(
+        "The runner is unavailable, so the reference solution cannot be tried right now.",
+      ),
+    ).toBeInTheDocument();
+  });
 });
 
 describe("QuestionEditor — keyboard", () => {
@@ -480,4 +539,61 @@ describe("QuestionEditor — keyboard", () => {
     await user.keyboard("{Control>}{Shift>}M{/Shift}{/Control}");
     await waitFor(() => expect(panel()).not.toBeInTheDocument());
   });
+});
+
+/*
+ * A pool shared with me as `reader` (F-POOL sharing): the question is there to
+ * be READ — that is what sharing is for — so nothing is hidden but the actions
+ * the server would refuse, and the Try tab, which writes nothing, stays live.
+ */
+describe("QuestionEditor — shared as reader", () => {
+  const readerRoutes = (detail: QuestionDetail) =>
+    routes(detail, { "GET /app/api/pools/p1": ok({ ...POOL, role: "reader" as const }) });
+
+  it("says so in the header and drops every action that would be refused", async () => {
+    mockFetch(readerRoutes(mcqDetail()));
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    await screen.findByRole("heading", { name: "ptr-null-check" });
+    expect(
+      await screen.findByText("Read-only — shared with you as reader"),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Publish" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Actions" })).toBeNull();
+    // The one thing a reader may still do with the screen.
+    expect(screen.getByRole("button", { name: "Student preview" })).toBeInTheDocument();
+  });
+
+  it("disables the type's editor and the properties panel", async () => {
+    mockFetch(readerRoutes(mcqDetail()));
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    // The badge is the proof the ROLE has landed: until the pool detail is
+    // there the screen knows nothing and stays as it was.
+    await screen.findByText("Read-only — shared with you as reader");
+    expect(await screen.findByRole("button", { name: "Add a choice" })).toBeDisabled();
+    expect(screen.getByLabelText("Internal name")).toBeDisabled();
+    expect(screen.getByLabelText("Category")).toBeDisabled();
+  }, 20_000);
+
+  it("sends no draft, not even on Ctrl+S, and never opens the publish dialog", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch(readerRoutes(mcqDetail()));
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    await screen.findByRole("heading", { name: "ptr-null-check" });
+
+    await user.keyboard("{Control>}s{/Control}");
+    await user.keyboard("{Control>}{Shift>}P{/Shift}{/Control}");
+    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DELAY_MS * 3));
+
+    expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("still lets a reader try the question", async () => {
+    const user = userEvent.setup();
+    mockFetch(readerRoutes(mcqDetail()));
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    await screen.findByRole("heading", { name: "ptr-null-check" });
+    await user.click(screen.getByRole("tab", { name: "Try" }));
+    expect(await screen.findByRole("heading", { name: "Try the question" })).toBeInTheDocument();
+  }, 20_000);
 });

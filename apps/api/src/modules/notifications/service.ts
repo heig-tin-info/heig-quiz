@@ -17,7 +17,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { NotificationPayload, type Notification, type NotificationList } from "@quiz/contracts";
 
 import type { Db } from "../../db/client.js";
-import { notifications } from "../../db/schema.js";
+import { notifications, pools } from "../../db/schema.js";
 import { hint, userTopic } from "../realtime/bus.js";
 
 export const DEFAULT_LIMIT = 30;
@@ -58,6 +58,24 @@ function notificationJson(row: NotificationRow): Notification {
   };
 }
 
+/**
+ * A notification points at a pool; the pool may be gone since. Such a row is
+ * a dead end — the bell would walk the reader to a 404 — so it is filtered
+ * OUT of the list AND out of `unread`, in the same statement rather than in a
+ * second round trip: a LEFT JOIN on `pools` over the payload's `poolId`.
+ *
+ * `pools.id` is compared as text on purpose: the payload is a union, a future
+ * kind may carry no `poolId` at all, and `->> 'poolId'` would then have to be
+ * cast to uuid — which throws on anything that is not one. A row without a
+ * `poolId` is kept (nothing to dangle).
+ *
+ * The rows themselves are never deleted here: `deletePool` does that
+ * (`dropPoolNotifications`), and a read stays a read.
+ */
+const poolStillThere = sql`(${notifications.payload} ->> 'poolId' is null or ${pools.id} is not null)`;
+
+const onPoolId = sql`${pools.id}::text = ${notifications.payload} ->> 'poolId'`;
+
 /** `GET /notifications`: newest first, capped, `unread` over the whole inbox. */
 export async function listNotifications(
   db: Db,
@@ -66,18 +84,22 @@ export async function listNotifications(
 ): Promise<NotificationList> {
   const [rows, [counted]] = await Promise.all([
     db
-      .select()
+      .select({ row: notifications })
       .from(notifications)
-      .where(eq(notifications.userId, userId))
+      .leftJoin(pools, onPoolId)
+      .where(and(eq(notifications.userId, userId), poolStillThere))
       .orderBy(desc(notifications.createdAt), desc(notifications.id))
       .limit(limit),
     db
       .select({ n: sql<number>`count(*)::int` })
       .from(notifications)
-      .where(and(eq(notifications.userId, userId), isNull(notifications.readAt))),
+      .leftJoin(pools, onPoolId)
+      .where(
+        and(eq(notifications.userId, userId), isNull(notifications.readAt), poolStillThere),
+      ),
   ]);
   const items: Notification[] = [];
-  for (const row of rows) {
+  for (const { row } of rows) {
     try {
       items.push(notificationJson(row));
     } catch {
@@ -85,6 +107,20 @@ export async function listNotifications(
     }
   }
   return { items, unread: counted?.n ?? 0 };
+}
+
+/**
+ * Every notification that points at one pool, gone with it. The payload is a
+ * union, so there is no foreign key to carry the cascade: the predicate reads
+ * the jsonb. Called by `pool.deletePool` — the `notifications` table is
+ * written here and nowhere else.
+ */
+export async function dropPoolNotifications(db: Db, poolId: string): Promise<number> {
+  const removed = await db
+    .delete(notifications)
+    .where(sql`${notifications.payload} ->> 'poolId' = ${poolId}`)
+    .returning({ id: notifications.id });
+  return removed.length;
 }
 
 /**

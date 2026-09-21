@@ -14,6 +14,7 @@ import type { RunnerOutcome } from "@quiz/core/server";
 import { compareOutput } from "@quiz/domain";
 
 import { CodeArea } from "./MonacoHost.js";
+import { referenceRegions } from "./reference.js";
 import { splitForDisplay } from "./segments.js";
 import {
   CODE_LANGUAGES,
@@ -30,12 +31,20 @@ import { badge, button, card, cx, hint, input, inputSm, label, sectionTitle } fr
 
 export interface CodeEditorProps extends EditorProps<CodeConfig> {
   /**
-   * Runs the reference solution against every case. The host posts to
-   * `POST /questions/:id/try`; the request is assembled server-side, so this
-   * component never builds one. `"unavailable"` means the runner is off
-   * (`RUNNER_MODE=stub`), which is the default and not an error.
+   * Runs the reference solution against every case. The host decides WHERE
+   * (`CodeConfig.runtime`: the browser runner, or `POST /questions/:id/try`)
+   * and rebuilds the source itself from the template and
+   * {@link referenceRegions}; this component never builds a request.
+   *
+   * Three answers, because the two runners do not return the same thing:
+   * a {@link RunnerOutcome} when the run was raw and the cases still have to
+   * be judged (the browser), `{ graded }` when the SERVER already judged them
+   * (`POST /try` returns a grading, not a run — `TryResult` in
+   * `@quiz/contracts` carries no per-case runner outcome), and
+   * `"unavailable"` when no runner could, which is a configuration and not an
+   * error (`RUNNER_MODE=stub` is the default).
    */
-  onTry?: ((config: CodeConfig) => Promise<RunnerOutcome | "unavailable">) | undefined;
+  onTry?: ((config: CodeConfig) => Promise<CodeTryOutcome>) | undefined;
   strings?: Partial<CodeEditorStrings> | undefined;
   /**
    * The host's sanitised markdown view, used to preview the statement under
@@ -47,11 +56,22 @@ export interface CodeEditorProps extends EditorProps<CodeConfig> {
   monaco?: boolean | undefined;
 }
 
+/** What the reference run came back with; see `CodeEditorProps.onTry`. */
+export type CodeTryOutcome =
+  | RunnerOutcome
+  | "unavailable"
+  | { graded: { compileOk: boolean; passed: number; total: number } };
+
 type TryState =
   | { status: "idle" }
   | { status: "running" }
   | { status: "unavailable" }
-  | { status: "failed" }
+  /**
+   * `compile`: the reference solution does not build. `regions`: it does not
+   * MATCH the template — the two are different mistakes and the teacher fixes
+   * them in different places, so they never share a sentence.
+   */
+  | { status: "failed"; reason: "compile" | "regions" }
   | { status: "done"; passed: number; total: number };
 
 const NEW_CASE: CodeCase = {
@@ -118,6 +138,16 @@ export function CodeEditor({
 
   async function runReference() {
     if (onTry === undefined) return;
+    /*
+     * The split is checked HERE, before anything leaves: a reference solution
+     * whose `@@next` pieces do not match the template's editable regions is a
+     * mistake in the text on this screen, and the teacher must read it as one
+     * — not as a compiler error from a program that was never assembled.
+     */
+    if (referenceRegions(config) === null) {
+      setTryState({ status: "failed", reason: "regions" });
+      return;
+    }
     setTryState({ status: "running" });
     try {
       const outcome = await onTry(config);
@@ -125,8 +155,17 @@ export function CodeEditor({
         setTryState({ status: "unavailable" });
         return;
       }
+      if ("graded" in outcome) {
+        // The server judged the cases: its verdict is the answer, and
+        // re-deciding it here from an output we do not have would be a guess.
+        const { compileOk, passed, total } = outcome.graded;
+        setTryState(
+          compileOk ? { status: "done", passed, total } : { status: "failed", reason: "compile" },
+        );
+        return;
+      }
       if (!outcome.compile.ok) {
-        setTryState({ status: "failed" });
+        setTryState({ status: "failed", reason: "compile" });
         return;
       }
       const passed = config.tests.cases.reduce((count, testCase, i) => {
@@ -144,7 +183,7 @@ export function CodeEditor({
       }, 0);
       setTryState({ status: "done", passed, total: config.tests.cases.length });
     } catch {
-      setTryState({ status: "failed" });
+      setTryState({ status: "failed", reason: "compile" });
     }
   }
 
@@ -294,7 +333,7 @@ export function CodeEditor({
             ) : null}
             {tryState.status === "failed" ? (
               <p role="status" className="text-[13px] text-danger">
-                {s.tryCompileFailed}
+                {tryState.reason === "regions" ? s.tryRegionsMismatch : s.tryCompileFailed}
               </p>
             ) : null}
             {tryState.status === "done" ? (

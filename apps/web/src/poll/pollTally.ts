@@ -17,6 +17,9 @@
  * saw, whatever it is called in the config.
  */
 import { foldPollAnswer } from "@quiz/domain";
+// A, B, C… comes from the type that owns the letter, so a row on the wall is
+// lettered exactly as the same choice is in the editor and in the review.
+import { choiceLetter } from "@quiz/qt-mcq/client";
 
 import type { PollTally, PollTeacherView } from "@quiz/contracts";
 
@@ -59,11 +62,6 @@ export interface PollRow {
   correct: boolean;
 }
 
-/** A, B, C… — the position of a row on the beamer. */
-export function letterOf(index: number): string {
-  return String.fromCharCode(65 + (index % 26));
-}
-
 /**
  * The denominator of every percentage: the participants who ANSWERED, never
  * the ones who joined. "27 %" on a beamer means "27 % of the answers", which
@@ -96,7 +94,7 @@ function mcqRows(question: PollTeacherView["question"], tally: PollTally): PollR
     const count = counts.get(choice.id) ?? 0;
     return {
       key: `c${choice.id}`,
-      letter: letterOf(position),
+      letter: choiceLetter(position),
       label: choice.text,
       markdown: true,
       count,

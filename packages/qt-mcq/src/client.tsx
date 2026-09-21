@@ -77,3 +77,10 @@ export {
   type McqStatsStringKey,
 } from "./strings.js";
 export type { McqAnswer, McqConfig, McqDetails, McqSolution, McqStudent } from "./schema.js";
+
+/*
+ * The letter of a choice is a VALUE the hosts need: the poll projection letters
+ * its rows on the wall exactly as the editor, the player and the review letter
+ * theirs. One definition (`schema.ts`), one way out for a browser.
+ */
+export { choiceLetter } from "./ui.js";

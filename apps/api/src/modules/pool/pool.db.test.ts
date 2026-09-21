@@ -24,6 +24,7 @@ import { loadConfig as loadAppConfig } from "../../config.js";
 import { syncRoleOfUser } from "../../roles.js";
 import { testDb } from "../../test/db.js";
 import { fakeShort, fakeV1Config } from "../../test/fakeType.js";
+import { notify } from "../notifications/service.js";
 import { loadConfig, saveDraftConfig, tryLoadConfig } from "./config.js";
 import * as service from "./service.js";
 
@@ -621,6 +622,36 @@ describe("members (F-POOL-05)", () => {
       .values({ id: studentId, oidcSub: `s-${studentId}`, email: "pupil@heig.test", role: "student" });
     expect(await service.findTeacherByEmail(db, "pupil@heig.test")).toBeNull();
     expect(await service.findTeacherByEmail(db, "nobody@heig.test")).toBeNull();
+  });
+});
+
+describe("deleting a pool", () => {
+  it("takes the bells that point at it with it", async () => {
+    const doomed = await seedPool();
+    const kept = await seedPool();
+    const colleague = await seedTeacher(`bell-${randomUUID().slice(0, 6)}@heig.test`);
+    // What the invitation route writes once the seat is granted.
+    for (const poolId of [doomed, kept]) {
+      await notify(db, colleague, {
+        kind: "pool_shared",
+        poolId,
+        poolName: "Pool",
+        role: "reader",
+        byName: "Prof Démo",
+      });
+    }
+
+    const before = await db.select().from(notifications).where(eq(notifications.userId, colleague));
+    expect(before).toHaveLength(2);
+
+    await service.deletePool(db, doomed);
+
+    // The payload is a union and carries no foreign key: without the explicit
+    // delete the bell would keep offering a row that opens on a 404.
+    const after = await db.select().from(notifications).where(eq(notifications.userId, colleague));
+    expect(after.map((r) => (r.payload as { poolId: string }).poolId)).toEqual([kept]);
+    expect(await db.select().from(pools).where(eq(pools.id, doomed))).toHaveLength(0);
+    expect(await db.select().from(pools).where(eq(pools.id, kept))).toHaveLength(1);
   });
 });
 

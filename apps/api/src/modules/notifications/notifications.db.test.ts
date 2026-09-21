@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import type { Db } from "../../db/client.js";
-import { notifications, users } from "../../db/schema.js";
+import { notifications, pools, users } from "../../db/schema.js";
 import { subscribe } from "../../events.js";
 import { testDb } from "../../test/db.js";
 import * as service from "./service.js";
@@ -19,14 +19,30 @@ async function seedUser(email: string): Promise<string> {
   return id;
 }
 
-function poolShared(name: string) {
+/**
+ * A real pool behind every notification: the bell drops a row whose pool is
+ * gone (it would walk the reader to a 404), so a fixture pointing at a random
+ * uuid would be invisible to every assertion below.
+ */
+async function seedPool(name: string): Promise<string> {
+  const id = randomUUID();
+  await db.insert(pools).values({ id, name, ownerId: alice });
+  return id;
+}
+
+function poolShared(poolId: string, name: string) {
   return {
     kind: "pool_shared",
-    poolId: randomUUID(),
+    poolId,
     poolName: name,
     role: "reader",
     byName: "Prof Démo",
   } as const;
+}
+
+/** The fixture of the common case: a pool that exists, shared with somebody. */
+async function sharedPool(name: string) {
+  return poolShared(await seedPool(name), name);
 }
 
 beforeAll(async () => {
@@ -41,7 +57,7 @@ describe("notify", () => {
     const off = subscribe((e) => {
       if (e.kind === "hint") seen.push({ type: e.type, topics: e.topics });
     });
-    const created = await service.notify(db, alice, poolShared("Programmation C"));
+    const created = await service.notify(db, alice, await sharedPool("Programmation C"));
     off();
 
     expect(created.readAt).toBeNull();
@@ -63,7 +79,7 @@ describe("the inbox", () => {
   it("is newest first, capped, and counts the unread over the WHOLE inbox", async () => {
     const names = ["one", "two", "three"];
     for (const [index, name] of names.entries()) {
-      const created = await service.notify(db, bob, poolShared(name));
+      const created = await service.notify(db, bob, await sharedPool(name));
       // The order is `created_at`; three inserts in the same millisecond would
       // leave it to the tie-break, so each row is aged by hand.
       await db
@@ -102,14 +118,53 @@ describe("the inbox", () => {
     const listed = await service.listNotifications(db, alice);
     expect(listed.items.map((n) => n.id)).not.toContain(orphan);
     // It is still counted as unread: the row exists, only its sentence is lost.
+    // It carries no `poolId` either, so the dangling filter leaves it alone.
     expect(listed.unread).toBeGreaterThan(0);
     await db.delete(notifications).where(eq(notifications.id, orphan));
+  });
+
+  it("drops a notification whose pool was deleted, from the list AND from unread", async () => {
+    const poolId = await seedPool("Pool éphémère");
+    const created = await service.notify(db, alice, poolShared(poolId, "Pool éphémère"));
+    const before = await service.listNotifications(db, alice);
+    expect(before.items.map((n) => n.id)).toContain(created.id);
+
+    await db.delete(pools).where(eq(pools.id, poolId));
+
+    const after = await service.listNotifications(db, alice);
+    // The bell would otherwise offer a row that opens on a 404.
+    expect(after.items.map((n) => n.id)).not.toContain(created.id);
+    expect(after.unread).toBe(before.unread - 1);
+    // The row is still there; only the READ hides it. `deletePool` removes it.
+    const [row] = await db.select().from(notifications).where(eq(notifications.id, created.id));
+    expect(row).toBeDefined();
+    await db.delete(notifications).where(eq(notifications.id, created.id));
+  });
+});
+
+describe("dropPoolNotifications", () => {
+  it("removes every row pointing at one pool and leaves the others standing", async () => {
+    const doomed = await seedPool("Pool supprimé");
+    const kept = await seedPool("Pool gardé");
+    const a = await service.notify(db, alice, poolShared(doomed, "Pool supprimé"));
+    const b = await service.notify(db, bob, poolShared(doomed, "Pool supprimé"));
+    const c = await service.notify(db, alice, poolShared(kept, "Pool gardé"));
+
+    expect(await service.dropPoolNotifications(db, doomed)).toBe(2);
+
+    const gone = await db.select().from(notifications).where(eq(notifications.userId, alice));
+    expect(gone.map((r) => r.id)).not.toContain(a.id);
+    expect(gone.map((r) => r.id)).toContain(c.id);
+    const bobs = await db.select().from(notifications).where(eq(notifications.id, b.id));
+    expect(bobs).toHaveLength(0);
+    // Nothing left: a second call is a no-op.
+    expect(await service.dropPoolNotifications(db, doomed)).toBe(0);
   });
 });
 
 describe("marking read", () => {
   it("marks one, is idempotent, and ignores somebody else's row", async () => {
-    const created = await service.notify(db, alice, poolShared("Électronique"));
+    const created = await service.notify(db, alice, await sharedPool("Électronique"));
     expect(await service.markRead(db, alice, created.id)).toBe(true);
     // Twice is a success: the button must not fail on a double click.
     expect(await service.markRead(db, alice, created.id)).toBe(true);

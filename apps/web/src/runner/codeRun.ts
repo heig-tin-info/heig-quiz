@@ -18,8 +18,9 @@
  *    program reads `data.csv` therefore has to run on the backend; the
  *    browser gets an empty file rather than a wrong one.
  */
+import { assembleSource as assembleFromTemplate } from "@quiz/domain";
 import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
-import type { CodeAnswer, CodeRunOptions, CodeStudent } from "@quiz/qt-code/client";
+import type { CodeAnswer, CodeConfig, CodeRunOptions, CodeStudent } from "@quiz/qt-code/client";
 
 import { browserCanRun, runWithFallback } from "./index";
 
@@ -100,4 +101,40 @@ export async function runCode(args: {
     backend: (built) => args.backend(built, manual),
     hooks: args.options?.onStage === undefined ? undefined : { onStage: args.options.onStage },
   });
+}
+
+/**
+ * The TEACHER'S try, built from the whole config.
+ *
+ * The student's request above is deliberately poorer than this one, and for a
+ * reason that does not apply here: what it may carry is bounded by what
+ * `toStudent` let out, so it compiles with the toolchain's defaults and reads
+ * empty extra files. The editor holds the config itself — the teacher wrote
+ * it — so the flags and the files travel, and the run the teacher sees is the
+ * run the grader will do.
+ *
+ * Every case, hidden ones included, in the config's order: the editor counts
+ * the passes by walking `outcome.cases[i]` beside `config.tests.cases[i]`.
+ *
+ * Nothing here weakens invariant 14. This request never grades anything; the
+ * mark is computed server-side from the stored template and the stored
+ * regions, and this source is rebuilt by the same `assembleSource` the API
+ * uses, from the template plus the regions read out of the reference solution.
+ */
+export function referenceRunRequest(
+  config: CodeConfig,
+  regions: readonly string[],
+): RunnerRequest {
+  return {
+    language: config.language,
+    files: [
+      { name: "main", content: assembleFromTemplate(config.template, config.language, regions) },
+      ...config.files.map((file) => ({ name: file.name, content: file.content })),
+    ],
+    compileArgs: config.compileArgs,
+    action: config.action,
+    limits: config.limits,
+    cases: config.tests.cases.map((c) => ({ name: c.name, args: c.args, stdin: c.stdin })),
+    priority: "interactive",
+  };
 }

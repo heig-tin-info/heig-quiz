@@ -23,6 +23,7 @@ export interface CodeEditorStrings {
   trying: string;
   tryUnavailable: string;
   tryCompileFailed: string;
+  tryRegionsMismatch: string;
   tryResult: (passed: number, total: number) => string;
   cases: string;
   case: (n: number) => string;
@@ -80,11 +81,13 @@ export const EDITOR_STRINGS: CodeEditorStrings = {
   editable: "Editable",
   referenceSolution: "Reference solution",
   referenceSolutionHint:
-    "Your own answer. Used only by the button below, to check that the cases pass. A student never sees it.",
+    "Your own answer to the editable parts, in the order they appear — with several of them, separate the pieces with a @@next comment line, exactly as the template uses @@lock. Used only by the button below, to check that the cases pass. A student never sees it.",
   tryReference: "Try the reference solution",
   trying: "Running…",
   tryUnavailable: "The runner is unavailable, so the reference solution cannot be tried right now.",
   tryCompileFailed: "The reference solution does not compile.",
+  tryRegionsMismatch:
+    "The reference solution does not match the starting code: it must hold one piece per editable region, separated by a @@next comment line.",
   tryResult: (passed, total) => `${passed} of ${total} cases pass.`,
   cases: "Test cases",
   case: (n) => `Case ${n}`,

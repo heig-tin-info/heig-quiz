@@ -10,7 +10,18 @@ import { describe, expect, it, vi } from "vitest";
 import { CodeEditor } from "./Editor.js";
 import { monacoAvailable } from "./MonacoHost.js";
 import { CodeConfig } from "./schema.js";
-import { codeConfig, outcome } from "./test/fixtures.js";
+import { codeConfig, configFor, outcome } from "./test/fixtures.js";
+
+/**
+ * The fixture template has TWO editable regions, so its reference solution
+ * only fits once it is cut in two by a `@@next` line (`./reference.ts`). The
+ * helper writes that split, because a try must not be tested on a reference
+ * the editor is right to refuse.
+ */
+const withSplitReference = (): CodeConfig => ({
+  ...codeConfig(),
+  referenceSolution: ["#include <stdio.h>", "/* @@next */", "    return 6;"].join("\n"),
+});
 
 function setup(overrides: Partial<React.ComponentProps<typeof CodeEditor>> = {}) {
   const onChange = vi.fn<(next: CodeConfig) => void>();
@@ -142,6 +153,7 @@ describe("CodeEditor", () => {
 
   it("says how many cases the reference solution passes", async () => {
     setup({
+      config: withSplitReference(),
       onTry: async () =>
         outcome([{ stdout: "6\n" }, { stdout: "0\n" }, { stdout: "5 (hidden-expected-marker)" }]),
     });
@@ -149,8 +161,43 @@ describe("CodeEditor", () => {
     expect(await screen.findByText("3 of 3 cases pass.")).toBeInTheDocument();
   });
 
+  it("shows the server's own verdict when the server graded instead of running", async () => {
+    // `POST /questions/:id/try` answers a GRADING: there is no per-case runner
+    // outcome to judge, so the editor reports what came back rather than
+    // deciding the cases a second time from an output it does not have.
+    setup({
+      config: withSplitReference(),
+      onTry: async () => ({ graded: { compileOk: true, passed: 2, total: 3 } }),
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Try the reference solution" }));
+    expect(await screen.findByText("2 of 3 cases pass.")).toBeInTheDocument();
+  });
+
+  it("runs a single-region reference as it stands, with nothing to separate", async () => {
+    const onTry = vi.fn(async () => outcome([{ stdout: "" }]));
+    // `configFor` locks a header and a footer around one editable body: one
+    // region, so the whole reference solution IS that region.
+    setup({ config: { ...configFor("c"), referenceSolution: "return 0;" }, onTry });
+    fireEvent.click(screen.getByRole("button", { name: "Try the reference solution" }));
+    expect(await screen.findByText("1 of 1 cases pass.")).toBeInTheDocument();
+    expect(onTry).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a reference that does not fit the template, before running anything", async () => {
+    const onTry = vi.fn(async () => outcome([{ stdout: "" }]));
+    // Two editable regions in the fixture template, one undivided reference.
+    setup({ config: codeConfig(), onTry });
+    fireEvent.click(screen.getByRole("button", { name: "Try the reference solution" }));
+    expect(
+      await screen.findByText(
+        "The reference solution does not match the starting code: it must hold one piece per editable region, separated by a @@next comment line.",
+      ),
+    ).toBeInTheDocument();
+    expect(onTry).not.toHaveBeenCalled();
+  });
+
   it("degrades to one clear line when the runner is off", async () => {
-    setup({ onTry: async () => "unavailable" });
+    setup({ config: withSplitReference(), onTry: async () => "unavailable" });
     fireEvent.click(screen.getByRole("button", { name: "Try the reference solution" }));
     expect(
       await screen.findByText(

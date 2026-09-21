@@ -8,8 +8,10 @@ import type {
   PoolDetail,
   PreviewResult,
   QuestionDetail,
+  TryResult,
   ZodIssueLite,
 } from "@quiz/contracts";
+import { referenceRegions, type CodeConfig, type CodeDetails } from "@quiz/qt-code/client";
 
 import { api, apiErrorMessage } from "../api";
 import { useConfirm } from "../confirm";
@@ -17,9 +19,16 @@ import { HelpIcon } from "../help";
 import { useT } from "../i18n";
 import { MarkdownField } from "../markdown/MarkdownField";
 import { useToast } from "../notify";
-import { QuestionEditorHost, QuestionPlayerHost, typeIcon, typeLabel } from "../questionTypes";
-import type { Route } from "../router";
-import { useSearchParam } from "../router";
+import {
+  QuestionEditorHost,
+  QuestionPlayerHost,
+  typeIcon,
+  typeLabel,
+  type TryOutcome,
+} from "../questionTypes";
+import { useSearchParam, type Route } from "../router";
+import { BrowserRunnerUnavailable, runnerFor } from "../runner";
+import { referenceRunRequest } from "../runner/codeRun";
 import { useScreenCommands } from "../screenCommands";
 import { useShortcuts } from "../shortcuts";
 import {
@@ -110,6 +119,19 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
     queryFn: () => api(`/app/api/pools/${poolId!}`),
     enabled: poolId !== undefined,
   });
+  /*
+   * A pool shared with me as `reader` (`PoolDetail.role`, the same predicate
+   * `PoolView` uses for its own list). The question is READABLE — that is the
+   * point of sharing — so the screen stays whole: the form, the properties
+   * and the Try tab are all there, simply not writable. Nothing is hidden
+   * except the actions that would be refused.
+   *
+   * The query is the one the pool screen already filled, so this costs no
+   * request; while it is in flight the screen is writable-looking for a
+   * moment, and the server refuses anyway (`staffAccess` / the pool role) —
+   * this is chrome, never the rule.
+   */
+  const readOnly = pool.data?.role === "reader";
 
   // `DraftSaved.updatedAt` of the last write THIS editor made. It is what
   // tells our own draft apart from a foreign one when the question query
@@ -129,10 +151,12 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
     [id],
   );
 
+  // `enabled: false` for a reader: not one `PUT /draft` leaves the browser,
+  // whatever a control that slipped through would do to the local draft.
   const autosave = useAutosave<Draft>({
     value: draft ?? { config: null, explanation: "" },
     save,
-    enabled: draft !== null,
+    enabled: draft !== null && !readOnly,
   });
 
   /**
@@ -209,18 +233,80 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
     if (ok) remove.mutate();
   }, [confirm, meta, remove, t]);
 
+  const { flush } = autosave;
+
+  /**
+   * "Try the reference solution" (`CodeEditor`), on whichever runner the
+   * question asks for — the same choice a STUDENT'S "Run" goes through
+   * (`src/runner/`, ADR-015), so a teacher rehearses on the engine their
+   * class will meet.
+   *
+   * The reference solution is read as one piece per editable region
+   * (`referenceRegions`, `@@next` between them). The editor refuses a
+   * mismatch before it ever calls this, which is why `null` below is a bug
+   * and not a state: it throws rather than inventing a verdict.
+   *
+   *  - `runtime: "runno"`: the browser runner runs the program assembled
+   *    here from the DRAFT's template and those regions, with the teacher's
+   *    compiler flags and the real content of the extra files — the editor
+   *    holds the whole config, so nothing has to be withheld the way
+   *    `toStudent` withholds it from a student. It answers a raw
+   *    `RunnerOutcome` and the editor judges the cases itself.
+   *  - `runtime: "backend"`, or a browser runtime that would not load:
+   *    `POST /questions/:id/try` grades the reference solution as an ANSWER.
+   *    It returns a grading, not a run (`TryResult` carries no per-case
+   *    runner outcome), so what comes back is the server's own verdict —
+   *    `{ graded }` — and the editor shows it instead of re-deciding it.
+   */
+  const tryReference = useCallback(
+    async (raw: unknown): Promise<TryOutcome> => {
+      const config = raw as CodeConfig;
+      const regions = referenceRegions(config);
+      if (regions === null) throw new Error("reference solution does not fit the template");
+
+      const browser = await runnerFor(config.runtime, config.language);
+      if (browser !== null) {
+        try {
+          return await browser.run(referenceRunRequest(config, regions));
+        } catch (error) {
+          // The runtime did not load on this deployment: the server answers
+          // the same question, exactly as it does for a student.
+          if (!(error instanceof BrowserRunnerUnavailable)) throw error;
+        }
+      }
+
+      // The route grades what the server HOLDS, so the draft goes first.
+      flush();
+      const result = await api<TryResult>(`/app/api/questions/${id}/try`, {
+        method: "POST",
+        body: JSON.stringify({ source: "draft", answer: { regions } }),
+      });
+      if (result.status !== "graded") return "unavailable";
+      const details = result.details as CodeDetails;
+      if (details.runner !== "ok") return "unavailable";
+      return {
+        graded: {
+          // `null` is a language with no compile step, not a failure.
+          compileOk: details.compile?.ok ?? true,
+          passed: details.cases.filter((c) => c.ok).length,
+          total: details.cases.length,
+        },
+      };
+    },
+    [flush, id],
+  );
+
   // docs/spec/08 §8.4: Ctrl+S saves (the automatic save is invisible and a
   // teacher wants to be sure), Ctrl+Shift+P publishes, Ctrl+Shift+M shows the
   // student preview, Ctrl+Enter tries the question. All four are reachable
   // with the mouse as well.
-  const { flush } = autosave;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
       const key = e.key.toLowerCase();
       if (key === "s" && !e.shiftKey) {
         e.preventDefault();
-        flush();
+        if (!readOnly) flush();
         return;
       }
       // §8.5 "Essayer la question": the draft is saved first — the Try tab
@@ -238,7 +324,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
       if (!e.shiftKey) return;
       if (key === "p") {
         e.preventDefault();
-        setPublishing(true);
+        if (!readOnly) setPublishing(true);
       } else if (key === "m") {
         e.preventDefault();
         setPreview((v) => !v);
@@ -246,17 +332,24 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [flush, setTab]);
+  }, [flush, readOnly, setTab]);
 
   // The same four, shown in the sidebar strip while this screen is mounted.
   // The sentence that used to spell them out under the form is gone: a hint
   // that only the editor carried is now the frame's, and it follows the page.
-  useShortcuts([
-    { keys: `${modKey()}+S`, label: t("common.save") },
-    { keys: `${modKey()}+Enter`, label: t("question.tab.try") },
-    { keys: `${modKey()}+Shift+P`, label: t("question.publish") },
-    { keys: `${modKey()}+Shift+M`, label: t("question.preview") },
-  ]);
+  useShortcuts(
+    readOnly
+      ? [
+          { keys: `${modKey()}+Enter`, label: t("question.tab.try") },
+          { keys: `${modKey()}+Shift+M`, label: t("question.preview") },
+        ]
+      : [
+          { keys: `${modKey()}+S`, label: t("common.save") },
+          { keys: `${modKey()}+Enter`, label: t("question.tab.try") },
+          { keys: `${modKey()}+Shift+P`, label: t("question.publish") },
+          { keys: `${modKey()}+Shift+M`, label: t("question.preview") },
+        ],
+  );
 
   useEffect(() => {
     if (!followToPanel.current) return;
@@ -268,14 +361,18 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   // shortcut as a hidden keyword, so typing "ctrl+shift+p" finds the action
   // it belongs to.
   useScreenCommands([
-    {
-      id: "question:publish",
-      label: t("palette.publish"),
-      icon: CloudUpload,
-      group: "action",
-      keywords: "ctrl+shift+p",
-      run: () => setPublishing(true),
-    },
+    ...(readOnly
+      ? []
+      : [
+          {
+            id: "question:publish",
+            label: t("palette.publish"),
+            icon: CloudUpload,
+            group: "action" as const,
+            keywords: "ctrl+shift+p",
+            run: () => setPublishing(true),
+          },
+        ]),
     {
       id: "question:preview",
       label: t("palette.preview"),
@@ -360,7 +457,13 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
             {draftAhead ? (
               <Badge tone="amber">{t("question.unpublished")}</Badge>
             ) : null}
-            <SyncBadge state={autosave.state} />
+            {readOnly ? (
+              <Badge tone="zinc" icon={Eye}>
+                {t("question.readOnly")}
+              </Badge>
+            ) : (
+              <SyncBadge state={autosave.state} />
+            )}
           </span>
         }
         actions={
@@ -368,21 +471,36 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
             <Button variant="secondary" onClick={() => setPreview((v) => !v)} aria-pressed={preview}>
               <Eye /> {t("question.preview")}
             </Button>
-            <Button onClick={() => setPublishing(true)}>{t("question.publish")}</Button>
-            <Menu
-              label={t("common.actions")}
-              items={[
-                { label: t("question.saveNow"), icon: Save, onSelect: () => autosave.flush() },
-                { label: t("question.duplicate"), icon: Copy, onSelect: () => duplicate.mutate() },
-                {
-                  label: t("question.delete"),
-                  icon: Trash2,
-                  danger: true,
-                  separator: true,
-                  onSelect: () => void askDelete(),
-                },
-              ]}
-            />
+            {/*
+             * A reader keeps the preview and loses the rest. Publish, save and
+             * delete would each be refused by the server, and "duplicate"
+             * writes into THIS pool, which a reader may not do either — so the
+             * overflow menu has nothing left to hold and goes with them, rather
+             * than staying as a row of actions that answer with an error.
+             */}
+            {readOnly ? null : (
+              <>
+                <Button onClick={() => setPublishing(true)}>{t("question.publish")}</Button>
+                <Menu
+                  label={t("common.actions")}
+                  items={[
+                    { label: t("question.saveNow"), icon: Save, onSelect: () => autosave.flush() },
+                    {
+                      label: t("question.duplicate"),
+                      icon: Copy,
+                      onSelect: () => duplicate.mutate(),
+                    },
+                    {
+                      label: t("question.delete"),
+                      icon: Trash2,
+                      danger: true,
+                      separator: true,
+                      onSelect: () => void askDelete(),
+                    },
+                  ]}
+                />
+              </>
+            )}
           </>
         }
       />
@@ -420,8 +538,10 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
                     setDraft({ ...draft, config });
                   }}
                   issues={configIssues}
+                  disabled={readOnly}
                   uploadAsset={uploadAsset}
                   aside={scoringSlot}
+                  {...(data.meta.type === "code" ? { onTry: tryReference } : {})}
                 />
               ) : (
                 <Spinner />
@@ -443,6 +563,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
               </div>
               <MarkdownField
                 className="[&>label]:hidden"
+                disabled={readOnly}
                 label={t("question.explanation")}
                 value={draft?.explanation ?? ""}
                 onChange={(explanation) => {
@@ -459,6 +580,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
               meta={data.meta}
               categories={pool.data?.categories ?? []}
               poolName={pool.data?.pool.name ?? "—"}
+              disabled={readOnly}
             />
             {/* Where the type's own settings land, under "Properties". Empty
                 for a type that portals nothing, and then it must not eat a
