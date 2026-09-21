@@ -7,7 +7,7 @@ heig-classroom is, on the same machines (ADR-016):
 | --- | --- | --- |
 | Already runs | heig-classroom (`:3000`), evaluation-tb (`:3001`), a native Caddy | heig-codespace, rootful Podman 5.7, a native Caddy |
 | Gets | `/opt/quiz`: `app` (`127.0.0.1:3002`), `postgres`, `backup` — Docker Compose | `/opt/quiz-runner`: the runner as a Podman quadlet on `127.0.0.1:3200` |
-| Vhost | `/etc/caddy/conf.d/quiz.caddy` → `quiz.chevallier.io` | `/etc/caddy/conf.d/quiz-runner.caddy` → `quiz-runner.chevallier.io` |
+| Vhost | `/etc/caddy/conf.d/quiz.caddy` → `quiz.chevallier.io` | `/etc/caddy/conf.d/quiz-runner.caddy` → `code.chevallier.io:8443` |
 | Deploys through | `/opt/quiz/deploy.sh` (forced command) | `/opt/quiz-runner/apps/runner/deploy/deploy.sh` (forced command) |
 
 Neither VM ever builds anything of ours: the two images come from GHCR, built
@@ -17,9 +17,12 @@ heig-codespace) gained that one `import /etc/caddy/conf.d/*.caddy` line.
 
 ## 1. DNS
 
-Two A records: `quiz.chevallier.io` → the classroom VM, `quiz-runner.chevallier.io`
-→ the code VM. Caddy obtains the certificates on its own once they resolve
-(`dig +short <name>`).
+One A record, `quiz.chevallier.io` → the classroom VM; Caddy obtains the
+certificate on its own once it resolves (`dig +short quiz.chevallier.io`). The
+runner is reached through the code VM's existing name, `code.chevallier.io`,
+on port **8443** — the same certificate, a port of its own so that the
+codespace's `:443` site block is not touched. That port must be open in the
+Hetzner firewall for the classroom VM's address.
 
 ## 2. The application VM (`/opt/quiz`)
 

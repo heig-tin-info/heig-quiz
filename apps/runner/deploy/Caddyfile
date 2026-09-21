@@ -1,4 +1,7 @@
-# Vhost of quiz-runner.chevallier.io, on the code VM (ADR-016).
+# The runner's front door on the code VM (ADR-016): the VM's own name,
+# code.chevallier.io, on port 8443 — the :443 site block belongs to
+# heig-codespace and stays untouched, and Caddy reuses the certificate it
+# already holds for that name.
 #
 # That VM's /etc/caddy/Caddyfile belongs to heig-codespace; it gained one
 # `import /etc/caddy/conf.d/*.caddy` line and this fragment lives there:
@@ -8,7 +11,7 @@
 # address of a TLS connection cannot be spoofed), and the API must present the
 # shared RUNNER_TOKEN, which the runner itself checks. Losing either one
 # leaves the other.
-quiz-runner.chevallier.io {
+https://code.chevallier.io:8443 {
 	encode gzip
 
 	header {

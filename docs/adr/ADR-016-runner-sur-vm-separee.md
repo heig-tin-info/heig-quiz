@@ -35,8 +35,10 @@ compose network only.
    path), read-only root, no capability. The sandbox containers it starts are unchanged. The language images
    are built on that VM from `apps/runner/images/`, its only supply chain.
 3. **The link between the two is HTTPS with two gates.** The code VM's Caddy serves
-   `quiz-runner.chevallier.io` (fragment `apps/runner/deploy/Caddyfile`) and answers
-   403 to any source address but the classroom VM's. The runner itself requires
+   the runner on `https://code.chevallier.io:8443` (fragment
+   `apps/runner/deploy/Caddyfile`): the VM's existing name and certificate, a port
+   of its own so the codespace's `:443` site block is untouched — and answers 403 to
+   any source address but the classroom VM's. The runner itself requires
    `Authorization: Bearer <RUNNER_TOKEN>` on both routes, compared in constant time;
    the API sends it on every call. Production refuses to start without the token on
    either side (`config.ts` of both). `/health` is guarded too, so a wrong token is a
@@ -55,8 +57,8 @@ compose network only.
 - The runner is a network service now. The token is a secret the runner holds
   (`/etc/quiz-runner/env`), the one exception to "no secret here" — it is never passed
   into a sandbox container, which invariant 10's closed list still asserts.
-- Two DNS records (`quiz`, `quiz-runner`), two VMs to keep patched, one more
-  Let's Encrypt certificate. The runner being down degrades to decision D14: a
+- One DNS record (`quiz`), one port to keep open on the code VM (8443, for the
+  classroom VM's address), two VMs to keep patched. The runner being down degrades to decision D14: a
   code question is graded by proposal, and `/healthz` says so.
 - A `podman-remote` client of the same major version as the code VM's engine
   (5.7) is pinned in `apps/runner/Dockerfile`; upgrading the VM's Podman means
@@ -71,8 +73,8 @@ compose network only.
 2. **A WireGuard tunnel between the VMs, runner unauthenticated**: a second piece
    of infrastructure to keep alive for what a source-address filter plus a bearer
    already give, with TLS from a certificate Caddy renews on its own.
-3. **The runner on `code.chevallier.io:8443`, no new DNS name**: reuses the existing
-   certificate but needs a firewall change and a port to remember; a name costs one
-   record.
+3. **A name of its own, `quiz-runner.chevallier.io` on 443**: one more record and
+   one more certificate for what the VM's existing name already gives; the port is
+   the only thing to remember, and it lives in one `.env.prod` line.
 4. **Plain HTTP on a firewalled port**: student code and outputs in clear across the
    internet, for no saving.
