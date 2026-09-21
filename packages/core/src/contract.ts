@@ -125,7 +125,17 @@ export interface QuestionTypeServer<
   readonly solutionSchema: z.ZodType<TSolution>;
   readonly detailsSchema: z.ZodType<TDetails>;
 
-  /** Config of a freshly created draft, valid against `configSchema`. */
+  /**
+   * Config of a freshly created draft: the shape of `configSchema` with its
+   * defaults, and EMPTY content — an empty prompt, empty choices, an empty
+   * matcher. It therefore does NOT have to satisfy `configSchema`.
+   *
+   * Decision D16 is what makes that safe: a draft is stored whatever it
+   * holds, and publication is the gate that parses. Pre-filling a new
+   * question with placeholder text instead would hand the teacher content
+   * to delete before writing their own, and a question that looks authored
+   * when nothing has been written yet.
+   */
   emptyDraft(): TConfig;
 
   /** Raise an old stored config to `configVersion`. Pure, total, never throws on a config it emitted before. */

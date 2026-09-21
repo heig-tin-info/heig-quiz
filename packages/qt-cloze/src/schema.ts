@@ -101,10 +101,12 @@ export const ClozeDetailsSchema = z.object({
 });
 export type ClozeDetails = z.infer<typeof ClozeDetailsSchema>;
 
-/** See `emptyMcqDraft`: language-free placeholders, and it validates (one blank). */
+/** See `emptyMcqDraft`: the shape and the defaults, no text, may be invalid. */
 export function emptyClozeDraft(): ClozeConfig {
-  return ClozeConfigSchema.parse({
+  return {
     configVersion: CLOZE_CONFIG_VERSION,
-    text: "… {{…}} …",
-  });
+    text: "",
+    caseSensitive: false,
+    shuffleOptions: true,
+  };
 }

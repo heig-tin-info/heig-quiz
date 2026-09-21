@@ -24,8 +24,8 @@ describe("ClozeEditor", () => {
     const onChange = vi.fn();
     render(<ClozeEditor config={emptyClozeDraft()} onChange={onChange} />);
     await userEvent.type(screen.getByLabelText("Text with blanks"), "?");
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ text: "… {{…}} …?" }));
-    expect(screen.getByLabelText("Text with blanks")).toHaveValue("… {{…}} …");
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ text: "?" }));
+    expect(screen.getByLabelText("Text with blanks")).toHaveValue("");
   });
 
   it("toggles case sensitivity through onChange", async () => {

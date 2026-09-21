@@ -91,9 +91,13 @@ describe("CodeAnswer", () => {
 });
 
 describe("the draft and the migration", () => {
-  it("emits a draft that its own schema accepts", () => {
-    expect(CodeConfig.safeParse(emptyCodeConfig()).success).toBe(true);
-    expect(CodeConfig.safeParse(codeServer.emptyDraft()).success).toBe(true);
+  it("emits an EMPTY draft, stored as it stands (D16)", () => {
+    const draft = emptyCodeConfig();
+    expect(draft.prompt).toBe("");
+    expect(draft.template).toBe("");
+    expect(draft.language).toBe("c");
+    expect(CodeConfig.safeParse(draft).success).toBe(false);
+    expect(codeServer.emptyDraft()).toEqual(draft);
   });
 
   it("stamps an older config with the current version", () => {
@@ -103,7 +107,12 @@ describe("the draft and the migration", () => {
 
   it("refuses a config from the future and an unrepairable one", () => {
     expect(() => codeServer.migrate(codeConfig(), 99)).toThrow(ConfigMigrationError);
-    expect(() => codeServer.migrate({ prompt: "" }, 1)).toThrow(ConfigMigrationError);
+    expect(() => codeServer.migrate({ prompt: "" }, 0)).toThrow(ConfigMigrationError);
+  });
+
+  it("returns a config at the current version untouched, even an empty draft", () => {
+    const draft = codeServer.emptyDraft();
+    expect(codeServer.migrate(draft, codeServer.configVersion)).toBe(draft);
   });
 
   it("defaults the item points to the weight of the cases", () => {

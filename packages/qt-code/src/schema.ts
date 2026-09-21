@@ -203,16 +203,31 @@ export function caseTimeMs(config: CodeConfig, testCase: CodeCase): number {
   return testCase.timeMs ?? config.limits.timeMs;
 }
 
-/** A fresh draft: valid against {@link CodeConfig}, and runnable as it stands. */
+/**
+ * A fresh draft: the shape, the defaults, and NO content — see `emptyMcqDraft`.
+ *
+ * It does not validate (an empty prompt and an unnamed case are refused by
+ * {@link CodeConfig}), which decision D16 allows for a draft. `language` is
+ * the one field that cannot be empty, because the editor needs a syntax to
+ * colour; `c` is the language of the course this platform was built for.
+ */
 export function emptyCodeConfig(): CodeConfig {
-  return CodeConfig.parse({
+  return {
     configVersion: CODE_CONFIG_VERSION,
-    prompt: "Describe the exercise here.",
+    prompt: "",
     language: "c",
-    template: "#include <stdio.h>\n\nint main(void) {\n    // your code here\n    return 0;\n}\n",
+    template: "",
+    files: [],
+    action: "run",
+    compileArgs: "",
+    limits: DEFAULT_LIMITS,
+    runsPerMinute: 10,
+    allOrNothing: false,
+    referenceSolution: "",
     tests: {
       mode: "io",
-      cases: [{ name: "case 1", stdin: "", expected: "", visible: true, points: 1 }],
+      compare: DEFAULT_COMPARE,
+      cases: [{ name: "", stdin: "", expected: "", visible: true, points: 1, timeMs: null }],
     },
-  });
+  };
 }

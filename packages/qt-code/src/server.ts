@@ -48,6 +48,11 @@ export const codeServer: QuestionTypeServer<
         "config written by a newer version of the platform",
       );
     }
+    // A config already at the current version is returned as it stands, like
+    // the other three types do: a DRAFT may be invalid (decision D16 — the
+    // empty draft is), and the contract says `migrate` never throws on a
+    // config the type emitted. Parsing is for the versions that changed shape.
+    if (fromVersion === CODE_CONFIG_VERSION) return config as CodeConfig;
     const source = typeof config === "object" && config !== null ? config : {};
     const parsed = CodeConfig.safeParse({ ...source, configVersion: CODE_CONFIG_VERSION });
     if (!parsed.success) {

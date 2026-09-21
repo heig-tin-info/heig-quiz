@@ -10,8 +10,11 @@ describe("the canonical mapping", () => {
     expect(fromCanonical(toCanonical(config))).toEqual(config);
   });
 
-  it("round-trips a fresh draft", () => {
-    const draft = emptyCodeConfig();
+  it("round-trips a draft once it holds enough to be valid", () => {
+    // A FRESH draft is empty and does not parse (D16); the canonical form is
+    // a file format, and reading one back goes through the schema.
+    const draft = { ...emptyCodeConfig(), prompt: "Do it", template: "int main(){}" };
+    draft.tests = { ...draft.tests, cases: [{ ...draft.tests.cases[0]!, name: "case 1" }] };
     expect(fromCanonical(toCanonical(draft))).toEqual(draft);
   });
 

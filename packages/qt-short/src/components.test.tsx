@@ -22,8 +22,8 @@ describe("ShortEditor", () => {
     const onChange = vi.fn();
     render(<ShortEditor config={emptyShortDraft()} onChange={onChange} />);
     await userEvent.type(screen.getByLabelText("Statement"), "?");
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ prompt: "…?" }));
-    expect(screen.getByLabelText("Statement")).toHaveValue("…");
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ prompt: "?" }));
+    expect(screen.getByLabelText("Statement")).toHaveValue("");
   });
 
   it("adds a matcher through onChange", async () => {

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { PoolDetail, QuestionDetail } from "@quiz/contracts";
 
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
+import { AUTOSAVE_DELAY_MS } from "./autosave";
 import { QuestionEditor } from "./QuestionEditor";
 
 /*
@@ -15,7 +16,25 @@ import { QuestionEditor } from "./QuestionEditor";
  * The question types are the REAL ones from `@quiz/registry/client`: the
  * point of the editor screen is that it mounts a type's own editor with the
  * app's strings, and a stub of that editor would test the stub.
+ *
+ * Since the host lends the types its WYSIWYG editor (`EditorProps.RichText`),
+ * the statement and the choices are CONTENTEDITABLE surfaces and not inputs:
+ * they are read with `toHaveTextContent`, never `toHaveValue`. What they hold
+ * is still markdown — `markdown/roundtrip.test.ts` is where that is proven.
  */
+
+/*
+ * jsdom implements `Range` but none of its layout methods, and ProseMirror
+ * calls them while mapping the document to coordinates. The stubs live here
+ * and not in `src/test/setup.ts`: a global stub would hide a real layout call
+ * in every other component test.
+ */
+if (typeof Range !== "undefined") {
+  Range.prototype.getClientRects = () =>
+    ({ length: 0, item: () => null, [Symbol.iterator]: function* () {} }) as unknown as DOMRectList;
+  Range.prototype.getBoundingClientRect = () => new DOMRect();
+}
+document.elementFromPoint ??= () => null;
 
 const POOL: PoolDetail = {
   pool: {
@@ -139,11 +158,13 @@ describe("QuestionEditor — mcq", () => {
     renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
     expect(await screen.findByRole("heading", { name: "ptr-null-check" })).toBeInTheDocument();
     // The mcq editor's own prompt field, labelled through `strings`.
-    expect(await screen.findByLabelText("Statement")).toHaveValue(
+    expect(await screen.findByLabelText("Statement")).toHaveTextContent(
       "Que vaut un pointeur non initialisé ?",
     );
-    expect(screen.getByLabelText("Text of choice A")).toHaveValue("NULL");
-  });
+    expect(screen.getByLabelText("Text of choice A")).toHaveTextContent("NULL");
+    // The first mount of the suite pulls the lazy rich-text chunk (Tiptap +
+    // KaTeX), which takes the default 5 s budget on a loaded CI worker.
+  }, 20_000);
 
   it("autosaves the draft after the last keystroke, once", async () => {
     const user = userEvent.setup();
@@ -156,12 +177,108 @@ describe("QuestionEditor — mcq", () => {
     await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
     const put = calls.find((c) => c.method === "PUT")!;
     expect(put.url).toBe("/app/api/questions/q1/draft");
-    expect((put.body as { config: { prompt: string } }).config.prompt).toBe(
-      "Que vaut un pointeur non initialisé ?!",
-    );
+    // Where the caret lands in a freshly mounted contenteditable is the
+    // browser's business, so the assertion is that the keystroke reached the
+    // draft — not where in the sentence it landed.
+    const saved = (put.body as { config: { prompt: string } }).config.prompt;
+    expect(saved).toContain("!");
+    expect(saved).toContain("Que vaut un pointeur non initialisé ?");
     // SyncBadge spells the state twice (visible above `sm`, sr-only below).
     expect(await screen.findAllByText("Saved")).not.toHaveLength(0);
   }, 20_000);
+
+  /*
+   * The autosave loop this screen used to live in: `PUT /draft` makes the API
+   * emit a pool hint, `live.ts` invalidates EVERY query, the question query
+   * refetches, its draft comes back with a new `updatedAt`, the effect keyed
+   * on that stamp replaced the local draft, `useAutosave` saw a new reference
+   * and saved again — forever. The editor now recognises the stamp its own
+   * save returned and lets it pass.
+   */
+  it("ignores its own draft coming back from the server, instead of saving again", async () => {
+    const user = userEvent.setup();
+    let served = mcqDetail();
+    const { calls } = mockFetch({
+      ...routes(mcqDetail()),
+      "GET /app/api/questions/q1": () => ok(served),
+    });
+    const { queryClient } = renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    await user.type(await screen.findByLabelText("Statement"), "!");
+    await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
+
+    // What the server now holds: what we just sent, stamped with the
+    // `updatedAt` the PUT answered with.
+    const sent = calls.find((c) => c.method === "PUT")!.body as { config: unknown };
+    const base = mcqDetail();
+    served = mcqDetail({
+      draft: { ...base.draft, config: sent.config, updatedAt: DRAFT_OK.updatedAt },
+    });
+
+    const before = calls.filter((c) => c.url === "/app/api/questions/q1").length;
+    await queryClient.invalidateQueries();
+    await waitFor(() =>
+      expect(calls.filter((c) => c.url === "/app/api/questions/q1").length).toBeGreaterThan(before),
+    );
+    // Long enough for a debounced second save to have left, had one been armed.
+    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DELAY_MS * 3));
+    expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1);
+    expect(await screen.findByLabelText("Statement")).toHaveTextContent("!");
+  }, 20_000);
+
+  it("still takes a FOREIGN draft — a version restored from the Versions tab", async () => {
+    let served = mcqDetail();
+    const { calls } = mockFetch({
+      ...routes(mcqDetail()),
+      "GET /app/api/questions/q1": () => ok(served),
+    });
+    const { queryClient } = renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    await screen.findByLabelText("Statement");
+
+    // `POST /versions/:n/restore` copies v1 over the draft and invalidates the
+    // question query; the stamp is newer than anything this editor wrote.
+    const base = mcqDetail();
+    served = mcqDetail({
+      draft: {
+        ...base.draft,
+        config: { ...(base.draft.config as object), prompt: "Restored from v1" },
+        updatedAt: "2026-09-21T09:00:00.000Z",
+      },
+    });
+    await queryClient.invalidateQueries();
+    await waitFor(() =>
+      expect(screen.getByLabelText("Statement")).toHaveTextContent("Restored from v1"),
+    );
+    expect(calls.filter((c) => c.method === "PUT").length).toBeLessThanOrEqual(1);
+  }, 20_000);
+
+  it("opens a blank, invalid draft without complaining about it", async () => {
+    // A new question is created EMPTY now; the warning belongs to a draft the
+    // teacher has worked on, not to one they have not started.
+    const base = mcqDetail();
+    const blank = mcqDetail({
+      draft: {
+        ...base.draft,
+        config: {
+          configVersion: 1,
+          prompt: "",
+          choices: [
+            { text: "", correct: true },
+            { text: "", correct: false },
+          ],
+          mode: "single",
+          policy: "all_or_nothing",
+          penalty: 1,
+          allowNegative: false,
+          shuffleChoices: true,
+        },
+        valid: false,
+      },
+    });
+    mockFetch(routes(blank));
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    expect((await screen.findByLabelText("Statement")).textContent).toBe("");
+    expect(screen.queryByText("This draft is incomplete")).not.toBeInTheDocument();
+  });
 
   it("publishes with a change note", async () => {
     const user = userEvent.setup();

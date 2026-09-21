@@ -1494,29 +1494,29 @@ on("POST", "/app/api/pools/:id/questions", (m, body) => {
   return questionDetail(created);
 });
 
-/** The `emptyDraft()` of each type, as the API would pre-fill it. */
+/**
+ * The `emptyDraft()` of each type, as the API pre-fills it: the shape and the
+ * defaults, with NO content. It does not validate, and that is intended —
+ * decision D16 stores a draft whatever it holds.
+ */
 function emptyConfig(type: MockQuestion["type"]): Record<string, unknown> {
   switch (type) {
     case "mcq":
-      return mcqConfig("…", [
-        ["…", true],
-        ["…", false],
+      return mcqConfig("", [
+        ["", true],
+        ["", false],
       ]);
     case "short":
       return {
         configVersion: 1,
-        prompt: "…",
+        prompt: "",
         kind: "text",
-        matchers: [{ kind: "exact", value: "…", caseSensitive: false, trim: true, collapseSpaces: true, points: 1 }],
+        matchers: [{ kind: "exact", value: "", caseSensitive: false, trim: true, collapseSpaces: true, points: 1 }],
       };
     case "cloze":
-      return { configVersion: 1, text: "… {{…}} …", caseSensitive: false, shuffleOptions: true };
+      return { configVersion: 1, text: "", caseSensitive: false, shuffleOptions: true };
     case "code":
-      return codeConfig(
-        "Décrivez l'exercice ici.",
-        "#include <stdio.h>\n\nint main(void) {\n    /* votre code */\n    return 0;\n}\n",
-        [{ name: "cas 1", stdin: "", expected: "", visible: true }],
-      );
+      return codeConfig("", "", [{ name: "", stdin: "", expected: "", visible: true }]);
   }
 }
 

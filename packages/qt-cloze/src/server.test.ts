@@ -13,8 +13,9 @@ describe("the contract", () => {
     expect(clozeServer.configVersion).toBe(1);
   });
 
-  it("emits a draft that validates", () => {
-    expect(clozeServer.configSchema.safeParse(clozeServer.emptyDraft()).success).toBe(true);
+  it("emits an EMPTY draft, stored as it stands (D16)", () => {
+    expect(clozeServer.emptyDraft().text).toBe("");
+    expect(clozeServer.configSchema.safeParse(clozeServer.emptyDraft()).success).toBe(false);
   });
 
   it("migrates a v1 config by identity", () => {
@@ -56,9 +57,9 @@ describe("the canonical mapping", () => {
   });
 
   it("omits the defaults", () => {
-    expect(toCanonical(ClozeConfigSchema.parse(emptyClozeDraft()))).toEqual({
+    expect(toCanonical(emptyClozeDraft())).toEqual({
       configVersion: 1,
-      text: "… {{…}} …",
+      text: "",
     });
   });
 

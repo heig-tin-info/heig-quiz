@@ -68,9 +68,11 @@ describe("ClozeAnswerSchema", () => {
 });
 
 describe("emptyClozeDraft", () => {
-  it("validates, and holds the one blank the schema demands", () => {
+  it("is empty, and therefore does NOT validate (D16)", () => {
     const draft = emptyClozeDraft();
-    expect(ClozeConfigSchema.safeParse(draft).success).toBe(true);
-    expect(parseCloze(draft.text).blanks).toHaveLength(1);
+    expect(draft.text).toBe("");
+    expect(parseCloze(draft.text).blanks).toHaveLength(0);
+    // No blank: the schema refuses it, and the draft is stored anyway.
+    expect(ClozeConfigSchema.safeParse(draft).success).toBe(false);
   });
 });

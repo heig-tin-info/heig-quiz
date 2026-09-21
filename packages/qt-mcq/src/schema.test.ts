@@ -110,11 +110,18 @@ describe("McqAnswerSchema", () => {
 });
 
 describe("emptyMcqDraft", () => {
-  it("validates against the schema it will be stored under", () => {
-    expect(McqConfigSchema.safeParse(emptyMcqDraft()).success).toBe(true);
+  it("is empty, and therefore does NOT validate (D16)", () => {
+    const draft = emptyMcqDraft();
+    expect(draft.prompt).toBe("");
+    expect(draft.choices.map((c) => c.text)).toEqual(["", ""]);
+    expect(McqConfigSchema.safeParse(draft).success).toBe(false);
   });
 
-  it("carries exactly one key, so the draft is publishable as is", () => {
-    expect(correctIndices(emptyMcqDraft())).toEqual([0]);
+  it("still carries the shape and the defaults the editor binds to", () => {
+    const draft = emptyMcqDraft();
+    expect(draft.configVersion).toBe(1);
+    expect(draft.mode).toBe("single");
+    expect(draft.policy).toBe("all_or_nothing");
+    expect(correctIndices(draft)).toEqual([0]);
   });
 });

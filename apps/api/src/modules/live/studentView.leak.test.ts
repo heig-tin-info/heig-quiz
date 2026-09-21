@@ -7,10 +7,12 @@
  * lands later, and including a type whose author forgot the rule.
  *
  * The method is the one the spec names:
- *   1. take the type's own `emptyDraft()` and sow recognisable markers into
- *      the fields that carry the key, keeping the config valid at every step
- *      (a marker that would break `configSchema` is skipped rather than
- *      forced, so the check never degenerates into "the parser refused it");
+ *   1. take the type's own `emptyDraft()`, COMPLETE it into a valid config
+ *      (an empty draft is empty by design and does not parse — D16) and sow
+ *      recognisable markers into the fields that carry the key, keeping the
+ *      config valid at every step (a marker that would break `configSchema`
+ *      is skipped rather than forced, so the check never degenerates into
+ *      "the parser refused it");
  *   2. serialise what `studentView()` produces;
  *   3. assert that no marker and no forbidden key survive the trip.
  *
@@ -95,13 +97,59 @@ interface Sown {
 }
 
 /**
+ * Every path of the config that holds an EMPTY string.
+ */
+function blankPaths(value: unknown, path: Path = [], out: Path[] = []): Path[] {
+  if (Array.isArray(value)) {
+    value.forEach((child, index) => blankPaths(child, [...path, index], out));
+    return out;
+  }
+  if (value === null || typeof value !== "object") return out;
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    if (child === "") out.push([...path, key]);
+    else blankPaths(child, [...path, key], out);
+  }
+  return out;
+}
+
+/**
+ * The fillers tried, in order, to turn an empty draft into a VALID config.
+ * `{{x}} x` is there for a type whose text carries its own grammar (`cloze`
+ * needs a blank); a type that needs something else fails loudly below rather
+ * than silently sowing nothing.
+ */
+const FILLERS = ["x", "{{x}} x"];
+
+/**
+ * The type's empty draft, completed into a config its schema accepts.
+ *
+ * `emptyDraft()` is deliberately EMPTY and invalid (decision D16), while
+ * `studentView` reads a stored config through `loadConfig`, which parses. So
+ * the fixture fills every blank string before anything is sown into it.
+ */
+function filledDraft(type: AnyQuestionTypeServer): unknown {
+  const draft = type.emptyDraft() as unknown;
+  const blanks = blankPaths(draft);
+  for (const filler of FILLERS) {
+    const candidate = structuredClone(draft) as unknown;
+    for (const path of blanks) setAt(candidate, path, filler);
+    const parsed = type.configSchema.safeParse(candidate);
+    if (parsed.success) return parsed.data;
+  }
+  throw new Error(
+    `the empty draft of "${type.id}" cannot be completed generically — ` +
+      "give this test a filler its schema accepts, or the leak search proves nothing",
+  );
+}
+
+/**
  * Sows one marker per secret field, one at a time, keeping only the ones the
  * type's own schema still accepts (an enum or a pattern legitimately refuses
  * a prefix). The markers are made of word characters so they survive the
  * common `\w`-shaped validations.
  */
 function sowSecrets(type: AnyQuestionTypeServer): Sown {
-  let config: unknown = type.configSchema.parse(type.emptyDraft());
+  let config: unknown = filledDraft(type);
   const markers: string[] = [];
   for (const path of secretPaths(config)) {
     const original = getAt(config, path);

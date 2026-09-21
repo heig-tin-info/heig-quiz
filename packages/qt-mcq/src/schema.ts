@@ -95,19 +95,27 @@ export const McqDetailsSchema = z.object({
 export type McqDetails = z.infer<typeof McqDetailsSchema>;
 
 /**
- * The config of a fresh draft. It must validate (PLAN-MVP §8 WP2), and every
- * string of the schema is non-empty, so the placeholders are the language-free
- * ellipsis rather than an English sentence the teacher would have to delete.
+ * The config of a fresh draft: the shape, the defaults, and NO content.
+ *
+ * It does not validate — an empty prompt and two empty choices are exactly
+ * what `configSchema` refuses — and that is the point: decision D16 stores a
+ * draft whatever it holds, and publication is the gate. A placeholder would
+ * only be text the teacher has to select and delete first.
  */
 export function emptyMcqDraft(): McqConfig {
-  return McqConfigSchema.parse({
+  return {
     configVersion: MCQ_CONFIG_VERSION,
-    prompt: "…",
+    prompt: "",
     choices: [
-      { text: "…", correct: true },
-      { text: "…", correct: false },
+      { text: "", correct: true },
+      { text: "", correct: false },
     ],
-  });
+    mode: "single",
+    policy: "all_or_nothing",
+    penalty: 1,
+    allowNegative: false,
+    shuffleChoices: true,
+  };
 }
 
 /** Canonical indices of the correct choices, ascending. */

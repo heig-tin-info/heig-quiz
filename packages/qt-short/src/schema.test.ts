@@ -102,7 +102,12 @@ describe("ShortAnswerSchema", () => {
 });
 
 describe("emptyShortDraft", () => {
-  it("validates against the schema it will be stored under", () => {
-    expect(ShortConfigSchema.safeParse(emptyShortDraft()).success).toBe(true);
+  it("is empty, and therefore does NOT validate (D16)", () => {
+    const draft = emptyShortDraft();
+    expect(draft.prompt).toBe("");
+    expect(draft.matchers).toEqual([
+      { kind: "exact", value: "", caseSensitive: false, trim: true, collapseSpaces: true, points: 1 },
+    ]);
+    expect(ShortConfigSchema.safeParse(draft).success).toBe(false);
   });
 });

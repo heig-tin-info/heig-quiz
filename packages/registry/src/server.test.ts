@@ -62,10 +62,14 @@ describe("the static registries", () => {
     }
   });
 
-  it("emit a draft that validates, for every registered type", () => {
+  it("emit a blank draft stamped with their own configVersion", () => {
     for (const id of REGISTERED) {
       const type = questionType(id);
-      expect(type.configSchema.safeParse(type.emptyDraft()).success, id).toBe(true);
+      const draft = type.emptyDraft() as Record<string, unknown>;
+      // An empty draft does NOT have to validate (decision D16): it is the
+      // shape and the defaults, with no content. What it must carry is the
+      // version it will be stored under, or a later `migrate` reads it wrong.
+      expect(draft["configVersion"], id).toBe(type.configVersion);
     }
   });
 

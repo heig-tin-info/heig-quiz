@@ -16,8 +16,9 @@ describe("the contract", () => {
     expect(mcqServer.configVersion).toBe(1);
   });
 
-  it("emits a draft that validates", () => {
-    expect(mcqServer.configSchema.safeParse(mcqServer.emptyDraft()).success).toBe(true);
+  it("emits an EMPTY draft, stored as it stands (D16)", () => {
+    expect(mcqServer.emptyDraft().prompt).toBe("");
+    expect(mcqServer.configSchema.safeParse(mcqServer.emptyDraft()).success).toBe(false);
   });
 
   it("migrates a v1 config by identity", () => {
@@ -58,11 +59,11 @@ describe("the canonical mapping", () => {
   });
 
   it("omits the defaults, so the YAML reads like the spec example", () => {
-    const canonical = toCanonical(McqConfigSchema.parse(emptyMcqDraft()));
+    const canonical = toCanonical(emptyMcqDraft());
     expect(canonical).toEqual({
       configVersion: 1,
-      prompt: "…",
-      choices: [{ text: "…", correct: true }, { text: "…" }],
+      prompt: "",
+      choices: [{ text: "", correct: true }, { text: "" }],
     });
   });
 

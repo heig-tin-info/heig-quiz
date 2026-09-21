@@ -117,12 +117,14 @@ export const ShortDetailsSchema = z.object({
 });
 export type ShortDetails = z.infer<typeof ShortDetailsSchema>;
 
-/** See `emptyMcqDraft`: the placeholders are language-free, and it validates. */
+/** See `emptyMcqDraft`: the shape and the defaults, no content, may be invalid. */
 export function emptyShortDraft(): ShortConfig {
-  return ShortConfigSchema.parse({
+  return {
     configVersion: SHORT_CONFIG_VERSION,
-    prompt: "…",
+    prompt: "",
     kind: "text",
-    matchers: [{ kind: "exact", value: "…" }],
-  });
+    matchers: [
+      { kind: "exact", value: "", caseSensitive: false, trim: true, collapseSpaces: true, points: 1 },
+    ],
+  };
 }

@@ -13,8 +13,9 @@ describe("the contract", () => {
     expect(shortServer.configVersion).toBe(1);
   });
 
-  it("emits a draft that validates", () => {
-    expect(shortServer.configSchema.safeParse(shortServer.emptyDraft()).success).toBe(true);
+  it("emits an EMPTY draft, stored as it stands (D16)", () => {
+    expect(shortServer.emptyDraft().prompt).toBe("");
+    expect(shortServer.configSchema.safeParse(shortServer.emptyDraft()).success).toBe(false);
   });
 
   it("migrates a v1 config by identity", () => {
@@ -51,10 +52,10 @@ describe("the canonical mapping", () => {
   });
 
   it("omits the defaults", () => {
-    expect(toCanonical(ShortConfigSchema.parse(emptyShortDraft()))).toEqual({
+    expect(toCanonical(emptyShortDraft())).toEqual({
       configVersion: 1,
-      prompt: "…",
-      matchers: [{ kind: "exact", value: "…" }],
+      prompt: "",
+      matchers: [{ kind: "exact", value: "" }],
     });
   });
 

@@ -78,6 +78,11 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   const tab: Tab = rawTab === "try" || rawTab === "versions" ? rawTab : "edit";
   const [draft, setDraft] = useState<Draft | null>(null);
   const [issues, setIssues] = useState<readonly ZodIssueLite[]>([]);
+  // Whether the teacher has changed anything in this session. A question is
+  // created EMPTY now (the type's `emptyDraft()` carries no content), so its
+  // stored draft is invalid from the first second and the warning below would
+  // greet every new question with a complaint about work not yet started.
+  const [edited, setEdited] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [preview, setPreview] = useState(false);
   // The tab panel, so `Ctrl+Enter` can put the reader inside what it opened.
@@ -96,14 +101,10 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
     enabled: poolId !== undefined,
   });
 
-  // The draft that arrives from the server replaces the local copy: it is
-  // also how "restore v2 into the draft" lands on screen.
-  const serverDraft = detail.data?.draft;
-  const serverStamp = serverDraft?.updatedAt;
-  useEffect(() => {
-    if (serverDraft) setDraft({ config: serverDraft.config, explanation: serverDraft.explanation });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the stamp is the identity of a draft
-  }, [serverStamp]);
+  // `DraftSaved.updatedAt` of the last write THIS editor made. It is what
+  // tells our own draft apart from a foreign one when the question query
+  // comes back (see the effect below).
+  const ownStamp = useRef<string | null>(null);
 
   const save = useCallback(
     async (value: Draft) => {
@@ -111,6 +112,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
         method: "PUT",
         body: JSON.stringify({ config: value.config, explanation: value.explanation }),
       });
+      ownStamp.current = saved.updatedAt;
       setIssues(saved.issues);
       return saved;
     },
@@ -122,6 +124,31 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
     save,
     enabled: draft !== null,
   });
+
+  /**
+   * The draft that arrives from the server replaces the local copy — that is
+   * how "restore v2 into the draft" and an edit made in another tab land on
+   * screen. Two guards keep it from eating what the teacher is writing:
+   *
+   * - **our own echo is ignored.** `PUT /draft` makes the API emit a pool
+   *   hint, `live.ts` invalidates every query, this one refetches and comes
+   *   back carrying a NEW `updatedAt`. Replacing the local draft with it
+   *   would hand `useAutosave` a new reference, which saves again, which
+   *   hints again: an endless round trip. So anything not strictly newer
+   *   than the stamp OUR last save returned is our own writing coming home.
+   * - **a dirty draft is never overwritten.** While something is typed or on
+   *   the wire, the local copy is the ahead one, whatever the server says.
+   */
+  const serverDraft = detail.data?.draft;
+  const serverStamp = serverDraft?.updatedAt;
+  const { dirty } = autosave;
+  useEffect(() => {
+    if (!serverDraft || !serverStamp) return;
+    if (dirty) return;
+    if (ownStamp.current !== null && new Date(serverStamp) <= new Date(ownStamp.current)) return;
+    setDraft({ config: serverDraft.config, explanation: serverDraft.explanation });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the stamp is the identity of a draft
+  }, [serverStamp]);
 
   const uploadAsset = useCallback(
     async (file: File): Promise<string> => {
@@ -280,11 +307,16 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
     latest !== null &&
     (autosave.dirty || new Date(data.draft.updatedAt) > new Date(latest.publishedAt));
   const Icon = typeIcon(data.meta.type);
-  const invalid = issues.length > 0 || data.draft.valid === false;
+  // Reported, not predicted: the alert appears once a save came back with
+  // issues, or once the teacher has touched a draft the server already holds
+  // as invalid. The Publish dialog reports the issues unconditionally — that
+  // is the moment the draft has to be complete.
+  const invalid = issues.length > 0 || (edited && data.draft.valid === false);
 
   return (
     <div className="space-y-6">
       <PageHeader
+        help="question-editor"
         eyebrow={
           <button
             type="button"
@@ -363,7 +395,10 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
                   t={t}
                   type={data.meta.type}
                   config={draft.config}
-                  onChange={(config) => setDraft({ ...draft, config })}
+                  onChange={(config) => {
+                    setEdited(true);
+                    setDraft({ ...draft, config });
+                  }}
                   issues={configIssues}
                   uploadAsset={uploadAsset}
                 />
@@ -377,9 +412,10 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
               <MarkdownField
                 label={t("question.explanation")}
                 value={draft?.explanation ?? ""}
-                onChange={(explanation) =>
-                  setDraft((current) => (current ? { ...current, explanation } : current))
-                }
+                onChange={(explanation) => {
+                  setEdited(true);
+                  setDraft((current) => (current ? { ...current, explanation } : current));
+                }}
                 onUploadImage={async (file) => ({ id: (await uploadAsset(file)).slice("asset:".length) })}
               />
             </Card>
