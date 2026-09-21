@@ -84,6 +84,28 @@ describe("the canonical mapping", () => {
   });
 });
 
+describe("summarizeAnswer — the glyph of the live grid (F-DASH-02)", () => {
+  const text = "Un {{int}} tient {{=32|64}} bits sur {{cette|la}} machine.";
+  const summarize = (blanks: (string | null)[]) =>
+    clozeServer.summarizeAnswer!(config(text), { blanks });
+
+  it("joins the blanks in order", () => {
+    expect(summarize(["int", "0", "cette"])).toBe("int · 32 · cette");
+  });
+
+  it("resolves a dropdown back to its label, never its stored index (D4)", () => {
+    expect(summarize([null, "1", null])).toBe("— · 64 · —");
+  });
+
+  it("keeps an untouched blank as a dash, because the position is the point", () => {
+    expect(summarize(["int", null, null])).toBe("int · — · —");
+  });
+
+  it("says nothing about whether any blank is right", () => {
+    expect(summarize(["float", "0", "la"])).toBe("float · 32 · la");
+  });
+});
+
 describe("the server entry point", () => {
   it("never reaches React", () => {
     for (const file of ["server.ts", "schema.ts", "grade.ts", "canonical.ts"]) {

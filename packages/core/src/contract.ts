@@ -10,6 +10,16 @@ import type { z } from "zod";
 import type { LlmGradeRequest, LlmService } from "./llm.js";
 import type { RunnerOutcome, RunnerRequest, RunnerService } from "./runner.js";
 
+/**
+ * How many characters of `summarizeAnswer` a dashboard cell can hold.
+ *
+ * Measured, not picked: a question column of the live grid is 64 px wide and
+ * the cell keeps an icon beside the text, which leaves about two dozen
+ * characters at 12 px before the truncation makes the preview useless. The
+ * types aim under it; the caller enforces it.
+ */
+export const ANSWER_SUMMARY_MAX = 24;
+
 /** The four types of the MVP (PLAN-MVP §0). */
 export const QUESTION_TYPE_IDS = ["mcq", "short", "cloze", "code"] as const;
 export type QuestionTypeId = (typeof QUESTION_TYPE_IDS)[number];
@@ -175,6 +185,23 @@ export interface QuestionTypeServer<
    * holds no key"; the `results` module strips the forbidden keys either way.
    */
   studentDetails?(details: TDetails, policy: StudentDetailsPolicy): unknown;
+
+  /**
+   * One cell of the live dashboard: what the student answered, in a glyph or
+   * two (F-DASH-02).
+   *
+   * The grid puts this INSIDE the cell, beside the status icon, so it has
+   * room for about {@link ANSWER_SUMMARY_MAX} characters and the teacher
+   * reads thirty of them at once, from the back of a lecture hall. "A, C",
+   * "42", "int · malloc" — never a sentence, never JSON. It is a preview and
+   * never a grading: it says nothing about whether the answer is right.
+   *
+   * `answer` has already been parsed by {@link answerSchema}; the caller
+   * handles "not answered" and truncates whatever comes back, so an
+   * implementation may stay naive about length. Omitting the hook leaves the
+   * caller its own generic fallback.
+   */
+  summarizeAnswer?(config: TConfig, answer: TAnswer): string;
 
   /** Phase 2 random values; absent in MVP packages. */
   randomize?(config: TConfig, seed: number): TConfig;

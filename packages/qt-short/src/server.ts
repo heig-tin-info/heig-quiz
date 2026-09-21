@@ -152,6 +152,15 @@ export const shortServer: QuestionTypeServer<
   grade: (config, answer, ctx) => gradeShort(config, answer, ctx.itemPoints),
 
   /**
+   * The live grid (F-DASH-02): what the student typed, whitespace collapsed.
+   *
+   * A short answer IS one line, so there is nothing to summarise — only to
+   * keep on one line. The caller truncates; a newline pasted into the field
+   * would otherwise break the row.
+   */
+  summarizeAnswer: (_config, answer) => answer.text.replace(/\s+/g, " ").trim(),
+
+  /**
    * The search index is teacher-facing (`question_versions.search`), so the
    * expected answers belong in it: a teacher looks for "stdio.h", not for the
    * sentence around it.

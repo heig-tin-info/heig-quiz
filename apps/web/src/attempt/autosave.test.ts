@@ -223,6 +223,50 @@ describe("Autosave", () => {
     expect(save.unsaved.sort()).toEqual(["i1", "i2"]);
   });
 
+  /*
+   * The StrictMode bug: React mounts, runs the cleanup, and mounts again on
+   * the SAME instance. The cleanup's `stop(false)` used to be irreversible,
+   * so every later keystroke was a silent no-op and nothing ever reached
+   * `PUT /attempts/:id/answers/:itemId`.
+   */
+  it("sends again after a non-final stop followed by a start", async () => {
+    const { save, sent, states } = make();
+    save.stop(false);
+    expect(states).not.toContain("closed");
+    save.start();
+
+    save.change("i1", { text: "a" });
+    await vi.advanceTimersByTimeAsync(300);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.body.payload).toEqual({ text: "a" });
+  });
+
+  it("keeps what was typed during a non-final stop and flushes it on start", async () => {
+    const { save, sent } = make();
+    save.change("i1", { text: "draft" });
+    save.stop(false);
+    // The debounce was cleared with everything else: nothing leaves.
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sent).toHaveLength(0);
+    expect(save.unsaved).toEqual(["i1"]);
+
+    save.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.body.payload).toEqual({ text: "draft" });
+  });
+
+  it("a final stop is final: neither start nor change reopens it", async () => {
+    const { save, sent, states } = make();
+    save.stop();
+    expect(states).toEqual(["closed"]);
+    save.start();
+    save.change("i1", { text: "a" });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sent).toHaveLength(0);
+    expect(save.syncState).toBe("closed");
+  });
+
   it("holds the unacked payloads until they are acknowledged", async () => {
     const { save, sent } = make();
     save.change("i1", { text: "draft" });

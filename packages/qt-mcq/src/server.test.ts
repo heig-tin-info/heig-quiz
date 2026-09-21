@@ -163,6 +163,29 @@ describe("the v1 -> v2 migration", () => {
   });
 });
 
+describe("summarizeAnswer — the glyph of the live grid (F-DASH-02)", () => {
+  const summarize = (selected: number[]) =>
+    mcqServer.summarizeAnswer!(multipleConfig(), { selected });
+
+  it("writes the letters of the canonical positions", () => {
+    expect(summarize([0, 2])).toBe("A, C");
+  });
+
+  it("sorts them, so two students who ticked the same pair read the same", () => {
+    expect(summarize([3, 1])).toBe("B, D");
+    expect(summarize([1, 3])).toBe(summarize([3, 1]));
+  });
+
+  it("is empty when nothing is ticked, and never says whether it is right", () => {
+    expect(summarize([])).toBe("");
+    expect(summarize([1])).not.toMatch(/correct|wrong/i);
+  });
+
+  it("ignores an index the config no longer has", () => {
+    expect(summarize([0, 99])).toBe("A");
+  });
+});
+
 describe("the server entry point", () => {
   /**
    * `@quiz/qt-mcq/server` is loaded by the API and by the grading worker: React

@@ -3,15 +3,20 @@ import { useT } from "../i18n";
 import { VerdictCell, type VerdictState } from "../ui";
 
 /**
- * The six states a cell can wear, named. A tint alone is not a legend, and a
+ * The seven states a cell can wear, named. A tint alone is not a legend, and a
  * dashboard on a lecture-hall wall has lost half of its saturation anyway.
- * `pending` is left out on purpose: it belongs to the grading screen, and a
- * legend that lists a state the grid cannot show is a legend nobody trusts.
+ *
+ * They are listed in the order a cell goes through them: the three progress
+ * states first, left to right and pale to filled, then the three verdicts the
+ * "Results" switch replaces them with. `pending` is left out on purpose: it
+ * belongs to the grading screen, and a legend that lists a state the grid
+ * cannot show is a legend nobody trusts.
  */
 const SHOWN = [
   ["blank", "verdict.blank"],
   ["inProgress", "verdict.inProgress"],
   ["answered", "verdict.answered"],
+  ["done", "live.verdict.done"],
   ["correct", "verdict.correct"],
   ["partial", "verdict.partial"],
   ["wrong", "verdict.wrong"],

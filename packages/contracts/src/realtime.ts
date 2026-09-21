@@ -16,7 +16,7 @@
 import { z } from "zod";
 
 import { EvaluationState } from "./evaluation.js";
-import { CellStatus, ClosedBy } from "./live.js";
+import { AttemptState, CellStatus, ClosedBy } from "./live.js";
 import type { NoticeKind } from "./notifications.js";
 
 /** The audiences an event can be addressed to. */
@@ -115,6 +115,26 @@ export const DashboardPresenceEvent = z.object({
 });
 export type DashboardPresenceEvent = z.infer<typeof DashboardPresenceEvent>;
 
+/**
+ * Staff connections only: a roster row learnt about its attempt.
+ *
+ * `dashboard.presence` says a student is connected; it does not say they have
+ * an attempt. Until this frame existed, a row the teacher watched stayed at
+ * `attemptId: null` / `not_started` from the moment the grid was fetched to
+ * the next full refetch, so a class that had all started still read "never
+ * connected" on the projector (`apps/web/src/realtime/grid.ts`).
+ */
+export const DashboardAttemptEvent = z.object({
+  type: z.literal("dashboard.attempt"),
+  evaluationId: z.uuid(),
+  userId: z.uuid(),
+  attemptId: z.uuid(),
+  state: AttemptState,
+  startedAt: z.iso.datetime().nullable(),
+  deadlineAt: z.iso.datetime().nullable(),
+});
+export type DashboardAttemptEvent = z.infer<typeof DashboardAttemptEvent>;
+
 /** A student in the lobby legitimately receives this one. */
 export const LobbyCountEvent = z.object({
   type: z.literal("lobby.count"),
@@ -194,6 +214,7 @@ export const ServerEvent = z.discriminatedUnion("type", [
   AttemptClosedEvent,
   DashboardCellEvent,
   DashboardPresenceEvent,
+  DashboardAttemptEvent,
   LobbyCountEvent,
   RunnerResultEvent,
   GradingProgressEvent,
@@ -202,7 +223,11 @@ export const ServerEvent = z.discriminatedUnion("type", [
 export type ServerEvent = z.infer<typeof ServerEvent>;
 
 /** The event names a `dashboard.*` filter must drop for a student stream. */
-export const STAFF_ONLY_EVENTS = ["dashboard.cell", "dashboard.presence"] as const;
+export const STAFF_ONLY_EVENTS = [
+  "dashboard.cell",
+  "dashboard.presence",
+  "dashboard.attempt",
+] as const;
 
 export function isStaffOnly(event: ServerEvent): boolean {
   return (STAFF_ONLY_EVENTS as readonly string[]).includes(event.type);

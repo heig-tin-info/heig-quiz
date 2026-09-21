@@ -1103,6 +1103,41 @@ describe("ProgressSegments", () => {
     renderWithProviders(<ProgressSegments segments={segments} label="Progress" />);
     for (const button of screen.getAllByRole("button")) expect(button).toBeDisabled();
   });
+
+  it("prints every number while the bars have the room for one", () => {
+    const { container } = renderWithProviders(
+      <ProgressSegments segments={segments} label="Progress" onSelect={() => {}} />,
+    );
+    const numbers = Array.from(container.querySelectorAll("button > span:last-child")).map(
+      (s) => s.textContent,
+    );
+    expect(numbers).toEqual(["1", "2", "3", "4"]);
+  });
+
+  it("thins the numbers down to anchors when the segments get too narrow", () => {
+    // jsdom runs no layout, so the strip is asked for its width directly.
+    // 800 px over 40 segments is ~16 px each: numbers every fifth.
+    const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(800);
+    try {
+      const many: Segment[] = Array.from({ length: 40 }, (_, i) => ({
+        id: `q${i + 1}`,
+        state: i === 6 ? "current" : i < 6 ? "done" : "empty",
+      }));
+      const { container } = renderWithProviders(
+        <ProgressSegments segments={many} label="Progress" onSelect={() => {}} />,
+      );
+      const numbers = Array.from(container.querySelectorAll("button > span:last-child"))
+        .map((s) => s.textContent)
+        .filter(Boolean);
+      // First, last, the current one, and every fifth in between.
+      expect(numbers).toEqual(["1", "5", "7", "10", "15", "20", "25", "30", "35", "40"]);
+      // The strip still names all forty of them for a screen reader.
+      expect(screen.getAllByRole("button")).toHaveLength(40);
+      expect(screen.getByRole("button", { name: "Question 23, not opened" })).toBeInTheDocument();
+    } finally {
+      width.mockRestore();
+    }
+  });
 });
 
 describe("VerdictCell", () => {
@@ -1110,6 +1145,7 @@ describe("VerdictCell", () => {
     "blank",
     "inProgress",
     "answered",
+    "done",
     "correct",
     "partial",
     "wrong",

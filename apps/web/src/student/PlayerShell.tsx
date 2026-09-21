@@ -23,13 +23,16 @@
  * is the player's, and it is four entries long: there is nowhere else to go
  * during an exam.
  */
+import { Moon, Sun } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { CommandPalette } from "../CommandPalette";
 import type { Command } from "../commands";
 import { useT } from "../i18n";
+import { setThemeChoice, useResolvedTheme } from "../theme";
 import {
   Countdown,
+  IconButton,
   ProgressSegments,
   SyncBadge,
   type Segment,
@@ -74,6 +77,13 @@ export function PlayerShell({
   children: ReactNode;
 }) {
   const t = useT();
+  // The player is rendered outside the Shell, so the account menu that
+  // carries the light/dark toggle everywhere else is not on screen. A student
+  // sitting an exam at night has nowhere to go for it, hence this one: the
+  // same store and the same two icons as the menu, so the two surfaces can
+  // never disagree about what is on screen. It is QUIET — the single accent
+  // of this screen is "Hand in".
+  const theme = useResolvedTheme();
   const [palette, setPalette] = useState(false);
   const hasPalette = (commands?.length ?? 0) > 0;
   useEffect(() => {
@@ -106,6 +116,17 @@ export function PlayerShell({
                 <p className="truncate text-[12px] leading-tight text-fg-muted">{subtitle}</p>
               ) : null}
             </div>
+            {/* Left of the clock, and there whether or not there IS a clock:
+                a `manual` evaluation has no deadline, and the toggle then
+                simply sits where the countdown would have been. */}
+            <IconButton
+              label={theme === "dark" ? t("player.themeLight") : t("player.themeDark")}
+              // An explicit choice, like the account menu's: a two-label
+              // toggle cannot express "system", which lives in Settings.
+              onClick={() => setThemeChoice(theme === "dark" ? "light" : "dark")}
+            >
+              {theme === "dark" ? <Sun /> : <Moon />}
+            </IconButton>
             {deadlineAt === null ? null : (
               <Countdown deadlineAt={deadlineAt} now={now} paused={paused} />
             )}

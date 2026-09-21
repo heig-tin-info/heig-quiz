@@ -1,6 +1,7 @@
 import axe from "axe-core";
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { StrictMode } from "react";
 import { describe, expect, it } from "vitest";
 
 import type { AttemptOrLobby, AttemptView } from "@quiz/contracts";
@@ -216,6 +217,43 @@ describe("the zen player", () => {
     expect(await screen.findAllByText("Sauvegardé")).not.toHaveLength(0);
   });
 
+  /*
+   * The bug this test exists for: `main.tsx` wraps the app in `<StrictMode>`,
+   * which in development mounts, runs the cleanup and mounts again while
+   * KEEPING the refs. The cleanup's non-final `stop()` used to be
+   * irreversible, so in a real browser not one `PUT …/answers/:itemId` ever
+   * left — while the badge went on saying "saved". Production, the unit tests
+   * and the smoke script all skipped the double mount, so nothing caught it.
+   */
+  it(
+    "still autosaves when the player is mounted twice by StrictMode",
+    { timeout: 15_000 },
+    async () => {
+      const view = attemptView();
+      const saves: unknown[] = [];
+      mockFetch({
+        [`POST /app/api/evaluations/${EVAL}/attempt`]: ok(entry(view)),
+        [`POST /app/api/attempts/${ATTEMPT}/position`]: noContent(),
+        [`POST /app/api/attempts/${ATTEMPT}/events`]: noContent(),
+        [`PUT /app/api/attempts/${ATTEMPT}/answers/i2`]: (call) => {
+          saves.push(call.body);
+          return ok({ revision: 3, accepted: true, serverNow: "2026-09-20T10:00:02.000Z" });
+        },
+      });
+      renderWithProviders(
+        <StrictMode>
+          <AttemptPage evaluationId={EVAL} navigate={() => {}} />
+        </StrictMode>,
+        { locale: "fr", route: `/take/${EVAL}` },
+      );
+
+      const field = await screen.findByLabelText("Votre réponse");
+      await userEvent.type(field, "2");
+      await waitFor(() => expect(saves).toHaveLength(1));
+      expect((saves[0] as { payload: { text: string } }).payload.text).toBe("42");
+    },
+  );
+
   it("shows the time-up screen and stops writing once the attempt is closed", async () => {
     const view = attemptView({ state: "expired" });
     const { calls } = stubs(view);
@@ -234,6 +272,32 @@ describe("the zen player", () => {
     expect(within(strip).getAllByRole("button")).toHaveLength(3);
     expect(
       within(strip).getByRole("button", { name: "Question 2, en cours" }),
+    ).toBeInTheDocument();
+  });
+
+  /*
+   * The player is rendered outside the Shell, so the account menu that holds
+   * the light/dark toggle everywhere else is not on screen: without this
+   * button a student sitting an exam at night cannot switch the theme at all.
+   */
+  it("switches the theme from the header, left of the clock", async () => {
+    const view = attemptView();
+    stubs(view);
+    render(view);
+    const toggle = await screen.findByRole("button", { name: "Passer au thème sombre" });
+    await userEvent.click(toggle);
+    expect(document.documentElement).toHaveClass("dark");
+    // The same button, relabelled, takes it back: an explicit choice both ways.
+    await userEvent.click(screen.getByRole("button", { name: "Passer au thème clair" }));
+    expect(document.documentElement).not.toHaveClass("dark");
+  });
+
+  it("keeps the theme toggle when a manual evaluation has no clock", async () => {
+    const view = attemptView({ deadlineAt: null });
+    stubs(view);
+    render(view);
+    expect(
+      await screen.findByRole("button", { name: "Passer au thème sombre" }),
     ).toBeInTheDocument();
   });
 

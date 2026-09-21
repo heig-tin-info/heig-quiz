@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users, Wifi, WifiOff } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { DashboardRow, EvaluationDetail } from "@quiz/contracts";
 
@@ -22,7 +22,8 @@ import {
   Switch,
   useNow,
 } from "../ui";
-import { InspectPanel } from "./InspectPanel";
+import { anonymousNumbers } from "./cells";
+import { InspectModal } from "./InspectModal";
 import { Legend } from "./Legend";
 import { LobbyPanel } from "./LobbyPanel";
 import { LiveHeader, type LiveControls } from "./LiveHeader";
@@ -41,7 +42,9 @@ import { useLiveCommands } from "./useLiveCommands";
  *     `r` hides the answers, `s` shows the results, `f` goes full screen. All
  *     of them are written under the grid, because a shortcut nobody can see
  *     does not exist;
- *   - the inspection panel sits beside the grid, never over it.
+ *   - reading ONE student is a modal over the grid and not a panel beside it
+ *     (`InspectModal`): it holds every answer of that student at once, which
+ *     is what the teacher opened it for, and the grid is one Escape away.
  */
 
 /** Toggles (F-DASH-02), their keys, and their initial state. */
@@ -104,9 +107,54 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
     onSuccess: refresh,
   });
 
+  /**
+   * Closing and reopening ONE student are the two row actions that change
+   * somebody else's exam, so they ask first — the same rule as closing the
+   * whole evaluation, and the reason `window.confirm` is banned.
+   */
+  const confirmAttempt = useCallback(
+    (row: DashboardRow, action: "close" | "reopen", name: string) => {
+      if (row.attemptId === null) return;
+      const attemptId = row.attemptId;
+      void (async () => {
+        if (
+          await confirm({
+            title: t(action === "close" ? "live.row.closeConfirm" : "live.row.reopenConfirm", {
+              name,
+            }),
+            confirmLabel: t(action === "close" ? "live.row.close" : "live.row.reopen"),
+            cancelLabel: t("common.cancel"),
+            danger: action === "close",
+          })
+        ) {
+          attemptControl.mutate({ attemptId, action });
+        }
+      })();
+    },
+    // `attemptControl` is rebuilt on every render; `mutate` itself is stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [confirm, t],
+  );
+
   const state = query.data ?? null;
   const evaluationState = state?.view.evaluation.state ?? "draft";
   const live = evaluationState === "running" || evaluationState === "paused";
+
+  /**
+   * What a row is called, once (F-DASH-02). With the names off it is
+   * "Student 7" and not the animal pseudonym: in front of a class a teacher
+   * says a number out loud. The number itself comes from `anonymousNumbers`,
+   * which orders the rows by the server's per-evaluation hash so that the
+   * numbering cannot be read back as the alphabetical roster.
+   */
+  const numbers = useMemo(() => anonymousNumbers(state?.view.rows ?? []), [state?.view.rows]);
+  const nameOf = useCallback(
+    (row: DashboardRow) =>
+      toggles.names
+        ? row.displayName
+        : t("live.row.anonymous", { n: numbers.get(row.userId) ?? 0 }),
+    [toggles.names, numbers, t],
+  );
 
   const controls: LiveControls = {
     busy: control.isPending,
@@ -176,10 +224,8 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
         toggleFullscreen();
         return;
       }
-      if (e.key === "Escape" && selected) {
-        e.preventDefault();
-        setSelected(null);
-      }
+      // Escape is the MODAL's, through `useLayer`: only the topmost layer
+      // answers it, so a confirmation opened over the modal closes alone.
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -286,13 +332,13 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
       ) : lobby ? (
         <LobbyPanel state={state} />
       ) : (
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
-          <Card className="min-w-0 flex-1 overflow-hidden">
+        <>
+          <Card className="min-w-0 overflow-hidden">
             <StudentGrid
               state={state}
               now={now}
               paused={evaluationState === "paused"}
-              showNames={toggles.names}
+              nameOf={nameOf}
               showAnswers={toggles.answers}
               showResults={toggles.results}
               selected={selected}
@@ -303,27 +349,22 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
                   body: { minutes: 5, scope: "attempt", attemptId: row.attemptId },
                 })
               }
-              onClose={(row) =>
-                row.attemptId &&
-                attemptControl.mutate({ attemptId: row.attemptId, action: "close" })
-              }
-              onReopen={(row) =>
-                row.attemptId &&
-                attemptControl.mutate({ attemptId: row.attemptId, action: "reopen" })
-              }
+              onClose={(row) => confirmAttempt(row, "close", nameOf(row))}
+              onReopen={(row) => confirmAttempt(row, "reopen", nameOf(row))}
             />
           </Card>
           {selectedRow && selected ? (
-            <InspectPanel
+            <InspectModal
               evaluationId={id}
               state={state}
               row={selectedRow}
               itemId={selected.itemId}
+              nameOf={nameOf}
               onSelect={selectCell}
               onClose={() => setSelected(null)}
             />
           ) : null}
-        </div>
+        </>
       )}
 
       <div className={cx("flex flex-wrap items-center justify-between gap-4", lobby && "hidden")}>

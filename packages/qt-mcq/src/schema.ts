@@ -103,6 +103,15 @@ export const McqAnswerSchema = z.object({
 export type McqAnswer = z.infer<typeof McqAnswerSchema>;
 
 /**
+ * Letter of a choice, as the editor, the review and the live grid show it:
+ * A, B, C… It lives with the schemas rather than in `ui.tsx` because both
+ * halves of the package need it and the server half may not touch React.
+ */
+export function choiceLetter(index: number): string {
+  return String.fromCharCode(65 + (index % 26));
+}
+
+/**
  * What `toStudent` may emit. `id` is the canonical index and the ARRAY ORDER is
  * the shuffled display order (decision D3): the answer is always canonical, the
  * display never is.

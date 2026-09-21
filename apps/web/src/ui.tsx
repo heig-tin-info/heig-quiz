@@ -9,13 +9,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Circle,
-  CircleDot,
+  CircleCheck,
   Clock,
   Ellipsis,
   Hourglass,
   Loader2,
   Lock,
   Pause,
+  PenLine,
   RefreshCw,
   Search,
   WifiOff,
@@ -677,11 +678,19 @@ function LayerClose({ onClose }: { onClose: () => void }) {
  * Centered dialog for confirmations and one-field forms (≤ 480 px by
  * default). Long forms belong in a <Sheet>. Deliberately no close on
  * backdrop click: a stray click must not discard what the user typed.
+ *
+ * `xl` + `scroll` is the READING variant, and the one exception to the rule
+ * above: not a form, a document — the whole of one student's answers, opened
+ * from the live grid. It is as wide as a question needs (920 px, the width
+ * the student read it at) and its body scrolls under a title and a footer
+ * that stay put, because the footer is how the teacher walks to the next
+ * student and it must not be at the bottom of a hundred lines of code.
  */
 export function Modal({
   title,
   subtitle,
   size = "md",
+  scroll = false,
   onClose,
   children,
   footer,
@@ -689,7 +698,9 @@ export function Modal({
   title: string;
   /** Muted state line under the title. */
   subtitle?: ReactNode;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
+  /** Cap the panel at the viewport and scroll the BODY, not the backdrop. */
+  scroll?: boolean;
   onClose: () => void;
   children: ReactNode;
   /** Actions row, right-aligned, on its own hairline. */
@@ -699,7 +710,7 @@ export function Modal({
   const panel = useRef<HTMLDivElement>(null);
   const titleId = useId();
   useLayer(panel, onClose);
-  const width = { sm: "max-w-105", md: "max-w-130", lg: "max-w-190" }[size];
+  const width = { sm: "max-w-105", md: "max-w-130", lg: "max-w-190", xl: "max-w-230" }[size];
   return createPortal(
     <div
       // The portal escapes the DOM but not the React tree: without this, a
@@ -717,9 +728,10 @@ export function Modal({
         className={cx(
           "dialog-panel mt-8 w-full rounded-sheet border border-line bg-surface shadow-overlay focus:outline-none sm:mt-0",
           width,
+          scroll && "flex max-h-[calc(100dvh-4rem)] flex-col",
         )}
       >
-        <div className="flex items-start gap-3 px-5 pt-5">
+        <div className={cx("flex items-start gap-3 px-5 pt-5", scroll && "shrink-0")}>
           <div className="min-w-0 flex-1">
             <h2 id={titleId} className="text-lg font-bold tracking-tight">
               {title}
@@ -728,9 +740,16 @@ export function Modal({
           </div>
           <LayerClose onClose={onClose} />
         </div>
-        <div className="px-5 py-4">{children}</div>
+        <div className={cx("px-5 py-4", scroll && "min-h-0 flex-1 overflow-y-auto")}>
+          {children}
+        </div>
         {footer ? (
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3">
+          <div
+            className={cx(
+              "flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3",
+              scroll && "shrink-0",
+            )}
+          >
             {footer}
           </div>
         ) : null}
@@ -2549,6 +2568,22 @@ export interface Segment {
   state: SegmentState;
 }
 
+/** The `gap-1` between two bars, in px: part of what the numbers compete for. */
+const SEGMENT_GAP = 4;
+
+/**
+ * How often a number is shown, from the strip's measured width. `1` is "every
+ * one of them"; `5` and `10` are the compressed modes. A width of 0 is "not
+ * measured yet" (first paint, or a test with no layout) and shows everything:
+ * the strip must never come up thinned out on a screen that had the room.
+ */
+export function segmentLabelStep(width: number, count: number): 1 | 5 | 10 {
+  if (width <= 0 || count <= 1) return 1;
+  const per = (width - SEGMENT_GAP * (count - 1)) / count;
+  if (per >= 22) return 1;
+  return per >= 11 ? 5 : 10;
+}
+
 /**
  * One bar per question in the zen player (mockup 07): where the student is,
  * what is done, what was opened and left, what was never opened. Four states
@@ -2560,8 +2595,25 @@ export interface Segment {
  * the accessible name of each bar carries its state in words — the height and
  * the tone are the same information for everyone else.
  *
- * Compact by construction: the bars share the width (`flex-1`, capped at
- * 34 px) so twenty of them fit a 360 px screen without a scrollbar.
+ * It spans the WHOLE width it is given and the bars share it equally
+ * (`flex-1 basis-0`, no cap): three questions are three wide bars over the
+ * question column, not a stub at its left edge — the strip is a map of the
+ * paper, and a map that covers a tenth of the page maps nothing.
+ *
+ * Every bar carries its number, so the student can aim at "question 7"
+ * without counting. When there are enough questions for the numbers to stop
+ * fitting, the strip COMPRESSES rather than wraps or scrolls: the bars stay,
+ * the numbers thin out to anchors. The rule, from the measured width of the
+ * strip (`segmentLabelStep`, gaps included):
+ *
+ *   - a segment at least 22 px wide holds two digits and its breathing room:
+ *     every number is shown (up to ~30 questions over the player's 760 px);
+ *   - at least 11 px: the first, the last, the current and every 5th;
+ *   - under that: the first, the last, the current and every 10th.
+ *
+ * A multiple that lands within two slots of the last one is dropped, so "30"
+ * and "32" never collide. Nothing is lost for a screen reader: the number and
+ * the state live in each bar's accessible name, which never thins out.
  */
 export function ProgressSegments({
   segments,
@@ -2579,6 +2631,21 @@ export function ProgressSegments({
   const t = useT();
   const strip = useRef<HTMLElement>(null);
   const current = Math.max(0, segments.findIndex((s) => s.state === "current"));
+  // The strip's own width, not the viewport's: it sits in a 760 px column on
+  // a laptop and in a 358 px one on a phone, and only its own width says how
+  // much room a number has.
+  const [width, setWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = strip.current;
+    if (!el) return;
+    const measure = () => setWidth(el.clientWidth);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  const step = segmentLabelStep(width, segments.length);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     const keys = ["ArrowRight", "ArrowLeft", "Home", "End"];
@@ -2602,10 +2669,25 @@ export function ProgressSegments({
       ref={strip}
       aria-label={label}
       onKeyDown={onKeyDown}
-      className={cx("flex w-full items-end gap-1", className)}
+      className={cx(
+        "flex w-full items-start",
+        // Compressed, the 4 px gaps are what the bars are losing: forty of
+        // them spend 156 px on air. Halving the gap is measured against the
+        // wider one, so the bars only ever come out wider than the rule
+        // assumed, never thinner.
+        step === 1 ? "gap-1" : "gap-0.5",
+        className,
+      )}
     >
       {segments.map((segment, i) => {
         const name = t("segments.item", { n: i + 1, state: t(SEGMENT_LABEL[segment.state]) });
+        const last = segments.length - 1;
+        const numbered =
+          step === 1 ||
+          i === 0 ||
+          i === last ||
+          i === current ||
+          ((i + 1) % step === 0 && last - i >= 2);
         return (
           <button
             key={segment.id}
@@ -2615,17 +2697,22 @@ export function ProgressSegments({
             aria-label={name}
             aria-current={segment.state === "current" ? "true" : undefined}
             onClick={() => onSelect?.(segment.id, i)}
-            className="min-w-1.5 max-w-8.5 flex-1 basis-0 rounded-full px-0 py-1.5 disabled:cursor-default"
+            className="min-w-0.5 flex-1 basis-0 rounded-full px-0 py-1.5 disabled:cursor-default"
           >
             <span className={cx("block rounded-full transition-colors duration-150", SEGMENT_BAR[segment.state])} />
+            {/* The row keeps its height whether or not it holds a number, so
+                the bars stay on one line. The number overflows its own bar
+                when compressed — its neighbours are empty, so there is room. */}
             <span
               className={cx(
-                "mt-0.5 block text-[11px] font-semibold leading-none tabular-nums text-accent",
-                segment.state === "current" ? "" : "invisible",
+                "mt-0.5 block h-2.75 overflow-visible whitespace-nowrap text-center text-[11px] leading-none tabular-nums",
+                segment.state === "current"
+                  ? "font-semibold text-accent"
+                  : "font-medium text-fg-faint",
               )}
               aria-hidden
             >
-              {i + 1}
+              {numbered ? i + 1 : null}
             </span>
           </button>
         );
@@ -2638,6 +2725,7 @@ export type VerdictState =
   | "blank"
   | "inProgress"
   | "answered"
+  | "done"
   | "correct"
   | "partial"
   | "wrong"
@@ -2647,15 +2735,30 @@ type VerdictKey =
   | "verdict.blank"
   | "verdict.inProgress"
   | "verdict.answered"
+  | "live.verdict.done"
   | "verdict.correct"
   | "verdict.partial"
   | "verdict.wrong"
   | "verdict.pending";
 
+/**
+ * The PROGRESS half of the scale (`inProgress`, `answered`, `done`) is blue
+ * and the VERDICT half (`correct`, `partial`, `wrong`) keeps the semantic
+ * green / amber / red, so a teacher scanning a grid never mistakes "they
+ * wrote something" for "it is right". The two blues are the same hue at two
+ * strengths — `info-soft` for an answer that is still being written,
+ * `info` filled for one the student has marked done — because the progression
+ * is a progression: a column darkening from left to right is a class moving
+ * through the quiz, readable at squinting distance and on a projector.
+ *
+ * `done` is the one state the grading list cannot show, which is why its word
+ * lives with the live dictionary and not with the six shared `verdict.*` ones.
+ */
 const VERDICTS: Record<VerdictState, { icon: IconType; tint: string; key: VerdictKey }> = {
   blank: { icon: Circle, tint: "text-line-strong", key: "verdict.blank" },
   inProgress: { icon: Ellipsis, tint: "bg-surface-2 text-fg-faint", key: "verdict.inProgress" },
-  answered: { icon: CircleDot, tint: "bg-surface-2 text-fg-muted", key: "verdict.answered" },
+  answered: { icon: PenLine, tint: "bg-info-soft text-info", key: "verdict.answered" },
+  done: { icon: CircleCheck, tint: "bg-info text-on-fill", key: "live.verdict.done" },
   correct: { icon: Check, tint: "bg-success-soft text-success", key: "verdict.correct" },
   partial: { icon: ChartPie, tint: "bg-warning-soft text-warning", key: "verdict.partial" },
   wrong: { icon: X, tint: "bg-danger-soft text-danger", key: "verdict.wrong" },
@@ -2688,11 +2791,15 @@ export function VerdictCell({
   const t = useT();
   const { icon: Icon, tint, key } = VERDICTS[state];
   const name = label ?? t(key);
+  // The answer carries no colour of its own: it INHERITS the state's ink,
+  // which is the only way it stays legible on every tint. `text-fg` on the
+  // filled `done` blue measured 2.9:1, under half of what a teacher three
+  // rows back needs; on the state's own ink every pair is 4.7:1 or better.
   const content = (
     <>
       <Icon className="size-3.5 shrink-0" aria-hidden />
       {value != null && value !== "" ? (
-        <span className="max-w-11.5 truncate text-xs font-medium text-fg">{value}</span>
+        <span className="max-w-11.5 truncate text-xs font-medium">{value}</span>
       ) : null}
     </>
   );

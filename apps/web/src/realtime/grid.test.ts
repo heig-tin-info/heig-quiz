@@ -106,6 +106,96 @@ describe("applyGridEvent — dashboard.presence", () => {
   });
 });
 
+/*
+ * The frame that did not exist: a roster row without an attempt showed
+ * "never connected" for the whole evaluation, because `attempt.deadline`
+ * rides the attempt topic and the teacher watches the evaluation one.
+ */
+describe("applyGridEvent — dashboard.attempt", () => {
+  /** A dashboard where row 1 is on the roster but has not entered yet. */
+  const waiting = () => {
+    const view = makeDashboard(3, 4);
+    const rows = view.rows.slice();
+    rows[1] = { ...rows[1]!, attemptId: null, state: "not_started", deadlineAt: null };
+    return initialGrid({ ...view, rows });
+  };
+
+  const event = (over: Record<string, unknown> = {}) =>
+    ({
+      type: "dashboard.attempt",
+      evaluationId: EVALUATION_ID,
+      userId: id("user", 1),
+      attemptId: id("attempt", 1),
+      state: "in_progress",
+      startedAt: liveAt(0),
+      deadlineAt: liveAt(30 * 60_000),
+      ...over,
+    }) as ServerEvent;
+
+  it("gives the row its attempt, its state and its deadline", () => {
+    const next = applyGridEvent(waiting(), event());
+    const row = next.view.rows[1]!;
+    expect(row.attemptId).toBe(id("attempt", 1));
+    expect(row.state).toBe("in_progress");
+    expect(row.deadlineAt).toBe(liveAt(30 * 60_000));
+  });
+
+  it("records the attempt created in the lobby, before the start", () => {
+    const next = applyGridEvent(
+      waiting(),
+      event({ state: "not_started", startedAt: null, deadlineAt: null }),
+    );
+    expect(next.view.rows[1]!.attemptId).toBe(id("attempt", 1));
+    expect(next.view.rows[1]!.state).toBe("not_started");
+  });
+
+  it("lets the first dashboard.cell of that student land, now that the row is keyed", () => {
+    const started = applyGridEvent(waiting(), event());
+    const answered = applyGridEvent(started, {
+      type: "dashboard.cell",
+      evaluationId: EVALUATION_ID,
+      attemptId: id("attempt", 1),
+      itemId: ITEM(0),
+      status: "done",
+      revision: 1,
+      points: null,
+      summary: "42",
+    });
+    expect(answered.view.rows[1]!.cells[0]!.status).toBe("done");
+  });
+
+  it("moves the denominator of every completion: one more started row", () => {
+    // Two started rows, one of them done on Q1 — 50 %.
+    const before = applyGridEvent(waiting(), {
+      type: "dashboard.cell",
+      evaluationId: EVALUATION_ID,
+      attemptId: id("attempt", 0),
+      itemId: ITEM(0),
+      status: "done",
+      revision: 1,
+      points: null,
+      summary: null,
+    });
+    expect(before.view.totals[0]!.completion).toBe(0.5);
+    // A third row enters: the same one done is now a third of them.
+    const after = applyGridEvent(before, event());
+    expect(after.view.totals[0]!.completion).toBe(0.33);
+  });
+
+  it("leaves the other rows untouched, by identity, and repeats as a no-op", () => {
+    const before = waiting();
+    const after = applyGridEvent(before, event());
+    expect(after.view.rows[0]).toBe(before.view.rows[0]);
+    expect(applyGridEvent(after, event())).toBe(after);
+  });
+
+  it("ignores another evaluation and a user who is not on the roster", () => {
+    const before = waiting();
+    expect(applyGridEvent(before, event({ evaluationId: id("evaluation", 9) }))).toBe(before);
+    expect(applyGridEvent(before, event({ userId: id("user", 99) }))).toBe(before);
+  });
+});
+
 describe("applyGridEvent — evaluation.state", () => {
   it("moves the state, the pause and the common deadline together", () => {
     const next = applyGridEvent(state(), {
@@ -135,18 +225,37 @@ describe("applyGridEvent — evaluation.state", () => {
 });
 
 describe("applyGridEvent — lobby.count", () => {
-  it("adopts the authoritative figures", () => {
-    const next = applyGridEvent(state(), {
-      type: "lobby.count",
-      evaluationId: EVALUATION_ID,
-      present: 18,
-      enrolled: 24,
-    });
-    expect(presence(next)).toEqual({ present: 18, enrolled: 24 });
+  const counted = (present: number, enrolled: number) =>
+    ({ type: "lobby.count", evaluationId: EVALUATION_ID, present, enrolled }) as ServerEvent;
+
+  it("takes the enrolment from the event: it counts unclaimed roster lines too", () => {
+    const next = applyGridEvent(state(), counted(18, 24));
+    expect(presence(next).enrolled).toBe(24);
   });
 
-  it("falls back to counting the rows until one arrives", () => {
+  it("counts the rows until one arrives", () => {
     expect(presence(state())).toEqual({ present: 3, enrolled: 3 });
+  });
+
+  /*
+   * The header used to read "0 of 6 connected" under a green name. The room
+   * figure only moves when a stream opens or closes; the dots move on every
+   * `dashboard.presence`. Two channels, one sentence — so `present` is now
+   * counted from the rows, which is what the dots are drawn from.
+   */
+  it("never lets the room figure contradict the dots on the same screen", () => {
+    const stale = applyGridEvent(state(), counted(0, 3));
+    expect(presence(stale).present).toBe(3);
+
+    const oneLeft = applyGridEvent(stale, {
+      type: "dashboard.presence",
+      evaluationId: EVALUATION_ID,
+      userId: id("user", 1),
+      online: false,
+      lastSeenAt: liveAt(-5_000),
+    });
+    expect(presence(oneLeft).present).toBe(2);
+    expect(oneLeft.view.rows.filter((r) => r.online)).toHaveLength(2);
   });
 });
 

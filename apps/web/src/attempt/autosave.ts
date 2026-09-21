@@ -20,6 +20,11 @@
  *   - a `410` stops every write for the attempt. Its `paused` reason is the
  *     one recoverable case (decision D17): the payloads are kept and sent
  *     again when the evaluation resumes.
+ *   - `stop(false)` only SUSPENDS the writes and `start()` brings them back;
+ *     `stop()` is final and nothing reopens it. React's StrictMode mounts,
+ *     unmounts and mounts again while keeping the refs, so a non-final stop
+ *     that could not be undone left the player silent for the whole session
+ *     while the badge still read "saved".
  *
  * Every response carries `serverNow`, and every one of them is fed to the
  * server clock: the countdown a student watches is corrected by the very
@@ -107,7 +112,10 @@ export class Autosave {
   private offlineTimer: ReturnType<typeof setTimeout> | null = null;
   /** True between a `410 paused` and the next `resume()` (decision D17). */
   private paused = false;
+  /** Writes are suspended. Reversible by `start()` unless `final` is set. */
   private stopped = false;
+  /** The attempt is over for good: no `start()` ever undoes this. */
+  private final = false;
 
   constructor(options: AutosaveOptions) {
     this.options = options;
@@ -152,7 +160,7 @@ export class Autosave {
 
   /** One change of one item's answer: bumps the revision and debounces. */
   change(itemId: string, payload: unknown): void {
-    if (this.stopped) return;
+    if (this.final) return;
     const item = this.items.get(itemId) ?? newItem(0);
     this.items.set(itemId, item);
     item.revision += 1;
@@ -173,7 +181,7 @@ export class Autosave {
    * now is new information, not another tick of the same failure.
    */
   resume(): void {
-    if (this.stopped) return;
+    if (this.final || this.stopped) return;
     this.paused = false;
     for (const [itemId, item] of this.items) {
       item.failures = 0;
@@ -186,7 +194,12 @@ export class Autosave {
     this.publish();
   }
 
-  /** Stops every write for good: a final `410`, or the player unmounting. */
+  /**
+   * Stops the writes. `final` (the default) is the end of the attempt — a
+   * `410`, a submission, a player that will never come back — and nothing
+   * reopens it. `stop(false)` only suspends: the timers are cleared, the
+   * pending payloads are kept, and `start()` sends them.
+   */
   stop(final = true): void {
     for (const item of this.items.values()) {
       if (item.debounce !== null) clearTimeout(item.debounce);
@@ -198,9 +211,23 @@ export class Autosave {
     this.offlineTimer = null;
     this.stopped = true;
     if (final) {
+      this.final = true;
       this.state = "closed";
       this.options.onState?.("closed");
     }
+  }
+
+  /**
+   * Undoes a non-final `stop`, and flushes whatever was waiting. A final stop
+   * stays final. This is what the player's mount effect calls: StrictMode
+   * runs mount → cleanup → mount on the SAME instance, and without this the
+   * second mount would type into an object that never sends again.
+   */
+  start(): void {
+    if (this.final || !this.stopped) return;
+    this.stopped = false;
+    this.publish();
+    for (const [itemId, item] of this.items) if (item.hasPending) this.flush(itemId);
   }
 
   // --- internals ----------------------------------------------------------
@@ -231,8 +258,10 @@ export class Autosave {
     response: AutosaveResponse,
     startedAt: number,
   ): void {
+    // A response that lands during a non-final stop is still recorded: the
+    // request left, and leaving `inFlight` set would block the item for good.
     const item = this.items.get(itemId);
-    if (!item || this.stopped) return;
+    if (!item || this.final) return;
     item.inFlight = false;
     item.failures = 0;
     this.options.onServerNow?.(response.serverNow, Math.max(0, this.now() - startedAt));
@@ -252,7 +281,7 @@ export class Autosave {
 
   private failed(itemId: string, error: unknown): void {
     const item = this.items.get(itemId);
-    if (!item || this.stopped) return;
+    if (!item || this.final) return;
     item.inFlight = false;
     const { closed, info } = closedBody(error);
     if (closed) {
@@ -268,6 +297,8 @@ export class Autosave {
       this.options.onClosed?.(info);
       return;
     }
+    // Suspended: the payload stays pending and `start()` is what replays it.
+    if (this.stopped) return;
     item.failures += 1;
     const delay = Math.min(
       this.backoffMaxMs,
@@ -303,7 +334,7 @@ export class Autosave {
   }
 
   private publish(): void {
-    const next: SyncState = this.stopped
+    const next: SyncState = this.final
       ? "closed"
       : this.offline
         ? "offline"

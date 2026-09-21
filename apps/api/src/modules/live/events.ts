@@ -38,6 +38,25 @@ export function attemptStarted(
     reason: "start",
     now,
   });
+  // `attempt.deadline` rides the ATTEMPT topic — the student's own stream.
+  // The dashboard watches the evaluation, so without the line below a row
+  // that just started stayed "not started" until the next full refetch.
+  attemptRowChanged(evaluation.id, attempt);
+}
+
+/**
+ * The roster row of one student, for the teacher's grid: the attempt exists
+ * now (created in the lobby), or it has started. Staff connections only.
+ */
+export function attemptRowChanged(evaluationId: string, attempt: AttemptRow): void {
+  bus.dashboardAttempt({
+    evaluationId,
+    userId: attempt.userId,
+    attemptId: attempt.id,
+    state: attempt.state,
+    startedAt: attempt.startedAt,
+    deadlineAt: attempt.deadlineAt,
+  });
 }
 
 export function deadlineChanged(

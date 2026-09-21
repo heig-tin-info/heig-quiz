@@ -43,12 +43,35 @@ export function makeCell(overrides: Partial<DashboardCell> & { itemId: string })
   };
 }
 
+/**
+ * Pseudonyms whose ALPHABETICAL order is deliberately not the row order: the
+ * dashboard numbers the anonymous rows by sorting on this string (D20), so a
+ * list already in order would let a wrong implementation — "number them as
+ * they come" — pass the test.
+ */
+const PSEUDONYMS = [
+  "Wise Otter",
+  "Amber Lynx",
+  "Nimble Ibex",
+  "Bold Raven",
+  "Serene Quokka",
+  "Calm Heron",
+  "Golden Marmot",
+  "Eager Puffin",
+];
+
 export function makeRow(index: number, itemIds: string[], overrides: Partial<DashboardRow> = {}): DashboardRow {
   return {
     attemptId: id("attempt", index),
     userId: id("user", index),
-    displayName: `Student ${index}`,
-    pseudonym: `calm heron ${index}`,
+    // A NAME, not "Student 0": with the names hidden the grid shows
+    // "Student <n>" itself, and a fixture that already said that would make
+    // the toggle untestable.
+    displayName: `Nadia Roux ${index}`,
+    pseudonym:
+      index < PSEUDONYMS.length
+        ? PSEUDONYMS[index]!
+        : `${PSEUDONYMS[index % PSEUDONYMS.length]!} ${index}`,
     state: "in_progress",
     online: true,
     lastSeenAt: liveAt(-2000),

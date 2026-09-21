@@ -17,6 +17,7 @@ import { registerForTests } from "@quiz/registry/server";
 import { TestClock } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { answers, attempts, evaluations } from "../../db/schema.js";
+import { subscribe, type BusMessage } from "../../events.js";
 import { testDb } from "../../test/db.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
@@ -116,6 +117,90 @@ describe("entering an evaluation (F-LIVE-01)", () => {
     // 1800 s + 50 % = 2700 s.
     expect(attempt.deadlineAt!.getTime() - clock.now().getTime()).toBe(2700 * 1000);
     expect(attempt.bonusS).toBe(900);
+  });
+});
+
+/**
+ * F-DASH-03. `attempt.deadline` rides the ATTEMPT topic, which only the
+ * student watching their own attempt holds; the teacher's dashboard watches
+ * `evaluation:<id>`. Without the frame below, a row that had started still
+ * read "never connected" on the projector until a full refetch.
+ */
+describe("what the teacher's grid is told about a row", () => {
+  /** Collects the `dashboard.attempt` frames published while `run` executes. */
+  async function published<T>(run: () => Promise<T>): Promise<[T, Record<string, unknown>[]]> {
+    const seen: Record<string, unknown>[] = [];
+    const unsubscribe = subscribe((message: BusMessage) => {
+      if (message.kind !== "data") return;
+      if (message.event.type !== "dashboard.attempt") return;
+      seen.push({ ...message.event, audience: message.audience, topics: message.topics });
+    });
+    try {
+      return [await run(), seen];
+    } finally {
+      unsubscribe();
+    }
+  }
+
+  it("announces the attempt the moment it is created, to the staff only", async () => {
+    const seed = await seedLive(db);
+    const row = await applyState(db, await reload(db, seed.evaluationId), "lobby", clock.now());
+    const participant = (await service.participantOf(db, row, seed.studentIds[0]!))!;
+
+    const [attempt, events] = await published(() =>
+      service.ensureAttempt(db, row, participant, clock.now()),
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      evaluationId: row.id,
+      userId: participant.userId,
+      attemptId: attempt.id,
+      state: "not_started",
+      startedAt: null,
+      deadlineAt: null,
+      audience: "staff",
+      topics: [`evaluation:${row.id}`],
+    });
+  });
+
+  it("says nothing a second time: the row was already there", async () => {
+    const seed = await seedLive(db);
+    const row = await applyState(db, await reload(db, seed.evaluationId), "lobby", clock.now());
+    const participant = (await service.participantOf(db, row, seed.studentIds[0]!))!;
+    await service.ensureAttempt(db, row, participant, clock.now());
+
+    const [, events] = await published(() =>
+      service.ensureAttempt(db, row, participant, clock.now()),
+    );
+    expect(events).toEqual([]);
+  });
+
+  it("announces the START, with the state and the deadline the row now shows", async () => {
+    const seed = await seedLive(db);
+    const row = await applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
+    const participant = (await service.participantOf(db, row, seed.studentIds[0]!))!;
+    const created = await service.ensureAttempt(db, row, participant, clock.now());
+
+    const [attempt, events] = await published(() =>
+      service.beginAttempt(db, row, created, participant, clock.now()),
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      userId: participant.userId,
+      attemptId: attempt.id,
+      state: "in_progress",
+      startedAt: clock.now().toISOString(),
+      deadlineAt: attempt.deadlineAt!.toISOString(),
+      audience: "staff",
+    });
+  });
+
+  it("says nothing when the start is a no-op (the attempt already runs)", async () => {
+    const { evaluation, attempt, participant } = await running();
+    const [, events] = await published(() =>
+      service.beginAttempt(db, evaluation, attempt, participant, clock.now()),
+    );
+    expect(events).toEqual([]);
   });
 });
 

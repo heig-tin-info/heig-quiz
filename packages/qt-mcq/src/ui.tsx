@@ -81,10 +81,14 @@ export function IssueList({ issues }: { issues: readonly ConfigIssue[] }): React
   );
 }
 
-/** Letter of a choice, as the editor and the review show it: A, B, C… */
-export function choiceLetter(index: number): string {
-  return String.fromCharCode(65 + (index % 26));
-}
+/**
+ * Letter of a choice, as the editor and the review show it: A, B, C…
+ *
+ * Defined in `schema.ts` and re-exported here: the SERVER half needs the same
+ * letters for its dashboard summary, and nothing in its import graph may
+ * reach React.
+ */
+export { choiceLetter } from "./schema.js";
 
 /**
  * The choice pastille: the LETTER IS THE CONTROL.

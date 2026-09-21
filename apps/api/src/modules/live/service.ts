@@ -39,7 +39,12 @@ import {
   type RunnerResultEvent,
   type StudentHome,
 } from "@quiz/contracts";
-import { RunnerBusy, RunnerUnavailable, type RunnerService } from "@quiz/core/server";
+import {
+  ANSWER_SUMMARY_MAX,
+  RunnerBusy,
+  RunnerUnavailable,
+  type RunnerService,
+} from "@quiz/core/server";
 import { shuffle, streamSeed } from "@quiz/core/rng";
 import {
   GRACE_MS,
@@ -286,7 +291,10 @@ export async function ensureAttempt(
   participant: Participant,
   now: Date,
 ): Promise<AttemptRecord> {
-  await db
+  // `returning()` is what tells the two apart: an empty array means the
+  // unique index refused the insert, so this call created nothing and must
+  // not announce a new row to the dashboard.
+  const created = await db
     .insert(attempts)
     .values({
       id: randomUUID(),
@@ -298,9 +306,13 @@ export async function ensureAttempt(
       createdAt: now,
       updatedAt: now,
     })
-    .onConflictDoNothing({ target: [attempts.evaluationId, attempts.userId] });
+    .onConflictDoNothing({ target: [attempts.evaluationId, attempts.userId] })
+    .returning({ id: attempts.id });
   const row = await attemptOf(db, evaluation.id, participant.userId);
   if (!row) throw new LiveError("internal_error", 500, "attempt vanished after insert");
+  // F-DASH-03: the teacher's grid learns the row exists the moment it does,
+  // not at the next refetch.
+  if (created.length > 0) events.attemptRowChanged(evaluation.id, row);
   return row;
 }
 
@@ -693,11 +705,90 @@ async function itemOf(
   return items.find((i) => i.item.id === itemId) ?? null;
 }
 
-/** A cell preview for the dashboard (F-DASH-02), bounded and never null-ish. */
-export function summarizeAnswer(payload: unknown): string {
+/** One line, and never wider than a cell (`ANSWER_SUMMARY_MAX`). */
+function truncate(text: string): string {
+  const one = text.replace(/\s+/g, " ").trim();
+  return one.length <= ANSWER_SUMMARY_MAX ? one : `${one.slice(0, ANSWER_SUMMARY_MAX - 1)}…`;
+}
+
+/**
+ * The preview of a type that does not write its own — `qt-code` today, whose
+ * answer is a set of editable regions: "12 L" is what a 64 px column can hold
+ * and what a teacher reads across thirty rows, with the source itself one
+ * click away in the inspect modal. Anything else falls back to its own short text form; the raw JSON
+ * never reaches a cell.
+ */
+export function genericSummary(payload: unknown): string {
   if (payload === null || payload === undefined) return "";
-  const text = typeof payload === "string" ? payload : JSON.stringify(payload);
-  return (text ?? "").slice(0, 160);
+  if (typeof payload === "string") return truncate(payload);
+  if (typeof payload === "number" || typeof payload === "boolean") return String(payload);
+  if (Array.isArray(payload)) return truncate(payload.map((v) => String(v)).join(" · "));
+  const record = payload as Record<string, unknown>;
+  const source = record["regions"] ?? record["source"] ?? record["files"];
+  if (Array.isArray(source)) {
+    const lines = source.reduce(
+      (sum: number, part) => sum + (typeof part === "string" ? part.split("\n").length : 0),
+      0,
+    );
+    return `${lines} L`;
+  }
+  if (typeof record["text"] === "string") return truncate(record["text"]);
+  return "";
+}
+
+/**
+ * A cell preview for the dashboard (F-DASH-02): what the student answered, in
+ * a glyph or two.
+ *
+ * It used to be `JSON.stringify`, which put `{"text":"4"}` in the teacher's
+ * column and made the "Answers" toggle worth nothing. The shape of an answer
+ * belongs to the question type, so the type writes the preview:
+ * `type.summarizeAnswer(config, answer)` (`@quiz/core`). This function is the
+ * part that is NOT the type's — finding the type, parsing the stored payload
+ * with the type's own `answerSchema`, and holding the result to the width of
+ * a cell.
+ *
+ * Everything here is defensive on purpose: it runs on every autosave of every
+ * student, and a preview is never worth a 500. A type with no hook (and a
+ * payload the hook refused) falls back to {@link genericSummary}.
+ *
+ * It is a CLOSURE over one item because the dashboard summarises a whole
+ * grid: the type and its configuration are resolved once per question and
+ * reused down the column, instead of once per cell — twenty-four students
+ * times ten questions is 240 config parses of ten distinct configs.
+ */
+export function answerSummarizer(item: JoinedItem): (payload: unknown) => string {
+  let hook: ((payload: unknown) => string) | null = null;
+  try {
+    const type = typeOf(item.question.type);
+    const write = type.summarizeAnswer?.bind(type);
+    if (write) {
+      const config = loadConfig(item.question.type, {
+        config: item.version.config,
+        configVersion: item.version.configVersion,
+      });
+      hook = (payload) => {
+        const answer = type.answerSchema.safeParse(payload);
+        return answer.success ? truncate(write(config, answer.data)) : genericSummary(payload);
+      };
+    }
+  } catch {
+    /* an unknown type or an unreadable config: the generic form still says something */
+  }
+  const write = hook;
+  return (payload) => {
+    if (payload === null || payload === undefined) return "";
+    try {
+      return write ? write(payload) : genericSummary(payload);
+    } catch {
+      return genericSummary(payload);
+    }
+  };
+}
+
+/** {@link answerSummarizer} for one cell. */
+export function summarizeAnswer(item: JoinedItem, payload: unknown): string {
+  return answerSummarizer(item)(payload);
 }
 
 function cellStatus(answer: AnswerRecord | null): CellStatus {
@@ -787,7 +878,7 @@ export async function saveAnswer(
     itemId,
     status: stored.get(itemId)?.markedDone === true ? "done" : "in_progress",
     revision: row.revision,
-    summary: summarizeAnswer(row.payload),
+    summary: summarizeAnswer(joined, row.payload),
   });
   return { accepted: true, revision: row.revision, serverNow: iso(now) };
 }
@@ -839,7 +930,8 @@ export async function markDone(
     attempt.seed,
     evaluation.id,
   );
-  const rank = ordered.find((o) => o.item.id === itemId)?.rank ?? -1;
+  const ownItem = ordered.find((o) => o.item.id === itemId) ?? null;
+  const rank = ownItem?.rank ?? -1;
   const next = ordered.find((o) => o.rank === rank + 1)?.item.id ?? null;
   if (next !== null) await db.update(attempts).set({ lastItemId: next, updatedAt: now }).where(eq(attempts.id, attempt.id));
 
@@ -849,7 +941,7 @@ export async function markDone(
     itemId,
     status: input.done ? "done" : cellStatus(current),
     revision: current?.revision ?? 0,
-    summary: current ? summarizeAnswer(current.payload) : null,
+    summary: current && ownItem ? summarizeAnswer(ownItem, current.payload) : null,
   });
   return { done: input.done, nextItemId: next };
 }
@@ -1353,6 +1445,12 @@ export async function dashboardView(
   const online = presence.online(evaluation.id);
   const maxPoints = Math.round(items.reduce((s, i) => s + i.item.points, 0) * 100) / 100;
 
+  // One summarizer per QUESTION (see `answerSummarizer`), built only when the
+  // teacher actually asked for the answers.
+  const summarize = new Map<string, (payload: unknown) => string>(
+    input.includeAnswers ? items.map((item) => [item.item.id, answerSummarizer(item)]) : [],
+  );
+
   const rows: DashboardView["rows"] = roster
     .filter((r) => r.userId !== null)
     .map((entry) => {
@@ -1383,7 +1481,7 @@ export async function dashboardView(
             points: grading && grading.state === "validated" ? grading.points : null,
             revision: answer?.revision ?? 0,
             summary:
-              input.includeAnswers && answer ? summarizeAnswer(answer.payload) : null,
+              answer ? (summarize.get(item.item.id)?.(answer.payload) ?? null) : null,
           };
         }),
       };

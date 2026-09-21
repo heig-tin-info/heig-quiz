@@ -9,6 +9,7 @@ import { seededShuffle, streamSeed } from "@quiz/core/rng";
 import { gradeMcq } from "./grade.js";
 import { fromCanonical, toCanonical } from "./canonical.js";
 import {
+  choiceLetter,
   correctIndices,
   emptyMcqDraft,
   MCQ_CONFIG_VERSION,
@@ -138,6 +139,21 @@ export const mcqServer: QuestionTypeServer<
   // `ctx.defaults` carries the EVALUATION's per-type settings; `gradeMcq`
   // reads its own `mcq` entry to resolve an `inherit` config.
   grade: (config, answer, ctx) => gradeMcq(config, answer, ctx.itemPoints, ctx.defaults),
+
+  /**
+   * The live grid (F-DASH-02): the LETTERS the student ticked, "A, C".
+   *
+   * The letter is the canonical position, never the shuffled one, so two
+   * students who saw the choices in two different orders still read the same
+   * way down the teacher's column — the column is the question, not one
+   * student's screen. Nothing here says whether the answer is right.
+   */
+  summarizeAnswer(config, answer) {
+    const selected = [...answer.selected]
+      .filter((index) => index >= 0 && index < config.choices.length)
+      .sort((a, b) => a - b);
+    return selected.map(choiceLetter).join(", ");
+  },
 
   searchText: (config) => [config.prompt, ...config.choices.map((c) => c.text)].join("\n"),
 

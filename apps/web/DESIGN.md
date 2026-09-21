@@ -35,19 +35,28 @@ raw values live in `src/style.css` and swap in dark mode without any
 | `success` / `success-soft` | `#1f7a4d` / `#e7f4ec` | `#4cc38a` / `rgb(76 195 138 / 0.14)` | semantic only |
 | `warning` / `warning-soft` | `#a35810` / `#fdf1e2` | `#f0a04b` / `rgb(240 160 75 / 0.14)` | semantic only |
 | `danger` / `danger-soft` | `#c2242a` / `#fbe9e9` | `#f26d72` / `rgb(242 109 114 / 0.14)` | destructive actions, failures |
-| `info` / `info-soft` | `#1268a0` / `#e8f2f9` | `#58a9e0` / `rgb(88 169 224 / 0.14)` | "a set of possibilities", and nothing else |
+| `info` / `info-soft` | `#1268a0` / `#e8f2f9` | `#58a9e0` / `rgb(88 169 224 / 0.14)` | "a set of possibilities", and the progress half of a cell state |
 
 Rule: strip the accent and every screen must still read. Hierarchy comes
 from size, weight and position, never from red.
 
 `info` is the calm blue of the logo's "I" bubble (`#0086d1`) taken down to
 reading weight — not a saturated link blue, which would read as "click me" in
-a page where the one thing to click is red. It exists for a single
-distinction, and gains nothing by being used for anything else: a `{{…}}` chip
-in the cloze editor holding ONE answer wears the accent, and one standing for
-a SET of possibilities (several answers, or a dropdown) wears this. A teacher
-scanning a paragraph of holes tells the two apart without reading a word of
-them.
+a page where the one thing to click is red. Its first job is one
+distinction: a `{{…}}` chip in the cloze editor holding ONE answer wears the
+accent, and one standing for a SET of possibilities (several answers, or a
+dropdown) wears this. A teacher scanning a paragraph of holes tells the two
+apart without reading a word of them.
+
+Its second job is the PROGRESS half of a `VerdictCell` — `info-soft` for a
+question the student has written in, the `info` fill for one they have marked
+done — and it is the same job seen from another side: green, amber and red on
+that grid mean "right, partly, wrong", so progress cannot borrow any of them,
+and a blue that is not a link colour is exactly what is left. The two
+strengths are the progression itself; a column darkening downward is a class
+moving through the quiz, legible at squinting distance and on a projector.
+Nothing on a `bg-info` fill may be written in `fg`: the ink is `on-fill`,
+like every other saturated fill.
 
 `on-fill` exists because one red cannot do both jobs in dark mode: a red
 light enough to read as text on `#1b1a18` (≥ 4.5:1) is too light to carry
@@ -276,6 +285,11 @@ with a keyboard-reachable dismiss button.
 - Sheet: right drawer, 560 px, for every form longer than three fields.
   Dialog: centered, ≤ 480 px, for confirmations and one-field forms.
   A sheet never opens another sheet; a dialog may open over a sheet.
+  One exception, `size="xl" scroll`: a READING dialog, 920 px, whose body
+  scrolls under a title and a footer that stay put. It is not a form — it is
+  a document the reader walks through, today the whole of one student's
+  answers opened from the live grid — and the footer is how they walk to the
+  next one, so it must not sit at the bottom of a hundred lines of code.
 - Menu: overflow for tertiary actions; destructive items last, separated. It
   closes on a page scroll, but not on the scroll its own opening click causes
   (200 ms of grace) nor on one inside the panel. Its panel stacks ABOVE the
@@ -326,10 +340,27 @@ with a keyboard-reachable dismiss button.
   whose whole message is "there is nothing to do". `label` names the figure;
   the middle is `aria-hidden`, or the reader hears the numbers twice.
 - ProgressSegments: one bar per question in the zen player, four states
-  (`empty` never opened, `answered` opened and left, `done`, `current`). The
-  bars share the width so twenty fit 360 px; roving tabindex like `Tabs`,
-  because twenty questions must not be twenty stops on the way to the answer
-  field; the state is in the accessible name, not only in the height.
+  (`empty` never opened, `answered` opened and left, `done`, `current`). It
+  spans the WHOLE width it is given and the bars share it equally, with no
+  cap: the strip is a map of the paper, and three questions drawn as three
+  stubs at the left edge map nothing. Every bar carries its NUMBER under it,
+  quiet (`fg-faint`, 11 px) except the current one, which is the accent and
+  bold — a student aims at "question 7" instead of counting bars. Roving
+  tabindex like `Tabs`, because twenty questions must not be twenty stops on
+  the way to the answer field; the state is in the accessible name, not only
+  in the height.
+  Past a certain count the numbers stop fitting, and the strip COMPRESSES
+  rather than wrapping or scrolling — the bars are what the strip is for, so
+  they stay and the numbers thin out to anchors. Measured on the strip's own
+  width (a `ResizeObserver`, never the viewport: the same strip is 760 px in
+  the player and 358 px on a phone): a segment of 22 px or more holds two
+  digits and its air, so everything is numbered (about 30 questions over
+  760 px); from 11 px, the first, the last, the current and every 5th; under
+  that, every 10th. A multiple landing within two slots of the last one is
+  dropped, so "30" and "32" never collide, and the gap halves to 2 px once
+  compressed to give the bars back what the air was taking. Nothing is lost:
+  the number and the state live in each bar's accessible name, which never
+  thins out.
 - Pastille (`packages/qt-mcq/src/ui.tsx`): the letter of a choice IS its
   checkbox — a circle, 32 px in the teacher's editor, 40 px under a student's
   finger. A hairline `line-strong` circle on `surface` with a bold `fg-muted`
@@ -342,11 +373,16 @@ with a keyboard-reachable dismiss button.
   the text of the choice and not a letter. It replaced a letter plus a box
   labelled "Correct": two targets and a word that named nothing a teacher was
   looking for.
-- VerdictCell: one cell of the live grid and of the grading list, seven
-  states (`blank`, `inProgress`, `answered`, `correct`, `partial`, `wrong`,
-  `pending`). Icon **and** tint **and** word, never a tint alone: a dashboard
+- VerdictCell: one cell of the live grid and of the grading list, eight
+  states in two families. PROGRESS — `blank` (nothing), `inProgress` (opened,
+  nothing written, neutral), `answered` (written in, `info-soft`), `done` (the
+  student marked it done, the `info` fill) — and VERDICT, which the grid's
+  "Results" switch puts in their place: `correct`, `partial`, `wrong`,
+  `pending`. Icon **and** tint **and** word, never a tint alone: a dashboard
   projected on a lecture-hall wall loses half its saturation. `value` holds
-  the answer in a glyph or two ("B", "NULL", "3/3") beside the icon.
+  the answer in a glyph or two ("A, C", "NULL", "12 L") beside the icon, and
+  INHERITS the state's ink rather than carrying `fg` — that is what keeps it
+  readable on the filled `done` blue, where `fg` measured 2.9:1.
 - SyncBadge: whether the student's work is safe — `saved`, `saving`,
   `offline`, `closed` — icon plus word, in a polite live region, since it is
   the answer to "did that save?". The word hides under `sm` where the zen bar

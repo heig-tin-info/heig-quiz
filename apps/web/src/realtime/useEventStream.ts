@@ -38,6 +38,7 @@ export const NAMED_EVENTS = [
   "attempt.closed",
   "dashboard.cell",
   "dashboard.presence",
+  "dashboard.attempt",
   "lobby.count",
   "runner.result",
   "grading.progress",

@@ -106,6 +106,30 @@ export const clozeServer: QuestionTypeServer<
 
   grade: (config, answer, ctx) => gradeClozeAnswer(config, answer, ctx.itemPoints),
 
+  /**
+   * The live grid (F-DASH-02): the blanks in order, joined by " · ".
+   *
+   * A dropdown stores the CANONICAL option index as a decimal string
+   * (decision D4), which would read as "2 · 0 · 1" in the teacher's column —
+   * three numbers that mean nothing. So a `select` blank is resolved back to
+   * its label here. An untouched blank is an em dash, because the POSITION of
+   * what is missing is half of what the teacher is reading.
+   */
+  summarizeAnswer(config, answer) {
+    const blanks = parseCloze(config.text).blanks;
+    return answer.blanks
+      .map((value, index) => {
+        if (value === null || value.trim() === "") return "—";
+        const blank = blanks[index];
+        if (blank?.kind === "select") {
+          const option = blank.options[Number(value)];
+          if (option !== undefined) return option;
+        }
+        return value.trim();
+      })
+      .join(" · ");
+  },
+
   /** The authoring text, blanks included: every answer a cloze holds is in it. */
   searchText: (config) => config.text,
 

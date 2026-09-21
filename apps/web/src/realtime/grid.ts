@@ -5,8 +5,9 @@
  * (`GET /evaluations/:id/dashboard`). While it is open, the SSE stream sends
  * the differences instead of asking the teacher's browser to fetch thirty
  * rows every second: a `dashboard.cell` per answered question, a
- * `dashboard.presence` per connection, an `evaluation.state` per teacher
- * control, a `lobby.count` while nobody has started yet.
+ * `dashboard.presence` per connection, a `dashboard.attempt` per student who
+ * enters or starts, an `evaluation.state` per teacher control, a
+ * `lobby.count` while nobody has started yet.
  *
  * Applying them is a pure function of (state, event), kept away from React on
  * purpose: this is the part where a wrong answer means a teacher reading a
@@ -43,14 +44,25 @@ export function initialGrid(view: DashboardView): GridState {
   return { view, lobby: null };
 }
 
-/** Present / enrolled, from the event when there is one, from the rows otherwise. */
+/**
+ * Present / enrolled, for the header counter and the lobby ring.
+ *
+ * `present` is counted from the ROWS, never from the last `lobby.count`. The
+ * two travel on different channels: `dashboard.presence` moves one row's dot,
+ * `lobby.count` is a whole-room figure the server only publishes when a
+ * stream opens or closes. Reading the second made the header disagree with
+ * the dots right beside it — "0 of 6 connected" under a green name — and it
+ * stayed wrong until the teacher reloaded. The rows are the per-student truth
+ * the grid already keeps current, so they answer both questions.
+ *
+ * `enrolled` still comes from the event when there is one: it counts the
+ * roster lines nobody has claimed yet, which have no row here.
+ */
 export function presence(state: GridState): LobbyCount {
-  return (
-    state.lobby ?? {
-      present: state.view.rows.filter((r) => r.online).length,
-      enrolled: state.view.rows.length,
-    }
-  );
+  return {
+    present: state.view.rows.filter((r) => r.online).length,
+    enrolled: state.lobby?.enrolled ?? state.view.rows.length,
+  };
 }
 
 /**
@@ -62,14 +74,18 @@ function startedRows(rows: readonly DashboardRow[]): number {
   return rows.filter((r) => r.attemptId !== null).length;
 }
 
-/** Recomputes the completion of ONE item, the same way `dashboardView` does. */
-function recomputeTotals(view: DashboardView, itemId: string): DashboardView["totals"] {
+/**
+ * Recomputes the completion of ONE item, the same way `dashboardView` does —
+ * or of every item when `itemId` is null, which is what a row that just
+ * acquired an attempt needs: it moves the DENOMINATOR of all of them.
+ */
+function recomputeTotals(view: DashboardView, itemId: string | null): DashboardView["totals"] {
   const started = startedRows(view.rows);
   let changed = false;
   const totals = view.totals.map((total) => {
-    if (total.itemId !== itemId) return total;
+    if (itemId !== null && total.itemId !== itemId) return total;
     const done = view.rows.filter(
-      (r) => r.cells.find((c) => c.itemId === itemId)?.status === "done",
+      (r) => r.cells.find((c) => c.itemId === total.itemId)?.status === "done",
     ).length;
     const completion = started === 0 ? 0 : Math.round((done / started) * 100) / 100;
     if (completion === total.completion) return total;
@@ -145,6 +161,46 @@ function applyPresence(
   return { ...state, view: updated };
 }
 
+/**
+ * The row of a student who just entered or just started (F-DASH-03).
+ *
+ * The roster row exists from the first fetch with `attemptId: null` and
+ * `state: "not_started"`; nothing else in the stream ever filled those in, so
+ * a student who was visibly ONLINE still read "never connected" until the
+ * teacher reloaded. `dashboard.cell` is keyed by `attemptId` too, so this is
+ * also what lets the very first answer of a student land in the grid.
+ */
+function applyAttempt(
+  state: GridState,
+  event: Extract<ServerEvent, { type: "dashboard.attempt" }>,
+): GridState {
+  const { view } = state;
+  if (event.evaluationId !== view.evaluation.id) return state;
+  const index = view.rows.findIndex((r) => r.userId === event.userId);
+  if (index < 0) return state;
+  const row = view.rows[index]!;
+  const gainedAnAttempt = row.attemptId === null;
+  if (
+    row.attemptId === event.attemptId &&
+    row.state === event.state &&
+    row.deadlineAt === event.deadlineAt
+  ) {
+    return state;
+  }
+  let updated = withRow(view, index, {
+    ...row,
+    attemptId: event.attemptId,
+    state: event.state,
+    deadlineAt: event.deadlineAt,
+  });
+  if (gainedAnAttempt) {
+    // One more started row: every completion is a share of THOSE.
+    const totals = recomputeTotals(updated, null);
+    if (totals !== updated.totals) updated = { ...updated, totals };
+  }
+  return { ...state, view: updated };
+}
+
 function applyState(
   state: GridState,
   event: Extract<ServerEvent, { type: "evaluation.state" }>,
@@ -211,6 +267,8 @@ export function applyGridEvent(state: GridState, event: ServerEvent): GridState 
       return applyCell(state, event);
     case "dashboard.presence":
       return applyPresence(state, event);
+    case "dashboard.attempt":
+      return applyAttempt(state, event);
     case "evaluation.state":
       return applyState(state, event);
     case "attempt.deadline":

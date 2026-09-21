@@ -17,8 +17,8 @@ import { LiveDashboard } from "./LiveDashboard";
 /*
  * The dashboard, from the three angles the work package cares about: the grid
  * renders 30 x 12 WITHOUT fetching a single cell, the keyboard is the real
- * interface (`n`/`r`/`s`, Space), and a click on a cell opens the in-flow
- * inspection panel rather than a modal.
+ * interface (`n`/`r`/`s`, Space), and a click on a cell opens the whole of
+ * one student's paper in a modal.
  *
  * `EventSource` is stubbed away: the query cache is seeded directly, which is
  * what a snapshot does anyway, and the stream itself is tested in
@@ -72,7 +72,8 @@ describe("LiveDashboard — the grid", () => {
     // Waiting LONGER can only reveal more fetches, so the three zero-fetch
     // expectations below are not weakened by it.
     await waitFor(() => expect(screen.getAllByRole("row")).toHaveLength(32), { timeout: 20_000 });
-    expect(screen.getAllByRole("columnheader")).toHaveLength(15);
+    // 3 identity/score/time columns + 12 questions + the actions column.
+    expect(screen.getAllByRole("columnheader")).toHaveLength(16);
     // Only the evaluation's own detail; the grid came from the cache and no
     // cell asked for anything of its own.
     expect(calls.filter((c) => c.url.includes("/dashboard"))).toHaveLength(0);
@@ -93,15 +94,20 @@ describe("LiveDashboard — the grid", () => {
 });
 
 describe("LiveDashboard — keyboard", () => {
-  it("`n` swaps the names for the stable pseudonyms", async () => {
+  it("`n` swaps the names for a stable number that is not the roster order", async () => {
     const user = userEvent.setup();
     setup();
-    expect(await screen.findByText("Student 0")).toBeInTheDocument();
+    expect(await screen.findByText("Nadia Roux 0")).toBeInTheDocument();
     await user.keyboard("n");
-    await waitFor(() => expect(screen.queryByText("Student 0")).not.toBeInTheDocument());
-    expect(screen.getByText("calm heron 0")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("Nadia Roux 0")).not.toBeInTheDocument());
+    // Not the animal pseudonym, and not the row's position either: the three
+    // fixture rows are "Wise Otter", "Amber Lynx", "Nimble Ibex", so sorting
+    // by the server's hash puts the FIRST row last (D20).
+    expect(screen.queryByText(/otter/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Student 3")).toBeInTheDocument();
+    expect(screen.getByText("Student 1")).toBeInTheDocument();
     await user.keyboard("n");
-    expect(await screen.findByText("Student 0")).toBeInTheDocument();
+    expect(await screen.findByText("Nadia Roux 0")).toBeInTheDocument();
   });
 
   it("`r` and `s` flip the answer and result toggles", async () => {
@@ -109,12 +115,12 @@ describe("LiveDashboard — keyboard", () => {
     setup();
     const answers = () => screen.getByRole("switch", { name: /answers/i });
     const results = () => screen.getByRole("switch", { name: /results/i });
-    await screen.findByText("Student 0");
+    await screen.findByText("Nadia Roux 0");
     expect(answers()).toHaveAttribute("aria-checked", "true");
     await user.keyboard("r");
     // The grid stays on screen while the other variant loads.
     await waitFor(() => expect(answers()).toHaveAttribute("aria-checked", "false"));
-    expect(screen.getByText("Student 0")).toBeInTheDocument();
+    expect(screen.getByText("Nadia Roux 0")).toBeInTheDocument();
     await user.keyboard("s");
     await waitFor(() => expect(results()).toHaveAttribute("aria-checked", "false"));
   });
@@ -124,7 +130,7 @@ describe("LiveDashboard — keyboard", () => {
     const { calls } = setup(makeDashboard(2, 2), {
       [`POST /app/api/evaluations/${EVALUATION_ID}/pause`]: ok({}),
     });
-    await screen.findByText("Student 0");
+    await screen.findByText("Nadia Roux 0");
     await user.keyboard(" ");
     await waitFor(() => expect(calls.some((c) => c.url.endsWith("/pause"))).toBe(true));
   });
@@ -132,54 +138,76 @@ describe("LiveDashboard — keyboard", () => {
   it("does not fire a shortcut typed into a field", async () => {
     const user = userEvent.setup();
     setup();
-    await screen.findByText("Student 0");
+    await screen.findByText("Nadia Roux 0");
     const input = document.createElement("input");
     document.body.append(input);
     input.focus();
     await user.keyboard("n");
-    expect(screen.getByText("Student 0")).toBeInTheDocument();
+    expect(screen.getByText("Nadia Roux 0")).toBeInTheDocument();
     input.remove();
   });
 });
 
 describe("LiveDashboard — inspection", () => {
-  it("opens the in-flow panel on a cell, and closes it with Escape", async () => {
+  const attempt = (index: number) => ({
+    attempt: {
+      id: id("attempt", index),
+      userId: id("user", index),
+      displayName: `Nadia Roux ${index}`,
+      pseudonym: "Amber Lynx",
+      state: "in_progress",
+      startedAt: null,
+      deadlineAt: null,
+      submittedAt: null,
+    },
+    items: [],
+    events: [],
+    serverNow: new Date().toISOString(),
+  });
+
+  it("opens every answer of that student in a modal, and closes it with Escape", async () => {
     const user = userEvent.setup();
     setup(makeDashboard(3, 4), {
-      [`GET /app/api/evaluations/${EVALUATION_ID}/attempts/${id("attempt", 1)}`]: ok({
-        attempt: {
-          id: id("attempt", 1),
-          userId: id("user", 1),
-          displayName: "Student 1",
-          pseudonym: "calm heron 1",
-          state: "in_progress",
-          startedAt: null,
-          deadlineAt: null,
-          submittedAt: null,
-        },
-        items: [],
-        events: [],
-        serverNow: new Date().toISOString(),
-      }),
+      [`GET /app/api/evaluations/${EVALUATION_ID}/attempts/${id("attempt", 1)}`]: ok(attempt(1)),
     });
 
-    await user.click(await screen.findByRole("button", { name: /Student 1 · Question 2/ }));
-    // `<aside>` maps to `complementary`, which is what "in flow, beside the
-    // grid" means to a screen reader.
-    const panel = await screen.findByRole("complementary", { name: /answer of student 1/i });
-    // In flow, not a modal: no dialog, no backdrop over the grid.
-    expect(within(panel).getByText(/question 2/i)).toBeInTheDocument();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(screen.getByRole("table")).toBeVisible();
+    await user.click(await screen.findByRole("button", { name: /Nadia Roux 1 · Question 2/ }));
+    const dialog = await screen.findByRole("dialog", { name: /answers of nadia roux 1/i });
+    // The whole paper, not one cell: the footer walks to the next STUDENT.
+    expect(within(dialog).getByRole("button", { name: /next student/i })).toBeInTheDocument();
 
     await act(async () => {
       await user.keyboard("{Escape}");
     });
     await waitFor(() =>
-      expect(
-        screen.queryByRole("complementary", { name: /answer of student 1/i }),
-      ).not.toBeInTheDocument(),
+      expect(screen.queryByRole("dialog", { name: /answers of nadia roux 1/i })).not.toBeInTheDocument(),
     );
+  });
+
+  it("walks to the next student with the right arrow, in one query each", async () => {
+    const user = userEvent.setup();
+    const { calls } = setup(makeDashboard(3, 4), {
+      [`GET /app/api/evaluations/${EVALUATION_ID}/attempts/${id("attempt", 1)}`]: ok(attempt(1)),
+      [`GET /app/api/evaluations/${EVALUATION_ID}/attempts/${id("attempt", 2)}`]: ok(attempt(2)),
+    });
+
+    await user.click(await screen.findByRole("button", { name: /Nadia Roux 1 · Question 2/ }));
+    await screen.findByRole("dialog", { name: /answers of nadia roux 1/i });
+    await user.keyboard("{ArrowRight}");
+    await screen.findByRole("dialog", { name: /answers of nadia roux 2/i });
+    // One request per student opened, never one per question.
+    expect(calls.filter((c) => c.url.includes("/attempts/"))).toHaveLength(2);
+  });
+
+  it("names the anonymous student in the modal too", async () => {
+    const user = userEvent.setup();
+    setup(makeDashboard(3, 4), {
+      [`GET /app/api/evaluations/${EVALUATION_ID}/attempts/${id("attempt", 1)}`]: ok(attempt(1)),
+    });
+    await screen.findByText("Nadia Roux 1");
+    await user.keyboard("n");
+    await user.click(await screen.findByRole("button", { name: /Student 1 · Question 2/ }));
+    expect(await screen.findByRole("dialog", { name: /answers of student 1/i })).toBeInTheDocument();
   });
 });
 
@@ -198,7 +226,7 @@ describe("LiveDashboard — states", () => {
     const view = makeDashboard(2, 2);
     view.evaluation.state = "closed";
     setup(view);
-    await screen.findByText("Student 0");
+    await screen.findByText("Nadia Roux 0");
     expect(screen.queryByRole("button", { name: /^pause$/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^close$/i })).not.toBeInTheDocument();
     // WP10: the grid is a record now; the work is the correction.
@@ -208,7 +236,7 @@ describe("LiveDashboard — states", () => {
 
   it("shows no grading button while the class is still in it", async () => {
     setup(makeDashboard(2, 2));
-    await screen.findByText("Student 0");
+    await screen.findByText("Nadia Roux 0");
     expect(screen.queryByRole("button", { name: /go to grading/i })).not.toBeInTheDocument();
   });
 

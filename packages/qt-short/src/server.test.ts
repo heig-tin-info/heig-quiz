@@ -142,6 +142,22 @@ describe("the canonical mapping", () => {
   });
 });
 
+describe("summarizeAnswer — the glyph of the live grid (F-DASH-02)", () => {
+  const summarize = (text: string) => shortServer.summarizeAnswer!(config(), { text });
+
+  it("is what the student typed", () => {
+    expect(summarize("malloc")).toBe("malloc");
+  });
+
+  it("collapses the whitespace, so a pasted newline cannot break the row", () => {
+    expect(summarize("  int\n  main ")).toBe("int main");
+  });
+
+  it("is empty for an empty field, and says nothing about the verdict", () => {
+    expect(summarize("   ")).toBe("");
+  });
+});
+
 describe("the server entry point", () => {
   it("never reaches React", () => {
     for (const file of ["server.ts", "schema.ts", "grade.ts", "canonical.ts"]) {

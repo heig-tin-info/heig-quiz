@@ -364,6 +364,33 @@ describe("what a student is allowed to receive (§4.8)", () => {
     expect(peerStream.text).not.toContain("attempt.closed");
   });
 
+  /**
+   * The frame that tells the grid a roster row now has an attempt. It carries
+   * one student's identity, their deadline and their state to every watcher
+   * of the evaluation topic — which is why it is staff-only.
+   */
+  it("keeps dashboard.attempt for the staff and drops it for a student", async () => {
+    const teacherStream = await openStream(teacher.headers, `evaluation:${seed.evaluationId}`);
+    const studentStream = await openStream(student.headers, `evaluation:${seed.evaluationId}`);
+    await settle();
+
+    bus.dashboardAttempt({
+      evaluationId: seed.evaluationId,
+      userId: student.id,
+      attemptId: "33333333-3333-4333-8333-333333333333",
+      state: "in_progress",
+      startedAt: server.clock.now(),
+      deadlineAt: new Date(server.clock.now().getTime() + 60_000),
+    });
+    await settle();
+
+    expect(names(teacherStream.text)).toContain("dashboard.attempt");
+    const event = frame(teacherStream.text, "dashboard.attempt")!;
+    expect(event["userId"]).toBe(student.id);
+    expect(event["state"]).toBe("in_progress");
+    expect(studentStream.text).not.toContain("dashboard.attempt");
+  });
+
   it("delivers lobby.count and evaluation.state to both", async () => {
     const teacherStream = await openStream(teacher.headers, `evaluation:${seed.evaluationId}`);
     const studentStream = await openStream(student.headers, `evaluation:${seed.evaluationId}`);

@@ -138,7 +138,14 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
     });
   }
   const saver = autosave.current;
-  useEffect(() => () => saver.stop(false), [saver]);
+  // `start()` on every mount, a NON-final stop on every unmount. StrictMode
+  // runs mount → cleanup → mount while keeping the ref, so a stop that could
+  // not be undone silenced the autosave for the whole session (the badge kept
+  // saying "saved" and no `PUT …/answers/:itemId` ever left the browser).
+  useEffect(() => {
+    saver.start();
+    return () => saver.stop(false);
+  }, [saver]);
 
   // --- Adopting a fresh view ----------------------------------------------
   useEffect(() => {

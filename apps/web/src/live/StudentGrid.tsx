@@ -1,11 +1,11 @@
 import { Clock, DoorOpen, Eye, RotateCcw, WifiOff } from "lucide-react";
 
-import type { DashboardRow } from "@quiz/contracts";
+import type { DashboardRow, EvaluationState } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import type { GridState } from "../realtime/grid";
-import { Badge, Countdown, cx, Menu, T, VerdictCell } from "../ui";
-import { cellState, cellValue } from "./cells";
+import { Badge, Countdown, cx, IconButton, T, VerdictCell } from "../ui";
+import { cellState, cellValue, completionOf } from "./cells";
 
 /**
  * The grid of F-DASH-01: students down, questions across.
@@ -17,9 +17,24 @@ import { cellState, cellValue } from "./cells";
  * the scroll distance is predictable and the header never reflows while cells
  * change under it.
  *
- * The row's overflow menu sits INSIDE the sticky column rather than at the
- * end of the row: an action you have to scroll sideways to reach is an action
- * you do not take while twenty-four people are waiting.
+ * The row's actions used to be an overflow `Menu` INSIDE the sticky identity
+ * column, on the argument that an action you have to scroll sideways to reach
+ * is an action you do not take while twenty-four people are waiting. Two
+ * things settle it the other way now. The actions are STICKY TOO, at the
+ * right edge, so they are never the thing that scrolled off; and they are
+ * four single-purpose buttons whose availability is the answer to a question
+ * the teacher is already asking — "can I still give this one five minutes?"
+ * A menu hid that answer behind a click and showed four items of which two
+ * were disabled. Buttons that are simply NOT THERE when the server would
+ * refuse them say more, and the column keeps a fixed width so a row losing a
+ * button does not make the grid jump.
+ *
+ * They stop being sticky UNDER `sm`, and that is not a detail: a 390 px
+ * screen has 348 px of table, the pinned identity column takes 176 of them
+ * and a second pinned column would leave 68 px — one question. Two sticky
+ * ends on a phone is not a matrix, it is a pair of columns with a slot
+ * between them. So on a phone the actions sit at the end of the row, where
+ * scrolling right through the questions lands anyway.
  *
  * Every cell is a plain `VerdictCell`; none of them fetches anything. The
  * whole grid is a pure function of the state `useDashboard` walks forward.
@@ -28,30 +43,44 @@ import { cellState, cellValue } from "./cells";
 /** Fixed width of a question column: two glyphs and the icon, and no more. */
 const COL = "w-16 min-w-16";
 
-function presenceDot(row: DashboardRow, t: ReturnType<typeof useT>) {
-  const label = row.online
-    ? t("live.row.online")
-    : row.lastSeenAt === null
-      ? t("live.row.never")
-      : t("live.row.offline");
-  return (
-    <span
-      className={cx(
-        "mt-1.5 size-2 shrink-0 rounded-full",
-        row.online ? "bg-success" : row.lastSeenAt === null ? "bg-line-strong" : "bg-warning",
-      )}
-      title={label}
-      aria-label={label}
-      role="img"
-    />
-  );
+/**
+ * Room for the widest row — three 28 px buttons and their gaps — held
+ * whatever a given row shows, so a student handing in does not shift the
+ * grid sideways under the teacher's pointer.
+ */
+const ACTIONS = "w-26 min-w-26";
+
+/**
+ * The dot and the word under the name — but only when they mean something.
+ *
+ * A student who has HANDED IN is not "offline": their stream closes the
+ * moment they submit, and printing the word beside twenty finished rows tells
+ * the teacher about the browser rather than about the exam. So presence is
+ * reported while the attempt is running, "never connected" while there is no
+ * attempt at all, and nothing once the attempt is over — the `handed in` /
+ * `closed` badge beside the name already carries that.
+ */
+function presenceOf(
+  row: DashboardRow,
+  t: ReturnType<typeof useT>,
+): { tone: string; label: string; line: boolean; warn: boolean } {
+  if (row.state === "not_started") {
+    return { tone: "bg-line-strong", label: t("live.row.never"), line: true, warn: false };
+  }
+  if (row.state === "submitted" || row.state === "expired") {
+    const label = row.state === "submitted" ? t("live.row.submitted") : t("live.row.expired");
+    return { tone: "bg-line-strong", label, line: false, warn: false };
+  }
+  return row.online
+    ? { tone: "bg-success", label: t("live.row.online"), line: false, warn: false }
+    : { tone: "bg-warning", label: t("live.row.offline"), line: true, warn: true };
 }
 
 export function StudentGrid({
   state,
   now,
   paused,
-  showNames,
+  nameOf,
   showAnswers,
   showResults,
   selected,
@@ -65,7 +94,8 @@ export function StudentGrid({
   now: number;
   /** The evaluation is paused: every row's countdown freezes with it (W16). */
   paused: boolean;
-  showNames: boolean;
+  /** The name or the anonymous number of one row; the toggle lives above. */
+  nameOf: (row: DashboardRow) => string;
   showAnswers: boolean;
   showResults: boolean;
   selected: { attemptId: string; itemId: string } | null;
@@ -78,6 +108,17 @@ export function StudentGrid({
   const { view } = state;
   const totals = new Map(view.totals.map((x) => [x.itemId, x]));
   const percent = (v: number) => `${Math.round(v * 100)} %`;
+
+  // Mirrors of the server's own rules, so no button is offered that the API
+  // would refuse (`live/service.ts`): `extendTime` and `closeAttempt` only
+  // move an attempt that is `in_progress`, and only while the evaluation is
+  // still running or paused; `reopenAttempt` returns an `in_progress` attempt
+  // untouched, so it is offered for a finished one only — and never once the
+  // results are out, where giving somebody the paper back would contradict a
+  // grade already published.
+  const evaluationState: EvaluationState = view.evaluation.state;
+  const live = evaluationState === "running" || evaluationState === "paused";
+  const canReopen = evaluationState !== "released";
 
   return (
     // `relative`, and not only `overflow-x-auto`: the accessible names inside
@@ -115,27 +156,40 @@ export function StudentGrid({
                 <span className="block truncate text-[10px] text-fg-faint">{item.type}</span>
               </th>
             ))}
+            <th
+              scope="col"
+              className={cx(
+                T.th,
+                ACTIONS,
+                "bg-surface text-right sm:sticky sm:right-0 sm:z-10 sm:border-l sm:border-line",
+              )}
+            >
+              {t("live.grid.actions")}
+            </th>
           </tr>
         </thead>
         <tbody>
           {view.rows.map((row) => {
-            const name = showNames ? row.displayName : row.pseudonym;
+            const name = nameOf(row);
             const active = selected?.attemptId === row.attemptId;
+            const presence = presenceOf(row, t);
+            const progress = completionOf(row);
+            const running = row.state === "in_progress";
+            const finished = row.state === "submitted" || row.state === "expired";
+            const stick = active ? "bg-accent-soft" : "bg-surface group-hover:bg-surface-2/70";
             return (
               <tr
                 key={row.userId}
                 className={cx(T.row, "group", active ? "bg-accent-soft" : T.rowHover)}
               >
-                <th
-                  scope="row"
-                  className={cx(
-                    T.td,
-                    "sticky left-0 z-10 text-left font-normal",
-                    active ? "bg-accent-soft" : "bg-surface group-hover:bg-surface-2/70",
-                  )}
-                >
+                <th scope="row" className={cx(T.td, "sticky left-0 z-10 text-left font-normal", stick)}>
                   <span className="flex items-start gap-2">
-                    {presenceDot(row, t)}
+                    <span
+                      className={cx("mt-1.5 size-2 shrink-0 rounded-full", presence.tone)}
+                      title={presence.label}
+                      aria-label={presence.label}
+                      role="img"
+                    />
                     <span className="flex min-w-0 flex-1 flex-col">
                       <span className="flex flex-wrap items-center gap-1.5">
                         <span
@@ -157,51 +211,37 @@ export function StudentGrid({
                           </Badge>
                         ) : null}
                       </span>
-                      {/* Only what is NOT the norm gets a second line: with
-                          twenty-four rows, "connected" under every name is
+                      {/* ONE meta line under the name, and it carries what
+                          changes from row to row: how far this student has
+                          got, plus a presence word only when presence is not
+                          the norm — "connected" under twenty-four names is
                           twenty-four words carrying no information. */}
-                      {row.online && row.state !== "not_started" ? null : (
-                        <span className="flex items-center gap-1 text-[11px] text-fg-faint">
-                          {!row.online && row.lastSeenAt !== null ? (
-                            <WifiOff className="size-3 text-warning" aria-hidden />
-                          ) : null}
-                          {row.state === "not_started"
-                            ? t("live.row.never")
-                            : t("live.row.offline")}
-                        </span>
-                      )}
+                      <span className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-fg-faint">
+                        {row.attemptId === null ? null : (
+                          <span
+                            className="tabular-nums"
+                            title={t("live.row.progressLabel", {
+                              done: progress.done,
+                              total: progress.total,
+                            })}
+                          >
+                            {t("live.row.progress", {
+                              done: progress.done,
+                              total: progress.total,
+                              percent: progress.percent,
+                            })}
+                          </span>
+                        )}
+                        {presence.line ? (
+                          <span className="flex items-center gap-1">
+                            {presence.warn ? (
+                              <WifiOff className="size-3 text-warning" aria-hidden />
+                            ) : null}
+                            {presence.label}
+                          </span>
+                        ) : null}
+                      </span>
                     </span>
-                    <Menu
-                      label={t("live.row.actions", { name })}
-                      items={[
-                        {
-                          label: t("live.row.inspect"),
-                          icon: Eye,
-                          disabled: row.attemptId === null,
-                          onSelect: () =>
-                            onInspect(row, selected?.itemId ?? view.items[0]?.id ?? ""),
-                        },
-                        {
-                          label: t("live.row.extend"),
-                          icon: Clock,
-                          disabled: row.attemptId === null,
-                          onSelect: () => onExtend(row),
-                        },
-                        {
-                          label: t("live.row.close"),
-                          icon: DoorOpen,
-                          disabled: row.state !== "in_progress",
-                          onSelect: () => onClose(row),
-                        },
-                        {
-                          label: t("live.row.reopen"),
-                          icon: RotateCcw,
-                          separator: true,
-                          disabled: row.attemptId === null || row.state === "in_progress",
-                          onSelect: () => onReopen(row),
-                        },
-                      ]}
-                    />
                   </span>
                 </th>
                 <td className={cx(T.td, "text-right tabular-nums")}>
@@ -214,7 +254,7 @@ export function StudentGrid({
                   )}
                 </td>
                 <td className={cx(T.td, "hidden text-right tabular-nums sm:table-cell")}>
-                  {row.deadlineAt === null || row.state !== "in_progress" ? (
+                  {row.deadlineAt === null || !running ? (
                     <span className="text-fg-faint">—</span>
                   ) : (
                     <Countdown
@@ -246,6 +286,55 @@ export function StudentGrid({
                     </td>
                   );
                 })}
+                <td
+                  className={cx(
+                    T.td,
+                    ACTIONS,
+                    "px-1 sm:sticky sm:right-0 sm:z-10 sm:border-l sm:border-line",
+                    stick,
+                  )}
+                >
+                  <span className="flex items-center justify-end gap-0.5">
+                    {row.attemptId === null ? null : (
+                      <IconButton
+                        size="sm"
+                        label={t("live.row.inspect")}
+                        onClick={() => onInspect(row, selected?.itemId ?? view.items[0]?.id ?? "")}
+                      >
+                        <Eye />
+                      </IconButton>
+                    )}
+                    {running && live ? (
+                      <>
+                        <IconButton
+                          size="sm"
+                          label={t("live.row.extend")}
+                          onClick={() => onExtend(row)}
+                        >
+                          <Clock />
+                        </IconButton>
+                        <IconButton
+                          size="sm"
+                          danger
+                          label={t("live.row.close")}
+                          onClick={() => onClose(row)}
+                        >
+                          <DoorOpen />
+                        </IconButton>
+                      </>
+                    ) : null}
+                    {finished && canReopen ? (
+                      <IconButton
+                        size="sm"
+                        danger
+                        label={t("live.row.reopen")}
+                        onClick={() => onReopen(row)}
+                      >
+                        <RotateCcw />
+                      </IconButton>
+                    ) : null}
+                  </span>
+                </td>
               </tr>
             );
           })}
@@ -278,6 +367,13 @@ export function StudentGrid({
                 </td>
               );
             })}
+            <td
+              className={cx(
+                T.td,
+                ACTIONS,
+                "bg-surface-2 sm:sticky sm:right-0 sm:z-10 sm:border-l sm:border-line",
+              )}
+            />
           </tr>
         </tfoot>
       </table>

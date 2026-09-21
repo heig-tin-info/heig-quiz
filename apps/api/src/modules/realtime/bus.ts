@@ -13,8 +13,10 @@
 import type {
   AttemptClosedEvent,
   AttemptDeadlineEvent,
+  AttemptState,
   CellStatus,
   ClosedBy,
+  DashboardAttemptEvent,
   DashboardCellEvent,
   DashboardPresenceEvent,
   EvaluationState,
@@ -171,6 +173,31 @@ export function dashboardPresence(input: {
     online: input.online,
     lastSeenAt: iso(input.lastSeenAt),
   });
+}
+
+/**
+ * A roster row acquired an attempt, or started it. Staff connections only,
+ * and NOT coalesced: it fires at most twice per student and per evaluation,
+ * and it is the frame that turns "never connected" into a live row.
+ */
+export function dashboardAttempt(input: {
+  evaluationId: string;
+  userId: string;
+  attemptId: string;
+  state: AttemptState;
+  startedAt: Date | null;
+  deadlineAt: Date | null;
+}): void {
+  const event: DashboardAttemptEvent = {
+    type: "dashboard.attempt",
+    evaluationId: input.evaluationId,
+    userId: input.userId,
+    attemptId: input.attemptId,
+    state: input.state,
+    startedAt: isoOrNull(input.startedAt),
+    deadlineAt: isoOrNull(input.deadlineAt),
+  };
+  emit(event, [evaluationTopic(input.evaluationId)], "staff");
 }
 
 /** Coalesced 1 s; everyone watching the evaluation receives it (F-LIVE-02). */

@@ -1932,20 +1932,29 @@ function answerOf(q: MockQuestion, seedValue: number): unknown {
 }
 
 /** One glyph or two for the grid cell (what `type.summarize` returns). */
+/**
+ * The glyph a dashboard cell carries, the way the SERVER writes it: the
+ * question type's own `summarizeAnswer` (`@quiz/core`), not a count. It is
+ * duplicated here rather than imported because the mock answers HTTP and has
+ * no configuration to hand a server package; the shapes are the real ones, so
+ * a change of form is visible on the screenshots.
+ */
 function summaryOf(q: MockQuestion, seedValue: number): string {
   const answer = answerOf(q, seedValue);
   switch (q.type) {
     case "mcq":
-      return String.fromCharCode(65 + ((answer as { selected: number[] }).selected[0] ?? 0));
+      return (answer as { selected: number[] }).selected
+        .map((index) => String.fromCharCode(65 + index))
+        .join(", ");
     case "short":
-      return (answer as { text: string }).text.slice(0, 8);
-    case "cloze": {
-      const blanks = (answer as { blanks: (string | null)[] }).blanks;
-      return `${blanks.filter((b) => b !== null).length}/${blanks.length}`;
-    }
+      return (answer as { text: string }).text;
+    case "cloze":
+      return (answer as { blanks: (string | null)[] }).blanks
+        .map((b) => (b === null || b === "" ? "—" : b))
+        .join(" · ");
     case "code": {
-      const cases = ((frozenConfig(q).tests ?? {}) as { cases?: unknown[] }).cases ?? [];
-      return `${cases.length === 0 ? 0 : 1 + (seedValue % cases.length)}/${cases.length}`;
+      const regions = (answer as { regions?: string[] }).regions ?? [];
+      return `${regions.reduce((sum, r) => sum + r.split("\n").length, 0)} L`;
     }
   }
 }
@@ -2097,17 +2106,28 @@ function makeRows(e: MockEvaluation, started: boolean): MockRowState[] {
       points: null,
       maxPoints,
       cells: e.items.map((item, i) => {
+        // The four states of F-DASH-01, all four reachable: done behind the
+        // student, `in_progress` where they are, `seen` on the next question
+        // for a third of the class (opened, nothing typed) and empty after.
         const status: MockCell["status"] =
-          i < progress - 1 ? "done" : i === progress - 1 ? "in_progress" : "empty";
+          i < progress - 1
+            ? "done"
+            : i === progress - 1
+              ? "in_progress"
+              : i === progress && index % 3 === 0
+                ? "seen"
+                : "empty";
+        const question = itemQuestion(item);
         return {
           itemId: item.id,
           status,
           verdict: null,
           points: null,
-          revision: status === "empty" ? 0 : 1 + i,
+          revision: status === "empty" || status === "seen" ? 0 : 1 + i,
+          // `seen` carries nothing on purpose: there is no answer to preview.
           summary:
-            status === "done" && itemQuestion(item) !== null
-              ? summaryOf(itemQuestion(item)!, index + i)
+            (status === "done" || status === "in_progress") && question !== null
+              ? summaryOf(question, index + i)
               : null,
         };
       }),

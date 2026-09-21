@@ -32,6 +32,7 @@ const VERDICT_STATES: VerdictState[] = [
   "blank",
   "inProgress",
   "answered",
+  "done",
   "correct",
   "partial",
   "wrong",
