@@ -73,6 +73,28 @@ export interface RichTextShortcut {
 export type RichTextToolbar = "always" | "focus" | "never";
 
 /**
+ * The few things a host's rich editor can be TOLD to do, handed to the owner
+ * of the field once its surface exists (`RichTextProps.onReady`).
+ *
+ * It is deliberately tiny, and it is not a second source of truth: every call
+ * ends in an ordinary `onChange` with the new markdown. It exists because the
+ * `cloze` editor has a button — "insert this choice set in the text" — that
+ * only the editor holding the caret can honour, and a markdown string handed
+ * back through `value` would land at the end of the text rather than where the
+ * teacher was writing.
+ */
+export interface RichTextApi {
+  /**
+   * Inserts the hole `{{body}}` at the caret, as ONE object rather than as
+   * five characters the serializer would then have to escape. Only a field
+   * with `holes` has them; elsewhere this is a no-op.
+   */
+  insertHole(body: string): void;
+  /** Puts the caret back in the editing surface. */
+  focus(): void;
+}
+
+/**
  * The props of the host's rich-text editor. Its interface is a MARKDOWN
  * STRING in and a markdown string out: the WYSIWYG surface is a rendering of
  * the stored value, never a second source of truth.
@@ -125,6 +147,18 @@ export interface RichTextProps {
    * it answers to, so the app's strip shows them wherever the caret is.
    */
   shortcuts?: readonly RichTextShortcut[];
+  /**
+   * The `{{…}}` holes of the `cloze` type are objects in this field rather
+   * than characters: a chip the teacher clicks to edit, serialized back
+   * VERBATIM. Off everywhere else, because `{{` is two ordinary braces in a
+   * prompt and a `{{` input rule in an mcq choice would be a trap.
+   */
+  holes?: boolean;
+  /**
+   * Called with the imperative handle once the surface exists, and with
+   * `null` when it goes away. The owner of the field keeps it in a ref.
+   */
+  onReady?: (api: RichTextApi | null) => void;
 }
 
 export type RichTextComponent = ComponentType<RichTextProps>;

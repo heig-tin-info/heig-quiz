@@ -38,7 +38,9 @@ import Image from "@tiptap/extension-image";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Placeholder } from "@tiptap/extension-placeholder";
 import { BlockMath, InlineMath } from "@tiptap/extension-mathematics";
+import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 
+import { clozeHoleExtensions } from "./clozeHole";
 import { CodeHighlight } from "./codeHighlight";
 import { assetUrl, assetWidth } from "./render";
 
@@ -67,6 +69,10 @@ export const INLINE_INPUT_RULES = [
   // The two rules of `CodeFence` below: the fence that opens a block with its
   // language, and the closing fence that gathers what was typed before it.
   "codeFence",
+  // Only a field with `holes` carries the extension at all, so listing its
+  // rule here costs nothing elsewhere — and a `cloze` text is authored in a
+  // block field anyway.
+  "clozeHole",
 ] as const;
 
 /**
@@ -389,6 +395,24 @@ export function openCodeFence(
   return true;
 }
 
+/*
+ * The shipped table renderer opens with a newline of its own and closes with
+ * another, on top of the blank line the serializer already puts between two
+ * blocks: a table between two paragraphs came back with THREE newlines on
+ * each side, and a document that is only a table came back starting with an
+ * empty line. Nothing downstream minds, but the stored source is what a
+ * teacher reads in the source pane and what a diff of a version shows.
+ */
+const MarkdownTable = Table.extend({
+  renderMarkdown(
+    this: { parent?: ((node: unknown, helpers: unknown) => string) | null },
+    node: unknown,
+    helpers: unknown,
+  ): string {
+    return (this.parent?.(node, helpers) ?? "").replace(/^\n+/, "").replace(/\n+$/, "");
+  },
+});
+
 export interface CodeFenceOptions {
   /** See the block comment above: on for a choice, off for a prompt. */
   mergeIntoBlock: boolean;
@@ -483,6 +507,12 @@ export interface RichTextSchemaOptions {
    * gather a code block written above it (`CodeFence`).
    */
   inline?: boolean;
+  /**
+   * The `{{…}}` holes of the `cloze` type become chips (`clozeHole.ts`). OFF
+   * by default and opt-in per field: `{{` is two ordinary braces in an mcq
+   * prompt, and an input rule that swallowed them there would be a trap.
+   */
+  cloze?: boolean;
 }
 
 /**
@@ -497,6 +527,7 @@ export function richTextExtensions({
   imageNodeView,
   codeBlockNodeView,
   inline = false,
+  cloze = false,
 }: RichTextSchemaOptions = {}): AnyExtension[] {
   const image = imageNodeView ? AssetImage.extend({ addNodeView: imageNodeView }) : AssetImage;
   const code = codeBlockNodeView
@@ -513,7 +544,10 @@ export function richTextExtensions({
     // column, and C in this school is written with two.
     code.configure({ enableTabIndentation: true, tabSize: 2 }),
     CodeFence.configure({ mergeIntoBlock: inline }),
-    CodeHighlight,
+    // Inside a fenced block a hole stays TEXT — the content of a code block is
+    // text, and a node cannot live in it — so it is coloured by a decoration
+    // instead, like the keywords around it.
+    CodeHighlight.configure({ holes: cloze }),
     image.configure({ allowBase64: false }),
     InlineMathTyping.configure({ katexOptions: KATEX_OPTIONS }),
     BlockMathTyping.configure({ katexOptions: KATEX_OPTIONS }),
@@ -522,7 +556,21 @@ export function richTextExtensions({
     // a silent loss on the next autosave.
     TaskList,
     TaskItem.configure({ nested: true }),
+    /*
+     * GFM tables, in EVERY field. `@tiptap/extension-table` 3.31 ships the
+     * markdown handlers (`markdownTokenizer`, `parseMarkdown`,
+     * `renderMarkdown`), so nothing is written here but the trim below: a
+     * `| a | b |` table round-trips through marked's own `table` token, cells
+     * padded to the column width. Column resizing is off — a width dragged in
+     * the editor has nowhere to be stored, markdown being the single source of
+     * truth, so the handle would promise what the save cannot keep.
+     */
+    MarkdownTable.configure({ resizable: false }),
+    TableRow,
+    TableHeader,
+    TableCell,
     Placeholder.configure({ placeholder: placeholder ?? "" }),
+    ...clozeHoleExtensions(cloze),
     Markdown,
   ];
 }

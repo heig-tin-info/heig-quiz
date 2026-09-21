@@ -13,6 +13,7 @@
  */
 import type { ReactNode } from "react";
 import { CLOZE_SENTINEL_PATTERN } from "@quiz/domain";
+import { cx } from "./ui.js";
 
 export interface ClozeTextProps {
   /** The sentinel-bearing markdown, exactly as `toStudent` sent it. */
@@ -81,25 +82,105 @@ function withBlanks(
   return nodes;
 }
 
-type Block = { kind: "code"; content: string } | { kind: "paragraph"; content: string };
+export type TableAlign = "left" | "center" | "right" | null;
 
-/** Fenced code blocks first (their content is verbatim), then blank-line paragraphs. */
+export type Block =
+  | { kind: "code"; content: string }
+  | { kind: "paragraph"; content: string }
+  | { kind: "table"; header: string[]; rows: string[][]; align: TableAlign[] };
+
+/** A GFM delimiter row: `| --- | :--: |`. What tells a table from a paragraph. */
+const DELIMITER = /^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/;
+const isRow = (line: string) => line.trimStart().startsWith("|");
+
+/** Splits one row on its unescaped pipes, dropping the outer ones. */
+function cells(line: string): string[] {
+  const out: string[] = [];
+  let current = "";
+  const trimmed = line.trim();
+  for (let i = 0; i < trimmed.length; i += 1) {
+    if (trimmed[i] === "\\" && i + 1 < trimmed.length) {
+      current += trimmed[i + 1];
+      i += 1;
+      continue;
+    }
+    if (trimmed[i] === "|") {
+      out.push(current);
+      current = "";
+      continue;
+    }
+    current += trimmed[i];
+  }
+  out.push(current);
+  if (out[0]?.trim() === "") out.shift();
+  if (out.length > 0 && out[out.length - 1]?.trim() === "") out.pop();
+  return out.map((cell) => cell.trim());
+}
+
+function alignOf(cell: string): TableAlign {
+  const left = cell.startsWith(":");
+  const right = cell.endsWith(":");
+  if (left && right) return "center";
+  if (right) return "right";
+  if (left) return "left";
+  return null;
+}
+
+/**
+ * One run of text, cut into paragraphs and GFM TABLES.
+ *
+ * A table is not decoration here: a `cloze` hole inside a table cell is the
+ * shape predefined choice sets exist for (docs/04 §4.6), and a student shown
+ * `| Directe | ⸢3⸣ |` as a line of prose would be reading the source of the
+ * question rather than the question.
+ */
+function paragraphsAndTables(content: string): Block[] {
+  const out: Block[] = [];
+  const lines = content.split("\n");
+  let buffer: string[] = [];
+  const flushText = () => {
+    const text = buffer.join("\n");
+    buffer = [];
+    for (const paragraph of text.split(/\n{2,}/)) {
+      if (paragraph.trim() !== "") out.push({ kind: "paragraph", content: paragraph });
+    }
+  };
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i]!;
+    const next = lines[i + 1];
+    if (isRow(line) && next !== undefined && isRow(next) && DELIMITER.test(next)) {
+      flushText();
+      const header = cells(line);
+      const align = cells(next).map(alignOf);
+      const rows: string[][] = [];
+      let j = i + 2;
+      for (; j < lines.length && isRow(lines[j]!); j += 1) rows.push(cells(lines[j]!));
+      out.push({ kind: "table", header, rows, align });
+      i = j - 1;
+      continue;
+    }
+    buffer.push(line);
+  }
+  flushText();
+  return out;
+}
+
+/** Fenced code blocks first (their content is verbatim), then tables and paragraphs. */
 export function splitBlocks(template: string): Block[] {
   const blocks: Block[] = [];
   const lines = template.split("\n");
   let buffer: string[] = [];
   let fenced = false;
 
-  const flush = (kind: Block["kind"]) => {
+  const flush = (kind: "code" | "paragraph") => {
     const content = buffer.join("\n");
     buffer = [];
     if (kind === "code") {
       blocks.push({ kind, content });
       return;
     }
-    for (const paragraph of content.split(/\n{2,}/)) {
-      if (paragraph.trim() !== "") blocks.push({ kind: "paragraph", content: paragraph });
-    }
+    blocks.push(...paragraphsAndTables(content));
   };
 
   for (const line of lines) {
@@ -114,23 +195,70 @@ export function splitBlocks(template: string): Block[] {
   return blocks;
 }
 
+/** The three alignments a GFM delimiter row can ask for. */
+const alignClass = (align: TableAlign): string =>
+  align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left";
+
 export function ClozeFallbackText({ template, renderBlank }: ClozeTextProps) {
   return (
     <>
-      {splitBlocks(template).map((block, i) =>
-        block.kind === "code" ? (
-          <pre
-            key={`b${i}`}
-            className="overflow-x-auto rounded-xl border border-line bg-surface-2 p-3 font-mono text-[13px] leading-7 text-fg"
-          >
-            <code>{withBlanks(block.content, `b${i}`, renderBlank, false)}</code>
-          </pre>
-        ) : (
+      {splitBlocks(template).map((block, i) => {
+        if (block.kind === "code") {
+          return (
+            <pre
+              key={`b${i}`}
+              className="overflow-x-auto rounded-xl border border-line bg-surface-2 p-3 font-mono text-[13px] leading-7 text-fg"
+            >
+              <code>{withBlanks(block.content, `b${i}`, renderBlank, false)}</code>
+            </pre>
+          );
+        }
+        if (block.kind === "table") {
+          return (
+            <div key={`b${i}`} className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr>
+                    {block.header.map((cell, c) => (
+                      <th
+                        key={c}
+                        className={cx(
+                          "border-b border-line px-2.5 py-1.5 font-semibold text-fg-muted",
+                          alignClass(block.align[c] ?? null),
+                        )}
+                      >
+                        {withBlanks(cell, `b${i}-h${c}`, renderBlank, true)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {block.rows.map((row, r) => (
+                    <tr key={r}>
+                      {row.map((cell, c) => (
+                        <td
+                          key={c}
+                          className={cx(
+                            "border-b border-line px-2.5 py-1.5 text-fg",
+                            alignClass(block.align[c] ?? null),
+                          )}
+                        >
+                          {withBlanks(cell, `b${i}-${r}-${c}`, renderBlank, true)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        }
+        return (
           <p key={`b${i}`} className="text-base leading-9 text-fg">
             {withBlanks(block.content, `b${i}`, renderBlank, true)}
           </p>
-        ),
-      )}
+        );
+      })}
     </>
   );
 }

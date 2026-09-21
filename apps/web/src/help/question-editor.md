@@ -31,7 +31,9 @@ its description; press Backspace in the empty field to take the last one off.
 The statement and the explanation are written as you would in a word
 processor. Markdown is what is stored underneath, so `**bold**`, `$math$`
 and fenced code blocks work if you prefer typing them. A pasted image is
-uploaded and referenced by a stable id.
+uploaded and referenced by a stable id. The table button inserts a 3×3 GFM
+table; with the caret inside one, the table menu beside it adds and removes
+rows and columns.
 
 ## Scoring a multiple-answer question
 
@@ -54,6 +56,23 @@ question: they are applied to the student's answer and to every accepted text
 before the comparison, so a key with five accepted answers no longer asks the
 same question about the case five times. Only "Integer" also reaches the
 grade: a non-integer answer to a whole-number question is wrong.
+
+## A fill-in-the-blanks question
+
+The statement is written in the same rich field as any other, and a blank is
+an object in it: type `{{` and the field asks what goes inside — `Newton` for
+one answer, `Newton|newton` for alternatives, `=a|b|c` for a dropdown, `#3.14`
+for a number, `/^N$/i` for a regular expression, `2*` in front of any of them
+for a double weight. The blank becomes a chip you click to change, and the
+braces, the pipes and the stars are written back exactly as you typed them.
+Inside a fenced code block a blank stays plain text, so "complete this code"
+works as it reads.
+
+**Predefined choices** are a dropdown written once. Name a set (`1`, `2`, … by
+default), list its options, tick the right one, and drop it in the text as
+`{{1}}`. Two reasons to prefer it: it is the only dropdown that fits in a
+TABLE cell, where a `|` would cut the row in two, and the same four options
+reused in eight blanks are one place to fix a typo instead of eight.
 
 ## Publishing
 

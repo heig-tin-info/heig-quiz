@@ -6,7 +6,8 @@
 
 export const clozeEditorStrings = {
   text: "Text with blanks",
-  textHint: "A blank is {{answer}}. Use | for alternatives, = for a dropdown, # for a number, / for a regex.",
+  textHint:
+    "A blank is {{answer}}. Use | for alternatives, = for a dropdown, # for a number, / for a regex, and {{1}} for a predefined choice set.",
   caseSensitive: "Case sensitive",
   shuffleOptions: "Shuffle the dropdown options",
   blanks: "Blanks",
@@ -17,6 +18,21 @@ export const clozeEditorStrings = {
   weight: "Weight",
   expected: "Expected",
   preview: "Preview",
+  // Predefined choice sets: the dropdown written once and reused by key.
+  choiceSets: "Predefined choices",
+  choiceSetsHint:
+    "A set of options written once. Name it, then write {{key}} in the text: the student gets a dropdown. This is how a dropdown fits in a table cell, where | would cut the row.",
+  noChoiceSet: "No set yet.",
+  addSet: "Add a set",
+  removeSet: "Remove this set",
+  setKey: "Key",
+  setOptions: "Options",
+  optionLabel: "Option",
+  optionCorrect: "Correct",
+  addOption: "Add an option",
+  removeOption: "Remove this option",
+  insertSet: "Insert in the text",
+  setUnused: "This set is not used in the text yet.",
 } as const;
 
 export type ClozeEditorStringKey = keyof typeof clozeEditorStrings;

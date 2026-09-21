@@ -34,7 +34,9 @@ arrière dans le champ vide pour retirer le dernier.
 L'énoncé et l'explication s'écrivent comme dans un traitement de texte. Le
 markdown est ce qui est stocké en dessous : `**gras**`, `$math$` et les
 blocs de code délimités fonctionnent si vous préférez les taper. Une image
-collée est envoyée au serveur et référencée par un identifiant stable.
+collée est envoyée au serveur et référencée par un identifiant stable. Le
+bouton tableau insère un tableau GFM de 3 × 3 ; le curseur dans un tableau,
+le menu voisin ajoute et retire lignes et colonnes.
 
 ## Noter une question à réponses multiples
 
@@ -59,6 +61,24 @@ l'étudiant et à chaque texte accepté avant la comparaison, si bien qu'une cl�
 à cinq réponses acceptées ne repose plus cinq fois la même question sur la
 casse. Seul « Entier » touche aussi la note : une réponse non entière à une
 question entière est fausse.
+
+## Une question à trous
+
+L'énoncé s'écrit dans le même champ riche que les autres, et un trou y est un
+objet : tapez `{{` et le champ demande ce qu'il contient — `Newton` pour une
+réponse, `Newton|newton` pour des variantes, `=a|b|c` pour une liste,
+`#3.14` pour un nombre, `/^N$/i` pour une expression régulière, `2*` devant
+n'importe lequel pour un poids double. Le trou devient une pastille que l'on
+clique pour la modifier, et les accolades, les barres et les étoiles sont
+réécrites telles quelles. Dans un bloc de code, un trou reste du texte : «
+complétez ce code » fonctionne comme il se lit.
+
+Les **listes prédéfinies** sont une liste déroulante écrite une fois. Nommez
+un ensemble (`1`, `2`, … par défaut), donnez ses options, cochez la bonne,
+puis écrivez `{{1}}` dans le texte. Deux raisons de la préférer : c'est la
+seule liste qui tienne dans une cellule de TABLEAU, où un `|` couperait la
+ligne en deux, et les mêmes quatre options réutilisées dans huit trous ne font
+qu'un seul endroit à corriger au lieu de huit.
 
 ## Publier
 

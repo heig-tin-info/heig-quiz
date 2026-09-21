@@ -38,9 +38,39 @@ export const CLOZE_SENTINEL_PATTERN = "⸢(\\d+)⸣";
 
 export type ClozeBlank =
   | { index: number; weight: number; kind: "text"; answers: string[] }
-  | { index: number; weight: number; kind: "select"; options: string[]; correct: number[] }
+  | {
+      index: number;
+      weight: number;
+      kind: "select";
+      options: string[];
+      correct: number[];
+      /** Set this dropdown came from, when the body was a choice-set key. */
+      setKey?: string;
+    }
   | { index: number; weight: number; kind: "number"; value: number; tolerance: number; mode: ToleranceMode }
   | { index: number; weight: number; kind: "regex"; pattern: string; flags: string };
+
+/**
+ * One PREDEFINED CHOICE SET of a question: a named list of options the teacher
+ * writes once and reuses in the text as `{{<key>}}`.
+ *
+ * It exists because the alternative spelling of a dropdown — `{{=a|b|c}}` —
+ * cannot live inside a markdown TABLE CELL, where every unescaped `|` is a
+ * column separator, and because the same four options repeated in eight holes
+ * were eight places to fix a typo. The set resolves to an ordinary `select`
+ * blank at parse time, so `toStudent`, the shuffle (D4), the grader and the
+ * player learn nothing new.
+ */
+export interface ClozeChoiceOption {
+  label: string;
+  correct: boolean;
+}
+
+export interface ClozeChoiceSet {
+  /** What a hole names it with: `{{1}}`, `{{unité}}`. */
+  key: string;
+  options: ClozeChoiceOption[];
+}
 
 export interface ClozeError {
   /** Character offset of the offending `{{` in the source text. */
@@ -65,7 +95,7 @@ export interface ClozeParse {
  * `errors` and is rendered literally, never thrown, because a teacher must be
  * able to leave a question half-written (decision D16).
  */
-export function parseCloze(text: string): ClozeParse {
+export function parseCloze(text: string, sets: readonly ClozeChoiceSet[] = []): ClozeParse {
   // An author typing a raw sentinel would otherwise conjure a phantom input in
   // the player, so the two code points never survive the parse.
   const source = text.split(CLOZE_SENTINEL_OPEN).join("").split(CLOZE_SENTINEL_CLOSE).join("");
@@ -85,14 +115,14 @@ export function parseCloze(text: string): ClozeParse {
       i += 1;
       continue;
     }
-    const end = findClosingBraces(source, i + 2);
+    const end = findClozeClosingBraces(source, i + 2);
     if (end === -1) {
       errors.push({ at: i, message: "cloze.unterminated" });
       template += "{{";
       i += 2;
       continue;
     }
-    const parsed = parseBlankBody(source.slice(i + 2, end), blanks.length);
+    const parsed = parseBlankBody(source.slice(i + 2, end), blanks.length, sets);
     if (typeof parsed === "string") {
       errors.push({ at: i, message: parsed });
       template += source.slice(i, end + 2);
@@ -106,8 +136,14 @@ export function parseCloze(text: string): ClozeParse {
   return { template, blanks, errors };
 }
 
-/** Index of the first unescaped `}}` at or after `from`, or -1. */
-function findClosingBraces(s: string, from: number): number {
+/**
+ * Index of the first unescaped `}}` at or after `from`, or -1.
+ *
+ * Exported because the rich editor tokenizes the very same hole
+ * (`apps/web/src/markdown/tiptap.ts`): the grammar has ONE implementation, and
+ * a second one in the editor is exactly how the preview and the grader drift.
+ */
+export function findClozeClosingBraces(s: string, from: number): number {
   for (let j = from; j < s.length; j++) {
     if (s[j] === "\\") {
       j += 1;
@@ -118,8 +154,29 @@ function findClosingBraces(s: string, from: number): number {
   return -1;
 }
 
+/**
+ * Reads ONE hole at the head of `src`, for a markdown tokenizer that walks a
+ * string left to right (marked, in the rich editor).
+ *
+ * `body` is `null` for the escaped opening `\{{`, which the grammar renders as
+ * two literal braces; `undefined` comes back when `src` does not start on a
+ * hole at all — an unterminated `{{` included, which `parseCloze` reports as
+ * `cloze.unterminated` rather than swallowing the rest of the text.
+ */
+export function matchClozeHole(src: string): { raw: string; body: string | null } | undefined {
+  if (src.startsWith("\\{{")) return { raw: "\\{{", body: null };
+  if (!src.startsWith("{{")) return undefined;
+  const end = findClozeClosingBraces(src, 2);
+  if (end === -1) return undefined;
+  return { raw: src.slice(0, end + 2), body: src.slice(2, end) };
+}
+
 /** Returns the blank, or an i18n key describing why the body is invalid. */
-function parseBlankBody(body: string, index: number): ClozeBlank | string {
+function parseBlankBody(
+  body: string,
+  index: number,
+  sets: readonly ClozeChoiceSet[],
+): ClozeBlank | string {
   let rest = body;
   let weight = 1;
   const weightMatch = /^(\d+(?:\.\d+)?)\*/.exec(rest);
@@ -128,6 +185,27 @@ function parseBlankBody(body: string, index: number): ClozeBlank | string {
     rest = rest.slice(weightMatch[0].length);
   }
   if (rest.trim() === "") return "cloze.empty_blank";
+
+  /*
+   * A PREDEFINED CHOICE SET, before anything else: a body that is EXACTLY the
+   * key of a defined set is that set's dropdown. The test is exact — no
+   * trimming, no case folding — so `{{0}}` stays the text blank whose answer
+   * is "0" as long as no set is called "0", and a question gains a dropdown
+   * only when the teacher actually defined one under that name.
+   */
+  const set = sets.find((candidate) => candidate.key === rest);
+  if (set !== undefined) {
+    const correct = set.options.flatMap((option, i) => (option.correct ? [i] : []));
+    if (correct.length === 0) return "cloze.set_no_correct";
+    return {
+      index,
+      weight,
+      kind: "select",
+      options: set.options.map((option) => option.label),
+      correct,
+      setKey: set.key,
+    };
+  }
 
   if (rest.startsWith("#")) {
     const m = /^#(-?\d+(?:[.,]\d+)?)(?::(\d+(?:[.,]\d+)?)(%?))?$/.exec(rest.trim());
@@ -311,6 +389,18 @@ export function describeBlank(blank: ClozeBlank): string {
     case "text":
       return blank.answers.join(" | ");
     case "select":
+      /*
+       * A set-backed dropdown names its SET and lays the whole list out, the
+       * correct ones ticked: the teacher's question says `{{1}}` and nothing
+       * else, so a key that only echoed the right label would leave them
+       * hunting for which set that was.
+       */
+      if (blank.setKey !== undefined) {
+        const options = blank.options
+          .map((label, i) => (blank.correct.includes(i) ? `${label} ✓` : label))
+          .join(", ");
+        return `set ${blank.setKey} (${options})`;
+      }
       return blank.correct.map((i) => blank.options[i] ?? "").join(" | ");
     case "number":
       if (blank.tolerance === 0) return String(blank.value);

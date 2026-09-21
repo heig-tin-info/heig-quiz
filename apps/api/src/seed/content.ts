@@ -249,7 +249,7 @@ export const C_POOL: PoolSpec = {
       explanation:
         "La condition doit être stricte : avec `<=` la boucle afficherait aussi `10`.",
       config: {
-        configVersion: 1,
+        configVersion: 2,
         caseSensitive: false,
         text:
           "Complétez la boucle qui affiche les entiers de `0` à `9` :\n\n" +
@@ -267,7 +267,7 @@ export const C_POOL: PoolSpec = {
         "`strlen` ne compte pas le `\\0`, mais `\"HEIG-VD\"` occupe bien 8 octets : " +
         "sept caractères plus le terminateur.",
       config: {
-        configVersion: 1,
+        configVersion: 2,
         caseSensitive: false,
         text:
           "En C, la fonction {{strlen}} renvoie la longueur d'une chaîne, " +
@@ -470,13 +470,41 @@ export const ELECTRONICS_POOL: PoolSpec = {
       explanation:
         "La tension de seuil d'une jonction au silicium est de l'ordre de 0,7 V ; " +
         "elle vaut environ 0,3 V pour le germanium.",
+      /*
+       * The question that shows what a PREDEFINED CHOICE SET is for: the same
+       * two options are asked twice, and they are asked inside a TABLE, where
+       * `{{=passant|bloqué}}` cannot go — every unescaped `|` in a markdown
+       * row is a column separator (docs/04 §4.6).
+       */
       config: {
-        configVersion: 1,
+        configVersion: 2,
         caseSensitive: false,
         text:
           "Une diode au silicium conduit lorsqu'elle est polarisée en " +
-          "{{direct|sens direct}} ; sa tension de seuil vaut alors environ {{#0.7:0.1}} V. " +
-          "Polarisée en {{=inverse|directe}}, elle bloque le courant.",
+          "{{direct|sens direct}} ; sa tension de seuil vaut alors environ {{#0.7:0.1}} V.\n\n" +
+          "| Polarisation | État de la diode |\n" +
+          "| ------------ | ---------------- |\n" +
+          "| Directe      | {{1}}            |\n" +
+          "| Inverse      | {{2}}            |",
+        // Two sets over the same two labels: a set carries the option LIST and
+        // the key of the hole that uses it, so the two rows of the table share
+        // the dropdown the student sees and not the answer.
+        choiceSets: [
+          {
+            key: "1",
+            options: [
+              { label: "passante", correct: true },
+              { label: "bloquée", correct: false },
+            ],
+          },
+          {
+            key: "2",
+            options: [
+              { label: "passante", correct: false },
+              { label: "bloquée", correct: true },
+            ],
+          },
+        ],
       },
     },
   ],

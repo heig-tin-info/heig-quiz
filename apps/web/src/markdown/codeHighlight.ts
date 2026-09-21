@@ -22,6 +22,8 @@ import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 
+import { findClozeClosingBraces } from "@quiz/domain";
+
 import { tokenize } from "./highlight";
 
 /** The node this extension colours; the only one whose content is code. */
@@ -29,16 +31,51 @@ const CODE_BLOCK = "codeBlock";
 
 export const codeHighlightKey = new PluginKey<DecorationSet>("codeHighlight");
 
+export interface CodeHighlightOptions {
+  /**
+   * Also mark the `{{…}}` holes of a `cloze` text. INSIDE a fenced block a
+   * hole cannot be the node the rest of the field uses — the content of a code
+   * block is text — so the only way to show the teacher that "complétez ce
+   * code" still has its holes is to draw over them.
+   */
+  holes: boolean;
+}
+
+/** The `{{…}}` runs of one block, by the grammar of `@quiz/domain`. */
+function holeRanges(text: string): { from: number; to: number }[] {
+  const out: { from: number; to: number }[] = [];
+  for (let i = 0; i < text.length; i += 1) {
+    if (text.startsWith("\\{{", i)) {
+      i += 2;
+      continue;
+    }
+    if (!text.startsWith("{{", i)) continue;
+    const end = findClozeClosingBraces(text, i + 2);
+    if (end === -1) break;
+    out.push({ from: i, to: end + 2 });
+    i = end + 1;
+  }
+  return out;
+}
+
 /** The decorations of ONE code block, `pos` being the position of the node. */
-function decorate(node: ProseMirrorNode, pos: number): Decoration[] {
+function decorate(node: ProseMirrorNode, pos: number, holes: boolean): Decoration[] {
   const language = typeof node.attrs.language === "string" ? node.attrs.language : null;
   const text = node.textContent;
   if (text === "") return [];
+  const ranges = holes ? holeRanges(text) : [];
   // `pos + 1` is the first character: a text block's content starts one
   // position inside the node.
-  return tokenize(text, language).map(({ from, to, cls }) =>
-    Decoration.inline(pos + 1 + from, pos + 1 + to, { class: cls }),
-  );
+  const at = (from: number, to: number, cls: string) =>
+    Decoration.inline(pos + 1 + from, pos + 1 + to, { class: cls });
+  return [
+    // A hole is not code: the tokens it overlaps are dropped rather than
+    // drawn under it, or `{{#10:0}}` would be half a number and half a hole.
+    ...tokenize(text, language)
+      .filter(({ from, to }) => !ranges.some((r) => from < r.to && r.from < to))
+      .map(({ from, to, cls }) => at(from, to, cls)),
+    ...ranges.map(({ from, to }) => at(from, to, "tok-hole")),
+  ];
 }
 
 /** Every code block of `doc`, with its position. Used on load and on a reload. */
@@ -57,10 +94,15 @@ function codeBlocksIn(
   return found;
 }
 
-export const CodeHighlight = Extension.create({
+export const CodeHighlight = Extension.create<CodeHighlightOptions>({
   name: "codeHighlight",
 
+  addOptions() {
+    return { holes: false };
+  },
+
   addProseMirrorPlugins() {
+    const { holes } = this.options;
     return [
       new Plugin<DecorationSet>({
         key: codeHighlightKey,
@@ -68,7 +110,7 @@ export const CodeHighlight = Extension.create({
           init(_config, state) {
             return DecorationSet.create(
               state.doc,
-              codeBlocksIn(state.doc).flatMap(({ node, pos }) => decorate(node, pos)),
+              codeBlocksIn(state.doc).flatMap(({ node, pos }) => decorate(node, pos, holes)),
             );
           },
           apply(tr, set) {
@@ -107,7 +149,7 @@ export const CodeHighlight = Extension.create({
               .remove(mapped.find(low, high))
               .add(
                 tr.doc,
-                blocks.flatMap(({ node, pos }) => decorate(node, pos)),
+                blocks.flatMap(({ node, pos }) => decorate(node, pos, holes)),
               );
           },
         },

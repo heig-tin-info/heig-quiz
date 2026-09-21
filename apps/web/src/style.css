@@ -382,6 +382,16 @@ html.dark {
 .md-body .tok-str { color: var(--success); }
 .md-body .tok-kw { color: var(--accent); }
 .md-body .tok-num { color: var(--warning); }
+/* A `{{…}}` hole INSIDE a fenced block of a cloze question. It is text there —
+   the content of a code block cannot hold a node — so the rich editor draws it
+   with a decoration (markdown/codeHighlight.ts) rather than as the chip the
+   prose gets, and this is the one colour that says "the student writes here".
+   The class never reaches a student: `render.ts` only ever sees the sentinel. */
+.md-body .tok-hole {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 4px;
+}
 
 /* KaTeX: inherit the surrounding size (its own stylesheet forces 1.21em) and
    let a long display formula scroll instead of widening the question. */

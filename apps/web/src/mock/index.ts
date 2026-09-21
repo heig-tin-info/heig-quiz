@@ -52,6 +52,7 @@ import {
   matchBlank,
   mcqFraction,
   parseCloze,
+  type ClozeChoiceSet,
   splitTemplate,
   truncateSelection,
   type McqScorePolicy,
@@ -920,11 +921,39 @@ const questions: MockQuestion[] = [
     shuffleable: true,
     randomizable: false,
     tags: ["memoire", "pointeurs"],
+    /*
+     * The question the rich cloze editor was built for: a hole inside a
+     * TABLE cell, which `{{=free|delete|dispose}}` cannot be — every
+     * unescaped `|` in a markdown row is a column separator — so the two
+     * dropdowns of the table go through PREDEFINED CHOICE SETS instead.
+     */
     config: {
-      configVersion: 1,
-      text: "Pour allouer un tableau de `n` entiers on écrit `int *t = {{malloc|calloc}}(n * sizeof({{int}}));`, puis on libère la mémoire avec {{=free|delete|dispose}}.",
+      configVersion: 2,
+      text:
+        "Pour allouer un tableau de `n` entiers on écrit `int *t = {{malloc|calloc}}(n * sizeof({{int}}));`, " +
+        "puis on libère la mémoire avec {{=free|delete|dispose}}.\n\n" +
+        "| Fonction | Met la mémoire à zéro |\n" +
+        "| -------- | --------------------- |\n" +
+        "| `malloc` | {{2}}                 |\n" +
+        "| `calloc` | {{1}}                 |",
       caseSensitive: false,
       shuffleOptions: true,
+      choiceSets: [
+        {
+          key: "1",
+          options: [
+            { label: "oui", correct: true },
+            { label: "non", correct: false },
+          ],
+        },
+        {
+          key: "2",
+          options: [
+            { label: "oui", correct: false },
+            { label: "non", correct: true },
+          ],
+        },
+      ],
     },
     explanation: "`malloc` renvoie `void *` ; en C la conversion est implicite et le cast est inutile.",
     published: [{ number: 1, changeNote: "Première version", daysAgo: 12 }],
@@ -1042,7 +1071,7 @@ const questions: MockQuestion[] = [
     randomizable: false,
     tags: ["can", "mesure"],
     config: {
-      configVersion: 1,
+      configVersion: 2,
       text: "Un convertisseur analogique-numérique de {{#12}} bits découpe sa pleine échelle en {{#4096}} paliers. Sous 3,3 V, un palier vaut environ {{#0.8:0.05}} mV.",
       caseSensitive: false,
       shuffleOptions: true,
@@ -1094,7 +1123,7 @@ function inflatePool() {
               ? shortNumber(`${title} — combien d'itérations ?`, 10 + i)
               : i % 4 === 2
                 ? {
-                    configVersion: 1,
+                    configVersion: 2,
                     text: `${title} : le compteur vaut {{#${i}}} à la sortie.`,
                     caseSensitive: false,
                     shuffleOptions: true,
@@ -1266,12 +1295,23 @@ function draftIssues(q: MockQuestion): { path: string[]; code: string; message: 
     });
   }
   if (q.type === "cloze") {
-    const parse = parseCloze(String(config.text ?? ""));
+    const parse = parseCloze(String(config.text ?? ""), clozeSets(config));
     if (parse.blanks.length === 0) {
       out.push({ path: ["text"], code: "custom", message: "cloze.no_blank" });
     }
   }
   return out;
+}
+
+/**
+ * The predefined choice sets of a `cloze` config, for `parseCloze`.
+ *
+ * The mock speaks the real grammar: `{{1}}` is a dropdown only when a set is
+ * named "1", so every parse here is handed the same list the API would
+ * (`packages/qt-cloze/src/parse.ts`).
+ */
+function clozeSets(config: Record<string, unknown>): ClozeChoiceSet[] {
+  return Array.isArray(config.choiceSets) ? (config.choiceSets as ClozeChoiceSet[]) : [];
 }
 
 /** `toStudent`, as the server's registry would do it (seed 0, no shuffle). */
@@ -1296,7 +1336,7 @@ function studentView(q: MockQuestion, config: Record<string, unknown>): unknown 
         ...(config.placeholder === undefined ? {} : { placeholder: config.placeholder }),
       };
     case "cloze": {
-      const parse = parseCloze(String(config.text ?? ""));
+      const parse = parseCloze(String(config.text ?? ""), clozeSets(config));
       return clozeStudentTemplate(parse, 0, q.id, false);
     }
     case "code": {
@@ -1413,7 +1453,7 @@ function tryAnswer(
       solution: { expected: matchers.map((m) => String(m.value)) },
     };
   }
-  const parse = parseCloze(String(config.text ?? ""));
+  const parse = parseCloze(String(config.text ?? ""), clozeSets(config));
   const given = ((answer as { blanks?: (string | null)[] } | null)?.blanks ?? []) as (string | null)[];
   const perBlank = parse.blanks.map((blank, i) => ({
     index: blank.index,
@@ -1616,7 +1656,7 @@ function emptyConfig(type: MockQuestion["type"]): Record<string, unknown> {
         matchers: [{ kind: "exact", value: "", points: 1 }],
       };
     case "cloze":
-      return { configVersion: 1, text: "", caseSensitive: false, shuffleOptions: true };
+          return { configVersion: 2, text: "", caseSensitive: false, shuffleOptions: true, choiceSets: [] };
     case "code":
       return codeConfig("", "", [{ name: "", stdin: "", expected: "", visible: true }]);
   }
@@ -1840,7 +1880,7 @@ function solutionOf(q: MockQuestion): unknown {
       return { expected: matchers.map((m) => String(m.value)) };
     }
     case "cloze": {
-      const parse = parseCloze(String(config.text ?? ""));
+      const parse = parseCloze(String(config.text ?? ""), clozeSets(config));
       return { blanks: parse.blanks.map((b) => ({ index: b.index, expected: describeBlank(b) })) };
     }
     case "code": {
@@ -1900,7 +1940,7 @@ function answerOf(q: MockQuestion, seedValue: number): unknown {
       return { text: wrong ? `${expected}0` : expected };
     }
     case "cloze": {
-      const parse = parseCloze(String(config.text ?? ""));
+      const parse = parseCloze(String(config.text ?? ""), clozeSets(config));
       // A blank left untouched is `null`, which is what an unfinished answer
       // looks like on the wire.
       return {
@@ -2631,25 +2671,45 @@ const studentPayloads: Record<number, unknown> = {
       { id: 3, text: 'Avec une fonction de la bibliothèque :\n\n```c\nprintf("%p\\n", addr(x));\n```' },
     ],
   },
-  2: {
-    template:
-      "Complétez la phrase. L'orthographe des noms propres n'est pas notée.\n\nLa loi d'⸢0⸣ relie la tension et le courant : pour un conducteur ohmique, U = ⸢1⸣ × I, où la tension U s'exprime en ⸢2⸣.",
-    blanks: [
-      { index: 0, weight: 1, kind: "input", numeric: false },
-      { index: 1, weight: 1, kind: "input", numeric: false },
-      {
-        index: 2,
-        weight: 1,
-        kind: "select",
-        options: [
-          { id: 0, label: "ampères" },
-          { id: 1, label: "ohms" },
-          { id: 2, label: "volts" },
-          { id: 3, label: "watts" },
-        ],
-      },
-    ],
-  },
+  /*
+   * Built by the REAL domain functions from a real config, sets included,
+   * rather than written out by hand: the dropdown of a PREDEFINED CHOICE SET
+   * — the one in the table cell, where `{{=a|b}}` cannot go — has to reach
+   * the player exactly as `{{=a|b|c}}` does, and a literal payload could not
+   * show that it does.
+   */
+  2: clozeStudentTemplate(
+    parseCloze(
+      "Complétez la phrase. L'orthographe des noms propres n'est pas notée.\n\n" +
+        "La loi d'{{Ohm|ohm}} relie la tension et le courant : pour un conducteur ohmique, " +
+        "U = {{R|la résistance}} × I, où la tension U s'exprime en {{=volts|ampères|ohms|watts}}.\n\n" +
+        "| Grandeur | Unité |\n" +
+        "| --- | --- |\n" +
+        "| Résistance | {{1}} |\n" +
+        "| Courant | {{2}} |",
+      [
+        {
+          key: "1",
+          options: [
+            { label: "ohms", correct: true },
+            { label: "volts", correct: false },
+            { label: "ampères", correct: false },
+          ],
+        },
+        {
+          key: "2",
+          options: [
+            { label: "ohms", correct: false },
+            { label: "volts", correct: false },
+            { label: "ampères", correct: true },
+          ],
+        },
+      ],
+    ),
+    0,
+    "student-item-2",
+    false,
+  ),
   3: {
     prompt:
       "Sur une machine 64 bits compilant en LP64, combien d'octets occupe un `int` en C ?",
@@ -3002,7 +3062,7 @@ function mockAnswer(q: MockQuestion, config: Record<string, unknown>, ability: n
     return { text: rand() < ability ? "8" : pick(["4", "64", "16"]) };
   }
   if (q.type === "cloze") {
-    const parse = parseCloze(String(config.text ?? ""));
+    const parse = parseCloze(String(config.text ?? ""), clozeSets(config));
     return {
       blanks: parse.blanks.map((blank) => {
         const good = rand() < ability;

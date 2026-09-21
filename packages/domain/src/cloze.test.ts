@@ -8,8 +8,10 @@ import {
   describeBlank,
   gradeCloze,
   matchBlank,
+  matchClozeHole,
   parseCloze,
   type ClozeBlank,
+  type ClozeChoiceSet,
 } from "./cloze.js";
 
 const s = clozeSentinel;
@@ -225,5 +227,143 @@ describe("describeBlank", () => {
 
   it("matchBlank is null-safe", () => {
     expect(matchBlank({ index: 0, weight: 1, kind: "text", answers: ["a"] }, null, false)).toBe(false);
+  });
+});
+
+/*
+ * PREDEFINED CHOICE SETS (docs/04 §4.6). A set is a named list of options the
+ * teacher writes once; a blank whose body is exactly that name becomes the
+ * ordinary `select` blank of the alternatives spelling, which is what lets a
+ * dropdown live inside a markdown table — `{{=a|b}}` cannot, every unescaped
+ * `|` there being a column separator.
+ */
+const SETS: ClozeChoiceSet[] = [
+  {
+    key: "1",
+    options: [
+      { label: "free", correct: true },
+      { label: "delete", correct: false },
+      { label: "dispose", correct: false },
+    ],
+  },
+  {
+    key: "unité",
+    options: [
+      { label: "volts", correct: true },
+      { label: "ampères", correct: false },
+    ],
+  },
+];
+
+describe("parseCloze — predefined choice sets", () => {
+  it("resolves a key to a select blank carrying the set's options", () => {
+    const parse = parseCloze("On libère avec {{1}}.", SETS);
+    expect(parse.errors).toEqual([]);
+    expect(parse.template).toBe(`On libère avec ${s(0)}.`);
+    expect(parse.blanks[0]).toEqual({
+      index: 0,
+      weight: 1,
+      kind: "select",
+      options: ["free", "delete", "dispose"],
+      correct: [0],
+      setKey: "1",
+    });
+  });
+
+  it("takes a weight prefix before the key, and a non-numeric key", () => {
+    const parse = parseCloze("{{2*unité}}", SETS);
+    expect(parse.blanks[0]?.weight).toBe(2);
+    expect(parse.blanks[0]?.kind).toBe("select");
+  });
+
+  it("marks every ticked option correct", () => {
+    const parse = parseCloze("{{k}}", [
+      {
+        key: "k",
+        options: [
+          { label: "a", correct: true },
+          { label: "b", correct: false },
+          { label: "c", correct: true },
+        ],
+      },
+    ]);
+    expect(parse.blanks[0]?.kind === "select" && parse.blanks[0].correct).toEqual([0, 2]);
+  });
+
+  it("refuses a set with no correct option, where it is used", () => {
+    const parse = parseCloze("a {{k}} b", [
+      { key: "k", options: [{ label: "a", correct: false }, { label: "b", correct: false }] },
+    ]);
+    expect(parse.errors).toEqual([{ at: 2, message: "cloze.set_no_correct" }]);
+    expect(parse.blanks).toHaveLength(0);
+    expect(parse.template).toBe("a {{k}} b");
+  });
+
+  it("leaves `{{0}}` a text blank when no set is called 0", () => {
+    const parse = parseCloze("int i = {{0}};", SETS);
+    expect(parse.blanks[0]).toEqual({ index: 0, weight: 1, kind: "text", answers: ["0"] });
+  });
+
+  it("matches the key EXACTLY: spaces and case are not folded", () => {
+    for (const text of ["{{ 1 }}", "{{Unité}}"]) {
+      const parse = parseCloze(text, SETS);
+      expect(parse.blanks[0]?.kind).toBe("text");
+    }
+  });
+
+  it("parses as before when no set is given", () => {
+    expect(parseCloze("{{1}}").blanks[0]).toEqual({
+      index: 0,
+      weight: 1,
+      kind: "text",
+      answers: ["1"],
+    });
+  });
+
+  it("grades and describes a set blank like any other dropdown", () => {
+    const parse = parseCloze("{{1}}", SETS);
+    const grade = gradeCloze(parse, ["0"], false);
+    expect(grade.perBlank[0]?.ok).toBe(true);
+    expect(gradeCloze(parse, ["1"], false).perBlank[0]?.ok).toBe(false);
+    // The key names the SET and lays the list out, the correct ones ticked.
+    expect(describeBlank(parse.blanks[0]!)).toBe("set 1 (free ✓, delete, dispose)");
+  });
+
+  it("shuffles a set blank exactly like an inline dropdown (D4)", () => {
+    const parse = parseCloze("{{1}}", SETS);
+    const student = clozeStudentTemplate(parse, 5, "item", true);
+    const blank = student.blanks[0];
+    expect(blank?.kind).toBe("select");
+    if (blank?.kind !== "select") throw new Error("the fixture must hold a dropdown");
+    expect(blank.options.map((o) => o.id).sort()).toEqual([0, 1, 2]);
+    // No `correct`, no `setKey`: the student view learns nothing of the key.
+    expect(JSON.stringify(student)).not.toContain("correct");
+    expect(JSON.stringify(student)).not.toContain("setKey");
+  });
+});
+
+describe("matchClozeHole — what the rich editor tokenizes", () => {
+  it("reads one hole at the head of the source", () => {
+    expect(matchClozeHole("{{=a|b}} suite")).toEqual({ raw: "{{=a|b}}", body: "=a|b" });
+  });
+
+  it("stops at the first UNESCAPED closing braces", () => {
+    expect(matchClozeHole("{{a\\}}b}}")).toEqual({ raw: "{{a\\}}b}}", body: "a\\}}b" });
+  });
+
+  it("reads the escaped opening as a literal, with no body", () => {
+    expect(matchClozeHole("\\{{ is a literal")).toEqual({ raw: "\\{{", body: null });
+  });
+
+  it("returns nothing for an unterminated hole or for ordinary text", () => {
+    expect(matchClozeHole("{{ never closed")).toBeUndefined();
+    expect(matchClozeHole("plain text")).toBeUndefined();
+  });
+
+  it("agrees with the parser on where a hole ends", () => {
+    const source = "{{a}}{{b}}";
+    const first = matchClozeHole(source)!;
+    expect(first.raw).toBe("{{a}}");
+    expect(matchClozeHole(source.slice(first.raw.length))?.body).toBe("b");
   });
 });

@@ -59,3 +59,31 @@ export function IssueList({ issues }: { issues: readonly ConfigIssue[] }): React
 export function choiceLetter(index: number): string {
   return String.fromCharCode(65 + (index % 26));
 }
+
+/**
+ * A card, in the little of `apps/web`'s `Card` a leaf package can carry: the
+ * card radius, one hairline, the surface — and no shadow, because nothing in
+ * the page flow has one. One predefined choice set wears it.
+ */
+export const cardClass = "rounded-card border border-line bg-surface p-3";
+
+/** Round, borderless control the size of a row: the bin. */
+export const iconButtonClass =
+  "inline-flex size-7 shrink-0 items-center justify-center rounded-full text-fg-faint transition-colors hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-40";
+
+export function TrashIcon({ className = "size-3.5" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M4 7h16M9.5 7V5.5A1.5 1.5 0 0 1 11 4h2a1.5 1.5 0 0 1 1.5 1.5V7M6.5 7l.8 12A1.5 1.5 0 0 0 8.8 20.5h6.4a1.5 1.5 0 0 0 1.5-1.5l.8-12" />
+    </svg>
+  );
+}

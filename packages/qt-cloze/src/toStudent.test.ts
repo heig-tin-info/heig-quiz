@@ -5,6 +5,8 @@ import { clozeServer } from "./server.js";
 
 const FORBIDDEN_KEYS = [
   "correct",
+  "setKey",
+  "choiceSets",
   "matchers",
   "answers",
   "expected",
@@ -50,14 +52,29 @@ describe("toStudent", () => {
   it("collapses text, number and regex blanks to one opaque input kind", () => {
     const student = clozeServer.toStudent(SECRET_CONFIG, view);
     const kinds = student.blanks.map((blank) => blank.kind);
-    expect(kinds).toEqual(["input", "input", "input", "select", "input"]);
+    expect(kinds).toEqual(["input", "input", "input", "select", "input", "select"]);
     // `numeric` is the ONLY thing a student learns, and only about the keyboard.
     expect(student.blanks[1]).toEqual({ index: 1, weight: 1, kind: "input", numeric: true });
   });
 
   it("keeps the weights: the scale is not a secret", () => {
     const student = clozeServer.toStudent(SECRET_CONFIG, view);
-    expect(student.blanks.at(-1)?.weight).toBe(2);
+    expect(student.blanks[4]?.weight).toBe(2);
+  });
+
+  /*
+   * A PREDEFINED CHOICE SET reaches the student as an ordinary dropdown: its
+   * LABELS have to travel (they are what the student picks from), the key of
+   * the set and which option is right do not. The set lives in a TABLE cell
+   * here, which is the whole reason the feature exists.
+   */
+  it("publishes a set blank as a plain dropdown, key and set name stripped", () => {
+    const student = clozeServer.toStudent(SECRET_CONFIG, view);
+    const blank = student.blanks[5];
+    expect(blank?.kind).toBe("select");
+    if (blank?.kind !== "select") throw new Error("the fixture must hold a set dropdown");
+    expect(blank.options.map((o) => o.label).sort()).toEqual(["joule", "newton", "pascal"]);
+    expect(student.template).toContain("| Force | ⸢5⸣ |");
   });
 
   it("shuffles the dropdown options while keeping the canonical id", () => {

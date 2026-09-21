@@ -41,7 +41,9 @@ function roundTrip(markdown: string, inline = false): string {
     contentType: "markdown",
   });
   try {
-    return editor.getMarkdown();
+    // `.trim()`, exactly as `serialize` in RichText.tsx does it: what the host
+    // is handed is what this test has to compare.
+    return editor.getMarkdown().trim();
   } finally {
     editor.destroy();
   }
@@ -535,5 +537,189 @@ describe("getting out of a fenced block", () => {
     } finally {
       editor.destroy();
     }
+  });
+});
+
+/*
+ * ---------------------------------------------------------------------------
+ * TABLES (`@tiptap/extension-table`), in every field.
+ *
+ * The extension ships the markdown handlers — a `markdownTokenizer` for
+ * marked's GFM `table` token, `parseMarkdown` and `renderMarkdown` — so
+ * nothing about the round trip is ours. What IS asserted here is the shape it
+ * writes back, because the cells are PADDED to the column width: a table
+ * typed by hand comes back aligned, once, and identical from then on.
+ * ---------------------------------------------------------------------------
+ */
+describe("round trip — tables", () => {
+  const TABLE = ["| a   | b   |", "| --- | --- |", "| c   | d   |"].join("\n");
+
+  it("keeps a padded 2×2 table byte for byte", () => {
+    expect(roundTrip(TABLE)).toBe(TABLE);
+  });
+
+  it("pads a hand-written table once, then leaves it alone", () => {
+    const typed = ["| a | b |", "| --- | --- |", "| c | d |"].join("\n");
+    expect(roundTrip(typed)).toBe(TABLE);
+    expect(roundTrip(TABLE)).toBe(TABLE);
+  });
+
+  it("keeps a table beside the prose around it", () => {
+    const source = ["Avant.", "", TABLE, "", "Après."].join("\n");
+    expect(roundTrip(source)).toBe(source);
+  });
+
+  it("keeps the alignment markers of a GFM table", () => {
+    const source = ["| a   | b   |", "| :--- | ---: |", "| c   | d   |"].join("\n");
+    expect(roundTrip(source)).toBe(source);
+  });
+});
+
+/*
+ * ---------------------------------------------------------------------------
+ * The `{{…}}` HOLES of the cloze type (markdown/clozeHole.ts).
+ *
+ * This is the acceptance test of the change that let the cloze editor drop its
+ * textarea: a hole is an inline ATOM, so the serializer never escapes the
+ * braces, the `|`, the `=`, the `#` or the `*` of a weight, and marked's
+ * emphasis rules never eat a pair of asterisks on the way in.
+ * ---------------------------------------------------------------------------
+ */
+function holeTrip(markdown: string): string {
+  const editor = new Editor({
+    element: document.createElement("div"),
+    extensions: richTextExtensions({ cloze: true }),
+    content: markdown,
+    contentType: "markdown",
+  });
+  try {
+    return editor.getMarkdown().trim();
+  } finally {
+    editor.destroy();
+  }
+}
+
+describe("round trip — cloze holes", () => {
+  it.each([
+    ["{{Newton}}"],
+    ["{{Newton|Isaac Newton}}"],
+    ["{{=newton|joule|watt|pascal}}"],
+    ["{{#3.14:0.01}}"],
+    ["{{#3.14:1%}}"],
+    ["{{/^[0-9a-f]+$/i}}"],
+    // The weight is the character the serializer used to escape into `\*`.
+    ["{{2*Newton}}"],
+    ["{{2*/^N$/}}"],
+    ["{{1}}"],
+    ["La loi de {{Newton|newton}} lie force, masse et accélération : **F = m·a**."],
+    ["a {{x}} b {{y}} c"],
+    // An escaped opening is a node too, or it would come back unescaped and
+    // parse as a hole the next time the question was opened.
+    ["\\{{ is a literal, {{Newton}} is not"],
+    // Two holes with a `*` each: marked's emphasis rule used to eat the pair.
+    ["{{2*a}} et {{3*b}}"],
+    ["{{a_b}} et {{c_d}}"],
+  ])("keeps %j", (source) => {
+    expect(holeTrip(source)).toBe(source);
+  });
+
+  it("keeps a hole inside a TABLE cell, which is what choice sets are for", () => {
+    const source = [
+      "| Polarisation | État  |",
+      "| ------------ | ----- |",
+      "| Directe      | {{1}} |",
+      "| Inverse      | {{2}} |",
+    ].join("\n");
+    expect(holeTrip(source)).toBe(source);
+  });
+
+  it("keeps a hole inside a fenced block, where it stays plain text", () => {
+    const source = "```c\nfor (int i = {{0}}; i {{<}} 10; i{{++}}) {\n}\n```";
+    expect(holeTrip(source)).toBe(source);
+  });
+
+  it("builds a chip, not five characters, and one per hole", () => {
+    const editor = new Editor({
+      element: document.createElement("div"),
+      extensions: richTextExtensions({ cloze: true }),
+      content: "a {{=x|y}} b",
+      contentType: "markdown",
+    });
+    try {
+      const names: string[] = [];
+      editor.state.doc.descendants((node) => void names.push(node.type.name));
+      expect(names).toContain("clozeHole");
+      expect(names.filter((n) => n === "clozeHole")).toHaveLength(1);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("leaves the braces alone in a field that did not ask for holes", () => {
+    expect(roundTrip("{{Newton}}")).toBe("{{Newton}}");
+    const editor = new Editor({
+      element: document.createElement("div"),
+      extensions: richTextExtensions({}),
+      content: "{{Newton}}",
+      contentType: "markdown",
+    });
+    try {
+      const names: string[] = [];
+      editor.state.doc.descendants((node) => void names.push(node.type.name));
+      expect(names).not.toContain("clozeHole");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it("turns `{{` into an empty hole as it is typed, and leaves `\\{{` literal", () => {
+    const editor = new Editor({
+      element: document.createElement("div"),
+      extensions: richTextExtensions({ cloze: true }),
+      content: "",
+      contentType: "markdown",
+    });
+    try {
+      type(editor, "a {{");
+      expect(firstChild(editor).lastChild?.type.name).toBe("clozeHole");
+      expect(firstChild(editor).lastChild?.attrs.body).toBe("");
+    } finally {
+      editor.destroy();
+    }
+  });
+});
+
+/*
+ * The cloze texts this app actually stores, from `apps/api/src/seed/content.ts`
+ * and `apps/web/src/mock/index.ts`. A teacher opening one of these questions
+ * and saving it again must get the very same string back, fenced blocks and
+ * tables included — that is the whole promise of the rich editor here.
+ */
+describe("round trip — the cloze texts this app actually stores", () => {
+  const REAL = [
+    "Complétez la boucle qui affiche les entiers de `0` à `9` :\n\n" +
+      "```c\nfor (int i = {{0}}; i {{<}} 10; i{{++}}) {\n" +
+      '    printf("%d\\n", i);\n}\n```',
+    "En C, la fonction {{strlen}} renvoie la longueur d'une chaîne, " +
+      "{{strcpy}} la copie et {{strcmp}} compare deux chaînes. " +
+      "Ces trois fonctions sont déclarées dans l'en-tête " +
+      '{{string.h|<string.h>}}. La chaîne `"HEIG-VD"` occupe {{#8}} octets en mémoire.',
+    "Une diode au silicium conduit lorsqu'elle est polarisée en " +
+      "{{direct|sens direct}} ; sa tension de seuil vaut alors environ {{#0.7:0.1}} V.\n\n" +
+      "| Polarisation | État de la diode |\n" +
+      "| ------------ | ---------------- |\n" +
+      "| Directe      | {{1}}            |\n" +
+      "| Inverse      | {{2}}            |",
+    "Pour allouer un tableau de `n` entiers on écrit `int *t = {{malloc|calloc}}(n * sizeof({{int}}));`, " +
+      "puis on libère la mémoire avec {{=free|delete|dispose}}.\n\n" +
+      "| Fonction | Met la mémoire à zéro |\n" +
+      "| -------- | --------------------- |\n" +
+      "| `malloc` | {{2}}                 |\n" +
+      "| `calloc` | {{1}}                 |",
+    "Un convertisseur analogique-numérique de {{#12}} bits découpe sa pleine échelle en {{#4096}} paliers. " +
+      "Sous 3,3 V, un palier vaut environ {{#0.8:0.05}} mV.",
+  ];
+  it.each(REAL)("keeps %j", (source) => {
+    expect(holeTrip(source)).toBe(source);
   });
 });

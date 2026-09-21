@@ -11,14 +11,15 @@ import {
   Link as LinkIcon,
   Sigma,
   SquareCode,
+  Table as TableIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
-import type { RichTextProps } from "@quiz/core/client";
+import type { RichTextApi, RichTextProps } from "@quiz/core/client";
 
 import { useT } from "../i18n";
 import { useShortcuts, type Shortcut } from "../shortcuts";
-import { Button, cx, IconButton, inputClass, modKey, type IconType } from "../ui";
+import { Button, cx, IconButton, inputClass, Menu, modKey, type IconType } from "../ui";
 import { CodeBlockView } from "./CodeBlockView";
 import type { Formula, FormulaDialog } from "./FormulaDialog";
 import { ImageToolsContext, ImageView } from "./ImageView";
@@ -74,22 +75,30 @@ let formulaDialog: FormulaDialogComponent | null = null;
 /**
  * The editor's document as markdown.
  *
- * Trimmed at the end, and that is the whole of it: StarterKit's `TrailingNode`
- * keeps an empty paragraph after a document that ends in a block node — which
- * is what lets the caret land under a closing code fence — and the serializer
- * writes that paragraph out as two newlines. Emitting them would rewrite the
- * stored prompt of every question whose statement ends with a fence, the first
- * time a teacher opened it. Trailing blank lines carry no markdown meaning.
+ * Trimmed, and that is the whole of it: StarterKit's `TrailingNode` keeps an
+ * empty paragraph after a document that ends in a block node — which is what
+ * lets the caret land under a closing code fence — and the serializer writes
+ * that paragraph out as two newlines. Emitting them would rewrite the stored
+ * prompt of every question whose statement ends with a fence, the first time a
+ * teacher opened it. Blank lines at either end carry no markdown meaning.
  */
 function serialize(editor: Editor): string {
-  return editor.getMarkdown().trimEnd();
+  return editor.getMarkdown().trim();
 }
 
 /** One toolbar action; `actions` below filters out the ones a mode cannot serve. */
 interface Action {
   key: string;
   icon: IconType;
-  labelKey: "md.bold" | "md.italic" | "md.code" | "md.codeBlock" | "md.math" | "md.image" | "md.link";
+  labelKey:
+    | "md.bold"
+    | "md.italic"
+    | "md.code"
+    | "md.codeBlock"
+    | "md.math"
+    | "md.image"
+    | "md.link"
+    | "md.table";
   shortcut?: string;
 }
 
@@ -122,6 +131,17 @@ function emptyMath(editor: Editor): { pos: number; display: boolean }[] {
   return found;
 }
 
+/** Every hole whose body is still empty, in document order. */
+function emptyClozeHoles(editor: Editor): number[] {
+  const found: number[] = [];
+  editor.state.doc.descendants((node, pos) => {
+    if (node.type.name !== "clozeHole") return;
+    if (node.attrs.body !== "") return;
+    found.push(pos);
+  });
+  return found;
+}
+
 export function RichText({
   value,
   onChange,
@@ -138,6 +158,8 @@ export function RichText({
   toolbar = "always",
   sourceToggle = !inline,
   shortcuts = [],
+  holes = false,
+  onReady,
 }: RichTextProps) {
   const t = useT();
   const auto = useId();
@@ -151,6 +173,12 @@ export function RichText({
   /** The link address prompt (a formula opens the dialog instead). */
   const [asking, setAsking] = useState<null | { initial: string }>(null);
   const [formula, setFormula] = useState<FormulaTarget | null>(null);
+  /**
+   * The `{{…}}` hole being written, when there is one. A hole is an atom:
+   * there is nothing to type into the chip, so the body is edited in the same
+   * one-field bar the link address uses (`AskBar`, at the foot of this file).
+   */
+  const [hole, setHole] = useState<null | { pos: number; body: string; created: boolean }>(null);
   /** The dialog component, once its chunk has arrived (never `lazy`, above). */
   // The initializer is a FUNCTION returning the component: `useState(fn)` would
   // call it as a lazy initializer — and a React component called with no props
@@ -192,6 +220,8 @@ export function RichText({
   const upload = useRef<((files: File[], at?: number) => void) | null>(null);
   /** How many empty formulas the document held at the previous transaction. */
   const emptyCount = useRef(0);
+  /** The same, for the empty hole that typing `{{` leaves behind. */
+  const emptyHoles = useRef(0);
   /**
    * The editor itself, for the handlers of `editorProps` — they are built
    * BEFORE it exists, and a pasted markdown fence has to go through the very
@@ -203,6 +233,7 @@ export function RichText({
     extensions: richTextExtensions({
       placeholder: placeholder ?? "",
       inline,
+      cloze: holes,
       // The picture's own toolbar (rotate, size, delete) lives in the node
       // view; `ImageToolsContext` below is how it reaches this field's
       // uploader, which is what a rotation writes its result through.
@@ -252,6 +283,20 @@ export function RichText({
           if (selection instanceof NodeSelection && isMathNode(selection.node.type.name)) {
             event.preventDefault();
             openMath(selection.from, selection.node.attrs.latex, selection.node.type.name);
+            return true;
+          }
+          // A hole is an atom too: Enter on the selected chip edits its body.
+          if (
+            selection instanceof NodeSelection &&
+            selection.node.type.name === "clozeHole" &&
+            selection.node.attrs.body !== null
+          ) {
+            event.preventDefault();
+            setHole({
+              pos: selection.from,
+              body: String(selection.node.attrs.body ?? ""),
+              created: false,
+            });
             return true;
           }
           /*
@@ -336,9 +381,18 @@ export function RichText({
         return false;
       },
       handleClickOn(_view, _pos, node, nodePos, _event, direct) {
-        if (!direct || !isMathNode(node.type.name)) return false;
-        openMath(nodePos, node.attrs.latex, node.type.name);
-        return true;
+        if (!direct) return false;
+        if (isMathNode(node.type.name)) {
+          openMath(nodePos, node.attrs.latex, node.type.name);
+          return true;
+        }
+        // The chip of a `{{…}}` hole. The escaped `\{{` is not editable —
+        // it is two braces, and there is nothing in it to change.
+        if (node.type.name === "clozeHole" && node.attrs.body !== null) {
+          setHole({ pos: nodePos, body: String(node.attrs.body ?? ""), created: false });
+          return true;
+        }
+        return false;
       },
       handlePaste(_view, event) {
         const files = Array.from(event.clipboardData?.files ?? []);
@@ -418,6 +472,20 @@ export function RichText({
         });
       }
       emptyCount.current = empties.length;
+
+      /*
+       * `{{` makes an EMPTY hole (markdown/clozeHole.ts), and an empty hole is
+       * a chip with nothing in it: the body field opens on it at once, exactly
+       * as `$$` opens the formula dialog, and for the same reason — there is
+       * nothing to type into an atom. Compared against the previous count, or
+       * every later keystroke would reopen the one already in the text.
+       */
+      const openHoles = emptyClozeHoles(e);
+      if (openHoles.length > emptyHoles.current) {
+        const at = openHoles[openHoles.length - 1]!;
+        setHole({ pos: at, body: "", created: true });
+      }
+      emptyHoles.current = openHoles.length;
     },
   });
 
@@ -452,6 +520,9 @@ export function RichText({
             codeBlock: e.isActive("codeBlock"),
             math: e.isActive("inlineMath") || e.isActive("blockMath"),
             link: e.isActive("link"),
+            // Not `table`, which is a toolbar ACTION key: a caret inside a
+            // table must not light the "insert a table" button up.
+            inTable: e.isActive("table"),
           },
   }) as Partial<Record<string, boolean>>;
 
@@ -473,6 +544,36 @@ export function RichText({
     if (editor.isEditable === !disabled) return;
     editor.setEditable(!disabled);
   }, [editor, disabled]);
+
+  /*
+   * The imperative handle (`RichTextApi`). It is what lets the `cloze` editor
+   * put a predefined choice set WHERE THE CARET IS: the set lives in a card
+   * beside the text, the text belongs to this component, and a markdown string
+   * handed back through `value` would land at the end of the prompt instead.
+   * `onReady` travels in a ref, so a host that forgets `useCallback` does not
+   * rebuild the handle on every render.
+   */
+  const onReadyRef = useRef(onReady);
+  onReadyRef.current = onReady;
+  useEffect(() => {
+    const announce = onReadyRef.current;
+    if (!announce) return;
+    if (!editor) {
+      announce(null);
+      return;
+    }
+    const api: RichTextApi = {
+      insertHole(body: string) {
+        if (!holes) return;
+        editor.chain().focus().insertContent({ type: "clozeHole", attrs: { body } }).run();
+      },
+      focus() {
+        editor.commands.focus();
+      },
+    };
+    announce(api);
+    return () => announce(null);
+  }, [editor, holes]);
 
   const insertImages = useCallback(
     async (files: File[], at?: number) => {
@@ -520,14 +621,17 @@ export function RichText({
     { key: "codeBlock", icon: SquareCode, labelKey: "md.codeBlock" },
     { key: "math", icon: Sigma, labelKey: "md.math" },
     { key: "image", icon: ImageIcon, labelKey: "md.image" },
+    { key: "table", icon: TableIcon, labelKey: "md.table" },
     { key: "link", icon: LinkIcon, labelKey: "md.link" },
   ];
 
   const actions = ACTIONS.filter(
     (a) =>
       (a.key !== "image" || showImage) &&
-      // A one-paragraph field has nowhere to put a fenced block.
-      (a.key !== "codeBlock" || !inline),
+      // A one-paragraph field has nowhere to put a fenced block, and a table
+      // in a row of a list is a shape no one asked a CHOICE for. The schema
+      // still knows both, so a stored one is never dropped (tiptap.ts).
+      ((a.key !== "codeBlock" && a.key !== "table") || !inline),
   );
 
   /*
@@ -580,6 +684,11 @@ export function RichText({
         return;
       case "image":
         file.current?.click();
+        return;
+      case "table":
+        // Three by three with a header row: the shape a teacher draws on a
+        // slide, and the one GFM writes with the least ceremony.
+        editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
         return;
       case "math": {
         const { selection } = editor.state;
@@ -641,6 +750,34 @@ export function RichText({
     editor?.commands.focus();
   }
 
+  /**
+   * Writes the body the hole bar collected. An EMPTY body removes the chip:
+   * a hole with nothing in it is `cloze.empty_blank` and would only be an
+   * error the teacher has to come back and delete.
+   */
+  function applyHole(body: string) {
+    if (!editor || !hole) return;
+    const node = editor.state.doc.nodeAt(hole.pos);
+    const size = node?.type.name === "clozeHole" ? node.nodeSize : 1;
+    const range = { from: hole.pos, to: hole.pos + size };
+    const chain = editor.chain().focus();
+    if (body.trim() === "") chain.deleteRange(range).run();
+    else chain.insertContentAt(range, { type: "clozeHole", attrs: { body } }).run();
+    setHole(null);
+  }
+
+  /** Leaving the bar. The chip `{{` had just made goes with it. */
+  function cancelHole() {
+    if (editor && hole?.created) {
+      const node = editor.state.doc.nodeAt(hole.pos);
+      if (node?.type.name === "clozeHole") {
+        editor.chain().focus().deleteRange({ from: hole.pos, to: hole.pos + node.nodeSize }).run();
+      }
+    }
+    setHole(null);
+    editor?.commands.focus();
+  }
+
   /** Applies what the link prompt collected, then gives the caret back. */
   function applyAsked(text: string) {
     if (!editor || !asking) return;
@@ -649,6 +786,35 @@ export function RichText({
     else chain.extendMarkRange("link").setLink({ href: text.trim() }).run();
     setAsking(null);
   }
+
+  /*
+   * What can be done to the TABLE the caret is in. A menu and not seven more
+   * icons in the row: they only exist while the caret is in a table, and a
+   * strip that grows by seven buttons under the teacher's hand is the row of
+   * icon buttons DESIGN.md sends to a menu. It is drawn only when there is a
+   * table to act on, so nothing is reserved for it either.
+   */
+  const tableMenu =
+    marks.inTable === true && !disabled && editor !== null ? (
+      <Menu
+        label={t("md.table.menu")}
+        align="start"
+        trigger={
+          <IconButton size="sm" label={t("md.table.menu")} onMouseDown={(e) => e.preventDefault()}>
+            <TableIcon />
+          </IconButton>
+        }
+        items={[
+          { label: t("md.table.rowBefore"), onSelect: () => editor.chain().focus().addRowBefore().run() },
+          { label: t("md.table.rowAfter"), onSelect: () => editor.chain().focus().addRowAfter().run() },
+          { label: t("md.table.columnBefore"), onSelect: () => editor.chain().focus().addColumnBefore().run() },
+          { label: t("md.table.columnAfter"), onSelect: () => editor.chain().focus().addColumnAfter().run() },
+          { label: t("md.table.deleteRow"), separator: true, danger: true, onSelect: () => editor.chain().focus().deleteRow().run() },
+          { label: t("md.table.deleteColumn"), danger: true, onSelect: () => editor.chain().focus().deleteColumn().run() },
+          { label: t("md.table.deleteTable"), danger: true, onSelect: () => editor.chain().focus().deleteTable().run() },
+        ]}
+      />
+    ) : null;
 
   const sourceButton =
     sourceToggle && toolbar !== "never" ? (
@@ -692,6 +858,7 @@ export function RichText({
           <a.icon />
         </IconButton>
       ))}
+      {tableMenu}
       {sourceButton}
       {uploading > 0 ? (
         <span role="status" className="ml-1 text-xs text-fg-muted">
@@ -718,6 +885,25 @@ export function RichText({
       ) : (
         <>
           {toolbar === "always" ? toolbarRow : null}
+
+          {hole ? (
+            /*
+             * The body of a `{{…}}` hole, in the flow of the card like the
+             * link address and for the same reason: one value, typed in one
+             * gesture. What goes in it is the grammar of `@quiz/domain` —
+             * `free|libre`, `=a|b|c`, `#3.14:0.01`, `1` for a predefined
+             * choice set — so the field is mono and the braces are implied.
+             */
+            <AskBar
+              key={`hole-${hole.pos}`}
+              label={t("md.hole")}
+              initial={hole.body}
+              apply={t("common.save")}
+              cancel={t("common.cancel")}
+              onSubmit={applyHole}
+              onCancel={cancelHole}
+            />
+          ) : null}
 
           {asking ? (
             <AskBar

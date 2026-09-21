@@ -371,6 +371,20 @@ with a keyboard-reachable dismiss button.
   tokenizer (`markdown/highlight.ts`, four classes), drawn over the document
   as ProseMirror decorations: the same four token colours the reader gets,
   and not one character of it in the markdown.
+  A TABLE is a GFM table in the markdown and a real table in the field: the
+  toolbar inserts a 3 × 3 one, and while the caret is inside it a menu — not
+  seven more icons in the strip — adds and removes rows and columns. It wears
+  the student's own `.md-body` hairlines; the editor adds only what an editing
+  surface needs, a cell you can still aim at when it is empty and an
+  `accent-soft` tint on a selected run of cells.
+  A `{{…}}` HOLE of the cloze type is an OBJECT in the field and not five
+  characters: a pill in `accent-soft` on `accent`, 13 px mono, showing the body
+  as written with a `▾` in front of a dropdown. Clicking it opens the same
+  one-field bar the link address uses; Backspace takes it whole. It is what let
+  the cloze editor drop its textarea, since a hole written as text came back
+  with the serializer's escapes in it. Inside a fenced block a hole stays text
+  — a code block holds no nodes — and is tinted by the same decoration plugin
+  as the keywords, through a fifth token class, `tok-hole`.
 - FormulaDialog: the one surface a formula is written on. A LaTeX box (which
   takes the focus — experts type), a MathLive `<math-field>` with its symbol
   palette (novices point), a live KaTeX preview of what the student will see,

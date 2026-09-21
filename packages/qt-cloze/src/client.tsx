@@ -83,6 +83,7 @@ export {
 } from "./strings.js";
 export type {
   ClozeAnswer,
+  ClozeChoiceSet,
   ClozeConfig,
   ClozeDetails,
   ClozeSolution,
