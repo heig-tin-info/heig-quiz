@@ -9,9 +9,8 @@
 
 export const mcqEditorStrings = {
   prompt: "Statement",
-  promptHint: "The students see it as written.",
   choices: "Choices",
-  choicesHint: "Tick the correct answers. The order is shuffled per student.",
+  choicesHint: "Tick the correct answers.",
   choiceText: "Text of choice",
   correct: "Correct",
   addChoice: "Add a choice",
@@ -26,13 +25,19 @@ export const mcqEditorStrings = {
   policyHelp: "About the scoring policies",
   /*
    * The six values of `McqQuestionPolicy`, and one line each for what they do
-   * to a score. The order is the order of the <select>: the default first,
-   * then from the strictest to the most forgiving.
+   * to a score. The order is the order of the segmented control: the default
+   * first, then from the strictest to the most forgiving.
+   *
+   * The LABELS are one word wherever one word will do — they are pills in a
+   * 288 px column now, not rows of a list, and the sentence that explained
+   * each one is the description under the control and the help topic behind
+   * the "?". The same six words name the policy on the settings page and in
+   * an evaluation's options, so a teacher meets one vocabulary.
    */
-  policyInherit: "Inherited from the evaluation",
-  policyAllOrNothing: "All or nothing",
-  policyTrueFalse: "True/false per choice",
-  policyDiscordance: "Discordances",
+  policyInherit: "Inherited",
+  policyAllOrNothing: "Exact",
+  policyTrueFalse: "True/false",
+  policyDiscordance: "Distance",
   policySymmetric: "Symmetric",
   policyRipkey: "Ripkey",
   policyDescInherit: "Uses the policy set on the evaluation.",
@@ -43,7 +48,24 @@ export const mcqEditorStrings = {
   policyDescRipkey: "The share of correct ticks, cancelled by any wrong tick.",
   maxSelections: "Maximum selections",
   maxSelectionsHint: "Empty means no limit.",
-  shuffleChoices: "Shuffle the choices",
+  /**
+   * The cap refused by `mcq.max_below_correct`, said by the editor ITSELF.
+   *
+   * The rule is in the schema and the server repeats it on every save, but a
+   * teacher who types 2 under three ticked answers must be told at the
+   * keystroke, not 500 ms later once an autosave came back. The host maps
+   * this key onto the very sentence it already shows for the server's issue,
+   * so the two never disagree.
+   */
+  maxBelowCorrect: "The maximum number of selections is below the number of correct choices.",
+  /**
+   * Shuffling is ON unless a question opts out: the evaluation decides, and
+   * a question whose choices must keep their order ("all of the above") says
+   * so once. The stored flag is the opposite (`shuffleChoices`), because that
+   * is what the grader and `toStudent` read.
+   */
+  neverShuffle: "Never shuffle this question",
+  neverShuffleHint: "Even when the evaluation shuffles choices.",
 } as const;
 
 export type McqEditorStringKey = keyof typeof mcqEditorStrings;

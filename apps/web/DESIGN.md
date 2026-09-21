@@ -308,7 +308,21 @@ with a keyboard-reachable dismiss button.
   where it was dropped, not at the caret. `toolbar="focus"` folds the toolbar
   INSIDE the field and shows it while the field has the caret: that is what a
   row of a list (an mcq choice) wears, since six permanent toolbars are a wall
-  of icons. MarkdownField around it is a label, a hint and the upload adapter.
+  of icons. MarkdownField around it is a label and the upload adapter — no
+  hint line: it named the keys the toolbar above it already shows, on every
+  field of a four-field screen.
+  An IMAGE in the editor carries its own bar, at its top-right corner while
+  the pointer is on it or it is the selection: rotate left, rotate right,
+  size, delete. It is the one pill allowed a shadow next to the page flow,
+  because it genuinely floats over the picture. Rotation happens in the
+  browser (canvas) and is uploaded as a NEW asset, so nothing but
+  `asset:<id>` ever reaches the markdown; the SIZE is a percentage of the
+  column carried as a query on the reference — `![alt](asset:<id>?w=50)` —
+  which `render.ts` turns into an `md-img-50` class for the student (a class,
+  never a `style`: the sanitiser admits one and refuses the other). An inline
+  field answers `Ctrl+Enter` with a NEW PARAGRAPH, so a choice can hold a
+  second line or a fenced block; plain Enter still belongs to the list around
+  it.
 - FormulaDialog: the one surface a formula is written on. A LaTeX box (which
   takes the focus — experts type), a MathLive `<math-field>` with its symbol
   palette (novices point), a live KaTeX preview of what the student will see,

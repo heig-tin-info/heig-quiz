@@ -148,7 +148,6 @@ export function CodeEditor({
               className={cx(input, "w-full py-2 leading-relaxed")}
             />
           )}
-          <p className={hint}>{s.promptHint}</p>
         </div>
         <div className="flex flex-col gap-1.5">
           <label className={label} htmlFor={`${ids}-language`}>

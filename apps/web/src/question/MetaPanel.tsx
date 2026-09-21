@@ -6,7 +6,7 @@ import type { CategoryNode, QuestionMeta, QuestionPatch } from "@quiz/contracts"
 import { api, apiErrorMessage } from "../api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { Card, Field, SectionHeading, Segmented, Select, SettingRow, Switch } from "../ui";
+import { Card, Field, SectionHeading, Segmented, Select } from "../ui";
 import { TagInput } from "./TagInput";
 
 /**
@@ -104,19 +104,6 @@ export function MetaPanel({
         {...(disabled ? { disabled } : {})}
         onChange={(tags) => patch.mutate({ tags })}
       />
-
-      <SettingRow
-        title={t("question.meta.shuffleable")}
-        desc={t("question.meta.shuffleableHint")}
-        className="border-t border-line pt-3"
-      >
-        <Switch
-          label={t("question.meta.shuffleable")}
-          disabled={disabled}
-          checked={meta.shuffleable}
-          onChange={(v) => patch.mutate({ shuffleable: v })}
-        />
-      </SettingRow>
 
       <div className="flex items-baseline justify-between border-t border-line pt-3 text-[13px]">
         <span className="text-fg-muted">{t("question.meta.pool")}</span>

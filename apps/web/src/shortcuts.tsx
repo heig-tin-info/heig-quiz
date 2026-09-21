@@ -29,7 +29,14 @@ const listeners = new Set<() => void>();
 let snapshot: Shortcut[] = [];
 
 function emit(): void {
-  snapshot = [...globals.values(), ...registry.values()].flat();
+  // One line per key combination, and the LAST registration wins: a focused
+  // field registers after the page it sits in, so `Ctrl+Enter` reads "New
+  // line" while the caret is in a choice and "Try" once it leaves — which is
+  // also what the key does, since the field stops that event from reaching
+  // the page.
+  const byKeys = new Map<string, Shortcut>();
+  for (const s of [...globals.values(), ...registry.values()].flat()) byKeys.set(s.keys, s);
+  snapshot = [...byKeys.values()];
   for (const l of listeners) l();
 }
 

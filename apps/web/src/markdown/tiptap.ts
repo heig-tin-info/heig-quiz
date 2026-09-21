@@ -28,7 +28,7 @@
  * dropped, in either mode.
  */
 import { InputRule } from "@tiptap/core";
-import type { AnyExtension } from "@tiptap/core";
+import type { AnyExtension, NodeViewRenderer } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
 import { Markdown } from "@tiptap/markdown";
@@ -38,7 +38,7 @@ import { TaskItem, TaskList } from "@tiptap/extension-list";
 import { Placeholder } from "@tiptap/extension-placeholder";
 import { BlockMath, InlineMath } from "@tiptap/extension-mathematics";
 
-import { assetUrl } from "./render";
+import { assetUrl, assetWidth } from "./render";
 
 /** KaTeX behaves here as in the student view: a broken formula shows, it never throws. */
 const KATEX_OPTIONS = { throwOnError: false } as const;
@@ -48,7 +48,21 @@ const KATEX_OPTIONS = { throwOnError: false } as const;
  * marks and a formula, never a block. Typing "- " at the head of a choice
  * writes "- ", it does not turn the choice into a bullet list.
  */
-export const INLINE_INPUT_RULES = ["bold", "italic", "code", "strike", "inlineMath"] as const;
+export const INLINE_INPUT_RULES = [
+  "bold",
+  "italic",
+  "code",
+  "strike",
+  "inlineMath",
+  // The one BLOCK rule an inline field keeps. A choice is allowed a second
+  // paragraph (Ctrl+Enter in `RichText`), and the reason a teacher asks for
+  // one is almost always a snippet: "Which of these compiles?" with three
+  // lines of C under it. Typing ``` on that new line must open the fence, or
+  // the field can hold a block it gives no way to make. The list and heading
+  // rules stay off: "- " at the head of a choice is still the two characters
+  // the teacher typed.
+  "codeBlock",
+] as const;
 
 /**
  * An `asset:<id>` is not a URL a browser can fetch, and the editor has to SHOW
@@ -70,7 +84,17 @@ const AssetImage = Image.extend({
         renderHTML: (attributes: Record<string, unknown>) => {
           const src = typeof attributes.src === "string" ? attributes.src : "";
           const resolved = assetUrl(src);
-          return resolved === null ? { src } : { src: resolved, "data-asset": src };
+          if (resolved === null) return { src };
+          // The WIDTH lives in the reference too (`asset:<id>?w=50`), and it
+          // is rendered as the student's own class so a copy of the editor's
+          // HTML looks like the question. The editor itself draws through the
+          // node view below, which sizes the FRAME rather than the picture.
+          const width = assetWidth(src);
+          return {
+            src: resolved,
+            "data-asset": src,
+            ...(width === 100 ? {} : { class: `md-img-${width}` }),
+          };
         },
       },
     };
@@ -216,6 +240,13 @@ const BlockMathTyping = BlockMath.extend({
 export interface RichTextSchemaOptions {
   /** Shown by the Placeholder extension through `data-placeholder`. */
   placeholder?: string;
+  /**
+   * The node view of the image node, when the host has one. It is a function
+   * and not a component because THIS MODULE HOLDS NO REACT (see the head of
+   * the file): `RichText` passes `() => ReactNodeViewRenderer(ImageView)`, and
+   * the round-trip tests build the same schema without any of it.
+   */
+  imageNodeView?: () => NodeViewRenderer;
 }
 
 /**
@@ -225,13 +256,17 @@ export interface RichTextSchemaOptions {
  * and hands it to the `MarkdownManager`, so each extension's own markdown
  * handlers are picked up wherever it sits.
  */
-export function richTextExtensions({ placeholder }: RichTextSchemaOptions = {}): AnyExtension[] {
+export function richTextExtensions({
+  placeholder,
+  imageNodeView,
+}: RichTextSchemaOptions = {}): AnyExtension[] {
+  const image = imageNodeView ? AssetImage.extend({ addNodeView: imageNodeView }) : AssetImage;
   return [
     StarterKit.configure({
       // A link is edited, not followed, inside an editor.
       link: { openOnClick: false },
     }),
-    AssetImage.configure({ allowBase64: false }),
+    image.configure({ allowBase64: false }),
     InlineMathTyping.configure({ katexOptions: KATEX_OPTIONS }),
     BlockMathTyping.configure({ katexOptions: KATEX_OPTIONS }),
     // GFM task lists. StarterKit does not carry them and `render.ts` does, so

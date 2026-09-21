@@ -35,6 +35,18 @@ export const selectClass =
 export const labelClass = "text-[13px] font-medium text-fg";
 export const helpClass = "text-xs text-fg-faint";
 export const sectionClass = "flex flex-col gap-2";
+
+/**
+ * A card, in the little of `apps/web`'s `Card` a leaf package can carry: the
+ * card radius, one hairline, the surface — and no shadow, because nothing in
+ * the page flow has one. It dresses the block the editor PORTALS into the
+ * host's aside (`EditorProps.aside`), so the scoring settings read as a card
+ * of the right column beside "Properties" rather than as a stray section.
+ */
+export const cardClass = "rounded-card border border-line bg-surface p-4";
+
+/** The 16 px section title of a card, as `SectionHeading` writes it. */
+export const cardTitleClass = "text-base font-bold tracking-tight text-fg";
 export const legendClass = "text-[13px] font-medium text-fg";
 
 /** Secondary button chrome (pill, hairline), for the editor's add/remove actions. */
@@ -91,6 +103,8 @@ export function Segmented<T extends string>({
   options,
   onChange,
   disabled,
+  wrap,
+  labelledBy,
 }: {
   /** Groups the native radios (one editor holds several groups). */
   name: string;
@@ -98,12 +112,31 @@ export function Segmented<T extends string>({
   options: { value: T; label: ReactNode }[];
   onChange: (value: T) => void;
   disabled?: boolean;
+  /**
+   * Lets the pills fall on a second row instead of sizing the track to their
+   * total width. Six policies do not fit the 288 px right column on one line,
+   * and a track that overflows its card is worse than a track two rows tall —
+   * the pill radius is what says "press me", and it survives the wrap.
+   */
+  wrap?: boolean;
+  /**
+   * The id of the element that names the group. A segmented control is a
+   * radiogroup, and a radiogroup without a name is six pills the reader has
+   * to guess the subject of.
+   */
+  labelledBy?: string;
 }): ReactNode {
   return (
     <div
       role="radiogroup"
+      {...(labelledBy === undefined ? {} : { "aria-labelledby": labelledBy })}
       className={cx(
-        "inline-flex shrink-0 flex-wrap gap-0.5 rounded-full bg-surface-3 p-0.75",
+        "gap-0.5 bg-surface-3 p-0.75",
+        // A track two rows tall is not a pill any more: `rounded-full` on it
+        // draws two half-circles the height of both rows. It becomes what it
+        // now is — a recessed panel — and keeps the card radius of the design
+        // scale, while the pills inside stay pills.
+        wrap ? "flex w-full flex-wrap rounded-card" : "inline-flex shrink-0 flex-wrap rounded-full",
         disabled && "opacity-60",
       )}
     >

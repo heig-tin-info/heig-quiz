@@ -638,10 +638,12 @@ function versionJson(row: VersionRecord): VersionRow {
 function draftJson(type: string, row: VersionRecord): QuestionDraft {
   const outcome = tryLoadConfig(type, row);
   return {
-    // A valid config is returned MIGRATED (the editor always works at the
-    // current schema); an invalid one comes back exactly as stored, or the
-    // teacher loses the half-written work `PUT /draft` accepted (D16).
-    config: outcome.ok ? outcome.config : row.config,
+    // MIGRATED either way (the editor always works at the current schema),
+    // and never re-validated when it does not parse: the teacher must not
+    // lose the half-written work `PUT /draft` accepted (D16). An invalid
+    // draft handed back at its OLD shape is what used to be written straight
+    // back under the current version number — see `tryLoadConfig`.
+    config: outcome.config,
     explanation: row.explanation,
     configVersion: row.configVersion,
     updatedAt: row.updatedAt.toISOString(),

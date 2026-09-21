@@ -49,6 +49,33 @@
   color: var(--fg-faint);
 }
 
+/* The frame of an image node (markdown/ImageView.tsx). It hugs the picture —
+   shrink-to-fit, capped by the column — so the floating toolbar can sit at the
+   picture's own top-right corner rather than at the far edge of the text; and
+   it is what carries the width the teacher chose, for the reason spelled out
+   in the component. The picture fills it. */
+.rt-surface .rt-image {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+.rt-surface .rt-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+/* The element @tiptap/react puts AROUND a React node view is a plain block,
+   so the selected-node ring drawn on it stretched across the whole column
+   for a picture a quarter of it wide. The ring belongs on the frame. */
+.rt-surface .node-image.ProseMirror-selectednode {
+  outline: none;
+}
+.rt-surface .node-image.ProseMirror-selectednode .rt-image {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
 /* An atom the caret sits on: an image, a formula. The accent ring says which
    one Backspace would remove. */
 .rt-surface .ProseMirror-selectednode {

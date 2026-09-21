@@ -299,8 +299,13 @@ const en = {
   "md.formula.empty": "Nothing to preview yet.",
   "md.formula.insert": "Insert",
   "md.uploading": "Uploading…",
-  "md.hint": "Bold, italic, code and $math$ as you type; Source shows the markdown underneath.",
-  "md.hint.withImages": "Bold, italic, code and $math$ as you type. Paste or drop an image to upload it.",
+  "md.newLine": "New line",
+  "md.image.menu": "Image",
+  "md.image.rotateLeft": "Rotate left",
+  "md.image.rotateRight": "Rotate right",
+  "md.image.size": "Size",
+  "md.image.percent": "{n}%",
+  "md.image.remove": "Remove the image",
   "md.placeholder.body": "Write the question…",
   "md.placeholder.bold": "bold text",
   "md.placeholder.italic": "italic text",
@@ -430,9 +435,6 @@ const en = {
   "question.meta.tags": "Tags",
   "question.meta.tagAdd": "Add a tag",
   "question.meta.tagRemove": "Remove the tag {name}",
-  "question.meta.shuffleable": "Shuffle for each student",
-  "question.meta.shuffleableHint":
-    "Choices and options are drawn in a different order per student.",
   "question.meta.pool": "Pool",
   "question.meta.saveFailed": "This property could not be saved.",
   "question.tag.placeholder": "Add a tag…",
@@ -501,10 +503,13 @@ const en = {
   "mcq.policy.title": "Multiple-answer scoring",
   "mcq.policy.settingsHint":
     "The default for the evaluations you create. Each evaluation keeps its own.",
-  "mcq.policy.inherit": "Inherited from the evaluation",
-  "mcq.policy.all_or_nothing": "All or nothing",
-  "mcq.policy.true_false": "True/false per choice",
-  "mcq.policy.discordance": "Discordances",
+  // One word each wherever one word will do: these are the pills of a
+  // segmented control in a 288 px column now, and the sentence that used to
+  // name them is the description right under it.
+  "mcq.policy.inherit": "Inherited",
+  "mcq.policy.all_or_nothing": "Exact",
+  "mcq.policy.true_false": "True/false",
+  "mcq.policy.discordance": "Distance",
   "mcq.policy.symmetric": "Symmetric",
   "mcq.policy.ripkey": "Ripkey",
   "mcq.policy.desc.inherit": "This question is scored the way the evaluation that plays it is.",
@@ -533,9 +538,8 @@ const en = {
 
   // --- qt-mcq strings ---
   "qt.mcq.e.prompt": "Statement",
-  "qt.mcq.e.promptHint": "The students see it as written.",
   "qt.mcq.e.choices": "Choices",
-  "qt.mcq.e.choicesHint": "Tick the correct answers. The order is shuffled per student.",
+  "qt.mcq.e.choicesHint": "Tick the correct answers.",
   "qt.mcq.e.choiceText": "Text of choice",
   "qt.mcq.e.correct": "Correct",
   "qt.mcq.e.addChoice": "Add a choice",
@@ -547,7 +551,8 @@ const en = {
   "qt.mcq.e.policyHelp": "About the scoring policies",
   "qt.mcq.e.maxSelections": "Maximum selections",
   "qt.mcq.e.maxSelectionsHint": "Empty means no limit.",
-  "qt.mcq.e.shuffleChoices": "Shuffle the choices",
+  "qt.mcq.e.neverShuffle": "Never shuffle this question",
+  "qt.mcq.e.neverShuffleHint": "Even when the evaluation shuffles choices.",
   "qt.mcq.p.chooseOne": "Choose one answer.",
   "qt.mcq.p.chooseSeveral": "Choose every correct answer.",
   "qt.mcq.p.chooseUpTo": "Choose at most the allowed number of answers.",
@@ -568,7 +573,6 @@ const en = {
 
   // --- qt-short strings ---
   "qt.short.e.prompt": "Statement",
-  "qt.short.e.promptHint": "The students see it as written.",
   "qt.short.e.preview": "Preview",
   "qt.short.e.kind": "Expected answer",
   "qt.short.e.kindText": "Text",
@@ -646,7 +650,6 @@ const en = {
   // --- qt-code editor strings ---
   "qt.code.e.questionSection": "Question",
   "qt.code.e.prompt": "Statement",
-  "qt.code.e.promptHint": "What the student reads above the editor.",
   "qt.code.e.language": "Language",
   "qt.code.e.template": "Starting code",
   "qt.code.e.templateHint":
@@ -1644,8 +1647,13 @@ const fr: Record<keyof Dict, string> = {
   "md.formula.empty": "Rien à prévisualiser pour l'instant.",
   "md.formula.insert": "Insérer",
   "md.uploading": "Envoi…",
-  "md.hint": "Gras, italique, code et $maths$ au fil de la frappe ; Source montre le markdown sous-jacent.",
-  "md.hint.withImages": "Gras, italique, code et $maths$ au fil de la frappe. Collez ou déposez une image pour l'envoyer.",
+  "md.newLine": "Nouvelle ligne",
+  "md.image.menu": "Image",
+  "md.image.rotateLeft": "Pivoter à gauche",
+  "md.image.rotateRight": "Pivoter à droite",
+  "md.image.size": "Taille",
+  "md.image.percent": "{n} %",
+  "md.image.remove": "Supprimer l'image",
   "md.placeholder.body": "Rédigez la question…",
   "md.placeholder.bold": "texte en gras",
   "md.placeholder.italic": "texte en italique",
@@ -1777,9 +1785,6 @@ const fr: Record<keyof Dict, string> = {
   "question.meta.tags": "Tags",
   "question.meta.tagAdd": "Ajouter un tag",
   "question.meta.tagRemove": "Retirer le tag {name}",
-  "question.meta.shuffleable": "Mélanger pour chaque étudiant",
-  "question.meta.shuffleableHint":
-    "Les choix et les options sont tirés dans un ordre différent par étudiant.",
   "question.meta.pool": "Banque",
   "question.meta.saveFailed": "Cette propriété n'a pas pu être enregistrée.",
   "question.tag.placeholder": "Ajouter un tag…",
@@ -1842,10 +1847,10 @@ const fr: Record<keyof Dict, string> = {
   "mcq.policy.title": "Notation des réponses multiples",
   "mcq.policy.settingsHint":
     "La valeur par défaut des évaluations que vous créez. Chacune garde la sienne.",
-  "mcq.policy.inherit": "Héritée de l'évaluation",
-  "mcq.policy.all_or_nothing": "Tout ou rien",
-  "mcq.policy.true_false": "Vrai-faux par proposition",
-  "mcq.policy.discordance": "Discordances",
+  "mcq.policy.inherit": "Héritée",
+  "mcq.policy.all_or_nothing": "Exact",
+  "mcq.policy.true_false": "Vrai-faux",
+  "mcq.policy.discordance": "Distance",
   "mcq.policy.symmetric": "Symétrique",
   "mcq.policy.ripkey": "Ripkey",
   "mcq.policy.desc.inherit": "Cette question se note comme l'évaluation qui la pose.",
@@ -1874,10 +1879,8 @@ const fr: Record<keyof Dict, string> = {
 
   // --- qt-mcq strings ---
   "qt.mcq.e.prompt": "Énoncé",
-  "qt.mcq.e.promptHint": "Les étudiants le voient tel quel.",
   "qt.mcq.e.choices": "Choix",
-  "qt.mcq.e.choicesHint":
-    "Cochez la ou les réponses correctes. L'ordre est mélangé pour chaque étudiant.",
+  "qt.mcq.e.choicesHint": "Cochez les bonnes réponses.",
   "qt.mcq.e.choiceText": "Texte du choix",
   "qt.mcq.e.correct": "Correct",
   "qt.mcq.e.addChoice": "Ajouter un choix",
@@ -1889,7 +1892,8 @@ const fr: Record<keyof Dict, string> = {
   "qt.mcq.e.policyHelp": "À propos des politiques de notation",
   "qt.mcq.e.maxSelections": "Sélections maximum",
   "qt.mcq.e.maxSelectionsHint": "Vide : pas de limite.",
-  "qt.mcq.e.shuffleChoices": "Mélanger les choix",
+  "qt.mcq.e.neverShuffle": "Ne jamais mélanger cette question",
+  "qt.mcq.e.neverShuffleHint": "Même quand l'évaluation mélange les choix.",
   "qt.mcq.p.chooseOne": "Choisissez une réponse.",
   "qt.mcq.p.chooseSeveral": "Choisissez toutes les réponses correctes.",
   "qt.mcq.p.chooseUpTo": "Choisissez au plus le nombre de réponses autorisé.",
@@ -1910,7 +1914,6 @@ const fr: Record<keyof Dict, string> = {
 
   // --- qt-short strings ---
   "qt.short.e.prompt": "Énoncé",
-  "qt.short.e.promptHint": "Les étudiants le voient tel quel.",
   "qt.short.e.preview": "Aperçu",
   "qt.short.e.kind": "Réponse attendue",
   "qt.short.e.kindText": "Texte",
@@ -1990,7 +1993,6 @@ const fr: Record<keyof Dict, string> = {
   // --- qt-code editor strings ---
   "qt.code.e.questionSection": "Question",
   "qt.code.e.prompt": "Énoncé",
-  "qt.code.e.promptHint": "Ce que l'étudiant lit au-dessus de l'éditeur.",
   "qt.code.e.language": "Langage",
   "qt.code.e.template": "Code de départ",
   "qt.code.e.templateHint":

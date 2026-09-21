@@ -37,13 +37,45 @@ import { escapeHtml, highlight } from "./highlight";
 /** Where an `asset:<id>` image resolves to. Same origin, no CDN (N-SEC-02). */
 export const ASSET_BASE = "/app/api/assets/";
 
-/** Ids are what the upload endpoint returns; anything else is not an asset. */
-const ASSET_REF = /^asset:([A-Za-z0-9_-]{1,64})$/;
+/**
+ * Ids are what the upload endpoint returns; anything else is not an asset.
+ *
+ * The optional query is how an image carries its WIDTH. A teacher who sizes a
+ * picture in the editor writes `![alt](asset:<id>?w=50)`, and that is the
+ * whole of it: no second attribute to invent, no HTML in the markdown, and a
+ * reader who opens the source pane sees what the setting is. Anything but the
+ * presets below is ignored rather than honoured, so a hand-typed `?w=900`
+ * cannot push an image out of the column.
+ */
+const ASSET_REF = /^asset:([A-Za-z0-9_-]{1,64})(?:\?([A-Za-z0-9_=&%.-]{0,64}))?$/;
+
+/** The widths the size menu offers, as a percentage of the content width. */
+export const IMAGE_WIDTHS = [25, 33, 50, 66, 75, 100] as const;
+export type ImageWidth = (typeof IMAGE_WIDTHS)[number];
 
 /** `asset:<id>` -> the same-origin URL, or null when it is not an asset ref. */
 export function assetUrl(href: string): string | null {
   const m = ASSET_REF.exec(href.trim());
   return m ? ASSET_BASE + m[1] : null;
+}
+
+/**
+ * The width an asset reference asks for, as a percentage. 100 when it asks
+ * for nothing, or for something that is not one of the presets: a full-width
+ * image is what every image in the app was before the setting existed, so an
+ * unreadable query degrades to the old behaviour instead of to nothing.
+ */
+export function assetWidth(href: string): ImageWidth {
+  const m = ASSET_REF.exec(href.trim());
+  const w = Number(new URLSearchParams(m?.[2] ?? "").get("w"));
+  return (IMAGE_WIDTHS as readonly number[]).includes(w) ? (w as ImageWidth) : 100;
+}
+
+/** The same reference, asking for `width`. 100 % drops the query entirely. */
+export function withAssetWidth(href: string, width: ImageWidth): string {
+  const m = ASSET_REF.exec(href.trim());
+  if (!m) return href;
+  return width === 100 ? `asset:${m[1]}` : `asset:${m[1]}?w=${width}`;
 }
 
 /** The markdown source of an image pointing at an uploaded asset. */
@@ -100,7 +132,13 @@ const marked = new Marked({
       const src = assetUrl(href ?? "");
       if (!src) return escapeHtml(text ?? "");
       const titleAttr = title ? ` title="${escapeHtml(title)}"` : "";
-      return `<img src="${src}" alt="${escapeHtml(text ?? "")}"${titleAttr}>`;
+      // The width travels as a CLASS and never as a `style`: the allow-list
+      // admits `class` and refuses `style` on purpose (a prompt must not be
+      // able to position anything), and the six presets are six rules in the
+      // `.md-body` block of style.css.
+      const width = assetWidth(href ?? "");
+      const cls = width === 100 ? "" : ` class="md-img-${width}"`;
+      return `<img src="${src}" alt="${escapeHtml(text ?? "")}"${titleAttr}${cls}>`;
     },
   },
 });

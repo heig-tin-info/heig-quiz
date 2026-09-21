@@ -26,8 +26,15 @@ export interface ConfigRow {
 }
 
 export type ConfigOutcome =
+  /** Migrated and parsed. */
   | { ok: true; config: unknown }
-  | { ok: false; issues: ZodIssueLite[] };
+  /**
+   * Migrated as far as it would go, NOT parsed: what an invalid draft is
+   * handed back as (decision D16). `config` is at the CURRENT shape whenever
+   * the migration ran, which is what keeps an invalid draft from being
+   * written back at the shape it was found in — see {@link tryLoadConfig}.
+   */
+  | { ok: false; config: unknown; issues: ZodIssueLite[] };
 
 /** A zod error reduced to what the editor can underline. */
 export function issuesOf(error: unknown): ZodIssueLite[] {
@@ -60,12 +67,49 @@ export function loadConfig(type: string, row: ConfigRow): unknown {
   return t.configSchema.parse(migrated);
 }
 
-/** {@link loadConfig} without the throw: for a draft, which may be invalid. */
+/**
+ * {@link loadConfig} without the throw: for a draft, which may be invalid.
+ *
+ * The failing branch carries the MIGRATED config, not the stored bytes. That
+ * is not a detail: `draftJson` hands this straight to the editor, the editor
+ * autosaves what it was given, and `saveDraftConfig` stamps the row with the
+ * CURRENT version whatever it stored. A draft that came back at its old shape
+ * was therefore written back as an old shape stamped current — after which
+ * nothing migrates it ever again and every parse dies on `configVersion`,
+ * hiding every real issue the teacher needed to see.
+ */
 export function tryLoadConfig(type: string, row: ConfigRow): ConfigOutcome {
   try {
     return { ok: true, config: loadConfig(type, row) };
   } catch (error) {
-    return { ok: false, issues: issuesOf(error) };
+    return { ok: false, config: raise(typeOf(type), row.config, row.configVersion), issues: issuesOf(error) };
+  }
+}
+
+/**
+ * The version a configuration declares INSIDE itself. Every question type of
+ * this codebase carries `configVersion` in its schema, beside the
+ * `question_versions.config_version` column that says the same thing; a type
+ * that does not is simply left alone here.
+ */
+function declaredVersion(config: unknown): number | undefined {
+  if (config === null || typeof config !== "object" || Array.isArray(config)) return undefined;
+  const value = (config as { configVersion?: unknown }).configVersion;
+  return typeof value === "number" ? value : undefined;
+}
+
+/**
+ * `type.migrate`, made total: an invalid or unreadable config comes back
+ * untouched instead of throwing. The caller is always on a path where the
+ * parse is about to report what is wrong with it anyway (D16), and a
+ * migration failure there would replace the real issues with its own.
+ */
+function raise(t: AnyQuestionTypeServer, config: unknown, fromVersion: number): unknown {
+  if (fromVersion === t.configVersion) return config;
+  try {
+    return t.migrate(config, fromVersion);
+  } catch {
+    return config;
   }
 }
 
@@ -89,10 +133,18 @@ export function saveDraftConfig(
   config: unknown,
 ): { row: ConfigRow; issues: ZodIssueLite[] } {
   const t = typeOf(type);
+  // The row is stamped with the CURRENT version below, valid or not, so a
+  // config that declares an older one is raised FIRST. Without it the two
+  // halves of the same row disagree — an old shape stored under the current
+  // number — and the next read, which trusts the column, never migrates it:
+  // `configVersion` then fails on every parse, and a failing literal ABORTS
+  // the object, so the refinements never run and the editor is told nothing
+  // about the field the teacher is actually working on.
+  const raised = raise(t, config, declaredVersion(config) ?? t.configVersion);
   try {
-    return { row: saveConfig(type, config), issues: [] };
+    return { row: saveConfig(type, raised), issues: [] };
   } catch (error) {
-    return { row: { config, configVersion: t.configVersion }, issues: issuesOf(error) };
+    return { row: { config: raised, configVersion: t.configVersion }, issues: issuesOf(error) };
   }
 }
 

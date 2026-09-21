@@ -250,6 +250,111 @@ describe("RichText — images", () => {
   });
 });
 
+describe("RichText — the toolbar of an image", () => {
+  /*
+   * A picture with a line of text above it, which is what a prompt looks
+   * like: a document that OPENS on an image starts with the image selected
+   * (ProseMirror cannot put a caret inside a leaf), and the bar would then be
+   * on screen from the first frame — a real case, covered on its own below.
+   */
+  const withImage = (props: Partial<Parameters<typeof Host>[0]> = {}) =>
+    renderWithProviders(
+      <Host
+        initial={"Before\n\n![schema](asset:a1b2)"}
+        uploadImage={async () => "asset:new1"}
+        {...props}
+      />,
+    );
+
+  /**
+   * The node view's frame, which is what the pointer enters. Awaited: the
+   * React node views of Tiptap arrive through a portal, one store
+   * notification after the document.
+   */
+  async function frame(container: HTMLElement): Promise<HTMLElement> {
+    await waitFor(() => expect(container.querySelector(".rt-image")).not.toBeNull());
+    return container.querySelector(".rt-image") as HTMLElement;
+  }
+
+  it("stays out of the way until the pointer is on the picture", async () => {
+    const { container } = withImage();
+    const box = await frame(container);
+    expect(screen.queryByRole("toolbar", { name: "Image" })).toBeNull();
+    fireEvent.mouseEnter(box);
+    expect(await screen.findByRole("toolbar", { name: "Image" })).toBeInTheDocument();
+    fireEvent.mouseLeave(box);
+    await waitFor(() => expect(screen.queryByRole("toolbar", { name: "Image" })).toBeNull());
+  });
+
+  it("is there too when the image itself is the selection", async () => {
+    const { container } = withImage({ initial: "![schema](asset:a1b2)" });
+    await frame(container);
+    expect(await screen.findByRole("toolbar", { name: "Image" })).toBeInTheDocument();
+  });
+
+  it("offers rotate, size and delete, and never takes the caret", async () => {
+    const { container } = withImage();
+    fireEvent.mouseEnter(await frame(container));
+    await screen.findByRole("toolbar", { name: "Image" });
+    for (const name of ["Rotate left", "Rotate right", "Size", "Remove the image"]) {
+      expect(screen.getByRole("button", { name })).toBeInTheDocument();
+    }
+    // A default-prevented mousedown is the whole trick, as it is for the
+    // formatting toolbar: the document keeps the selection it had.
+    expect(fireEvent.mouseDown(screen.getByRole("button", { name: "Size" }))).toBe(false);
+  });
+
+  it("hides the two rotate buttons when the field cannot upload", async () => {
+    const { container } = renderWithProviders(
+      <Host initial={"Before\n\n![schema](asset:a1b2)"} />,
+    );
+    fireEvent.mouseEnter(await frame(container));
+    await screen.findByRole("toolbar", { name: "Image" });
+    expect(screen.queryByRole("button", { name: "Rotate left" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Size" })).toBeInTheDocument();
+  });
+
+  it("writes the chosen width as a query on the asset reference", async () => {
+    const onValue = vi.fn();
+    const { container } = withImage({ onValue });
+    fireEvent.mouseEnter(await frame(container));
+    await userEvent.click(await screen.findByRole("button", { name: "Size" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "50%" }));
+    await waitFor(() =>
+      expect(onValue.mock.lastCall?.[0]).toBe("Before\n\n![schema](asset:a1b2?w=50)"),
+    );
+  });
+
+  it("ticks the width the image already carries", async () => {
+    const { container } = withImage({ initial: "Before\n\n![schema](asset:a1b2?w=25)" });
+    const box = await frame(container);
+    // The frame carries the width; the picture fills it (see ImageView.tsx).
+    expect(box.style.width).toBe("25%");
+    fireEvent.mouseEnter(box);
+    await userEvent.click(await screen.findByRole("button", { name: "Size" }));
+    expect((await screen.findByRole("menuitem", { name: "25%" })).querySelector("svg")).not.toBeNull();
+    expect(screen.getByRole("menuitem", { name: "75%" }).querySelector("svg")).toBeNull();
+  });
+
+  it("deletes the image", async () => {
+    const onValue = vi.fn();
+    const { container } = withImage({ onValue });
+    fireEvent.mouseEnter(await frame(container));
+    await userEvent.click(await screen.findByRole("button", { name: "Remove the image" }));
+    await waitFor(() => expect(onValue.mock.lastCall?.[0]).toBe("Before"));
+  });
+
+  it("names the buttons in French under the French locale (N-I18N-01)", async () => {
+    const { container } = renderWithProviders(
+      <Host initial={"Before\n\n![schema](asset:a1b2)"} uploadImage={async () => "asset:new1"} />,
+      { locale: "fr" },
+    );
+    fireEvent.mouseEnter(await frame(container));
+    expect(await screen.findByRole("button", { name: "Pivoter à gauche" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Taille" })).toBeInTheDocument();
+  });
+});
+
 describe("RichText — inline mode, the row of a choice", () => {
   it("calls onEnter instead of splitting the paragraph", async () => {
     const onEnter = vi.fn();
@@ -277,6 +382,44 @@ describe("RichText — inline mode, the row of a choice", () => {
     await userEvent.tab();
     expect(onTab).toHaveBeenCalledWith(false);
     expect(surface()).toHaveFocus();
+  });
+
+  it.each([["{Control>}{Enter}{/Control}"], ["{Shift>}{Enter}{/Shift}"]])(
+    "makes a SECOND PARAGRAPH on %s, so a choice can hold two lines",
+    async (keys) => {
+      const onEnter = vi.fn();
+      const onValue = vi.fn();
+      renderWithProviders(
+        <Host initial="" inline toolbar="never" onEnter={onEnter} onValue={onValue} />,
+      );
+      const el = surface();
+      el.focus();
+      await userEvent.type(el, "a");
+      await userEvent.keyboard(keys);
+      await userEvent.type(el, "b");
+      await waitFor(() => expect(onValue.mock.lastCall?.[0]).toBe("a\n\nb"));
+      expect(el.querySelectorAll("p")).toHaveLength(2);
+      // The host's own Enter is untouched: it still moves to the next choice.
+      expect(onEnter).not.toHaveBeenCalled();
+    },
+  );
+
+  it("publishes the new-line key in the shortcut strip", async () => {
+    resetShortcuts();
+    function Strip() {
+      const live = useActiveShortcuts();
+      return <ul data-testid="strip2">{live.map((s) => <li key={s.keys}>{s.keys}</li>)}</ul>;
+    }
+    renderWithProviders(
+      <>
+        <Host initial="abc" inline toolbar="never" />
+        <Strip />
+      </>,
+    );
+    surface().focus();
+    await waitFor(() =>
+      expect(screen.getByTestId("strip2")).toHaveTextContent(`${modKey()}+Enter`),
+    );
   });
 
   it("offers no code-block action, having nowhere to put one", () => {

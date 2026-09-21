@@ -58,6 +58,10 @@ describe("round trip — inline marks", () => {
     ["[HEIG-VD](https://heig-vd.ch)"],
     ["![alt](asset:00000000-0000-4000-8000-000000000000)"],
     ["Voir ![schema](asset:a1b2) ci-dessus."],
+    // The width of an image is a query on the asset reference, and it has to
+    // survive every save — it is the only place the setting is stored.
+    ["![a](asset:a1b2?w=50)"],
+    ["![a](asset:a1b2?w=25)"],
   ])("keeps %j", (source) => {
     expect(roundTrip(source)).toBe(source);
   });
@@ -268,6 +272,37 @@ describe("typing a formula", () => {
       type(editor, "$$");
       expect(firstChild(editor).type.name).toBe("paragraph");
       expect(editor.getMarkdown()).toBe("$$");
+    } finally {
+      editor.destroy();
+    }
+  });
+});
+
+/*
+ * The ONE block an inline field is allowed to build. A choice may hold a
+ * second paragraph (Ctrl+Enter in `RichText`), and what a teacher writes on
+ * that line is almost always a snippet — so the fence rule is on, and the
+ * list and heading rules stay off.
+ */
+describe("the input rules of an inline field", () => {
+  // The shipped rule of StarterKit fires on the whitespace AFTER the fence
+  // (```<lang> and a space), which is also the only spelling an inline field
+  // can reach: its Enter belongs to the host.
+  it.each([["``` "], ["```c "]])("opens a fenced block on %j", (source) => {
+    const editor = editorFor("", true);
+    try {
+      type(editor, source);
+      expect(firstChild(editor).type.name).toBe("codeBlock");
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it.each([["- "], ["1. "], ["# "], ["> "]])("leaves %j as the characters typed", (source) => {
+    const editor = editorFor("", true);
+    try {
+      type(editor, source);
+      expect(firstChild(editor).type.name).toBe("paragraph");
     } finally {
       editor.destroy();
     }

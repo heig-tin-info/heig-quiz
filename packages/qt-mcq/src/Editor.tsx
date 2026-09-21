@@ -17,7 +17,8 @@
  *    drag handle, and that handle is a BUTTON, so the keyboard reorders
  *    through the very same affordance (focus it, Space, arrows, Space).
  */
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   closestCenter,
   DndContext,
@@ -54,6 +55,8 @@ import {
 import { mcqEditorStrings, type McqEditorStringKey } from "./strings.js";
 import {
   buttonClass,
+  cardClass,
+  cardTitleClass,
   choiceLetter,
   cx,
   gripClass,
@@ -66,7 +69,7 @@ import {
   labelClass,
   rootIssues,
   sectionClass,
-  selectClass,
+  Segmented,
   Tip,
   TrashIcon,
 } from "./ui.js";
@@ -81,9 +84,24 @@ export type McqEditorProps = Omit<EditorProps<McqConfig>, "uploadAsset"> & {
   renderMarkdown?: MarkdownRenderer;
   /** The host's contextual help; without it the "?" beside a label is not drawn. */
   renderHelp?: EditorProps<McqConfig>["renderHelp"];
+  /**
+   * Where the host wants the scoring settings (`EditorProps.aside`). Given
+   * one, the "Scoring" card is PORTALLED there — the right column of the
+   * question editor, under "Properties". Absent, it stays in the main column,
+   * which is what a test and any other host get.
+   */
+  aside?: EditorProps<McqConfig>["aside"];
 };
 
 type Strings = Readonly<Record<McqEditorStringKey, string>>;
+
+/**
+ * The schema message for a cap below the key set. The editor raises the same
+ * rule itself, so it recognises the server's copy of it and shows one line
+ * instead of two — translated or not, since a host that translates the key
+ * hands the sentence in through `strings.maxBelowCorrect`.
+ */
+const MAX_BELOW_CORRECT = "mcq.max_below_correct";
 
 /** The DOM id of one choice's editing surface, so a sibling can focus it. */
 const choiceId = (index: number) => `mcq-choice-${index}`;
@@ -154,9 +172,29 @@ export function McqEditor({
   renderHelp,
   RichText,
   uploadAsset,
+  aside,
 }: McqEditorProps) {
   const s = resolveStrings(mcqEditorStrings, strings);
   const multiple = config.mode === "multiple";
+  const correctCount = config.choices.filter((c) => c.correct).length;
+  /**
+   * The answer limit, checked HERE and not only by the server.
+   *
+   * The schema refuses a cap below the key set and the autosave brings the
+   * issue back — half a second later, after a round trip, which for a teacher
+   * typing a 2 under three ticked answers is no feedback at all. The same
+   * sentence is rendered at the keystroke, and the server's copy of it is
+   * dropped so the field never says it twice.
+   */
+  const capTooSmall = config.maxSelections !== undefined && config.maxSelections < correctCount;
+  const echoed = (message: string) =>
+    message === s.maxBelowCorrect || message === MAX_BELOW_CORRECT;
+  const maxIssues = [
+    ...(capTooSmall ? [{ path: ["maxSelections"], message: s.maxBelowCorrect }] : []),
+    ...issuesAt(issues, "maxSelections").filter(
+      (issue) => !(capTooSmall && echoed(issue.message)),
+    ),
+  ];
 
   /**
    * The row to put the caret in once React has drawn it. A choice added by
@@ -243,7 +281,108 @@ export function McqEditor({
     />
   );
 
-  return (
+  /**
+   * How the question is marked — the one block the host may take away.
+   *
+   * It is dressed as a CARD, because that is where it lands: the right column
+   * of the question editor, under "Properties" (`EditorProps.aside`). The
+   * package cannot import the app's `Card`, so it wears the same hairline,
+   * surface and radius through the tokens. Without an aside the very same
+   * node renders in the main column, one section among the others.
+   */
+  const scoring = (
+    <section className={cx(aside ? cardClass : "", "flex flex-col gap-3")}>
+      <h3 className={aside ? cardTitleClass : labelClass}>{s.scoring}</h3>
+
+      {/*
+       * The policy, and only in `multiple` mode: with one key there is
+       * nothing to be partial about, the schema refines it to all or
+       * nothing, and a control that can hold exactly one value is a sentence
+       * pretending to be a question.
+       *
+       * A segmented control again, and not the <select> it briefly was: the
+       * six policies are now named in one word each, six pills wrap onto two
+       * rows of the right column, and the whole set is READABLE at a glance —
+       * which a closed <select> never is. The sentence under it says what the
+       * chosen one does, and the "?" holds the formulas.
+       */}
+      {multiple ? (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={labelClass} id="mcq-policy-label">
+              {s.policy}
+            </span>
+            {renderHelp ? renderHelp("mcq-policies") : null}
+          </div>
+          <Segmented
+            wrap
+            labelledBy="mcq-policy-label"
+            name="mcq-policy"
+            value={config.policy}
+            {...(disabled === undefined ? {} : { disabled })}
+            options={POLICY_OPTIONS.map((o) => ({ value: o.value, label: s[o.label] }))}
+            onChange={(policy) => patch({ policy: policy as McqQuestionPolicy })}
+          />
+          {/* What the one chosen policy does, in one line: a legend of six
+              lines is a table nobody reads, and the help "?" holds the long
+              form. */}
+          <p className={helpClass} data-testid="mcq-policy-desc">
+            {s[(POLICY_OPTIONS.find((o) => o.value === config.policy) ?? POLICY_OPTIONS[0]!).desc]}
+          </p>
+        </div>
+      ) : null}
+
+      {multiple ? (
+        <div className="flex flex-col gap-1.5">
+          <label className={labelClass} htmlFor="mcq-max">
+            {s.maxSelections}
+          </label>
+          <input
+            id="mcq-max"
+            type="number"
+            min={1}
+            max={MCQ_MAX_CHOICES}
+            className={cx(inputClass, "w-28 tabular-nums")}
+            value={config.maxSelections ?? ""}
+            disabled={disabled}
+            onChange={(e) => {
+              const next = { ...config };
+              if (e.target.value === "") delete next.maxSelections;
+              else next.maxSelections = Number(e.target.value);
+              onChange(next);
+            }}
+          />
+          <p className={helpClass}>{s.maxSelectionsHint}</p>
+          {/* A cap below the number of correct choices makes the full mark
+              unreachable. The editor says so at once and the schema refuses
+              the draft; `maxIssues` is the two merged into one line. */}
+          <IssueList issues={maxIssues} />
+        </div>
+      ) : null}
+
+      {/*
+       * Shuffling is the evaluation's decision, and this is the one question
+       * that opts OUT of it — "all of the above" has to stay last. Stated as
+       * the exception it is, rather than as a switch that is on by default
+       * and does nothing on its own: the API keeps the AND of the two.
+       */}
+      <div className="flex flex-col gap-1">
+        <label className="inline-flex items-start gap-2 text-[13px] text-fg">
+          <input
+            type="checkbox"
+            className="mt-0.5 size-4 accent-accent"
+            checked={!config.shuffleChoices}
+            disabled={disabled}
+            onChange={(e) => patch({ shuffleChoices: !e.target.checked })}
+          />
+          {s.neverShuffle}
+        </label>
+        <p className={cx(helpClass, "pl-6")}>{s.neverShuffleHint}</p>
+      </div>
+    </section>
+  );
+
+  const main = (
     <div className="flex flex-col gap-6">
       <IssueList issues={rootIssues(issues)} />
 
@@ -252,7 +391,6 @@ export function McqEditor({
           {s.prompt}
         </label>
         {promptField}
-        <p className={helpClass}>{s.promptHint}</p>
         <IssueList issues={issuesAt(issues, "prompt")} />
         {/*
          * No preview block under the statement any more. With `RichText` the
@@ -339,86 +477,17 @@ export function McqEditor({
         </div>
       </section>
 
-      <section className={sectionClass}>
-        <h3 className={labelClass}>{s.scoring}</h3>
-
-        {/*
-         * The policy, and only in `multiple` mode: with one key there is
-         * nothing to be partial about, the schema refines it to all or
-         * nothing, and a control that can hold exactly one value is a sentence
-         * pretending to be a question. A <select> and no longer a segmented
-         * control — six options is a paragraph of chips, and five of them are
-         * formulas a teacher reads once and picks from a list.
-         */}
-        {multiple ? (
-          <div className="flex flex-col gap-1.5">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <label className={labelClass} htmlFor="mcq-policy">
-                {s.policy}
-              </label>
-              {renderHelp ? renderHelp("mcq-policies") : null}
-            </div>
-            <select
-              id="mcq-policy"
-              className={cx(selectClass, "w-full max-w-80")}
-              value={config.policy}
-              disabled={disabled}
-              onChange={(e) => patch({ policy: e.target.value as McqQuestionPolicy })}
-            >
-              {POLICY_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {s[o.label]}
-                </option>
-              ))}
-            </select>
-            {/* What the one chosen policy does, in one line: a legend of six
-                lines is a table nobody reads, and the help "?" holds the long
-                form. */}
-            <p className={helpClass} data-testid="mcq-policy-desc">
-              {s[(POLICY_OPTIONS.find((o) => o.value === config.policy) ?? POLICY_OPTIONS[0]!).desc]}
-            </p>
-          </div>
-        ) : null}
-
-        {multiple ? (
-          <>
-            <label className={labelClass} htmlFor="mcq-max">
-              {s.maxSelections}
-            </label>
-            <input
-              id="mcq-max"
-              type="number"
-              min={1}
-              max={MCQ_MAX_CHOICES}
-              className={cx(inputClass, "w-28 tabular-nums")}
-              value={config.maxSelections ?? ""}
-              disabled={disabled}
-              onChange={(e) => {
-                const next = { ...config };
-                if (e.target.value === "") delete next.maxSelections;
-                else next.maxSelections = Number(e.target.value);
-                onChange(next);
-              }}
-            />
-            <p className={helpClass}>{s.maxSelectionsHint}</p>
-            {/* A cap below the number of correct choices makes the full mark
-                unreachable; the schema refuses it and says so here. */}
-            <IssueList issues={issuesAt(issues, "maxSelections")} />
-          </>
-        ) : null}
-
-        <label className="inline-flex items-center gap-1.5 text-sm text-fg-muted">
-          <input
-            type="checkbox"
-            className="size-4 accent-accent"
-            checked={config.shuffleChoices}
-            disabled={disabled}
-            onChange={(e) => patch({ shuffleChoices: e.target.checked })}
-          />
-          {s.shuffleChoices}
-        </label>
-      </section>
+      {aside ? null : scoring}
     </div>
+  );
+
+  return aside ? (
+    <>
+      {main}
+      {createPortal(scoring, aside)}
+    </>
+  ) : (
+    main
   );
 }
 

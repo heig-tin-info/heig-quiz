@@ -940,16 +940,22 @@ const questions: MockQuestion[] = [
     shuffleable: true,
     randomizable: false,
     tags: ["fichiers"],
+    // The one MULTIPLE-answer question of the mock: two keys, so the scoring
+    // card of the editor is shown whole — the policy, the answer limit and
+    // the shuffling exception all live there and single mode hides two of
+    // the three.
     config: mcqConfig(
-      "Quel mode de `fopen` ouvre un fichier en écriture **sans** effacer son contenu ?",
+      "Quels modes de `fopen` permettent d'écrire dans un fichier **sans** effacer son contenu ?",
       [
-        ['`"w"`', false],
         ['`"a"`', true],
-        ['`"r"`', false],
+        ['`"a+"`', true],
+        ['`"w"`', false],
         ['`"w+"`', false],
       ],
+      { mode: "multiple", policy: "symmetric" },
     ),
-    explanation: "`\"a\"` écrit à la fin ; `\"w\"` tronque le fichier à l'ouverture.",
+    explanation:
+      "`\"a\"` et `\"a+\"` écrivent à la fin du fichier ; `\"w\"` et `\"w+\"` le tronquent à l'ouverture.",
     published: [{ number: 1, changeNote: "Première version", daysAgo: 55 }],
   }),
   makeQuestion({
@@ -1219,6 +1225,15 @@ function draftIssues(q: MockQuestion): { path: string[]; code: string; message: 
     }
     if (config.mode === "single" && choices.filter((c) => c.correct).length > 1) {
       out.push({ path: ["choices"], code: "custom", message: "mcq.single_needs_one" });
+    }
+    // A cap below the key set makes the full mark unreachable. The editor
+    // says so at the keystroke; this is the SERVER's copy of it, so the mock
+    // answers a save the way the API does.
+    if (
+      typeof config.maxSelections === "number" &&
+      config.maxSelections < choices.filter((c) => c.correct).length
+    ) {
+      out.push({ path: ["maxSelections"], code: "custom", message: "mcq.max_below_correct" });
     }
     choices.forEach((choice, i) => {
       if (choice.text.trim() === "") {

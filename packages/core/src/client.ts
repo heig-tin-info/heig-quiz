@@ -39,6 +39,21 @@ export interface EditorProps<TConfig> {
    * does, so nothing is lost but the long form.
    */
   renderHelp?: (topic: string) => ReactNode;
+  /**
+   * A host-provided element the editor MAY portal its settings into, lent for
+   * the same reason `RichText` and `renderHelp` are: where a setting belongs
+   * on the page is the host's layout decision, not the question type's.
+   *
+   * The question editor of `apps/web` puts it in the right column, under the
+   * "Properties" card, so the scoring of a question sits with what the
+   * question IS rather than in the middle of what it SAYS. An editor that
+   * uses it renders that block through `createPortal` when the element is
+   * there, and INLINE when it is not — a host without an aside (another app,
+   * a test) must still show every setting. It arrives as `null` on the first
+   * render, since the host only holds the element after its own layout is
+   * mounted, so it is state on the host side and a re-render here.
+   */
+  aside?: HTMLElement | null;
 }
 
 /**

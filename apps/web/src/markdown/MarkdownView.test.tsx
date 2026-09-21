@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { renderWithProviders } from "../test/render";
 import { MarkdownView } from "./MarkdownView";
-import { assetMarkdown, assetUrl, renderMarkdown } from "./render";
+import { assetMarkdown, assetUrl, assetWidth, renderMarkdown, withAssetWidth } from "./render";
 
 /*
  * The sanitising pipeline is the whole point of this component, so most of
@@ -79,6 +79,39 @@ describe("MarkdownView — assets", () => {
     expect(assetUrl("asset:xyz")).toBe("/app/api/assets/xyz");
     expect(assetUrl("asset:../../etc/passwd")).toBeNull();
     expect(assetUrl("https://example.org/a.png")).toBeNull();
+  });
+
+  it("drops the width query when it builds the URL", () => {
+    expect(assetUrl("asset:xyz?w=50")).toBe("/app/api/assets/xyz");
+  });
+
+  it("reads the width the reference asks for, and refuses anything else", () => {
+    expect(assetWidth("asset:xyz?w=50")).toBe(50);
+    expect(assetWidth("asset:xyz")).toBe(100);
+    expect(assetWidth("asset:xyz?w=100")).toBe(100);
+    // Not a preset: an image sized by hand cannot leave the column.
+    expect(assetWidth("asset:xyz?w=900")).toBe(100);
+    expect(assetWidth("asset:xyz?w=oops")).toBe(100);
+  });
+
+  it("writes the width back, and drops the query at full width", () => {
+    expect(withAssetWidth("asset:xyz", 50)).toBe("asset:xyz?w=50");
+    expect(withAssetWidth("asset:xyz?w=50", 25)).toBe("asset:xyz?w=25");
+    expect(withAssetWidth("asset:xyz?w=50", 100)).toBe("asset:xyz");
+    expect(withAssetWidth("https://example.org/a.png", 50)).toBe("https://example.org/a.png");
+  });
+
+  it("turns the width into a class, which the allow-list admits (style would not)", () => {
+    const body = view("![a](asset:abc?w=50)");
+    const img = body.querySelector("img")!;
+    expect(img).toHaveAttribute("src", "/app/api/assets/abc");
+    expect(img).toHaveClass("md-img-50");
+    expect(img.getAttribute("style")).toBeNull();
+  });
+
+  it("gives a full-width image no class at all", () => {
+    expect(view("![a](asset:abc)").querySelector("img")!.className).toBe("");
+    expect(view("![a](asset:abc?w=100)").querySelector("img")!.className).toBe("");
   });
 });
 

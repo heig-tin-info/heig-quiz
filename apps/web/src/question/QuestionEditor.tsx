@@ -13,6 +13,7 @@ import type {
 
 import { api, apiErrorMessage } from "../api";
 import { useConfirm } from "../confirm";
+import { HelpIcon } from "../help";
 import { useT } from "../i18n";
 import { MarkdownField } from "../markdown/MarkdownField";
 import { useToast } from "../notify";
@@ -86,6 +87,13 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   // greet every new question with a complaint about work not yet started.
   const [edited, setEdited] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  /**
+   * The slot of the right column a question type may portal its settings
+   * into (`EditorProps.aside`): the mcq editor puts its "Scoring" card there,
+   * under "Properties". STATE and not a ref, because the element does not
+   * exist on the first render and a ref would never tell the editor it does.
+   */
+  const [scoringSlot, setScoringSlot] = useState<HTMLDivElement | null>(null);
   const [preview, setPreview] = useState(false);
   // The tab panel, so `Ctrl+Enter` can put the reader inside what it opened.
   const panelRef = useRef<HTMLDivElement>(null);
@@ -413,6 +421,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
                   }}
                   issues={configIssues}
                   uploadAsset={uploadAsset}
+                  aside={scoringSlot}
                 />
               ) : (
                 <Spinner />
@@ -420,7 +429,20 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
             </Card>
 
             <Card className="space-y-3 p-5">
+              {/*
+               * The label is rendered HERE, and `MarkdownField`'s own is
+               * hidden: the "?" is a SIBLING of the label, never inside it
+               * (DESIGN.md, "Field"), and `MarkdownField` has no slot beside
+               * its label. The prop is still passed, because that is what
+               * names the editing surface — a contenteditable takes its name
+               * from `aria-label`, not from a `<label for>`.
+               */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[13px] font-medium text-fg">{t("question.explanation")}</span>
+                <HelpIcon topic="explanation" />
+              </div>
               <MarkdownField
+                className="[&>label]:hidden"
                 label={t("question.explanation")}
                 value={draft?.explanation ?? ""}
                 onChange={(explanation) => {
@@ -438,6 +460,10 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
               categories={pool.data?.categories ?? []}
               poolName={pool.data?.pool.name ?? "—"}
             />
+            {/* Where the type's own settings land, under "Properties". Empty
+                for a type that portals nothing, and then it must not eat a
+                row of the column's spacing. */}
+            <div ref={setScoringSlot} className="empty:hidden" />
             {preview ? <StudentPreview questionId={id} type={data.meta.type} /> : null}
           </aside>
         </div>

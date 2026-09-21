@@ -6,7 +6,6 @@
 
 export const shortEditorStrings = {
   prompt: "Statement",
-  promptHint: "The students see it as written.",
   preview: "Preview",
   kind: "Expected answer",
   kindText: "Text",

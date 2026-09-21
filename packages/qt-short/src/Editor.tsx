@@ -295,7 +295,6 @@ export function ShortEditor({
             onChange={(e) => patch({ prompt: e.target.value })}
           />
         )}
-        <p className={helpClass}>{s.promptHint}</p>
         <IssueList issues={issuesAt(issues, "prompt")} />
       </section>
 

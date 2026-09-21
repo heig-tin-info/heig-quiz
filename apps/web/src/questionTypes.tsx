@@ -142,11 +142,29 @@ const mcqPolicyStrings = (t: TFunction) => ({
   policyDescRipkey: t("mcq.policy.desc.ripkey"),
 });
 
-/** The keys of `mcqEditorStrings` the mapping above answers for. */
-export const MCQ_HOST_MAPPED_KEYS = Object.keys(mcqPolicyStrings(((k) => String(k)) as TFunction));
+/**
+ * The schema messages the MCQ editor raises ITSELF, worded once.
+ *
+ * `issue.mcq.max_below_correct` is what `question/issues.ts` already shows for
+ * the server's copy of that issue; the editor checks the same rule at the
+ * keystroke, so it gets the same sentence rather than a second wording of it.
+ */
+const mcqIssueStrings = (t: TFunction) => ({
+  maxBelowCorrect: t("issue.mcq.max_below_correct"),
+});
+
+/** The keys of `mcqEditorStrings` the two mappings above answer for. */
+export const MCQ_HOST_MAPPED_KEYS = Object.keys({
+  ...mcqPolicyStrings(((k) => String(k)) as TFunction),
+  ...mcqIssueStrings(((k) => String(k)) as TFunction),
+});
 
 export const editorStrings = {
-  mcq: (t: TFunction) => ({ ...translated(t, mcqEditorStrings, "qt.mcq.e"), ...mcqPolicyStrings(t) }),
+  mcq: (t: TFunction) => ({
+    ...translated(t, mcqEditorStrings, "qt.mcq.e"),
+    ...mcqPolicyStrings(t),
+    ...mcqIssueStrings(t),
+  }),
   short: (t: TFunction) => translated(t, shortEditorStrings, "qt.short.e"),
   cloze: (t: TFunction) => translated(t, clozeEditorStrings, "qt.cloze.e"),
   code: (t: TFunction): CodeEditorStrings => ({
@@ -221,6 +239,7 @@ interface EditorHostProps {
   renderHelp?: (topic: string) => ReactNode;
   RichText?: RichTextComponent;
   uploadAsset?: (file: File) => Promise<string>;
+  aside?: HTMLElement | null;
   onTry?: (config: unknown) => Promise<RunnerOutcome | "unavailable">;
 }
 
@@ -251,6 +270,7 @@ export function QuestionEditorHost({
   issues,
   disabled,
   uploadAsset,
+  aside,
   onTry,
 }: {
   t: TFunction;
@@ -260,6 +280,13 @@ export function QuestionEditorHost({
   issues?: readonly ConfigIssue[];
   disabled?: boolean;
   uploadAsset: (file: File) => Promise<string>;
+  /**
+   * The element of the screen's right column a type's editor may portal its
+   * settings into (`EditorProps.aside`). It is the host's layout decision,
+   * never the type's, so it travels as a prop and an editor that ignores it
+   * simply keeps everything in one column.
+   */
+  aside?: HTMLElement | null;
   onTry?: (config: unknown) => Promise<RunnerOutcome | "unavailable">;
 }) {
   const client = questionType(type);
@@ -278,6 +305,7 @@ export function QuestionEditorHost({
         renderHelp={renderHelp}
         RichText={LazyRichText}
         uploadAsset={uploadAsset}
+        {...(aside === undefined ? {} : { aside })}
         {...(onTry === undefined ? {} : { onTry })}
       />
     </Suspense>

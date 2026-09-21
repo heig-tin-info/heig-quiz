@@ -355,6 +355,17 @@ html.dark {
   border-radius: var(--radius-field);
   border: 1px solid var(--line);
 }
+/* The six widths the image menu of the rich editor offers, carried in the
+   markdown as `![alt](asset:<id>?w=50)` and turned into one of these classes
+   by `render.ts`. A class and not a `style`, because the sanitiser admits the
+   first and refuses the second (N-SEC-05): a prompt may size its own picture,
+   it may not position anything. No token is involved — a percentage of the
+   column is a measure, not a design value. */
+.md-body img.md-img-25 { width: 25%; }
+.md-body img.md-img-33 { width: 33%; }
+.md-body img.md-img-50 { width: 50%; }
+.md-body img.md-img-66 { width: 66%; }
+.md-body img.md-img-75 { width: 75%; }
 .md-body table { border-collapse: collapse; width: 100%; font-size: 13px; }
 .md-body th, .md-body td {
   border-bottom: 1px solid var(--line);

@@ -92,6 +92,28 @@ function mcqDetail(over: Partial<QuestionDetail> = {}): QuestionDetail {
   };
 }
 
+/** The same question with two keys: what fills the scoring card. */
+function multipleDetail(): QuestionDetail {
+  const base = mcqDetail();
+  return {
+    ...base,
+    draft: {
+      ...base.draft,
+      config: {
+        ...(base.draft.config as Record<string, unknown>),
+        configVersion: 2,
+        choices: [
+          { text: "NULL", correct: true },
+          { text: "Une valeur indéterminée", correct: true },
+          { text: "0", correct: false },
+        ],
+        mode: "multiple",
+        policy: "inherit",
+      },
+    },
+  };
+}
+
 function codeDetail(): QuestionDetail {
   const base = mcqDetail();
   return {
@@ -319,6 +341,56 @@ describe("QuestionEditor — mcq", () => {
     // The dialog stays open: the decision is made here, so the refusal is too.
     expect(screen.getByRole("dialog")).toBeInTheDocument();
   });
+
+  /*
+   * Where the type's settings LAND. The scoring of a question belongs with
+   * what the question is, not in the middle of what it says, so the screen
+   * lends the type an element of its right column (`EditorProps.aside`) and
+   * the mcq editor portals its "Scoring" card into it, under "Properties".
+   */
+  it("hosts the type's scoring settings in the right column, after Properties", async () => {
+    mockFetch(routes(multipleDetail()));
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    const aside = await screen.findByRole("complementary", { name: "Question details" });
+    await waitFor(() => expect(within(aside).getByText("Scoring")).toBeInTheDocument());
+    expect(within(aside).getByRole("radiogroup", { name: "Scoring policy" })).toBeInTheDocument();
+    expect(within(aside).getByLabelText("Never shuffle this question")).toBeInTheDocument();
+    const headings = within(aside)
+      .getAllByRole("heading")
+      .map((h) => h.textContent);
+    expect(headings.indexOf("Properties")).toBeGreaterThanOrEqual(0);
+    expect(headings.indexOf("Properties")).toBeLessThan(headings.indexOf("Scoring"));
+    // And nothing of it stayed in the main column.
+    expect(screen.getAllByText("Scoring")).toHaveLength(1);
+  }, 20_000);
+
+  it("complains about an answer limit below the key set without waiting for a save", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch(routes(multipleDetail()));
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    const max = await screen.findByLabelText("Maximum selections");
+    await user.type(max, "1");
+    expect(
+      await screen.findByText(
+        "The maximum number of selections is below the number of correct choices.",
+      ),
+    ).toBeInTheDocument();
+    // Said before anything left for the server, which is the whole point.
+    expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
+  }, 20_000);
+
+  /*
+   * `MarkdownField` names its own surface through `aria-label` and draws a
+   * label the screen hides (`[&>label]:hidden`), because the "?" has to be a
+   * SIBLING of the label and that component has no slot for it. The visible
+   * row is the screen's, and this is what says the two stay together.
+   */
+  it("offers the help of the explanation field beside its label", async () => {
+    mockFetch(routes(mcqDetail()));
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    const row = (await screen.findAllByText("Explanation")).find((el) => el.tagName === "SPAN");
+    expect(within(row!.parentElement!).getByRole("button", { name: "Help" })).toBeInTheDocument();
+  }, 20_000);
 });
 
 describe("QuestionEditor — code", () => {

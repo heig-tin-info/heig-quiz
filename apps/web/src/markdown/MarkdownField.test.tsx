@@ -10,7 +10,7 @@ import { MarkdownField } from "./MarkdownField";
  * The field is controlled, so every test drives it through a tiny stateful
  * host: what is asserted is what the parent would have been told to store.
  *
- * `MarkdownField` is a label, a hint and an upload adapter around `RichText`
+ * `MarkdownField` is a label and an upload adapter around `RichText`
  * now — both surfaces live in the editor itself (RichText.test.tsx has the
  * toggle's own suite). What is tested HERE is that the whole thing still adds
  * up through the field a teacher actually meets: the same caret-level toolbar
@@ -222,9 +222,12 @@ describe("MarkdownField — panes", () => {
     expect(screen.getByRole("toolbar", { name: "Formatting" })).toBeInTheDocument();
   });
 
-  it("keeps the label and the hint whichever surface shows", async () => {
+  it("keeps the label whichever surface shows, and carries no hint line", async () => {
     renderWithProviders(<Host initial="x" />);
-    expect(screen.getByText("Bold, italic, code and $math$ as you type; Source shows the markdown underneath.")).toBeInTheDocument();
+    // The sentence under the field is gone: it named the shortcuts the
+    // toolbar above it already shows, on every field of a four-field screen.
+    expect(screen.getByText("Prompt")).toBeInTheDocument();
+    expect(document.querySelector("p.text-fg-faint")).toBeNull();
     await openSource();
     expect(screen.getByRole("textbox", { name: "Prompt" }).tagName).toBe("TEXTAREA");
   });

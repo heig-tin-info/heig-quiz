@@ -1,6 +1,7 @@
 import type { Editor } from "@tiptap/core";
+import { splitBlock } from "@tiptap/pm/commands";
 import { NodeSelection } from "@tiptap/pm/state";
-import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
+import { EditorContent, ReactNodeViewRenderer, useEditor, useEditorState } from "@tiptap/react";
 import {
   Bold,
   Code,
@@ -11,7 +12,7 @@ import {
   Sigma,
   SquareCode,
 } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type { RichTextProps } from "@quiz/core/client";
 
@@ -19,6 +20,7 @@ import { useT } from "../i18n";
 import { useShortcuts, type Shortcut } from "../shortcuts";
 import { Button, cx, IconButton, inputClass, modKey, type IconType } from "../ui";
 import type { Formula, FormulaDialog } from "./FormulaDialog";
+import { ImageToolsContext, ImageView } from "./ImageView";
 import "./richtext.css";
 import { SourcePane } from "./SourcePane";
 import { INLINE_INPUT_RULES, richTextExtensions } from "./tiptap";
@@ -187,7 +189,13 @@ export function RichText({
   const emptyCount = useRef(0);
 
   const editor = useEditor({
-    extensions: richTextExtensions({ placeholder: placeholder ?? "" }),
+    extensions: richTextExtensions({
+      placeholder: placeholder ?? "",
+      // The picture's own toolbar (rotate, size, delete) lives in the node
+      // view; `ImageToolsContext` below is how it reaches this field's
+      // uploader, which is what a rotation writes its result through.
+      imageNodeView: () => ReactNodeViewRenderer(ImageView),
+    }),
     content: value,
     contentType: "markdown",
     editable: !disabled,
@@ -226,6 +234,29 @@ export function RichText({
           if (selection instanceof NodeSelection && isMathNode(selection.node.type.name)) {
             event.preventDefault();
             openMath(selection.from, selection.node.attrs.latex, selection.node.type.name);
+            return true;
+          }
+          /*
+           * A SECOND LINE inside a choice. Plain Enter belongs to the host (it
+           * moves to the next choice), so the modifier is what is left — and
+           * both spellings answer, because a teacher who wants a line break
+           * reaches for Shift+Enter and a developer for Ctrl+Enter.
+           *
+           * It splits the block rather than inserting a hard break: what a
+           * choice is asked to hold is a snippet, and a fence cannot open
+           * inside a paragraph. The new paragraph serializes as a blank line,
+           * which is the markdown for exactly what is on screen.
+           */
+          if (inline && (event.ctrlKey || event.metaKey || event.shiftKey)) {
+            event.preventDefault();
+            // And STOPPED, not merely prevented: the question editor answers
+            // Ctrl+Enter on `window` with "Try the question", and a teacher
+            // who asked a choice for a second line must not be carried off to
+            // another tab. The field publishes its own Ctrl+Enter in the
+            // shortcut strip while it has the caret, so the strip says which
+            // of the two is live.
+            event.stopPropagation();
+            splitBlock(view.state, view.dispatch);
             return true;
           }
           if (inline && onEnterRef.current) {
@@ -374,6 +405,12 @@ export function RichText({
 
   const showImage = uploadImage !== undefined;
 
+  /** What the image node view reads; see `ImageView.tsx` for why it is a context. */
+  const imageTools = useMemo(
+    () => (uploadImage === undefined ? {} : { uploadImage }),
+    [uploadImage],
+  );
+
   /** Every action the toolbar can offer, before the mode filters it. */
   const ACTIONS: Action[] = [
     { key: "bold", icon: Bold, labelKey: "md.bold", shortcut: `${modKey()}+B` },
@@ -401,6 +438,9 @@ export function RichText({
   const live: Shortcut[] = [
     { keys: `${modKey()}+B`, label: t("md.bold") },
     { keys: `${modKey()}+I`, label: t("md.italic") },
+    // Only an inline field: a block field splits its paragraph on plain Enter,
+    // and teaching a second key for the same thing is noise.
+    ...(inline ? [{ keys: `${modKey()}+Enter`, label: t("md.newLine") }] : []),
     ...shortcuts.map((s) => ({ keys: s.keys, label: s.label })),
   ];
   useShortcuts(live, focused && !disabled && !source);
@@ -590,12 +630,14 @@ export function RichText({
             {toolbar === "focus" && focused ? (
               <div className="-mx-1 mb-1.5 border-b border-line px-1 pb-1.5">{toolbarRow}</div>
             ) : null}
-            <EditorContent
-              editor={editor}
-              // A block field needs room to be written in; an inline one is a
-              // row of a list and grows with what it holds.
-              className={inline ? "min-h-5" : "min-h-32"}
-            />
+            <ImageToolsContext.Provider value={imageTools}>
+              <EditorContent
+                editor={editor}
+                // A block field needs room to be written in; an inline one is
+                // a row of a list and grows with what it holds.
+                className={inline ? "min-h-5" : "min-h-32"}
+              />
+            </ImageToolsContext.Provider>
           </div>
         </>
       )}

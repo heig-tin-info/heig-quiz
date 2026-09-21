@@ -8,10 +8,15 @@ import { RichText } from "./RichText";
  * The markdown field a teacher writes a prompt in (PLAN-MVP §6.7, decision
  * D11; docs/spec/05 §5.10 for the Tiptap decision).
  *
- * Markdown is the single source of truth, and what is left here is the label,
- * the hint line and the upload adapter: `RichText` holds BOTH surfaces now —
- * the Tiptap one and the markdown source underneath it — and swaps between
- * them from the last button of its own toolbar.
+ * Markdown is the single source of truth, and what is left here is the label
+ * and the upload adapter: `RichText` holds BOTH surfaces now — the Tiptap one
+ * and the markdown source underneath it — and swaps between them from the last
+ * button of its own toolbar.
+ *
+ * There is no hint line under the field either. It named the three shortcuts
+ * the toolbar above it already shows, on every markdown field of a screen that
+ * has four of them, and a sentence a teacher reads once and then reads past on
+ * every question is not help — it is furniture.
  *
  * That is the second round of teacher feedback: "Write / Source" as a
  * segmented control named two things the reader had no reason to tell apart,
@@ -87,10 +92,6 @@ export function MarkdownField({
         {...(disabled === undefined ? {} : { disabled })}
         {...(showImage ? { uploadImage } : {})}
       />
-
-      <p id={`${fieldId}-hint`} className="text-xs text-fg-faint">
-        {showImage ? t("md.hint.withImages") : t("md.hint")}
-      </p>
     </div>
   );
 }

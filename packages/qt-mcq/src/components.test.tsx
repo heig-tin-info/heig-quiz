@@ -2,7 +2,7 @@
  * Smoke tests of the three components: they render, they report every change
  * through their callback, and they hold no state of their own.
  */
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -123,33 +123,29 @@ describe("McqEditor — the derived mode", () => {
 });
 
 /*
- * The policy is a <select> and no longer a segmented control: there are six of
- * them now (`McqQuestionPolicy`), five of which are formulas, and a row of six
- * chips is a paragraph. `inherit` is the default — the evaluation decides —
- * and the line under the control says what the chosen one does.
+ * The policy is a SEGMENTED control again: the six values of
+ * `McqQuestionPolicy` are named in one word each now, so the whole set is
+ * readable at a glance in the 288 px column the scoring card lives in — which
+ * a closed <select> never was. `inherit` is the default — the evaluation
+ * decides — and the line under the control says what the chosen one does.
  */
 describe("McqEditor — the scoring policy", () => {
-  const policy = () => screen.getByLabelText("Scoring policy") as HTMLSelectElement;
+  const policy = () => screen.getByRole("radiogroup", { name: "Scoring policy" });
 
   it("offers the six policies, in order, inherit first", () => {
     render(<McqEditor config={multipleConfig({ policy: "inherit" })} onChange={() => {}} />);
     expect(
-      Array.from(policy().options).map((o) => o.textContent),
-    ).toEqual([
-      "Inherited from the evaluation",
-      "All or nothing",
-      "True/false per choice",
-      "Discordances",
-      "Symmetric",
-      "Ripkey",
-    ]);
-    expect(policy()).toHaveValue("inherit");
+      within(policy())
+        .getAllByRole("radio")
+        .map((r) => r.closest("label")?.textContent),
+    ).toEqual(["Inherited", "Exact", "True/false", "Distance", "Symmetric", "Ripkey"]);
+    expect(within(policy()).getByRole("radio", { name: "Inherited" })).toBeChecked();
   });
 
   it("reports the picked policy", async () => {
     const onChange = vi.fn();
     render(<McqEditor config={multipleConfig()} onChange={onChange} />);
-    await userEvent.selectOptions(policy(), "ripkey");
+    await userEvent.click(within(policy()).getByRole("radio", { name: "Ripkey" }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ policy: "ripkey" }));
   });
 
@@ -169,9 +165,9 @@ describe("McqEditor — the scoring policy", () => {
 
   it("is not there at all in single mode, where one key leaves nothing to choose", () => {
     render(<McqEditor config={SECRET_CONFIG} onChange={() => {}} />);
-    expect(screen.queryByLabelText("Scoring policy")).toBeNull();
+    expect(screen.queryByRole("radiogroup", { name: "Scoring policy" })).toBeNull();
     // What single mode DOES keep beside it.
-    expect(screen.getByLabelText("Shuffle the choices")).toBeInTheDocument();
+    expect(screen.getByLabelText("Never shuffle this question")).toBeInTheDocument();
     expect(screen.queryByLabelText("Maximum selections")).toBeNull();
   });
 
@@ -200,7 +196,93 @@ describe("McqEditor — the scoring policy", () => {
         issues={[{ path: ["maxSelections"], message: "mcq.max_below_correct" }]}
       />,
     );
-    expect(screen.getByText("mcq.max_below_correct")).toBeInTheDocument();
+    // Said ONCE: the editor raises the same rule itself and recognises the
+    // server's copy of it (translated or not).
+    expect(screen.getAllByText(/maximum number of selections|max_below_correct/)).toHaveLength(1);
+  });
+
+  /*
+   * The rule is checked HERE and not only by the server: a teacher who types
+   * a 2 under three ticked answers is told at the keystroke, not half a
+   * second later once an autosave came back — which is what they met.
+   */
+  it("says at once that the limit is below the key set, with no server round trip", async () => {
+    function Host() {
+      const [config, setConfig] = useState(
+        multipleConfig({
+          choices: [
+            { text: "a", correct: true },
+            { text: "b", correct: true },
+            { text: "c", correct: true },
+          ],
+        }),
+      );
+      return <McqEditor config={config} onChange={setConfig} />;
+    }
+    render(<Host />);
+    expect(screen.queryByText(/maximum number of selections/)).toBeNull();
+    await userEvent.type(screen.getByLabelText("Maximum selections"), "2");
+    expect(
+      screen.getByText("The maximum number of selections is below the number of correct choices."),
+    ).toBeInTheDocument();
+  });
+
+  it("takes the host's sentence for it, so the two never disagree", () => {
+    render(
+      <McqEditor
+        config={{ ...multipleConfig(), maxSelections: 1 }}
+        onChange={() => {}}
+        strings={{ maxBelowCorrect: "Trop peu de sélections." }}
+        issues={[{ path: ["maxSelections"], message: "Trop peu de sélections." }]}
+      />,
+    );
+    expect(screen.getAllByText("Trop peu de sélections.")).toHaveLength(1);
+  });
+});
+
+/*
+ * The scoring settings belong to the right column of the host's editor, under
+ * "Properties" — so the host lends the element and the editor portals into it
+ * (`EditorProps.aside`). Without one, nothing moves: the same block renders
+ * where it always did.
+ */
+describe("McqEditor — the scoring card in the host's aside", () => {
+  it("portals the scoring block into the element the host lends", () => {
+    const aside = document.createElement("div");
+    aside.setAttribute("data-testid", "aside");
+    document.body.append(aside);
+    render(<McqEditor config={multipleConfig()} onChange={() => {}} aside={aside} />);
+    expect(aside.textContent).toContain("Scoring");
+    expect(within(aside).getByRole("radiogroup", { name: "Scoring policy" })).toBeInTheDocument();
+    expect(within(aside).getByLabelText("Maximum selections")).toBeInTheDocument();
+    expect(within(aside).getByLabelText("Never shuffle this question")).toBeInTheDocument();
+    // The statement and the choices stay where they are.
+    expect(aside.textContent).not.toContain("Statement");
+    aside.remove();
+  });
+
+  it("keeps the scoring block inline when the host lends nothing", () => {
+    const { container } = render(<McqEditor config={multipleConfig()} onChange={() => {}} />);
+    expect(container.textContent).toContain("Scoring");
+    expect(within(container).getByLabelText("Maximum selections")).toBeInTheDocument();
+  });
+});
+
+describe("McqEditor — shuffling", () => {
+  it("is allowed by default, and the box stores the opposite", async () => {
+    const onChange = vi.fn();
+    render(<McqEditor config={multipleConfig()} onChange={onChange} />);
+    const box = screen.getByLabelText("Never shuffle this question");
+    expect(box).not.toBeChecked();
+    await userEvent.click(box);
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ shuffleChoices: false }));
+  });
+
+  it("is ticked for a question that already refuses to be shuffled", () => {
+    render(
+      <McqEditor config={multipleConfig({ shuffleChoices: false })} onChange={() => {}} />,
+    );
+    expect(screen.getByLabelText("Never shuffle this question")).toBeChecked();
   });
 });
 
