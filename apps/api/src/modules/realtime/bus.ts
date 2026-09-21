@@ -22,6 +22,7 @@ import type {
   EvaluationState,
   GradingProgressEvent,
   LobbyCountEvent,
+  PollTallyEvent,
   RunnerResultEvent,
   ServerEvent,
   Topic,
@@ -40,6 +41,8 @@ import { Coalescer } from "./coalesce.js";
 /** PLAN-MVP §4.8 routing table. */
 export const CELL_WINDOW_MS = 250;
 export const PRESENCE_WINDOW_MS = 1000;
+/** docs/spec/05 §5.4: the poll aggregate goes out at most twice a second. */
+export const POLL_WINDOW_MS = 500;
 
 export const evaluationTopic = (id: string): Topic => `evaluation:${id}`;
 export const attemptTopic = (id: string): Topic => `attempt:${id}`;
@@ -68,11 +71,16 @@ const lobbyCounts = new Coalescer<LobbyCountEvent>(PRESENCE_WINDOW_MS, (event) =
   emit(event, [evaluationTopic(event.evaluationId)], "all"),
 );
 
+const pollTallies = new Coalescer<PollTallyEvent>(POLL_WINDOW_MS, (event) =>
+  emit(event, [evaluationTopic(event.evaluationId)], "staff"),
+);
+
 /** Emits every pending coalesced frame now. Shutdown, and tests. */
 export function flushCoalescers(): void {
   cells.flush();
   presenceEvents.flush();
   lobbyCounts.flush();
+  pollTallies.flush();
 }
 
 /** Drops every pending coalesced frame. Tests only. */
@@ -80,6 +88,7 @@ export function resetCoalescers(): void {
   cells.clear();
   presenceEvents.clear();
   lobbyCounts.clear();
+  pollTallies.clear();
 }
 
 // --- The live catalogue ---------------------------------------------------
@@ -233,6 +242,27 @@ export function gradingProgress(input: {
     [evaluationTopic(input.evaluationId), ...input.teacherIds.map(teacherTopic)],
     "staff",
   );
+}
+
+/**
+ * The whole aggregate of a running poll (F-LIVE-13), coalesced 500 ms per
+ * EVALUATION and staff only: the projection is a teacher screen, and a
+ * participant must not read the distribution before the reveal.
+ *
+ * The frame carries the complete tally rather than a delta, so a projection
+ * that missed one is right again on the next one.
+ */
+export function pollTally(input: {
+  evaluationId: string;
+  tally: PollTallyEvent["tally"];
+  now: Date;
+}): void {
+  pollTallies.push(input.evaluationId, {
+    type: "poll.tally",
+    evaluationId: input.evaluationId,
+    tally: input.tally,
+    serverNow: iso(input.now),
+  });
 }
 
 /** Addressed to the student who pressed Run, never to a topic they share. */

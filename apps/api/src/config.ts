@@ -30,6 +30,19 @@ const EnvSchema = z.object({
   PUBLIC_URL: z.string().default("http://localhost:3000"),
 
   /**
+   * Where a BROWSER reaches the SPA — the base of the poll join link behind
+   * the QR code (F-LIVE-13, ADR-014).
+   *
+   * Empty means `PUBLIC_URL`, which is already the right answer in both
+   * shipped setups: in production the monolith serves the built SPA itself,
+   * and in development `.env.example` points `PUBLIC_URL` at the Vite origin
+   * that proxies `/app`. Set it only when the two differ — typically
+   * `WEB_URL=http://<lan-ip>:5173`, so a real phone can scan the code
+   * instead of `localhost`.
+   */
+  WEB_URL: z.string().default(""),
+
+  /**
    * The addresses Caddy reaches the API from — and NOTHING else.
    *
    * `req.ip` is the room restriction of F-EVAL-12 and the address the journal
@@ -176,6 +189,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   }
   return {
     ...parsed.data,
+    // Empty means "the SPA is served where the API is" (production).
+    WEB_URL: (parsed.data.WEB_URL || parsed.data.PUBLIC_URL).replace(/\/+$/, ""),
     // Made absolute at load time, like the PEM path below: the asset store
     // must not follow the process around.
     ASSETS_DIR: resolve(parsed.data.ASSETS_DIR),

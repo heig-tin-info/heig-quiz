@@ -269,6 +269,9 @@ interface Roster {
 }
 
 async function rosterOf(db: Db, evaluationId: string): Promise<Map<string, Roster>> {
+  // LEFT JOIN, not INNER: an attempt of a poll may belong to a GUEST, whose
+  // `user_id` is null (ADR-014). An inner join silently dropped those rows
+  // and the panel showed a graded answer with no owner at all.
   const rows = await db
     .select({
       attemptId: attempts.id,
@@ -278,21 +281,30 @@ async function rosterOf(db: Db, evaluationId: string): Promise<Map<string, Roste
       email: users.email,
     })
     .from(attempts)
-    .innerJoin(users, eq(attempts.userId, users.id))
-    .where(eq(attempts.evaluationId, evaluationId));
+    .leftJoin(users, eq(attempts.userId, users.id))
+    .where(eq(attempts.evaluationId, evaluationId))
+    .orderBy(asc(attempts.createdAt));
   const pseudonyms = uniquePseudonyms(
     evaluationId,
-    rows.map((r) => r.userId),
+    rows.map((r) => r.userId).filter((id): id is string => id !== null),
   );
+  let guests = 0;
   return new Map(
-    rows.map((r) => [
-      r.attemptId,
-      {
-        userId: r.userId,
-        displayName: `${r.givenName ?? ""} ${r.familyName ?? ""}`.trim() || r.email,
-        pseudonym: pseudonyms.get(r.userId) ?? "—",
-      },
-    ]),
+    rows.map((r) => {
+      if (r.userId === null) {
+        guests += 1;
+        const name = `Guest ${guests}`;
+        return [r.attemptId, { userId: r.attemptId, displayName: name, pseudonym: name }];
+      }
+      return [
+        r.attemptId,
+        {
+          userId: r.userId,
+          displayName: `${r.givenName ?? ""} ${r.familyName ?? ""}`.trim() || (r.email ?? ""),
+          pseudonym: pseudonyms.get(r.userId) ?? "—",
+        },
+      ];
+    }),
   );
 }
 
@@ -380,7 +392,10 @@ export async function gradingQueue(
       answerId: answer?.id ?? null,
       attemptId: attempt.id,
       itemId: item.item.id,
-      label: query.anonymous ? (who?.pseudonym ?? "—") : (who?.displayName ?? attempt.userId),
+      // A guest has no account behind it: `rosterOf` names it "Guest n".
+      label: query.anonymous
+        ? (who?.pseudonym ?? "—")
+        : (who?.displayName ?? attempt.userId ?? "—"),
       answer: answer?.payload ?? null,
       student: studentView({
         type: item.question.type,

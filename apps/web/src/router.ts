@@ -22,6 +22,10 @@ export type Route =
   | { view: "evaluation"; id: string }
   /** The live grid of one evaluation. */
   | { view: "live"; id: string }
+  /** The projection of a poll: the question, the tally, the QR (F-LIVE-14). */
+  | { view: "poll"; id: string }
+  /** A participant joining a poll by its session code — with or without an account. */
+  | { view: "join"; code: string }
   // WP10: grading + results
   /** The teacher's grading panel for one evaluation. */
   | { view: "grading"; evaluationId: string }
@@ -56,6 +60,10 @@ export function routeToPath(r: Route): string {
       return `/evaluations/${r.id}`;
     case "live":
       return `/evaluations/${r.id}/live`;
+    case "poll":
+      return `/evaluations/${r.id}/poll`;
+    case "join":
+      return `/p/${r.code}`;
     // WP10: grading + results
     case "grading":
       return `/evaluations/${r.evaluationId}/grading`;
@@ -77,6 +85,9 @@ export function parsePath(path: string): Route {
   if (parts[0] === "questions" && parts[1]) return { view: "question", id: parts[1] };
   // WP9: student player
   if (parts[0] === "take" && parts[1]) return { view: "attempt", evaluationId: parts[1] };
+  // A poll's session code, as printed under the QR. Upper-cased so a code
+  // typed by hand on a phone survives the keyboard's habits.
+  if (parts[0] === "p" && parts[1]) return { view: "join", code: parts[1].toUpperCase() };
   // WP10: the student's feedback on one attempt — the ONE student results page.
   if (parts[0] === "attempts" && parts[1] && parts[2] === "feedback")
     return { view: "feedback", attemptId: parts[1] };
@@ -87,6 +98,8 @@ export function parsePath(path: string): Route {
     switch (parts[2]) {
       case "live":
         return { view: "live", id: parts[1] };
+      case "poll":
+        return { view: "poll", id: parts[1] };
       case "grading":
         return { view: "grading", evaluationId: parts[1] };
       case "results":

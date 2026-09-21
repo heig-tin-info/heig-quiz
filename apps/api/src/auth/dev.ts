@@ -21,6 +21,7 @@ import type { AppConfig } from "../config.js";
 import { users } from "../db/schema.js";
 import { claimEnrollments } from "../modules/roster.js";
 import { syncUserEmails } from "./claims.js";
+import { returnToOf, safeReturnTo } from "./returnTo.js";
 import type { SessionUser } from "./plugin.js";
 
 export interface Persona {
@@ -94,10 +95,13 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 }
 
-function page(): string {
+function page(next: string): string {
+  const nextField =
+    next === "/" ? "" : `<input type="hidden" name="next" value="${escapeHtml(next)}" />`;
   const card = (p: Persona) => `
     <form method="post" action="/app/auth/dev">
       <input type="hidden" name="persona" value="${escapeHtml(p.key)}" />
+      ${nextField}
       <button type="submit">
         <span class="name">${escapeHtml(`${p.givenName} ${p.familyName}`)}</span>
         <span class="mail">${escapeHtml(p.email)}</span>
@@ -139,10 +143,14 @@ function page(): string {
 }
 
 export async function devLoginRoutes(app: FastifyInstance, _config: AppConfig) {
-  app.get("/app/auth/dev", async (_req, reply) => reply.type("text/html; charset=utf-8").send(page()));
+  // `?next=/p/ABC123`: a phone sent to the login by a poll must come back to
+  // the poll, and the picker carries the path through the POST.
+  app.get("/app/auth/dev", async (req, reply) =>
+    reply.type("text/html; charset=utf-8").send(page(returnToOf(req.query))),
+  );
 
   app.post("/app/auth/dev", async (req, reply) => {
-    const body = (req.body ?? {}) as { persona?: unknown };
+    const body = (req.body ?? {}) as { persona?: unknown; next?: unknown };
     const key = typeof body.persona === "string" ? body.persona : "";
     const persona = PERSONAS.find((p) => p.key === key);
     if (!persona) return reply.code(400).send({ error: "unknown_persona" });
@@ -156,6 +164,6 @@ export async function devLoginRoutes(app: FastifyInstance, _config: AppConfig) {
       subjectId: user.id,
       payload: { persona: persona.key },
     });
-    return reply.redirect("/", 302);
+    return reply.redirect(safeReturnTo(body.next), 302);
   });
 }

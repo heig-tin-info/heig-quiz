@@ -207,6 +207,24 @@ export const HintEvent = z.object({
 });
 export type HintEvent = z.infer<typeof HintEvent>;
 
+/**
+ * The aggregate of a running poll, staff only, coalesced 500 ms server side
+ * (docs/spec/05 §"poll.tally"). Carries the WHOLE tally, not a delta: a
+ * projection that missed a frame is still right on the next one.
+ */
+export const PollTallyEvent = z.object({
+  type: z.literal("poll.tally"),
+  evaluationId: z.uuid(),
+  tally: z.object({
+    joined: z.number().int(),
+    answered: z.number().int(),
+    choices: z.array(z.object({ index: z.number().int(), count: z.number().int() })),
+    answers: z.array(z.object({ text: z.string(), count: z.number().int() })),
+  }),
+  serverNow: z.iso.datetime(),
+});
+export type PollTallyEvent = z.infer<typeof PollTallyEvent>;
+
 export const ServerEvent = z.discriminatedUnion("type", [
   SnapshotEvent,
   ClockEvent,
@@ -220,6 +238,7 @@ export const ServerEvent = z.discriminatedUnion("type", [
   RunnerResultEvent,
   GradingProgressEvent,
   HintEvent,
+  PollTallyEvent,
 ]);
 export type ServerEvent = z.infer<typeof ServerEvent>;
 
@@ -228,6 +247,7 @@ export const STAFF_ONLY_EVENTS = [
   "dashboard.cell",
   "dashboard.presence",
   "dashboard.attempt",
+  "poll.tally",
 ] as const;
 
 export function isStaffOnly(event: ServerEvent): boolean {

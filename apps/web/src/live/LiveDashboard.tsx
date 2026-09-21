@@ -85,6 +85,18 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
     queryFn: () => api(`/app/api/evaluations/${id}`),
   });
 
+  /**
+   * A poll has no grid: one question, no roster, and its screen is the
+   * projection (F-LIVE-13). `/evaluations/:id/live` is still a legitimate
+   * address for it — an old link, a teacher typing the URL they know — so
+   * the dashboard forwards rather than refusing, and it forwards as a
+   * `navigate`, which replaces the address bar with the one that is right.
+   */
+  const isPoll = detail.data?.evaluation.mode === "poll";
+  useEffect(() => {
+    if (isPoll) navigate({ view: "poll", id });
+  }, [isPoll, id, navigate]);
+
   const refresh = useCallback(() => {
     void qc.invalidateQueries({ queryKey: dashboardKey(id, toggles.answers) });
     void qc.invalidateQueries({ queryKey: evaluationKey(id) });
@@ -247,6 +259,9 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
     ...(selected ? [{ keys: "Esc", label: t("live.inspect.close") }] : []),
   ]);
 
+  if (isPoll) {
+    return <p className="py-12 text-center text-sm text-fg-muted">{t("poll.opening")}</p>;
+  }
   if (query.isLoading) {
     return (
       <div className="space-y-6">

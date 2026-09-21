@@ -16,6 +16,7 @@ import {
   Settings as SettingsIcon,
   ShieldCheck,
   Sun,
+  Vote,
 } from "lucide-react";
 
 import type { CourseSummary, Me, PoolSummary } from "@quiz/contracts";
@@ -73,6 +74,12 @@ export interface CommandContext {
   openHelp: (topic: string) => void;
   helpTopics: { topic: string; title: string }[];
   signOut: () => void;
+  /**
+   * Opens the poll launcher (F-LIVE-13). A callback and not a route: a poll
+   * is STARTED from wherever the teacher stands, and the launcher is a sheet
+   * the Shell owns — the palette has no sheet of its own to open.
+   */
+  onStartPoll?: () => void;
 }
 
 /** Id prefix of the per-classroom commands; the cap below recognizes them by it. */
@@ -125,6 +132,19 @@ export function buildCommands(ctx: CommandContext): Command[] {
       icon: ShieldCheck,
       group: "navigate",
       run: () => navigate({ view: "admin" }),
+    });
+  }
+
+  if (ctx.teacherUi && ctx.onStartPoll) {
+    const startPoll = ctx.onStartPoll;
+    commands.push({
+      id: "action:poll",
+      label: t("poll.start"),
+      hint: t("poll.launcherHint"),
+      icon: Vote,
+      group: "action",
+      keywords: "poll vote sondage question live",
+      run: () => startPoll(),
     });
   }
 

@@ -10,6 +10,7 @@ export * from "./deadline.js";
 export * from "./grade.js";
 export * from "./lockedTemplate.js";
 export * from "./mcqScore.js";
+export * from "./pollTally.js";
 export * from "./poolRole.js";
 export * from "./pseudonym.js";
 export * from "./roster.js";

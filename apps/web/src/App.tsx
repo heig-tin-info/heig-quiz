@@ -119,7 +119,14 @@ const VIEW_AS_KEY = "quiz-view-as";
  * it used to render it UNDER the teacher URL, so a reload or a Back landed
  * on the same wrong address again (W20).
  */
-const STUDENT_ROUTES = new Set<Route["view"]>(["home", "settings", "feedback", "attempt"]);
+const STUDENT_ROUTES = new Set<Route["view"]>(["home", "settings", "feedback", "attempt", "join"]);
+
+// The poll screens. The participant page is the ONE route that renders with
+// no session at all: a guest who scanned a QR has nothing to log into.
+const PollProjection = lazy(() =>
+  import("./poll/PollProjection").then((m) => ({ default: m.PollProjection })),
+);
+const PollJoin = lazy(() => import("./poll/PollJoin").then((m) => ({ default: m.PollJoin })));
 
 export default function App() {
   const me = useMe();
@@ -160,6 +167,15 @@ export default function App() {
   }, [onTeacherRoute]);
 
   if (me.isLoading) return null;
+  // Before the session gate: the participant of a poll may have no account
+  // (`settings.poll.anonymous`), and the page itself sends to login otherwise.
+  if (route.view === "join") {
+    return (
+      <Suspense fallback={<Spinner className="py-24" />}>
+        <PollJoin code={route.code} me={me.data ?? null} navigate={navigate} />
+      </Suspense>
+    );
+  }
   if (!me.data) return <Landing />;
   const role = me.data.role;
   const teacher = role === "teacher" || role === "admin";
@@ -173,6 +189,14 @@ export default function App() {
     return (
       <Suspense fallback={<Spinner className="py-24" />}>
         <AttemptPage evaluationId={route.evaluationId} navigate={navigate} />
+      </Suspense>
+    );
+  }
+  // The projection is for a beamer: no sidebar, no chrome (mockup 10).
+  if (route.view === "poll" && teacherUi) {
+    return (
+      <Suspense fallback={<Spinner className="py-24" />}>
+        <PollProjection id={route.id} navigate={navigate} />
       </Suspense>
     );
   }

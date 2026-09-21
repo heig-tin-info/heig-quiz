@@ -15,6 +15,7 @@ import { roleForIdentity } from "../roles.js";
 import { addressesOf, affiliationsOf, recordIdpClaims, syncUserEmails } from "./claims.js";
 import { devLoginRoutes } from "./dev.js";
 import { OidcProvider, type OidcClaims } from "./oidc.js";
+import { returnToOf, safeReturnTo } from "./returnTo.js";
 import {
   CSRF_COOKIE,
   CSRF_HEADER,
@@ -165,21 +166,13 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   }));
 
   // --- Routes ---
-  /**
-   * Where to land after the login round trip. Only a same-origin, absolute
-   * PATH is accepted: anything else — a full URL, a protocol-relative
-   * "//evil.example" — falls back to the home page, so the parameter can
-   * never become an open redirect.
-   */
-  function safeReturnTo(raw: unknown): string {
-    if (typeof raw !== "string") return "/";
-    if (!raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\")) return "/";
-    return raw;
-  }
 
   app.get("/app/auth/login", async (req, reply) => {
     const { url, codeVerifier, state, nonce } = await provider.beginLogin();
-    const returnTo = safeReturnTo((req.query as { returnTo?: unknown }).returnTo);
+    // `?next=/p/ABC123` (a poll) or `?returnTo=` (the SPA): the same
+    // validator, and the path travels in the SIGNED stash cookie beside the
+    // PKCE verifier — never in the OIDC `state`, which the IdP echoes back.
+    const returnTo = returnToOf(req.query);
     reply.setCookie(LOGIN_STASH_COOKIE, JSON.stringify({ codeVerifier, state, nonce, returnTo }), {
       path: "/app/auth",
       httpOnly: true,

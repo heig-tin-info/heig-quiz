@@ -83,7 +83,7 @@ import {
 /** The handle inside `db.transaction(...)`: the same builders, one connection. */
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
-type PoolRow = typeof pools.$inferSelect;
+export type PoolRow = typeof pools.$inferSelect;
 type QuestionRecord = typeof questions.$inferSelect;
 type VersionRecord = typeof questionVersions.$inferSelect;
 
@@ -230,6 +230,47 @@ export async function createPool(
     })
     .returning();
   return poolJson(row!);
+}
+
+/** The name the personal pool is born with; the teacher may rename it. */
+export const PERSONAL_POOL_NAME = "Polls";
+
+/**
+ * The teacher's own pool (F-POOL-01), created on FIRST use and not at
+ * sign-up: `pools_personal_uq` — unique on `owner_id WHERE is_personal` — is
+ * what makes two simultaneous first polls resolve to one pool.
+ *
+ * It is an ordinary pool in every other respect: it shows on the pools page,
+ * it can be renamed, shared and drawn from. Today the live poll launcher is
+ * its only creator (ADR-014), which is why it is named after what it holds.
+ */
+export async function ensurePersonalPool(db: Db, userId: string): Promise<PoolRow> {
+  const existing = await personalPool(db, userId);
+  if (existing) return existing;
+  await db
+    .insert(pools)
+    .values({
+      id: randomUUID(),
+      name: PERSONAL_POOL_NAME,
+      icon: "message-circle-question",
+      visibility: "private",
+      ownerId: userId,
+      isPersonal: true,
+    })
+    // The loser of a race reads the winner's row below.
+    .onConflictDoNothing();
+  const row = await personalPool(db, userId);
+  if (!row) throw new Error("personal pool vanished after insert");
+  return row;
+}
+
+async function personalPool(db: Db, userId: string): Promise<PoolRow | null> {
+  const [row] = await db
+    .select()
+    .from(pools)
+    .where(and(eq(pools.ownerId, userId), eq(pools.isPersonal, true)))
+    .limit(1);
+  return row ?? null;
 }
 
 export async function updatePool(

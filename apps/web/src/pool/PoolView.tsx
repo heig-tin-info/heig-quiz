@@ -8,7 +8,7 @@ import { api, apiErrorMessage } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { QUESTION_TYPE_IDS, typeHint, typeIcon, typeLabel } from "../questionTypes";
+import { QUESTION_TYPE_IDS, typeIcon, typeLabel } from "../questionTypes";
 import type { Route } from "../router";
 import { useSearchParam } from "../router";
 import { useScreenCommands } from "../screenCommands";
@@ -16,7 +16,6 @@ import {
   Badge,
   Button,
   Card,
-  cx,
   EmptyState,
   Field,
   Modal,
@@ -37,6 +36,7 @@ import { FilterBar, type ListView } from "./FilterBar";
 import { QuestionCards, QuestionCardsSkeleton } from "./QuestionCards";
 import { groupQuestions, isGroupBy, type GroupBy } from "./QuestionGroups";
 import { QuestionTable, QuestionTableSkeleton } from "./QuestionTable";
+import { QuestionTypePicker } from "./QuestionTypePicker";
 
 /**
  * The pool screen (mockup `08-pool.html`): the questions across the full
@@ -174,34 +174,7 @@ function NewQuestionModal({
       <div className="space-y-4">
         <fieldset>
           <legend className="mb-2 text-[13px] font-medium">{t("pool.questionType")}</legend>
-          <div className="grid gap-2 sm:grid-cols-2">
-            {QUESTION_TYPE_IDS.map((id) => {
-              const Icon = typeIcon(id);
-              const active = type === id;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setType(id)}
-                  className={cx(
-                    "flex items-start gap-2.5 rounded-field border p-3 text-left transition-colors",
-                    active
-                      ? "border-accent bg-accent-soft"
-                      : "border-line-strong bg-surface hover:bg-surface-2",
-                  )}
-                >
-                  <Icon className={cx("mt-0.5 size-4 shrink-0", active ? "text-accent" : "text-fg-faint")} />
-                  <span className="min-w-0">
-                    <span className={cx("block text-sm font-medium", active && "text-accent")}>
-                      {typeLabel(t, id)}
-                    </span>
-                    <span className="block text-xs text-fg-muted">{typeHint(t, id)}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+          <QuestionTypePicker types={QUESTION_TYPE_IDS} value={type} onChange={setType} />
         </fieldset>
         <Field
           label={t("pool.questionName")}

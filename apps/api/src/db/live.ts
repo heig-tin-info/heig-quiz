@@ -15,6 +15,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -28,6 +29,31 @@ import {
 import { users } from "./auth.js";
 import { evaluationItems, evaluations } from "./evaluation.js";
 
+/**
+ * Participants without an account: a browser that scanned the QR of an
+ * ANONYMOUS poll (F-AUTH-05, ADR-014).
+ *
+ * `token_hash` is `sha256(token)`; the token itself only ever exists in the
+ * `quiz_guest` cookie of that browser, scoped to `/app/api/p`. A guest is a
+ * row of THIS table and never an `enrollments` seat: a poll has no roster,
+ * and nothing about a guest reaches the grade table.
+ */
+export const guestParticipants = pgTable(
+  "guest_participants",
+  {
+    id: uuid("id").primaryKey(),
+    evaluationId: uuid("evaluation_id")
+      .notNull()
+      .references(() => evaluations.id, { onDelete: "cascade" }),
+    /** Reserved for a named guest (F-AUTH-05); no route sets it yet. */
+    pseudonym: text("pseudonym"),
+    /** sha256 of the cookie value — the clear token is never stored. */
+    tokenHash: text("token_hash").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("guest_participants_evaluation_idx").on(t.evaluationId)],
+);
+
 export const attempts = pgTable(
   "attempts",
   {
@@ -35,9 +61,13 @@ export const attempts = pgTable(
     evaluationId: uuid("evaluation_id")
       .notNull()
       .references(() => evaluations.id, { onDelete: "cascade" }),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    /**
+     * The account that holds this attempt — NULL for a guest of a poll, and
+     * only then: the check constraint below is what makes "exactly one owner"
+     * a property of the schema rather than of a service.
+     */
+    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+    guestId: uuid("guest_id").references(() => guestParticipants.id, { onDelete: "cascade" }),
     state: text("state", { enum: ["not_started", "in_progress", "submitted", "expired"] })
       .notNull()
       .default("not_started"),
@@ -62,6 +92,13 @@ export const attempts = pgTable(
   },
   (t) => [
     uniqueIndex("attempts_evaluation_user_uq").on(t.evaluationId, t.userId),
+    // The same idempotency, for the guest half: one attempt per (poll,
+    // browser), so a reload of `/p/<code>` never opens a second one.
+    uniqueIndex("attempts_evaluation_guest_uq").on(t.evaluationId, t.guestId),
+    check(
+      "attempts_owner_ck",
+      sql`(${t.userId} is null) <> (${t.guestId} is null)`,
+    ),
     index("attempts_deadline_idx")
       .on(t.deadlineAt)
       .where(sql`${t.state} = 'in_progress'`),
@@ -125,21 +162,3 @@ export const attemptEvents = pgTable(
   (t) => [index("attempt_events_attempt_idx").on(t.attemptId, t.at)],
 );
 
-/**
- * Participants without an account — PHASE 2: the table exists so the column
- * set is settled and no migration is needed later, and no route writes it.
- */
-export const guestParticipants = pgTable(
-  "guest_participants",
-  {
-    id: uuid("id").primaryKey(),
-    evaluationId: uuid("evaluation_id")
-      .notNull()
-      .references(() => evaluations.id, { onDelete: "cascade" }),
-    displayName: text("display_name").notNull(),
-    /** Opaque per-guest secret handed out with the join link. */
-    token: text("token").notNull().unique(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("guest_participants_evaluation_idx").on(t.evaluationId)],
-);

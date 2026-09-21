@@ -9,6 +9,7 @@ import {
   School,
   Search,
   ShieldCheck,
+  Vote,
   X,
 } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
@@ -22,6 +23,7 @@ import { helpTopics, useHelp } from "./help";
 import { useI18n, useT } from "./i18n";
 import { NotificationBell } from "./notifications/NotificationBell";
 import type { Route } from "./router";
+import { PollLauncher } from "./poll/PollLauncher";
 import { SidebarCategories } from "./pool/CategoryTree";
 import { shortcutCaps, useActiveShortcuts, useGlobalShortcuts } from "./shortcuts";
 import { setThemeChoice, useResolvedTheme, useThemeChoice } from "./theme";
@@ -88,6 +90,7 @@ function Nav({
   navigate,
   teacherUi,
   onNavigate,
+  onStartPoll,
 }: {
   me: Me;
   route: Route;
@@ -96,6 +99,8 @@ function Nav({
   teacherUi: boolean;
   /** Called after any navigation (closes the mobile drawer). */
   onNavigate?: () => void;
+  /** Opens the poll launcher (a layer, not a page — hence a callback). */
+  onStartPoll?: () => void;
 }) {
   const t = useT();
   const courses = useQuery<CourseSummary[]>({
@@ -147,6 +152,21 @@ function Nav({
                 THAT page, and unfolding them anywhere else would put a tree
                 with no table beside it in the frame. */}
             {route.view === "pool" ? <SidebarCategories poolId={route.id} /> : null}
+            {/* Not a page: a poll is STARTED, from wherever the teacher is,
+                and the launcher is a sheet over the screen they were on. The
+                row is `active` while a projection is up, because that IS the
+                poll, and it is the one place this entry leads to. */}
+            {onStartPoll ? (
+              <NavItem
+                icon={Vote}
+                label={t("poll.nav")}
+                active={route.view === "poll"}
+                onClick={() => {
+                  onStartPoll();
+                  onNavigate?.();
+                }}
+              />
+            ) : null}
           </>
         ) : null}
         {/* Settings is not a section of the product: it lives in the account
@@ -267,6 +287,10 @@ export function Shell({
   useLayer(drawerPanel, () => setDrawer(false), { enabled: drawer });
 
   const [palette, setPalette] = useState(false);
+  // The poll launcher lives here, beside the palette, for the same reason:
+  // it is opened from the navigation AND from the palette, and both of those
+  // belong to the frame rather than to whatever page is under it.
+  const [launcher, setLauncher] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // Ctrl+Alt+K and Ctrl+Shift+K belong to the browser (the web console,
@@ -350,7 +374,13 @@ export function Shell({
             permanent button for it took the top of the sidebar away from the
             navigation. The phone keeps its own trigger in the top bar, where
             there is no keyboard to hold a shortcut. */}
-        <Nav me={me} route={route} navigate={navigate} teacherUi={teacherUi} />
+        <Nav
+          me={me}
+          route={route}
+          navigate={navigate}
+          teacherUi={teacherUi}
+          onStartPoll={teacherUi ? () => setLauncher(true) : undefined}
+        />
         <ShortcutStrip />
         {/* The account row, and beside it the bell: the two things that are
             about the PERSON rather than about the page, at the bottom of the
@@ -385,6 +415,7 @@ export function Shell({
               navigate={navigate}
               teacherUi={teacherUi}
               onNavigate={() => setDrawer(false)}
+              onStartPoll={teacherUi ? () => setLauncher(true) : undefined}
             />
             <div className="border-t border-line p-2">{userMenu(false)}</div>
           </div>
@@ -455,7 +486,14 @@ export function Shell({
           openHelp={openHelp}
           helpTopics={topics}
           signOut={signOut}
+          onStartPoll={teacherUi ? () => setLauncher(true) : undefined}
         />
+      ) : null}
+
+      {/* Same rule as the palette: mounted only while open, so the queries it
+          holds exist on the screen that asked for it and nowhere else. */}
+      {launcher ? (
+        <PollLauncher onClose={() => setLauncher(false)} navigate={navigate} />
       ) : null}
     </div>
   );

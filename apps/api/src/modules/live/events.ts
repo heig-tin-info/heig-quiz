@@ -49,6 +49,8 @@ export function attemptStarted(
  * now (created in the lobby), or it has started. Staff connections only.
  */
 export function attemptRowChanged(evaluationId: string, attempt: AttemptRow): void {
+  // A guest of a poll (`user_id is null`) has no roster row to light up.
+  if (attempt.userId === null) return;
   bus.dashboardAttempt({
     evaluationId,
     userId: attempt.userId,

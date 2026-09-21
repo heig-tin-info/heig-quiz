@@ -213,9 +213,23 @@ export function pastGrace(deadlineAt: Date | null, now: Date): boolean {
 
 // --- Access ---------------------------------------------------------------
 
+/**
+ * Who holds an attempt. EXACTLY one of the two ids is set — the check
+ * constraint `attempts_owner_ck` says the same thing in the schema:
+ *   - `userId`: an account, reached through a claimed roster seat for an
+ *     exam or an exercise, or through the poll's own code (ADR-014);
+ *   - `guestId`: a browser that joined an anonymous poll and nothing else
+ *     (F-AUTH-05). A guest has no accommodation, hence no time bonus.
+ */
 export interface Participant {
-  userId: string;
+  userId: string | null;
+  guestId: string | null;
   timeBonusPercent: number;
+}
+
+/** The half of {@link Participant} an `attempts` row is keyed on. */
+function ownerOf(participant: Participant): { userId: string | null; guestId: string | null } {
+  return { userId: participant.userId, guestId: participant.guestId };
 }
 
 /** A student reaches an evaluation only through a CLAIMED roster seat. */
@@ -235,7 +249,7 @@ export async function participantOf(
       ),
     )
     .limit(1);
-  return row ? { userId, timeBonusPercent: row.timeBonusPercent } : null;
+  return row ? { userId, guestId: null, timeBonusPercent: row.timeBonusPercent } : null;
 }
 
 /** F-LIVE-02: the denominator of the lobby ring. Staff seats do not count. */
@@ -264,12 +278,19 @@ export async function attemptById(db: Db, id: string): Promise<AttemptRecord | n
 export async function attemptOf(
   db: Db,
   evaluationId: string,
-  userId: string,
+  owner: string | Participant,
 ): Promise<AttemptRecord | null> {
+  const { userId, guestId } =
+    typeof owner === "string" ? { userId: owner, guestId: null } : ownerOf(owner);
   const [row] = await db
     .select()
     .from(attempts)
-    .where(and(eq(attempts.evaluationId, evaluationId), eq(attempts.userId, userId)))
+    .where(
+      and(
+        eq(attempts.evaluationId, evaluationId),
+        guestId === null ? eq(attempts.userId, userId!) : eq(attempts.guestId, guestId),
+      ),
+    )
     .limit(1);
   return row ?? null;
 }
@@ -299,20 +320,27 @@ export async function ensureAttempt(
     .values({
       id: randomUUID(),
       evaluationId: evaluation.id,
-      userId: participant.userId,
+      ...ownerOf(participant),
       state: "not_started",
       seed: drawSeed(),
       presentAt: now,
       createdAt: now,
       updatedAt: now,
     })
-    .onConflictDoNothing({ target: [attempts.evaluationId, attempts.userId] })
+    // A guest is keyed on `(evaluation_id, guest_id)`, an account on
+    // `(evaluation_id, user_id)`: two unique indexes, the same idempotency.
+    .onConflictDoNothing({
+      target:
+        participant.guestId === null
+          ? [attempts.evaluationId, attempts.userId]
+          : [attempts.evaluationId, attempts.guestId],
+    })
     .returning({ id: attempts.id });
-  const row = await attemptOf(db, evaluation.id, participant.userId);
+  const row = await attemptOf(db, evaluation.id, participant);
   if (!row) throw new LiveError("internal_error", 500, "attempt vanished after insert");
   // F-DASH-03: the teacher's grid learns the row exists the moment it does,
-  // not at the next refetch.
-  if (created.length > 0) events.attemptRowChanged(evaluation.id, row);
+  // not at the next refetch. A guest has no roster row to light up.
+  if (created.length > 0 && row.userId !== null) events.attemptRowChanged(evaluation.id, row);
   return row;
 }
 
@@ -477,8 +505,11 @@ export async function attemptOrLobbyView(
   now: Date,
 ): Promise<AttemptOrLobby> {
   if (!contentVisible(evaluation.state)) {
-    const participant = (await participantOf(db, evaluation, attempt.userId)) ?? {
+    const seat =
+      attempt.userId === null ? null : await participantOf(db, evaluation, attempt.userId);
+    const participant: Participant = seat ?? {
       userId: attempt.userId,
+      guestId: attempt.guestId,
       timeBonusPercent: 0,
     };
     return { kind: "lobby", view: await lobbyView(db, evaluation, participant, now) };
@@ -609,7 +640,7 @@ export async function enterEvaluation(
 
   const open = evaluation.state === "lobby" || evaluation.state === "running" ||
     evaluation.state === "paused";
-  const existing = await attemptOf(db, evaluation.id, participant.userId);
+  const existing = await attemptOf(db, evaluation.id, participant);
   // A closed evaluation still hands back a finished attempt: the student
   // must be able to reopen the page and see what they submitted.
   if (!open && existing === null) throw new NotOpen();
@@ -1162,7 +1193,9 @@ export async function runVisibleCases(
 
   // The result travels on the student's own topic (§4.8) AND in the response,
   // so a client that lost its stream is not left waiting.
-  events.runnerResult(attempt.userId, requestId, itemId, result);
+  // `POST /attempts/:id/run` is reached through `ownAttempt`, so the owner
+  // is always an account here; a poll runs no code.
+  if (attempt.userId !== null) events.runnerResult(attempt.userId, requestId, itemId, result);
   return { requestId, result };
 }
 
@@ -1200,7 +1233,11 @@ export async function startEvaluation(
       db,
       next,
       attempt,
-      { userId: attempt.userId, timeBonusPercent: attempt.timeBonusPercent },
+      {
+        userId: attempt.userId,
+        guestId: attempt.guestId,
+        timeBonusPercent: attempt.timeBonusPercent,
+      },
       now,
     );
   }
@@ -1364,8 +1401,11 @@ export async function reopenAttempt(
   now: Date,
 ): Promise<AttemptRecord> {
   if (attempt.state === "in_progress") return attempt;
-  const participant = (await participantOf(db, evaluation, attempt.userId)) ?? {
+  const seat =
+    attempt.userId === null ? null : await participantOf(db, evaluation, attempt.userId);
+  const participant: Participant = seat ?? {
     userId: attempt.userId,
+    guestId: attempt.guestId,
     timeBonusPercent: 0,
   };
   const { deadlineAt, bonusS } = deadlineFor(evaluation, {
@@ -1561,11 +1601,16 @@ export async function attemptInspect(
 ): Promise<AttemptInspect> {
   const items = await joinedItems(db, evaluation.id);
   const answered = await answersOf(db, attempt.id);
-  const [student] = await db
-    .select({ givenName: users.givenName, familyName: users.familyName, email: users.email })
-    .from(users)
-    .where(eq(users.id, attempt.userId))
-    .limit(1);
+  // A teacher only ever inspects an attempt of THEIR evaluation, and a poll
+  // has no inspector; the guest branch is here so the type is honest.
+  const [student] = attempt.userId === null
+    ? []
+    : await db
+        .select({ givenName: users.givenName, familyName: users.familyName, email: users.email })
+        .from(users)
+        .where(eq(users.id, attempt.userId))
+        .limit(1);
+  const ownerId = attempt.userId ?? attempt.id;
   const journal = await db
     .select()
     .from(attemptEvents)
@@ -1575,11 +1620,11 @@ export async function attemptInspect(
   return {
     attempt: {
       id: attempt.id,
-      userId: attempt.userId,
+      userId: ownerId,
       displayName: student
         ? `${student.givenName ?? ""} ${student.familyName ?? ""}`.trim() || student.email
-        : attempt.userId,
-      pseudonym: uniquePseudonyms(evaluation.id, [attempt.userId]).get(attempt.userId) ?? "—",
+        : "Guest",
+      pseudonym: uniquePseudonyms(evaluation.id, [ownerId]).get(ownerId) ?? "—",
       state: attempt.state,
       startedAt: isoOrNull(attempt.startedAt),
       deadlineAt: isoOrNull(attempt.deadlineAt),

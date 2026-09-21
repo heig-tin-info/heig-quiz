@@ -430,6 +430,97 @@ export async function createEvaluation(
   return (await byId(db, id))!;
 }
 
+/**
+ * The POLL path (F-LIVE-13, ADR-014): one question, created AND started in
+ * the same call, with the session code already on it.
+ *
+ * It lives here rather than in `modules/poll/` because `evaluations` and
+ * `evaluation_items` are this module's tables and no other module writes
+ * them (CLAUDE.md, Conventions). {@link createEvaluation} keeps refusing
+ * `mode: "poll"`: a poll is never authored item by item, so the generic
+ * route has nothing to offer it.
+ *
+ * Deliberate differences from {@link addItems}: the question is NOT required
+ * to sit in a pool of the classroom's course — a poll runs a question of the
+ * teacher's personal pool, which is linked to nothing — and the two writes
+ * are one transaction, so a poll is never half-created.
+ */
+export async function createPollEvaluation(
+  db: Db,
+  input: {
+    classroomId: string;
+    title: string;
+    createdBy: string;
+    questionId: string;
+    accessCode: string;
+    anonymous: boolean;
+    defaultPoints: (type: string, version: typeof questionVersions.$inferSelect) => number;
+    now: Date;
+  },
+): Promise<{ evaluation: EvaluationRecord; item: ItemRecord }> {
+  const [question] = await db
+    .select()
+    .from(questions)
+    .where(eq(questions.id, input.questionId))
+    .limit(1);
+  if (!question || question.deletedAt !== null) throw new QuestionNotInCourse(input.questionId);
+  const version = (await latestPublished(db, [input.questionId])).get(input.questionId);
+  if (!version) throw new NoPublishedVersion(input.questionId);
+
+  // The exercise preset, plus the two poll switches. `immediate` feedback
+  // with the key HELD BACK: the reveal is the teacher's act, and it moves
+  // `settings.poll.revealed` and `feedbackPolicy.showKey` together.
+  const settings: EvaluationSettings = EvaluationSettings.parse({
+    ...presetSettings("exercise").settings,
+    poll: { anonymous: input.anonymous, revealed: false },
+  });
+  const feedbackPolicy: FeedbackPolicy = FeedbackPolicy.parse({
+    when: "immediate",
+    showAnswer: true,
+    showKey: false,
+    showExplanation: false,
+  });
+
+  const id = randomUUID();
+  const itemId = randomUUID();
+  const mcqPolicy = await preferredMcqPolicy(db, input.createdBy);
+  await db.transaction(async (tx) => {
+    await tx.insert(evaluations).values({
+      id,
+      classroomId: input.classroomId,
+      title: input.title,
+      mode: "poll",
+      // A poll opens on the spot: there is no lobby, no schedule and no
+      // draft to review (glossary §1.4).
+      state: "running",
+      settings,
+      gradingScale: defaultGradingScale(),
+      feedbackPolicy,
+      mcqPolicy,
+      accessCode: input.accessCode,
+      startedAt: input.now,
+      createdBy: input.createdBy,
+      createdAt: input.now,
+      updatedAt: input.now,
+    });
+    await tx.insert(evaluationItems).values({
+      id: itemId,
+      evaluationId: id,
+      position: 0,
+      questionVersionId: version.id,
+      points: input.defaultPoints(question.type, version),
+      milestone: false,
+      createdAt: input.now,
+    });
+  });
+  const [item] = await db
+    .select()
+    .from(evaluationItems)
+    .where(eq(evaluationItems.id, itemId))
+    .limit(1);
+  return { evaluation: (await byId(db, id))!, item: item! };
+}
+
 export async function byId(db: Db, id: string): Promise<EvaluationRecord | null> {
   const [row] = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
   return row ?? null;

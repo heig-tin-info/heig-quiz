@@ -29,6 +29,7 @@ import { registerGradingJobs } from "./modules/grading/jobs.js";
 import { livePlugin } from "./modules/live/routes.js";
 import { notificationsPlugin } from "./modules/notifications/routes.js";
 import { orgPlugin } from "./modules/org/routes.js";
+import { pollPlugin } from "./modules/poll/routes.js";
 import { poolPlugin } from "./modules/pool/routes.js";
 import { flushCoalescers } from "./modules/realtime/bus.js";
 import { realtimePlugin } from "./modules/realtime/routes.js";
@@ -159,6 +160,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(coursesPlugin, { config });
   await app.register(orgPlugin);
   await app.register(poolPlugin, { config });
+  await app.register(pollPlugin, { config });
   await app.register(evaluationPlugin);
   await app.register(livePlugin);
   await app.register(gradingPlugin);

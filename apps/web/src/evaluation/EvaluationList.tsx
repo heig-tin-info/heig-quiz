@@ -1,5 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, ClipboardCheck, ClipboardList, Copy, MonitorPlay, Plus, Trash2 } from "lucide-react";
+import {
+  BarChart3,
+  ClipboardCheck,
+  ClipboardList,
+  Copy,
+  MonitorPlay,
+  Plus,
+  Presentation,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
 
 import type { EvaluationMode, EvaluationSummary } from "@quiz/contracts";
@@ -155,6 +164,9 @@ export function EvaluationList({
    * they are published, and the configuration screen before any of that.
    */
   const open = (row: EvaluationSummary) => {
+    // A poll has no configuration screen and no grid: it IS its projection,
+    // whether it is still running or already over (F-LIVE-13).
+    if (row.mode === "poll") return navigate({ view: "poll", id: row.id });
     if (isLive(row.state)) return navigate({ view: "live", id: row.id });
     if (!isGraded(row.state)) return navigate({ view: "evaluation", id: row.id });
     const links = gradingLinks(row.id);
@@ -232,7 +244,18 @@ export function EvaluationList({
                       <Badge tone={stateTone(row.state)}>{stateLabel(row.state, t)}</Badge>
                     </span>
                   </td>
-                  <td className={`${T.td} text-fg-muted`}>{t(`eval.mode.${row.mode}`)}</td>
+                  <td className={`${T.td} text-fg-muted`}>
+                    {/* A poll is the one mode that changes where the whole row
+                        leads, so it is a badge and the other two stay words:
+                        the badge is what a teacher scans a list of thirty
+                        evaluations for. Zinc, never the accent — "New
+                        evaluation" owns the red on this screen. */}
+                    {row.mode === "poll" ? (
+                      <Badge tone="zinc">{t("eval.mode.poll")}</Badge>
+                    ) : (
+                      t(`eval.mode.${row.mode}`)
+                    )}
+                  </td>
                   <td className={`${T.td} ${T.colHigh} text-right tabular-nums`}>{row.itemCount}</td>
                   <td className={`${T.td} ${T.colMid} text-right tabular-nums`}>{row.totalPoints}</td>
                   <td className={`${T.td} ${T.colLow} text-right tabular-nums`}>
@@ -242,11 +265,20 @@ export function EvaluationList({
                     <Menu
                       label={t("live.row.actions", { name: row.title })}
                       items={[
+                        ...(row.mode === "poll"
+                          ? [
+                              {
+                                label: t("poll.openProjection"),
+                                icon: Presentation,
+                                onSelect: () => navigate({ view: "poll", id: row.id }),
+                              },
+                            ]
+                          : []),
                         // WP10: once a quiz is closed, the two screens the
                         // teacher actually wants are the correction and the
                         // table — first in the menu, above the dashboard the
                         // row no longer opens by itself.
-                        ...(isGraded(row.state)
+                        ...(isGraded(row.state) && row.mode !== "poll"
                           ? [
                               {
                                 label: t("eval.grading"),
@@ -260,7 +292,7 @@ export function EvaluationList({
                               },
                             ]
                           : []),
-                        ...(hasDashboard(row)
+                        ...(hasDashboard(row) && row.mode !== "poll"
                           ? [
                               {
                                 label: t("eval.dashboard"),
@@ -269,11 +301,15 @@ export function EvaluationList({
                               },
                             ]
                           : []),
-                        {
-                          label: t("eval.configure"),
-                          icon: ClipboardList,
-                          onSelect: () => navigate({ view: "evaluation", id: row.id }),
-                        },
+                        ...(row.mode === "poll"
+                          ? []
+                          : [
+                              {
+                                label: t("eval.configure"),
+                                icon: ClipboardList,
+                                onSelect: () => navigate({ view: "evaluation", id: row.id }),
+                              },
+                            ]),
                         {
                           label: t("eval.duplicate"),
                           icon: Copy,

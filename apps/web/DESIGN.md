@@ -501,6 +501,47 @@ with a keyboard-reachable dismiss button.
   one. MathLive is loaded on first open and dressed in the tokens through
   `markdown/formula.css`; its fonts are the KaTeX fonts the page already has.
 
+## Projection (the poll on a beamer)
+
+One screen of the product is not read at arm's length, and it is the only
+place where this file's scale does not apply: `PollProjection` is thrown on a
+lecture-hall wall and read from thirty rows back. Three extensions, and
+nothing else on it leaves the system.
+
+- **A scale of its own, in `clamp()`.** The question is
+  `clamp(30px, 4.6vw, 68px)` at 700 and `-0.03em`, a choice
+  `clamp(19px, 2.3vw, 36px)`, its percentage `clamp(20px, 2.4vw, 38px)` in
+  mono, the session code `clamp(34px, 4.2vw, 64px)`; the context strip and
+  the counts stay at reading size. It is the same 2× jump the rest of the
+  product uses, multiplied by the room: the viewport IS the projector, so the
+  sizes are measured against it rather than picked from the 12–28 px scale.
+  Nothing else in `apps/web` may use a `clamp()` type size.
+  The question's own step is picked from its LENGTH (`questionScale`): a
+  one-line question gets the full 68 px, and two longer steps follow, because
+  a four-line question at 68 px pushes the last bars off the wall — and
+  nothing on this screen may be truncated, since a question is read, not
+  summarised. From `sm` up the stage IS the viewport (`h-dvh`, no page
+  scroll): the session code and the QR stay on the wall whatever the question
+  costs, and only the middle band gives way. The distribution shows at most
+  eight rows and counts the rest in one muted line: a free-text tally carries
+  up to sixty distinct spellings, and sixty bars is a wall of noise.
+- **The QR tile does not follow the theme.** White background, `#131211`
+  modules, in light and in dark alike, because a camera needs the contrast the
+  code was designed with and an inverted QR is one half the phones in the room
+  will not read. It is the only element of the product allowed a fixed colour
+  pair, and it is a hairline-bordered tile so it still reads as a surface.
+- **Dark by default, and only here.** The screen turns `html.dark` on when it
+  mounts unless this browser has explicitly stored `light`, and puts the
+  theme back when it leaves — without persisting anything: a beamer throws
+  light, so a white page is the room's lighting. The toggle in its control
+  strip writes a real choice, like every other theme toggle.
+
+The rest is the system as written: the bar track is `surface-2`, the fill is
+`accent-soft` on an `accent` hairline, the revealed key is `success` with a
+tick AND the word "Correct answer" (never a tint alone — a projector eats half
+the saturation), and the rows that are not the key FADE to `fg-faint` rather
+than turning red. Nobody in the room is being marked wrong.
+
 ## Tables
 
 At most seven visible columns, one dominant identity column, numbers right
@@ -544,3 +585,34 @@ questions) and the grade table (duration, e-mail).
 Sentence case everywhere. Buttons start with a verb ("Create question",
 "Publish"). Status words are lowercase in badges. Every surface, teacher and
 student alike, goes through `t()` with an `en` and an `fr` entry (N-I18N-01).
+
+## The participant's poll page (`/p/:CODE`)
+
+One question on a phone in a lecture hall, reached by a QR code and often by
+a reader with no account (F-AUTH-05, F-LIVE-13). It is the one screen the app
+draws before the session gate, so it carries its own door.
+
+- Column **560 px**, not the zen player's 760: a poll is a single question, and
+  760 px of paper around it is a frame with nothing to frame. The gutter is the
+  page's own — 16 px on a phone, 24 above it.
+- The chrome is a 12 px uppercase eyebrow over a 16 px name; the reading size
+  belongs to the question, drawn by the type's own player through
+  `QuestionHost`. `PlayerShell` is NOT reused: there is no clock (a poll ends
+  when the teacher says so), no progress strip over one question, and no
+  hand-in dialog.
+- ONE primary action, "Send", in a sticky bottom bar with a hairline over it —
+  the thumb's half of the screen. It becomes "Update" once an answer is
+  stored, and it is disabled while the stored answer is the one on screen.
+  There is **no autosave**: a poll is one deliberate tap, and an answer that
+  saved itself mid-gesture is an answer nobody meant to send. The whole sync
+  report is a `success` check and the word "Sent", in a polite live region.
+- **Reveal replaces the control.** Once the teacher has revealed — and on a
+  poll that has ended — the answer control is gone rather than disabled with a
+  key beside it: an input that still accepts a tap after the room has read the
+  answer is a trap. The key wears `success`, a wrong own pick `danger`, and
+  both carry a WORD beside the tint (`PollJoinReveal`), because a lecture hall
+  projector and a red-green reader both lose a tint alone.
+- The type's own `Review` is deliberately not reused for that reveal: it is a
+  GRADED surface (it always prints a score line, and `short` reads its verdict
+  from grading details) and a poll produces none of that. A poll reveals the
+  two facts it has — which answer is right, and which one this browser sent.

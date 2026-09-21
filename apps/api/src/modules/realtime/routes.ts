@@ -216,6 +216,7 @@ async function snapshotOf(
   }
   const participant = (await live.participantOf(app.db, row, stream.userId)) ?? {
     userId: stream.userId,
+    guestId: null,
     timeBonusPercent: 0,
   };
   return {

@@ -82,6 +82,10 @@ export const EvaluationSettings = z.object({
   /** F-EVAL-13: tab visibility changes are journalled, never blocked. */
   logVisibility: z.boolean().default(true),
   requireFullscreen: z.boolean().default(false),
+  /** Only on a `poll` evaluation (`./poll.ts`); absent everywhere else. */
+  poll: z
+    .object({ anonymous: z.boolean().default(false), revealed: z.boolean().default(false) })
+    .optional(),
 });
 export type EvaluationSettings = z.infer<typeof EvaluationSettings>;
 

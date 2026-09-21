@@ -9,3 +9,4 @@ export * from "./results.js";
 export * from "./realtime.js";
 export * from "./api.js";
 export * from "./notifications.js";
+export * from "./poll.js";
