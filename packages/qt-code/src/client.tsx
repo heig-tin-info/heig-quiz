@@ -12,6 +12,13 @@ import type { QuestionTypeClient } from "@quiz/core/client";
 
 import { initialRegions } from "./segments.js";
 import type { CodeAnswer, CodeConfig, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
+/*
+ * Two VALUES escape to the host, and only these two: the list of languages the
+ * browser runner ships, and nothing else from `schema.ts`. `apps/web` decides
+ * where a run executes (`src/runner/index.ts`) and needs the same list the
+ * editor offers the teacher — one list, not two that drift (ADR-015).
+ */
+export { RUNNO_LANGUAGES } from "./schema.js";
 
 function CodeIcon({ className }: { className?: string }) {
   return (
@@ -72,8 +79,11 @@ export const codeClient: QuestionTypeClient<
 export { CodeIcon };
 export type {
   CodeAnswer,
+  CodeCase,
   CodeConfig,
   CodeDetails,
+  CodeLimits,
+  CodeRuntime,
   CodeSegment,
   CodeSolution,
   CodeStudent,
@@ -85,7 +95,7 @@ export type {
  * genuinely needs one imports the file directly.
  */
 export type { CodeEditorProps } from "./Editor.js";
-export type { CodePlayerProps } from "./Player.js";
+export type { CodePlayerProps, CodeRunOptions, CodeRunStage } from "./Player.js";
 export type { CodeReviewProps } from "./Review.js";
 export type { CodeAreaProps } from "./MonacoHost.js";
 export {

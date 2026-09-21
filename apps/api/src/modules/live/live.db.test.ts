@@ -566,7 +566,12 @@ describe("restoring an attempt (F-LIVE-06)", () => {
 });
 
 describe("running code (POST /attempts/:id/run)", () => {
-  async function codeAttempt() {
+  async function codeAttempt(
+    cases: { name: string; args?: string[]; expected: string; visible: boolean }[] = [
+      { name: "visible-1", expected: "ok", visible: true },
+      { name: "hidden-1", expected: "secret-expected", visible: false },
+    ],
+  ) {
     const seed = await seedLive(db, { questions: 0 });
     const row = await applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
     const { createQuestion, putDraft, publishQuestion } = await import("../pool/service.js");
@@ -584,10 +589,7 @@ describe("running code (POST /attempts/:id/run)", () => {
       config: {
         template: "int main(){}",
         runsPerMinute: 2,
-        cases: [
-          { name: "visible-1", expected: "ok", visible: true },
-          { name: "hidden-1", expected: "secret-expected", visible: false },
-        ],
+        cases,
       },
     });
     await publishQuestion(db, question!, { userId: seed.teacherId });
@@ -690,6 +692,87 @@ describe("running code (POST /attempts/:id/run)", () => {
         now: clock.now(),
       }),
     ).resolves.toMatchObject({ result: { status: "ok" } });
+  });
+
+  /** A recording runner: it answers nothing useful, it remembers the request. */
+  function recorder(): {
+    requests: { cases: { name: string; args: string[]; stdin: string }[] }[];
+    runner: never;
+  } {
+    const requests: { cases: { name: string; args: string[]; stdin: string }[] }[] = [];
+    const runner = {
+      run: async (req: { cases: { name: string; args: string[]; stdin: string }[] }) => {
+        requests.push({ cases: req.cases });
+        return {
+          compile: { ok: true, stdout: "", stderr: "", ms: 1 },
+          cases: req.cases.map(() => ({
+            exitCode: 0,
+            stdout: "ok",
+            stderr: "",
+            ms: 1,
+            timedOut: false,
+            oom: false,
+            truncated: false,
+          })),
+        };
+      },
+      health: async () => ({ ok: true, languages: ["c"], queued: 0, avgMs: 1 }),
+    };
+    return { requests, runner: runner as never };
+  }
+
+  it("keeps the command line the TEACHER wrote on a visible case", async () => {
+    const { evaluation, attempt, itemId } = await codeAttempt([
+      { name: "visible-1", args: ["3", "4"], expected: "ok", visible: true },
+      { name: "hidden-1", args: ["--secret-arg"], expected: "secret-expected", visible: false },
+    ]);
+    const { requests, runner } = recorder();
+    const result = await service.runVisibleCases(db, {
+      runner,
+      evaluation,
+      attempt,
+      itemId,
+      regions: ["return 0;"],
+      // A command line in the body is for the free-stdin try only; it must not
+      // touch a visible case.
+      args: ["99"],
+      now: clock.now(),
+    });
+    expect(requests[0]?.cases).toEqual([{ name: "visible-1", args: ["3", "4"], stdin: "" }]);
+    expect(result.result.status).toBe("ok");
+    // The hidden case's command line is as much of the key as its stdin is.
+    expect(JSON.stringify(requests)).not.toContain("--secret-arg");
+  });
+
+  it("gives the free-stdin try the command line the body asked for", async () => {
+    const { evaluation, attempt, itemId } = await codeAttempt();
+    const { requests, runner } = recorder();
+    await service.runVisibleCases(db, {
+      runner,
+      evaluation,
+      attempt,
+      itemId,
+      regions: ["return 0;"],
+      stdin: "7\n",
+      args: ["a b", "x;y"],
+      now: clock.now(),
+    });
+    expect(requests[0]?.cases).toEqual([
+      { name: "stdin", args: ["a b", "x;y"], stdin: "7\n" },
+    ]);
+
+    // And nothing at all when the body says nothing.
+    const plain = recorder();
+    await service.runVisibleCases(db, {
+      runner: plain.runner,
+      evaluation,
+      attempt,
+      itemId,
+      regions: ["return 0;"],
+      stdin: "7\n",
+      now: clock.now(),
+    });
+    expect(plain.requests[0]?.cases).toEqual([{ name: "stdin", args: [], stdin: "7\n" }]);
   });
 });
 

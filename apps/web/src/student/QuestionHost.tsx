@@ -8,7 +8,9 @@
  *   - the host injects what a `qt-*` package cannot own: the French strings
  *     (`questionStrings.ts`) and `MarkdownView`, the ONE renderer of
  *     untrusted content a student sees (invariant 4 and DESIGN.md);
- *   - `onRun` is adapted from `POST /attempts/:id/run`.
+ *   - `onRun` comes from `src/runner/`, which decides between the backend
+ *     runner and the browser one and owns the fallback between them
+ *     (ADR-015); `POST /attempts/:id/run` is the backend half of it.
  *
  * The registry types every player as `ComponentType<PlayerProps<…>>`, which
  * is the shape of the contract and not of the host's extras (deviation W2-3
@@ -31,7 +33,8 @@ import { playerStringsFor } from "./questionStrings";
 interface HostPlayerProps extends PlayerProps<unknown, unknown> {
   strings?: unknown;
   renderMarkdown?: (source: string) => ReactNode;
-  onRun?: (answer: unknown) => Promise<RunnerOutcome | "unavailable">;
+  onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable">;
+  allowManualRun?: boolean;
 }
 
 /*
@@ -49,6 +52,7 @@ export function QuestionHost({
   onChange,
   readOnly,
   onRun,
+  allowManualRun,
 }: {
   type: string;
   student: unknown;
@@ -56,7 +60,9 @@ export function QuestionHost({
   onChange: (next: unknown) => void;
   readOnly: boolean;
   /** Present only for a type that has something to run. */
-  onRun?: (answer: unknown) => Promise<RunnerOutcome | "unavailable">;
+  onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable">;
+  /** `code` only: whether the free stdin box has a runner that will take it. */
+  allowManualRun?: boolean;
 }) {
   const t = useT();
   let Player: ComponentType<HostPlayerProps>;
@@ -84,6 +90,7 @@ export function QuestionHost({
           strings={playerStringsFor(type, t)}
           renderMarkdown={renderMarkdown}
           {...(onRun ? { onRun } : {})}
+          {...(allowManualRun === undefined ? {} : { allowManualRun })}
         />
       </Suspense>
     </ScrollableCode>

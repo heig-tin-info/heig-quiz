@@ -49,6 +49,48 @@ describe("the canonical mapping", () => {
     });
   });
 
+  it("leaves out the defaults of a case, so the spec's three-field case reads back", () => {
+    const canonical = toCanonical(codeConfig()) as {
+      tests: { cases: Record<string, unknown>[] };
+    };
+    const plain = canonical.tests.cases[0]!;
+    expect(plain).not.toHaveProperty("args");
+    expect(plain).not.toHaveProperty("compareStdout");
+    expect(plain).not.toHaveProperty("expectedExitCode");
+    expect(canonical).not.toHaveProperty("runtime");
+  });
+
+  it("round-trips a command line, the two checks and the browser runtime", () => {
+    const config = CodeConfig.parse({
+      ...codeConfig(),
+      runtime: "runno",
+      tests: {
+        mode: "io",
+        cases: [
+          { name: "argv", args: ["3", "a b", "x;y"], expected: "7\n", visible: true, points: 1 },
+          {
+            name: "exit only",
+            expected: "",
+            compareStdout: false,
+            expectedExitCode: 2,
+            points: 1,
+          },
+          { name: "any code", expected: "ok\n", expectedExitCode: null, points: 1 },
+        ],
+      },
+    });
+    const canonical = toCanonical(config) as {
+      runtime: unknown;
+      tests: { cases: Record<string, unknown>[] };
+    };
+    expect(canonical.runtime).toBe("runno");
+    expect(canonical.tests.cases[0]).toMatchObject({ args: ["3", "a b", "x;y"] });
+    expect(canonical.tests.cases[1]).toMatchObject({ compareStdout: false, expectedExitCode: 2 });
+    expect(canonical.tests.cases[2]).toMatchObject({ expectedExitCode: null });
+    expect(canonical.tests.cases[2]).not.toHaveProperty("compareStdout");
+    expect(fromCanonical(canonical)).toEqual(config);
+  });
+
   it("accepts the YAML of docs/spec/04 §4.7, defaults and all", () => {
     const config = fromCanonical({
       prompt: "Sum the array read on stdin.",
@@ -63,6 +105,14 @@ describe("the canonical mapping", () => {
     expect(config.configVersion).toBe(1);
     expect(config.limits.timeMs).toBe(2000);
     expect(config.tests.cases[0]?.timeMs).toBeNull();
+    // A file written before ADR-015 means exactly what it meant: no command
+    // line, compare stdout, require exit 0, run on the backend.
+    expect(config.runtime).toBe("backend");
+    expect(config.tests.cases[0]).toMatchObject({
+      args: [],
+      compareStdout: true,
+      expectedExitCode: 0,
+    });
   });
 
   it("refuses a file it cannot validate", () => {

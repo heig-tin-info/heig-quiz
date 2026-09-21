@@ -61,7 +61,12 @@ export interface UseAttempt {
   setAnswer: (itemId: string, payload: unknown) => void;
   markDone: (itemId: string, done: boolean) => Promise<void>;
   submit: () => Promise<void>;
-  run: (itemId: string, regions: string[]) => Promise<RunnerOutcome | "unavailable">;
+  run: (
+    itemId: string,
+    regions: string[],
+    /** The free try of §4.7; absent, the server runs the VISIBLE cases. */
+    manual?: { args: string[]; stdin: string },
+  ) => Promise<RunnerOutcome | "unavailable">;
   /** F-EVAL-13: the journal. Never blocks, never surfaces an error. */
   report: (kind: AttemptEventKind, details?: unknown) => void;
 }
@@ -75,13 +80,13 @@ function toOutcome(result: RunnerResultEvent["result"]): RunnerOutcome | "unavai
     // The server sends the VISIBLE cases in their published order, which is
     // the order the player's table walks (deviation W5-12).
     cases: result.cases.map((c) => ({
-      exitCode: c.ok ? 0 : 1,
+      exitCode: c.exitCode,
       stdout: c.stdout,
-      stderr: "",
+      stderr: c.stderr,
       ms: c.ms,
       timedOut: c.timedOut,
-      oom: false,
-      truncated: false,
+      oom: c.oom,
+      truncated: c.truncated,
     })),
   };
 }
@@ -308,12 +313,33 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
     saver.stop();
   }, [attemptId, preview, sample, saver]);
 
+  /*
+   * The BACKEND half of a student's "Run" (ADR-015). Which runner serves the
+   * run is decided one level up, in `src/runner/`: `student/Player.tsx` hands
+   * this function to `runCode` as the backend path, and the browser runner
+   * takes over when the question asks for it or when this one answers 503.
+   * Nothing about the call below changed, and nothing about it should: a
+   * graded run is this one.
+   */
   const run = useCallback(
-    async (itemId: string, regions: string[]): Promise<RunnerOutcome | "unavailable"> => {
+    async (
+      itemId: string,
+      regions: string[],
+      manual?: { args: string[]; stdin: string },
+    ): Promise<RunnerOutcome | "unavailable"> => {
       try {
         const response = await api<{ requestId: string; result: RunnerResultEvent["result"] }>(
           `/app/api/attempts/${attemptId}/run`,
-          { method: "POST", body: JSON.stringify({ itemId, regions }) },
+          {
+            method: "POST",
+            // A `stdin` — even an empty one — is what tells the server this is
+            // the free try rather than the visible cases (`RunBody`).
+            body: JSON.stringify(
+              manual === undefined
+                ? { itemId, regions }
+                : { itemId, regions, stdin: manual.stdin, args: manual.args },
+            ),
+          },
         );
         return toOutcome(response.result);
       } catch (error) {

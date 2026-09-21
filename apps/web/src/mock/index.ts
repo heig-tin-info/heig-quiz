@@ -851,12 +851,22 @@ const shortNumber = (prompt: string, value: number, unit?: string) => ({
 const codeConfig = (
   prompt: string,
   template: string,
-  cases: { name: string; stdin: string; expected: string; visible: boolean }[],
+  cases: {
+    name: string;
+    args?: string[];
+    stdin: string;
+    expected: string;
+    compareStdout?: boolean;
+    expectedExitCode?: number | null;
+    visible: boolean;
+  }[],
   reference = "",
+  runtime: "backend" | "runno" = "backend",
 ) => ({
   configVersion: 1,
   prompt,
   language: "c",
+  runtime,
   template,
   files: [],
   action: "run",
@@ -868,7 +878,14 @@ const codeConfig = (
   tests: {
     mode: "io",
     compare: { trimTrailing: true, ignoreCase: false, numeric: null },
-    cases: cases.map((c) => ({ ...c, points: 1, timeMs: null })),
+    cases: cases.map((c) => ({
+      args: [],
+      compareStdout: true,
+      expectedExitCode: 0,
+      ...c,
+      points: 1,
+      timeMs: null,
+    })),
   },
 });
 
@@ -1521,13 +1538,17 @@ function studentView(q: MockQuestion, config: Record<string, unknown>): unknown 
       return {
         prompt: config.prompt,
         language: config.language,
+        runtime: config.runtime ?? "backend",
         segments: splitTemplate(String(config.template ?? ""), "c"),
         limits: config.limits,
         runsPerMinute: config.runsPerMinute,
         visibleCases: visible.map((c) => ({
           name: c.name,
+          args: c.args ?? [],
           stdin: c.stdin,
-          expected: c.expected,
+          expected: c.compareStdout === false ? "" : c.expected,
+          compareStdout: c.compareStdout ?? true,
+          expectedExitCode: c.expectedExitCode === undefined ? 0 : c.expectedExitCode,
           points: c.points,
         })),
         hiddenCount: hidden.length,
@@ -1541,8 +1562,11 @@ function studentView(q: MockQuestion, config: Record<string, unknown>): unknown 
 
 interface CodeCaseLike {
   name: string;
+  args?: string[];
   stdin: string;
   expected: string;
+  compareStdout?: boolean;
+  expectedExitCode?: number | null;
   visible: boolean;
   points: number;
 }
@@ -2190,8 +2214,11 @@ function solutionOf(q: MockQuestion): unknown {
         referenceSolution: String(config.referenceSolution ?? ""),
         cases: (tests.cases ?? []).map((c) => ({
           name: c.name,
+          args: c.args ?? [],
           stdin: c.stdin,
           expected: c.expected,
+          compareStdout: c.compareStdout ?? true,
+          expectedExitCode: c.expectedExitCode === undefined ? 0 : c.expectedExitCode,
           points: c.points,
           visible: c.visible,
         })),
@@ -3021,17 +3048,29 @@ const studentPayloads: Record<number, unknown> = {
     kind: "number",
     placeholder: "4",
   },
+  /*
+   * The one question of the mock that really RUNS. `runtime: "runno"` sends it
+   * to the browser runner (`src/runner/`), so `pnpm dev:mock` — no API, no
+   * container engine, nothing — compiles this C with clang.wasm and executes
+   * the three cases for real. Which is the only honest way to look at the
+   * screen: a stubbed outcome shows the markup, not the feature.
+   *
+   * The program takes its input from the COMMAND LINE, and the third case
+   * checks nothing but the exit code, so the two things the case shape gained
+   * are both on screen.
+   */
   4: {
     prompt:
       // Plain text: the `code` player renders its prompt as written (its
       // props carry no markdown renderer), so no backtick survives as syntax.
-      "Corrigez r_parallele pour qu'elle renvoie la résistance équivalente de deux résistances en parallèle, en ohms. Le cas d'un court-circuit doit renvoyer 0.",
+      "Corrigez r_parallele pour qu'elle renvoie la résistance équivalente de deux résistances en parallèle, en ohms. Les deux valeurs arrivent sur la ligne de commande. Le cas d'un court-circuit doit renvoyer 0, et un appel sans les deux arguments doit sortir avec le code 2.",
     language: "c",
+    runtime: "runno",
     segments: [
       {
         kind: "locked",
         index: null,
-        text: "/* Résistance équivalente de deux résistances en parallèle, en ohms. */\n#include <stdio.h>\n",
+        text: "/* Résistance équivalente de deux résistances en parallèle, en ohms. */\n#include <stdio.h>\n#include <stdlib.h>\n",
       },
       {
         kind: "editable",
@@ -3041,14 +3080,39 @@ const studentPayloads: Record<number, unknown> = {
       {
         kind: "locked",
         index: null,
-        text: 'int main(void)\n{\n    double a, b;\n    if (scanf("%lf %lf", &a, &b) != 2)\n        return 1;\n    printf("%.2f\\n", r_parallele(a, b));\n    return 0;\n}\n',
+        text: 'int main(int argc, char **argv)\n{\n    if (argc != 3) {\n        fprintf(stderr, "usage: %s R1 R2\\n", argv[0]);\n        return 2;\n    }\n    printf("%.2f\\n", r_parallele(atof(argv[1]), atof(argv[2])));\n    return 0;\n}\n',
       },
     ],
     limits: { timeMs: 2000, memoryMb: 128, outputKb: 64 },
     runsPerMinute: 10,
     visibleCases: [
-      { name: "deux résistances égales", stdin: "100 100", expected: "50.00", points: 1 },
-      { name: "court-circuit", stdin: "0 470", expected: "0.00", points: 1 },
+      {
+        name: "deux résistances égales",
+        args: ["100", "100"],
+        stdin: "",
+        expected: "50.00",
+        compareStdout: true,
+        expectedExitCode: 0,
+        points: 1,
+      },
+      {
+        name: "court-circuit",
+        args: ["0", "470"],
+        stdin: "",
+        expected: "0.00",
+        compareStdout: true,
+        expectedExitCode: 0,
+        points: 1,
+      },
+      {
+        name: "arguments manquants",
+        args: [],
+        stdin: "",
+        expected: "",
+        compareStdout: false,
+        expectedExitCode: 2,
+        points: 1,
+      },
     ],
     hiddenCount: 3,
     hiddenPoints: 3,
@@ -3243,7 +3307,34 @@ on("POST", "/app/api/attempts/:id/submit", () => ({
 
 on("POST", "/app/api/attempts/:id/events", () => undefined);
 
-on("POST", "/app/api/attempts/:id/run", () => ({
+/*
+ * The BACKEND run. The mock's code question asks for the browser instead
+ * (`runtime: "runno"`), so this answers only when the browser runner cannot —
+ * no `/runtimes` on this deployment, or a question that says `backend`. A free
+ * try (`stdin` in the body) gets one case back, the way the API answers it.
+ */
+on("POST", "/app/api/attempts/:id/run", (m, body): unknown => {
+  const free = body as { stdin?: string; args?: string[] } | undefined;
+  if (free?.stdin !== undefined) {
+    return {
+      requestId: "33333333-3333-4333-8333-333333333334",
+      result: {
+        status: "ok",
+        compile: { ok: true, stderr: "" },
+        cases: [
+          {
+            name: "stdin",
+            ok: true,
+            stdout: `${(free.args ?? []).join(" ")}\n`,
+            expected: "",
+            ms: 4,
+            timedOut: false,
+          },
+        ],
+      },
+    };
+  }
+  return {
   requestId: "33333333-3333-4333-8333-333333333333",
   result: {
     status: "ok",
@@ -3267,7 +3358,8 @@ on("POST", "/app/api/attempts/:id/run", () => ({
       },
     ],
   },
-}));
+  };
+});
 
 on("POST", "/app/api/join/:code", (m): JoinResult => ({
   classroomId: "r1",

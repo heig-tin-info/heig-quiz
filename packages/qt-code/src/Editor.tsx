@@ -18,13 +18,15 @@ import { splitForDisplay } from "./segments.js";
 import {
   CODE_LANGUAGES,
   DEFAULT_LIMITS,
+  RUNNO_LANGUAGES,
   totalCasePoints,
   type CodeCase,
   type CodeConfig,
   type CodeLanguage,
+  type CodeRuntime,
 } from "./schema.js";
 import { EDITOR_STRINGS, withStrings, type CodeEditorStrings } from "./strings.js";
-import { badge, button, card, cx, hint, input, inputSm, label, sectionTitle, table } from "./styles.js";
+import { badge, button, card, cx, hint, input, inputSm, label, sectionTitle } from "./styles.js";
 
 export interface CodeEditorProps extends EditorProps<CodeConfig> {
   /**
@@ -54,12 +56,19 @@ type TryState =
 
 const NEW_CASE: CodeCase = {
   name: "",
+  args: [],
   stdin: "",
   expected: "",
+  compareStdout: true,
+  expectedExitCode: 0,
   visible: false,
   points: 1,
   timeMs: null,
 };
+
+/** The languages the browser runner can run; anything else is the server's. */
+const browserCapable = (language: CodeLanguage): boolean =>
+  (RUNNO_LANGUAGES as readonly string[]).includes(language);
 
 export function CodeEditor({
   config,
@@ -74,6 +83,12 @@ export function CodeEditor({
   const s = withStrings(EDITOR_STRINGS, strings);
   const ids = useId();
   const [tryState, setTryState] = useState<TryState>({ status: "idle" });
+  /*
+   * One argument per LINE, and the textarea keeps its own text while it is
+   * being typed: `args.join("\n")` would swallow the newline the teacher just
+   * pressed (an empty last line is not an argument) and move the caret.
+   */
+  const [argsDraft, setArgsDraft] = useState<Record<number, string>>({});
 
   const patch = (next: Partial<CodeConfig>) => onChange({ ...config, ...next });
   const patchTests = (next: Partial<CodeConfig["tests"]>) =>
@@ -82,6 +97,21 @@ export function CodeEditor({
     patchTests({
       cases: config.tests.cases.map((c, i) => (i === index ? { ...c, ...next } : c)),
     });
+  const setCases = (cases: CodeCase[]) => {
+    // The drafts are keyed by position, so a removal would shift them onto the
+    // wrong case. Dropping them re-reads every row from the config.
+    setArgsDraft({});
+    patchTests({ cases });
+  };
+  const writeArgs = (index: number, text: string) => {
+    setArgsDraft((draft) => ({ ...draft, [index]: text }));
+    patchCase(index, {
+      args: text
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line !== ""),
+    });
+  };
 
   const segments = splitForDisplay(config.template, config.language);
   const lockedCount = segments.filter((seg) => seg.kind === "locked").length;
@@ -103,10 +133,13 @@ export function CodeEditor({
         const run = outcome.cases[i];
         const ok =
           run !== undefined &&
-          run.exitCode === 0 &&
           !run.timedOut &&
           !run.oom &&
-          compareOutput(testCase.expected, run.stdout, config.tests.compare);
+          (testCase.expectedExitCode === null
+            ? run.exitCode !== null
+            : run.exitCode === (testCase.expectedExitCode ?? 0)) &&
+          (testCase.compareStdout === false ||
+            compareOutput(testCase.expected, run.stdout, config.tests.compare));
         return ok ? count + 1 : count;
       }, 0);
       setTryState({ status: "done", passed, total: config.tests.cases.length });
@@ -149,24 +182,49 @@ export function CodeEditor({
             />
           )}
         </div>
-        <div className="flex flex-col gap-1.5">
-          <label className={label} htmlFor={`${ids}-language`}>
-            {s.language}
-          </label>
-          <select
-            id={`${ids}-language`}
-            disabled={disabled}
-            value={config.language}
-            onChange={(e) => patch({ language: e.target.value as CodeLanguage })}
-            className={cx(input, "h-8.5 w-52")}
-          >
-            {CODE_LANGUAGES.map((lang) => (
-              <option key={lang} value={lang}>
-                {lang}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label className={label} htmlFor={`${ids}-language`}>
+              {s.language}
+            </label>
+            <select
+              id={`${ids}-language`}
+              disabled={disabled}
+              value={config.language}
+              onChange={(e) => patch({ language: e.target.value as CodeLanguage })}
+              className={cx(input, "h-8.5 w-52")}
+            >
+              {CODE_LANGUAGES.map((lang) => (
+                <option key={lang} value={lang}>
+                  {lang}
+                </option>
+              ))}
+            </select>
+          </div>
+          {/*
+           * Only for a language the browser runner ships (ADR-015). For every
+           * other one the question has no choice to offer, and a disabled
+           * control that can never be enabled is worse than no control.
+           */}
+          {browserCapable(config.language) ? (
+            <div className="flex flex-col gap-1.5">
+              <label className={label} htmlFor={`${ids}-runtime`}>
+                {s.runtime}
+              </label>
+              <select
+                id={`${ids}-runtime`}
+                disabled={disabled}
+                value={config.runtime ?? "backend"}
+                onChange={(e) => patch({ runtime: e.target.value as CodeRuntime })}
+                className={cx(input, "h-8.5 w-52")}
+              >
+                <option value="backend">{s.runtimeBackend}</option>
+                <option value="runno">{s.runtimeBrowser}</option>
+              </select>
+            </div>
+          ) : null}
         </div>
+        {browserCapable(config.language) ? <p className={hint}>{s.runtimeHint}</p> : null}
       </section>
 
       <section className={cx(card, "flex flex-col gap-3 p-4")}>
@@ -248,136 +306,192 @@ export function CodeEditor({
         )}
       </section>
 
+      {/*
+       * One PANEL per case, not one table row.
+       *
+       * A case now carries ten fields — a name, a command line, an input, an
+       * expected output and the two checks that decide whether it passed, plus
+       * its points, its budget and its visibility. Ten columns is not a table
+       * a teacher can read at 1440 px, let alone on a laptop; a panel gives
+       * each case a heading and three short lines (DESIGN.md, tables).
+       */}
       <section className={cx(card, "flex flex-col gap-3 p-4")}>
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className={sectionTitle}>
-            {s.cases}
-          </h3>
+          <h3 className={sectionTitle}>{s.cases}</h3>
           <span className={badge()}>{s.totalPoints(totalCasePoints(config))}</span>
           <button
             type="button"
             className={button("secondary", "sm", "ml-auto")}
             disabled={disabled}
-            onClick={() => patchTests({ cases: [...config.tests.cases, { ...NEW_CASE }] })}
+            onClick={() => setCases([...config.tests.cases, { ...NEW_CASE }])}
           >
             {s.addCase}
           </button>
         </div>
-        <div className="overflow-x-auto">
-          <table className={table.table}>
-            <thead className={table.head}>
-              <tr>
-                <th scope="col" className={table.th}>
-                  {s.caseName}
-                </th>
-                <th scope="col" className={table.th}>
-                  {s.stdin}
-                </th>
-                <th scope="col" className={table.th}>
-                  {s.expected}
-                </th>
-                <th scope="col" className={table.th}>
+
+        <ol className="flex flex-col gap-3">
+          {config.tests.cases.map((testCase, i) => (
+            <li key={i} className="rounded-card border border-line bg-surface-2 p-3">
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="flex min-w-40 flex-1 flex-col gap-1.5">
+                  <label className={label} htmlFor={`${ids}-name-${i}`}>
+                    {s.case(i + 1)}
+                  </label>
+                  <input
+                    id={`${ids}-name-${i}`}
+                    className={cx(inputSm, "w-full font-medium")}
+                    aria-label={`${s.caseName} ${i + 1}`}
+                    disabled={disabled}
+                    value={testCase.name}
+                    onChange={(e) => patchCase(i, { name: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className={label} htmlFor={`${ids}-points-${i}`}>
+                    {s.points}
+                  </label>
+                  <input
+                    id={`${ids}-points-${i}`}
+                    type="number"
+                    min={0}
+                    step={0.5}
+                    className={cx(inputSm, "w-20 text-right tabular-nums")}
+                    aria-label={`${s.points} ${i + 1}`}
+                    disabled={disabled}
+                    value={testCase.points}
+                    onChange={(e) => patchCase(i, { points: Number(e.target.value) || 0 })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className={label} htmlFor={`${ids}-time-${i}`}>
+                    {s.timeMs}
+                  </label>
+                  <input
+                    id={`${ids}-time-${i}`}
+                    type="number"
+                    min={100}
+                    step={100}
+                    placeholder={String(config.limits.timeMs)}
+                    className={cx(inputSm, "w-24 text-right tabular-nums")}
+                    aria-label={`${s.timeMs} ${i + 1}`}
+                    disabled={disabled}
+                    value={testCase.timeMs ?? ""}
+                    onChange={(e) =>
+                      patchCase(i, {
+                        timeMs: e.target.value === "" ? null : Number(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+                <label className="flex h-7 items-center gap-2 text-[13px] text-fg-muted">
+                  <input
+                    type="checkbox"
+                    aria-label={`${s.hidden} ${i + 1}`}
+                    disabled={disabled}
+                    checked={!testCase.visible}
+                    onChange={(e) => patchCase(i, { visible: !e.target.checked })}
+                  />
                   {s.hidden}
-                </th>
-                <th scope="col" className={cx(table.th, "text-right")}>
-                  {s.points}
-                </th>
-                <th scope="col" className={cx(table.th, "text-right")}>
-                  {s.timeMs}
-                </th>
-                <th scope="col" className={table.th} />
-              </tr>
-            </thead>
-            <tbody>
-              {config.tests.cases.map((testCase, i) => (
-                <tr key={i} className={table.row}>
-                  <td className={table.td}>
+                </label>
+                <button
+                  type="button"
+                  className={button("ghost", "sm")}
+                  aria-label={s.removeCase(testCase.name)}
+                  disabled={disabled || config.tests.cases.length <= 1}
+                  onClick={() => setCases(config.tests.cases.filter((_, j) => j !== i))}
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5">
+                  <label className={label} htmlFor={`${ids}-args-${i}`}>
+                    {s.args}
+                  </label>
+                  <textarea
+                    id={`${ids}-args-${i}`}
+                    rows={2}
+                    className={cx(input, "w-full py-1.5 font-mono")}
+                    aria-label={`${s.args} ${i + 1}`}
+                    disabled={disabled}
+                    value={argsDraft[i] ?? (testCase.args ?? []).join("\n")}
+                    onChange={(e) => writeArgs(i, e.target.value)}
+                  />
+                  <p className={hint}>{s.argsHint}</p>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className={label} htmlFor={`${ids}-stdin-${i}`}>
+                    {s.stdin}
+                  </label>
+                  <textarea
+                    id={`${ids}-stdin-${i}`}
+                    rows={2}
+                    className={cx(input, "w-full py-1.5 font-mono")}
+                    aria-label={`${s.stdin} ${i + 1}`}
+                    disabled={disabled}
+                    value={testCase.stdin}
+                    onChange={(e) => patchCase(i, { stdin: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-end gap-3">
+                <label className="flex h-8.5 items-center gap-2 text-[13px] text-fg">
+                  <input
+                    type="checkbox"
+                    aria-label={`${s.compareStdout} ${i + 1}`}
+                    disabled={disabled}
+                    checked={testCase.compareStdout !== false}
+                    onChange={(e) => patchCase(i, { compareStdout: e.target.checked })}
+                  />
+                  {s.compareStdout}
+                </label>
+                {/* Off, there is no expected output to write: the case checks
+                    the exit code alone, so the field goes away with it. */}
+                {testCase.compareStdout !== false ? (
+                  <div className="flex min-w-48 flex-1 flex-col gap-1.5">
+                    <label className={label} htmlFor={`${ids}-expected-${i}`}>
+                      {s.expected}
+                    </label>
                     <input
-                      className={cx(inputSm, "w-36 font-medium")}
-                      aria-label={`${s.caseName} ${i + 1}`}
-                      disabled={disabled}
-                      value={testCase.name}
-                      onChange={(e) => patchCase(i, { name: e.target.value })}
-                    />
-                  </td>
-                  <td className={table.td}>
-                    <input
-                      className={cx(inputSm, "w-40 font-mono")}
-                      aria-label={`${s.stdin} ${i + 1}`}
-                      disabled={disabled}
-                      value={testCase.stdin}
-                      onChange={(e) => patchCase(i, { stdin: e.target.value })}
-                    />
-                  </td>
-                  <td className={table.td}>
-                    <input
-                      className={cx(inputSm, "w-40 font-mono")}
+                      id={`${ids}-expected-${i}`}
+                      className={cx(inputSm, "w-full font-mono")}
                       aria-label={`${s.expected} ${i + 1}`}
                       disabled={disabled}
                       value={testCase.expected}
                       onChange={(e) => patchCase(i, { expected: e.target.value })}
                     />
-                  </td>
-                  <td className={table.td}>
-                    <label className="inline-flex items-center gap-2 text-[13px] text-fg-muted">
-                      <input
-                        type="checkbox"
-                        aria-label={`${s.hidden} ${i + 1}`}
-                        disabled={disabled}
-                        checked={!testCase.visible}
-                        onChange={(e) => patchCase(i, { visible: !e.target.checked })}
-                      />
-                      {s.hidden}
-                    </label>
-                  </td>
-                  <td className={cx(table.td, "text-right")}>
-                    <input
-                      type="number"
-                      min={0}
-                      step={0.5}
-                      className={cx(inputSm, "w-20 text-right tabular-nums")}
-                      aria-label={`${s.points} ${i + 1}`}
-                      disabled={disabled}
-                      value={testCase.points}
-                      onChange={(e) => patchCase(i, { points: Number(e.target.value) || 0 })}
-                    />
-                  </td>
-                  <td className={cx(table.td, "text-right")}>
-                    <input
-                      type="number"
-                      min={100}
-                      step={100}
-                      placeholder={String(config.limits.timeMs)}
-                      className={cx(inputSm, "w-24 text-right tabular-nums")}
-                      aria-label={`${s.timeMs} ${i + 1}`}
-                      disabled={disabled}
-                      value={testCase.timeMs ?? ""}
-                      onChange={(e) =>
-                        patchCase(i, {
-                          timeMs: e.target.value === "" ? null : Number(e.target.value),
-                        })
-                      }
-                    />
-                  </td>
-                  <td className={cx(table.td, "text-right")}>
-                    <button
-                      type="button"
-                      className={button("ghost", "sm")}
-                      aria-label={s.removeCase(testCase.name)}
-                      disabled={disabled || config.tests.cases.length <= 1}
-                      onClick={() =>
-                        patchTests({ cases: config.tests.cases.filter((_, j) => j !== i) })
-                      }
-                    >
-                      ×
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </div>
+                ) : null}
+                <div className="flex flex-col gap-1.5">
+                  <label className={label} htmlFor={`${ids}-exit-${i}`}>
+                    {s.exitCode}
+                  </label>
+                  <input
+                    id={`${ids}-exit-${i}`}
+                    type="number"
+                    min={0}
+                    max={255}
+                    placeholder={s.exitCodeAny}
+                    className={cx(inputSm, "w-24 text-right tabular-nums")}
+                    aria-label={`${s.exitCode} ${i + 1}`}
+                    disabled={disabled}
+                    value={testCase.expectedExitCode ?? ""}
+                    onChange={(e) =>
+                      patchCase(i, {
+                        expectedExitCode:
+                          e.target.value === "" ? null : Number(e.target.value) || 0,
+                      })
+                    }
+                  />
+                </div>
+              </div>
+            </li>
+          ))}
+        </ol>
         <p className={hint}>{s.timeMsHint}</p>
+        <p className={hint}>{s.exitCodeHint}</p>
       </section>
 
       <details className={cx(card, "p-4")}>

@@ -1,7 +1,7 @@
 import type { RunnerRequest } from "@quiz/core/server";
 import { describe, expect, it } from "vitest";
 
-import { classify, containerTtlSeconds, executeRequest, prepareFiles } from "./execute.js";
+import { caseArgv, classify, containerTtlSeconds, executeRequest, prepareFiles } from "./execute.js";
 import { createFakeEngine } from "./test/fakeEngine.js";
 import { testConfig } from "./test/config.js";
 
@@ -15,8 +15,8 @@ function request(overrides: Partial<RunnerRequest> = {}): RunnerRequest {
     action: "run",
     limits: { timeMs: 2000, memoryMb: 128, outputKb: 64 },
     cases: [
-      { name: "one", stdin: "1\n" },
-      { name: "two", stdin: "2\n" },
+      { name: "one", args: [], stdin: "1\n" },
+      { name: "two", args: [], stdin: "2\n" },
     ],
     priority: "grading",
     ...overrides,
@@ -51,7 +51,9 @@ describe("containerTtlSeconds", () => {
   });
 
   it("stays under the ceiling of a whole request", () => {
-    const many = request({ cases: Array.from({ length: 50 }, (_, i) => ({ name: `c${i}`, stdin: "" })) });
+    const many = request({
+      cases: Array.from({ length: 50 }, (_, i) => ({ name: `c${i}`, args: [], stdin: "" })),
+    });
     expect(containerTtlSeconds(many, config)).toBe(
       config.RUNNER_REQUEST_TIMEOUT_MS / 1000 + 5,
     );
@@ -61,6 +63,31 @@ describe("containerTtlSeconds", () => {
     expect(containerTtlSeconds(request({ action: "check" }), config)).toBeLessThan(
       containerTtlSeconds(request(), config),
     );
+  });
+});
+
+describe("caseArgv", () => {
+  it("puts the case's arguments after the program, as argv entries", () => {
+    expect(caseArgv(["./program"], 2, ["3", "4"])).toEqual([
+      "timeout", "-s", "KILL", "2", "./program", "3", "4",
+    ]);
+    expect(caseArgv(["python3", "main.py"], 5, ["3", "4"])).toEqual([
+      "timeout", "-s", "KILL", "5", "python3", "main.py", "3", "4",
+    ]);
+  });
+
+  it("keeps a space, a quote, a `;` or a `$` inside ONE argument", () => {
+    // There is no shell anywhere in this path (`languages.ts`), so these are
+    // characters of an argument and never fragments of a command line.
+    const nasty = ["a b", 'say "hi"', "x;rm -rf /", "$HOME", "*", "", "--flag"];
+    const argv = caseArgv(["./program"], 2, nasty);
+    expect(argv.slice(5)).toEqual(nasty);
+    // One entry per argument: nothing was split and nothing was joined.
+    expect(argv).toHaveLength(5 + nasty.length);
+  });
+
+  it("adds nothing at all when the case has no command line", () => {
+    expect(caseArgv(["./program"], 2, [])).toEqual(["timeout", "-s", "KILL", "2", "./program"]);
   });
 });
 
@@ -144,6 +171,26 @@ describe("executeRequest", () => {
     expect(runs[0]!.argv).toEqual(["timeout", "-s", "KILL", "2", "./program"]);
     // ... and the service's own deadline is the budget plus the grace.
     expect(runs[0]!.timeoutMs).toBe(2000 + config.RUNNER_CASE_GRACE_MS);
+  });
+
+  it("hands each case its own command line, verbatim, one argv entry per argument", async () => {
+    const engine = createFakeEngine((call) =>
+      call.argv[0] === "timeout" ? { exitCode: 0, stdout: `${call.argv.length}\n` } : {},
+    );
+    await executeRequest(
+      request({
+        cases: [
+          { name: "plain", args: [], stdin: "" },
+          { name: "argv", args: ["3", "a b", 'q"x', "semi;colon"], stdin: "" },
+        ],
+      }),
+      deps(engine),
+    );
+    const runs = engine.calls.filter((call) => call.argv[0] === "timeout");
+    expect(runs[0]!.argv).toEqual(["timeout", "-s", "KILL", "2", "./program"]);
+    expect(runs[1]!.argv).toEqual([
+      "timeout", "-s", "KILL", "2", "./program", "3", "a b", 'q"x', "semi;colon",
+    ]);
   });
 
   it("stops at a build failure and runs no case", async () => {

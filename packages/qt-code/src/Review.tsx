@@ -22,10 +22,31 @@ export interface CodeReviewProps
   renderMarkdown?: MarkdownRenderer | undefined;
 }
 
-function verdictOf(detail: CodeCaseDetail, s: CodeReviewStrings): string {
+/** The case as the teacher wrote it, when the feedback policy sends the key. */
+type CaseSpec = NonNullable<CodeSolution["cases"]>[number];
+
+/**
+ * Which check failed, not merely that one did.
+ *
+ * `gradings.details` stores the outcome, not the rule that judged it, so the
+ * precise sentence is only available when the key travelled with it — the
+ * teacher always, a student when the policy opens the solution. Without it the
+ * verdict stays the honest, blunt "Failed".
+ */
+function verdictOf(
+  detail: CodeCaseDetail,
+  spec: CaseSpec | undefined,
+  s: CodeReviewStrings,
+): string {
   if (detail.timedOut) return s.timedOut;
   if (detail.oom) return s.outOfMemory;
-  return detail.ok ? s.passed : s.failed;
+  if (detail.ok) return s.passed;
+  if (detail.exitCode === null) return s.crashed;
+  if (spec !== undefined && spec.expectedExitCode !== null && detail.exitCode !== spec.expectedExitCode) {
+    return s.exitMismatch(String(detail.exitCode), spec.expectedExitCode);
+  }
+  if (spec !== undefined && !spec.compareStdout) return s.failed;
+  return spec === undefined ? s.failed : s.outputMismatch;
 }
 
 export function CodeReview({
@@ -65,6 +86,8 @@ export function CodeReview({
     );
   }
 
+  // The key, when it travelled: it is what turns "Failed" into "exit 1 ≠ 0".
+  const specs = new Map<string, CaseSpec>((solution?.cases ?? []).map((c) => [c.name, c]));
   const shown = details.cases.filter((c) => c.visible || reveal);
   const hidden = details.cases.filter((c) => !c.visible && !reveal);
   const hiddenPassed = hidden.filter((c) => c.ok).length;
@@ -105,6 +128,9 @@ export function CodeReview({
                   {s.caseName}
                 </th>
                 <th scope="col" className={table.th}>
+                  {s.args}
+                </th>
+                <th scope="col" className={table.th}>
                   {s.expected}
                 </th>
                 <th scope="col" className={table.th}>
@@ -119,13 +145,20 @@ export function CodeReview({
               </tr>
             </thead>
             <tbody>
-              {shown.map((detail, i) => (
+              {shown.map((detail, i) => {
+                const spec = specs.get(detail.name);
+                return (
                 <tr key={i} className={table.row}>
                   <td className={cx(table.td, "font-medium")}>
                     {detail.name}
                     {detail.visible ? null : (
                       <span className={badge("neutral", "ml-2")}>{s.hiddenCase}</span>
                     )}
+                  </td>
+                  <td className={cx(table.td, "whitespace-pre-wrap font-mono")}>
+                    {spec === undefined || (spec.args ?? []).length === 0
+                      ? s.noArgs
+                      : spec.args.join(" ")}
                   </td>
                   <td className={cx(table.td, "whitespace-pre-wrap font-mono")}>
                     {detail.expected ?? "—"}
@@ -135,14 +168,15 @@ export function CodeReview({
                   </td>
                   <td className={table.td}>
                     <span className={badge(detail.ok ? "success" : "danger")}>
-                      {verdictOf(detail, s)}
+                      {verdictOf(detail, spec, s)}
                     </span>
                   </td>
                   <td className={cx(table.td, "text-right tabular-nums")}>
                     {detail.ok ? detail.points : 0} / {detail.points}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

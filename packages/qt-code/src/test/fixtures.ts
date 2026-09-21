@@ -26,6 +26,8 @@ int main(void) {
 export const SECRET_HIDDEN_STDIN = "4\n-1 -2 3 5\n";
 export const SECRET_HIDDEN_EXPECTED = "5 (hidden-expected-marker)";
 export const SECRET_HIDDEN_NAME = "negative-values";
+/** A hidden case's command line is part of the key: it must never reach a student. */
+export const SECRET_HIDDEN_ARG = "--secret-hidden-arg";
 export const SECRET_REFERENCE = "int secret_reference_solution(void) { return 42; }";
 export const SECRET_FILE_CONTENT = "id,answer\n1,0x1004\n";
 export const SECRET_COMPILE_ARGS = "-Wall -Wextra -std=c17 -DSECRET_FLAG";
@@ -51,6 +53,7 @@ export function codeConfig(): CodeConfig {
         { name: "empty array", stdin: "0\n", expected: "0\n", visible: true, points: 1 },
         {
           name: SECRET_HIDDEN_NAME,
+          args: [SECRET_HIDDEN_ARG],
           stdin: SECRET_HIDDEN_STDIN,
           expected: SECRET_HIDDEN_EXPECTED,
           visible: false,

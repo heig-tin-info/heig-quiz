@@ -1060,7 +1060,13 @@ export async function countRecentEvents(
 /** What `type.toStudent` exposes about running; read structurally, never cast. */
 interface RunnableStudentView {
   runsPerMinute?: number;
-  visibleCases?: { name: string; stdin: string; expected: string }[];
+  visibleCases?: {
+    name: string;
+    stdin: string;
+    expected: string;
+    compareStdout: boolean;
+    expectedExitCode: number | null;
+  }[];
 }
 
 function runnableView(student: unknown): RunnableStudentView {
@@ -1072,12 +1078,21 @@ function runnableView(student: unknown): RunnableStudentView {
     out.visibleCases = source["visibleCases"].flatMap((raw) => {
       if (raw === null || typeof raw !== "object") return [];
       const c = raw as Record<string, unknown>;
+      // The two checks default the way the schema defaults them, so a type
+      // that says nothing about them still means "compare stdout, want 0".
       return typeof c["name"] === "string"
         ? [
             {
               name: c["name"],
               stdin: typeof c["stdin"] === "string" ? c["stdin"] : "",
               expected: typeof c["expected"] === "string" ? c["expected"] : "",
+              compareStdout: c["compareStdout"] !== false,
+              expectedExitCode:
+                c["expectedExitCode"] === null
+                  ? null
+                  : typeof c["expectedExitCode"] === "number"
+                    ? c["expectedExitCode"]
+                    : 0,
             },
           ]
         : [];
@@ -1107,6 +1122,8 @@ export async function runVisibleCases(
     itemId: string;
     regions: string[];
     stdin?: string | undefined;
+    /** The command line of the free-stdin try; a visible case keeps the teacher's. */
+    args?: string[] | undefined;
     now: Date;
   },
 ): Promise<{ requestId: string; result: RunnerResultEvent["result"] }> {
@@ -1151,13 +1168,15 @@ export async function runVisibleCases(
 
   const visible = student.visibleCases ?? [];
   const visibleNames = new Set(visible.map((c) => c.name));
-  const expectedOf = new Map(visible.map((c) => [c.name, c.expected]));
+  const specOf = new Map(visible.map((c) => [c.name, c]));
   // Only what the student may already see: their own stdin, or the VISIBLE
-  // cases. The hidden half never leaves the grading worker.
+  // cases. The hidden half never leaves the grading worker. A visible case
+  // keeps the `args` the TYPE put in the request (invariant 14); only the
+  // free-stdin try takes a command line from the browser.
   const cases =
     input.stdin === undefined
       ? first.request.cases.filter((c) => visibleNames.has(c.name))
-      : [{ name: "stdin", stdin: input.stdin }];
+      : [{ name: "stdin", args: input.args ?? [], stdin: input.stdin }];
   const request = { ...first.request, cases, priority: "interactive" as const };
 
   const requestId = randomUUID();
@@ -1171,17 +1190,37 @@ export async function runVisibleCases(
       compile: { ok: outcome.compile.ok, stderr: outcome.compile.stderr },
       cases: cases.map((c, index) => {
         const run = outcome.cases[index];
-        const expected = expectedOf.get(c.name) ?? "";
+        const spec = specOf.get(c.name);
+        // Nothing to compare when the case does not compare stdout, and
+        // nothing to show either.
+        const expected = spec === undefined || !spec.compareStdout ? "" : spec.expected;
+        // The same two independent checks `finalizeRunnerCode` applies, so the
+        // player's verdict and the grade cannot disagree (ADR-015). A free
+        // stdin try has no case behind it: exit 0 is all it can mean.
+        const exitOk =
+          run === undefined
+            ? false
+            : spec === undefined
+              ? run.exitCode === 0
+              : spec.expectedExitCode === null
+                ? run.exitCode !== null
+                : run.exitCode === spec.expectedExitCode;
+        const stdoutOk =
+          run !== undefined &&
+          (spec === undefined || !spec.compareStdout || compareOutput(spec.expected, run.stdout));
         return {
           name: c.name,
-          ok:
-            run !== undefined &&
-            run.exitCode === 0 &&
-            (expectedOf.has(c.name) ? compareOutput(expected, run.stdout) : true),
+          ok: run !== undefined && !run.timedOut && exitOk && stdoutOk,
+          // The facts the player names the failure by ("exit 1 ≠ 0", "Output
+          // differs", "Timed out"): the same fields a browser run reports.
+          exitCode: run?.exitCode ?? null,
           stdout: run?.stdout ?? "",
+          stderr: run?.stderr ?? "",
           expected,
           ms: run?.ms ?? 0,
           timedOut: run?.timedOut ?? false,
+          oom: run?.oom ?? false,
+          truncated: run?.truncated ?? false,
         };
       }),
     };

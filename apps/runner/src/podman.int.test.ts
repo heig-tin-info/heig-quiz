@@ -83,7 +83,7 @@ function request(
     compileArgs: "",
     action: "run",
     limits: { timeMs: 2000, memoryMb: 128, outputKb: 64 },
-    cases: [{ name: "one", stdin: "" }],
+    cases: [{ name: "one", args: [], stdin: "" }],
     priority: "interactive",
     ...overrides,
   };
@@ -153,7 +153,7 @@ for (const language of ["c", "python"] as const) {
   describe.skipIf(!has(language))(`${language} in a real container`, () => {
     it("builds and runs a hello world", async () => {
       const outcome = await run(
-        request(language, HELLO[language], { cases: [{ name: "twice", stdin: "21\n" }] }),
+        request(language, HELLO[language], { cases: [{ name: "twice", args: [], stdin: "21\n" }] }),
       );
       expect(outcome.compile.ok).toBe(true);
       expect(outcome.cases[0]).toMatchObject({
@@ -216,6 +216,68 @@ for (const language of ["c", "python"] as const) {
   });
 }
 
+/**
+ * `args` reaches the program as `argv[1..]`, and ONE argument stays one
+ * argument whatever is inside it. This is the check that no shell is in the
+ * path: with one, `x;echo pwned` would print `pwned` and `a b` would arrive
+ * as two arguments.
+ */
+const ARGV = {
+  c:
+    "#include <stdio.h>\n" +
+    'int main(int argc,char**argv){printf("%d\\n",argc);' +
+    'for(int i=1;i<argc;i++)printf("[%s]\\n",argv[i]);return 0;}\n',
+  python:
+    "import sys\n" +
+    "print(len(sys.argv))\n" +
+    "for a in sys.argv[1:]:\n    print(f'[{a}]')\n",
+} as const;
+
+const SUM = {
+  c:
+    "#include <stdio.h>\n#include <stdlib.h>\n" +
+    "int main(int argc,char**argv){long s=0;for(int i=1;i<argc;i++)s+=atol(argv[i]);" +
+    'printf("%ld\\n",s);return 0;}\n',
+  python: "import sys\nprint(sum(int(a) for a in sys.argv[1:]))\n",
+} as const;
+
+for (const language of ["c", "python"] as const) {
+  describe.skipIf(!has(language))(`${language} command line in a real container`, () => {
+    it("sums the numbers of its command line", async () => {
+      const outcome = await run(
+        request(language, SUM[language], { cases: [{ name: "3+4", args: ["3", "4"], stdin: "" }] }),
+      );
+      expect(outcome.compile.ok).toBe(true);
+      expect(outcome.cases[0]).toMatchObject({ exitCode: 0, stdout: "7\n" });
+    });
+
+    it("receives a space, a quote and a `;` as ONE argument each", async () => {
+      const nasty = ["a b", 'say "hi"', "x;echo pwned", "$HOME", "*"];
+      const outcome = await run(
+        request(language, ARGV[language], {
+          cases: [{ name: "nasty", args: nasty, stdin: "" }],
+        }),
+      );
+      expect(outcome.compile.ok).toBe(true);
+      const lines = outcome.cases[0]!.stdout.split("\n").filter((l) => l !== "");
+      // argc counts the program itself.
+      expect(lines[0]).toBe(String(nasty.length + 1));
+      expect(lines.slice(1)).toEqual(nasty.map((a) => `[${a}]`));
+      // No shell ran: `echo pwned` never became a command of its own, `$HOME`
+      // was not expanded and `*` did not glob the work directory.
+      expect(lines).not.toContain("pwned");
+      expect(lines).not.toContain("[/work]");
+      expect(lines).not.toContain("[main.c]");
+      expect(lines).not.toContain("[main.py]");
+    });
+
+    it("runs with no argument at all when the case has none", async () => {
+      const outcome = await run(request(language, ARGV[language]));
+      expect(outcome.cases[0]!.stdout.split("\n")[0]).toBe("1");
+    });
+  });
+}
+
 describe.skipIf(!has("c"))("the container itself", () => {
   it("runs as a user that is not root and owns nothing outside /work", async () => {
     const outcome = await run(
@@ -249,7 +311,7 @@ describe.skipIf(!has("c"))("the container itself", () => {
   });
 
   it("is destroyed when the request is over", async () => {
-    await run(request("c", HELLO.c, { cases: [{ name: "one", stdin: "1\n" }] }));
+    await run(request("c", HELLO.c, { cases: [{ name: "one", args: [], stdin: "1\n" }] }));
     const listed = execFileSync(
       config.PODMAN_BIN,
       [

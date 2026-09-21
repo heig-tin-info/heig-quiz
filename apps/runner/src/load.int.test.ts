@@ -67,7 +67,7 @@ describe.skipIf(!ready())("thirty runs at once", () => {
       compileArgs: "",
       action: "run",
       limits: { timeMs: 2000, memoryMb: 128, outputKb: 64 },
-      cases: [{ name: "one", stdin: `${index}\n` }],
+      cases: [{ name: "one", args: [], stdin: `${index}\n` }],
       priority: "interactive",
     });
 
@@ -113,7 +113,7 @@ describe.skipIf(!ready())("thirty runs at once", () => {
         compileArgs: "",
         action: "run",
         limits: { timeMs: 2000, memoryMb: 128, outputKb: 64 },
-        cases: [{ name: "one", stdin: "1\n" }],
+        cases: [{ name: "one", args: [], stdin: "1\n" }],
         priority: "grading",
       };
       const answers = await Promise.all(

@@ -3,8 +3,10 @@ import { AlertTriangle, FlaskConical, Play } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { PreviewResult, TryResult } from "@quiz/contracts";
+import type { CodeAnswer, CodeRunOptions, CodeStudent } from "@quiz/qt-code/client";
 
 import { api, apiErrorMessage } from "../api";
+import { canRunManually, runCode } from "../runner/codeRun";
 import { useT } from "../i18n";
 import { emptyAnswerOf, QuestionPlayerHost, QuestionReviewHost } from "../questionTypes";
 import { Alert, Button, Card, EmptyState, QueryError, SectionHeading, Skeleton } from "../ui";
@@ -22,6 +24,10 @@ import { Alert, Button, Card, EmptyState, QueryError, SectionHeading, Skeleton }
  * `code` degrades instead of failing: with `RUNNER_MODE=stub` — the default
  * on a machine without a container engine (decision D14) — the answer comes
  * back `runner_unavailable`, and that is a message, not an error state.
+ *
+ * Its "Run" button, on the other hand, is live even there when the question
+ * says `runtime: "runno"`: the browser runs the teacher's own trial, exactly
+ * as it will run the student's (ADR-015). Grading stays the server's.
  */
 export function TryPanel({
   questionId,
@@ -88,6 +94,24 @@ export function TryPanel({
           answer={answer}
           onChange={setAnswer}
           readOnly={false}
+          {...(type === "code" && student !== undefined
+            ? {
+                allowManualRun: canRunManually(student as CodeStudent),
+                onRun: (value: unknown, options?: unknown) =>
+                  runCode({
+                    student: student as CodeStudent,
+                    answer: value as CodeAnswer,
+                    /*
+                     * There is no backend run in this panel: the API grades a
+                     * whole answer here (`POST /questions/:id/try`) and has no
+                     * route that runs one. So the browser runner serves it, or
+                     * nothing does — which is one line, not an error.
+                     */
+                    backend: async () => "unavailable" as const,
+                    options: options as CodeRunOptions | undefined,
+                  }),
+              }
+            : {})}
         />
         <div className="flex flex-wrap items-center gap-2 border-t border-line pt-4">
           <Button onClick={() => grade.mutate()} loading={grade.isPending}>

@@ -36,6 +36,9 @@ import { ClosedScreen } from "./ClosedScreen";
 import { OfflineBanner } from "./OfflineBanner";
 import { PausedOverlay } from "./PausedOverlay";
 import { PlayerShell } from "./PlayerShell";
+import type { CodeAnswer, CodeRunOptions, CodeStudent } from "@quiz/qt-code/client";
+
+import { runCode } from "../runner/codeRun";
 import { QuestionHost } from "./QuestionHost";
 import { SubmitDialog } from "./SubmitDialog";
 
@@ -297,8 +300,19 @@ export function Player({
                 readOnly={readOnly}
                 {...(item.type === "code"
                   ? {
-                      onRun: (answer: unknown) =>
-                        run(item.id, (answer as { regions?: string[] }).regions ?? []),
+                      // `POST /attempts/:id/run` takes a free stdin and a
+                      // command line, and so does the browser runner: the box
+                      // is offered whichever one ends up serving it.
+                      allowManualRun: true,
+                      onRun: (answer: unknown, options?: unknown) =>
+                        runCode({
+                          student: item.student as CodeStudent,
+                          answer: answer as CodeAnswer,
+                          // The backend path is the API call it always was.
+                          backend: (_request, manual) =>
+                            run(item.id, (answer as { regions?: string[] }).regions ?? [], manual),
+                          options: options as CodeRunOptions | undefined,
+                        }),
                     }
                   : {})}
               />

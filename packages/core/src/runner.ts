@@ -25,7 +25,16 @@ export const RunnerRequest = z.object({
     memoryMb: z.number().int().min(16).max(512),
     outputKb: z.number().int().min(1).max(256),
   }),
-  cases: z.array(z.object({ name: z.string(), stdin: z.string().max(64_000) })).max(50),
+  cases: z
+    .array(
+      z.object({
+        name: z.string(),
+        /** `argv[1..]` of the program; the runner never builds a command line from it. */
+        args: z.array(z.string().max(200)).max(32).default([]),
+        stdin: z.string().max(64_000),
+      }),
+    )
+    .max(50),
   /** "interactive" (student clicked Run) or "grading" (background). Maps to the runner's two queues. */
   priority: z.enum(["interactive", "grading"]).default("grading"),
 });

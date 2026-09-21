@@ -165,6 +165,7 @@ Les `label` d'une liste atteignent l'étudiant — ce sont les options — mais 
 config:
   prompt: markdown
   language: c            # c, cpp, python, js, rust en phase 1
+  runtime: backend       # backend (défaut) ou runno — voir « Où s'exécute l'essai »
   template: |            # code initial, avec régions verrouillées
     #include <stdio.h>
     // @@lock
@@ -184,14 +185,28 @@ config:
     cases:
       - { name: "cas simple", stdin: "3 4\n", expected: "7\n", visible: true, points: 1 }
       - { name: "négatifs", stdin: "-3 4\n", expected: "1\n", visible: false, points: 1 }
+      # ligne de commande : args devient argv[1..] du programme
+      - { name: "somme argv", args: ["3", "4"], expected: "7\n", visible: true, points: 1 }
+      # les deux contrôles sont indépendants : ici seul le code de sortie compte
+      - { name: "refuse un argument invalide", args: ["oui"], expected: "",
+          compareStdout: false, expectedExitCode: 1, visible: false, points: 1 }
     compare: { trimTrailing: true, ignoreCase: false, numeric: null }
 ```
 
 - **Régions verrouillées** : marquées par des commentaires `@@lock` / `@@endlock` dans la syntaxe de commentaire du langage. Le player les rend en lecture seule et grisées. Le serveur reconstruit le fichier final à partir du template et des régions éditables, jamais du texte brut du client, ce qui empêche de modifier une région verrouillée.
-- **Mode `io`** : chaque cas envoie `stdin` et compare `stdout`. Un cas vaut ses points si la sortie correspond. C'est le mode de la phase 1.
+- **Mode `io`** : chaque cas envoie `stdin`, éventuellement une ligne de commande, et vérifie ce que le prof a demandé. C'est le mode de la phase 1.
+- **`args`, la ligne de commande d'un cas** : un tableau de chaînes, une par argument, qui devient `argv[1..]` du programme (`sys.argv[1:]` en Python, `process.argv.slice(2)` en JS). Le runner les passe au programme comme arguments d'un processus, jamais à travers un shell : une espace, une apostrophe, un `$` ou un `;` à l'intérieur d'un élément est un caractère de cet élément, pas un séparateur. Absent, le programme est lancé sans argument.
+- **Les deux contrôles d'un cas sont indépendants**, et un cas doit en activer au moins un (sinon la configuration est refusée : `code.case_checks_nothing`) :
+    - `compareStdout` (défaut `true`) compare `expected` à la sortie standard selon `compare` ;
+    - `expectedExitCode` (défaut `0`, `null` = n'importe lequel) compare le code de sortie du processus.
+
+    Le verdict d'un cas se lit dans cet ordre : il échoue sur un accident — horloge murale dépassée, plafond mémoire atteint, processus tué sans code de sortie propre — puis **chaque contrôle activé doit passer** ; un contrôle désactivé ne dit rien. Un cas qui ne compare pas `stdout` n'expose pas de sortie attendue, ni au player ni dans le détail de correction.
+- **Où s'exécute l'essai — `runtime`** (ADR-015) : `backend` (défaut) exécute l'essai de l'étudiant dans le runner conteneurisé ; `runno` l'exécute dans le navigateur, en WASI dans un Web Worker, pour les seuls langages que ce runtime embarque — **C et Python**. Les runtimes sont hébergés par la plateforme, jamais chargés depuis un tiers au moment de la requête. Tout autre langage retombe sur `backend`, comme un navigateur qui ne peut pas démarrer le worker.
+
+    **Le navigateur exécute, le serveur corrige.** `runtime` ne décrit que le bouton « Exécuter » de l'étudiant : la correction passe toujours par le runner du serveur, qui reconstruit la source depuis le template et les régions éditables. Un résultat produit par un navigateur n'est pas une preuve. WASI n'est pas Linux — pas de `fork`, pas de signaux, `<sys/…>` partiel, horloges et aléa du navigateur — donc un essai qui passe dans le navigateur peut encore échouer à la correction : le player annonce l'essai comme un essai.
 - **Mode `tap`**, phase 3 : le prof fournit `testFile` et `command`. Le runner exécute la commande et lit un flux TAP sur stdout : `ok 1 - nom` et `not ok 2 - nom`. Chaque ligne est un cas. Des bibliothèques TAP existent pour C, Python, JS, Rust.
 - **Points** : la somme des points des cas. Une option `allOrNothing` sur la question donne tout ou rien.
-- **Boutons du player** : "Vérifier" compile, "Exécuter" lance les cas visibles et affiche pour chacun stdin, sortie attendue, sortie obtenue, verdict. Une zone stdin libre permet un essai manuel. Les cas cachés ne sont exécutés qu'à la correction.
+- **Boutons du player** : "Vérifier" compile, "Exécuter" lance les cas visibles et affiche pour chacun la ligne de commande, stdin, la sortie attendue (quand elle est comparée), la sortie obtenue et le verdict. Une zone stdin libre permet un essai manuel, avec sa propre ligne de commande ; c'est le seul endroit où des arguments viennent du navigateur. Les cas cachés ne sont exécutés qu'à la correction.
 - **Réponse** : `regions[]` contenu de chaque région éditable, `lastRun` résumé du dernier run pour le tableau de bord.
 - **Éditeur de code** : Monaco, thème aligné sur la plateforme, raccourcis VS Code, tabulation configurable, sans serveur de langage.
 

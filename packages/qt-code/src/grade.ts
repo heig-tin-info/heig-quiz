@@ -86,7 +86,10 @@ export function buildRunnerRequest(
     compileArgs: config.compileArgs,
     action: options.action ?? "run",
     limits: { ...config.limits, timeMs },
-    cases: cases.map((c) => ({ name: c.name, stdin: c.stdin })),
+    // `args` is the case's command line, one argv entry per element. The
+    // runner hands them to the program as arguments of a process, never
+    // through a shell (apps/runner/src/languages.ts).
+    cases: cases.map((c) => ({ name: c.name, args: [...c.args], stdin: c.stdin })),
     priority: options.priority,
   });
 }
@@ -221,17 +224,24 @@ export function finalizeRunnerCode(
         ms: 0,
         timedOut: false,
         oom: false,
-        expected: testCase.expected,
+        ...(testCase.compareStdout ? { expected: testCase.expected } : {}),
       };
     }
     // The request carries one global budget, so a case with a tighter budget of
     // its own is timed out here, on the measured time.
     const timedOut = run.timedOut || run.ms > caseTimeMs(config, testCase);
-    const ok =
-      !timedOut &&
-      !run.oom &&
-      run.exitCode === 0 &&
+    // A case fails on an accident whatever it checks: the wall clock, the
+    // memory ceiling, or a process with no exit code of its own (killed).
+    // Past that, the two checks are INDEPENDENT and each one is optional —
+    // `expectedExitCode: null` accepts any code, `compareStdout: false`
+    // compares nothing — and the schema refuses a case that enables neither.
+    const crashed = run.exitCode === null;
+    const exitOk =
+      testCase.expectedExitCode === null || run.exitCode === testCase.expectedExitCode;
+    const stdoutOk =
+      !testCase.compareStdout ||
       compareOutput(testCase.expected, run.stdout, config.tests.compare);
+    const ok = !timedOut && !run.oom && !crashed && exitOk && stdoutOk;
     return {
       name: testCase.name,
       visible: testCase.visible,
@@ -241,7 +251,7 @@ export function finalizeRunnerCode(
       ms: run.ms,
       timedOut,
       oom: run.oom,
-      expected: testCase.expected,
+      ...(testCase.compareStdout ? { expected: testCase.expected } : {}),
       actual: truncate(run.stdout),
       stderr: truncate(run.stderr),
     };

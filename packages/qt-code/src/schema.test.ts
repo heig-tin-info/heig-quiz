@@ -2,7 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import { ConfigMigrationError } from "@quiz/core/server";
 
-import { CodeAnswer, CodeConfig, caseTimeMs, emptyCodeConfig, totalCasePoints } from "./schema.js";
+import {
+  CodeAnswer,
+  CodeConfig,
+  CODE_CONFIG_VERSION,
+  RUNNO_LANGUAGES,
+  caseTimeMs,
+  emptyCodeCase,
+  emptyCodeConfig,
+  totalCasePoints,
+} from "./schema.js";
 import { codeServer } from "./server.js";
 import { codeConfig } from "./test/fixtures.js";
 
@@ -30,6 +39,69 @@ describe("CodeConfig", () => {
     expect(config.referenceSolution).toBe("");
     expect(config.tests.compare).toEqual({ trimTrailing: true, ignoreCase: false, numeric: null });
     expect(config.tests.cases[0]).toMatchObject({ stdin: "", visible: false, points: 1, timeMs: null });
+    // The fields added with ADR-015, every one of them with a default — which
+    // is why `CODE_CONFIG_VERSION` did not move.
+    expect(config.runtime).toBe("backend");
+    expect(config.tests.cases[0]).toMatchObject({
+      args: [],
+      compareStdout: true,
+      expectedExitCode: 0,
+    });
+    expect(CODE_CONFIG_VERSION).toBe(1);
+  });
+
+  it("takes a command line, one argv entry per element", () => {
+    const config = CodeConfig.parse({
+      configVersion: 1,
+      prompt: "p",
+      language: "python",
+      tests: { mode: "io", cases: [{ name: "c", args: ["3", "a b", "x;y"], expected: "" }] },
+    });
+    // A space or a `;` is a character of the argument: nothing splits it.
+    expect(config.tests.cases[0]?.args).toEqual(["3", "a b", "x;y"]);
+  });
+
+  it("takes the two checks independently, and refuses a case that checks nothing", () => {
+    const of = (testCase: Record<string, unknown>): unknown => ({
+      configVersion: 1,
+      prompt: "p",
+      language: "c",
+      tests: { mode: "io", cases: [{ name: "c", expected: "", ...testCase }] },
+    });
+    // Exit code only.
+    expect(CodeConfig.safeParse(of({ compareStdout: false, expectedExitCode: 3 })).success).toBe(
+      true,
+    );
+    // Stdout only: any exit code is accepted.
+    expect(CodeConfig.safeParse(of({ expectedExitCode: null })).success).toBe(true);
+    // Neither: the case would pass whatever the program printed and returned.
+    const nothing = CodeConfig.safeParse(of({ compareStdout: false, expectedExitCode: null }));
+    expect(nothing.success).toBe(false);
+    expect(JSON.stringify(nothing.error?.issues)).toContain("code.case_checks_nothing");
+    // Out of the range of a process exit status.
+    expect(CodeConfig.safeParse(of({ expectedExitCode: 256 })).success).toBe(false);
+    expect(CodeConfig.safeParse(of({ expectedExitCode: -1 })).success).toBe(false);
+  });
+
+  it("names the languages the browser runtime can serve", () => {
+    expect([...RUNNO_LANGUAGES]).toEqual(["c", "python"]);
+    expect(CodeConfig.safeParse({ ...codeConfig(), runtime: "runno" }).success).toBe(true);
+    expect(CodeConfig.safeParse({ ...codeConfig(), runtime: "browser" }).success).toBe(false);
+  });
+
+  it("spells out every default of a fresh case", () => {
+    expect(emptyCodeCase()).toEqual({
+      name: "",
+      args: [],
+      stdin: "",
+      expected: "",
+      compareStdout: true,
+      expectedExitCode: 0,
+      visible: false,
+      points: 1,
+      timeMs: null,
+    });
+    expect(emptyCodeCase({ visible: true }).visible).toBe(true);
   });
 
   it("rejects what a runner could not honour", () => {
@@ -96,6 +168,7 @@ describe("the draft and the migration", () => {
     expect(draft.prompt).toBe("");
     expect(draft.template).toBe("");
     expect(draft.language).toBe("c");
+    expect(draft.runtime).toBe("backend");
     expect(CodeConfig.safeParse(draft).success).toBe(false);
     expect(codeServer.emptyDraft()).toEqual(draft);
   });

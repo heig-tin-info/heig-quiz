@@ -156,10 +156,15 @@ export const RunnerResultEvent = z.object({
         z.object({
           name: z.string(),
           ok: z.boolean(),
+          /** The program's own exit code; null when it did not exit by itself (killed, oom). */
+          exitCode: z.number().int().nullable(),
           stdout: z.string(),
+          stderr: z.string(),
           expected: z.string(),
           ms: z.number(),
           timedOut: z.boolean(),
+          oom: z.boolean(),
+          truncated: z.boolean(),
         }),
       ),
     }),

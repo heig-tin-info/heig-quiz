@@ -28,10 +28,15 @@ export function toCanonical(config: CodeConfig): Record<string, unknown> {
     runsPerMinute: config.runsPerMinute,
     tests: {
       mode: config.tests.mode,
+      // A default is left out, so the common case — compare stdout, require
+      // exit 0, no command line — reads as the three-field case of the spec.
       cases: config.tests.cases.map((c) => ({
         name: c.name,
+        ...(c.args.length === 0 ? {} : { args: [...c.args] }),
         stdin: c.stdin,
         expected: c.expected,
+        ...(c.compareStdout ? {} : { compareStdout: false }),
+        ...(c.expectedExitCode === 0 ? {} : { expectedExitCode: c.expectedExitCode }),
         visible: c.visible,
         points: c.points,
         ...(c.timeMs === null ? {} : { timeMs: c.timeMs }),
@@ -39,6 +44,7 @@ export function toCanonical(config: CodeConfig): Record<string, unknown> {
       ...(isSameCompare(config.tests.compare) ? {} : { compare: config.tests.compare }),
     },
   };
+  if (config.runtime !== "backend") out.runtime = config.runtime;
   if (config.files.length > 0) out.files = config.files.map((f) => ({ ...f }));
   if (config.compileArgs !== "") out.compileArgs = config.compileArgs;
   if (!isSameLimits(config.limits)) out.limits = { ...config.limits };

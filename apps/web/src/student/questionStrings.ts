@@ -8,6 +8,7 @@
  * question comes from `i18n.tsx` through here.
  */
 import type { TFunction } from "../i18n";
+import { playerStrings } from "../questionTypes";
 
 export function mcqPlayerStrings(t: TFunction) {
   return {
@@ -37,41 +38,13 @@ export function clozePlayerStrings(t: TFunction) {
 }
 
 /**
- * `code` is the one dictionary with interpolating entries: the package types
- * them as functions, so the host closes over `t` instead of over a literal.
+ * `code` is the one dictionary with interpolating entries, and the one the
+ * app builds TWICE — once for this host and once for `QuestionPlayerHost`.
+ * It is built once, in `questionTypes.tsx`, and read here: two copies of
+ * fifteen sentences drift, and only one of them is under the key-by-key test
+ * of `questionTypes.test.tsx`.
  */
-export function codePlayerStrings(t: TFunction) {
-  return {
-    locked: t("qt.code.locked"),
-    editableRegion: (n: number) => t("qt.code.editableRegion", { n }),
-    run: t("qt.code.run"),
-    running: t("qt.code.running"),
-    runUnavailable: t("qt.code.runUnavailable"),
-    runFailed: t("qt.code.runFailed"),
-    runHint: t("qt.code.runHint"),
-    visibleCases: t("qt.code.visibleCases"),
-    noVisibleCases: t("qt.code.noVisibleCases"),
-    hiddenCases: (count: number, points: number) =>
-      count === 1
-        ? t("qt.code.hiddenCase", { points })
-        : t("qt.code.hiddenCases", { n: count, points }),
-    files: t("qt.code.files"),
-    caseName: t("qt.code.caseName"),
-    stdin: t("qt.code.stdin"),
-    expected: t("qt.code.expected"),
-    got: t("qt.code.got"),
-    verdict: t("qt.code.verdict"),
-    passed: t("qt.code.passed"),
-    failed: t("qt.code.failed"),
-    notRun: t("qt.code.notRun"),
-    timedOut: t("qt.code.timedOut"),
-    outOfMemory: t("qt.code.outOfMemory"),
-    compileFailed: t("qt.code.compileFailed"),
-    compileOk: t("qt.code.compileOk"),
-    allOrNothing: t("qt.code.allOrNothing"),
-    limits: (timeMs: number, memoryMb: number) => t("qt.code.limits", { timeMs, memoryMb }),
-  };
-}
+export const codePlayerStrings = (t: TFunction) => playerStrings.code(t);
 
 /** The dictionary a given type's player expects, or `undefined` for an unknown one. */
 export function playerStringsFor(type: string, t: TFunction): unknown {

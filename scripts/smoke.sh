@@ -91,7 +91,10 @@ CLASSROOM_ID="$(jqx '.classrooms[0].id' 'first classroom')"
 POOL_ID="$(jqx '.pools[0].id' 'first pool of the course')"
 api "$TEACHER" GET /app/api/pools; expect 200 "GET /pools"
 api "$TEACHER" GET "/app/api/pools/$POOL_ID/questions?limit=100"; expect 200 "GET /pools/:id/questions"
-EXISTING_Q="$(jqx '.items[0].id' 'an existing question')"
+# Not a code question: the evaluation below gets exactly ONE code item, the
+# one whose region the walk writes (`$CODE_Q`), so a pool that happens to list
+# a code question first cannot make the walk edit the wrong program.
+EXISTING_Q="$(jqx '[.items[] | select(.type != "code")][0].id' 'an existing question')"
 # The seeded C exercise, by name: the two answers below are written for THAT
 # question (a `somme` over an array), so any other code question would only
 # produce a confusing link error.

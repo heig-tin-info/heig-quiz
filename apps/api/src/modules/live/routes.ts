@@ -310,6 +310,7 @@ export async function livePlugin(app: FastifyInstance) {
         itemId: body.data.itemId,
         regions: body.data.regions,
         stdin: body.data.stdin,
+        args: body.data.args,
         now,
       });
       // 202: the authoritative delivery is the `runner.result` SSE frame; the

@@ -92,6 +92,15 @@ host whose Podman service is not running, not the normal path.
    container and `limits.timeMs + RUNNER_CASE_GRACE_MS` on the service's own
    clock. Both streams are capped at `min(limits.outputKb, RUNNER_MAX_OUTPUT_KB)`,
    and `truncated` says so.
+
+   `cases[].args` follows the program in that argv (`caseArgv` in
+   `execute.ts`): `timeout -s KILL <s> ./program <arg…>`, or
+   `… python3 main.py <arg…>` for an interpreted language, so the case's
+   command line is `argv[1..]` of the student's program. One element is ONE
+   argument, verbatim — a space, a quote, a `$` or a `;` inside it is a
+   character of that argument, because no shell runs in a container of this
+   service (`languages.ts`). `src/podman.int.test.ts` proves it against a real
+   container, in C and in Python.
 6. The container is destroyed in a `finally`.
 
 `timeout` and a cgroup OOM kill both end as exit 137, so the elapsed time

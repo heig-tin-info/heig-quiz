@@ -43,6 +43,18 @@ describe("CodeReview", () => {
     expect(screen.getByText("Failed")).toBeInTheDocument();
   });
 
+  it("names the check that failed once the key travelled with the details", () => {
+    setup(graded.details, {
+      audience: "teacher",
+      solution: codeServer.toSolution(config),
+    });
+    // The failing visible case printed "nope" and left with 0: the exit code
+    // is the one the case wanted, so the output is what did not hold.
+    expect(screen.getByText("Output differs")).toBeInTheDocument();
+    // And the hidden case's command line is a teacher's to see.
+    expect(screen.getByText("--secret-hidden-arg")).toBeInTheDocument();
+  });
+
   it("counts the hidden cases instead of naming them", () => {
     setup(studentDetails(graded.details));
     expect(screen.getByText("Hidden cases: 1 of 1 passed.")).toBeInTheDocument();

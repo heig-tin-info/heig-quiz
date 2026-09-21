@@ -83,13 +83,21 @@ export const codeServer: QuestionTypeServer<
     return {
       prompt: config.prompt,
       language: config.language,
+      // Where the Run button executes. It says nothing about the key: the
+      // grade is the backend's whatever this holds (ADR-015).
+      runtime: config.runtime,
       segments: splitTemplate(config.template, config.language),
       limits: { ...config.limits },
       runsPerMinute: config.runsPerMinute,
       visibleCases: visible.map((c) => ({
         name: c.name,
+        args: [...c.args],
         stdin: c.stdin,
-        expected: c.expected,
+        // A case that does not compare stdout has no expected output to show,
+        // and `expected` would otherwise publish a string nothing checks.
+        expected: c.compareStdout ? c.expected : "",
+        compareStdout: c.compareStdout,
+        expectedExitCode: c.expectedExitCode,
         points: c.points,
       })),
       hiddenCount: hidden.length,
@@ -105,8 +113,11 @@ export const codeServer: QuestionTypeServer<
       referenceSolution: config.referenceSolution,
       cases: config.tests.cases.map((c) => ({
         name: c.name,
+        args: [...c.args],
         stdin: c.stdin,
-        expected: c.expected,
+        expected: c.compareStdout ? c.expected : "",
+        compareStdout: c.compareStdout,
+        expectedExitCode: c.expectedExitCode,
         points: c.points,
         visible: c.visible,
       })),

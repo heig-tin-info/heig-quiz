@@ -580,6 +580,24 @@ Applied today: the pool table (version, updated, tags), the roster (last
 sign-in, accommodation, e-mail), the evaluation list (attempts, points,
 questions) and the grade table (duration, e-mail).
 
+### When a row stops being a row
+
+Past seven columns there is no priority left to give: the record is not a row
+any more, it is a small form. Then it gets a PANEL — `rounded-card border
+border-line bg-surface-2`, a heading that names it ("Case 1"), and its fields
+laid out in two or three short lines that stack at 390 px.
+
+Applied today: the test cases of a `code` question
+(`packages/qt-code/src/Editor.tsx`). One case carries a name, a command line,
+an input, an expected output, the two checks that decide whether it passed,
+its points, its time budget and its visibility — ten fields. As a table it was
+unreadable at 1440 px; as a panel it reads at 390 px.
+
+The threshold is not the count, it is the question "would a teacher SCAN these
+or EDIT them?". A list you scan stays a table however many columns it has to
+drop. A list you edit field by field becomes panels as soon as a row needs
+more than one line.
+
 ## Voice
 
 Sentence case everywhere. Buttons start with a verb ("Create question",

@@ -169,6 +169,7 @@ export const editorStrings = {
   cloze: (t: TFunction) => translated(t, clozeEditorStrings, "qt.cloze.e"),
   code: (t: TFunction): CodeEditorStrings => ({
     ...translated(t, EDITOR_STRINGS, "qt.code.e"),
+    case: (n) => t("qt.code.e.case", { n }),
     lockedRegions: (n) =>
       t(n === 1 ? "qt.code.e.lockedRegions.one" : "qt.code.e.lockedRegions", { n }),
     tryResult: (passed, total) => t("qt.code.e.tryResult", { passed, total }),
@@ -187,6 +188,9 @@ export const playerStrings = {
     hiddenCases: (count, points) =>
       t(count === 1 ? "qt.code.p.hiddenCases.one" : "qt.code.p.hiddenCases", { count, points }),
     limits: (timeMs, memoryMb) => t("qt.code.p.limits", { timeMs, memoryMb }),
+    command: (args) => t("qt.code.p.command", { args }),
+    exitMismatch: (got, want) => t("qt.code.p.exitMismatch", { got, want }),
+    exitCode: (code) => t("qt.code.p.exitCode", { code }),
   }),
 };
 
@@ -198,6 +202,7 @@ export const reviewStrings = {
     ...translated(t, REVIEW_STRINGS, "qt.code.r"),
     score: (points, max) => t("qt.code.r.score", { points, max }),
     hiddenSummary: (passed, count) => t("qt.code.r.hiddenSummary", { passed, count }),
+    exitMismatch: (got, want) => t("qt.code.r.exitMismatch", { got, want }),
   }),
 };
 
@@ -319,6 +324,8 @@ interface PlayerHostProps {
   readOnly: boolean;
   strings?: unknown;
   renderMarkdown?: (source: string) => ReactNode;
+  onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable">;
+  allowManualRun?: boolean;
 }
 
 export function QuestionPlayerHost({
@@ -328,6 +335,8 @@ export function QuestionPlayerHost({
   answer,
   onChange,
   readOnly,
+  onRun,
+  allowManualRun,
 }: {
   t: TFunction;
   type: string;
@@ -335,6 +344,9 @@ export function QuestionPlayerHost({
   answer: unknown;
   onChange: (next: unknown) => void;
   readOnly: boolean;
+  /** `code` only: the run the type's player offers, from `src/runner/`. */
+  onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable">;
+  allowManualRun?: boolean;
 }) {
   const client = questionType(type);
   if (!client) return <Unknown>{t("qt.unknown")}</Unknown>;
@@ -352,6 +364,8 @@ export function QuestionPlayerHost({
           readOnly={readOnly}
           strings={playerStrings[client.id](t)}
           renderMarkdown={renderInline}
+          {...(onRun === undefined ? {} : { onRun })}
+          {...(allowManualRun === undefined ? {} : { allowManualRun })}
         />
       </Suspense>
     </ScrollableCode>

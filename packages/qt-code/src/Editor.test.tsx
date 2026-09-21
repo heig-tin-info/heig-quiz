@@ -91,6 +91,40 @@ describe("CodeEditor", () => {
     expect(onChange.mock.calls[0]?.[0]?.tests.cases[0]?.timeMs).toBeNull();
   });
 
+  it("writes one argument per line, ignoring the blanks", () => {
+    const { onChange } = setup();
+    fireEvent.change(screen.getByLabelText("Arguments 1"), { target: { value: "-v\n\n7\n" } });
+    expect(onChange.mock.calls[0]?.[0]?.tests.cases[0]?.args).toEqual(["-v", "7"]);
+  });
+
+  it("hides the expected output when the case does not compare it", () => {
+    const { onChange } = setup();
+    expect(screen.getByLabelText("Expected output 1")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("Compare the output 1"));
+    expect(onChange.mock.calls[0]?.[0]?.tests.cases[0]?.compareStdout).toBe(false);
+  });
+
+  it("reads an empty exit code as 'any exit code'", () => {
+    const { onChange } = setup();
+    fireEvent.change(screen.getByLabelText("Exit code 1"), { target: { value: "" } });
+    expect(onChange.mock.calls[0]?.[0]?.tests.cases[0]?.expectedExitCode).toBeNull();
+
+    onChange.mockClear();
+    fireEvent.change(screen.getByLabelText("Exit code 1"), { target: { value: "2" } });
+    expect(onChange.mock.calls[0]?.[0]?.tests.cases[0]?.expectedExitCode).toBe(2);
+  });
+
+  it("offers the browser only for a language the browser can run", () => {
+    const { onChange } = setup();
+    fireEvent.change(screen.getByLabelText("Run in"), { target: { value: "runno" } });
+    expect(onChange.mock.calls[0]?.[0]?.runtime).toBe("runno");
+  });
+
+  it("does not offer a runtime choice a language cannot honour", () => {
+    setup({ config: { ...codeConfig(), language: "rust" } });
+    expect(screen.queryByLabelText("Run in")).toBeNull();
+  });
+
   it("keeps the advanced options out of the primary path but reachable", () => {
     setup();
     expect(screen.getByText("Advanced options")).toBeInTheDocument();

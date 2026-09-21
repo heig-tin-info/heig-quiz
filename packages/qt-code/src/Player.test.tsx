@@ -85,7 +85,8 @@ describe("CodePlayer", () => {
 
     expect(await screen.findByText("Compiled")).toBeInTheDocument();
     expect(screen.getByText("Passed")).toBeInTheDocument();
-    expect(screen.getByText("Failed")).toBeInTheDocument();
+    // Not "Failed": the verdict names the check that did not hold.
+    expect(screen.getByText("Output differs")).toBeInTheDocument();
     // The hidden case is not in the table: it is not run interactively.
     expect(screen.queryByText("negative-values")).toBeNull();
   });
@@ -118,6 +119,81 @@ describe("CodePlayer", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Your code, region 1")).toBeInTheDocument();
+  });
+
+  it("names the check that failed rather than saying only 'Failed'", async () => {
+    setup({ onRun: async () => outcome([{ exitCode: 1, stdout: "6\n" }, { stdout: "0\n" }]) });
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    // Case 1 prints the right thing but leaves with 1, and the case wants 0.
+    expect(await screen.findByText("exit 1 ≠ 0")).toBeInTheDocument();
+    expect(screen.getByText("Passed")).toBeInTheDocument();
+  });
+
+  it("shows a case's command line next to its stdin", () => {
+    const withArgs = {
+      ...student,
+      visibleCases: student.visibleCases.map((c, i) =>
+        i === 0 ? { ...c, args: ["3", "4"] } : c,
+      ),
+    };
+    setup({ student: withArgs, onRun: async () => outcome([]) });
+    expect(screen.getByText("$ program 3 4")).toBeInTheDocument();
+  });
+
+  it("flags a run whose output was cut at the limit", async () => {
+    setup({ onRun: async () => outcome([{ stdout: "6\n", truncated: true }, { stdout: "0\n" }]) });
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    expect(await screen.findByText("Output truncated")).toBeInTheDocument();
+  });
+
+  it("says where the program runs when the browser is the one running it", () => {
+    setup({ student: { ...student, runtime: "runno" }, onRun: async () => outcome([]) });
+    expect(screen.getByText("Runs in your browser — the server grades.")).toBeInTheDocument();
+  });
+
+  it("keeps quiet about the browser when the server is the one running it", () => {
+    setup({ onRun: async () => outcome([]) });
+    expect(screen.queryByText("Runs in your browser — the server grades.")).toBeNull();
+  });
+
+  it("announces the runtime download, which only happens once", async () => {
+    let release: (() => void) | null = null;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    setup({
+      onRun: async (_answer, options) => {
+        options?.onStage?.("loading");
+        await held;
+        return outcome([]);
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    expect(
+      await screen.findByText("Loading the language runtime… this happens once."),
+    ).toBeInTheDocument();
+    release?.();
+  });
+
+  it("offers the free input only where the host can honour it", async () => {
+    const seen: unknown[] = [];
+    setup({
+      allowManualRun: true,
+      onRun: async (_answer, options) => {
+        seen.push(options?.manual);
+        return outcome([{ stdout: "42\n", exitCode: 0 }]);
+      },
+    });
+    fireEvent.change(screen.getByLabelText("Arguments"), { target: { value: "-v\n7" } });
+    fireEvent.change(screen.getByLabelText("stdin"), { target: { value: "1 2\n" } });
+    fireEvent.click(screen.getByRole("button", { name: "Run once" }));
+    expect(await screen.findByLabelText("Output")).toHaveTextContent("42");
+    expect(seen).toEqual([{ args: ["-v", "7"], stdin: "1 2\n" }]);
+  });
+
+  it("hides the free input when the host cannot take one", () => {
+    setup({ onRun: async () => outcome([]) });
+    expect(screen.queryByRole("button", { name: "Run once" })).toBeNull();
   });
 
   it("takes its strings from the host", () => {

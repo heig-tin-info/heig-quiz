@@ -28,6 +28,24 @@ import { planFor, sanitizeFileName, splitCompileArgs, type LanguagePlan } from "
  * a useful thing for a teacher to write (apps/runner/README.md).
  */
 
+/**
+ * The argv of one case: the in-container reaper, then the language's run
+ * plan, then the case's own arguments.
+ *
+ * Every element is ONE argv entry and travels verbatim. No shell runs in a
+ * container of this service, so a space, a quote, a `$` or a `;` inside an
+ * argument is a character of that argument and nothing else — there is no
+ * command line for it to escape from (`languages.ts`). A `timeout` that fires
+ * therefore kills the program and not a shell that outlives it.
+ */
+export function caseArgv(
+  run: readonly string[],
+  seconds: number,
+  args: readonly string[],
+): string[] {
+  return ["timeout", "-s", "KILL", String(seconds), ...run, ...args];
+}
+
 export class ExecuteError extends Error {
   constructor(
     message: string,
@@ -169,8 +187,9 @@ export async function executeRequest(
       }
       const seconds = Math.max(1, Math.ceil(request.limits.timeMs / 1000));
       const result = await engine.exec(name, {
-        // The in-container reaper. The service's own deadline is below.
-        argv: ["timeout", "-s", "KILL", String(seconds), ...plan.run],
+        // The in-container reaper, then the program and its own `argv[1..]`.
+        // The service's own deadline is below.
+        argv: caseArgv(plan.run, seconds, testCase.args),
         stdin: testCase.stdin,
         timeoutMs: request.limits.timeMs + config.RUNNER_CASE_GRACE_MS,
         maxBytes: outputBytes,

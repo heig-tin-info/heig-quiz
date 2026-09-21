@@ -20,7 +20,15 @@ export const CODE_LANGUAGES = ["c", "cpp", "python", "js", "rust"] as const;
 export const CodeLanguage = z.enum(CODE_LANGUAGES);
 export type CodeLanguage = z.infer<typeof CodeLanguage>;
 
-/** Bumped when the shape below changes; stored in `question_versions.config_version`. */
+/**
+ * Bumped when the shape below changes; stored in `question_versions.config_version`.
+ *
+ * It stays at 1 although `args`, `compareStdout`, `expectedExitCode` and
+ * `runtime` were added after the first questions were stored: every one of
+ * them has a DEFAULT, so a config written before them parses unchanged and
+ * means exactly what it meant. A version bump is for a shape a stored config
+ * can no longer satisfy (ADR-015).
+ */
 export const CODE_CONFIG_VERSION = 1;
 
 export const CodeLimits = z.object({
@@ -56,15 +64,41 @@ export const DEFAULT_COMPARE: CodeCompare = {
  * `timeMs` overrides `limits.timeMs` for this case alone — `null` means "use
  * the question limit".
  */
-export const CodeCase = z.object({
-  name: z.string().min(1).max(60),
-  stdin: z.string().max(16_000).default(""),
-  expected: z.string().max(16_000),
-  visible: z.boolean().default(false),
-  points: z.number().min(0).max(100).default(1),
-  timeMs: z.number().int().min(100).max(20_000).nullable().default(null),
-});
+export const CodeCase = z
+  .object({
+    name: z.string().min(1).max(60),
+    /** The command line, one argument per entry, handed to the program as `argv[1..]`. */
+    args: z.array(z.string().max(200)).max(32).default([]),
+    stdin: z.string().max(16_000).default(""),
+    expected: z.string().max(16_000),
+    /**
+     * Whether `expected` is compared with stdout at all. Off, the case checks
+     * only the exit code (and a crash or a timeout still fails it).
+     */
+    compareStdout: z.boolean().default(true),
+    /** The exit code the case requires; `null` accepts any (crashes still fail). */
+    expectedExitCode: z.number().int().min(0).max(255).nullable().default(0),
+    visible: z.boolean().default(false),
+    points: z.number().min(0).max(100).default(1),
+    timeMs: z.number().int().min(100).max(20_000).nullable().default(null),
+  })
+  .refine((c) => c.compareStdout || c.expectedExitCode !== null, {
+    message: "code.case_checks_nothing",
+    path: ["compareStdout"],
+  });
 export type CodeCase = z.infer<typeof CodeCase>;
+
+/**
+ * Where the STUDENT'S trial run executes ("Run" in the player). Grading
+ * always runs on the backend runner: a browser result is not evidence.
+ * `runno` is WASI in a Web Worker, for the languages it ships (`c`,
+ * `python`); the backend stays the fallback when a browser cannot.
+ */
+export const CodeRuntime = z.enum(["backend", "runno"]);
+export type CodeRuntime = z.infer<typeof CodeRuntime>;
+
+/** The languages the browser runner can run (docs/04 §4.7). */
+export const RUNNO_LANGUAGES = ["c", "python"] as const;
 
 export const CodeFile = z.object({
   name: z.string().regex(/^[\w.-]{1,40}$/),
@@ -76,6 +110,7 @@ export const CodeConfig = z.object({
   configVersion: z.literal(CODE_CONFIG_VERSION),
   prompt: z.string().min(1).max(20_000),
   language: CodeLanguage,
+  runtime: CodeRuntime.default("backend"),
   /** Starting code, with the locked regions marked by `@@lock` / `@@endlock`. */
   template: z.string().max(40_000).default(""),
   /** Extra files the program reads; injected server-side, never by the client. */
@@ -131,11 +166,22 @@ export type CodeSegment = z.infer<typeof CodeSegment>;
 export const CodeStudent = z.object({
   prompt: z.string(),
   language: CodeLanguage,
+  /** Where "Run" executes; the key never depends on it. */
+  runtime: CodeRuntime,
   segments: z.array(CodeSegment),
   limits: CodeLimits,
   runsPerMinute: z.number().int(),
   visibleCases: z.array(
-    z.object({ name: z.string(), stdin: z.string(), expected: z.string(), points: z.number() }),
+    z.object({
+      name: z.string(),
+      args: z.array(z.string()),
+      stdin: z.string(),
+      /** Empty when the case does not compare stdout. */
+      expected: z.string(),
+      compareStdout: z.boolean(),
+      expectedExitCode: z.number().int().nullable(),
+      points: z.number(),
+    }),
   ),
   /** Hidden cases exist but stay opaque during the attempt (docs/06 Q8). */
   hiddenCount: z.number().int(),
@@ -151,8 +197,11 @@ export const CodeSolution = z.object({
   cases: z.array(
     z.object({
       name: z.string(),
+      args: z.array(z.string()),
       stdin: z.string(),
       expected: z.string(),
+      compareStdout: z.boolean(),
+      expectedExitCode: z.number().int().nullable(),
       points: z.number(),
       visible: z.boolean(),
     }),
@@ -204,6 +253,27 @@ export function caseTimeMs(config: CodeConfig, testCase: CodeCase): number {
 }
 
 /**
+ * A fresh case, with every default spelled out.
+ *
+ * The editor adds cases one by one and the schema's defaults only apply when
+ * a value is PARSED, so the one place that writes a case literal is here.
+ */
+export function emptyCodeCase(overrides: Partial<CodeCase> = {}): CodeCase {
+  return {
+    name: "",
+    args: [],
+    stdin: "",
+    expected: "",
+    compareStdout: true,
+    expectedExitCode: 0,
+    visible: false,
+    points: 1,
+    timeMs: null,
+    ...overrides,
+  };
+}
+
+/**
  * A fresh draft: the shape, the defaults, and NO content — see `emptyMcqDraft`.
  *
  * It does not validate (an empty prompt and an unnamed case are refused by
@@ -216,6 +286,7 @@ export function emptyCodeConfig(): CodeConfig {
     configVersion: CODE_CONFIG_VERSION,
     prompt: "",
     language: "c",
+    runtime: "backend",
     template: "",
     files: [],
     action: "run",
@@ -227,7 +298,7 @@ export function emptyCodeConfig(): CodeConfig {
     tests: {
       mode: "io",
       compare: DEFAULT_COMPARE,
-      cases: [{ name: "", stdin: "", expected: "", visible: true, points: 1, timeMs: null }],
+      cases: [emptyCodeCase({ visible: true })],
     },
   };
 }

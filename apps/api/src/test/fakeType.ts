@@ -135,7 +135,15 @@ export const fakeRunnerType: QuestionTypeServer<
 const RunnableConfig = z.object({
   template: z.string(),
   runsPerMinute: z.number().int().default(2),
-  cases: z.array(z.object({ name: z.string(), expected: z.string(), visible: z.boolean() })),
+  cases: z.array(
+    z.object({
+      name: z.string(),
+      /** `argv[1..]`, like a `qt-code` case: the live module must forward it. */
+      args: z.array(z.string()).default([]),
+      expected: z.string(),
+      visible: z.boolean(),
+    }),
+  ),
 });
 
 /**
@@ -148,7 +156,11 @@ const RunnableConfig = z.object({
 export const fakeRunnableCode: QuestionTypeServer<
   z.infer<typeof RunnableConfig>,
   { regions: string[] },
-  { template: string; runsPerMinute: number; visibleCases: { name: string; stdin: string; expected: string }[] },
+  {
+    template: string;
+    runsPerMinute: number;
+    visibleCases: { name: string; args: string[]; stdin: string; expected: string }[];
+  },
   { cases: { name: string; expected: string }[] },
   { passed: number }
 > = {
@@ -160,7 +172,12 @@ export const fakeRunnableCode: QuestionTypeServer<
     template: z.string(),
     runsPerMinute: z.number().int(),
     visibleCases: z.array(
-      z.object({ name: z.string(), stdin: z.string(), expected: z.string() }),
+      z.object({
+        name: z.string(),
+        args: z.array(z.string()),
+        stdin: z.string(),
+        expected: z.string(),
+      }),
     ),
   }),
   solutionSchema: z.object({
@@ -171,7 +188,7 @@ export const fakeRunnableCode: QuestionTypeServer<
   emptyDraft: () => ({
     template: "",
     runsPerMinute: 2,
-    cases: [{ name: "visible-1", expected: "ok", visible: true }],
+    cases: [{ name: "visible-1", args: [], expected: "ok", visible: true }],
   }),
   migrate: (config) => RunnableConfig.parse(config),
   defaultPoints: (config) => config.cases.length,
@@ -184,7 +201,7 @@ export const fakeRunnableCode: QuestionTypeServer<
       // Only the visible half, exactly like `qt-code` (decision D15).
       visibleCases: config.cases
         .filter((c) => c.visible)
-        .map((c) => ({ name: c.name, stdin: "", expected: c.expected })),
+        .map((c) => ({ name: c.name, args: [...c.args], stdin: "", expected: c.expected })),
     };
   },
   toSolution: (config) => ({
@@ -201,7 +218,7 @@ export const fakeRunnableCode: QuestionTypeServer<
         compileArgs: "",
         action: "run",
         limits: { timeMs: 1000, memoryMb: 64, outputKb: 8 },
-        cases: config.cases.map((c) => ({ name: c.name, stdin: "" })),
+        cases: config.cases.map((c) => ({ name: c.name, args: [...c.args], stdin: "" })),
         priority: "grading",
       },
     };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isGraded, isPendingRunner, type GradeContext } from "@quiz/core/server";
+import { isGraded, isPendingRunner, type GradeContext, type RunnerOutcome } from "@quiz/core/server";
 import { regionCount, splitTemplate } from "@quiz/domain";
 
 import {
@@ -18,6 +18,7 @@ import {
   configFor,
   FINALIZE_CTX,
   outcome,
+  SECRET_HIDDEN_ARG,
   SECRET_HIDDEN_EXPECTED,
   templateFor,
 } from "./test/fixtures.js";
@@ -52,11 +53,31 @@ describe("gradeCode", () => {
     expect(source).toContain("int total = 1;"); // the student's region is in place
     expect(source).toContain("// @@lock"); // markers are comments and stay
 
-    // Every case is sent, with its stdin and no expected output.
+    // Every case is sent, with its stdin, its command line, and no expected
+    // output: the runner executes, it never decides.
     expect(result.request.cases).toEqual(
-      config.tests.cases.map((c) => ({ name: c.name, stdin: c.stdin })),
+      config.tests.cases.map((c) => ({ name: c.name, args: c.args, stdin: c.stdin })),
     );
     expect(JSON.stringify(result.request)).not.toContain('"expected"');
+    expect(JSON.stringify(result.request)).not.toContain("compareStdout");
+    expect(JSON.stringify(result.request)).not.toContain("expectedExitCode");
+  });
+
+  it("carries each case's command line into the request, verbatim", () => {
+    const config = CodeConfig.parse({
+      ...codeConfig(),
+      tests: {
+        mode: "io",
+        cases: [
+          { name: "plain", expected: "" },
+          { name: "argv", args: ["3", "a b", 'q"x', "semi;colon"], expected: "" },
+        ],
+      },
+    });
+    const result = gradeCode(config, answerFor(config, "x"), ctx());
+    if (!isPendingRunner(result)) throw new Error("expected a pending runner result");
+    expect(result.request.cases[0]?.args).toEqual([]);
+    expect(result.request.cases[1]?.args).toEqual(["3", "a b", 'q"x', "semi;colon"]);
   });
 
   it("assembles the source for every language comment style of lockedTemplate", () => {
@@ -97,6 +118,8 @@ describe("gradeCode", () => {
     const request = buildInteractiveRequest(config, answerFor(config, "x"));
     expect(request.priority).toBe("interactive");
     expect(request.cases.map((c) => c.name)).toEqual(["three items", "empty array"]);
+    // The hidden case's command line stays behind with its stdin.
+    expect(JSON.stringify(request.cases)).not.toContain(SECRET_HIDDEN_ARG);
   });
 
   it("grades an unanswered question zero, without touching the runner", () => {
@@ -258,6 +281,105 @@ describe("finalizeRunnerCode", () => {
       outcome([{ stdout: "6\n" }, { stdout: "0\n" }, { stdout: SECRET_HIDDEN_EXPECTED }]),
     );
     expect(complete.points).toBe(10);
+  });
+});
+
+/**
+ * The rule of ONE case, branch by branch (ADR-015). Two independent checks,
+ * each one optional, on top of the accidents that fail a case whatever it
+ * checks.
+ */
+describe("the verdict of a case", () => {
+  /** A one-case config, with the case's checks spelled out. */
+  const only = (testCase: Record<string, unknown>): Config =>
+    CodeConfig.parse({
+      ...codeConfig(),
+      files: [],
+      tests: {
+        mode: "io",
+        compare: { trimTrailing: true, ignoreCase: false, numeric: null },
+        cases: [{ name: "c", expected: "42\n", visible: true, points: 1, ...testCase }],
+      },
+    });
+
+  const verdict = (config: Config, run: Partial<RunnerOutcome["cases"][number]>): boolean =>
+    finalizeRunnerCode(config, answerFor(config, "x"), FINALIZE_CTX, outcome([run]))
+      .details.cases[0]!.ok;
+
+  it("compares stdout and requires exit 0, by default", () => {
+    const config = only({});
+    expect(verdict(config, { stdout: "42\n", exitCode: 0 })).toBe(true);
+    expect(verdict(config, { stdout: "41\n", exitCode: 0 })).toBe(false);
+    expect(verdict(config, { stdout: "42\n", exitCode: 1 })).toBe(false);
+  });
+
+  it("checks the exit code alone when stdout is not compared", () => {
+    const config = only({ compareStdout: false, expectedExitCode: 2 });
+    expect(verdict(config, { stdout: "anything at all", exitCode: 2 })).toBe(true);
+    expect(verdict(config, { stdout: "42\n", exitCode: 0 })).toBe(false);
+    // Nothing is compared, so nothing is stored to compare against either.
+    const details = finalizeRunnerCode(
+      config,
+      answerFor(config, "x"),
+      FINALIZE_CTX,
+      outcome([{ stdout: "x", exitCode: 2 }]),
+    ).details;
+    expect(details.cases[0]?.expected).toBeUndefined();
+  });
+
+  it("accepts any exit code when the teacher asked for none", () => {
+    const config = only({ expectedExitCode: null });
+    expect(verdict(config, { stdout: "42\n", exitCode: 0 })).toBe(true);
+    expect(verdict(config, { stdout: "42\n", exitCode: 3 })).toBe(true);
+    expect(verdict(config, { stdout: "42\n", exitCode: 255 })).toBe(true);
+    // The output still has to match: the other check is still enabled.
+    expect(verdict(config, { stdout: "nope", exitCode: 0 })).toBe(false);
+  });
+
+  it("fails on an accident whatever the case checks", () => {
+    for (const config of [only({}), only({ compareStdout: false, expectedExitCode: 0 })]) {
+      expect(verdict(config, { stdout: "42\n", exitCode: 0, timedOut: true })).toBe(false);
+      expect(verdict(config, { stdout: "42\n", exitCode: 0, oom: true })).toBe(false);
+      // No exit code of its own: the service killed it, or it never ran.
+      expect(verdict(config, { stdout: "42\n", exitCode: null })).toBe(false);
+    }
+  });
+
+  it("fails a crash even when the case accepts any exit code", () => {
+    const config = only({ expectedExitCode: null });
+    expect(verdict(config, { stdout: "42\n", exitCode: null, timedOut: true })).toBe(false);
+    expect(verdict(config, { stdout: "42\n", exitCode: null })).toBe(false);
+  });
+
+  it("scores an exit-code-only case on the item scale like any other", () => {
+    const config = CodeConfig.parse({
+      ...codeConfig(),
+      files: [],
+      tests: {
+        mode: "io",
+        cases: [
+          { name: "prints", expected: "ok\n", visible: true, points: 1 },
+          {
+            name: "refuses",
+            args: ["--bad"],
+            expected: "",
+            compareStdout: false,
+            expectedExitCode: 1,
+            visible: false,
+            points: 3,
+          },
+        ],
+      },
+    });
+    const result = finalizeRunnerCode(
+      config,
+      answerFor(config, "x"),
+      FINALIZE_CTX,
+      outcome([{ stdout: "ok\n" }, { stdout: "usage: …", exitCode: 1 }]),
+    );
+    expect(result.details.cases.map((c) => c.ok)).toEqual([true, true]);
+    expect(result.details.earned).toBe(4);
+    expect(result.points).toBe(10);
   });
 });
 

@@ -17,3 +17,6 @@ coverage/
 # Local secrets -- ADR-010
 secrets/
 site/
+
+# Self-hosted WebAssembly language runtimes (apps/web/scripts/fetch-runtimes.mjs)
+/apps/web/public/runtimes/

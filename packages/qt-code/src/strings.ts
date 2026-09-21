@@ -25,15 +25,26 @@ export interface CodeEditorStrings {
   tryCompileFailed: string;
   tryResult: (passed: number, total: number) => string;
   cases: string;
+  case: (n: number) => string;
   caseName: string;
+  args: string;
+  argsHint: string;
   stdin: string;
   expected: string;
+  compareStdout: string;
+  exitCode: string;
+  exitCodeHint: string;
+  exitCodeAny: string;
   hidden: string;
   points: string;
   timeMs: string;
   timeMsHint: string;
   addCase: string;
   removeCase: (name: string) => string;
+  runtime: string;
+  runtimeBackend: string;
+  runtimeBrowser: string;
+  runtimeHint: string;
   advanced: string;
   action: string;
   actionCheck: string;
@@ -76,15 +87,26 @@ export const EDITOR_STRINGS: CodeEditorStrings = {
   tryCompileFailed: "The reference solution does not compile.",
   tryResult: (passed, total) => `${passed} of ${total} cases pass.`,
   cases: "Test cases",
+  case: (n) => `Case ${n}`,
   caseName: "Name",
+  args: "Arguments",
+  argsHint: "One argument per line. Blank lines are ignored.",
   stdin: "stdin",
   expected: "Expected output",
+  compareStdout: "Compare the output",
+  exitCode: "Exit code",
+  exitCodeHint: "Empty: any exit code is accepted. A crash still fails the case.",
+  exitCodeAny: "any",
   hidden: "Hidden",
   points: "Points",
   timeMs: "Time (ms)",
   timeMsHint: "Empty: use the question limit.",
   addCase: "Add a case",
   removeCase: (name) => `Remove the case ${name}`,
+  runtime: "Run in",
+  runtimeBackend: "The server",
+  runtimeBrowser: "The browser",
+  runtimeHint: "The browser runs the student's trials; the server always grades.",
   advanced: "Advanced options",
   action: "Action",
   actionCheck: "Compile only",
@@ -112,6 +134,8 @@ export interface CodePlayerStrings {
   editableRegion: (n: number) => string;
   run: string;
   running: string;
+  loadingRuntime: string;
+  inBrowser: string;
   runUnavailable: string;
   runFailed: string;
   runHint: string;
@@ -121,7 +145,10 @@ export interface CodePlayerStrings {
   files: string;
   caseName: string;
   stdin: string;
+  noStdin: string;
+  command: (args: string) => string;
   expected: string;
+  expectedAnyOutput: string;
   got: string;
   verdict: string;
   passed: string;
@@ -129,10 +156,20 @@ export interface CodePlayerStrings {
   notRun: string;
   timedOut: string;
   outOfMemory: string;
+  crashed: string;
+  truncated: string;
+  exitMismatch: (got: string, want: number) => string;
+  outputMismatch: string;
   compileFailed: string;
   compileOk: string;
   allOrNothing: string;
   limits: (timeMs: number, memoryMb: number) => string;
+  manual: string;
+  manualHint: string;
+  manualArgs: string;
+  manualRun: string;
+  manualOutput: string;
+  exitCode: (code: string) => string;
 }
 
 export const PLAYER_STRINGS: CodePlayerStrings = {
@@ -140,6 +177,8 @@ export const PLAYER_STRINGS: CodePlayerStrings = {
   editableRegion: (n) => `Your code, region ${n}`,
   run: "Run",
   running: "Running…",
+  loadingRuntime: "Loading the language runtime… this happens once.",
+  inBrowser: "Runs in your browser — the server grades.",
   runUnavailable:
     "Running is unavailable right now. Your answer is saved and will be graded by your teacher.",
   runFailed: "The run could not be completed. Your answer is saved; try again in a moment.",
@@ -153,7 +192,10 @@ export const PLAYER_STRINGS: CodePlayerStrings = {
   files: "Files available to your program",
   caseName: "Case",
   stdin: "stdin",
+  noStdin: "No input",
+  command: (args) => `$ program ${args}`,
   expected: "Expected",
+  expectedAnyOutput: "Any output",
   got: "Got",
   verdict: "Verdict",
   passed: "Passed",
@@ -161,10 +203,21 @@ export const PLAYER_STRINGS: CodePlayerStrings = {
   notRun: "Not run",
   timedOut: "Timed out",
   outOfMemory: "Out of memory",
+  crashed: "Crashed",
+  truncated: "Output truncated",
+  exitMismatch: (got, want) => `exit ${got} ≠ ${want}`,
+  outputMismatch: "Output differs",
   compileFailed: "Compilation failed",
   compileOk: "Compiled",
   allOrNothing: "All cases must pass to score.",
   limits: (timeMs, memoryMb) => `${timeMs} ms · ${memoryMb} MB`,
+  manual: "Try it yourself",
+  manualHint:
+    "Run your program once on an input of your own. One argument per line; nothing here is graded.",
+  manualArgs: "Arguments",
+  manualRun: "Run once",
+  manualOutput: "Output",
+  exitCode: (code) => `exit ${code}`,
 };
 
 export interface CodeReviewStrings {
@@ -173,6 +226,8 @@ export interface CodeReviewStrings {
   compilerOutput: string;
   cases: string;
   caseName: string;
+  args: string;
+  noArgs: string;
   expected: string;
   got: string;
   verdict: string;
@@ -180,6 +235,9 @@ export interface CodeReviewStrings {
   failed: string;
   timedOut: string;
   outOfMemory: string;
+  crashed: string;
+  exitMismatch: (got: string, want: number) => string;
+  outputMismatch: string;
   points: string;
   hiddenSummary: (passed: number, count: number) => string;
   hiddenCase: string;
@@ -197,6 +255,8 @@ export const REVIEW_STRINGS: CodeReviewStrings = {
   compilerOutput: "Compiler output",
   cases: "Cases",
   caseName: "Case",
+  args: "Arguments",
+  noArgs: "—",
   expected: "Expected",
   got: "Got",
   verdict: "Verdict",
@@ -204,6 +264,9 @@ export const REVIEW_STRINGS: CodeReviewStrings = {
   failed: "Failed",
   timedOut: "Timed out",
   outOfMemory: "Out of memory",
+  crashed: "Crashed",
+  exitMismatch: (got, want) => `exit ${got} ≠ ${want}`,
+  outputMismatch: "Output differs",
   points: "Points",
   hiddenSummary: (passed, count) => `Hidden cases: ${passed} of ${count} passed.`,
   hiddenCase: "Hidden case",

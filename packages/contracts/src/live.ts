@@ -194,6 +194,12 @@ export const RunBody = z.object({
   itemId: z.uuid(),
   regions: z.array(z.string().max(20_000)).max(20),
   stdin: z.string().max(16_000).optional(),
+  /**
+   * The command line of a MANUAL try, one `argv[1..]` entry per element. It
+   * only applies to the free-stdin trial: a visible case runs with the
+   * arguments the teacher wrote, which the client never gets to change.
+   */
+  args: z.array(z.string().max(200)).max(32).optional(),
 });
 export type RunBody = z.infer<typeof RunBody>;
 
