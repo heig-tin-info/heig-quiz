@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { registerForTests } from "@quiz/registry/server";
 
-import { assets, coursePools, courseStaff, courses, pools, questions } from "../../db/schema.js";
+import { assets, coursePools, courseStaff, courses, pools, questions, users } from "../../db/schema.js";
 import { subscribe } from "../../events.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { fakeRunnerType, fakeShort } from "../../test/fakeType.js";
@@ -593,5 +593,355 @@ describe("the tag vocabulary of a pool", () => {
       headers: owner.headers,
     });
     expect(still.json()[0].description).toBe("Allocates memory on the heap");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sharing over HTTP (F-POOL-05, F-POOL-06)
+// ---------------------------------------------------------------------------
+
+type Actor = Awaited<ReturnType<TestServer["signIn"]>> & { email?: string };
+
+/** `GET /pools/:id` — a read anyone the pool lets in may do. */
+async function readPool(id: string, who: Actor) {
+  return server.app.inject({ method: "GET", url: `/app/api/pools/${id}`, headers: who.headers });
+}
+
+/** A write reserved to a contributor: creating a question. */
+async function writeQuestion(id: string, who: Actor, name: string) {
+  return server.app.inject({
+    method: "POST",
+    url: `/app/api/pools/${id}/questions`,
+    headers: who.headers,
+    payload: { type: "short", internalName: name },
+  });
+}
+
+/** A write reserved to an owner: renaming the pool. */
+async function renamePool(id: string, who: Actor, name: string) {
+  return server.app.inject({
+    method: "PATCH",
+    url: `/app/api/pools/${id}`,
+    headers: who.headers,
+    payload: { name },
+  });
+}
+
+async function invite(id: string, who: Actor, email: string, role: string) {
+  return server.app.inject({
+    method: "POST",
+    url: `/app/api/pools/${id}/members`,
+    headers: who.headers,
+    payload: { email, role },
+  });
+}
+
+describe("pool sharing", () => {
+  let poolOwner: Actor;
+  let reader: Actor;
+  let contributor: Actor;
+  let coOwner: Actor;
+  let outsider: Actor;
+  let staffer: Actor;
+  let admin: Actor;
+  let shared: string;
+  const emails = new Map<string, string>();
+
+  async function actor(role: "teacher" | "admin", label: string): Promise<Actor> {
+    const email = `${label}-${crypto.randomUUID().slice(0, 8)}@heig.test`;
+    const who = await server.signIn(role, email);
+    emails.set(who.id, email);
+    return who;
+  }
+
+  beforeAll(async () => {
+    poolOwner = await actor("teacher", "pool-owner");
+    reader = await actor("teacher", "reader");
+    contributor = await actor("teacher", "contributor");
+    coOwner = await actor("teacher", "co-owner");
+    outsider = await actor("teacher", "outsider");
+    staffer = await actor("teacher", "staffer");
+    admin = await actor("admin", "admin");
+
+    const created = await server.app.inject({
+      method: "POST",
+      url: "/app/api/pools",
+      headers: poolOwner.headers,
+      payload: { name: "Shared pool", icon: "cpu" },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().icon).toBe("cpu");
+    expect(created.json().visibility).toBe("private");
+    shared = created.json().id;
+
+    for (const [who, role] of [
+      [reader, "reader"],
+      [contributor, "contributor"],
+      [coOwner, "owner"],
+    ] as const) {
+      const res = await invite(shared, poolOwner, emails.get(who.id)!, role);
+      expect(res.statusCode).toBe(201);
+    }
+  });
+
+  it("flips a private pool to shared on the first invitation", async () => {
+    const detail = await readPool(shared, poolOwner);
+    expect(detail.json().pool.visibility).toBe("shared");
+    expect(detail.json().role).toBe("owner");
+  });
+
+  it("gives every party the role they hold, and nothing more", async () => {
+    // reader: reads, does not write.
+    expect((await readPool(shared, reader)).json().role).toBe("reader");
+    const refused = await writeQuestion(shared, reader, "reader tries");
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json().error).toBe("forbidden");
+
+    // contributor: writes questions, does not manage the pool.
+    expect((await readPool(shared, contributor)).json().role).toBe("contributor");
+    expect((await writeQuestion(shared, contributor, "contributor writes")).statusCode).toBe(201);
+    expect((await renamePool(shared, contributor, "hijacked")).statusCode).toBe(403);
+
+    // member-owner: manages it.
+    expect((await readPool(shared, coOwner)).json().role).toBe("owner");
+    expect((await renamePool(shared, coOwner, "Shared pool")).statusCode).toBe(200);
+
+    // admin: owner everywhere.
+    expect((await readPool(shared, admin)).json().role).toBe("owner");
+
+    // stranger: the pool does not exist.
+    expect((await readPool(shared, outsider)).statusCode).toBe(404);
+    expect((await writeQuestion(shared, outsider, "intruder")).statusCode).toBe(404);
+  });
+
+  it("keeps the staff of a linked course a contributor, never an owner", async () => {
+    const courseId = crypto.randomUUID();
+    await server.app.db
+      .insert(courses)
+      .values({ id: courseId, name: "Sharing", code: `S${Date.now()}` });
+    await server.app.db.insert(courseStaff).values({ courseId, userId: staffer.id });
+    const linked = await server.app.inject({
+      method: "PUT",
+      url: `/app/api/courses/${courseId}/pools`,
+      headers: staffer.headers,
+      payload: { poolIds: [shared] },
+    });
+    // A pool is linked only by someone who can already reach it, so the owner
+    // does it: the staffer cannot link a pool they do not see yet.
+    expect(linked.json().length).toBe(0);
+    await server.app.db.insert(coursePools).values({ courseId, poolId: shared });
+
+    const detail = await readPool(shared, staffer);
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().role).toBe("contributor");
+    expect((await writeQuestion(shared, staffer, "staff writes")).statusCode).toBe(201);
+    expect((await renamePool(shared, staffer, "staff renames")).statusCode).toBe(403);
+  });
+
+  it("lets every teacher READ a public pool and nobody write it", async () => {
+    const created = await server.app.inject({
+      method: "POST",
+      url: "/app/api/pools",
+      headers: poolOwner.headers,
+      payload: { name: "Public pool", visibility: "public" },
+    });
+    const open = created.json().id;
+    const seen = await readPool(open, outsider);
+    expect(seen.statusCode).toBe(200);
+    expect(seen.json().role).toBe("reader");
+    expect((await writeQuestion(open, outsider, "not yours")).statusCode).toBe(403);
+    expect((await renamePool(open, outsider, "not yours")).statusCode).toBe(403);
+
+    // And it is listed, with the owner's name on it.
+    const listed = await server.app.inject({
+      method: "GET",
+      url: "/app/api/pools",
+      headers: outsider.headers,
+    });
+    const row = listed.json().find((p: { id: string }) => p.id === open);
+    expect(row.role).toBe("reader");
+    expect(row.ownerName).toBe("Test teacher");
+    expect(row.memberCount).toBe(0);
+  });
+
+  it("lists every reachable pool with its role and its member count", async () => {
+    const listed = await server.app.inject({
+      method: "GET",
+      url: "/app/api/pools",
+      headers: contributor.headers,
+    });
+    expect(listed.statusCode).toBe(200);
+    const row = listed.json().find((p: { id: string }) => p.id === shared);
+    expect(row).toMatchObject({ role: "contributor", memberCount: 3, icon: "cpu" });
+    expect(row.updatedAt).toBeTruthy();
+  });
+
+  it("refuses an invitation that names nobody, a student, or an existing seat", async () => {
+    const unknown = await invite(shared, poolOwner, "ghost@heig.test", "reader");
+    expect(unknown.statusCode).toBe(404);
+    expect(unknown.json().error).toBe("teacher_not_found");
+
+    const pupil = await server.signIn("student", `pupil-${crypto.randomUUID().slice(0, 8)}@heig.test`);
+    const [row] = await server.app.db
+      .select()
+      .from(users)
+      .where(eq(users.id, pupil.id));
+    expect((await invite(shared, poolOwner, row!.email, "reader")).statusCode).toBe(404);
+
+    const again = await invite(shared, poolOwner, emails.get(reader.id)!, "reader");
+    expect(again.statusCode).toBe(409);
+    expect(again.json().error).toBe("already_member");
+
+    const itself = await invite(shared, poolOwner, emails.get(poolOwner.id)!, "reader");
+    expect(itself.statusCode).toBe(409);
+  });
+
+  it("only lets an owner invite", async () => {
+    const res = await invite(shared, contributor, emails.get(outsider.id)!, "reader");
+    expect(res.statusCode).toBe(403);
+    const hidden = await invite(shared, outsider, emails.get(outsider.id)!, "reader");
+    expect(hidden.statusCode).toBe(404);
+  });
+
+  it("changes a role, refuses to touch the owner, and removes a seat", async () => {
+    const promoted = await server.app.inject({
+      method: "PATCH",
+      url: `/app/api/pools/${shared}/members/${reader.id}`,
+      headers: poolOwner.headers,
+      payload: { role: "contributor" },
+    });
+    expect(promoted.statusCode).toBe(200);
+    expect(
+      promoted.json().members.find((m: { userId: string }) => m.userId === reader.id).role,
+    ).toBe("contributor");
+    expect((await writeQuestion(shared, reader, "promoted writes")).statusCode).toBe(201);
+
+    const onOwner = await server.app.inject({
+      method: "PATCH",
+      url: `/app/api/pools/${shared}/members/${poolOwner.id}`,
+      headers: poolOwner.headers,
+      payload: { role: "reader" },
+    });
+    expect(onOwner.statusCode).toBe(409);
+    expect(onOwner.json().error).toBe("is_owner");
+
+    const removedOwner = await server.app.inject({
+      method: "DELETE",
+      url: `/app/api/pools/${shared}/members/${poolOwner.id}`,
+      headers: coOwner.headers,
+    });
+    expect(removedOwner.statusCode).toBe(409);
+
+    const removed = await server.app.inject({
+      method: "DELETE",
+      url: `/app/api/pools/${shared}/members/${reader.id}`,
+      headers: poolOwner.headers,
+    });
+    expect(removed.statusCode).toBe(204);
+    expect((await readPool(shared, reader)).statusCode).toBe(404);
+  });
+
+  it("lets a member leave on their own, and nobody else remove a colleague", async () => {
+    const byContributor = await server.app.inject({
+      method: "DELETE",
+      url: `/app/api/pools/${shared}/members/${coOwner.id}`,
+      headers: contributor.headers,
+    });
+    expect(byContributor.statusCode).toBe(403);
+
+    const leaving = await server.app.inject({
+      method: "DELETE",
+      url: `/app/api/pools/${shared}/members/${contributor.id}`,
+      headers: contributor.headers,
+    });
+    expect(leaving.statusCode).toBe(204);
+    expect((await readPool(shared, contributor)).statusCode).toBe(404);
+  });
+
+  it("drops a notification in the invitee's inbox", async () => {
+    const invited = await actor("teacher", "notified");
+    expect((await invite(shared, poolOwner, emails.get(invited.id)!, "reader")).statusCode).toBe(201);
+
+    const bell = await server.app.inject({
+      method: "GET",
+      url: "/app/api/notifications",
+      headers: invited.headers,
+    });
+    expect(bell.statusCode).toBe(200);
+    expect(bell.json().unread).toBe(1);
+    expect(bell.json().items[0].payload).toMatchObject({
+      kind: "pool_shared",
+      poolId: shared,
+      role: "reader",
+    });
+
+    const read = await server.app.inject({
+      method: "POST",
+      url: `/app/api/notifications/${bell.json().items[0].id}/read`,
+      headers: invited.headers,
+    });
+    expect(read.statusCode).toBe(200);
+    expect(read.json().unread).toBe(0);
+  });
+});
+
+describe("question listing over HTTP", () => {
+  let listed: string;
+  let author: Actor;
+
+  beforeAll(async () => {
+    author = await server.signIn("teacher");
+    const created = await server.app.inject({
+      method: "POST",
+      url: "/app/api/pools",
+      headers: author.headers,
+      payload: { name: "Sorted pool" },
+    });
+    listed = created.json().id;
+    for (const name of ["Charlie", "alpha", "Bravo"]) {
+      const res = await server.app.inject({
+        method: "POST",
+        url: `/app/api/pools/${listed}/questions`,
+        headers: author.headers,
+        payload: { type: "short", internalName: name },
+      });
+      expect(res.statusCode).toBe(201);
+    }
+  });
+
+  it("sorts by name and pages with a cursor", async () => {
+    const first = await server.app.inject({
+      method: "GET",
+      url: `/app/api/pools/${listed}/questions?sort=name&dir=asc&limit=2`,
+      headers: author.headers,
+    });
+    expect(first.json().items.map((q: { internalName: string }) => q.internalName)).toEqual([
+      "alpha",
+      "Bravo",
+    ]);
+    const second = await server.app.inject({
+      method: "GET",
+      url: `/app/api/pools/${listed}/questions?sort=name&dir=asc&limit=2&cursor=${encodeURIComponent(first.json().nextCursor)}`,
+      headers: author.headers,
+    });
+    expect(second.json().items.map((q: { internalName: string }) => q.internalName)).toEqual([
+      "Charlie",
+    ]);
+    expect(second.json().nextCursor).toBeNull();
+  });
+
+  it("answers 400 to a cursor that belongs to another order", async () => {
+    const first = await server.app.inject({
+      method: "GET",
+      url: `/app/api/pools/${listed}/questions?sort=name&dir=asc&limit=1`,
+      headers: author.headers,
+    });
+    const mixed = await server.app.inject({
+      method: "GET",
+      url: `/app/api/pools/${listed}/questions?sort=updated&dir=desc&limit=1&cursor=${encodeURIComponent(first.json().nextCursor)}`,
+      headers: author.headers,
+    });
+    expect(mixed.statusCode).toBe(400);
+    expect(mixed.json().error).toBe("invalid_cursor");
   });
 });

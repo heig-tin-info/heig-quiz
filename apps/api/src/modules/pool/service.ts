@@ -30,6 +30,11 @@ import {
 import type {
   Category,
   CategoryNode,
+  Pool,
+  PoolMember,
+  PoolMembers,
+  PoolRole,
+  PoolSummary,
   QuestionDetail,
   QuestionDraft,
   QuestionMeta,
@@ -40,6 +45,7 @@ import type {
   VersionRow,
   ZodIssueLite,
 } from "@quiz/contracts";
+import { effectivePoolRole } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import {
@@ -47,15 +53,23 @@ import {
   attempts,
   categories,
   coursePools,
+  courseStaff,
   evaluationItems,
   evaluations,
+  poolMembers,
   pools,
   poolTags as poolTagsTable,
   questionTags,
   questionVersionAssets,
   questionVersions,
   questions,
+  userEmails,
+  users,
 } from "../../db/schema.js";
+import { audit } from "../../audit.js";
+import { notify } from "../notifications/service.js";
+import { userTopic } from "../realtime/bus.js";
+import { poolPeopleChanged } from "./events.js";
 import {
   issuesOf,
   loadConfig,
@@ -118,34 +132,102 @@ function qualified(column: AnyColumn): SQL {
 
 const questionCount = sql<number>`(SELECT count(*) FROM ${questions} WHERE ${qualified(questions.poolId)} = ${qualified(pools.id)} AND ${qualified(questions.deletedAt)} IS NULL)::int`;
 
-function poolJson(pool: PoolRow) {
+function poolJson(pool: PoolRow): Pool {
   return {
     id: pool.id,
     name: pool.name,
+    icon: pool.icon,
     visibility: pool.visibility,
     ownerId: pool.ownerId,
     isPersonal: pool.isPersonal,
     createdAt: pool.createdAt.toISOString(),
+    updatedAt: pool.updatedAt.toISOString(),
   };
 }
 
-/** Every pool the predicate lets the caller see, with its question count. */
-export async function listPools(db: Db, where: SQL | undefined) {
+/** "Prof Démo", or the e-mail when the account has no name yet. */
+function displayName(row: { givenName: string | null; familyName: string | null; email: string }): string {
+  const full = `${row.givenName ?? ""} ${row.familyName ?? ""}`.trim();
+  return full === "" ? row.email : full;
+}
+
+/** The facts `effectivePoolRole` needs, gathered per row rather than per pool. */
+const memberCountOf = sql<number>`(SELECT count(*) FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${qualified(pools.id)})::int`;
+
+function memberRoleOf(userId: string): SQL<PoolRole | null> {
+  return sql<PoolRole | null>`(SELECT ${qualified(poolMembers.role)} FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${qualified(pools.id)} AND ${qualified(poolMembers.userId)} = ${userId})`;
+}
+
+function courseStaffOf(userId: string): SQL<boolean> {
+  return sql<boolean>`EXISTS (SELECT 1 FROM ${coursePools} JOIN ${courseStaff} ON ${qualified(courseStaff.courseId)} = ${qualified(coursePools.courseId)} WHERE ${qualified(coursePools.poolId)} = ${qualified(pools.id)} AND ${qualified(courseStaff.userId)} = ${userId})`;
+}
+
+/**
+ * Every pool the predicate lets the caller see (their own, the ones they were
+ * named in, the public ones and the ones their courses draw from), with the
+ * caller's EFFECTIVE role on each — the list screen needs it to know which
+ * cards open on a read-only pool.
+ *
+ * The role is resolved by the same pure rule as `guards.poolRoleOf`; only the
+ * loading differs, and it is done in one statement rather than one per pool.
+ */
+export async function listPools(
+  db: Db,
+  where: SQL | undefined,
+  viewer: { id: string; role: string },
+): Promise<PoolSummary[]> {
   const rows = await db
-    .select({ pool: pools, questionCount })
+    .select({
+      pool: pools,
+      questionCount,
+      memberCount: memberCountOf,
+      memberRole: memberRoleOf(viewer.id),
+      isCourseStaff: courseStaffOf(viewer.id),
+      ownerGivenName: users.givenName,
+      ownerFamilyName: users.familyName,
+      ownerEmail: users.email,
+    })
     .from(pools)
+    .leftJoin(users, eq(users.id, pools.ownerId))
     .where(where)
     .orderBy(asc(pools.name));
-  return rows.map((r) => ({ ...poolJson(r.pool), questionCount: r.questionCount }));
+  return rows.map((r) => ({
+    ...poolJson(r.pool),
+    questionCount: r.questionCount,
+    memberCount: r.memberCount,
+    role: effectivePoolRole({
+      isAdmin: viewer.role === "admin",
+      isOwner: r.pool.ownerId === viewer.id,
+      memberRole: r.memberRole,
+      isCourseStaff: r.isCourseStaff,
+      isPublic: r.pool.visibility === "public",
+    }),
+    ownerName: displayName({
+      givenName: r.ownerGivenName,
+      familyName: r.ownerFamilyName,
+      email: r.ownerEmail ?? "",
+    }),
+  }));
 }
 
 export async function createPool(
   db: Db,
-  input: { name: string; visibility: "private" | "shared" | "public"; ownerId: string },
+  input: {
+    name: string;
+    visibility: "private" | "shared" | "public";
+    ownerId: string;
+    icon?: string | null | undefined;
+  },
 ) {
   const [row] = await db
     .insert(pools)
-    .values({ id: randomUUID(), name: input.name, visibility: input.visibility, ownerId: input.ownerId })
+    .values({
+      id: randomUUID(),
+      name: input.name,
+      icon: input.icon ?? null,
+      visibility: input.visibility,
+      ownerId: input.ownerId,
+    })
     .returning();
   return poolJson(row!);
 }
@@ -153,7 +235,11 @@ export async function createPool(
 export async function updatePool(
   db: Db,
   poolId: string,
-  patch: { name?: string | undefined; visibility?: "private" | "shared" | "public" | undefined },
+  patch: {
+    name?: string | undefined;
+    icon?: string | null | undefined;
+    visibility?: "private" | "shared" | "public" | undefined;
+  },
 ) {
   const [row] = await db
     .update(pools)
@@ -167,8 +253,260 @@ export async function deletePool(db: Db, poolId: string): Promise<void> {
   await db.delete(pools).where(eq(pools.id, poolId));
 }
 
-/** `GET /pools/:id`: the pool, its category tree and the tags in use. */
-export async function poolDetail(db: Db, pool: PoolRow) {
+// ---------------------------------------------------------------------------
+// Members (F-POOL-05)
+// ---------------------------------------------------------------------------
+
+/**
+ * The people of a pool: the `pools.owner_id` account FIRST, then the members
+ * in the order they were added — which is the succession order the day the
+ * owner loses the teacher role (`transferOnLoss`).
+ */
+export async function listMembers(db: Db, pool: PoolRow): Promise<PoolMembers> {
+  const [[owner], rows] = await Promise.all([
+    db
+      .select({
+        id: users.id,
+        email: users.email,
+        givenName: users.givenName,
+        familyName: users.familyName,
+      })
+      .from(users)
+      .where(eq(users.id, pool.ownerId))
+      .limit(1),
+    db
+      .select({
+        id: users.id,
+        email: users.email,
+        givenName: users.givenName,
+        familyName: users.familyName,
+        role: poolMembers.role,
+        addedAt: poolMembers.createdAt,
+      })
+      .from(poolMembers)
+      .innerJoin(users, eq(users.id, poolMembers.userId))
+      .where(eq(poolMembers.poolId, pool.id))
+      .orderBy(asc(poolMembers.createdAt), asc(users.email)),
+  ]);
+  const members: PoolMember[] = [];
+  if (owner) {
+    members.push({
+      userId: owner.id,
+      email: owner.email,
+      givenName: owner.givenName,
+      familyName: owner.familyName,
+      role: "owner",
+      isOwner: true,
+      // The owner has held the pool since it existed; nothing else would be
+      // true, and the web app sorts on this field.
+      addedAt: pool.createdAt.toISOString(),
+    });
+  }
+  for (const row of rows) {
+    members.push({
+      userId: row.id,
+      email: row.email,
+      givenName: row.givenName,
+      familyName: row.familyName,
+      role: row.role,
+      isOwner: false,
+      addedAt: row.addedAt.toISOString(),
+    });
+  }
+  return { visibility: pool.visibility, members };
+}
+
+/**
+ * The account an invitation names, found by e-mail over the whole identity
+ * set (`user_emails`, GH-11) and not only the login address, then narrowed to
+ * the accounts that may hold a pool seat: a teacher or an admin.
+ *
+ * A student address answers `teacher_not_found` like an unknown one: a pool
+ * is never shared with a student, and the difference is not the inviter's
+ * business.
+ */
+export async function findTeacherByEmail(db: Db, email: string) {
+  const normalized = email.trim().toLowerCase();
+  const [row] = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      givenName: users.givenName,
+      familyName: users.familyName,
+      role: users.role,
+    })
+    .from(users)
+    .where(
+      and(
+        or(
+          sql`lower(${users.email}) = ${normalized}`,
+          sql`EXISTS (SELECT 1 FROM ${userEmails} WHERE ${qualified(userEmails.userId)} = ${qualified(users.id)} AND ${qualified(userEmails.email)} = ${normalized} AND ${qualified(userEmails.verified)})`,
+        ),
+        inArray(users.role, ["teacher", "admin"]),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+/** Already a member, or the owner: the invitation is a 409, not a second row. */
+export async function isMemberOrOwner(db: Db, pool: PoolRow, userId: string): Promise<boolean> {
+  if (pool.ownerId === userId) return true;
+  const [row] = await db
+    .select({ userId: poolMembers.userId })
+    .from(poolMembers)
+    .where(and(eq(poolMembers.poolId, pool.id), eq(poolMembers.userId, userId)))
+    .limit(1);
+  return row !== undefined;
+}
+
+/**
+ * Names one account in the pool. A `private` pool becomes `shared` on the
+ * first invitation — the visibility is a consequence of the members, never a
+ * second thing to remember (F-POOL-05).
+ */
+export async function addMember(
+  db: Db,
+  pool: PoolRow,
+  userId: string,
+  role: PoolRole,
+): Promise<{ addedAt: Date; visibility: PoolRow["visibility"] }> {
+  return db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(poolMembers)
+      .values({ poolId: pool.id, userId, role })
+      .returning();
+    const visibility = pool.visibility === "private" ? "shared" : pool.visibility;
+    await tx
+      .update(pools)
+      .set({ visibility, updatedAt: new Date() })
+      .where(eq(pools.id, pool.id));
+    return { addedAt: row!.createdAt, visibility };
+  });
+}
+
+export async function setMemberRole(
+  db: Db,
+  poolId: string,
+  userId: string,
+  role: PoolRole,
+): Promise<boolean> {
+  const updated = await db
+    .update(poolMembers)
+    .set({ role })
+    .where(and(eq(poolMembers.poolId, poolId), eq(poolMembers.userId, userId)))
+    .returning({ userId: poolMembers.userId });
+  return updated.length > 0;
+}
+
+export async function removeMember(db: Db, poolId: string, userId: string): Promise<boolean> {
+  const removed = await db
+    .delete(poolMembers)
+    .where(and(eq(poolMembers.poolId, poolId), eq(poolMembers.userId, userId)))
+    .returning({ userId: poolMembers.userId });
+  return removed.length > 0;
+}
+
+/**
+ * The topics a change of the pool's people must reach: the owner and every
+ * member, on their OWN topic.
+ *
+ * `pool:<id>` is not enough here — a connection subscribes to the pools it
+ * could reach WHEN IT OPENED, so the colleague who has just been named is
+ * precisely the one not listening to it yet.
+ */
+export async function poolAudience(db: Db, pool: PoolRow): Promise<string[]> {
+  const rows = await db
+    .select({ userId: poolMembers.userId })
+    .from(poolMembers)
+    .where(eq(poolMembers.poolId, pool.id));
+  return [...new Set([pool.ownerId, ...rows.map((r) => r.userId)])];
+}
+
+/**
+ * Succession (F-POOL-05): the pools owned by an account that has just lost
+ * the teacher role pass to their FIRST member, then the next, and so on.
+ *
+ * "Removed from the system" is never a deletion here — an account is kept for
+ * its audit trail and its past attempts. What happens is that the role is
+ * recomputed to something that is not `teacher`/`admin`, which is why this is
+ * wired into `roles.ts` (see the comment there) rather than into a delete
+ * route that does not exist.
+ *
+ * One transaction per pool, and idempotent: a pool whose owner is anyone else
+ * is left alone, and a pool with NO member keeps its owner — it stays
+ * readable by the staff of the courses it is linked to, and an admin can
+ * still dispose of it. Nothing is ever orphaned to nobody.
+ */
+export async function transferOnLoss(
+  db: Db,
+  userId: string,
+): Promise<{ poolId: string; toUserId: string }[]> {
+  const owned = await db.select().from(pools).where(eq(pools.ownerId, userId));
+  if (owned.length === 0) return [];
+  const [previous] = await db
+    .select({ givenName: users.givenName, familyName: users.familyName, email: users.email })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const fromName = previous ? displayName(previous) : "";
+
+  const done: { poolId: string; toUserId: string }[] = [];
+  for (const pool of owned) {
+    const heir = await db.transaction(async (tx) => {
+      // Re-read inside the transaction: two concurrent role recomputations
+      // must not hand the same pool to two different people.
+      const [current] = await tx
+        .select()
+        .from(pools)
+        .where(and(eq(pools.id, pool.id), eq(pools.ownerId, userId)))
+        .limit(1);
+      if (!current) return null;
+      const [first] = await tx
+        .select({ userId: poolMembers.userId })
+        .from(poolMembers)
+        .where(eq(poolMembers.poolId, pool.id))
+        .orderBy(asc(poolMembers.createdAt), asc(poolMembers.userId))
+        .limit(1);
+      if (!first) return null;
+      await tx
+        .update(pools)
+        .set({ ownerId: first.userId, updatedAt: new Date() })
+        .where(eq(pools.id, pool.id));
+      // The new owner is the owner by `pools.owner_id`; a member row for them
+      // would be a second, weaker claim on the same seat.
+      await tx
+        .delete(poolMembers)
+        .where(and(eq(poolMembers.poolId, pool.id), eq(poolMembers.userId, first.userId)));
+      return first.userId;
+    });
+    if (!heir) continue;
+    await audit(db, {
+      actorUserId: null,
+      actorType: "system",
+      action: "pool.transfer",
+      subjectType: "pool",
+      subjectId: pool.id,
+      payload: { from: userId, to: heir, name: pool.name, reason: "owner_lost_teacher_role" },
+    });
+    await notify(db, heir, {
+      kind: "pool_ownership",
+      poolId: pool.id,
+      poolName: pool.name,
+      fromName,
+    });
+    poolPeopleChanged([userTopic(heir), userTopic(userId)]);
+    done.push({ poolId: pool.id, toUserId: heir });
+  }
+  return done;
+}
+
+/**
+ * `GET /pools/:id`: the pool, its category tree, the tags in use — and the
+ * caller's effective role, which is what the screen reads to decide whether
+ * it offers an editor or a reading view.
+ */
+export async function poolDetail(db: Db, pool: PoolRow, role: PoolRole) {
   const [tree, tags, [counted]] = await Promise.all([
     categoryTree(db, pool.id),
     poolTagNames(db, pool.id),
@@ -176,6 +514,7 @@ export async function poolDetail(db: Db, pool: PoolRow) {
   ]);
   return {
     pool: poolJson(pool),
+    role,
     categories: tree,
     tags,
     questionCount: counted?.n ?? 0,
@@ -450,19 +789,88 @@ export async function deleteCategory(db: Db, categoryId: string): Promise<void> 
 // Questions — listing and metadata
 // ---------------------------------------------------------------------------
 
-/** `(updatedAt, id)` of the last row of a page, opaque to the client. */
-function encodeCursor(updatedAt: Date, id: string): string {
-  return Buffer.from(`${updatedAt.toISOString()}|${id}`, "utf8").toString("base64url");
+/** A cursor that does not belong to the query it was sent with (400). */
+export class InvalidCursor extends Error {
+  constructor(readonly reason: "malformed" | "sort_changed") {
+    super(`cursor is ${reason}`);
+    this.name = "InvalidCursor";
+  }
 }
 
-function decodeCursor(cursor: string): { updatedAt: Date; id: string } | null {
-  const raw = Buffer.from(cursor, "base64url").toString("utf8");
-  const bar = raw.lastIndexOf("|");
-  if (bar <= 0) return null;
-  const updatedAt = new Date(raw.slice(0, bar));
-  const id = raw.slice(bar + 1);
-  if (Number.isNaN(updatedAt.getTime()) || id.length === 0) return null;
-  return { updatedAt, id };
+/**
+ * The keyset cursor: the SORT KEY of the last row of the page, its id, and
+ * the order that produced them — base64url, opaque to the client, same shape
+ * as the `(updatedAt, id)` one it replaces.
+ *
+ * Carrying the order is what makes a page safe: a client that changes column
+ * mid-scroll sends a key that means nothing in the new order, and the API
+ * refuses it (`sort_changed`) instead of returning a page that mixes two.
+ */
+interface Cursor {
+  sort: QuestionSearch["sort"];
+  dir: QuestionSearch["dir"];
+  /** The sort key as text; `id` breaks the ties. */
+  key: string;
+  id: string;
+}
+
+function encodeCursor(cursor: Cursor): string {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+function decodeCursor(raw: string, search: QuestionSearch): Cursor {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+  } catch {
+    throw new InvalidCursor("malformed");
+  }
+  const cursor = parsed as Partial<Cursor> | null;
+  if (!cursor || typeof cursor.key !== "string" || typeof cursor.id !== "string") {
+    throw new InvalidCursor("malformed");
+  }
+  if (cursor.sort !== search.sort || cursor.dir !== search.dir) {
+    throw new InvalidCursor("sort_changed");
+  }
+  return { sort: search.sort, dir: search.dir, key: cursor.key, id: cursor.id };
+}
+
+/**
+ * The highest PUBLISHED version number of a question, as a correlated
+ * subquery. `null` for a draft-only question — which is why `version:>1` and
+ * `version:<3` both leave those rows out: a comparison against null is never
+ * true (F-POOL-03, the `version:` filters of the search box).
+ */
+const latestNumber = sql<number | null>`(SELECT max(${qualified(questionVersions.number)}) FROM ${questionVersions} WHERE ${qualified(questionVersions.questionId)} = ${qualified(questions.id)})`;
+
+/**
+ * The sort key per column, as SQL and as text.
+ *
+ * `version` sorts NULLS LAST in both directions, which a plain `order by`
+ * could express but a KEYSET comparison could not: `(key, id) < (…)` has no
+ * meaning when the key is null. The null is therefore folded into a sentinel
+ * that already sorts last in the requested direction, and the row comparison
+ * stays a single, index-friendly expression.
+ */
+const SORT_KEYS = {
+  name: { expr: () => sql`lower(${qualified(questions.internalName)})`, cast: "text" },
+  type: { expr: () => qualified(questions.type), cast: "text" },
+  difficulty: { expr: () => qualified(questions.difficulty), cast: "int" },
+  version: {
+    expr: (dir: QuestionSearch["dir"]) =>
+      sql`coalesce(${latestNumber}, ${dir === "desc" ? -1 : 2_147_483_647})`,
+    cast: "int",
+  },
+  updated: { expr: () => qualified(questions.updatedAt), cast: "timestamptz" },
+} as const satisfies Record<
+  QuestionSearch["sort"],
+  { expr: (dir: QuestionSearch["dir"]) => SQL; cast: string }
+>;
+
+/** The value the database returned for the sort key, as cursor text. */
+function keyText(value: unknown): string {
+  if (value instanceof Date) return value.toISOString();
+  return String(value ?? "");
 }
 
 /**
@@ -488,6 +896,10 @@ function searchWhere(poolId: string, search: QuestionSearch): SQL[] {
       sql`(${questions.internalName} ILIKE ${like} OR EXISTS (SELECT 1 FROM ${questionVersions} WHERE ${questionVersions.questionId} = ${questions.id} AND ${questionVersions.search} @@ plainto_tsquery('simple', ${search.q})))`,
     );
   }
+  // `version:>1` / `version:<3`: bounds on the HIGHEST published number. A
+  // question that was never published has none, and matches neither bound.
+  if (search.versionMin !== undefined) clauses.push(sql`${latestNumber} >= ${search.versionMin}`);
+  if (search.versionMax !== undefined) clauses.push(sql`${latestNumber} <= ${search.versionMax}`);
   return clauses;
 }
 
@@ -581,28 +993,51 @@ function rowJson(
   };
 }
 
-/** `GET /pools/:id/questions`: filtered, newest first, cursor-paginated. */
+/**
+ * `GET /pools/:id/questions`: filtered, sorted on the requested column,
+ * cursor-paginated.
+ *
+ * The sort key is SELECTED as well as ordered on, so the cursor carries the
+ * exact value the database produced — a `lower()` recomputed in JavaScript
+ * could disagree with the collation and silently skip a row at a page break.
+ */
 export async function listQuestions(db: Db, poolId: string, search: QuestionSearch) {
   const clauses = searchWhere(poolId, search);
-  const cursor = search.cursor ? decodeCursor(search.cursor) : null;
-  if (cursor) {
+  const spec = SORT_KEYS[search.sort];
+  const key = spec.expr(search.dir);
+  const descending = search.dir === "desc";
+  if (search.cursor) {
+    const cursor = decodeCursor(search.cursor, search);
+    // One row-value comparison, so the page break is a single predicate on
+    // `(sort key, id)` — the pair the ORDER BY below is built on.
     clauses.push(
-      sql`(${questions.updatedAt}, ${questions.id}) < (${cursor.updatedAt.toISOString()}::timestamptz, ${cursor.id}::uuid)`,
+      sql`(${key}, ${qualified(questions.id)}) ${sql.raw(descending ? "<" : ">")} (${cursor.key}::${sql.raw(spec.cast)}, ${cursor.id}::uuid)`,
     );
   }
+  const order = descending ? desc : asc;
   const rows = await db
-    .select()
+    .select({ question: questions, sortKey: key })
     .from(questions)
     .where(and(...clauses))
-    .orderBy(desc(questions.updatedAt), desc(questions.id))
+    .orderBy(order(key), order(questions.id))
     .limit(search.limit + 1);
   const page = rows.slice(0, search.limit);
-  const ids = page.map((r) => r.id);
+  const ids = page.map((r) => r.question.id);
   const [tags, facts] = await Promise.all([tagsOf(db, ids), versionFactsOf(db, ids)]);
   const last = page.at(-1);
   return {
-    items: page.map((q) => rowJson(q, tags.get(q.id) ?? [], facts.get(q.id))),
-    nextCursor: rows.length > search.limit && last ? encodeCursor(last.updatedAt, last.id) : null,
+    items: page.map((r) =>
+      rowJson(r.question, tags.get(r.question.id) ?? [], facts.get(r.question.id)),
+    ),
+    nextCursor:
+      rows.length > search.limit && last
+        ? encodeCursor({
+            sort: search.sort,
+            dir: search.dir,
+            key: keyText(last.sortKey),
+            id: last.question.id,
+          })
+        : null,
   };
 }
 

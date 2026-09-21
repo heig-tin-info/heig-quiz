@@ -65,6 +65,7 @@ import type {
   JoinResult,
   LobbyView,
   Me,
+  Notification,
   PublicConfig,
   RosterEntry,
   ServerEvent,
@@ -683,10 +684,23 @@ interface MockQuestion {
 interface MockPool {
   id: string;
   name: string;
+  /** A lucide icon name (`poolIcons.ts`), or null for the default. */
+  icon: string | null;
   visibility: "private" | "shared" | "public";
   ownerId: string;
   isPersonal: boolean;
   createdAt: string;
+  updatedAt: string;
+}
+
+/** A seat on a pool (F-POOL-05); the OWNER account holds the first one. */
+interface MockMember {
+  userId: string;
+  email: string;
+  givenName: string;
+  familyName: string;
+  role: "reader" | "contributor" | "owner";
+  addedAt: string;
 }
 
 interface MockCategory {
@@ -697,9 +711,72 @@ interface MockCategory {
   position: number;
 }
 
+/**
+ * Three pools, because the card has three facts to show and one pool cannot
+ * show them: one private and mine, one PUBLIC and mine, and one owned by a
+ * colleague and shared with me as a contributor — which is the only way the
+ * owner's name, the role and the "Leave" item of the menu are ever on screen.
+ */
 const pools: MockPool[] = [
-  { id: "p1", name: "Programmation C", visibility: "private", ownerId: "u-me", isPersonal: false, createdAt: iso(-300 * D) },
-  { id: "p2", name: "Systèmes embarqués", visibility: "private", ownerId: "u-me", isPersonal: false, createdAt: iso(-120 * D) },
+  { id: "p1", name: "Programmation C", icon: "code", visibility: "shared", ownerId: "u-me", isPersonal: false, createdAt: iso(-300 * D), updatedAt: iso(-2 * H) },
+  { id: "p2", name: "Systèmes embarqués", icon: "cpu", visibility: "public", ownerId: "u-me", isPersonal: false, createdAt: iso(-120 * D), updatedAt: iso(-6 * D) },
+  { id: "p3", name: "Électronique analogique", icon: "circuit-board", visibility: "shared", ownerId: "t1", isPersonal: false, createdAt: iso(-60 * D), updatedAt: iso(-30 * 60_000) },
+];
+
+const ADA = { userId: "t1", email: "ada.lovelace@heig-vd.ch", givenName: "Ada", familyName: "Lovelace" };
+const GRACE = { userId: "t2", email: "grace.hopper@heig-vd.ch", givenName: "Grace", familyName: "Hopper" };
+const ME_MEMBER = {
+  userId: "u-me",
+  email: ME_TEACHER.email,
+  givenName: ME_TEACHER.givenName,
+  familyName: ME_TEACHER.familyName,
+};
+
+/** `pool_members`, owner first, then in the order the seats were given. */
+const poolMembers: Record<string, MockMember[]> = {
+  p1: [
+    { ...ME_MEMBER, role: "owner", addedAt: iso(-300 * D) },
+    { ...ADA, role: "contributor", addedAt: iso(-40 * D) },
+    { ...GRACE, role: "reader", addedAt: iso(-12 * D) },
+  ],
+  p2: [{ ...ME_MEMBER, role: "owner", addedAt: iso(-120 * D) }],
+  // The one pool this browser only READS: the pool screen then draws no
+  // create, edit, duplicate, delete or bulk action (F-POOL-05).
+  p3: [
+    { ...ADA, role: "owner", addedAt: iso(-60 * D) },
+    { ...ME_MEMBER, role: "reader", addedAt: iso(-3 * D) },
+  ],
+};
+
+/**
+ * The bell's inbox: newest first, one unread and one already read, so both
+ * halves of a row are on screen at once. `?many=1` floods it, which is the
+ * only way to see the badge give up counting ("9+").
+ */
+const notifications: Notification[] = [
+  {
+    id: "n1",
+    payload: {
+      kind: "pool_shared",
+      poolId: "p3",
+      poolName: "Électronique analogique",
+      role: "reader",
+      byName: "Ada Lovelace",
+    },
+    createdAt: iso(-3 * D),
+    readAt: null,
+  },
+  {
+    id: "n2",
+    payload: {
+      kind: "pool_ownership",
+      poolId: "p2",
+      poolName: "Systèmes embarqués",
+      fromName: "Grace Hopper",
+    },
+    createdAt: iso(-9 * D),
+    readAt: iso(-8 * D),
+  },
 ];
 
 const categories: MockCategory[] = [
@@ -710,6 +787,8 @@ const categories: MockCategory[] = [
   { id: "k5", poolId: "p1", parentId: null, name: "Fichiers", position: 2 },
   { id: "k6", poolId: "p2", parentId: null, name: "Capteurs", position: 0 },
   { id: "k7", poolId: "p2", parentId: null, name: "Bus I²C", position: 1 },
+  { id: "k8", poolId: "p3", parentId: null, name: "Amplificateurs", position: 0 },
+  { id: "k9", poolId: "p3", parentId: null, name: "Filtres", position: 1 },
 ];
 
 /** `course_pools`: which pools a course draws from. */
@@ -1063,6 +1142,89 @@ const questions: MockQuestion[] = [
     },
     explanation: "2^12 = 4096 paliers ; 3,3 V / 4096 ≈ 0,8 mV.",
   }),
+
+  /*
+   * `p3` — the pool this browser only READS (`poolMembers`). Its questions
+   * exist so the read-only screen has something to show: without rows it is
+   * an empty state, and an empty state shows none of the actions the role is
+   * supposed to have taken away.
+   */
+  makeQuestion({
+    poolId: "p3",
+    type: "mcq",
+    internalName: "ao-gain-inverseur",
+    categoryId: "k8",
+    difficulty: 2,
+    shuffleable: true,
+    randomizable: false,
+    tags: ["amplificateur", "gain"],
+    config: mcqConfig(
+      "Un montage inverseur a `R1 = 1 kΩ` en entrée et `R2 = 10 kΩ` en contre-réaction. Quel est son gain ?",
+      [
+        ["-10", true],
+        ["+10", false],
+        ["-0,1", false],
+        ["+11", false],
+      ],
+    ),
+    explanation: "Le gain d'un inverseur vaut `-R2 / R1`, soit -10.",
+    published: [{ number: 1, changeNote: "Première version", daysAgo: 45 }],
+  }),
+  makeQuestion({
+    poolId: "p3",
+    type: "short",
+    internalName: "ao-slew-rate",
+    categoryId: "k8",
+    difficulty: 3,
+    shuffleable: false,
+    randomizable: false,
+    tags: ["amplificateur"],
+    config: shortNumber(
+      "Un AOP a un slew rate de 0,5 V/µs. Quelle est la durée minimale d'un front de 5 V ? Répondez en µs.",
+      10,
+      "µs",
+    ),
+    explanation: "5 V / 0,5 V·µs⁻¹ = 10 µs.",
+    published: [
+      { number: 1, changeNote: "Première version", daysAgo: 30 },
+      { number: 2, changeNote: "Unité précisée dans l'énoncé", daysAgo: 8 },
+    ],
+  }),
+  makeQuestion({
+    poolId: "p3",
+    type: "cloze",
+    internalName: "filtre-rc-passe-bas",
+    categoryId: "k9",
+    difficulty: 2,
+    shuffleable: true,
+    randomizable: false,
+    tags: ["filtre", "gain"],
+    config: {
+      configVersion: 2,
+      text: "Un RC série est un filtre {{passe-bas|passe-haut}} dont la fréquence de coupure vaut 1 / (2π{{RC}}).",
+      caseSensitive: false,
+      shuffleOptions: true,
+    },
+    explanation: "La sortie est prise aux bornes du condensateur : les hautes fréquences y tombent.",
+    published: [{ number: 1, changeNote: "Première version", daysAgo: 16 }],
+  }),
+  makeQuestion({
+    poolId: "p3",
+    type: "mcq",
+    internalName: "filtre-ordre-pente",
+    categoryId: "k9",
+    difficulty: 4,
+    shuffleable: true,
+    randomizable: false,
+    tags: ["filtre"],
+    config: mcqConfig("Quelle est la pente d'atténuation d'un filtre passif du second ordre ?", [
+      ["-20 dB/décade", false],
+      ["-40 dB/décade", true],
+      ["-6 dB/octave", false],
+      ["-3 dB/décade", false],
+    ]),
+    explanation: "Chaque ordre ajoute -20 dB/décade ; le second ordre en donne -40.",
+  }),
 ];
 
 /**
@@ -1127,19 +1289,57 @@ function stripPool() {
   questions.length = 0;
   categories.length = 0;
   pools.length = 0;
+  for (const key of Object.keys(poolMembers)) delete poolMembers[key];
+  notifications.length = 0;
   for (const key of Object.keys(coursePools)) coursePools[key] = [];
 }
 
-if (flags.many) inflatePool();
+/** `?many=1`: an inbox the badge cannot count on one hand. */
+function inflateNotifications() {
+  for (let i = 0; i < 12; i += 1) {
+    notifications.push({
+      id: `n${i + 10}`,
+      payload: {
+        kind: "pool_shared",
+        poolId: "p1",
+        poolName: `Banque ${i + 1}`,
+        role: i % 2 === 0 ? "reader" : "contributor",
+        byName: i % 3 === 0 ? "Grace Hopper" : "Ada Lovelace",
+      },
+      createdAt: iso(-(i + 1) * H),
+      readAt: null,
+    });
+  }
+  notifications.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+if (flags.many) {
+  inflatePool();
+  inflateNotifications();
+}
 if (flags.empty) stripPool();
 
 // --- Views -----------------------------------------------------------------
 
 const liveQuestions = (poolId: string) => questions.filter((q) => q.poolId === poolId);
 
+/** The caller's own seat on a pool; the owner account always has one. */
+const myMembership = (poolId: string): MockMember | undefined =>
+  (poolMembers[poolId] ?? []).find((m) => m.userId === (me?.id ?? "u-me"));
+
+const poolOwnerName = (pool: MockPool) => {
+  const owner = (poolMembers[pool.id] ?? []).find((m) => m.userId === pool.ownerId);
+  return owner ? `${owner.givenName} ${owner.familyName}` : "—";
+};
+
 const poolSummary = (pool: MockPool) => ({
   ...pool,
   questionCount: liveQuestions(pool.id).filter((q) => !q.deletedAt).length,
+  // The server sends the caller's EFFECTIVE role; a pool with no member row
+  // at all is one this browser just created, so it is theirs.
+  role: myMembership(pool.id)?.role ?? (pool.ownerId === (me?.id ?? "u-me") ? "owner" : "reader"),
+  ownerName: poolOwnerName(pool),
+  memberCount: (poolMembers[pool.id] ?? []).filter((m) => m.userId !== pool.ownerId).length,
 });
 
 interface TreeNode extends MockCategory {
@@ -1466,18 +1666,22 @@ on("POST", "/app/api/pools", (_m, body) => {
   const pool: MockPool = {
     id: nextId("p"),
     name: String(body.name),
+    icon: typeof body.icon === "string" ? body.icon : null,
     visibility: "private",
     ownerId: "u-me",
     isPersonal: false,
     createdAt: iso(0),
+    updatedAt: iso(0),
   };
   pools.push(pool);
+  poolMembers[pool.id] = [{ ...ME_MEMBER, role: "owner", addedAt: iso(0) }];
   return poolSummary(pool);
 });
 on("GET", "/app/api/pools/:id", (m) => {
   const pool = poolOr404(m.groups!.id!);
   return {
     pool,
+    role: poolSummary(pool).role,
     categories: categoryTree(pool.id),
     tags: poolTags(pool.id),
     questionCount: liveQuestions(pool.id).filter((q) => !q.deletedAt).length,
@@ -1486,12 +1690,95 @@ on("GET", "/app/api/pools/:id", (m) => {
 on("PATCH", "/app/api/pools/:id", (m, body) => {
   const pool = poolOr404(m.groups!.id!);
   if (typeof body.name === "string") pool.name = body.name;
+  // `icon: null` is a real value (the default icon), so the key being THERE
+  // is what decides, not its truthiness.
+  if ("icon" in body) pool.icon = typeof body.icon === "string" ? body.icon : null;
+  if (typeof body.visibility === "string") {
+    pool.visibility = body.visibility as MockPool["visibility"];
+  }
+  pool.updatedAt = iso(0);
   return poolSummary(pool);
 });
 on("DELETE", "/app/api/pools/:id", (m) => {
   const i = pools.findIndex((p) => p.id === m.groups!.id);
   if (i >= 0) pools.splice(i, 1);
+  delete poolMembers[m.groups!.id!];
   return undefined;
+});
+
+// --- Pool members and the bell (F-POOL-05) --------------------------------
+
+/** `PoolMembers`, which is also what the two write routes answer with. */
+const memberList = (pool: MockPool) => ({
+  visibility: pool.visibility,
+  // The owner's row first, whatever order the seats were given in.
+  members: [...(poolMembers[pool.id] ?? [])]
+    .sort((a, b) => Number(b.userId === pool.ownerId) - Number(a.userId === pool.ownerId))
+    .map((mem) => ({ ...mem, isOwner: mem.userId === pool.ownerId })),
+});
+
+on("GET", "/app/api/pools/:id/members", (m) => memberList(poolOr404(m.groups!.id!)));
+on("POST", "/app/api/pools/:id/members", (m, body) => {
+  const pool = poolOr404(m.groups!.id!);
+  const email = String(body.email ?? "").trim().toLowerCase();
+  const found = teachers.find((t) => t.email.toLowerCase() === email);
+  if (!found) throw new MockError(404, "No teacher account with this e-mail.");
+  const rows = (poolMembers[pool.id] ??= []);
+  if (rows.some((mem) => mem.userId === found.id)) {
+    throw new MockError(409, "This teacher already has access to the pool.");
+  }
+  rows.push({
+    userId: found.id,
+    email: found.email,
+    givenName: found.givenName ?? found.email.split(".")[0] ?? "",
+    familyName: found.familyName ?? "",
+    role: (body.role as MockMember["role"] | undefined) ?? "reader",
+    addedAt: iso(0),
+  });
+  // Inviting someone is what makes a pool shared, exactly as the API does it.
+  if (pool.visibility === "private") pool.visibility = "shared";
+  return memberList(pool);
+});
+on("PATCH", "/app/api/pools/:id/members/:userId", (m, body) => {
+  const pool = poolOr404(m.groups!.id!);
+  const row = (poolMembers[pool.id] ?? []).find((mem) => mem.userId === m.groups!.userId);
+  if (!row) throw new MockError(404, "Member not found");
+  row.role = body.role as MockMember["role"];
+  return memberList(pool);
+});
+on("DELETE", "/app/api/pools/:id/members/:userId", (m) => {
+  const pool = poolOr404(m.groups!.id!);
+  const rows = poolMembers[pool.id] ?? [];
+  const i = rows.findIndex((mem) => mem.userId === m.groups!.userId);
+  if (i >= 0) rows.splice(i, 1);
+  // Leaving a pool someone else owns takes it off my shelf.
+  if (m.groups!.userId === (me?.id ?? "u-me") && pool.ownerId !== (me?.id ?? "u-me")) {
+    const p = pools.findIndex((x) => x.id === pool.id);
+    if (p >= 0) pools.splice(p, 1);
+  }
+  return undefined;
+});
+
+/** `NotificationList`: the capped page, and the unread count of the WHOLE inbox. */
+const notificationList = (limit = 30) => ({
+  items: notifications.slice(0, limit),
+  unread: notifications.filter((n) => n.readAt === null).length,
+});
+
+on("GET", "/app/api/notifications", (_m, _body, url) =>
+  notificationList(Number(url.searchParams.get("limit") ?? 30)),
+);
+// Both writes answer with the inbox as it now stands, like the API: the bell
+// adopts the reply instead of asking for the list a second time.
+on("POST", "/app/api/notifications/:id/read", (m) => {
+  const row = notifications.find((n) => n.id === m.groups!.id);
+  if (!row) throw new MockError(404, "Notification not found");
+  row.readAt ??= iso(0);
+  return notificationList();
+});
+on("POST", "/app/api/notifications/read-all", () => {
+  for (const row of notifications) row.readAt ??= iso(0);
+  return notificationList();
 });
 on("GET", "/app/api/pools/:id/tags", (m) => poolTagDetails(poolOr404(m.groups!.id!).id));
 on("PATCH", "/app/api/pools/:id/tags/:tag", (m, body) => {
@@ -1569,6 +1856,29 @@ on("GET", "/app/api/pools/:id/questions", (m, _body, url) => {
   const includeDeleted = params.get("includeDeleted") === "1";
   const limit = Number(params.get("limit") ?? 25);
   const cursor = params.get("cursor");
+  // `versionMin` / `versionMax` are bounds on the highest PUBLISHED number,
+  // so a draft-only question (no number at all) matches neither of them.
+  const versionMin = params.get("versionMin");
+  const versionMax = params.get("versionMax");
+  const sort = params.get("sort") ?? "updated";
+  const dir = params.get("dir") === "asc" ? 1 : -1;
+
+  /** What the sorted column holds for one question, as a comparable value. */
+  const rank = (question: MockQuestion): string | number => {
+    switch (sort) {
+      case "name":
+        return question.internalName.toLowerCase();
+      case "type":
+        return question.type;
+      case "difficulty":
+        return question.difficulty;
+      case "version":
+        // A draft sorts below v1, which is where a teacher looks for it.
+        return question.versions.at(-1)?.number ?? 0;
+      default:
+        return question.updatedAt;
+    }
+  };
 
   const matching = liveQuestions(pool.id)
     .filter((question) => includeDeleted || question.deletedAt === null)
@@ -1576,13 +1886,29 @@ on("GET", "/app/api/pools/:id/questions", (m, _body, url) => {
     .filter((question) => tags.length === 0 || question.tags.some((x) => tags.includes(x)))
     .filter((question) => difficulties.length === 0 || difficulties.includes(question.difficulty))
     .filter((question) => categoryId === null || question.categoryId === categoryId)
+    .filter((question) => {
+      if (versionMin === null && versionMax === null) return true;
+      const number = question.versions.at(-1)?.number ?? null;
+      if (number === null) return false;
+      return (
+        (versionMin === null || number >= Number(versionMin)) &&
+        (versionMax === null || number <= Number(versionMax))
+      );
+    })
     .filter(
       (question) =>
         q === "" ||
         question.internalName.toLowerCase().includes(q) ||
         JSON.stringify(question.draft.config).toLowerCase().includes(q),
     )
-    .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+    .sort((a, b) => {
+      const x = rank(a);
+      const y = rank(b);
+      const cmp = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y));
+      // The internal name breaks a tie, so a page never re-shuffles under a
+      // cursor that encodes the order it was cut in.
+      return (cmp === 0 ? a.internalName.localeCompare(b.internalName) : cmp) * dir;
+    });
   const start = cursor ? matching.findIndex((x) => x.id === cursor) + 1 : 0;
   const page = matching.slice(start, start + limit);
   const next = start + limit < matching.length ? page.at(-1)!.id : null;

@@ -18,6 +18,7 @@ import type { AppConfig } from "./config.js";
 import type { Db } from "./db/client.js";
 import { courseStaff, teacherGrants, userIdpClaims, users } from "./db/schema.js";
 import { knownEmails, normalizeEmail, ownersOf } from "./identity.js";
+import { transferOnLoss } from "./modules/pool/service.js";
 
 export type UserRole = (typeof users.$inferSelect)["role"];
 
@@ -85,6 +86,32 @@ export async function roleForUser(
 }
 
 /**
+ * THE seam where a computed role is STORED — and therefore the one place
+ * that can notice an account LOSING the teacher role.
+ *
+ * Both entry points below go through it, which is why the pool succession
+ * (F-POOL-05) is wired here and not in `modules/admin.ts`: revoking a grant
+ * is only one of the two ways the role falls (`courses.ts` removes the last
+ * staff seat through `syncRoleOfUser`), and an account is NEVER deleted —
+ * "removed from the system" means exactly "no longer teacher nor admin".
+ *
+ * The transfer runs after the role is stored, so a failure of the succession
+ * can never leave an account teacher-by-accident; re-running the sync picks
+ * the pools up again (`transferOnLoss` is idempotent).
+ */
+async function storeRole(db: Db, userId: string, role: UserRole): Promise<void> {
+  const [before] = await db
+    .select({ role: users.role })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  await db.update(users).set({ role }).where(eq(users.id, userId));
+  const was = before?.role === "teacher" || before?.role === "admin";
+  const is = role === "teacher" || role === "admin";
+  if (was && !is) await transferOnLoss(db, userId);
+}
+
+/**
  * Applies the rule to the accounts holding `email`, so a grant/revoke or a
  * staff add/remove takes effect immediately instead of at the next login.
  * No-op when nobody signed up under that address yet (the role is computed
@@ -101,14 +128,12 @@ export async function syncUserRole(db: Db, config: AppConfig, email: string): Pr
     owners.push(...legacy.map((u) => u.id));
   }
   for (const userId of owners) {
-    const role = await roleForUser(db, config, userId);
-    await db.update(users).set({ role }).where(eq(users.id, userId));
+    await storeRole(db, userId, await roleForUser(db, config, userId));
   }
   return owners.length;
 }
 
 /** Recomputes one account's role (after a course-staff change). */
 export async function syncRoleOfUser(db: Db, config: AppConfig, userId: string): Promise<void> {
-  const role = await roleForUser(db, config, userId);
-  await db.update(users).set({ role }).where(eq(users.id, userId));
+  await storeRole(db, userId, await roleForUser(db, config, userId));
 }

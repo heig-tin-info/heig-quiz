@@ -29,10 +29,17 @@ export interface QuestionSpec {
 
 export interface PoolSpec {
   name: string;
+  /** A lucide icon name, as the pool card shows it (F-POOL-05). */
+  icon: string;
   /** Course code the pool is attached to, or `null` for a stand-alone pool. */
   courseCode: string | null;
   categories: string[];
   questions: QuestionSpec[];
+  /**
+   * Personas this pool is shared with, by key (`apps/api/auth/dev.ts`), so the
+   * demo world has a pool seen from BOTH sides: its owner and a colleague.
+   */
+  sharedWith?: { persona: string; role: "reader" | "contributor" | "owner" }[];
 }
 
 export interface EvaluationSpec {
@@ -121,6 +128,7 @@ const TYPES = "Types et opérateurs";
 
 export const C_POOL: PoolSpec = {
   name: "Programmation C",
+  icon: "cpu",
   courseCode: "PRG1",
   categories: [POINTERS, STRINGS, TYPES],
   questions: [
@@ -394,7 +402,11 @@ const SEMICONDUCTORS = "Semi-conducteurs";
 
 export const ELECTRONICS_POOL: PoolSpec = {
   name: "Électronique",
+  icon: "circuit-board",
   courseCode: null,
+  // Shared with the administrator persona, so the demo shows a pool from the
+  // colleague's side too: `admin@heig-vd.ch` may edit it, not manage it.
+  sharedWith: [{ persona: "admin", role: "contributor" }],
   categories: [DC, SEMICONDUCTORS],
   questions: [
     {

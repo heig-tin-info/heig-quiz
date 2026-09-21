@@ -17,10 +17,10 @@ import {
   cx,
   EmptyState,
   Field,
-  isoDateTime,
   Menu,
   Modal,
   QueryError,
+  RelativeTime,
   Skeleton,
   T,
 } from "../ui";
@@ -154,7 +154,7 @@ export function VersionHistory({
                   </span>
                 </td>
                 <td className={cx(T.td, "whitespace-nowrap tabular-nums text-fg-muted")}>
-                  {isoDateTime(v.publishedAt)}
+                  <RelativeTime iso={v.publishedAt} />
                 </td>
                 <td className={cx(T.td, "text-fg-muted")}>
                   {v.changeNote ?? v.deprecationNote ?? "—"}

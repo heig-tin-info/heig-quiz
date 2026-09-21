@@ -27,6 +27,7 @@ import { evaluationPlugin } from "./modules/evaluation/routes.js";
 import { gradingPlugin } from "./modules/grading/routes.js";
 import { registerGradingJobs } from "./modules/grading/jobs.js";
 import { livePlugin } from "./modules/live/routes.js";
+import { notificationsPlugin } from "./modules/notifications/routes.js";
 import { orgPlugin } from "./modules/org/routes.js";
 import { poolPlugin } from "./modules/pool/routes.js";
 import { flushCoalescers } from "./modules/realtime/bus.js";
@@ -162,6 +163,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(livePlugin);
   await app.register(gradingPlugin);
   await app.register(resultsPlugin);
+  await app.register(notificationsPlugin);
   await app.register(studentPlugin);
 
   // Job queue + ticker. A database that is unreachable at boot does not kill

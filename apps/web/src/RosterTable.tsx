@@ -25,8 +25,8 @@ import {
   Initials,
   inputClass,
   inputSize,
-  isoDateTime,
   Menu,
+  RelativeTime,
   SortHeader,
   T,
   useSortableTable,
@@ -224,7 +224,7 @@ function Row({ classroomId, entry }: { classroomId: string; entry: RosterEntry }
           )}
         </td>
         <td className={cx(T.td, "whitespace-nowrap text-fg-muted", T.colLow)}>
-          {entry.lastLoginAt ? isoDateTime(entry.lastLoginAt) : "—"}
+          {entry.lastLoginAt ? <RelativeTime iso={entry.lastLoginAt} /> : "—"}
         </td>
         <td className={cx(T.td, "whitespace-nowrap text-right", T.stickyEnd)}>
           {/* The menu is gone by the time the request answers, so the row

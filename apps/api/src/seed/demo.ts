@@ -155,11 +155,30 @@ async function ensurePool(
     poolId = (
       await poolService.createPool(db, {
         name: spec.name,
+        icon: spec.icon,
         visibility: "shared",
         ownerId: teacherId,
       })
     ).id;
     counts.pools += 1;
+  } else {
+    // A pool seeded before the icons existed gets one; a second run writes
+    // nothing, like everything else here.
+    const [row] = await db.select().from(pools).where(eq(pools.id, poolId));
+    if (row && row.icon !== spec.icon) {
+      await poolService.updatePool(db, poolId, { icon: spec.icon });
+    }
+  }
+
+  // F-POOL-05: the named members of the pool. Keyed on the seat itself, so
+  // re-running the seed neither duplicates a row nor undoes a role a teacher
+  // changed by hand.
+  for (const share of spec.sharedWith ?? []) {
+    const userId = await userIdOfPersona(db, share.persona);
+    if (!userId || userId === teacherId) continue;
+    const [pool] = await db.select().from(pools).where(eq(pools.id, poolId));
+    if (!pool || (await poolService.isMemberOrOwner(db, pool, userId))) continue;
+    await poolService.addMember(db, pool, userId, share.role);
   }
 
   const categoryIds = new Map<string, string>();

@@ -1,5 +1,5 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FileQuestion, Plus } from "lucide-react";
+import { Eye, FileQuestion, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type { PoolDetail, QuestionDetail, QuestionPage, QuestionRow } from "@quiz/contracts";
@@ -13,6 +13,7 @@ import type { Route } from "../router";
 import { useSearchParam } from "../router";
 import { useScreenCommands } from "../screenCommands";
 import {
+  Badge,
   Button,
   Card,
   cx,
@@ -26,8 +27,15 @@ import {
   Spinner,
 } from "../ui";
 import { BulkBar } from "./BulkBar";
-import { EMPTY_FILTERS, questionQuery, type QuestionFilters } from "./filters";
-import { FilterBar } from "./FilterBar";
+import {
+  EMPTY_FILTERS,
+  questionQuery,
+  type QuestionFilters,
+  type QuestionSort,
+} from "./filters";
+import { FilterBar, type ListView } from "./FilterBar";
+import { QuestionCards, QuestionCardsSkeleton } from "./QuestionCards";
+import { groupQuestions, isGroupBy, type GroupBy } from "./QuestionGroups";
 import { QuestionTable, QuestionTableSkeleton } from "./QuestionTable";
 
 /**
@@ -44,7 +52,76 @@ import { QuestionTable, QuestionTableSkeleton } from "./QuestionTable";
  * The ONE primary action is "New question". Importing, exporting and adding
  * to an evaluation are later work packages; nothing else here competes with
  * the single red button.
+ *
+ * Two readings of the same list — the table and the cards — and four ways of
+ * cutting it (`QuestionGroups.ts`). Which one is a HABIT, not a state of the
+ * data, so it is remembered per viewer in `localStorage` and never in the URL
+ * or on the server; a browser that refuses storage simply starts on the table
+ * every time, which is why every access is wrapped.
+ *
+ * Sorting belongs to the API (`sort` / `dir` of `QuestionSearch`). A page of
+ * 25 rows sorted in the browser sorts the rows that happen to be loaded, and
+ * "Load more" would then append a second, differently ordered page under the
+ * first. Changing the sort therefore changes the query key, which is what
+ * makes TanStack drop the cursor and start again at page one.
+ *
+ * A pool the caller only READS (`PoolDetail.role === "reader"`, F-POOL-05)
+ * loses the create, edit, duplicate, delete and bulk actions and the tick
+ * boxes that feed them: what is not permitted is not drawn greyed out, it is
+ * absent. Opening a question still works — the editor is where a question is
+ * read — and it is the editor's own business to refuse a save.
  */
+
+type Prefs = { view: ListView; group: GroupBy };
+
+const VIEW_KEY = "quiz-pool-view";
+const GROUP_KEY = "quiz-pool-group";
+
+/** Reading storage may throw (private window, blocked site data): never fatal. */
+function readPref(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writePref(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // A remembered habit is a convenience; losing it costs one click.
+  }
+}
+
+function usePrefs(): [Prefs, (patch: Partial<Prefs>) => void] {
+  const [prefs, setPrefs] = useState<Prefs>(() => {
+    const group = readPref(GROUP_KEY);
+    return {
+      view: readPref(VIEW_KEY) === "cards" ? "cards" : "list",
+      group: group !== null && isGroupBy(group) ? group : "none",
+    };
+  });
+  return [
+    prefs,
+    (patch) => {
+      if (patch.view) writePref(VIEW_KEY, patch.view);
+      if (patch.group) writePref(GROUP_KEY, patch.group);
+      setPrefs((p) => ({ ...p, ...patch }));
+    },
+  ];
+}
+
+/** "Pointeurs / Arithmétique" for every node, and the tree's own order. */
+function categoryPaths(
+  nodes: PoolDetail["categories"],
+  prefix = "",
+): { id: string; label: string }[] {
+  return nodes.flatMap((node) => {
+    const label = prefix ? `${prefix} / ${node.name}` : node.name;
+    return [{ id: node.id, label }, ...categoryPaths(node.children, label)];
+  });
+}
 
 function NewQuestionModal({
   poolId,
@@ -157,24 +234,29 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const categoryId = categoryParam === "" ? null : categoryParam;
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
   const [creating, setCreating] = useState<string | null>(null);
-
-  // What this screen adds to the command palette while it is open
-  // (docs/spec/08 §8.3): one entry per question type, so an expert never
-  // touches the type picker.
-  useScreenCommands(
-    QUESTION_TYPE_IDS.map((typeId) => ({
-      id: `question:new:${typeId}`,
-      label: t("palette.newQuestion", { type: typeLabel(t, typeId) }),
-      icon: typeIcon(typeId),
-      group: "action" as const,
-      run: () => setCreating(typeId),
-    })),
-  );
+  const [prefs, setPrefs] = usePrefs();
 
   const pool = useQuery<PoolDetail>({
     queryKey: ["pool", id],
     queryFn: () => api(`/app/api/pools/${id}`),
   });
+  const mayWrite = pool.data?.role !== "reader";
+
+  // What this screen adds to the command palette while it is open
+  // (docs/spec/08 §8.3): one entry per question type, so an expert never
+  // touches the type picker. A reader gets none of them — the palette must
+  // not offer what the screen has taken away.
+  useScreenCommands(
+    mayWrite
+      ? QUESTION_TYPE_IDS.map((typeId) => ({
+          id: `question:new:${typeId}`,
+          label: t("palette.newQuestion", { type: typeLabel(t, typeId) }),
+          icon: typeIcon(typeId),
+          group: "action" as const,
+          run: () => setCreating(typeId),
+        }))
+      : [],
+  );
 
   const search = useMemo<QuestionFilters>(() => ({ ...filters, categoryId }), [filters, categoryId]);
   const query = questionQuery(search);
@@ -191,6 +273,21 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
     [questions.data],
   );
   const checkedIds = rows.filter((r) => checked.has(r.id)).map((r) => r.id);
+
+  /**
+   * A new column restarts the pagination — the cursor encodes the order it was
+   * cut in — and drops the selection, which was made on rows the reader is
+   * about to stop seeing in that place. The first click on a column takes the
+   * order a reader expects of it: a name ascends, a date starts at the newest.
+   */
+  const sortBy = (key: QuestionSort) => {
+    setChecked(new Set());
+    setFilters((f) =>
+      f.sort === key
+        ? { ...f, dir: f.dir === "asc" ? "desc" : "asc" }
+        : { ...f, sort: key, dir: key === "updated" || key === "version" ? "desc" : "asc" },
+    );
+  };
 
   const toggleCheck = (questionId: string) =>
     setChecked((prev) => {
@@ -254,6 +351,23 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
 
   const detail = pool.data!;
   const category = categoryId ? findCategory(detail.categories, categoryId) : null;
+  // `reader` is the one role that may not write (F-POOL-05). An API that does
+  // not say (the mock of an older shape) is treated as the role it used to
+  // imply, so the screen never silently loses its actions.
+  const readOnly = detail.role === "reader";
+  const paths = categoryPaths(detail.categories);
+  const groups = groupQuestions(
+    rows,
+    prefs.group,
+    {
+      type: (typeId) => typeLabel(t, typeId),
+      category: (catId) => paths.find((p) => p.id === catId)?.label ?? catId,
+      noTag: t("pool.group.noTag"),
+      noCategory: t("pool.bulk.root"),
+    },
+    QUESTION_TYPE_IDS,
+    paths.map((p) => p.id),
+  );
 
   return (
     <div className="space-y-6">
@@ -277,9 +391,15 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
               })
         }
         actions={
-          <Button onClick={() => setCreating(QUESTION_TYPE_IDS[0]!)}>
-            <Plus /> {t("pool.newQuestion")}
-          </Button>
+          readOnly ? (
+            <Badge tone="zinc" icon={Eye}>
+              {t("pool.readOnly")}
+            </Badge>
+          ) : (
+            <Button onClick={() => setCreating(QUESTION_TYPE_IDS[0]!)}>
+              <Plus /> {t("pool.newQuestion")}
+            </Button>
+          )
         }
       />
 
@@ -292,12 +412,20 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
           }}
           tags={detail.tags}
           total={rows.length}
+          view={prefs.view}
+          onView={(view) => setPrefs({ view })}
+          group={prefs.group}
+          onGroup={(group) => setPrefs({ group })}
         />
 
         {questions.isLoading ? (
-          <Card>
-            <QuestionTableSkeleton />
-          </Card>
+          prefs.view === "cards" ? (
+            <QuestionCardsSkeleton />
+          ) : (
+            <Card>
+              <QuestionTableSkeleton />
+            </Card>
+          )
         ) : questions.isError ? (
           <QueryError
             title={t("pool.title")}
@@ -313,11 +441,18 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
               title={t(detail.questionCount === 0 ? "pool.empty.title" : "pool.emptyFiltered.title")}
               action={
                 detail.questionCount === 0 ? (
-                  <Button onClick={() => setCreating(QUESTION_TYPE_IDS[0]!)}>
-                    <Plus /> {t("pool.newQuestion")}
-                  </Button>
+                  readOnly ? undefined : (
+                    <Button onClick={() => setCreating(QUESTION_TYPE_IDS[0]!)}>
+                      <Plus /> {t("pool.newQuestion")}
+                    </Button>
+                  )
                 ) : (
-                  <Button variant="secondary" onClick={() => setFilters(EMPTY_FILTERS)}>
+                  <Button
+                    variant="secondary"
+                    // The sort is not a filter: clearing what hides the rows
+                    // must not also change the order they come back in.
+                    onClick={() => setFilters((f) => ({ ...EMPTY_FILTERS, sort: f.sort, dir: f.dir }))}
+                  >
                     {t("pool.filter.clear")}
                   </Button>
                 )
@@ -328,19 +463,35 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
           </Card>
         ) : (
           <>
-            <QuestionTable
-              rows={rows}
-              checked={checked}
-              onToggleCheck={toggleCheck}
-              onToggleAll={() =>
-                setChecked((prev) =>
-                  rows.every((r) => prev.has(r.id)) ? new Set() : new Set(rows.map((r) => r.id)),
-                )
-              }
-              onEdit={(row) => navigate({ view: "question", id: row.id })}
-              onDuplicate={(row) => duplicate.mutate(row)}
-              onDelete={(row) => void askDelete(row)}
-            />
+            {prefs.view === "cards" ? (
+              <QuestionCards
+                groups={groups}
+                checked={checked}
+                onToggleCheck={toggleCheck}
+                onEdit={(row) => navigate({ view: "question", id: row.id })}
+                onDuplicate={(row) => duplicate.mutate(row)}
+                onDelete={(row) => void askDelete(row)}
+                readOnly={readOnly}
+              />
+            ) : (
+              <QuestionTable
+                groups={groups}
+                checked={checked}
+                onToggleCheck={toggleCheck}
+                onToggleAll={() =>
+                  setChecked((prev) =>
+                    rows.every((r) => prev.has(r.id)) ? new Set() : new Set(rows.map((r) => r.id)),
+                  )
+                }
+                onEdit={(row) => navigate({ view: "question", id: row.id })}
+                onDuplicate={(row) => duplicate.mutate(row)}
+                onDelete={(row) => void askDelete(row)}
+                sort={filters.sort}
+                dir={filters.dir}
+                onSort={sortBy}
+                readOnly={readOnly}
+              />
+            )}
             {questions.hasNextPage ? (
               <div className="flex justify-center">
                 <Button
@@ -359,7 +510,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
         )}
       </div>
 
-      {checkedIds.length > 0 ? (
+      {checkedIds.length > 0 && !readOnly ? (
         <BulkBar
           poolId={id}
           ids={checkedIds}

@@ -16,12 +16,51 @@ ouvre le type, la difficulté, les tags et **Afficher les questions
 supprimées**. Ce qui est actif revient en pastilles amovibles sous la barre,
 avec le nombre de questions qu'elles laissent.
 
-## Le tableau et l'aperçu
+Le champ accepte aussi les filtres sous forme de mots, plus rapides que le
+panneau une fois le vocabulaire connu :
 
-Une ligne par question : nom interne, type, tags, difficulté en cinq points,
-version publiée, dernière modification. Un clic sélectionne la ligne et
-montre l'énoncé dans le panneau de droite. Le menu de la ligne ouvre
-l'éditeur, duplique la question dans cette banque, ou la supprime.
+| Écrit | Signifie |
+| --- | --- |
+| `tag:pointeurs`, `tag:#pointeurs` | les questions portant ce tag |
+| `type:mcq`, `type:short`, `type:cloze`, `type:code` | ce type de question |
+| `difficulty:3` | exactement 3 |
+| `difficulty:>3`, `difficulty:>=2`, `difficulty:<3`, `difficulty:<=4` | une borne |
+| `difficulty:2-4` | un intervalle |
+| `version:v2`, `version:2` | version publiée 2 |
+| `version:>1`, `version:>=2`, `version:<3`, `version:1-3` | une borne, un intervalle |
+| `"une phrase entière"` | ces mots ensemble |
+
+Le reste est du texte libre. Plusieurs `tag:` s'additionnent ; deux bornes
+`version:` se resserrent. Ce que vous tapez et ce que vous cochez sont le
+MÊME filtre : les deux apparaissent en pastilles, et retirer une pastille
+retire aussi le mot du champ. Juste après `tag:` ou `type:`, une courte liste
+s'ouvre sous le champ — tapez pour la resserrer, les flèches pour vous
+déplacer, Entrée pour insérer, Échap pour fermer.
+
+## Le tableau, les cartes et le regroupement
+
+Une ligne par question : le type en icône devant le nom interne (survolez-la
+pour son nom), les tags, la difficulté en cinq points, la version publiée, la
+dernière modification en distance — survolez-la pour la date exacte. Un clic
+ouvre l'éditeur. Chaque ligne porte modifier, dupliquer et supprimer à son
+extrémité.
+
+Cliquer un en-tête de colonne trie toute la banque, pas seulement les
+questions déjà chargées ; recliquer inverse l'ordre. Par défaut : la dernière
+modification, la plus récente en tête.
+
+À côté des filtres, trois contrôles changent la manière dont la liste est
+dessinée : **cartes ou tableau**, **regrouper par** (rien, type, tag ou
+catégorie) et le **tri**, seul endroit d'où trier par type puisqu'il a perdu
+sa colonne. Une question portant trois tags apparaît dans les trois sections.
+Tout cela est retenu pour la prochaine visite.
+
+## Une banque partagée avec vous
+
+Si votre siège sur la banque est **lecteur**, l'écran montre les questions et
+aucune action : ni nouvelle question, ni modification, ni duplication, ni
+suppression, ni cases à cocher. Ouvrir une question reste possible — la lire,
+c'est l'ouvrir.
 
 ## Plusieurs à la fois
 

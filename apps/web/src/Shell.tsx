@@ -20,6 +20,7 @@ import { CommandPalette } from "./CommandPalette";
 import { Logo, UserMenu, useSignOut } from "./Header";
 import { helpTopics, useHelp } from "./help";
 import { useI18n, useT } from "./i18n";
+import { NotificationBell } from "./notifications/NotificationBell";
 import type { Route } from "./router";
 import { SidebarCategories } from "./pool/CategoryTree";
 import { shortcutCaps, useActiveShortcuts, useGlobalShortcuts } from "./shortcuts";
@@ -351,7 +352,13 @@ export function Shell({
             there is no keyboard to hold a shortcut. */}
         <Nav me={me} route={route} navigate={navigate} teacherUi={teacherUi} />
         <ShortcutStrip />
-        <div className="border-t border-line p-2">{userMenu(false)}</div>
+        {/* The account row, and beside it the bell: the two things that are
+            about the PERSON rather than about the page, at the bottom of the
+            column where the eye leaves the navigation. */}
+        <div className="flex items-center gap-1 border-t border-line p-2">
+          <div className="min-w-0 flex-1">{userMenu(false)}</div>
+          {teacherUi ? <NotificationBell navigate={navigate} /> : null}
+        </div>
       </aside>
 
       {/* Mobile drawer */}
@@ -400,6 +407,9 @@ export function Shell({
           <IconButton label={t("palette.open")} onClick={() => setPalette(true)}>
             <Search />
           </IconButton>
+          {/* Beside the avatar, hanging from its own right edge: the top bar
+              has nothing else on that side to push the panel out of. */}
+          {teacherUi ? <NotificationBell navigate={navigate} align="end" /> : null}
           {userMenu(true)}
         </div>
 

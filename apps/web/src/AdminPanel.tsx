@@ -15,9 +15,9 @@ import {
   EmptyState,
   Field,
   IconButton,
-  isoDateTime,
   PageHeader,
   QueryError,
+  RelativeTime,
   SectionHeading,
   Skeleton,
   SortHeader,
@@ -163,10 +163,10 @@ export function AdminPage() {
                       </span>
                     </td>
                     <td className={`${T.td} whitespace-nowrap text-fg-muted`}>
-                      {r.lastLoginAt ? isoDateTime(r.lastLoginAt) : "—"}
+                      {r.lastLoginAt ? <RelativeTime iso={r.lastLoginAt} /> : "—"}
                     </td>
                     <td className={`${T.td} whitespace-nowrap text-fg-muted`}>
-                      {isoDateTime(r.grantedAt)}
+                      <RelativeTime iso={r.grantedAt} />
                     </td>
                     <td className={`${T.td} text-right`}>
                       <IconButton

@@ -25,6 +25,9 @@ import {
   DeprecateBody,
   DraftPut,
   PoolCreate,
+  PoolMemberInvite,
+  PoolMemberParam,
+  PoolMemberPatch,
   PoolPatch,
   PreviewBody,
   PublishBody,
@@ -57,13 +60,17 @@ import {
   accessiblePool,
   accessibleQuestion,
   poolAccess,
+  poolRoleOf,
+  requirePoolRole,
   teacherGuard,
 } from "../guards.js";
 import { isAllowedMime, pathForHash, readAsset, sha256Of, sniffImage, writeAsset } from "./assets.js";
 import { studentViewOf } from "../live/studentView.js";
 import { issuesOf, loadConfig, tryLoadConfig, typeOf } from "./config.js";
 import { publish } from "../../events.js";
-import { poolChanged } from "./events.js";
+import { notify } from "../notifications/service.js";
+import { userTopic } from "../realtime/bus.js";
+import { poolChanged, poolPeopleChanged } from "./events.js";
 import * as service from "./service.js";
 
 /**
@@ -114,10 +121,26 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     limits: { fileSize: config.ASSETS_MAX_BYTES, files: 1, fields: 4 },
   });
 
+  /**
+   * The people a change of the pool's roster must reach, on their OWN topic.
+   *
+   * `pool:<id>` is computed when a connection OPENS, so the colleague who has
+   * just been named — or the one who has just been removed — is exactly the
+   * one it does not carry. `user:<id>` always reaches them, and a hint carries
+   * no data, so nobody learns anything they could not already read.
+   */
+  const topicsOf = async (pool: typeof pools.$inferSelect) =>
+    (await service.poolAudience(app.db, pool)).map(userTopic);
+
   // --- Pools -------------------------------------------------------------
 
+  /**
+   * Every pool the caller reaches: their own, the ones they were named in,
+   * the public ones and the ones their courses draw from — each with the
+   * caller's effective role, so the list can say what it offers (F-POOL-05).
+   */
   app.get("/app/api/pools", { preHandler: requireTeacher }, async (req) =>
-    service.listPools(app.db, mine(req)),
+    service.listPools(app.db, mine(req), req.user!),
   );
 
   app.post("/app/api/pools", { preHandler: requireTeacher }, async (req, reply) => {
@@ -142,12 +165,14 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
   app.get("/app/api/pools/:id", { preHandler: requireTeacher }, async (req, reply) => {
     const pool = await accessiblePool(app, req, reply);
     if (!pool) return reply;
-    return service.poolDetail(app.db, pool);
+    return service.poolDetail(app.db, pool, await poolRoleOf(app.db, pool, req.user!));
   });
 
+  /** Name, icon and visibility are the owner's business (F-POOL-05). */
   app.patch("/app/api/pools/:id", { preHandler: requireTeacher }, async (req, reply) => {
     const pool = await accessiblePool(app, req, reply);
     if (!pool) return reply;
+    if (!(await requirePoolRole(app, req, reply, pool, "owner"))) return reply;
     const body = PoolPatch.safeParse(req.body);
     if (!body.success) return invalid(reply, body.error);
     const updated = await service.updatePool(app.db, pool.id, body.data);
@@ -160,17 +185,18 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       payload: body.data,
     });
     poolChanged(pool.id);
+    // A visibility or a name the members see on their own list too.
+    poolPeopleChanged(await topicsOf(pool));
     return updated;
   });
 
   app.delete("/app/api/pools/:id", { preHandler: requireTeacher }, async (req, reply) => {
     const pool = await accessiblePool(app, req, reply);
     if (!pool) return reply;
-    // Only the owner disposes of a pool: a course staff member reaches it
-    // through `course_pools` to work in it, not to destroy it.
-    if (pool.ownerId !== req.user!.id && req.user!.role !== "admin") {
-      return reply.code(403).send({ error: "forbidden", message: "Only the owner deletes a pool" });
-    }
+    // Only an owner disposes of a pool: a course staff member and a named
+    // contributor reach it to WORK in it, not to destroy it.
+    const audience = await topicsOf(pool);
+    if (!(await requirePoolRole(app, req, reply, pool, "owner"))) return reply;
     await service.deletePool(app.db, pool.id);
     await audit(app.db, {
       actorUserId: req.user!.id,
@@ -181,8 +207,139 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       payload: { name: pool.name },
     });
     poolChanged(pool.id);
+    poolPeopleChanged(audience);
     return reply.code(204).send();
   });
+
+  // --- Members (F-POOL-05) -----------------------------------------------
+
+  /**
+   * Who holds a seat on this pool. Readable by anyone the pool lets in: a
+   * contributor has to know whom they are working with, and the list carries
+   * no more than the colleagues' names.
+   */
+  app.get("/app/api/pools/:id/members", { preHandler: requireTeacher }, async (req, reply) => {
+    const pool = await accessiblePool(app, req, reply);
+    if (!pool) return reply;
+    return service.listMembers(app.db, pool);
+  });
+
+  /**
+   * Names a colleague in the pool, by e-mail. The address is matched over the
+   * whole identity set of an account (GH-11), and a `private` pool becomes
+   * `shared` on the first invitation.
+   */
+  app.post("/app/api/pools/:id/members", { preHandler: requireTeacher }, async (req, reply) => {
+    const pool = await accessiblePool(app, req, reply);
+    if (!pool) return reply;
+    if (!(await requirePoolRole(app, req, reply, pool, "owner"))) return reply;
+    const body = PoolMemberInvite.safeParse(req.body);
+    if (!body.success) return invalid(reply, body.error);
+    const invitee = await service.findTeacherByEmail(app.db, body.data.email);
+    if (!invitee) {
+      return reply.code(404).send({
+        error: "teacher_not_found",
+        message: "No teacher account holds this address",
+      });
+    }
+    if (await service.isMemberOrOwner(app.db, pool, invitee.id)) {
+      return reply
+        .code(409)
+        .send({ error: "already_member", message: "This account already holds a seat" });
+    }
+    const added = await service.addMember(app.db, pool, invitee.id, body.data.role);
+    await audit(app.db, {
+      actorUserId: req.user!.id,
+      actorType: "user",
+      action: "pool.share",
+      subjectType: "pool",
+      subjectId: pool.id,
+      payload: { userId: invitee.id, email: invitee.email, role: body.data.role },
+    });
+    await notify(app.db, invitee.id, {
+      kind: "pool_shared",
+      poolId: pool.id,
+      poolName: pool.name,
+      role: body.data.role,
+      byName: `${req.user!.givenName ?? ""} ${req.user!.familyName ?? ""}`.trim() || req.user!.email,
+    });
+    poolChanged(pool.id);
+    poolPeopleChanged(await topicsOf(pool));
+    return reply.code(201).send(await service.listMembers(app.db, { ...pool, visibility: added.visibility }));
+  });
+
+  /** Changes what a member may do. The `pools.owner_id` account is not here. */
+  app.patch(
+    "/app/api/pools/:id/members/:userId",
+    { preHandler: requireTeacher },
+    async (req, reply) => {
+      const pool = await accessiblePool(app, req, reply);
+      if (!pool) return reply;
+      if (!(await requirePoolRole(app, req, reply, pool, "owner"))) return reply;
+      const params = PoolMemberParam.safeParse(req.params);
+      if (!params.success) return reply.code(404).send({ error: "not_found" });
+      const body = PoolMemberPatch.safeParse(req.body);
+      if (!body.success) return invalid(reply, body.error);
+      if (params.data.userId === pool.ownerId) {
+        return reply.code(409).send({
+          error: "is_owner",
+          message: "The owner of the pool holds their seat by ownership",
+        });
+      }
+      const audience = await topicsOf(pool);
+      const done = await service.setMemberRole(app.db, pool.id, params.data.userId, body.data.role);
+      if (!done) return reply.code(404).send({ error: "not_found" });
+      await audit(app.db, {
+        actorUserId: req.user!.id,
+        actorType: "user",
+        action: "pool.member_update",
+        subjectType: "pool",
+        subjectId: pool.id,
+        payload: { userId: params.data.userId, role: body.data.role },
+      });
+      poolChanged(pool.id);
+      poolPeopleChanged(audience);
+      return service.listMembers(app.db, pool);
+    },
+  );
+
+  /**
+   * Removes a seat. An owner removes anyone but the `pools.owner_id` account
+   * — that one goes away by a TRANSFER, never by a delete — and a member may
+   * remove THEMSELVES, which is how one leaves a pool one was named in.
+   */
+  app.delete(
+    "/app/api/pools/:id/members/:userId",
+    { preHandler: requireTeacher },
+    async (req, reply) => {
+      const pool = await accessiblePool(app, req, reply);
+      if (!pool) return reply;
+      const params = PoolMemberParam.safeParse(req.params);
+      if (!params.success) return reply.code(404).send({ error: "not_found" });
+      const leaving = params.data.userId === req.user!.id;
+      if (!leaving && !(await requirePoolRole(app, req, reply, pool, "owner"))) return reply;
+      if (params.data.userId === pool.ownerId) {
+        return reply.code(409).send({
+          error: "is_owner",
+          message: "The owner of a pool cannot be removed from it",
+        });
+      }
+      const audience = await topicsOf(pool);
+      const done = await service.removeMember(app.db, pool.id, params.data.userId);
+      if (!done) return reply.code(404).send({ error: "not_found" });
+      await audit(app.db, {
+        actorUserId: req.user!.id,
+        actorType: "user",
+        action: "pool.unshare",
+        subjectType: "pool",
+        subjectId: pool.id,
+        payload: { userId: params.data.userId, left: leaving },
+      });
+      poolChanged(pool.id);
+      poolPeopleChanged(audience);
+      return reply.code(204).send();
+    },
+  );
 
   /** The tag vocabulary of the pool: name, description, usage count. */
   app.get("/app/api/pools/:id/tags", { preHandler: requireTeacher }, async (req, reply) => {
@@ -199,6 +356,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
   app.patch("/app/api/pools/:id/tags/:tag", { preHandler: requireTeacher }, async (req, reply) => {
     const pool = await accessiblePool(app, req, reply);
     if (!pool) return reply;
+    if (!(await requirePoolRole(app, req, reply, pool, "contributor"))) return reply;
     const params = TagParam.safeParse(req.params);
     if (!params.success) return invalid(reply, params.error);
     const body = TagPatch.safeParse(req.body);
@@ -226,6 +384,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
   app.post("/app/api/pools/:id/categories", { preHandler: requireTeacher }, async (req, reply) => {
     const pool = await accessiblePool(app, req, reply);
     if (!pool) return reply;
+    if (!(await requirePoolRole(app, req, reply, pool, "contributor"))) return reply;
     const body = CategoryCreate.safeParse(req.body);
     if (!body.success) return invalid(reply, body.error);
     if (body.data.parentId) {
@@ -252,6 +411,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
   app.patch("/app/api/categories/:id", { preHandler: requireTeacher }, async (req, reply) => {
     const scope = await accessibleCategory(app, req, reply);
     if (!scope) return reply;
+    if (!(await requirePoolRole(app, req, reply, scope.pool, "contributor"))) return reply;
     const body = CategoryPatch.safeParse(req.body);
     if (!body.success) return invalid(reply, body.error);
     if (body.data.parentId !== undefined && body.data.parentId !== null) {
@@ -288,6 +448,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     async (req, reply) => {
       const pool = await accessiblePool(app, req, reply);
       if (!pool) return reply;
+      if (!(await requirePoolRole(app, req, reply, pool, "contributor"))) return reply;
       const body = CategoryOrder.safeParse(req.body);
       if (!body.success) return invalid(reply, body.error);
       for (const item of body.data.items) {
@@ -314,6 +475,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
   app.delete("/app/api/categories/:id", { preHandler: requireTeacher }, async (req, reply) => {
     const scope = await accessibleCategory(app, req, reply);
     if (!scope) return reply;
+    if (!(await requirePoolRole(app, req, reply, scope.pool, "contributor"))) return reply;
     await service.deleteCategory(app.db, scope.category.id);
     await audit(app.db, {
       actorUserId: req.user!.id,
@@ -334,12 +496,25 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     if (!pool) return reply;
     const query = QuestionSearch.safeParse(req.query);
     if (!query.success) return invalid(reply, query.error);
-    return service.listQuestions(app.db, pool.id, query.data);
+    try {
+      return await service.listQuestions(app.db, pool.id, query.data);
+    } catch (error) {
+      // A cursor is only valid for the order that produced it: a client that
+      // changes column mid-scroll starts the list again rather than reading a
+      // page that mixes two orders.
+      if (error instanceof service.InvalidCursor) {
+        return reply
+          .code(400)
+          .send({ error: "invalid_cursor", message: "Restart the list", reason: error.reason });
+      }
+      throw error;
+    }
   });
 
   app.post("/app/api/pools/:id/questions", { preHandler: requireTeacher }, async (req, reply) => {
     const pool = await accessiblePool(app, req, reply);
     if (!pool) return reply;
+    if (!(await requirePoolRole(app, req, reply, pool, "contributor"))) return reply;
     const body = QuestionCreate.safeParse(req.body);
     if (!body.success) return invalid(reply, body.error);
     try {
@@ -383,6 +558,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
   app.patch("/app/api/questions/:id", { preHandler: requireTeacher }, async (req, reply) => {
     const scope = await accessibleQuestion(app, req, reply);
     if (!scope) return reply;
+    if (!(await requirePoolRole(app, req, reply, scope.pool, "contributor"))) return reply;
     const body = QuestionPatch.safeParse(req.body);
     if (!body.success) return invalid(reply, body.error);
     try {
@@ -417,6 +593,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
   app.put("/app/api/questions/:id/draft", { preHandler: requireTeacher }, async (req, reply) => {
     const scope = await accessibleQuestion(app, req, reply);
     if (!scope) return reply;
+    if (!(await requirePoolRole(app, req, reply, scope.pool, "contributor"))) return reply;
     const body = DraftPut.safeParse(req.body);
     if (!body.success) return invalid(reply, body.error);
     try {
@@ -434,6 +611,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
   app.post("/app/api/questions/:id/publish", { preHandler: requireTeacher }, async (req, reply) => {
     const scope = await accessibleQuestion(app, req, reply);
     if (!scope) return reply;
+    if (!(await requirePoolRole(app, req, reply, scope.pool, "contributor"))) return reply;
     const body = PublishBody.safeParse(emptyBody(req.body));
     if (!body.success) return invalid(reply, body.error);
     try {
@@ -494,6 +672,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     async (req, reply) => {
       const scope = await accessibleQuestion(app, req, reply);
       if (!scope) return reply;
+      if (!(await requirePoolRole(app, req, reply, scope.pool, "contributor"))) return reply;
       const params = VersionParam.safeParse(req.params);
       if (!params.success) return reply.code(404).send({ error: "not_found" });
       const done = await service.restoreVersion(app.db, scope.question, params.data.number);
@@ -521,6 +700,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     async (req, reply) => {
       const scope = await accessibleQuestion(app, req, reply);
       if (!scope) return reply;
+      if (!(await requirePoolRole(app, req, reply, scope.pool, "contributor"))) return reply;
       const params = VersionParam.safeParse(req.params);
       if (!params.success) return reply.code(404).send({ error: "not_found" });
       const body = DeprecateBody.safeParse(req.body);
@@ -560,6 +740,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
   app.delete("/app/api/questions/:id", { preHandler: requireTeacher }, async (req, reply) => {
     const scope = await accessibleQuestion(app, req, reply);
     if (!scope) return reply;
+    if (!(await requirePoolRole(app, req, reply, scope.pool, "contributor"))) return reply;
     const query = DeleteQuery.safeParse(req.query);
     if (!query.success) return invalid(reply, query.error);
     try {
@@ -599,6 +780,9 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       .where(and(eq(pools.id, body.data.targetPoolId), mine(req)))
       .limit(1);
     if (!target) return reply.code(404).send({ error: "not_found" });
+    // Reading the source is enough to copy FROM it; writing the copy needs a
+    // contributor's seat on the TARGET.
+    if (!(await requirePoolRole(app, req, reply, target, "contributor"))) return reply;
     const id = await service.copyQuestion(app.db, scope.question, {
       targetPoolId: target.id,
       categoryId: body.data.categoryId ?? null,
@@ -737,6 +921,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
   app.post("/app/api/pools/:id/assets", { preHandler: requireTeacher }, async (req, reply) => {
     const pool = await accessiblePool(app, req, reply);
     if (!pool) return reply;
+    if (!(await requirePoolRole(app, req, reply, pool, "contributor"))) return reply;
     if (!req.isMultipart()) {
       return reply.code(415).send({ error: "unsupported_media_type", message: "Expected multipart/form-data" });
     }

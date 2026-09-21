@@ -21,23 +21,49 @@ export type QuestionTypeId = z.infer<typeof QuestionTypeId>;
 export const PoolVisibility = z.enum(["private", "shared", "public"]);
 export type PoolVisibility = z.infer<typeof PoolVisibility>;
 
+/**
+ * What an account may do in a pool (F-POOL-05). `reader` reads, `contributor`
+ * edits questions, `owner` also manages the members, the name, the icon, the
+ * visibility and the deletion. The pool's `ownerId` is always an owner; a
+ * member may be one too.
+ */
+export const PoolRole = z.enum(["reader", "contributor", "owner"]);
+export type PoolRole = z.infer<typeof PoolRole>;
+
+/** A lucide icon name (`flask-conical`, `cpu`, …); null shows the default. */
+export const PoolIcon = z
+  .string()
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+  .max(64);
+
 // --- Pools ---------------------------------------------------------------
 
 export const Pool = z.object({
   id: z.uuid(),
   name: z.string(),
+  icon: PoolIcon.nullable(),
   visibility: PoolVisibility,
   ownerId: z.uuid(),
   isPersonal: z.boolean(),
   createdAt: z.string(),
+  updatedAt: z.string(),
 });
 export type Pool = z.infer<typeof Pool>;
 
-export const PoolSummary = Pool.extend({ questionCount: z.number().int() });
+export const PoolSummary = Pool.extend({
+  questionCount: z.number().int(),
+  /** The caller's effective role in this pool. */
+  role: PoolRole,
+  /** "Prof Démo" — shown on a pool the caller does not own. */
+  ownerName: z.string(),
+  /** Explicit members (the owner excluded), for the card's "shared with n". */
+  memberCount: z.number().int(),
+});
 export type PoolSummary = z.infer<typeof PoolSummary>;
 
 export const PoolCreate = z.object({
   name: z.string().trim().min(1).max(200),
+  icon: PoolIcon.nullable().optional(),
   visibility: PoolVisibility.default("private"),
 });
 export type PoolCreate = z.infer<typeof PoolCreate>;
@@ -45,10 +71,47 @@ export type PoolCreate = z.infer<typeof PoolCreate>;
 export const PoolPatch = z
   .object({
     name: z.string().trim().min(1).max(200).optional(),
+    icon: PoolIcon.nullable().optional(),
     visibility: PoolVisibility.optional(),
   })
   .refine((b) => Object.keys(b).length > 0, { message: "Nothing to update" });
 export type PoolPatch = z.infer<typeof PoolPatch>;
+
+// --- Members (F-POOL-05) ---------------------------------------------------
+
+/** One account in a pool: the owner row first, then the members in the order they were added. */
+export const PoolMember = z.object({
+  userId: z.uuid(),
+  email: z.string(),
+  givenName: z.string(),
+  familyName: z.string(),
+  role: PoolRole,
+  /** `true` on the `pools.owner_id` account; it cannot be removed or demoted here. */
+  isOwner: z.boolean(),
+  /** When the seat was given; the succession order when the owner goes. */
+  addedAt: z.string(),
+});
+export type PoolMember = z.infer<typeof PoolMember>;
+
+export const PoolMembers = z.object({
+  visibility: PoolVisibility,
+  members: z.array(PoolMember),
+});
+export type PoolMembers = z.infer<typeof PoolMembers>;
+
+/** `POST /pools/:id/members`: the account is found by email and must be a teacher. */
+export const PoolMemberInvite = z.object({
+  email: z.string().trim().toLowerCase().email().max(200),
+  role: PoolRole.default("reader"),
+});
+export type PoolMemberInvite = z.infer<typeof PoolMemberInvite>;
+
+/** `PATCH /pools/:id/members/:userId`. */
+export const PoolMemberPatch = z.object({ role: PoolRole });
+export type PoolMemberPatch = z.infer<typeof PoolMemberPatch>;
+
+export const PoolMemberParam = z.object({ id: z.uuid(), userId: z.uuid() });
+export type PoolMemberParam = z.infer<typeof PoolMemberParam>;
 
 // --- Categories ----------------------------------------------------------
 
@@ -141,6 +204,9 @@ export type QuestionPage = z.infer<typeof QuestionPage>;
  * Filter bar of the pool screen, as query parameters. Repeated (`?tag=a&tag=b`)
  * and comma-separated (`?tag=a,b`) forms are both accepted.
  */
+export const QuestionSort = z.enum(["name", "type", "difficulty", "version", "updated"]);
+export type QuestionSort = z.infer<typeof QuestionSort>;
+
 export const QuestionSearch = z.object({
   q: z.string().trim().max(200).optional(),
   type: StringList.optional(),
@@ -152,6 +218,15 @@ export const QuestionSearch = z.object({
     .union([z.string(), z.boolean()])
     .transform((v) => v === true || v === "1" || v === "true")
     .optional(),
+  /**
+   * Published version number bounds (`version:>1`, `version:v2` in the search
+   * box). A draft-only question has no number and matches neither bound.
+   */
+  versionMin: z.coerce.number().int().min(0).optional(),
+  versionMax: z.coerce.number().int().min(0).optional(),
+  /** Column sort; the cursor encodes the sort, so a page never mixes two orders. */
+  sort: QuestionSort.default("updated"),
+  dir: z.enum(["asc", "desc"]).default("desc"),
   limit: z.coerce.number().int().min(1).max(200).default(50),
   cursor: z.string().max(200).optional(),
 });
@@ -297,6 +372,8 @@ export type Asset = z.infer<typeof Asset>;
 
 export const PoolDetail = z.object({
   pool: Pool,
+  /** The caller's effective role: what the screen may offer. */
+  role: PoolRole,
   categories: z.array(CategoryNode),
   tags: z.array(z.string()),
   questionCount: z.number().int(),

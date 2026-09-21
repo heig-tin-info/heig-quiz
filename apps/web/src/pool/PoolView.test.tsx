@@ -21,11 +21,14 @@ const POOL: PoolDetail = {
   pool: {
     id: "p1",
     name: "Programmation C",
+    icon: null,
     visibility: "private",
     ownerId: "u-me",
     isPersonal: false,
     createdAt: "2026-01-01T08:00:00.000Z",
+    updatedAt: "2026-09-18T08:00:00.000Z",
   },
+  role: "owner",
   categories: [
     {
       id: "k1",

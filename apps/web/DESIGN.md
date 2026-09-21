@@ -304,6 +304,49 @@ with a keyboard-reachable dismiss button.
   "this has started", which is the only report an action taken from a menu
   can get.
 - Empty state: icon in a `surface-2` circle, title, one line, one action.
+- Notification bell (`src/notifications/NotificationBell.tsx`): the account's
+  own inbox, beside the account row in the sidebar and beside the avatar in
+  the phone top bar — the two things that are about the PERSON and not about
+  the page. Its panel is NOT a `Menu`: the rows are sentences carrying a
+  `RelativeTime` and a read mark, which a `MenuItem` cannot hold, so it is
+  built from the same two pieces (`menuPosition`, `useLayer`) as a
+  `role="dialog"` layer, 352 px wide, capped at 60 dvh and clamped to the
+  16 px page gutter — anchored on a trigger 20 px from the right edge of a
+  phone, the panel otherwise hangs off the screen. The unread COUNT is the
+  one count in the product that wears the accent FILL rather than being plain
+  text: it sits on an icon, where there is no room for a word, and it is the
+  one thing on that row that is new. Capped at "9+". An unread ROW, in
+  contrast, is marked by a 6 px accent dot and a semibold sentence, never by
+  a tinted row: a column of red-tinted rows would beat the count itself at
+  the squint test.
+- Pool card and pool icon: a pool is a spine on a shelf, so its ICON is the
+  identity — 24 px in a 44 px `surface-2` tile, over a 14 px bold name and
+  12 px muted facts. The card is ONE button (the door) with the overflow menu
+  beside it, never inside it, and the cards of a row are a flex column each
+  so the "Updated …" strip lands at the same height on all of them. The icon
+  is a lucide NAME stored on the pool (`src/pool/poolIcons.ts` holds the
+  curated shelf of about thirty school and technical subjects) and drawn by
+  `PoolIcon.tsx`, which takes two paths: a STATIC map for the curated names,
+  because those are the ones on every card and they must be there in the
+  first frame, and lucide's `DynamicIcon`, loaded lazily, for a pool wearing
+  one of the other 1500. The split is measured, not a preference —
+  `DynamicIcon` alone put 250 kB (62 kB gzipped) of lazy-import map inside
+  the pools page chunk and rendered nothing until an `import()` resolved,
+  where thirty real imports cost about 3 kB and paint at once. Visibility
+  is a `Badge`: zinc for `private` and `shared with n`, amber for `public` —
+  the one state where a stranger reads your questions is the one worth a
+  second glance, and neither may take the accent, which belongs to "New pool".
+- Icon picker: one dialog, two steps — the curated shelf, then the whole
+  lucide catalogue behind a search box (`fuzzyFilter`, 120 results drawn,
+  scrolled), which is a `lazy()` module of its own so the catalogue is
+  downloaded by the teacher who asks for it and by nobody else. Not a second
+  window: "more" is the same decision seen wider.
+  Picking IS the action, so the dialog has no primary button; the footer only
+  changes step. A tile is a value you switch on and wears the `ToggleChip`
+  language (hairline at rest, `accent-soft` on an `accent` border when it is
+  the current one). A tile's label is the RAW lucide name (`flask-conical`),
+  untranslated on purpose: it is an identifier, like a SHA or a tag, and in
+  the search step it is the very string the reader typed.
 - Kbd: a key cap for the places that teach a shortcut — 6 px radius, hairline,
   `surface-2`, 11 px / 500 in `fg-muted`, 6 px horizontal padding. `font-sans`,
   not mono: the mono face is reserved for SHAs, repository names and what a

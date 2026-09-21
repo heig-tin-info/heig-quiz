@@ -7,7 +7,7 @@ import { api } from "../api";
 import { useT, type Dict } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { QuestionReviewHost } from "../questionTypes";
-import { Badge, Card, EmptyState, isoDateTime, QueryError, Skeleton, Stat } from "../ui";
+import { Badge, Card, EmptyState, QueryError, RelativeTime, Skeleton, Stat } from "../ui";
 
 /**
  * What a student sees of their own attempt (F-RES-04).
@@ -78,7 +78,7 @@ export function Feedback({ attemptId }: { attemptId: string }) {
       </h1>
       {released ? (
         <p className="mt-1.5 text-sm text-fg-muted">
-          {t("feedback.released", { date: isoDateTime(released) })}
+          {t("feedback.released")} <RelativeTime iso={released} />
         </p>
       ) : null}
     </header>

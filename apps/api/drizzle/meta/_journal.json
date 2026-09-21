@@ -43,6 +43,13 @@
       "when": 1789981227115,
       "tag": "0005_strange_master_chief",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790006849527,
+      "tag": "0006_high_starhawk",
+      "breakpoints": true
     }
   ]
 }

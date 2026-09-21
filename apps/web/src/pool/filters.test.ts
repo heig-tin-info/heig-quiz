@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { activeFilterCount, EMPTY_FILTERS, questionQuery, toggle } from "./filters";
+import {
+  activeFilterCount,
+  EMPTY_FILTERS,
+  questionQuery,
+  resolveFilters,
+  toggle,
+} from "./filters";
 
 describe("questionQuery", () => {
   it("asks for one page and nothing else when no filter is set", () => {
@@ -9,6 +15,7 @@ describe("questionQuery", () => {
 
   it("composes every filter into the query the API parses", () => {
     const query = questionQuery({
+      ...EMPTY_FILTERS,
       q: "  pointeurs ",
       types: ["code", "mcq"],
       tags: ["pointers", "memory"],
@@ -69,5 +76,74 @@ describe("toggle", () => {
   it("adds at the end and removes in place", () => {
     expect(toggle(["a"], "b")).toEqual(["a", "b"]);
     expect(toggle(["a", "b"], "a")).toEqual(["b"]);
+  });
+});
+
+describe("questionQuery · sort and version", () => {
+  it("sends nothing while the sort is the API's own default", () => {
+    expect(questionQuery(EMPTY_FILTERS)).not.toContain("sort");
+    expect(questionQuery(EMPTY_FILTERS)).not.toContain("dir");
+  });
+
+  it("names the column and the direction once either leaves the default", () => {
+    const params = new URLSearchParams(
+      questionQuery({ ...EMPTY_FILTERS, sort: "name", dir: "asc" }).slice(1),
+    );
+    expect(params.get("sort")).toBe("name");
+    expect(params.get("dir")).toBe("asc");
+  });
+
+  it("sends the direction alone when only it changed", () => {
+    const params = new URLSearchParams(questionQuery({ ...EMPTY_FILTERS, dir: "asc" }).slice(1));
+    expect(params.get("sort")).toBe(null);
+    expect(params.get("dir")).toBe("asc");
+  });
+
+  it("carries the version bounds", () => {
+    const params = new URLSearchParams(
+      questionQuery({ ...EMPTY_FILTERS, versionMin: 2, versionMax: 4 }).slice(1),
+    );
+    expect(params.get("versionMin")).toBe("2");
+    expect(params.get("versionMax")).toBe("4");
+  });
+
+  it("keeps the parameter order stable, cursor last", () => {
+    expect(questionQuery({ ...EMPTY_FILTERS, sort: "name", dir: "asc" }, "c-1")).toBe(
+      "?sort=name&dir=asc&limit=25&cursor=c-1",
+    );
+  });
+});
+
+describe("resolveFilters", () => {
+  it("merges the search box tokens into the chips and keeps the free text", () => {
+    const resolved = resolveFilters({
+      ...EMPTY_FILTERS,
+      q: "tag:pointeurs type:code difficulty:>3 version:>1 segfault",
+      tags: ["memoire"],
+    });
+    expect(resolved.q).toBe("segfault");
+    expect(resolved.tags).toEqual(["memoire", "pointeurs"]);
+    expect(resolved.types).toEqual(["code"]);
+    expect(resolved.difficulties).toEqual([4, 5]);
+    expect(resolved.versionMin).toBe(2);
+    expect(resolved.versionMax).toBe(null);
+  });
+
+  it("never lists the same value twice when both sides carry it", () => {
+    const resolved = resolveFilters({ ...EMPTY_FILTERS, q: "tag:memoire", tags: ["memoire"] });
+    expect(resolved.tags).toEqual(["memoire"]);
+  });
+
+  it("puts a token of the field into the query the API parses", () => {
+    const params = new URLSearchParams(
+      questionQuery({ ...EMPTY_FILTERS, q: 'type:mcq "null pointer"' }).slice(1),
+    );
+    expect(params.get("type")).toBe("mcq");
+    expect(params.get("q")).toBe("null pointer");
+  });
+
+  it("counts a token of the field as an active filter", () => {
+    expect(activeFilterCount({ ...EMPTY_FILTERS, q: "tag:a tag:b" })).toBe(2);
+    expect(activeFilterCount({ ...EMPTY_FILTERS, q: "version:>2" })).toBe(1);
   });
 });

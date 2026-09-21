@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { GradingHistoryEntry } from "@quiz/contracts";
 
 import { useT } from "../i18n";
-import { Badge, Button, cx, isoDateTime, useEscape, Z } from "../ui";
+import { Badge, Button, cx, RelativeTime, useEscape, Z } from "../ui";
 import { round2, sourceLabel, stateLabel, stateTone } from "./labels";
 
 /**
@@ -81,7 +81,7 @@ export function HistoryPopover({ history }: { history: GradingHistoryEntry[] }) 
                     ) : null}
                   </div>
                   <p className="mt-0.5 text-xs text-fg-faint">
-                    {sourceLabel(t, h.source)} · {isoDateTime(h.gradedAt)}
+                    {sourceLabel(t, h.source)} · <RelativeTime iso={h.gradedAt} />
                   </p>
                   {h.regradeNote ? (
                     <p className="mt-1 flex items-start gap-1.5 text-xs text-fg-muted">

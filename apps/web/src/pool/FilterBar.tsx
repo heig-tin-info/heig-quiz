@@ -1,11 +1,37 @@
-import { SlidersHorizontal, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, LayoutGrid, List, SlidersHorizontal, X } from "lucide-react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
 
 import { fuzzyFilter } from "../fuzzy";
 import { useT } from "../i18n";
 import { typeIcon, typeLabel, QUESTION_TYPE_IDS } from "../questionTypes";
-import { Badge, Button, SearchInput, Sheet, Switch, ToggleChip } from "../ui";
-import { activeFilterCount, toggle, type QuestionFilters } from "./filters";
+import {
+  Badge,
+  Button,
+  cx,
+  IconButton,
+  SearchInput,
+  Segmented,
+  Select,
+  Sheet,
+  Switch,
+  ToggleChip,
+  Z,
+} from "../ui";
+import {
+  activeFilterCount,
+  resolveFilters,
+  toggle,
+  type QuestionFilters,
+  type QuestionSort,
+} from "./filters";
+import { GROUP_BY, type GroupBy } from "./QuestionGroups";
+import {
+  applyCompletion,
+  completionAt,
+  SEARCH_TYPE_IDS,
+  withoutToken,
+  type Completion,
+} from "./searchSyntax";
 
 /**
  * Search, then the filters behind one button (mockup `08-pool.html`): the
@@ -13,19 +39,41 @@ import { activeFilterCount, toggle, type QuestionFilters } from "./filters";
  * four lists — type, tag, difficulty, deleted — live in a sheet, because
  * more than three controls in a row is a control panel, not a toolbar.
  *
+ * The FIELD is a second way into the same filters, for the teacher who types
+ * faster than they click: `tag:pointeurs type:code difficulty:>3 version:>1`
+ * (the grammar is in `searchSyntax.ts`, and one quiet line under the field
+ * says so). What it parses MERGES with what the sheet ticked — the chips
+ * below the bar show the union, and removing one takes the token out of the
+ * text as well as the value out of the list, so a chip never comes straight
+ * back. While the caret sits right after `tag:` or `type:`, a small list of
+ * the pool's own tags (or of the four types) opens under the field: arrows
+ * move, Enter inserts, Escape closes.
+ *
  * Inside the sheet the three lists are rows of `ToggleChip`, not rows of
  * checkboxes. A checkbox is the shape of an independent setting; these are
  * SETS of values, and "Multiple choice" beside "Short answer" beside a box
  * each collide the moment the sheet is narrower than the labels. A pill
  * carries its own bounds and wraps.
  *
- * Whatever is active comes back as chips under the bar, each one removable:
- * a filter you cannot see is a filter you will blame the data for.
+ * The second row is not filtering at all: how the list is DRAWN (cards or
+ * table), how it is CUT (group by) and how it is ORDERED. It is right
+ * aligned and one size down, the way the courses page carries its own view
+ * switch — those are the reader's habits, not the data's state, and they must
+ * not compete with the field above them. The sort control repeats what the
+ * table headers do, because the cards have no headers and because `type` lost
+ * its column to an icon and has nowhere else to be clicked.
  */
 const DIFFICULTIES = [1, 2, 3, 4, 5];
 
 /** How many tag chips the sheet shows before "Show all (N)". */
 const TAG_LIMIT = 20;
+
+/** How many suggestions the `tag:` / `type:` popover offers at once. */
+const COMPLETION_LIMIT = 8;
+
+export type ListView = "cards" | "list";
+
+const SORT_KEYS: readonly QuestionSort[] = ["updated", "name", "type", "difficulty", "version"];
 
 function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
   const t = useT();
@@ -115,11 +163,152 @@ function TagChips({
   );
 }
 
+interface Suggestion {
+  value: string;
+  label: string;
+}
+
+/**
+ * The search field, plus the completion list that opens on `tag:` / `type:`.
+ *
+ * The list is virtually focused, like the command palette: the focus never
+ * leaves the input (typing must keep working), the rows are out of the Tab
+ * order and `aria-activedescendant` carries the selection. It is a floating
+ * layer, so it is the one thing here allowed a shadow.
+ */
+function SearchBox({
+  value,
+  onChange,
+  tags,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  tags: string[];
+}) {
+  const t = useT();
+  const input = useRef<HTMLInputElement>(null);
+  const [caret, setCaret] = useState(0);
+  const [dismissed, setDismissed] = useState(false);
+  const [active, setActive] = useState(0);
+  const listId = "pool-search-completions";
+
+  const at: Completion | null = dismissed ? null : completionAt(value, caret);
+  const options = useMemo<Suggestion[]>(() => {
+    if (!at) return [];
+    const all: Suggestion[] =
+      at.kind === "tag"
+        ? tags.map((tag) => ({ value: tag, label: `#${tag}` }))
+        : SEARCH_TYPE_IDS.map((id) => ({ value: id, label: typeLabel(t, id) }));
+    return fuzzyFilter(at.prefix, all, (s) => `${s.value} ${s.label}`).slice(0, COMPLETION_LIMIT);
+  }, [at, tags, t]);
+
+  const sync = (el: HTMLInputElement) => setCaret(el.selectionStart ?? el.value.length);
+
+  const pick = (suggestion: Suggestion) => {
+    if (!at) return;
+    const next = applyCompletion(value, at, suggestion.value);
+    onChange(next.text);
+    setDismissed(true);
+    setActive(0);
+    // The caret belongs after the value the pick inserted, not at the end of
+    // a field the teacher may still be writing the middle of.
+    requestAnimationFrame(() => {
+      const el = input.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(next.caret, next.caret);
+      setCaret(next.caret);
+    });
+  };
+
+  const open = options.length > 0;
+  const current = open ? options[Math.min(active, options.length - 1)] : undefined;
+
+  return (
+    <div className="relative min-w-0 flex-1">
+      <SearchInput
+        ref={input}
+        className="w-full"
+        aria-label={t("pool.search")}
+        placeholder={t("pool.search")}
+        role="combobox"
+        aria-expanded={open}
+        aria-controls={open ? listId : undefined}
+        aria-activedescendant={open && current ? `${listId}-${current.value}` : undefined}
+        aria-autocomplete="list"
+        value={value}
+        onChange={(e) => {
+          setDismissed(false);
+          setActive(0);
+          onChange(e.target.value);
+          sync(e.target);
+        }}
+        onClick={(e) => sync(e.currentTarget)}
+        onKeyUp={(e) => sync(e.currentTarget)}
+        onBlur={() => setDismissed(true)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape" && open) {
+            e.preventDefault();
+            e.stopPropagation();
+            setDismissed(true);
+            return;
+          }
+          if (!open) return;
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setActive((i) => (i + 1) % options.length);
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setActive((i) => (i - 1 + options.length) % options.length);
+          } else if (e.key === "Enter" && current) {
+            e.preventDefault();
+            pick(current);
+          }
+        }}
+      />
+      {open ? (
+        <ul
+          id={listId}
+          role="listbox"
+          aria-label={t(at?.kind === "type" ? "pool.filter.type" : "pool.filter.tag")}
+          className={cx(
+            "absolute left-0 top-full mt-1.5 max-h-72 w-72 max-w-full overflow-y-auto rounded-menu border border-line bg-surface p-1 shadow-popover",
+            Z.popover,
+          )}
+        >
+          {options.map((option, i) => (
+            <li
+              key={option.value}
+              id={`${listId}-${option.value}`}
+              role="option"
+              aria-selected={i === active}
+              // The pointer must not take the focus off the input before the
+              // click lands, or the blur closes the list under the cursor.
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => pick(option)}
+              className={cx(
+                "cursor-pointer truncate rounded-md px-2.5 py-1.5 text-[13px]",
+                i === active ? "bg-accent-soft text-accent" : "text-fg-muted",
+              )}
+            >
+              {option.label}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 export function FilterBar({
   filters,
   onChange,
   tags,
   total,
+  view,
+  onView,
+  group,
+  onGroup,
 }: {
   filters: QuestionFilters;
   onChange: (next: QuestionFilters) => void;
@@ -127,22 +316,62 @@ export function FilterBar({
   tags: string[];
   /** How many rows are loaded, for the count beside the chips. */
   total: number;
+  view: ListView;
+  onView: (next: ListView) => void;
+  group: GroupBy;
+  onGroup: (next: GroupBy) => void;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const count = activeFilterCount(filters);
+  const resolved = resolveFilters(filters);
   const set = (patch: Partial<QuestionFilters>) => onChange({ ...filters, ...patch });
+
+  /**
+   * Removing a chip takes the value off the list AND out of the search text:
+   * the chip stands for the union of the two, so taking it off one side only
+   * would put it straight back.
+   */
+  const dropType = (id: string) =>
+    set({ types: filters.types.filter((x) => x !== id), q: withoutToken(filters.q, "type", id) });
+  const dropTag = (tag: string) =>
+    set({ tags: filters.tags.filter((x) => x !== tag), q: withoutToken(filters.q, "tag", tag) });
+  const dropDifficulty = (d: number) =>
+    set({
+      difficulties: filters.difficulties.filter((x) => x !== d),
+      q: withoutToken(filters.q, "difficulty", String(d)),
+    });
+  const dropVersion = () =>
+    set({ versionMin: null, versionMax: null, q: withoutToken(filters.q, "version") });
+
+  const versionLabel = () => {
+    const { versionMin: min, versionMax: max } = resolved;
+    if (min !== null && max !== null) {
+      return min === max
+        ? t("pool.version.is", { n: min })
+        : t("pool.version.between", { min, max });
+    }
+    return min !== null ? t("pool.version.from", { n: min }) : t("pool.version.upTo", { n: max! });
+  };
+
+  /**
+   * Two icons and no words: the choice is between two pictures of the same
+   * list, and a pair of labels beside them would weigh more than the switch.
+   */
+  const viewOption = (value: ListView, icon: ReactNode, label: string) => ({
+    value,
+    label: (
+      <span title={label} className="flex items-center">
+        {icon}
+        <span className="sr-only">{label}</span>
+      </span>
+    ),
+  });
 
   return (
     <div className="space-y-2.5">
       <div className="flex flex-wrap items-center gap-2">
-        <SearchInput
-          className="w-full min-w-0 flex-1 sm:w-72"
-          aria-label={t("pool.search")}
-          placeholder={t("pool.search")}
-          value={filters.q}
-          onChange={(e) => set({ q: e.target.value })}
-        />
+        <SearchBox value={filters.q} onChange={(q) => set({ q })} tags={tags} />
         {/* Default size (md, 34 px) on purpose: `SearchInput` is `inputSize.md`
             and a 28 px button beside it sat on a different baseline. */}
         <Button variant="secondary" onClick={() => setOpen(true)}>
@@ -155,36 +384,88 @@ export function FilterBar({
         </Button>
       </div>
 
+      <p className="text-[11px] leading-relaxed text-fg-faint">{t("search.syntax")}</p>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Select
+          size="sm"
+          aria-label={t("pool.groupBy")}
+          value={group}
+          onChange={(e) => onGroup(e.target.value as GroupBy)}
+        >
+          {GROUP_BY.map((g) => (
+            <option key={g} value={g}>
+              {t(`pool.group.${g}` as "pool.group.none")}
+            </option>
+          ))}
+        </Select>
+        <Select
+          size="sm"
+          aria-label={t("pool.sortBy")}
+          value={filters.sort}
+          onChange={(e) => set({ sort: e.target.value as QuestionSort })}
+        >
+          {SORT_KEYS.map((key) => (
+            <option key={key} value={key}>
+              {t(`pool.sort.${key}` as "pool.sort.name")}
+            </option>
+          ))}
+        </Select>
+        <IconButton
+          size="sm"
+          label={t(filters.dir === "asc" ? "pool.sort.asc" : "pool.sort.desc")}
+          onClick={() => set({ dir: filters.dir === "asc" ? "desc" : "asc" })}
+        >
+          {filters.dir === "asc" ? <ArrowUpNarrowWide /> : <ArrowDownWideNarrow />}
+        </IconButton>
+        <div className="ml-auto">
+          <Segmented
+            name="pool-view"
+            size="sm"
+            value={view}
+            onChange={onView}
+            options={[
+              viewOption("cards", <LayoutGrid className="size-4" />, t("view.cards")),
+              viewOption("list", <List className="size-4" />, t("view.list")),
+            ]}
+          />
+        </div>
+      </div>
+
       {count > 0 ? (
         <div className="flex flex-wrap items-center gap-1.5">
-          {filters.types.map((type) => (
-            <Chip
-              key={`type-${type}`}
-              label={typeLabel(t, type)}
-              onRemove={() => set({ types: toggle(filters.types, type) })}
-            />
+          {resolved.types.map((type) => (
+            <Chip key={`type-${type}`} label={typeLabel(t, type)} onRemove={() => dropType(type)} />
           ))}
-          {filters.tags.map((tag) => (
-            <Chip
-              key={`tag-${tag}`}
-              label={`#${tag}`}
-              onRemove={() => set({ tags: toggle(filters.tags, tag) })}
-            />
+          {resolved.tags.map((tag) => (
+            <Chip key={`tag-${tag}`} label={`#${tag}`} onRemove={() => dropTag(tag)} />
           ))}
-          {filters.difficulties.map((d) => (
+          {resolved.difficulties.map((d) => (
             <Chip
               key={`diff-${d}`}
               label={t("pool.difficultyOf", { n: d })}
-              onRemove={() => set({ difficulties: toggle(filters.difficulties, d) })}
+              onRemove={() => dropDifficulty(d)}
             />
           ))}
-          {filters.includeDeleted ? (
+          {resolved.versionMin !== null || resolved.versionMax !== null ? (
+            <Chip label={versionLabel()} onRemove={dropVersion} />
+          ) : null}
+          {resolved.includeDeleted ? (
             <Chip label={t("pool.filter.deleted")} onRemove={() => set({ includeDeleted: false })} />
           ) : null}
           <button
             type="button"
             onClick={() =>
-              onChange({ ...filters, q: "", types: [], tags: [], difficulties: [], includeDeleted: false })
+              onChange({
+                ...filters,
+                q: "",
+                types: [],
+                tags: [],
+                difficulties: [],
+                includeDeleted: false,
+                versionMin: null,
+                versionMax: null,
+              })
             }
             className="rounded-md px-1.5 py-0.5 text-xs text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
           >
@@ -211,6 +492,12 @@ export function FilterBar({
                     tags: [],
                     difficulties: [],
                     includeDeleted: false,
+                    versionMin: null,
+                    versionMax: null,
+                    q: withoutToken(
+                      withoutToken(withoutToken(withoutToken(filters.q, "tag"), "type"), "difficulty"),
+                      "version",
+                    ),
                   })
                 }
               >
@@ -229,8 +516,10 @@ export function FilterBar({
                     key={id}
                     icon={typeIcon(id)}
                     label={typeLabel(t, id)}
-                    pressed={filters.types.includes(id)}
-                    onToggle={() => set({ types: toggle(filters.types, id) })}
+                    pressed={resolved.types.includes(id)}
+                    onToggle={() =>
+                      resolved.types.includes(id) ? dropType(id) : set({ types: toggle(filters.types, id) })
+                    }
                   />
                 ))}
               </div>
@@ -247,8 +536,12 @@ export function FilterBar({
                     label={d}
                     // A bare digit is not a name: the reader hears the scale.
                     aria-label={t("pool.difficultyOf", { n: d })}
-                    pressed={filters.difficulties.includes(d)}
-                    onToggle={() => set({ difficulties: toggle(filters.difficulties, d) })}
+                    pressed={resolved.difficulties.includes(d)}
+                    onToggle={() =>
+                      resolved.difficulties.includes(d)
+                        ? dropDifficulty(d)
+                        : set({ difficulties: toggle(filters.difficulties, d) })
+                    }
                   />
                 ))}
               </div>
@@ -261,8 +554,10 @@ export function FilterBar({
               ) : (
                 <TagChips
                   tags={tags}
-                  selected={filters.tags}
-                  onToggle={(tag) => set({ tags: toggle(filters.tags, tag) })}
+                  selected={resolved.tags}
+                  onToggle={(tag) =>
+                    resolved.tags.includes(tag) ? dropTag(tag) : set({ tags: toggle(filters.tags, tag) })
+                  }
                 />
               )}
             </fieldset>

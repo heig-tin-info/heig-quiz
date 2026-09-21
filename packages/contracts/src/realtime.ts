@@ -197,6 +197,7 @@ export const HintEvent = z.object({
       "results",
       "grading",
       "admin",
+      "notifications",
       "mutation",
     ]),
   ),

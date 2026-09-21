@@ -48,6 +48,7 @@ function CategoryRow({
   onDelete,
   onMove,
   siblings,
+  readOnly,
 }: {
   node: CategoryNode;
   depth: number;
@@ -58,6 +59,8 @@ function CategoryRow({
   onDelete: (node: CategoryNode) => void;
   onMove: (node: CategoryNode, direction: -1 | 1) => void;
   siblings: CategoryNode[];
+  /** A pool the caller only reads: the tree selects and edits nothing. */
+  readOnly: boolean;
 }) {
   const t = useT();
   const [open, setOpen] = useState(true);
@@ -97,6 +100,7 @@ function CategoryRow({
         >
           {node.name}
         </button>
+        {readOnly ? null : (
         <Menu
           label={t("common.actions")}
           items={[
@@ -127,6 +131,7 @@ function CategoryRow({
             },
           ]}
         />
+        )}
       </div>
       {open && node.children.length > 0 ? (
         <ul className="ml-4 border-l border-line pl-1.5">
@@ -142,6 +147,7 @@ function CategoryRow({
               onDelete={onDelete}
               onMove={onMove}
               siblings={node.children}
+              readOnly={readOnly}
             />
           ))}
         </ul>
@@ -161,12 +167,19 @@ function CategoryList({
   categories,
   selected,
   onSelect,
+  readOnly,
 }: {
   poolId: string;
   categories: CategoryNode[];
   /** `null` is "all questions". */
   selected: string | null;
   onSelect: (id: string | null) => void;
+  /**
+   * A `reader` seat on the pool (F-POOL-05): the tree still NAVIGATES — that
+   * is what a reader came for — and offers no way to change it. Nothing is
+   * drawn disabled; what is not permitted is absent.
+   */
+  readOnly: boolean;
 }) {
   const t = useT();
   const qc = useQueryClient();
@@ -277,17 +290,20 @@ function CategoryList({
             onDelete={askDelete}
             onMove={move}
             siblings={categories}
+            readOnly={readOnly}
           />
         ))}
       </ul>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="mt-1 w-full justify-start"
-        onClick={() => openCreate(null)}
-      >
-        <Plus /> {t("pool.newCategory")}
-      </Button>
+      {readOnly ? null : (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mt-1 w-full justify-start"
+          onClick={() => openCreate(null)}
+        >
+          <Plus /> {t("pool.newCategory")}
+        </Button>
+      )}
 
       {form ? (
         <Modal
@@ -374,6 +390,7 @@ export function SidebarCategories({ poolId }: { poolId: string }) {
           categories={detail.data.categories}
           selected={category === "" ? null : category}
           onSelect={(id) => setCategory(id ?? "")}
+          readOnly={detail.data.role === "reader"}
         />
       )}
     </div>

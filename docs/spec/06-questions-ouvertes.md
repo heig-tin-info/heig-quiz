@@ -12,7 +12,7 @@
 | 6 | Les étudiants voient-ils le classement de la classe ? | Non, seulement leur note et la distribution anonyme |
 | 7 | Langages du runner en phase 1 : C, C++, Python, JS, Rust. Rust a une compilation lente, le garder ? | Gardé avec un temps limite de compilation de 20 s |
 | 8 | Les tests cachés d'une question code sont-ils révélés dans le feedback ? | Nom et verdict oui, contenu non, option par évaluation |
-| 9 | Le pool public : qui peut y publier au départ ? | L'admin seulement, phase 2 |
+| 9 | Le pool public : qui peut y publier au départ ? | **Tranché (ADR-013)** : un pool `public` est LISIBLE par tous les profs ; il est écrit par son propriétaire et par les membres qu'il a nommés (`contributor`, `owner`). L'admin reste propriétaire de fait partout. |
 | 10 | Format des sauvegardes hors VM : stockage objet Hetzner ou autre ? | Stockage objet Hetzner via rclone |
 | 11 | Le drawing s'appuie sur Excalidraw embarqué : accepté malgré son style propre ? | Oui, barre d'outils réduite et thème aligné |
 | 12 | Une évaluation `exercise` avec plusieurs tentatives : meilleure ou dernière ? | Dernière, phase 2 |

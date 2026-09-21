@@ -48,6 +48,8 @@ export const pools = pgTable(
   {
     id: uuid("id").primaryKey(),
     name: text("name").notNull(),
+    /** A lucide icon name (`cpu`, `flask-conical`); null shows the default. */
+    icon: text("icon"),
     visibility: text("visibility", { enum: ["private", "shared", "public"] })
       .notNull()
       .default("private"),
@@ -65,8 +67,17 @@ export const pools = pgTable(
 );
 
 /**
- * Explicit sharing of a pool with another account — PHASE 2: the table
- * exists, no route writes it, and `poolAccess` does not read it yet.
+ * Explicit sharing of a pool with another account (F-POOL-05): the members
+ * the owner named, with what each may do. `poolAccess` reads it, the member
+ * routes of the `pool` module write it.
+ *
+ * `created_at` is load-bearing: it is the succession order when the owner
+ * loses the teacher role (`transferOnLoss`), so the FIRST member invited is
+ * the one who inherits the pool.
+ *
+ * The `pools.owner_id` account is never a row here — it is the owner by
+ * definition. A member MAY hold the `owner` role, which grants everything
+ * except being the fallback of the succession.
  */
 export const poolMembers = pgTable(
   "pool_members",
@@ -77,18 +88,19 @@ export const poolMembers = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    role: text("role", { enum: ["viewer", "editor"] })
+    role: text("role", { enum: ["reader", "contributor", "owner"] })
       .notNull()
-      .default("viewer"),
+      .default("reader"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.poolId, t.userId] }), index("pool_members_user_idx").on(t.userId)],
 );
 
 /**
- * The pools a course draws its questions from. This is what makes a pool
- * reachable by the whole teaching staff of a course (`poolAccess`), so the
- * `org` module goes through `pool/service.ts` to write it.
+ * The pools a course draws its questions from. This is the SECOND way a pool
+ * is reachable (`poolAccess`, after `pool_members`): the whole teaching staff
+ * of the course works in it, so the `org` module goes through
+ * `pool/service.ts` to write it.
  */
 export const coursePools = pgTable(
   "course_pools",

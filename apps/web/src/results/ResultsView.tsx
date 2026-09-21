@@ -22,7 +22,7 @@ import {
   Button,
   Card,
   EmptyState,
-  isoDateTime,
+  RelativeTime,
   Menu,
   PageError,
   PageHeader,
@@ -177,7 +177,11 @@ export function ResultsView({
         help="results"
         description={
           view.released && view.releasedAt
-            ? t("results.released", { date: isoDateTime(view.releasedAt) })
+            ? (
+              <>
+                {t("results.released")} <RelativeTime iso={view.releasedAt} />
+              </>
+            )
             : t("results.notReleased")
         }
         actions={

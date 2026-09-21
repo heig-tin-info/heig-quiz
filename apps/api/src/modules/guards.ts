@@ -8,9 +8,13 @@
  * missing entity.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { and, eq, sql, type SQL } from "drizzle-orm";
+import { and, eq, getTableName, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
+import type { PoolRole } from "@quiz/contracts";
+import { effectivePoolRole, poolRoleAllows } from "@quiz/domain";
+
+import type { Db } from "../db/client.js";
 import {
   answers,
   attempts,
@@ -22,6 +26,7 @@ import {
   enrollments,
   evaluations,
   gradings,
+  poolMembers,
   pools,
   questions,
 } from "../db/schema.js";
@@ -48,16 +53,99 @@ export function staffAccess(userId: string): SQL {
 export const courseAccess = staffAccess;
 
 /**
- * THE access predicate for a pool, on a query that has `pools` in scope: its
- * owner, or anyone on the staff of a course the pool is linked to
- * (`course_pools`). Same motif as `staffAccess` — a caller who fails it gets
- * a 404, never a 403, so the existence of someone else's pool never leaks.
+ * `"table"."column"`, always — the same precaution as `qualified` in
+ * `pool/service.ts`: inside a correlated subquery of a statement drizzle
+ * believes reads a single table, a bare `${pools.id}` renders as `"id"` and
+ * resolves against the SUBQUERY's table whenever that one has a column by
+ * the same name (`question_versions.id` does). Qualifying by hand makes a
+ * fragment independent of the statement it is dropped into.
+ */
+function qualified(column: AnyColumn): SQL {
+  return sql`${sql.identifier(getTableName(column.table))}.${sql.identifier(column.name)}`;
+}
+
+/**
+ * THE access predicate for a pool, on a query that has `pools` in scope
+ * (F-POOL-05, F-POOL-06). A pool is reached by:
+ *   - its owner (`pools.owner_id`);
+ *   - a named member (`pool_members`), whatever their role;
+ *   - every teacher, when the pool is `public` — the pool screen is read-only
+ *     for them unless they are also a member (decided in ADR-013);
+ *   - anyone on the staff of a course the pool is linked to (`course_pools`).
  *
- * `pool_members` (explicit per-account sharing) is phase 2 and deliberately
- * NOT read here: the table exists, the rule does not.
+ * Same motif as `staffAccess` — a caller who fails it gets a 404, never a
+ * 403, so the existence of someone else's private pool never leaks. What a
+ * caller may DO once they are in is `poolRoleOf` below, and failing THAT is a
+ * 403: they already know the pool exists.
+ *
+ * `teacherGuard` runs before every pool route, so the `public` branch cannot
+ * hand a pool to a student.
  */
 export function poolAccess(userId: string): SQL {
-  return sql`(${pools.ownerId} = ${userId} OR EXISTS (SELECT 1 FROM ${coursePools} JOIN ${courseStaff} ON ${courseStaff.courseId} = ${coursePools.courseId} WHERE ${coursePools.poolId} = ${pools.id} AND ${courseStaff.userId} = ${userId}))`;
+  return sql`(${qualified(pools.ownerId)} = ${userId} OR ${qualified(pools.visibility)} = 'public' OR EXISTS (SELECT 1 FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${qualified(pools.id)} AND ${qualified(poolMembers.userId)} = ${userId}) OR EXISTS (SELECT 1 FROM ${coursePools} JOIN ${courseStaff} ON ${qualified(courseStaff.courseId)} = ${qualified(coursePools.courseId)} WHERE ${qualified(coursePools.poolId)} = ${qualified(pools.id)} AND ${qualified(courseStaff.userId)} = ${userId}))`;
+}
+
+/**
+ * What the caller may DO in a pool they can already see. THE resolution order
+ * is the pure rule `effectivePoolRole` of `@quiz/domain` (ADR-013) — this
+ * function only loads the facts it needs, so the pool list can resolve the
+ * same order in bulk without a second definition of it.
+ */
+export async function poolRoleOf(
+  db: Db,
+  pool: Pick<AccessiblePool, "id" | "ownerId" | "visibility">,
+  user: { id: string; role: string },
+): Promise<PoolRole> {
+  if (user.role === "admin" || pool.ownerId === user.id) return "owner";
+  const [[member], [seat]] = await Promise.all([
+    db
+      .select({ role: poolMembers.role })
+      .from(poolMembers)
+      .where(and(eq(poolMembers.poolId, pool.id), eq(poolMembers.userId, user.id)))
+      .limit(1),
+    db
+      .select({ courseId: coursePools.courseId })
+      .from(coursePools)
+      .innerJoin(courseStaff, eq(courseStaff.courseId, coursePools.courseId))
+      .where(and(eq(coursePools.poolId, pool.id), eq(courseStaff.userId, user.id)))
+      .limit(1),
+  ]);
+  return effectivePoolRole({
+    isAdmin: false,
+    isOwner: false,
+    memberRole: member?.role ?? null,
+    isCourseStaff: seat !== undefined,
+    isPublic: pool.visibility === "public",
+  });
+}
+
+/** An `owner` does everything a `contributor` does, and so on down. */
+export const roleAllows = poolRoleAllows;
+
+/**
+ * The WRITE half of the pool motif, used by every write route of the module.
+ *
+ * The caller has already been let in by `poolAccess`, so a role they do not
+ * hold is answered `403 forbidden`, NOT 404: invariant 6 hides the EXISTENCE
+ * of an entity, and this caller can legitimately see it. A 404 here would
+ * also leave the SPA unable to tell "the pool is gone" from "you may only
+ * read it".
+ */
+export async function requirePoolRole(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  pool: Pick<AccessiblePool, "id" | "ownerId" | "visibility">,
+  needed: PoolRole,
+): Promise<PoolRole | null> {
+  const role = await poolRoleOf(app.db, pool, req.user!);
+  if (roleAllows(role, needed)) return role;
+  await reply.code(403).send({
+    error: "forbidden",
+    message: needed === "owner" ? "Only an owner of this pool may do that" : "Read-only access",
+    role,
+  });
+  return null;
 }
 
 /**
