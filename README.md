@@ -18,6 +18,7 @@ persona picker instead of Switch edu-ID.
 
 ```bash
 corepack enable pnpm && pnpm install
+pnpm build               # the workspace packages: the apps import their dist/
 cp .env.example .env     # embedded database, development login on
 pnpm seed                # the demo world — see below
 pnpm dev                 # API on :3000, web on :5173

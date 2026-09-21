@@ -152,6 +152,7 @@ No Docker, no Podman and no PostgreSQL are needed to run this.
 
 ```bash
 corepack enable pnpm && pnpm install
+pnpm build                      # the packages: the apps resolve them through dist/
 cp .env.example .env            # pglite:// database + AUTH_DEV_LOGIN=1
 pnpm seed                       # the whole demo world (below)
 pnpm dev                        # API :3000, Vite :5173 — and the runner on

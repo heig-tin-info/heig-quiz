@@ -395,7 +395,9 @@ function useCourseActions(course: CourseSummary): {
         icon: UserPlus,
         onSelect: () => setNewStaff(true),
       },
-      ...course.staff.map((s) => ({
+      // The server refuses to empty a staff (409 `last_staff`); a menu item
+      // that can only fail is not offered at all.
+      ...(course.staff.length <= 1 ? [] : course.staff).map((s) => ({
         label: t("courses.staffRemove") + ` — ${s.givenName} ${s.familyName}`,
         icon: Users,
         onSelect: async () => {
