@@ -22,7 +22,14 @@ if [ -n "${SSH_ORIGINAL_COMMAND:-}" ]; then
     | docker login ghcr.io -u heig-tin-info --password-stdin >/dev/null
 fi
 
+# `git pull` rewrites THIS file while bash is still reading the old copy, so
+# a deploy that changes the deploy steps would run the previous steps. Hand
+# over to the pulled copy exactly once, with the login already done.
+before=$(git rev-parse HEAD)
 git pull --ff-only
+if [ "$before" != "$(git rev-parse HEAD)" ] && [ -z "${QUIZ_DEPLOY_REEXEC:-}" ]; then
+  QUIZ_DEPLOY_REEXEC=1 SSH_ORIGINAL_COMMAND= exec "$0"
+fi
 # `pull app`, not `pull`: postgres and backup are public images that compose
 # already has, and naming ours keeps the login scoped to what the token was
 # issued for. `--ignore-pull-failures` is deliberately NOT used: a missing
