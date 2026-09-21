@@ -64,9 +64,11 @@ podman images | grep quiz-runner
 ```
 
 The quadlet (`apps/runner/deploy/quiz-runner.container`) is installed by
-`deploy.sh` at every deploy: host networking bound to loopback, the rootful
-socket as its only mount, read-only root, no capability, `Pull=never` (the
-image is pulled by the deploy, with the CI's token, never at boot). The
+`deploy.sh` at every deploy: host networking bound to loopback, two read-only
+things from the host — the rootful socket and the seccomp profile, installed
+at `/etc/quiz-runner/seccomp.json` because the Podman *server* is what opens
+it — a read-only root, no capability, `Pull=never` (the image is pulled by
+the deploy, with the CI's token, never at boot). The
 runner holds one secret, `RUNNER_TOKEN`, checked on both routes; it reaches no
 database and passes nothing of its environment into the sandbox containers
 (`apps/runner/README.md`).

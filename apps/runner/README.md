@@ -167,7 +167,9 @@ database and passes nothing of its own environment into a container.
 
 `deploy/` holds the whole of it (ADR-016, `deploy.md` § Runner): a Podman
 quadlet (`quiz-runner.container`) that runs this image on the code VM against
-its rootful socket, a Caddy fragment that exposes it as
+its rootful socket — with the seccomp profile installed on the host at
+`/etc/quiz-runner/seccomp.json`, since a `--remote` client hands the server a
+path and the server is what opens it — a Caddy fragment that exposes it as
 `https://quiz-runner.chevallier.io` to the quiz VM's address only, an
 `env.example` for `/etc/quiz-runner/env`, and the `deploy.sh` the CI's
 forced-command key is pinned to.

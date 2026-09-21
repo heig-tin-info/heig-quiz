@@ -30,8 +30,9 @@ compose network only.
    classroom's. Nothing of the neighbours is touched.
 2. **The runner** runs on the code VM as a Podman quadlet
    (`apps/runner/deploy/quiz-runner.container`): the CI image, host networking bound
-   to `127.0.0.1:3200`, the rootful socket as its only mount, read-only root, no
-   capability. The sandbox containers it starts are unchanged. The language images
+   to `127.0.0.1:3200`, the rootful socket and the seccomp profile as its only
+   mounts (the profile is opened by the Podman server, so it has to be a host
+   path), read-only root, no capability. The sandbox containers it starts are unchanged. The language images
    are built on that VM from `apps/runner/images/`, its only supply chain.
 3. **The link between the two is HTTPS with two gates.** The code VM's Caddy serves
    `quiz-runner.chevallier.io` (fragment `apps/runner/deploy/Caddyfile`) and answers

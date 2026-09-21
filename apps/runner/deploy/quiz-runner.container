@@ -24,9 +24,14 @@ Environment=NODE_ENV=production
 Network=host
 Environment=HOST=127.0.0.1
 Environment=PORT=3200
-# The ONLY thing the service gets from the host. The containers it then
-# starts mount nothing at all.
+# The two things the service gets from the host, and the containers it then
+# starts mount nothing at all. The seccomp profile is opened by the Podman
+# SERVER (`--security-opt seccomp=<path>` is a host path with `--remote`), so
+# deploy.sh installs the repository's copy at a path that exists on both
+# sides, and the service checks it at startup on its side of the mount.
 Volume=/run/podman/podman.sock:/run/podman/podman.sock
+Volume=/etc/quiz-runner/seccomp.json:/etc/quiz-runner/seccomp.json:ro
+Environment=RUNNER_SECCOMP=/etc/quiz-runner/seccomp.json
 # The service itself: nothing to write, nothing to escalate.
 ReadOnly=true
 Tmpfs=/tmp

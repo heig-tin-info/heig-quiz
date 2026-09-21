@@ -23,6 +23,10 @@ fi
 
 git pull --ff-only
 podman pull ghcr.io/heig-tin-info/quiz-runner:latest
+# The profile the sandbox containers run under: a HOST path, because the
+# Podman server is what opens it (quiz-runner.container mounts the same path
+# into the service so that its startup check sees the same file).
+install -m 0644 apps/runner/infra/seccomp/runner.json /etc/quiz-runner/seccomp.json
 install -m 0644 apps/runner/deploy/quiz-runner.container /etc/containers/systemd/quiz-runner.container
 install -m 0644 apps/runner/deploy/Caddyfile /etc/caddy/conf.d/quiz-runner.caddy
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
