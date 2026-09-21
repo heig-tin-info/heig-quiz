@@ -32,6 +32,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
 import type { ComponentType, ReactNode, RefObject } from "react";
@@ -102,6 +103,26 @@ export function pressable(onActivate: () => void, role: string = "button") {
 }
 
 /** Ticking clock for countdowns; re-renders every `intervalMs`. */
+/**
+ * True from `px` wide up, following the window as it resizes. False where
+ * `matchMedia` does not exist (a test), so a component defaults to its
+ * phone layout there — the one that also renders inside a narrow window.
+ */
+export function useMinWidth(px: number): boolean {
+  const query = `(min-width: ${px}px)`;
+  const supported = typeof window !== "undefined" && typeof window.matchMedia === "function";
+  return useSyncExternalStore(
+    (onChange) => {
+      if (!supported) return () => {};
+      const media = window.matchMedia(query);
+      media.addEventListener("change", onChange);
+      return () => media.removeEventListener("change", onChange);
+    },
+    () => (supported ? window.matchMedia(query).matches : false),
+    () => false,
+  );
+}
+
 export function useNow(intervalMs = 30_000): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {

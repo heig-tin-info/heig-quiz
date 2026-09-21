@@ -150,12 +150,12 @@ describe("the zen player", () => {
     render(view);
 
     // The position the server remembered, not the first question.
-    expect(await screen.findByText("Question 2 sur 3")).toBeInTheDocument();
+    expect(await screen.findByText("Question 2")).toBeInTheDocument();
     const field = (await screen.findByLabelText("Votre réponse")) as HTMLInputElement;
     expect(field.value).toBe("4");
     // And the answer of a question the student is not looking at is loaded too.
     await userEvent.keyboard("{Alt>}{ArrowLeft}{/Alt}");
-    expect(await screen.findByText("Question 1 sur 3")).toBeInTheDocument();
+    expect(await screen.findByText("Question 1")).toBeInTheDocument();
     const chosen = await screen.findByRole("radio", { name: "*x" });
     expect(chosen).toBeChecked();
   });
@@ -164,7 +164,7 @@ describe("the zen player", () => {
     const view = attemptView();
     const { calls } = stubs(view);
     render(view);
-    await screen.findByText("Question 2 sur 3");
+    await screen.findByText("Question 2");
     await waitFor(() =>
       expect(
         calls.some(
@@ -178,12 +178,12 @@ describe("the zen player", () => {
     const view = attemptView();
     const { calls } = stubs(view);
     render(view);
-    await screen.findByText("Question 2 sur 3");
+    await screen.findByText("Question 2");
 
     await userEvent.keyboard("{Alt>}{ArrowRight}{/Alt}");
-    expect(await screen.findByText("Question 3 sur 3")).toBeInTheDocument();
+    expect(await screen.findByText("Question 3")).toBeInTheDocument();
     await userEvent.keyboard("{Alt>}{ArrowLeft}{/Alt}");
-    expect(await screen.findByText("Question 2 sur 3")).toBeInTheDocument();
+    expect(await screen.findByText("Question 2")).toBeInTheDocument();
 
     await userEvent.keyboard("{Control>}{Enter}{/Control}");
     await waitFor(() =>
@@ -310,11 +310,11 @@ describe("the zen player", () => {
     const view = attemptView();
     stubs(view);
     render(view);
-    await screen.findByText("Question 2 sur 3");
+    await screen.findByText("Question 2");
     const headings = screen.getAllByRole("heading", { level: 1 });
     expect(headings).toHaveLength(1);
     expect(headings[0]).toHaveTextContent("Quiz 3 — Pointeurs");
-    const counter = screen.getByText("Question 2 sur 3");
+    const counter = screen.getByText("Question 2");
     expect(counter.tagName).toBe("P");
     expect(counter).toHaveAttribute("aria-live", "polite");
   });
@@ -328,7 +328,7 @@ describe("the zen player", () => {
     const view = attemptView();
     stubs(view);
     render(view);
-    await screen.findByText("Question 2 sur 3");
+    await screen.findByText("Question 2");
 
     await userEvent.keyboard("{Control>}k{/Control}");
     const palette = await screen.findByRole("dialog");
@@ -348,7 +348,7 @@ describe("the zen player", () => {
     const view = attemptView();
     stubs(view);
     const { container } = render(view);
-    await screen.findByText("Question 2 sur 3");
+    await screen.findByText("Question 2");
     const results = await axe.run(container, {
       // jsdom computes no layout and no cascade, so contrast is measured in
       // the screenshots instead (DESIGN.md holds the measured table).

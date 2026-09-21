@@ -114,6 +114,9 @@ export function Lobby({
       </Ring>
 
       <p className="mt-8 text-base text-fg-muted">{t("lobby.waiting")}</p>
+      {/* Said here, once, while the student has time to read it — the player
+          itself stays bare (the sentence used to sit under every question). */}
+      <p className="mt-2 text-[13px] text-fg-muted">{t("lobby.hint.saving")}</p>
 
       <Card className="mt-8 w-full divide-y divide-line text-left">
         {rules.map((rule) => (

@@ -73,7 +73,8 @@ export function PlayerShell({
   commands?: Command[];
   /** The offline alert, in the flow under the bar. */
   banner?: ReactNode;
-  footer: ReactNode;
+  /** Absent on a desktop: the actions then sit under the question itself. */
+  footer?: ReactNode;
   children: ReactNode;
 }) {
   const t = useT();
@@ -147,12 +148,16 @@ export function PlayerShell({
         {children}
       </main>
 
-      <footer className="sticky bottom-0 z-20 border-t border-line bg-surface">
-        <div className="mx-auto flex w-full max-w-190 flex-wrap items-center gap-2 px-4 py-3 sm:px-6">
-          {footer}
-        </div>
+      {footer ? (
+        <footer className="sticky bottom-0 z-20 border-t border-line bg-surface">
+          <div className="mx-auto flex w-full max-w-190 flex-wrap items-center gap-2 px-4 py-3 sm:px-6">
+            {footer}
+          </div>
+          <p className="sr-only">{t("player.shortcuts")}</p>
+        </footer>
+      ) : (
         <p className="sr-only">{t("player.shortcuts")}</p>
-      </footer>
+      )}
       {palette && commands ? (
         <CommandPalette open onClose={() => setPalette(false)} t={t} commands={commands} />
       ) : null}

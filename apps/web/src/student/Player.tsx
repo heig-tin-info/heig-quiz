@@ -31,7 +31,7 @@ import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { useShortcuts } from "../shortcuts";
-import { Badge, Button, Card, modKey, type Segment } from "../ui";
+import { Badge, Button, Card, modKey, useMinWidth, type Segment } from "../ui";
 import { ClosedScreen } from "./ClosedScreen";
 import { OfflineBanner } from "./OfflineBanner";
 import { PausedOverlay } from "./PausedOverlay";
@@ -83,6 +83,11 @@ export function Player({
   const total = state.items.length;
   const locked = item ? isLocked(state, item.id) : true;
   const readOnly = locked || closed !== null || paused;
+  // On a phone the three actions live in a sticky footer under the thumb;
+  // on a desktop they sit right under the question, where the mouse already
+  // is — a footer at the bottom of a 900 px window is a trip per question.
+  // A hook, so it stays above the early returns below.
+  const desktop = useMinWidth(640);
   const segments = useMemo(() => segmentsOf(state), [state]);
   const unanswered = state.items.filter(
     (i) => !isAnswered(i, state.answers[i.id] ?? null),
@@ -197,11 +202,46 @@ export function Player({
       run: onHome,
     },
   ];
+  // Only a rule worth reading under the question: a locked question, or an
+  // irreversible "done". That answers are saved as one types is said once,
+  // in the lobby, and the free player stays bare.
   const hint = locked
     ? t("player.hint.locked")
     : state.navigation === "free"
-      ? t("player.hint.saving")
+      ? null
       : t("player.hint.forward");
+  const actions = (
+    <>
+      <Button
+        variant="secondary"
+        onClick={() => dispatch({ type: "move", delta: -1 })}
+        disabled={previous === null}
+      >
+        <ChevronLeft className="size-4" aria-hidden />
+        {t("player.prev")}
+      </Button>
+      <div className="flex-1" />
+      <Button
+        variant={item?.markedDone ? "secondary" : "primary"}
+        onClick={() => void toggleDone()}
+        // A locked question cannot be un-marked: the server answers
+        // `409 irreversible`, so the button must not offer it.
+        disabled={readOnly}
+      >
+        {item?.markedDone ? <Check className="size-4" aria-hidden /> : null}
+        {item?.markedDone ? t("player.markedDone") : t("player.markDone")}
+      </Button>
+      <div className="flex-1" />
+      <Button
+        variant="secondary"
+        onClick={() => dispatch({ type: "move", delta: 1 })}
+        disabled={next === null}
+      >
+        {t("player.next")}
+        <ChevronRight className="size-4" aria-hidden />
+      </Button>
+    </>
+  );
 
   return (
     <>
@@ -221,38 +261,7 @@ export function Player({
           </Button>
         }
         banner={<OfflineBanner show={sync === "offline"} />}
-        footer={
-          <>
-            <Button
-              variant="secondary"
-              onClick={() => dispatch({ type: "move", delta: -1 })}
-              disabled={previous === null}
-            >
-              <ChevronLeft className="size-4" aria-hidden />
-              {t("player.prev")}
-            </Button>
-            <div className="flex-1" />
-            <Button
-              variant={item?.markedDone ? "secondary" : "primary"}
-              onClick={() => void toggleDone()}
-              // A locked question cannot be un-marked: the server answers
-              // `409 irreversible`, so the button must not offer it.
-              disabled={readOnly}
-            >
-              {item?.markedDone ? <Check className="size-4" aria-hidden /> : null}
-              {item?.markedDone ? t("player.markedDone") : t("player.markDone")}
-            </Button>
-            <div className="flex-1" />
-            <Button
-              variant="secondary"
-              onClick={() => dispatch({ type: "move", delta: 1 })}
-              disabled={next === null}
-            >
-              {t("player.next")}
-              <ChevronRight className="size-4" aria-hidden />
-            </Button>
-          </>
-        }
+        {...(desktop ? {} : { footer: actions })}
       >
         {item ? (
           <>
@@ -265,16 +274,18 @@ export function Player({
                 aria-live="polite"
                 className="text-[13px] font-semibold uppercase tracking-wide text-fg-muted"
               >
-                {t("player.question", { n: state.index + 1, total })}
+                {/* "Question 2", not "2 of 4": the strip above already counts,
+                    and one question per page needs no second counter. */}
+                {t("player.question", { n: state.index + 1 })}
               </p>
-              <span className="text-[13px] text-fg-muted">
-                {item.points === 1 ? t("player.point") : t("player.points", { n: item.points })}
-              </span>
               {item.markedDone ? (
                 <Badge tone="green" icon={Check}>
                   {t("player.markedDone")}
                 </Badge>
               ) : null}
+              <span className="ml-auto text-[13px] text-fg-muted">
+                {item.points === 1 ? t("player.point") : t("player.points", { n: item.points })}
+              </span>
             </div>
             <Card className="p-5 sm:p-6">
               <QuestionHost
@@ -292,7 +303,12 @@ export function Player({
                   : {})}
               />
             </Card>
-            <p className="mt-3 text-[13px] leading-relaxed text-fg-muted">{hint}</p>
+            {desktop ? (
+              <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>
+            ) : null}
+            {hint ? (
+              <p className="mt-3 text-[13px] leading-relaxed text-fg-muted">{hint}</p>
+            ) : null}
           </>
         ) : null}
       </PlayerShell>

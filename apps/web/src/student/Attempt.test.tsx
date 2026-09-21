@@ -176,7 +176,7 @@ describe("/take/:id", () => {
 
     start();
     streams.at(-1)!.emit(started);
-    expect(await screen.findByText("Question 1 sur 1")).toBeInTheDocument();
+    expect(await screen.findByText("Question 1")).toBeInTheDocument();
     expect(screen.queryByText("Salle d'attente")).not.toBeInTheDocument();
   });
 
@@ -187,7 +187,7 @@ describe("/take/:id", () => {
 
     start();
     streams.at(-1)!.emit(started);
-    expect(await screen.findByText("Question 1 sur 1")).toBeInTheDocument();
+    expect(await screen.findByText("Question 1")).toBeInTheDocument();
     expect(entryCalls(calls)).toHaveLength(2);
 
     // The loop the field incident produced: the POST answers 200, the server
