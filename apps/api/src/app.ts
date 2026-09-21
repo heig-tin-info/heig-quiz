@@ -113,9 +113,16 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   );
 
   // Every successful HTTP mutation emits an SSE refresh hint (ADR-005).
+  //
+  // A route that is a READ behind a POST (a preview, a dry run: the verb only
+  // carries a body) declares `config: { readOnly: true }` and is skipped. Its
+  // hint would otherwise reach the very tab that asked, which invalidates its
+  // queries on any hint and re-issues the same POST: an endless round trip
+  // that showed as "Saving…" forever in the question editor.
   app.addHook("onResponse", async (req, reply) => {
     if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return;
     if (reply.statusCode >= 400 || !req.user) return;
+    if (req.routeOptions.config.readOnly) return;
     const pool = /^\/app\/api\/pools\/([0-9a-f-]{36})/.exec(req.url);
     const classroom = /^\/app\/api\/classrooms\/([0-9a-f-]{36})/.exec(req.url);
     const course = /^\/app\/api\/courses\/([0-9a-f-]{36})/.exec(req.url);
@@ -230,5 +237,9 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
 declare module "fastify" {
   interface FastifyInstance {
     db: ReturnType<typeof createDb>["db"];
+  }
+  interface FastifyContextConfig {
+    /** A read served by a non-GET verb: no refresh hint on its response. */
+    readOnly?: boolean;
   }
 }

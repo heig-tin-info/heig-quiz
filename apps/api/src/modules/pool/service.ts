@@ -17,11 +17,13 @@ import {
   asc,
   desc,
   eq,
+  getTableName,
   inArray,
   isNotNull,
   isNull,
   or,
   sql,
+  type AnyColumn,
   type SQL,
 } from "drizzle-orm";
 
@@ -94,7 +96,22 @@ export class VersionInUse extends Error {
 // Pools
 // ---------------------------------------------------------------------------
 
-const questionCount = sql<number>`(SELECT count(*) FROM ${questions} WHERE ${questions.poolId} = ${pools.id} AND ${questions.deletedAt} IS NULL)::int`;
+/**
+ * `"table"."column"`, always.
+ *
+ * A bare `${table.column}` inside a `sql` fragment renders WITHOUT its table
+ * whenever drizzle believes the surrounding statement reads a single table —
+ * which is exactly the case of the correlated subquery below, sitting in the
+ * select list of `select … from pools`. The condition then came out as
+ * `"pool_id" = "id"`, both resolved against `questions`, and every pool
+ * counted zero. Qualifying by hand makes the fragment independent of the
+ * statement it is dropped into.
+ */
+function qualified(column: AnyColumn): SQL {
+  return sql`${sql.identifier(getTableName(column.table))}.${sql.identifier(column.name)}`;
+}
+
+const questionCount = sql<number>`(SELECT count(*) FROM ${questions} WHERE ${qualified(questions.poolId)} = ${qualified(pools.id)} AND ${qualified(questions.deletedAt)} IS NULL)::int`;
 
 function poolJson(pool: PoolRow) {
   return {
@@ -556,6 +573,11 @@ function draftJson(type: string, row: VersionRecord): QuestionDraft {
 /**
  * A new question and its first draft, pre-filled by the type's
  * `emptyDraft()` — the only place a config is born.
+ *
+ * That draft is EMPTY, so it does not satisfy the type's schema: it goes
+ * through `saveDraftConfig`, exactly like the autosave of `putDraft`, and is
+ * stored as it stands (decision D16). Refusing it here would mean no teacher
+ * could ever create a question.
  */
 export async function createQuestion(
   db: Db,
@@ -568,7 +590,7 @@ export async function createQuestion(
   },
 ): Promise<string> {
   const t = typeOf(input.type);
-  const config = saveConfig(input.type, t.emptyDraft());
+  const { row: config } = saveDraftConfig(input.type, t.emptyDraft());
   const id = randomUUID();
   const now = new Date();
   await db.transaction(async (tx) => {

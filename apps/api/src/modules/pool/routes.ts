@@ -605,7 +605,11 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     return { config: outcome.config };
   }
 
-  app.post("/app/api/questions/:id/preview", { preHandler: requireTeacher }, async (req, reply) => {
+  app.post(
+    "/app/api/questions/:id/preview",
+    // A read behind a POST: no refresh hint on its response (see `app.ts`).
+    { preHandler: requireTeacher, config: { readOnly: true } },
+    async (req, reply) => {
     const scope = await accessibleQuestion(app, req, reply);
     if (!scope) return reply;
     const body = PreviewBody.safeParse(emptyBody(req.body));
@@ -637,7 +641,11 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
    * runner when there is one, and degrades to `runner_unavailable`
    * otherwise (decision D14) — never to a 500.
    */
-  app.post("/app/api/questions/:id/try", { preHandler: requireTeacher }, async (req, reply) => {
+  app.post(
+    "/app/api/questions/:id/try",
+    // A read behind a POST: no refresh hint on its response (see `app.ts`).
+    { preHandler: requireTeacher, config: { readOnly: true } },
+    async (req, reply) => {
     const scope = await accessibleQuestion(app, req, reply);
     if (!scope) return reply;
     const body = TryBody.safeParse(emptyBody(req.body));

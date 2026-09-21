@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { registerForTests } from "@quiz/registry/server";
 
 import { assets, coursePools, courseStaff, courses, pools, questions } from "../../db/schema.js";
+import { subscribe } from "../../events.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { fakeRunnerType, fakeShort } from "../../test/fakeType.js";
 import { seedLive } from "../../test/live.js";
@@ -287,6 +288,38 @@ describe("POST /questions/:id/try (F-QST-09)", () => {
     });
     expect(res.json().student).toEqual({ statement: "Visible" });
     expect(JSON.stringify(res.json())).not.toContain("secret-key");
+  });
+
+  it("emits no refresh hint for a preview or a try: a read behind a POST", async () => {
+    const id = await createQuestion("silent-read");
+    const hints: string[] = [];
+    const stop = subscribe((m) => {
+      if (m.kind === "hint") hints.push(m.type);
+    });
+    try {
+      // The write that precedes them does hint, which is what would start the
+      // round trip the two reads must not sustain.
+      await server.app.inject({
+        method: "PUT",
+        url: `/app/api/questions/${id}/draft`,
+        headers: owner.headers,
+        payload: { config: { statement: "Visible", answer: "k" } },
+      });
+      expect(hints.length).toBeGreaterThan(0);
+      hints.length = 0;
+      for (const path of ["preview", "try"]) {
+        const res = await server.app.inject({
+          method: "POST",
+          url: `/app/api/questions/${id}/${path}`,
+          headers: owner.headers,
+          payload: path === "preview" ? { source: "draft" } : { source: "draft", answer: "k" },
+        });
+        expect(res.statusCode, path).toBe(200);
+      }
+      expect(hints).toEqual([]);
+    } finally {
+      stop();
+    }
   });
 });
 

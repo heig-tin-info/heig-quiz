@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
-import { pools, questionTags, questionVersions, questions, users } from "../../db/schema.js";
+import { courses, pools, questionTags, questionVersions, questions, users } from "../../db/schema.js";
 import { testDb } from "../../test/db.js";
 import { fakeShort, fakeV1Config } from "../../test/fakeType.js";
 import { loadConfig, tryLoadConfig } from "./config.js";
@@ -353,5 +353,36 @@ describe("categories and copies", () => {
     expect(rows.map((r) => r.tag).sort()).toEqual(["a", "b"]);
     await service.patchQuestion(db, await questionRow(id), { tags: [] });
     expect(await db.select().from(questionTags).where(eq(questionTags.questionId, id))).toEqual([]);
+  });
+});
+
+describe("question counts", () => {
+  it("counts the live questions of a pool on every listing", async () => {
+    const counted = await seedPool();
+    for (const name of ["count 1", "count 2", "count 3"]) await seedQuestion(name, counted);
+
+    const listed = await service.listPools(db, eq(pools.id, counted));
+    expect(listed).toHaveLength(1);
+    expect(listed[0]!.questionCount).toBe(3);
+
+    const [row] = await db.select().from(pools).where(eq(pools.id, counted));
+    expect((await service.poolDetail(db, row!)).questionCount).toBe(3);
+
+    const courseId = randomUUID();
+    await db.insert(courses).values({ id: courseId, name: "Counting", code: `C-${courseId.slice(0, 8)}` });
+    await service.setCoursePools(db, courseId, [counted], undefined);
+    const ofCourse = await service.poolsOfCourse(db, courseId);
+    expect(ofCourse.map((p) => p.questionCount)).toEqual([3]);
+  });
+
+  it("leaves a soft-deleted question out of the count", async () => {
+    const counted = await seedPool();
+    const kept = await seedQuestion("kept", counted);
+    const removed = await seedQuestion("removed", counted);
+    await service.softDeleteQuestion(db, await questionRow(removed));
+
+    const listed = await service.listPools(db, eq(pools.id, counted));
+    expect(listed[0]!.questionCount).toBe(1);
+    expect(kept).toBeTruthy();
   });
 });
