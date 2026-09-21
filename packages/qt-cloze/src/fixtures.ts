@@ -29,7 +29,8 @@ export function config(text: string, over: Partial<ClozeConfig> = {}): ClozeConf
 /**
  * The example of PLAN-MVP §2.3: one text blank with alternatives, a number, a
  * text blank with an escaped `|`, a dropdown and a weighted regex — inside a
- * fenced code block for two of them.
+ * fenced code block for two of them, and one more dropdown inside a markdown
+ * TABLE CELL, where the `|` of the hole is the case the editor protects.
  */
 export const SECRET_TEXT = [
   "La loi de {{Newton|newton}} lie force, masse et accélération : **F = m·a**.",
@@ -44,27 +45,20 @@ export const SECRET_TEXT = [
   "",
   "| Grandeur | Unité |",
   "| --- | --- |",
-  "| Force | {{SET-KEY-MARKER}} |",
+  "| Force | {{=NEWTON-MARKER|pascal|joule}} |",
 ].join("\n");
 
+export const SECRET_CONFIG: ClozeConfig = config(SECRET_TEXT);
+
 /**
- * The predefined choice set the fixture's TABLE cell uses. Its key is a
- * marker: the option labels legitimately reach the student — they are the
- * dropdown — but which one is correct, and the name of the set they came
- * from, must not. `SECRET_VALUES` below asserts exactly that.
+ * Values that must never appear in the serialised student view.
+ *
+ * The last two are the dropdown case, and they are the reason the fixture
+ * holds one at all: the option LABELS legitimately travel — they are the list
+ * the student picks from — so the marker is placed in the `=` POSITION, i.e.
+ * the mark that says which one is right. `=NEWTON-MARKER` can only appear in
+ * the output if the raw body leaked; `NEWTON-MARKER` alone is allowed to, and
+ * `"correct"` proves the index list stayed behind (decision D4: what travels
+ * is the canonical option id, never the key).
  */
-export const SECRET_SETS = [
-  {
-    key: "SET-KEY-MARKER",
-    options: [
-      { label: "newton", correct: true },
-      { label: "pascal", correct: false },
-      { label: "joule", correct: false },
-    ],
-  },
-];
-
-export const SECRET_CONFIG: ClozeConfig = config(SECRET_TEXT, { choiceSets: SECRET_SETS });
-
-/** Values that must never appear in the serialised student view. */
-export const SECRET_VALUES = ["Newton", "^N$", "+=", "#10", "SET-KEY-MARKER"];
+export const SECRET_VALUES = ["Newton", "^N$", "+=", "#10", "=NEWTON-MARKER", "=newton"];

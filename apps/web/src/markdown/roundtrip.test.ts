@@ -15,6 +15,7 @@ import { Editor } from "@tiptap/core";
 import type { JSONContent } from "@tiptap/core";
 import { describe, expect, it } from "vitest";
 
+import { protectHolePipes, restoreHolePipes } from "./clozeHole";
 import { INLINE_INPUT_RULES, richTextExtensions } from "./tiptap";
 
 /*
@@ -589,11 +590,13 @@ function holeTrip(markdown: string): string {
   const editor = new Editor({
     element: document.createElement("div"),
     extensions: richTextExtensions({ cloze: true }),
-    content: markdown,
+    // The two boundaries `RichText` applies, and for the reason it applies
+    // them: a `|` inside a hole must not reach the markdown TABLE lexer.
+    content: protectHolePipes(markdown),
     contentType: "markdown",
   });
   try {
-    return editor.getMarkdown().trim();
+    return restoreHolePipes(editor.getMarkdown().trim());
   } finally {
     editor.destroy();
   }
@@ -623,7 +626,7 @@ describe("round trip — cloze holes", () => {
     expect(holeTrip(source)).toBe(source);
   });
 
-  it("keeps a hole inside a TABLE cell, which is what choice sets are for", () => {
+  it("keeps a hole inside a TABLE cell", () => {
     const source = [
       "| Polarisation | État  |",
       "| ------------ | ----- |",
@@ -631,6 +634,27 @@ describe("round trip — cloze holes", () => {
       "| Inverse      | {{2}} |",
     ].join("\n");
     expect(holeTrip(source)).toBe(source);
+  });
+
+  /*
+   * THE case the predefined choice sets were invented for, and the reason they
+   * could be deleted: a markdown row is split on every unescaped `|`, so a
+   * hole holding one used to lose its row. `protectHolePipes` takes the pipe
+   * out of the row on the way in and `restoreHolePipes` puts it back at the
+   * very end, after the table renderer has padded its columns.
+   */
+  it.each([
+    [["| a   | b       |", "| --- | ------- |", "| a   | {{x|y}} |"].join("\n")],
+    [["| a   | b        |", "| --- | -------- |", "| a   | {{=x|y}} |"].join("\n")],
+    ])("keeps a MULTI-ANSWER hole inside a table cell: %j", (source) => {
+    expect(holeTrip(source)).toBe(source);
+  });
+
+  it("never escapes the pipe of a hole into the stored markdown", () => {
+    const out = holeTrip("| a | b |\n| - | - |\n| a | {{x|y}} |");
+    expect(out).toContain("{{x|y}}");
+    expect(out).not.toContain("\\|");
+    expect(out).not.toContain("\uE000");
   });
 
   it("keeps a hole inside a fenced block, where it stays plain text", () => {
@@ -721,5 +745,28 @@ describe("round trip — the cloze texts this app actually stores", () => {
   ];
   it.each(REAL)("keeps %j", (source) => {
     expect(holeTrip(source)).toBe(source);
+  });
+});
+
+/*
+ * The pipe protection, at its two boundaries. It is the only place in the
+ * editor that rewrites the markdown, so what it leaves alone matters as much
+ * as what it changes.
+ */
+describe("protectHolePipes", () => {
+  it("replaces the `|` of a hole, and only that", () => {
+    expect(protectHolePipes("| a | {{x|y}} |")).toBe("| a | {{xy}} |");
+    expect(protectHolePipes("a | b")).toBe("a | b");
+    expect(protectHolePipes("\\{{ a | b")).toBe("\\{{ a | b");
+  });
+
+  it("leaves CODE alone: a chip is not drawn there, a tofu box would be", () => {
+    expect(protectHolePipes("`int t = {{a|b}};`")).toBe("`int t = {{a|b}};`");
+    expect(protectHolePipes("```c\nint t = {{a|b}};\n```")).toBe("```c\nint t = {{a|b}};\n```");
+  });
+
+  it("round-trips through the restore", () => {
+    const source = "| a | {{x|y}} | `{{p|q}}` |";
+    expect(restoreHolePipes(protectHolePipes(source))).toBe(source);
   });
 });

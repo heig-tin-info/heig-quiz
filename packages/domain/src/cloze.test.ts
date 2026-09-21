@@ -8,10 +8,11 @@ import {
   describeBlank,
   gradeCloze,
   matchBlank,
+  formatBlank,
   matchClozeHole,
+  parseBlankBody,
   parseCloze,
   type ClozeBlank,
-  type ClozeChoiceSet,
 } from "./cloze.js";
 
 const s = clozeSentinel;
@@ -231,114 +232,74 @@ describe("describeBlank", () => {
 });
 
 /*
- * PREDEFINED CHOICE SETS (docs/04 §4.6). A set is a named list of options the
- * teacher writes once; a blank whose body is exactly that name becomes the
- * ordinary `select` blank of the alternatives spelling, which is what lets a
- * dropdown live inside a markdown table — `{{=a|b}}` cannot, every unescaped
- * `|` there being a column separator.
+ * `formatBlank` is the inverse of `parseBlankBody`, and the blank editor of the
+ * rich text field writes through it. A body it produced that the grader read
+ * back as something else would be the one bug this popup can cause, so the
+ * round trip is asserted on every kind AND on the characters that mean
+ * something inside a blank.
  */
-const SETS: ClozeChoiceSet[] = [
-  {
-    key: "1",
-    options: [
-      { label: "free", correct: true },
-      { label: "delete", correct: false },
-      { label: "dispose", correct: false },
-    ],
-  },
-  {
-    key: "unité",
-    options: [
-      { label: "volts", correct: true },
-      { label: "ampères", correct: false },
-    ],
-  },
-];
+describe("formatBlank / parseBlankBody — the round trip the popup rides on", () => {
+  const CASES: ClozeBlank[] = [
+    { index: 0, weight: 1, kind: "text", answers: ["Newton"] },
+    { index: 0, weight: 1, kind: "text", answers: ["Newton", "Isaac Newton"] },
+    { index: 0, weight: 2.5, kind: "text", answers: ["a"] },
+    // The four escapes of the grammar table, each in an answer.
+    { index: 0, weight: 1, kind: "text", answers: ["a|b", "c}d", "e*f", "g\\h"] },
+    // …and the heads the parser reads as another kind entirely.
+    { index: 0, weight: 1, kind: "text", answers: ["#3"] },
+    { index: 0, weight: 1, kind: "text", answers: ["/a/"] },
+    { index: 0, weight: 1, kind: "text", answers: ["=x", "=y"] },
+    { index: 0, weight: 1, kind: "text", answers: ["2*3"] },
+    { index: 0, weight: 3, kind: "text", answers: ["2*3", "6"] },
+    { index: 0, weight: 1, kind: "select", options: ["oui", "non"], correct: [0] },
+    { index: 0, weight: 1, kind: "select", options: ["a", "b", "c"], correct: [1, 2] },
+    { index: 0, weight: 2, kind: "select", options: ["=a", "#b", "c|d"], correct: [0, 2] },
+    { index: 0, weight: 1, kind: "number", value: 10, tolerance: 0, mode: "abs" },
+    { index: 0, weight: 1, kind: "number", value: 3.14, tolerance: 0.01, mode: "abs" },
+    { index: 0, weight: 1, kind: "number", value: -2, tolerance: 0.05, mode: "rel" },
+    { index: 0, weight: 4, kind: "number", value: 9.81, tolerance: 0.1, mode: "rel" },
+    { index: 0, weight: 1, kind: "regex", pattern: "^N$", flags: "" },
+    { index: 0, weight: 2, kind: "regex", pattern: "a|b", flags: "i" },
+  ];
 
-describe("parseCloze — predefined choice sets", () => {
-  it("resolves a key to a select blank carrying the set's options", () => {
-    const parse = parseCloze("On libère avec {{1}}.", SETS);
-    expect(parse.errors).toEqual([]);
-    expect(parse.template).toBe(`On libère avec ${s(0)}.`);
-    expect(parse.blanks[0]).toEqual({
-      index: 0,
-      weight: 1,
-      kind: "select",
-      options: ["free", "delete", "dispose"],
-      correct: [0],
-      setKey: "1",
-    });
-  });
+  it.each(CASES.map((blank) => [`${blank.kind}: ${formatBlank(blank)}`, blank] as const))(
+    "%s",
+    (_name, blank) => {
+      expect(parseBlankBody(formatBlank(blank))).toEqual(blank);
+    },
+  );
 
-  it("takes a weight prefix before the key, and a non-numeric key", () => {
-    const parse = parseCloze("{{2*unité}}", SETS);
-    expect(parse.blanks[0]?.weight).toBe(2);
-    expect(parse.blanks[0]?.kind).toBe("select");
-  });
-
-  it("marks every ticked option correct", () => {
-    const parse = parseCloze("{{k}}", [
-      {
-        key: "k",
-        options: [
-          { label: "a", correct: true },
-          { label: "b", correct: false },
-          { label: "c", correct: true },
-        ],
-      },
-    ]);
-    expect(parse.blanks[0]?.kind === "select" && parse.blanks[0].correct).toEqual([0, 2]);
-  });
-
-  it("refuses a set with no correct option, where it is used", () => {
-    const parse = parseCloze("a {{k}} b", [
-      { key: "k", options: [{ label: "a", correct: false }, { label: "b", correct: false }] },
-    ]);
-    expect(parse.errors).toEqual([{ at: 2, message: "cloze.set_no_correct" }]);
-    expect(parse.blanks).toHaveLength(0);
-    expect(parse.template).toBe("a {{k}} b");
-  });
-
-  it("leaves `{{0}}` a text blank when no set is called 0", () => {
-    const parse = parseCloze("int i = {{0}};", SETS);
-    expect(parse.blanks[0]).toEqual({ index: 0, weight: 1, kind: "text", answers: ["0"] });
-  });
-
-  it("matches the key EXACTLY: spaces and case are not folded", () => {
-    for (const text of ["{{ 1 }}", "{{Unité}}"]) {
-      const parse = parseCloze(text, SETS);
-      expect(parse.blanks[0]?.kind).toBe("text");
+  it("writes the body a whole hole parses back to, blank for blank", () => {
+    for (const blank of CASES) {
+      const parse = parseCloze(`x {{${formatBlank(blank)}}} y`);
+      expect(parse.errors).toEqual([]);
+      expect(parse.blanks).toEqual([blank]);
     }
   });
 
-  it("parses as before when no set is given", () => {
-    expect(parseCloze("{{1}}").blanks[0]).toEqual({
-      index: 0,
-      weight: 1,
-      kind: "text",
-      answers: ["1"],
-    });
+  it("leaves the weight out when it is 1, and writes it when it is not", () => {
+    expect(formatBlank({ index: 0, weight: 1, kind: "text", answers: ["a"] })).toBe("a");
+    expect(formatBlank({ index: 0, weight: 2, kind: "text", answers: ["a"] })).toBe("2*a");
   });
 
-  it("grades and describes a set blank like any other dropdown", () => {
-    const parse = parseCloze("{{1}}", SETS);
-    const grade = gradeCloze(parse, ["0"], false);
-    expect(grade.perBlank[0]?.ok).toBe(true);
-    expect(gradeCloze(parse, ["1"], false).perBlank[0]?.ok).toBe(false);
-    // The key names the SET and lays the list out, the correct ones ticked.
-    expect(describeBlank(parse.blanks[0]!)).toBe("set 1 (free ✓, delete, dispose)");
+  it("writes a dropdown with `=` on every correct option", () => {
+    expect(
+      formatBlank({ index: 0, weight: 1, kind: "select", options: ["a", "b", "c"], correct: [0, 2] }),
+    ).toBe("=a|b|=c");
   });
 
-  it("shuffles a set blank exactly like an inline dropdown (D4)", () => {
-    const parse = parseCloze("{{1}}", SETS);
-    const student = clozeStudentTemplate(parse, 5, "item", true);
-    const blank = student.blanks[0];
-    expect(blank?.kind).toBe("select");
-    if (blank?.kind !== "select") throw new Error("the fixture must hold a dropdown");
-    expect(blank.options.map((o) => o.id).sort()).toEqual([0, 1, 2]);
-    // No `correct`, no `setKey`: the student view learns nothing of the key.
-    expect(JSON.stringify(student)).not.toContain("correct");
-    expect(JSON.stringify(student)).not.toContain("setKey");
+  it("writes a relative tolerance as a percentage, exactly", () => {
+    expect(formatBlank({ index: 0, weight: 1, kind: "number", value: 2, tolerance: 0.05, mode: "rel" })).toBe(
+      "#2:5%",
+    );
+  });
+
+  it("reports the same i18n key the parser does on an invalid body", () => {
+    expect(parseBlankBody("")).toBe("cloze.empty_blank");
+    expect(parseBlankBody("#nope")).toBe("cloze.invalid_number");
+    expect(parseBlankBody("/(/")).toBe("cloze.invalid_regex");
+    expect(parseBlankBody("/a/zz")).toBe("cloze.invalid_regex_flags");
+    expect(parseBlankBody("=a|")).toBe("cloze.empty_option");
   });
 });
 

@@ -11,15 +11,6 @@ function base(text: string): Record<string, unknown> {
   return { configVersion: CLOZE_CONFIG_VERSION, text };
 }
 
-/** A well-formed set: two options, one of them ticked. */
-const SET = {
-  key: "1",
-  options: [
-    { label: "free", correct: true },
-    { label: "delete", correct: false },
-  ],
-};
-
 describe("ClozeConfigSchema", () => {
   const accepted: [string, Record<string, unknown>][] = [
     ["a plain text blank", base("La loi de {{Newton}}.")],
@@ -33,13 +24,14 @@ describe("ClozeConfigSchema", () => {
     ["an escaped brace beside a real blank", base("\\{{ is a literal, {{Newton}} is not")],
     ["case sensitivity turned on", { ...base("{{Newton}}"), caseSensitive: true }],
     ["shuffling turned off", { ...base("{{=a|b}}"), shuffleOptions: false }],
-    ["a predefined choice set used by key", { ...base("{{1}}"), choiceSets: [SET] }],
     [
-      "a set used inside a table cell, which is what it is for",
-      { ...base("| a | b |\n| --- | --- |\n| x | {{1}} |"), choiceSets: [SET] },
+      "a dropdown inside a table cell: the `|` never reaches the table parser",
+      base("| a | b |\n| --- | --- |\n| x | {{=oui|non}} |"),
     ],
-    ["a set that is defined but never used", { ...base("{{Newton}}"), choiceSets: [SET] }],
-    ["no choiceSets at all: the field defaults to an empty list", base("{{Newton}}")],
+    [
+      "a stored config still carrying `choiceSets`: zod strips the key",
+      { ...base("{{Newton}}"), choiceSets: [{ key: "1", options: [] }] },
+    ],
   ];
 
   for (const [name, input] of accepted) {
@@ -61,21 +53,6 @@ describe("ClozeConfigSchema", () => {
     ["a future configVersion", { ...base("{{a}}"), configVersion: 3 }],
     ["the v1 configVersion, which `migrate` deals with first", { ...base("{{a}}"), configVersion: 1 }],
     ["a missing configVersion", { text: "{{a}}" }],
-    [
-      "a set with one option",
-      { ...base("{{1}}"), choiceSets: [{ key: "1", options: [{ label: "a", correct: true }] }] },
-    ],
-    [
-      "a set with no correct option",
-      {
-        ...base("{{1}}"),
-        choiceSets: [
-          { key: "1", options: [{ label: "a", correct: false }, { label: "b", correct: false }] },
-        ],
-      },
-    ],
-    ["two sets under one key", { ...base("{{1}}"), choiceSets: [SET, SET] }],
-    ["a set with an empty key", { ...base("{{Newton}}"), choiceSets: [{ ...SET, key: "" }] }],
   ];
 
   for (const [name, input] of rejected) {
@@ -94,19 +71,20 @@ describe("ClozeConfigSchema", () => {
     const config = ClozeConfigSchema.parse(base("{{Newton}}"));
     expect(config.caseSensitive).toBe(false);
     expect(config.shuffleOptions).toBe(true);
-    expect(config.choiceSets).toEqual([]);
   });
 
-  it("reports a broken set on the set, not on the text", () => {
-    const result = ClozeConfigSchema.safeParse({ ...base("{{Newton}}"), choiceSets: [SET, SET] });
-    expect(result.error?.issues.map((issue) => issue.message)).toContain("cloze.set_duplicate_key");
-    expect(result.error?.issues[0]?.path[0]).toBe("choiceSets");
-  });
-
-  it("turns a key into a DROPDOWN, which the text alone could not say", () => {
-    const parse = parseCloze("{{1}}", [SET]);
-    expect(parse.blanks[0]?.kind).toBe("select");
-    expect(parseCloze("{{1}}").blanks[0]?.kind).toBe("text");
+  /*
+   * The predefined choice sets are GONE (they were never shipped). A stored
+   * draft that still holds the key keeps its text and loses the list, and
+   * `{{1}}` goes back to being the text blank it is spelled as.
+   */
+  it("strips a leftover `choiceSets`, and reads `{{1}}` as a text blank again", () => {
+    const config = ClozeConfigSchema.parse({
+      ...base("{{1}}"),
+      choiceSets: [{ key: "1", options: [{ label: "free", correct: true }] }],
+    });
+    expect(config).not.toHaveProperty("choiceSets");
+    expect(parseCloze(config.text).blanks[0]).toMatchObject({ kind: "text", answers: ["1"] });
   });
 });
 
@@ -121,7 +99,6 @@ describe("emptyClozeDraft", () => {
   it("is empty, and therefore does NOT validate (D16)", () => {
     const draft = emptyClozeDraft();
     expect(draft.text).toBe("");
-    expect(draft.choiceSets).toEqual([]);
     expect(parseCloze(draft.text).blanks).toHaveLength(0);
     // No blank: the schema refuses it, and the draft is stored anyway.
     expect(ClozeConfigSchema.safeParse(draft).success).toBe(false);

@@ -52,7 +52,6 @@ import {
   matchBlank,
   mcqFraction,
   parseCloze,
-  type ClozeChoiceSet,
   splitTemplate,
   truncateSelection,
   type McqScorePolicy,
@@ -922,10 +921,12 @@ const questions: MockQuestion[] = [
     randomizable: false,
     tags: ["memoire", "pointeurs"],
     /*
-     * The question the rich cloze editor was built for: a hole inside a
-     * TABLE cell, which `{{=free|delete|dispose}}` cannot be — every
-     * unescaped `|` in a markdown row is a column separator — so the two
-     * dropdowns of the table go through PREDEFINED CHOICE SETS instead.
+     * The question the rich cloze editor was built for: a dropdown inside a
+     * TABLE cell. The `|` of the hole is exactly the character a markdown row
+     * is split on, and it survives because the editor takes it out of the row
+     * before the table lexer sees it (markdown/clozeHole.ts) and the domain
+     * parser replaces the whole hole by a sentinel before markdown runs at all
+     * (decision D5).
      */
     config: {
       configVersion: 2,
@@ -934,26 +935,10 @@ const questions: MockQuestion[] = [
         "puis on libère la mémoire avec {{=free|delete|dispose}}.\n\n" +
         "| Fonction | Met la mémoire à zéro |\n" +
         "| -------- | --------------------- |\n" +
-        "| `malloc` | {{2}}                 |\n" +
-        "| `calloc` | {{1}}                 |",
+        "| `malloc` | {{oui|=non}}          |\n" +
+        "| `calloc` | {{=oui|non}}          |",
       caseSensitive: false,
       shuffleOptions: true,
-      choiceSets: [
-        {
-          key: "1",
-          options: [
-            { label: "oui", correct: true },
-            { label: "non", correct: false },
-          ],
-        },
-        {
-          key: "2",
-          options: [
-            { label: "oui", correct: false },
-            { label: "non", correct: true },
-          ],
-        },
-      ],
     },
     explanation: "`malloc` renvoie `void *` ; en C la conversion est implicite et le cast est inutile.",
     published: [{ number: 1, changeNote: "Première version", daysAgo: 12 }],
@@ -1295,23 +1280,12 @@ function draftIssues(q: MockQuestion): { path: string[]; code: string; message: 
     });
   }
   if (q.type === "cloze") {
-    const parse = parseCloze(String(config.text ?? ""), clozeSets(config));
+    const parse = parseCloze(String(config.text ?? ""));
     if (parse.blanks.length === 0) {
       out.push({ path: ["text"], code: "custom", message: "cloze.no_blank" });
     }
   }
   return out;
-}
-
-/**
- * The predefined choice sets of a `cloze` config, for `parseCloze`.
- *
- * The mock speaks the real grammar: `{{1}}` is a dropdown only when a set is
- * named "1", so every parse here is handed the same list the API would
- * (`packages/qt-cloze/src/parse.ts`).
- */
-function clozeSets(config: Record<string, unknown>): ClozeChoiceSet[] {
-  return Array.isArray(config.choiceSets) ? (config.choiceSets as ClozeChoiceSet[]) : [];
 }
 
 /** `toStudent`, as the server's registry would do it (seed 0, no shuffle). */
@@ -1336,7 +1310,7 @@ function studentView(q: MockQuestion, config: Record<string, unknown>): unknown 
         ...(config.placeholder === undefined ? {} : { placeholder: config.placeholder }),
       };
     case "cloze": {
-      const parse = parseCloze(String(config.text ?? ""), clozeSets(config));
+      const parse = parseCloze(String(config.text ?? ""));
       return clozeStudentTemplate(parse, 0, q.id, false);
     }
     case "code": {
@@ -1453,7 +1427,7 @@ function tryAnswer(
       solution: { expected: matchers.map((m) => String(m.value)) },
     };
   }
-  const parse = parseCloze(String(config.text ?? ""), clozeSets(config));
+  const parse = parseCloze(String(config.text ?? ""));
   const given = ((answer as { blanks?: (string | null)[] } | null)?.blanks ?? []) as (string | null)[];
   const perBlank = parse.blanks.map((blank, i) => ({
     index: blank.index,
@@ -1656,7 +1630,7 @@ function emptyConfig(type: MockQuestion["type"]): Record<string, unknown> {
         matchers: [{ kind: "exact", value: "", points: 1 }],
       };
     case "cloze":
-          return { configVersion: 2, text: "", caseSensitive: false, shuffleOptions: true, choiceSets: [] };
+          return { configVersion: 2, text: "", caseSensitive: false, shuffleOptions: true };
     case "code":
       return codeConfig("", "", [{ name: "", stdin: "", expected: "", visible: true }]);
   }
@@ -1880,7 +1854,7 @@ function solutionOf(q: MockQuestion): unknown {
       return { expected: matchers.map((m) => String(m.value)) };
     }
     case "cloze": {
-      const parse = parseCloze(String(config.text ?? ""), clozeSets(config));
+      const parse = parseCloze(String(config.text ?? ""));
       return { blanks: parse.blanks.map((b) => ({ index: b.index, expected: describeBlank(b) })) };
     }
     case "code": {
@@ -1940,7 +1914,7 @@ function answerOf(q: MockQuestion, seedValue: number): unknown {
       return { text: wrong ? `${expected}0` : expected };
     }
     case "cloze": {
-      const parse = parseCloze(String(config.text ?? ""), clozeSets(config));
+      const parse = parseCloze(String(config.text ?? ""));
       // A blank left untouched is `null`, which is what an unfinished answer
       // looks like on the wire.
       return {
@@ -2672,11 +2646,10 @@ const studentPayloads: Record<number, unknown> = {
     ],
   },
   /*
-   * Built by the REAL domain functions from a real config, sets included,
-   * rather than written out by hand: the dropdown of a PREDEFINED CHOICE SET
-   * — the one in the table cell, where `{{=a|b}}` cannot go — has to reach
-   * the player exactly as `{{=a|b|c}}` does, and a literal payload could not
-   * show that it does.
+   * Built by the REAL domain functions from a real config rather than written
+   * out by hand: a dropdown inside a TABLE CELL has to reach the player
+   * exactly as an inline one does, and a literal payload could not show that
+   * it does.
    */
   2: clozeStudentTemplate(
     parseCloze(
@@ -2685,26 +2658,8 @@ const studentPayloads: Record<number, unknown> = {
         "U = {{R|la résistance}} × I, où la tension U s'exprime en {{=volts|ampères|ohms|watts}}.\n\n" +
         "| Grandeur | Unité |\n" +
         "| --- | --- |\n" +
-        "| Résistance | {{1}} |\n" +
-        "| Courant | {{2}} |",
-      [
-        {
-          key: "1",
-          options: [
-            { label: "ohms", correct: true },
-            { label: "volts", correct: false },
-            { label: "ampères", correct: false },
-          ],
-        },
-        {
-          key: "2",
-          options: [
-            { label: "ohms", correct: false },
-            { label: "volts", correct: false },
-            { label: "ampères", correct: true },
-          ],
-        },
-      ],
+        "| Résistance | {{=ohms|volts|ampères}} |\n" +
+        "| Courant | {{ohms|volts|=ampères}} |",
     ),
     0,
     "student-item-2",
@@ -3062,7 +3017,7 @@ function mockAnswer(q: MockQuestion, config: Record<string, unknown>, ability: n
     return { text: rand() < ability ? "8" : pick(["4", "64", "16"]) };
   }
   if (q.type === "cloze") {
-    const parse = parseCloze(String(config.text ?? ""), clozeSets(config));
+    const parse = parseCloze(String(config.text ?? ""));
     return {
       blanks: parse.blanks.map((blank) => {
         const good = rand() < ability;

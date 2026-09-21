@@ -65,20 +65,23 @@ question entière est fausse.
 ## Une question à trous
 
 L'énoncé s'écrit dans le même champ riche que les autres, et un trou y est un
-objet : tapez `{{` et le champ demande ce qu'il contient — `Newton` pour une
-réponse, `Newton|newton` pour des variantes, `=a|b|c` pour une liste,
-`#3.14` pour un nombre, `/^N$/i` pour une expression régulière, `2*` devant
-n'importe lequel pour un poids double. Le trou devient une pastille que l'on
-clique pour la modifier, et les accolades, les barres et les étoiles sont
-réécrites telles quelles. Dans un bloc de code, un trou reste du texte : «
-complétez ce code » fonctionne comme il se lit.
+objet. Tapez `{{`, utilisez le bouton trou de la barre d'outils, ou cliquez un
+trou existant : une petite carte s'ouvre en dessous et demande de quelle forme
+il est — **L'une de ces réponses** (une seule, ou plusieurs), **Liste
+déroulante** (cochez les bonnes options), **Nombre** (une valeur et une
+tolérance, absolue ou en pourcent), **Regex** — plus un poids si ce trou vaut
+davantage que les autres.
 
-Les **listes prédéfinies** sont une liste déroulante écrite une fois. Nommez
-un ensemble (`1`, `2`, … par défaut), donnez ses options, cochez la bonne,
-puis écrivez `{{1}}` dans le texte. Deux raisons de la préférer : c'est la
-seule liste qui tienne dans une cellule de TABLEAU, où un `|` couperait la
-ligne en deux, et les mêmes quatre options réutilisées dans huit trous ne font
-qu'un seul endroit à corriger au lieu de huit.
+La pastille dit alors d'un coup d'œil ce qu'elle représente : une réponse
+unique en rouge, la PREMIÈRE de plusieurs en bleu avec un `+2`, une liste
+déroulante avec un `▾`. Survolez-la et la liste complète apparaît, coches
+comprises. Un trou tient dans une cellule de TABLEAU, barres verticales
+incluses, et dans un bloc de code, où il reste du texte : « complétez ce
+code » fonctionne comme il se lit.
+
+La syntaxe brute `{{…}}` n'a pas disparu : le bouton **source Markdown** la
+montre, et `Newton|newton`, `=a|b|c`, `#3.14:0.01`, `/^N$/i` et le préfixe de
+poids `2*` restent ce qui est enregistré.
 
 ## Publier
 

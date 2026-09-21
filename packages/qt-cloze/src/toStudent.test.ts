@@ -5,8 +5,6 @@ import { clozeServer } from "./server.js";
 
 const FORBIDDEN_KEYS = [
   "correct",
-  "setKey",
-  "choiceSets",
   "matchers",
   "answers",
   "expected",
@@ -63,17 +61,17 @@ describe("toStudent", () => {
   });
 
   /*
-   * A PREDEFINED CHOICE SET reaches the student as an ordinary dropdown: its
-   * LABELS have to travel (they are what the student picks from), the key of
-   * the set and which option is right do not. The set lives in a TABLE cell
-   * here, which is the whole reason the feature exists.
+   * A dropdown INSIDE A TABLE CELL. Its LABELS have to travel — they are what
+   * the student picks from — and which one is right must not; the `|` of the
+   * hole never reaches the markdown table parser, because the sentinel has
+   * already taken its place (decision D5).
    */
-  it("publishes a set blank as a plain dropdown, key and set name stripped", () => {
+  it("publishes a dropdown in a table cell, the correct mark stripped", () => {
     const student = clozeServer.toStudent(SECRET_CONFIG, view);
     const blank = student.blanks[5];
     expect(blank?.kind).toBe("select");
-    if (blank?.kind !== "select") throw new Error("the fixture must hold a set dropdown");
-    expect(blank.options.map((o) => o.label).sort()).toEqual(["joule", "newton", "pascal"]);
+    if (blank?.kind !== "select") throw new Error("the fixture must hold a dropdown in a table");
+    expect(blank.options.map((o) => o.label).sort()).toEqual(["NEWTON-MARKER", "joule", "pascal"]);
     expect(student.template).toContain("| Force | ⸢5⸣ |");
   });
 

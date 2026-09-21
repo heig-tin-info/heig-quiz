@@ -6,16 +6,15 @@
  * this module only parses the text once and maps the fraction onto the item.
  */
 import type { GradedResult } from "@quiz/core/server";
-import { gradeCloze, round2 } from "@quiz/domain";
+import { gradeCloze, parseCloze, round2 } from "@quiz/domain";
 import type { ClozeAnswer, ClozeConfig, ClozeDetails } from "./schema.js";
-import { clozeParse } from "./parse.js";
 
 export function gradeClozeAnswer(
   config: ClozeConfig,
   answer: ClozeAnswer | null,
   itemPoints: number,
 ): GradedResult<ClozeDetails> {
-  const parse = clozeParse(config);
+  const parse = parseCloze(config.text);
   // An absent answer is an array of untouched blanks: every one of them is
   // wrong, and the item scores 0 (F-GRADE-01).
   const grade = gradeCloze(parse, answer?.blanks ?? [], config.caseSensitive);

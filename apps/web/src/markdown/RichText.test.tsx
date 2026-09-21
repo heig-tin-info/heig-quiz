@@ -741,3 +741,119 @@ describe("RichText — pasting markdown", () => {
     expect(container.querySelectorAll("pre")).toHaveLength(0);
   });
 });
+
+/*
+ * THE BLANK CARD (`BlankPopover`). The body of a `{{…}}` hole is a grammar,
+ * not a value, so the chip is opened into a card that asks for the SHAPE of
+ * the blank and writes the body through `formatBlank` — never by hand.
+ *
+ * The card is opened here through the TOOLBAR button, which is the one path a
+ * synthetic event can take: a click on the chip goes through ProseMirror's
+ * `handleClickOn`, and that needs `posAtCoords`, which jsdom has no layout to
+ * answer. The two paths end in the same `openHole`.
+ */
+describe("RichText — the blank card", () => {
+  const insert = () => screen.getByRole("button", { name: /Insert a blank/ });
+  const card = () => screen.getByRole("dialog", { name: "Blank" });
+
+  /**
+   * Types into a field of the card. The explicit click is not decoration:
+   * `userEvent.type` alone leaves the caret in the contenteditable the button
+   * was pressed from, and the keystrokes land in the document instead.
+   */
+  async function fill(label: string, text: string) {
+    const field = screen.getByLabelText(label);
+    await userEvent.click(field);
+    await userEvent.type(field, text);
+  }
+
+  it("draws the insert button only in a field that has holes", () => {
+    const { unmount } = renderWithProviders(<Host initial="a" holes />);
+    expect(insert()).toBeInTheDocument();
+    unmount();
+    renderWithProviders(<Host initial="a" />);
+    expect(screen.queryByRole("button", { name: /Insert a blank/ })).not.toBeInTheDocument();
+  });
+
+  it("opens on a new hole, empty and on the first answer", async () => {
+    renderWithProviders(<Host initial="La loi de" holes />);
+    await userEvent.click(insert());
+    expect(card()).toBeInTheDocument();
+    expect(screen.getByLabelText("Answer 1")).toHaveValue("");
+    // Nothing to save yet: an empty blank is `cloze.empty_blank`.
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+
+  it("writes the body through the domain, escapes included", async () => {
+    const onValue = vi.fn();
+    renderWithProviders(<Host initial="" holes onValue={onValue} />);
+    await userEvent.click(insert());
+    await fill("Answer 1", "#3");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    // `#3` at the head of a body would be a NUMBER blank: the escape is the
+    // grammar's, and it comes from `formatBlank`.
+    await waitFor(() => expect(onValue).toHaveBeenLastCalledWith("{{\\#3}}"));
+  });
+
+  it("adds an answer on Enter in the last row, and writes the alternatives", async () => {
+    const onValue = vi.fn();
+    renderWithProviders(<Host initial="" holes onValue={onValue} />);
+    await userEvent.click(insert());
+    await fill("Answer 1", "oui{Enter}");
+    await fill("Answer 2", "si");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(onValue).toHaveBeenLastCalledWith("{{oui|si}}"));
+  });
+
+  it("writes a dropdown with `=` on the ticked answers", async () => {
+    const onValue = vi.fn();
+    renderWithProviders(<Host initial="" holes onValue={onValue} />);
+    await userEvent.click(insert());
+    await userEvent.click(screen.getByRole("radio", { name: "Dropdown" }));
+    await fill("Answer 1", "oui{Enter}");
+    await fill("Answer 2", "non");
+    // The first row starts ticked — a dropdown needs at least one right
+    // answer — so this moves the tick rather than adding a second one.
+    await userEvent.click(screen.getAllByRole("checkbox", { name: "Correct" })[1]!);
+    await userEvent.click(screen.getAllByRole("checkbox", { name: "Correct" })[0]!);
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(onValue).toHaveBeenLastCalledWith("{{oui|=non}}"));
+  });
+
+  it("writes a number with its tolerance, and a weight", async () => {
+    const onValue = vi.fn();
+    renderWithProviders(<Host initial="" holes onValue={onValue} />);
+    await userEvent.click(insert());
+    await userEvent.click(screen.getByRole("radio", { name: "Number" }));
+    await fill("Value", "3.14");
+    await fill("Tolerance", "0.01");
+    await userEvent.clear(screen.getByLabelText("Weight"));
+    await fill("Weight", "2");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(onValue).toHaveBeenLastCalledWith("{{2*#3.14:0.01}}"));
+  });
+
+  it("shows the chip by SHAPE: one answer, several, a dropdown, machinery", () => {
+    const { container } = renderWithProviders(
+      <Host initial="{{a}} {{a|b|c}} {{=x|y}} {{#3}}" holes />,
+    );
+    const chips = Array.from(container.querySelectorAll(".rt-hole"));
+    expect(chips.map((el) => el.getAttribute("data-tone"))).toEqual([
+      "one",
+      "set",
+      "set",
+      "machine",
+    ]);
+    expect(chips[1]?.textContent).toBe("a+2");
+    expect(chips[2]?.textContent).toBe("x▾");
+  });
+
+  it("Escape drops the chip the button had just made, and saves nothing", async () => {
+    const onValue = vi.fn();
+    renderWithProviders(<Host initial="" holes onValue={onValue} />);
+    await userEvent.click(insert());
+    await fill("Answer 1", "z{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Blank" })).not.toBeInTheDocument();
+    await waitFor(() => expect(surface().querySelector(".rt-hole")).toBeNull());
+  });
+});

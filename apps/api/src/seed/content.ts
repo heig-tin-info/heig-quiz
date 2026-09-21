@@ -471,10 +471,12 @@ export const ELECTRONICS_POOL: PoolSpec = {
         "La tension de seuil d'une jonction au silicium est de l'ordre de 0,7 V ; " +
         "elle vaut environ 0,3 V pour le germanium.",
       /*
-       * The question that shows what a PREDEFINED CHOICE SET is for: the same
-       * two options are asked twice, and they are asked inside a TABLE, where
-       * `{{=passant|bloqué}}` cannot go — every unescaped `|` in a markdown
-       * row is a column separator (docs/04 §4.6).
+       * The question that shows a dropdown inside a TABLE CELL. The `|` of the
+       * hole is the very character a markdown row is split on, and it survives
+       * for two independent reasons: `parseCloze` replaces the whole hole by a
+       * sentinel before markdown runs (decision D5), and the rich editor takes
+       * the pipe out of the row before the table lexer sees it
+       * (apps/web/src/markdown/clozeHole.ts).
        */
       config: {
         configVersion: 2,
@@ -482,29 +484,10 @@ export const ELECTRONICS_POOL: PoolSpec = {
         text:
           "Une diode au silicium conduit lorsqu'elle est polarisée en " +
           "{{direct|sens direct}} ; sa tension de seuil vaut alors environ {{#0.7:0.1}} V.\n\n" +
-          "| Polarisation | État de la diode |\n" +
-          "| ------------ | ---------------- |\n" +
-          "| Directe      | {{1}}            |\n" +
-          "| Inverse      | {{2}}            |",
-        // Two sets over the same two labels: a set carries the option LIST and
-        // the key of the hole that uses it, so the two rows of the table share
-        // the dropdown the student sees and not the answer.
-        choiceSets: [
-          {
-            key: "1",
-            options: [
-              { label: "passante", correct: true },
-              { label: "bloquée", correct: false },
-            ],
-          },
-          {
-            key: "2",
-            options: [
-              { label: "passante", correct: false },
-              { label: "bloquée", correct: true },
-            ],
-          },
-        ],
+          "| Polarisation | État de la diode          |\n" +
+          "| ------------ | ------------------------- |\n" +
+          "| Directe      | {{=passante|bloquée}}     |\n" +
+          "| Inverse      | {{passante|=bloquée}}     |",
       },
     },
   ],

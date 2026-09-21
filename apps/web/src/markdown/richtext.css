@@ -171,6 +171,12 @@
    caret steps over and Backspace takes whole, and a teacher must be able to
    see at a glance where the student will have to write. The mono face is the
    one the source pane uses for the same string. */
+/* THE CHIP OF A `{{…}}` HOLE, by SHAPE and not by syntax (clozeHole.ts).
+
+   One answer wears the accent; a hole standing for a SET of possibilities —
+   several answers, or a dropdown — wears `info`, the second tone DESIGN.md
+   adds for exactly this distinction. A number or a regex is machinery and
+   stays quiet, and a body the parser cannot read is a mistake in red. */
 .rt-surface .rt-hole {
   display: inline-block;
   padding: 0 8px;
@@ -183,7 +189,26 @@
   white-space: pre;
   cursor: pointer;
 }
-.rt-surface .rt-hole[data-literal="true"] {
+.rt-surface .rt-hole[data-tone="set"] {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.rt-surface .rt-hole[data-tone="machine"] {
+  background: var(--surface-3);
+  color: var(--fg-muted);
+}
+.rt-surface .rt-hole[data-tone="broken"] {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+/* `+2`, `▾`, `±0.01`: what the chip stands for beyond the word it shows. */
+.rt-surface .rt-hole-suffix {
+  margin-left: 4px;
+  opacity: 0.75;
+  font-size: 11px;
+}
+.rt-surface .rt-hole[data-literal="true"],
+.rt-surface .rt-hole[data-tone="literal"] {
   background: var(--surface-3);
   color: var(--fg-muted);
   cursor: default;

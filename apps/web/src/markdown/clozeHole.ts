@@ -22,23 +22,153 @@
  */
 import { Extension, InputRule, mergeAttributes, Node } from "@tiptap/core";
 import type { MarkdownToken } from "@tiptap/core";
-import { matchClozeHole } from "@quiz/domain";
+import { matchClozeHole, parseBlankBody, type ClozeBlank } from "@quiz/domain";
 
 /** The token the tokenizer below emits; `body: null` is the escaped `\{{`. */
 type ClozeHoleToken = MarkdownToken & { raw?: string; body?: string | null };
 
-/**
- * What the chip reads, from the raw body.
+/*
+ * ---------------------------------------------------------------------------
+ * THE PIPE OF A HOLE, INSIDE A TABLE CELL
  *
- * The body already carries its own operator — `#` for a number, `/` for a
- * regex — so repeating it as a glyph would be noise. The one case that needs a
- * mark is the DROPDOWN: `=free|delete` says nothing to a teacher at a glance,
- * and the little caret says "this is a list" the way the player will draw it.
+ * A markdown table row is split on every unescaped `|` — by marked's block
+ * lexer, long before any inline tokenizer sees the cell — so `| a | {{x|y}} |`
+ * reached the editor as THREE columns and the hole was gone. The domain side
+ * does not have this problem: `parseCloze` runs before markdown and the cell
+ * already holds a sentinel by the time the row is split (decision D5). The
+ * editor has no such pass, so it does the same thing by hand, at its two
+ * boundaries: every `|` INSIDE a hole body becomes U+E000 on the way in, and
+ * `|` again on the way out.
+ *
+ * The substitution is undone at the very END of the serialisation, after the
+ * table renderer has padded its columns — the shipped renderer
+ * (`renderTableToMarkdown`, @tiptap/extension-table 3.31) does NOT escape a
+ * pipe in a cell, it only pads, so a `\|` would have travelled into the stored
+ * markdown as two characters and the padding is computed on a string of the
+ * same length either way.
+ * ---------------------------------------------------------------------------
  */
-export function clozeHoleLabel(body: string): string {
-  const weight = /^\d+(?:\.\d+)?\*/.exec(body)?.[0] ?? "";
-  const rest = body.slice(weight.length);
-  return rest.startsWith("=") ? `▾ ${weight}${rest.slice(1)}` : body;
+
+/** A private-use code point: it cannot occur in a question a teacher wrote. */
+export const HOLE_PIPE = "\uE000";
+
+/**
+ * Every `|` inside a `{{…}}` body, replaced by `HOLE_PIPE`.
+ *
+ * CODE is left alone — a fenced block, and a backtick span. A hole there is
+ * plain text, not a chip, so the substitution would be visible as a tofu box
+ * in the editing surface; and the one case that needed protecting, a code span
+ * in a table cell, is already handled by the table extension itself, which
+ * escapes the pipes of a code span on a row line before splitting it
+ * (`preprocessTablePipes`, @tiptap/extension-table).
+ */
+export function protectHolePipes(markdown: string): string {
+  let fenced = false;
+  return markdown
+    .split("\n")
+    .map((line) => {
+      if (/^\s{0,3}(```|~~~)/.test(line)) {
+        fenced = !fenced;
+        return line;
+      }
+      return fenced ? line : protectLine(line);
+    })
+    .join("\n");
+}
+
+function protectLine(line: string): string {
+  let out = "";
+  let i = 0;
+  while (i < line.length) {
+    if (line[i] === "`") {
+      // A code span travels verbatim, closing run included; an unclosed run is
+      // not a span at all, so only the backticks themselves are copied.
+      const run = /^`+/.exec(line.slice(i))![0];
+      const close = line.indexOf(run, i + run.length);
+      const end = close === -1 ? i + run.length : close + run.length;
+      out += line.slice(i, end);
+      i = end;
+      continue;
+    }
+    const hole = line[i] === "{" || line.startsWith("\\{{", i) ? matchClozeHole(line.slice(i)) : undefined;
+    if (hole === undefined) {
+      out += line[i];
+      i += 1;
+      continue;
+    }
+    out += hole.body === null ? hole.raw : `{{${hole.body.split("|").join(HOLE_PIPE)}}}`;
+    i += hole.raw.length;
+  }
+  return out;
+}
+
+/** The inverse, applied to the whole serialised document. */
+export function restoreHolePipes(markdown: string): string {
+  return markdown.split(HOLE_PIPE).join("|");
+}
+
+/**
+ * What the chip reads, and in which tone.
+ *
+ * The shape of the blank is the thing a teacher has to recognise at a glance,
+ * not its syntax: one answer is a word, several answers are a SET of
+ * possibilities, and a number or a regex is machinery. So the chip shows the
+ * first answer and says how many more there are, and the second tone
+ * (`info`, DESIGN.md) exists for exactly that distinction.
+ */
+export interface ClozeHoleChip {
+  /** What the pill reads. */
+  text: string;
+  /** A small suffix: `+2` for the other answers, `▾` for a dropdown, `±t`. */
+  suffix: string | null;
+  tone: "one" | "set" | "machine" | "broken";
+}
+
+export function clozeHoleChip(body: string): ClozeHoleChip {
+  const blank = parseBlankBody(body);
+  if (typeof blank === "string") return { text: body, suffix: null, tone: "broken" };
+  const weight = blank.weight === 1 ? "" : `${blank.weight}× `;
+  const chip = shape(blank);
+  return { ...chip, text: weight + chip.text };
+}
+
+function shape(blank: ClozeBlank): ClozeHoleChip {
+  switch (blank.kind) {
+    case "text":
+      return blank.answers.length === 1
+        ? { text: blank.answers[0]!, suffix: null, tone: "one" }
+        : { text: blank.answers[0]!, suffix: `+${blank.answers.length - 1}`, tone: "set" };
+    case "select": {
+      const first = blank.options[blank.correct[0] ?? 0] ?? "";
+      return { text: first, suffix: "▾", tone: "set" };
+    }
+    case "number": {
+      if (blank.tolerance === 0) return { text: `#${blank.value}`, suffix: null, tone: "machine" };
+      const tolerance =
+        blank.mode === "rel" ? `${Number((blank.tolerance * 100).toFixed(6))}%` : String(blank.tolerance);
+      return { text: `#${blank.value}`, suffix: `±${tolerance}`, tone: "machine" };
+    }
+    case "regex":
+      return { text: `/${blank.pattern}/${blank.flags}`, suffix: null, tone: "machine" };
+  }
+}
+
+/** The whole list a multi-answer chip stands for, for the read-only popover. */
+export interface ClozeHolePossibility {
+  label: string;
+  correct: boolean | null;
+}
+
+export function clozeHolePossibilities(body: string): ClozeHolePossibility[] | null {
+  const blank = parseBlankBody(body);
+  if (typeof blank === "string") return null;
+  if (blank.kind === "text" && blank.answers.length > 1) {
+    return blank.answers.map((label) => ({ label, correct: null }));
+  }
+  if (blank.kind === "select") {
+    return blank.options.map((label, i) => ({ label, correct: blank.correct.includes(i) }));
+  }
+  return null;
 }
 
 export const ClozeHole = Node.create({
@@ -78,26 +208,48 @@ export const ClozeHole = Node.create({
   renderHTML({ node, HTMLAttributes }) {
     const raw: unknown = node.attrs.body;
     const body = raw === null ? null : String(raw ?? "");
-    return [
-      "span",
-      mergeAttributes(HTMLAttributes, {
-        "data-type": "cloze-hole",
-        class: "rt-hole",
-        title: body === null ? "\\{{" : `{{${body}}}`,
-      }),
-      body === null ? "{{" : clozeHoleLabel(body),
-    ];
+    if (body === null) {
+      return [
+        "span",
+        mergeAttributes(HTMLAttributes, {
+          "data-type": "cloze-hole",
+          class: "rt-hole",
+          "data-tone": "literal",
+          title: "\\{{",
+        }),
+        "{{",
+      ];
+    }
+    const chip = clozeHoleChip(body);
+    const attrs = mergeAttributes(HTMLAttributes, {
+      "data-type": "cloze-hole",
+      class: "rt-hole",
+      "data-tone": chip.tone,
+      title: `{{${body}}}`,
+    });
+    return chip.suffix === null
+      ? ["span", attrs, chip.text]
+      : ["span", attrs, chip.text, ["span", { class: "rt-hole-suffix" }, chip.suffix]];
   },
 
-  parseMarkdown: (token: MarkdownToken) => ({
-    type: "clozeHole",
-    attrs: { body: (token as ClozeHoleToken).body ?? null },
-  }),
+  /** The node attribute holds the REAL body: the `|` comes back here. */
+  parseMarkdown: (token: MarkdownToken) => {
+    const body = (token as ClozeHoleToken).body ?? null;
+    return {
+      type: "clozeHole",
+      attrs: { body: body === null ? null : restoreHolePipes(body) },
+    };
+  },
 
-  /** VERBATIM: the braces, the `|`, the `=`, the `#` and the `*` as written. */
+  /**
+   * VERBATIM: the braces, the `=`, the `#` and the `*` as written — and the
+   * `|` as `HOLE_PIPE`, which `RichText.serialize` turns back into a pipe once
+   * the table renderer has had its say (the block comment at the head).
+   */
   renderMarkdown: (node: { attrs?: Record<string, unknown> }) => {
     const raw = node.attrs?.body;
-    return raw === null || raw === undefined ? "\\{{" : `{{${String(raw)}}}`;
+    if (raw === null || raw === undefined) return "\\{{";
+    return `{{${String(raw).split("|").join(HOLE_PIPE)}}}`;
   },
 
   markdownTokenizer: {
@@ -161,7 +313,9 @@ const ClozeHoleFallback = Extension.create({
      * the backslash in turn, one more on every save.
      */
     text: unescapeMarkdown(
-      (token as ClozeHoleToken).body === null ? "{{" : ((token as ClozeHoleToken).raw ?? ""),
+      restoreHolePipes(
+        (token as ClozeHoleToken).body === null ? "{{" : ((token as ClozeHoleToken).raw ?? ""),
+      ),
     ),
   }),
 });

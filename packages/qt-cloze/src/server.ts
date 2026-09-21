@@ -4,10 +4,9 @@
  * No React in this import graph: the API and the grading worker load it.
  */
 import { ConfigMigrationError, type QuestionTypeServer } from "@quiz/core/server";
-import { clozeStudentTemplate, describeBlank } from "@quiz/domain";
+import { clozeStudentTemplate, describeBlank, parseCloze } from "@quiz/domain";
 import { fromCanonical, toCanonical } from "./canonical.js";
 import { gradeClozeAnswer } from "./grade.js";
-import { clozeParse } from "./parse.js";
 import {
   CLOZE_CONFIG_VERSION,
   ClozeAnswerSchema,
@@ -25,7 +24,7 @@ import {
 
 /** Does this text hold at least one dropdown, the only shuffleable thing here? */
 export function hasSelectBlank(config: ClozeConfig): boolean {
-  return clozeParse(config).blanks.some((blank) => blank.kind === "select");
+  return parseCloze(config.text).blanks.some((blank) => blank.kind === "select");
 }
 
 export const clozeServer: QuestionTypeServer<
@@ -47,15 +46,15 @@ export const clozeServer: QuestionTypeServer<
   emptyDraft: emptyClozeDraft,
 
   /**
-   * Same version: identity, even for an invalid draft (D16). v1 is v2 with no
-   * predefined choice set — nothing in a v1 text can name one, so the list is
-   * empty and every blank keeps the kind it already had.
+   * Same version: identity, even for an invalid draft (D16). v1 → v2 is the
+   * identity plus the version stamp — the two shapes are the same (schema.ts
+   * says why the number moved anyway).
    */
   migrate(config: unknown, fromVersion: number): ClozeConfig {
     if (fromVersion === CLOZE_CONFIG_VERSION) return config as ClozeConfig;
     if (fromVersion === 1) {
       const v1 = (typeof config === "object" && config !== null ? config : {}) as Record<string, unknown>;
-      return { ...v1, configVersion: CLOZE_CONFIG_VERSION, choiceSets: [] } as unknown as ClozeConfig;
+      return { ...v1, configVersion: CLOZE_CONFIG_VERSION } as unknown as ClozeConfig;
     }
     throw new ConfigMigrationError(
       "cloze",
@@ -66,7 +65,7 @@ export const clozeServer: QuestionTypeServer<
   },
 
   /** One point per blank is the least surprising default for a teacher. */
-  defaultPoints: (config) => Math.max(1, clozeParse(config).blanks.length),
+  defaultPoints: (config) => Math.max(1, parseCloze(config.text).blanks.length),
 
   /** Only the dropdowns can be shuffled; a text field has no order. */
   shuffleable: (config) => config.shuffleOptions && hasSelectBlank(config),
@@ -78,7 +77,7 @@ export const clozeServer: QuestionTypeServer<
    */
   toStudent(config, view): ClozeStudent {
     return clozeStudentTemplate(
-      clozeParse(config),
+      parseCloze(config.text),
       view.seed,
       view.itemId,
       view.shuffle && config.shuffleOptions,
@@ -86,7 +85,7 @@ export const clozeServer: QuestionTypeServer<
   },
 
   toSolution: (config) => ({
-    blanks: clozeParse(config).blanks.map((blank) => ({
+    blanks: parseCloze(config.text).blanks.map((blank) => ({
       index: blank.index,
       expected: describeBlank(blank),
     })),
@@ -107,14 +106,8 @@ export const clozeServer: QuestionTypeServer<
 
   grade: (config, answer, ctx) => gradeClozeAnswer(config, answer, ctx.itemPoints),
 
-  /**
-   * The authoring text, blanks included, plus the labels of the predefined
-   * choice sets: a question whose dropdown is written `{{1}}` holds none of
-   * its options in the text, and "free" must still find it.
-   */
-  searchText: (config) =>
-    [config.text, ...(config.choiceSets ?? []).flatMap((set) => set.options.map((o) => o.label))]
-      .join("\n"),
+  /** The authoring text, blanks included: every answer a cloze holds is in it. */
+  searchText: (config) => config.text,
 
   toCanonical,
   fromCanonical,

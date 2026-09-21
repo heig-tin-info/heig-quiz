@@ -35,9 +35,19 @@ raw values live in `src/style.css` and swap in dark mode without any
 | `success` / `success-soft` | `#1f7a4d` / `#e7f4ec` | `#4cc38a` / `rgb(76 195 138 / 0.14)` | semantic only |
 | `warning` / `warning-soft` | `#a35810` / `#fdf1e2` | `#f0a04b` / `rgb(240 160 75 / 0.14)` | semantic only |
 | `danger` / `danger-soft` | `#c2242a` / `#fbe9e9` | `#f26d72` / `rgb(242 109 114 / 0.14)` | destructive actions, failures |
+| `info` / `info-soft` | `#1268a0` / `#e8f2f9` | `#58a9e0` / `rgb(88 169 224 / 0.14)` | "a set of possibilities", and nothing else |
 
 Rule: strip the accent and every screen must still read. Hierarchy comes
 from size, weight and position, never from red.
+
+`info` is the calm blue of the logo's "I" bubble (`#0086d1`) taken down to
+reading weight — not a saturated link blue, which would read as "click me" in
+a page where the one thing to click is red. It exists for a single
+distinction, and gains nothing by being used for anything else: a `{{…}}` chip
+in the cloze editor holding ONE answer wears the accent, and one standing for
+a SET of possibilities (several answers, or a dropdown) wears this. A teacher
+scanning a paragraph of holes tells the two apart without reading a word of
+them.
 
 `on-fill` exists because one red cannot do both jobs in dark mode: a red
 light enough to read as text on `#1b1a18` (≥ 4.5:1) is too light to carry
@@ -67,6 +77,8 @@ belongs in `fg-muted` anyway; `fg-faint` is for the ones that only support it.
 | `success` on `success-soft` | 4.70 | 4.70 | 6.10 | 6.10 |
 | `warning` on `warning-soft` | 4.48 ✗ | **4.76** | 6.27 | 6.27 |
 | `danger` on `danger-soft` | 5.01 | 5.01 | 4.88 | 4.88 |
+| `info` on `info-soft` | — | **5.27** | — | **5.39** |
+| `info` on `surface` | — | **5.98** | — | **6.76** |
 | `accent` on `accent-soft` | 5.75 | 5.75 | 3.75 ✗ | **4.58** |
 | `accent` on `surface` | 6.64 | 6.64 | 4.31 ✗ | **5.18** |
 | `on-fill` on `accent` | 6.64 | 6.64 | 4.03 ✗ (white) | **5.57** |

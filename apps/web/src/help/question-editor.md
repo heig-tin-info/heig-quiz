@@ -60,19 +60,21 @@ grade: a non-integer answer to a whole-number question is wrong.
 ## A fill-in-the-blanks question
 
 The statement is written in the same rich field as any other, and a blank is
-an object in it: type `{{` and the field asks what goes inside — `Newton` for
-one answer, `Newton|newton` for alternatives, `=a|b|c` for a dropdown, `#3.14`
-for a number, `/^N$/i` for a regular expression, `2*` in front of any of them
-for a double weight. The blank becomes a chip you click to change, and the
-braces, the pipes and the stars are written back exactly as you typed them.
-Inside a fenced code block a blank stays plain text, so "complete this code"
-works as it reads.
+an object in it. Type `{{`, press the blank button in the toolbar, or click a
+blank already there: a small card opens under it and asks what kind of blank
+it is — **Any of these** (one answer, or several), **Dropdown** (tick the
+right options), **Number** (a value and a tolerance, absolute or in percent),
+**Regex** — plus a weight if this blank is worth more than the others.
 
-**Predefined choices** are a dropdown written once. Name a set (`1`, `2`, … by
-default), list its options, tick the right one, and drop it in the text as
-`{{1}}`. Two reasons to prefer it: it is the only dropdown that fits in a
-TABLE cell, where a `|` would cut the row in two, and the same four options
-reused in eight blanks are one place to fix a typo instead of eight.
+The chip then says what it stands for at a glance: one answer in red, the
+first of SEVERAL answers in blue with a `+2`, a dropdown with a `▾`. Hover it
+and the whole list shows, ticks included. A blank can sit in a TABLE cell,
+pipes and all, and it can sit inside a fenced code block, where it stays plain
+text — so "complete this code" works as it reads.
+
+The raw `{{…}}` syntax has not gone anywhere: the **Markdown source** button
+shows it, and `Newton|newton`, `=a|b|c`, `#3.14:0.01`, `/^N$/i` and a `2*`
+weight prefix are still what gets stored.
 
 ## Publishing
 

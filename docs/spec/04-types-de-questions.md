@@ -141,16 +141,17 @@ Syntaxe des trous, inspirée de Moodle Cloze, simplifiée :
 | `{{#3.14:1%}}` | Numérique avec tolérance relative |
 | `{{/^[0-9a-f]+$/i}}` | Expression régulière |
 | `{{2*Newton}}` | Poids 2 pour ce trou |
-| `{{1}}` | Liste de choix prédéfinie nommée `1` (ci-dessous) |
 | `\{{` | Accolades littérales |
 
 Dans un bloc de code markdown les trous restent actifs, ce qui permet "complétez ce code". Une question `code` n'utilise pas cette syntaxe.
 
-**Listes de choix prédéfinies** (`configVersion: 2`). `choiceSets[]` contient au plus vingt ensembles, chacun une `key` de 1 à 32 caractères unique dans la question et de deux à douze `options` `{ label, correct }`. Un trou dont le corps — après le préfixe de poids facultatif — est EXACTEMENT la clé d'un ensemble défini devient une liste déroulante portant ses options : `{{1}}` et `{{2*1}}` valent `{{=…}}`, à ceci près que les options ne sont écrites qu'une fois. La comparaison est exacte, sans repli de casse ni suppression d'espaces, de sorte que `{{0}}` reste un champ texte dont la réponse est « 0 » tant qu'aucun ensemble ne s'appelle « 0 ».
+À l'intérieur d'un trou, une barre oblique inverse devant une ponctuation ASCII rend ce caractère littéral : `\|`, `\}`, `\*`, `\\` sont les quatre que l'on rencontre, et la règle est plus large pour que l'éditeur de trou (ci-dessous) puisse écrire n'importe quelle réponse — une réponse commençant par `#`, `/` ou `=` deviendrait sinon un nombre, une regex ou une liste.
 
-Deux raisons à cette syntaxe. D'abord un **tableau markdown** : dans une cellule, tout `|` non échappé sépare deux colonnes, donc `{{=a|b|c}}` y est impossible et `{{1}}` est la seule écriture d'une liste déroulante dans un tableau. Ensuite la répétition : les mêmes quatre options dans huit trous, c'étaient huit endroits où corriger une faute de frappe.
+**Éditeur de trou.** Le corps d'un trou est une grammaire, pas une valeur : on ne le tape pas. Taper `{{`, cliquer une puce existante, presser le bouton « Insérer un trou » ou Entrée sur une puce sélectionnée ouvre une carte ancrée sous la puce, qui demande la FORME du trou — l'une de ces réponses, liste déroulante, nombre, regex — plus le poids. Elle lit le corps existant et le réécrit avec les fonctions du domaine (`parseBlankBody` / `formatBlank`), jamais par concaténation : ce que la carte montre et ce que le correcteur lit ne peuvent pas diverger. La syntaxe brute reste disponible dans le volet source markdown.
 
-Un ensemble sans option correcte est refusé là où il est utilisé (`cloze.set_no_correct`) ; moins de deux options, `cloze.set_too_small` ; deux ensembles sous la même clé, `cloze.set_duplicate_key`. Les `label` d'un ensemble utilisé atteignent l'étudiant — ce sont les options de la liste — mais jamais `correct` ni le nom de l'ensemble. Un trou placé dans une cellule de tableau ne doit contenir aucun `|` : la migration v1 → v2 ajoute simplement `choiceSets: []`, aucun texte v1 ne pouvant nommer un ensemble.
+**Un trou dans une cellule de tableau.** Un `|` non échappé sépare deux colonnes, mais un `|` À L'INTÉRIEUR d'un trou n'en est pas un. Côté domaine c'est acquis : `parseCloze` tourne AVANT le markdown et remplace chaque trou par une sentinelle (décision D5), si bien que la ligne est découpée sur une cellule qui ne contient plus de barre. Côté éditeur riche, c'est à lui de le garantir : il remplace le `|` d'un corps de trou par un caractère de la zone privée à la lecture et le rétablit à la toute fin de la sérialisation, après que le rendu du tableau a aligné ses colonnes. `{{=passante|bloquée}}` dans une cellule est donc une écriture normale.
+
+Les `label` d'une liste atteignent l'étudiant — ce sont les options — mais jamais `correct`.
 
 **Réponse** : `blanks[]` chaînes dans l'ordre d'apparition.
 

@@ -24,13 +24,13 @@ describe("the contract", () => {
   });
 
   /*
-   * v1 is v2 with no predefined choice set: nothing in a v1 text can name one,
-   * so the list is empty and every blank keeps the kind it already had.
+   * v1 → v2 is the identity plus the version stamp: the two shapes are the
+   * same (schema.ts says why the number moved anyway).
    */
-  it("migrates a v1 config by adding an empty list of choice sets", () => {
+  it("migrates a v1 config by stamping the version, changing nothing else", () => {
     const v1 = { configVersion: 1, text: "{{a}}", caseSensitive: false, shuffleOptions: true };
     const migrated = clozeServer.migrate(v1, 1);
-    expect(migrated).toEqual({ ...v1, configVersion: CLOZE_CONFIG_VERSION, choiceSets: [] });
+    expect(migrated).toEqual({ ...v1, configVersion: CLOZE_CONFIG_VERSION });
     expect(ClozeConfigSchema.safeParse(migrated).success).toBe(true);
   });
 
@@ -54,30 +54,20 @@ describe("the contract", () => {
     const solution = clozeServer.toSolution(SECRET_CONFIG, { seed: 1, itemId: "i", shuffle: true });
     expect(solution.blanks[0]).toEqual({ index: 0, expected: "Newton | newton" });
     expect(solution.blanks[4]).toEqual({ index: 4, expected: "/^N$/" });
-    // A set-backed dropdown names its set and lays the list out for the panel.
-    expect(solution.blanks.at(-1)).toEqual({
-      index: 5,
-      expected: "set SET-KEY-MARKER (newton ✓, pascal, joule)",
-    });
+    // A dropdown lists the CORRECT labels, and only those.
+    expect(solution.blanks.at(-1)).toEqual({ index: 5, expected: "NEWTON-MARKER" });
   });
 
-  it("indexes the authoring text AND the labels of the choice sets", () => {
+  it("indexes the authoring text, which holds every answer a cloze has", () => {
     const indexed = clozeServer.searchText(SECRET_CONFIG);
     expect(indexed).toContain(SECRET_CONFIG.text);
-    // `{{SET-KEY-MARKER}}` holds none of its options: "pascal" must still find it.
     expect(indexed).toContain("pascal");
   });
 });
 
 describe("the canonical mapping", () => {
-  it("round-trips a full config, choice sets included", () => {
-    const cfg = config("{{=a|b}} {{k}}", {
-      caseSensitive: true,
-      shuffleOptions: false,
-      choiceSets: [
-        { key: "k", options: [{ label: "a", correct: true }, { label: "b", correct: false }] },
-      ],
-    });
+  it("round-trips a full config", () => {
+    const cfg = config("{{=a|b}} {{k}}", { caseSensitive: true, shuffleOptions: false });
     expect(fromCanonical(toCanonical(cfg))).toEqual(cfg);
   });
 
@@ -96,7 +86,7 @@ describe("the canonical mapping", () => {
 
 describe("the server entry point", () => {
   it("never reaches React", () => {
-    for (const file of ["server.ts", "schema.ts", "grade.ts", "canonical.ts", "parse.ts"]) {
+    for (const file of ["server.ts", "schema.ts", "grade.ts", "canonical.ts"]) {
       const source = readFileSync(new URL(file, import.meta.url), "utf8");
       expect(source).not.toMatch(/from "react/);
       expect(source).not.toMatch(/@quiz\/core\/client/);

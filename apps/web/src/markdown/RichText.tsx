@@ -4,22 +4,32 @@ import { NodeSelection, type EditorState } from "@tiptap/pm/state";
 import { EditorContent, ReactNodeViewRenderer, useEditor, useEditorState } from "@tiptap/react";
 import {
   Bold,
+  Check,
   Code,
   FileCode2,
   Image as ImageIcon,
   Italic,
   Link as LinkIcon,
+  RectangleEllipsis,
   Sigma,
   SquareCode,
   Table as TableIcon,
 } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
-import type { RichTextApi, RichTextProps } from "@quiz/core/client";
+import type { RichTextProps } from "@quiz/core/client";
 
 import { useT } from "../i18n";
 import { useShortcuts, type Shortcut } from "../shortcuts";
-import { Button, cx, IconButton, inputClass, Menu, modKey, type IconType } from "../ui";
+import { Button, cx, IconButton, inputClass, Menu, modKey, Z, type IconType } from "../ui";
+import { BlankPopover } from "./BlankPopover";
+import {
+  clozeHolePossibilities,
+  protectHolePipes,
+  restoreHolePipes,
+  type ClozeHolePossibility,
+} from "./clozeHole";
 import { CodeBlockView } from "./CodeBlockView";
 import type { Formula, FormulaDialog } from "./FormulaDialog";
 import { ImageToolsContext, ImageView } from "./ImageView";
@@ -83,7 +93,13 @@ let formulaDialog: FormulaDialogComponent | null = null;
  * teacher opened it. Blank lines at either end carry no markdown meaning.
  */
 function serialize(editor: Editor): string {
-  return editor.getMarkdown().trim();
+  /*
+   * `restoreHolePipes` LAST, after the table renderer has padded its columns:
+   * a `|` inside a hole travels through the whole serialisation as U+E000 so
+   * that the row it sits in is not split on it (clozeHole.ts says why, and
+   * checks that the shipped table renderer escapes nothing of its own).
+   */
+  return restoreHolePipes(editor.getMarkdown().trim());
 }
 
 /** One toolbar action; `actions` below filters out the ones a mode cannot serve. */
@@ -98,7 +114,8 @@ interface Action {
     | "md.math"
     | "md.image"
     | "md.link"
-    | "md.table";
+    | "md.table"
+    | "md.blank.insert";
   shortcut?: string;
 }
 
@@ -131,6 +148,31 @@ function emptyMath(editor: Editor): { pos: number; display: boolean }[] {
   return found;
 }
 
+/**
+ * Where the card of a hole hangs: the chip's own rectangle, in viewport
+ * coordinates. `coordsAtPos` is the fallback for the frame in which the chip
+ * has just been created and has no element yet.
+ */
+function holeAnchor(editor: Editor, pos: number): { top: number; bottom: number; left: number } {
+  const dom = editor.view.nodeDOM(pos);
+  if (dom instanceof HTMLElement) {
+    const r = dom.getBoundingClientRect();
+    return { top: r.top, bottom: r.bottom, left: r.left };
+  }
+  try {
+    const c = editor.view.coordsAtPos(pos);
+    return { top: c.top, bottom: c.bottom, left: c.left };
+  } catch {
+    return { top: 0, bottom: 0, left: 0 };
+  }
+}
+
+/** What the read-only popover under a multi-answer chip shows. */
+interface HolePreview {
+  anchor: { top: number; bottom: number; left: number };
+  items: ClozeHolePossibility[];
+}
+
 /** Every hole whose body is still empty, in document order. */
 function emptyClozeHoles(editor: Editor): number[] {
   const found: number[] = [];
@@ -159,7 +201,6 @@ export function RichText({
   sourceToggle = !inline,
   shortcuts = [],
   holes = false,
-  onReady,
 }: RichTextProps) {
   const t = useT();
   const auto = useId();
@@ -175,10 +216,19 @@ export function RichText({
   const [formula, setFormula] = useState<FormulaTarget | null>(null);
   /**
    * The `{{…}}` hole being written, when there is one. A hole is an atom:
-   * there is nothing to type into the chip, so the body is edited in the same
-   * one-field bar the link address uses (`AskBar`, at the foot of this file).
+   * there is nothing to type into the chip, so it is edited in a card anchored
+   * under it (`BlankPopover`), which asks for the SHAPE of the blank instead
+   * of the grammar.
    */
-  const [hole, setHole] = useState<null | { pos: number; body: string; created: boolean }>(null);
+  const [hole, setHole] = useState<null | {
+    pos: number;
+    body: string;
+    created: boolean;
+    anchor: { top: number; bottom: number; left: number };
+  }>(null);
+  /** The read-only list under a hovered multi-answer chip, and under a selected one. */
+  const [hoverPreview, setHoverPreview] = useState<HolePreview | null>(null);
+  const [selectionPreview, setSelectionPreview] = useState<HolePreview | null>(null);
   /** The dialog component, once its chunk has arrived (never `lazy`, above). */
   // The initializer is a FUNCTION returning the component: `useState(fn)` would
   // call it as a lazy initializer — and a React component called with no props
@@ -241,7 +291,7 @@ export function RichText({
       // The block's own language field, at its top-right corner.
       codeBlockNodeView: () => ReactNodeViewRenderer(CodeBlockView),
     }),
-    content: value,
+    content: holes ? protectHolePipes(value) : value,
     contentType: "markdown",
     editable: !disabled,
     autofocus: autoFocus,
@@ -292,11 +342,7 @@ export function RichText({
             selection.node.attrs.body !== null
           ) {
             event.preventDefault();
-            setHole({
-              pos: selection.from,
-              body: String(selection.node.attrs.body ?? ""),
-              created: false,
-            });
+            openHole(selection.from, String(selection.node.attrs.body ?? ""), false);
             return true;
           }
           /*
@@ -389,7 +435,7 @@ export function RichText({
         // The chip of a `{{…}}` hole. The escaped `\{{` is not editable —
         // it is two braces, and there is nothing in it to change.
         if (node.type.name === "clozeHole" && node.attrs.body !== null) {
-          setHole({ pos: nodePos, body: String(node.attrs.body ?? ""), created: false });
+          openHole(nodePos, String(node.attrs.body ?? ""), false);
           return true;
         }
         return false;
@@ -429,7 +475,9 @@ export function RichText({
         const target = editorRef.current;
         if (!target) return false;
         event.preventDefault();
-        target.commands.insertContent(text, { contentType: "markdown" });
+        target.commands.insertContent(holes ? protectHolePipes(text) : text, {
+          contentType: "markdown",
+        });
         return true;
       },
       handleDrop(view, event) {
@@ -483,13 +531,20 @@ export function RichText({
       const openHoles = emptyClozeHoles(e);
       if (openHoles.length > emptyHoles.current) {
         const at = openHoles[openHoles.length - 1]!;
-        setHole({ pos: at, body: "", created: true });
+        setHole({ pos: at, body: "", created: true, anchor: holeAnchor(e, at) });
       }
       emptyHoles.current = openHoles.length;
     },
   });
 
   editorRef.current = editor;
+
+  /** Opens the blank card on the hole at `pos`. */
+  function openHole(pos: number, body: string, created: boolean) {
+    if (!editorRef.current) return;
+    setHoverPreview(null);
+    setHole({ pos, body, created, anchor: holeAnchor(editorRef.current, pos) });
+  }
 
   /** Opens the dialog on the math node at `pos`. */
   function openMath(pos: number, latex: unknown, typeName: string) {
@@ -526,6 +581,33 @@ export function RichText({
           },
   }) as Partial<Record<string, boolean>>;
 
+  /**
+   * The chip the caret has SELECTED, as one string so the selector can be
+   * compared by value: `useEditorState` runs on every transaction, and a fresh
+   * object would re-render this component per keystroke.
+   */
+  const selectedHole = useEditorState({
+    editor,
+    selector: ({ editor: e }) => {
+      if (e === null) return null;
+      const { selection } = e.state;
+      if (!(selection instanceof NodeSelection)) return null;
+      if (selection.node.type.name !== "clozeHole" || selection.node.attrs.body === null) return null;
+      return `${selection.from}\u0000${String(selection.node.attrs.body ?? "")}`;
+    },
+  }) as string | null;
+
+  useEffect(() => {
+    if (!editor || !holes || selectedHole === null) {
+      setSelectionPreview(null);
+      return;
+    }
+    const cut = selectedHole.indexOf("\u0000");
+    const pos = Number(selectedHole.slice(0, cut));
+    const items = clozeHolePossibilities(selectedHole.slice(cut + 1));
+    setSelectionPreview(items === null ? null : { anchor: holeAnchor(editor, pos), items });
+  }, [editor, holes, selectedHole]);
+
   /*
    * `value` changed underneath us — a restored version, a reset draft — so the
    * document is rebuilt. An edit this component made itself never lands here:
@@ -536,7 +618,10 @@ export function RichText({
     if (!editor || editor.isDestroyed) return;
     if (value === settled.current) return;
     settled.current = value;
-    editor.commands.setContent(value, { contentType: "markdown", emitUpdate: false });
+    editor.commands.setContent(holes ? protectHolePipes(value) : value, {
+      contentType: "markdown",
+      emitUpdate: false,
+    });
   }, [editor, value]);
 
   useEffect(() => {
@@ -544,36 +629,6 @@ export function RichText({
     if (editor.isEditable === !disabled) return;
     editor.setEditable(!disabled);
   }, [editor, disabled]);
-
-  /*
-   * The imperative handle (`RichTextApi`). It is what lets the `cloze` editor
-   * put a predefined choice set WHERE THE CARET IS: the set lives in a card
-   * beside the text, the text belongs to this component, and a markdown string
-   * handed back through `value` would land at the end of the prompt instead.
-   * `onReady` travels in a ref, so a host that forgets `useCallback` does not
-   * rebuild the handle on every render.
-   */
-  const onReadyRef = useRef(onReady);
-  onReadyRef.current = onReady;
-  useEffect(() => {
-    const announce = onReadyRef.current;
-    if (!announce) return;
-    if (!editor) {
-      announce(null);
-      return;
-    }
-    const api: RichTextApi = {
-      insertHole(body: string) {
-        if (!holes) return;
-        editor.chain().focus().insertContent({ type: "clozeHole", attrs: { body } }).run();
-      },
-      focus() {
-        editor.commands.focus();
-      },
-    };
-    announce(api);
-    return () => announce(null);
-  }, [editor, holes]);
 
   const insertImages = useCallback(
     async (files: File[], at?: number) => {
@@ -623,11 +678,14 @@ export function RichText({
     { key: "image", icon: ImageIcon, labelKey: "md.image" },
     { key: "table", icon: TableIcon, labelKey: "md.table" },
     { key: "link", icon: LinkIcon, labelKey: "md.link" },
+    // Only a cloze field has holes, and only there is the button drawn.
+    { key: "blank", icon: RectangleEllipsis, labelKey: "md.blank.insert", shortcut: "{{" },
   ];
 
   const actions = ACTIONS.filter(
     (a) =>
       (a.key !== "image" || showImage) &&
+      (a.key !== "blank" || holes) &&
       // A one-paragraph field has nowhere to put a fenced block, and a table
       // in a row of a list is a shape no one asked a CHOICE for. The schema
       // still knows both, so a stored one is never dropped (tiptap.ts).
@@ -663,6 +721,7 @@ export function RichText({
         // Only an inline field: a block field splits its paragraph on plain
         // Enter, and teaching a second key for the same thing is noise.
         ...(inline ? [{ keys: `${modKey()}+Enter`, label: t("md.newLine") }] : []),
+        ...(holes ? [{ keys: "{{", label: t("md.blank.insert") }] : []),
         ...shortcuts.map((s) => ({ keys: s.keys, label: s.label })),
       ];
   useShortcuts(live, focused && !disabled && !source);
@@ -708,6 +767,15 @@ export function RichText({
         });
         return;
       }
+      case "blank": {
+        /*
+         * An EMPTY chip, which `onUpdate` opens the card on at once — the very
+         * path typing `{{` takes, so the button and the two braces cannot end
+         * up meaning two different things.
+         */
+        editor.chain().focus().insertContent({ type: "clozeHole", attrs: { body: "" } }).run();
+        return;
+      }
       case "link": {
         const href = editor.getAttributes("link").href;
         setAsking({ initial: typeof href === "string" ? href : "" });
@@ -751,7 +819,7 @@ export function RichText({
   }
 
   /**
-   * Writes the body the hole bar collected. An EMPTY body removes the chip:
+   * Writes the body the blank card collected. An EMPTY body removes the chip:
    * a hole with nothing in it is `cloze.empty_blank` and would only be an
    * error the teacher has to come back and delete.
    */
@@ -766,7 +834,7 @@ export function RichText({
     setHole(null);
   }
 
-  /** Leaving the bar. The chip `{{` had just made goes with it. */
+  /** Leaving the card. The chip `{{` had just made goes with it. */
   function cancelHole() {
     if (editor && hole?.created) {
       const node = editor.state.doc.nodeAt(hole.pos);
@@ -776,6 +844,16 @@ export function RichText({
     }
     setHole(null);
     editor?.commands.focus();
+  }
+
+  /** The chip under the pointer, when it stands for more than one possibility. */
+  function previewAt(target: EventTarget | null): HolePreview | null {
+    const el = target instanceof Element ? target.closest('span[data-type="cloze-hole"]') : null;
+    if (!(el instanceof HTMLElement) || el.getAttribute("data-literal") === "true") return null;
+    const items = clozeHolePossibilities(el.getAttribute("data-body") ?? "");
+    if (items === null) return null;
+    const r = el.getBoundingClientRect();
+    return { anchor: { top: r.top, bottom: r.bottom, left: r.left }, items };
   }
 
   /** Applies what the link prompt collected, then gives the caret back. */
@@ -815,6 +893,9 @@ export function RichText({
         ]}
       />
     ) : null;
+
+  /** The card wins over the list: they would otherwise sit on top of each other. */
+  const preview = hole !== null || source ? null : (hoverPreview ?? selectionPreview);
 
   const sourceButton =
     sourceToggle && toolbar !== "never" ? (
@@ -886,25 +967,6 @@ export function RichText({
         <>
           {toolbar === "always" ? toolbarRow : null}
 
-          {hole ? (
-            /*
-             * The body of a `{{…}}` hole, in the flow of the card like the
-             * link address and for the same reason: one value, typed in one
-             * gesture. What goes in it is the grammar of `@quiz/domain` —
-             * `free|libre`, `=a|b|c`, `#3.14:0.01`, `1` for a predefined
-             * choice set — so the field is mono and the braces are implied.
-             */
-            <AskBar
-              key={`hole-${hole.pos}`}
-              label={t("md.hole")}
-              initial={hole.body}
-              apply={t("common.save")}
-              cancel={t("common.cancel")}
-              onSubmit={applyHole}
-              onCancel={cancelHole}
-            />
-          ) : null}
-
           {asking ? (
             <AskBar
               label={t("md.url")}
@@ -945,11 +1007,60 @@ export function RichText({
                 // A block field needs room to be written in; an inline one is
                 // a row of a list and grows with what it holds.
                 className={inline ? "min-h-5" : "min-h-32"}
+                // A chip shows the FIRST possibility and how many more there
+                // are; the whole list is one hover away, read-only. Delegated
+                // from the field, because the chips are ProseMirror's DOM and
+                // a React node view per hole would rebuild on every keystroke.
+                {...(holes
+                  ? {
+                      onMouseOver: (e: React.MouseEvent) => setHoverPreview(previewAt(e.target)),
+                      onMouseOut: () => setHoverPreview(null),
+                    }
+                  : {})}
               />
             </ImageToolsContext.Provider>
           </div>
         </>
       )}
+
+      {hole ? (
+        <BlankPopover
+          key={`hole-${hole.pos}`}
+          anchor={hole.anchor}
+          body={hole.body}
+          onApply={applyHole}
+          onCancel={cancelHole}
+        />
+      ) : null}
+
+      {preview
+        ? createPortal(
+            <div
+              aria-hidden
+              className={cx(
+                "pointer-events-none fixed max-w-64 rounded-menu border border-line bg-surface px-2.5 py-1.5 shadow-popover",
+                Z.popover,
+              )}
+              style={{ top: preview.anchor.bottom + 6, left: preview.anchor.left }}
+            >
+              <ul className="flex flex-col gap-0.5 text-[13px]">
+                {preview.items.map((item, i) => (
+                  <li key={i} className="flex items-center gap-1.5">
+                    {item.correct === null ? null : (
+                      <Check
+                        className={cx("size-3.5 shrink-0 text-success", item.correct ? "" : "opacity-0")}
+                      />
+                    )}
+                    <span className={cx("font-mono", item.correct === false ? "text-fg-muted" : "text-fg")}>
+                      {item.label}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {formula && Dialog ? (
         <Dialog

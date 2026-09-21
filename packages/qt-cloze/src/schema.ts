@@ -9,44 +9,20 @@
 import { parseCloze } from "@quiz/domain";
 import { z } from "zod";
 
-/** v2 adds `choiceSets`; v1 is the same question with an empty list. */
+/**
+ * v2 is v1. The version was bumped for the predefined choice sets, which the
+ * teacher then asked to have removed before anything shipped, so nothing was
+ * ever stored under it that v1 could not hold; the stamp stays because a
+ * version number that goes backwards is worse than one that stood still. A
+ * stored config still carrying `choiceSets` is simply STRIPPED by the schema
+ * below — zod drops unknown keys — and its `{{<key>}}` holes become the
+ * ordinary text blanks they are spelled as.
+ */
 export const CLOZE_CONFIG_VERSION = 2;
 
 /** docs/04: a cloze holds at most fifty blanks, and an answer at most 200 characters. */
 export const CLOZE_MAX_BLANKS = 50;
 export const CLOZE_MAX_BLANK_LENGTH = 200;
-
-/** docs/04 §4.6: twenty sets per question, two to twelve options each. */
-export const CLOZE_MAX_CHOICE_SETS = 20;
-export const CLOZE_MIN_SET_OPTIONS = 2;
-export const CLOZE_MAX_SET_OPTIONS = 12;
-export const CLOZE_MAX_SET_KEY_LENGTH = 32;
-export const CLOZE_MAX_OPTION_LENGTH = 200;
-
-/**
- * A PREDEFINED CHOICE SET: the options of a dropdown, written once and reused
- * in the text as `{{<key>}}` (docs/04 §4.6).
- *
- * It is what makes a dropdown possible inside a markdown TABLE, where the
- * `{{=a|b|c}}` spelling cannot go: every unescaped `|` there is a column
- * separator. `@quiz/domain`'s `parseCloze` resolves the key back to an
- * ordinary `select` blank, so nothing downstream gains a case.
- */
-export const ClozeChoiceSetSchema = z.object({
-  key: z.string().min(1).max(CLOZE_MAX_SET_KEY_LENGTH),
-  options: z
-    .array(
-      z.object({
-        label: z.string().min(1).max(CLOZE_MAX_OPTION_LENGTH),
-        correct: z.boolean().default(false),
-      }),
-    )
-    // Our own i18n key rather than zod's sentence: a `qt-*` package emits keys
-    // and the host decides the wording (`IssueList` in ui.tsx).
-    .min(CLOZE_MIN_SET_OPTIONS, "cloze.set_too_small")
-    .max(CLOZE_MAX_SET_OPTIONS),
-});
-export type ClozeChoiceSet = z.infer<typeof ClozeChoiceSetSchema>;
 
 export const ClozeConfigSchema = z
   .object({
@@ -55,15 +31,13 @@ export const ClozeConfigSchema = z
     text: z.string().min(1).max(20_000),
     caseSensitive: z.boolean().default(false),
     shuffleOptions: z.boolean().default(true),
-    /** Reusable dropdowns, addressed from the text by their key. */
-    choiceSets: z.array(ClozeChoiceSetSchema).max(CLOZE_MAX_CHOICE_SETS).default([]),
   })
   .superRefine((config, ctx) => {
     /*
-     * The sets are handed to the SAME parser the grader and `toStudent` call,
-     * so a `{{1}}` the teacher sees as a dropdown here is a dropdown there.
+     * The SAME parser the grader and `toStudent` call, so a blank the teacher
+     * sees here is the blank they get there.
      */
-    const parse = parseCloze(config.text, config.choiceSets);
+    const parse = parseCloze(config.text);
     for (const error of parse.errors) {
       ctx.addIssue({ code: "custom", path: ["text"], message: error.message });
     }
@@ -73,18 +47,6 @@ export const ClozeConfigSchema = z
     if (parse.blanks.length > CLOZE_MAX_BLANKS) {
       ctx.addIssue({ code: "custom", path: ["text"], message: "cloze.too_many_blanks" });
     }
-    const seen = new Set<string>();
-    config.choiceSets.forEach((set, i) => {
-      // A key is what a hole names, so two sets under one name would make
-      // `{{1}}` mean whichever the parser met first: refused, not resolved.
-      if (seen.has(set.key)) {
-        ctx.addIssue({ code: "custom", path: ["choiceSets", i], message: "cloze.set_duplicate_key" });
-      }
-      seen.add(set.key);
-      if (!set.options.some((option) => option.correct)) {
-        ctx.addIssue({ code: "custom", path: ["choiceSets", i], message: "cloze.set_no_correct" });
-      }
-    });
   });
 export type ClozeConfig = z.infer<typeof ClozeConfigSchema>;
 
@@ -159,6 +121,5 @@ export function emptyClozeDraft(): ClozeConfig {
     text: "",
     caseSensitive: false,
     shuffleOptions: true,
-    choiceSets: [],
   };
 }

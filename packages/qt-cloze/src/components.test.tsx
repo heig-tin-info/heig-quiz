@@ -42,97 +42,10 @@ describe("ClozeEditor", () => {
     expect(screen.getByText("cloze.unterminated")).toBeInTheDocument();
   });
 
-  /*
-   * PREDEFINED CHOICE SETS. The section is the teacher-facing half of the
-   * grammar change: a dropdown written once in a card, named by a key, and
-   * dropped in the text as `{{1}}` — which is the only spelling that fits in a
-   * markdown table cell.
-   */
-  it("adds a set with the next free key and two options ready to fill", async () => {
-    const onChange = vi.fn();
-    render(<ClozeEditor config={config("{{Newton}}")} onChange={onChange} />);
-    await userEvent.click(screen.getByRole("button", { name: "Add a set" }));
-    expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({
-        choiceSets: [
-          {
-            key: "1",
-            options: [
-              { label: "", correct: true },
-              { label: "", correct: false },
-            ],
-          },
-        ],
-      }),
-    );
-  });
-
-  it("reports an option label and its correct flag without keeping them", async () => {
-    const onChange = vi.fn();
-    const withSet = config("{{1}}", {
-      choiceSets: [
-        { key: "1", options: [{ label: "free", correct: true }, { label: "delete", correct: false }] },
-      ],
-    });
-    render(<ClozeEditor config={withSet} onChange={onChange} />);
-    await userEvent.type(screen.getByLabelText("Option 2"), "!");
-    expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({
-        choiceSets: [expect.objectContaining({ options: expect.arrayContaining([{ label: "delete!", correct: false }]) })],
-      }),
-    );
-    onChange.mockClear();
-    await userEvent.click(screen.getAllByRole("checkbox", { name: "Correct" })[1]!);
-    expect(onChange).toHaveBeenCalledWith(
-      expect.objectContaining({
-        choiceSets: [expect.objectContaining({ options: [{ label: "free", correct: true }, { label: "delete", correct: true }] })],
-      }),
-    );
-  });
-
-  it("reads a used key as a DROPDOWN in the blanks table, not as a text answer", () => {
-    const withSet = config("Libérer avec {{1}}.", {
-      choiceSets: [
-        { key: "1", options: [{ label: "free", correct: true }, { label: "delete", correct: false }] },
-      ],
-    });
-    render(<ClozeEditor config={withSet} onChange={() => {}} />);
+  it("reads a dropdown as a DROPDOWN in the blanks table, correct answers only", () => {
+    render(<ClozeEditor config={config("Libérer avec {{=free|delete}}.")} onChange={() => {}} />);
     expect(screen.getByText("select")).toBeInTheDocument();
-    expect(screen.getByText("set 1 (free ✓, delete)")).toBeInTheDocument();
-  });
-
-  /*
-   * "Insert in the text" goes through the rich editor's imperative handle
-   * (`RichTextApi`), because the hole belongs WHERE THE CARET IS and a
-   * markdown string handed back through `value` would land at the end.
-   * Without a rich editor there is no caret, so the button is not drawn.
-   */
-  it("inserts {{key}} through the rich editor's handle, and hides the button without one", async () => {
-    const insertHole = vi.fn();
-    const Rich = ({ onReady, value, "aria-label": label }: RichTextProps) => {
-      useEffect(() => {
-        onReady?.({ insertHole, focus: () => {} });
-      }, [onReady]);
-      return <textarea aria-label={label} value={value} readOnly />;
-    };
-    const withSet = config("{{Newton}}", {
-      choiceSets: [
-        { key: "u", options: [{ label: "a", correct: true }, { label: "b", correct: false }] },
-      ],
-    });
-    render(<ClozeEditor config={withSet} onChange={() => {}} RichText={Rich} />);
-    await userEvent.click(screen.getByRole("button", { name: "Insert in the text" }));
-    expect(insertHole).toHaveBeenCalledWith("u");
-  });
-
-  it("draws no insert button without a rich editor: there is no caret to insert at", () => {
-    const withSet = config("{{Newton}}", {
-      choiceSets: [
-        { key: "u", options: [{ label: "a", correct: true }, { label: "b", correct: false }] },
-      ],
-    });
-    render(<ClozeEditor config={withSet} onChange={() => {}} />);
-    expect(screen.queryByRole("button", { name: "Insert in the text" })).not.toBeInTheDocument();
+    expect(screen.getByText("free")).toBeInTheDocument();
   });
 
   it("takes the host's French strings", () => {
@@ -211,16 +124,13 @@ describe("the fallback text renderer", () => {
   });
 
   /*
-   * A TABLE, which is why the choice sets exist: a hole in a cell must reach
-   * the student as a cell, not as a line of `| Directe | ⸢1⸣ |` prose.
+   * A TABLE with a dropdown in a cell. The `|` of the hole never reaches the
+   * table parser: `parseCloze` runs FIRST and the cell holds a sentinel by the
+   * time marked splits the row (decision D5).
    */
   it("renders a GFM table, with the blank inside its cell", () => {
     const one = clozeServer.toStudent(
-      config("| Polarisation | État |\n| --- | :-: |\n| Directe | {{1}} |", {
-        choiceSets: [
-          { key: "1", options: [{ label: "passante", correct: true }, { label: "bloquée", correct: false }] },
-        ],
-      }),
+      config("| Polarisation | État |\n| --- | :-: |\n| Directe | {{=passante|bloquée}} |"),
       { seed: 1, itemId: "i", shuffle: false },
     );
     render(<ClozePlayer student={one} answer={null} onChange={() => {}} readOnly={false} />);
