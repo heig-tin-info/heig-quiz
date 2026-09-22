@@ -9,7 +9,12 @@
  */
 import { z } from "zod";
 
-export const RunnerLanguage = z.enum(["c", "cpp", "python", "js", "rust"]);
+/**
+ * The five programming languages of phase 1, and `spice`: the ngspice image
+ * that serves the `circuit` question type. It is a "language" only in the
+ * runner's eyes — one image, one run plan, the same hardened container.
+ */
+export const RunnerLanguage = z.enum(["c", "cpp", "python", "js", "rust", "spice"]);
 export type RunnerLanguage = z.infer<typeof RunnerLanguage>;
 
 export const RunnerRequest = z.object({

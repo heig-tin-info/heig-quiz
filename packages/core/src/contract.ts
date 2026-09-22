@@ -20,8 +20,12 @@ import type { RunnerOutcome, RunnerRequest, RunnerService } from "./runner.js";
  */
 export const ANSWER_SUMMARY_MAX = 24;
 
-/** The four types of the MVP (PLAN-MVP §0). */
-export const QUESTION_TYPE_IDS = ["mcq", "short", "cloze", "code"] as const;
+/**
+ * The four types of the MVP (PLAN-MVP §0), plus `circuit` — the two-port
+ * schematic of docs/spec/04 §4.11, brought forward from phase 3 with a
+ * simulation path (`packages/qt-circuit`).
+ */
+export const QUESTION_TYPE_IDS = ["mcq", "short", "cloze", "code", "circuit"] as const;
 export type QuestionTypeId = (typeof QUESTION_TYPE_IDS)[number];
 
 export function isQuestionTypeId(id: string): id is QuestionTypeId {
@@ -212,6 +216,25 @@ export interface QuestionTypeServer<
     answer: TAnswer | null,
     ctx: GradeContext,
   ): GradeResult<TDetails> | Promise<GradeResult<TDetails>>;
+
+  /**
+   * The request behind the student's OWN button — "Run" for `code`,
+   * "Simulate" for `circuit` — assembled server-side from the stored config
+   * and the student's answer (invariant 14), and holding only what the
+   * student may already see: the visible cases, never a hidden one, never the
+   * reference solution's output unless the config publishes it. `null` when
+   * there is nothing to run for this answer (an empty schematic).
+   *
+   * `POST /attempts/:id/simulate` runs it with `priority: "interactive"` and
+   * hands the `RunnerOutcome` back untouched; the client half of the type
+   * reads it. A type without this hook has no interactive run of its own
+   * (`code` keeps its older, case-filtering route).
+   */
+  interactiveRequest?(
+    config: TConfig,
+    answer: TAnswer,
+    ctx: FinalizeContext,
+  ): RunnerRequest | null;
 
   /** Second half of a `pending: runner` grading. Pure, so it is unit-testable without a runner. */
   finalizeRunner?(
