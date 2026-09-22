@@ -2,10 +2,12 @@
 
 ## Status
 
-Accepted (2026-09-22, asked for by the product owner). Amended the same day
-by the addendum at the end of this record, which moves the switch into the
-application frame and makes it per WINDOW; decisions 1 and 2 below are the
-ones it touches.
+Accepted (2026-09-22, asked for by the product owner). Amended twice the
+same day by the two addenda at the end of this record: the first moves the
+switch into the application frame and makes it per WINDOW, the second removes
+the evaluation page's own button (and the read-only preview beside it) and
+makes the heading rename itself. Decisions 1 and 2 below are the ones they
+touch.
 
 ## Context
 
@@ -288,3 +290,52 @@ laptop — and the store made it impossible.
 6. **Self-enrolling from the frame's switch.** A toggle that writes a roster
    seat, from any page, with no confirmation, is a surprise. The evaluation
    page asks first, and keeps that job.
+
+---
+
+## Addendum (2026-09-22, second) — the page button goes, the frame switch stays
+
+The product owner, looking at the evaluation header once the frame switch of
+the previous addendum had shipped: the page now carried two ways into the
+same walk, and the page one was the worse of the two — it exists on ONE
+screen, and the teacher is on another by the time the quiz is alive.
+
+1. **"View as student" is removed from the evaluation header.** Decision 1
+   of the record above, and the sentence in the first addendum that kept the
+   three older entry points, are superseded: the entry point is the
+   `Teacher | Student` switch of the frame (`ViewModeToggle`), plus the
+   account menu and the command palette, which are unchanged. With the button
+   go its confirmation dialog, its `eval.viewAsStudent.*` strings and the
+   page's only call to `POST /classrooms/:id/self-enroll`.
+
+   The seat therefore comes from **"Join as student"** on the classroom page,
+   which always gave it out and still does. The route is untouched on the
+   server, and so is the staff-seat behaviour it carries. `player.noSeatHint`
+   — the sentence a teacher gets from `/take/:id` without a seat — now names
+   that button instead of the one that is gone.
+
+2. **"Preview as student" is removed with it.** The read-only sheet
+   (`PreviewSheet.tsx`) was the lesser half of a pair: it answered "are these
+   the right questions?" only as long as something beside it answered "does
+   this quiz work?". The real walk answers both. `POST /evaluations/:id/preview`
+   STAYS on the server — it is a tested route with no client left, and the
+   question-level preview page (`/questions/:id/preview`, a different feature)
+   is untouched.
+
+3. **Renaming happens on the title.** The "Rename" line of the overflow menu
+   and the one-field modal behind it are replaced by `InlineTitle` (`ui.tsx`):
+   the `<h1>` is a button that swaps itself for an input of the same size and
+   weight, Enter or blur saves through the same `PATCH /evaluations/:id` and
+   the same `EvaluationPatch` schema, Escape cancels, an empty title is
+   refused and the old one restored. A pencil fades in on hover and on
+   keyboard focus. It is not a primary action and takes no accent: the
+   primary of each step stays what it is.
+
+   It stays available on a frozen evaluation, because `title` is one of the
+   server's `SAFE_FIELDS` — what freezes when a student starts is the
+   structure, not the name.
+
+After this, the header holds a breadcrumb, the editable title, the state
+badge, the help "?" and the overflow menu (Live dashboard, Duplicate,
+Delete, and Reset my test attempt when there is one) — plus "Grading" once
+the evaluation is closed.

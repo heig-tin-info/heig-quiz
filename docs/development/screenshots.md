@@ -97,7 +97,8 @@ contain the identifiers of that run's seed; the script discovers them over
 the API, so they change from one seed to the next.
 
 <!-- scenes:start -->
-Last full run: 2026-09-21, commit `828d8d8`, 66 scenes.
+Last full run: 2026-09-21, commit `828d8d8`, 65 scenes. The `eval-rename`
+scene was added after that run and appears here on the next one.
 
 | Scene | Persona | Path | Phase | Action after load | Viewport |
 | --- | --- | --- | --- | --- | --- |
@@ -123,7 +124,6 @@ Last full run: 2026-09-21, commit `828d8d8`, 66 scenes.
 | `eval-questions` | teacher | `/evaluations/ec1186d0-1d86-49e2-9d65-989a6a002dc7?step=questions` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `eval-timing` | teacher | `/evaluations/ec1186d0-1d86-49e2-9d65-989a6a002dc7?step=timing` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `eval-launch` | teacher | `/evaluations/ec1186d0-1d86-49e2-9d65-989a6a002dc7?step=launch` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `eval-preview` | teacher | `/evaluations/ec1186d0-1d86-49e2-9d65-989a6a002dc7?step=launch` | seeded | Clicked “Preview as student”. | 1440×900 |
 | `eval-scheduled` | teacher | `/evaluations/f259b01d-cdb0-4bc5-9484-4e74c186745a` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `live-lobby` | teacher | `/evaluations/2d031274-da46-4a00-9f8d-f5056e933cb9/live` | lobby | Nothing: the page as it loads. | 1440×900 |
 | `live-running` | teacher | `/evaluations/2d031274-da46-4a00-9f8d-f5056e933cb9/live` | running | Nothing: the page as it loads. | 1440×900 |

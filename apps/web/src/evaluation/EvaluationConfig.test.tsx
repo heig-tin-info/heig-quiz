@@ -252,6 +252,80 @@ describe("EvaluationConfig", () => {
     expect(screen.getByRole("button", { name: /^go to launch$/i })).toBeInTheDocument();
   });
 
+  /*
+   * Renaming lives on the title now: no menu line, no modal, no layer for one
+   * word. The four things asserted here are the whole contract — it opens, it
+   * saves what was typed through the ordinary PATCH, Escape changes nothing,
+   * and a title trimmed to nothing is refused with the old one restored.
+   */
+  describe("the title renames itself", () => {
+    const RENAME = /^rename evaluation: quiz 3/i;
+
+    async function open() {
+      const user = userEvent.setup();
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=questions",
+      });
+      await user.click(await screen.findByRole("button", { name: RENAME }));
+      return { user, input: await screen.findByRole("textbox", { name: /^title$/i }) };
+    }
+
+    it("saves the new title on Enter, through the ordinary PATCH", async () => {
+      const renamed = makeEvaluationDetail();
+      renamed.evaluation.title = "Quiz 3 — arrays";
+      const { calls } = mockFetch(
+        routes(makeEvaluationDetail(), {
+          [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(renamed),
+        }),
+      );
+      const { user, input } = await open();
+
+      await user.clear(input);
+      await user.type(input, "Quiz 3 — arrays{Enter}");
+
+      await waitFor(() =>
+        expect(calls.find((c) => c.method === "PATCH")).toMatchObject({
+          body: { title: "Quiz 3 — arrays" },
+        }),
+      );
+      expect(await screen.findByRole("button", { name: /^rename evaluation: quiz 3 — arrays/i }))
+        .toBeInTheDocument();
+      // The same "Saved" the rest of the app answers a write with.
+      expect(await screen.findByText(/^saved$/i)).toBeInTheDocument();
+    });
+
+    it("writes nothing when Escape cancels", async () => {
+      const { calls } = mockFetch(routes());
+      const { user, input } = await open();
+
+      await user.clear(input);
+      await user.type(input, "Something else{Escape}");
+
+      expect(await screen.findByRole("button", { name: RENAME })).toBeInTheDocument();
+      expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+    });
+
+    it("refuses an empty title and puts the old one back", async () => {
+      const { calls } = mockFetch(routes());
+      const { user, input } = await open();
+
+      await user.clear(input);
+      await user.type(input, "   ");
+      await user.tab();
+
+      expect(await screen.findByRole("button", { name: RENAME })).toBeInTheDocument();
+      expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+    });
+
+    it("stays available once a student has started (the title is not frozen)", async () => {
+      mockFetch(routes(makeEvaluationDetail({ editable: false, attemptCount: 3 })));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=questions",
+      });
+      expect(await screen.findByRole("button", { name: RENAME })).toBeEnabled();
+    });
+  });
+
   it("the launch step offers only the way back", async () => {
     mockFetch(routes());
     renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {

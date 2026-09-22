@@ -97,12 +97,10 @@ const scenes = [
   { name: "eval-config-launch", role: "teacher", path: "/evaluations/draft?step=launch" },
   { name: "eval-config-loading", role: "teacher", path: "/evaluations/draft?slow=1", settle: 300 },
   { name: "eval-config-error", role: "teacher", path: "/evaluations/draft?fail=1", settle: 2500 },
-  { name: "eval-preview", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { name: /preview as student/i }).first().click() },
-  // ADR-018, "View as student". Three scenes: the header carrying the button
-  // beside the preview, the confirmation a teacher with no seat gets, and the
-  // overflow of a teacher who already walked it (`?mytest=1`).
-  { name: "eval-view-as-student", role: "teacher", path: "/evaluations/draft?step=questions", fold: true },
-  { name: "eval-view-as-student-confirm", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: (p) => p.getByRole("button", { name: /^(view as student|voir en tant qu'étudiant)$/i }).first().click() },
+  // The heading renames itself in place: closed, then open on the input.
+  { name: "eval-rename", role: "teacher", path: "/evaluations/draft?step=questions", fold: true },
+  { name: "eval-rename-editing", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: (p) => p.getByRole("button", { name: /^(rename evaluation|renommer l'évaluation)/i }).first().click() },
+  // ADR-018: the overflow of a teacher who already walked it (`?mytest=1`).
   { name: "eval-reset-attempt-menu", role: "teacher", path: "/evaluations/closed?mytest=1", fold: true, act: (p) => p.getByRole("button", { name: /^actions$/i }).first().click() },
   { name: "eval-reset-attempt-confirm", role: "teacher", path: "/evaluations/closed?mytest=1", fold: true, act: async (p) => {
       await p.getByRole("button", { name: /^actions$/i }).first().click();

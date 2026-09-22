@@ -11,7 +11,7 @@ Open the classroom and its **Evaluations** tab (see [Classrooms](classrooms.md))
 
 The mode is not a lock. It picks the starting preset and decides which feedback timings are offered, and everything else stays yours to change. Click **Create evaluation**: the new evaluation opens in `draft` on its first step.
 
-The configuration screen has three tabs, **Questions**, **Time and mode** and **Launch**. They are tabs, not a wizard: you can come back to any of them, and the step is part of the address (`?step=timing`), so a bookmark or a shared link lands on the right one. **Preview as student** stays in the header on all three.
+The configuration screen has three tabs, **Questions**, **Time and mode** and **Launch**. They are tabs, not a wizard: you can come back to any of them, and the step is part of the address (`?step=timing`), so a bookmark or a shared link lands on the right one. The title in the header renames itself: click it, type, press Enter.
 
 ## Step 1: Questions
 
@@ -52,7 +52,7 @@ This is only offered while nobody has started. Once an attempt exists, the versi
 The bin at the end of a row takes the item out of this evaluation. The question itself stays in its pool.
 
 !!! tip
-    Use **Preview as student** after assembling the list. It shows the whole evaluation the way a student receives it, statement by statement, and catches a question that reads well in the pool but makes no sense in this order.
+    Walk the evaluation after assembling the list, with the **Teacher / Student** switch at the bottom of the sidebar: you get the real thing — the waiting room, the player, the countdown — and it catches a question that reads well in the pool but makes no sense in this order.
 
 ## Step 2: Time and mode
 
@@ -125,15 +125,9 @@ An evaluation with no question cannot be opened or scheduled.
   <figcaption>A scheduled evaluation stays editable and opens on its own at the announced time.</figcaption>
 </figure>
 
-### Student preview
+### Renaming it
 
-<figure markdown="span">
-  ![The student preview sheet over the launch step](../assets/screenshots/eval-preview-light.png#only-light)
-  ![The student preview sheet over the launch step](../assets/screenshots/eval-preview-dark.png#only-dark)
-  <figcaption>The student preview renders the whole evaluation as a student gets it, read-only.</figcaption>
-</figure>
-
-**Preview as student** opens the **Student preview** sheet: every question in order, with its type and points, exactly as the player will render it. It is read-only, nothing you do in it is saved, and no attempt is created. **Done** closes it.
+The title in the header is the control. Click it — or focus it and press Enter or F2 — and it becomes a field at the same size; **Enter** or clicking away saves, **Escape** cancels, and an empty title is refused and the old one comes back. The name is one of the few things you can still change once a student has started.
 
 ## The states of an evaluation
 

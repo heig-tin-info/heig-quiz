@@ -43,25 +43,29 @@ on top of the duration.
 
 A summary, then one action: open the waiting room, or schedule it. Once the
 class is in, pausing, extending and closing all happen on the dashboard.
-**Student preview** shows the whole evaluation as a student gets it.
+
+## Renaming it
+
+The title in the header is the control: click it — or focus it and press
+Enter or F2 — and it becomes a field at the same size. Enter, or clicking
+away, saves; Escape cancels; an empty title is refused and the old one comes
+back. The name is one of the few things that can still change once a student
+has started.
 
 ## Testing it for real
 
-**Student preview** answers "are these the right questions?". **View as
-student** answers "does this quiz work?": it is the real thing — the waiting
-room, the player, the countdown, the submit and the feedback, exactly as the
-class gets them.
+Walking the quiz is the real thing — the waiting room, the player, the
+countdown, the submit and the feedback, exactly as the class gets them.
 
-The first click offers you a seat in the classroom (the same one **Join as
-student** gives you from the classroom page) and then switches the whole app
-into the student view. The banner at the top brings you back to this page.
-A quiz still in preparation has no waiting room open yet, so start it — or
-open it — before walking it.
+The **Teacher / Student** switch at the bottom of the sidebar takes you
+there, from this page or from any other — the live dashboard included, which
+is where you are once the quiz is running. It applies to this browser tab
+only, so you can keep the dashboard open in one tab and take the quiz in
+another.
 
-Once you hold a seat, the **Teacher / Student** switch at the bottom of the
-sidebar does the same from any page — the live dashboard included, which is
-where you are once the quiz is running. It applies to this browser tab only,
-so you can keep the dashboard open in one tab and take the quiz in another.
+It needs a seat in the classroom: **Join as student**, on the classroom
+page, gives you one. A quiz still in preparation has no waiting room open
+yet, so start it — or open it — before walking it.
 
 Your test attempt is a real attempt: it shows up on the live dashboard, in
 the grading panel and in the results table, each time with a *staff* badge.
