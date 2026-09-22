@@ -205,6 +205,20 @@ Two things are specific to it:
   exits 1 with "no simulations run" in a few milliseconds (verified on
   ngspice 42, `src/spice.int.test.ts`).
 
+**The one `podman run` outside this package.**
+`packages/qt-circuit/src/spice.int.test.ts` validates the netlists that type
+emits against a real ngspice, and cannot call `executeRequest`: `@quiz/runner`
+is an app (ADR-016) and no `packages/*` depends on an app. It therefore repeats
+the flags of `containerArgs()` itself — `--remote --url`, `--cap-drop=ALL`,
+`no-new-privileges`, this package's seccomp profile, `--read-only`, both tmpfs,
+`--pids-limit`, `--memory` without swap, `--cpus`, `--network none` — with ONE
+relaxation, stated here rather than in a comment: **`--userns=auto` is not
+passed there.** The service probes it once at startup against a real image and
+drops it when the engine cannot do it; a test has no such probe, and passing
+the flag blindly would make the suite fail on a rootless workstation instead of
+telling it anything about ngspice. Nothing else is relaxed, nothing is mounted,
+and the containers are `--rm` and unlabelled, so `pruneOrphans()` ignores them.
+
 **What was checked about `.control` blocks.** ngspice's batch mode executes
 the `.control` section of the netlist, and that section has commands that
 touch the host: `shell` runs a command, `source` and `load` read a file,
