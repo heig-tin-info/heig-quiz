@@ -3,8 +3,9 @@
 A quiz platform for HEIG-VD teachers. Question pools with categories, tags
 and published versions; evaluations run live on a server-side clock, with a
 projector dashboard and automatic grading, including code executed in a
-sandbox; live polls answered from a phone through a QR code. One virtual
-machine, one PostgreSQL, one repository, operable by one person.
+sandbox; live polls answered from a phone through a QR code. One
+application server, one PostgreSQL, one repository, operable by one
+person, with the code runner on a virtual machine of its own.
 
 <div class="grid cards" markdown>
 

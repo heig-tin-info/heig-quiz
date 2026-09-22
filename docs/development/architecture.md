@@ -9,9 +9,10 @@ parts.
 
 ## System context
 
-One VM, one process for the API, one PostgreSQL, one runner service. The
-browser talks to Caddy only. The API talks to the database, the runner and
-the identity provider. Nothing else talks to anything.
+One process for the API, one PostgreSQL, one runner service. In production
+the runner sits on a second VM; everything else shares one. The browser
+talks to Caddy only. The API talks to the database, the runner and the
+identity provider. Nothing else talks to anything.
 
 ```mermaid
 flowchart TB
@@ -28,7 +29,7 @@ flowchart TB
   C --> API
   API --> DB[("PostgreSQL 17")]
   API -- "OIDC" --> IDP["Identity provider: Switch edu-ID, Keycloak in dev"]
-  API -- "POST /run" --> RUN["Runner service (port 3200)"]
+  API -- "POST /run" --> RUN["Runner service (own VM in production, :3200 under pnpm dev)"]
   RUN -- "podman --remote" --> POD["One hardened container per request"]
 ```
 
@@ -36,9 +37,12 @@ Caddy terminates TLS and speaks HTTP/2 to the browser, which is what lets a
 page hold a long-lived SSE stream without eating one of the six HTTP/1.1
 connections. The API is a modular monolith: one Fastify process serves the
 routes, the built SPA and the event streams, and runs the ticker and the job
-queue in the same process. The runner is a separate service on the internal
-network, reached over HTTP by the API alone, and it drives Podman over a
-socket to create one container per request. In production the identity
+queue in the same process. The runner is a separate service reached by the
+API alone. In production it runs on a VM of its own, `code.chevallier.io`,
+behind that VM's Caddy, over HTTPS with a shared bearer token
+([ADR-016](../adr/ADR-016-runner-sur-vm-separee.md)); `pnpm dev` starts it
+on the same machine, on port 3200, with no token. Either way it drives
+Podman over a socket to create one container per request. In production the identity
 provider is Switch edu-ID; in development it is a Keycloak realm from
 `infra/keycloak`, or the dev login. Settled by
 [5.1 Technical stack](../spec/05-architecture.md#51-technical-stack),

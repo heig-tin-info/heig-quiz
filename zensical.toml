@@ -61,6 +61,7 @@ nav = [
       { "ADR-013 Pool sharing" = "adr/ADR-013-partage-des-pools.md" },
       { "ADR-014 Live polls" = "adr/ADR-014-sondages-en-direct.md" },
       { "ADR-015 Browser run, server grade" = "adr/ADR-015-execution-navigateur-correction-serveur.md" },
+      { "ADR-016 Runner on a separate VM" = "adr/ADR-016-runner-sur-vm-separee.md" },
     ] },
     { "MVP plan" = "PLAN-MVP.md" },
     { "API review (2026-09-20)" = "API-REVIEW-2026-09-20.md" },

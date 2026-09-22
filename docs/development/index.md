@@ -2,7 +2,7 @@
 
 This page gets the platform running on a laptop and explains what you are
 looking at once it runs. The [repository layout](repository.md) describes
-the code, [deployment](deployment.md) the production VM, and
+the code, [deployment](deployment.md) the two production machines, and
 [writing the documentation](documentation.md) this site.
 
 ## Prerequisites
@@ -132,9 +132,11 @@ stored in the database like an OIDC session, which is why the seed and the
 smoke test can use it.
 
 It never exists in production. Under `NODE_ENV=production`, `config.ts`
-throws on `AUTH_DEV_LOGIN=1` exactly as it throws on a `pglite://` database
-or on the placeholder `COOKIE_SECRET` and `OIDC_CLIENT_SECRET` of
-`.env.example`: the process refuses to start rather than serve an open door.
+throws on `AUTH_DEV_LOGIN=1` exactly as it throws on a `pglite://` database,
+on the placeholder `COOKIE_SECRET` of `.env.example`, or on its placeholder
+`OIDC_CLIENT_SECRET` when no private key is configured (with `private_key_jwt`
+the secret is never sent, so it is not checked): the process refuses to
+start rather than serve an open door.
 The OIDC path (Keycloak in development, Switch edu-ID in production) is the
 real one and stays intact whether or not the shortcut is on.
 
@@ -204,6 +206,10 @@ pnpm --filter @quiz/runner images        # apps/runner/images/build.sh: c cpp py
 RUNNER_MODE=http
 RUNNER_URL=http://localhost:3200
 ```
+
+`RUNNER_TOKEN` stays empty on a workstation: the runner is on localhost and
+checks no bearer when no token is configured. Production requires the same
+token on both sides ([ADR-016](../adr/ADR-016-runner-sur-vm-separee.md)).
 
 `pnpm dev` detects the socket and starts the runner on :3200 (`RUNNER_PORT`
 moves it). On a rootless workstation `--userns=auto` is probed once at
