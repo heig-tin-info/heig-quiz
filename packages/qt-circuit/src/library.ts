@@ -20,11 +20,27 @@
 export const GRID = 20;
 
 /**
+ * Every fifth grid line is drawn thicker. The box and the four port anchors
+ * are laid out on that coarser lattice, so the outline and the anchors always
+ * land ON a major line instead of between two of them.
+ */
+export const MAJOR = 5;
+
+/**
  * The two-port box the student wires inside: the "quadripole" container.
  * Four ports on its border, two on each side; everything else is placed
  * inside. Fixed size, so a saved schematic always fits the same canvas.
+ *
+ * Both sides are a whole number of MAJOR cells (40 × 25), which is what puts
+ * the border itself on a thick line.
  */
-export const BOX = { width: 40 * GRID, height: 24 * GRID } as const;
+export const BOX = { width: 40 * GRID, height: 25 * GRID } as const;
+
+/**
+ * How far from the top edge — and, mirrored, from the bottom edge — the port
+ * anchors sit, in cells. A multiple of {@link MAJOR}, on a thick line.
+ */
+export const PORT_INSET = MAJOR;
 
 /** Direction a wire leaves a pin: 0 → +x, 1 → +y, 2 → −x, 3 → −y (mockup convention). */
 export type PinDirection = 0 | 1 | 2 | 3;
@@ -48,12 +64,16 @@ export interface PinSpec {
 export const PORT_IDS = ["in+", "in-", "out+", "out-"] as const;
 export type PortId = (typeof PORT_IDS)[number];
 
+/** The `+` rail, five cells below the top edge; the `−` rail, five cells above the bottom one. */
+const PORT_TOP = PORT_INSET * GRID;
+const PORT_BOTTOM = BOX.height - PORT_INSET * GRID;
+
 /** Where each port sits on the box border; the wire leaves it INTO the box. */
 export const PORTS: Readonly<Record<PortId, PinSpec>> = {
-  "in+": { name: "in+", x: 0, y: 8 * GRID, d: 0 },
-  "in-": { name: "in-", x: 0, y: 16 * GRID, d: 0 },
-  "out+": { name: "out+", x: BOX.width, y: 8 * GRID, d: 2 },
-  "out-": { name: "out-", x: BOX.width, y: 16 * GRID, d: 2 },
+  "in+": { name: "in+", x: 0, y: PORT_TOP, d: 0 },
+  "in-": { name: "in-", x: 0, y: PORT_BOTTOM, d: 0 },
+  "out+": { name: "out+", x: BOX.width, y: PORT_TOP, d: 2 },
+  "out-": { name: "out-", x: BOX.width, y: PORT_BOTTOM, d: 2 },
 };
 
 /**

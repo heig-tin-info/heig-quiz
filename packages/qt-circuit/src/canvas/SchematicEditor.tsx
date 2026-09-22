@@ -89,7 +89,9 @@ import {
   ROTATE,
   clampPoint,
   clampToBox,
+  clampView,
   extentOf,
+  fitCanvasHeight,
   hitRectOf,
   indexOf,
   multiply,
@@ -106,6 +108,7 @@ import {
   viewBoxAttr,
   viewScale,
   zoomAt,
+  zoomPercent,
   type PinPoint,
   type PinTarget,
   type ViewBox,
@@ -138,7 +141,10 @@ export interface SchematicEditorProps {
   highlightPins?: readonly FlaggedPin[] | undefined;
   highlightPorts?: readonly PortId[] | undefined;
   strings?: Partial<CanvasStrings> | undefined;
-  /** Height of the drawing area, in px. */
+  /**
+   * The TALLEST the drawing area gets, in px. It is normally shorter: the
+   * area takes the shape of the fitted view for the width it was given.
+   */
   height?: number | undefined;
   id?: string | undefined;
   "aria-label"?: string | undefined;
@@ -257,6 +263,7 @@ export function SchematicEditor({
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const canvasRef = useRef<HTMLDivElement | null>(null);
 
   const history = useHistory<Schematic>();
   const [mode, setMode] = useState<Mode>("select");
@@ -280,6 +287,9 @@ export function SchematicEditor({
   const [palDrag, setPalDrag] = useState<{ kind: ComponentKind; x: number; y: number; moved: boolean; rearm: boolean } | null>(
     null,
   );
+  /* The drawing area is as tall as the fitted view is, for the width it was
+     given — never taller, or the frame floats in a band of empty canvas. */
+  const [canvasHeight, setCanvasHeight] = useState<number>(height);
 
   /* The drag mutates on every pointer move; a ref keeps the handler stable and
      the render cheap, and the state copy above is what the SVG draws from. */
@@ -732,7 +742,7 @@ export function SchematicEditor({
         const dx = (e.clientX - d.cx) / k;
         const dy = (e.clientY - d.cy) / k;
         if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
-        setView({ ...d.view, x: d.view.x - dx, y: d.view.y - dy });
+        setView(clampView({ ...d.view, x: d.view.x - dx, y: d.view.y - dy }));
       } else if (d.kind === "move") {
         const dx = snap(w.x - d.sx);
         const dy = snap(w.y - d.sy);
@@ -794,6 +804,32 @@ export function SchematicEditor({
     },
     [apply, displayed.components, routes, selection, value],
   );
+
+  /* The drawing area takes the SHAPE of the fitted view, so that the frame
+     plus its one-cell margin fills it on both axes instead of sitting in a
+     letterbox. Only the width is read — the height is what this sets — and a
+     `ResizeObserver` is what makes it survive a column that narrows, a
+     sidebar that opens and a page that goes full screen. */
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (el === null) return;
+    const measure = (): void => {
+      setCanvasHeight((current) => {
+        const next = fitCanvasHeight(el.clientWidth, height);
+        return next === current ? current : next;
+      });
+    };
+    measure();
+    /* jsdom has no layout and no observer; the height then stays the cap. */
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    document.addEventListener("fullscreenchange", measure);
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("fullscreenchange", measure);
+    };
+  }, [height]);
 
   /* Wheel has to be a native listener: React registers `wheel` passively on
      the root, where `preventDefault` is a no-op and the page scrolls away. */
@@ -947,7 +983,8 @@ export function SchematicEditor({
 
   // --- render ------------------------------------------------------------
 
-  const zoomPercent = Math.round((FIT_VIEW.w / view.w) * 100);
+  /* 100 % is the whole frame, port anchors included — the floor of zoom-out. */
+  const zoom = zoomPercent(view);
   const hint =
     mode === "place" && placeKind !== null
       ? s.hintPlace(s.kind(placeKind))
@@ -1019,14 +1056,14 @@ export function SchematicEditor({
           </>
         )}
         <div className="ml-auto flex items-center gap-1">
-          <span className={cx(statusCursor, "text-[11px] text-fg-faint")}>{zoomPercent} %</span>
+          <span className={cx(statusCursor, "text-[11px] text-fg-faint")}>{zoom} %</span>
           <IconButton label={s.fit} name="fit" onClick={() => setView(FIT_VIEW)} />
         </div>
       </div>
 
       <div className="flex flex-col sm:flex-row">
         {readOnly ? null : (
-          <div className={paletteColumn} style={{ maxHeight: height }}>
+          <div className={paletteColumn} style={{ maxHeight: canvasHeight }}>
             <div className={paletteHead}>
               <span className={paletteTitle}>{s.components}</span>
               <span className={paletteCount}>{s.componentCount(used, palette.maxComponents)}</span>
@@ -1063,7 +1100,7 @@ export function SchematicEditor({
           </div>
         )}
 
-        <div className={canvasArea} style={{ height }}>
+        <div ref={canvasRef} className={canvasArea} style={{ height: canvasHeight }}>
           <svg
             ref={svgRef}
             data-testid="schematic-canvas"

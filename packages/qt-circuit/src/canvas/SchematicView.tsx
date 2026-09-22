@@ -2,14 +2,14 @@
  * The read-only rendering of a schematic — and the pieces the editor draws
  * with, which live here so there is ONE drawing of a resistor in the package.
  *
- * The view fits its width: one `viewBox` over the whole box, a little bleed so
- * the outline and the ports are not clipped, and `xMidYMid meet`, so the same
- * markup reads on a phone and on a projector. It shows what is STORED — the
- * `points` the editor routed — and never routes anything itself.
+ * The view FILLS its box: one `viewBox` over the whole frame plus exactly one
+ * grid cell of margin, and `xMidYMid meet`, so the same markup reads on a
+ * phone and on a projector. It shows what is STORED — the `points` the editor
+ * routed — and never routes anything itself.
  */
 import { useId, type JSX } from "react";
 
-import { BOX, GRID, LIBRARY, PORT_IDS, type PortId } from "../library.js";
+import { BOX, GRID, LIBRARY, MAJOR, PORT_IDS, type PortId } from "../library.js";
 import type { Schematic, SchematicComponent, Wire } from "../schema.js";
 
 import { CANVAS_STRINGS, withStrings, type CanvasStrings } from "./canvasStrings.js";
@@ -35,6 +35,7 @@ import {
   wireLine,
 } from "./canvasStyles.js";
 import {
+  FIT_ASPECT,
   FIT_VIEW,
   hitRectOf,
   pinPosition,
@@ -59,16 +60,21 @@ const safeId = (id: string): string => id.replace(/[^A-Za-z0-9_-]/g, "_");
 // The paper: grid, box, ports
 // ---------------------------------------------------------------------------
 
-/** The grid patterns; drawn INSIDE the box only, which is what {@link Paper} does. */
+/**
+ * The grid patterns; drawn INSIDE the box only, which is what {@link Paper}
+ * does. The thick line falls every {@link MAJOR} cells from the box origin,
+ * which is the lattice the border and the four port anchors are laid out on.
+ */
 export function GridDefs({ id }: { id: string }): JSX.Element {
+  const major = GRID * MAJOR;
   return (
     <defs>
       <pattern id={`${id}-min`} width={GRID} height={GRID} patternUnits="userSpaceOnUse">
         <path className={gridMinor} d={`M${GRID} 0H0V${GRID}`} />
       </pattern>
-      <pattern id={`${id}-maj`} width={GRID * 5} height={GRID * 5} patternUnits="userSpaceOnUse">
-        <rect width={GRID * 5} height={GRID * 5} fill={`url(#${id}-min)`} />
-        <path className={gridMajor} d={`M${GRID * 5} 0H0V${GRID * 5}`} />
+      <pattern id={`${id}-maj`} width={major} height={major} patternUnits="userSpaceOnUse">
+        <rect width={major} height={major} fill={`url(#${id}-min)`} />
+        <path className={gridMajor} d={`M${major} 0H0V${major}`} />
       </pattern>
     </defs>
   );
@@ -373,8 +379,19 @@ export function SchematicView({
         aria-label={ariaLabel ?? s.viewLabel}
         viewBox={viewBoxAttr(FIT_VIEW)}
         preserveAspectRatio="xMidYMid meet"
-        style={{ width: "100%", height: "auto", maxHeight: height }}
-        className="block"
+        /*
+         * The same fit as the editor: the drawing IS the frame plus its
+         * one-cell margin, so it fills its box on both axes. `maxWidth` is
+         * what `maxHeight` alone would not do — capping the height of a
+         * full-width SVG letterboxes it instead of narrowing it.
+         */
+        style={{
+          width: "100%",
+          maxWidth: Math.round(height * FIT_ASPECT),
+          height: "auto",
+          maxHeight: height,
+        }}
+        className="mx-auto block"
       >
         <GridDefs id={id} />
         <Paper id={id} />

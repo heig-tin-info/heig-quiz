@@ -190,8 +190,9 @@ describe("withRoutes", () => {
   it("starts each polyline at `a` and ends it at `b`", () => {
     const routed = withRoutes(schematic);
     const w1 = routed.wires[0]!;
+    const into = portPosition("in+");
     expect(w1.points[0]).toEqual([160, 160]);
-    expect(w1.points[w1.points.length - 1]).toEqual([0, 160]);
+    expect(w1.points[w1.points.length - 1]).toEqual([into.x, into.y]);
     const w3 = routed.wires[2]!;
     const out = portPosition("out+");
     expect(w3.points[w3.points.length - 1]).toEqual([out.x, out.y]);

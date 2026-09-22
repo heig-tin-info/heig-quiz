@@ -16,6 +16,7 @@ import {
 } from "./spice.js";
 import { SERIES_MAX_POINTS, type Schematic, type Stimulus, type Supplies } from "./schema.js";
 import {
+  RAIL,
   at,
   component,
   pinEnd,
@@ -185,13 +186,13 @@ describe("buildNetlist: the RC low-pass", () => {
 
   it("writes the extraction issues into the deck as comments", () => {
     resetIds();
-    const r = component("R", "R1", 400, 160, { value: "1k" });
+    const r = component("R", "R1", 400, RAIL, { value: "1k" });
     const [x, y] = at(r, 0);
     const half: Schematic = {
       components: [r],
       wires: [
         wire("w1", portEnd("in+"), pinEnd(r, 0), [
-          [0, 160],
+          [0, RAIL],
           [x, y],
         ]),
       ],
