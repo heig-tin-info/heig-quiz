@@ -151,6 +151,9 @@ importers:
       '@quiz/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@quiz/qt-circuit':
+        specifier: workspace:*
+        version: link:../../packages/qt-circuit
       '@quiz/qt-cloze':
         specifier: workspace:*
         version: link:../../packages/qt-cloze
@@ -565,6 +568,9 @@ importers:
       '@quiz/core':
         specifier: workspace:*
         version: link:../core
+      '@quiz/qt-circuit':
+        specifier: workspace:*
+        version: link:../qt-circuit
       '@quiz/qt-cloze':
         specifier: workspace:*
         version: link:../qt-cloze
