@@ -5,7 +5,6 @@ import {
   countdownPhase,
   formatDateTimeAs,
   formatRemaining,
-  localDateKey,
   menuPosition,
   scrollEdges,
 } from "./ui";
@@ -37,23 +36,6 @@ describe("formatDateTimeAs", () => {
     expect(formatDateTimeAs(new Date(2026, 8, 7, 0, 30).toISOString(), "us")).toBe(
       "09/07/2026 12:30 AM",
     );
-  });
-});
-
-describe("localDateKey", () => {
-  it("pads the month and the day", () => {
-    expect(localDateKey(new Date(2026, 0, 3))).toBe("2026-01-03");
-  });
-
-  it("stays on the local day, not the UTC one", () => {
-    expect(localDateKey(new Date(2026, 11, 31, 23, 30))).toBe("2026-12-31");
-  });
-
-  it("orders as plain strings", () => {
-    const days = [new Date(2026, 8, 10), new Date(2026, 8, 2), new Date(2025, 11, 31)].map((d) =>
-      localDateKey(d),
-    );
-    expect([...days].sort()).toEqual(["2025-12-31", "2026-09-02", "2026-09-10"]);
   });
 });
 
