@@ -1,3 +1,5 @@
+import { GraduationCap } from "lucide-react";
+
 import type { ResultRow, ResultRowState } from "@quiz/contracts";
 
 import { formatDuration, useT, type Dict, type TFunction } from "../i18n";
@@ -26,7 +28,8 @@ export const stateLabel = (t: TFunction, s: ResultRowState) => t(STATE_KEYS[s]);
 /**
  * One student per row (F-RES-02), absent students included: they are a 1.0
  * that belongs in the export and in the statistics, and a table that hides
- * them is not the class.
+ * them is not the class. A teacher's own test walk is a row too, badged
+ * `staff`, and it is in none of the two (ADR-018).
  *
  * Six columns, under the seven DESIGN.md allows. The name is the identity
  * column and carries the weight; the numbers are tabular and right-aligned;
@@ -85,7 +88,18 @@ export function GradeTable({ rows }: { rows: ResultRow[] }) {
         <tbody>
           {sorted.map((row) => (
             <tr key={row.userId} className={T.row}>
-              <td className={cx(T.td, "font-semibold")}>{row.displayName}</td>
+              <td className={cx(T.td, "font-semibold")}>
+                <span className="inline-flex items-center gap-1.5">
+                  {row.displayName}
+                  {/* A teacher's own test walk (ADR-018): listed, badged, and
+                      in neither the statistics above nor the CSV. */}
+                  {row.staff ? (
+                    <Badge tone="zinc" icon={GraduationCap}>
+                      {t("roster.status.staff")}
+                    </Badge>
+                  ) : null}
+                </span>
+              </td>
               <td className={cx(T.td, "text-fg-muted", T.colHigh)}>{row.email}</td>
               <td className={cx(T.td, "text-right tabular-nums")}>
                 {Math.round(row.points * 100) / 100}

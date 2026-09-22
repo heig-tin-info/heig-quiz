@@ -1,4 +1,4 @@
-import { Clock, DoorOpen, Eye, RotateCcw, WifiOff } from "lucide-react";
+import { Clock, DoorOpen, Eye, GraduationCap, RotateCcw, WifiOff } from "lucide-react";
 
 import type { DashboardRow, EvaluationState } from "@quiz/contracts";
 
@@ -210,6 +210,15 @@ export function StudentGrid({
                             {t("live.row.bonus", { n: row.timeBonusPercent })}
                           </Badge>
                         ) : null}
+                        {/* A teacher walking their own quiz (ADR-018). The
+                            same badge the roster table uses, so "staff" means
+                            one thing everywhere. The row counts in none of
+                            the totals under the grid. */}
+                        {row.staff ? (
+                          <Badge tone="zinc" icon={GraduationCap}>
+                            {t("roster.status.staff")}
+                          </Badge>
+                        ) : null}
                       </span>
                       {/* ONE meta line under the name, and it carries what
                           changes from row to row: how far this student has
@@ -347,7 +356,7 @@ export function StudentGrid({
             >
               {t("live.grid.class")}{" "}
               <span className="font-normal text-fg-muted">
-                · {t("live.grid.students", { n: view.rows.length })}
+                · {t("live.grid.students", { n: view.rows.filter((r) => !r.staff).length })}
               </span>
             </th>
             <td className={cx(T.td, "text-right text-fg-faint")}>—</td>

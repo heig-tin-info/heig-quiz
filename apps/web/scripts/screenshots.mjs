@@ -96,6 +96,23 @@ const scenes = [
   { name: "eval-config-loading", role: "teacher", path: "/evaluations/draft?slow=1", settle: 300 },
   { name: "eval-config-error", role: "teacher", path: "/evaluations/draft?fail=1", settle: 2500 },
   { name: "eval-preview", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { name: /preview as student/i }).first().click() },
+  // ADR-018, "View as student". Three scenes: the header carrying the button
+  // beside the preview, the confirmation a teacher with no seat gets, and the
+  // overflow of a teacher who already walked it (`?mytest=1`).
+  { name: "eval-view-as-student", role: "teacher", path: "/evaluations/draft?step=questions", fold: true },
+  { name: "eval-view-as-student-confirm", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: (p) => p.getByRole("button", { name: /^(view as student|voir en tant qu'étudiant)$/i }).first().click() },
+  { name: "eval-reset-attempt-menu", role: "teacher", path: "/evaluations/closed?mytest=1", fold: true, act: (p) => p.getByRole("button", { name: /^actions$/i }).first().click() },
+  { name: "eval-reset-attempt-confirm", role: "teacher", path: "/evaluations/closed?mytest=1", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^actions$/i }).first().click();
+      await p.getByRole("menuitem", { name: /reset my test attempt|réinitialiser ma tentative/i }).click();
+    } },
+  // The staff row, badged, in the three places attempts are listed.
+  { name: "live-running-staff", role: "teacher", path: "/evaluations/running/live?mytest=1" },
+  { name: "grading-staff", role: "teacher", path: "/evaluations/closed/grading?mytest=1" },
+  { name: "results-staff", role: "teacher", path: "/evaluations/closed/results?mytest=1" },
+  // The banner the walk comes back through: the student view, entered from an
+  // evaluation, with "Back to teacher view" pointing at it.
+  { name: "student-view-banner", role: "teacher", path: "/", ls: { "quiz-view-as": "student", "quiz-view-as-return": "/evaluations/closed" } },
   { name: "live-running", role: "teacher", path: "/evaluations/running/live" },
   { name: "live-running-many", role: "teacher", path: "/evaluations/running/live?many=1" },
   { name: "live-lobby", role: "teacher", path: "/evaluations/lobby/live" },

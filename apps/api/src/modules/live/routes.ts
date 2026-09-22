@@ -122,7 +122,9 @@ export async function livePlugin(app: FastifyInstance) {
     const scope = await reachableEvaluation(app, req, reply, params.data.id);
     if (!scope) return reply;
     const participant = await service.participantOf(app.db, scope.evaluation, req.user!.id);
-    // A staff member has no roster seat: they preview, they do not take part.
+    // A CLAIMED roster seat is the whole admission, staff or not: a teacher
+    // who joined their own classroom walks the real flow (ADR-018), and a
+    // teacher who did not holds no seat and gets the 404 a stranger gets.
     if (!participant) return reply.code(404).send({ error: "not_found" });
     try {
       const result = await service.enterEvaluation(app.db, {
@@ -144,6 +146,39 @@ export async function livePlugin(app: FastifyInstance) {
       return failure(reply, error, now);
     }
   });
+
+  /**
+   * ADR-018: a teacher throws away their OWN staff test attempt.
+   *
+   * `POST /evaluations/:id/attempt` is idempotent per participant, so
+   * without this a teacher tests a quiz exactly once and then has no way
+   * back into the flow. Three things make it safe, and the service loads all
+   * three rather than checking them afterwards (invariant 6): the caller is
+   * staff of the course (the guard), the seat they hold in the classroom is
+   * a STAFF seat, and the attempt deleted is keyed on their own user id. A
+   * student's attempt is therefore unreachable from here, at any state, and
+   * the `410 attempt_closed` gate does not apply: this is not a write into
+   * somebody's exam, it is a teacher erasing their own rehearsal.
+   */
+  app.delete(
+    "/app/api/evaluations/:id/attempt",
+    { preHandler: requireTeacher },
+    async (req, reply) => {
+      const scope = await accessibleEvaluation(app, req, reply);
+      if (!scope) return reply;
+      const result = await service.resetOwnStaffAttempt(
+        app.db,
+        scope.evaluation,
+        req.user!.id,
+      );
+      if (result.deleted) {
+        await trace(req, "attempt.staff_reset", "evaluation", scope.evaluation.id, {
+          attemptId: result.attemptId,
+        });
+      }
+      return { deleted: result.deleted };
+    },
+  );
 
   /**
    * F-LIVE-06: the whole state back, answers and position included — but

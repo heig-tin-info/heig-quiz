@@ -77,8 +77,10 @@ export async function evaluationPlugin(app: FastifyInstance) {
       ...(payload === undefined ? {} : { payload }),
     });
 
-  const detail = (row: service.EvaluationRecord): Promise<EvaluationDetail> =>
-    service.evaluationDetail(app.db, row);
+  const detail = (
+    req: FastifyRequest,
+    row: service.EvaluationRecord,
+  ): Promise<EvaluationDetail> => service.evaluationDetail(app.db, row, req.user!.id);
 
   // --- Collection --------------------------------------------------------
 
@@ -122,7 +124,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
   app.get("/app/api/evaluations/:id", { preHandler: requireTeacher }, async (req, reply) => {
     const scope = await accessibleEvaluation(app, req, reply);
     if (!scope) return reply;
-    return detail(scope.evaluation);
+    return detail(req, scope.evaluation);
   });
 
   app.patch("/app/api/evaluations/:id", { preHandler: requireTeacher }, async (req, reply) => {
@@ -137,7 +139,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
       });
       await trace(req, "evaluation.update", row.id, { fields: Object.keys(body.data) });
       evaluationChanged(row.classroomId, row.id);
-      return detail(row);
+      return detail(req, row);
     } catch (error) {
       return evaluationFailure(reply, error) ?? reply.code(500).send({ error: "internal_error" });
     }

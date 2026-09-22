@@ -16,7 +16,9 @@ imports an Excel or CSV export.
 
 **Join as student** gives you a seat in your own classroom, so you can take
 the evaluation the way a student does. That seat is flagged *staff* and
-stays out of the headcount.
+stays out of the headcount. From an evaluation, **View as student** does the
+whole thing in one click — it offers the seat if you have none, then walks
+you through the real waiting room and player.
 
 ## Evaluations
 

@@ -28,6 +28,7 @@ import {
   type Evaluation,
   type EvaluationDetail,
   type EvaluationMode,
+  type EvaluationSelf,
   type EvaluationPatch,
   type EvaluationState,
   type EvaluationSummary,
@@ -42,6 +43,7 @@ import {
   attempts,
   coursePools,
   classrooms,
+  enrollments,
   evaluationItems,
   evaluations,
   questionVersions,
@@ -318,9 +320,105 @@ export const staleOf = (rows: readonly ItemRow[]): string[] =>
   rows.filter((r) => r.latestVersionNumber !== null && r.latestVersionNumber > r.versionNumber)
     .map((r) => r.id);
 
+/**
+ * The attempts of an evaluation that belong to a STAFF seat of its classroom
+ * — a teacher's own test walk (ADR-018).
+ *
+ * ONE query, shared by the dashboard, the grading panel and the results, so
+ * the three screens can never disagree about which rows are a teacher's.
+ */
+export async function staffAttemptIds(
+  db: Db,
+  evaluation: EvaluationRecord,
+): Promise<Set<string>> {
+  const rows = await db
+    .select({ id: attempts.id })
+    .from(attempts)
+    .innerJoin(
+      enrollments,
+      and(
+        eq(enrollments.classroomId, evaluation.classroomId),
+        eq(enrollments.userId, attempts.userId),
+        eq(enrollments.staff, true),
+      ),
+    )
+    .where(eq(attempts.evaluationId, evaluation.id));
+  return new Set(rows.map((r) => r.id));
+}
+
+/**
+ * The staff seats of a classroom that actually took the evaluation, in the
+ * shape the roster queries of the dashboard and the results use.
+ *
+ * A staff seat with no attempt is NOT returned: the teacher's name would
+ * otherwise sit in every grid of every quiz they never opened.
+ */
+export async function staffRosterWithAttempt(
+  db: Db,
+  evaluation: EvaluationRecord,
+): Promise<
+  { userId: string; nom: string; prenom: string; email: string; timeBonusPercent: number }[]
+> {
+  return db
+    .select({
+      userId: sql<string>`${enrollments.userId}`,
+      nom: enrollments.nom,
+      prenom: enrollments.prenom,
+      email: enrollments.email,
+      timeBonusPercent: enrollments.timeBonusPercent,
+    })
+    .from(enrollments)
+    .innerJoin(
+      attempts,
+      and(eq(attempts.userId, enrollments.userId), eq(attempts.evaluationId, evaluation.id)),
+    )
+    .where(
+      and(eq(enrollments.classroomId, evaluation.classroomId), eq(enrollments.staff, true)),
+    )
+    .orderBy(asc(enrollments.nom), asc(enrollments.prenom));
+}
+
+/**
+ * What the reader of this page is, seen from the evaluation (ADR-018): the
+ * seat they hold in its classroom and the test attempt they took with it.
+ *
+ * Two tables of two other modules, read by join and never written, which is
+ * what a module is allowed to do (CLAUDE.md, Conventions). It is NOT a call
+ * into `live/service.ts`: `live` already imports this file, and the cycle
+ * would be the price of saving four lines.
+ */
+async function selfOf(
+  db: Db,
+  row: EvaluationRecord,
+  userId: string,
+): Promise<EvaluationSelf> {
+  const [seat] = await db
+    .select({ staff: enrollments.staff })
+    .from(enrollments)
+    .where(
+      and(
+        eq(enrollments.classroomId, row.classroomId),
+        eq(enrollments.userId, userId),
+        eq(enrollments.status, "claimed"),
+      ),
+    )
+    .limit(1);
+  const [attempt] = await db
+    .select({ id: attempts.id })
+    .from(attempts)
+    .where(and(eq(attempts.evaluationId, row.id), eq(attempts.userId, userId)))
+    .limit(1);
+  return {
+    seat: seat !== undefined,
+    staffSeat: seat?.staff ?? false,
+    attemptId: attempt?.id ?? null,
+  };
+}
+
 export async function evaluationDetail(
   db: Db,
   row: EvaluationRecord,
+  viewerId: string,
 ): Promise<EvaluationDetail> {
   const items = await itemRows(db, row.id);
   const attemptsSoFar = await attemptCount(db, row.id);
@@ -331,6 +429,7 @@ export async function evaluationDetail(
     staleItems: staleOf(items),
     attemptCount: attemptsSoFar,
     editable: attemptsSoFar === 0,
+    self: await selfOf(db, row, viewerId),
   };
 }
 

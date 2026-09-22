@@ -4,7 +4,10 @@
 
 The class list. Each row is a seat: **pending** until the student signs in
 with a matching e-mail, **claimed** once attached to their account.
-A *staff* badge marks a teacher seat.
+A *staff* badge marks a teacher seat — the one **Join as student**, or
+**View as student** on an evaluation, gives you so you can walk the real
+student flow. A test attempt taken from such a seat is badged the same way
+wherever attempts are listed, and counts in no statistic.
 
 ## How claiming works
 

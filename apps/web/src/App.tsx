@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import type { PublicConfig } from "@quiz/contracts";
@@ -9,6 +9,7 @@ import { useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
 import { useRoute, type Route } from "./router";
 import { Shell } from "./Shell";
+import { enterStudentView, leaveStudentView, useStudentView } from "./studentView";
 import { Button, LinkButton, setDateFormat, Spinner } from "./ui";
 
 // One chunk per page: a student never downloads the teacher UI and vice versa.
@@ -110,9 +111,6 @@ function Landing() {
   );
 }
 
-// Persisted teacher choice: "student" keeps the student view across reloads.
-const VIEW_AS_KEY = "quiz-view-as";
-
 /**
  * The routes a student (or a teacher in student view) actually has a screen
  * for. Everything else falls through to `StudentHome` — which is right — but
@@ -134,9 +132,8 @@ const PollLauncher = lazy(() =>
 export default function App() {
   const me = useMe();
   const [route, navigate] = useRoute();
-  const [studentView, setStudentView] = useState(
-    () => localStorage.getItem(VIEW_AS_KEY) === "student",
-  );
+  // Persisted, with the route to come back to (`studentView.ts`, ADR-018).
+  const studentView = useStudentView();
   const { setLocale } = useI18n();
   // The hint stream drives a blanket `invalidateQueries()`, which is right on
   // a teacher screen and wrong during an exam: `/take/:id` runs on a POST
@@ -249,14 +246,20 @@ export default function App() {
       navigate={navigate}
       teacherUi={teacherUi}
       studentView={inStudentView}
+      /*
+       * The switch, both ways. Going IN remembers the page it was thrown
+       * from and lands on the student home, which is where a student starts;
+       * coming OUT goes back to that page (ADR-018), so the walk that began
+       * on an evaluation ends on it and not on the teacher home.
+       */
       onToggleStudentView={
         teacher
           ? () => {
-              setStudentView((v) => {
-                localStorage.setItem(VIEW_AS_KEY, v ? "teacher" : "student");
-                return !v;
-              });
-              navigate({ view: "home" });
+              if (inStudentView) navigate(leaveStudentView());
+              else {
+                enterStudentView(route);
+                navigate({ view: "home" });
+              }
             }
           : undefined
       }

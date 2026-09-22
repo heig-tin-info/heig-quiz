@@ -11,12 +11,15 @@ const g = (n: number) => n.toFixed(1);
  * The four numbers F-RES-01 asks for, in the `Stat` primitive: mean, median,
  * standard deviation and the pass rate. The absent students are in them —
  * they hold a 1.0 (deviation W6-10) — or every class average would flatter
- * the teacher who reads it.
+ * the teacher who reads it. A teacher's own test walk is NOT (ADR-018): it
+ * is not a member of the class, and it is the one row here whose author
+ * knew the answers.
  */
 export function StatsRow({ stats, rows }: { stats: ResultsStats; rows: ResultRow[] }) {
   const t = useT();
-  const passing = rows.filter((r) => isPassing(r.grade)).length;
-  const rate = rows.length === 0 ? 0 : Math.round((passing / rows.length) * 100);
+  const classRows = rows.filter((r) => !r.staff);
+  const passing = classRows.filter((r) => isPassing(r.grade)).length;
+  const rate = classRows.length === 0 ? 0 : Math.round((passing / classRows.length) * 100);
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <Stat
@@ -29,7 +32,7 @@ export function StatsRow({ stats, rows }: { stats: ResultsStats; rows: ResultRow
       <Stat
         label={t("results.stat.passRate")}
         value={`${rate}%`}
-        hint={`${passing} / ${rows.length}`}
+        hint={`${passing} / ${classRows.length}`}
       />
     </div>
   );

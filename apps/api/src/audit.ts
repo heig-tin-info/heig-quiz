@@ -13,6 +13,7 @@ export type AuditAction =
   | "avatar.update"
   | "attempt.close"
   | "attempt.reopen"
+  | "attempt.staff_reset"
   | "category.create"
   | "category.delete"
   | "category.reorder"
