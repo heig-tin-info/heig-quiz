@@ -146,8 +146,9 @@ images/build.sh rust            # ~700 MB, never built by default
 | `quiz-runner-rust` | alpine 3.20 | `rust`, `cargo` | ~700 MB, on demand |
 | `quiz-runner-spice` | alpine 3.20 | `ngspice` (42) | ~65 MB |
 
-Alpine-based, one toolchain each, a non-root `uid 1000`, no network client, no
-package manager needed at run time. `GET /health` lists the languages whose
+Alpine-based, one toolchain each, a non-root `uid 1000` — asserted image by
+image, by a program that prints its own uid (`src/podman.int.test.ts`) — no
+network client, no package manager needed at run time. `GET /health` lists the languages whose
 image is present; `POST /run` answers `503 language_unavailable` for the
 others — the runner never pulls anything (it has no registry credentials and,
 in production, no route to a registry).

@@ -294,6 +294,36 @@ const PERF_EVENT_OPEN =
   "int main(void){long rc=syscall(SYS_perf_event_open,(void*)0,0,-1,-1,0UL);" +
   'printf("%ld %d\\n",rc,errno);return 0;}\n';
 
+/**
+ * The uid the program runs under, asked of the program itself.
+ *
+ * Every `images/*​/Containerfile` repeats the same `adduser` stanza and the
+ * assertion has to be repeated with it: an image added later with the stanza
+ * forgotten is exactly the mistake this loop catches, and it catches it on
+ * that image rather than on `c`'s. Rust declares `getuid` itself — the image
+ * ships `rustc` with no crate registry to fetch `libc` from, and there is no
+ * network inside the container anyway (invariant 11).
+ */
+const UID = {
+  c: '#include <stdio.h>\n#include <unistd.h>\nint main(void){printf("%d\\n",(int)getuid());return 0;}\n',
+  cpp: '#include <cstdio>\n#include <unistd.h>\nint main(){std::printf("%d\\n",(int)getuid());return 0;}\n',
+  python: "import os\nprint(os.getuid())\n",
+  js: "console.log(process.getuid());\n",
+  rust: 'extern "C" { fn getuid() -> u32; }\nfn main(){ println!("{}", unsafe { getuid() }); }\n',
+} as const;
+
+for (const language of ["c", "cpp", "python", "js", "rust"] as const) {
+  describe.skipIf(!has(language))(`the ${language} image`, () => {
+    it("runs the student's program as a user that is not root", async () => {
+      const outcome = await run(request(language, UID[language]));
+      expect(outcome.compile.ok, outcome.compile.stderr).toBe(true);
+      const uid = Number(outcome.cases[0]!.stdout.trim());
+      expect(Number.isInteger(uid)).toBe(true);
+      expect(uid).not.toBe(0);
+    });
+  });
+}
+
 describe.skipIf(!has("c"))("the container itself", () => {
   it("has the seccomp profile in force, and not merely configured", async () => {
     // Invariant 12. `loadConfig` checks that the profile EXISTS on this host,
@@ -309,16 +339,6 @@ describe.skipIf(!has("c"))("the container itself", () => {
     // removes the syscall outright answers. Anything else — EFAULT above all
     // — means the call reached the kernel and no profile was in the way.
     expect([1, 38]).toContain(errno);
-  });
-
-  it("runs as a user that is not root and owns nothing outside /work", async () => {
-    const outcome = await run(
-      request(
-        "c",
-        '#include <stdio.h>\n#include <unistd.h>\nint main(void){printf("%d\\n",(int)getuid());return 0;}\n',
-      ),
-    );
-    expect(outcome.cases[0]!.stdout.trim()).not.toBe("0");
   });
 
   it("carries the closed list of environment variables and nothing else", async () => {
