@@ -29,6 +29,8 @@ export interface FakeEngine extends Engine {
   readonly calls: FakeCall[];
   readonly created: CreateOptions[];
   readonly removed: string[];
+  /** One entry per `pruneOrphans()`: the reaping happens at boot, exactly once. */
+  readonly pruned: number[];
   images: string[];
 }
 
@@ -45,11 +47,13 @@ export function createFakeEngine(handler: FakeHandler = () => ({})): FakeEngine 
   const calls: FakeCall[] = [];
   const created: CreateOptions[] = [];
   const removed: string[] = [];
+  const pruned: number[] = [];
   const engine: FakeEngine = {
     capabilities: FAKE_CAPABILITIES,
     calls,
     created,
     removed,
+    pruned,
     images: ["localhost/quiz-runner-c:latest", "quiz-runner-python:latest"],
     containerArgs: () => [],
     async create(options: CreateOptions) {
@@ -71,6 +75,10 @@ export function createFakeEngine(handler: FakeHandler = () => ({})): FakeEngine 
     },
     async remove(name: string) {
       removed.push(name);
+    },
+    async pruneOrphans() {
+      pruned.push(Date.now());
+      return 0;
     },
     async listImages() {
       return engine.images;

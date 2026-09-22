@@ -115,6 +115,16 @@ host whose Podman service is not running, not the normal path.
    container, in C and in Python.
 6. The container is destroyed in a `finally`.
 
+The container is NOT created with `--rm`: it has to outlive the process that
+ran in it, so a case that timed out can be inspected and the next case can
+reuse the same container. What `finally` cannot cover is the service dying
+between `create` and it — an OOM on the host, a restart, a crash — so
+`pruneOrphans()` runs once at startup and removes everything labelled
+`quiz.runner=1`. It is never a reason not to start: a failure is one log line
+and the service serves. One consequence worth knowing: two runners sharing a
+Podman socket would reap each other's containers at boot, which is why a
+deployment gives the service a socket of its own (ADR-016).
+
 `timeout` and a cgroup OOM kill both end as exit 137, so the elapsed time
 tells them apart: at the deadline it is `timedOut`, well before it is `oom`.
 When the service's own clock has to fire, or when the OOM killer took the

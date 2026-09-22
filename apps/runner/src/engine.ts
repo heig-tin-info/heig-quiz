@@ -103,6 +103,17 @@ export interface Engine {
   create(options: CreateOptions): Promise<void>;
   exec(name: string, options: ExecOptions): Promise<ExecResult>;
   remove(name: string): Promise<void>;
+  /**
+   * Destroys every container this service ever labelled, whoever created it.
+   *
+   * Called once at startup, and only there. A container is normally removed in
+   * the `finally` of its own request; what that cannot cover is the service
+   * being killed between `create` and `finally` — an OOM on the host, a
+   * `systemctl restart`, a crash — which leaves an `Exited` container holding
+   * its name and its share of the disk until someone notices. The label
+   * `quiz.runner=1` is on every one of them, and on nothing else.
+   */
+  pruneOrphans(): Promise<number>;
   /** Image references present on the engine, `repository:tag`. */
   listImages(): Promise<string[]>;
 }
@@ -309,6 +320,28 @@ export function createEngine(options: EngineOptions): Engine {
 
     async remove(name) {
       await podman(["rm", "-f", "-t", "0", name], { timeoutMs: 30_000, maxBytes: 16 * 1024 });
+    },
+
+    async pruneOrphans() {
+      // Not `--rm` on the container itself: `podman run --rm` deletes the
+      // container the moment it exits, and this service needs it to survive
+      // its own `sleep` so a case that timed out can still be inspected and
+      // the name reused. Reaping is therefore a startup job, not a flag.
+      const result = await podman(["rm", "-f", "--filter", "label=quiz.runner=1"], {
+        timeoutMs: 60_000,
+        maxBytes: 64 * 1024,
+      });
+      if (result.code !== 0) {
+        throw new EngineError(
+          `podman rm --filter failed (${result.code ?? "killed"})`,
+          result.stderr.toString("utf8"),
+        );
+      }
+      // One id per line; none at all is the ordinary case.
+      return result.stdout
+        .toString("utf8")
+        .split("\n")
+        .filter((line) => line.trim() !== "").length;
     },
 
     async listImages() {

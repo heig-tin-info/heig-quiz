@@ -80,7 +80,6 @@ describe("containerArgs", () => {
     expect(passed).toEqual(["HOME=/work", "LANG=C.UTF-8"]);
     expect(args).not.toContain("--env-file");
   });
-
 });
 
 /**
@@ -89,7 +88,7 @@ describe("containerArgs", () => {
  * `containerArgs()` deliberately does NOT carry the connection flags — they
  * are prepended by the spawner, for `exec`, `rm` and `images` as well — so no
  * assertion on its list can see them. This is the only place that does: delete
- * the three lines that build them and four expectations break at once.
+ * the three lines that build them and five expectations break at once.
  */
 describe("--remote --url, on every command the engine sends", () => {
   /** A `podman` that appends its argv to a log, one argument per line. */
@@ -125,14 +124,15 @@ describe("--remote --url, on every command the engine sends", () => {
     });
     await subject.remove(CREATE.name);
     await subject.listImages();
+    await subject.pruneOrphans();
   }
 
-  it("prefixes create, exec, rm and images with the socket of the engine", async () => {
+  it("prefixes every command it sends with the socket of the engine", async () => {
     const podman = recorder();
     await exercise(podman.bin, "/run/podman/podman.sock");
 
     const calls = podman.calls();
-    expect(calls).toHaveLength(4);
+    expect(calls).toHaveLength(5);
     for (const argv of calls) {
       expect(argv.slice(0, 3)).toEqual([
         "--remote",
@@ -142,7 +142,7 @@ describe("--remote --url, on every command the engine sends", () => {
     }
     // The subcommand comes right after them, never before: a `podman run`
     // that reached the CLI first would already have chosen its engine.
-    expect(calls.map((argv) => argv[3])).toEqual(["run", "exec", "rm", "images"]);
+    expect(calls.map((argv) => argv[3])).toEqual(["run", "exec", "rm", "images", "rm"]);
   });
 
   it("passes no --remote at all on the explicit local escape hatch", async () => {
@@ -150,12 +150,20 @@ describe("--remote --url, on every command the engine sends", () => {
     await exercise(podman.bin, null);
 
     const calls = podman.calls();
-    expect(calls).toHaveLength(4);
+    expect(calls).toHaveLength(5);
     for (const argv of calls) {
       expect(argv).not.toContain("--remote");
       expect(argv).not.toContain("--url");
     }
-    expect(calls.map((argv) => argv[0])).toEqual(["run", "exec", "rm", "images"]);
+    expect(calls.map((argv) => argv[0])).toEqual(["run", "exec", "rm", "images", "rm"]);
+  });
+
+  it("reaps a previous run's containers by label, and nothing else", async () => {
+    const podman = recorder();
+    await engine({ podmanBin: podman.bin, socket: null }).pruneOrphans();
+    // No name, no `--all`: the label is on every container this service ever
+    // created and on nothing else on the host.
+    expect(podman.calls()).toEqual([["rm", "-f", "--filter", "label=quiz.runner=1"]]);
   });
 });
 
