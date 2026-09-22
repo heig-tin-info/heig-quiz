@@ -1,10 +1,29 @@
 /**
  * The "zen" player: one question per screen (F-EVAL-08, mockup 07).
  *
- * The single primary action is "Mark as done". Everything else is one tier
- * below: previous / next are secondary, handing in is a secondary button in
- * the bar (its confirmation is where the weight belongs), and the progress
- * strip is navigation, not an action.
+ * ONE primary action, and it MOVES with the state of the question, because
+ * the single thing to do on this screen is not the same before and after
+ * F-LIVE-08's "done":
+ *
+ *   - the question is not done yet    -> "Mark as done", in the footer;
+ *   - it is done and another question is reachable -> "Next";
+ *   - it is done and nothing follows (the last question, or the only one)
+ *     -> "Hand in", the button that was already in the bar, which simply
+ *        lights up rather than moving: a second "Hand in" in the footer would
+ *        put the same label twice on one screen, and this shell's own header
+ *        comment already names "Hand in" as the accent of the page.
+ *
+ * Marking done is a STATE, not an action to press twice. Once it is set, the
+ * screen says so with the "Done" badge beside the counter, and the footer
+ * offers a named, secondary way back — "Reopen the question" — instead of a
+ * primary-looking "Done ✓" whose click silently un-did it. Where the server
+ * refuses to un-do (`forward_only`, a crossed milestone, a closed attempt)
+ * nothing is offered at all: the hint line under the question is what says
+ * why.
+ *
+ * A one-question evaluation has no navigation to draw: no progress strip
+ * (the strip is a map of a paper that has one page) and no previous / next
+ * buttons — absent, not disabled. Two dead controls are worse than none.
  *
  * What this component owns, beyond the layout:
  *   - the keyboard: `Alt + ←/→` moves, `Ctrl + Enter` marks the question as
@@ -135,7 +154,10 @@ export function Player({
   ).length;
 
   const toggleDone = useCallback(async () => {
-    if (!item || closed !== null || paused) return;
+    // The same condition as the button, so `Ctrl+Enter` can never ask for
+    // what the screen does not offer: un-marking in `forward_only` answers
+    // `409 irreversible`, and the student would read it as a failure.
+    if (!item || readOnly) return;
     const next = !item.markedDone;
     // F-LIVE-08: crossing a milestone closes everything behind it, so it is
     // the one move that asks first.
@@ -152,7 +174,7 @@ export function Player({
     } catch {
       toast(t("player.doneFailed"), "error");
     }
-  }, [item, closed, paused, state.navigation, confirm, t, markDone, toast]);
+  }, [item, readOnly, state.navigation, confirm, t, markDone, toast]);
 
   // The two shortcuts of the DoD. `Alt` and `Ctrl` are held on purpose: the
   // bare keys belong to whatever field the student is typing in.
@@ -177,8 +199,14 @@ export function Player({
   // Shell and therefore shows no strip of its own; registering them anyway
   // costs nothing and keeps the day the frame comes back one line of work.
   useShortcuts([
-    { keys: "Alt+←", label: t("player.command.prev") },
-    { keys: "Alt+→", label: t("player.command.next") },
+    // A one-question attempt has nowhere to move: offering the two arrows
+    // would teach a shortcut that does nothing.
+    ...(total > 1
+      ? [
+          { keys: "Alt+←", label: t("player.command.prev") },
+          { keys: "Alt+→", label: t("player.command.next") },
+        ]
+      : []),
     { keys: `${modKey()}+Enter`, label: t("player.markDone") },
   ]);
 
@@ -262,38 +290,64 @@ export function Player({
     : state.navigation === "free"
       ? null
       : t("player.hint.forward");
-  const actions = (
-    <>
-      <Button
-        variant="secondary"
-        onClick={() => dispatch({ type: "move", delta: -1 })}
-        disabled={previous === null}
-      >
-        <ChevronLeft className="size-4" aria-hidden />
-        {t("player.prev")}
-      </Button>
-      <div className="flex-1" />
-      <Button
-        variant={item?.markedDone ? "secondary" : "primary"}
-        onClick={() => void toggleDone()}
-        // A locked question cannot be un-marked: the server answers
-        // `409 irreversible`, so the button must not offer it.
-        disabled={readOnly}
-      >
-        {item?.markedDone ? <Check className="size-4" aria-hidden /> : null}
-        {item?.markedDone ? t("player.markedDone") : t("player.markDone")}
-      </Button>
-      <div className="flex-1" />
-      <Button
-        variant="secondary"
-        onClick={() => dispatch({ type: "move", delta: 1 })}
-        disabled={next === null}
-      >
-        {t("player.next")}
-        <ChevronRight className="size-4" aria-hidden />
-      </Button>
-    </>
-  );
+  /*
+   * Who wears the accent, and therefore what the other two tiers are. The
+   * order matters: as long as the question is open, the thing to do is to
+   * close it; once it is closed, the thing to do is to leave it, and there is
+   * only one way out of the last question.
+   */
+  const done = item?.markedDone === true;
+  const handInIsPrimary = done && next === null;
+  const nextIsPrimary = done && next !== null;
+  // Un-marking is offered exactly where the server accepts it (`free`, and a
+  // milestone not yet crossed). In `forward_only` there is nothing to press.
+  const canReopen = done && !readOnly;
+  // A single question has no neighbours to walk to: the two buttons are
+  // absent rather than disabled, and so is the strip above (F-LIVE-09 draws
+  // the questions, and one question is not a progression).
+  const manyItems = total > 1;
+  const centre = !done ? (
+    <Button variant="primary" onClick={() => void toggleDone()} disabled={readOnly}>
+      {t("player.markDone")}
+    </Button>
+  ) : canReopen ? (
+    // Secondary, named for what it does, and with no tick: the button that
+    // used to sit here read "Done ✓" in the primary style and un-did the
+    // question when pressed.
+    <Button variant="secondary" onClick={() => void toggleDone()}>
+      {t("player.reopen")}
+    </Button>
+  ) : null;
+  // Nothing to show at all — a one-question `forward_only` attempt, once the
+  // question is handed over — means no footer bar, not an empty one.
+  const actions =
+    !manyItems && centre === null ? null : (
+      <>
+        {manyItems ? (
+          <Button
+            variant="secondary"
+            onClick={() => dispatch({ type: "move", delta: -1 })}
+            disabled={previous === null}
+          >
+            <ChevronLeft className="size-4" aria-hidden />
+            {t("player.prev")}
+          </Button>
+        ) : null}
+        <div className="flex-1" />
+        {centre}
+        <div className="flex-1" />
+        {manyItems ? (
+          <Button
+            variant={nextIsPrimary ? "primary" : "secondary"}
+            onClick={() => dispatch({ type: "move", delta: 1 })}
+            disabled={next === null}
+          >
+            {t("player.next")}
+            <ChevronRight className="size-4" aria-hidden />
+          </Button>
+        ) : null}
+      </>
+    );
 
   return (
     <>
@@ -303,12 +357,16 @@ export function Player({
         now={now}
         paused={paused}
         sync={sync}
-        segments={segments}
+        segments={manyItems ? segments : []}
         onSelectSegment={(itemId) => dispatch({ type: "goto", itemId })}
         progressLabel={t("player.progress", { n: state.index + 1, total })}
         commands={commands}
         headerAction={
-          <Button variant="secondary" size="sm" onClick={() => setSubmitting(true)}>
+          <Button
+            variant={handInIsPrimary ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => setSubmitting(true)}
+          >
             {t("player.finish")}
           </Button>
         }
@@ -372,7 +430,7 @@ export function Player({
                   : {})}
               />
             </Card>
-            {desktop ? (
+            {desktop && actions ? (
               <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>
             ) : null}
             {hint ? (
