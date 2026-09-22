@@ -306,7 +306,17 @@ export function RichText({
         // `.md-body` is the student's stylesheet: what the teacher sees while
         // typing is what the question will look like, down to the code tint
         // and the KaTeX size. `.rt-surface` adds what ProseMirror needs.
-        class: cx("rt-surface md-body focus:outline-none", inline && "md-sm"),
+        //
+        // The MINIMUM HEIGHT belongs to the contenteditable, not to the box
+        // around it: only the element ProseMirror owns turns a click into a
+        // caret, so a field whose chrome was tall and whose surface was one
+        // line high answered on its first line and nowhere else. A block
+        // field needs room to be written in; an inline one is a row of a
+        // list and grows with what it holds.
+        class: cx(
+          "rt-surface md-body focus:outline-none",
+          inline ? "min-h-5 md-sm" : "min-h-32",
+        ),
         role: "textbox",
         "aria-multiline": inline ? "false" : "true",
         ...(ariaLabel === undefined ? {} : { "aria-label": ariaLabel }),
@@ -846,6 +856,33 @@ export function RichText({
     editor?.commands.focus();
   }
 
+  /**
+   * A click that lands on the field's CHROME — its padding, the strip beside
+   * the compact toolbar — rather than on the contenteditable itself.
+   *
+   * The whole bordered box is the field, so it must take the caret: the
+   * surface fills the box (`min-h-*` on `.rt-surface` above), and what is
+   * left over is the padding, which ProseMirror never hears about. The caret
+   * goes to the position nearest the pointer, and to the end of the text when
+   * the layout cannot answer — a click under the last line is a click after
+   * the last word. `preventDefault` keeps the field from blurring first.
+   */
+  function focusFromChrome(event: React.MouseEvent) {
+    if (!editor || disabled) return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (target === null) return;
+    // The surface heard it already, and a control inside the box — a toolbar
+    // button, the language field of a code block — owns its own click.
+    if (target.closest(".rt-surface, button, input, select, textarea, a")) return;
+    event.preventDefault();
+    const box = (editor.view.dom as HTMLElement).getBoundingClientRect();
+    const at = editor.view.posAtCoords({
+      left: Math.min(Math.max(event.clientX, box.left + 1), box.right - 1),
+      top: Math.min(Math.max(event.clientY, box.top + 1), box.bottom - 1),
+    });
+    editor.commands.focus(at === null ? "end" : at.pos);
+  }
+
   /** The chip under the pointer, when it stands for more than one possibility. */
   function previewAt(target: EventTarget | null): HolePreview | null {
     const el = target instanceof Element ? target.closest('span[data-type="cloze-hole"]') : null;
@@ -982,13 +1019,14 @@ export function RichText({
           ) : null}
 
           <div
+            onMouseDown={focusFromChrome}
             className={cx(
               inputClass,
               "w-full px-3 py-2",
               // `inputClass` styles the wrapper, and the focus ring has to
               // follow the caret into the contenteditable inside it.
               "focus-within:border-accent focus-within:ring-3 focus-within:ring-accent/20",
-              disabled && "opacity-50",
+              disabled ? "opacity-50" : "cursor-text",
             )}
           >
             {/*
@@ -1004,9 +1042,9 @@ export function RichText({
             <ImageToolsContext.Provider value={imageTools}>
               <EditorContent
                 editor={editor}
-                // A block field needs room to be written in; an inline one is
-                // a row of a list and grows with what it holds.
-                className={inline ? "min-h-5" : "min-h-32"}
+                // No height here: the room a field needs is on the surface
+                // INSIDE this wrapper (`editorProps.attributes` above), which
+                // is the only element a click can turn into a caret.
                 // A chip shows the FIRST possibility and how many more there
                 // are; the whole list is one hover away, read-only. Delegated
                 // from the field, because the chips are ProseMirror's DOM and

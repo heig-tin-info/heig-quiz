@@ -857,3 +857,52 @@ describe("RichText — the blank card", () => {
     await waitFor(() => expect(surface().querySelector(".rt-hole")).toBeNull());
   });
 });
+
+/*
+ * The FIELD is the whole bordered box, not the line of glyphs in it. Only the
+ * element ProseMirror owns turns a click into a caret, so the surface has to
+ * fill the box, and the padding left around it has to forward what it catches.
+ */
+describe("RichText — a click anywhere in the box puts the caret in the text", () => {
+  /** The bordered box: the wrapper `EditorContent` mounts the surface into. */
+  const boxOf = (el: HTMLElement) => el.parentElement!.parentElement!;
+
+  it("gives the surface itself the height of the box", () => {
+    renderWithProviders(<Host initial="one line" />);
+    expect(surface().className).toContain("min-h-32");
+    expect(boxOf(surface()).className).not.toContain("min-h");
+  });
+
+  it("an inline field stays one row high, on the surface too", () => {
+    renderWithProviders(<Host initial="a choice" inline />);
+    expect(surface().className).toContain("min-h-5");
+  });
+
+  it("focuses the text when the click lands on the padding of the box", async () => {
+    renderWithProviders(<Host initial="one line" />);
+    const box = boxOf(surface());
+    expect(surface()).not.toHaveFocus();
+    // `mousedown` and not `click`: the default of that event is what moves
+    // the caret, and the handler has to take it before the field blurs.
+    const taken = !fireEvent.mouseDown(box);
+    expect(taken).toBe(true);
+    await waitFor(() => expect(surface()).toHaveFocus());
+  });
+
+  it("leaves the compact toolbar inside the box its own clicks", async () => {
+    const onValue = vi.fn();
+    renderWithProviders(<Host initial="abc" toolbar="focus" onValue={onValue} />);
+    // The compact toolbar only exists while the field has the caret, and it
+    // sits INSIDE the bordered box: a wrapper that swallowed its mousedown
+    // would drop the selection the button is about to act on.
+    selectAll();
+    await userEvent.click(await screen.findByRole("button", { name: /^Bold/ }));
+    await waitFor(() => expect(onValue).toHaveBeenLastCalledWith("**abc**"));
+  });
+
+  it("does nothing on a disabled field", () => {
+    renderWithProviders(<Host initial="one line" disabled />);
+    expect(fireEvent.mouseDown(boxOf(surface()))).toBe(true);
+    expect(surface()).not.toHaveFocus();
+  });
+});
