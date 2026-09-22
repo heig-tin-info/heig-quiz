@@ -18,7 +18,7 @@ import type { CourseSummary, Me, PoolSummary } from "@quiz/contracts";
 
 import { api } from "./api";
 import { CommandPalette } from "./CommandPalette";
-import { Logo, UserMenu, useSignOut } from "./Header";
+import { Logo, UserMenu, useSignOut, ViewModeToggle } from "./Header";
 import { helpTopics, useHelp } from "./help";
 import { useI18n, useT } from "./i18n";
 import { NotificationBell } from "./notifications/NotificationBell";
@@ -417,6 +417,23 @@ export function Shell({
       onToggleStudentView={onToggleStudentView}
     />
   );
+  /*
+   * The teacher/student switch, in the frame rather than on a page (ADR-018
+   * addendum): a teacher who has launched their quiz is on the live
+   * dashboard, and the button that used to be the only way in lives on
+   * another screen. `onToggleStudentView` is defined for a teacher and an
+   * admin and for nobody else, so a student never sees a switch that would
+   * do nothing. It is drawn in BOTH views — the way out of the student view
+   * is exactly as reachable as the way in.
+   */
+  const viewToggle = (compact: boolean) =>
+    onToggleStudentView ? (
+      <ViewModeToggle
+        studentView={studentView}
+        onToggle={onToggleStudentView}
+        compact={compact}
+      />
+    ) : null;
 
   return (
     <div className="min-h-dvh lg:flex">
@@ -444,9 +461,14 @@ export function Shell({
         {/* The account row, and beside it the bell: the two things that are
             about the PERSON rather than about the page, at the bottom of the
             column where the eye leaves the navigation. */}
-        <div className="flex items-center gap-1 border-t border-line p-2">
-          <div className="min-w-0 flex-1">{userMenu(false)}</div>
-          {teacherUi ? <NotificationBell navigate={navigate} /> : null}
+        <div className="border-t border-line p-2">
+          {onToggleStudentView ? (
+            <div className="mb-2 flex justify-center">{viewToggle(false)}</div>
+          ) : null}
+          <div className="flex items-center gap-1">
+            <div className="min-w-0 flex-1">{userMenu(false)}</div>
+            {teacherUi ? <NotificationBell navigate={navigate} /> : null}
+          </div>
         </div>
       </aside>
 
@@ -477,7 +499,12 @@ export function Shell({
               onNavigate={() => setDrawer(false)}
               onStartPoll={teacherUi ? () => navigate({ view: "polls" }) : undefined}
             />
-            <div className="border-t border-line p-2">{userMenu(false)}</div>
+            <div className="border-t border-line p-2">
+              {onToggleStudentView ? (
+                <div className="mb-2 flex justify-center">{viewToggle(false)}</div>
+              ) : null}
+              {userMenu(false)}
+            </div>
           </div>
         </div>
       ) : null}
@@ -495,6 +522,7 @@ export function Shell({
           </IconButton>
           {brand()}
           <span className="flex-1" />
+          {viewToggle(true)}
           <IconButton label={t("palette.open")} onClick={() => setPalette(true)}>
             <Search />
           </IconButton>

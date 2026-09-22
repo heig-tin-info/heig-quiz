@@ -42,6 +42,11 @@ const en = {
   "menu.lightTheme": "Light theme",
   "menu.darkTheme": "Dark theme",
   "menu.studentViewBanner": "You are viewing the portal as a student.",
+  // The frame's teacher/student switch (ADR-018 addendum). `view.label` names
+  // the group for a screen reader: the two pills have no visible caption.
+  "view.label": "View as",
+  "view.teacher": "Teacher",
+  "view.student": "Student",
   "menu.openMenu": "Open menu",
   "menu.closeMenu": "Close menu",
 
@@ -1282,6 +1287,11 @@ const en = {
   "player.loading": "Opening the evaluation…",
   "player.loadFailed": "This evaluation could not be opened.",
   "player.notOpen": "This evaluation is not open.",
+  "player.notAvailable": "This evaluation is not available to you.",
+  // Shown to a teacher only: a student has nothing to do about a seat, and
+  // the 404 above is deliberately the same one a stranger gets.
+  "player.noSeatHint":
+    "Taking it needs a seat in the classroom. Open the evaluation in the teacher view and use \u201cView as student\u201d, which gives you one \u2014 badged as a staff test.",
   "player.ipBlocked": "This evaluation cannot be taken from this network.",
   "player.accessCode": "Access code",
   "player.accessCodeHint": "Your teacher gives it out at the start.",
@@ -1954,6 +1964,9 @@ const fr: Record<keyof Dict, string> = {
   "menu.lightTheme": "Thème clair",
   "menu.darkTheme": "Thème sombre",
   "menu.studentViewBanner": "Vous consultez le portail comme un étudiant.",
+  "view.label": "Afficher comme",
+  "view.teacher": "Enseignant",
+  "view.student": "Étudiant",
   "menu.openMenu": "Ouvrir le menu",
   "menu.closeMenu": "Fermer le menu",
 
@@ -3190,6 +3203,9 @@ const fr: Record<keyof Dict, string> = {
   "player.loading": "Ouverture de l'évaluation…",
   "player.loadFailed": "Cette évaluation n'a pas pu être ouverte.",
   "player.notOpen": "Cette évaluation n'est pas ouverte.",
+  "player.notAvailable": "Cette évaluation ne vous est pas accessible.",
+  "player.noSeatHint":
+    "La passer demande une place dans la classe. Ouvrez l'évaluation en vue enseignant et utilisez « Voir en tant qu'étudiant » : elle vous inscrit, avec la marque « équipe ».",
   "player.ipBlocked": "Cette évaluation ne peut pas être passée depuis ce réseau.",
   "player.accessCode": "Code d'accès",
   "player.accessCodeHint": "Votre enseignant le donne au démarrage.",

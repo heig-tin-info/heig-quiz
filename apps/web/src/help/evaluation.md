@@ -58,6 +58,11 @@ into the student view. The banner at the top brings you back to this page.
 A quiz still in preparation has no waiting room open yet, so start it — or
 open it — before walking it.
 
+Once you hold a seat, the **Teacher / Student** switch at the bottom of the
+sidebar does the same from any page — the live dashboard included, which is
+where you are once the quiz is running. It applies to this browser tab only,
+so you can keep the dashboard open in one tab and take the quiz in another.
+
 Your test attempt is a real attempt: it shows up on the live dashboard, in
 the grading panel and in the results table, each time with a *staff* badge.
 It counts in nothing — not in the class average, not in the success rate of

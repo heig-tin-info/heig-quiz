@@ -63,6 +63,8 @@ vi.stubGlobal("matchMedia", (query: string) => ({
 
 beforeEach(() => {
   localStorage.clear();
+  // The student view lives here now, per tab (`studentView.ts`).
+  sessionStorage.clear();
   window.history.replaceState(null, "", "/");
   // No test may reach the network. A test that expects a call installs its
   // own stub (`mockFetch`); anything else fails loudly instead of leaving.

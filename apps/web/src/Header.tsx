@@ -17,7 +17,7 @@ import { api } from "./api";
 import quizLogo from "./assets/quiz.svg";
 import { useT } from "./i18n";
 import { setThemeChoice, useResolvedTheme } from "./theme";
-import { Avatar, cx, Menu, type MenuItem } from "./ui";
+import { Avatar, cx, IconButton, Menu, Segmented, type MenuItem } from "./ui";
 
 /**
  * The mark: the product's wordmark — four speech bubbles spelling Q U I Z,
@@ -47,6 +47,86 @@ export function useSignOut(): () => void {
     onSuccess: () => qc.setQueryData(["me"], null),
   });
   return () => logout.mutate();
+}
+
+/**
+ * The master switch of the frame: TEACHER or STUDENT, on every page a teacher
+ * can be on (ADR-018 addendum).
+ *
+ * It used to be a button on the evaluation configuration page and nowhere
+ * else, so a teacher who had launched the quiz — and was therefore on the
+ * live dashboard — could start the exam and not join it. The switch belongs
+ * to the frame for the same reason the theme toggle does: it is about the
+ * whole window, not about the page under it.
+ *
+ * The four decisions, so it reads as chrome and not as a call to action:
+ *   - Type: 12 px pills, under the 14 px of the navigation rows above them.
+ *   - Color: none on the desktop control. The track is `surface-3` and the
+ *     selected pill is `surface` — the screen's one accent stays on the
+ *     page's primary action, and the student view says what it is with the
+ *     banner. The phone's icon keeps `IconButton`'s pressed chip, which is
+ *     how every other toggle of the product says "on".
+ *   - Space: it shares the bottom block with the account row, one hairline
+ *     under the navigation, 8 px between the two.
+ *   - Finish: hairline and surfaces, no shadow; it sits in the flow.
+ *
+ * `compact` is the phone top bar, which has no room for two words: one
+ * `IconButton` that draws the view it switches TO, with that as its label.
+ */
+export function ViewModeToggle({
+  studentView,
+  onToggle,
+  compact,
+}: {
+  studentView: boolean;
+  onToggle: () => void;
+  /** Icon-only trigger (mobile top bar). */
+  compact?: boolean;
+}) {
+  const t = useT();
+  if (compact) {
+    return (
+      <IconButton
+        label={studentView ? t("menu.teacherView") : t("menu.studentView")}
+        active={studentView}
+        onClick={onToggle}
+      >
+        {studentView ? <School /> : <GraduationCap />}
+      </IconButton>
+    );
+  }
+  return (
+    <Segmented
+      name="view-as"
+      label={t("view.label")}
+      size="sm"
+      value={studentView ? "student" : "teacher"}
+      // A radio group answers with the value it was given, and only a
+      // CHANGE flips anything: re-selecting the mode already on screen must
+      // not re-enter the student view and overwrite the way back.
+      onChange={(value) => {
+        if ((value === "student") !== studentView) onToggle();
+      }}
+      options={[
+        {
+          value: "teacher",
+          label: (
+            <span className="inline-flex items-center gap-1.5">
+              <School className="size-3.5" aria-hidden /> {t("view.teacher")}
+            </span>
+          ),
+        },
+        {
+          value: "student",
+          label: (
+            <span className="inline-flex items-center gap-1.5">
+              <GraduationCap className="size-3.5" aria-hidden /> {t("view.student")}
+            </span>
+          ),
+        },
+      ]}
+    />
+  );
 }
 
 /**

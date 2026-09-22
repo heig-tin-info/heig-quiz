@@ -19,7 +19,7 @@
  * or from an `attempt.closed` frame, and then this renders `ClosedScreen`.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Home, Send } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Home, School, Send } from "lucide-react";
 
 import type { AttemptView } from "@quiz/contracts";
 import type { RunnerOutcome } from "@quiz/core/server";
@@ -98,11 +98,20 @@ export function Player({
   initial,
   onHome,
   onResults,
+  onExitStudentView,
 }: {
   initial: AttemptView;
   onHome: () => void;
   /** WP10: opens the student's own feedback on this attempt. */
   onResults: (attemptId: string) => void;
+  /**
+   * Given only to a TEACHER walking their own test attempt (ADR-018
+   * addendum): the exam screen carries no teacher chrome — that is the point
+   * of walking it — so the way out of the student view is one palette entry
+   * rather than a button on a student's exam. A student never has it: the
+   * switch is off, so `AttemptPage` passes nothing.
+   */
+  onExitStudentView?: () => void;
 }) {
   const t = useT();
   const toast = useToast();
@@ -233,6 +242,17 @@ export function Player({
       group: "navigate",
       run: onHome,
     },
+    ...(onExitStudentView
+      ? [
+          {
+            id: "player:teacher-view",
+            label: t("menu.teacherView"),
+            icon: School,
+            group: "navigate" as const,
+            run: onExitStudentView,
+          },
+        ]
+      : []),
   ];
   // Only a rule worth reading under the question: a locked question, or an
   // irreversible "done". That answers are saved as one types is said once,

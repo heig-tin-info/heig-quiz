@@ -66,6 +66,7 @@ function renderShell({
   me = makeMe(),
   navigate = vi.fn(),
   onToggleStudentView = vi.fn(),
+  canSwitchView = true,
   pool,
   poolList,
   path,
@@ -78,6 +79,8 @@ function renderShell({
   me?: ReturnType<typeof makeMe>;
   navigate?: (r: Route) => void;
   onToggleStudentView?: () => void;
+  /** False is a plain student: the frame gets no switch at all. */
+  canSwitchView?: boolean;
   /** Seeds the pool the sidebar unfolds on a `pool` route. */
   pool?: PoolDetail;
   /** Seeds the pool LIST the "all pools" state of the sidebar draws. */
@@ -98,7 +101,7 @@ function renderShell({
       navigate={navigate}
       teacherUi={teacherUi}
       studentView={studentView}
-      onToggleStudentView={onToggleStudentView}
+      {...(canSwitchView ? { onToggleStudentView } : {})}
     >
       {children ?? <p>Page content</p>}
     </Shell>,
@@ -327,9 +330,52 @@ describe("Shell student view banner", () => {
 
   it("says the teacher is in the student view and offers the way back", async () => {
     const { onToggleStudentView } = renderShell({ studentView: true, teacherUi: false });
-    expect(screen.getByText("You are viewing the portal as a student.")).toBeVisible();
-    await userEvent.click(screen.getByRole("button", { name: "Back to teacher view" }));
+    const line = screen.getByText("You are viewing the portal as a student.");
+    expect(line).toBeVisible();
+    // Scoped to the banner: the phone top bar carries a switch with the same
+    // label, which is the point — the way out is never one surface only.
+    const banner = line.closest("div")!;
+    await userEvent.click(within(banner).getByRole("button", { name: "Back to teacher view" }));
     expect(onToggleStudentView).toHaveBeenCalledTimes(1);
+  });
+});
+
+/*
+ * The master switch of the frame (ADR-018 addendum). It is what makes the
+ * student view reachable from the live dashboard — the screen a teacher is on
+ * once they have launched the quiz, and the one the old button was missing
+ * from.
+ */
+describe("Shell view switch", () => {
+  const group = () => screen.getByRole("radiogroup", { name: "View as" });
+
+  it("is in the frame of every teacher page, showing the view on screen", () => {
+    renderShell({ route: { view: "live", id: "e1" } });
+    expect(within(group()).getByRole("radio", { name: "Teacher" })).toBeChecked();
+    expect(within(group()).getByRole("radio", { name: "Student" })).not.toBeChecked();
+  });
+
+  it("flips the view, once, from the teacher side", async () => {
+    const { onToggleStudentView } = renderShell({ route: { view: "live", id: "e1" } });
+    await userEvent.click(within(group()).getByRole("radio", { name: "Student" }));
+    expect(onToggleStudentView).toHaveBeenCalledTimes(1);
+    // Picking the mode already on screen changes nothing: re-entering would
+    // overwrite the way back with the page the teacher is already on.
+    await userEvent.click(within(group()).getByRole("radio", { name: "Teacher" }));
+    expect(onToggleStudentView).toHaveBeenCalledTimes(1);
+  });
+
+  it("is just as reachable from the student shell", async () => {
+    const { onToggleStudentView } = renderShell({ studentView: true, teacherUi: false });
+    expect(within(group()).getByRole("radio", { name: "Student" })).toBeChecked();
+    await userEvent.click(within(group()).getByRole("radio", { name: "Teacher" }));
+    expect(onToggleStudentView).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays out of a plain student's frame", () => {
+    renderShell({ teacherUi: false, canSwitchView: false });
+    expect(screen.queryByRole("radiogroup", { name: "View as" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Switch to student view" })).toBeNull();
   });
 });
 

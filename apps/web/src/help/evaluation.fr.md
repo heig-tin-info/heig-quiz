@@ -60,6 +60,12 @@ toute l'application en vue étudiant. Le bandeau en haut vous ramène à cette
 page. Une évaluation encore en préparation n'a pas de salle d'attente
 ouverte : démarrez-la, ou ouvrez-la, avant de la parcourir.
 
+Une fois la place obtenue, le sélecteur **Enseignant / Étudiant** en bas de
+la barre latérale fait la même chose depuis n'importe quelle page — y compris
+le tableau de bord, où vous êtes une fois le quiz lancé. Il ne vaut que pour
+cet onglet : vous pouvez garder le tableau de bord dans l'un et passer le
+quiz dans l'autre.
+
 Votre tentative de test est une vraie tentative : elle apparaît sur le
 tableau de bord, dans la correction et dans les résultats, chaque fois avec
 un badge *équipe*. Elle ne compte nulle part — ni dans la moyenne de la

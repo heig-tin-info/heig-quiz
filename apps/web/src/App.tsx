@@ -7,9 +7,15 @@ import { api, useMe } from "./api";
 import { Logo } from "./Header";
 import { useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
-import { useRoute, type Route } from "./router";
+import { useRoute } from "./router";
 import { Shell } from "./Shell";
-import { enterStudentView, leaveStudentView, useStudentView } from "./studentView";
+import {
+  enterStudentView,
+  leaveStudentView,
+  STUDENT_ROUTES,
+  studentRouteFor,
+  useStudentView,
+} from "./studentView";
 import { Button, LinkButton, setDateFormat, Spinner } from "./ui";
 
 // One chunk per page: a student never downloads the teacher UI and vice versa.
@@ -115,14 +121,6 @@ function Landing() {
     </main>
   );
 }
-
-/**
- * The routes a student (or a teacher in student view) actually has a screen
- * for. Everything else falls through to `StudentHome` — which is right — but
- * it used to render it UNDER the teacher URL, so a reload or a Back landed
- * on the same wrong address again (W20).
- */
-const STUDENT_ROUTES = new Set<Route["view"]>(["home", "settings", "feedback", "attempt", "join"]);
 
 // The poll screens. The participant page is the ONE route that renders with
 // no session at all: a guest who scanned a QR has nothing to log into.
@@ -263,9 +261,11 @@ export default function App() {
       studentView={inStudentView}
       /*
        * The switch, both ways. Going IN remembers the page it was thrown
-       * from and lands on the student home, which is where a student starts;
-       * coming OUT goes back to that page (ADR-018), so the walk that began
-       * on an evaluation ends on it and not on the teacher home.
+       * from and lands on that page's student twin — the evaluation's own
+       * `/take/:id` for the two screens that have one, the student home
+       * otherwise (`studentRouteFor`). Coming OUT goes back to the page it
+       * was thrown from (ADR-018), so the walk that began on a live
+       * dashboard ends on it and not on the teacher home.
        */
       onToggleStudentView={
         teacher
@@ -273,7 +273,7 @@ export default function App() {
               if (inStudentView) navigate(leaveStudentView());
               else {
                 enterStudentView(route);
-                navigate({ view: "home" });
+                navigate(studentRouteFor(route));
               }
             }
           : undefined

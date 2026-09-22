@@ -34,7 +34,8 @@ function routes(
 const ATTEMPT = id("attempt", 1);
 
 afterEach(() => {
-  localStorage.clear();
+  // The switch is per WINDOW now, so it is `sessionStorage` it writes.
+  sessionStorage.clear();
 });
 
 describe("View as student (ADR-018)", () => {
