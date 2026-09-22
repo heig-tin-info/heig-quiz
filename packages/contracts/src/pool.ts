@@ -456,8 +456,21 @@ export type TryResult = z.infer<typeof TryResult>;
 
 // --- Assets --------------------------------------------------------------
 
+/**
+ * THE set of image types the platform accepts, and the source of truth for
+ * every place that has to repeat it (B-19). SVG is deliberately absent: it is
+ * a script container, and sanitising it is a project of its own (N-SEC).
+ */
 export const AssetMime = z.enum(["image/png", "image/jpeg", "image/gif", "image/webp"]);
 export type AssetMime = z.infer<typeof AssetMime>;
+
+/**
+ * The same set for an avatar, minus the animated gif: a profile picture is
+ * cropped to a still 256x256 square, so accepting an animation would only
+ * store frames nothing ever shows.
+ */
+export const AvatarMime = AssetMime.exclude(["image/gif"]);
+export type AvatarMime = z.infer<typeof AvatarMime>;
 
 export const Asset = z.object({
   id: z.uuid(),

@@ -2,11 +2,14 @@ import type { FastifyInstance } from "fastify";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { AvatarMime } from "@quiz/contracts";
+
 import { audit } from "../audit.js";
 import { avatars } from "../db/schema.js";
 import { publish } from "../events.js";
 
-const ACCEPTED = new Set(["image/jpeg", "image/png", "image/webp"]);
+/** `AvatarMime` is the one list (B-19); `app.ts` parses the same set. */
+const ACCEPTED: ReadonlySet<string> = new Set<string>(AvatarMime.options);
 const MAX_BYTES = 1_000_000; // cropped to 256x256 client-side: ~30-80 KB in practice
 
 /**

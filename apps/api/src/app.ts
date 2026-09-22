@@ -12,7 +12,7 @@ import fastifyStatic from "@fastify/static";
 import { sql } from "drizzle-orm";
 import { collectDefaultMetrics, Gauge, Registry } from "prom-client";
 
-import type { HealthResponse } from "@quiz/contracts";
+import { AvatarMime, type HealthResponse } from "@quiz/contracts";
 import type { Clock } from "./clock.js";
 import { authPlugin } from "./auth/plugin.js";
 import { systemClock } from "./clock.js";
@@ -94,11 +94,10 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   app.addContentTypeParser(["text/csv", "text/plain"], { parseAs: "string" }, (_req, body, done) =>
     done(null, body),
   );
-  // Avatars: raw binary image (<= 1 MB, default Fastify limit).
-  app.addContentTypeParser(
-    ["image/jpeg", "image/png", "image/webp"],
-    { parseAs: "buffer" },
-    (_req, body, done) => done(null, body),
+  // Avatars: raw binary image (<= 1 MB, default Fastify limit). The accepted
+  // set is `AvatarMime`, the same one `modules/avatar.ts` enforces (B-19).
+  app.addContentTypeParser([...AvatarMime.options], { parseAs: "buffer" }, (_req, body, done) =>
+    done(null, body),
   );
   // Server-rendered HTML forms (the development persona picker is the only
   // one): a plain field map, no nesting, no array syntax.

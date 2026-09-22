@@ -15,13 +15,11 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
 
-import type { AssetMime } from "@quiz/contracts";
+import { AssetMime } from "@quiz/contracts";
 
-/** The only types a question may embed. SVG is deliberately absent. */
-const ALLOWED: readonly AssetMime[] = ["image/png", "image/jpeg", "image/gif", "image/webp"];
-
+/** The only types a question may embed; `AssetMime` is the one list (B-19). */
 export function isAllowedMime(mime: string): mime is AssetMime {
-  return (ALLOWED as readonly string[]).includes(mime);
+  return AssetMime.safeParse(mime).success;
 }
 
 interface ImageFacts {
