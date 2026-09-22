@@ -164,6 +164,7 @@ function routes(detail: QuestionDetail, over: Record<string, unknown> = {}) {
       deprecationNote: null,
     }),
     [`POST /app/api/questions/${id}/preview`]: ok({
+      type: "mcq",
       student: {
         prompt: "Que vaut un pointeur non initialisé ?",
         choices: [
@@ -541,18 +542,42 @@ describe("QuestionEditor — keyboard", () => {
     expect(panel).toHaveFocus();
   });
 
-  it("Ctrl+Shift+M toggles the student preview", async () => {
+  /*
+   * "Student preview" leaves the editor: it opens `/questions/:id/preview` in
+   * a TAB of its own. It used to toggle a panel at the bottom of the right
+   * column of the Edit tab, which is why the teacher who pressed it saw
+   * nothing happen — from the Try tab it really did nothing.
+   */
+  it("opens the student preview in a new tab, and saves the draft first", async () => {
     const user = userEvent.setup();
+    const { calls } = mockFetch(routes(mcqDetail()));
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    await screen.findByRole("heading", { name: "ptr-null-check" });
+    // Nothing of the preview is rendered in the page any more.
+    expect(screen.queryByRole("heading", { name: "Student preview" })).toBeNull();
+
+    const link = screen.getByRole("link", { name: "Student preview" });
+    expect(link).toHaveAttribute("href", "/questions/q1/preview");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener");
+    // The tab reads what the SERVER holds, so an edit in flight is flushed
+    // before it opens.
+    await user.type(await screen.findByLabelText("Statement"), "?");
+    await user.click(link);
+    await waitFor(() =>
+      expect(calls.some((c) => c.method === "PUT" && c.url.endsWith("/draft"))).toBe(true),
+    );
+  });
+
+  it("Ctrl+Shift+M opens the same tab", async () => {
+    const user = userEvent.setup();
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
     mockFetch(routes(mcqDetail()));
     renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
     await screen.findByRole("heading", { name: "ptr-null-check" });
-    // The button of the same name is always there; the PANEL is what toggles.
-    const panel = () => screen.queryByRole("heading", { name: "Student preview" });
-    expect(panel()).not.toBeInTheDocument();
     await user.keyboard("{Control>}{Shift>}M{/Shift}{/Control}");
-    expect(await screen.findByRole("heading", { name: "Student preview" })).toBeInTheDocument();
-    await user.keyboard("{Control>}{Shift>}M{/Shift}{/Control}");
-    await waitFor(() => expect(panel()).not.toBeInTheDocument());
+    expect(open).toHaveBeenCalledWith("/questions/q1/preview", "_blank", "noopener");
+    open.mockRestore();
   });
 });
 
@@ -575,7 +600,7 @@ describe("QuestionEditor — shared as reader", () => {
     expect(screen.queryByRole("button", { name: "Publish" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Actions" })).toBeNull();
     // The one thing a reader may still do with the screen.
-    expect(screen.getByRole("button", { name: "Student preview" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Student preview" })).toBeInTheDocument();
   });
 
   it("disables the type's editor and the properties panel", async () => {

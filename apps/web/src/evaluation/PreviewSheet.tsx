@@ -1,13 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { Suspense, type ComponentType } from "react";
 
-import type { PlayerProps } from "@quiz/core/client";
 import type { AttemptView } from "@quiz/contracts";
-import { questionTypeClient } from "@quiz/registry/client";
 
 import { api } from "../api";
 import { useT } from "../i18n";
-import { Alert, Badge, Button, Card, QueryError, Sheet, Skeleton, Spinner } from "../ui";
+import { QuestionHost } from "../student/QuestionHost";
+import { Alert, Badge, Button, Card, QueryError, Sheet, Skeleton } from "../ui";
 import { typeLabel } from "./common";
 
 /**
@@ -15,10 +13,18 @@ import { typeLabel } from "./common";
  *
  * It does not re-implement the player: it asks the server for a REAL student
  * view (`POST /evaluations/:id/preview`, seed 0, no attempt row anywhere —
- * WP5 deviation W5-16) and hands each item to its own type's `Player` with
- * `readOnly`. What the teacher reads here therefore went through
- * `toStudent`, exactly like the student's, and there is no second code path
- * that could show them something the class will not get.
+ * WP5 deviation W5-16) and hands each item to `QuestionHost` with `readOnly`.
+ * What the teacher reads here therefore went through `toStudent`, exactly
+ * like the student's, and there is no second code path that could show them
+ * something the class will not get.
+ *
+ * `QuestionHost`, and not the type's `Player` mounted here by hand: the host
+ * is what lends a `qt-*` package the app's translated strings and
+ * `MarkdownView`, the ONE renderer of untrusted content. Mounting the player
+ * without them printed every statement as its own source — a heading came out
+ * as the literal `# Titre` — and showed the packages' English defaults on a
+ * French screen. One mounting path, so the preview cannot drift from the
+ * player it is a preview of.
  *
  * Scrolling every question in one column rather than reproducing the zen
  * shell: the question is "did I configure the right things?", not "how does
@@ -63,36 +69,31 @@ export function PreviewSheet({ evaluationId, onClose }: { evaluationId: string; 
         <Alert title={t("eval.preview.empty")} />
       ) : (
         <ol className="space-y-4">
-          {preview.data.items.map((item, index) => {
-            const type = questionTypeClient(item.type as never);
-            const Player = type.Player as ComponentType<PlayerProps<unknown, unknown>>;
-            return (
-              <li key={item.id}>
-                <Card className="space-y-3 p-4">
-                  <div className="flex flex-wrap items-center gap-2 text-[13px] text-fg-muted">
-                    <span className="font-semibold text-fg">
-                      {t("live.grid.question", { n: index + 1 })}
-                    </span>
-                    <Badge tone="zinc">{typeLabel(item.type, t)}</Badge>
-                    <span className="tabular-nums">
-                      {t("eval.count.points", { n: item.points })}
-                    </span>
-                    {item.milestone ? (
-                      <Badge tone="amber">{t("eval.questions.milestone")}</Badge>
-                    ) : null}
-                  </div>
-                  <Suspense fallback={<Spinner className="py-6" />}>
-                    <Player
-                      student={item.student}
-                      answer={item.answer}
-                      readOnly
-                      onChange={() => {}}
-                    />
-                  </Suspense>
-                </Card>
-              </li>
-            );
-          })}
+          {preview.data.items.map((item, index) => (
+            <li key={item.id}>
+              <Card className="space-y-3 p-4">
+                <div className="flex flex-wrap items-center gap-2 text-[13px] text-fg-muted">
+                  <span className="font-semibold text-fg">
+                    {t("live.grid.question", { n: index + 1 })}
+                  </span>
+                  <Badge tone="zinc">{typeLabel(item.type, t)}</Badge>
+                  <span className="tabular-nums">
+                    {t("eval.count.points", { n: item.points })}
+                  </span>
+                  {item.milestone ? (
+                    <Badge tone="amber">{t("eval.questions.milestone")}</Badge>
+                  ) : null}
+                </div>
+                <QuestionHost
+                  type={item.type}
+                  student={item.student}
+                  answer={item.answer}
+                  readOnly
+                  onChange={() => {}}
+                />
+              </Card>
+            </li>
+          ))}
         </ol>
       )}
     </Sheet>

@@ -32,6 +32,11 @@ const PoolView = lazy(() => import("./pool/PoolView").then((m) => ({ default: m.
 const QuestionEditor = lazy(() =>
   import("./question/QuestionEditor").then((m) => ({ default: m.QuestionEditor })),
 );
+// "See what the student sees" for one question (docs/spec/08 §8.2). Its own
+// chunk and its own full-screen page, like the attempt: it IS the player.
+const StudentPreviewPage = lazy(() =>
+  import("./question/StudentPreviewPage").then((m) => ({ default: m.StudentPreviewPage })),
+);
 // WP8: evaluation + dashboard
 const EvaluationConfig = lazy(() =>
   import("./evaluation/EvaluationConfig").then((m) => ({ default: m.EvaluationConfig })),
@@ -189,6 +194,16 @@ export default function App() {
     return (
       <Suspense fallback={<Spinner className="py-24" />}>
         <AttemptPage evaluationId={route.evaluationId} navigate={navigate} />
+      </Suspense>
+    );
+  }
+  // The student preview of ONE question: the player, and therefore the whole
+  // screen, for exactly the reason the attempt takes it — a preview framed by
+  // the teacher's sidebar previews the wrong thing.
+  if (route.view === "questionPreview" && teacherUi) {
+    return (
+      <Suspense fallback={<Spinner className="py-24" />}>
+        <StudentPreviewPage id={route.id} />
       </Suspense>
     );
   }

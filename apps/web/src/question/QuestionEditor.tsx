@@ -6,7 +6,6 @@ import type {
   Asset,
   DraftSaved,
   PoolDetail,
-  PreviewResult,
   QuestionDetail,
   TryResult,
   ZodIssueLite,
@@ -20,14 +19,8 @@ import { HelpIcon } from "../help";
 import { useT } from "../i18n";
 import { MarkdownField } from "../markdown/MarkdownField";
 import { useToast } from "../notify";
-import {
-  QuestionEditorHost,
-  QuestionPlayerHost,
-  typeIcon,
-  typeLabel,
-  type TryOutcome,
-} from "../questionTypes";
-import { useSearchParam, type Route } from "../router";
+import { QuestionEditorHost, typeIcon, typeLabel, type TryOutcome } from "../questionTypes";
+import { routeToPath, useSearchParam, type Route } from "../router";
 import { BrowserRunnerUnavailable, runnerFor } from "../runner";
 import { referenceRunRequest } from "../runner/codeRun";
 import { useScreenCommands } from "../screenCommands";
@@ -37,11 +30,11 @@ import {
   Badge,
   Button,
   Card,
+  LinkButton,
   Menu,
   modKey,
   PageError,
   PageHeader,
-  SectionHeading,
   Skeleton,
   Spinner,
   SyncBadge,
@@ -59,7 +52,8 @@ import { VersionHistory } from "./VersionHistory";
  * The question editor (mockups `01-editeur-qcm.html`, `02-editeur-code.html`).
  *
  * The ONE primary action is "Publish"; everything else is secondary (the
- * student preview) or in the overflow menu (duplicate, delete, save now).
+ * student preview, which opens `/questions/:id/preview` in a tab of its own)
+ * or in the overflow menu (duplicate, delete, save now).
  *
  * Three decisions shape the screen:
  *
@@ -104,7 +98,6 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
    * exist on the first render and a ref would never tell the editor it does.
    */
   const [scoringSlot, setScoringSlot] = useState<HTMLDivElement | null>(null);
-  const [preview, setPreview] = useState(false);
   // The tab panel, so `Ctrl+Enter` can put the reader inside what it opened.
   const panelRef = useRef<HTMLDivElement>(null);
   const followToPanel = useRef(false);
@@ -237,6 +230,24 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   const { flush } = autosave;
 
   /**
+   * "Student preview": a TAB of its own, on `/questions/:id/preview`
+   * (docs/spec/08 §8.2). It used to be a panel at the bottom of the right
+   * column of the Edit tab, which is why pressing the button looked like it
+   * did nothing — from the Try tab it really did nothing, and from the Edit
+   * tab it opened something below the fold. The draft is flushed first, for
+   * the reason the Try tab flushes it: the preview renders what the SERVER
+   * holds, and previewing a question without the edit that prompted the
+   * preview is the one thing this button must not do.
+   *
+   * `noopener`, like every other `target="_blank"`: the opened page gets no
+   * handle on this one.
+   */
+  const openPreview = useCallback(() => {
+    flush();
+    window.open(routeToPath({ view: "questionPreview", id }), "_blank", "noopener");
+  }, [flush, id]);
+
+  /**
    * "Try the reference solution" (`CodeEditor`), on whichever runner the
    * question asks for — the same choice a STUDENT'S "Run" goes through
    * (`src/runner/`, ADR-015), so a teacher rehearses on the engine their
@@ -326,9 +337,9 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   );
 
   // docs/spec/08 §8.4: Ctrl+S saves (the automatic save is invisible and a
-  // teacher wants to be sure), Ctrl+Shift+P publishes, Ctrl+Shift+M shows the
-  // student preview, Ctrl+Enter tries the question. All four are reachable
-  // with the mouse as well.
+  // teacher wants to be sure), Ctrl+Shift+P publishes, Ctrl+Shift+M opens the
+  // student preview in a new tab, Ctrl+Enter tries the question. All four are
+  // reachable with the mouse as well.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.metaKey)) return;
@@ -356,12 +367,12 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
         if (!readOnly) setPublishing(true);
       } else if (key === "m") {
         e.preventDefault();
-        setPreview((v) => !v);
+        openPreview();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [flush, readOnly, setTab]);
+  }, [flush, openPreview, readOnly, setTab]);
 
   // The same four, shown in the sidebar strip while this screen is mounted.
   // The sentence that used to spell them out under the form is gone: a hint
@@ -408,7 +419,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
       icon: Eye,
       group: "action",
       keywords: "ctrl+shift+m",
-      run: () => setPreview((v) => !v),
+      run: openPreview,
     },
     {
       id: "question:try",
@@ -497,9 +508,18 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
         }
         actions={
           <>
-            <Button variant="secondary" onClick={() => setPreview((v) => !v)} aria-pressed={preview}>
+            {/* It opens a TAB, so it is an anchor: middle-click, Ctrl-click
+                and "open in a new window" all have to work, and a <button>
+                offers none of them. `noopener` on both halves. */}
+            <LinkButton
+              variant="secondary"
+              href={routeToPath({ view: "questionPreview", id })}
+              target="_blank"
+              rel="noopener"
+              onClick={() => flush()}
+            >
               <Eye /> {t("question.preview")}
-            </Button>
+            </LinkButton>
             {/*
              * A reader keeps the preview and loses the rest. Publish, save and
              * delete would each be refused by the server, and "duplicate"
@@ -616,7 +636,6 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
                 for a type that portals nothing, and then it must not eat a
                 row of the column's spacing. */}
             <div ref={setScoringSlot} className="empty:hidden" />
-            {preview ? <StudentPreview questionId={id} type={data.meta.type} /> : null}
           </aside>
         </div>
       ) : tab === "try" ? (
@@ -640,39 +659,5 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
         />
       ) : null}
     </div>
-  );
-}
-
-/** The draft as a student would receive it, beside the form (Ctrl+Shift+M). */
-function StudentPreview({ questionId, type }: { questionId: string; type: string }) {
-  const t = useT();
-  const preview = useQuery<PreviewResult>({
-    queryKey: ["question", questionId, "preview", "draft"],
-    queryFn: () =>
-      api(`/app/api/questions/${questionId}/preview`, {
-        method: "POST",
-        body: JSON.stringify({ source: "draft" }),
-      }),
-  });
-  return (
-    <Card className="space-y-3 p-4">
-      <SectionHeading title={t("question.preview")} />
-      {preview.isLoading ? (
-        <Skeleton className="h-24 w-full" />
-      ) : preview.isError ? (
-        <Alert tone="warning" icon={AlertTriangle} title={t("question.previewFailed")}>
-          {apiErrorMessage(preview.error, t("error.server"))}
-        </Alert>
-      ) : (
-        <QuestionPlayerHost
-          t={t}
-          type={type}
-          student={preview.data?.student}
-          answer={null}
-          onChange={() => {}}
-          readOnly
-        />
-      )}
-    </Card>
   );
 }

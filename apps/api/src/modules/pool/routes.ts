@@ -1026,6 +1026,9 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       if (!loaded) return reply;
       const t = typeOf(scope.question.type);
       return {
+        // The type, so a client that has nothing but this payload knows which
+        // `Player` to mount (the full-page preview of one question).
+        type: scope.question.type,
         // Teacher preview: seed 0 and no shuffle, so the view is stable
         // between two reloads (decision D19). It goes through the ONE student
         // exit of the API (`live/studentView.ts`), like every other payload a

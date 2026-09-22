@@ -46,6 +46,7 @@ const en = {
   "menu.closeMenu": "Close menu",
 
   "common.cancel": "Cancel",
+  "common.close": "Close",
   "common.save": "Save",
   "common.create": "Create",
   "common.delete": "Delete",
@@ -222,7 +223,7 @@ const en = {
   "palette.openPool": "Open the pool {name}",
   "palette.newQuestion": "New question — {type}",
   "palette.publish": "Publish this question",
-  "palette.preview": "Show the student preview",
+  "palette.preview": "Open the student preview",
   "palette.external": "External link",
   "palette.helpHint": "Help",
   "palette.switchLocale": "Switch to {language}",
@@ -580,6 +581,13 @@ const en = {
   "question.preview": "Student preview",
   "question.previewToggle": "Show the student preview",
   "question.previewFailed": "The preview could not be built.",
+  // The full-page student preview, opened in a tab of its own
+  // (`/questions/:id/preview`).
+  "question.preview.pageTitle": "Student preview",
+  "question.preview.pageSubtitle": "What a student sees for this question",
+  "question.preview.banner": "Preview — nothing is saved",
+  "question.preview.bannerBody": "Answer it if you like: no attempt is created, nothing is stored and nothing is graded. Close the tab when you are done.",
+  "question.preview.incomplete": "Finish the question first: an unfinished draft has nothing to show a student.",
   "question.uploadFailed": "The image could not be uploaded.",
 
   // --- MCQ scoring policies (docs/04 §4.4) ---
@@ -1950,6 +1958,7 @@ const fr: Record<keyof Dict, string> = {
   "menu.closeMenu": "Fermer le menu",
 
   "common.cancel": "Annuler",
+  "common.close": "Fermer",
   "common.save": "Enregistrer",
   "common.create": "Créer",
   "common.delete": "Supprimer",
@@ -2126,7 +2135,7 @@ const fr: Record<keyof Dict, string> = {
   "palette.openPool": "Ouvrir la banque {name}",
   "palette.newQuestion": "Nouvelle question — {type}",
   "palette.publish": "Publier cette question",
-  "palette.preview": "Afficher l'aperçu étudiant",
+  "palette.preview": "Ouvrir l'aperçu étudiant",
   "palette.external": "Lien externe",
   "palette.helpHint": "Aide",
   "palette.switchLocale": "Passer en {language}",
@@ -2483,6 +2492,11 @@ const fr: Record<keyof Dict, string> = {
   "question.preview": "Aperçu étudiant",
   "question.previewToggle": "Afficher l'aperçu étudiant",
   "question.previewFailed": "L'aperçu n'a pas pu être construit.",
+  "question.preview.pageTitle": "Aperçu étudiant",
+  "question.preview.pageSubtitle": "Ce qu'un étudiant voit de cette question",
+  "question.preview.banner": "Aperçu — rien n'est enregistré",
+  "question.preview.bannerBody": "Répondez si vous le souhaitez : aucune tentative n'est créée, rien n'est stocké et rien n'est corrigé. Fermez l'onglet quand vous avez terminé.",
+  "question.preview.incomplete": "Terminez d'abord la question : un brouillon inachevé n'a rien à montrer à un étudiant.",
   "question.uploadFailed": "L'image n'a pas pu être envoyée.",
 
   // --- Politiques de notation des QCM (docs/04 §4.4) ---

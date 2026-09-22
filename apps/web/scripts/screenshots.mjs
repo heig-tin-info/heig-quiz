@@ -264,7 +264,9 @@ const scenes = [
   { name: "editor-code", role: "teacher", path: "/questions/q1", settle: 5000 },
   { name: "editor-short", role: "teacher", path: "/questions/q3" },
   { name: "editor-cloze", role: "teacher", path: "/questions/q4" },
-  { name: "editor-preview", role: "teacher", path: "/questions/q2", act: (p) => p.keyboard.press("Control+Shift+M") },
+  // "Student preview": a page of its own, opened by the editor in a new tab.
+  { name: "question-preview", role: "teacher", path: "/questions/q2/preview", settle: 3000 },
+  { name: "question-preview-code", role: "teacher", path: "/questions/q1/preview", settle: 8000 },
   { name: "editor-publish", role: "teacher", path: "/questions/q2", fold: true, act: (p) => p.keyboard.press("Control+Shift+P") },
   { name: "editor-versions", role: "teacher", path: "/questions/q1?tab=versions", settle: 3000 },
   { name: "editor-loading", role: "teacher", path: "/questions/q2?slow=1", settle: 300 },

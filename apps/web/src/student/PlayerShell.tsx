@@ -32,6 +32,7 @@ import { useT } from "../i18n";
 import { setThemeChoice, useResolvedTheme } from "../theme";
 import {
   Countdown,
+  cx,
   IconButton,
   ProgressSegments,
   SyncBadge,
@@ -46,7 +47,7 @@ export function PlayerShell({
   now,
   paused = false,
   sync,
-  segments,
+  segments = [],
   onSelectSegment,
   progressLabel,
   headerAction,
@@ -62,11 +63,16 @@ export function PlayerShell({
   now: number;
   /** The teacher paused the evaluation: the countdown freezes with it (W16). */
   paused?: boolean;
-  sync: SyncState;
-  segments: Segment[];
+  /**
+   * Absent when there is nothing to save — the one-question preview writes
+   * nothing, and a badge saying "Saved" there would be a lie.
+   */
+  sync?: SyncState;
+  /** Empty when there is only one thing to read: no strip at all. */
+  segments?: Segment[];
   /** Absent when navigation is locked: the strip becomes an indicator. */
   onSelectSegment?: (id: string, index: number) => void;
-  progressLabel: string;
+  progressLabel?: string;
   /** "Hand in", the only action of the bar. */
   headerAction?: ReactNode;
   /** What `Ctrl+K` offers here. Empty means no palette at all. */
@@ -103,7 +109,14 @@ export function PlayerShell({
   return (
     <div className="flex min-h-dvh flex-col bg-canvas">
       <header className="sticky top-0 z-20 border-b border-line bg-surface">
-        <div className="mx-auto w-full max-w-190 px-4 pt-2.5 sm:px-6">
+        <div
+          className={cx(
+            "mx-auto w-full max-w-190 px-4 pt-2.5 sm:px-6",
+            // The strip carries the bar's bottom margin; without one the bar
+            // would sit on its own hairline.
+            segments.length === 0 && "pb-2.5",
+          )}
+        >
           <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
               {/* The page's heading is what the page IS — the evaluation the
@@ -131,15 +144,17 @@ export function PlayerShell({
             {deadlineAt === null ? null : (
               <Countdown deadlineAt={deadlineAt} now={now} paused={paused} />
             )}
-            <SyncBadge state={sync} />
+            {sync === undefined ? null : <SyncBadge state={sync} />}
             {headerAction}
           </div>
-          <ProgressSegments
-            segments={segments}
-            {...(onSelectSegment ? { onSelect: onSelectSegment } : {})}
-            label={progressLabel}
-            className="mt-1"
-          />
+          {segments.length === 0 ? null : (
+            <ProgressSegments
+              segments={segments}
+              {...(onSelectSegment ? { onSelect: onSelectSegment } : {})}
+              label={progressLabel ?? ""}
+              className="mt-1"
+            />
+          )}
         </div>
       </header>
 
