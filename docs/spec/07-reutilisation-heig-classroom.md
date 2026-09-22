@@ -1,96 +1,96 @@
-# 7. Réutilisation de heig-classroom
+# 7. Reuse of heig-classroom
 
-Le dépôt `~/heig-classroom` est un projet du même auteur, en production, avec la même pile, le même IdP et les mêmes contraintes d'exploitation. **Le portail de quiz démarre par une copie de ce dépôt, élagué**, plutôt que par un dépôt vierge. Les agents qui coderont le produit doivent lire cette page avant de créer quoi que ce soit qui existe déjà là-bas.
+The `~/heig-classroom` repository is a project by the same author, in production, with the same stack, the same IdP and the same operating constraints. **The quiz portal starts as a pruned copy of that repository**, rather than from a blank one. The agents that will code the product must read this page before creating anything that already exists there.
 
-## 7.1 Ce qu'est heig-classroom
+## 7.1 What heig-classroom is
 
-Monorepo pnpm, deux applications :
+pnpm monorepo, two applications:
 
-| Chemin | Rôle | État |
+| Path | Role | State |
 |---|---|---|
-| `apps/server` + `apps/web` | Portail GitHub Classroom : classes, devoirs, dépôts étudiants, notation par CI | Production, `classroom.chevallier.io` |
-| `apps/codespace` | Portail d'environnements de développement supervisés : code-server, Podman rootful durci, mode examen SEB | En test |
-| `packages/domain`, `packages/contracts` | Règles métier pures et schémas zod partagés | |
+| `apps/server` + `apps/web` | GitHub Classroom portal: classrooms, assignments, student repositories, grading by CI | Production, `classroom.chevallier.io` |
+| `apps/codespace` | Portal of supervised development environments: code-server, hardened rootful Podman, SEB exam mode | In testing |
+| `packages/domain`, `packages/contracts` | Pure business rules and shared zod schemas | |
 
-Pile : Node 22, TypeScript strict, Fastify 5, zod 4, Drizzle sur PostgreSQL, pg-boss, openid-client, React 19, Vite, Tailwind 4, TanStack Query, vitest, Playwright pour les captures. Tout est écrit en anglais : code, commentaires, documentation, commits. Seule l'interface utilisateur est traduite. **Ces conventions s'appliquent telles quelles au portail de quiz.**
+Stack: Node 22, strict TypeScript, Fastify 5, zod 4, Drizzle on PostgreSQL, pg-boss, openid-client, React 19, Vite, Tailwind 4, TanStack Query, vitest, Playwright for the screenshots. Everything is written in English: code, comments, documentation, commits. Only the user interface is translated. **These conventions apply as they are to the quiz portal.**
 
-Treize ADR dans `docs/adr/` documentent les choix. Les ADR 001, 002, 003, 004, 005, 006, 008, 009, 010 s'appliquent sans modification au quiz : monolithe modulaire, Fastify, Postgres et Drizzle, pg-boss, SSE sans WebSocket, ticker unique pour les deadlines, SPA React, VM et Compose, secrets hors dépôt et hors base.
+Thirteen ADRs in `docs/adr/` document the choices. ADRs 001, 002, 003, 004, 005, 006, 008, 009, 010 apply without modification to the quiz: modular monolith, Fastify, Postgres and Drizzle, pg-boss, SSE without WebSocket, single ticker for the deadlines, React SPA, VM and Compose, secrets outside the repository and outside the database.
 
-## 7.2 À reprendre tel quel
+## 7.2 To reuse as-is
 
-| Élément | Chemin dans heig-classroom | Usage dans le quiz |
+| Element | Path in heig-classroom | Use in the quiz |
 |---|---|---|
-| Login OIDC edu-ID | `apps/server/src/auth/oidc.ts`, `auth/plugin.ts` | Identique. Authorization Code + PKCE, `state` et `nonce`, authentification client `private_key_jwt` pour edu-ID ou `client_secret` pour Keycloak en dev, découverte paresseuse avec cache. Le scope `https://eduid.ch/scope/userinfo.read` est déjà géré. |
-| Capture des claims | `auth/claims.ts`, table `user_idp_claims` | Identique. Conserve tout ce que l'IdP livre pour diagnostiquer, sans jamais l'exposer. `affiliationsOf` extrait `eduPersonAffiliation`, c'est la source du rôle prof ou étudiant, voir F-AUTH-02. Note observée en production : `eduPersonPrimaryAffiliation` n'est pas livré. |
-| Identité multi-adresses | `identity.ts`, table `user_emails` | Identique. edu-ID livre l'adresse choisie par l'utilisateur, parfois privée, alors que le roster GAPS contient l'adresse `@heig-vd.ch`. L'identité est un ensemble d'adresses, l'appariement du roster se fait sur cet ensemble, les collisions sont signalées au prof. Ce problème est déjà résolu, ne pas le redécouvrir. |
-| Sessions opaques | `auth/session.ts` | Identique. Jeton aléatoire, seul le hash SHA-256 est stocké, cookie CSRF séparé. |
-| Keycloak de développement | `docker-compose.dev.yml`, `infra/keycloak/hgc-dev-realm.json` | Identique. Un vrai OIDC même en dev, aucun "utilisateur courant" par variable d'environnement. Ajouter un client `quiz` au realm. |
-| Configuration typée | `apps/server/src/config.ts` | Même schéma zod des variables d'environnement, avec le refus des valeurs de dev en production. |
-| Import de roster | `packages/domain/src/roster.ts`, `apps/web/src/RosterImport.tsx`, `RosterTable.tsx` | Identique. Collage CSV ou dépôt d'un fichier Excel, détection permissive des colonnes nom, prénom, email, import atomique. Ajouter la colonne temps supplémentaire en pourcent, F-ORG-07. |
-| Guards et chargeurs d'accès | `apps/server/src/modules/guards.ts` | Même motif : un seul prédicat `staffAccess`, les entités sont chargées si et seulement si l'utilisateur a accès à leur classroom, sinon 404 indiscernable d'une absence. |
-| Journal d'audit | `audit.ts`, table `audit_log` | Identique, catalogue fermé d'actions en union TypeScript. Couvre F-ADMIN-04. |
-| Bus d'événements et SSE | `events.ts`, `modules/events.ts`, `apps/web/src/live.ts` | À reprendre avec une extension, voir 7.3. Les événements sont des indices de rafraîchissement par sujets, jamais des données. Reconnexion native de `EventSource`, refetch TanStack Query, pas de replay. |
-| File de tâches | `jobs.ts`, pg-boss | Identique. Remplace la table `jobs` maison prévue en 5.6. Files `grading.auto`, `grading.runner`, `grading.llm`, `export.pool`. |
-| Ticker des deadlines | `ticker.ts`, `deadline.ts` | Même mécanisme : une boucle périodique, verrou consultatif Postgres, sélection SQL des tentatives dont `deadline_at + grâce <= now()` et non fermées, fermeture par UPDATE conditionnel. Période à ramener de 20 s à 1 s pour le quiz, ce qui reste trivial pour 100 tentatives ouvertes. Le principe "replanifier est gratuit, rattraper après une panne est gratuit" est exactement ce que demande F-LIVE-07 et F-LIVE-11. |
-| Gel en deux temps | ADR-012 | Même logique pour les notes : note provisoire à la clôture, définitive à la publication, F-GRADE-09. L'heure de réception serveur fait foi, jamais l'heure du client. |
-| Design system | `apps/web/DESIGN.md`, `apps/web/src/style.css`, `apps/web/src/ui.tsx`, `theme.ts`, `.claude/skills/hgc-ui/SKILL.md` | À reprendre en entier, voir 7.4. |
-| i18n | `apps/web/src/i18n.tsx` | Même mécanisme : dictionnaire plat par locale, `t(key, vars)`, choix persisté sur le compte avec miroir localStorage. Différence : dans le quiz, les surfaces prof sont aussi traduites, N-I18N-01. |
-| Mock navigateur | `apps/web/src/mock/`, `dev:mock`, `?as=teacher` | Identique. Permet de développer et de capturer chaque écran sans backend. |
-| Captures d'écran | `apps/web/scripts/screenshots.mjs` | Identique. Chaque écran touché est capturé en 1440×900 et 390×844, clair et sombre. |
-| Déploiement | `Dockerfile`, `compose.prod.yml`, `Caddyfile`, `deploy.sh`, `deploy.md`, service `backup` | Identique, en retirant Keycloak de la production. Le service de sauvegarde Postgres existe déjà. |
-| Tests | `apps/server/src/test/db.ts` avec PGlite, conventions `*.db.test.ts` | Identique. Tests de base sans Postgres externe. |
-| Rendu markdown | `apps/web/src/markdown.tsx` | Non. C'est un rendu minimal pour l'aide, contenu de confiance. Le quiz a besoin d'un vrai éditeur et d'un rendu assaini avec KaTeX, voir 5.1. |
-| Intégration GitHub | `apps/server/src/github/`, `octokit` | Non. Supprimer. |
-| Mailer | `mailer.ts`, `modules/email.ts` | Plus tard. Utile pour notifier la publication des résultats, F-GRADE-09, mais pas en phase 1. |
+| edu-ID OIDC login | `apps/server/src/auth/oidc.ts`, `auth/plugin.ts` | Identical. Authorization Code + PKCE, `state` and `nonce`, `private_key_jwt` client authentication for edu-ID or `client_secret` for Keycloak in dev, lazy discovery with cache. The `https://eduid.ch/scope/userinfo.read` scope is already handled. |
+| Claims capture | `auth/claims.ts`, table `user_idp_claims` | Identical. Keeps everything the IdP delivers for diagnosis, without ever exposing it. `affiliationsOf` extracts `eduPersonAffiliation`, which is the source of the teacher or student role, see F-AUTH-02. Note observed in production: `eduPersonPrimaryAffiliation` is not delivered. |
+| Multi-address identity | `identity.ts`, table `user_emails` | Identical. edu-ID delivers the address chosen by the user, sometimes a private one, while the GAPS roster contains the `@heig-vd.ch` address. An identity is a set of addresses, roster matching is done on that set, collisions are reported to the teacher. This problem is already solved, do not rediscover it. |
+| Opaque sessions | `auth/session.ts` | Identical. Random token, only the SHA-256 hash is stored, separate CSRF cookie. |
+| Development Keycloak | `docker-compose.dev.yml`, `infra/keycloak/hgc-dev-realm.json` | Identical. A real OIDC even in dev, no "current user" through an environment variable. Add a `quiz` client to the realm. |
+| Typed configuration | `apps/server/src/config.ts` | Same zod schema of the environment variables, with the refusal of dev values in production. |
+| Roster import | `packages/domain/src/roster.ts`, `apps/web/src/RosterImport.tsx`, `RosterTable.tsx` | Identical. CSV paste or Excel file drop, permissive detection of the last name, first name and email columns, atomic import. Add the extra time column in percent, F-ORG-07. |
+| Guards and access loaders | `apps/server/src/modules/guards.ts` | Same pattern: a single `staffAccess` predicate, entities are loaded if and only if the user has access to their classroom, otherwise a 404 indistinguishable from a missing entity. |
+| Audit log | `audit.ts`, table `audit_log` | Identical, closed catalogue of actions as a TypeScript union. Covers F-ADMIN-04. |
+| Event bus and SSE | `events.ts`, `modules/events.ts`, `apps/web/src/live.ts` | To reuse with an extension, see 7.3. Events are refresh hints by topic, never data. Native `EventSource` reconnection, TanStack Query refetch, no replay. |
+| Job queue | `jobs.ts`, pg-boss | Identical. Replaces the home-made `jobs` table planned in 5.6. Queues `grading.auto`, `grading.runner`, `grading.llm`, `export.pool`. |
+| Deadline ticker | `ticker.ts`, `deadline.ts` | Same mechanism: a periodic loop, Postgres advisory lock, SQL selection of the attempts whose `deadline_at + grace <= now()` and not closed, closing by conditional UPDATE. Period to bring down from 20 s to 1 s for the quiz, which stays trivial for 100 open attempts. The principle "rescheduling is free, catching up after an outage is free" is exactly what F-LIVE-07 and F-LIVE-11 ask for. |
+| Two-step freeze | ADR-012 | Same logic for the grades: provisional grade at closing, final at release, F-GRADE-09. The server's receipt time is authoritative, never the client's time. |
+| Design system | `apps/web/DESIGN.md`, `apps/web/src/style.css`, `apps/web/src/ui.tsx`, `theme.ts`, `.claude/skills/hgc-ui/SKILL.md` | To reuse in full, see 7.4. |
+| i18n | `apps/web/src/i18n.tsx` | Same mechanism: flat dictionary per locale, `t(key, vars)`, choice persisted on the account with a localStorage mirror. Difference: in the quiz, the teacher surfaces are translated too, N-I18N-01. |
+| Browser mock | `apps/web/src/mock/`, `dev:mock`, `?as=teacher` | Identical. Lets one develop and capture every screen without a backend. |
+| Screenshots | `apps/web/scripts/screenshots.mjs` | Identical. Every touched screen is captured at 1440×900 and 390×844, light and dark. |
+| Deployment | `Dockerfile`, `compose.prod.yml`, `Caddyfile`, `deploy.sh`, `deploy.md`, `backup` service | Identical, removing Keycloak from production. The Postgres backup service already exists. |
+| Tests | `apps/server/src/test/db.ts` with PGlite, `*.db.test.ts` conventions | Identical. Database tests without an external Postgres. |
+| Markdown rendering | `apps/web/src/markdown.tsx` | No. It is a minimal rendering for the help, trusted content. The quiz needs a real editor and a sanitised rendering with KaTeX, see 5.1. |
+| GitHub integration | `apps/server/src/github/`, `octokit` | No. Remove. |
+| Mailer | `mailer.ts`, `modules/email.ts` | Later. Useful to notify the release of the results, F-GRADE-09, but not in phase 1. |
 
-## 7.3 À adapter
+## 7.3 To adapt
 
-**SSE**. Le bus de heig-classroom ne transporte que des indices, le client refetch. Pour le quiz, cela suffit au tableau de bord prof et à l'état de l'évaluation. Deux ajouts :
+**SSE**. The heig-classroom bus only carries hints; the client refetches. For the quiz, this is enough for the teacher dashboard and the evaluation state. Two additions:
 
-1. Un battement toutes les secondes sur le flux d'une tentative ouverte, porteur de `serverNow` et de `deadlineAt`, pour l'horloge, voir 5.4. Le battement de 25 s de heig-classroom reste pour les autres pages.
-2. Un sujet `attempt:<id>` et un sujet `evaluation:<id>` dans la grammaire des topics, en plus de `classroom:<id>`, `teacher:<id>`, `user:<id>`.
+1. A heartbeat every second on the stream of an open attempt, carrying `serverNow` and `deadlineAt`, for the clock, see 5.4. The 25 s heartbeat of heig-classroom remains for the other pages.
+2. An `attempt:<id>` topic and an `evaluation:<id>` topic in the topic grammar, in addition to `classroom:<id>`, `teacher:<id>`, `user:<id>`.
 
-L'écriture des réponses reste en REST, comme le prévoit l'ADR-005.
+Writing answers stays in REST, as ADR-005 provides.
 
-**Rôles**. heig-classroom traite prof et assistant comme des étiquettes sans niveau de permission. Le quiz garde cette simplicité : tout membre du staff d'un cours a les mêmes droits. Le rôle global `teacher` vient de l'affiliation edu-ID ou de la promotion par l'admin.
+**Roles**. heig-classroom treats teacher and assistant as labels without a permission level. The quiz keeps that simplicity: every staff member of a course has the same rights. The global `teacher` role comes from the edu-ID affiliation or from promotion by the admin.
 
-**Schéma**. Reprendre `users`, `user_emails`, `user_idp_claims`, `sessions`, `audit_log`, `avatars`, `classrooms`, `enrollments`. Supprimer `organizations`, `assignments`, `student_repos` et tout ce qui touche GitHub. Ajouter les tables de [01-glossaire-et-domaine.md](01-glossaire-et-domaine.md). heig-classroom utilise des UUID, le quiz aussi, la spec parlait d'ULID : **les UUID v7 sont retenus**, triables et générables côté client.
+**Schema**. Reuse `users`, `user_emails`, `user_idp_claims`, `sessions`, `audit_log`, `avatars`, `classrooms`, `enrollments`. Remove `organizations`, `assignments`, `student_repos` and everything touching GitHub. Add the tables of [01-glossaire-et-domaine.md](01-glossaire-et-domaine.md). heig-classroom uses UUIDs, so does the quiz, the spec spoke of ULIDs: **UUID v7 is retained**, sortable and generatable client-side.
 
-## 7.4 Ligne graphique
+## 7.4 Visual identity
 
-Le portail de quiz reprend le design system de heig-classroom tel quel. C'est déjà la ligne demandée dans le README : sobre, sans cadres, une action primaire par écran, jetons sémantiques, clair et sombre par échange de variables sans variante `dark:` dans le balisage.
+The quiz portal takes over the heig-classroom design system as it is. It is already the line requested in the README: sober, no frames, one primary action per screen, semantic tokens, light and dark by swapping variables without a `dark:` variant in the markup.
 
-- **Jetons** : `canvas`, `surface`, `surface-2`, `surface-3`, `line`, `line-strong`, `fg`, `fg-muted`, `fg-faint`, `accent`, `accent-soft`, `on-fill`, `success`, `warning`, `danger` et leurs variantes `soft`. Définis dans `style.css`, documentés dans `DESIGN.md`, 230 lignes à lire en premier.
-- **Typographie** : Manrope variable pour le texte, JetBrains Mono variable pour le code.
-- **Primitives** dans `ui.tsx`, 2000 lignes : `Button`, `IconButton`, `Card`, `Badge`, `Alert`, `Field`, `Select`, `Textarea`, `Segmented`, `Switch`, `Tabs`, `Menu`, `Modal`, `Sheet`, `PageHeader`, `SectionHeading`, `Stat`, `EmptyState`, `Skeleton`, `Spinner`, `Progress`, styles de table `T` avec tri, `RangeCalendar`, `useConfirm`, `useLayer`, `useEscape`, `useNow`.
-- **Règles** de la skill `hgc-ui` : cinq états par surface asynchrone, formulaires longs en `Sheet`, confirmations par `useConfirm`, sept colonnes au plus, clavier complet, capture d'écran obligatoire avant de déclarer un écran terminé.
-- **Différence d'accent** : l'accent rouge HEIG-VD de heig-classroom peut être conservé ou remplacé par une teinte propre au quiz. Un seul jeton à changer.
-- **À ajouter** pour le quiz : anneau de progression de la salle d'attente, compte à rebours, grille étudiants × questions, barre de progression des questions, cellules de verdict juste / partiel / faux avec icône. Ces composants entrent dans `ui.tsx` ou dans un `packages/ui` s'ils deviennent nombreux.
+- **Tokens**: `canvas`, `surface`, `surface-2`, `surface-3`, `line`, `line-strong`, `fg`, `fg-muted`, `fg-faint`, `accent`, `accent-soft`, `on-fill`, `success`, `warning`, `danger` and their `soft` variants. Defined in `style.css`, documented in `DESIGN.md`, 230 lines to read first.
+- **Typography**: variable Manrope for text, variable JetBrains Mono for code.
+- **Primitives** in `ui.tsx`, 2000 lines: `Button`, `IconButton`, `Card`, `Badge`, `Alert`, `Field`, `Select`, `Textarea`, `Segmented`, `Switch`, `Tabs`, `Menu`, `Modal`, `Sheet`, `PageHeader`, `SectionHeading`, `Stat`, `EmptyState`, `Skeleton`, `Spinner`, `Progress`, `T` table styles with sorting, `RangeCalendar`, `useConfirm`, `useLayer`, `useEscape`, `useNow`.
+- **Rules** of the `hgc-ui` skill: five states per asynchronous surface, long forms in a `Sheet`, confirmations through `useConfirm`, seven columns at most, full keyboard support, mandatory screenshot before declaring a screen finished.
+- **Accent difference**: the HEIG-VD red accent of heig-classroom may be kept or replaced by a hue of the quiz's own. A single token to change.
+- **To add** for the quiz: waiting-room progress ring, countdown, students × questions grid, question progress bar, correct / partial / wrong verdict cells with an icon. These components go into `ui.tsx` or into a `packages/ui` if they become numerous.
 
-La skill `.claude/skills/hgc-ui/SKILL.md` est copiée dans le nouveau dépôt sous un nom propre au quiz, avec les chemins mis à jour.
+The `.claude/skills/hgc-ui/SKILL.md` skill is copied into the new repository under a name of the quiz's own, with the paths updated.
 
-## 7.5 Principe des runners
+## 7.5 Runner principle
 
-heig-classroom n'a pas de runner de code intégré : la notation se fait par GitHub Actions sur des runners éphémères auto-hébergés, ADR-007. Ce n'est pas le modèle du quiz. En revanche `apps/codespace` contient exactement le durcissement de conteneur dont le runner du quiz a besoin :
+heig-classroom has no built-in code runner: grading is done by GitHub Actions on ephemeral self-hosted runners, ADR-007. That is not the quiz's model. On the other hand, `apps/codespace` contains exactly the container hardening the quiz's runner needs:
 
-| Élément | Chemin | Usage dans le quiz |
+| Element | Path | Use in the quiz |
 |---|---|---|
-| Options de durcissement | `apps/codespace/images/c-dev/run-hardened.sh` | Reprendre la liste : `--userns=auto`, `--cap-drop=ALL`, `--security-opt no-new-privileges`, profil seccomp, `--read-only`, `--pids-limit`, tmpfs de travail, `--network none`. Ce sont les options de N-SEC-06. |
-| Profil seccomp | `apps/codespace/infra/seccomp/codespace.json` | Reprendre. Déjà testé avec une chaîne de compilation C. |
-| Image C | `apps/codespace/images/c-dev/Containerfile` | Base pour l'image `runner-c`, en retirant code-server. Une image par langage, même structure. |
-| Module moteur | `apps/codespace/src/engine/` | Pilotage de Podman en `--remote` via le socket, sortie `--format json`. Reprendre comme base de `apps/runner`. |
-| Invariants | `apps/codespace/CLAUDE.md` | "Aucun secret dans le conteneur", "réseau fermé par construction", "durcissement dès le premier run". Recopier dans le `CLAUDE.md` du quiz. |
-| Réseau interne nftables | `apps/codespace/infra/net/`, `infra/nft/` | Non nécessaire. Le runner du quiz est en `--network none`, il n'a pas de canal git à ouvrir. |
-| Mode SEB | `apps/codespace/src/seb/` | Hors périmètre du quiz, voir 0.6. Reste disponible si un jour un examen surveillé est demandé. |
+| Hardening options | `apps/codespace/images/c-dev/run-hardened.sh` | Reuse the list: `--userns=auto`, `--cap-drop=ALL`, `--security-opt no-new-privileges`, seccomp profile, `--read-only`, `--pids-limit`, working tmpfs, `--network none`. These are the options of N-SEC-06. |
+| seccomp profile | `apps/codespace/infra/seccomp/codespace.json` | Reuse. Already tested with a C toolchain. |
+| C image | `apps/codespace/images/c-dev/Containerfile` | Base for the `runner-c` image, removing code-server. One image per language, same structure. |
+| Engine module | `apps/codespace/src/engine/` | Driving Podman in `--remote` through the socket, `--format json` output. Reuse as the base of `apps/runner`. |
+| Invariants | `apps/codespace/CLAUDE.md` | "No secret inside the container", "network closed by construction", "hardening from the very first run". Copy into the quiz's `CLAUDE.md`. |
+| Internal nftables network | `apps/codespace/infra/net/`, `infra/nft/` | Not needed. The quiz's runner is in `--network none`, it has no git channel to open. |
+| SEB mode | `apps/codespace/src/seb/` | Out of scope for the quiz, see 0.6. Remains available if a proctored exam is ever requested. |
 
-Conséquence sur [05-architecture.md](05-architecture.md), section 5.5 : le runner est piloté par **Podman rootful en `--remote`** comme le codespace, plutôt que par le socket Docker. gVisor reste l'option recommandée en plus, si la VM Hetzner l'accepte ; sinon le durcissement Podman du codespace est la référence, il est déjà éprouvé. Le codespace maintient une session longue par étudiant, le runner du quiz lance un conteneur par exécution de quelques secondes : le module moteur est repris, la gestion de sessions ne l'est pas.
+Consequence on [05-architecture.md](05-architecture.md), section 5.5: the runner is driven by **rootful Podman in `--remote`** like the codespace, rather than by the Docker socket. gVisor remains the recommended option on top, if the Hetzner VM accepts it; otherwise the codespace's Podman hardening is the reference, it is already proven. The codespace maintains a long session per student, the quiz's runner launches one container per execution of a few seconds: the engine module is reused, the session management is not.
 
-## 7.6 Marche à suivre pour démarrer le dépôt
+## 7.6 Steps to start the repository
 
-1. Copier heig-classroom dans un nouveau dépôt, historique non conservé.
-2. Supprimer `apps/codespace` après avoir déplacé `images/c-dev`, `infra/seccomp`, `src/engine` vers `apps/runner`.
-3. Dans `apps/server` : supprimer `github/`, `modules/webhooks.ts`, `repos.ts`, `sync.ts`, `codespace.ts`, `mailer.ts` pour l'instant, et les tables associées. Garder auth, identity, sessions, guards, audit, events, jobs, ticker, config, test.
-4. Dans `apps/web` : garder `ui.tsx`, `style.css`, `theme.ts`, `i18n.tsx`, `Shell.tsx`, `Header.tsx`, `notify.tsx`, `confirm.tsx`, `RosterImport.tsx`, `RosterTable.tsx`, `SettingsPage.tsx`, `AdminPanel.tsx`, `mock/`, `scripts/`. Supprimer les écrans de devoirs.
-5. Renommer le scope de package `@hgc` en un scope propre au quiz, mettre à jour `DESIGN.md` et la skill UI.
-6. Créer `packages/core` avec le contrat `QuestionType` et le registre, puis `packages/qt-mcq` comme premier type, avant tout écran d'évaluation.
-7. Vérifier que `pnpm build && pnpm typecheck && pnpm test` passe sur le squelette vide avant d'ajouter une fonctionnalité.
+1. Copy heig-classroom into a new repository, history not kept.
+2. Remove `apps/codespace` after moving `images/c-dev`, `infra/seccomp`, `src/engine` to `apps/runner`.
+3. In `apps/server`: remove `github/`, `modules/webhooks.ts`, `repos.ts`, `sync.ts`, `codespace.ts`, `mailer.ts` for now, and the associated tables. Keep auth, identity, sessions, guards, audit, events, jobs, ticker, config, test.
+4. In `apps/web`: keep `ui.tsx`, `style.css`, `theme.ts`, `i18n.tsx`, `Shell.tsx`, `Header.tsx`, `notify.tsx`, `confirm.tsx`, `RosterImport.tsx`, `RosterTable.tsx`, `SettingsPage.tsx`, `AdminPanel.tsx`, `mock/`, `scripts/`. Remove the assignment screens.
+5. Rename the `@hgc` package scope to a scope of the quiz's own, update `DESIGN.md` and the UI skill.
+6. Create `packages/core` with the `QuestionType` contract and the registry, then `packages/qt-mcq` as the first type, before any evaluation screen.
+7. Check that `pnpm build && pnpm typecheck && pnpm test` passes on the empty skeleton before adding a feature.

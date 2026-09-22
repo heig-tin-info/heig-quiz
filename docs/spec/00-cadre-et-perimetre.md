@@ -1,117 +1,117 @@
-# 0. Cadre, objectifs et périmètre
+# 0. Context, objectives and scope
 
-## 0.1 Contexte
+## 0.1 Context
 
-- Projet d'un enseignant HEIG-VD pour ses propres cours. Développement par l'enseignant, assisté de Claude.
-- Hébergement : une VM Hetzner, déploiement Docker Compose, un seul nœud.
-- Utilisateurs : étudiants et enseignants HES-SO authentifiés par edu-ID, un administrateur.
-- Usage principal : évaluations en classe (20 à 30 étudiants), exercices à la maison, sondages en direct, entraînement individuel.
+- A project by a HEIG-VD teacher for his own courses. Developed by the teacher, assisted by Claude.
+- Hosting: one Hetzner VM, Docker Compose deployment, a single node.
+- Users: HES-SO students and teachers authenticated by edu-ID, one admin.
+- Main use: in-class evaluations (20 to 30 students), exercises at home, live polls, individual practice.
 
-## 0.2 Pourquoi un système maison
+## 0.2 Why a home-grown system
 
-| Besoin | Moodle / CodeRunner | Wooclap, Kahoot, etc. | Ce projet |
+| Need | Moodle / CodeRunner | Wooclap, Kahoot, etc. | This project |
 |---|---|---|---|
-| Auth edu-ID et appariement automatique des étudiants | Oui via Cyberlearn, mais lourd | Non | Oui, natif |
-| Interface sobre et moderne, temps réel | Non | Oui, mais orientée animation | Oui |
-| Questions code exécutées en sandbox | CodeRunner, UI datée | Non | Oui, natif |
-| Correction assistée par LLM cadrée et validée par le prof | Non | Non | Oui, différenciateur |
-| Pool de questions versionné, partagé, exportable en texte | Partiel | Non | Oui |
-| Entraînement espacé sur les questions du cours | Non | Non | Oui, phase 2 |
-| Gratuit, sans publicité, données sur un serveur maîtrisé | Oui | Non | Oui |
+| edu-ID auth and automatic matching of students | Yes through Cyberlearn, but heavy | No | Yes, native |
+| Clean, modern interface, real time | No | Yes, but geared towards animation | Yes |
+| Code questions run in a sandbox | CodeRunner, dated UI | No | Yes, native |
+| LLM-assisted grading, framed and validated by the teacher | No | No | Yes, a differentiator |
+| Versioned question pool, shared, exportable as text | Partial | No | Yes |
+| Spaced practice on the questions of the course | No | No | Yes, phase 2 |
+| Free, no advertising, data on a server under our control | Yes | No | Yes |
 
-## 0.3 Objectifs
+## 0.3 Objectives
 
-1. Un prof crée une évaluation de 10 questions à partir de son pool en moins de 10 minutes.
-2. Un quiz de 30 étudiants se déroule sans incident réseau visible : chaque réponse est sauvée dès la saisie, une déconnexion ne perd rien.
-3. Le tableau de bord du prof reflète l'état des étudiants en moins d'une seconde.
-4. Les questions à correction automatique donnent une note provisoire dès la clôture. Les autres sont proposées par le LLM et validées par le prof en un passage.
-5. L'export des notes au dixième, barème 1 à 6, est disponible en CSV dès la validation.
-6. Tout le contenu d'un pool s'exporte en fichiers texte versionnables dans git et se réimporte sans perte.
+1. A teacher creates a 10-question evaluation from their pool in under 10 minutes.
+2. A quiz with 30 students runs without any visible network incident: every answer is saved as soon as it is typed, a disconnection loses nothing.
+3. The teacher's dashboard reflects the state of the students in under one second.
+4. Automatically graded questions yield a provisional grade as soon as the evaluation closes. The others are proposed by the LLM and validated by the teacher in a single pass.
+5. The export of grades to the tenth, on the 1 to 6 scale, is available as CSV as soon as they are validated.
+6. The whole content of a pool exports to text files that can be versioned in git, and imports back without loss.
 
-## 0.4 Contraintes
+## 0.4 Constraints
 
-- Équipe : une personne plus un assistant IA. La spec privilégie la simplicité d'exploitation : un dépôt, une base, une VM.
-- Point de départ : le dépôt `~/heig-classroom` du même auteur, en production, fournit l'auth edu-ID, le design system, l'infrastructure de déploiement et le durcissement des conteneurs. Voir [07-reutilisation-heig-classroom.md](07-reutilisation-heig-classroom.md).
-- Charge : 20 à 30 étudiants par quiz, 100 étudiants simultanés sur la plateforme, pics d'exécution de code de 30 runs en 10 secondes.
-- Langues : interface en français et en anglais. Contenu des questions dans la langue du prof.
-- Auth : edu-ID uniquement pour les comptes nominatifs. Un code de session permet la participation anonyme aux sondages.
-- Données : réponses et notes sont des données personnelles. Voir [03-exigences-non-fonctionnelles.md](03-exigences-non-fonctionnelles.md), section données.
-- Navigateurs : versions courantes de Chrome, Firefox, Safari, Edge. Mobile et tablette pour tous les types sauf le code et le drawing, qui restent utilisables mais optimisés pour desktop.
+- Team: one person plus an AI assistant. The spec favours operational simplicity: one repository, one database, one VM.
+- Starting point: the `~/heig-classroom` repository by the same author, in production, provides the edu-ID auth, the design system, the deployment infrastructure and the container hardening. See [07-reutilisation-heig-classroom.md](07-reutilisation-heig-classroom.md).
+- Load: 20 to 30 students per quiz, 100 students simultaneously on the platform, code execution peaks of 30 runs in 10 seconds.
+- Languages: interface in French and in English. Question content in the teacher's language.
+- Auth: edu-ID only for named accounts. A session code allows anonymous participation in polls.
+- Data: answers and grades are personal data. See [03-exigences-non-fonctionnelles.md](03-exigences-non-fonctionnelles.md), data section.
+- Browsers: current versions of Chrome, Firefox, Safari, Edge. Mobile and tablet for every type except code and drawing, which remain usable but are optimised for desktop.
 
 ## 0.5 Phases
 
-Priorité MoSCoW : M = must, S = should, C = could.
+MoSCoW priority: M = must, S = should, C = could.
 
-### Phase 1, MVP : faire passer un quiz noté en classe
+### Phase 1, MVP: run a graded quiz in class
 
-| Domaine | Contenu | Prio |
+| Area | Content | Prio |
 |---|---|---|
-| Auth | edu-ID OpenID Connect, rôles prof / étudiant / admin | M |
-| Organisation | Cours, classroom, roster importé par CSV ou auto-inscription à la connexion | M |
-| Pool | Pool privé par prof, catégories, tags, brouillon puis publication, versions numérotées | M |
-| Questions | Choix multiples, texte court, texte à trou, code stdin/stdout | M |
-| Évaluation | Mode examen chronométré, salle d'attente, navigation libre / forward only, mélange, temps supplémentaire par étudiant | M |
-| Déroulement | Autosave, SSE temps réel, horloge serveur, pause, +1/+5/+10 min, clôture manuelle ou automatique | M |
-| Correction | Auto pour les 4 types, panneau de validation, surcharge manuelle, re-correction annotée | M |
-| Notes | Barème 1 à 6 au dixième, export CSV, feedback configurable | M |
-| Tableau de bord | Grille étudiants x questions en direct, affichage / masquage des noms et réponses | M |
-| Export | Format canonique YAML du pool, import / export, API à jeton | S |
-| Expert | Bascule WYSIWYG / source, palette `Ctrl+K`, raccourcis | S |
-| UX | Design system maison, clair / sombre, responsive | M |
+| Auth | edu-ID OpenID Connect, teacher / student / admin roles | M |
+| Organisation | Course, classroom, roster imported from CSV or self-enrolment at sign-in | M |
+| Pool | Private pool per teacher, categories, tags, draft then publication, numbered versions | M |
+| Questions | Multiple choice, short answer, cloze, stdin/stdout code | M |
+| Evaluation | Timed exam mode, waiting room, free / forward only navigation, shuffling, extra time per student | M |
+| Live run | Autosave, real-time SSE, server clock, pause, +1/+5/+10 min, manual or automatic close | M |
+| Grading | Automatic for the 4 types, validation panel, manual override, annotated re-grading | M |
+| Grades | 1 to 6 scale to the tenth, CSV export, configurable feedback | M |
+| Dashboard | Live students x questions grid, show / hide names and answers | M |
+| Export | Canonical YAML format of the pool, import / export, token API | S |
+| Expert | WYSIWYG / source toggle, `Ctrl+K` palette, shortcuts | S |
+| UX | Home-grown design system, light / dark, responsive | M |
 
-### Phase 2 : LLM, exercices, statistiques
+### Phase 2: LLM, exercises, statistics
 
-| Domaine | Contenu | Prio |
+| Area | Content | Prio |
 |---|---|---|
-| Questions | Réponse riche markdown corrigée par LLM, valeurs numériques aléatoires | M |
-| LLM | "Générer la réponse", variantes, explications, sorties attendues calculées par la solution de référence, correction proposée, clé API par prof ou institutionnelle | M |
-| Expert | CLI `quiz pull` / `push`, édition YAML brute, testeur de regex, opérations en masse | S |
-| Évaluation | Mode exercice ouvert avec délai, mode sondage une question avec code de session | M |
-| Pools | Pools partagés entre profs, rôles lecteur / contributeur / propriétaire, fork avec provenance | S |
-| Statistiques | Indices de difficulté et de discrimination par version, analyse des distracteurs, temps de réponse | S |
-| Drill | Entraînement espacé FSRS, drill quotidien / hebdomadaire, points forts et faibles par tag | S |
-| Import | GIFT et Moodle XML | C |
+| Questions | Rich markdown answer graded by LLM, random numeric values | M |
+| LLM | "Generate the answer", variants, explanations, expected outputs computed by the reference solution, proposed grading, API key per teacher or institutional | M |
+| Expert | `quiz pull` / `push` CLI, raw YAML editing, regex tester, bulk operations | S |
+| Evaluation | Open exercise mode with a deadline, one-question poll mode with a session code | M |
+| Pools | Pools shared between teachers, reader / contributor / owner roles, fork with provenance | S |
+| Statistics | Difficulty and discrimination indices per version, distractor analysis, answer time | S |
+| Drill | FSRS spaced practice, daily / weekly drill, strengths and weaknesses per tag | S |
+| Import | GIFT and Moodle XML | C |
 
-### Phase 3 : types avancés et extensibilité
+### Phase 3: advanced types and extensibility
 
-| Domaine | Contenu | Prio |
+| Area | Content | Prio |
 |---|---|---|
-| Questions | CodeImage, drawing, pick-place composants électroniques | S |
-| Code | Tests unitaires TAP, fichiers additionnels, régions verrouillées, langages supplémentaires | S |
-| Plugins | Packages de questions externes, chargés au build | C |
-| Génération | "Generate 10 min quiz" par tags et difficulté | C |
-| Intégrations | Serveur MCP pour rédiger depuis un client LLM | C |
+| Questions | CodeImage, drawing, pick-and-place of electronic components | S |
+| Code | TAP unit tests, additional files, locked regions, further languages | S |
+| Plugins | External question packages, loaded at build time | C |
+| Generation | "Generate 10 min quiz" by tags and difficulty | C |
+| Integrations | MCP server to author from an LLM client | C |
 
-## 0.6 Hors périmètre
+## 0.6 Out of scope
 
-- Proctoring lourd : webcam, verrouillage de l'appareil, Safe Exam Browser.
-- Correction de schémas électroniques par simulation ou comparaison de netlist. Le pick-place est corrigé par LLM ou manuellement.
-- Gestion de plans d'études, de crédits, d'absences. La plateforme exporte des notes, elle ne les administre pas.
-- Multi-tenant institutionnel : un seul admin, une seule instance.
-- Éditeur de code avec serveur de langage complet. Monaco avec coloration et raccourcis suffit.
-- Installation de plugins à chaud depuis un dépôt distant.
+- Heavy proctoring: webcam, device lockdown, Safe Exam Browser.
+- Grading of electronic schematics by simulation or netlist comparison. Pick-and-place is graded by LLM or manually.
+- Management of study plans, credits, absences. The platform exports grades, it does not administer them.
+- Institutional multi-tenancy: a single admin, a single instance.
+- Code editor with a full language server. Monaco with highlighting and shortcuts is enough.
+- Hot installation of plugins from a remote repository.
 
-## 0.7 Risques
+## 0.7 Risks
 
-| Risque | Impact | Mitigation |
+| Risk | Impact | Mitigation |
 |---|---|---|
-| Panne de la VM pendant un examen | Élevé | Autosave côté serveur à chaque saisie, reprise transparente, sauvegardes, procédure de bascule documentée, mode papier de secours |
-| Évasion de la sandbox de code | Élevé | Conteneurs sans réseau, gVisor, limites CPU / mémoire / pids / temps, image en lecture seule, pas de secrets accessibles |
-| Correction LLM erronée sur une note officielle | Moyen | Toujours validée par le prof, justification par critère, score de confiance, re-correction tracée |
-| Coût ou indisponibilité du fournisseur LLM | Moyen | Correction différée, jamais dans le chemin critique du quiz, clé par prof |
-| Fuite des questions du pool | Moyen | Le pool n'est jamais servi aux étudiants, seules les questions d'une évaluation en cours le sont, sans la clé |
-| Dérive du périmètre | Élevé | Phases figées, toute nouvelle idée va dans la phase 3 ou hors périmètre |
+| VM outage during an exam | High | Server-side autosave on every keystroke, transparent resume, backups, documented failover procedure, paper fallback mode |
+| Escape from the code sandbox | High | Containers without network, gVisor, CPU / memory / pids / time limits, read-only image, no reachable secrets |
+| Wrong LLM grading on an official grade | Medium | Always validated by the teacher, justification per criterion, confidence score, traced re-grading |
+| Cost or unavailability of the LLM provider | Medium | Deferred grading, never in the critical path of the quiz, key per teacher |
+| Leak of the pool's questions | Medium | The pool is never served to students, only the questions of a running evaluation are, without the key |
+| Scope creep | High | Frozen phases, every new idea goes to phase 3 or out of scope |
 
-## 0.8 Journal des décisions
+## 0.8 Decision log
 
-| Date | Décision |
+| Date | Decision |
 |---|---|
-| 2026-09-19 | Système maison plutôt que Moodle ou outil SaaS |
-| 2026-09-19 | Correction LLM pour réponses riches et drawing, validée par le prof |
-| 2026-09-19 | Barème 1 à 6 au dixième, temps supplémentaire en % par étudiant |
-| 2026-09-19 | Rétention complète jusqu'à suppression par le prof |
-| 2026-09-19 | Versionnage brouillon puis publication, numéro incrémenté |
-| 2026-09-19 | Charge cible 30 par quiz, 100 simultanés |
-| 2026-09-19 | Temps réel : SSE plus REST, événements porteurs de données pour le direct, pas de WebSocket |
-| 2026-09-19 | Deux niveaux d'interface, profane par défaut, expert par divulgation progressive |
-| 2026-09-19 | Démarrer par une copie élaguée de heig-classroom : auth, ligne graphique, SSE, pg-boss, ticker, déploiement, durcissement Podman du codespace |
+| 2026-09-19 | Home-grown system rather than Moodle or a SaaS tool |
+| 2026-09-19 | LLM grading for rich answers and drawing, validated by the teacher |
+| 2026-09-19 | 1 to 6 scale to the tenth, extra time in % per student |
+| 2026-09-19 | Full retention until deletion by the teacher |
+| 2026-09-19 | Versioning as draft then publication, incremented number |
+| 2026-09-19 | Target load of 30 per quiz, 100 simultaneous |
+| 2026-09-19 | Real time: SSE plus REST, data-carrying events for the live run, no WebSocket |
+| 2026-09-19 | Two interface levels, novice by default, expert through progressive disclosure |
+| 2026-09-19 | Start from a pruned copy of heig-classroom: auth, visual identity, SSE, pg-boss, ticker, deployment, Podman hardening from the codespace |

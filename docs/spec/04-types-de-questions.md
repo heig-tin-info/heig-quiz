@@ -1,42 +1,42 @@
-# 4. Types de questions
+# 4. Question types
 
-## 4.1 Contrat d'un type de question
+## 4.1 Contract of a question type
 
-Un type est un package TypeScript qui exporte un objet `QuestionType` :
+A type is a TypeScript package that exports a `QuestionType` object:
 
-| Membre | Rôle |
+| Member | Role |
 |---|---|
-| `id` | Identifiant stable, ex. `mcq`. Utilisé en base et dans le format canonique. |
-| `configSchema` | Schéma zod de la configuration, énoncé compris. Validé à la publication et à l'import. |
-| `answerSchema` | Schéma zod de la réponse étudiant. Validé à chaque autosave. |
-| `defaultPoints(config)` | Points par défaut quand la question est ajoutée à une évaluation. |
-| `toStudent(config, seed)` | Retourne la configuration visible par l'étudiant : sans clé, sans explication, sans tests cachés, choix mélangés selon la graine. Fonction pure, testée. |
-| `grade(config, answer, ctx)` | Retourne `{ points, maxPoints, details }` ou `{ pending: 'runner' | 'llm' }`. `ctx` fournit la graine, les points de l'item, et les services runner et LLM. |
-| `randomize(config, seed)` | Facultatif. Instancie les variables aléatoires. Retourne une configuration concrète. |
-| `Editor` | Composant React d'édition du brouillon. |
-| `Player` | Composant React de réponse. Reçoit la configuration étudiant, la réponse courante, un rappel `onChange`. |
-| `Review` | Composant React de relecture : réponse, clé, correction, pour le prof et pour le feedback étudiant. |
-| `Stats` | Facultatif. Composant d'agrégation des réponses d'un item, ex. répartition des choix. |
-| `toCanonical` / `fromCanonical` | Conversion depuis et vers le format canonique, si différent de la configuration brute. |
-| `toDrillGrade(grading)` | Facultatif. Convertit une correction en note de rappel 1 à 4 pour FSRS. |
-| `configVersion`, `migrate(config, from)` | Version du schéma de configuration et montée de version à la lecture. Permet de faire évoluer un type sans migration SQL, voir 5.2. |
-| `generate(ctx)` | Facultatif. Gabarits LLM du type pour "Générer la réponse", "Générer l'explication", "Générer une variante", voir 8.2. |
-| `searchText(config)` | Texte indexé pour la recherche plein texte du pool. |
+| `id` | Stable identifier, e.g. `mcq`. Used in the database and in the canonical format. |
+| `configSchema` | Zod schema of the configuration, statement included. Validated at publication and at import. |
+| `answerSchema` | Zod schema of the student's answer. Validated at every autosave. |
+| `defaultPoints(config)` | Default points when the question is added to an evaluation. |
+| `toStudent(config, seed)` | Returns the configuration visible to the student: no key, no explanation, no hidden tests, choices shuffled according to the seed. Pure function, tested. |
+| `grade(config, answer, ctx)` | Returns `{ points, maxPoints, details }` or `{ pending: 'runner' | 'llm' }`. `ctx` provides the seed, the item's points, and the runner and LLM services. |
+| `randomize(config, seed)` | Optional. Instantiates the random variables. Returns a concrete configuration. |
+| `Editor` | React component for editing the draft. |
+| `Player` | React component for answering. Receives the student configuration, the current answer, an `onChange` callback. |
+| `Review` | React component for review: answer, key, grading, for the teacher and for the student feedback. |
+| `Stats` | Optional. Component aggregating the answers of one item, e.g. the distribution of choices. |
+| `toCanonical` / `fromCanonical` | Conversion from and to the canonical format, if it differs from the raw configuration. |
+| `toDrillGrade(grading)` | Optional. Converts a grading into a recall rating from 1 to 4 for FSRS. |
+| `configVersion`, `migrate(config, from)` | Version of the configuration schema and upgrade on read. Lets a type evolve without an SQL migration, see 5.2. |
+| `generate(ctx)` | Optional. The type's LLM templates for "Generate the answer", "Generate the explanation", "Generate a variant", see 8.2. |
+| `searchText(config)` | Text indexed for the full-text search of the pool. |
 
-Règles :
+Rules:
 
-- Un type n'a pas de tables. Sa configuration et ses réponses vivent en JSONB dans les tables du noyau.
-- Un type ne fait pas d'appel réseau direct. Il passe par `ctx.runner` et `ctx.llm`.
-- Les types de la phase 1 vivent dans le monorepo sous `packages/qt-*`, avec deux points d'entrée `server` et `client`, voir 5.2. Le chargement est statique, par deux registres.
+- A type has no tables. Its configuration and its answers live in JSONB in the core tables.
+- A type makes no direct network call. It goes through `ctx.runner` and `ctx.llm`.
+- The phase 1 types live in the monorepo under `packages/qt-*`, with two entry points `server` and `client`, see 5.2. Loading is static, through two registries.
 
-## 4.2 Format canonique
+## 4.2 Canonical format
 
-Un fichier YAML par question. Les images sont dans un dossier `assets/` voisin, référencées par chemin relatif.
+One YAML file per question. Images live in a sibling `assets/` folder, referenced by relative path.
 
 ```yaml
-id: 01J8Z3K9M2X5V7N4Q6R8T0W2Y4      # ULID stable, généré à la création
+id: 01J8Z3K9M2X5V7N4Q6R8T0W2Y4      # stable ULID, generated at creation
 type: mcq
-name: pointeurs-arithmetique-01      # nom interne
+name: pointeurs-arithmetique-01      # internal name
 tags: [c, pointers, arithmetic]
 difficulty: 2
 version: 3
@@ -53,11 +53,11 @@ config:
   policy: all_or_nothing
 ```
 
-Le champ `config` est propre au type. Les champs de tête sont communs. L'export d'un pool produit `pool.yaml` avec ses métadonnées, un dossier par catégorie, un fichier par question. L'import respecte les `id` : une question existante avec le même `id` reçoit une nouvelle version si le contenu diffère.
+The `config` field is specific to the type. The header fields are common. Exporting a pool produces `pool.yaml` with its metadata, one folder per category, one file per question. Import honours the `id`s: an existing question with the same `id` receives a new version if the content differs.
 
-## 4.3 Valeurs aléatoires
+## 4.3 Random values
 
-Disponible pour `short`, `cloze`, `mcq`, `code` en phase 2.
+Available for `short`, `cloze`, `mcq`, `code` in phase 2.
 
 ```yaml
 variables:
@@ -66,107 +66,107 @@ variables:
   G: { expr: "-R2 / R1", precision: 2 }
 ```
 
-- L'énoncé et la clé utilisent `{{R1}}`, `{{G}}`. Les expressions sont évaluées par un évaluateur arithmétique restreint, sans accès au langage hôte : opérateurs, fonctions mathématiques usuelles, constantes.
-- La graine d'instanciation est celle de la tentative combinée à l'id de l'item. Rejouer une tentative donne les mêmes valeurs.
-- L'éditeur affiche cinq instanciations pour vérification, et un bouton "figer" pour convertir en question fixe.
+- The statement and the key use `{{R1}}`, `{{G}}`. Expressions are evaluated by a restricted arithmetic evaluator, with no access to the host language: operators, the usual mathematical functions, constants.
+- The instantiation seed is the attempt's seed combined with the item id. Replaying an attempt gives the same values.
+- The editor shows five instantiations for checking, and a "freeze" button to convert into a fixed question.
 
-## 4.4 Choix multiples `mcq`
+## 4.4 Multiple choice `mcq`
 
-**Configuration** : `prompt` markdown, `choices[]` avec `text` markdown et `correct`, `mode` `single` ou `multiple`, `maxSelections` facultatif, `policy`, `penalty` facteur 0 à 1 par défaut 1, `allowNegative` par défaut faux.
+**Configuration**: `prompt` markdown, `choices[]` with `text` markdown and `correct`, `mode` `single` or `multiple`, optional `maxSelections`, `policy`, `penalty` factor from 0 to 1, default 1, `allowNegative` default false.
 
-**Réponse** : `selected[]` indices des choix dans l'ordre canonique. Le mélange est appliqué par `toStudent`, la réponse est toujours en indices canoniques.
+**Answer**: `selected[]` indices of the choices in canonical order. Shuffling is applied by `toStudent`; the answer is always in canonical indices.
 
-**Notation**, avec C bonnes réponses, W mauvaises, c bonnes cochées, w mauvaises cochées :
+**Scoring**, with C correct answers, W wrong ones, c correct ones ticked, w wrong ones ticked:
 
-| Politique | Formule | Commentaire |
+| Policy | Formula | Comment |
 |---|---|---|
-| `all_or_nothing` | 1 si c = C et w = 0, sinon 0 | Défaut pour `single` |
-| `partial` | max(0, (c − w) / C) | Une erreur annule une bonne |
-| `penalized` | max(0, c / C − penalty × w / W) | Une erreur coûte une fraction de W |
+| `all_or_nothing` | 1 if c = C and w = 0, otherwise 0 | Default for `single` |
+| `partial` | max(0, (c − w) / C) | One mistake cancels one correct answer |
+| `penalized` | max(0, c / C − penalty × w / W) | One mistake costs a fraction of W |
 
-Si `allowNegative` est vrai, la borne inférieure devient −1. Le résultat est multiplié par les points de l'item.
+If `allowNegative` is true, the lower bound becomes −1. The result is multiplied by the item's points.
 
-**Éditeur** : liste de choix, une case par choix pour marquer correct, ajout par Entrée, réordonnement par glisser, aperçu en direct.
+**Editor**: list of choices, one checkbox per choice to mark it correct, add with Enter, reorder by drag, live preview.
 
-## 4.5 Texte court `short`
+## 4.5 Short answer `short`
 
-**Configuration** (`configVersion: 2`) : `prompt`, `kind` `text` / `number` / `date` / `time`, les `constraints` de ce `kind`, les `prefilters` de la question, et `matchers[]` évalués dans l'ordre, la première correspondance donne les points.
+**Configuration** (`configVersion: 2`): `prompt`, `kind` `text` / `number` / `date` / `time`, the `constraints` of that `kind`, the question's `prefilters`, and `matchers[]` evaluated in order; the first match awards the points.
 
-**Contraintes du champ** — elles disent ce que le champ ACCEPTE, jamais ce qu'il attend. Elles ne font donc pas partie de la clé : `toStudent` les transmet et le player les impose dans l'input, où le navigateur les applique lui-même.
+**Field constraints**: they say what the field ACCEPTS, never what it expects. They are therefore not part of the key: `toStudent` passes them through and the player enforces them in the input, where the browser applies them itself.
 
-| `kind` | Contraintes | Champ de l'étudiant |
+| `kind` | Constraints | Student's field |
 |---|---|---|
-| `text` | `minLength` défaut 0, `maxLength` défaut 255, plafond dur 500 | `input type="text"` avec `minlength` et `maxlength` |
-| `number` | `min` et `max` facultatives (vides = non bornées), `integer` défaut faux | `input type="number"` avec `min`, `max` et `step` |
-| `date` | `from` et `to` facultatives | `input type="date"` avec `min` et `max` |
-| `time` | aucune | `input type="time"` |
+| `text` | `minLength` default 0, `maxLength` default 255, hard cap 500 | `input type="text"` with `minlength` and `maxlength` |
+| `number` | optional `min` and `max` (empty = unbounded), `integer` default false | `input type="number"` with `min`, `max` and `step` |
+| `date` | optional `from` and `to` | `input type="date"` with `min` and `max` |
+| `time` | none | `input type="time"` |
 
-Une seule contrainte pèse sur la correction : `integer`. Une réponse non entière à une question entière vaut 0, quels que soient les matchers. Les autres appartiennent au champ, jamais au barème — une réponse enregistrée avant qu'une contrainte soit resserrée est corrigée sur son mérite. Un matcher `number` dont la valeur attendue n'est pas entière dans une question entière est refusé à la publication, avec la clé `short.integer_expected`.
+Only one constraint bears on grading: `integer`. A non-integer answer to an integer question is worth 0, whatever the matchers. The others belong to the field, never to the grade scale: an answer recorded before a constraint was tightened is graded on its merit. A `number` matcher whose expected value is not an integer in an integer question is refused at publication, with the key `short.integer_expected`.
 
-**Prefilters** — deux normalisations décidées UNE fois pour la question, appliquées à la réponse de l'étudiant ET à chaque valeur `exact` avant la comparaison. L'entrée d'un `regex` les subit aussi ; son drapeau `i`, lui, reste le sien.
+**Prefilters**: two normalisations decided ONCE for the question, applied to the student's answer AND to every `exact` value before the comparison. The input of a `regex` undergoes them too; its `i` flag, however, remains its own.
 
-| Prefilter | Défaut | Effet |
+| Prefilter | Default | Effect |
 |---|---|---|
-| `trim` | vrai | Retire les espaces de début et de fin, des deux côtés |
-| `lowercase` | vrai | Compare en minuscules, pliage français, les accents restent significatifs (décision D9) |
+| `trim` | true | Removes leading and trailing whitespace, on both sides |
+| `lowercase` | true | Compares in lowercase, French folding, accents stay significant (decision D9) |
 
-Les suites d'espaces à l'intérieur d'une réponse sont toujours réduites à un seul espace. En v1 ces trois réglages vivaient sur chaque matcher `exact` (`caseSensitive`, `trim`, `collapseSpaces`) : la migration v1 → v2 lit `trim` et `caseSensitive` du PREMIER matcher `exact` pour en faire les prefilters de la question, puis les retire de tous les matchers.
+Runs of whitespace inside an answer are always collapsed to a single space. In v1 these three settings lived on each `exact` matcher (`caseSensitive`, `trim`, `collapseSpaces`): the v1 → v2 migration reads `trim` and `caseSensitive` from the FIRST `exact` matcher to make them the question's prefilters, then removes them from every matcher.
 
-| Matcher | Champs | Sémantique |
+| Matcher | Fields | Semantics |
 |---|---|---|
-| `exact` | `value` | Égalité après les prefilters de la question |
-| `regex` | `pattern`, `flags` | Correspondance complète, sur l'entrée préfiltrée |
-| `number` | `value`, `tolerance`, `toleranceMode` `abs` / `rel`, `unit` facultative acceptée ou ignorée | Comparaison numérique, virgule et point acceptés |
-| `date`, `time` | `value`, `tolerance` en jours ou minutes | Formats locaux acceptés, normalisés en ISO |
-| `llm` | `rubric` markdown, `reference` facultative | Correction LLM proposée, phase 2 |
+| `exact` | `value` | Equality after the question's prefilters |
+| `regex` | `pattern`, `flags` | Full match, on the prefiltered input |
+| `number` | `value`, `tolerance`, `toleranceMode` `abs` / `rel`, optional `unit` accepted or ignored | Numeric comparison, comma and dot accepted |
+| `date`, `time` | `value`, `tolerance` in days or minutes | Local formats accepted, normalised to ISO |
+| `llm` | `rubric` markdown, optional `reference` | Proposed LLM grading, phase 2 |
 
-Chaque matcher peut porter `points` en fraction, défaut 1, pour accepter une réponse partiellement juste.
+Each matcher may carry `points` as a fraction, default 1, to accept a partially correct answer.
 
-**Éditeur** : le `kind` est un contrôle segmenté, les contraintes de ce `kind` sont sur la même ligne, à sa droite ; les prefilters sont deux cases au-dessous de la liste des réponses acceptées.
+**Editor**: the `kind` is a segmented control, the constraints of that `kind` sit on the same line, to its right; the prefilters are two checkboxes below the list of accepted answers.
 
-**Réponse** : `text` chaîne.
+**Answer**: `text` string.
 
-## 4.6 Texte à trou `cloze`
+## 4.6 Fill in the blanks `cloze`
 
-**Configuration** : `text` markdown contenant des trous, `caseSensitive` global par défaut faux. Le player rend le markdown avec un champ ou une liste à chaque trou. Les trous ont un poids égal par défaut.
+**Configuration**: `text` markdown containing blanks, global `caseSensitive` default false. The player renders the markdown with a field or a dropdown at each blank. Blanks have equal weight by default.
 
-Syntaxe des trous, inspirée de Moodle Cloze, simplifiée :
+Blank syntax, inspired by Moodle Cloze, simplified:
 
-| Syntaxe | Signification |
+| Syntax | Meaning |
 |---|---|
-| `{{Newton}}` | Champ texte, réponse `Newton`, égalité normalisée |
-| `{{Newton\|Isaac Newton}}` | Alternatives acceptées |
-| `{{=Newton\|Maxwell\|Faraday\|Galilée}}` | Liste déroulante, `=` marque la bonne option, ordre mélangé si la question est mélangeable |
-| `{{#3.14:0.01}}` | Numérique avec tolérance absolue |
-| `{{#3.14:1%}}` | Numérique avec tolérance relative |
-| `{{/^[0-9a-f]+$/i}}` | Expression régulière |
-| `{{2*Newton}}` | Poids 2 pour ce trou |
-| `\{{` | Accolades littérales |
+| `{{Newton}}` | Text field, answer `Newton`, normalised equality |
+| `{{Newton\|Isaac Newton}}` | Accepted alternatives |
+| `{{=Newton\|Maxwell\|Faraday\|Galilée}}` | Dropdown, `=` marks the correct option, shuffled order if the question is shuffleable |
+| `{{#3.14:0.01}}` | Numeric with absolute tolerance |
+| `{{#3.14:1%}}` | Numeric with relative tolerance |
+| `{{/^[0-9a-f]+$/i}}` | Regular expression |
+| `{{2*Newton}}` | Weight 2 for this blank |
+| `\{{` | Literal braces |
 
-Dans un bloc de code markdown les trous restent actifs, ce qui permet "complétez ce code". Une question `code` n'utilise pas cette syntaxe.
+Inside a markdown code block the blanks stay active, which allows "complete this code". A `code` question does not use this syntax.
 
-À l'intérieur d'un trou, une barre oblique inverse devant une ponctuation ASCII rend ce caractère littéral : `\|`, `\}`, `\*`, `\\` sont les quatre que l'on rencontre, et la règle est plus large pour que l'éditeur de trou (ci-dessous) puisse écrire n'importe quelle réponse — une réponse commençant par `#`, `/` ou `=` deviendrait sinon un nombre, une regex ou une liste.
+Inside a blank, a backslash before an ASCII punctuation character makes that character literal: `\|`, `\}`, `\*`, `\\` are the four one meets, and the rule is broader so that the blank editor (below) can write any answer; an answer starting with `#`, `/` or `=` would otherwise become a number, a regex or a dropdown.
 
-**Éditeur de trou.** Le corps d'un trou est une grammaire, pas une valeur : on ne le tape pas. Taper `{{`, cliquer une puce existante, presser le bouton « Insérer un trou » ou Entrée sur une puce sélectionnée ouvre une carte ancrée sous la puce, qui demande la FORME du trou — l'une de ces réponses, liste déroulante, nombre, regex — plus le poids. Elle lit le corps existant et le réécrit avec les fonctions du domaine (`parseBlankBody` / `formatBlank`), jamais par concaténation : ce que la carte montre et ce que le correcteur lit ne peuvent pas diverger. La syntaxe brute reste disponible dans le volet source markdown.
+**Blank editor.** The body of a blank is a grammar, not a value: one does not type it. Typing `{{`, clicking an existing chip, pressing the "Insert a blank" button or Enter on a selected chip opens a card anchored under the chip, which asks for the FORM of the blank (any of these answers, dropdown, number, regex) plus the weight. It reads the existing body and rewrites it with the domain functions (`parseBlankBody` / `formatBlank`), never by concatenation: what the card shows and what the grader reads cannot diverge. The raw syntax remains available in the markdown source pane.
 
-**Un trou dans une cellule de tableau.** Un `|` non échappé sépare deux colonnes, mais un `|` À L'INTÉRIEUR d'un trou n'en est pas un. Côté domaine c'est acquis : `parseCloze` tourne AVANT le markdown et remplace chaque trou par une sentinelle (décision D5), si bien que la ligne est découpée sur une cellule qui ne contient plus de barre. Côté éditeur riche, c'est à lui de le garantir : il remplace le `|` d'un corps de trou par un caractère de la zone privée à la lecture et le rétablit à la toute fin de la sérialisation, après que le rendu du tableau a aligné ses colonnes. `{{=passante|bloquée}}` dans une cellule est donc une écriture normale.
+**A blank in a table cell.** An unescaped `|` separates two columns, but a `|` INSIDE a blank is not one. On the domain side this is settled: `parseCloze` runs BEFORE the markdown and replaces every blank with a sentinel (decision D5), so the row is split on a cell that no longer contains a bar. On the rich editor side, it is the editor's job to guarantee it: it replaces the `|` of a blank body with a private-use character on read and restores it at the very end of serialisation, after the table rendering has aligned its columns. `{{=passante|bloquée}}` in a cell is therefore ordinary writing.
 
-Les `label` d'une liste atteignent l'étudiant — ce sont les options — mais jamais `correct`.
+The `label`s of a dropdown reach the student, they are the options, but `correct` never does.
 
-**Réponse** : `blanks[]` chaînes dans l'ordre d'apparition.
+**Answer**: `blanks[]` strings in order of appearance.
 
-**Notation** : somme des poids des trous justes sur la somme des poids.
+**Scoring**: sum of the weights of the correct blanks over the sum of the weights.
 
 ## 4.7 Code `code`
 
-**Configuration** :
+**Configuration**:
 
 ```yaml
 config:
   prompt: markdown
-  language: c            # c, cpp, python, js, rust en phase 1
-  runtime: backend       # backend (défaut) ou runno — voir « Où s'exécute l'essai »
-  template: |            # code initial, avec régions verrouillées
+  language: c            # c, cpp, python, js, rust in phase 1
+  runtime: backend       # backend (default) or runno, see "Where the trial runs"
+  template: |            # initial code, with locked regions
     #include <stdio.h>
     // @@lock
     int main(void) {
@@ -174,69 +174,69 @@ config:
         // votre code
         return 0;
     }
-  files:                 # fichiers additionnels lus par le programme, facultatif
+  files:                 # additional files read by the program, optional
     - { name: data.csv, content: "..." }
-  action: run            # check compile seulement, run exécute
+  action: run            # check compiles only, run executes
   compileArgs: "-Wall -Wextra -std=c17"
   limits: { timeMs: 2000, memoryMb: 128, outputKb: 64 }
   runsPerMinute: 10
   tests:
-    mode: io             # io ou tap
+    mode: io             # io or tap
     cases:
       - { name: "cas simple", stdin: "3 4\n", expected: "7\n", visible: true, points: 1 }
       - { name: "négatifs", stdin: "-3 4\n", expected: "1\n", visible: false, points: 1 }
-      # ligne de commande : args devient argv[1..] du programme
+      # command line: args becomes argv[1..] of the program
       - { name: "somme argv", args: ["3", "4"], expected: "7\n", visible: true, points: 1 }
-      # les deux contrôles sont indépendants : ici seul le code de sortie compte
+      # the two checks are independent: here only the exit code counts
       - { name: "refuse un argument invalide", args: ["oui"], expected: "",
           compareStdout: false, expectedExitCode: 1, visible: false, points: 1 }
     compare: { trimTrailing: true, ignoreCase: false, numeric: null }
 ```
 
-- **Régions verrouillées** : marquées par des commentaires `@@lock` / `@@endlock` dans la syntaxe de commentaire du langage. Le player les rend en lecture seule et grisées. Le serveur reconstruit le fichier final à partir du template et des régions éditables, jamais du texte brut du client, ce qui empêche de modifier une région verrouillée.
-- **Solution de référence, découpée comme le template** : `referenceSolution` n'est pas un fichier complet, c'est le contenu des régions ÉDITABLES du template, dans leur ordre. Avec une seule région éditable, la référence entière est cette région. Avec plusieurs, les morceaux sont séparés par une LIGNE marqueur `@@next`, écrite dans la syntaxe de commentaire du langage exactement comme `@@lock` et `@@endlock` (`/* @@next */` ou `// @@next` en C, `# @@next` en Python) ; la ligne marqueur disparaît avec les sauts de ligne qui l'entouraient. Si le nombre de morceaux ne correspond pas au nombre de régions, l'éditeur le dit et n'essaie rien : la source est toujours reconstruite à partir du template (invariant 14), jamais prise telle quelle.
-- **Mode `io`** : chaque cas envoie `stdin`, éventuellement une ligne de commande, et vérifie ce que le prof a demandé. C'est le mode de la phase 1.
-- **`args`, la ligne de commande d'un cas** : un tableau de chaînes, une par argument, qui devient `argv[1..]` du programme (`sys.argv[1:]` en Python, `process.argv.slice(2)` en JS). Le runner les passe au programme comme arguments d'un processus, jamais à travers un shell : une espace, une apostrophe, un `$` ou un `;` à l'intérieur d'un élément est un caractère de cet élément, pas un séparateur. Absent, le programme est lancé sans argument.
-- **Les deux contrôles d'un cas sont indépendants**, et un cas doit en activer au moins un (sinon la configuration est refusée : `code.case_checks_nothing`) :
-    - `compareStdout` (défaut `true`) compare `expected` à la sortie standard selon `compare` ;
-    - `expectedExitCode` (défaut `0`, `null` = n'importe lequel) compare le code de sortie du processus.
+- **Locked regions**: marked by `@@lock` / `@@endlock` comments in the language's comment syntax. The player renders them read-only and greyed out. The server rebuilds the final file from the template and the editable regions, never from the client's raw text, which prevents a locked region from being modified.
+- **Reference solution, split like the template**: `referenceSolution` is not a complete file, it is the content of the EDITABLE regions of the template, in their order. With a single editable region, the whole reference is that region. With several, the pieces are separated by an `@@next` marker LINE, written in the language's comment syntax exactly like `@@lock` and `@@endlock` (`/* @@next */` or `// @@next` in C, `# @@next` in Python); the marker line disappears along with the line breaks around it. If the number of pieces does not match the number of regions, the editor says so and attempts nothing: the source is always rebuilt from the template (invariant 14), never taken as-is.
+- **`io` mode**: each case sends `stdin`, possibly a command line, and checks what the teacher asked for. This is the phase 1 mode.
+- **`args`, the command line of a case**: an array of strings, one per argument, which becomes `argv[1..]` of the program (`sys.argv[1:]` in Python, `process.argv.slice(2)` in JS). The runner passes them to the program as process arguments, never through a shell: a space, an apostrophe, a `$` or a `;` inside an element is a character of that element, not a separator. When absent, the program is launched without arguments.
+- **The two checks of a case are independent**, and a case must enable at least one (otherwise the configuration is refused: `code.case_checks_nothing`):
+    - `compareStdout` (default `true`) compares `expected` to the standard output according to `compare`;
+    - `expectedExitCode` (default `0`, `null` = any) compares the process exit code.
 
-    Le verdict d'un cas se lit dans cet ordre : il échoue sur un accident — horloge murale dépassée, plafond mémoire atteint, processus tué sans code de sortie propre — puis **chaque contrôle activé doit passer** ; un contrôle désactivé ne dit rien. Un cas qui ne compare pas `stdout` n'expose pas de sortie attendue, ni au player ni dans le détail de correction.
-- **Où s'exécute l'essai — `runtime`** (ADR-015) : `backend` (défaut) exécute l'essai de l'étudiant dans le runner conteneurisé ; `runno` l'exécute dans le navigateur, en WASI dans un Web Worker, pour les seuls langages que ce runtime embarque — **C et Python**. Les runtimes sont hébergés par la plateforme, jamais chargés depuis un tiers au moment de la requête. Tout autre langage retombe sur `backend`, comme un navigateur qui ne peut pas démarrer le worker.
+    The verdict of a case is read in this order: it fails on an accident (wall clock exceeded, memory cap reached, process killed without a clean exit code), then **every enabled check must pass**; a disabled check says nothing. A case that does not compare `stdout` exposes no expected output, neither to the player nor in the grading details.
+- **Where the trial runs, `runtime`** (ADR-015): `backend` (default) runs the student's trial in the containerised runner; `runno` runs it in the browser, in WASI inside a Web Worker, for the only languages that runtime embeds: **C and Python**. The runtimes are hosted by the platform, never loaded from a third party at request time. Any other language falls back to `backend`, as does a browser that cannot start the worker.
 
-    **Le navigateur exécute, le serveur corrige.** `runtime` ne décrit que le bouton « Exécuter » de l'étudiant : la correction passe toujours par le runner du serveur, qui reconstruit la source depuis le template et les régions éditables. Un résultat produit par un navigateur n'est pas une preuve. WASI n'est pas Linux — pas de `fork`, pas de signaux, `<sys/…>` partiel, horloges et aléa du navigateur — donc un essai qui passe dans le navigateur peut encore échouer à la correction : le player annonce l'essai comme un essai.
-- **Mode `tap`**, phase 3 : le prof fournit `testFile` et `command`. Le runner exécute la commande et lit un flux TAP sur stdout : `ok 1 - nom` et `not ok 2 - nom`. Chaque ligne est un cas. Des bibliothèques TAP existent pour C, Python, JS, Rust.
-- **Points** : la somme des points des cas. Une option `allOrNothing` sur la question donne tout ou rien.
-- **Boutons du player** : "Vérifier" compile, "Exécuter" lance les cas visibles et affiche pour chacun la ligne de commande, stdin, la sortie attendue (quand elle est comparée), la sortie obtenue et le verdict. Une zone stdin libre permet un essai manuel, avec sa propre ligne de commande ; c'est le seul endroit où des arguments viennent du navigateur. Les cas cachés ne sont exécutés qu'à la correction.
-- **Réponse** : `regions[]` contenu de chaque région éditable, `lastRun` résumé du dernier run pour le tableau de bord.
-- **Éditeur de code** : Monaco, thème aligné sur la plateforme, raccourcis VS Code, tabulation configurable, sans serveur de langage.
+    **The browser runs, the server grades.** `runtime` only describes the student's "Run" button: grading always goes through the server's runner, which rebuilds the source from the template and the editable regions. A result produced by a browser is not proof. WASI is not Linux (no `fork`, no signals, partial `<sys/…>`, the browser's clocks and randomness), so a trial that passes in the browser can still fail at grading: the player presents the trial as a trial.
+- **`tap` mode**, phase 3: the teacher provides `testFile` and `command`. The runner executes the command and reads a TAP stream on stdout: `ok 1 - name` and `not ok 2 - name`. Each line is a case. TAP libraries exist for C, Python, JS, Rust.
+- **Points**: the sum of the cases' points. An `allOrNothing` option on the question gives all or nothing.
+- **Player buttons**: "Check" compiles, "Run" launches the visible cases and shows for each the command line, stdin, the expected output (when it is compared), the obtained output and the verdict. A free stdin area allows a manual trial, with its own command line; it is the only place where arguments come from the browser. Hidden cases are only run at grading.
+- **Answer**: `regions[]` content of each editable region, `lastRun` summary of the last run for the dashboard.
+- **Code editor**: Monaco, theme aligned with the platform, VS Code shortcuts, configurable tab width, no language server.
 
-## 4.8 Réponse riche `rich`, phase 2
+## 4.8 Rich answer `rich`, phase 2
 
-**Configuration** : `prompt`, `rubric[]` critères avec `label`, `points`, `description`, `reference` réponse modèle facultative, `maxWords` facultatif, `allowImages`.
+**Configuration**: `prompt`, `rubric[]` criteria with `label`, `points`, `description`, optional `reference` model answer, optional `maxWords`, `allowImages`.
 
-**Réponse** : `markdown` avec images collées.
+**Answer**: `markdown` with pasted images.
 
-**Notation** : `grade` retourne `pending: 'llm'`. Le service LLM reçoit l'énoncé, la grille, la référence, la réponse anonymisée, et doit répondre en JSON : points par critère, justification courte par critère, confiance `low` / `medium` / `high`. Le prof valide dans le panneau de correction. Sans fournisseur configuré, la correction est manuelle avec la grille comme formulaire.
+**Scoring**: `grade` returns `pending: 'llm'`. The LLM service receives the statement, the rubric, the reference, the anonymised answer, and must reply in JSON: points per criterion, short justification per criterion, confidence `low` / `medium` / `high`. The teacher validates in the grading panel. Without a configured provider, grading is manual with the rubric as the form.
 
 ## 4.9 CodeImage `codeimage`, phase 3
 
-Extension de `code`. Le programme écrit sur stdout une image au format PPM binaire `P6`, dimensions imposées par la question, 300 × 300 par défaut. Ce protocole est indépendant du langage et tient en dix lignes dans chaque langage. La question fournit l'image attendue, produite par la solution du prof exécutée dans le runner.
+Extension of `code`. The program writes to stdout an image in binary PPM `P6` format, with dimensions imposed by the question, 300 × 300 by default. This protocol is language-independent and fits in ten lines in every language. The question provides the expected image, produced by the teacher's solution run in the runner.
 
-Player : image obtenue à droite, bascule vers l'image attendue, vue différence en surimpression avec curseur, pourcentage de similarité. Notation : pourcentage de pixels égaux à une tolérance par canal près, seuils de points configurables, ex. 100 % des points dès 98 % de similarité.
+Player: obtained image on the right, toggle to the expected image, difference view as an overlay with a slider, similarity percentage. Scoring: percentage of pixels equal within a per-channel tolerance, configurable point thresholds, e.g. 100 % of the points from 98 % similarity.
 
 ## 4.10 Drawing `drawing`, phase 3
 
-Canevas minimaliste : rectangle, ellipse, ligne, flèche, trait libre, texte. Sélection, déplacement, suppression, annulation. Base technique candidate : Excalidraw en mode embarqué, ce qui évite d'écrire un éditeur.
+Minimalist canvas: rectangle, ellipse, line, arrow, freehand stroke, text. Select, move, delete, undo. Candidate technical base: Excalidraw in embedded mode, which avoids writing an editor.
 
-**Réponse** : scène JSON et rendu PNG généré côté client à chaque autosave. **Notation** : LLM avec vision sur le PNG, grille de critères comme `rich`. Sinon manuelle.
+**Answer**: JSON scene and PNG rendering generated client-side at every autosave. **Scoring**: LLM with vision on the PNG, rubric of criteria like `rich`. Otherwise manual.
 
 ## 4.11 Pick-place `circuit`, phase 3
 
-Palette de composants à gauche : résistance, condensateur, diode, ampli op, sources, masse. Placement sur une grille, rotation, fils avec ponts, étiquettes de valeur. Une bibliothèque de symboles SVG normalisés.
+Component palette on the left: resistor, capacitor, diode, op-amp, sources, ground. Placement on a grid, rotation, wires with jumpers, value labels. A library of normalised SVG symbols.
 
-**Réponse** : liste de composants avec position et valeur, liste de fils, rendu PNG. Le noyau ne calcule pas de netlist. **Notation** : LLM avec vision et grille de critères, ou manuelle. La comparaison de netlist est hors périmètre, voir [00-cadre-et-perimetre.md](00-cadre-et-perimetre.md).
+**Answer**: list of components with position and value, list of wires, PNG rendering. The core computes no netlist. **Scoring**: LLM with vision and a rubric of criteria, or manual. Netlist comparison is out of scope, see [00-cadre-et-perimetre.md](00-cadre-et-perimetre.md).
 
-## 4.12 Sondage `poll`, phase 2
+## 4.12 Poll `poll`, phase 2
 
-Ce n'est pas un type de question mais un mode d'évaluation à un seul item, qui accepte `mcq`, `short` et une variante `scale` de 1 à N. Le `Stats` du type alimente l'écran de projection en direct.
+This is not a question type but a single-item evaluation mode, which accepts `mcq`, `short` and a `scale` variant from 1 to N. The type's `Stats` feeds the live projection screen.

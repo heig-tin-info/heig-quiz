@@ -1,25 +1,25 @@
-# 6. Questions ouvertes
+# 6. Open questions
 
-À trancher avant de commencer le code. Chaque ligne indique la valeur supposée dans la spec.
+To be settled before starting the code. Each row states the value assumed in the spec.
 
-| # | Question | Supposé dans la spec |
+| # | Question | Assumed in the spec |
 |---|---|---|
-| 1 | Nom du projet, nom de domaine, dépôt public ou privé | À définir |
-| 2 | Attributs edu-ID disponibles pour distinguer prof et étudiant. `eduPersonAffiliation` est-il fourni par la fédération HES-SO ? Sinon les profs sont promus par l'admin. | Affiliation disponible, repli sur promotion manuelle |
-| 3 | Un étudiant retardataire en mode `duration` : durée pleine ou fin commune ? | Durée pleine, le prof peut fermer manuellement |
-| 4 | Arrondi de la note : au dixième le plus proche, ou au demi-point comme certains barèmes HES ? | Au dixième le plus proche, méthode configurable |
-| 5 | Feedback `immediate` autorisé en mode `exam` ? | Non, réservé à `exercise` et `poll` |
-| 6 | Les étudiants voient-ils le classement de la classe ? | Non, seulement leur note et la distribution anonyme |
-| 7 | Langages du runner en phase 1 : C, C++, Python, JS, Rust. Rust a une compilation lente, le garder ? | Gardé avec un temps limite de compilation de 20 s |
-| 8 | Les tests cachés d'une question code sont-ils révélés dans le feedback ? | Nom et verdict oui, contenu non, option par évaluation |
-| 9 | Le pool public : qui peut y publier au départ ? | **Tranché (ADR-013)** : un pool `public` est LISIBLE par tous les profs ; il est écrit par son propriétaire et par les membres qu'il a nommés (`contributor`, `owner`). L'admin reste propriétaire de fait partout. |
-| 10 | Format des sauvegardes hors VM : stockage objet Hetzner ou autre ? | Stockage objet Hetzner via rclone |
-| 11 | Le drawing s'appuie sur Excalidraw embarqué : accepté malgré son style propre ? | Oui, barre d'outils réduite et thème aligné |
-| 12 | Une évaluation `exercise` avec plusieurs tentatives : meilleure ou dernière ? | Dernière, phase 2 |
-| 13 | Modèle LLM par défaut pour la correction et pour la génération, et qui paie : clé institutionnelle ou clé du prof ? | Opus pour la correction, Sonnet pour la génération, clé du prof |
-| 14 | Design system : partir d'une référence visuelle précise ? La capture d'écran fournie montre le tableau de bord attendu. | Un document de design à écrire avant le premier écran |
-| 15 | Sondage en direct : comment identifier un participant sans compte ? | **Tranché (ADR-014)** : un cookie `quiz_guest` (HttpOnly, `SameSite=Lax`, chemin `/app/api/p`, 12 h) dont la base ne garde que `sha256(token:evaluation)`, et une ligne `guest_participants` par (sondage, navigateur). `attempts.user_id` devient nullable, `attempts.guest_id` apparaît, et une contrainte CHECK impose exactement un propriétaire. Aucun compte fictif n'est créé. |
-| 16 | Sondage en direct : la fin d'un sondage publie-t-elle des résultats (`running → released` du glossaire) ? | **Tranché (ADR-014)** : non. « Terminer » ferme le sondage (`closed`) et lance la correction déterministe, sans publication : publier écrirait une note gelée pour toute la classe, y compris les étudiants qui n'ont jamais vu le sondage, et ferait apparaître un 1.0 sur leur page de résultats. Le résultat d'un sondage, c'est la répartition projetée. |
-| 17 | Question code : l'essai de l'étudiant doit-il tourner dans le navigateur (WASI) plutôt que dans un conteneur, et si oui qui corrige ? | **Tranché (ADR-015)** : le navigateur exécute, le serveur corrige. `runtime` (`backend` par défaut, `runno` pour C et Python) ne choisit que l'endroit du bouton « Exécuter » ; `grade()` passe toujours par le runner du serveur, car un résultat produit par un navigateur n'est pas une preuve — WASI n'est pas Linux (pas de `fork`, pas de signaux, `<sys/…>` partiel, horloges du navigateur). Le backend reste le repli quand le navigateur ne peut pas (D14). Les runtimes sont hébergés par la plateforme. |
-| 18 | Sondage : pseudonyme pour un participant sans compte (F-AUTH-05) ? | **Tranché** : non, un invité est anonyme, point ; le champ `pseudonym` de `guest_participants` reste nul et aucune UI ne le demande. Un pseudonyme choisi librement est soit un vrai nom, et le sondage n'est plus anonyme, soit du bruit sur la projection ; la répartition n'a besoin d'aucune identité. |
-| 19 | Un sondage apparaît-il dans la liste des évaluations de sa classroom ? | **Tranché** : oui, avec le badge « Sondage », puisque c'en est une (ADR-014) ; sa ligne ouvre la projection et non le tableau de bord d'examen. Le cacher ferait de `mode: "poll"` une évaluation fantôme, invisible là où son classroom la porte. |
+| 1 | Project name, domain name, public or private repository | To be defined |
+| 2 | edu-ID attributes available to tell a teacher from a student. Is `eduPersonAffiliation` provided by the HES-SO federation? Otherwise teachers are promoted by the admin. | Affiliation available, fallback on manual promotion |
+| 3 | A late student in `duration` mode: full duration or common end? | Full duration, the teacher may close manually |
+| 4 | Rounding of the grade: to the nearest tenth, or to the half point like some HES grade scales? | To the nearest tenth, configurable method |
+| 5 | `immediate` feedback allowed in `exam` mode? | No, reserved for `exercise` and `poll` |
+| 6 | Do students see the classroom ranking? | No, only their grade and the anonymous distribution |
+| 7 | Runner languages in phase 1: C, C++, Python, JS, Rust. Rust compiles slowly, keep it? | Kept with a compilation time limit of 20 s |
+| 8 | Are the hidden tests of a code question revealed in the feedback? | Name and verdict yes, content no, option per evaluation |
+| 9 | The public pool: who may publish to it at first? | **Settled (ADR-013)**: a `public` pool is READABLE by every teacher; it is written by its owner and by the members the owner named (`contributor`, `owner`). The admin remains the de facto owner everywhere. |
+| 10 | Format of the off-VM backups: Hetzner object storage or other? | Hetzner object storage through rclone |
+| 11 | Drawing relies on embedded Excalidraw: accepted despite its own style? | Yes, reduced toolbar and aligned theme |
+| 12 | An `exercise` evaluation with several attempts: best or last? | Last, phase 2 |
+| 13 | Default LLM model for grading and for generation, and who pays: institutional key or the teacher's key? | Opus for grading, Sonnet for generation, the teacher's key |
+| 14 | Design system: start from a precise visual reference? The screenshot provided shows the expected dashboard. | A design document to be written before the first screen |
+| 15 | Live poll: how to identify a participant without an account? | **Settled (ADR-014)**: a `quiz_guest` cookie (HttpOnly, `SameSite=Lax`, path `/app/api/p`, 12 h) of which the database only keeps `sha256(token:evaluation)`, and one `guest_participants` row per (poll, browser). `attempts.user_id` becomes nullable, `attempts.guest_id` appears, and a CHECK constraint imposes exactly one owner. No fictitious account is created. |
+| 16 | Live poll: does the end of a poll release results (`running → released` in the glossary)? | **Settled (ADR-014)**: no. "End poll" closes the poll (`closed`) and launches the deterministic grading, without release: releasing would write a frozen grade for the whole classroom, including the students who never saw the poll, and would make a 1.0 appear on their results page. The result of a poll is the projected distribution. |
+| 17 | Code question: should the student's trial run in the browser (WASI) rather than in a container, and if so who grades? | **Settled (ADR-015)**: the browser runs, the server grades. `runtime` (`backend` by default, `runno` for C and Python) only chooses where the "Run" button executes; `grade()` always goes through the server's runner, because a result produced by a browser is not proof: WASI is not Linux (no `fork`, no signals, partial `<sys/…>`, the browser's clocks). The backend remains the fallback when the browser cannot (D14). The runtimes are hosted by the platform. |
+| 18 | Poll: pseudonym for a participant without an account (F-AUTH-05)? | **Settled**: no, a guest is anonymous, full stop; the `pseudonym` field of `guest_participants` stays null and no UI asks for it. A freely chosen pseudonym is either a real name, and the poll is no longer anonymous, or noise on the projection; the distribution needs no identity. |
+| 19 | Does a poll appear in the evaluation list of its classroom? | **Settled**: yes, with the "Poll" badge, since it is one (ADR-014); its row opens the projection and not the exam dashboard. Hiding it would make `mode: "poll"` a phantom evaluation, invisible where its classroom carries it. |

@@ -1,89 +1,89 @@
-# 8. Expérience à deux niveaux : profane et expert
+# 8. Two-level experience: novice and expert
 
-La plateforme sert deux profils de profs avec la même interface. Le profane veut saisir une question comme dans un traitement de texte, cliquer sur un bouton pour obtenir la réponse, et lancer le quiz. L'expert veut écrire du markdown, des regex, versionner ses questions dans git, tout faire au clavier. Aucun des deux ne doit voir les outils de l'autre par défaut.
+The platform serves two profiles of teachers with the same interface. The novice wants to enter a question as in a word processor, click a button to get the answer, and launch the quiz. The expert wants to write markdown, regexes, version questions in git, do everything from the keyboard. Neither must see the other's tools by default.
 
-## 8.1 Principes
+## 8.1 Principles
 
-1. **Divulgation progressive.** Le chemin simple est le chemin par défaut. Les options avancées sont derrière une bascule, un menu ou la palette de commandes, jamais dans le flux principal.
-2. **Une seule source de vérité.** Le WYSIWYG et la vue source éditent le même markdown. Le formulaire "réponse attendue" et le matcher regex écrivent la même configuration. Passer d'un mode à l'autre ne perd rien.
-3. **Le LLM fait le travail ingrat, le prof décide.** Chaque bouton "Générer" produit une proposition dans le brouillon, visible, modifiable, jamais publiée seule.
-4. **Tout ce que fait l'interface, l'API le fait.** Chaque écran est construit sur `/api/v1`. L'expert peut scripter ce que le profane clique.
-5. **Le clavier d'abord pour l'expert, jamais requis pour le profane.** Tous les raccourcis ont un équivalent cliquable.
+1. **Progressive disclosure.** The simple path is the default path. Advanced options sit behind a toggle, a menu or the command palette, never in the main flow.
+2. **A single source of truth.** The WYSIWYG and the source view edit the same markdown. The "expected answer" form and the regex matcher write the same configuration. Switching from one mode to the other loses nothing.
+3. **The LLM does the thankless work, the teacher decides.** Every "Generate" button produces a proposal in the draft, visible, editable, never published on its own.
+4. **Everything the interface does, the API does.** Every screen is built on `/api/v1`. The expert can script what the novice clicks.
+5. **Keyboard first for the expert, never required for the novice.** Every shortcut has a clickable equivalent.
 
-## 8.2 Mode profane
+## 8.2 Novice mode
 
-| Besoin | Réponse |
+| Need | Answer |
 |---|---|
-| Créer une question sans apprendre de syntaxe | Éditeur Tiptap en WYSIWYG : barre minimale gras, italique, code, liste, titre, image, équation. Coller une image l'insère. Coller un tableau depuis Excel le convertit. |
-| Écrire une équation sans LaTeX | Bouton équation avec aperçu, saisie LaTeX assistée par palette de symboles, et bouton "Décrire l'équation" qui demande au LLM la traduction en LaTeX. |
-| Ne pas connaître les types de questions | Écran "Nouvelle question" avec quatre cartes illustrées : choix, réponse courte, texte à trou, code. Les types avancés sous "Plus". |
-| Créer vite un QCM | "Coller un QCM" : le prof colle un texte avec des lignes `A)`, `B)`, `*C)` ou `- [x]`, la plateforme reconnaît l'énoncé, les choix et la bonne réponse. |
-| Obtenir la bonne réponse et l'explication | Bouton **Générer la réponse** dans chaque éditeur : le LLM coche les bons choix, remplit la réponse attendue, ou écrit la solution de référence pour une question code, puis rédige l'explication. Les propositions apparaissent surlignées, avec accepter ou rejeter. |
-| Créer des cas de test sans écrire de test | Pour une question code : saisir des entrées, cliquer "Calculer les sorties attendues" qui exécute la solution de référence dans le runner et remplit les sorties. Pour `codeimage`, l'image attendue est produite de la même manière. |
-| Vérifier que la question fonctionne | Onglet "Essayer" dans l'éditeur : le prof répond comme un étudiant et voit la correction. Aucune publication sans un essai réussi, rappel non bloquant. |
-| Configurer un quiz sans se tromper | Trois écrans : choisir les questions, régler le temps, démarrer. Préréglages nommés : "Quiz noté 20 min", "Exercice de la semaine", "Sondage". Tout le reste sous "Options avancées". |
-| Comprendre un paramètre | Chaque option a une phrase d'aide sous son libellé, pas une infobulle. |
-| Corriger sans effort | Panneau de correction avec les propositions LLM triées par confiance. "Tout valider ce qui est confiance haute" en un clic, puis passage en revue des cas restants. |
-| Voir ce que voit l'étudiant | Bouton "Aperçu étudiant" partout où une question ou une évaluation est affichée. |
+| Create a question without learning a syntax | Tiptap editor in WYSIWYG: minimal toolbar with bold, italic, code, list, heading, image, equation. Pasting an image inserts it. Pasting a table from Excel converts it. |
+| Write an equation without LaTeX | Equation button with preview, LaTeX entry assisted by a symbol palette, and a "Describe the equation" button that asks the LLM for the translation into LaTeX. |
+| Not knowing the question types | "New question" screen with four illustrated cards: choice, short answer, fill in the blanks, code. The advanced types under "More". |
+| Create an MCQ quickly | "Paste an MCQ": the teacher pastes a text with lines `A)`, `B)`, `*C)` or `- [x]`, the platform recognises the statement, the choices and the correct answer. |
+| Get the correct answer and the explanation | **Generate the answer** button in every editor: the LLM ticks the correct choices, fills in the expected answer, or writes the reference solution for a code question, then writes the explanation. The proposals appear highlighted, with accept or reject. |
+| Create test cases without writing a test | For a code question: enter inputs, click "Compute the expected outputs", which runs the reference solution in the runner and fills in the outputs. For `codeimage`, the expected image is produced the same way. |
+| Check that the question works | "Try" tab in the editor: the teacher answers as a student would and sees the grading. No publication without a successful try, non-blocking reminder. |
+| Configure a quiz without mistakes | Three screens: pick the questions, set the time, start. Named presets: "Graded quiz 20 min", "Exercise of the week", "Poll". Everything else under "Advanced options". |
+| Understand a setting | Every option has a help sentence under its label, not a tooltip. |
+| Grade effortlessly | Grading panel with the LLM proposals sorted by confidence. "Validate everything with high confidence" in one click, then review of the remaining cases. |
+| See what the student sees | "Student preview" button wherever a question or an evaluation is displayed. |
 
-## 8.3 Mode expert
+## 8.3 Expert mode
 
-| Besoin | Réponse |
+| Need | Answer |
 |---|---|
-| Écrire en markdown | Bascule "Source" dans l'éditeur, `Ctrl+Shift+M`, avec coloration et aperçu côte à côte. Le choix est mémorisé par utilisateur. |
-| Matchers précis | Dans l'éditeur de réponse courte, "Avancé" révèle la liste de matchers : regex avec testeur en direct sur des exemples saisis, tolérance numérique, unités. Le formulaire simple reste un matcher `exact` unique. |
-| Éditer la configuration brute | "Modifier en YAML" ouvre la question au format canonique dans un éditeur Monaco avec validation par le schéma du type et diff avant enregistrement. |
-| Versionner dans git | Export et import YAML depuis l'interface, API REST à jeton, CLI `quiz pull` et `quiz push`. Le dossier exporté est lisible et diffable. |
-| Automatiser | Jetons d'API personnels dans les réglages, OpenAPI généré, exemples `curl` dans la documentation. |
-| Tout faire au clavier | Palette de commandes `Ctrl+K`, raccourcis globaux, navigation par `j` `k` dans les listes, `Enter` pour ouvrir, `Esc` pour fermer. |
-| Traiter en masse | Sélection multiple dans le pool : ajouter un tag, déplacer de catégorie, exporter, ajouter à une évaluation. |
-| Inspecter | Historique des versions avec diff, journal des appels LLM, journal des événements d'une tentative, export brut d'une évaluation en JSON. |
-| Brancher un LLM à soi | Clé API personnelle, choix du modèle par usage, gabarits de prompts modifiables par prof, phase 3. |
-| Rédiger depuis son outil | Serveur MCP, phase 3 : créer et lire des brouillons depuis Claude Desktop ou Claude Code. |
+| Write in markdown | "Source" toggle in the editor, `Ctrl+Shift+M`, with highlighting and side-by-side preview. The choice is remembered per user. |
+| Precise matchers | In the short answer editor, "Advanced" reveals the list of matchers: regex with a live tester on typed examples, numeric tolerance, units. The simple form remains a single `exact` matcher. |
+| Edit the raw configuration | "Edit as YAML" opens the question in the canonical format in a Monaco editor with validation by the type's schema and a diff before saving. |
+| Version in git | YAML export and import from the interface, token REST API, `quiz pull` and `quiz push` CLI. The exported folder is readable and diffable. |
+| Automate | Personal API tokens in the settings, generated OpenAPI, `curl` examples in the documentation. |
+| Do everything from the keyboard | `Ctrl+K` command palette, global shortcuts, `j` `k` navigation in lists, `Enter` to open, `Esc` to close. |
+| Process in bulk | Multiple selection in the pool: add a tag, move to a category, export, add to an evaluation. |
+| Inspect | Version history with diff, LLM call log, event log of an attempt, raw export of an evaluation as JSON. |
+| Plug in one's own LLM | Personal API key, model choice per purpose, prompt templates editable per teacher, phase 3. |
+| Write from one's own tool | MCP server, phase 3: create and read drafts from Claude Desktop or Claude Code. |
 
-## 8.4 Palette de commandes
+## 8.4 Command palette
 
-`Ctrl+K` ou `Cmd+K` partout. Une seule zone de saisie, résultats groupés, navigation clavier.
+`Ctrl+K` or `Cmd+K` everywhere. A single input field, grouped results, keyboard navigation.
 
-| Groupe | Exemples |
+| Group | Examples |
 |---|---|
-| Navigation | Aller au cours, à la classroom, au pool, aux réglages |
-| Questions | Recherche plein texte et par tag `#pointers`, par type `type:code`, par difficulté `diff:3` ; ouvrir, essayer, ajouter à l'évaluation en cours d'édition |
-| Actions contextuelles | Sur une évaluation : démarrer, pause, ajouter 5 minutes, clôturer, publier les résultats. Sur une question : publier, dupliquer, générer une variante, exporter |
-| Création | Nouvelle question de type X, nouvelle évaluation, nouveau pool |
-| Préférences | Thème, langue, mode source par défaut |
-| Aide | Raccourcis, documentation, données et confidentialité |
+| Navigation | Go to the course, the classroom, the pool, the settings |
+| Questions | Full-text search and by tag `#pointers`, by type `type:code`, by difficulty `diff:3`; open, try, add to the evaluation being edited |
+| Contextual actions | On an evaluation: start, pause, add 5 minutes, close, release the results. On a question: publish, duplicate, generate a variant, export |
+| Creation | New question of type X, new evaluation, new pool |
+| Preferences | Theme, language, default source mode |
+| Help | Shortcuts, documentation, data and privacy |
 
-Les actions sont fournies par les écrans montés, via un registre de commandes dans `packages/ui`. Un écran déclare ses commandes avec libellé, raccourci, condition et handler. La palette ne connaît pas les modules.
+The actions are provided by the mounted screens, through a command registry in `packages/ui`. A screen declares its commands with label, shortcut, condition and handler. The palette knows nothing about the modules.
 
-## 8.5 Raccourcis
+## 8.5 Shortcuts
 
-| Contexte | Raccourci | Action |
+| Context | Shortcut | Action |
 |---|---|---|
 | Global | `Ctrl+K` | Palette |
-| Global | `?` | Liste des raccourcis |
-| Global | `g` puis `p` / `c` / `s` | Aller au pool / aux cours / aux réglages |
-| Éditeur | `Ctrl+S` | Sauver le brouillon, déjà automatique, rassure |
-| Éditeur | `Ctrl+Shift+P` | Publier |
-| Éditeur | `Ctrl+Shift+M` | Basculer WYSIWYG / source |
-| Éditeur | `Ctrl+Enter` | Essayer la question |
-| Éditeur code | ceux de VS Code | Monaco |
-| Player étudiant | `Alt+→` `Alt+←` | Question suivante / précédente |
-| Player étudiant | `Ctrl+Enter` | Marquer faite, ou exécuter le code dans une question code |
-| Tableau de bord | `n` `r` `s` | Basculer noms / réponses / résultats |
-| Tableau de bord | `Space` | Pause / reprise |
-| Correction | `v` `→` | Valider et passer au suivant |
+| Global | `?` | List of shortcuts |
+| Global | `g` then `p` / `c` / `s` | Go to the pool / the courses / the settings |
+| Editor | `Ctrl+S` | Save the draft, already automatic, reassures |
+| Editor | `Ctrl+Shift+P` | Publish |
+| Editor | `Ctrl+Shift+M` | Toggle WYSIWYG / source |
+| Editor | `Ctrl+Enter` | Try the question |
+| Code editor | those of VS Code | Monaco |
+| Student player | `Alt+→` `Alt+←` | Next / previous question |
+| Student player | `Ctrl+Enter` | Mark as done, or run the code in a code question |
+| Dashboard | `n` `r` `s` | Toggle names / answers / results |
+| Dashboard | `Space` | Pause / resume |
+| Grading | `v` `→` | Validate and move on to the next |
 
-## 8.6 Fonctions qui font la différence
+## 8.6 Features that make the difference
 
-- **Générer une variante** : même question, autres valeurs ou autre contexte, en brouillon lié à l'original par `origin_question_id`.
-- **Générer un quiz** : durée, tags, difficulté, et la plateforme compose un brouillon d'évaluation à partir des statistiques de temps de réponse. Phase 3.
-- **Code de session et QR code** pour rejoindre un sondage ou une classroom depuis un téléphone.
-- **Vue projection** sans nom : anneau de présence en salle d'attente, répartition en direct pour un sondage, taux de complétion pendant un quiz.
-- **Différence d'image** pour `codeimage`, curseur de comparaison et pourcentage.
-- **Historique de tentative** pour le support : reconstruction de la suite des révisions d'une réponse avec horodatage serveur.
-- **Aperçu de cinq instanciations** pour une question à valeurs aléatoires, avec bouton "figer".
-- **Statistiques dans le pool** : sur la fiche d'une question, taux de réussite et temps moyen par version, pour choisir la bonne question en un coup d'œil.
-- **Coller depuis Moodle** : un fichier GIFT déposé sur le pool est importé, les questions non convertibles sont listées.
-- **Correction par lot** : filtre par confiance, par question, par écart entre proposition LLM et score moyen.
-- **Mode zen** pour l'étudiant, une question par écran, barre de progression, sans chrome inutile.
+- **Generate a variant**: same question, other values or other context, as a draft linked to the original by `origin_question_id`.
+- **Generate a quiz**: duration, tags, difficulty, and the platform composes a draft evaluation from the answer-time statistics. Phase 3.
+- **Session code and QR code** to join a poll or a classroom from a phone.
+- **Projection view** without names: presence ring in the waiting room, live distribution for a poll, completion rate during a quiz.
+- **Image difference** for `codeimage`, comparison slider and percentage.
+- **Attempt history** for support: reconstruction of the sequence of revisions of an answer with server timestamps.
+- **Preview of five instantiations** for a question with random values, with a "freeze" button.
+- **Statistics in the pool**: on a question's card, success rate and average time per version, to pick the right question at a glance.
+- **Paste from Moodle**: a GIFT file dropped on the pool is imported, the non-convertible questions are listed.
+- **Batch grading**: filter by confidence, by question, by gap between the LLM proposal and the average score.
+- **Zen mode** for the student, one question per screen, progress bar, no unnecessary chrome.
