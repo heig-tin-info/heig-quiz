@@ -26,7 +26,7 @@
  *    and the results. Without it the teacher holds no seat, which is the
  *    path that asks for a confirmation first;
  *  - `scene` — the student player's state, and only that one screen's:
- *    `?scene=lobby|running|paused|closed|extend` (`running` by default).
+ *    `?scene=lobby|running|paused|closed|extend|single` (`running` by default).
  *
  * ONE dataset, in four labelled sections:
  *
@@ -127,7 +127,7 @@ for (const name of FLAG_NAMES) {
  * fake backend serves on ONE evaluation (section 4) and changes nothing
  * anywhere else.
  */
-type Scene = "lobby" | "running" | "paused" | "closed" | "extend";
+type Scene = "lobby" | "running" | "paused" | "closed" | "extend" | "single";
 const SCENE_KEY = "quiz-mock-scene";
 const sceneParam = params.get("scene");
 if (sceneParam !== null) {
@@ -3654,7 +3654,12 @@ on("POST", "/app/api/evaluations/:id/attempts/:attemptId/reopen", (m) => {
 // closure. `?scene=` (read in section 0) picks which one the fake backend
 // serves:
 //
-//   ?scene=lobby | running | paused | closed | extend   (running by default)
+//   ?scene=lobby | running | paused | closed | extend | single
+//                                                     (running by default)
+//
+// `single` serves the SAME attempt cut down to its first question: the
+// one-question evaluation the player draws without a progress strip and
+// without previous / next.
 //
 // `extend` is the teacher granting time: the fake stream pushes an
 // `attempt.deadline` four seconds in, which is the only way to see the
@@ -3877,7 +3882,7 @@ const studentAttemptView = (): AttemptView => ({
     pausedAt: scene === "paused" ? iso(-30_000) : null,
     totalPoints: 10,
   },
-  items: [1, 2, 3, 4, 5].map((n) => {
+  items: (scene === "single" ? [1] : [1, 2, 3, 4, 5]).map((n) => {
     const stored = studentAnswers.get(studentItem(n));
     return {
       id: studentItem(n),
@@ -5834,6 +5839,6 @@ const active = FLAG_NAMES.filter((f) => flags[f]);
 console.info(
   `[mock] persona: ${role} — switch with ?as=teacher|student|admin` +
     `\n[mock] scene flags: ${active.length ? active.join(", ") : "none"} — ?empty=1 ?fail=1 ?slow=1 ?many=1 (append =0 to clear)` +
-    `\n[mock] student scene: ${scene} — ?scene=lobby|running|paused|closed|extend` +
+    `\n[mock] student scene: ${scene} — ?scene=lobby|running|paused|closed|extend|single` +
     `\n[mock] polls: /evaluations/poll/poll · /evaluations/poll-short/poll · /evaluations/poll-ended/poll — ?revealed=1`,
 );

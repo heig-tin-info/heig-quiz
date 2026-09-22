@@ -118,22 +118,40 @@ const attemptView = (over: Partial<AttemptView["attempt"]> = {}): AttemptView =>
 
 const entry = (view: AttemptView): AttemptOrLobby => ({ kind: "attempt", view });
 
+/** The same evaluation, cut down to its first question (F-LIVE-09). */
+const oneItemView = (): AttemptView => {
+  const view = attemptView({ lastItemId: "i1" });
+  return { ...view, items: [view.items[0]!] };
+};
+
+const withNavigation = (view: AttemptView, navigation: "free" | "forward_only"): AttemptView => ({
+  ...view,
+  evaluation: {
+    ...view.evaluation,
+    settings: { ...view.evaluation.settings, navigation },
+  },
+});
+
+/** `buttonClass` writes the accent fill, and only for `primary`. */
+const isPrimary = (el: HTMLElement) => el.classList.contains("bg-accent");
+
+/** Like the API: the flag the student asked for is the flag that comes back. */
+const doneEcho = (call: { body: unknown }) =>
+  ok({
+    done: (call.body as { done: boolean }).done,
+    nextItemId: null,
+    serverNow: "2026-09-20T10:00:01.000Z",
+  });
+
 function stubs(view: AttemptView) {
   return mockFetch({
     [`POST /app/api/evaluations/${EVAL}/attempt`]: ok(entry(view)),
     [`GET /app/api/attempts/${ATTEMPT}`]: ok(entry(view)),
     [`POST /app/api/attempts/${ATTEMPT}/position`]: noContent(),
     [`POST /app/api/attempts/${ATTEMPT}/events`]: noContent(),
-    [`POST /app/api/attempts/${ATTEMPT}/answers/i1/done`]: ok({
-      done: true,
-      nextItemId: null,
-      serverNow: "2026-09-20T10:00:01.000Z",
-    }),
-    [`POST /app/api/attempts/${ATTEMPT}/answers/i2/done`]: ok({
-      done: true,
-      nextItemId: null,
-      serverNow: "2026-09-20T10:00:01.000Z",
-    }),
+    [`POST /app/api/attempts/${ATTEMPT}/answers/i1/done`]: doneEcho,
+    [`POST /app/api/attempts/${ATTEMPT}/answers/i2/done`]: doneEcho,
+    [`POST /app/api/attempts/${ATTEMPT}/answers/i3/done`]: doneEcho,
   });
 }
 
@@ -342,6 +360,120 @@ describe("the zen player", () => {
     // And it runs: the next question is one Enter away.
     await userEvent.keyboard("{Escape}");
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  });
+
+  /*
+   * F-LIVE-08 and F-LIVE-09, as the product owner read them after sitting a
+   * one-question quiz: nothing on the screen may be a control that does
+   * nothing, and nothing may be a control that quietly does the opposite of
+   * what it says.
+   */
+  describe("navigation and the done state", () => {
+    it("draws no strip and no previous / next for a single question", async () => {
+      const view = oneItemView();
+      stubs(view);
+      render(view);
+      await screen.findByText("Question 1");
+
+      expect(screen.queryByRole("navigation")).toBeNull();
+      expect(screen.queryByRole("button", { name: "Précédent" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Suivant" })).toBeNull();
+      // The rest of the frame is untouched.
+      expect(screen.getByRole("button", { name: "Rendre" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Marquer comme faite" })).toBeInTheDocument();
+      // And the two arrows are harmless rather than broken.
+      await userEvent.keyboard("{Alt>}{ArrowRight}{/Alt}");
+      expect(screen.getByText("Question 1")).toBeInTheDocument();
+    });
+
+    it("keeps the strip and both arrows as soon as there are several", async () => {
+      const view = attemptView();
+      stubs(view);
+      render(view);
+      await screen.findByText("Question 2");
+
+      expect(
+        await screen.findByRole("navigation", { name: "Progression : question 2 sur 3" }),
+      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Précédent" })).toBeEnabled();
+      expect(screen.getByRole("button", { name: "Suivant" })).toBeEnabled();
+    });
+
+    it("offers a named way back, not a primary 'Done', once marked in free mode", async () => {
+      const view = attemptView();
+      stubs(view);
+      render(view);
+      await screen.findByText("Question 2");
+
+      const mark = screen.getByRole("button", { name: "Marquer comme faite" });
+      expect(isPrimary(mark)).toBe(true);
+      await userEvent.click(mark);
+
+      const reopen = await screen.findByRole("button", { name: "Rouvrir la question" });
+      expect(isPrimary(reopen)).toBe(false);
+      expect(screen.queryByRole("button", { name: "Faite" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Marquer comme faite" })).toBeNull();
+      // "Done" is still SAID — as the status badge beside the counter.
+      expect(screen.getByText("Faite")).toBeInTheDocument();
+      // The accent moved to the only thing left to do here: the next question.
+      expect(isPrimary(screen.getByRole("button", { name: "Suivant" }))).toBe(true);
+
+      // And it really re-opens, rather than being a second confirmation.
+      await userEvent.click(reopen);
+      expect(
+        await screen.findByRole("button", { name: "Marquer comme faite" }),
+      ).toBeInTheDocument();
+    });
+
+    it("offers no way back in forward_only (F-LIVE-08)", async () => {
+      const view = withNavigation(attemptView({ lastItemId: "i3" }), "forward_only");
+      const { calls } = stubs(view);
+      render(view);
+      await screen.findByText("Question 3");
+
+      await userEvent.click(screen.getByRole("button", { name: "Marquer comme faite" }));
+      await screen.findByText("Faite");
+      expect(screen.queryByRole("button", { name: "Rouvrir la question" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Faite" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Marquer comme faite" })).toBeNull();
+      // Ctrl+Enter must not ask for it either: the server answers 409.
+      const before = calls.filter((c) => c.url.endsWith("/done")).length;
+      await userEvent.keyboard("{Control>}{Enter}{/Control}");
+      expect(calls.filter((c) => c.url.endsWith("/done"))).toHaveLength(before);
+    });
+
+    it("hands the accent to 'Rendre' once the last question is done", async () => {
+      const view = attemptView({ lastItemId: "i3" });
+      stubs(view);
+      render(view);
+      await screen.findByText("Question 3");
+      expect(isPrimary(screen.getByRole("button", { name: "Rendre" }))).toBe(false);
+
+      await userEvent.click(screen.getByRole("button", { name: "Marquer comme faite" }));
+      await screen.findByRole("button", { name: "Rouvrir la question" });
+      await waitFor(() =>
+        expect(isPrimary(screen.getByRole("button", { name: "Rendre" }))).toBe(true),
+      );
+      // Still exactly one accent on the screen.
+      expect(isPrimary(screen.getByRole("button", { name: "Suivant" }))).toBe(false);
+      // And handing in still goes through its confirmation (F-LIVE-10).
+      await userEvent.click(screen.getByRole("button", { name: "Rendre" }));
+      expect(await screen.findByText("Rendre vos réponses ?")).toBeInTheDocument();
+    });
+
+    it("makes 'Rendre' the accent on a one-question attempt once it is done", async () => {
+      const view = oneItemView();
+      stubs(view);
+      render(view);
+      await screen.findByText("Question 1");
+
+      await userEvent.click(screen.getByRole("button", { name: "Marquer comme faite" }));
+      const reopen = await screen.findByRole("button", { name: "Rouvrir la question" });
+      expect(isPrimary(reopen)).toBe(false);
+      await waitFor(() =>
+        expect(isPrimary(screen.getByRole("button", { name: "Rendre" }))).toBe(true),
+      );
+    });
   });
 
   it("has no axe violation", async () => {

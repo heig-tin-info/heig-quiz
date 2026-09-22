@@ -151,6 +151,11 @@ const scenes = [
   { name: "player-run", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 4); await p.getByRole("button", { name: /^(run|exécuter)$/i }).click(); await p.getByText(/^(Compiled|Compilé)$/).waitFor({ timeout: 60000 }); await p.waitForTimeout(500); } },
   { name: "player-run-manual", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 4); await p.getByLabel(/^(Arguments)$/).fill("220\n470"); await p.getByRole("button", { name: /^(run once|exécuter une fois)$/i }).click(); await p.getByLabel(/^(Output|Sortie)$/).waitFor({ timeout: 60000 }); await p.waitForTimeout(300); } },
   { name: "player-submit", role: "student", path: `${TAKE}?scene=running`, fold: true, act: (p) => p.getByRole("button", { name: /hand in/i }).first().click() },
+  // A ONE-question evaluation: no progress strip and no previous / next,
+  // and, once the question is marked done, "Hand in" takes the accent while
+  // the footer offers the named way back.
+  { name: "player-single", role: "student", path: `${TAKE}?scene=single` },
+  { name: "player-single-done", role: "student", path: `${TAKE}?scene=single`, act: async (p) => { await p.getByRole("button", { name: /mark as done/i }).click(); await p.getByRole("button", { name: /reopen the question/i }).waitFor(); } },
   { name: "player-paused", role: "student", path: `${TAKE}?scene=paused`, fold: true },
   { name: "player-timeup", role: "student", path: `${TAKE}?scene=closed` },
 
