@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { BOX, GRID, LIBRARY, PORT_IDS } from "../library.js";
+import { BOX, GRID, LIBRARY, MAJOR, PORTS, PORT_IDS } from "../library.js";
 import { Schematic, type Orientation, type SchematicComponent } from "../schema.js";
 
 import {
+  BLEED,
+  FIT_ASPECT,
   FIT_VIEW,
+  MAX_ZOOM,
   MIRROR_X,
   MIRROR_Y,
   ORIENTATIONS,
@@ -12,8 +15,10 @@ import {
   ORIENT_90,
   ROTATE,
   clampToBox,
+  clampView,
   directionOf,
   extentOf,
+  fitCanvasHeight,
   multiply,
   newComponent,
   nextId,
@@ -29,6 +34,7 @@ import {
   snap,
   viewScale,
   zoomAt,
+  zoomPercent,
 } from "./geometry.js";
 
 const at = (kind: SchematicComponent["kind"], x: number, y: number, m: Orientation = ORIENT_0): SchematicComponent => ({
@@ -222,7 +228,8 @@ describe("wire ends", () => {
   it("finds the pin or the port under a point", () => {
     const list = [at("R", 200, 200)];
     expect(pinAt(list, 162, 200, 9)).toEqual({ kind: "pin", c: "c1", p: 0 });
-    expect(pinAt(list, 0, 160, 9)).toEqual({ kind: "port", port: "in+" });
+    const inPlus = portPosition("in+");
+    expect(pinAt(list, inPlus.x, inPlus.y, 9)).toEqual({ kind: "port", port: "in+" });
     expect(pinAt(list, 400, 400, 9)).toBeNull();
   });
 });
@@ -230,15 +237,47 @@ describe("wire ends", () => {
 describe("the view", () => {
   const rect = { left: 0, top: 0, width: FIT_VIEW.w, height: FIT_VIEW.h };
 
+  it("leaves exactly one grid cell of margin around the box, on every side", () => {
+    expect(BLEED).toBe(GRID);
+    expect(FIT_VIEW.x).toBe(-GRID);
+    expect(FIT_VIEW.y).toBe(-GRID);
+    /* Left margin, right margin, and the same on the other axis. */
+    expect(-FIT_VIEW.x).toBe(GRID);
+    expect(FIT_VIEW.x + FIT_VIEW.w - BOX.width).toBe(GRID);
+    expect(FIT_VIEW.y + FIT_VIEW.h - BOX.height).toBe(GRID);
+  });
+
+  it("gives the canvas the height at which the fitted view does not letterbox", () => {
+    /* A viewport W × fitCanvasHeight(W) shows FIT_VIEW with no slack at all:
+       one cell of margin on the four sides, which is rule 1. */
+    for (const width of [400, 514, 900]) {
+      const height = fitCanvasHeight(width, 10_000);
+      const scale = viewScale({ left: 0, top: 0, width, height }, FIT_VIEW);
+      /* A whole number of pixels: the slack is a rounding, never a margin. */
+      expect(Math.abs(width - FIT_VIEW.w * scale)).toBeLessThanOrEqual(1);
+      expect(Math.abs(height - FIT_VIEW.h * scale)).toBeLessThanOrEqual(1);
+      /* The frame itself then sits one cell — at that scale — from each edge. */
+      expect(Math.abs((width - BOX.width * scale) / 2 - GRID * scale)).toBeLessThanOrEqual(1);
+      expect(Math.abs((height - BOX.height * scale) / 2 - GRID * scale)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it("never grows the canvas past the cap, and keeps it when nothing is measured", () => {
+    expect(fitCanvasHeight(10_000, 420)).toBe(420);
+    expect(fitCanvasHeight(0, 420)).toBe(420);
+    expect(fitCanvasHeight(Number.NaN, 420)).toBe(420);
+    expect(fitCanvasHeight(FIT_ASPECT * 300, 420)).toBe(300);
+  });
+
   it("maps a client point back to the world one to one when the view fits", () => {
     expect(viewScale(rect, FIT_VIEW)).toBe(1);
-    expect(screenToWorld(rect, FIT_VIEW, 212, 172)).toEqual({ x: 200, y: 160 });
+    expect(screenToWorld(rect, FIT_VIEW, 200 + BLEED, 160 + BLEED)).toEqual({ x: 200, y: 160 });
   });
 
   it("takes the letterbox into account when the element is wider than the view", () => {
     const wide = { left: 0, top: 0, width: FIT_VIEW.w * 2, height: FIT_VIEW.h };
     /* `meet` centres the view: half the slack is a dead margin on each side. */
-    const p = screenToWorld(wide, FIT_VIEW, FIT_VIEW.w / 2 + 212, 172);
+    const p = screenToWorld(wide, FIT_VIEW, FIT_VIEW.w / 2 + 200 + BLEED, 160 + BLEED);
     expect(p).toEqual({ x: 200, y: 160 });
   });
 
@@ -253,9 +292,38 @@ describe("the view", () => {
     expect(200).toBeCloseTo(zoomed.x + ((200 - FIT_VIEW.x) / FIT_VIEW.w) * zoomed.w);
   });
 
-  it("refuses to zoom past its limits", () => {
-    expect(zoomAt(FIT_VIEW, 1000, 0, 0).w).toBeCloseTo(FIT_VIEW.w / 4);
-    expect(zoomAt(FIT_VIEW, 1 / 1000, 0, 0).w).toBeCloseTo(FIT_VIEW.w * 4);
+  it("stops zooming out at the fitted view and calls it 100 %", () => {
+    expect(zoomAt(FIT_VIEW, 1000, 0, 0).w).toBeCloseTo(FIT_VIEW.w / MAX_ZOOM);
+    expect(zoomAt(FIT_VIEW, 1 / 1000, 0, 0).w).toBeCloseTo(FIT_VIEW.w);
+    expect(zoomPercent(FIT_VIEW)).toBe(100);
+    expect(zoomPercent(zoomAt(FIT_VIEW, 2, 200, 160))).toBe(200);
+    expect(zoomPercent(zoomAt(FIT_VIEW, 1 / 1000, 0, 0))).toBe(100);
+  });
+
+  it("never lets a pan push the frame off the canvas", () => {
+    const zoomed = zoomAt(FIT_VIEW, 2, BOX.width / 2, BOX.height / 2);
+    const far = clampView({ ...zoomed, x: 10_000, y: -10_000 });
+    expect(far.x).toBe(FIT_VIEW.x + FIT_VIEW.w - zoomed.w);
+    expect(far.y).toBe(FIT_VIEW.y);
+    /* At the floor there is nowhere to go: the view is the fitted one. */
+    expect(clampView({ ...FIT_VIEW, x: 999, y: 999 })).toEqual(FIT_VIEW);
+  });
+});
+
+describe("the port anchors", () => {
+  it("sit five cells from the top and five from the bottom, on major lines", () => {
+    const cells = (v: number): number => v / GRID;
+    expect(cells(BOX.height) % MAJOR).toBe(0);
+    expect(cells(BOX.width) % MAJOR).toBe(0);
+    for (const port of PORT_IDS) {
+      const { x, y } = portPosition(port);
+      expect(cells(y) % MAJOR).toBe(0);
+      expect(cells(x) % MAJOR).toBe(0);
+    }
+    expect(cells(PORTS["in+"].y)).toBe(MAJOR);
+    expect(cells(PORTS["out+"].y)).toBe(MAJOR);
+    expect(cells(BOX.height - PORTS["in-"].y)).toBe(MAJOR);
+    expect(cells(BOX.height - PORTS["out-"].y)).toBe(MAJOR);
   });
 });
 

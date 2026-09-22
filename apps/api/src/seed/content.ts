@@ -517,8 +517,8 @@ export const ELECTRONICS_POOL: PoolSpec = {
         ],
         reference: {
           components: [
-            { id: "c1", kind: "R", x: 300, y: 160, m: [1, 0, 0, 1], name: "R1", value: "1.59k" },
-            { id: "c2", kind: "C", x: 480, y: 240, m: [0, 1, -1, 0], name: "C1", value: "100n" },
+            { id: "c1", kind: "R", x: 300, y: 100, m: [1, 0, 0, 1], name: "R1", value: "1.59k" },
+            { id: "c2", kind: "C", x: 480, y: 180, m: [0, 1, -1, 0], name: "C1", value: "100n" },
           ],
           wires: [
             {
@@ -526,35 +526,35 @@ export const ELECTRONICS_POOL: PoolSpec = {
               a: { kind: "port", port: "in+" },
               b: { kind: "pin", c: "c1", p: 0 },
               via: [],
-              points: [[0, 160], [260, 160]],
+              points: [[0, 100], [260, 100]],
             },
             {
               id: "w2",
               a: { kind: "pin", c: "c1", p: 1 },
               b: { kind: "port", port: "out+" },
               via: [],
-              points: [[340, 160], [800, 160]],
+              points: [[340, 100], [800, 100]],
             },
             {
               id: "w3",
               a: { kind: "pin", c: "c2", p: 0 },
-              b: { kind: "free", x: 480, y: 160 },
+              b: { kind: "free", x: 480, y: 100 },
               via: [],
-              points: [[480, 220], [480, 160]],
+              points: [[480, 160], [480, 100]],
             },
             {
               id: "w4",
               a: { kind: "pin", c: "c2", p: 1 },
               b: { kind: "port", port: "in-" },
               via: [],
-              points: [[480, 260], [480, 320], [0, 320]],
+              points: [[480, 200], [480, 400], [0, 400]],
             },
             {
               id: "w5",
-              a: { kind: "free", x: 480, y: 320 },
+              a: { kind: "free", x: 480, y: 400 },
               b: { kind: "port", port: "out-" },
               via: [],
-              points: [[480, 320], [800, 320]],
+              points: [[480, 400], [800, 400]],
             },
           ],
         },

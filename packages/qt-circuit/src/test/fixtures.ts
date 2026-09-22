@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 import type { RunnerOutcome } from "@quiz/core/server";
 
-import { LIBRARY, type ComponentKind } from "../library.js";
+import { BOX, LIBRARY, PORTS, type ComponentKind } from "../library.js";
 import {
   CircuitConfig,
   type CircuitAnswer,
@@ -87,6 +87,17 @@ export const portEnd = (port: "in+" | "in-" | "out+" | "out-"): Wire["a"] =>
   ({ kind: "port", port }) as const;
 export const freeEnd = (x: number, y: number): Wire["a"] => ({ kind: "free", x, y }) as const;
 
+/**
+ * The two rails the fixtures wire along, read from the port table rather than
+ * written down: `in+`/`out+` sit on one, `in-`/`out-` on the other, and moving
+ * them in `library.ts` moves every fixture with them.
+ */
+export const RAIL = PORTS["in+"].y;
+export const RAIL_LOW = PORTS["in-"].y;
+/** The x of the left and right box borders, where the four ports are. */
+export const LEFT = 0;
+export const RIGHT = BOX.width;
+
 // ---------------------------------------------------------------------------
 // The RC low-pass of `rc-lowpass.cir`
 // ---------------------------------------------------------------------------
@@ -101,9 +112,9 @@ export function rcLowPass(
   values: { r?: string; c?: string } = {},
 ): { schematic: Schematic; r: SchematicComponent; c: SchematicComponent } {
   resetIds();
-  const r = component("R", "R1", 400, 160, { value: values.r ?? "1.59k" });
-  const cap = component("C", "C1", 600, 240, { value: values.c ?? "100n", m: ROT90 });
-  const gnd = component("GND", "GND", 600, 300);
+  const r = component("R", "R1", 400, RAIL, { value: values.r ?? "1.59k" });
+  const cap = component("C", "C1", 600, RAIL + 80, { value: values.c ?? "100n", m: ROT90 });
+  const gnd = component("GND", "GND", 600, RAIL + 140);
   const [rx0, ry0] = at(r, 0);
   const [rx1, ry1] = at(r, 1);
   const [cx0, cy0] = at(cap, 0);
@@ -114,17 +125,17 @@ export function rcLowPass(
       components: [r, cap, gnd],
       wires: [
         wire("w1", portEnd("in+"), pinEnd(r, 0), [
-          [0, 160],
+          [LEFT, RAIL],
           [rx0, ry0],
         ]),
         wire("w2", pinEnd(r, 1), portEnd("out+"), [
           [rx1, ry1],
-          [800, 160],
+          [RIGHT, RAIL],
         ]),
         // A free end landing on the middle of w2: the T-junction.
-        wire("w3", pinEnd(cap, 0), freeEnd(cx0, 160), [
+        wire("w3", pinEnd(cap, 0), freeEnd(cx0, RAIL), [
           [cx0, cy0],
-          [cx0, 160],
+          [cx0, RAIL],
         ]),
         wire("w4", pinEnd(cap, 1), pinEnd(gnd, 0), [
           [cx1, cy1],
@@ -153,9 +164,9 @@ export const SECRET_TOLERANCE = 0.0777;
 /** The teacher's own circuit: the key. */
 export function referenceSchematic(): Schematic {
   resetIds();
-  const r = component("R", SECRET_REFERENCE_NAME, 400, 160, { value: SECRET_REFERENCE_VALUE });
-  const cap = component("C", "Csecret", 600, 240, { value: "100n", m: ROT90 });
-  const gnd = component("GND", "GND", 600, 300);
+  const r = component("R", SECRET_REFERENCE_NAME, 400, RAIL, { value: SECRET_REFERENCE_VALUE });
+  const cap = component("C", "Csecret", 600, RAIL + 80, { value: "100n", m: ROT90 });
+  const gnd = component("GND", "GND", 600, RAIL + 140);
   const [rx0, ry0] = at(r, 0);
   const [rx1, ry1] = at(r, 1);
   const [cx0, cy0] = at(cap, 0);
@@ -165,16 +176,16 @@ export function referenceSchematic(): Schematic {
     components: [r, cap, gnd],
     wires: [
       wire("w1", portEnd("in+"), pinEnd(r, 0), [
-        [0, 160],
+        [LEFT, RAIL],
         [rx0, ry0],
       ]),
       wire("w2", pinEnd(r, 1), portEnd("out+"), [
         [rx1, ry1],
-        [800, 160],
+        [RIGHT, RAIL],
       ]),
-      wire("w3", pinEnd(cap, 0), freeEnd(cx0, 160), [
+      wire("w3", pinEnd(cap, 0), freeEnd(cx0, RAIL), [
         [cx0, cy0],
-        [cx0, 160],
+        [cx0, RAIL],
       ]),
       wire("w4", pinEnd(cap, 1), pinEnd(gnd, 0), [
         [cx1, cy1],

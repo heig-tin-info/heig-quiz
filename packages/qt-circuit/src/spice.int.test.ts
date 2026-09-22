@@ -21,7 +21,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildNetlist, parseSpiceOutput, type Harness } from "./spice.js";
 import type { Orientation, Schematic, SchematicComponent, SeriesSet, Stimulus, Supplies } from "./schema.js";
-import { ROT90, at, component, freeEnd, pinEnd, portEnd, resetIds, wire } from "./test/fixtures.js";
+import { RAIL, ROT90, at, component, freeEnd, pinEnd, portEnd, resetIds, wire } from "./test/fixtures.js";
 
 const IMAGE = "localhost/quiz-runner-spice:latest";
 const TIMEOUT_MS = 60_000;
@@ -84,8 +84,8 @@ function rcLowPassSchematic(): Schematic {
   return {
     components: [r, cap, gnd],
     wires: [
-      wire("w1", portEnd("in+"), pinEnd(r, 0), [[0, 160], at(r, 0)]),
-      wire("w2", pinEnd(r, 1), portEnd("out+"), [at(r, 1), [800, 160]]),
+      wire("w1", portEnd("in+"), pinEnd(r, 0), [[0, RAIL], [0, 160], at(r, 0)]),
+      wire("w2", pinEnd(r, 1), portEnd("out+"), [at(r, 1), [800, 160], [800, RAIL]]),
       wire("w3", pinEnd(cap, 0), freeEnd(600, 160), [at(cap, 0), [600, 160]]),
       link("w4", cap, 1, gnd, 0),
     ],
@@ -102,11 +102,11 @@ function invertingAmplifier(): Schematic {
   return {
     components: [r1, r2, amp, gnd],
     wires: [
-      wire("w1", portEnd("in+"), pinEnd(r1, 0), [[0, 160], at(r1, 0)]),
+      wire("w1", portEnd("in+"), pinEnd(r1, 0), [[0, RAIL], [0, 160], at(r1, 0)]),
       wire("w2", pinEnd(r1, 1), pinEnd(amp, 0), [at(r1, 1), [200, 140], at(amp, 0)]),
       link("w3", r2, 0, amp, 0),
       link("w4", r2, 1, amp, 2),
-      wire("w5", pinEnd(amp, 2), portEnd("out+"), [at(amp, 2), [800, 160]]),
+      wire("w5", pinEnd(amp, 2), portEnd("out+"), [at(amp, 2), [800, 160], [800, RAIL]]),
       link("w6", amp, 1, gnd, 0),
     ],
   };
@@ -120,9 +120,9 @@ function comparator(): Schematic {
   return {
     components: [amp, gnd],
     wires: [
-      wire("w1", portEnd("in+"), pinEnd(amp, 1), [[0, 160], [0, 180], at(amp, 1)]),
+      wire("w1", portEnd("in+"), pinEnd(amp, 1), [[0, RAIL], [0, 180], at(amp, 1)]),
       link("w2", amp, 0, gnd, 0),
-      wire("w3", pinEnd(amp, 2), portEnd("out+"), [at(amp, 2), [800, 160]]),
+      wire("w3", pinEnd(amp, 2), portEnd("out+"), [at(amp, 2), [800, 160], [800, RAIL]]),
     ],
   };
 }
@@ -138,11 +138,11 @@ function commonEmitter(): Schematic {
   return {
     components: [rb, rc, q, vcc, gnd],
     wires: [
-      wire("w1", portEnd("in+"), pinEnd(rb, 0), [[0, 160], at(rb, 0)]),
+      wire("w1", portEnd("in+"), pinEnd(rb, 0), [[0, RAIL], [0, 160], at(rb, 0)]),
       wire("w2", pinEnd(rb, 1), pinEnd(q, 1), [at(rb, 1), [200, 200], at(q, 1)]),
       link("w3", rc, 1, q, 0),
       link("w4", q, 2, gnd, 0),
-      wire("w5", pinEnd(q, 0), portEnd("out+"), [at(q, 0), [800, 160]]),
+      wire("w5", pinEnd(q, 0), portEnd("out+"), [at(q, 0), [800, 160], [800, RAIL]]),
     ],
   };
 }
@@ -157,10 +157,10 @@ function mosfetSwitch(): Schematic {
   return {
     components: [rd, m, vcc, gnd],
     wires: [
-      wire("w1", portEnd("in+"), pinEnd(m, 1), [[0, 160], [0, 200], at(m, 1)]),
+      wire("w1", portEnd("in+"), pinEnd(m, 1), [[0, RAIL], [0, 200], at(m, 1)]),
       link("w2", rd, 1, m, 0),
       link("w3", m, 2, gnd, 0),
-      wire("w4", pinEnd(m, 0), portEnd("out+"), [at(m, 0), [800, 160]]),
+      wire("w4", pinEnd(m, 0), portEnd("out+"), [at(m, 0), [800, 160], [800, RAIL]]),
     ],
   };
 }
@@ -175,8 +175,8 @@ function zenerClamp(): Schematic {
   return {
     components: [r, dz, gnd],
     wires: [
-      wire("w1", portEnd("in+"), pinEnd(r, 0), [[0, 160], at(r, 0)]),
-      wire("w2", pinEnd(r, 1), portEnd("out+"), [at(r, 1), [800, 160]]),
+      wire("w1", portEnd("in+"), pinEnd(r, 0), [[0, RAIL], [0, 160], at(r, 0)]),
+      wire("w2", pinEnd(r, 1), portEnd("out+"), [at(r, 1), [800, 160], [800, RAIL]]),
       wire("w3", pinEnd(dz, 1), freeEnd(400, 160), [at(dz, 1), [400, 160]]),
       link("w4", dz, 0, gnd, 0),
     ],

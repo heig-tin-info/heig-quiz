@@ -3,6 +3,8 @@ import { describe, expect, it } from "vitest";
 import type { Palette, Schematic, Supplies } from "./schema.js";
 import { extractNets, pinKey, type NetlistIssueCode } from "./netlist.js";
 import {
+  RAIL,
+  RAIL_LOW,
   ROT90,
   at,
   component,
@@ -32,8 +34,8 @@ describe("pinKey", () => {
 describe("connectivity", () => {
   it("joins two pins that touch, with no wire at all", () => {
     resetIds();
-    const a = component("R", "R1", 200, 160, { value: "1k" });
-    const b = component("R", "R2", 280, 160, { value: "1k" });
+    const a = component("R", "R1", 200, RAIL, { value: "1k" });
+    const b = component("R", "R2", 280, RAIL, { value: "1k" });
     expect(at(a, 1)).toEqual(at(b, 0));
     const schematic: Schematic = { components: [a, b], wires: [] };
     const nets = extractNets(schematic, common);
@@ -73,17 +75,17 @@ describe("connectivity", () => {
 
   it("joins two wires whose ends coincide", () => {
     resetIds();
-    const r = component("R", "R1", 400, 160, { value: "1k" });
+    const r = component("R", "R1", 400, RAIL, { value: "1k" });
     const [rx, ry] = at(r, 0);
     const schematic: Schematic = {
       components: [r],
       wires: [
-        wire("w1", portEnd("in+"), freeEnd(200, 160), [
-          [0, 160],
-          [200, 160],
+        wire("w1", portEnd("in+"), freeEnd(200, RAIL), [
+          [0, RAIL],
+          [200, RAIL],
         ]),
-        wire("w2", freeEnd(200, 160), pinEnd(r, 0), [
-          [200, 160],
+        wire("w2", freeEnd(200, RAIL), pinEnd(r, 0), [
+          [200, RAIL],
           [rx, ry],
         ]),
       ],
@@ -106,23 +108,23 @@ describe("naming", () => {
 
   it("gives `inn`/`outn` and no ground of its own without a common ground", () => {
     resetIds();
-    const r = component("R", "R1", 400, 160, { value: "1k" });
+    const r = component("R", "R1", 400, RAIL, { value: "1k" });
     const [rx0, ry0] = at(r, 0);
     const [rx1, ry1] = at(r, 1);
     const schematic: Schematic = {
       components: [r],
       wires: [
         wire("w1", portEnd("in+"), pinEnd(r, 0), [
-          [0, 160],
+          [0, RAIL],
           [rx0, ry0],
         ]),
         wire("w2", pinEnd(r, 1), portEnd("out+"), [
           [rx1, ry1],
-          [800, 160],
+          [800, RAIL],
         ]),
         wire("w3", portEnd("in-"), portEnd("out-"), [
-          [0, 320],
-          [800, 320],
+          [0, RAIL_LOW],
+          [800, RAIL_LOW],
         ]),
       ],
     };
@@ -144,22 +146,22 @@ describe("naming", () => {
 
   it("numbers the inner nets deterministically, by lowest component then wire", () => {
     resetIds();
-    const r1 = component("R", "R1", 200, 160, { value: "1k" });
-    const r2 = component("R", "R2", 320, 160, { value: "1k" });
+    const r1 = component("R", "R1", 200, RAIL, { value: "1k" });
+    const r2 = component("R", "R2", 320, RAIL, { value: "1k" });
     const schematic: Schematic = {
       components: [r1, r2],
       wires: [
         wire("w1", portEnd("in+"), pinEnd(r1, 0), [
-          [0, 160],
-          [160, 160],
+          [0, RAIL],
+          [160, RAIL],
         ]),
         wire("w2", pinEnd(r1, 1), pinEnd(r2, 0), [
-          [240, 160],
-          [280, 160],
+          [240, RAIL],
+          [280, RAIL],
         ]),
         wire("w3", pinEnd(r2, 1), portEnd("out+"), [
-          [360, 160],
-          [800, 160],
+          [360, RAIL],
+          [800, RAIL],
         ]),
       ],
     };
@@ -173,13 +175,13 @@ describe("naming", () => {
 describe("diagnostics", () => {
   it("reports a pin nothing shares a node with", () => {
     resetIds();
-    const r = component("R", "R1", 400, 160, { value: "1k" });
+    const r = component("R", "R1", 400, RAIL, { value: "1k" });
     const [rx0, ry0] = at(r, 0);
     const schematic: Schematic = {
       components: [r],
       wires: [
         wire("w1", portEnd("in+"), pinEnd(r, 0), [
-          [0, 160],
+          [0, RAIL],
           [rx0, ry0],
         ]),
       ],
@@ -203,14 +205,14 @@ describe("diagnostics", () => {
 
   it("reports a wire whose polyline left its ends behind", () => {
     resetIds();
-    const r = component("R", "R1", 400, 160, { value: "1k" });
+    const r = component("R", "R1", 400, RAIL, { value: "1k" });
     const schematic: Schematic = {
       components: [r],
       wires: [
         // `a` claims the port, but the polyline starts somewhere else.
         wire("w1", portEnd("in+"), pinEnd(r, 0), [
-          [100, 160],
-          [360, 160],
+          [100, RAIL],
+          [360, RAIL],
         ]),
       ],
     };
@@ -306,15 +308,15 @@ describe("diagnostics", () => {
     ];
     resetIds();
     // One schematic that is wrong in every way at once.
-    const r = component("R", "R1", 400, 160);
-    const bad = component("R", "R1", 500, 160, { value: "1e20" });
-    const worse = component("C", "C1", 600, 160, { value: "big", m: ROT90 });
+    const r = component("R", "R1", 400, RAIL);
+    const bad = component("R", "R1", 500, RAIL, { value: "1e20" });
+    const worse = component("C", "C1", 600, RAIL, { value: "big", m: ROT90 });
     const vcc = component("VCC", "VCC", 700, 100);
     const seen = new Set(
       extractNets(
         {
           components: [r, bad, worse, vcc],
-          wires: [wire("w1", portEnd("in+"), pinEnd(r, 0), [[100, 160], [360, 160]])],
+          wires: [wire("w1", portEnd("in+"), pinEnd(r, 0), [[100, RAIL], [360, RAIL]])],
         },
         {
           commonGround: false,

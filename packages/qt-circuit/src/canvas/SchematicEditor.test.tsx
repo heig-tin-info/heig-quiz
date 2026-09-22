@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Schematic, type Palette, type Supplies } from "../schema.js";
 
 import { SchematicEditor } from "./SchematicEditor.js";
-import { FIT_VIEW, ORIENT_0 } from "./geometry.js";
+import { FIT_VIEW, ORIENT_0, portPosition, viewBoxAttr } from "./geometry.js";
 import { withRoutes } from "./router.js";
 
 /**
@@ -37,6 +37,16 @@ const PALETTE: Palette = { kinds: ["R", "C", "GND", "VCC", "VEE"], maxComponents
 const SUPPLIES: Supplies = { vcc: null, vee: null };
 
 const EMPTY: Schematic = { components: [], wires: [] };
+
+/** The port anchors, read from the library: five cells in from the top and the bottom. */
+const IN_PLUS = portPosition("in+");
+const IN_MINUS = portPosition("in-");
+
+/** The numbers of a `viewBox` attribute, for the assertions about panning. */
+const viewOf = (el: Element): { x: number; y: number; w: number; h: number } => {
+  const [x, y, w, h] = (el.getAttribute("viewBox") ?? "").split(" ").map(Number) as number[];
+  return { x: x!, y: y!, w: w!, h: h! };
+};
 
 const ONE_R: Schematic = withRoutes({
   components: [{ id: "c1", kind: "R", x: 200, y: 160, m: ORIENT_0, name: "R1", value: "10k" }],
@@ -189,7 +199,7 @@ describe("wiring", () => {
     render(<Harness initial={ONE_R} onChange={onChange} />);
     fireEvent.click(screen.getByRole("button", { name: "Wire" }));
     fireEvent.pointerDown(canvas(), { button: 0, ...client(160, 160) }); // R1 pin 1
-    fireEvent.pointerDown(canvas(), { button: 0, ...client(0, 160) }); // port in+
+    fireEvent.pointerDown(canvas(), { button: 0, ...client(IN_PLUS.x, IN_PLUS.y) }); // port in+
 
     expect(onChange).toHaveBeenCalledTimes(1);
     const next = onChange.mock.calls[0]?.[0] as Schematic;
@@ -198,7 +208,7 @@ describe("wiring", () => {
     expect(wire.a).toEqual({ kind: "pin", c: "c1", p: 0 });
     expect(wire.b).toEqual({ kind: "port", port: "in+" });
     expect(wire.points[0]).toEqual([160, 160]);
-    expect(wire.points.at(-1)).toEqual([0, 160]);
+    expect(wire.points.at(-1)).toEqual([IN_PLUS.x, IN_PLUS.y]);
   });
 
   it("adds a waypoint on a click in open space", () => {
@@ -208,7 +218,7 @@ describe("wiring", () => {
     fireEvent.pointerDown(canvas(), { button: 0, ...client(160, 160) });
     fireEvent.pointerDown(canvas(), { button: 0, ...client(100, 400) });
     expect(onChange).not.toHaveBeenCalled(); // nothing committed yet
-    fireEvent.pointerDown(canvas(), { button: 0, ...client(0, 320) }); // port in-
+    fireEvent.pointerDown(canvas(), { button: 0, ...client(IN_MINUS.x, IN_MINUS.y) }); // port in-
     const next = onChange.mock.calls[0]?.[0] as Schematic;
     expect(next.wires[0]?.via).toEqual([{ x: 100, y: 400 }]);
     expect(next.wires[0]?.points).toContainEqual([100, 400]);
@@ -368,20 +378,44 @@ describe("readOnly", () => {
 });
 
 describe("the view", () => {
-  it("opens fitted to the whole box and comes back to it", () => {
+  it("opens on the whole frame plus one grid cell, and calls it 100 %", () => {
     render(<Harness />);
-    expect(canvas().getAttribute("viewBox")).toBe("-12 -12 824 504");
+    expect(canvas().getAttribute("viewBox")).toBe(viewBoxAttr(FIT_VIEW));
     fireEvent.click(screen.getByRole("button", { name: "Fit to view" }));
-    expect(canvas().getAttribute("viewBox")).toBe("-12 -12 824 504");
+    expect(canvas().getAttribute("viewBox")).toBe(viewBoxAttr(FIT_VIEW));
     expect(screen.getByText("100 %")).toBeInTheDocument();
   });
 
-  it("pans with the right button and does not open a context menu", () => {
+  it("refuses to zoom out below the fitted view", () => {
     render(<Harness />);
+    fireEvent.wheel(canvas(), { deltaY: 900, clientX: 400, clientY: 300 });
+    expect(canvas().getAttribute("viewBox")).toBe(viewBoxAttr(FIT_VIEW));
+    expect(screen.getByText("100 %")).toBeInTheDocument();
+  });
+
+  it("zooms in above it, and says so", () => {
+    render(<Harness />);
+    fireEvent.wheel(canvas(), { deltaY: -600, clientX: 400, clientY: 300 });
+    expect(viewOf(canvas()).w).toBeLessThan(FIT_VIEW.w);
+    expect(screen.getByText(/^\d{3} %$/).textContent).not.toBe("100 %");
+  });
+
+  it("pans with the right button, never past the frame, and opens no context menu", () => {
+    render(<Harness />);
+    /* At 100 % the whole frame is on screen: there is nowhere to pan to. */
     fireEvent.pointerDown(canvas(), { button: 2, clientX: 400, clientY: 300 });
     fireEvent.pointerMove(canvas(), { clientX: 300, clientY: 300 });
-    expect(canvas().getAttribute("viewBox")).toBe("88 -12 824 504");
+    expect(canvas().getAttribute("viewBox")).toBe(viewBoxAttr(FIT_VIEW));
     fireEvent.pointerUp(canvas(), { button: 2, clientX: 300, clientY: 300 });
+
+    /* Zoomed in, it pans — and stops at the edge of the fitted view. */
+    fireEvent.wheel(canvas(), { deltaY: -600, clientX: 400, clientY: 300 });
+    fireEvent.pointerDown(canvas(), { button: 2, clientX: 400, clientY: 300 });
+    fireEvent.pointerMove(canvas(), { clientX: -4000, clientY: -4000 });
+    const panned = viewOf(canvas());
+    expect(panned.x).toBeCloseTo(FIT_VIEW.x + FIT_VIEW.w - panned.w, 5);
+    expect(panned.y).toBeCloseTo(FIT_VIEW.y + FIT_VIEW.h - panned.h, 5);
+    fireEvent.pointerUp(canvas(), { button: 2, clientX: -4000, clientY: -4000 });
   });
 });
 

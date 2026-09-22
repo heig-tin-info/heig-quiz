@@ -346,16 +346,43 @@ export interface ViewBox {
   readonly h: number;
 }
 
-/** A little air around the box, so its outline and the ports are not clipped. */
-export const BLEED = 12;
+/**
+ * The air kept around the box when the view is fitted: EXACTLY one grid cell,
+ * on every side. It is what makes the frame read as filling the canvas rather
+ * than floating in it, and it is wide enough for the outline, the port glyphs
+ * and their labels.
+ */
+export const BLEED = GRID;
 
-/** The whole box, centred: the view on mount and on "fit". */
+/**
+ * The whole box plus its one-cell margin. Three things at once: the view on
+ * mount, the view the "fit" button returns to, and the FLOOR of zooming out —
+ * which is why the indicator calls it 100 %.
+ */
 export const FIT_VIEW: ViewBox = {
   x: -BLEED,
   y: -BLEED,
   w: BOX.width + 2 * BLEED,
   h: BOX.height + 2 * BLEED,
 };
+
+/** Width over height of {@link FIT_VIEW}: the shape a canvas area wants to be. */
+export const FIT_ASPECT = FIT_VIEW.w / FIT_VIEW.h;
+
+/**
+ * The height, in CSS pixels, at which a canvas `width` pixels wide shows
+ * {@link FIT_VIEW} with no letterbox at all — the frame then sits one grid
+ * cell from every edge of the drawing area, which is rule 1.
+ *
+ * `maxHeight` caps it: past that the area is wider than the fitted view and
+ * `xMidYMid meet` letterboxes left and right, the one case where the margin
+ * is wider than a cell. A width of zero (jsdom, a hidden tab) means "not
+ * measured yet" and keeps the cap.
+ */
+export function fitCanvasHeight(width: number, maxHeight: number): number {
+  if (!Number.isFinite(width) || width <= 0) return maxHeight;
+  return Math.min(maxHeight, Math.round(width / FIT_ASPECT));
+}
 
 export const viewBoxAttr = (v: ViewBox): string => `${v.x} ${v.y} ${v.w} ${v.h}`;
 
@@ -393,13 +420,38 @@ export function screenToWorld(
   };
 }
 
-/** The smallest and largest the view may get: 25 % to 400 % of "fit". */
-const MIN_W = FIT_VIEW.w / 4;
-const MAX_W = FIT_VIEW.w * 4;
+/** The tightest the view may get: 400 % of "fit". */
+export const MAX_ZOOM = 4;
+
+/**
+ * The smallest and largest the view may get. Zooming OUT stops at the fitted
+ * view: below it the frame would only get smaller inside an already-empty
+ * canvas, so 100 % is both the floor and what the whole frame looks like.
+ */
+const MIN_W = FIT_VIEW.w / MAX_ZOOM;
+const MAX_W = FIT_VIEW.w;
+
+/** What the indicator shows: 100 % is the fitted view, more is zoomed in. */
+export const zoomPercent = (view: ViewBox): number => Math.round((FIT_VIEW.w / view.w) * 100);
+
+/**
+ * The view moved back inside {@link FIT_VIEW}. Panning may not push the frame
+ * off the canvas: whatever the pointer asked for, what is on screen stays a
+ * part of the box and of its one-cell margin.
+ */
+export function clampView(view: ViewBox): ViewBox {
+  const slackX = FIT_VIEW.w - view.w;
+  const slackY = FIT_VIEW.h - view.h;
+  return {
+    ...view,
+    x: slackX <= 0 ? FIT_VIEW.x : Math.min(FIT_VIEW.x + slackX, Math.max(FIT_VIEW.x, view.x)),
+    y: slackY <= 0 ? FIT_VIEW.y : Math.min(FIT_VIEW.y + slackY, Math.max(FIT_VIEW.y, view.y)),
+  };
+}
 
 /** Zoom by `factor` about the world point `(ax, ay)`, which stays put. */
 export function zoomAt(view: ViewBox, factor: number, ax: number, ay: number): ViewBox {
   const w = Math.min(MAX_W, Math.max(MIN_W, view.w / factor));
   const k = w / view.w;
-  return { x: ax - (ax - view.x) * k, y: ay - (ay - view.y) * k, w, h: view.h * k };
+  return clampView({ x: ax - (ax - view.x) * k, y: ay - (ay - view.y) * k, w, h: view.h * k });
 }

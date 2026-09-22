@@ -29,7 +29,9 @@ export { CANVAS_STRINGS, withStrings, type CanvasStrings } from "./canvasStrings
 
 export {
   BLEED,
+  FIT_ASPECT,
   FIT_VIEW,
+  MAX_ZOOM,
   MIRROR_X,
   MIRROR_Y,
   ORIENTATIONS,
@@ -44,8 +46,10 @@ export {
   ROTATE,
   clampPoint,
   clampToBox,
+  clampView,
   directionOf,
   extentOf,
+  fitCanvasHeight,
   hitRectOf,
   indexOf,
   multiply,
@@ -65,6 +69,7 @@ export {
   viewBoxAttr,
   viewScale,
   zoomAt,
+  zoomPercent,
   type PinPoint,
   type PinTarget,
   type Placement,

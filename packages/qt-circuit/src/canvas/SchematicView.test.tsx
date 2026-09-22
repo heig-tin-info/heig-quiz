@@ -6,7 +6,7 @@ import type { Schematic } from "../schema.js";
 
 import { SchematicView } from "./SchematicView.js";
 import { withRoutes } from "./router.js";
-import { ORIENT_0, ORIENT_90 } from "./geometry.js";
+import { FIT_ASPECT, FIT_VIEW, ORIENT_0, ORIENT_90, viewBoxAttr } from "./geometry.js";
 
 const demo: Schematic = withRoutes({
   components: [
@@ -41,12 +41,15 @@ describe("SchematicView", () => {
     expect(screen.getByText("C1")).toBeInTheDocument();
   });
 
-  it("fits its width through the view box, whatever the height cap", () => {
+  it("fills its box through the view box, with one grid cell of margin", () => {
     const { container } = render(<SchematicView schematic={demo} height={180} />);
     const svg = container.querySelector("svg");
-    expect(svg?.getAttribute("viewBox")).toBe("-12 -12 824 504");
+    expect(svg?.getAttribute("viewBox")).toBe(viewBoxAttr(FIT_VIEW));
     expect(svg?.getAttribute("preserveAspectRatio")).toBe("xMidYMid meet");
+    /* The cap narrows the drawing instead of letterboxing it: the frame keeps
+       filling the box on both axes, exactly as it does in the editor. */
     expect(svg?.style.maxHeight).toBe("180px");
+    expect(svg?.style.maxWidth).toBe(`${Math.round(180 * FIT_ASPECT)}px`);
   });
 
   it("says so when there is nothing drawn", () => {
