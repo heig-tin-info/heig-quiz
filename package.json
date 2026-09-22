@@ -17,7 +17,8 @@
     "smoke": "bash scripts/smoke.sh",
     "db:generate": "pnpm --filter @quiz/api db:generate",
     "docs:build": "zensical build",
-    "docs:serve": "zensical serve"
+    "docs:serve": "zensical serve",
+    "docs:screenshots": "node apps/web/scripts/docs-screenshots.mjs"
   },
   "pnpm": {
     "overrides": {

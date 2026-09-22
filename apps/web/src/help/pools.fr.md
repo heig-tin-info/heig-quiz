@@ -30,6 +30,7 @@ l'utilisent déjà la résolvent encore.
 ses questions et ses catégories, après une confirmation qui la nomme. Si
 vous vouliez seulement cesser de la proposer, déliez-la de vos cours.
 
-Partager une banque avec un collègue, et la banque lisible par tous les
-profs, viendront plus tard : aujourd'hui, toutes les banques listées ici
-sont les vôtres.
+**Partager…** dans le menu d'une banque donne à un collègue une place
+dessus, en lecture ou en écriture ; une banque partagée avec vous est aussi
+listée ici, avec votre rôle. La banque lisible par tous les profs viendra
+plus tard.

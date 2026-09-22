@@ -8,39 +8,60 @@ copyright = """
 Copyright &copy; 2026 HEIG-VD, TIN department
 """
 
-# The specification is written in French (it is the product spec of a
-# French-speaking school); the plan and the decision records are in English,
-# as everything else in the repository (CLAUDE.md, invariant 1).
+# Everything on the site is in English (CLAUDE.md, invariant 1): the product
+# specification was translated from its French original and lives under
+# Development, next to the decision records and the plan. The Guide is the
+# user documentation of the platform; its screenshots come in a light and a
+# dark variant (docs/development/screenshots.md).
 nav = [
   { "Home" = "index.md" },
-  { "Specification" = [
-    { "0. Cadre, objectifs et périmètre" = "spec/00-cadre-et-perimetre.md" },
-    { "1. Glossaire et modèle de domaine" = "spec/01-glossaire-et-domaine.md" },
-    { "2. Exigences fonctionnelles" = "spec/02-exigences-fonctionnelles.md" },
-    { "3. Exigences non fonctionnelles" = "spec/03-exigences-non-fonctionnelles.md" },
-    { "4. Types de questions" = "spec/04-types-de-questions.md" },
-    { "5. Architecture" = "spec/05-architecture.md" },
-    { "6. Questions ouvertes" = "spec/06-questions-ouvertes.md" },
-    { "7. Réutilisation de heig-classroom" = "spec/07-reutilisation-heig-classroom.md" },
-    { "8. Expérience à deux niveaux" = "spec/08-experience-deux-niveaux.md" },
-  ] },
-  { "Decisions" = [
-    { "ADR-001 Modular monolith" = "adr/ADR-001-monolithe-modulaire.md" },
-    { "ADR-002 Fastify backend" = "adr/ADR-002-stack-backend-fastify.md" },
-    { "ADR-003 PostgreSQL and Drizzle" = "adr/ADR-003-postgresql-drizzle.md" },
-    { "ADR-004 pg-boss jobs" = "adr/ADR-004-jobs-pg-boss.md" },
-    { "ADR-005 SSE, not WebSocket" = "adr/ADR-005-sse-sans-websocket.md" },
-    { "ADR-006 Deadline ticker" = "adr/ADR-006-deadline-ticker.md" },
-    { "ADR-007 Self-hosted runner" = "adr/ADR-007-runner-self-hosted.md" },
-    { "ADR-008 React SPA" = "adr/ADR-008-frontend-spa-react.md" },
-    { "ADR-009 One VM, Compose" = "adr/ADR-009-deploiement-vm-compose.md" },
-    { "ADR-010 Secrets" = "adr/ADR-010-stockage-secrets.md" },
-    { "ADR-012 Two-step grade freeze" = "adr/ADR-012-gel-note-deux-temps.md" },
-    { "ADR-013 Pool sharing" = "adr/ADR-013-partage-des-pools.md" },
-    { "ADR-014 Live polls" = "adr/ADR-014-sondages-en-direct.md" },
-    { "ADR-015 Browser run, server grade" = "adr/ADR-015-execution-navigateur-correction-serveur.md" },
+  { "Guide" = [
+    { "Overview" = "guide/index.md" },
+    { "Getting started" = "guide/getting-started.md" },
+    { "Courses and classrooms" = "guide/classrooms.md" },
+    { "Question pools" = "guide/pools.md" },
+    { "Question types" = "guide/question-types.md" },
+    { "Evaluations" = "guide/evaluations.md" },
+    { "Running an evaluation" = "guide/live.md" },
+    { "Grading and results" = "guide/grading.md" },
+    { "Live polls" = "guide/polls.md" },
+    { "For students" = "guide/students.md" },
+    { "Administration" = "guide/admin.md" },
   ] },
   { "Development" = [
+    { "Local setup" = "development/index.md" },
+    { "Repository layout" = "development/repository.md" },
+    { "Deployment" = "development/deployment.md" },
+    { "Architecture" = "development/architecture.md" },
+    { "Writing the documentation" = "development/documentation.md" },
+    { "Screenshots" = "development/screenshots.md" },
+    { "Specification" = [
+      { "0. Scope and objectives" = "spec/00-cadre-et-perimetre.md" },
+      { "1. Glossary and domain model" = "spec/01-glossaire-et-domaine.md" },
+      { "2. Functional requirements" = "spec/02-exigences-fonctionnelles.md" },
+      { "3. Non-functional requirements" = "spec/03-exigences-non-fonctionnelles.md" },
+      { "4. Question types" = "spec/04-types-de-questions.md" },
+      { "5. Architecture" = "spec/05-architecture.md" },
+      { "6. Open questions" = "spec/06-questions-ouvertes.md" },
+      { "7. Reuse of heig-classroom" = "spec/07-reutilisation-heig-classroom.md" },
+      { "8. Two-level experience" = "spec/08-experience-deux-niveaux.md" },
+    ] },
+    { "Decisions" = [
+      { "ADR-001 Modular monolith" = "adr/ADR-001-monolithe-modulaire.md" },
+      { "ADR-002 Fastify backend" = "adr/ADR-002-stack-backend-fastify.md" },
+      { "ADR-003 PostgreSQL and Drizzle" = "adr/ADR-003-postgresql-drizzle.md" },
+      { "ADR-004 pg-boss jobs" = "adr/ADR-004-jobs-pg-boss.md" },
+      { "ADR-005 SSE, not WebSocket" = "adr/ADR-005-sse-sans-websocket.md" },
+      { "ADR-006 Deadline ticker" = "adr/ADR-006-deadline-ticker.md" },
+      { "ADR-007 Self-hosted runner" = "adr/ADR-007-runner-self-hosted.md" },
+      { "ADR-008 React SPA" = "adr/ADR-008-frontend-spa-react.md" },
+      { "ADR-009 One VM, Compose" = "adr/ADR-009-deploiement-vm-compose.md" },
+      { "ADR-010 Secrets" = "adr/ADR-010-stockage-secrets.md" },
+      { "ADR-012 Two-step grade freeze" = "adr/ADR-012-gel-note-deux-temps.md" },
+      { "ADR-013 Pool sharing" = "adr/ADR-013-partage-des-pools.md" },
+      { "ADR-014 Live polls" = "adr/ADR-014-sondages-en-direct.md" },
+      { "ADR-015 Browser run, server grade" = "adr/ADR-015-execution-navigateur-correction-serveur.md" },
+    ] },
     { "MVP plan" = "PLAN-MVP.md" },
     { "API review (2026-09-20)" = "API-REVIEW-2026-09-20.md" },
   ] },
@@ -50,6 +71,8 @@ nav = [
 language = "en"
 features = [
   "content.code.copy",
+  "navigation.tabs",
+  "navigation.sections",
   "content.footnote.tooltips",
   "content.tooltips",
   "navigation.footer",
@@ -88,6 +111,9 @@ link = "https://github.com/heig-tin-info/heig-quiz"
 permalink = true
 [project.markdown_extensions.pymdownx.betterem]
 [project.markdown_extensions.pymdownx.details]
+[project.markdown_extensions.pymdownx.emoji]
+emoji_index = "zensical.extensions.emoji.twemoji"
+emoji_generator = "zensical.extensions.emoji.to_svg"
 [project.markdown_extensions.pymdownx.highlight]
 anchor_linenums = true
 line_spans = "__span"

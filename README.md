@@ -97,8 +97,11 @@ machines, the secrets, the DNS records, the CI key, backups and rollback.
 
 ## Status
 
-Bootstrap. Identity, courses, classrooms and rosters work; pools, evaluations,
-grading and the runner are the work ahead. See `docs/spec/`.
+Phase one is complete: identity, courses, classrooms and rosters, question
+pools with four question types, evaluations run live, grading, results and
+the sandboxed code runner all work, and live polls are in. The user guide and
+the specification are published at
+<https://heig-tin-info.github.io/heig-quiz/>; the plan is `docs/PLAN-MVP.md`.
 
 ## Documentation
 

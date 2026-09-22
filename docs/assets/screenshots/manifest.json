@@ -1,0 +1,1544 @@
+{
+  "generatedBy": "apps/web/scripts/docs-screenshots.mjs",
+  "base": "http://localhost:3100",
+  "viewports": {
+    "desktop": {
+      "width": 1440,
+      "height": 900
+    },
+    "phone": {
+      "width": 390,
+      "height": 844
+    }
+  },
+  "phases": [
+    "seeded",
+    "graded",
+    "lobby",
+    "running",
+    "poll-open",
+    "poll-revealed",
+    "poll-ended",
+    "released"
+  ],
+  "scenes": [
+    {
+      "name": "sign-in",
+      "caption": "The sign-in screen, with the development login next to the Switch edu-ID button.",
+      "persona": "none",
+      "path": "/",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "No session in the browser.",
+      "phase": "seeded",
+      "files": {
+        "light": "sign-in-light.png",
+        "dark": "sign-in-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "teacher-home",
+      "caption": "The teacher's home: one card per course, with its classrooms.",
+      "persona": "teacher",
+      "path": "/",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded: the course PRG1 with its classroom PRG1-2026.",
+      "phase": "seeded",
+      "files": {
+        "light": "teacher-home-light.png",
+        "dark": "teacher-home-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "classroom-evaluations",
+      "caption": "A classroom, on its evaluations tab.",
+      "persona": "teacher",
+      "path": "/classrooms/797acf2d-b3af-4367-aabd-4f5f6159f1aa",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded: four evaluations (draft, scheduled, lobby, closed).",
+      "phase": "seeded",
+      "files": {
+        "light": "classroom-evaluations-light.png",
+        "dark": "classroom-evaluations-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "classroom-roster",
+      "caption": "The same classroom, on its roster tab.",
+      "persona": "teacher",
+      "path": "/classrooms/797acf2d-b3af-4367-aabd-4f5f6159f1aa?tab=roster",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded: six students, every seat claimed.",
+      "phase": "seeded",
+      "files": {
+        "light": "classroom-roster-light.png",
+        "dark": "classroom-roster-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "roster-import",
+      "caption": "Adding students: paste a list or a CSV export.",
+      "persona": "teacher",
+      "path": "/classrooms/797acf2d-b3af-4367-aabd-4f5f6159f1aa?tab=roster",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Clicked “Add students” on the roster tab.",
+      "state": "As seeded.",
+      "phase": "seeded",
+      "files": {
+        "light": "roster-import-light.png",
+        "dark": "roster-import-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "help-drawer",
+      "caption": "Every screen has a help drawer, opened from the question mark.",
+      "persona": "teacher",
+      "path": "/classrooms/797acf2d-b3af-4367-aabd-4f5f6159f1aa",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Clicked the “Help” icon of the classroom page.",
+      "state": "As seeded.",
+      "phase": "seeded",
+      "files": {
+        "light": "help-drawer-light.png",
+        "dark": "help-drawer-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "pools",
+      "caption": "The question pools of the teacher.",
+      "persona": "teacher",
+      "path": "/pools",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded: the pools “Programmation C” and “Électronique”.",
+      "phase": "seeded",
+      "files": {
+        "light": "pools-light.png",
+        "dark": "pools-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "pool",
+      "caption": "A pool: its categories in the sidebar, its questions in the table.",
+      "persona": "teacher",
+      "path": "/pools/014cc676-210c-4231-8342-00a0009f060c",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded: ten published questions of the four types.",
+      "phase": "seeded",
+      "files": {
+        "light": "pool-light.png",
+        "dark": "pool-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "pool-filters",
+      "caption": "The filters of a pool: type, difficulty, tags, state.",
+      "persona": "teacher",
+      "path": "/pools/014cc676-210c-4231-8342-00a0009f060c",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Clicked “Filters” above the question table.",
+      "state": "As seeded.",
+      "phase": "seeded",
+      "files": {
+        "light": "pool-filters-light.png",
+        "dark": "pool-filters-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "pool-share",
+      "caption": "Sharing a pool with another teacher.",
+      "persona": "teacher",
+      "path": "/pools",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Opened the row menu of the first pool and picked “Share…”.",
+      "state": "As seeded.",
+      "phase": "seeded",
+      "files": {
+        "light": "pool-share-light.png",
+        "dark": "pool-share-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "editor-mcq",
+      "caption": "The editor of a multiple-choice question.",
+      "persona": "teacher",
+      "path": "/questions/10eb3127-c30a-4cde-b8be-05197fa76a8c",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded: the published question “prg1-pointeur-non-initialise”.",
+      "phase": "seeded",
+      "files": {
+        "light": "editor-mcq-light.png",
+        "dark": "editor-mcq-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "editor-short",
+      "caption": "The editor of a short-answer question, with its matchers.",
+      "persona": "teacher",
+      "path": "/questions/dcaaf3e6-7023-4f27-9dac-38d8212b4177",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded: the published question “prg1-mot-cle-constante”.",
+      "phase": "seeded",
+      "files": {
+        "light": "editor-short-light.png",
+        "dark": "editor-short-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "editor-cloze",
+      "caption": "The editor of a fill-in-the-blanks question.",
+      "persona": "teacher",
+      "path": "/questions/557c0ffa-9fc0-46aa-b524-dc89ae4af138",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded: the published question “prg1-boucle-for”.",
+      "phase": "seeded",
+      "files": {
+        "light": "editor-cloze-light.png",
+        "dark": "editor-cloze-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "editor-code",
+      "caption": "The editor of a code question: template, editable regions, test cases.",
+      "persona": "teacher",
+      "path": "/questions/637aca79-7782-4acc-ab32-907876fedddb",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded: the published C exercise “prg1-code-somme-tableau”.",
+      "phase": "seeded",
+      "files": {
+        "light": "editor-code-light.png",
+        "dark": "editor-code-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "editor-preview",
+      "caption": "The student preview of a question, exactly what a student will see.",
+      "persona": "teacher",
+      "path": "/questions/10eb3127-c30a-4cde-b8be-05197fa76a8c",
+      "width": 1440,
+      "height": 900,
+      "fullPage": true,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Pressed Ctrl+Shift+M in the editor.",
+      "state": "As seeded.",
+      "phase": "seeded",
+      "files": {
+        "light": "editor-preview-light.png",
+        "dark": "editor-preview-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "editor-versions",
+      "caption": "The versions of a question: every publication, with its note.",
+      "persona": "teacher",
+      "path": "/questions/637aca79-7782-4acc-ab32-907876fedddb?tab=versions",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded: one published version.",
+      "phase": "seeded",
+      "files": {
+        "light": "editor-versions-light.png",
+        "dark": "editor-versions-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "editor-publish",
+      "caption": "Publishing a question: a version number and a change note.",
+      "persona": "teacher",
+      "path": "/questions/10eb3127-c30a-4cde-b8be-05197fa76a8c",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Pressed Ctrl+Shift+P in the editor.",
+      "state": "As seeded.",
+      "phase": "seeded",
+      "files": {
+        "light": "editor-publish-light.png",
+        "dark": "editor-publish-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "try-mcq-graded",
+      "caption": "Trying a question as a student, and grading the answer on the spot.",
+      "persona": "teacher",
+      "path": "/questions/10eb3127-c30a-4cde-b8be-05197fa76a8c?tab=try",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Chose the first answer, clicked “Grade my answer”.",
+      "state": "As seeded.",
+      "phase": "seeded",
+      "files": {
+        "light": "try-mcq-graded-light.png",
+        "dark": "try-mcq-graded-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "try-code",
+      "caption": "Trying a code question: the program is compiled and run by the code runner.",
+      "persona": "teacher",
+      "path": "/questions/637aca79-7782-4acc-ab32-907876fedddb?tab=try",
+      "width": 1440,
+      "height": 900,
+      "fullPage": true,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Clicked “Run” on the visible cases, then “Grade my answer”, with the template as it is.",
+      "state": "As seeded; a real code runner compiled and ran the program.",
+      "phase": "seeded",
+      "files": {
+        "light": "try-code-light.png",
+        "dark": "try-code-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "eval-questions",
+      "caption": "Configuring an evaluation, step 1: the questions.",
+      "persona": "teacher",
+      "path": "/evaluations/ec1186d0-1d86-49e2-9d65-989a6a002dc7?step=questions",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded: the draft “Test 1 — pointeurs”, five questions.",
+      "phase": "seeded",
+      "files": {
+        "light": "eval-questions-light.png",
+        "dark": "eval-questions-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "eval-timing",
+      "caption": "Step 2: time and mode.",
+      "persona": "teacher",
+      "path": "/evaluations/ec1186d0-1d86-49e2-9d65-989a6a002dc7?step=timing",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded: the draft “Test 1 — pointeurs”.",
+      "phase": "seeded",
+      "files": {
+        "light": "eval-timing-light.png",
+        "dark": "eval-timing-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "eval-launch",
+      "caption": "Step 3: launch.",
+      "persona": "teacher",
+      "path": "/evaluations/ec1186d0-1d86-49e2-9d65-989a6a002dc7?step=launch",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded: the draft “Test 1 — pointeurs”.",
+      "phase": "seeded",
+      "files": {
+        "light": "eval-launch-light.png",
+        "dark": "eval-launch-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "eval-preview",
+      "caption": "The student preview of an evaluation, from the launch step.",
+      "persona": "teacher",
+      "path": "/evaluations/ec1186d0-1d86-49e2-9d65-989a6a002dc7?step=launch",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Clicked “Preview as student”.",
+      "state": "As seeded: the draft “Test 1 — pointeurs”.",
+      "phase": "seeded",
+      "files": {
+        "light": "eval-preview-light.png",
+        "dark": "eval-preview-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "eval-scheduled",
+      "caption": "A scheduled evaluation: it opens by itself at the announced time.",
+      "persona": "teacher",
+      "path": "/evaluations/f259b01d-cdb0-4bc5-9484-4e74c186745a",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded: “Test 2 — chaînes”, scheduled two days ahead.",
+      "phase": "seeded",
+      "files": {
+        "light": "eval-scheduled-light.png",
+        "dark": "eval-scheduled-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "live-lobby",
+      "caption": "The dashboard of an evaluation in its lobby: the class is gathering.",
+      "persona": "teacher",
+      "path": "/evaluations/2d031274-da46-4a00-9f8d-f5056e933cb9/live",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "“Quiz d'entraînement” in its lobby; Léa and Noah have the lobby page open.",
+      "phase": "lobby",
+      "files": {
+        "light": "live-lobby-light.png",
+        "dark": "live-lobby-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "live-running",
+      "caption": "The dashboard during the evaluation: one row per student, one cell per question.",
+      "persona": "teacher",
+      "path": "/evaluations/2d031274-da46-4a00-9f8d-f5056e933cb9/live",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "“Quiz d'entraînement” running: Noah handed in, Léa answered two questions, Emma one, Louis only opened it.",
+      "phase": "running",
+      "files": {
+        "light": "live-running-light.png",
+        "dark": "live-running-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "live-inspect",
+      "caption": "A cell opened: what the student wrote, live.",
+      "persona": "teacher",
+      "path": "/evaluations/2d031274-da46-4a00-9f8d-f5056e933cb9/live",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Clicked the first student's cell of question 1.",
+      "state": "“Quiz d'entraînement” running (see live-running).",
+      "phase": "running",
+      "files": {
+        "light": "live-inspect-light.png",
+        "dark": "live-inspect-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "live-extend",
+      "caption": "Giving more time: to the whole class or to one student.",
+      "persona": "teacher",
+      "path": "/evaluations/2d031274-da46-4a00-9f8d-f5056e933cb9/live",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Clicked “Extend”.",
+      "state": "“Quiz d'entraînement” running (see live-running).",
+      "phase": "running",
+      "files": {
+        "light": "live-extend-light.png",
+        "dark": "live-extend-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "live-closed",
+      "caption": "The dashboard of a closed evaluation: verdicts and scores.",
+      "persona": "teacher",
+      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/live",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded: “Test 0 — bases du C”, closed and graded.",
+      "phase": "graded",
+      "files": {
+        "light": "live-closed-light.png",
+        "dark": "live-closed-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "grading",
+      "caption": "The grading panel, by question: the automatic gradings, validated or waiting for the teacher.",
+      "persona": "teacher",
+      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading",
+      "width": 1440,
+      "height": 900,
+      "fullPage": true,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "“Test 0” graded by the real runner, results unreleased.",
+      "phase": "graded",
+      "files": {
+        "light": "grading-light.png",
+        "dark": "grading-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "grading-short",
+      "caption": "Grading a short-answer question.",
+      "persona": "teacher",
+      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading",
+      "width": 1440,
+      "height": 900,
+      "fullPage": true,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Moved to the next question (the short answer).",
+      "state": "“Test 0” graded by the real runner, unreleased.",
+      "phase": "graded",
+      "files": {
+        "light": "grading-short-light.png",
+        "dark": "grading-short-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "grading-cloze",
+      "caption": "Grading a fill-in-the-blanks question.",
+      "persona": "teacher",
+      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading",
+      "width": 1440,
+      "height": 900,
+      "fullPage": true,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Moved three questions forward (the cloze).",
+      "state": "“Test 0” graded by the real runner, unreleased.",
+      "phase": "graded",
+      "files": {
+        "light": "grading-cloze-light.png",
+        "dark": "grading-cloze-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "grading-code",
+      "caption": "Grading a code question: compilation and test cases per student.",
+      "persona": "teacher",
+      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading",
+      "width": 1440,
+      "height": 900,
+      "fullPage": true,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Moved four questions forward (the code question).",
+      "state": "“Test 0” graded by the real runner, unreleased.",
+      "phase": "graded",
+      "files": {
+        "light": "grading-code-light.png",
+        "dark": "grading-code-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "grading-by-student",
+      "caption": "The same panel, by student.",
+      "persona": "teacher",
+      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading",
+      "width": 1440,
+      "height": 900,
+      "fullPage": true,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Switched the order to “By student”.",
+      "state": "“Test 0” graded by the real runner, unreleased.",
+      "phase": "graded",
+      "files": {
+        "light": "grading-by-student-light.png",
+        "dark": "grading-by-student-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "grading-override",
+      "caption": "Adjusting a grading by hand: points and a comment the student will read.",
+      "persona": "teacher",
+      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Clicked “Adjust” on the first grading.",
+      "state": "“Test 0” graded by the real runner, unreleased.",
+      "phase": "graded",
+      "files": {
+        "light": "grading-override-light.png",
+        "dark": "grading-override-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "grading-batch",
+      "caption": "Validating every proposal of a question at once (here the code answers the seed could not run).",
+      "persona": "teacher",
+      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Moved to the code question; the batch bar offers to validate its proposals.",
+      "state": "As seeded: the four code answers of “Test 0” are proposals waiting for a runner (reason runner_unavailable), the rest is validated.",
+      "phase": "seeded",
+      "files": {
+        "light": "grading-batch-light.png",
+        "dark": "grading-batch-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "results",
+      "caption": "The results of an evaluation, by student, before they are published.",
+      "persona": "teacher",
+      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/results",
+      "width": 1440,
+      "height": 900,
+      "fullPage": true,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "“Test 0” graded, unreleased; Gabriel absent, Chloé never handed in.",
+      "phase": "graded",
+      "files": {
+        "light": "results-light.png",
+        "dark": "results-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "results-questions",
+      "caption": "The results by question: success rate and discrimination.",
+      "persona": "teacher",
+      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/results?tab=questions",
+      "width": 1440,
+      "height": 900,
+      "fullPage": true,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "“Test 0” graded by the real runner, unreleased.",
+      "phase": "graded",
+      "files": {
+        "light": "results-questions-light.png",
+        "dark": "results-questions-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "results-release-confirm",
+      "caption": "Publishing the results: the students see their feedback from then on.",
+      "persona": "teacher",
+      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/results",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Clicked “Publish results”.",
+      "state": "“Test 0” graded by the real runner, unreleased.",
+      "phase": "graded",
+      "files": {
+        "light": "results-release-confirm-light.png",
+        "dark": "results-release-confirm-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "poll-launcher",
+      "caption": "The poll launcher: pick a question, or write one, and start.",
+      "persona": "teacher",
+      "path": "/polls",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "Reached from the “Poll” button of the navigation; no poll yet.",
+      "phase": "running",
+      "files": {
+        "light": "poll-launcher-light.png",
+        "dark": "poll-launcher-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "poll-projection",
+      "caption": "The projection of a running poll: the question, the live tally, the join code and its QR.",
+      "persona": "teacher",
+      "path": "/evaluations/ef92b717-da38-47f6-b9ba-f5c8009f35ca/poll",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "A poll on “prg1-pointeur-non-initialise”; three students answered. The tally is live, the correct answer is not revealed yet.",
+      "phase": "poll-open",
+      "files": {
+        "light": "poll-projection-light.png",
+        "dark": "poll-projection-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "join-mcq-phone",
+      "caption": "A phone joining the poll through the code.",
+      "persona": "guest",
+      "path": "/p/5BC8A7",
+      "width": 390,
+      "height": 844,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "The same poll, open; a browser with no session (a guest).",
+      "phase": "poll-open",
+      "files": {
+        "light": "join-mcq-phone-light.png",
+        "dark": "join-mcq-phone-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "poll-revealed",
+      "caption": "The answer revealed: the tally, with the correct choice marked.",
+      "persona": "teacher",
+      "path": "/evaluations/ef92b717-da38-47f6-b9ba-f5c8009f35ca/poll",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "The same poll after the teacher revealed the answer (two guest phones joined for the join scenes).",
+      "phase": "poll-revealed",
+      "files": {
+        "light": "poll-revealed-light.png",
+        "dark": "poll-revealed-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "join-revealed-phone",
+      "caption": "The phone after the reveal.",
+      "persona": "guest",
+      "path": "/p/5BC8A7",
+      "width": 390,
+      "height": 844,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "The same poll after the reveal; a guest browser.",
+      "phase": "poll-revealed",
+      "files": {
+        "light": "join-revealed-phone-light.png",
+        "dark": "join-revealed-phone-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "poll-ended",
+      "caption": "The poll ended.",
+      "persona": "teacher",
+      "path": "/evaluations/ef92b717-da38-47f6-b9ba-f5c8009f35ca/poll",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "The same poll after the teacher ended it.",
+      "phase": "poll-ended",
+      "files": {
+        "light": "poll-ended-light.png",
+        "dark": "poll-ended-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "notifications",
+      "caption": "The notifications bell, here with nothing new: a pool shared with you shows up in it.",
+      "persona": "teacher",
+      "path": "/",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Clicked the bell in the header.",
+      "state": "After the exercise started and Noah handed in.",
+      "phase": "running",
+      "files": {
+        "light": "notifications-light.png",
+        "dark": "notifications-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "palette",
+      "caption": "The command palette (Ctrl+K): every screen and action, from anywhere.",
+      "persona": "teacher",
+      "path": "/",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Pressed Ctrl+K.",
+      "state": "As seeded.",
+      "phase": "seeded",
+      "files": {
+        "light": "palette-light.png",
+        "dark": "palette-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "palette-query",
+      "caption": "The palette filtering on “grad”.",
+      "persona": "teacher",
+      "path": "/",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Pressed Ctrl+K and typed “grad”.",
+      "state": "As seeded.",
+      "phase": "seeded",
+      "files": {
+        "light": "palette-query-light.png",
+        "dark": "palette-query-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "settings",
+      "caption": "The settings: language, theme, notifications.",
+      "persona": "teacher",
+      "path": "/settings",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded.",
+      "phase": "seeded",
+      "files": {
+        "light": "settings-light.png",
+        "dark": "settings-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "admin",
+      "caption": "The administration screen: who is a teacher.",
+      "persona": "admin",
+      "path": "/admin",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded: one teacher.",
+      "phase": "seeded",
+      "files": {
+        "light": "admin-light.png",
+        "dark": "admin-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "student-home",
+      "caption": "The student's home: what is open, what is coming, what is past.",
+      "persona": "lea",
+      "path": "/",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded: one exercise in its lobby, one scheduled test, one past test.",
+      "phase": "seeded",
+      "files": {
+        "light": "student-home-light.png",
+        "dark": "student-home-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "student-home-phone",
+      "caption": "The student's home: what is open, what is coming, what is past.",
+      "persona": "lea",
+      "path": "/",
+      "width": 390,
+      "height": 844,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded: one exercise in its lobby, one scheduled test, one past test.",
+      "phase": "seeded",
+      "files": {
+        "light": "student-home-phone-light.png",
+        "dark": "student-home-phone-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "student-lobby",
+      "caption": "The lobby: the student waits for the teacher to start.",
+      "persona": "lea",
+      "path": "/take/2d031274-da46-4a00-9f8d-f5056e933cb9",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "“Quiz d'entraînement” in its lobby.",
+      "phase": "lobby",
+      "files": {
+        "light": "student-lobby-light.png",
+        "dark": "student-lobby-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "player-mcq",
+      "caption": "The player on a multiple-choice question.",
+      "persona": "lea",
+      "path": "/take/2d031274-da46-4a00-9f8d-f5056e933cb9",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "“Quiz d'entraînement” running; Léa has answered the first two questions.",
+      "phase": "running",
+      "files": {
+        "light": "player-mcq-light.png",
+        "dark": "player-mcq-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "player-mcq-phone",
+      "caption": "The player on a multiple-choice question.",
+      "persona": "lea",
+      "path": "/take/2d031274-da46-4a00-9f8d-f5056e933cb9",
+      "width": 390,
+      "height": 844,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "“Quiz d'entraînement” running; Léa has answered the first two questions.",
+      "phase": "running",
+      "files": {
+        "light": "player-mcq-phone-light.png",
+        "dark": "player-mcq-phone-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "player-cloze",
+      "caption": "The player on a fill-in-the-blanks question.",
+      "persona": "lea",
+      "path": "/take/2d031274-da46-4a00-9f8d-f5056e933cb9",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Moved to question 3 through the progress strip.",
+      "state": "“Quiz d'entraînement” running.",
+      "phase": "running",
+      "files": {
+        "light": "player-cloze-light.png",
+        "dark": "player-cloze-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "player-short",
+      "caption": "The player on a short-answer question.",
+      "persona": "lea",
+      "path": "/take/2d031274-da46-4a00-9f8d-f5056e933cb9",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Moved to question 4 through the progress strip.",
+      "state": "“Quiz d'entraînement” running.",
+      "phase": "running",
+      "files": {
+        "light": "player-short-light.png",
+        "dark": "player-short-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "player-code",
+      "caption": "The player on a code question: the editable regions of the template.",
+      "persona": "lea",
+      "path": "/take/2d031274-da46-4a00-9f8d-f5056e933cb9",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Moved to question 5 through the progress strip.",
+      "state": "“Quiz d'entraînement” running; Léa's region holds a solution, not yet marked done.",
+      "phase": "running",
+      "files": {
+        "light": "player-code-light.png",
+        "dark": "player-code-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "player-run",
+      "caption": "Running the program against the visible cases before handing in.",
+      "persona": "lea",
+      "path": "/take/2d031274-da46-4a00-9f8d-f5056e933cb9",
+      "width": 1440,
+      "height": 900,
+      "fullPage": true,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Moved to question 5, clicked “Run”, waited for “Compiled”.",
+      "state": "“Quiz d'entraînement” running; Léa's region holds a solution.",
+      "phase": "running",
+      "files": {
+        "light": "player-run-light.png",
+        "dark": "player-run-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "player-submit",
+      "caption": "Handing in: the confirmation names what is still unanswered.",
+      "persona": "lea",
+      "path": "/take/2d031274-da46-4a00-9f8d-f5056e933cb9",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Clicked “Hand in”.",
+      "state": "“Quiz d'entraînement” running; Léa has answered two questions of five.",
+      "phase": "running",
+      "files": {
+        "light": "player-submit-light.png",
+        "dark": "player-submit-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "player-done",
+      "caption": "After handing in.",
+      "persona": "noah",
+      "path": "/take/2d031274-da46-4a00-9f8d-f5056e933cb9",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "“Quiz d'entraînement” running; Noah handed in.",
+      "phase": "running",
+      "files": {
+        "light": "player-done-light.png",
+        "dark": "player-done-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "feedback-pending",
+      "caption": "The student's results page while the teacher has not published yet.",
+      "persona": "lea",
+      "path": "/attempts/3f4538b5-1a06-4271-8d98-735ab8b03c8f/feedback",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "“Test 0” graded by the real runner, unreleased.",
+      "phase": "graded",
+      "files": {
+        "light": "feedback-pending-light.png",
+        "dark": "feedback-pending-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "results-released",
+      "caption": "The results after publication.",
+      "persona": "teacher",
+      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/results",
+      "width": 1440,
+      "height": 900,
+      "fullPage": true,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "“Test 0” released by the teacher.",
+      "phase": "released",
+      "files": {
+        "light": "results-released-light.png",
+        "dark": "results-released-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "feedback",
+      "caption": "The student's feedback: points, verdicts, explanations and the teacher's comments.",
+      "persona": "lea",
+      "path": "/attempts/3f4538b5-1a06-4271-8d98-735ab8b03c8f/feedback",
+      "width": 1440,
+      "height": 900,
+      "fullPage": true,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "“Test 0” released by the teacher.",
+      "phase": "released",
+      "files": {
+        "light": "feedback-light.png",
+        "dark": "feedback-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "feedback-phone",
+      "caption": "The student's feedback: points, verdicts, explanations and the teacher's comments.",
+      "persona": "lea",
+      "path": "/attempts/3f4538b5-1a06-4271-8d98-735ab8b03c8f/feedback",
+      "width": 390,
+      "height": 844,
+      "fullPage": true,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "“Test 0” released by the teacher.",
+      "phase": "released",
+      "files": {
+        "light": "feedback-phone-light.png",
+        "dark": "feedback-phone-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    },
+    {
+      "name": "student-settings",
+      "caption": "The settings, as a student.",
+      "persona": "lea",
+      "path": "/settings",
+      "width": 1440,
+      "height": 900,
+      "fullPage": false,
+      "theme": [
+        "light",
+        "dark"
+      ],
+      "action": "Nothing: the page as it loads.",
+      "state": "As seeded.",
+      "phase": "seeded",
+      "files": {
+        "light": "student-settings-light.png",
+        "dark": "student-settings-dark.png"
+      },
+      "takenAt": "2026-09-21T20:58:21.264Z",
+      "commit": "828d8d8",
+      "base": "http://localhost:3100"
+    }
+  ]
+}

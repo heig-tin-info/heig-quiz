@@ -50,11 +50,11 @@ mockups/      HTML mockups of the target screens
 infra/        Keycloak development realm
 ```
 
-`packages/qt-mcq`, `qt-short` and `qt-cloze` exist and are registered in
-`packages/registry` in two places (`./server` and `./client`). Packages still
-to create, in this order (`docs/spec/05-architecture.md`, 5.2 and
-`docs/PLAN-MVP.md` §8): `packages/qt-code`, registered the same way, then
-`packages/canonical`, `packages/ui`, `packages/cli`.
+`packages/qt-mcq`, `qt-short`, `qt-cloze` and `qt-code` exist and are
+registered in `packages/registry` in two places (`./server` and `./client`).
+Packages still to create, in this order (`docs/spec/05-architecture.md`, 5.2
+and `docs/PLAN-MVP.md` §8): `packages/canonical`, `packages/ui`,
+`packages/cli`.
 
 `packages/core` is split in two entry points: `@quiz/core/server` (no React,
 anywhere) and `@quiz/core/client` (React as type-only imports). The static

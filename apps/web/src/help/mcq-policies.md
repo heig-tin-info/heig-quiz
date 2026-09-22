@@ -17,9 +17,9 @@ Each one overrides the one above it.
 `C` is the number of correct choices, `W` the number of wrong ones, `c` how
 many correct ones the student ticked and `w` how many wrong ones.
 
-- **All or nothing** — 1 if the ticked set is exactly the key, 0 otherwise.
-- **True/false per choice** — every choice is its own true/false question: `(c + (W - w)) / (C + W)`. Ticking nothing already scores `W / (C + W)`.
-- **Discordances** — count the choices the student got the wrong way round, in either direction: `d = (C - c) + w`. No discordance scores 1, one scores 0.5, two score 0.2, three or more score 0.
+- **Exact** (all or nothing) — 1 if the ticked set is exactly the key, 0 otherwise.
+- **True/false** — every choice is its own true/false question: `(c + (W - w)) / (C + W)`. Ticking nothing already scores `W / (C + W)`.
+- **Distance** (discordances) — count the choices the student got the wrong way round, in either direction: `d = (C - c) + w`. No discordance scores 1, one scores 0.5, two score 0.2, three or more score 0.
 - **Symmetric** — `c/C - w/W`: a wrong tick costs exactly what a right one earns, so ticking at random is worth nothing on average.
 - **Ripkey** — `c/C`, cancelled to 0 by a single wrong tick. It pays a student who ticks only what they are sure of.
 

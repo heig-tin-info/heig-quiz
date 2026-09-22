@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "dev:mock": "node scripts/fetch-runtimes.mjs && VITE_MOCK=1 vite",
-    "screenshots": "node scripts/screenshots.mjs"
+    "screenshots": "node scripts/screenshots.mjs",
+    "docs:screenshots": "node scripts/docs-screenshots.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "6.3.1",

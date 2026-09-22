@@ -28,5 +28,6 @@ from the count; the evaluations that already use it still resolve it.
 questions and its categories with it, after a confirmation naming the pool.
 Unlink it from your courses first if you only meant to stop offering it.
 
-Sharing a pool with a colleague, and the pool every teacher can read, are
-later work: today every pool listed here is your own.
+**Share…** in a pool's menu gives a colleague a seat on it, as a reader or
+an editor; a pool shared with you is listed here too, with your role. The
+pool every teacher can read is later work.
