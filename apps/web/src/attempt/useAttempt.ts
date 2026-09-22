@@ -25,7 +25,9 @@ import type {
   AttemptView,
   AutosaveResponse,
   MarkDoneResponse,
+  RunAccepted,
   RunnerResultEvent,
+  SubmitResponse,
 } from "@quiz/contracts";
 import type { RunnerOutcome } from "@quiz/core/server";
 
@@ -304,7 +306,7 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
       setClosed({ reason: "submitted" });
       return;
     }
-    const response = await api<{ state: string; submittedAt: string; serverNow: string }>(
+    const response = await api<SubmitResponse>(
       `/app/api/attempts/${attemptId}/submit`,
       { method: "POST", body: JSON.stringify({ confirm: true }) },
     );
@@ -328,7 +330,7 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
       manual?: { args: string[]; stdin: string },
     ): Promise<RunnerOutcome | "unavailable"> => {
       try {
-        const response = await api<{ requestId: string; result: RunnerResultEvent["result"] }>(
+        const response = await api<RunAccepted>(
           `/app/api/attempts/${attemptId}/run`,
           {
             method: "POST",

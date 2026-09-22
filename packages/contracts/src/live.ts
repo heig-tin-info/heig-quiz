@@ -188,7 +188,8 @@ export type AttemptEventBody = z.infer<typeof AttemptEventBody>;
 /**
  * The student's Run button on a `code` question. The regions are reassembled
  * into a source server-side (invariant 14); the result comes back over SSE as
- * `runner.result`.
+ * `runner.result`, and the 202 body repeats it — that acknowledgement is
+ * `RunAccepted`, declared in `./realtime.ts` next to the frame it copies.
  */
 export const RunBody = z.object({
   itemId: z.uuid(),
@@ -202,9 +203,6 @@ export const RunBody = z.object({
   args: z.array(z.string().max(200)).max(32).optional(),
 });
 export type RunBody = z.infer<typeof RunBody>;
-
-export const RunAccepted = z.object({ requestId: z.uuid() });
-export type RunAccepted = z.infer<typeof RunAccepted>;
 
 /**
  * The student's own run button for a question type that builds its OWN

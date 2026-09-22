@@ -266,6 +266,35 @@ export const ServerEvent = z.discriminatedUnion("type", [
 ]);
 export type ServerEvent = z.infer<typeof ServerEvent>;
 
+/** The discriminant of {@link ServerEvent}: every frame name the server emits. */
+export type ServerEventName = ServerEvent["type"];
+
+/**
+ * Every frame the server sends under a NAME (`event: clock`, …). The `hint`
+ * travels unnamed, so `onmessage` is the only way in and it is excluded here.
+ *
+ * Derived from the union rather than restated: a new member of
+ * {@link ServerEvent} is subscribed to by the browser without anyone having
+ * to remember a second list (`apps/web/src/realtime/useEventStream.ts`).
+ */
+export const SERVER_EVENT_NAMES: readonly Exclude<ServerEventName, "hint">[] = ServerEvent.options
+  .map((option) => option.shape.type.value)
+  .filter((name): name is Exclude<ServerEventName, "hint"> => name !== "hint");
+
+/**
+ * The acknowledgement of `POST /attempts/:id/run`, 202: the authoritative
+ * delivery is the `runner.result` SSE frame and the body repeats it, so the
+ * shape is that frame's minus its discriminant and its `itemId`.
+ *
+ * It lives here rather than in `./live.ts` because `./realtime.ts` already
+ * owns the result union and imports `./live.ts`, never the other way round.
+ */
+export const RunAccepted = z.object({
+  requestId: RunnerResultEvent.shape.requestId,
+  result: RunnerResultEvent.shape.result,
+});
+export type RunAccepted = z.infer<typeof RunAccepted>;
+
 /** The event names a `dashboard.*` filter must drop for a student stream. */
 export const STAFF_ONLY_EVENTS = [
   "dashboard.cell",

@@ -17,6 +17,7 @@ import {
   GradingQuery,
   GradingRunBody,
   ItemParam,
+  type GradingRunAccepted,
   ManualGradingBody,
   RegradeBody,
   ValidateGradingBody,
@@ -98,7 +99,13 @@ export async function gradingPlugin(app: FastifyInstance) {
       ...(body.data.itemIds ? { itemIds } : {}),
     });
     await trace(req, "grading.run", "evaluation", scope.evaluation.id, { itemIds });
-    return reply.code(202).send({ evaluationId: scope.evaluation.id, itemIds, queued });
+    return reply
+      .code(202)
+      .send({
+        evaluationId: scope.evaluation.id,
+        itemIds,
+        queued,
+      } satisfies GradingRunAccepted);
   };
 
   app.post("/app/api/evaluations/:id/grading/run", { preHandler: requireTeacher }, runHandler);

@@ -1,7 +1,7 @@
 import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { ServerEvent } from "@quiz/contracts";
+import { SERVER_EVENT_NAMES, type ServerEvent } from "@quiz/contracts";
 
 import { EVALUATION_ID, liveAt } from "../test/live-fixtures";
 import {
@@ -34,6 +34,11 @@ class FakeEventSource {
 
   addEventListener(name: string, fn: (e: MessageEvent) => void) {
     this.listeners.set(name, [...(this.listeners.get(name) ?? []), fn]);
+  }
+
+  /** The names this connection actually subscribed to. */
+  subscribed(): string[] {
+    return [...this.listeners.keys()];
   }
 
   removeEventListener() {}
@@ -118,6 +123,11 @@ describe("useEventStream", () => {
     expect([...NAMED_EVENTS]).toContain("snapshot");
     expect([...NAMED_EVENTS]).toContain("clock");
     expect([...NAMED_EVENTS]).toContain("lobby.count");
+    // The connection subscribes to the contracts' own list, so a new member of
+    // `ServerEvent` is listened for without a second list being edited (FC-09).
+    expect(live()[0]!.subscribed().sort()).toEqual([...SERVER_EVENT_NAMES].sort());
+    // The hint has no name; `onmessage` is the only way in.
+    expect(live()[0]!.subscribed()).not.toContain("hint");
   });
 
   it("routes the snapshot, the clock and the unnamed hint to their handlers", () => {
