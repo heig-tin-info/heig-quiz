@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
   ArchiveRestore,
+  CalendarRange,
   ClipboardList,
   GraduationCap,
   Pencil,
@@ -29,8 +30,10 @@ import {
   Card,
   cx,
   EmptyState,
+  Field,
   inputClass,
   Menu,
+  Modal,
   PageHeader,
   QueryError,
   Skeleton,
@@ -144,6 +147,57 @@ function ClassroomName({ room }: { room: ClassroomDetail }) {
   );
 }
 
+/**
+ * The period ("2026-A"), one field in a dialog.
+ *
+ * The name renames in the title; the period does not, because an empty one
+ * leaves nothing on screen to hover and click. One field, so a modal and not
+ * a sheet.
+ */
+function PeriodModal({ room, onClose }: { room: ClassroomDetail; onClose: () => void }) {
+  const t = useT();
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [period, setPeriod] = useState(room.period);
+  const save = useMutation({
+    mutationFn: () =>
+      api(`/app/api/classrooms/${room.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ period: period.trim() }),
+      }),
+    onSuccess: async () => {
+      await qc.invalidateQueries();
+      onClose();
+    },
+    onError: (error) => toast(apiErrorMessage(error, t("error.save")), "error"),
+  });
+  return (
+    <Modal
+      title={t("classrooms.setPeriod")}
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            {t("common.cancel")}
+          </Button>
+          <Button onClick={() => save.mutate()} loading={save.isPending}>
+            {t("common.save")}
+          </Button>
+        </>
+      }
+    >
+      <Field
+        label={t("classrooms.period")}
+        fullWidth
+        autoFocus
+        placeholder={t("classrooms.periodPlaceholder")}
+        value={period}
+        onChange={(e) => setPeriod(e.target.value)}
+      />
+    </Modal>
+  );
+}
+
 export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Route) => void }) {
   const t = useT();
   const qc = useQueryClient();
@@ -151,6 +205,7 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
   const toast = useToast();
   const me = useMe();
   const [importing, setImporting] = useState(false);
+  const [editingPeriod, setEditingPeriod] = useState(false);
   // "" and not a tab name: which tab opens depends on the roster, which is
   // not loaded yet when this runs. The empty value means "whatever the page
   // decides"; a click always writes a real one.
@@ -298,6 +353,11 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
                       onSelect: () => archive.mutate("archive"),
                     },
                 {
+                  label: t("classrooms.setPeriod"),
+                  icon: CalendarRange,
+                  onSelect: () => setEditingPeriod(true),
+                },
+                {
                   label: t("classrooms.delete"),
                   icon: Trash2,
                   danger: true,
@@ -371,6 +431,7 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
       {importing ? (
         <RosterImport classroomId={id} onClose={() => setImporting(false)} />
       ) : null}
+      {editingPeriod ? <PeriodModal room={data} onClose={() => setEditingPeriod(false)} /> : null}
     </div>
   );
 }

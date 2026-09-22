@@ -148,10 +148,31 @@ describe("ClassroomView", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Actions" }));
     const menu = within(screen.getByRole("menu"));
     const items = menu.getAllByRole("menuitem").map((el) => el.textContent);
-    expect(items).toEqual(["Archive", "Delete classroom"]);
+    expect(items).toEqual(["Archive", "Period…", "Delete classroom"]);
     // The two that left it are on the header itself now.
     expect(menu.queryByRole("menuitem", { name: "Join as student" })).toBeNull();
     expect(menu.queryByRole("menuitem", { name: RENAME })).toBeNull();
+  });
+
+  it("edits the period from the overflow menu", async () => {
+    const { calls } = mockFetch({
+      [`GET ${ROOM}`]: ok(makeClassroomDetail()),
+      [`PATCH ${ROOM}`]: ok(makeClassroomDetail({ period: "2027-P" })),
+    });
+    renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
+    await userEvent.click(await screen.findByRole("button", { name: "Actions" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: "Period…" }));
+
+    const dialog = await screen.findByRole("dialog");
+    const field = within(dialog).getByRole("textbox", { name: /Period/ });
+    expect(field).toHaveValue("2026-A");
+    await userEvent.clear(field);
+    await userEvent.type(field, "2027-P");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    expect(calls.find((c) => c.method === "PATCH" && c.url === ROOM)?.body).toEqual({
+      period: "2027-P",
+    });
   });
 
   it("takes a seat in the classroom from a button beside Add students", async () => {
