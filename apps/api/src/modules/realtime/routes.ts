@@ -66,7 +66,6 @@ interface Stream {
 
 const open = new Set<Stream>();
 
-
 function write(stream: Stream, chunk: string, now: number): void {
   const flushed = stream.res.write(chunk);
   // `write` returns false when the chunk is only buffered: a socket that

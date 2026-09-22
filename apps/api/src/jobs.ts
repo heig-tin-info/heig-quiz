@@ -14,7 +14,6 @@ import { PgBoss } from "pg-boss";
 
 import type { FastifyInstance } from "fastify";
 
-
 /**
  * The grading queues (PLAN-MVP §5.4). Their names live here, next to the
  * queue itself, so that `grep QUEUE jobs.ts` lists everything this process

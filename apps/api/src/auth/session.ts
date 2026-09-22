@@ -63,7 +63,7 @@ export async function deleteSession(db: Db, token: string) {
   await db.delete(sessions).where(eq(sessions.sidHash, hashToken(token)));
 }
 
-/** Purge of expired sessions (wired to `purge.housekeeping` in M3). */
+/** Purge of expired sessions, run by the ticker (`ticker.ts`). */
 export async function purgeExpiredSessions(db: Db) {
   await db.delete(sessions).where(lt(sessions.expiresAt, new Date()));
 }
