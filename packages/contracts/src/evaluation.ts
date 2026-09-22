@@ -188,6 +188,25 @@ export const ItemRow = z.object({
 });
 export type ItemRow = z.infer<typeof ItemRow>;
 
+/**
+ * What the teacher reading this page is, seen from the evaluation: the seat
+ * they hold in its classroom and the test attempt they took with it.
+ *
+ * It is what "View as student" needs before it can do anything (ADR-018): no
+ * seat means offering to take one, a staff seat means the walk is one click
+ * away, and an attempt already submitted means the only way back into the
+ * flow is to reset it.
+ */
+export const EvaluationSelf = z.object({
+  /** A CLAIMED seat in the classroom, of any kind. */
+  seat: z.boolean(),
+  /** That seat is a staff one — the teacher joined their own classroom. */
+  staffSeat: z.boolean(),
+  /** Their own attempt on this evaluation, when they have taken it. */
+  attemptId: z.uuid().nullable(),
+});
+export type EvaluationSelf = z.infer<typeof EvaluationSelf>;
+
 export const EvaluationDetail = z.object({
   evaluation: Evaluation,
   items: z.array(ItemRow),
@@ -197,6 +216,8 @@ export const EvaluationDetail = z.object({
   attemptCount: z.number().int(),
   /** False once an attempt exists: the structure is frozen (F-EVAL-03). */
   editable: z.boolean(),
+  /** The reader's own seat and test attempt (ADR-018). */
+  self: EvaluationSelf,
 });
 export type EvaluationDetail = z.infer<typeof EvaluationDetail>;
 

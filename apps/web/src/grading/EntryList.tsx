@@ -1,3 +1,4 @@
+import { GraduationCap } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { GradingEntry, GradingQueueItem } from "@quiz/contracts";
@@ -62,6 +63,14 @@ export function EntryList({
                 <VerdictCell state={entryVerdict(entry)} />
               </span>
               <span className="min-w-0 flex-1 truncate text-sm font-semibold">{name}</span>
+              {/* The teacher's own test walk (ADR-018). It is corrected like
+                  any other answer — they asked for it — and the badge is what
+                  stops it being read as a student's. */}
+              {entry.staff ? (
+                <Badge tone="zinc" icon={GraduationCap}>
+                  {t("roster.status.staff")}
+                </Badge>
+              ) : null}
               {/* The badges hide on a phone through their WRAPPER: `hidden`
                   on a `Badge` loses to the `inline-flex` of its own base
                   class, which the stylesheet emits later. */}

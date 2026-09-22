@@ -80,6 +80,8 @@ export const GradingEntry = z.object({
   itemId: z.uuid(),
   /** Pseudonym by default, display name when `?anonymous=0` (F-GRADE-03). */
   label: z.string(),
+  /** The attempt is a teacher's own staff test (ADR-018), badged as such. */
+  staff: z.boolean(),
   answer: z.unknown().nullable(),
   /** The question as the student saw it, through `studentView()`. */
   student: z.unknown(),

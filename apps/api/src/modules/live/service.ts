@@ -74,6 +74,7 @@ import {
   byId as evaluationById,
   feedbackOf,
   settingsOf,
+  staffRosterWithAttempt,
   toEvaluation,
   tryApplyState,
   type EvaluationRecord,
@@ -250,6 +251,58 @@ export async function participantOf(
     )
     .limit(1);
   return row ? { userId, guestId: null, timeBonusPercent: row.timeBonusPercent } : null;
+}
+
+/**
+ * The caller's own seat in the classroom of an evaluation, or `null`.
+ *
+ * `staff` is what tells a teacher's test walk apart from a student's attempt
+ * (ADR-018): it is written by `POST /classrooms/:id/self-enroll` and it is
+ * the only thing that makes the reset route of this module legitimate.
+ */
+export async function seatOf(
+  db: Db,
+  evaluation: EvaluationRecord,
+  userId: string,
+): Promise<{ staff: boolean } | null> {
+  const [row] = await db
+    .select({ staff: enrollments.staff })
+    .from(enrollments)
+    .where(
+      and(
+        eq(enrollments.classroomId, evaluation.classroomId),
+        eq(enrollments.userId, userId),
+        eq(enrollments.status, "claimed"),
+      ),
+    )
+    .limit(1);
+  return row ? { staff: row.staff } : null;
+}
+
+/**
+ * ADR-018: a teacher throws away their OWN test attempt to walk the quiz
+ * again. `POST /evaluations/:id/attempt` is idempotent per participant, so
+ * without this a teacher tests a quiz exactly once, for ever.
+ *
+ * Three conditions, all of them loaded rather than checked afterwards
+ * (invariant 6): the seat exists, the seat is STAFF, and the attempt is the
+ * caller's own. The dependent rows (answers, journal, gradings) go with it
+ * through the `ON DELETE CASCADE` of the schema.
+ */
+export async function resetOwnStaffAttempt(
+  db: Db,
+  evaluation: EvaluationRecord,
+  userId: string,
+): Promise<{ deleted: boolean; attemptId: string | null }> {
+  const seat = await seatOf(db, evaluation, userId);
+  if (!seat?.staff) return { deleted: false, attemptId: null };
+  const [row] = await db
+    .delete(attempts)
+    .where(and(eq(attempts.evaluationId, evaluation.id), eq(attempts.userId, userId)))
+    .returning({ id: attempts.id });
+  if (!row) return { deleted: false, attemptId: null };
+  events.attemptRemoved(evaluation.id, userId);
+  return { deleted: true, attemptId: row.id };
 }
 
 /** F-LIVE-02: the denominator of the lobby ring. Staff seats do not count. */
@@ -1491,6 +1544,17 @@ export async function dashboardView(
       and(eq(enrollments.classroomId, evaluation.classroomId), eq(enrollments.staff, false)),
     )
     .orderBy(asc(enrollments.nom), asc(enrollments.prenom));
+  /*
+   * The teacher's own test walk, under the class and never among it
+   * (ADR-018). It is here because a teacher who is testing wants to watch
+   * their own row light up like anybody else's; it is LAST and flagged
+   * because everything this grid totals is about the class.
+   */
+  const staffRoster = await staffRosterWithAttempt(db, evaluation);
+  const seats = [
+    ...roster.map((entry) => ({ ...entry, staff: false })),
+    ...staffRoster.map((entry) => ({ ...entry, staff: true })),
+  ];
 
   const attemptRows = await db
     .select()
@@ -1530,7 +1594,7 @@ export async function dashboardView(
     input.includeAnswers ? items.map((item) => [item.item.id, answerSummarizer(item)]) : [],
   );
 
-  const rows: DashboardView["rows"] = roster
+  const rows: DashboardView["rows"] = seats
     .filter((r) => r.userId !== null)
     .map((entry) => {
       const userId = entry.userId!;
@@ -1539,6 +1603,7 @@ export async function dashboardView(
       return {
         attemptId: attempt?.id ?? null,
         userId,
+        staff: entry.staff,
         displayName: `${entry.prenom} ${entry.nom}`.trim() || entry.email,
         pseudonym: pseudonyms.get(userId) ?? "—",
         state: (attempt?.state ?? "not_started") as AttemptState,
@@ -1566,7 +1631,13 @@ export async function dashboardView(
       };
     });
 
-  const started = rows.filter((r) => r.attemptId !== null).length;
+  // Every denominator below is the CLASS: a teacher testing their own quiz
+  // must not move the completion of a question or its success rate.
+  const classRows = rows.filter((r) => !r.staff);
+  const started = classRows.filter((r) => r.attemptId !== null).length;
+  const staffAttempts = new Set(
+    rows.filter((r) => r.staff && r.attemptId !== null).map((r) => r.attemptId!),
+  );
   return {
     evaluation: {
       id: evaluation.id,
@@ -1586,13 +1657,13 @@ export async function dashboardView(
     })),
     rows,
     totals: items.map((item) => {
-      const done = rows.filter(
+      const done = classRows.filter(
         (r) => r.cells.find((c) => c.itemId === item.item.id)?.status === "done",
       ).length;
       return {
         itemId: item.item.id,
         completion: started === 0 ? 0 : Math.round((done / started) * 100) / 100,
-        successRate: successRateOf(standing, item.item.id),
+        successRate: successRateOf(standing, item.item.id, staffAttempts),
       };
     }),
   };
@@ -1615,15 +1686,20 @@ function pointsOf(
   return seen === 0 ? null : Math.round(total * 100) / 100;
 }
 
-/** The mean of `points / maxPoints` over the validated gradings of one item. */
+/**
+ * The mean of `points / maxPoints` over the validated gradings of one item,
+ * excluding the attempts of `skip` — the staff tests of ADR-018.
+ */
 function successRateOf(
   standing: ReadonlyMap<PairKey, GradingRecord>,
   itemId: string,
+  skip: ReadonlySet<string>,
 ): number | null {
   let sum = 0;
   let n = 0;
   for (const grading of standing.values()) {
     if (grading.itemId !== itemId || grading.state !== "validated") continue;
+    if (skip.has(grading.attemptId)) continue;
     if (grading.maxPoints <= 0) continue;
     sum += grading.points / grading.maxPoints;
     n += 1;

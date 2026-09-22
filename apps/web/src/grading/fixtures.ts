@@ -63,6 +63,7 @@ export function makeEntry(over: Partial<GradingEntry> = {}): GradingEntry {
     attemptId: "a1",
     itemId: "i1",
     label: "Swift Otter",
+    staff: false,
     answer: { selected: [1] },
     student: MCQ_STUDENT,
     solution: MCQ_SOLUTION,
@@ -163,6 +164,7 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
     staleItems: [],
     attemptCount: 2,
     editable: false,
+    self: { seat: false, staffSeat: false, attemptId: null },
     ...over,
   };
 }
@@ -183,6 +185,7 @@ function row(displayName: string, points: number, grade: number, over: Partial<R
     grade,
     durationS: 600,
     state: "submitted" as const,
+    staff: false,
     ...over,
   };
 }

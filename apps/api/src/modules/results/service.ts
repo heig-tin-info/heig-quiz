@@ -54,6 +54,8 @@ import {
   joinedItems,
   scaleOf,
   settingsOf,
+  staffAttemptIds,
+  staffRosterWithAttempt,
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
@@ -109,16 +111,29 @@ export async function computeResults(
     .from(enrollments)
     .where(and(eq(enrollments.classroomId, evaluation.classroomId), eq(enrollments.staff, false)))
     .orderBy(asc(enrollments.nom), asc(enrollments.prenom));
+  /*
+   * The teacher's own test walk, appended after the class and flagged
+   * (ADR-018). It is a ROW because the teacher wants to read the grade their
+   * own answers earned; it is not a STUDENT, so `resultsView` keeps it out
+   * of the statistics, `itemViews` out of the success rates, the CSV out of
+   * the file and the release out of the frozen snapshot.
+   */
+  const staffSeats = await staffRosterWithAttempt(db, evaluation);
 
   const attemptRows = await db
     .select()
     .from(attempts)
     .where(eq(attempts.evaluationId, evaluation.id));
   const byUser = new Map(attemptRows.map((a) => [a.userId, a]));
+  const staffAttempts = await staffAttemptIds(db, evaluation);
   const validated = await validatedGradings(db, evaluation.id);
 
   const rows: ResultRow[] = [];
-  for (const entry of roster) {
+  const seats = [
+    ...roster.map((entry) => ({ ...entry, staff: false })),
+    ...staffSeats.map((entry) => ({ ...entry, staff: true })),
+  ];
+  for (const entry of seats) {
     if (entry.userId === null) continue;
     const attempt = byUser.get(entry.userId) ?? null;
     const perItem: Record<string, number> = {};
@@ -144,10 +159,11 @@ export async function computeResults(
       grade: gradeFromPoints(points, totalPoints, scale),
       durationS: durationOf(attempt),
       state: attempt ? attempt.state : "absent",
+      staff: entry.staff,
     });
   }
 
-  return { totalPoints, scale, items: itemViews(items, validated), rows };
+  return { totalPoints, scale, items: itemViews(items, validated, staffAttempts), rows };
 }
 
 function durationOf(
@@ -159,13 +175,19 @@ function durationOf(
   return Math.max(0, Math.round((end.getTime() - attempt.startedAt.getTime()) / 1000));
 }
 
-/** Per-item success rate: the mean of `points / maxPoints` over the class. */
+/**
+ * Per-item success rate: the mean of `points / maxPoints` over the CLASS.
+ * `staffAttempts` — the teachers' own test walks (ADR-018) — are skipped: a
+ * teacher who knows the key would otherwise pull every rate up.
+ */
 function itemViews(
   items: readonly JoinedItem[],
   validated: ReadonlyMap<PairKey, GradingRecord>,
+  staffAttempts: ReadonlySet<string>,
 ): ResultsItem[] {
   const sums = new Map<string, { sum: number; n: number }>();
   for (const grading of validated.values()) {
+    if (staffAttempts.has(grading.attemptId)) continue;
     if (grading.maxPoints <= 0) continue;
     const acc = sums.get(grading.itemId) ?? { sum: 0, n: 0 };
     acc.sum += grading.points / grading.maxPoints;
@@ -188,8 +210,9 @@ function itemViews(
 export async function resultsView(db: Db, evaluation: EvaluationRecord): Promise<ResultsView> {
   const computed = await computeResults(db, evaluation);
   // Absent students count in the mean: a 1.0 that is not in the statistics
-  // would flatter every class average (F-RES-01).
-  const grades = computed.rows.map((r) => r.grade);
+  // would flatter every class average (F-RES-01). A teacher's own test does
+  // NOT: it is not a member of the class (ADR-018).
+  const grades = computed.rows.filter((r) => !r.staff).map((r) => r.grade);
   const stats = describe(grades);
   return {
     evaluationId: evaluation.id,
@@ -228,13 +251,17 @@ export async function releaseResults(
     releasedAt: iso(releasedAt),
     totalPoints: computed.totalPoints,
     scale: computed.scale,
-    rows: computed.rows.map((r) => ({
-      attemptId: r.attemptId,
-      userId: r.userId,
-      points: r.points,
-      grade: r.grade,
-      perItem: r.perItem,
-    })),
+    // The frozen snapshot is the CLASS's grades (ADR-012); a teacher's own
+    // test is not one of them and has nothing to freeze (ADR-018).
+    rows: computed.rows
+      .filter((r) => !r.staff)
+      .map((r) => ({
+        attemptId: r.attemptId,
+        userId: r.userId,
+        points: r.points,
+        grade: r.grade,
+        perItem: r.perItem,
+      })),
   };
   await db.transaction(async (tx) => {
     await tx
@@ -248,7 +275,7 @@ export async function releaseResults(
       })
       .where(eq(evaluations.id, evaluation.id));
   });
-  return { releasedAt, rows: computed.rows.length };
+  return { releasedAt, rows: snapshot.rows.length };
 }
 
 /**
@@ -295,11 +322,16 @@ export async function markModifiedAfterRelease(
 export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<ByQuestion[]> {
   const items = await joinedItems(db, evaluation.id);
   const validated = await validatedGradings(db, evaluation.id);
-  const views = itemViews(items, validated);
-  const attemptRows = await db
-    .select({ id: attempts.id, seed: attempts.seed })
-    .from(attempts)
-    .where(eq(attempts.evaluationId, evaluation.id));
+  // The class debrief is about the CLASS: the teacher's own rehearsal is not
+  // in the success rates and not in the answer distributions (ADR-018).
+  const staffAttempts = await staffAttemptIds(db, evaluation);
+  const views = itemViews(items, validated, staffAttempts);
+  const attemptRows = (
+    await db
+      .select({ id: attempts.id, seed: attempts.seed })
+      .from(attempts)
+      .where(eq(attempts.evaluationId, evaluation.id))
+  ).filter((a) => !staffAttempts.has(a.id));
   const answerRows =
     attemptRows.length === 0
       ? []

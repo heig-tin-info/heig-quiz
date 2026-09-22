@@ -68,6 +68,7 @@ export function makeRow(index: number, itemIds: string[], overrides: Partial<Das
     // "Student <n>" itself, and a fixture that already said that would make
     // the toggle untestable.
     displayName: `Nadia Roux ${index}`,
+    staff: false,
     pseudonym:
       index < PSEUDONYMS.length
         ? PSEUDONYMS[index]!
@@ -174,6 +175,7 @@ export function makeEvaluationDetail(overrides: Partial<EvaluationDetail> = {}):
     staleItems: [],
     attemptCount: 0,
     editable: true,
+    self: { seat: false, staffSeat: false, attemptId: null },
     ...overrides,
   };
 }

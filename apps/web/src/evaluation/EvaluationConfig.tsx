@@ -6,8 +6,10 @@ import {
   ClipboardCheck,
   Copy,
   Eye,
+  GraduationCap,
   MonitorPlay,
   Pencil,
+  RotateCcw,
   Trash2,
 } from "lucide-react";
 import { useState } from "react";
@@ -18,8 +20,10 @@ import { api, apiErrorMessage } from "../api";
 import { useConfirm } from "../confirm";
 import { gradingLinks } from "../grading";
 import { useT } from "../i18n";
+import { useToast } from "../notify";
 import type { Route } from "../router";
 import { useSearchParam } from "../router";
+import { enterStudentView } from "../studentView";
 import {
   Alert,
   Badge,
@@ -108,6 +112,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
   const t = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const toast = useToast();
   const [rawStep, setStep] = useSearchParam("step", "questions");
   const step: Step = isStep(rawStep) ? rawStep : "questions";
   const [previewing, setPreviewing] = useState(false);
@@ -136,6 +141,26 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
       navigate({ view: "evaluation", id: row.id });
     },
   });
+  /*
+   * ADR-018, "View as student": the REAL walk, not the read-only preview
+   * beside it. A teacher with no seat is offered one (the same route the
+   * classroom page's "Join as student" calls), and then the app switches to
+   * the student UI and goes to `/take/:id` — the student's own route, the
+   * student's own components. Nothing of the flow is re-implemented here.
+   */
+  const join = useMutation({
+    mutationFn: () => api(`/app/api/classrooms/${classroomId}/self-enroll`, { method: "POST" }),
+  });
+  /** The teacher throws away their own staff test so they can walk it again. */
+  const resetAttempt = useMutation({
+    mutationFn: () => api(`/app/api/evaluations/${id}/attempt`, { method: "DELETE" }),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: evaluationKey(id) });
+      toast(t("eval.resetAttempt.done"), "success");
+    },
+    onError: (error) => toast(apiErrorMessage(error, t("eval.resetAttempt.failed")), "error"),
+  });
+
   const remove = useMutation({
     mutationFn: (confirmTitle: string) =>
       api(`/app/api/evaluations/${id}`, {
@@ -176,6 +201,29 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
   const data = detail.data;
   const evaluation = data.evaluation;
   const links = gradingLinks(id);
+  const self = data.self;
+
+  const viewAsStudent = async () => {
+    if (!self.seat) {
+      const ok = await confirm({
+        title: t("eval.viewAsStudent.title"),
+        message: t("eval.viewAsStudent.message"),
+        confirmLabel: t("eval.viewAsStudent.confirm"),
+        cancelLabel: t("common.cancel"),
+      });
+      if (!ok) return;
+      try {
+        await join.mutateAsync();
+      } catch (error) {
+        toast(apiErrorMessage(error, t("eval.viewAsStudent.failed")), "error");
+        return;
+      }
+    }
+    // The way back, remembered before leaving: the banner of the student
+    // view returns to THIS page and not to the teacher home (ADR-018).
+    enterStudentView({ view: "evaluation", id });
+    navigate({ view: "attempt", evaluationId: id });
+  };
 
   return (
     <div className="space-y-6">
@@ -212,6 +260,16 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
             <Button variant="secondary" onClick={() => setPreviewing(true)}>
               <Eye /> {t("eval.preview")}
             </Button>
+            {/* Secondary, beside the preview and never instead of it: the
+                preview answers "are these the right questions?", this one
+                answers "does the quiz WORK?" (ADR-018). */}
+            <Button
+              variant="secondary"
+              loading={join.isPending}
+              onClick={() => void viewAsStudent()}
+            >
+              <GraduationCap /> {t("eval.viewAsStudent")}
+            </Button>
             <Menu
               label={t("common.actions")}
               items={[
@@ -236,11 +294,42 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
                   onSelect: () =>
                     duplicate.mutate(t("eval.duplicateTitle", { title: evaluation.title })),
                 },
+                /*
+                 * The teacher's own test attempt, thrown away so the walk can
+                 * be done again (ADR-018). It only exists when there is one,
+                 * and it lives in the overflow beside the other destructive
+                 * item rather than as a fourth button in the header: the
+                 * action tiers of DESIGN.md allow three secondaries, and the
+                 * red of a destructive action belongs to the dialog it opens.
+                 */
+                ...(self.attemptId !== null && self.staffSeat
+                  ? [
+                      {
+                        label: t("eval.resetAttempt"),
+                        icon: RotateCcw,
+                        danger: true,
+                        separator: true,
+                        onSelect: async () => {
+                          if (
+                            await confirm({
+                              title: t("eval.resetAttempt.title"),
+                              message: t("eval.resetAttempt.message"),
+                              confirmLabel: t("eval.resetAttempt.confirm"),
+                              cancelLabel: t("common.cancel"),
+                              danger: true,
+                            })
+                          ) {
+                            resetAttempt.mutate();
+                          }
+                        },
+                      },
+                    ]
+                  : []),
                 {
                   label: t("eval.delete"),
                   icon: Trash2,
                   danger: true,
-                  separator: true,
+                  separator: self.attemptId === null || !self.staffSeat,
                   onSelect: async () => {
                     if (
                       await confirm({

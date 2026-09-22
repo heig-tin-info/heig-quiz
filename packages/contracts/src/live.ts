@@ -256,6 +256,13 @@ export const DashboardRow = z.object({
   attemptId: z.uuid().nullable(),
   userId: z.uuid(),
   displayName: z.string(),
+  /**
+   * The row belongs to a STAFF seat: a teacher walking their own quiz as a
+   * student (ADR-018). It is shown — that is the point of the walk — and it
+   * counts in no total: not in the completion of a question, not in its
+   * success rate, not in the class statistics.
+   */
+  staff: z.boolean(),
   /** Stable per-row pseudonym when names are hidden (F-DASH-02, decision D20). */
   pseudonym: z.string(),
   state: AttemptState,
@@ -306,6 +313,14 @@ export const DashboardQuery = z.object({
     .transform((v) => v === true || v === "1" || v === "true"),
 });
 export type DashboardQuery = z.infer<typeof DashboardQuery>;
+
+/**
+ * `DELETE /evaluations/:id/attempt` — a teacher throws away their OWN staff
+ * test attempt so they can walk the quiz again (ADR-018). `deleted` is false
+ * when there was nothing to remove, which is a success and not a 404.
+ */
+export const ResetAttemptResponse = z.object({ deleted: z.boolean() });
+export type ResetAttemptResponse = z.infer<typeof ResetAttemptResponse>;
 
 export const StartBody = z.object({ confirm: z.literal(true) });
 export type StartBody = z.infer<typeof StartBody>;

@@ -46,3 +46,27 @@ Un récapitulatif, puis une seule action : ouvrir la salle d'attente, ou
 planifier. Une fois la classe entrée, la pause, la prolongation et la
 clôture se font depuis le tableau de bord. **Aperçu étudiant** montre toute
 l'évaluation telle que l'étudiant la reçoit.
+
+## La tester pour de vrai
+
+**Aperçu étudiant** répond à « est-ce que ce sont les bonnes questions ? ».
+**Voir en tant qu'étudiant** répond à « est-ce que ce quiz fonctionne ? » :
+c'est la vraie chose — la salle d'attente, le lecteur, le décompte, le rendu
+et le retour, exactement comme la classe les reçoit.
+
+Le premier clic vous propose une place dans la classe (la même que
+**S'inscrire comme étudiant** depuis la page de la classe) puis bascule
+toute l'application en vue étudiant. Le bandeau en haut vous ramène à cette
+page. Une évaluation encore en préparation n'a pas de salle d'attente
+ouverte : démarrez-la, ou ouvrez-la, avant de la parcourir.
+
+Votre tentative de test est une vraie tentative : elle apparaît sur le
+tableau de bord, dans la correction et dans les résultats, chaque fois avec
+un badge *équipe*. Elle ne compte nulle part — ni dans la moyenne de la
+classe, ni dans le taux de réussite d'une question, ni dans le fichier
+exporté.
+
+Comme une évaluation ne se passe qu'une fois, la refaire signifie jeter la
+première : **Réinitialiser ma tentative de test**, sous **Actions**. Elle
+supprime votre propre tentative et rien d'autre — vos réponses, votre
+journal et les notes de ce test partent avec elle.

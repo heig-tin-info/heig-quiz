@@ -19,6 +19,12 @@
  *  - `many`  — 8 courses, 30 classrooms, a 120-student roster on the first
  *    one and 70 questions in the first pool: long lists, the sidebar, the
  *    cursor pagination of the pool table and the 120 × 10 live grid;
+ *  - `mytest` — the teacher already holds a STAFF seat in the classroom and
+ *    has taken every started evaluation with it (ADR-018): "View as student"
+ *    then goes straight through, "Reset my test attempt" is in the overflow,
+ *    and the badged staff row shows up in the live grid, the grading panel
+ *    and the results. Without it the teacher holds no seat, which is the
+ *    path that asks for a confirmation first;
  *  - `scene` — the student player's state, and only that one screen's:
  *    `?scene=lobby|running|paused|closed|extend` (`running` by default).
  *
@@ -88,7 +94,7 @@ if (asParam === "teacher" || asParam === "student" || asParam === "admin") {
 const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "teacher";
 
 /** Scene flags: read from the URL, then remembered like the persona. */
-const FLAG_NAMES = ["empty", "fail", "slow", "many"] as const;
+const FLAG_NAMES = ["empty", "fail", "slow", "many", "mytest"] as const;
 type FlagName = (typeof FLAG_NAMES)[number];
 const flags = {} as Record<FlagName, boolean>;
 for (const name of FLAG_NAMES) {
@@ -2501,6 +2507,11 @@ interface MockRowState {
   attemptId: string | null;
   userId: string;
   displayName: string;
+  /** A teacher walking their own quiz (ADR-018): badged, counted nowhere. */
+  staff: boolean;
+  lastName: string;
+  firstName: string;
+  email: string;
   pseudonym: string;
   state: "not_started" | "in_progress" | "submitted" | "expired";
   online: boolean;
@@ -2605,6 +2616,10 @@ function makeRows(e: MockEvaluation, started: boolean): MockRowState[] {
       attemptId: hasAttempt ? uuid() : null,
       userId: uuid(),
       displayName: `${student.nom}, ${student.prenom}`,
+      staff: false,
+      lastName: student.nom,
+      firstName: student.prenom,
+      email: student.email,
       pseudonym: pseudonymOf(index),
       state: !hasAttempt
         ? "not_started"
@@ -2755,6 +2770,69 @@ function seedEvaluations() {
 }
 if (!flags.empty) seedEvaluations();
 
+/**
+ * `?mytest=1` — the teacher joined their own classroom and walked every
+ * started evaluation with that staff seat (ADR-018). It is what makes the
+ * reset action, the badged row of the live grid, the badged entry of the
+ * grading panel and the badged result row reachable in the mock.
+ */
+function seedStaffTest() {
+  for (const room of rooms) {
+    if (room.roster.some((s) => s.email === ME_TEACHER.email)) continue;
+    room.roster.push({
+      id: "s-me",
+      nom: ME_TEACHER.familyName,
+      prenom: ME_TEACHER.givenName,
+      email: ME_TEACHER.email,
+      status: "claimed",
+      conflictFlag: false,
+      staff: true,
+      timeBonusPercent: 0,
+      note: null,
+      lastLoginAt: iso(-H),
+      avatarUrl: null,
+      userId: ME_TEACHER.userId,
+    });
+  }
+  for (const e of evaluations) {
+    // Only where the class itself has attempts: a teacher's test on a draft
+    // nobody has opened is not a state worth mocking.
+    if (!e.rows.some((r) => r.attemptId !== null)) continue;
+    e.rows.push(staffRow(e));
+  }
+}
+
+/** The teacher's own row: every question answered and submitted. */
+function staffRow(e: MockEvaluation): MockRowState {
+  const maxPoints = e.items.reduce((sum, i) => sum + i.points, 0);
+  return {
+    attemptId: uuid(),
+    userId: ME_TEACHER.userId,
+    displayName: `${ME_TEACHER.familyName}, ${ME_TEACHER.givenName}`,
+    staff: true,
+    lastName: ME_TEACHER.familyName,
+    firstName: ME_TEACHER.givenName,
+    email: ME_TEACHER.email,
+    pseudonym: "Staff Test",
+    state: "submitted",
+    online: false,
+    lastSeenAt: iso(-5 * 60_000),
+    deadlineAt: null,
+    timeBonusPercent: 0,
+    points: null,
+    maxPoints,
+    cells: e.items.map((item, i) => ({
+      itemId: item.id,
+      status: "done" as const,
+      verdict: null,
+      points: null,
+      revision: 1 + i,
+      summary: null,
+    })),
+  };
+}
+if (flags.mytest && !flags.empty) seedStaffTest();
+
 /** The running evaluation is the one the fake stream keeps moving. */
 const runningEvaluation = () => evaluations.find((e) => e.state === "running") ?? null;
 
@@ -2825,6 +2903,22 @@ const evaluationSummary = (e: MockEvaluation) => ({
   createdAt: e.createdAt,
 });
 
+/**
+ * The reader's own seat and test attempt (ADR-018). The seat is read off the
+ * classroom roster, exactly as the server reads it off `enrollments`, so
+ * clicking "Join as student" here really changes what the button does next.
+ */
+const selfOf = (e: MockEvaluation) => {
+  const seat = (rooms.find((r) => r.id === e.classroomId)?.roster ?? []).find(
+    (s) => me !== null && s.email.toLowerCase() === me.email.toLowerCase(),
+  );
+  return {
+    seat: seat !== undefined,
+    staffSeat: seat?.staff ?? false,
+    attemptId: e.rows.find((r) => r.staff)?.attemptId ?? null,
+  };
+};
+
 const evaluationDetail = (e: MockEvaluation) => ({
   evaluation: toEvaluation(e),
   items: e.items.map((i) => ({ ...i })),
@@ -2834,10 +2928,14 @@ const evaluationDetail = (e: MockEvaluation) => ({
     .map((i) => i.id),
   attemptCount: attemptCountOf(e),
   editable: attemptCountOf(e) === 0,
+  self: selfOf(e),
 });
 
 const dashboardView = (e: MockEvaluation, includeAnswers: boolean) => {
-  const started = e.rows.filter((r) => r.attemptId !== null).length;
+  // Every denominator is the CLASS: a teacher's own test walk is a row and
+  // not a total (ADR-018).
+  const classRows = e.rows.filter((r) => !r.staff);
+  const started = classRows.filter((r) => r.attemptId !== null).length;
   return {
     evaluation: {
       id: e.id,
@@ -2860,7 +2958,7 @@ const dashboardView = (e: MockEvaluation, includeAnswers: boolean) => {
       cells: r.cells.map((c) => ({ ...c, summary: includeAnswers ? c.summary : null })),
     })),
     totals: e.items.map((item) => {
-      const done = e.rows.filter(
+      const done = classRows.filter(
         (r) => r.cells.find((c) => c.itemId === item.id)?.status === "done",
       ).length;
       return {
@@ -3060,6 +3158,22 @@ on("POST", "/app/api/evaluations/:id/state", (m, body) => {
   e.state = body.to as MockEvaluation["state"];
   return toEvaluation(e);
 });
+/**
+ * ADR-018: the teacher throws away their OWN staff test attempt. The mock
+ * holds the same three conditions the server loads — a seat, a STAFF seat,
+ * and their own row — so the button disappears here for the same reasons.
+ */
+on("DELETE", "/app/api/evaluations/:id/attempt", (m) => {
+  const e = evaluationOr404(m.groups!.id!);
+  const mine = e.rows.find((r) => r.staff && r.userId === ME_TEACHER.userId);
+  if (!mine) return { deleted: false };
+  e.rows = e.rows.filter((r) => r !== mine);
+  // The grading world is derived from the rows, so its copy goes too.
+  const world = gradingWorlds.find((w) => w.evaluation.id === e.id);
+  if (world) world.attempts = world.attempts.filter((a) => a.id !== mine.attemptId);
+  return { deleted: true };
+});
+
 on("POST", "/app/api/evaluations/:id/preview", (m) => previewView(evaluationOr404(m.groups!.id!)));
 
 // --- Routes: the teacher's controls on a live evaluation -------------------
@@ -3560,6 +3674,8 @@ interface MockAttempt {
   id: string;
   userId: string;
   displayName: string;
+  /** A teacher's own test walk (ADR-018). */
+  staff: boolean;
   lastName: string;
   firstName: string;
   email: string;
@@ -3724,23 +3840,22 @@ function buildGradingWorld(
   // One attempt per dashboard row that has one. A row without an attempt is a
   // student who never opened it, and stays one: the results table lists them
   // as absent (deviation W6-10) instead of inventing a second class.
-  const roster = classroomRoster(evaluation.classroomId);
   const attempts: MockAttempt[] = [];
-  evaluation.rows.forEach((row, index) => {
+  evaluation.rows.forEach((row) => {
     if (row.attemptId === null) return;
     // The student persona's own attempt is pinned on the first row, so the
     // `past` card of their home and the player's finished screen link to a
     // feedback page that really exists — on the very evaluation the teacher
     // is grading two tabs away.
     if (attempts.length === 0 && options.pinnedAttemptId) row.attemptId = options.pinnedAttemptId;
-    const student = roster[index];
     attempts.push({
       id: row.attemptId,
       userId: row.userId,
       displayName: row.displayName,
-      lastName: student?.nom ?? row.displayName,
-      firstName: student?.prenom ?? "",
-      email: student?.email ?? "",
+      staff: row.staff,
+      lastName: row.lastName,
+      firstName: row.firstName,
+      email: row.email,
       pseudonym: row.pseudonym,
       state: row.state === "submitted" ? "submitted" : "expired",
       durationS: 600 + Math.round(rand() * 1500),
@@ -3922,6 +4037,7 @@ function gradingEntry(e: MockGradingWorld, attempt: MockAttempt, item: MockEvalI
     attemptId: attempt.id,
     itemId: item.id,
     label: anonymous ? attempt.pseudonym : attempt.displayName,
+    staff: attempt.staff,
     answer,
     student: studentView(q, config),
     solution,
@@ -4141,30 +4257,32 @@ function resultsView(e: MockGradingWorld) {
       grade: gradeOf(points, total),
       durationS: a.durationS,
       state: a.state,
+      staff: a.staff,
     };
   });
   // The students who never opened it: a 1.0 that belongs in the table and in
   // the statistics (deviation W6-10). They are the dashboard rows without an
   // attempt, so the absent count of the results matches the live grid's.
-  const roster = classroomRoster(e.evaluation.classroomId);
-  e.evaluation.rows.forEach((row, index) => {
+  e.evaluation.rows.forEach((row) => {
     if (row.attemptId !== null) return;
-    const student = roster[index];
     rows.push({
       userId: row.userId,
       displayName: row.displayName,
-      lastName: student?.nom ?? row.displayName,
-      firstName: student?.prenom ?? "",
-      email: student?.email ?? "",
+      lastName: row.lastName,
+      firstName: row.firstName,
+      email: row.email,
       attemptId: null as unknown as string,
       perItem: {},
       points: 0,
       grade: 1,
       durationS: null as unknown as number,
       state: "absent" as MockAttempt["state"],
+      staff: row.staff,
     });
   });
-  const grades = rows.map((r) => r.grade);
+  // The class, and only the class: a teacher's own test is a row of the
+  // table and of nothing else (ADR-018).
+  const grades = rows.filter((r) => !r.staff).map((r) => r.grade);
   const stats = describe(grades);
   return {
     evaluationId: e.evaluation.id,
@@ -4176,6 +4294,7 @@ function resultsView(e: MockGradingWorld) {
     modifiedAfterRelease: e.evaluation.modifiedAfterRelease,
     items: e.items.map((i) => {
       const scores = e.attempts
+        .filter((a) => !a.staff)
         .map((a) => standingGrading(e, a.id, i.id))
         .filter((g): g is MockGrading => g !== null && g.state === "validated");
       return {
@@ -4204,6 +4323,7 @@ on("GET", "/app/api/evaluations/:id/results/by-question", (m) => {
     const q = questions.find((x) => x.id === item.questionId)!;
     const config = publishedConfig(q);
     const given = e.attempts
+      .filter((a) => !a.staff)
       .map((a) => e.answers.get(cellKey(a.id, item.id)))
       .filter((x) => x !== undefined);
     let distribution: { key: string; label: string; count: number; correct: boolean | null }[] = [];
@@ -4261,7 +4381,11 @@ on("POST", "/app/api/evaluations/:id/release", (m) => {
   // configuration header and the student's home all agree one call later.
   e.evaluation.state = "released";
   e.evaluation.modifiedAfterRelease = false;
-  return { releasedAt: e.evaluation.releasedAt, rows: e.attempts.length, released: true };
+  return {
+    releasedAt: e.evaluation.releasedAt,
+    rows: e.attempts.filter((a) => !a.staff).length,
+    released: true,
+  };
 });
 
 on("POST", "/app/api/evaluations/:id/unrelease", (m) => {

@@ -44,3 +44,26 @@ on top of the duration.
 A summary, then one action: open the waiting room, or schedule it. Once the
 class is in, pausing, extending and closing all happen on the dashboard.
 **Student preview** shows the whole evaluation as a student gets it.
+
+## Testing it for real
+
+**Student preview** answers "are these the right questions?". **View as
+student** answers "does this quiz work?": it is the real thing — the waiting
+room, the player, the countdown, the submit and the feedback, exactly as the
+class gets them.
+
+The first click offers you a seat in the classroom (the same one **Join as
+student** gives you from the classroom page) and then switches the whole app
+into the student view. The banner at the top brings you back to this page.
+A quiz still in preparation has no waiting room open yet, so start it — or
+open it — before walking it.
+
+Your test attempt is a real attempt: it shows up on the live dashboard, in
+the grading panel and in the results table, each time with a *staff* badge.
+It counts in nothing — not in the class average, not in the success rate of
+a question, not in the exported file.
+
+Because an evaluation is taken once, walking it again means throwing the
+first walk away: **Reset my test attempt**, under **Actions**. It deletes
+your own attempt and nothing else — your answers, your journal and the marks
+of that test go with it.

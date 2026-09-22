@@ -5,7 +5,11 @@
 La liste de la classe. Chaque ligne est une place : **en attente** tant que
 l'étudiant ne s'est pas connecté avec une adresse correspondante,
 **rattachée** une fois liée à son compte. Un badge *équipe* marque une place
-d'enseignant.
+d'enseignant — celle que **S'inscrire comme étudiant**, ou **Voir en tant
+qu'étudiant** sur une évaluation, vous donne pour parcourir le vrai
+parcours étudiant. Une tentative de test prise depuis une telle place porte
+le même badge partout où les tentatives sont listées, et ne compte dans
+aucune statistique.
 
 ## Le rattachement
 

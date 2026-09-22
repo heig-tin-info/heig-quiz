@@ -61,6 +61,17 @@ export function attemptRowChanged(evaluationId: string, attempt: AttemptRow): vo
   });
 }
 
+/**
+ * The row of a teacher's own staff test, thrown away so the quiz can be
+ * walked again (ADR-018). There is no typed frame for a row that ceased to
+ * exist, and inventing one for a case only a teacher can cause would put a
+ * deletion in the live path of an exam; the dashboards watching the
+ * evaluation re-read it instead.
+ */
+export function attemptRemoved(evaluationId: string, userId: string): void {
+  bus.hint("evaluations", [bus.evaluationTopic(evaluationId), bus.userTopic(userId)]);
+}
+
 export function deadlineChanged(
   evaluation: EvaluationRecord,
   attempt: AttemptRow,

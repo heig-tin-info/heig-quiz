@@ -35,7 +35,12 @@ import { round2, uniquePseudonyms } from "@quiz/domain";
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { answers, attempts, gradings, users } from "../../db/schema.js";
-import { joinedItems, type EvaluationRecord, type JoinedItem } from "../evaluation/service.js";
+import {
+  joinedItems,
+  staffAttemptIds,
+  type EvaluationRecord,
+  type JoinedItem,
+} from "../evaluation/service.js";
 import { solutionView, studentView } from "../live/studentView.js";
 
 export type GradingRecord = typeof gradings.$inferSelect;
@@ -374,6 +379,9 @@ export async function gradingQueue(
   const standing = await standingGradings(db, evaluation.id);
   const history = await historyOf(db, evaluation.id);
   const roster = await rosterOf(db, evaluation.id);
+  // The teacher's own test walk is corrected like any other — they asked for
+  // it — but the panel says whose it is (ADR-018).
+  const staffAttempts = await staffAttemptIds(db, evaluation);
 
   const entries: GradingEntry[] = [];
   const pairs: { attempt: (typeof attemptRows)[number]; item: JoinedItem }[] =
@@ -396,6 +404,7 @@ export async function gradingQueue(
       label: query.anonymous
         ? (who?.pseudonym ?? "—")
         : (who?.displayName ?? attempt.userId ?? "—"),
+      staff: staffAttempts.has(attempt.id),
       answer: answer?.payload ?? null,
       student: studentView({
         type: item.question.type,

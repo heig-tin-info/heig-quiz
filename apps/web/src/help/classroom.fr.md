@@ -17,7 +17,10 @@ ou CSV.
 
 **S'inscrire comme étudiant** vous donne une place dans votre propre classe,
 pour passer l'évaluation comme un étudiant la passe. Cette place porte le
-badge *équipe* et reste hors de l'effectif.
+badge *équipe* et reste hors de l'effectif. Depuis une évaluation, **Voir en
+tant qu'étudiant** fait tout cela d'un clic — la place vous est proposée si
+vous n'en avez pas, puis la vraie salle d'attente et le vrai lecteur
+s'ouvrent.
 
 ## Évaluations
 

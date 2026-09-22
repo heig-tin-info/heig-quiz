@@ -220,7 +220,14 @@ export function ResultsView({
         onChange={setTab}
         label={t("results.title")}
         items={[
-          { value: "students", label: t("results.tab.students"), icon: Users, count: view.rows.length },
+          {
+            value: "students",
+            label: t("results.tab.students"),
+            icon: Users,
+            // The CLASS: a teacher's own test walk is a row of the table and
+            // not one of its students (ADR-018).
+            count: view.rows.filter((r) => !r.staff).length,
+          },
           {
             value: "questions",
             label: t("results.tab.questions"),

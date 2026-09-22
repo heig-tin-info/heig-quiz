@@ -32,6 +32,12 @@ export const ResultRow = z.object({
   grade: z.number(),
   durationS: z.number().int().nullable(),
   state: ResultRowState,
+  /**
+   * A teacher's own test attempt, taken from a staff seat (ADR-018). The row
+   * is listed — the teacher wants to read their own walk — and it is in no
+   * statistic, in no success rate and in no exported file.
+   */
+  staff: z.boolean(),
 });
 export type ResultRow = z.infer<typeof ResultRow>;
 
