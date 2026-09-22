@@ -95,6 +95,7 @@ const en = {
   "classrooms.name": "Name",
   "classrooms.namePlaceholder": "PRG1-2026",
   "classrooms.period": "Period",
+  "classrooms.setPeriod": "Period…",
   "classrooms.periodPlaceholder": "2026-A",
   "classrooms.empty": "No classroom in this course yet.",
   "classrooms.students": "{n} students",
@@ -105,7 +106,10 @@ const en = {
   "classrooms.archived": "archived",
   "classrooms.delete": "Delete classroom",
   "classrooms.deleteConfirm": "Delete “{name}”? Its roster and results go with it.",
-  "classrooms.rename": "Rename",
+  // The name goes in the label: the button IS the <h1>'s text, so a bare
+  // "Rename classroom" would leave the heading announcing no classroom.
+  "classrooms.renameName": "Rename classroom “{name}”",
+  "classrooms.renameFailed": "Could not rename this classroom.",
   "classrooms.notFound": "This classroom does not exist, or you do not have access to it.",
 
   "roster.title": "Roster",
@@ -1707,6 +1711,7 @@ const fr: Record<keyof Dict, string> = {
   "classrooms.name": "Nom",
   "classrooms.namePlaceholder": "PRG1-2026",
   "classrooms.period": "Période",
+  "classrooms.setPeriod": "Période…",
   "classrooms.periodPlaceholder": "2026-A",
   "classrooms.empty": "Aucune classe dans ce cours.",
   "classrooms.students": "{n} étudiants",
@@ -1718,7 +1723,8 @@ const fr: Record<keyof Dict, string> = {
   "classrooms.delete": "Supprimer la classe",
   "classrooms.deleteConfirm":
     "Supprimer « {name} » ? Sa liste et ses résultats disparaissent avec elle.",
-  "classrooms.rename": "Renommer",
+  "classrooms.renameName": "Renommer la classe « {name} »",
+  "classrooms.renameFailed": "Impossible de renommer cette classe.",
   "classrooms.notFound": "Cette classe n'existe pas, ou vous n'y avez pas accès.",
 
   "roster.title": "Liste",
