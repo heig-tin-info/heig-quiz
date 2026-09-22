@@ -8,9 +8,10 @@ import type {
 } from "@quiz/contracts";
 
 /**
- * Fixtures of the grading and results screens (WP10). They live beside the
- * screens rather than in `test/fixtures.ts` so the shared file stays the
- * shape three work packages agreed on.
+ * Fixtures of the grading and results screens (WP10). A file of their own
+ * rather than `test/fixtures.ts`, so the shared file stays the shape three
+ * work packages agreed on — but under `test/`, because test data has no
+ * business sitting in the source tree of a feature.
  */
 
 const MCQ_STUDENT = {

@@ -43,7 +43,7 @@ export function setQuestionDrag(event: DragEvent, drag: QuestionDrag): void {
 }
 
 /** Reads it back on the drop; anything that is not ours answers null. */
-export function readQuestionDrag(event: DragEvent): QuestionDrag | null {
+function readQuestionDrag(event: DragEvent): QuestionDrag | null {
   const raw = event.dataTransfer.getData(QUESTION_DRAG_MIME);
   if (!raw) return null;
   try {

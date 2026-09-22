@@ -31,15 +31,6 @@ export interface ParsedSearch {
   versionMax: number | null;
 }
 
-export const EMPTY_PARSE: ParsedSearch = {
-  q: "",
-  tags: [],
-  types: [],
-  difficulties: [],
-  versionMin: null,
-  versionMax: null,
-};
-
 /** The ids `type:` accepts, from the contract rather than retyped here. */
 export const SEARCH_TYPE_IDS: readonly string[] = QuestionTypeId.options;
 

@@ -19,7 +19,7 @@ import { api } from "../api";
  * It is deliberately NOT a general stream hook — one event, one query, one
  * screen. The shared `useEventStream` belongs to the live dashboard.
  */
-export function gradingProgressKey(evaluationId: string) {
+function gradingProgressKey(evaluationId: string) {
   return ["grading", evaluationId, "progress"] as const;
 }
 

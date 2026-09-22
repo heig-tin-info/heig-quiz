@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GradingPanel } from "./GradingPanel";
-import { makeEntry, makeEvaluationDetail, makeGrading, makeQueue } from "./fixtures";
+import { makeEntry, makeEvaluationDetail, makeGrading, makeQueue } from "../test/grading-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 
 /*

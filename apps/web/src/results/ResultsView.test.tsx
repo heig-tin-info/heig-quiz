@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { makeResultsView } from "../grading/fixtures";
+import { makeResultsView } from "../test/grading-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 import { ResultsView } from "./ResultsView";
 

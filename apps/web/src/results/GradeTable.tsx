@@ -23,7 +23,7 @@ const STATE_TONES: Record<ResultRowState, Tone> = {
   expired: "amber",
 };
 
-export const stateLabel = (t: TFunction, s: ResultRowState) => t(STATE_KEYS[s]);
+const stateLabel = (t: TFunction, s: ResultRowState) => t(STATE_KEYS[s]);
 
 /**
  * One student per row (F-RES-02), absent students included: they are a 1.0

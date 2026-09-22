@@ -10,7 +10,7 @@
 import type { TFunction } from "../i18n";
 import { circuitCanvasStrings, playerStrings } from "../questionTypes";
 
-export function mcqPlayerStrings(t: TFunction) {
+function mcqPlayerStrings(t: TFunction) {
   return {
     chooseOne: t("qt.mcq.chooseOne"),
     chooseSeveral: t("qt.mcq.chooseSeveral"),
@@ -19,7 +19,7 @@ export function mcqPlayerStrings(t: TFunction) {
   };
 }
 
-export function shortPlayerStrings(t: TFunction) {
+function shortPlayerStrings(t: TFunction) {
   return {
     label: t("qt.short.player.label"),
     hintText: t("qt.short.hintText"),
@@ -29,7 +29,7 @@ export function shortPlayerStrings(t: TFunction) {
   };
 }
 
-export function clozePlayerStrings(t: TFunction) {
+function clozePlayerStrings(t: TFunction) {
   return {
     blank: t("qt.cloze.blank"),
     choose: t("qt.cloze.choose"),
@@ -44,14 +44,14 @@ export function clozePlayerStrings(t: TFunction) {
  * fifteen sentences drift, and only one of them is under the key-by-key test
  * of `questionTypes.test.tsx`.
  */
-export const codePlayerStrings = (t: TFunction) => playerStrings.code(t);
+const codePlayerStrings = (t: TFunction) => playerStrings.code(t);
 
 /**
  * `circuit` is built the same way, and for the same reason: half of its
  * sentences interpolate a designator or a value, and rebuilding them here
  * would be a second copy outside the key-by-key test.
  */
-export const circuitPlayerStrings = (t: TFunction) => playerStrings.circuit(t);
+const circuitPlayerStrings = (t: TFunction) => playerStrings.circuit(t);
 
 /**
  * The canvas of the `circuit` type has a dictionary of its own, keyed under

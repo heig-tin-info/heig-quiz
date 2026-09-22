@@ -43,7 +43,7 @@ import {
 } from "./playerReducer";
 
 /** Why the attempt stopped accepting writes. `null` while it is running. */
-export interface ClosedInfo {
+interface ClosedInfo {
   reason: AttemptClosed["reason"];
 }
 
