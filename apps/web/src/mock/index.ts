@@ -301,6 +301,37 @@ const teachers: AdminTeacher[] = [
     lastLoginAt: null,
     grantedAt: iso(-1 * D),
   },
+  // Colleagues with no seat on any pool: what the invite picker offers.
+  {
+    id: "t4",
+    email: "margaret.hamilton@heig-vd.ch",
+    givenName: "Margaret",
+    familyName: "Hamilton",
+    signedUp: true,
+    courses: 2,
+    lastLoginAt: iso(-3 * D),
+    grantedAt: iso(-300 * D),
+  },
+  {
+    id: "t5",
+    email: "barbara.liskov@heig-vd.ch",
+    givenName: "Barbara",
+    familyName: "Liskov",
+    signedUp: true,
+    courses: 1,
+    lastLoginAt: iso(-12 * D),
+    grantedAt: iso(-250 * D),
+  },
+  {
+    id: "t6",
+    email: "dennis.ritchie@heig-vd.ch",
+    givenName: "Dennis",
+    familyName: "Ritchie",
+    signedUp: true,
+    courses: 4,
+    lastLoginAt: iso(-1 * H),
+    grantedAt: iso(-500 * D),
+  },
 ];
 
 /** `?many=1`: 8 courses, 30 classrooms, and 120 students on the first one. */
@@ -1743,10 +1774,29 @@ const memberList = (pool: MockPool) => ({
 });
 
 on("GET", "/app/api/pools/:id/members", (m) => memberList(poolOr404(m.groups!.id!)));
+/** `PoolCandidates`: the teachers with an account, not yet seated, by name or address. */
+on("GET", "/app/api/pools/:id/candidates", (m, _body, url) => {
+  const pool = poolOr404(m.groups!.id!);
+  const q = (url.searchParams.get("q") ?? "").trim().toLowerCase();
+  const seated = new Set([pool.ownerId, ...(poolMembers[pool.id] ?? []).map((mem) => mem.userId)]);
+  return teachers
+    .filter((t) => t.signedUp && !seated.has(t.id))
+    .filter((t) => `${t.givenName ?? ""} ${t.familyName ?? ""} ${t.email}`.toLowerCase().includes(q))
+    .slice(0, 10)
+    .map((t) => ({
+      userId: t.id,
+      email: t.email,
+      givenName: t.givenName ?? "",
+      familyName: t.familyName ?? "",
+    }));
+});
 on("POST", "/app/api/pools/:id/members", (m, body) => {
   const pool = poolOr404(m.groups!.id!);
   const email = String(body.email ?? "").trim().toLowerCase();
-  const found = teachers.find((t) => t.email.toLowerCase() === email);
+  // Picked in the list (`userId`), or spelled out as an address.
+  const found = teachers.find((t) =>
+    body.userId !== undefined ? t.id === body.userId : t.email.toLowerCase() === email,
+  );
   if (!found) throw new MockError(404, "No teacher account with this e-mail.");
   const rows = (poolMembers[pool.id] ??= []);
   if (rows.some((mem) => mem.userId === found.id)) {

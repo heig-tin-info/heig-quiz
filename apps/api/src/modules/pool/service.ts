@@ -31,6 +31,7 @@ import type {
   Category,
   CategoryNode,
   Pool,
+  PoolCandidates,
   PoolMember,
   PoolMembers,
   PoolRole,
@@ -397,6 +398,52 @@ export async function findTeacherByEmail(db: Db, email: string) {
     )
     .limit(1);
   return row ?? null;
+}
+
+/** The account behind a pick of the invite list — a teacher or an admin, or nobody. */
+export async function findTeacherById(db: Db, userId: string) {
+  const [row] = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      givenName: users.givenName,
+      familyName: users.familyName,
+      role: users.role,
+    })
+    .from(users)
+    .where(and(eq(users.id, userId), inArray(users.role, ["teacher", "admin"])))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * The teachers who hold no seat on the pool yet, matched on name or address:
+ * what the picker of the share sheet offers. Ten rows at most — the picker
+ * is searched, not browsed — and none when the school is fully seated.
+ */
+export async function listCandidates(db: Db, pool: PoolRow, q: string): Promise<PoolCandidates> {
+  // `\` is the default LIKE escape in PostgreSQL: a typed `%` or `_` is a
+  // character to find, not a wildcard.
+  const needle = `%${q.trim().toLowerCase().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const rows = await db
+    .select({
+      userId: users.id,
+      email: users.email,
+      givenName: users.givenName,
+      familyName: users.familyName,
+    })
+    .from(users)
+    .where(
+      and(
+        inArray(users.role, ["teacher", "admin"]),
+        sql`${users.id} <> ${pool.ownerId}`,
+        sql`NOT EXISTS (SELECT 1 FROM ${poolMembers} WHERE ${qualified(poolMembers.poolId)} = ${pool.id} AND ${qualified(poolMembers.userId)} = ${qualified(users.id)})`,
+        sql`lower(${users.givenName} || ' ' || ${users.familyName} || ' ' || ${users.email}) LIKE ${needle}`,
+      ),
+    )
+    .orderBy(asc(users.familyName), asc(users.givenName), asc(users.email))
+    .limit(10);
+  return rows;
 }
 
 /** Already a member, or the owner: the invitation is a 409, not a second row. */

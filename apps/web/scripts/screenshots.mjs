@@ -155,6 +155,19 @@ const scenes = [
       await openRowMenu(p, /^(actions)$/i);
       await p.getByRole("menuitem", { name: /^(share|partager)…$/i }).click();
     } },
+  // The invite picker with a few letters typed: the colleagues it offers.
+  { name: "pool-share-pick", role: "teacher", path: "/pools", fold: true, act: async (p) => {
+      await openRowMenu(p, /^(actions)$/i);
+      await p.getByRole("menuitem", { name: /^(share|partager)…$/i }).click();
+      await p.getByRole("combobox", { name: /^(teacher|enseignant)$/i }).fill("ri");
+    } },
+  // ... and the field once a colleague is picked: the name in it, the address on the label line.
+  { name: "pool-share-picked", role: "teacher", path: "/pools", fold: true, act: async (p) => {
+      await openRowMenu(p, /^(actions)$/i);
+      await p.getByRole("menuitem", { name: /^(share|partager)…$/i }).click();
+      await p.getByRole("combobox", { name: /^(teacher|enseignant)$/i }).fill("ri");
+      await p.getByRole("option", { name: /Ritchie/ }).click();
+    } },
 
   // The bell, and the same bell with more than nine unread ("9+").
   { name: "notifications", role: "teacher", path: "/", fold: true, act: (p) => p.getByRole("button", { name: /^notifications/i }).first().click() },

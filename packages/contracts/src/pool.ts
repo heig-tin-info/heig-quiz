@@ -99,11 +99,36 @@ export const PoolMembers = z.object({
 });
 export type PoolMembers = z.infer<typeof PoolMembers>;
 
-/** `POST /pools/:id/members`: the account is found by email and must be a teacher. */
-export const PoolMemberInvite = z.object({
-  email: z.string().trim().toLowerCase().email().max(200),
-  role: PoolRole.default("reader"),
+/** `GET /pools/:id/candidates?q=`: a few letters of a name or an address. */
+export const PoolCandidateQuery = z.object({ q: z.string().trim().max(100).default("") });
+export type PoolCandidateQuery = z.infer<typeof PoolCandidateQuery>;
+
+/** A teacher account that holds no seat on the pool yet: what the invite picker offers. */
+export const PoolCandidate = z.object({
+  userId: z.uuid(),
+  email: z.string(),
+  givenName: z.string(),
+  familyName: z.string(),
 });
+export type PoolCandidate = z.infer<typeof PoolCandidate>;
+
+export const PoolCandidates = z.array(PoolCandidate);
+export type PoolCandidates = z.infer<typeof PoolCandidates>;
+
+/**
+ * `POST /pools/:id/members`: the account picked among the candidates
+ * (`userId`), or named by an address the picker does not list — one of the
+ * two, never both. Either way it must be a teacher.
+ */
+export const PoolMemberInvite = z
+  .object({
+    userId: z.uuid().optional(),
+    email: z.string().trim().toLowerCase().email().max(200).optional(),
+    role: PoolRole.default("reader"),
+  })
+  .refine((b) => (b.userId === undefined) !== (b.email === undefined), {
+    message: "Either userId or email",
+  });
 export type PoolMemberInvite = z.infer<typeof PoolMemberInvite>;
 
 /** `PATCH /pools/:id/members/:userId`. */

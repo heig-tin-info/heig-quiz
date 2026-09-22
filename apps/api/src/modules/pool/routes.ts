@@ -25,6 +25,7 @@ import {
   DeprecateBody,
   DraftPut,
   PoolCreate,
+  PoolCandidateQuery,
   PoolMemberInvite,
   PoolMemberParam,
   PoolMemberPatch,
@@ -225,9 +226,25 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
   });
 
   /**
-   * Names a colleague in the pool, by e-mail. The address is matched over the
-   * whole identity set of an account (GH-11), and a `private` pool becomes
-   * `shared` on the first invitation.
+   * The colleagues an owner may still invite, matched on a few letters of a
+   * name or an address: the list behind the picker of the share sheet. Owner
+   * only, like the invitation it prepares — a reader of a pool has no
+   * business with the directory of the school.
+   */
+  app.get("/app/api/pools/:id/candidates", { preHandler: requireTeacher }, async (req, reply) => {
+    const pool = await accessiblePool(app, req, reply);
+    if (!pool) return reply;
+    if (!(await requirePoolRole(app, req, reply, pool, "owner"))) return reply;
+    const query = PoolCandidateQuery.safeParse(req.query);
+    if (!query.success) return invalid(reply, query.error);
+    return service.listCandidates(app.db, pool, query.data.q);
+  });
+
+  /**
+   * Names a colleague in the pool: an account picked among the candidates,
+   * or an address — matched over the whole identity set of an account
+   * (GH-11) for a teacher the picker does not list under that spelling. A
+   * `private` pool becomes `shared` on the first invitation.
    */
   app.post("/app/api/pools/:id/members", { preHandler: requireTeacher }, async (req, reply) => {
     const pool = await accessiblePool(app, req, reply);
@@ -235,11 +252,14 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     if (!(await requirePoolRole(app, req, reply, pool, "owner"))) return reply;
     const body = PoolMemberInvite.safeParse(req.body);
     if (!body.success) return invalid(reply, body.error);
-    const invitee = await service.findTeacherByEmail(app.db, body.data.email);
+    const invitee =
+      body.data.userId !== undefined
+        ? await service.findTeacherById(app.db, body.data.userId)
+        : await service.findTeacherByEmail(app.db, body.data.email!);
     if (!invitee) {
       return reply.code(404).send({
         error: "teacher_not_found",
-        message: "No teacher account holds this address",
+        message: "No teacher account matches",
       });
     }
     if (await service.isMemberOrOwner(app.db, pool, invitee.id)) {
