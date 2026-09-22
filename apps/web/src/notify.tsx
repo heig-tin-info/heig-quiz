@@ -23,9 +23,7 @@ const NOTICE_DEFAULTS: Record<NoticeKind, boolean> = {
 };
 
 /** Settings order: labels come from i18n (`notify.<kind>`). */
-export const NOTICE_KINDS = (Object.keys(NOTICE_DEFAULTS) as NoticeKind[]).map((kind) => ({
-  kind,
-}));
+export const NOTICE_KINDS = Object.keys(NOTICE_DEFAULTS) as NoticeKind[];
 
 const PREFS_KEY = "quiz-notify-prefs";
 

@@ -156,7 +156,7 @@ function NotificationsCard() {
         description={t("settings.notificationsBrowser")}
       />
       <Card className="divide-y divide-line px-5">
-        {NOTICE_KINDS.map(({ kind }) => (
+        {NOTICE_KINDS.map((kind) => (
           <SettingRow key={kind} title={t(`notify.${kind}` as Parameters<typeof t>[0])} className="py-2.5">
             <Switch
               checked={prefs[kind]}
