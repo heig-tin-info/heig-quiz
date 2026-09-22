@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GradingEntry } from "@quiz/contracts";
 
+import { DICTS } from "../i18n";
 import { makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
 import { GradingPanel } from "./GradingPanel";
 import { makeEntry, makeEvaluationDetail, makeGrading, makeQueue } from "./fixtures";
@@ -89,9 +90,20 @@ function setup(over: Record<string, ReturnType<typeof ok>> = {}) {
   return { ...rendered, ...stubs, queryClient };
 }
 
+/*
+ * A row's accessible name is `grading.entry.open` with the label substituted
+ * in. Taken from the dictionary rather than retyped here: an English string
+ * in a test is a second, silent translation of a key that N-I18N-01 says has
+ * exactly one, and rewording the entry would leave these queries matching
+ * nothing with no hint as to why.
+ */
+const OPEN_TEMPLATE = DICTS.en["grading.entry.open"]!;
+const OPEN_PREFIX = OPEN_TEMPLATE.slice(0, OPEN_TEMPLATE.indexOf("{label}"));
+
 /** The rows of the list, in the order they are shown. */
-const rows = () => screen.getAllByRole("button", { name: /Open the answer of/ });
-const labels = () => rows().map((r) => r.getAttribute("aria-label")?.replace("Open the answer of ", ""));
+const rows = () => screen.getAllByRole("button", { name: (name) => name.startsWith(OPEN_PREFIX) });
+const labels = () =>
+  rows().map((r) => (r.getAttribute("aria-label") ?? "").slice(OPEN_PREFIX.length));
 const openIndex = () => rows().findIndex((r) => r.getAttribute("aria-expanded") === "true");
 
 /**

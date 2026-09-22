@@ -126,8 +126,6 @@ describe("StudentGrid — the rows", () => {
     setup(view);
     expect(within(rowOf("Nadia Roux 0")).getByText("+33 % time")).toBeVisible();
     expect(within(rowOf("Nadia Roux 1")).getByText("staff")).toBeVisible();
-    // The staff row counts in no total under the grid.
-    expect(screen.getByText(/1 students/)).toBeVisible();
   });
 
   it("says nothing about presence for a student who has handed in", () => {
@@ -292,26 +290,52 @@ describe("StudentGrid — the sticky ends", () => {
     expect(head.className).not.toMatch(/(^|\s)sticky(\s|$)/);
   });
 
+  /*
+   * The actual width is `StudentGrid`'s own `ACTIONS` constant and is none of
+   * this test's business — what matters is that a row losing a button does
+   * not make the grid jump. So the two cells are compared to EACH OTHER
+   * rather than to a frozen `w-26`: retuning the column keeps this green,
+   * letting it collapse to its content does not.
+   */
   it("holds the actions column at one width whatever a row shows", () => {
     const view = viewIn("running", 2, 2);
     // One row keeps all three buttons, the other has none at all.
     view.rows[1] = { ...view.rows[1]!, attemptId: null, state: "not_started" };
     setup(view);
-    const widths = [rowOf("Nadia Roux 0"), rowOf("Nadia Roux 1")].map((tr) => {
-      const last = tr.querySelectorAll("td")[tr.querySelectorAll("td").length - 1]!;
-      return last.className.includes("w-26 min-w-26");
+    const [full, empty] = [rowOf("Nadia Roux 0"), rowOf("Nadia Roux 1")].map((tr) => {
+      const cells = tr.querySelectorAll("td");
+      return cells[cells.length - 1]!.className;
     });
-    expect(widths).toEqual([true, true]);
+    expect(full).toBe(empty);
+    // And it is a fixed width, not "whatever fits".
+    expect(full).toMatch(/\bmin-w-\S+/);
   });
 });
 
 describe("StudentGrid — the class row", () => {
-  it("counts the students, the staff excluded, and reads the completion as a percentage", () => {
+  it("counts the students and reads the completion as a percentage", () => {
     const view = viewIn("running", 3, 2);
     view.totals[0] = { ...view.totals[0]!, completion: 0.5 };
     setup(view);
-    expect(screen.getByText(/3 students/)).toBeVisible();
+    expect(screen.getByText(/\b3 students\b/)).toBeVisible();
     expect(screen.getByText("50 %")).toBeVisible();
+  });
+
+  /*
+   * DEFECT, pinned as it stands so the fix is a visible flip of this test.
+   *
+   * `live.grid.students` is "{n} students" with no singular form, so a class
+   * of one — or a class where every other row is staff, which is the case
+   * built here — reads "1 students". N-I18N-01 owns both dictionaries, and
+   * French has the same hole ("{n} étudiants"). When a `.one` variant is
+   * added, the expectation becomes "1 student" and the `today:` goes.
+   */
+  it("today: excludes the staff rows from the count, and says \"1 students\" for the one left", () => {
+    const view = viewIn("running", 3, 2);
+    view.rows[1] = { ...view.rows[1]!, staff: true };
+    view.rows[2] = { ...view.rows[2]!, staff: true };
+    setup(view);
+    expect(screen.getByText(/\b1 students\b/)).toBeVisible();
   });
 
   it("says the rate is a live one while the answers are being graded as they land", () => {

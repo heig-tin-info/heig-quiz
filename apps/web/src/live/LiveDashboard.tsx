@@ -407,7 +407,15 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   );
 
   return fullscreen ? (
-    <div className="fixed inset-0 z-30 overflow-auto bg-canvas px-6 py-6">{body}</div>
+    // `data-testid` and not a class query: the page-level full screen is a
+    // STATE the tests assert on, and pinning it to `fixed inset-0 z-30` would
+    // make restyling the overlay break the tests that guard its behaviour.
+    <div
+      data-testid="live-fullscreen-stage"
+      className="fixed inset-0 z-30 overflow-auto bg-canvas px-6 py-6"
+    >
+      {body}
+    </div>
   ) : (
     body
   );

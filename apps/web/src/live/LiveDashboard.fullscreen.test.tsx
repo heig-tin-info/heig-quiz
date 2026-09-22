@@ -64,8 +64,15 @@ function setup(state: "running" | "closed" = "running") {
   return { ...rendered, ...stubs };
 }
 
-/** The page-level overlay, the thing a teacher is actually looking at. */
-const overlay = () => document.querySelector("div.fixed.inset-0.z-30");
+/**
+ * The page-level overlay, the thing a teacher is actually looking at.
+ *
+ * By its `data-testid` and not by `div.fixed.inset-0.z-30`: nine of the ten
+ * tests below turn on this query, and the overlay's utilities are styling
+ * the refactoring is free to change. The marker is the one production line
+ * this test-only branch touches.
+ */
+const overlay = () => screen.queryByTestId("live-fullscreen-stage");
 const enterButton = () => screen.getByRole("button", { name: "Full screen" });
 const leaveButton = () => screen.getByRole("button", { name: "Leave full screen" });
 

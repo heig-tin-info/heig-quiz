@@ -4,7 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { PoolSummary, QuestionPage } from "@quiz/contracts";
 
-import { makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
+import { PAGE_SIZE } from "../pool/filters";
+import {
+  makeQueryClient,
+  mockFetch,
+  ok,
+  type RecordedCall,
+  renderWithProviders,
+} from "../test/render";
 import { AddQuestionsSheet } from "./AddQuestionsSheet";
 
 /*
@@ -78,14 +85,56 @@ const PAGE: QuestionPage = {
 
 const EMPTY: QuestionPage = { items: [], nextCursor: null };
 
-const QUESTIONS = (search = "") => `GET /app/api/pools/p1/questions${search}`;
+/**
+ * One stubbed questions endpoint, registered under BOTH spellings of the
+ * same request: the one the sheet builds by hand today, and the one with the
+ * `&limit=25` that `pool/filters.ts` `questionQuery` always appends last.
+ * FF-11 routes this sheet through that builder, and a route table that only
+ * knew today's spelling would answer 404 the day it does — a red suite that
+ * says nothing about the behaviour under test.
+ */
+function questions(search: string, reply: ReturnType<typeof ok>) {
+  const paged = search === "" ? `?limit=${PAGE_SIZE}` : `${search}&limit=${PAGE_SIZE}`;
+  return {
+    [`GET /app/api/pools/p1/questions${search}`]: reply,
+    [`GET /app/api/pools/p1/questions${paged}`]: reply,
+  };
+}
 
 function routes(over: Record<string, ReturnType<typeof ok>> = {}) {
   return {
     "GET /app/api/pools": ok(POOLS),
-    [QUESTIONS()]: ok(PAGE),
+    ...questions("", ok(PAGE)),
     ...over,
   };
+}
+
+/**
+ * The filter parameters of the last questions request, as ordered pairs.
+ *
+ * Parsed rather than compared as a string, and `limit` is dropped: paging is
+ * not filtering, and it is exactly the parameter FF-11 will start sending.
+ * What the tests below pin is WHICH filters travel and IN WHAT ORDER — the
+ * order matters because the query string is also the TanStack Query key, so
+ * two spellings of one filter state are two cache entries.
+ */
+function lastQuestionQuery(calls: RecordedCall[]): [string, string][] {
+  const call = [...calls].reverse().find((c) => c.url.includes("/questions"));
+  if (call === undefined) throw new Error("no questions request was made");
+  const params = new URLSearchParams(call.url.split("?")[1] ?? "");
+  params.delete("limit");
+  return [...params.entries()];
+}
+
+/** Every questions request so far, each as its parsed parameters. */
+function questionQueries(calls: RecordedCall[]): [string, string][][] {
+  return calls
+    .filter((c) => c.url.includes("/questions"))
+    .map((c) => {
+      const params = new URLSearchParams(c.url.split("?")[1] ?? "");
+      params.delete("limit");
+      return [...params.entries()];
+    });
 }
 
 function setup(
@@ -131,6 +180,7 @@ describe("AddQuestionsSheet — the pool", () => {
     const user = userEvent.setup();
     const { calls } = setup({
       "GET /app/api/pools/p2/questions": ok(EMPTY),
+      [`GET /app/api/pools/p2/questions?limit=${PAGE_SIZE}`]: ok(EMPTY),
     });
     await screen.findByText("ptr-arith-01");
 
@@ -142,7 +192,8 @@ describe("AddQuestionsSheet — the pool", () => {
     // The selection belonged to the other pool; the footer is back to its
     // disabled, unnumbered state.
     expect(screen.queryByText("1 selected")).toBeNull();
-    expect(calls.some((c) => c.url === "/app/api/pools/p2/questions")).toBe(true);
+    // The POOL is in the path, so this one is matched on the path alone.
+    expect(calls.some((c) => c.url.startsWith("/app/api/pools/p2/questions"))).toBe(true);
   });
 
   it("says so, once and without an error, when the teacher has no pool at all", async () => {
@@ -152,26 +203,22 @@ describe("AddQuestionsSheet — the pool", () => {
 });
 
 describe("AddQuestionsSheet — the filters", () => {
-  it("sends the type as `?type=`", async () => {
+  it("sends the type as a `type` parameter", async () => {
     const user = userEvent.setup();
-    const { calls } = setup({ [QUESTIONS("?type=code")]: ok(EMPTY) });
+    const { calls } = setup(questions("?type=code", ok(EMPTY)));
     await screen.findByText("ptr-arith-01");
 
     await user.selectOptions(screen.getByLabelText("Type"), "code");
-    await waitFor(() =>
-      expect(calls.some((c) => c.url === "/app/api/pools/p1/questions?type=code")).toBe(true),
-    );
+    await waitFor(() => expect(lastQuestionQuery(calls)).toEqual([["type", "code"]]));
   });
 
-  it("sends the difficulty as `?difficulty=`", async () => {
+  it("sends the difficulty as a `difficulty` parameter", async () => {
     const user = userEvent.setup();
-    const { calls } = setup({ [QUESTIONS("?difficulty=3")]: ok(EMPTY) });
+    const { calls } = setup(questions("?difficulty=3", ok(EMPTY)));
     await screen.findByText("ptr-arith-01");
 
     await user.selectOptions(difficultySelect(), "3");
-    await waitFor(() =>
-      expect(calls.some((c) => c.url === "/app/api/pools/p1/questions?difficulty=3")).toBe(true),
-    );
+    await waitFor(() => expect(lastQuestionQuery(calls)).toEqual([["difficulty", "3"]]));
   });
 
   /*
@@ -184,9 +231,9 @@ describe("AddQuestionsSheet — the filters", () => {
   it("combines the search, the type and the difficulty in that order", async () => {
     const user = userEvent.setup();
     const { calls } = setup({
-      [QUESTIONS("?q=ptr")]: ok(PAGE),
-      [QUESTIONS("?q=ptr&type=code")]: ok(PAGE),
-      [QUESTIONS("?q=ptr&type=code&difficulty=3")]: ok(PAGE),
+      ...questions("?q=ptr", ok(PAGE)),
+      ...questions("?q=ptr&type=code", ok(PAGE)),
+      ...questions("?q=ptr&type=code&difficulty=3", ok(PAGE)),
     });
     await screen.findByText("ptr-arith-01");
 
@@ -195,25 +242,28 @@ describe("AddQuestionsSheet — the filters", () => {
     await user.selectOptions(difficultySelect(), "3");
 
     await waitFor(() =>
-      expect(
-        calls.some((c) => c.url === "/app/api/pools/p1/questions?q=ptr&type=code&difficulty=3"),
-      ).toBe(true),
+      expect(lastQuestionQuery(calls)).toEqual([
+        ["q", "ptr"],
+        ["type", "code"],
+        ["difficulty", "3"],
+      ]),
     );
   });
 
-  it("asks for no filter at all when both selects are back on their any option", async () => {
+  it("asks for no filter at all when the selects are back on their any option", async () => {
     const user = userEvent.setup();
-    const { calls } = setup({ [QUESTIONS("?type=mcq")]: ok(PAGE) });
+    const { calls } = setup(questions("?type=mcq", ok(PAGE)));
     await screen.findByText("ptr-arith-01");
 
     await user.selectOptions(screen.getByLabelText("Type"), "mcq");
-    await waitFor(() =>
-      expect(calls.some((c) => c.url === "/app/api/pools/p1/questions?type=mcq")).toBe(true),
-    );
+    await waitFor(() => expect(lastQuestionQuery(calls)).toEqual([["type", "mcq"]]));
+
     await user.selectOptions(screen.getByLabelText("Type"), "");
-    // Back to the bare path, not `?type=`.
     await waitFor(() => expect(screen.getByLabelText("Type")).toHaveValue(""));
-    expect(calls.some((c) => c.url.endsWith("questions?type="))).toBe(false);
+    // No request ever carried an empty `type`: the "any" option removes the
+    // parameter rather than sending it blank, which is also what keeps the
+    // unfiltered list on ONE cache entry.
+    expect(questionQueries(calls).flat().filter(([k, v]) => k === "type" && v === "")).toEqual([]);
   });
 
   /*
