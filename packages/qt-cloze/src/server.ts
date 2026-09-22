@@ -4,7 +4,7 @@
  * No React in this import graph: the API and the grading worker load it.
  */
 import { ConfigMigrationError, type QuestionTypeServer } from "@quiz/core/server";
-import { clozeStudentTemplate, describeBlank, parseCloze } from "@quiz/domain";
+import { clozeStudentTemplate, describeBlank, parseCloze } from "@quiz/domain/cloze";
 import { fromCanonical, toCanonical } from "./canonical.js";
 import { gradeClozeAnswer } from "./grade.js";
 import {

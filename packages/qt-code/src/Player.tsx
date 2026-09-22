@@ -16,7 +16,7 @@ import { useId, useState } from "react";
 
 import type { MarkdownRenderer, PlayerProps } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
-import { compareOutput } from "@quiz/domain";
+import { compareOutput } from "@quiz/domain/compareOutput";
 
 import { CodeArea } from "./MonacoHost.js";
 import { initialRegions, stripMarkerLines, trimTrailingNewline } from "./segments.js";

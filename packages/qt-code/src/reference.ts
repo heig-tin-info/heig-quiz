@@ -21,7 +21,7 @@
  *   - a count that does not match the template returns `null`, never a
  *     silently misplaced piece.
  */
-import { splitTemplate } from "@quiz/domain";
+import { splitTemplate } from "@quiz/domain/lockedTemplate";
 
 import type { CodeConfig } from "./schema.js";
 import { editableSegments, isNextMarkerLine, trimTrailingNewline } from "./segments.js";

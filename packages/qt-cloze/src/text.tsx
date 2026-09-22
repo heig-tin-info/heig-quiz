@@ -12,7 +12,7 @@
  * italic. It is deliberately small; `apps/web` will pass its `MarkdownView`.
  */
 import type { ReactNode } from "react";
-import { CLOZE_SENTINEL_PATTERN } from "@quiz/domain";
+import { CLOZE_SENTINEL_PATTERN } from "@quiz/domain/cloze";
 import { cx } from "./ui.js";
 
 interface ClozeTextProps {

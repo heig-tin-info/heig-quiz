@@ -1,4 +1,4 @@
-import { parseCloze } from "@quiz/domain";
+import { parseCloze } from "@quiz/domain/cloze";
 import { describe, expect, it } from "vitest";
 import {
   CLOZE_CONFIG_VERSION,

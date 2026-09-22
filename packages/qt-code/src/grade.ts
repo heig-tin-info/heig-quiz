@@ -14,13 +14,9 @@ import { createHash } from "node:crypto";
 
 import type { FinalizeContext, GradeContext, GradeResult, GradedResult } from "@quiz/core/server";
 import { RunnerRequest, type RunnerOutcome } from "@quiz/core/server";
-import {
-  assembleSource,
-  compareOutput,
-  mainFileName,
-  round2,
-  TemplateRegionMismatch,
-} from "@quiz/domain";
+import { compareOutput } from "@quiz/domain/compareOutput";
+import { assembleSource, mainFileName, TemplateRegionMismatch } from "@quiz/domain/lockedTemplate";
+import { round2 } from "@quiz/domain/round";
 
 import {
   caseTimeMs,

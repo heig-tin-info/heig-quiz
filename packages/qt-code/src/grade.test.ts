@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { isGraded, isPendingRunner, type GradeContext, type RunnerOutcome } from "@quiz/core/server";
-import { regionCount, splitTemplate } from "@quiz/domain";
+import { regionCount, splitTemplate } from "@quiz/domain/lockedTemplate";
 
 import {
   buildInteractiveRequest,

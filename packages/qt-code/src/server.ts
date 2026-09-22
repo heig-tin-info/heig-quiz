@@ -6,7 +6,7 @@
  */
 import type { FinalizeContext, GradeContext, QuestionTypeServer } from "@quiz/core/server";
 import { ConfigMigrationError, type RunnerOutcome } from "@quiz/core/server";
-import { splitTemplate } from "@quiz/domain";
+import { splitTemplate } from "@quiz/domain/lockedTemplate";
 
 import { fromCanonical, toCanonical } from "./canonical.js";
 import { finalizeRunnerCode, gradeCode, studentDetails } from "./grade.js";

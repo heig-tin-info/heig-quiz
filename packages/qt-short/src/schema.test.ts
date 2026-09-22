@@ -1,4 +1,4 @@
-import { hasLlmMatcher } from "@quiz/domain";
+import { hasLlmMatcher } from "@quiz/domain/short";
 import { describe, expect, it } from "vitest";
 import {
   emptyShortDraft,

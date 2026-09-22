@@ -11,7 +11,7 @@ import { useId, useState } from "react";
 
 import type { EditorProps, MarkdownRenderer } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
-import { compareOutput } from "@quiz/domain";
+import { compareOutput } from "@quiz/domain/compareOutput";
 
 import { CodeArea } from "./MonacoHost.js";
 import { referenceRegions } from "./reference.js";

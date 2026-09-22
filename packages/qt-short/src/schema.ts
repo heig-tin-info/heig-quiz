@@ -14,7 +14,7 @@
  * the next, and a teacher who read "Case sensitive" three times on three rows
  * was reading the same decision three times.
  */
-import { ALLOWED_REGEX_FLAGS, isValidPattern, MAX_PATTERN_LENGTH } from "@quiz/domain";
+import { ALLOWED_REGEX_FLAGS, isValidPattern, MAX_PATTERN_LENGTH } from "@quiz/domain/short";
 import { z } from "zod";
 
 export const SHORT_CONFIG_VERSION = 2;

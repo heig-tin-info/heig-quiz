@@ -16,7 +16,7 @@ import type {
   StringOverrides,
 } from "@quiz/core/client";
 import { resolveStrings } from "@quiz/core/client";
-import { describeBlank, parseCloze } from "@quiz/domain";
+import { describeBlank, parseCloze } from "@quiz/domain/cloze";
 import { type ClozeConfig } from "./schema.js";
 import { clozeEditorStrings, type ClozeEditorStringKey } from "./strings.js";
 import {
