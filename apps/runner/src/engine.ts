@@ -21,6 +21,19 @@ import { spawn } from "node:child_process";
  * work directory is a tmpfs that dies with the container.
  */
 
+/**
+ * The connection flags of every Podman command, invariant 13 in one place.
+ *
+ * `null` is the explicit local escape hatch (`PODMAN_REMOTE=false`) and is the
+ * ONLY way to get an empty list: a socket always produces `--remote --url`,
+ * because without them the binary silently drives another engine than the one
+ * production runs. Everything that spawns `podman` in this package goes
+ * through here — the service, the startup probe and the integration suites.
+ */
+export function remoteArgs(socket: string | null): string[] {
+  return socket === null ? [] : ["--remote", "--url", `unix://${socket}`];
+}
+
 /** The closed list of environment variables a container gets (invariant 10). */
 export const CONTAINER_ENV: Readonly<Record<string, string>> = Object.freeze({
   // Toolchains write caches next to the sources rather than into a $HOME that
@@ -152,10 +165,7 @@ function collector(maxBytes: number): {
 }
 
 export function createEngine(options: EngineOptions): Engine {
-  const base =
-    options.socket === null
-      ? []
-      : ["--remote", "--url", `unix://${options.socket}`];
+  const base = remoteArgs(options.socket);
 
   function podman(
     args: string[],

@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-import type { EngineCapabilities } from "./engine.js";
+import { remoteArgs, type EngineCapabilities } from "./engine.js";
 import type { RunnerConfig } from "./config.js";
 
 const execFileAsync = promisify(execFile);
@@ -42,8 +42,7 @@ async function probeImage(run: Run, config: RunnerConfig): Promise<string | null
 }
 
 export async function probeEngine(config: RunnerConfig): Promise<ProbeResult> {
-  const base =
-    config.PODMAN_SOCKET === null ? [] : ["--remote", "--url", `unix://${config.PODMAN_SOCKET}`];
+  const base = remoteArgs(config.PODMAN_SOCKET);
   const notes: string[] = [];
 
   const run = async (args: string[], timeout = 30_000): Promise<string> => {
