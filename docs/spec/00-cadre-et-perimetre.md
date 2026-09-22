@@ -76,7 +76,7 @@ MoSCoW priority: M = must, S = should, C = could.
 
 | Area | Content | Prio |
 |---|---|---|
-| Questions | CodeImage, drawing, pick-and-place of electronic components | S |
+| Questions | CodeImage, drawing. The schematic type (`circuit`) was brought forward and now ships with a simulation grading, ADR-019 | S |
 | Code | TAP unit tests, additional files, locked regions, further languages | S |
 | Plugins | External question packages, loaded at build time | C |
 | Generation | "Generate 10 min quiz" by tags and difficulty | C |
@@ -85,7 +85,11 @@ MoSCoW priority: M = must, S = should, C = could.
 ## 0.6 Out of scope
 
 - Heavy proctoring: webcam, device lockdown, Safe Exam Browser.
-- Grading of electronic schematics by simulation or netlist comparison. Pick-and-place is graded by LLM or manually.
+- Comparison of electronic schematics by topology: netlist isomorphism, series/parallel
+  canonicalisation, "the same circuit drawn differently". The `circuit` question type
+  grades a schematic by SIMULATING it and comparing the output waveform with the
+  reference's (ADR-019), which is in scope; what it never does is decide whether two
+  netlists are the same graph. Pick-and-place is graded by LLM or manually.
 - Management of study plans, credits, absences. The platform exports grades, it does not administer them.
 - Institutional multi-tenancy: a single admin, a single instance.
 - Code editor with a full language server. Monaco with highlighting and shortcuts is enough.

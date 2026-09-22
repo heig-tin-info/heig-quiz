@@ -231,11 +231,58 @@ Minimalist canvas: rectangle, ellipse, line, arrow, freehand stroke, text. Selec
 
 **Answer**: JSON scene and PNG rendering generated client-side at every autosave. **Scoring**: LLM with vision on the PNG, rubric of criteria like `rich`. Otherwise manual.
 
-## 4.11 Pick-place `circuit`, phase 3
+## 4.11 Schematic `circuit`
 
-Component palette on the left: resistor, capacitor, diode, op-amp, sources, ground. Placement on a grid, rotation, wires with jumpers, value labels. A library of normalised SVG symbols.
+The student wires a **two-port box**: a fixed canvas with four ports on its border, `in+` and `in-` on the left, `out+` and `out-` on the right. The teacher decides what drives the input, what loads the output, and how the answer is graded. Components are dropped on a grid, rotated and mirrored, wired orthogonally; junctions are read from the wire geometry, so the schematic is the only thing stored.
 
-**Answer**: list of components with position and value, list of wires, PNG rendering. The core computes no netlist. **Scoring**: LLM with vision and a rubric of criteria, or manual. Netlist comparison is out of scope, see [00-cadre-et-perimetre.md](00-cadre-et-perimetre.md).
+**Configuration**:
+
+```yaml
+config:
+  prompt: markdown
+  palette:
+    kinds: [R, C, L, D, DZ, NPN, OPAMP, GND]   # from the 16 of the library
+    maxComponents: 10        # terminals (GND, VCC, VEE) do not count
+  supplies: { vcc: 15, vee: -15 }    # null hides the rail's symbol
+  commonGround: true         # in- and out- ARE node 0; off, two free nets to wire
+  stimuli:                   # at most four, like the cases of a `code` question
+    - name: "1 kHz"
+      source: { kind: sine, amplitude: 1, frequencyHz: 1000, offset: 0 }
+      sourceOhms: 50         # series resistance of the source; 0 = ideal
+      load: { kind: resistor, ohms: 10000 }    # or { kind: open }, { kind: capacitor, farads: 1e-9 }
+      analysis: { stopMs: 5, skipMs: 1, points: 500 }
+      points: 1
+      visible: true
+    - name: "10 kHz"           # same shape; visible: false = run at grading only
+      source: { kind: sine, amplitude: 1, frequencyHz: 10000 }
+      load: { kind: open }
+      points: 1
+      visible: false
+  reference: { components: [...], wires: [...] }     # the teacher's own circuit: the key
+  grading:
+    mode: simulation         # manual (default), simulation, llm (phase 2)
+    tolerance: 0.05          # simulation: the per-stimulus pass threshold
+    rubric: "..."            # manual and llm: the criteria
+  showExpected: false        # overlay the reference's curve on the visible stimuli
+  simulationsPerMinute: 10   # N-SEC-07, the budget of the Simulate button
+```
+
+- **The palette** lists the kinds the student may place, out of the sixteen of the library (R, C, L, four diodes, four bipolars and MOSFETs, an op-amp, and the `GND`, `VCC`, `VEE` terminals). `maxComponents` caps what is placed: a terminal names a net, it is not a part, so it does not count.
+- **Supplies**: `vcc` and `vee` publish a rail at the voltage the teacher wrote; `null` removes the symbol from the palette. The op-amp is ideal and clamped to those rails.
+- **`commonGround`** (default on) makes `in-` and `out-` the reference node. Off, they are two independent nets the student has to wire, and a `GND` symbol is what names the reference.
+- **A stimulus is a test case**: a name, a source (`dc`, `sine`, `pulse`, `step`), a source resistance, a load (`open`, `resistor`, `capacitor`), a transient window (`stopMs`, `skipMs` to drop the settling, `points` samples kept), points, and `visible`. A hidden stimulus is only run at grading, exactly like a hidden case of a `code` question (docs/06 Q8 applies to its name).
+- **The reference** is a schematic, not a netlist and not a waveform: the teacher draws the circuit they expect. A `simulation` grading without a reference, or without a stimulus, is refused at publication (`circuit.simulation_needs_reference`, `circuit.simulation_needs_stimulus`).
+- **Three grading modes**:
+    - `manual` (default): the teacher reads the schematic — and, when there are stimuli, the simulated curves — and grades by hand;
+    - `simulation`: both circuits are simulated under every stimulus and the OUTPUT WAVEFORMS are compared (below);
+    - `llm`: phase 2, the netlist and the rubric go to the LLM service.
+- **The grading rule of `simulation`** (ADR-019): the student's schematic and the reference are each turned into a SPICE netlist, run through ngspice for each stimulus, and `v(out)` is compared sample by sample. A stimulus passes when the normalised RMS distance between the two output voltages is at or under `tolerance` times the reference's peak-to-peak swing; its points are then earned whole, and the total is the sum of the stimuli that passed. **What is compared is behaviour, never topology**: a circuit drawn differently, with merged resistors or another ordering, that produces the same output is a correct answer.
+- **When the REFERENCE fails to simulate**, or the runner is unreachable, the grading is stored `proposed` with the reason, never `validated`: an unrunnable question is the teacher's problem, not a zero for the student. A student circuit that fails to simulate is a failed stimulus with its machine reason (`floating_pin`, `spice_failed`), which is information, not an incident.
+- **`showExpected`** overlays the reference's output on the student's plot, for the visible stimuli only. It needs a reference, and it is what decides whether the reference's curve may travel in a grading's details at all.
+- **Answer**: `{ schematic }` — the components with their position, orientation, designator and value, and the wires with their routed polyline. **No netlist is ever stored, and none ever comes from the browser**: it is rebuilt server-side from the stored schematic and the stimulus, every time (invariant 14). Values are parsed case-sensitively, because SPICE reads `1M` as milli and `1Meg` as mega.
+- **Player button**: "Simulate" runs the student's own circuit under the VISIBLE stimuli and plots `v(in)`, `v(out)` and the load current, with the reference's curve beside them when `showExpected` is on. It goes through `POST /app/api/attempts/:id/simulate`, is budgeted by `simulationsPerMinute` per attempt, and is refused once the attempt is closed like any other write. The button is absent when the question has no visible stimulus.
+- **What `toStudent` strips** (invariant 4): the reference, the hidden stimuli (only their count and their total points remain), the tolerance, the rubric and the grading mode. What stays is what the student needs to draw and to simulate: the prompt, the palette, the supplies, `commonGround`, the visible stimuli and the budget.
+- **Points**: the sum of the stimuli's points; `defaultPoints` proposes it.
 
 ## 4.12 Poll `poll`, phase 2
 
