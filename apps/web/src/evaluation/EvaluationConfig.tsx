@@ -5,16 +5,12 @@ import {
   BarChart3,
   ClipboardCheck,
   Copy,
-  Eye,
-  GraduationCap,
   MonitorPlay,
-  Pencil,
   RotateCcw,
   Trash2,
 } from "lucide-react";
-import { useState } from "react";
 
-import type { ClassroomDetail, EvaluationDetail } from "@quiz/contracts";
+import { EvaluationPatch, type ClassroomDetail, type EvaluationDetail } from "@quiz/contracts";
 
 import { api, apiErrorMessage } from "../api";
 import { useConfirm } from "../confirm";
@@ -23,15 +19,13 @@ import { useT } from "../i18n";
 import { useToast } from "../notify";
 import type { Route } from "../router";
 import { useSearchParam } from "../router";
-import { enterStudentView } from "../studentView";
 import {
   Alert,
   Badge,
   Button,
   cx,
-  Field,
+  InlineTitle,
   Menu,
-  Modal,
   PageError,
   PageHeader,
   Skeleton,
@@ -41,7 +35,6 @@ import {
 import { evaluationKey, evaluationsKey, isGraded, stateLabel, stateTone } from "./common";
 import { ItemsStep } from "./ItemsStep";
 import { LaunchStep } from "./LaunchStep";
-import { PreviewSheet } from "./PreviewSheet";
 import { TimingStep } from "./TimingStep";
 import { useEvaluationPatch } from "./usePatch";
 
@@ -54,10 +47,18 @@ import { useEvaluationPatch } from "./usePatch";
  *
  * The one primary action belongs to the STEP, never to the page HEADER: "Add
  * questions" on the first, a preset on the second, "Open the waiting room" on
- * the third. The header therefore holds no primary at all, only the preview
- * and the overflow menu. The foot of the frame carries the way FORWARD, which
- * names the step it leads to; on Launch it carries only the way back, because
- * the primary there is the launch itself.
+ * the third. The header therefore holds no primary at all — a breadcrumb, the
+ * title (which renames itself in place), the state, the help and the overflow
+ * menu. The foot of the frame carries the way FORWARD, which names the step it
+ * leads to; on Launch it carries only the way back, because the primary there
+ * is the launch itself.
+ *
+ * The header used to carry two more buttons and both are gone. "Preview as
+ * student" opened a read-only sheet of the whole evaluation; "View as student"
+ * walked the real thing. The second is now the `Teacher | Student` switch of
+ * the application frame (ADR-018's addendum), reachable from every page
+ * instead of this one, and with it gone the read-only sheet was the lesser
+ * half of a pair that no longer exists.
  */
 
 const STEPS = ["questions", "timing", "launch"] as const;
@@ -67,47 +68,6 @@ function isStep(value: string): value is Step {
   return (STEPS as readonly string[]).includes(value);
 }
 
-function RenameModal({
-  detail,
-  onClose,
-}: {
-  detail: EvaluationDetail;
-  onClose: () => void;
-}) {
-  const t = useT();
-  const patch = useEvaluationPatch(detail.evaluation.id);
-  const [title, setTitle] = useState(detail.evaluation.title);
-  return (
-    <Modal
-      title={t("eval.rename")}
-      onClose={onClose}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button
-            loading={patch.isPending}
-            disabled={title.trim() === ""}
-            onClick={() => patch.mutate({ title: title.trim() }, { onSuccess: onClose })}
-          >
-            {t("common.save")}
-          </Button>
-        </>
-      }
-    >
-      <Field
-        label={t("eval.titleLabel")}
-        required
-        fullWidth
-        autoFocus
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-      />
-    </Modal>
-  );
-}
-
 export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: Route) => void }) {
   const t = useT();
   const qc = useQueryClient();
@@ -115,8 +75,6 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
   const toast = useToast();
   const [rawStep, setStep] = useSearchParam("step", "questions");
   const step: Step = isStep(rawStep) ? rawStep : "questions";
-  const [previewing, setPreviewing] = useState(false);
-  const [renaming, setRenaming] = useState(false);
 
   const detail = useQuery<EvaluationDetail>({
     queryKey: evaluationKey(id),
@@ -140,16 +98,6 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
       if (classroomId) await qc.invalidateQueries({ queryKey: evaluationsKey(classroomId) });
       navigate({ view: "evaluation", id: row.id });
     },
-  });
-  /*
-   * ADR-018, "View as student": the REAL walk, not the read-only preview
-   * beside it. A teacher with no seat is offered one (the same route the
-   * classroom page's "Join as student" calls), and then the app switches to
-   * the student UI and goes to `/take/:id` — the student's own route, the
-   * student's own components. Nothing of the flow is re-implemented here.
-   */
-  const join = useMutation({
-    mutationFn: () => api(`/app/api/classrooms/${classroomId}/self-enroll`, { method: "POST" }),
   });
   /** The teacher throws away their own staff test so they can walk it again. */
   const resetAttempt = useMutation({
@@ -203,26 +151,21 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
   const links = gradingLinks(id);
   const self = data.self;
 
-  const viewAsStudent = async () => {
-    if (!self.seat) {
-      const ok = await confirm({
-        title: t("eval.viewAsStudent.title"),
-        message: t("eval.viewAsStudent.message"),
-        confirmLabel: t("eval.viewAsStudent.confirm"),
-        cancelLabel: t("common.cancel"),
-      });
-      if (!ok) return;
-      try {
-        await join.mutateAsync();
-      } catch (error) {
-        toast(apiErrorMessage(error, t("eval.viewAsStudent.failed")), "error");
-        return;
-      }
-    }
-    // The way back, remembered before leaving: the banner of the student
-    // view returns to THIS page and not to the teacher home (ADR-018).
-    enterStudentView({ view: "evaluation", id });
-    navigate({ view: "attempt", evaluationId: id });
+  /*
+   * The title, renamed from the heading itself. The same `PATCH` every other
+   * control of the screen sends, and the same schema the route validates —
+   * a title trimmed to nothing, or longer than the column, never leaves the
+   * browser. `title` is one of the few fields the server still accepts once a
+   * student has started (SAFE_FIELDS), so the affordance stays on a frozen
+   * evaluation: what is frozen there is the structure, not its name.
+   */
+  const rename = (title: string) => {
+    const parsed = EvaluationPatch.safeParse({ title });
+    if (!parsed.success) return;
+    patch.mutate(parsed.data, {
+      onSuccess: () => toast(t("sync.saved"), "success"),
+      onError: (error) => toast(apiErrorMessage(error, t("eval.saveFailed")), "error"),
+    });
   };
 
   return (
@@ -243,7 +186,12 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
         }
         title={
           <span className="flex flex-wrap items-baseline gap-3">
-            {evaluation.title}
+            <InlineTitle
+              value={evaluation.title}
+              onSave={rename}
+              editLabel={t("eval.rename.of", { title: evaluation.title })}
+              inputLabel={t("eval.titleLabel")}
+            />
             <Badge tone={stateTone(evaluation.state)}>{stateLabel(evaluation.state, t)}</Badge>
           </span>
         }
@@ -257,19 +205,6 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
                 <ClipboardCheck /> {t("eval.grading")}
               </Button>
             ) : null}
-            <Button variant="secondary" onClick={() => setPreviewing(true)}>
-              <Eye /> {t("eval.preview")}
-            </Button>
-            {/* Secondary, beside the preview and never instead of it: the
-                preview answers "are these the right questions?", this one
-                answers "does the quiz WORK?" (ADR-018). */}
-            <Button
-              variant="secondary"
-              loading={join.isPending}
-              onClick={() => void viewAsStudent()}
-            >
-              <GraduationCap /> {t("eval.viewAsStudent")}
-            </Button>
             <Menu
               label={t("common.actions")}
               items={[
@@ -287,7 +222,6 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
                   icon: MonitorPlay,
                   onSelect: () => navigate({ view: "live", id }),
                 },
-                { label: t("eval.rename"), icon: Pencil, onSelect: () => setRenaming(true) },
                 {
                   label: t("eval.duplicate"),
                   icon: Copy,
@@ -403,10 +337,6 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
         )}
       </div>
 
-      {previewing ? (
-        <PreviewSheet evaluationId={id} onClose={() => setPreviewing(false)} />
-      ) : null}
-      {renaming ? <RenameModal detail={data} onClose={() => setRenaming(false)} /> : null}
     </div>
   );
 }

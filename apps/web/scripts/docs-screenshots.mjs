@@ -339,12 +339,12 @@ const scenes = [
     state: "As seeded: the draft “Test 1 — pointeurs”.",
   },
   {
-    name: "eval-preview",
-    caption: "The student preview of an evaluation, from the launch step.",
+    name: "eval-rename",
+    caption: "The title of an evaluation, renamed from the heading itself.",
     persona: "teacher",
-    path: (w) => `/evaluations/${w.evals.draft.id}?step=launch`,
-    act: (p) => p.getByRole("button", { name: /^preview as student$/i }).first().click(),
-    action: "Clicked “Preview as student”.",
+    path: (w) => `/evaluations/${w.evals.draft.id}?step=questions`,
+    act: (p) => p.getByRole("button", { name: /^rename evaluation/i }).first().click(),
+    action: "Clicked the title, which turns the heading into a field.",
     state: "As seeded: the draft “Test 1 — pointeurs”.",
   },
   {

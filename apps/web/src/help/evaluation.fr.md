@@ -44,27 +44,31 @@ supplémentaire de la liste s'ajoute à la durée.
 
 Un récapitulatif, puis une seule action : ouvrir la salle d'attente, ou
 planifier. Une fois la classe entrée, la pause, la prolongation et la
-clôture se font depuis le tableau de bord. **Aperçu étudiant** montre toute
-l'évaluation telle que l'étudiant la reçoit.
+clôture se font depuis le tableau de bord.
+
+## La renommer
+
+Le titre dans l'en-tête est le contrôle : cliquez dessus — ou placez-y le
+focus et appuyez sur Entrée ou F2 — et il devient un champ, à la même
+taille. Entrée, ou un clic à côté, enregistre ; Échap annule ; un titre vide
+est refusé et l'ancien revient. Le nom fait partie des rares choses qui
+changent encore une fois qu'un étudiant a commencé.
 
 ## La tester pour de vrai
 
-**Aperçu étudiant** répond à « est-ce que ce sont les bonnes questions ? ».
-**Voir en tant qu'étudiant** répond à « est-ce que ce quiz fonctionne ? » :
-c'est la vraie chose — la salle d'attente, le lecteur, le décompte, le rendu
-et le retour, exactement comme la classe les reçoit.
+Parcourir le quiz, c'est la vraie chose — la salle d'attente, le lecteur, le
+décompte, le rendu et le retour, exactement comme la classe les reçoit.
 
-Le premier clic vous propose une place dans la classe (la même que
-**S'inscrire comme étudiant** depuis la page de la classe) puis bascule
-toute l'application en vue étudiant. Le bandeau en haut vous ramène à cette
-page. Une évaluation encore en préparation n'a pas de salle d'attente
-ouverte : démarrez-la, ou ouvrez-la, avant de la parcourir.
-
-Une fois la place obtenue, le sélecteur **Enseignant / Étudiant** en bas de
-la barre latérale fait la même chose depuis n'importe quelle page — y compris
-le tableau de bord, où vous êtes une fois le quiz lancé. Il ne vaut que pour
+Le sélecteur **Enseignant / Étudiant** en bas de la barre latérale vous y
+emmène, depuis cette page comme depuis n'importe quelle autre — y compris le
+tableau de bord, où vous êtes une fois le quiz lancé. Il ne vaut que pour
 cet onglet : vous pouvez garder le tableau de bord dans l'un et passer le
 quiz dans l'autre.
+
+Il demande une place dans la classe : **S'inscrire comme étudiant**, sur la
+page de la classe, vous en donne une. Une évaluation encore en préparation
+n'a pas de salle d'attente ouverte : démarrez-la, ou ouvrez-la, avant de la
+parcourir.
 
 Votre tentative de test est une vraie tentative : elle apparaît sur le
 tableau de bord, dans la correction et dans les résultats, chaque fois avec

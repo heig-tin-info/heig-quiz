@@ -1620,6 +1620,137 @@ export function PageHeader({
   );
 }
 
+/**
+ * A heading that renames itself where it stands.
+ *
+ * Renaming used to be a line in an overflow menu that opened a modal holding
+ * ONE field — three clicks and a layer for a word. Here the title IS the
+ * control: a real `<button>` (so Enter, Space and F2 all reach it, and it has
+ * an accessible name that says what pressing it does) which swaps itself for
+ * an `<input>` drawn at the heading's own size and weight, so nothing on the
+ * line moves. Enter or blur saves, Escape cancels, and a title trimmed to
+ * nothing is refused — the old one comes back, because an untitled evaluation
+ * is not a thing the product has.
+ *
+ * The pencil is the discovery: it fades in on hover and on keyboard focus,
+ * and it is `aria-hidden` — the button already says "rename" out loud. The
+ * button keeps a transparent border so that the swap to the input, which has
+ * a real one, does not shift the text by a pixel.
+ *
+ * It is not a primary action and never takes the accent (DESIGN.md): the
+ * primary of the screen it sits on stays what it is.
+ */
+export function InlineTitle({
+  value,
+  onSave,
+  editLabel,
+  inputLabel,
+  className = "",
+}: {
+  value: string;
+  /** Called with the trimmed new title, only when it is non-empty and different. */
+  onSave: (next: string) => void;
+  /** Accessible name of the button, e.g. `Rename evaluation: Test 0`. */
+  editLabel: string;
+  /** Accessible name of the input, e.g. `Title`. */
+  inputLabel: string;
+  className?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  // Enter and blur both land on `finish`, and Escape unmounts an input whose
+  // blur may still be on its way. One latch per edit, so the second call is a
+  // no-op instead of a second save.
+  const done = useRef(true);
+
+  const open = () => {
+    setDraft(value);
+    done.current = false;
+    setEditing(true);
+  };
+  const finish = (save: boolean) => {
+    if (done.current) return;
+    done.current = true;
+    setEditing(false);
+    const next = draft.trim();
+    if (save && next !== "" && next !== value) onSave(next);
+  };
+
+  const type = "text-[28px] font-bold leading-tight tracking-[-0.02em]";
+
+  if (editing) {
+    /*
+     * The field grows with what is typed instead of taking the whole line: a
+     * `w-full` input pushed the state badge onto a second row the moment the
+     * editor opened, which is the jump this component exists to avoid. The
+     * mirror span sets the grid column to the text's own width, the input
+     * lies on top of it, and `max-w-full` keeps a long title inside the
+     * header on a phone.
+     */
+    return (
+      <span className={cx("-mx-1.5 inline-grid max-w-full min-w-0 align-baseline", className)}>
+        <span
+          aria-hidden
+          className={cx(
+            "invisible col-start-1 row-start-1 min-w-24 overflow-hidden whitespace-pre px-1.5",
+            type,
+          )}
+        >
+          {draft}
+        </span>
+        <input
+          aria-label={inputLabel}
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onFocus={(e) => e.currentTarget.select()}
+          onBlur={() => finish(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              finish(true);
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              finish(false);
+            }
+          }}
+          className={cx(
+            "col-start-1 row-start-1 w-full min-w-0 rounded-field border border-accent bg-surface px-1.5 text-fg outline-none ring-3 ring-accent/20",
+            type,
+          )}
+        />
+      </span>
+    );
+  }
+  return (
+    <button
+      type="button"
+      aria-label={editLabel}
+      onClick={open}
+      onKeyDown={(e) => {
+        if (e.key === "F2") {
+          e.preventDefault();
+          open();
+        }
+      }}
+      className={cx(
+        // Not a flex row: a long title WRAPS on a phone rather than being cut
+        // short, and an inline pencil then trails its last line instead of
+        // floating beside the block.
+        "group -mx-1.5 max-w-full rounded-field border border-transparent px-1.5 text-left break-words transition-colors hover:border-line hover:bg-surface-2 focus-visible:border-accent focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-accent/20",
+        type,
+        className,
+      )}
+    >
+      {value}
+      <PenLine
+        aria-hidden
+        className="ml-2 inline-block size-4 -translate-y-0.5 align-middle text-fg-faint opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+      />
+    </button>
+  );
+}
+
 /** Heading of a section inside a page or a card (h2 at 16 px). */
 export function SectionHeading({
   icon: Icon,

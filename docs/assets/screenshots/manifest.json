@@ -529,29 +529,6 @@
       "base": "http://localhost:3100"
     },
     {
-      "name": "eval-preview",
-      "caption": "The student preview of an evaluation, from the launch step.",
-      "persona": "teacher",
-      "path": "/evaluations/ec1186d0-1d86-49e2-9d65-989a6a002dc7?step=launch",
-      "width": 1440,
-      "height": 900,
-      "fullPage": false,
-      "theme": [
-        "light",
-        "dark"
-      ],
-      "action": "Clicked “Preview as student”.",
-      "state": "As seeded: the draft “Test 1 — pointeurs”.",
-      "phase": "seeded",
-      "files": {
-        "light": "eval-preview-light.png",
-        "dark": "eval-preview-dark.png"
-      },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
-      "base": "http://localhost:3100"
-    },
-    {
       "name": "eval-scheduled",
       "caption": "A scheduled evaluation: it opens by itself at the announced time.",
       "persona": "teacher",

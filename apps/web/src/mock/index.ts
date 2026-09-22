@@ -3410,44 +3410,6 @@ const attemptInspect = (e: MockEvaluation, attemptId: string) => {
   };
 };
 
-const previewView = (e: MockEvaluation) => ({
-  attempt: {
-    id: "00000000-0000-4000-8000-0000000000ff",
-    state: "in_progress" as const,
-    startedAt: iso(0),
-    deadlineAt: iso(45 * 60_000),
-    lastItemId: null,
-    serverNow: iso(0),
-    preview: true,
-    readOnly: false,
-  },
-  evaluation: {
-    id: e.id,
-    title: e.title,
-    mode: e.mode,
-    state: e.state,
-    settings: e.settings,
-    feedbackPolicy: e.feedbackPolicy,
-    pausedAt: e.pausedAt,
-    totalPoints: totalPointsOf(e),
-  },
-  items: e.items.flatMap((item) => {
-    const q = itemQuestion(item);
-    if (q === null) return [];
-    return [{
-      id: item.id,
-      position: item.position,
-      points: item.points,
-      type: item.type,
-      milestone: item.milestone,
-      student: studentConfigOf(q),
-      answer: null,
-      revision: 0,
-      markedDone: false,
-      locked: false,
-    }];
-  }),
-});
 // --- Routes: evaluations --------------------------------------------------
 
 on("GET", "/app/api/classrooms/:id/evaluations", (m) =>
@@ -3576,7 +3538,6 @@ on("DELETE", "/app/api/evaluations/:id/attempt", (m) => {
   return { deleted: true };
 });
 
-on("POST", "/app/api/evaluations/:id/preview", (m) => previewView(evaluationOr404(m.groups!.id!)));
 
 // --- Routes: the teacher's controls on a live evaluation -------------------
 
