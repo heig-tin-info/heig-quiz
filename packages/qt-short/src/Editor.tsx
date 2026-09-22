@@ -417,9 +417,20 @@ export function ShortEditor({
       <IssueList issues={rootIssues(issues)} />
 
       <section className={sectionClass}>
-        <label className={labelClass} htmlFor="short-prompt">
-          {s.prompt}
-        </label>
+        {/*
+         * A caption and not a `<label for>` when the host lent its rich
+         * editor: its surface is a contenteditable, which is not a labelable
+         * element — the browser reports such a `for` as matching no control,
+         * and the field takes its name from `aria-label` instead. The
+         * textarea fallback is a real control and keeps its label.
+         */}
+        {RichText ? (
+          <span className={labelClass}>{s.prompt}</span>
+        ) : (
+          <label className={labelClass} htmlFor="short-prompt">
+            {s.prompt}
+          </label>
+        )}
         {/*
          * The host's WYSIWYG editor when it lent one, the textarea otherwise.
          * There is no preview block under either: with `RichText` the field IS

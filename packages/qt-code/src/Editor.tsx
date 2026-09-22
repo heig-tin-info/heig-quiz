@@ -192,9 +192,20 @@ export function CodeEditor({
       <section className={cx(card, "flex flex-col gap-4 p-4")}>
         <h3 className={sectionTitle}>{s.questionSection}</h3>
         <div className="flex flex-col gap-1.5">
-          <label className={label} htmlFor={`${ids}-prompt`}>
-            {s.prompt}
-          </label>
+          {/*
+           * A caption and not a `<label for>` when the host lent its rich
+           * editor: its surface is a contenteditable, which is not a labelable
+           * element — the browser reports such a `for` as matching no control,
+           * and the field takes its name from `aria-label` instead. The
+           * textarea fallback is a real control and keeps its label.
+           */}
+          {RichText ? (
+            <span className={label}>{s.prompt}</span>
+          ) : (
+            <label className={label} htmlFor={`${ids}-prompt`}>
+              {s.prompt}
+            </label>
+          )}
           {/*
            * The host's WYSIWYG editor when it lent one (`EditorProps.RichText`),
            * the textarea otherwise. No preview under either: the rich field IS

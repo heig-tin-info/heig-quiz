@@ -11,6 +11,7 @@ import {
   makeDashboard,
   makeEvaluationDetail,
 } from "../test/live-fixtures";
+import { labelIssues } from "../test/labels";
 import { makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
 import { LiveDashboard } from "./LiveDashboard";
 
@@ -90,6 +91,12 @@ describe("LiveDashboard — the grid", () => {
   it("falls back to an empty state when the roster is empty", async () => {
     setup(makeDashboard(0, 4));
     expect(await screen.findByText(/nobody on the roster/i)).toBeInTheDocument();
+  });
+
+  it("gives every <label for> of the screen a control to point at", async () => {
+    setup();
+    expect(await screen.findByText(/3 students/i)).toBeInTheDocument();
+    expect(labelIssues()).toEqual([]);
   });
 });
 

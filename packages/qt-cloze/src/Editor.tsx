@@ -82,9 +82,20 @@ export function ClozeEditor({
       <IssueList issues={rootIssues(issues)} />
 
       <section className={sectionClass}>
-        <label className={labelClass} htmlFor="cloze-text">
-          {s.text}
-        </label>
+        {/*
+         * A caption and not a `<label for>` when the host lent its rich
+         * editor: its surface is a contenteditable, which is not a labelable
+         * element — the browser reports such a `for` as matching no control,
+         * and the field takes its name from `aria-label` instead. The
+         * textarea fallback is a real control and keeps its label.
+         */}
+        {RichText ? (
+          <span className={labelClass}>{s.text}</span>
+        ) : (
+          <label className={labelClass} htmlFor="cloze-text">
+            {s.text}
+          </label>
+        )}
         {textField}
         <p className={helpClass}>{s.textHint}</p>
         <IssueList issues={issuesAt(issues, "text")} />

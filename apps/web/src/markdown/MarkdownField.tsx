@@ -44,6 +44,12 @@ export interface MarkdownFieldProps {
    * cannot work is worse than one that is not there.
    */
   onUploadImage?: (file: File) => Promise<{ id: string }>;
+  /**
+   * Draws the caption somewhere else. `label` is still required — it is what
+   * NAMES the editing surface — but the screen owns the visible row, which is
+   * how a help "?" gets to sit beside the caption instead of inside it.
+   */
+  labelHidden?: boolean;
   className?: string;
 }
 
@@ -55,6 +61,7 @@ export function MarkdownField({
   disabled,
   id,
   onUploadImage,
+  labelHidden = false,
   className = "",
 }: MarkdownFieldProps) {
   const t = useT();
@@ -77,10 +84,14 @@ export function MarkdownField({
 
   return (
     <div className={cx("flex flex-col gap-2", className)}>
-      {label ? (
-        <label htmlFor={fieldId} className="text-[13px] font-medium text-fg">
-          {label}
-        </label>
+      {/*
+       * A caption, not a `<label for>`: the editing surface is a
+       * contenteditable, which is not a labelable element — the browser
+       * reports such a `for` as pointing at nothing and the caption names no
+       * control. The field takes its name from `aria-label` below.
+       */}
+      {label && !labelHidden ? (
+        <span className="text-[13px] font-medium text-fg">{label}</span>
       ) : null}
 
       <RichText

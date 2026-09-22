@@ -230,7 +230,18 @@ export function FormulaDialog({
               {t("md.formula.keyboard")}
             </Button>
           </div>
-          <div className={cx(inputClass, "flex min-h-11 w-full items-center py-1.5")}>
+          {/* The box is the field: MathLive's element is shorter than the
+              row it sits in, so the space around it has to carry the click
+              rather than swallow it. */}
+          <div
+            onMouseDown={(event) => {
+              const mf = field.current;
+              if (mf === null || (event.target instanceof Node && mf.contains(event.target))) return;
+              event.preventDefault();
+              mf.focus();
+            }}
+            className={cx(inputClass, "flex min-h-11 w-full cursor-text items-center py-1.5")}
+          >
             {ready ? null : <Spinner label={t("md.formula.loading")} className="py-1" />}
             {/* MathLive's own element lives in here, and React puts nothing
                 inside: the two must not fight over the same children. */}

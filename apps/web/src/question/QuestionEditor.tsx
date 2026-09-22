@@ -580,19 +580,19 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
 
             <Card className="space-y-3 p-5">
               {/*
-               * The label is rendered HERE, and `MarkdownField`'s own is
-               * hidden: the "?" is a SIBLING of the label, never inside it
-               * (DESIGN.md, "Field"), and `MarkdownField` has no slot beside
-               * its label. The prop is still passed, because that is what
-               * names the editing surface — a contenteditable takes its name
-               * from `aria-label`, not from a `<label for>`.
+               * The caption is rendered HERE, and `MarkdownField`'s own is
+               * left out (`labelHidden`): the "?" is a SIBLING of the label,
+               * never inside it (DESIGN.md, "Field"), and `MarkdownField` has
+               * no slot beside its caption. The prop is still passed, because
+               * that is what names the editing surface — a contenteditable
+               * takes its name from `aria-label`, not from a `<label for>`.
                */}
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-[13px] font-medium text-fg">{t("question.explanation")}</span>
                 <HelpIcon topic="explanation" />
               </div>
               <MarkdownField
-                className="[&>label]:hidden"
+                labelHidden
                 disabled={readOnly}
                 label={t("question.explanation")}
                 value={draft?.explanation ?? ""}
