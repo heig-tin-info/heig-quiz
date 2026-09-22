@@ -9,7 +9,7 @@ import {
   Square,
   Sun,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import type { PollTeacherView, WatchSubject } from "@quiz/contracts";
 
@@ -21,6 +21,7 @@ import { useEventStream } from "../realtime/useEventStream";
 import type { Route } from "../router";
 import { setThemeChoice, useThemeChoice } from "../theme";
 import { Button, cx, IconButton, Menu, PageError, Ring, Segmented, Skeleton } from "../ui";
+import { FIT_PROBES, fitScale, layoutWidthFor, nextProbe } from "./fit";
 import { PollBars } from "./PollBars";
 import { PollQr } from "./PollQr";
 import {
@@ -50,13 +51,27 @@ import {
  *     row ever turns red, because nobody in the room is being marked wrong.
  *   - Space: tight inside a choice (the bar sits under its own line),
  *     generous between the three bands of the screen (`clamp(24px, 3.5vh,
- *     48px)`): context, question, and how to join.
+ *     48px)`): how to join, the question, and where the room is at.
  *   - Finish: full bleed. The only surfaces are the bar track and the white
  *     QR tile; the only hairline is that tile's.
  *
+ * The way in — the host, the session code and the QR — lives in the TOP right
+ * corner. It used to sit at the bottom right, under the distribution, which
+ * is also where the app's toasts are pinned (`notify.tsx`, `fixed bottom-4
+ * right-4`): a student joining mid-lecture threw a notice straight over the
+ * code the rest of the room was trying to scan. The two corners are now
+ * opposite ones, and neither has to know about the other.
+ *
  * The one primary action is "Reveal the answer" while the poll runs, and
- * "Run again" once it has ended. Everything else is quiet, top right, where
- * the teacher's hand is and the room's eye is not.
+ * "Run again" once it has ended. Everything else is quiet, in the same top
+ * strip, left of the QR: the teacher's hand is there and the room's eye is
+ * not.
+ *
+ * And the middle band never scrolls. When a question with eight long choices
+ * does not fit the wall, two things happen before anything is given up: the
+ * bars go into two columns (`PollBars`), and `useStageFit` searches for the
+ * widest layout the band can be drawn at, then draws it through one transform
+ * (see `fit.ts`). Nothing is ever truncated and no scrollbar ever appears.
  *
  * Dark by default, like the mockup: a beamer throws light, so a white page
  * is the room's lighting. Only an explicit "light" already stored in this
@@ -124,6 +139,142 @@ function useFullscreen(): [boolean, () => void] {
     return () => document.removeEventListener("fullscreenchange", sync);
   }, []);
   return [on, toggle];
+}
+
+/**
+ * The middle band, scaled so the whole of it is on the wall.
+ *
+ * A projection may not scroll: a bar below the fold is a bar nobody in the
+ * room will ever see, and a scrollbar on a beamer is a bug the teacher
+ * discovers in front of forty people. `questionScale()` steps the title down
+ * by the length of the prompt, but the bars are what usually overflow — eight
+ * choices of two lines each clear a 1280 × 720 projector on their own. So the
+ * band is measured and, when it is too tall, drawn through one
+ * `transform: scale()`; `fitScale()` holds the arithmetic and says why a
+ * transform rather than a font size.
+ *
+ * `ready` is whether the band exists yet: the screen renders a skeleton and an
+ * error state before it, and the observer has nothing to watch until then.
+ */
+function useStageFit(ready: boolean) {
+  const area = useRef<HTMLDivElement | null>(null);
+  const content = useRef<HTMLDivElement | null>(null);
+  /** `width` is the LAYOUT width in pixels, `null` meaning the area's own. */
+  const [fit, setFit] = useState<{ scale: number; width: number | null; height: number | null }>({
+    scale: 1,
+    width: null,
+    height: null,
+  });
+
+  const measure = useCallback(() => {
+    const box = area.current;
+    const block = content.current;
+    if (box === null || block === null) return;
+    const commit = (next: { scale: number; width: number | null; height: number | null }) => {
+      // The probes above leave the block wherever the last measurement put it;
+      // this is what puts it back where the render says it belongs, so the DOM
+      // is right even when the state below turns out to be unchanged.
+      block.style.width = next.width === null ? "" : `${next.width}px`;
+      block.style.transform = next.scale < 1 ? `scale(${next.scale})` : "";
+      setFit((prev) =>
+        prev.scale === next.scale && prev.width === next.width && prev.height === next.height
+          ? prev
+          : next,
+      );
+    };
+
+    // A phone is not a beamer. Below `sm` the stage is an ordinary page whose
+    // middle band GROWS with its content, so a scale taken from it would chase
+    // its own result down to nothing; there the page simply scrolls.
+    const beamer =
+      typeof window.matchMedia === "function" && window.matchMedia("(min-width: 640px)").matches;
+    const availW = box.clientWidth;
+    const availH = box.clientHeight;
+    if (!beamer || availW <= 0 || availH <= 0) {
+      commit({ scale: 1, width: null, height: null });
+      return;
+    }
+
+    /*
+     * The search. Every candidate is MEASURED rather than predicted, because
+     * the height of a block is not a smooth function of its width: it steps
+     * down each time a label stops wrapping. `offsetWidth`/`offsetHeight` are
+     * layout sizes that a transform does not touch, which is what keeps the
+     * measurement independent of the scale it produces.
+     */
+    block.style.transform = "none";
+    // No inline width: the block falls back to `w-full`, which is the area's
+    // own width — the layout the screen was designed at, and the only honest
+    // starting point. (Without that class it would fall back to `max-content`,
+    // and the search would start from a line length nobody has ever seen.)
+    block.style.width = "";
+    const natural = fitScale(block.offsetWidth, block.offsetHeight, availW, availH);
+    if (natural >= 1) {
+      commit({ scale: 1, width: null, height: null });
+      return;
+    }
+
+    /*
+     * `lo` is the largest scale whose layout has been MEASURED and does fit;
+     * `hi` the smallest one known not to. The first candidate is the un-widened
+     * fit, which cannot fail — the same block drawn on the same wall, only
+     * laid out wider, is never taller — so the search always has an answer and
+     * the worst case is exactly what a plain scale would have given.
+     */
+    let lo = natural;
+    let hi = 1;
+    let slack = 0;
+    let best: { scale: number; width: number; height: number } | null = null;
+    for (let probe = 0; probe < FIT_PROBES; probe += 1) {
+      const candidate = probe === 0 ? natural : nextProbe(lo, hi, slack);
+      if (probe > 0 && (candidate <= lo || candidate >= hi)) break;
+      const width = layoutWidthFor(availW, candidate);
+      block.style.width = `${width}px`;
+      const drawn = block.offsetHeight * candidate;
+      if (drawn <= availH) {
+        lo = candidate;
+        slack = availH / Math.max(1, drawn);
+        best = { scale: candidate, width, height: Math.round(drawn) };
+      } else {
+        hi = candidate;
+        slack = 0;
+      }
+    }
+    commit(best ?? { scale: natural, width: layoutWidthFor(availW, natural), height: null });
+  }, []);
+
+  // After every commit: a new question, a reveal, one more tally frame — each
+  // changes the height of the block, and each arrives through a render.
+  useLayoutEffect(measure);
+
+  useEffect(() => {
+    const box = area.current;
+    const block = content.current;
+    if (typeof ResizeObserver !== "function" || box === null || block === null) return undefined;
+    // Two boxes, one observer: the area moves when the projector does (full
+    // screen, a resized window, a rotated display), the block when a web font
+    // finally lands or a long label rewraps. The observer converges: `measure`
+    // is a function of the area and of the text, so the layout it writes back
+    // is the one it just measured, and the next notification changes nothing.
+    const observer = new ResizeObserver(() => measure());
+    observer.observe(box);
+    observer.observe(block);
+    return () => observer.disconnect();
+  }, [measure, ready]);
+
+  useEffect(() => {
+    const onChange = () => measure();
+    window.addEventListener("resize", onChange);
+    // Leaving full screen through the browser's own chrome resizes nothing
+    // the observer above can see until the next frame; this is that frame.
+    document.addEventListener("fullscreenchange", onChange);
+    return () => {
+      window.removeEventListener("resize", onChange);
+      document.removeEventListener("fullscreenchange", onChange);
+    };
+  }, [measure]);
+
+  return { area, content, scale: fit.scale, width: fit.width, height: fit.height };
 }
 
 export function PollProjection({ id, navigate }: { id: string; navigate: (r: Route) => void }) {
@@ -233,12 +384,15 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
   );
   const rows = allRows.slice(0, PROJECTION_ROW_CAP);
   const overflow = allRows.length - rows.length;
+  const fit = useStageFit(view !== null);
 
   /*
    * A beamer is exactly one screen, so from `sm` up the stage IS the
    * viewport and never scrolls: the session code and the QR must stay on the
    * wall whatever the question costs. Only the middle band gives way, and it
-   * scrolls inside itself. A phone is not a beamer and keeps a normal page.
+   * gives way by SHRINKING (`useStageFit`) rather than by scrolling, so the
+   * last bar of a long mcq is on the wall instead of under a scrollbar. A
+   * phone is not a beamer and keeps a normal page.
    */
   const stage =
     "flex min-h-dvh flex-col gap-[clamp(24px,3.5vh,48px)] bg-canvas px-[clamp(16px,4vw,64px)] py-[clamp(20px,3vh,40px)] text-fg sm:h-dvh sm:min-h-0 sm:overflow-hidden";
@@ -286,100 +440,159 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
 
   return (
     <main className={stage}>
-      {/* Band 1 — where we are and what state the room is in. */}
-      <div className="flex flex-wrap items-center gap-4">
-        <span className="text-[clamp(14px,1.4vw,18px)] font-semibold tracking-[-0.01em] text-fg-muted">
-          {context}
-        </span>
-        <span className="size-1 rounded-full bg-fg-faint" aria-hidden />
-        {ended ? (
-          <span className="text-[clamp(13px,1.2vw,16px)] font-semibold text-fg-muted">
-            {t("poll.ended")}
+      {/* Band 1 — where we are, what state the room is in, and the way in.
+          The join tile owns the top-right corner (the toasts own the bottom
+          one); the controls sit in the left column, pushed against it. */}
+      <header className="flex flex-wrap items-start gap-[clamp(16px,2.4vw,32px)]">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-4">
+          <span className="text-[clamp(14px,1.4vw,18px)] font-semibold tracking-[-0.01em] text-fg-muted">
+            {context}
           </span>
-        ) : revealed ? (
-          <span className="inline-flex items-center gap-1.5 text-[clamp(13px,1.2vw,16px)] font-semibold text-success">
-            <Check className="size-[1.1em]" aria-hidden />
-            {t("poll.revealed")}
-          </span>
-        ) : (
-          <span className="inline-flex items-center gap-2 text-[clamp(13px,1.2vw,16px)] font-semibold text-accent">
-            <span className="size-2.5 animate-pulse rounded-full bg-accent" aria-hidden />
-            {t("poll.live")}
-          </span>
-        )}
-        <span className="ml-auto flex flex-wrap items-center gap-2">
-          <Segmented
-            name="poll-reveal"
-            value={revealed ? "revealed" : "live"}
-            onChange={(v) => setRevealed(v === "revealed")}
-            options={[
-              { value: "live", label: t("poll.live") },
-              { value: "revealed", label: t("poll.reveal") },
-            ]}
-          />
+          <span className="size-1 rounded-full bg-fg-faint" aria-hidden />
           {ended ? (
-            <Button size="sm" onClick={() => act.mutate({ path: "again" })} loading={act.isPending}>
-              <RotateCcw /> {t("poll.again")}
-            </Button>
-          ) : null}
-          <IconButton
-            label={dark ? t("menu.lightTheme") : t("menu.darkTheme")}
-            onClick={toggleTheme}
+            <span className="text-[clamp(13px,1.2vw,16px)] font-semibold text-fg-muted">
+              {t("poll.ended")}
+            </span>
+          ) : revealed ? (
+            <span className="inline-flex items-center gap-1.5 text-[clamp(13px,1.2vw,16px)] font-semibold text-success">
+              <Check className="size-[1.1em]" aria-hidden />
+              {t("poll.revealed")}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-2 text-[clamp(13px,1.2vw,16px)] font-semibold text-accent">
+              <span className="size-2.5 animate-pulse rounded-full bg-accent" aria-hidden />
+              {t("poll.live")}
+            </span>
+          )}
+          <span className="ml-auto flex flex-wrap items-center gap-2">
+            <Segmented
+              name="poll-reveal"
+              value={revealed ? "revealed" : "live"}
+              onChange={(v) => setRevealed(v === "revealed")}
+              options={[
+                { value: "live", label: t("poll.live") },
+                { value: "revealed", label: t("poll.reveal") },
+              ]}
+            />
+            {ended ? (
+              <Button size="sm" onClick={() => act.mutate({ path: "again" })} loading={act.isPending}>
+                <RotateCcw /> {t("poll.again")}
+              </Button>
+            ) : null}
+            <IconButton
+              label={dark ? t("menu.lightTheme") : t("menu.darkTheme")}
+              onClick={toggleTheme}
+            >
+              {dark ? <Sun /> : <Moon />}
+            </IconButton>
+            <IconButton
+              label={fullscreen ? t("poll.exitFullscreen") : t("poll.fullscreen")}
+              onClick={toggleFullscreen}
+            >
+              {fullscreen ? <Minimize2 /> : <Maximize2 />}
+            </IconButton>
+            <Menu
+              label={t("common.actions")}
+              items={[
+                ...(ended
+                  ? []
+                  : [{ label: t("poll.end"), icon: Square, danger: true, onSelect: endPoll }]),
+                {
+                  label: t("poll.back"),
+                  separator: !ended,
+                  onSelect: () =>
+                    navigate({ view: "classroom", id: view.evaluation.classroomId }),
+                },
+              ]}
+            />
+          </span>
+        </div>
+
+        {/* A finished poll offers no way in: a code still on the wall sends
+            the room to a page that refuses them. */}
+        {ended ? null : (
+          <div
+            data-poll-join
+            className="flex items-center gap-[clamp(14px,1.6vw,26px)] max-sm:w-full max-sm:justify-between"
           >
-            {dark ? <Sun /> : <Moon />}
-          </IconButton>
-          <IconButton
-            label={fullscreen ? t("poll.exitFullscreen") : t("poll.fullscreen")}
-            onClick={toggleFullscreen}
-          >
-            {fullscreen ? <Minimize2 /> : <Maximize2 />}
-          </IconButton>
-          <Menu
-            label={t("common.actions")}
-            items={[
-              ...(ended
-                ? []
-                : [{ label: t("poll.end"), icon: Square, danger: true, onSelect: endPoll }]),
-              {
-                label: t("poll.back"),
-                separator: !ended,
-                onSelect: () =>
-                  navigate({ view: "classroom", id: view.evaluation.classroomId }),
-              },
-            ]}
-          />
-        </span>
-      </div>
+            <span className="text-right max-sm:text-left">
+              <span className="block text-[clamp(13px,1.2vw,17px)] text-fg-muted">
+                {t("poll.joinAt", { host: joinHost(view.joinUrl) })}
+              </span>
+              <span className="mt-0.5 block font-mono text-[clamp(34px,4.2vw,64px)] font-bold leading-none tracking-[0.02em] tabular-nums">
+                {view.evaluation.code}
+              </span>
+            </span>
+            <PollQr
+              value={view.joinUrl}
+              label={t("poll.qrLabel", { code: view.evaluation.code })}
+            />
+          </div>
+        )}
+      </header>
 
       {/* Band 2 — the question and its distribution: the whole point. The
-          outer box owns the scroll and the inner one the centering: a
-          `justify-center` box that overflows cuts its own top off. */}
-      <div className="min-w-0 flex-1 sm:min-h-0 sm:overflow-y-auto">
-        <div className="flex min-h-full flex-col justify-center gap-[clamp(20px,3.5vh,44px)]">
-          <h1
-            className={cx(
-              "max-w-[24ch] font-bold leading-[1.08] tracking-[-0.03em]",
-              questionScale(promptOf(view.question)),
-            )}
+          outer box is the room the band has (and hides whatever leaves it);
+          the middle box carries the height the transform actually DRAWS, so
+          a shrunk block is still centred on what one sees rather than on the
+          size it was laid out at; the inner one is what gets scaled. */}
+      <div
+        ref={fit.area}
+        data-poll-band
+        className="flex min-w-0 flex-1 flex-col justify-center sm:min-h-0 sm:overflow-hidden"
+      >
+        {/* `justify-center` on a box whose child is WIDER than it overflows it
+            by the same amount on both sides, which is what puts the block's
+            centre on the area's centre — and therefore what makes
+            `transform-origin: top center` land it exactly on the wall. */}
+        <div
+          // `items-start`: a flex row stretches its items to its own height,
+          // and a block stretched to the height this box was just given would
+          // measure that height back on the next pass — the fit chasing its
+          // own answer. The block keeps the height its content asks for.
+          className="flex w-full items-start justify-center"
+          style={fit.height === null ? undefined : { height: fit.height }}
+        >
+          <div
+            ref={fit.content}
+            data-poll-content
+            // `shrink-0`: a widened block is wider than the box on purpose,
+            // and a flex item that may shrink would be squeezed straight back
+            // to the box's width, undoing the reflow the fit just bought.
+            className="flex w-full shrink-0 flex-col gap-[clamp(20px,3.5vh,44px)]"
+            style={{
+              ...(fit.width === null ? null : { width: fit.width }),
+              ...(fit.scale < 1
+                ? { transform: `scale(${fit.scale})`, transformOrigin: "top center" }
+                : null),
+            }}
           >
-            <MarkdownView source={promptOf(view.question)} inline />
-          </h1>
-          {rows.length === 0 ? (
-            <p className="text-[clamp(16px,1.6vw,22px)] text-fg-muted">{t("poll.noAnswersYet")}</p>
-          ) : (
-            <>
-              <PollBars rows={rows} revealed={revealed} />
-              {overflow > 0 ? (
-                <p className="text-[clamp(13px,1.2vw,17px)] text-fg-faint">
-                  {t(overflow === 1 ? "poll.moreAnswers.one" : "poll.moreAnswers", { n: overflow })}
-                </p>
-              ) : null}
-            </>
-          )}
+            <h1
+              className={cx(
+                "max-w-[24ch] font-bold leading-[1.08] tracking-[-0.03em]",
+                questionScale(promptOf(view.question)),
+              )}
+            >
+              <MarkdownView source={promptOf(view.question)} inline />
+            </h1>
+            {rows.length === 0 ? (
+              <p className="text-[clamp(16px,1.6vw,22px)] text-fg-muted">{t("poll.noAnswersYet")}</p>
+            ) : (
+              <>
+                <PollBars rows={rows} revealed={revealed} />
+                {overflow > 0 ? (
+                  <p className="text-[clamp(13px,1.2vw,17px)] text-fg-faint">
+                    {t(overflow === 1 ? "poll.moreAnswers.one" : "poll.moreAnswers", { n: overflow })}
+                  </p>
+                ) : null}
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Band 3 — the room on the left, the way in on the right. */}
+      {/* Band 3 — where the room is at. The way in left this corner for the
+          top one, out of the toasts' way. */}
       <div className="flex flex-wrap items-end justify-between gap-6">
         <div className="flex items-center gap-3.5">
           <Ring
@@ -415,22 +628,6 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
             ) : null}
           </span>
         </div>
-
-        {/* A finished poll offers no way in: a code still on the wall sends
-            the room to a page that refuses them. */}
-        {ended ? null : (
-        <div className="flex items-center gap-[clamp(14px,1.6vw,26px)] max-sm:w-full max-sm:justify-between">
-          <span className="text-right max-sm:text-left">
-            <span className="block text-[clamp(13px,1.2vw,17px)] text-fg-muted">
-              {t("poll.joinAt", { host: joinHost(view.joinUrl) })}
-            </span>
-            <span className="mt-0.5 block font-mono text-[clamp(34px,4.2vw,64px)] font-bold leading-none tracking-[0.02em] tabular-nums">
-              {view.evaluation.code}
-            </span>
-          </span>
-          <PollQr value={view.joinUrl} label={t("poll.qrLabel", { code: view.evaluation.code })} />
-        </div>
-        )}
       </div>
     </main>
   );

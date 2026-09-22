@@ -206,6 +206,11 @@ const scenes = [
   { name: "poll-projection", role: "teacher", path: "/evaluations/poll/poll", fold: true },
   { name: "poll-projection-revealed", role: "teacher", path: "/evaluations/poll/poll?revealed=1", fold: true },
   { name: "poll-ended", role: "teacher", path: "/evaluations/poll-ended/poll", fold: true },
+  // The worst case of the wall: a three-line question and eight choices that
+  // wrap. It must come back with no scrollbar and nothing cut off — the band
+  // shrinks itself (`fitScale`), so the fold IS the whole screen.
+  { name: "poll-projection-long", role: "teacher", path: "/evaluations/poll-long/poll", fold: true },
+  { name: "poll-projection-long-revealed", role: "teacher", path: "/evaluations/poll-long/poll?revealed=1", fold: true },
   // The participant's half, as a GUEST: no session at all, which is what a
   // phone in the room has (`?as=guest` in src/mock/index.ts).
   { name: "join-mcq", role: "teacher", path: "/p/QZ4F7K?as=guest" },

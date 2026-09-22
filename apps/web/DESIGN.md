@@ -530,7 +530,7 @@ with a keyboard-reachable dismiss button.
 
 One screen of the product is not read at arm's length, and it is the only
 place where this file's scale does not apply: `PollProjection` is thrown on a
-lecture-hall wall and read from thirty rows back. Three extensions, and
+lecture-hall wall and read from thirty rows back. Six extensions, and
 nothing else on it leaves the system.
 
 - **A scale of its own, in `clamp()`.** The question is
@@ -550,6 +550,48 @@ nothing else on it leaves the system.
   costs, and only the middle band gives way. The distribution shows at most
   eight rows and counts the rest in one muted line: a free-text tally carries
   up to sixty distinct spellings, and sixty bars is a wall of noise.
+- **Six choices or more go in TWO columns**, column-major, so A–D are the left
+  column and E–H the right one and the letters still read downwards
+  (`lg:grid lg:grid-flow-col` over `repeat(⌈n/2⌉, auto)` rows, with
+  `grid-auto-columns: minmax(0, 1fr)` — a bare `1fr` floors a column at its
+  min-content width and pushes the grid off the wall). Eight bars in one
+  column is a list so tall that the fit below has to shrink the whole wall to
+  a third to hold it, and the room then reads none of it. Below `lg` the
+  window is not a wall and the single column stays.
+- **The middle band gives way by SHRINKING, never by scrolling.** The length
+  of the prompt is not the whole story — eight choices of two lines clear a
+  1280 × 720 projector under a one-line question — so what the band cannot fit
+  it draws smaller: `useStageFit` measures the block against the room the
+  header and the footer left it and applies one `transform: scale(k)` with
+  `transform-origin: top center`, `k ≤ 1` (`fitScale`, `src/poll/fit.ts`,
+  recomputed on resize, full screen, question and reveal). It is a transform
+  and not a root font size because every size here is a `clamp()` of `vw`/`vh`
+  units and a root font size would move none of them; one transform moves the
+  question, the bars and the percentages together, in the ratios picked above.
+  It never magnifies: a question that fits is drawn exactly as designed. The
+  band hides its overflow, so no scrollbar can ever appear on a wall.
+- **The block is WIDENED before it is scaled.** Scaling a block laid out at
+  the width of the band shrinks it away from both side edges: the wall ends up
+  two thirds empty and the text half the size the room can read. So the fit is
+  a short search — `layoutWidthFor()` gives the widest layout a candidate
+  scale may use without spilling sideways (`availW / k`, capped at four times
+  the band), the browser measures what that layout costs in height, and the
+  largest candidate whose measured height still fits is the one applied. Four
+  measurements, each verified rather than predicted (a block's height steps
+  down each time a label stops wrapping, so nothing can be extrapolated), and
+  the first candidate is the un-widened fit, which cannot fail — the search's
+  worst case is a plain scale. On the 8-choice question of the mock that is
+  `k ≈ 0.60` and 18 px of choice text at 1280 × 720, and `k ≈ 0.74` and 27 px
+  at 1920 × 1080, against 11 px and 16 px for the same fit without widening.
+- **The way in is TOP right, and it is the only thing in that corner.** The
+  host, the session code and the QR tile travel together, in the first band of
+  the stage (mockup 10 has them in the footer; the product does not). The
+  reason is the toaster: `notify.tsx` pins the toast stack to `fixed bottom-4
+  right-4`, and a "student joined" notice arriving mid-lecture landed straight
+  on the code the back rows were scanning. The two corners are opposite ones
+  and neither has to know about the other. The teacher's controls stay in the
+  same top strip, pushed against the tile — the room's eye is on the question,
+  not up there.
 - **The QR tile does not follow the theme.** White background, `#131211`
   modules, in light and in dark alike, because a camera needs the contrast the
   code was designed with and an inverted QR is one half the phones in the room

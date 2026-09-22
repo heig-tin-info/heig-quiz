@@ -4934,6 +4934,10 @@ on("GET", "/app/api/attempts/:id/feedback", (m) => {
 //   QZ4F7K  running, anonymous, mcq         the QR path — no account at all
 //   NM2X9A  running, NOT anonymous, short   the login gate
 //   EN6D3D  ended and revealed, mcq         the key, after the fact
+//   LG8C2M  running, anonymous, mcq         the projection's worst case: a
+//                                           long statement and eight choices
+//                                           of two lines, which is what the
+//                                           beamer has to shrink to fit
 //
 // Two switches, read from the PAGE url at request time and not at import, so
 // a screenshot flips one without reloading the module — and the running
@@ -5032,6 +5036,38 @@ const polls: MockPoll[] = [
     // screen.
     answer: { selected: [0, 1] },
   },
+  {
+    // The poll that made the projection scroll: a statement of three lines
+    // and the twelve-choice ceiling all but reached, each choice long enough
+    // to wrap. Nothing here may be truncated, so the wall shrinks instead —
+    // see `fitScale` in `apps/web/src/poll/fit.ts`.
+    code: "LG8C2M",
+    title: "Révision — passage de paramètres",
+    state: "running",
+    anonymous: true,
+    revealed: false,
+    type: "mcq",
+    student: {
+      prompt:
+        "Dans une fonction C qui reçoit `int tab[]` et `size_t n`, quelle affirmation décrit **correctement** ce que la fonction peut faire du tableau reçu ?",
+      mode: "single",
+      choices: [
+        { id: 0, text: "Elle reçoit une copie complète du tableau et peut le modifier sans que l'appelant en voie quoi que ce soit" },
+        { id: 1, text: "Elle reçoit un pointeur sur le premier élément et modifie donc le tableau de l'appelant" },
+        { id: 2, text: "Elle peut retrouver la taille du tableau avec `sizeof(tab) / sizeof(tab[0])`, comme dans l'appelant" },
+        { id: 3, text: "Elle doit recevoir `n` parce que le tableau reçu a perdu sa taille en devenant un pointeur" },
+        { id: 4, text: "Elle peut agrandir le tableau avec `realloc(tab, …)` tant que l'appelant ne s'en sert plus après" },
+        { id: 5, text: "Elle ne peut écrire dans le tableau que si le paramètre est déclaré `const int tab[]`" },
+        { id: 6, text: "Elle reçoit le tableau par valeur, sauf si l'appelant écrit explicitement `&tab` à l'appel" },
+        { id: 7, text: "Elle peut renvoyer `tab` à l'appelant, qui obtiendra un pointeur sur une variable locale détruite" },
+      ],
+    },
+    // Two of the eight are right, which is what makes the reveal worth a
+    // screenshot: one fades, one gains the tick and the word.
+    solution: { correct: [1, 3] },
+    joined: false,
+    answer: null,
+  },
 ];
 
 const pollOr404 = (code: string): MockPoll => {
@@ -5094,6 +5130,8 @@ on("POST", "/app/api/p/:code/answer", (m, body) => {
 //   /evaluations/poll/poll        the running mcq (mockup 10)
 //   /evaluations/poll-short/poll  a running short answer
 //   /evaluations/poll-ended/poll  one that is over
+//   /evaluations/poll-long/poll   a long statement and eight choices: the
+//                                 one the wall has to shrink to fit
 //
 // The tally GROWS while you look at it: `POLL_TICK` moves it and the fake SSE
 // stream pushes the WHOLE aggregate as a `poll.tally` frame, exactly as the
@@ -5103,6 +5141,7 @@ on("POST", "/app/api/p/:code/answer", (m, body) => {
 const POLL_RUNNING = "00000000-0000-4000-9000-000000000001";
 const POLL_SHORT = "00000000-0000-4000-9000-000000000002";
 const POLL_ENDED = "00000000-0000-4000-9000-000000000003";
+const POLL_LONG = "00000000-0000-4000-9000-000000000004";
 
 /** How often the fake room answers, in ms. */
 const POLL_TICK = 1200;
@@ -5170,7 +5209,7 @@ function seedPollEvaluation(tp: MockTeacherPoll, alias: string): void {
   aliased.set(alias, tp.id);
 }
 
-if (!flags.empty && polls.length >= 3) {
+if (!flags.empty && polls.length >= 4) {
   teacherPolls.push(
     {
       id: POLL_RUNNING,
@@ -5209,10 +5248,24 @@ if (!flags.empty && polls.length >= 3) {
       counts: [19, 7, 14, 4],
       texts: [],
     },
+    {
+      // Eight bars under a three-line question: the projection's worst case,
+      // and the one a screenshot at 1280 x 720 has to come back from without
+      // a scrollbar.
+      id: POLL_LONG,
+      code: polls[3]!.code,
+      classroomId: EVAL_ROOM,
+      createdAt: iso(-1 * 60_000),
+      joined: 57,
+      answered: 49,
+      counts: [6, 18, 4, 11, 2, 3, 2, 3],
+      texts: [],
+    },
   );
   seedPollEvaluation(teacherPolls[0]!, "poll");
   seedPollEvaluation(teacherPolls[1]!, "poll-short");
   seedPollEvaluation(teacherPolls[2]!, "poll-ended");
+  seedPollEvaluation(teacherPolls[3]!, "poll-long");
 }
 
 const answeredOf = (tp: MockTeacherPoll): number => tp.answered;
