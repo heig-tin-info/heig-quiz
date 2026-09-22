@@ -36,6 +36,8 @@ const widths = opt("width").map(Number).filter(Boolean);
 // role   mock persona: teacher | student | admin
 // path   URL under BASE; scene flags of the mock go in the query string
 // ls     extra localStorage entries, written before the first paint
+// ss     extra sessionStorage entries (the student view lives there: it is a
+//        property of the WINDOW, not of the browser)
 // act    what to open once the page settled (a sheet, a menu, a dialog)
 // fold   viewport only, whatever --fold says. For a scene whose layer is
 //        `fixed`: full-page, the backdrop covers the viewport and everything
@@ -112,7 +114,10 @@ const scenes = [
   { name: "results-staff", role: "teacher", path: "/evaluations/closed/results?mytest=1" },
   // The banner the walk comes back through: the student view, entered from an
   // evaluation, with "Back to teacher view" pointing at it.
-  { name: "student-view-banner", role: "teacher", path: "/", ls: { "quiz-view-as": "student", "quiz-view-as-return": "/evaluations/closed" } },
+  { name: "student-view-banner", role: "teacher", path: "/", ss: { "quiz-view-as": "student", "quiz-view-as-return": "/evaluations/closed" } },
+  // The frame's teacher/student switch (ADR-018 addendum), both ways round.
+  { name: "view-switch-teacher", role: "teacher", path: "/evaluations/running/live", fold: true, settle: 3000 },
+  { name: "view-switch-student", role: "teacher", path: "/", fold: true, settle: 3000, ss: { "quiz-view-as": "student", "quiz-view-as-return": "/evaluations/running/live" } },
   { name: "live-running", role: "teacher", path: "/evaluations/running/live" },
   { name: "live-running-many", role: "teacher", path: "/evaluations/running/live?many=1" },
   { name: "live-lobby", role: "teacher", path: "/evaluations/lobby/live" },
@@ -402,13 +407,15 @@ for (const width of widths.length ? widths : [1440]) {
       if (m.type() === "error") problems.push(m.text());
     });
     await page.addInitScript(
-      ({ role, ls, dark }) => {
+      ({ role, ls, ss, dark }) => {
         localStorage.clear();
+        sessionStorage.clear();
         localStorage.setItem("quiz-mock-role", role);
         if (dark) localStorage.setItem("quiz-theme", "dark");
         for (const [k, v] of Object.entries(ls ?? {})) localStorage.setItem(k, v);
+        for (const [k, v] of Object.entries(ss ?? {})) sessionStorage.setItem(k, v);
       },
-      { role: scene.role, ls: scene.ls, dark },
+      { role: scene.role, ls: scene.ls, ss: scene.ss, dark },
     );
     try {
       await page.goto(BASE + scene.path, { waitUntil: "domcontentloaded" });

@@ -2,7 +2,10 @@
 
 ## Status
 
-Accepted (2026-09-22, asked for by the product owner).
+Accepted (2026-09-22, asked for by the product owner). Amended the same day
+by the addendum at the end of this record, which moves the switch into the
+application frame and makes it per WINDOW; decisions 1 and 2 below are the
+ones it touches.
 
 ## Context
 
@@ -165,3 +168,123 @@ readable ("Preview as student" vs "View as student").
    answers, the journal and the gradings would survive, so the second walk
    would start half-filled and the "does the empty state look right?" question
    — one of the reasons to walk it — could never be asked again.
+
+
+---
+
+## Addendum (2026-09-22) — the switch belongs to the frame, and to the window
+
+### Context
+
+The walk above was reported back from its first real use, and it broke in two
+places, both of them in decision 1 and decision 2.
+
+**One entry point, on the wrong screen.** The teacher put themselves on the
+roster, opened the lobby and launched the evaluation — from the LIVE
+DASHBOARD, which is where a teacher is once a quiz is alive. "View as student"
+is a button on the CONFIGURATION page. Having started the exam, they had no
+way into it: the switch existed on a screen they had left, and the account
+menu and the command palette — the two other entry points — were not where
+anybody looked. They could start the test but not sit it.
+
+**One store for every tab.** The view was held in `localStorage`, which the
+whole browser shares. A teacher watching the grid in one tab and taking their
+own attempt in another had both tabs in the same mode: opening the student
+view in the second dragged the first out of the teacher UI. The two tabs are
+the natural way to run this — the dashboard on the beamer, the attempt on the
+laptop — and the store made it impossible.
+
+### Decision
+
+1. **The switch is part of the application frame, not of a page.** A
+   `Teacher | Student` segmented control (`ViewModeToggle`, `Header.tsx`) sits
+   in the bottom block of the sidebar, above the account row, and as one
+   labelled icon in the phone top bar. It is drawn on every page the `Shell`
+   draws — the live dashboard included — and in BOTH views, so the way out is
+   exactly as reachable as the way in. It is SECONDARY chrome: no accent, the
+   quiet pills of `Segmented`, one tier under the page's own primary action
+   (invariant 2 is untouched — the toggle is not an action of any screen).
+
+   A teacher and an admin get it; nobody else does. `onToggleStudentView` is
+   `undefined` for a plain student, and the frame then draws no switch at all
+   rather than one that would do nothing.
+
+   The three older entry points stay and now delegate to the same store: the
+   button on the evaluation page (which alone can also hand out a seat), the
+   account menu, the command palette. What changed is that none of them is
+   the only one.
+
+2. **The student view is a property of the WINDOW.** The store moves from
+   `localStorage` to `sessionStorage`, same two keys. It survives the reloads
+   of its own tab — which the walk needs, the player being a page people
+   reload — and reaches no other tab. The live dashboard therefore stays in
+   the teacher UI in one tab while the other one sits the quiz.
+
+   A key left behind in `localStorage` by the previous version is simply
+   never read again: the teacher opens in the teacher view, which is the
+   right default for a version that has just been deployed.
+
+3. **Flipping to "student" lands on the current page's student twin.**
+   `studentRouteFor` (in `studentView.ts`) maps the evaluation configuration
+   and the live dashboard to that evaluation's own `/take/:id` — the route
+   the SERVER routes, which answers the lobby before the start and the player
+   after — leaves a page that is already a student page where it is, and
+   sends everything else to the student home. A grading panel and a results
+   table have no student twin that can be named without the reader's own
+   attempt id, and guessing one would open another person's page. Flipping
+   back returns to the page the walk started from, as before.
+
+   The frame's switch does NOT hand out a seat: it has no classroom in hand
+   on most pages, and a silent self-enrolment from a toggle is not something
+   a teacher asked for. `/take/:id` answers `404` to a teacher with no seat,
+   as it answers it to a stranger (invariant 6), and that refusal now has a
+   screen of its own — "This evaluation is not available to you", with the
+   way home, and, for a teacher only, the sentence that names the evaluation
+   page's button as the thing that gives out the seat. Before, the route
+   rendered a retry loop outside the Shell, with nothing on screen to leave
+   by.
+
+4. **The attempt route keeps no teacher chrome.** `/take/:id` renders outside
+   the `Shell` — an exam is the one screen the rest of the app must go away
+   from, and a teacher who sees more than a student does is not walking the
+   student's quiz any more. So the frame's switch is not on it. The way out
+   is the lobby's own "Leave", and, inside the player, one entry in the
+   `Ctrl+K` palette ("Back to teacher view") that exists only when the switch
+   is on — which, for a student, it never is. Nobody is stuck in either mode:
+   every other page of the product carries the switch in its frame.
+
+### Consequences
+
+- `studentView.ts` gains `studentRouteFor` and owns `STUDENT_ROUTES`, which
+  `App.tsx` used to hold. One list decides both what the student UI has a
+  screen for and where the switch lands.
+- `Player` gains an optional `onExitStudentView`, given only when the switch
+  is on. Nothing else about the student flow changed.
+- The screenshot scenes seed `sessionStorage` (`ss`) instead of
+  `localStorage` for this key.
+- A test that puts the app in the student view clears `sessionStorage`; the
+  jsdom setup clears both before every test.
+
+### Rejected alternatives
+
+1. **Leaving the switch on the evaluation page and adding a second button to
+   the live dashboard.** Two buttons, two screens, and the next screen a
+   teacher is surprised on is a third. The view is a property of the window,
+   so it belongs to the frame — the same argument that puts the theme toggle
+   in the account menu rather than on every page.
+2. **A primary button in the page header.** It would take the one accent of
+   whatever screen it lands on, and the live dashboard's primary action is
+   "Launch" — a switch that competes with it is a switch someone presses by
+   mistake during an exam.
+3. **Keeping `localStorage` and synchronising the tabs through the `storage`
+   event.** That is the behaviour that was reported as the bug, made
+   deliberate. The teacher wants the two tabs to DISAGREE.
+4. **Mapping the grading panel and the results table to the teacher's own
+   feedback page.** It needs an attempt id the frame does not have, and the
+   one it could guess is somebody else's.
+5. **Putting the switch on the exam screen too.** Then the teacher is not
+   looking at what a student gets, which is the whole point of ADR-018, and
+   the zen player grows chrome for a case that lasts one click.
+6. **Self-enrolling from the frame's switch.** A toggle that writes a roster
+   seat, from any page, with no confirmation, is a surprise. The evaluation
+   page asks first, and keeps that job.

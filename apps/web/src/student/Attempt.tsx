@@ -13,14 +13,15 @@
  */
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { KeyRound, Lock } from "lucide-react";
+import { KeyRound, Lock, UserX } from "lucide-react";
 
 import type { AttemptOrLobby } from "@quiz/contracts";
 
-import { ApiError, api } from "../api";
+import { ApiError, api, useMe } from "../api";
 import { feedbackLink } from "../grading";
 import { useT } from "../i18n";
 import type { Route } from "../router";
+import { leaveStudentView, studentViewOn } from "../studentView";
 import { Button, Card, EmptyState, Field, QueryError, Spinner } from "../ui";
 import { Lobby } from "./Lobby";
 import { Player } from "./Player";
@@ -36,6 +37,11 @@ export function AttemptPage({
   navigate: (r: Route) => void;
 }) {
   const t = useT();
+  // Only to decide whether the refusal below may say the word "seat": a
+  // student can do nothing about one, and the 404 is deliberately the same
+  // answer a stranger to the classroom gets (invariant 6).
+  const me = useMe();
+  const staff = me.data?.role === "teacher" || me.data?.role === "admin";
   const [accessCode, setAccessCode] = useState("");
   const [sent, setSent] = useState<string | null>(null);
 
@@ -59,6 +65,15 @@ export function AttemptPage({
   });
 
   const home = () => navigate({ view: "home" });
+  /*
+   * The one way out of the student view from inside an attempt (ADR-018
+   * addendum). This route renders OUTSIDE the Shell — an exam is the one
+   * screen the rest of the app must go away from — so the frame's switch is
+   * not on it, and a teacher walking their own test would otherwise have to
+   * leave the attempt first. It is `undefined` for everybody else, and a
+   * student's switch is never on.
+   */
+  const exitStudentView = studentViewOn() ? () => navigate(leaveStudentView()) : undefined;
 
   if (entry.isLoading) return <Spinner label={t("player.loading")} className="py-24" />;
 
@@ -99,19 +114,41 @@ export function AttemptPage({
         </main>
       );
     }
-    if (code === "ip_not_allowed" || code === "not_open" || code === "not_implemented") {
+    /*
+     * The refusals that are an ANSWER and not a failure: retrying changes
+     * nothing, so each one gets a screen with the one way out. `not_found`
+     * joined them because this route is now reachable from the frame's view
+     * switch: a teacher who flips it on an evaluation of a classroom they
+     * hold no seat in used to land on a retry loop, outside the Shell, with
+     * nothing on screen to leave by (ADR-018 addendum).
+     */
+    if (
+      code === "ip_not_allowed" ||
+      code === "not_open" ||
+      code === "not_implemented" ||
+      code === "not_found"
+    ) {
+      const missing = code === "not_found";
       return (
         <main className="mx-auto w-full max-w-160 px-4 py-16">
           <Card className="px-6 py-4">
             <EmptyState
-              icon={Lock}
-              title={code === "ip_not_allowed" ? t("player.ipBlocked") : t("player.notOpen")}
+              icon={missing ? UserX : Lock}
+              title={
+                missing
+                  ? t("player.notAvailable")
+                  : code === "ip_not_allowed"
+                    ? t("player.ipBlocked")
+                    : t("player.notOpen")
+              }
               action={
                 <Button variant="primary" onClick={home}>
                   {t("player.closed.home")}
                 </Button>
               }
-            />
+            >
+              {missing && staff ? t("player.noSeatHint") : null}
+            </EmptyState>
           </Card>
         </main>
       );
@@ -144,6 +181,7 @@ export function AttemptPage({
       initial={data.view}
       onHome={home}
       onResults={(attemptId) => navigate(feedbackLink(attemptId).route)}
+      {...(exitStudentView ? { onExitStudentView: exitStudentView } : {})}
     />
   );
 }
