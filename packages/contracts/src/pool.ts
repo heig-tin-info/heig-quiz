@@ -419,6 +419,14 @@ export const PreviewBody = z.object({ source: VersionSource.default("draft") });
 export type PreviewBody = z.infer<typeof PreviewBody>;
 
 export const PreviewResult = z.object({
+  /**
+   * The question type the preview belongs to. It travels with the view
+   * because a preview is played by the type's own `Player`, and a surface
+   * that only has the preview (the full-page student preview of a question,
+   * opened in its own tab) would otherwise have to fetch the whole teacher
+   * detail just to learn which component to mount.
+   */
+  type: z.string(),
   student: z.unknown(),
   itemPoints: z.number(),
 });

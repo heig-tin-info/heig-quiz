@@ -14,6 +14,12 @@ export type Route =
   | { view: "pools" }
   | { view: "pool"; id: string }
   | { view: "question"; id: string }
+  /**
+   * What a student would see for ONE question, in a page of its own
+   * (docs/spec/08 §8.2, "See what the student sees"). The editor opens it in
+   * a new tab, so the draft the teacher is writing stays where it was.
+   */
+  | { view: "questionPreview"; id: string }
   // WP9: student player
   /** The student's attempt: the server decides between the lobby and the player. */
   | { view: "attempt"; evaluationId: string }
@@ -54,6 +60,8 @@ export function routeToPath(r: Route): string {
       return `/pools/${r.id}`;
     case "question":
       return `/questions/${r.id}`;
+    case "questionPreview":
+      return `/questions/${r.id}/preview`;
     // WP9: student player
     case "attempt":
       return `/take/${r.evaluationId}`;
@@ -87,7 +95,12 @@ export function parsePath(path: string): Route {
   if (parts[0] === "classrooms" && parts[1]) return { view: "classroom", id: parts[1] };
   if (parts[0] === "pools") return parts[1] ? { view: "pool", id: parts[1] } : { view: "pools" };
   if (parts[0] === "polls") return { view: "polls" };
-  if (parts[0] === "questions" && parts[1]) return { view: "question", id: parts[1] };
+  // `/questions/:id/preview` is the student preview; every other tail is the
+  // editor itself (its tab lives in the query string, not in the path).
+  if (parts[0] === "questions" && parts[1])
+    return parts[2] === "preview"
+      ? { view: "questionPreview", id: parts[1] }
+      : { view: "question", id: parts[1] };
   // WP9: student player
   if (parts[0] === "take" && parts[1]) return { view: "attempt", evaluationId: parts[1] };
   // A poll's session code, as printed under the QR. Upper-cased so a code

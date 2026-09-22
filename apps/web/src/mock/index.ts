@@ -2628,7 +2628,7 @@ on("POST", "/app/api/questions/:id/preview", (m, body) => {
   if (source === "draft" && issues.length > 0) {
     throw new MockValidation("This version cannot be rendered", issues);
   }
-  return { student: studentView(q, config), itemPoints: 1 };
+  return { type: q.type, student: studentView(q, config), itemPoints: 1 };
 });
 on("POST", "/app/api/questions/:id/try", (m, body) => {
   const q = questionOr404(m.groups!.id!);

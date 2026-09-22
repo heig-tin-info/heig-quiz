@@ -11,6 +11,7 @@ describe("routeToPath / parsePath", () => {
     { view: "pools" },
     { view: "pool", id: "p-1" },
     { view: "question", id: "q-1" },
+    { view: "questionPreview", id: "q-1" },
     // WP9: student player
     { view: "attempt", evaluationId: "e-1" },
     // WP10 replaced WP9's `/results/:id` with the one feedback route.
@@ -37,6 +38,13 @@ describe("routeToPath / parsePath", () => {
     // The editor tab lives in the query string, not in the path.
     expect(parsePath("/questions/q-1/edit")).toEqual({ view: "question", id: "q-1" });
     expect(parsePath("/questions")).toEqual({ view: "home" });
+    // The one tail that is a page of its own: the student preview the editor
+    // opens in a new tab (docs/spec/08 §8.2).
+    expect(parsePath("/questions/q-1/preview")).toEqual({
+      view: "questionPreview",
+      id: "q-1",
+    });
+    expect(routeToPath({ view: "questionPreview", id: "q-1" })).toBe("/questions/q-1/preview");
   });
 
   it("parses the development gallery; App.tsx is what refuses it in production", () => {
