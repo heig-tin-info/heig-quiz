@@ -62,9 +62,16 @@ grep -q 'conf.d/\*.caddy' /etc/caddy/Caddyfile || sed -i '1i import /etc/caddy/c
 mkdir -p /etc/caddy/conf.d && cp apps/runner/deploy/Caddyfile /etc/caddy/conf.d/quiz-runner.caddy
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && systemctl reload caddy
 # The language images: the runner's only supply chain, built HERE, never pulled.
-PODMAN_REMOTE_URL=unix:///run/podman/podman.sock apps/runner/images/build.sh c cpp python js
+# `spice` is ngspice, for the `circuit` question type (ADR-019): without it
+# `GET /health` does not list `spice` and every circuit grading degrades to a
+# PROPOSED grade. It is the default list, so passing no argument builds it.
+PODMAN_REMOTE_URL=unix:///run/podman/podman.sock apps/runner/images/build.sh c cpp python js spice
 podman images | grep quiz-runner
 ```
+
+After an upgrade that adds or changes an image (a new language, a new ngspice),
+rebuild it on the VM — nothing else does: `deploy.sh` ships the runner's own
+image, never the sandbox ones.
 
 The quadlet (`apps/runner/deploy/quiz-runner.container`) is installed by
 `deploy.sh` at every deploy: host networking bound to loopback, two read-only

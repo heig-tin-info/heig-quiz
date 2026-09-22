@@ -2,7 +2,7 @@
 #
 # Builds the runner images: `quiz-runner-<lang>:latest`, one per language.
 #
-#   images/build.sh              # c cpp python js  (the default four)
+#   images/build.sh              # c cpp python js spice  (the default five)
 #   images/build.sh c python     # only those
 #   images/build.sh rust         # the big one, never built by default
 #
@@ -25,7 +25,7 @@ fi
 
 languages=("$@")
 if [ ${#languages[@]} -eq 0 ]; then
-  languages=(c cpp python js)
+  languages=(c cpp python js spice)
 fi
 
 for lang in "${languages[@]}"; do

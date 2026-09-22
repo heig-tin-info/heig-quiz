@@ -43,6 +43,8 @@ import {
   ANSWER_SUMMARY_MAX,
   RunnerBusy,
   RunnerUnavailable,
+  type RunnerOutcome,
+  type RunnerRequest,
   type RunnerService,
 } from "@quiz/core/server";
 import { shuffle, streamSeed } from "@quiz/core/rng";
@@ -174,6 +176,18 @@ export class RunnerDown extends LiveError {
 export class NotRunnable extends LiveError {
   constructor() {
     super("not_runnable", 422, "this question type has nothing to run");
+  }
+}
+/**
+ * The type CAN run, and this particular answer has nothing to run: an empty
+ * schematic, a circuit with no stimulus. It is not `not_runnable` — that one
+ * says the button should not be there at all — and it is not a 4xx the client
+ * should report as an error, so the student's player says "draw something
+ * first" rather than "the simulator is down".
+ */
+export class NothingToRun extends LiveError {
+  constructor() {
+    super("nothing_to_run", 422, "this answer has nothing to run yet");
   }
 }
 
@@ -1113,6 +1127,8 @@ export async function countRecentEvents(
 /** What `type.toStudent` exposes about running; read structurally, never cast. */
 interface RunnableStudentView {
   runsPerMinute?: number;
+  /** The same budget under the name the `circuit` type gives it (ADR-019). */
+  simulationsPerMinute?: number;
   visibleCases?: {
     name: string;
     stdin: string;
@@ -1127,6 +1143,9 @@ function runnableView(student: unknown): RunnableStudentView {
   const source = student as Record<string, unknown>;
   const out: RunnableStudentView = {};
   if (typeof source["runsPerMinute"] === "number") out.runsPerMinute = source["runsPerMinute"];
+  if (typeof source["simulationsPerMinute"] === "number") {
+    out.simulationsPerMinute = source["simulationsPerMinute"];
+  }
   if (Array.isArray(source["visibleCases"])) {
     out.visibleCases = source["visibleCases"].flatMap((raw) => {
       if (raw === null || typeof raw !== "object") return [];
@@ -1289,6 +1308,98 @@ export async function runVisibleCases(
   // is always an account here; a poll runs no code.
   if (attempt.userId !== null) events.runnerResult(attempt.userId, requestId, itemId, result);
   return { requestId, result };
+}
+
+/**
+ * `POST /attempts/:id/simulate` — the student's own button, for a type that
+ * builds its OWN request (ADR-019).
+ *
+ * The generic half of `runVisibleCases`: same gate, same budget, same
+ * journal, but the request comes from `type.interactiveRequest` instead of
+ * from the first half of a grading. The type assembles it server-side from
+ * the STORED config and the parsed answer (invariant 14) and puts in it only
+ * what the student may already see — a `circuit` sends the visible stimuli
+ * and never the reference's waveform. Nothing here inspects the request: the
+ * live module does not know what a netlist is.
+ *
+ * The outcome comes back raw, in the response and nowhere else. A `code` run
+ * needs an SSE frame because its result is a verdict the dashboard also
+ * cares about; a simulation is a curve the student asked for, so the response
+ * is the delivery.
+ */
+export async function simulateAnswer(
+  db: Db,
+  input: {
+    runner: RunnerService;
+    evaluation: EvaluationRecord;
+    attempt: AttemptRecord;
+    itemId: string;
+    answer: unknown;
+    now: Date;
+  },
+): Promise<RunnerOutcome> {
+  const { evaluation, attempt, itemId, now } = input;
+  // The server owns the clock: a simulation is a write's worth of work, so it
+  // is refused past the deadline exactly like an autosave (invariant 5).
+  assertWritable(evaluation, attempt, now);
+  const joined = await itemOf(db, evaluation.id, itemId);
+  // 404 and not 403: an item of another evaluation is indistinguishable from
+  // one that does not exist (invariant 6).
+  if (!joined) throw new LiveError("not_found", 404);
+
+  const type = typeOf(joined.question.type);
+  const build = type.interactiveRequest?.bind(type);
+  // A type with no button of its own. `code` is not one of them: it keeps its
+  // older, case-filtering `/run` route.
+  if (!build) throw new NotRunnable();
+
+  const version = { config: joined.version.config, configVersion: joined.version.configVersion };
+  const student = runnableView(
+    studentView({ type: joined.question.type, version, seed: attempt.seed, itemId, shuffle: false }),
+  );
+
+  // N-SEC-07: the same journal-counted budget as `/run`, under whichever name
+  // the type publishes it — a circuit says `simulationsPerMinute`, a code
+  // question says `runsPerMinute`. Both are counted as `run` events, so a
+  // student cannot double their budget by using both buttons of one attempt.
+  const limit = student.simulationsPerMinute ?? student.runsPerMinute ?? DEFAULT_RUNS_PER_MINUTE;
+  const used = await countRecentEvents(db, attempt.id, "run", new Date(now.getTime() - 60_000));
+  if (used >= limit) throw new RateLimited(60);
+
+  // Invariant 7's second half: the envelope was parsed by `SimulateBody`, the
+  // payload is parsed by the schema the type and the client share.
+  const answer = type.answerSchema.safeParse(input.answer);
+  if (!answer.success) throw new AnswerInvalid(answer.error.issues);
+
+  const config = loadConfig(joined.question.type, version);
+  const built = build(config, answer.data, {
+    seed: attempt.seed,
+    itemId,
+    attemptId: attempt.id,
+    itemPoints: joined.item.points,
+    now,
+    // Same per-type settings as the grading pass, so what the student tries is
+    // what the grading will score.
+    defaults: gradeDefaults(evaluation),
+  });
+  if (built === null) throw new NothingToRun();
+
+  // The student is waiting in front of the screen: never the grading queue.
+  const request: RunnerRequest = { ...built, priority: "interactive" };
+  const requestId = randomUUID();
+  // `kind: "simulate"` tells the two buttons apart in the journal; the EVENT
+  // stays a `run`, because the budget is one and the audit union is closed
+  // (invariant 9). Nothing student-supplied is journalled: the file names are
+  // the type's (invariant 14).
+  await logAttemptEvent(db, attempt.id, "run", { itemId, requestId, kind: "simulate" }, now);
+
+  try {
+    return await input.runner.run(request);
+  } catch (error) {
+    if (error instanceof RunnerBusy) throw new RunnerDown("busy");
+    if (error instanceof RunnerUnavailable) throw new RunnerDown(error.reason);
+    throw error;
+  }
 }
 
 // --- Teacher controls (§5.1, F-LIVE-11) -----------------------------------

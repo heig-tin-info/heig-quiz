@@ -207,6 +207,40 @@ describe("executeRequest", () => {
     expect(engine.removed).toContain("quiz-run-test");
   });
 
+  /**
+   * A `spice` request: one schematic, one file per stimulus, one case per
+   * stimulus naming its own netlist (ADR-019). Nothing is built, so no
+   * compile exec is issued at all and `compile.ok` is true by definition.
+   */
+  it("runs one ngspice per stimulus, with the netlist in the case's argv", async () => {
+    const engine = createFakeEngine((call) =>
+      call.argv[0] === "timeout" ? { exitCode: 0, stdout: " time v(out)\n0 0\n", ms: 40 } : {},
+    );
+    const outcome = await executeRequest(
+      request({
+        language: "spice",
+        files: [
+          { name: "s0.cir", content: "* s0\n.end\n" },
+          { name: "s1.cir", content: "* s1\n.end\n" },
+        ],
+        cases: [
+          { name: "s0", args: ["s0.cir"], stdin: "" },
+          { name: "s1", args: ["s1.cir"], stdin: "" },
+        ],
+      }),
+      deps(engine),
+    );
+
+    expect(engine.created[0]).toMatchObject({ image: "quiz-runner-spice:latest" });
+    // Nothing between the uploads and the first case: a netlist has no build.
+    expect(engine.calls.map((call) => call.argv[0])).toEqual(["cp", "cp", "timeout", "timeout"]);
+    expect(outcome.compile).toEqual({ ok: true, stdout: "", stderr: "", ms: 0 });
+    const runs = engine.calls.filter((call) => call.argv[0] === "timeout");
+    expect(runs[0]!.argv).toEqual(["timeout", "-s", "KILL", "2", "ngspice", "-b", "s0.cir"]);
+    expect(runs[1]!.argv).toEqual(["timeout", "-s", "KILL", "2", "ngspice", "-b", "s1.cir"]);
+    expect(outcome.cases.map((c) => c.exitCode)).toEqual([0, 0]);
+  });
+
   it("runs no case for an `action: check`", async () => {
     const engine = createFakeEngine();
     const outcome = await executeRequest(request({ action: "check" }), deps(engine));

@@ -1,0 +1,29 @@
+# quiz-runner-spice: ngspice, and nothing else.
+#
+# The `circuit` question type (packages/qt-circuit) is graded by SIMULATING
+# the student's schematic and comparing the output waveform with the
+# reference's (ADR-019). ngspice is therefore a "language" of the runner in
+# exactly the sense the other five are: one image, one run plan
+# (`src/languages.ts`), the same hardened container — no mount, no network,
+# no secret (invariants 10 to 13).
+#
+# Built by images/build.sh:
+#   podman build -t quiz-runner-spice:latest images/spice
+FROM docker.io/library/alpine:3.20
+
+# ngspice alone (Alpine 3.20 ships 42). It is a batch simulator: it reads a
+# netlist and writes a table. No X, no editor, no network client — the
+# container has no network, so a network client in it would only be a tool
+# for an attacker.
+RUN apk add --no-cache ngspice
+
+# uid 1000, non-root, owning nothing outside the work directory. /work is
+# replaced at run time by a tmpfs (mode 1777, size RUNNER_WORKDIR_MB); the
+# directory here only exists so that WORKDIR resolves on an unmounted image.
+RUN adduser -D -u 1000 -h /work runner && mkdir -p /work && chown 1000:1000 /work
+
+USER 1000:1000
+WORKDIR /work
+# No ENTRYPOINT and no CMD that matter: the runner starts the container with
+# `sleep <budget>` and drives it with `podman exec`.
+CMD ["sleep", "60"]

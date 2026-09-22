@@ -3,8 +3,17 @@ import type { RunnerLanguage } from "@quiz/core/server";
 import type { RunnerConfig } from "./config.js";
 import type { Engine } from "./engine.js";
 
-/** The five languages of the contract; an image may exist for any subset. */
-export const LANGUAGES: readonly RunnerLanguage[] = ["c", "cpp", "python", "js", "rust"];
+/** The six languages of the contract; an image may exist for any subset. */
+export const LANGUAGES: readonly RunnerLanguage[] = [
+  "c",
+  "cpp",
+  "python",
+  "js",
+  "rust",
+  // ngspice, for the `circuit` question type (ADR-019). A language in the
+  // runner's eyes only: one image, one run plan, the same hardened container.
+  "spice",
+];
 
 /** `quiz-runner-c:latest` — what images/build.sh tags. */
 export function imageRef(config: RunnerConfig, language: RunnerLanguage): string {

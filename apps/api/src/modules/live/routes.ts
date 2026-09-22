@@ -24,6 +24,7 @@ import {
   MarkDoneBody,
   PositionBody,
   RunBody,
+  SimulateBody,
   StartBody,
   SubmitBody,
 } from "@quiz/contracts";
@@ -77,6 +78,13 @@ export async function livePlugin(app: FastifyInstance) {
         .header("retry-after", String(error.retryAfterS))
         .code(429)
         .send({ error: error.code });
+    }
+    if (error instanceof service.RunnerDown) {
+      // `reason` beside `message`: the player names the failure with it
+      // ("busy", "not_configured", "timeout") without parsing a sentence.
+      return reply
+        .code(error.status)
+        .send({ error: error.code, reason: error.reason, message: error.message });
     }
     if (error instanceof service.LiveError) {
       return reply.code(error.status).send({ error: error.code, message: error.message });
@@ -351,6 +359,39 @@ export async function livePlugin(app: FastifyInstance) {
       // 202: the authoritative delivery is the `runner.result` SSE frame; the
       // body repeats it so a client without a stream still works.
       return reply.code(202).send(outcome);
+    } catch (error) {
+      return failure(reply, error, now);
+    }
+  });
+
+  /**
+   * The student's Simulate button (ADR-019). Generic: any question type that
+   * implements `interactiveRequest` gets this route, and the outcome comes
+   * back raw for the client half of that type to read.
+   *
+   * `200` and not `202`: there is no SSE frame behind it, so the response is
+   * the delivery. With `RUNNER_MODE=stub` it answers `503
+   * runner_unavailable`, which is a configuration and not a failure
+   * (decision D14).
+   */
+  app.post("/app/api/attempts/:id/simulate", { preHandler: requireSession }, async (req, reply) => {
+    const now = app.clock.now();
+    const params = IdParam.safeParse(req.params);
+    if (!params.success) return reply.code(404).send({ error: "not_found" });
+    const body = SimulateBody.safeParse(req.body);
+    if (!body.success) return invalid(reply, body.error);
+    const scope = await ownAttempt(app, req, reply, params.data.id);
+    if (!scope) return reply;
+    try {
+      const outcome = await service.simulateAnswer(app.db, {
+        runner: app.runner,
+        evaluation: scope.evaluation,
+        attempt: scope.attempt,
+        itemId: body.data.itemId,
+        answer: body.data.answer,
+        now,
+      });
+      return reply.code(200).send(outcome);
     } catch (error) {
       return failure(reply, error, now);
     }

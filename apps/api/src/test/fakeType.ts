@@ -237,3 +237,96 @@ export const fakeRunnableCode: QuestionTypeServer<
 
   searchText: (config) => config.template,
 };
+
+const SimulatableConfig = z.object({
+  prompt: z.string(),
+  /** The budget of the Simulate button, under the name `qt-circuit` gives it. */
+  simulationsPerMinute: z.number().int().default(2),
+  /** The reference the grading compares against: never a student's to see. */
+  reference: z.string(),
+  stimuli: z.array(z.object({ name: z.string(), hidden: z.boolean() })),
+});
+
+/**
+ * A type with an `interactiveRequest` and NO `finalizeRunner`: the fake behind
+ * `POST /attempts/:id/simulate` (ADR-019).
+ *
+ * It is registered as `circuit` because that is the id the real type uses, and
+ * `registerForTests` puts the real one back afterwards. What it proves is that
+ * the live module drives ANY type declaring the hook — it never mentions
+ * ngspice, a netlist or a stimulus — and that the request the type built is
+ * forwarded as it is, save for the `priority` the route forces.
+ */
+export const fakeSimulatable: QuestionTypeServer<
+  z.infer<typeof SimulatableConfig>,
+  { schematic: string },
+  { prompt: string; simulationsPerMinute: number; stimuli: { name: string }[] },
+  { reference: string },
+  { passed: number }
+> = {
+  id: "circuit",
+  configVersion: 1,
+  configSchema: SimulatableConfig,
+  answerSchema: z.object({ schematic: z.string() }),
+  studentSchema: z.object({
+    prompt: z.string(),
+    simulationsPerMinute: z.number().int(),
+    stimuli: z.array(z.object({ name: z.string() })),
+  }),
+  solutionSchema: z.object({ reference: z.string() }),
+  detailsSchema: z.object({ passed: z.number().int() }),
+
+  emptyDraft: () => ({
+    prompt: "",
+    simulationsPerMinute: 2,
+    reference: "",
+    stimuli: [{ name: "s0", hidden: false }],
+  }),
+  migrate: (config) => SimulatableConfig.parse(config),
+  defaultPoints: (config) => config.stimuli.length,
+  shuffleable: () => false,
+
+  toStudent: (config) => ({
+    prompt: config.prompt,
+    simulationsPerMinute: config.simulationsPerMinute,
+    // The visible half only, and never the reference (invariant 4).
+    stimuli: config.stimuli.filter((s) => !s.hidden).map((s) => ({ name: s.name })),
+  }),
+  toSolution: (config) => ({ reference: config.reference }),
+
+  /**
+   * The request the student's button runs. Built from the STORED config and
+   * the parsed answer (invariant 14): the file names are the type's, never
+   * anything the browser sent. `null` for an empty schematic — there is
+   * nothing to simulate yet.
+   */
+  interactiveRequest(config, answer) {
+    if (answer.schematic.trim() === "") return null;
+    const visible = config.stimuli.filter((s) => !s.hidden);
+    return {
+      language: "spice",
+      files: visible.map((s, index) => ({
+        name: `${s.name}.cir`,
+        content: `* ${answer.schematic}\n* stimulus ${index}\n.end\n`,
+      })),
+      compileArgs: "",
+      action: "run",
+      limits: { timeMs: 5000, memoryMb: 128, outputKb: 64 },
+      cases: visible.map((s) => ({ name: s.name, args: [`${s.name}.cir`], stdin: "" })),
+      // Deliberately wrong: the live service must force `interactive`.
+      priority: "grading",
+    };
+  },
+
+  grade(_config, _answer, ctx): GradeResult<{ passed: number }> {
+    return {
+      kind: "graded",
+      points: 0,
+      maxPoints: ctx.itemPoints,
+      details: { passed: 0 },
+      state: "proposed",
+    };
+  },
+
+  searchText: (config) => config.prompt,
+};

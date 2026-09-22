@@ -86,8 +86,9 @@ host whose Podman service is not running, not the normal path.
    leading `-`. No shell ever sees it — every command is an argv.
 4. The language's build step runs once (`gcc`, `g++`, `rustc`, or
    `py_compile`/`node --check` for the interpreted ones, so a syntax error is
-   a compile error and not four identical failed cases). A failure ends the
-   request there, with an empty case list.
+   a compile error and not four identical failed cases; `spice` has none at
+   all — see below). A failure ends the request there, with an empty case
+   list.
 5. Each case runs in turn, `timeout -s KILL <limits.timeMs>` inside the
    container and `limits.timeMs + RUNNER_CASE_GRACE_MS` on the service's own
    clock. Both streams are capped at `min(limits.outputKb, RUNNER_MAX_OUTPUT_KB)`,
@@ -96,7 +97,8 @@ host whose Podman service is not running, not the normal path.
    `cases[].args` follows the program in that argv (`caseArgv` in
    `execute.ts`): `timeout -s KILL <s> ./program <arg…>`, or
    `… python3 main.py <arg…>` for an interpreted language, so the case's
-   command line is `argv[1..]` of the student's program. One element is ONE
+   command line is `argv[1..]` of the student's program — or, in `spice`, the
+   netlist to simulate (`… ngspice -b s0.cir`). One element is ONE
    argument, verbatim — a space, a quote, a `$` or a `;` inside it is a
    character of that argument, because no shell runs in a container of this
    service (`languages.ts`). `src/podman.int.test.ts` proves it against a real
@@ -121,15 +123,65 @@ is not a useful thing for a teacher to write.
 ## The images
 
 ```bash
-images/build.sh                 # c cpp python js
+images/build.sh                 # c cpp python js spice
 images/build.sh rust            # ~700 MB, never built by default
 ```
+
+| Image | Base | What is in it | Size |
+| --- | --- | --- | --- |
+| `quiz-runner-c` | alpine 3.20 | `gcc`, `musl-dev` | ~160 MB |
+| `quiz-runner-cpp` | alpine 3.20 | `g++`, `musl-dev` | ~220 MB |
+| `quiz-runner-python` | alpine 3.20 | `python3` | ~50 MB |
+| `quiz-runner-js` | alpine 3.20 | `nodejs` | ~170 MB |
+| `quiz-runner-rust` | alpine 3.20 | `rust`, `cargo` | ~700 MB, on demand |
+| `quiz-runner-spice` | alpine 3.20 | `ngspice` (42) | ~65 MB |
 
 Alpine-based, one toolchain each, a non-root `uid 1000`, no network client, no
 package manager needed at run time. `GET /health` lists the languages whose
 image is present; `POST /run` answers `503 language_unavailable` for the
 others — the runner never pulls anything (it has no registry credentials and,
 in production, no route to a registry).
+
+### `spice`: a simulator, served as a language
+
+The `circuit` question type (`packages/qt-circuit`) is graded by SIMULATING
+the student's schematic and comparing the output waveform with the
+reference's (ADR-019). ngspice therefore rides the existing path, unchanged:
+one image, one entry in `SPECS` (`languages.ts`), the same hardened container,
+the same queues, the same limits. No flag was relaxed for it and no
+environment variable was added — `src/engine.test.ts` asserts the container's
+argv flag for flag and did not change.
+
+Two things are specific to it:
+
+- **Nothing is built.** `compile` is `null`, so `compile.ok` is true by
+  definition and a malformed netlist reaches the student as a FAILED CASE —
+  ngspice exits non-zero and says why — not as a compile error. ngspice has
+  no check mode to borrow, unlike `py_compile` for Python.
+- **The argv carries the netlist**, not the run plan. A request holds one
+  schematic and several stimuli: one file per stimulus (`s0.cir`, `s1.cir`,
+  …, all rebuilt server-side by the question type — invariant 14) and one
+  case per stimulus, named `s0`, `s1`, …, with `args: ["s0.cir"]`. The argv
+  is therefore `timeout -s KILL <s> ngspice -b s0.cir`, and one container
+  serves every stimulus of one answer. A case with NO argument is not a hang:
+  `ngspice -b` then reads its stdin, which the engine closes at once, and it
+  exits 1 with "no simulations run" in a few milliseconds (verified on
+  ngspice 42, `src/spice.int.test.ts`).
+
+**What was checked about `.control` blocks.** ngspice's batch mode executes
+the `.control` section of the netlist, and that section has commands that
+touch the host: `shell` runs a command, `source` and `load` read a file,
+`write` writes one. They were all tried inside the container of this service.
+`shell id` answers `uid=1000(runner)`; `shell cat /etc/shadow` is *Permission
+denied*; `shell touch /etc/pwned` and `write /etc/out.raw` are *Read-only file
+system*; `shell ping` is *permission denied (are you root?)* because
+`--cap-drop=ALL` took `CAP_NET_RAW`, and there is nothing to reach anyway with
+`--network none`; `load` reads only what is already in the image or in the
+`/work` tmpfs. So the sandbox answers, not the parser — which is the point of
+invariants 11 and 12. The second line of defence is that a student never
+writes a netlist: the type assembles it from the schematic and the teacher's
+stimuli (invariant 14), so no `.control` block of a student's making is ever
+submitted.
 
 ## Running it here
 
