@@ -66,10 +66,10 @@ afterEach(() => {
 });
 
 describe("the lobby", () => {
-  it("watches its evaluation and shows the presence ring", () => {
+  it("watches the lobby subject — the one that counts as present — and shows the ring", () => {
     const { stream } = render();
     expect(stream.url).toBe(
-      "/app/api/events?watch=evaluation%3A11111111-1111-4111-8111-111111111111",
+      "/app/api/events?watch=lobby%3A11111111-1111-4111-8111-111111111111",
     );
     expect(
       screen.getByRole("img", { name: "18 étudiants présents sur 24" }),

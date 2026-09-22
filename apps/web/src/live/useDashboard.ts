@@ -34,10 +34,14 @@ export interface DashboardStream {
   connected: boolean;
 }
 
-export function useDashboard(id: string, includeAnswers: boolean): DashboardStream {
+export function useDashboard(
+  id: string,
+  includeAnswers: boolean,
+  includeResults: boolean,
+): DashboardStream {
   const qc = useQueryClient();
   const clock = useServerClock();
-  const key = dashboardKey(id, includeAnswers);
+  const key = dashboardKey(id, includeAnswers, includeResults);
 
   const query = useQuery<GridState>({
     queryKey: key,
@@ -48,20 +52,27 @@ export function useDashboard(id: string, includeAnswers: boolean): DashboardStre
     placeholderData: keepPreviousData,
     queryFn: async () =>
       initialGrid(
-        await api(`/app/api/evaluations/${id}/dashboard?includeAnswers=${includeAnswers ? 1 : 0}`),
+        await api(
+          `/app/api/evaluations/${id}/dashboard?includeAnswers=${
+            includeAnswers ? 1 : 0
+          }&results=${includeResults ? 1 : 0}`,
+        ),
       ),
   });
 
   const refresh = useCallback(() => {
     void qc.invalidateQueries({ queryKey: key });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qc, id, includeAnswers]);
+  }, [qc, id, includeAnswers, includeResults]);
 
   const { connected } = useEventStream({
     watch: `evaluation:${id}`,
     onClock: (serverNow) => clock.sample(serverNow),
     onSnapshot: (state) => {
-      if (includeAnswers) {
+      // The stream builds its snapshot without either toggle, so a teacher
+      // reading the answers OR the live verdicts refetches their own variant
+      // instead of having it silently blanked.
+      if (includeAnswers || includeResults) {
         refresh();
         return;
       }
@@ -73,6 +84,17 @@ export function useDashboard(id: string, includeAnswers: boolean): DashboardStre
     },
     onEvent: (event) => {
       qc.setQueryData<GridState>(key, (prev) => (prev ? applyGridEvent(prev, event) : prev));
+    },
+    /*
+     * A hint on the `evaluations` family means the grid gained or lost a ROW
+     * — a teacher who just took a seat and opened the quiz (ADR-018), or one
+     * who threw their test attempt away. No typed frame can express that, and
+     * every frame that follows it (`dashboard.presence`, `dashboard.cell`) is
+     * keyed on a row that is not there yet, so it lands nowhere. Re-reading is
+     * the answer, and it is the one the server asked for by sending a hint.
+     */
+    onHint: (hint) => {
+      if (hint.kinds.includes("evaluations")) refresh();
     },
     onRefresh: refresh,
   });

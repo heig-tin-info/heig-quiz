@@ -38,11 +38,14 @@ import {
   type LobbyView,
   type RunnerResultEvent,
   type StudentHome,
+  type Verdict,
 } from "@quiz/contracts";
 import {
   ANSWER_SUMMARY_MAX,
+  isGraded,
   RunnerBusy,
   RunnerUnavailable,
+  type AnyQuestionTypeServer,
   type RunnerOutcome,
   type RunnerRequest,
   type RunnerService,
@@ -94,6 +97,7 @@ import {
   type PairKey,
 } from "../grading/service.js";
 import { presence } from "../realtime/presence.js";
+import { UnavailableRunner } from "../runner/unavailable.js";
 import { isShuffleable, solutionView, studentView } from "./studentView.js";
 
 export type AttemptRecord = typeof attempts.$inferSelect;
@@ -319,13 +323,38 @@ export async function resetOwnStaffAttempt(
   return { deleted: true, attemptId: row.id };
 }
 
-/** F-LIVE-02: the denominator of the lobby ring. Staff seats do not count. */
-export async function enrolledCount(db: Db, classroomId: string): Promise<number> {
-  const [row] = await db
+/**
+ * F-LIVE-02: the denominator of the lobby ring — the SEATS IN THE ROOM.
+ *
+ * The class, plus the staff seats that hold an attempt on this evaluation.
+ * That is exactly the row set `dashboardView` builds, so the ring and the
+ * grid can never disagree on who is expected, and a teacher walking their own
+ * quiz (ADR-018) never reads "1 / 0" on the one screen where being counted is
+ * the whole message.
+ *
+ * It does NOT weaken decision 4 of ADR-018: a staff attempt still counts in
+ * no statistic — not in the completion of a question, not in its success
+ * rate, not in the class figures. Presence is not a statistic; it is how many
+ * people are sitting in the room, and a teacher sitting the quiz is one of
+ * them. A staff seat that took no attempt is listed nowhere and counted
+ * nowhere, exactly as before.
+ */
+export async function enrolledCount(db: Db, evaluation: EvaluationRecord): Promise<number> {
+  const [klass] = await db
     .select({ n: count() })
     .from(enrollments)
-    .where(and(eq(enrollments.classroomId, classroomId), eq(enrollments.staff, false)));
-  return row?.n ?? 0;
+    .where(
+      and(eq(enrollments.classroomId, evaluation.classroomId), eq(enrollments.staff, false)),
+    );
+  const [staff] = await db
+    .select({ n: count() })
+    .from(enrollments)
+    .innerJoin(
+      attempts,
+      and(eq(attempts.userId, enrollments.userId), eq(attempts.evaluationId, evaluation.id)),
+    )
+    .where(and(eq(enrollments.classroomId, evaluation.classroomId), eq(enrollments.staff, true)));
+  return (klass?.n ?? 0) + (staff?.n ?? 0);
 }
 
 /** F-EVAL-12: a prefix list, matched literally against the request address. */
@@ -407,7 +436,16 @@ export async function ensureAttempt(
   if (!row) throw new LiveError("internal_error", 500, "attempt vanished after insert");
   // F-DASH-03: the teacher's grid learns the row exists the moment it does,
   // not at the next refetch. A guest has no roster row to light up.
-  if (created.length > 0 && row.userId !== null) events.attemptRowChanged(evaluation.id, row);
+  if (created.length > 0 && row.userId !== null) {
+    events.attemptRowChanged(evaluation.id, row);
+    // A STAFF seat has no row in the grid until it holds an attempt (ADR-018,
+    // decision 3), so the frame above has nothing to land on: the grid is one
+    // ROW short, not one cell stale. There is no typed frame for a row that
+    // came into existence, so the dashboards re-read — the same answer
+    // `attemptRemoved` gives for a row that ceased to exist.
+    const seat = await seatOf(db, evaluation, row.userId);
+    if (seat?.staff) events.rosterChanged(evaluation.id);
+  }
   return row;
 }
 
@@ -672,7 +710,7 @@ export async function lobbyView(
       announcedDurationS: evaluation.durationS,
     },
     present: presence.count(evaluation.id),
-    enrolled: await enrolledCount(db, evaluation.classroomId),
+    enrolled: await enrolledCount(db, evaluation),
     timeBonusPercent: participant.timeBonusPercent,
     serverNow: iso(now),
   };
@@ -889,6 +927,105 @@ export function summarizeAnswer(item: JoinedItem, payload: unknown): string {
   return answerSummarizer(item)(payload);
 }
 
+/**
+ * ADR-020 — the verdict a cell WOULD get if the evaluation closed now.
+ *
+ * The "Results" toggle of the live dashboard used to mean "show the gradings
+ * there are", and before closing there are none: the teacher watched a wall
+ * of blue "done" cells and a class row reading "after closing", on the one
+ * screen whose job is to say whether the class has understood. So the server
+ * grades the answer it already holds, with the type's OWN `grade` — the same
+ * function the grading pass calls, on the same config, so a preview and the
+ * final grading can never disagree by construction.
+ *
+ * Four properties make that safe rather than clever:
+ *   - it is READ-ONLY. Nothing is written to `gradings`, nothing is queued,
+ *     no job is enqueued, and the grading pass at closing runs exactly as it
+ *     did. A preview is a number computed and thrown away;
+ *   - it never reaches a student. It travels on `DashboardView` and on the
+ *     staff-only `dashboard.cell` frame, neither of which goes through
+ *     `toStudent`, and the student payloads are untouched (invariant 4);
+ *   - it is only ever asked for by the teacher who turned the toggle on
+ *     (`?results=1`), so a projected grid costs nothing when the switch is
+ *     off;
+ *   - a type that needs the RUNNER gets no preview. `finalizeRunner` is the
+ *     declaration of "graded in two halves"; building the request and running
+ *     nothing would cost the assembly of every source file of every student
+ *     on every refresh, to answer `null`. `code` and `circuit` therefore
+ *     colour when their real grading lands, exactly as before.
+ *
+ * Returns `null` for a question this cannot preview, which the caller reads
+ * as "no live verdict for this column".
+ */
+export function liveGrader(
+  item: JoinedItem,
+  evaluation: EvaluationRecord,
+  now: Date,
+): ((attempt: AttemptRecord, payload: unknown) => Promise<GradedCell | null>) | null {
+  let type: AnyQuestionTypeServer;
+  let config: unknown;
+  try {
+    type = typeOf(item.question.type);
+    if (type.finalizeRunner) return null;
+    config = loadConfig(item.question.type, {
+      config: item.version.config,
+      configVersion: item.version.configVersion,
+    });
+  } catch {
+    // An unknown type or a config this build cannot read: no preview, and
+    // certainly not a 500 on the teacher's dashboard.
+    return null;
+  }
+  const runner = new UnavailableRunner("live_preview");
+  const defaults = gradeDefaults(evaluation);
+  return async (attempt, payload) => {
+    try {
+      const parsed = type.answerSchema.safeParse(payload);
+      if (!parsed.success) return null;
+      const result = await type.grade(config, parsed.data, {
+        seed: attempt.seed,
+        itemId: item.item.id,
+        attemptId: attempt.id,
+        itemPoints: item.item.points,
+        now,
+        runner,
+        defaults,
+      });
+      if (!isGraded(result)) return null;
+      const points = Math.round(result.points * 100) / 100;
+      const maxPoints = result.maxPoints;
+      return {
+        verdict: verdictOf({ points, maxPoints, state: "validated" }),
+        rate: maxPoints > 0 ? points / maxPoints : null,
+      };
+    } catch {
+      // A grader that throws on a half-typed answer is expected while the
+      // student is still typing; the cell simply keeps its progress colour.
+      return null;
+    }
+  };
+}
+
+/** What {@link liveGrader} answers: a colour, and the share it counts for. */
+interface GradedCell {
+  verdict: Verdict;
+  rate: number | null;
+}
+
+/** {@link liveGrader} for ONE cell, which is what an autosave moves. */
+async function previewVerdict(
+  evaluation: EvaluationRecord,
+  item: JoinedItem,
+  attempt: AttemptRecord,
+  payload: unknown,
+  now: Date,
+): Promise<Verdict | null> {
+  if (payload === null || payload === undefined) return null;
+  const grade = liveGrader(item, evaluation, now);
+  if (!grade) return null;
+  return (await grade(attempt, payload))?.verdict ?? null;
+}
+
 function cellStatus(answer: AnswerRecord | null): CellStatus {
   if (!answer) return "empty";
   if (answer.markedDone) return "done";
@@ -977,6 +1114,7 @@ export async function saveAnswer(
     status: stored.get(itemId)?.markedDone === true ? "done" : "in_progress",
     revision: row.revision,
     summary: summarizeAnswer(joined, row.payload),
+    verdict: await previewVerdict(evaluation, joined, attempt, row.payload, now),
   });
   return { accepted: true, revision: row.revision, serverNow: iso(now) };
 }
@@ -1040,6 +1178,10 @@ export async function markDone(
     status: input.done ? "done" : cellStatus(current),
     revision: current?.revision ?? 0,
     summary: current && ownItem ? summarizeAnswer(ownItem, current.payload) : null,
+    verdict:
+      current && ownItem
+        ? await previewVerdict(evaluation, ownItem, attempt, current.payload, now)
+        : null,
   });
   return { done: input.done, nextItemId: next };
 }
@@ -1639,7 +1781,7 @@ export async function reopenAttempt(
 export async function dashboardView(
   db: Db,
   evaluation: EvaluationRecord,
-  input: { now: Date; includeAnswers: boolean },
+  input: { now: Date; includeAnswers: boolean; includeResults: boolean },
 ): Promise<DashboardView> {
   const items = await joinedItems(db, evaluation.id);
   const roster = await db
@@ -1705,9 +1847,27 @@ export async function dashboardView(
     input.includeAnswers ? items.map((item) => [item.item.id, answerSummarizer(item)]) : [],
   );
 
-  const rows: DashboardView["rows"] = seats
+  /*
+   * One live grader per QUESTION (ADR-020), built only when the teacher asked
+   * for the results — the type and its configuration are parsed once per
+   * column and reused down it, exactly like the summarizer above. A column
+   * whose type is graded by the runner has no entry at all, so its cells cost
+   * nothing.
+   */
+  const preview = new Map<string, NonNullable<ReturnType<typeof liveGrader>>>();
+  if (input.includeResults) {
+    for (const item of items) {
+      const grader = liveGrader(item, evaluation, input.now);
+      if (grader) preview.set(item.item.id, grader);
+    }
+  }
+  /** The live rate of each item, over the CLASS rows only (ADR-018). */
+  const liveRates = new Map<string, number[]>();
+
+  const rows: DashboardView["rows"] = await Promise.all(
+    seats
     .filter((r) => r.userId !== null)
-    .map((entry) => {
+    .map(async (entry) => {
       const userId = entry.userId!;
       const attempt = byUser.get(userId) ?? null;
       const answered = attempt ? (byAttempt.get(attempt.id) ?? new Map()) : new Map();
@@ -1724,23 +1884,43 @@ export async function dashboardView(
         timeBonusPercent: entry.timeBonusPercent,
         points: attempt ? pointsOf(standing, attempt.id, items) : null,
         maxPoints,
-        cells: items.map((item) => {
-          const answer = answered.get(item.item.id) ?? null;
-          const grading = attempt
-            ? (standing.get(pairKey(attempt.id, item.item.id)) ?? null)
-            : null;
-          return {
-            itemId: item.item.id,
-            status: cellStatus(answer),
-            verdict: grading ? verdictOf(grading) : null,
-            points: grading && grading.state === "validated" ? grading.points : null,
-            revision: answer?.revision ?? 0,
-            summary:
-              answer ? (summarize.get(item.item.id)?.(answer.payload) ?? null) : null,
-          };
-        }),
+        cells: await Promise.all(
+          items.map(async (item) => {
+            const answer: AnswerRecord | null = answered.get(item.item.id) ?? null;
+            const grading = attempt
+              ? (standing.get(pairKey(attempt.id, item.item.id)) ?? null)
+              : null;
+            // A grading on record always wins: a preview never overwrites a
+            // teacher's validated verdict, nor a proposal awaiting their eyes.
+            let verdict: Verdict | null = grading ? verdictOf(grading) : null;
+            let provisional = false;
+            if (grading === null && attempt !== null && answer !== null && answer.payload !== null) {
+              const graded = await preview.get(item.item.id)?.(attempt, answer.payload);
+              if (graded) {
+                verdict = graded.verdict;
+                provisional = true;
+                if (!entry.staff && graded.rate !== null) {
+                  const rates = liveRates.get(item.item.id) ?? [];
+                  rates.push(graded.rate);
+                  liveRates.set(item.item.id, rates);
+                }
+              }
+            }
+            return {
+              itemId: item.item.id,
+              status: cellStatus(answer),
+              verdict,
+              provisional,
+              points: grading && grading.state === "validated" ? grading.points : null,
+              revision: answer?.revision ?? 0,
+              summary:
+                answer ? (summarize.get(item.item.id)?.(answer.payload) ?? null) : null,
+            };
+          }),
+        ),
       };
-    });
+    }),
+  );
 
   // Every denominator below is the CLASS: a teacher testing their own quiz
   // must not move the completion of a question or its success rate.
@@ -1771,10 +1951,18 @@ export async function dashboardView(
       const done = classRows.filter(
         (r) => r.cells.find((c) => c.itemId === item.item.id)?.status === "done",
       ).length;
+      const graded = successRateOf(standing, item.item.id, staffAttempts);
+      // Before anything is graded, the live rate of the answers that CAN be
+      // graded now (ADR-020) — flagged, so the footer says which it is.
+      const live = liveRates.get(item.item.id) ?? [];
+      const provisional = graded === null && live.length > 0;
       return {
         itemId: item.item.id,
         completion: started === 0 ? 0 : Math.round((done / started) * 100) / 100,
-        successRate: successRateOf(standing, item.item.id, staffAttempts),
+        successRate: provisional
+          ? Math.round((live.reduce((a, b) => a + b, 0) / live.length) * 100) / 100
+          : graded,
+        provisional,
       };
     }),
   };
@@ -2036,7 +2224,7 @@ export async function autoStartFullLobbies(db: Db, now: Date): Promise<Evaluatio
   const moved: EvaluationRecord[] = [];
   for (const row of rows) {
     if (settingsOf(row).lobby !== "auto") continue;
-    const enrolled = await enrolledCount(db, row.classroomId);
+    const enrolled = await enrolledCount(db, row);
     if (enrolled === 0 || presence.count(row.id) < enrolled) continue;
     moved.push(await startEvaluation(db, row, now));
   }

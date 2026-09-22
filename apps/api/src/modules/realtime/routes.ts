@@ -45,11 +45,21 @@ const IDLE_SWEEP_MS = 5_000;
 
 type Watch =
   | { kind: "evaluation"; evaluationId: string }
+  /** The same topic as `evaluation`, watched from inside the room (F-LIVE-02). */
+  | { kind: "lobby"; evaluationId: string }
   | { kind: "attempt"; attemptId: string; evaluationId: string };
 
 interface Stream {
   userId: string;
   staff: boolean;
+  /**
+   * This connection is a BODY IN THE ROOM, and presence counts it (F-LIVE-02,
+   * F-LIVE-03). It is not the opposite of `staff`: a teacher who holds a
+   * roster seat and walks their own quiz (ADR-018) is both. What decides is
+   * the subject — a `lobby:` or one's OWN `attempt:` — plus a claimed seat,
+   * which is the same admission `participantOf` gives the attempt routes.
+   */
+  participant: boolean;
   topics: Set<string>;
   watch: Watch | null;
   res: ServerResponse;
@@ -123,13 +133,23 @@ async function resolveWatch(
   app: FastifyInstance,
   req: FastifyRequest,
   subject: WatchSubject,
-): Promise<{ watch: Watch; staff: boolean } | null> {
+): Promise<{ watch: Watch; staff: boolean; participant: boolean } | null> {
   const separator = subject.indexOf(":");
   const [kind, id] = [subject.slice(0, separator), subject.slice(separator + 1)];
   if (kind === "evaluation") {
     const scope = await reachable(app, req, id);
     if (!scope) return null;
-    return { watch: { kind: "evaluation", evaluationId: id }, staff: scope.staff };
+    return { watch: { kind: "evaluation", evaluationId: id }, staff: scope.staff, participant: false };
+  }
+  if (kind === "lobby") {
+    // The SAME authorisation as `evaluation:` — nothing here is a second
+    // door. What the subject adds is the side of the room: this connection
+    // draws the waiting room, so it receives no `dashboard.*` whoever opened
+    // it, and it counts as present when its user holds a seat.
+    const scope = await reachable(app, req, id);
+    if (!scope) return null;
+    const seat = await live.participantOf(app.db, scope.evaluation, req.user!.id);
+    return { watch: { kind: "lobby", evaluationId: id }, staff: false, participant: seat !== null };
   }
   if (kind === "attempt") {
     const attempt = await live.attemptById(app.db, id);
@@ -142,6 +162,9 @@ async function resolveWatch(
     return {
       watch: { kind: "attempt", attemptId: id, evaluationId: attempt.evaluationId },
       staff: scope.staff,
+      // Watching one's OWN attempt is sitting the quiz, teacher or not; a
+      // staff inspector watching somebody else's row is not in the room.
+      participant: attempt.userId === req.user!.id,
     };
   }
   return null;
@@ -193,7 +216,9 @@ async function snapshotOf(
   const row = evaluation[0];
   if (!row) return null;
   const subject =
-    watch.kind === "attempt" ? `attempt:${watch.attemptId}` : `evaluation:${watch.evaluationId}`;
+    watch.kind === "attempt"
+      ? `attempt:${watch.attemptId}`
+      : `${watch.kind}:${watch.evaluationId}`;
 
   if (watch.kind === "attempt") {
     const attempt = await live.attemptById(app.db, watch.attemptId);
@@ -206,12 +231,18 @@ async function snapshotOf(
       : (await live.attemptOrLobbyView(app.db, row, attempt, now)).view;
     return { type: "snapshot", serverNow: iso(now), subject, state };
   }
+  // A `lobby:` connection is in the room whoever opened it, so it gets the
+  // lobby snapshot; `stream.staff` is already false for one (`resolveWatch`).
   if (stream.staff) {
     return {
       type: "snapshot",
       serverNow: iso(now),
       subject,
-      state: await live.dashboardView(app.db, row, { now, includeAnswers: false }),
+      state: await live.dashboardView(app.db, row, {
+        now,
+        includeAnswers: false,
+        includeResults: false,
+      }),
     };
   }
   const participant = (await live.participantOf(app.db, row, stream.userId)) ?? {
@@ -249,6 +280,7 @@ export async function realtimePlugin(app: FastifyInstance) {
 
     let watch: Watch | null = null;
     let staff = me.role === "teacher" || me.role === "admin";
+    let participant = false;
     if (raw !== null) {
       // The grammar is a contract (`WatchSubject`), not a `split(":")`:
       // `attempt:not-a-uuid` used to reach the database and answer a 500.
@@ -259,10 +291,13 @@ export async function realtimePlugin(app: FastifyInstance) {
       if (!resolved) return reply.code(404).send({ error: "not_found" });
       watch = resolved.watch;
       staff = resolved.staff;
+      participant = resolved.participant;
     }
 
     const topics = await topicsOf(app, req);
-    if (watch?.kind === "evaluation") topics.add(`evaluation:${watch.evaluationId}`);
+    if (watch?.kind === "evaluation" || watch?.kind === "lobby") {
+      topics.add(`evaluation:${watch.evaluationId}`);
+    }
     if (watch?.kind === "attempt") {
       topics.add(`attempt:${watch.attemptId}`);
       // Pause, resume and close arrive on the evaluation topic: an attempt
@@ -285,6 +320,7 @@ export async function realtimePlugin(app: FastifyInstance) {
     const stream: Stream = {
       userId: me.id,
       staff,
+      participant,
       topics,
       watch,
       res,
@@ -296,7 +332,7 @@ export async function realtimePlugin(app: FastifyInstance) {
         clearInterval(ping);
         clearInterval(clock);
         unsubscribe();
-        if (watch !== null && !staff) {
+        if (watch !== null && participant) {
           const change = presence.leave(watch.evaluationId, me.id, app.clock.now());
           if (change) {
             bus.dashboardPresence(change);
@@ -347,7 +383,7 @@ export async function realtimePlugin(app: FastifyInstance) {
           if (!due) return;
           sinceClock = 0;
           sendNamed(stream, { type: "clock", serverNow: iso(now) }, Date.now());
-          if (watch !== null && !stream.staff) presence.touch(watch.evaluationId, me.id, now);
+          if (watch !== null && stream.participant) presence.touch(watch.evaluationId, me.id, now);
         })();
       },
       fast ? FAST_CLOCK_MS : CLOCK_MS,
@@ -358,7 +394,7 @@ export async function realtimePlugin(app: FastifyInstance) {
 
     // Presence, then the snapshot: the count the student reads already
     // includes them.
-    if (watch !== null && !staff) {
+    if (watch !== null && participant) {
       const now = app.clock.now();
       const change = presence.join(watch.evaluationId, me.id, now);
       if (change) bus.dashboardPresence(change);
@@ -380,7 +416,7 @@ export async function realtimePlugin(app: FastifyInstance) {
 /** F-LIVE-02: the ring everybody in the lobby watches. Coalesced 1 s. */
 async function announceLobby(app: FastifyInstance, evaluationId: string): Promise<void> {
   const [row] = await app.db
-    .select({ classroomId: evaluations.classroomId })
+    .select()
     .from(evaluations)
     .where(eq(evaluations.id, evaluationId))
     .limit(1);
@@ -388,6 +424,6 @@ async function announceLobby(app: FastifyInstance, evaluationId: string): Promis
   bus.lobbyCount({
     evaluationId,
     present: presence.count(evaluationId),
-    enrolled: await live.enrolledCount(app.db, row.classroomId),
+    enrolled: await live.enrolledCount(app.db, row),
   });
 }

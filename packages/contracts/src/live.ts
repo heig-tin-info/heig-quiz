@@ -264,7 +264,19 @@ export type StudentHome = z.infer<typeof StudentHome>;
 export const DashboardCell = z.object({
   itemId: z.uuid(),
   status: CellStatus,
+  /**
+   * The verdict the grid colours the cell with (F-DASH-01). It is the
+   * standing grading's when there is one, and otherwise — only when the
+   * dashboard was asked with `?results=1` — the verdict this answer WOULD get
+   * if the evaluation closed now, for the deterministic types (ADR-020).
+   * `provisional` says which of the two it is.
+   */
   verdict: z.enum(["correct", "partial", "wrong", "pending"]).nullable(),
+  /**
+   * The verdict is a live preview, computed from the answer as it stands and
+   * written nowhere. A validated or proposed grading is never provisional.
+   */
+  provisional: z.boolean(),
   points: z.number().nullable(),
   revision: z.number().int(),
   /** Only when `?includeAnswers=1` (F-DASH-02). */
@@ -320,17 +332,35 @@ export const DashboardView = z.object({
     z.object({
       itemId: z.uuid(),
       completion: z.number(),
+      /**
+       * F-DASH-04. The mean of `points / maxPoints` over the CLASS (a staff
+       * test counts in nothing, ADR-018). It is the validated gradings' rate
+       * once the evaluation has been graded, and, with `?results=1` before
+       * that, the live rate over the answers that can be graded now — which
+       * `provisional` flags, so the grid never passes a preview off as a
+       * result.
+       */
       successRate: z.number().nullable(),
+      provisional: z.boolean(),
     }),
   ),
 });
 export type DashboardView = z.infer<typeof DashboardView>;
 
+/** `?includeAnswers=1`, `?results=1`: the teacher's two toggles, on the wire. */
+const flag = z
+  .union([z.string(), z.boolean()])
+  .default(false)
+  .transform((v) => v === true || v === "1" || v === "true");
+
 export const DashboardQuery = z.object({
-  includeAnswers: z
-    .union([z.string(), z.boolean()])
-    .default(false)
-    .transform((v) => v === true || v === "1" || v === "true"),
+  includeAnswers: flag,
+  /**
+   * The "Results" toggle (F-DASH-02). It is a REQUEST flag and not only a
+   * display one: the live verdicts of ADR-020 are computed per cell, so they
+   * are computed only for the teacher who is looking at them.
+   */
+  results: flag,
 });
 export type DashboardQuery = z.infer<typeof DashboardQuery>;
 
