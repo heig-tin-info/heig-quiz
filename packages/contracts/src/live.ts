@@ -203,8 +203,10 @@ export const RunBody = z.object({
 });
 export type RunBody = z.infer<typeof RunBody>;
 
-export const RunAccepted = z.object({ requestId: z.uuid() });
-export type RunAccepted = z.infer<typeof RunAccepted>;
+/**
+ * The acknowledgement of this route is `RunAccepted`, declared in
+ * `./realtime.ts` next to the `runner.result` frame whose shape it repeats.
+ */
 
 /**
  * The student's own run button for a question type that builds its OWN

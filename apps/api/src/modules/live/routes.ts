@@ -27,6 +27,10 @@ import {
   SimulateBody,
   StartBody,
   SubmitBody,
+  type ExtendResponse,
+  type ResetAttemptResponse,
+  type RunAccepted,
+  type SubmitResponse,
 } from "@quiz/contracts";
 
 import { audit, type AuditAction } from "../../audit.js";
@@ -184,7 +188,7 @@ export async function livePlugin(app: FastifyInstance) {
           attemptId: result.attemptId,
         });
       }
-      return { deleted: result.deleted };
+      return { deleted: result.deleted } satisfies ResetAttemptResponse;
     },
   );
 
@@ -290,7 +294,11 @@ export async function livePlugin(app: FastifyInstance) {
     if (!scope) return reply;
     try {
       const row = await service.submitAttempt(app.db, scope.evaluation, scope.attempt, now);
-      return { state: row.state, submittedAt: iso(row.submittedAt ?? now), serverNow: iso(now) };
+      return {
+        state: row.state,
+        submittedAt: iso(row.submittedAt ?? now),
+        serverNow: iso(now),
+      } satisfies SubmitResponse;
     } catch (error) {
       return failure(reply, error, now);
     }
@@ -358,7 +366,7 @@ export async function livePlugin(app: FastifyInstance) {
       });
       // 202: the authoritative delivery is the `runner.result` SSE frame; the
       // body repeats it so a client without a stream still works.
-      return reply.code(202).send(outcome);
+      return reply.code(202).send(outcome satisfies RunAccepted);
     } catch (error) {
       return failure(reply, error, now);
     }
@@ -482,7 +490,7 @@ export async function livePlugin(app: FastifyInstance) {
       attemptId: body.data.attemptId ?? null,
       updated,
     });
-    return { updated, serverNow: iso(now) };
+    return { updated, serverNow: iso(now) } satisfies ExtendResponse;
   });
 
   /** F-DASH-05. */

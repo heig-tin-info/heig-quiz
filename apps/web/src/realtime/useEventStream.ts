@@ -27,23 +27,21 @@
  */
 import { useEffect, useRef, useState } from "react";
 
-import { ServerEvent, type HintEvent, type WatchSubject } from "@quiz/contracts";
+import {
+  SERVER_EVENT_NAMES,
+  ServerEvent,
+  type HintEvent,
+  type WatchSubject,
+} from "@quiz/contracts";
 
-/** Every frame the server sends under a name; the hint travels unnamed. */
-export const NAMED_EVENTS = [
-  "snapshot",
-  "clock",
-  "evaluation.state",
-  "attempt.deadline",
-  "attempt.closed",
-  "dashboard.cell",
-  "dashboard.presence",
-  "dashboard.attempt",
-  "poll.tally",
-  "lobby.count",
-  "runner.result",
-  "grading.progress",
-] as const;
+/**
+ * Every frame the server sends under a name; the hint travels unnamed.
+ *
+ * Derived from the `ServerEvent` union in `packages/contracts` rather than
+ * restated here (invariant 7): a fourteenth event is subscribed to the day it
+ * is declared, instead of compiling everywhere and never being delivered.
+ */
+export const NAMED_EVENTS = SERVER_EVENT_NAMES;
 
 /** No `clock` for this long and the connection is presumed dead. */
 export const SILENCE_MS = 30_000;
