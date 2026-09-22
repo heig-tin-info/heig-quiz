@@ -77,6 +77,11 @@ const scenes = [
   { name: "classroom-roster-many", role: "teacher", path: "/classrooms/r1?tab=roster&many=1" },
   { name: "classroom-import", role: "teacher", path: "/classrooms/r1?tab=roster", act: (p) => p.getByRole("button", { name: /add students/i }).first().click() },
   { name: "classroom-menu", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /^actions$/i }).first().click() },
+  // The title renamed in place: the pencil is the affordance (it only exists
+  // under the pointer), and the field that replaces the name must keep the
+  // baseline it had.
+  { name: "classroom-rename-hover", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /^rename classroom/i }).first().hover() },
+  { name: "classroom-rename", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /^rename classroom/i }).first().click() },
   { name: "classroom-row-menu", role: "teacher", path: "/classrooms/r1?tab=roster", fold: true, act: (p) => openRowMenu(p, /^Actions for /) },
 
   // WP8: evaluation + dashboard. The mock addresses an evaluation by its
@@ -155,6 +160,19 @@ const scenes = [
       await openRowMenu(p, /^(actions)$/i);
       await p.getByRole("menuitem", { name: /^(share|partager)…$/i }).click();
     } },
+  // The invite picker with a few letters typed: the colleagues it offers.
+  { name: "pool-share-pick", role: "teacher", path: "/pools", fold: true, act: async (p) => {
+      await openRowMenu(p, /^(actions)$/i);
+      await p.getByRole("menuitem", { name: /^(share|partager)…$/i }).click();
+      await p.getByRole("combobox", { name: /^(teacher|enseignant)$/i }).fill("ri");
+    } },
+  // ... and the field once a colleague is picked: the name in it, the address on the label line.
+  { name: "pool-share-picked", role: "teacher", path: "/pools", fold: true, act: async (p) => {
+      await openRowMenu(p, /^(actions)$/i);
+      await p.getByRole("menuitem", { name: /^(share|partager)…$/i }).click();
+      await p.getByRole("combobox", { name: /^(teacher|enseignant)$/i }).fill("ri");
+      await p.getByRole("option", { name: /Ritchie/ }).click();
+    } },
 
   // The bell, and the same bell with more than nine unread ("9+").
   { name: "notifications", role: "teacher", path: "/", fold: true, act: (p) => p.getByRole("button", { name: /^notifications/i }).first().click() },
@@ -190,8 +208,28 @@ const scenes = [
   { name: "pool-bulk-move", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
       await p.getByLabel(/ptr-arith-01/).first().check();
       await p.getByRole("button", { name: /^(move to a category|déplacer)$/i }).first().click();
-      await p.getByLabel(/^(Category|Catégorie)$/).selectOption("__new__");
-      await p.getByLabel(/^(Category name|Nom de la catégorie)$/).fill("Tableaux");
+      // Scoped to the dialog: the toolbar's "Group by" has a Category pill too.
+      const sheet = p.getByRole("dialog");
+      await sheet.getByLabel(/^(Category|Catégorie)$/).selectOption("__new__");
+      await sheet.getByLabel(/^(Category name|Nom de la catégorie)$/).fill("Tableaux");
+    } },
+  // ADR-017: the sidebar showing EVERY pool (the third state of the
+  // "Question pools" row), which is what a question is dragged onto.
+  { name: "pool-nav-all", role: "teacher", path: "/pools/p1", ls: { "quiz-pools-nav": "all" } },
+  // The bulk bar's "Move to another pool", with a target picked so its
+  // category select is on screen too.
+  { name: "pool-move-pool", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
+      await p.getByLabel(/ptr-null-check/).first().check();
+      await p.getByRole("button", { name: /^(move to another pool|déplacer vers une autre banque)$/i }).first().click();
+      await p.getByLabel(/^(Target pool|Banque de destination)$/).selectOption({ index: 1 });
+    } },
+  // The refusal that becomes a question: a classroom already plays this
+  // question and the target pool is not one of its course's.
+  { name: "pool-move-used", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
+      await p.getByLabel(/ptr-arith-01/).first().check();
+      await p.getByRole("button", { name: /^(move to another pool|déplacer vers une autre banque)$/i }).first().click();
+      await p.getByLabel(/^(Target pool|Banque de destination)$/).selectOption({ index: 1 });
+      await p.getByRole("button", { name: /^(move|déplacer)$/i }).first().click();
     } },
   { name: "pool-new-question", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("button", { name: /nouvelle question|new question/i }).first().click() },
   // The categories live in the frame's sidebar now, so on a phone they are

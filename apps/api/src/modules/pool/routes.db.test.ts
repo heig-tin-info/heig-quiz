@@ -636,6 +636,15 @@ async function invite(id: string, who: Actor, email: string, role: string) {
   });
 }
 
+/** `GET /pools/:id/candidates?q=` — the teachers an owner may still invite. */
+async function candidates(id: string, who: Actor, q: string) {
+  return server.app.inject({
+    method: "GET",
+    url: `/app/api/pools/${id}/candidates?q=${encodeURIComponent(q)}`,
+    headers: who.headers,
+  });
+}
+
 describe("pool sharing", () => {
   let poolOwner: Actor;
   let reader: Actor;
@@ -712,6 +721,64 @@ describe("pool sharing", () => {
     // stranger: the pool does not exist.
     expect((await readPool(shared, outsider)).statusCode).toBe(404);
     expect((await writeQuestion(shared, outsider, "intruder")).statusCode).toBe(404);
+  });
+
+  it("offers an owner the teachers not yet seated, by name or address", async () => {
+    // The outsider holds no seat: offered, found by a piece of the address,
+    // whatever the case it is typed in.
+    const found = await candidates(shared, poolOwner, "OUTSIDER-");
+    expect(found.statusCode).toBe(200);
+    expect(found.json().map((c: { userId: string }) => c.userId)).toEqual([outsider.id]);
+    expect(found.json()[0]).toMatchObject({ email: emails.get(outsider.id), givenName: "Test" });
+
+    // Seated already, or the owner: not offered again.
+    expect((await candidates(shared, poolOwner, "reader-")).json()).toEqual([]);
+    expect((await candidates(shared, poolOwner, emails.get(poolOwner.id)!)).json()).toEqual([]);
+
+    // A wildcard typed by hand is a character to find, not everyone.
+    expect((await candidates(shared, poolOwner, "%")).json()).toEqual([]);
+
+    // The directory is an owner's: a member-owner reads it, a reader does
+    // not, and a stranger does not see the pool at all.
+    expect((await candidates(shared, coOwner, "")).statusCode).toBe(200);
+    expect((await candidates(shared, reader, "")).statusCode).toBe(403);
+    expect((await candidates(shared, outsider, "")).statusCode).toBe(404);
+  });
+
+  it("invites the account picked, by id, and refuses a body naming both or neither", async () => {
+    const post = (payload: unknown) =>
+      server.app.inject({
+        method: "POST",
+        url: `/app/api/pools/${shared}/members`,
+        headers: poolOwner.headers,
+        payload,
+      });
+    expect((await post({ role: "reader" })).statusCode).toBe(400);
+    expect(
+      (await post({ userId: outsider.id, email: emails.get(outsider.id), role: "reader" }))
+        .statusCode,
+    ).toBe(400);
+    // A student's account is nobody to invite.
+    const student = await server.signIn("student");
+    expect((await post({ userId: student.id, role: "reader" })).statusCode).toBe(404);
+
+    const seated = await post({ userId: outsider.id, role: "contributor" });
+    expect(seated.statusCode).toBe(201);
+    expect(
+      seated.json().members.find((m: { userId: string }) => m.userId === outsider.id)?.role,
+    ).toBe("contributor");
+    expect((await post({ userId: outsider.id, role: "reader" })).statusCode).toBe(409);
+    // Seated now, so no longer offered.
+    expect((await candidates(shared, poolOwner, "outsider-")).json()).toEqual([]);
+
+    // The seat is taken back: the outsider stays a stranger for the tests below.
+    const removed = await server.app.inject({
+      method: "DELETE",
+      url: `/app/api/pools/${shared}/members/${outsider.id}`,
+      headers: poolOwner.headers,
+    });
+    expect(removed.statusCode).toBe(204);
+    expect((await readPool(shared, outsider)).statusCode).toBe(404);
   });
 
   it("keeps the staff of a linked course a contributor, never an owner", async () => {

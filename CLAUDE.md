@@ -9,6 +9,12 @@ author, same stack, same identity provider, in production). Its ADRs 001–010
 and 012 apply here as written and live in `docs/adr/`. What was reused,
 adapted or dropped is spelled out in `docs/spec/07-reutilisation-heig-classroom.md`.
 
+## Several agents at once
+
+Other sessions work on this repository concurrently, and every push to
+`main` deploys. `AGENTS.md` has the rules: a worktree per agent, `main` by
+merge only, staging by path, atomic lockfile commits. Read it first.
+
 ## The rule about the spec
 
 **The specification lives in `docs/spec/`. Read the file that covers a feature

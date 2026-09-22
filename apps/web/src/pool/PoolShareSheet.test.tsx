@@ -1,8 +1,8 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { PoolMembers, PoolSummary } from "@quiz/contracts";
+import type { PoolCandidate, PoolMembers, PoolSummary } from "@quiz/contracts";
 
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { PoolShareSheet } from "./PoolShareSheet";
@@ -28,6 +28,29 @@ const POOL: PoolSummary = {
 };
 
 const MEMBERS = "/app/api/pools/p1/members";
+const CANDIDATES = "/app/api/pools/p1/candidates";
+
+const grace: PoolCandidate = {
+  userId: "t2",
+  email: "grace.hopper@heig-vd.ch",
+  givenName: "Grace",
+  familyName: "Hopper",
+};
+const linus: PoolCandidate = {
+  userId: "t3",
+  email: "linus.t@heig-vd.ch",
+  givenName: "Linus",
+  familyName: "Torvalds",
+};
+
+/** The picker asks after every keystroke: one stub per prefix of what is typed. */
+function candidatesFor(typed: string, rows: PoolCandidate[]) {
+  const stubs: Record<string, ReturnType<typeof ok>> = {};
+  for (let i = 1; i <= typed.length; i += 1) {
+    stubs[`GET ${CANDIDATES}?q=${encodeURIComponent(typed.slice(0, i))}`] = ok(rows);
+  }
+  return stubs;
+}
 
 const list: PoolMembers = {
   visibility: "shared",
@@ -97,29 +120,51 @@ describe("PoolShareSheet", () => {
     expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({ visibility: "public" });
   });
 
-  it("invites a teacher, and names the two refusals in words", async () => {
+  it("offers the colleagues by name, and invites the one picked by account", async () => {
     const { calls } = mockFetch({
       [`GET ${MEMBERS}`]: ok(list),
-      "POST /app/api/pools/p1/members": (call) =>
-        (call.body as { email: string }).email === "nobody@heig-vd.ch"
-          ? fail(404, { error: "teacher_not_found", message: "No teacher account" })
-          : { status: 204 },
+      [`GET ${CANDIDATES}?q=`]: ok([grace, linus]),
+      ...candidatesFor("gra", [grace]),
+      "POST /app/api/pools/p1/members": { status: 201, body: list },
     });
     renderWithProviders(<PoolShareSheet pool={POOL} onClose={vi.fn()} />);
 
-    const email = await screen.findByLabelText("E-mail");
-    await userEvent.type(email, "nobody@heig-vd.ch");
-    await userEvent.click(screen.getByRole("button", { name: /Invite/ }));
-    expect(await screen.findByText("No teacher account with this e-mail.")).toBeVisible();
+    const field = await screen.findByRole("combobox", { name: "Teacher" });
+    // Nothing typed yet: not an address, nothing picked, nothing to send.
+    expect(screen.getByRole("button", { name: /Invite/ })).toBeDisabled();
+    await userEvent.type(field, "gra");
+    await userEvent.click(await screen.findByRole("option", { name: /Grace Hopper/ }));
+    expect(field).toHaveValue("Grace Hopper");
+    expect(screen.getByText("grace.hopper@heig-vd.ch")).toBeVisible();
 
-    await userEvent.clear(email);
-    await userEvent.type(email, "Grace.Hopper@heig-vd.ch");
     await userEvent.selectOptions(screen.getByRole("combobox", { name: "Role" }), "contributor");
     await userEvent.click(screen.getByRole("button", { name: /Invite/ }));
+    const post = calls.filter((c) => c.method === "POST").at(-1);
+    expect(post?.body).toEqual({ userId: "t2", role: "contributor" });
+    // The field is emptied for the next colleague.
+    await waitFor(() => expect(field).toHaveValue(""));
+  });
 
+  it("still sends an address the list does not know, and names the refusal", async () => {
+    const { calls } = mockFetch({
+      [`GET ${MEMBERS}`]: ok(list),
+      [`GET ${CANDIDATES}?q=`]: ok([grace, linus]),
+      ...candidatesFor("Nobody@heig-vd.ch", []),
+      "POST /app/api/pools/p1/members": fail(404, {
+        error: "teacher_not_found",
+        message: "No teacher account",
+      }),
+    });
+    renderWithProviders(<PoolShareSheet pool={POOL} onClose={vi.fn()} />);
+
+    const field = await screen.findByRole("combobox", { name: "Teacher" });
+    await userEvent.type(field, "Nobody@heig-vd.ch");
+    expect(await screen.findByText("No teacher matches “Nobody@heig-vd.ch”.")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: /Invite/ }));
+    expect(await screen.findByText("No teacher account with this e-mail.")).toBeVisible();
     const post = calls.filter((c) => c.method === "POST").at(-1);
     // Lower-cased on the way out, exactly as the contract stores it.
-    expect(post?.body).toEqual({ email: "grace.hopper@heig-vd.ch", role: "contributor" });
+    expect(post?.body).toEqual({ email: "nobody@heig-vd.ch", role: "reader" });
   });
 
   it("says who has access when nobody does", async () => {

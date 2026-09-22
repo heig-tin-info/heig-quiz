@@ -197,6 +197,13 @@ runs and Escape closes, all without the focus ever leaving the search input.
 `Tip` never takes the focus (portal, `pointer-events-none`, `aria-hidden`)
 and Escape dismisses it.
 
+A label cut by an ellipsis carries a `Tip` with the whole of it — the
+sidebar's classroom names first, which outgrow 240 px routinely. The `Tip`
+wraps the ROW, so the name reads the same on hover and on Tab, and it is
+armed only when the label is REALLY cut (`useTruncated`, which measures
+`scrollWidth` against `clientWidth`): a bubble repeating a label the eye
+already reads is noise on every row of the list.
+
 Toasts sit in one `aria-live="polite"` region, each one a `role="status"`
 with a keyboard-reachable dismiss button.
 
@@ -241,6 +248,17 @@ with a keyboard-reachable dismiss button.
   Width is a prop, never a class beside `inputClass`: Tailwind settles two
   width or height utilities on one element by their order in the generated
   stylesheet, not by the order they were written in.
+- Help "?" (`HelpIcon`): **16 px**, `fg-faint` at rest, accent on hover, the
+  same beside a 28 px page title, a 16 px section heading and a 13 px field
+  label — it is a mark next to a word, not an action of its own, and one size
+  is what makes it read as the same mark everywhere. It is placed by the
+  component and never by the call site, which only says WHICH topic. Its rows
+  are `flex … items-center`, and `items-center` centers it on the LINE BOX,
+  whose middle sits above the middle of the letters (the box carries the
+  descender space and the leading): the icon is therefore pushed back down by
+  `0.0625em`, onto the letters, between the cap-height middle and the
+  x-height middle. In `em` because the error it corrects is a fraction of the
+  font size, so one value holds at 13 px and at 28 px.
 - ToggleChip: a value you switch on, as a pill — `border-line-strong` on
   `surface` in `fg-muted` at rest, `accent-soft` on an `accent` border in
   `accent` when pressed, 28 px tall, 13 px, an optional leading icon.

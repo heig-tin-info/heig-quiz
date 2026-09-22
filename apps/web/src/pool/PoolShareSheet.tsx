@@ -3,6 +3,7 @@ import { Globe, Lock, Trash2, UserPlus, Users } from "lucide-react";
 import { useState } from "react";
 
 import type {
+  PoolCandidate,
   PoolMember,
   PoolMembers,
   PoolRole,
@@ -14,9 +15,9 @@ import { api, ApiError, apiErrorMessage } from "../api";
 import { useConfirm } from "../confirm";
 import { useT, type TFunction } from "../i18n";
 import { useToast } from "../notify";
+import { TeacherPicker, nameOf } from "./TeacherPicker";
 import {
   Button,
-  Field,
   IconButton,
   Initials,
   QueryError,
@@ -35,7 +36,15 @@ import {
  * halves are half disabled is a screen that should not have opened. The one
  * primary action is "Invite": the visibility and the roles are settings that
  * save as they are touched, and the footer only holds the way out.
+ *
+ * The invitee is picked by name among the colleagues (`TeacherPicker`). An
+ * address the picker does not list may still be typed and sent as such: the
+ * API resolves it over every address of an account (GH-11), which is how an
+ * alias reaches a teacher the list shows under another spelling.
  */
+
+/** Enough of an address to be worth sending: the API does the real check. */
+const LOOKS_LIKE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const VISIBILITY_ICON = { private: Lock, shared: Users, public: Globe } as const;
 
@@ -136,8 +145,10 @@ export function PoolShareSheet({ pool, onClose }: { pool: PoolSummary; onClose: 
   const qc = useQueryClient();
   const toast = useToast();
   const key = ["pool-members", pool.id];
-  const [email, setEmail] = useState("");
+  const [text, setText] = useState("");
+  const [selected, setSelected] = useState<PoolCandidate | null>(null);
   const [role, setRole] = useState<PoolRole>("reader");
+  const canInvite = selected !== null || LOOKS_LIKE_EMAIL.test(text.trim());
 
   const members = useQuery<PoolMembers>({
     queryKey: key,
@@ -163,13 +174,20 @@ export function PoolShareSheet({ pool, onClose }: { pool: PoolSummary; onClose: 
     mutationFn: () =>
       api(`/app/api/pools/${pool.id}/members`, {
         method: "POST",
-        body: JSON.stringify({ email: email.trim().toLowerCase(), role }),
+        body: JSON.stringify(
+          selected
+            ? { userId: selected.userId, role }
+            : { email: text.trim().toLowerCase(), role },
+        ),
       }),
     onSuccess: async () => {
-      setEmail("");
+      setText("");
+      setSelected(null);
       await Promise.all([
         qc.invalidateQueries({ queryKey: key }),
         qc.invalidateQueries({ queryKey: ["pools"] }),
+        // The newcomer leaves the list of who may still be invited.
+        qc.invalidateQueries({ queryKey: ["pool-candidates", pool.id] }),
       ]);
     },
   });
@@ -254,16 +272,23 @@ export function PoolShareSheet({ pool, onClose }: { pool: PoolSummary; onClose: 
             className="mt-3 flex flex-wrap items-end gap-2"
             onSubmit={(e) => {
               e.preventDefault();
-              if (email.trim() !== "") invite.mutate();
+              if (canInvite) invite.mutate();
             }}
           >
-            <Field
-              type="email"
-              width="min-w-0 flex-1 basis-56"
-              label={t("share.email")}
-              placeholder="prenom.nom@heig-vd.ch"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+            <TeacherPicker
+              poolId={pool.id}
+              text={text}
+              selected={selected}
+              disabled={invite.isPending}
+              onText={(value) => {
+                setText(value);
+                // The text no longer names the pick.
+                setSelected(null);
+              }}
+              onPick={(candidate) => {
+                setSelected(candidate);
+                setText(nameOf(candidate));
+              }}
             />
             <Select
               width="w-33"
@@ -275,7 +300,7 @@ export function PoolShareSheet({ pool, onClose }: { pool: PoolSummary; onClose: 
               <option value="contributor">{t("share.role.contributor")}</option>
               <option value="owner">{t("share.role.owner")}</option>
             </Select>
-            <Button type="submit" loading={invite.isPending} disabled={email.trim() === ""}>
+            <Button type="submit" loading={invite.isPending} disabled={!canInvite}>
               <UserPlus /> {t("share.inviteAction")}
             </Button>
           </form>

@@ -60,6 +60,7 @@ export type AuditAction =
   | "question.create"
   | "question.delete"
   | "question.deprecate"
+  | "question.move"
   | "question.publish"
   | "question.restore_version"
   | "question.update"

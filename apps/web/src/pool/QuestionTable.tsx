@@ -1,4 +1,5 @@
 import { Copy, Pencil, Trash2 } from "lucide-react";
+import type { DragEvent } from "react";
 
 import type { QuestionRow } from "@quiz/contracts";
 
@@ -132,6 +133,7 @@ export function QuestionTable({
   sort,
   dir,
   onSort,
+  onDragStart,
   readOnly = false,
 }: {
   /** One section per "group by" value; `none` hands over a single unlabelled one. */
@@ -147,6 +149,11 @@ export function QuestionTable({
   sort: QuestionSort;
   dir: SortDir;
   onSort: (key: QuestionSort) => void;
+  /**
+   * Makes the row draggable onto a pool of the sidebar, which MOVES it there
+   * (ADR-017). Absent — a read-only pool — the row is not draggable at all.
+   */
+  onDragStart?: (event: DragEvent, row: QuestionRow) => void;
   /** A pool the caller only reads: no tick boxes, no row actions (F-POOL-05). */
   readOnly?: boolean;
 }) {
@@ -209,6 +216,8 @@ export function QuestionTable({
                 key={`${group.key}:${row.id}`}
                 onClick={() => onEdit(row)}
                 {...pressable(() => onEdit(row), "row")}
+                draggable={onDragStart !== undefined}
+                onDragStart={onDragStart ? (event) => onDragStart(event, row) : undefined}
                 className={cx(T.row, T.rowHover, "cursor-pointer")}
               >
                 {readOnly ? null : (

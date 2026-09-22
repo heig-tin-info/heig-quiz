@@ -301,6 +301,37 @@ const teachers: AdminTeacher[] = [
     lastLoginAt: null,
     grantedAt: iso(-1 * D),
   },
+  // Colleagues with no seat on any pool: what the invite picker offers.
+  {
+    id: "t4",
+    email: "margaret.hamilton@heig-vd.ch",
+    givenName: "Margaret",
+    familyName: "Hamilton",
+    signedUp: true,
+    courses: 2,
+    lastLoginAt: iso(-3 * D),
+    grantedAt: iso(-300 * D),
+  },
+  {
+    id: "t5",
+    email: "barbara.liskov@heig-vd.ch",
+    givenName: "Barbara",
+    familyName: "Liskov",
+    signedUp: true,
+    courses: 1,
+    lastLoginAt: iso(-12 * D),
+    grantedAt: iso(-250 * D),
+  },
+  {
+    id: "t6",
+    email: "dennis.ritchie@heig-vd.ch",
+    givenName: "Dennis",
+    familyName: "Ritchie",
+    signedUp: true,
+    courses: 4,
+    lastLoginAt: iso(-1 * H),
+    grantedAt: iso(-500 * D),
+  },
 ];
 
 /** `?many=1`: 8 courses, 30 classrooms, and 120 students on the first one. */
@@ -424,6 +455,20 @@ class MockValidation extends MockError {
     readonly details: { path: string[]; code: string; message: string }[],
   ) {
     super(422, message);
+  }
+}
+
+/**
+ * An error whose BODY is the answer, for the routes whose refusal carries
+ * data the client branches on — `POST /questions/move` and its 409 listing
+ * the classrooms that play the question (ADR-017).
+ */
+class MockPayload extends MockError {
+  constructor(
+    status: number,
+    readonly body: Record<string, unknown>,
+  ) {
+    super(status, String(body.message ?? ""));
   }
 }
 
@@ -1743,10 +1788,29 @@ const memberList = (pool: MockPool) => ({
 });
 
 on("GET", "/app/api/pools/:id/members", (m) => memberList(poolOr404(m.groups!.id!)));
+/** `PoolCandidates`: the teachers with an account, not yet seated, by name or address. */
+on("GET", "/app/api/pools/:id/candidates", (m, _body, url) => {
+  const pool = poolOr404(m.groups!.id!);
+  const q = (url.searchParams.get("q") ?? "").trim().toLowerCase();
+  const seated = new Set([pool.ownerId, ...(poolMembers[pool.id] ?? []).map((mem) => mem.userId)]);
+  return teachers
+    .filter((t) => t.signedUp && !seated.has(t.id))
+    .filter((t) => `${t.givenName ?? ""} ${t.familyName ?? ""} ${t.email}`.toLowerCase().includes(q))
+    .slice(0, 10)
+    .map((t) => ({
+      userId: t.id,
+      email: t.email,
+      givenName: t.givenName ?? "",
+      familyName: t.familyName ?? "",
+    }));
+});
 on("POST", "/app/api/pools/:id/members", (m, body) => {
   const pool = poolOr404(m.groups!.id!);
   const email = String(body.email ?? "").trim().toLowerCase();
-  const found = teachers.find((t) => t.email.toLowerCase() === email);
+  // Picked in the list (`userId`), or spelled out as an address.
+  const found = teachers.find((t) =>
+    body.userId !== undefined ? t.id === body.userId : t.email.toLowerCase() === email,
+  );
   if (!found) throw new MockError(404, "No teacher account with this e-mail.");
   const rows = (poolMembers[pool.id] ??= []);
   if (rows.some((mem) => mem.userId === found.id)) {
@@ -2076,6 +2140,100 @@ on("POST", "/app/api/questions/:id/copy", (m, body) => {
   questions.push(copy);
   return questionDetail(copy);
 });
+/**
+ * `POST /questions/move` (ADR-017): the question keeps its id and changes
+ * pool. The mock reproduces the three refusals the screens branch on — a
+ * classroom that plays the question while the target pool is not one of its
+ * course's, a course this browser is not staff of, and a name already taken
+ * there — because each of them is a different dialog.
+ */
+on("POST", "/app/api/questions/move", (_m, body) => {
+  const ids = ((body.questionIds as string[]) ?? []).filter((id, i, all) => all.indexOf(id) === i);
+  const moving = ids.map(questionOr404);
+  const target = poolOr404(String(body.targetPoolId));
+  const writable = (poolId: string) => poolSummary(poolOr404(poolId)).role !== "reader";
+  if (!writable(target.id) || moving.some((q) => !writable(q.poolId))) {
+    throw new MockError(403, "Read-only access");
+  }
+  const categoryId = (body.categoryId as string | null | undefined) ?? null;
+  if (categoryId !== null && !categories.some((c) => c.id === categoryId && c.poolId === target.id)) {
+    throw new MockError(404, "Category not found");
+  }
+
+  // Which courses play one of these questions without drawing from the target.
+  const blocking = new Map<string, Record<string, unknown>>();
+  for (const evaluation of evaluations) {
+    if (!evaluation.items.some((item) => ids.includes(item.questionId))) continue;
+    const room = rooms.find((r) => r.id === evaluation.classroomId);
+    const course = courses.find((c) => c.id === room?.courseId);
+    if (!room || !course) continue;
+    if ((coursePools[course.id] ?? []).includes(target.id)) continue;
+    const entry = blocking.get(course.id) ?? {
+      courseId: course.id,
+      courseName: course.name,
+      courseCode: course.code,
+      classrooms: [] as { id: string; name: string }[],
+      mayLink: course.staff.some((s) => s.userId === (me?.id ?? "u-me")),
+    };
+    const listed = entry.classrooms as { id: string; name: string }[];
+    if (!listed.some((x) => x.id === room.id)) listed.push({ id: room.id, name: room.name });
+    blocking.set(course.id, entry);
+  }
+  const blocked = [...blocking.values()];
+  let linkedCourseIds: string[] = [];
+  if (blocked.length > 0) {
+    if (body.linkCourses !== true) {
+      throw new MockPayload(409, {
+        error: "pool_not_linked",
+        message: "This question is used by a classroom whose course does not draw from that pool",
+        courses: blocked,
+        names: [],
+      });
+    }
+    const forbidden = blocked.filter((c) => c.mayLink !== true);
+    if (forbidden.length > 0) {
+      throw new MockPayload(409, {
+        error: "course_forbidden",
+        message: "You are not on the teaching staff of that course",
+        courses: forbidden,
+        names: [],
+      });
+    }
+    linkedCourseIds = blocked.map((c) => String(c.courseId));
+    for (const courseId of linkedCourseIds) {
+      coursePools[courseId] = [...new Set([...(coursePools[courseId] ?? []), target.id])];
+    }
+  }
+
+  const taken = questions
+    .filter((q) => q.poolId === target.id && !q.deletedAt && !ids.includes(q.id))
+    .map((q) => q.internalName.toLowerCase());
+  const clashing = moving
+    .filter((q) => taken.includes(q.internalName.toLowerCase()))
+    .map((q) => q.internalName);
+  if (clashing.length > 0) {
+    throw new MockPayload(409, {
+      error: "name_taken",
+      message: "That internal name is already taken in the target pool",
+      courses: [],
+      names: clashing,
+    });
+  }
+
+  for (const q of moving) {
+    q.poolId = target.id;
+    q.categoryId = categoryId;
+    q.updatedAt = iso(0);
+  }
+  return {
+    moved: moving.length,
+    questionIds: ids,
+    targetPoolId: target.id,
+    categoryId,
+    linkedCourseIds,
+  };
+});
+
 on("POST", "/app/api/questions/:id/preview", (m, body) => {
   const q = questionOr404(m.groups!.id!);
   const source = body.source ?? "draft";
@@ -4753,9 +4911,11 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
     } catch (e) {
       if (e instanceof MockError) {
         const payload =
-          e instanceof MockValidation
-            ? { error: "config_invalid", message: e.message, details: e.details }
-            : { message: e.message };
+          e instanceof MockPayload
+            ? e.body
+            : e instanceof MockValidation
+              ? { error: "config_invalid", message: e.message, details: e.details }
+              : { message: e.message };
         return new Response(JSON.stringify(payload), {
           status: e.status,
           headers: { "content-type": "application/json" },

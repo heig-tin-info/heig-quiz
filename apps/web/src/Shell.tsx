@@ -23,10 +23,21 @@ import { helpTopics, useHelp } from "./help";
 import { useI18n, useT } from "./i18n";
 import { NotificationBell } from "./notifications/NotificationBell";
 import type { Route } from "./router";
-import { SidebarCategories } from "./pool/CategoryTree";
+import { inPoolSection, PoolNavTree, usePoolNavState } from "./pool/PoolNav";
 import { shortcutCaps, useActiveShortcuts, useGlobalShortcuts } from "./shortcuts";
 import { setThemeChoice, useResolvedTheme, useThemeChoice } from "./theme";
-import { Button, cx, IconButton, Kbd, modKey, useLayer, Z, type IconType } from "./ui";
+import {
+  Button,
+  cx,
+  IconButton,
+  Kbd,
+  modKey,
+  Tip,
+  useLayer,
+  useTruncated,
+  Z,
+  type IconType,
+} from "./ui";
 
 /**
  * Application frame: a 240 px sidebar on desktop (navigation, the teacher's
@@ -40,18 +51,22 @@ function NavItem({
   active,
   onClick,
   trailing,
+  expanded,
 }: {
   icon?: IconType;
   label: ReactNode;
   active?: boolean;
   onClick: () => void;
   trailing?: ReactNode;
+  /** Set on a row that also discloses something under itself. */
+  expanded?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
       aria-current={active ? "page" : undefined}
+      aria-expanded={expanded}
       className={cx(
         "flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-left text-sm transition-colors",
         active ? "bg-accent-soft font-semibold text-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg",
@@ -61,6 +76,51 @@ function NavItem({
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {trailing}
     </button>
+  );
+}
+
+/**
+ * A classroom in the sidebar: its name, and its course code as the second
+ * name beside it. The name is the one label of the frame that is routinely
+ * too long for 240 px — "Prog-C-2026-2027-test" is a classroom a teacher
+ * really creates — so the row carries a `Tip` with the whole of it, and only
+ * when the ellipsis is actually there (`useTruncated`). The `Tip` wraps the
+ * ROW, not the text: React's `onFocus` rides `focusin`, which bubbles, so a
+ * teacher who reaches the row with the Tab key reads the name the same way a
+ * pointer does.
+ */
+function ClassroomNavItem({
+  name,
+  courseCode,
+  active,
+  onClick,
+}: {
+  name: string;
+  courseCode: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const [nameRef, truncated] = useTruncated<HTMLSpanElement>();
+  return (
+    <Tip label={truncated ? name : null} className="block">
+      <NavItem
+        icon={School}
+        label={
+          <span className="flex min-w-0 items-baseline gap-1.5">
+            <span ref={nameRef} className="truncate">
+              {name}
+            </span>
+            {/* `fg-muted`: a course code is the classroom's other name, not
+                decoration, and this row sits on `accent-soft` when it is the
+                one being read — the one background `fg-faint` still falls
+                short of 4.5:1 on (W1). */}
+            <span className="shrink-0 text-[11px] text-fg-muted">{courseCode}</span>
+          </span>
+        }
+        active={active}
+        onClick={onClick}
+      />
+    </Tip>
   );
 }
 
@@ -88,6 +148,7 @@ function Nav({
   route,
   navigate,
   teacherUi,
+  poolNav,
   onNavigate,
   onStartPoll,
 }: {
@@ -96,6 +157,12 @@ function Nav({
   navigate: (r: Route) => void;
   /** The teacher UI is on (false in student view and for students). */
   teacherUi: boolean;
+  /**
+   * The three-state disclosure of the pools section, held by the frame: the
+   * desktop sidebar and the mobile drawer both draw this navigation, and two
+   * copies of the state would drift apart between them.
+   */
+  poolNav: ReturnType<typeof usePoolNavState>;
   /** Called after any navigation (closes the mobile drawer). */
   onNavigate?: () => void;
   /** The palette's "Start a poll": goes to the launcher page. */
@@ -145,12 +212,24 @@ function Nav({
               // The three pool routes are one place as far as navigation goes:
               // a question is read inside its pool, not beside it.
               active={route.view === "pools" || route.view === "pool" || route.view === "question"}
-              onClick={() => go({ view: "pools" })}
+              expanded={poolNav.state !== "collapsed"}
+              // One row, two jobs, and they never collide: from outside the
+              // section the click NAVIGATES (and unfolds a collapsed tree);
+              // from inside it cycles collapsed → active pool → all pools.
+              // So a teacher reading a question cannot lose it by folding the
+              // tree, and nobody needs a second control to see their pools.
+              onClick={() => {
+                if (inPoolSection(route)) poolNav.cycle();
+                else {
+                  poolNav.open();
+                  go({ view: "pools" });
+                }
+              }}
             />
-            {/* Only on the pool screen: the categories are the navigation of
-                THAT page, and unfolding them anywhere else would put a tree
-                with no table beside it in the frame. */}
-            {route.view === "pool" ? <SidebarCategories poolId={route.id} /> : null}
+            {/* The tree of the pool being read, or every pool the teacher can
+                reach — the state the row above cycles through (PoolNav.tsx).
+                Each row of it is a drop target for a dragged question. */}
+            <PoolNavTree state={poolNav.state} route={route} navigate={go} />
             {/* The launcher is a page of its own (`/polls`); the row stays
                 `active` while a projection is up, because that IS the poll. */}
             <NavItem
@@ -179,20 +258,10 @@ function Nav({
           </p>
           <div className="space-y-0.5">
             {shownRooms.map((r) => (
-              <NavItem
+              <ClassroomNavItem
                 key={r.id}
-                icon={School}
-                label={
-                  <span className="flex min-w-0 items-baseline gap-1.5">
-                    <span className="truncate">{r.name}</span>
-                    {/* `fg-muted`: a course code is the classroom's other
-                        name, not decoration, and this row sits on
-                        `accent-soft` when it is the one being read — the one
-                        background `fg-faint` still falls short of 4.5:1 on
-                        (W1). */}
-                    <span className="shrink-0 text-[11px] text-fg-muted">{r.courseCode}</span>
-                  </span>
-                }
+                name={r.name}
+                courseCode={r.courseCode}
                 active={currentRoom === r.id}
                 onClick={() => go({ view: "classroom", id: r.id })}
               />
@@ -278,6 +347,7 @@ export function Shell({
   // Escape closes it and the "Open menu" button gets the focus back.
   useLayer(drawerPanel, () => setDrawer(false), { enabled: drawer });
 
+  const poolNav = usePoolNavState();
   const [palette, setPalette] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -367,6 +437,7 @@ export function Shell({
           route={route}
           navigate={navigate}
           teacherUi={teacherUi}
+          poolNav={poolNav}
           onStartPoll={teacherUi ? () => navigate({ view: "polls" }) : undefined}
         />
         <ShortcutStrip />
@@ -402,6 +473,7 @@ export function Shell({
               route={route}
               navigate={navigate}
               teacherUi={teacherUi}
+              poolNav={poolNav}
               onNavigate={() => setDrawer(false)}
               onStartPoll={teacherUi ? () => navigate({ view: "polls" }) : undefined}
             />

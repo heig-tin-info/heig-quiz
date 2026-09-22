@@ -95,6 +95,7 @@ const en = {
   "classrooms.name": "Name",
   "classrooms.namePlaceholder": "PRG1-2026",
   "classrooms.period": "Period",
+  "classrooms.setPeriod": "Period…",
   "classrooms.periodPlaceholder": "2026-A",
   "classrooms.empty": "No classroom in this course yet.",
   "classrooms.students": "{n} students",
@@ -105,7 +106,10 @@ const en = {
   "classrooms.archived": "archived",
   "classrooms.delete": "Delete classroom",
   "classrooms.deleteConfirm": "Delete “{name}”? Its roster and results go with it.",
-  "classrooms.rename": "Rename",
+  // The name goes in the label: the button IS the <h1>'s text, so a bare
+  // "Rename classroom" would leave the heading announcing no classroom.
+  "classrooms.renameName": "Rename classroom “{name}”",
+  "classrooms.renameFailed": "Could not rename this classroom.",
   "classrooms.notFound": "This classroom does not exist, or you do not have access to it.",
 
   "roster.title": "Roster",
@@ -467,6 +471,28 @@ const en = {
   "pool.bulk.newCategory": "New category…",
   "pool.bulk.done": "{n} questions updated.",
   "pool.bulk.failed": "{n} questions could not be updated.",
+  "pool.bulk.movePool": "Move to another pool",
+
+  // --- Moving questions to another pool (ADR-017) ---
+  "pool.move.title": "Move {n} questions to another pool",
+  "pool.move.title.one": "Move this question to another pool",
+  "pool.move.action": "Move",
+  "pool.move.pool": "Target pool",
+  "pool.move.choosePool": "Choose a pool…",
+  "pool.move.noTarget": "There is no other pool you may write to.",
+  "pool.move.dropInto": "Move into {pool}",
+  "pool.move.done": "{n} questions moved to {pool}.",
+  "pool.move.done.one": "{name} moved to {pool}.",
+  "pool.move.failed": "These questions could not be moved.",
+  "pool.move.nameTaken": "The target pool already has a question named {name}.",
+  "pool.move.forbidden":
+    "You are not on the teaching staff of {course}, so this pool cannot be added to it.",
+  "pool.move.usedTitle": "Already used in a classroom",
+  "pool.move.usedBody.one":
+    "This question is already used in {classrooms}. Add the pool “{pool}” to {courses} so the class keeps reaching it?",
+  "pool.move.usedBody":
+    "These questions are already used in {classrooms}. Add the pool “{pool}” to {courses} so those classes keep reaching them?",
+  "pool.move.usedConfirm": "Add the pool and move",
 
   // --- Question editor (question/) ---
   "question.notFound": "This question does not exist, or you do not have access to it.",
@@ -1518,7 +1544,13 @@ const en = {
     "If the owner's account leaves the school, the pool goes to the first member added.",
   "share.invite": "Invite a teacher",
   "share.inviteAction": "Invite",
-  "share.email": "E-mail",
+  "share.teacher": "Teacher",
+  "share.teacherPlaceholder": "Name or e-mail",
+  "share.candidates": "Teachers",
+  "share.candidatesLoading": "Searching…",
+  "share.candidatesFailed": "The teachers could not be loaded.",
+  "share.noCandidate": "No teacher matches “{q}”.",
+  "share.everyoneSeated": "Every teacher of the school already has access.",
   "share.roleLabel": "Role",
   "share.roleOf": "Role of {name}",
   "share.remove": "Remove {name}",
@@ -1701,6 +1733,7 @@ const fr: Record<keyof Dict, string> = {
   "classrooms.name": "Nom",
   "classrooms.namePlaceholder": "PRG1-2026",
   "classrooms.period": "Période",
+  "classrooms.setPeriod": "Période…",
   "classrooms.periodPlaceholder": "2026-A",
   "classrooms.empty": "Aucune classe dans ce cours.",
   "classrooms.students": "{n} étudiants",
@@ -1712,7 +1745,8 @@ const fr: Record<keyof Dict, string> = {
   "classrooms.delete": "Supprimer la classe",
   "classrooms.deleteConfirm":
     "Supprimer « {name} » ? Sa liste et ses résultats disparaissent avec elle.",
-  "classrooms.rename": "Renommer",
+  "classrooms.renameName": "Renommer la classe « {name} »",
+  "classrooms.renameFailed": "Impossible de renommer cette classe.",
   "classrooms.notFound": "Cette classe n'existe pas, ou vous n'y avez pas accès.",
 
   "roster.title": "Liste",
@@ -2072,6 +2106,28 @@ const fr: Record<keyof Dict, string> = {
   "pool.bulk.newCategory": "Nouvelle catégorie…",
   "pool.bulk.done": "{n} questions mises à jour.",
   "pool.bulk.failed": "{n} questions n'ont pas pu être mises à jour.",
+  "pool.bulk.movePool": "Déplacer vers une autre banque",
+
+  // --- Déplacer des questions vers une autre banque (ADR-017) ---
+  "pool.move.title": "Déplacer {n} questions vers une autre banque",
+  "pool.move.title.one": "Déplacer cette question vers une autre banque",
+  "pool.move.action": "Déplacer",
+  "pool.move.pool": "Banque de destination",
+  "pool.move.choosePool": "Choisir une banque…",
+  "pool.move.noTarget": "Il n'y a aucune autre banque où vous pouvez écrire.",
+  "pool.move.dropInto": "Déplacer dans {pool}",
+  "pool.move.done": "{n} questions déplacées vers {pool}.",
+  "pool.move.done.one": "{name} déplacée vers {pool}.",
+  "pool.move.failed": "Ces questions n'ont pas pu être déplacées.",
+  "pool.move.nameTaken": "La banque de destination contient déjà une question nommée {name}.",
+  "pool.move.forbidden":
+    "Vous ne faites pas partie de l'équipe enseignante de {course} : la banque ne peut pas y être ajoutée.",
+  "pool.move.usedTitle": "Déjà utilisée dans une classe",
+  "pool.move.usedBody.one":
+    "Cette question est déjà utilisée dans {classrooms}. Ajouter la banque « {pool} » à {courses} pour que la classe continue d'y accéder ?",
+  "pool.move.usedBody":
+    "Ces questions sont déjà utilisées dans {classrooms}. Ajouter la banque « {pool} » à {courses} pour que ces classes continuent d'y accéder ?",
+  "pool.move.usedConfirm": "Ajouter la banque et déplacer",
 
   // --- Question editor (question/) ---
   "question.notFound": "Cette question n'existe pas, ou vous n'y avez pas accès.",
@@ -3120,7 +3176,13 @@ const fr: Record<keyof Dict, string> = {
     "Si le compte du propriétaire quitte l'école, la banque revient au premier membre ajouté.",
   "share.invite": "Inviter un enseignant",
   "share.inviteAction": "Inviter",
-  "share.email": "Adresse e-mail",
+  "share.teacher": "Enseignant",
+  "share.teacherPlaceholder": "Nom ou adresse e-mail",
+  "share.candidates": "Enseignants",
+  "share.candidatesLoading": "Recherche…",
+  "share.candidatesFailed": "Les enseignants n'ont pas pu être chargés.",
+  "share.noCandidate": "Aucun enseignant ne correspond à « {q} ».",
+  "share.everyoneSeated": "Tous les enseignants de l'école y ont déjà accès.",
   "share.roleLabel": "Rôle",
   "share.roleOf": "Rôle de {name}",
   "share.remove": "Retirer {name}",

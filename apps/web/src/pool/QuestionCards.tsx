@@ -1,4 +1,5 @@
 import { Copy, Pencil, Trash2 } from "lucide-react";
+import type { DragEvent } from "react";
 
 import type { QuestionRow } from "@quiz/contracts";
 
@@ -32,6 +33,7 @@ function QuestionCard({
   onEdit,
   onDuplicate,
   onDelete,
+  onDragStart,
   readOnly,
 }: {
   row: QuestionRow;
@@ -40,6 +42,7 @@ function QuestionCard({
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  onDragStart?: (event: DragEvent) => void;
   readOnly: boolean;
 }) {
   const t = useT();
@@ -47,6 +50,8 @@ function QuestionCard({
     <Card
       onClick={onEdit}
       {...pressable(onEdit)}
+      draggable={onDragStart !== undefined}
+      onDragStart={onDragStart}
       className={cx(
         "group flex min-w-0 cursor-pointer flex-col gap-3 p-4 transition-colors hover:bg-surface-2/70",
         checked && "border-accent",
@@ -136,6 +141,7 @@ export function QuestionCards({
   onEdit,
   onDuplicate,
   onDelete,
+  onDragStart,
   readOnly = false,
 }: {
   groups: QuestionGroup[];
@@ -144,6 +150,8 @@ export function QuestionCards({
   onEdit: (row: QuestionRow) => void;
   onDuplicate: (row: QuestionRow) => void;
   onDelete: (row: QuestionRow) => void;
+  /** Dragging a card onto a sidebar pool moves the question there (ADR-017). */
+  onDragStart?: (event: DragEvent, row: QuestionRow) => void;
   readOnly?: boolean;
 }) {
   return (
@@ -166,6 +174,7 @@ export function QuestionCards({
                 onEdit={() => onEdit(row)}
                 onDuplicate={() => onDuplicate(row)}
                 onDelete={() => onDelete(row)}
+                onDragStart={onDragStart ? (event) => onDragStart(event, row) : undefined}
                 readOnly={readOnly}
               />
             ))}
