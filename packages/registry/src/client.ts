@@ -6,6 +6,7 @@
  * Every entry exposes `Editor`/`Player`/`Review` through `React.lazy`, so that
  * Monaco never enters the initial bundle (N-PERF-05).
  */
+import { circuitClient } from "@quiz/qt-circuit/client";
 import { codeClient } from "@quiz/qt-code/client";
 
 import {
@@ -27,6 +28,7 @@ export const clientRegistry: Partial<Record<QuestionTypeId, AnyQuestionTypeClien
     short: shortClient,
     cloze: clozeClient,
     code: codeClient,
+    circuit: circuitClient,
   });
 
 /** Total lookup; an unregistered id throws `UnknownQuestionType`. */

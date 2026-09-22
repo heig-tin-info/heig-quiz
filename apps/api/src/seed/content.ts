@@ -11,7 +11,7 @@
  * looks them up before it writes, so running it twice changes nothing.
  */
 
-export type QuestionTypeName = "mcq" | "short" | "cloze" | "code";
+export type QuestionTypeName = "mcq" | "short" | "cloze" | "code" | "circuit";
 
 export interface QuestionSpec {
   /** Unique inside its pool, and the key the seed is idempotent on. */
@@ -471,6 +471,102 @@ export const ELECTRONICS_POOL: PoolSpec = {
           { text: "6 V", correct: false },
           { text: "12 V", correct: false },
         ],
+      },
+    },
+    {
+      internalName: "elec-filtre-rc-passe-bas",
+      type: "circuit",
+      category: DC,
+      difficulty: 3,
+      tags: ["filtre", "rc", "régime alternatif"],
+      explanation:
+        "La fréquence de coupure vaut f = 1 / (2 π R C) ≈ 1 kHz pour R = 1,59 kΩ et " +
+        "C = 100 nF. La résistance est en série, le condensateur en parallèle sur la sortie.",
+      /*
+       * Graded BY HAND (`mode: "manual"`), and that is the point of the demo:
+       * the type works with no container engine anywhere (decision D14). The
+       * reference is still there — it is what "Simulate the reference" runs
+       * when a runner exists, and what a simulated grade would compare
+       * against — and the single stimulus is visible, so a student who does
+       * have a runner may press "Simulate".
+       *
+       * The reference is the RC low-pass itself: R1 from `in+` to `out+`,
+       * C1 from that node down to the `in-` / `out-` rail. Its geometry is on
+       * the 20-unit grid of `packages/qt-circuit/src/library.ts`, so the
+       * netlist extractor reads three nets and raises no issue.
+       */
+      config: {
+        configVersion: 1,
+        prompt:
+          "Câblez un filtre **passe-bas** du premier ordre entre l'entrée et la sortie du " +
+          "quadripôle, de fréquence de coupure 1 kHz. La sortie est prise aux bornes du " +
+          "condensateur.",
+        palette: { kinds: ["R", "C", "L", "GND"], maxComponents: 4 },
+        supplies: { vcc: null, vee: null },
+        commonGround: true,
+        stimuli: [
+          {
+            name: "sinus 1 kHz",
+            source: { kind: "sine", amplitude: 1, frequencyHz: 1000, offset: 0 },
+            sourceOhms: 0,
+            load: { kind: "resistor", ohms: 1_000_000 },
+            analysis: { stopMs: 5, skipMs: 0, points: 500 },
+            points: 2,
+            visible: true,
+          },
+        ],
+        reference: {
+          components: [
+            { id: "c1", kind: "R", x: 300, y: 160, m: [1, 0, 0, 1], name: "R1", value: "1.59k" },
+            { id: "c2", kind: "C", x: 480, y: 240, m: [0, 1, -1, 0], name: "C1", value: "100n" },
+          ],
+          wires: [
+            {
+              id: "w1",
+              a: { kind: "port", port: "in+" },
+              b: { kind: "pin", c: "c1", p: 0 },
+              via: [],
+              points: [[0, 160], [260, 160]],
+            },
+            {
+              id: "w2",
+              a: { kind: "pin", c: "c1", p: 1 },
+              b: { kind: "port", port: "out+" },
+              via: [],
+              points: [[340, 160], [800, 160]],
+            },
+            {
+              id: "w3",
+              a: { kind: "pin", c: "c2", p: 0 },
+              b: { kind: "free", x: 480, y: 160 },
+              via: [],
+              points: [[480, 220], [480, 160]],
+            },
+            {
+              id: "w4",
+              a: { kind: "pin", c: "c2", p: 1 },
+              b: { kind: "port", port: "in-" },
+              via: [],
+              points: [[480, 260], [480, 320], [0, 320]],
+            },
+            {
+              id: "w5",
+              a: { kind: "free", x: 480, y: 320 },
+              b: { kind: "port", port: "out-" },
+              via: [],
+              points: [[480, 320], [800, 320]],
+            },
+          ],
+        },
+        grading: {
+          mode: "manual",
+          tolerance: 0.05,
+          rubric:
+            "Résistance en série et condensateur en parallèle sur la sortie ; " +
+            "produit R·C cohérent avec 1 kHz à 10 % près ; masse commune câblée.",
+        },
+        showExpected: false,
+        simulationsPerMinute: 10,
       },
     },
     {

@@ -8,7 +8,7 @@
  * question comes from `i18n.tsx` through here.
  */
 import type { TFunction } from "../i18n";
-import { playerStrings } from "../questionTypes";
+import { circuitCanvasStrings, playerStrings } from "../questionTypes";
 
 export function mcqPlayerStrings(t: TFunction) {
   return {
@@ -46,6 +46,20 @@ export function clozePlayerStrings(t: TFunction) {
  */
 export const codePlayerStrings = (t: TFunction) => playerStrings.code(t);
 
+/**
+ * `circuit` is built the same way, and for the same reason: half of its
+ * sentences interpolate a designator or a value, and rebuilding them here
+ * would be a second copy outside the key-by-key test.
+ */
+export const circuitPlayerStrings = (t: TFunction) => playerStrings.circuit(t);
+
+/**
+ * The canvas of the `circuit` type has a dictionary of its own, keyed under
+ * `qt.circuit.c.*` and handed to the player beside its `strings`: a package
+ * splits its surfaces, and the host translates each one whole.
+ */
+export const circuitCanvasStringsFor = (t: TFunction): unknown => circuitCanvasStrings(t);
+
 /** The dictionary a given type's player expects, or `undefined` for an unknown one. */
 export function playerStringsFor(type: string, t: TFunction): unknown {
   switch (type) {
@@ -57,6 +71,8 @@ export function playerStringsFor(type: string, t: TFunction): unknown {
       return clozePlayerStrings(t);
     case "code":
       return codePlayerStrings(t);
+    case "circuit":
+      return circuitPlayerStrings(t);
     default:
       return undefined;
   }

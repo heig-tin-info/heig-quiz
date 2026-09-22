@@ -62,6 +62,19 @@ import {
   truncateSelection,
   type McqScorePolicy,
 } from "@quiz/domain";
+/*
+ * The `circuit` type's own parser, used here for the reason the mock uses
+ * `@quiz/domain`'s formulas: a grading whose waveforms were invented by hand
+ * would prove the markup and nothing about the feature. It is a pure
+ * function over a runner outcome, so it costs the mock bundle nothing.
+ */
+import {
+  extractNets,
+  parseSimulation,
+  type CircuitStudent,
+  type Schematic,
+  type StimulusDetail,
+} from "@quiz/qt-circuit/client";
 import type {
   AdminTeacher,
   AttemptView,
@@ -720,7 +733,7 @@ interface MockVersion {
 interface MockQuestion {
   id: string;
   poolId: string;
-  type: "mcq" | "short" | "cloze" | "code";
+  type: "mcq" | "short" | "cloze" | "code" | "circuit";
   internalName: string;
   categoryId: string | null;
   difficulty: number;
@@ -940,6 +953,281 @@ const codeConfig = (
   },
 });
 
+/**
+ * The RC low-pass of the `circuit` question below, drawn on the 20-unit grid
+ * of `@quiz/qt-circuit`: R1 from `in+` to `out+`, C1 from that node down to
+ * the `in-` / `out-` rail. It is the TEACHER's reference; the student's
+ * answer further down is the same circuit with the capacitor left floating,
+ * because the diagnostics strip is what the screenshot has to show.
+ */
+const RC_REFERENCE: Schematic = {
+  components: [
+    { id: "c1", kind: "R", x: 300, y: 160, m: [1, 0, 0, 1], name: "R1", value: "1.59k" },
+    { id: "c2", kind: "C", x: 480, y: 240, m: [0, 1, -1, 0], name: "C1", value: "100n" },
+  ],
+  wires: [
+    { id: "w1", a: { kind: "port", port: "in+" }, b: { kind: "pin", c: "c1", p: 0 }, via: [], points: [[0, 160], [260, 160]] },
+    { id: "w2", a: { kind: "pin", c: "c1", p: 1 }, b: { kind: "port", port: "out+" }, via: [], points: [[340, 160], [800, 160]] },
+    { id: "w3", a: { kind: "pin", c: "c2", p: 0 }, b: { kind: "free", x: 480, y: 160 }, via: [], points: [[480, 220], [480, 160]] },
+    { id: "w4", a: { kind: "pin", c: "c2", p: 1 }, b: { kind: "port", port: "in-" }, via: [], points: [[480, 260], [480, 320], [0, 320]] },
+    { id: "w5", a: { kind: "free", x: 480, y: 320 }, b: { kind: "port", port: "out-" }, via: [], points: [[480, 320], [800, 320]] },
+  ],
+};
+
+/** The same circuit with its ground wires missing: C1's lower pin hangs in the air. */
+const RC_STUDENT: Schematic = {
+  components: RC_REFERENCE.components,
+  wires: RC_REFERENCE.wires.filter((w) => w.id !== "w4" && w.id !== "w5"),
+};
+
+const circuitConfig = (
+  prompt: string,
+  over: Record<string, unknown> = {},
+) => ({
+  configVersion: 1,
+  prompt,
+  palette: { kinds: ["R", "C", "L", "GND"], maxComponents: 4 },
+  supplies: { vcc: null, vee: null },
+  commonGround: true,
+  stimuli: [
+    {
+      name: "sinus 1 kHz",
+      source: { kind: "sine", amplitude: 1, frequencyHz: 1000, offset: 0 },
+      sourceOhms: 0,
+      load: { kind: "resistor", ohms: 1_000_000 },
+      analysis: { stopMs: 5, skipMs: 0, points: 500 },
+      points: 2,
+      visible: true,
+    },
+    {
+      name: "sinus 10 kHz",
+      source: { kind: "sine", amplitude: 1, frequencyHz: 10_000, offset: 0 },
+      sourceOhms: 0,
+      load: { kind: "resistor", ohms: 1_000_000 },
+      analysis: { stopMs: 1, skipMs: 0, points: 500 },
+      points: 1,
+      visible: false,
+    },
+  ],
+  reference: RC_REFERENCE,
+  grading: {
+    mode: "manual",
+    tolerance: 0.05,
+    rubric:
+      "Résistance en série, condensateur en parallèle sur la sortie, produit R·C cohérent avec 1 kHz.",
+  },
+  showExpected: false,
+  simulationsPerMinute: 10,
+  ...over,
+});
+
+/**
+ * REAL ngspice output, shortened from the transient of
+ * `packages/qt-circuit/src/test/ngspice-rc-lowpass.stdout.txt`: the header
+ * line and a hundred of its rows, in the exact format `parseSimulation`
+ * reads. A hand-written table would prove the markup and nothing else.
+ */
+const NGSPICE_RC_LOWPASS = `
+Note: No compatibility mode selected!
+
+
+Circuit: * rc low-pass
+
+Doing analysis at TEMP = 27.000000 and TNOM = 27.000000
+
+
+Initial Transient Solution
+--------------------------
+
+Node                                   Voltage
+----                                   -------
+in                                           0
+out                                          0
+outl                                         0
+vmeas#branch                                 0
+vin#branch                                   0
+
+ time            v(in)           v(out)          i(Vmeas)       
+ 0.00000000e+00  0.00000000e+00  0.00000000e+00  0.00000000e+00 
+ 1.00000000e-05  6.27763719e-02  2.10456606e-03  2.10456606e-09 
+ 2.00000000e-05  1.25280781e-01  7.88837779e-03  7.88837779e-09 
+ 3.00000000e-05  1.87304773e-01  1.69362232e-02  1.69362232e-08 
+ 4.00000000e-05  2.48589559e-01  2.91907519e-02  2.91907519e-08 
+ 5.00000000e-05  3.08893275e-01  4.44036884e-02  4.44036884e-08 
+ 6.00000000e-05  3.67977931e-01  6.23272898e-02  6.23272898e-08 
+ 7.00000000e-05  4.25610346e-01  8.27145789e-02  8.27145789e-08 
+ 8.00000000e-05  4.81563071e-01  1.05319618e-01  1.05319618e-07 
+ 9.00000000e-05  5.35615287e-01  1.29897823e-01  1.29897823e-07 
+ 1.00000000e-04  5.87553674e-01  1.56206311e-01  1.56206311e-07 
+ 1.10000000e-04  6.37173255e-01  1.84004280e-01  1.84004280e-07 
+ 1.20000000e-04  6.84278205e-01  2.13053413e-01  2.13053413e-07 
+ 1.30000000e-04  7.28682621e-01  2.43118312e-01  2.43118312e-07 
+ 1.40000000e-04  7.70211259e-01  2.73966943e-01  2.73966943e-07 
+ 1.50000000e-04  8.08700226e-01  3.05371103e-01  3.05371103e-07 
+ 1.60000000e-04  8.43997622e-01  3.37106899e-01  3.37106899e-07 
+ 1.70000000e-04  8.75964145e-01  3.68955232e-01  3.68955232e-07 
+ 1.80000000e-04  9.04473638e-01  4.00702292e-01  4.00702292e-07 
+ 1.90000000e-04  9.29413587e-01  4.32140049e-01  4.32140049e-07 
+ 2.00000000e-04  9.50685565e-01  4.63066746e-01  4.63066746e-07 
+ 2.10000000e-04  9.68205621e-01  4.93287389e-01  4.93287389e-07 
+ 2.20000000e-04  9.81904612e-01  5.22614224e-01  5.22614224e-07 
+ 2.30000000e-04  9.91728474e-01  5.50867206e-01  5.50867206e-07 
+ 2.40000000e-04  9.97638437e-01  5.77874456e-01  5.77874456e-07 
+ 2.50000000e-04  9.99611177e-01  6.03472698e-01  6.03472698e-07 
+ 2.60000000e-04  9.97638908e-01  6.27507681e-01  6.27507681e-07 
+ 2.70000000e-04  9.91729414e-01  6.49834571e-01  6.49834571e-07 
+ 2.80000000e-04  9.81906017e-01  6.70318328e-01  6.70318328e-07 
+ 2.90000000e-04  9.68207486e-01  6.88834054e-01  6.88834054e-07 
+ 3.00000000e-04  9.50687882e-01  7.05267305e-01  7.05267305e-07 
+ 3.10000000e-04  9.29416347e-01  7.19514385e-01  7.19514385e-07 
+ 3.20000000e-04  9.04476831e-01  7.31482596e-01  7.31482596e-07 
+ 3.30000000e-04  8.75967758e-01  7.41090462e-01  7.41090462e-07 
+ 3.40000000e-04  8.44001640e-01  7.48267913e-01  7.48267913e-07 
+ 3.50000000e-04  8.08704633e-01  7.52956434e-01  7.52956434e-07 
+ 3.60000000e-04  7.70216039e-01  7.55109177e-01  7.55109177e-07 
+ 3.70000000e-04  7.28687754e-01  7.54691033e-01  7.54691033e-07 
+ 3.80000000e-04  6.84283671e-01  7.51678662e-01  7.51678662e-07 
+ 3.90000000e-04  6.37179033e-01  7.46060490e-01  7.46060490e-07 
+ 4.00000000e-04  5.87559741e-01  7.37836661e-01  7.37836661e-07 
+ 4.10000000e-04  5.35621619e-01  7.27018945e-01  7.27018945e-07 
+ 4.20000000e-04  4.81569643e-01  7.13630614e-01  7.13630614e-07 
+ 4.30000000e-04  4.25617131e-01  6.97706270e-01  6.97706270e-07 
+ 4.40000000e-04  3.67984903e-01  6.79291638e-01  6.79291638e-07 
+ 4.50000000e-04  3.08900407e-01  6.58443316e-01  6.58443316e-07 
+ 4.60000000e-04  2.48596822e-01  6.35228488e-01  6.35228488e-07 
+ 4.70000000e-04  1.87312139e-01  6.09724601e-01  6.09724601e-07 
+ 4.80000000e-04  1.25288221e-01  5.82019000e-01  5.82019000e-07 
+ 4.90000000e-04  6.27698471e-02  5.52208532e-01  5.52208532e-07 
+ 5.00000000e-04  3.74936500e-06  5.20399114e-01  5.20399114e-07 
+ 5.10000000e-04 -6.27623631e-02  4.86705268e-01  4.86705268e-07 
+ 5.20000000e-04 -1.25280781e-01  4.51249627e-01  4.51249627e-07 
+ 5.30000000e-04 -1.87304773e-01  4.14162407e-01  4.14162407e-07 
+ 5.40000000e-04 -2.48589559e-01  3.75580857e-01  3.75580857e-07 
+ 5.50000000e-04 -3.08893275e-01  3.35648680e-01  3.35648680e-07 
+ 5.60000000e-04 -3.67977931e-01  2.94515433e-01  2.94515433e-07 
+ 5.70000000e-04 -4.25610346e-01  2.52335901e-01  2.52335901e-07 
+ 5.80000000e-04 -4.81563071e-01  2.09269463e-01  2.09269463e-07 
+ 5.90000000e-04 -5.35615287e-01  1.65479428e-01  1.65479428e-07 
+ 6.00000000e-04 -5.87553674e-01  1.21132369e-01  1.21132369e-07 
+ 6.10000000e-04 -6.37173255e-01  7.63974383e-02  7.63974383e-08 
+ 6.20000000e-04 -6.84278205e-01  3.14456758e-02  3.14456758e-08 
+ 6.30000000e-04 -7.28682621e-01 -1.35506848e-02 -1.35506848e-08 
+ 6.40000000e-04 -7.70211259e-01 -5.84189189e-02 -5.84189189e-08 
+ 6.50000000e-04 -8.08700226e-01 -1.02986511e-01 -1.02986511e-07 
+ 6.60000000e-04 -8.43997622e-01 -1.47081853e-01 -1.47081853e-07 
+ 6.70000000e-04 -8.75964145e-01 -1.90534940e-01 -1.90534940e-07 
+ 6.80000000e-04 -9.04473638e-01 -2.33178056e-01 -2.33178056e-07 
+ 6.90000000e-04 -9.29413587e-01 -2.74846451e-01 -2.74846451e-07 
+ 7.00000000e-04 -9.50685565e-01 -3.15379005e-01 -3.15379005e-07 
+ 7.10000000e-04 -9.68205621e-01 -3.54618879e-01 -3.54618879e-07 
+ 7.20000000e-04 -9.81904612e-01 -3.92414144e-01 -3.92414144e-07 
+ 7.30000000e-04 -9.91728474e-01 -4.28618393e-01 -4.28618393e-07 
+ 7.40000000e-04 -9.97638437e-01 -4.63091329e-01 -4.63091329e-07 
+ 7.50000000e-04 -9.99611177e-01 -4.95699332e-01 -4.95699332e-07 
+ 7.60000000e-04 -9.97638908e-01 -5.26315991e-01 -5.26315991e-07 
+ 7.70000000e-04 -9.91729414e-01 -5.54822617e-01 -5.54822617e-07 
+ 7.80000000e-04 -9.81906017e-01 -5.81108716e-01 -5.81108716e-07 
+ 7.90000000e-04 -9.68207486e-01 -6.05072437e-01 -6.05072437e-07 
+ 8.00000000e-04 -9.50687882e-01 -6.26620977e-01 -6.26620977e-07 
+ 8.10000000e-04 -9.29416347e-01 -6.45670956e-01 -6.45670956e-07 
+ 8.20000000e-04 -9.04476831e-01 -6.62148756e-01 -6.62148756e-07 
+ 8.30000000e-04 -8.75967758e-01 -6.75990812e-01 -6.75990812e-07 
+ 8.40000000e-04 -8.44001640e-01 -6.87143873e-01 -6.87143873e-07 
+ 8.50000000e-04 -8.08704633e-01 -6.95565215e-01 -6.95565215e-07 
+ 8.60000000e-04 -7.70216039e-01 -7.01222817e-01 -7.01222817e-07 
+ 8.70000000e-04 -7.28687754e-01 -7.04095491e-01 -7.04095491e-07 
+ 8.80000000e-04 -6.84283671e-01 -7.04172969e-01 -7.04172969e-07 
+ 8.90000000e-04 -6.37179033e-01 -7.01455951e-01 -7.01455951e-07 
+ 9.00000000e-04 -5.87559741e-01 -6.95956103e-01 -6.95956103e-07 
+ 9.10000000e-04 -5.35621619e-01 -6.87696016e-01 -6.87696016e-07 
+ 9.20000000e-04 -4.81569643e-01 -6.76709121e-01 -6.76709121e-07 
+ 9.30000000e-04 -4.25617131e-01 -6.63039558e-01 -6.63039558e-07 
+ 9.40000000e-04 -3.67984903e-01 -6.46742008e-01 -6.46742008e-07 
+ 9.50000000e-04 -3.08900407e-01 -6.27881479e-01 -6.27881479e-07 
+ 9.60000000e-04 -2.48596822e-01 -6.06533051e-01 -6.06533051e-07 
+ 9.70000000e-04 -1.87312139e-01 -5.82781583e-01 -5.82781583e-07 
+ 9.80000000e-04 -1.25288221e-01 -5.56721381e-01 -5.56721381e-07 
+ 9.90000000e-04 -6.27698471e-02 -5.28455828e-01 -5.28455828e-07 
+No. of Data Rows : 512
+Note: Simulation executed from .control section 
+`;
+
+type MockSchematic = Schematic;
+const EMPTY_SCHEMATIC: Schematic = { components: [], wires: [] };
+
+/** One runner case carrying the transient above. */
+const ngspiceCase = () => ({
+  exitCode: 0,
+  stdout: NGSPICE_RC_LOWPASS,
+  stderr: "",
+  ms: 340,
+  timedOut: false,
+  oom: false,
+  truncated: false,
+});
+
+/** A `RunnerOutcome` for `n` decks, which is what `POST /simulate` answers. */
+const ngspiceOutcome = (n: number) => ({
+  compile: { ok: true, stdout: "", stderr: "", ms: 0 },
+  cases: Array.from({ length: n }, ngspiceCase),
+});
+
+/**
+ * `gradings.details` for a circuit answer: the visible stimuli carry the
+ * waveforms the parser read out of the transient above, the hidden ones carry
+ * none (they were never run in this mock), and the mode stays `manual` —
+ * which is what a deployment without a container engine produces (D14).
+ */
+function mockCircuitDetails(
+  student: CircuitStudent,
+  stimuli: CircuitStimulusLike[],
+  schematic: MockSchematic,
+): { fraction: number; details: Record<string, unknown> } {
+  // The diagnostics are EXTRACTED from the answer, never invented: the mock
+  // runs the same `extractNets` the grader does, so a screenshot shows the
+  // sentence a student would really get.
+  const netlist = extractNets(schematic, {
+    commonGround: student.commonGround,
+    palette: student.palette,
+    supplies: student.supplies,
+  });
+  const ok = netlist.issues.length === 0 && netlist.counted > 0;
+  const parsed = ok ? parseSimulation(student, ngspiceOutcome(student.visibleStimuli.length)) : [];
+  let visibleSeen = 0;
+  const details: StimulusDetail[] = stimuli.map((st) => {
+    const visible = st.visible !== false;
+    const read = visible && ok ? (parsed[visibleSeen++] ?? null) : null;
+    return {
+      name: st.name,
+      visible,
+      points: st.points,
+      ok,
+      // Nothing was compared when the netlist did not come out, so there is
+      // no distance to report — `—`, not a number a teacher would trust.
+      error: ok ? 0.012 : null,
+      series: read?.series ?? null,
+      expected: null,
+      ...(ok ? {} : { reason: netlist.counted === 0 ? "not_run" : "floating_pin" }),
+    };
+  });
+  const total = stimuli.reduce((sum, st) => sum + st.points, 0);
+  return {
+    fraction: ok ? 1 : 0,
+    details: {
+      mode: "manual",
+      runner: ok ? "ok" : "none",
+      netlist: {
+        components: netlist.counted,
+        nets: netlist.nets.length,
+        issues: netlist.issues.map((i) => `${i.code}:${i.ref}`),
+      },
+      stimuli: details,
+      earned: ok ? total : 0,
+      total,
+    },
+  };
+}
+
 const SUM_TEMPLATE = `/* @@lock */
 #include <stddef.h>
 #include <stdio.h>
@@ -1155,6 +1443,25 @@ const questions: MockQuestion[] = [
       [{ name: "troncature", stdin: "", expected: "bonjour", visible: true }],
     ),
     explanation: "`strncpy` ne termine pas toujours la chaîne : il faut écrire le `\\0` soi-même.",
+  }),
+  makeQuestion({
+    poolId: "p2",
+    type: "circuit",
+    internalName: "filtre-capteur-rc",
+    categoryId: "k6",
+    difficulty: 3,
+    shuffleable: false,
+    randomizable: false,
+    tags: ["filtre", "capteur", "rc"],
+    config: circuitConfig(
+      "La sortie analogique du capteur est bruitée au-delà de quelques kilohertz. " +
+        "Câblez entre l'entrée et la sortie du quadripôle un filtre **passe-bas** du " +
+        "premier ordre, de fréquence de coupure 1 kHz.",
+    ),
+    explanation:
+      "f = 1 / (2 π R C). Avec R = 1,59 kΩ et C = 100 nF, f ≈ 1 kHz. " +
+      "La sortie se prend aux bornes du condensateur.",
+    published: [{ number: 1, changeNote: "Première version", daysAgo: 9 }],
   }),
   makeQuestion({
     poolId: "p2",
@@ -1582,6 +1889,32 @@ function studentView(q: MockQuestion, config: Record<string, unknown>): unknown 
       const parse = parseCloze(String(config.text ?? ""));
       return clozeStudentTemplate(parse, 0, q.id, false);
     }
+    case "circuit": {
+      const stimuli = (config.stimuli ?? []) as CircuitStimulusLike[];
+      const visible = stimuli.filter((st) => st.visible !== false);
+      const hidden = stimuli.filter((st) => st.visible === false);
+      return {
+        prompt: config.prompt,
+        palette: config.palette,
+        supplies: config.supplies,
+        commonGround: config.commonGround !== false,
+        // The reference and the hidden stimuli stop HERE, exactly as
+        // `toStudent` stops them server-side (invariant 4).
+        visibleStimuli: visible.map((st) => ({
+          name: st.name,
+          source: st.source,
+          sourceOhms: st.sourceOhms ?? 0,
+          load: st.load,
+          analysis: st.analysis,
+          points: st.points,
+        })),
+        hiddenCount: hidden.length,
+        hiddenPoints: hidden.reduce((sum, st) => sum + st.points, 0),
+        canSimulate: visible.length > 0,
+        showExpected: config.showExpected === true,
+        simulationsPerMinute: config.simulationsPerMinute ?? 10,
+      };
+    }
     case "code": {
       const cases = ((config.tests as { cases?: CodeCaseLike[] })?.cases ?? []) as CodeCaseLike[];
       const visible = cases.filter((c) => c.visible);
@@ -1609,6 +1942,16 @@ function studentView(q: MockQuestion, config: Record<string, unknown>): unknown 
       };
     }
   }
+}
+
+interface CircuitStimulusLike {
+  name: string;
+  source: unknown;
+  sourceOhms?: number;
+  load: unknown;
+  analysis: unknown;
+  points: number;
+  visible?: boolean;
 }
 
 interface CodeCaseLike {
@@ -1650,6 +1993,27 @@ function tryAnswer(
   evaluationPolicy: McqScorePolicy | null = null,
 ): unknown {
   if (q.type === "code") return { status: "runner_unavailable", reason: "not_configured" };
+  /*
+   * `circuit` does NOT answer `runner_unavailable`: the mock has a real
+   * ngspice transient to hand, so the teacher's "Simulate the reference" and
+   * the try panel's review both show the waveforms a working deployment
+   * would. The mode stays `manual`, so the verdict is still the teacher's.
+   */
+  if (q.type === "circuit") {
+    const stimuli = (config.stimuli ?? []) as CircuitStimulusLike[];
+    const student = studentView(q, config) as CircuitStudent;
+    const schematic =
+      (answer as { schematic?: MockSchematic } | null)?.schematic ?? EMPTY_SCHEMATIC;
+    const built = mockCircuitDetails(student, stimuli, schematic);
+    const total = stimuli.reduce((sum, st) => sum + st.points, 0);
+    return {
+      status: "graded",
+      points: Math.round(built.fraction * total * 100) / 100,
+      maxPoints: total,
+      details: built.details,
+      solution: solutionOf(q),
+    };
+  }
   if (q.type === "mcq") {
     const choices = (config.choices ?? []) as { text: string; correct: boolean }[];
     const correct = choices.flatMap((c, i) => (c.correct ? [i] : []));
@@ -2054,6 +2418,19 @@ function emptyConfig(type: MockQuestion["type"]): Record<string, unknown> {
           return { configVersion: 2, text: "", caseSensitive: false, shuffleOptions: true };
     case "code":
       return codeConfig("", "", [{ name: "", stdin: "", expected: "", visible: true }]);
+    case "circuit":
+      return {
+        configVersion: 1,
+        prompt: "",
+        palette: { kinds: ["R", "C", "L", "D", "GND"], maxComponents: 10 },
+        supplies: { vcc: null, vee: null },
+        commonGround: true,
+        stimuli: [],
+        reference: null,
+        grading: { mode: "manual", tolerance: 0.05, rubric: "" },
+        showExpected: false,
+        simulationsPerMinute: 10,
+      };
   }
 }
 
@@ -2351,7 +2728,15 @@ const frozenConfig = (q: MockQuestion): Record<string, unknown> =>
 function itemSource(): MockQuestion[] {
   const published = questions.filter((q) => q.deletedAt === null && q.versions.length > 0);
   const primary = published.filter((q) => q.poolId === "p1");
-  return primary.length > 0 ? primary : published;
+  /*
+   * The `circuit` question lives in the SECOND pool — a sensor's front end is
+   * not a C exercise — and an evaluation that never played it would leave the
+   * dashboard, the grading panel and the feedback screen without one. It is
+   * spliced in early enough that even a four-item evaluation carries it.
+   */
+  const circuit = published.filter((q) => q.type === "circuit");
+  if (primary.length === 0) return published;
+  return [...primary.slice(0, 2), ...circuit, ...primary.slice(2)];
 }
 
 const studentConfigOf = (q: MockQuestion): unknown => studentView(q, frozenConfig(q));
@@ -2389,6 +2774,12 @@ function solutionOf(q: MockQuestion): unknown {
         compare: tests.compare,
       };
     }
+    case "circuit":
+      return {
+        reference: config.reference ?? null,
+        stimuli: config.stimuli ?? [],
+        grading: config.grading ?? { mode: "manual", tolerance: 0.05, rubric: "" },
+      };
   }
 }
 
@@ -2446,6 +2837,11 @@ function answerOf(q: MockQuestion, seedValue: number): unknown {
           .map((s) => s.text),
         lastRun: null,
       };
+    // The student's circuit is the reference with its ground wires missing
+    // when the seed says "wrong": a floating capacitor is the mistake this
+    // type actually produces, and the strip under the canvas names it.
+    case "circuit":
+      return { schematic: wrong ? RC_STUDENT : RC_REFERENCE };
   }
 }
 
@@ -2473,6 +2869,12 @@ function summaryOf(q: MockQuestion, seedValue: number): string {
     case "code": {
       const regions = (answer as { regions?: string[] }).regions ?? [];
       return `${regions.reduce((sum, r) => sum + r.split("\n").length, 0)} L`;
+    }
+    case "circuit": {
+      const schematic = (answer as { schematic?: { components?: unknown[] } }).schematic;
+      const max = (frozenConfig(q).palette as { maxComponents?: number } | undefined)
+        ?.maxComponents;
+      return `${schematic?.components?.length ?? 0}/${max ?? 10}`;
     }
   }
 }
@@ -3391,10 +3793,46 @@ const studentPayloads: Record<number, unknown> = {
     filesPreview: [],
     allOrNothing: false,
   },
+  /*
+   * The `circuit` item: the student view of the pool question above, written
+   * out here because this attempt is not built from the pool. What is NOT in
+   * it is the point — no reference, no hidden stimulus, no tolerance
+   * (invariant 4) — and `canSimulate` is what puts the button on the screen.
+   */
+  5: {
+    prompt:
+      "La sortie analogique du capteur est bruitée au-delà de quelques kilohertz. " +
+      "Câblez entre l'entrée et la sortie du quadripôle un filtre **passe-bas** du " +
+      "premier ordre, de fréquence de coupure 1 kHz.",
+    palette: { kinds: ["R", "C", "L", "GND"], maxComponents: 4 },
+    supplies: { vcc: null, vee: null },
+    commonGround: true,
+    visibleStimuli: [
+      {
+        name: "sinus 1 kHz",
+        source: { kind: "sine", amplitude: 1, frequencyHz: 1000, offset: 0 },
+        sourceOhms: 0,
+        load: { kind: "resistor", ohms: 1_000_000 },
+        analysis: { stopMs: 5, skipMs: 0, points: 500 },
+        points: 2,
+      },
+    ],
+    hiddenCount: 1,
+    hiddenPoints: 1,
+    canSimulate: true,
+    showExpected: false,
+    simulationsPerMinute: 10,
+  },
 };
 
 /** The attempt's mutable half: what the student typed, and where they are. */
 const studentAnswers = new Map<string, { payload: unknown; revision: number; done: boolean }>();
+/*
+ * The circuit item opens with something already on the canvas — the RC with
+ * its ground wires missing. An empty box would show the empty state and
+ * nothing else, and the strip under the drawing is half of what this type IS.
+ */
+studentAnswers.set(studentItem(5), { payload: { schematic: RC_STUDENT }, revision: 1, done: false });
 let studentPosition: string | null = studentItem(1);
 const BASE_DEADLINE = now + 14 * 60_000 + 32_000;
 let studentDeadline = BASE_DEADLINE;
@@ -3439,13 +3877,14 @@ const studentAttemptView = (): AttemptView => ({
     pausedAt: scene === "paused" ? iso(-30_000) : null,
     totalPoints: 10,
   },
-  items: [1, 2, 3, 4].map((n) => {
+  items: [1, 2, 3, 4, 5].map((n) => {
     const stored = studentAnswers.get(studentItem(n));
     return {
       id: studentItem(n),
       position: n,
-      points: n === 4 ? 5 : n === 3 ? 1 : 2,
-      type: n === 1 ? "mcq" : n === 2 ? "cloze" : n === 3 ? "short" : "code",
+      points: n === 4 ? 5 : n === 5 ? 3 : n === 3 ? 1 : 2,
+      type:
+        n === 1 ? "mcq" : n === 2 ? "cloze" : n === 3 ? "short" : n === 4 ? "code" : "circuit",
       milestone: n === 3,
       student: studentPayloads[n],
       answer: stored?.payload ?? null,
@@ -3585,6 +4024,28 @@ on("POST", "/app/api/attempts/:id/events", () => undefined);
  * no `/runtimes` on this deployment, or a question that says `backend`. A free
  * try (`stdin` in the body) gets one case back, the way the API answers it.
  */
+/**
+ * `POST /attempts/:id/simulate` (WP11): ngspice on the platform runner.
+ *
+ * It answers a RAW `RunnerOutcome` — one deck per VISIBLE stimulus, in order
+ * — and the `circuit` player parses it itself (`parseSimulation`). The
+ * stdout below is a real transient, so the plot on the screen is a real RC
+ * low-pass and not a drawing of one.
+ *
+ * Both graceful paths are reachable: `?fail=1` answers the `503` of a
+ * deployment with no container engine (decision D14), and the fourth press
+ * in one page answers the `429` of the per-attempt budget (N-SEC-07) —
+ * a real budget rather than a flag, because that is how a student meets it.
+ * `?slow=1` already delays every call, which is the running state.
+ */
+let simulationsSpent = 0;
+on("POST", "/app/api/attempts/:id/simulate", (): unknown => {
+  if (flags.fail) throw new MockError(503, "runner_unavailable");
+  simulationsSpent += 1;
+  if (simulationsSpent > 3) throw new MockError(429, "rate_limited");
+  return ngspiceOutcome(1);
+});
+
 on("POST", "/app/api/attempts/:id/run", (m, body): unknown => {
   const free = body as { stdin?: string; args?: string[] } | undefined;
   if (free?.stdin !== undefined) {
@@ -3750,6 +4211,11 @@ function mockAnswer(q: MockQuestion, config: Record<string, unknown>, ability: n
       }),
     };
   }
+  if (q.type === "circuit") {
+    // The wrong half of the class left the capacitor's lower pin in the air,
+    // which is the mistake this type actually produces.
+    return { schematic: rand() < ability ? RC_REFERENCE : RC_STUDENT };
+  }
   const good = rand() < ability;
   return {
     regions: [
@@ -3891,6 +4357,16 @@ function buildGradingWorld(
         details = null;
       } else if (q.type === "code") {
         const built = mockCodeDetails(config, attempt.ability);
+        points = halfPoints(built.fraction * item.points);
+        details = built.details;
+      } else if (q.type === "circuit") {
+        // A circuit is graded on the ITEM's points, not on its stimuli's, so
+        // the fraction is what travels — as it does for every other type.
+        const built = mockCircuitDetails(
+          studentView(q, config) as CircuitStudent,
+          (config.stimuli ?? []) as CircuitStimulusLike[],
+          (answer as { schematic?: MockSchematic } | null)?.schematic ?? EMPTY_SCHEMATIC,
+        );
         points = halfPoints(built.fraction * item.points);
         details = built.details;
       } else {
