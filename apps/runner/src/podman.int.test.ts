@@ -3,11 +3,10 @@ import { execFileSync } from "node:child_process";
 import type { RunnerLanguage, RunnerOutcome, RunnerRequest } from "@quiz/core/server";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { detectSocket, loadConfig, type RunnerConfig } from "./config.js";
-import { createEngine, type Engine } from "./engine.js";
+import { remoteArgs, type Engine } from "./engine.js";
 import { executeRequest } from "./execute.js";
-import { availableLanguages, imageRef } from "./images.js";
-import { probeEngine } from "./probe.js";
+import { imageRef } from "./images.js";
+import { announce, integrationEngine, integrationHost } from "./test/integration.js";
 
 /**
  * The suite that really starts containers.
@@ -22,50 +21,21 @@ import { probeEngine } from "./probe.js";
  * enough for a classroom.
  */
 
-const SOCKET = detectSocket();
+const host = integrationHost();
+const has = (language: RunnerLanguage): boolean => host.has(language);
+announce(host, "the integration suite");
 
-function engineIsReachable(): { ok: boolean; languages: RunnerLanguage[]; config: RunnerConfig } {
-  const config = loadConfig({ LOG_LEVEL: "fatal", ...(SOCKET === null ? {} : { PODMAN_SOCKET: SOCKET }) });
-  try {
-    const base = config.PODMAN_SOCKET === null ? [] : ["--remote", "--url", `unix://${config.PODMAN_SOCKET}`];
-    const images = execFileSync(
-      config.PODMAN_BIN,
-      [...base, "images", "--format", "{{.Repository}}:{{.Tag}}"],
-      { encoding: "utf8", timeout: 20_000 },
-    );
-    return { ok: true, languages: availableLanguages(images.split("\n"), config), config };
-  } catch {
-    return { ok: false, languages: [], config };
-  }
-}
-
-const probe = engineIsReachable();
-const has = (language: RunnerLanguage): boolean => probe.ok && probe.languages.includes(language);
-
-if (!probe.ok) {
-  console.warn("[runner] Podman is not reachable: the integration suite is skipped.");
-} else if (probe.languages.length === 0) {
-  console.warn("[runner] no quiz-runner-* image: run images/build.sh first.");
-}
-
-const config = probe.config;
+const config = host.config;
 let engine: Engine;
 
 beforeAll(async () => {
-  if (!probe.ok) return;
-  const probed = await probeEngine(config);
-  engine = createEngine({
-    podmanBin: config.PODMAN_BIN,
-    socket: config.PODMAN_SOCKET,
-    seccompProfile: config.RUNNER_SECCOMP,
-    usernsAuto: probed.capabilities.usernsAuto,
-    runtime: probed.capabilities.runtime,
-    capabilities: probed.capabilities,
-  });
+  if (!host.ok) return;
+  engine = await integrationEngine(host);
+  const capabilities = engine.capabilities;
   console.log(
-    `[runner] ${probed.capabilities.version}, rootless=${probed.capabilities.rootless}, ` +
-      `remote=${probed.capabilities.remote}, userns=auto:${probed.capabilities.usernsAuto}, ` +
-      `runtime=${probed.capabilities.runtime ?? "default"}, languages=${probe.languages.join(",")}`,
+    `[runner] ${capabilities.version}, rootless=${capabilities.rootless}, ` +
+      `remote=${capabilities.remote}, userns=auto:${capabilities.usernsAuto}, ` +
+      `runtime=${capabilities.runtime ?? "default"}, languages=${host.languages.join(",")}`,
   );
 });
 
@@ -367,7 +337,7 @@ describe.skipIf(!has("c"))("the container itself", () => {
     const listed = execFileSync(
       config.PODMAN_BIN,
       [
-        ...(config.PODMAN_SOCKET === null ? [] : ["--remote", "--url", `unix://${config.PODMAN_SOCKET}`]),
+        ...remoteArgs(config.PODMAN_SOCKET),
         "ps", "-a", "--filter", "label=quiz.runner=1", "--format", "{{.Names}}",
       ],
       { encoding: "utf8" },
@@ -376,7 +346,7 @@ describe.skipIf(!has("c"))("the container itself", () => {
   });
 
   it("has an image for the language it claims to serve", () => {
-    expect(probe.languages.map((language) => imageRef(config, language))).toContain(
+    expect(host.languages.map((language) => imageRef(config, language))).toContain(
       "quiz-runner-c:latest",
     );
   });

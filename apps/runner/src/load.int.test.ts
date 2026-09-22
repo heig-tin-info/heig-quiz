@@ -1,12 +1,9 @@
-import { execFileSync } from "node:child_process";
-
 import { RunnerOutcome, type RunnerRequest } from "@quiz/core/server";
 import type { FastifyInstance } from "fastify";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { buildApp } from "./app.js";
-import { detectSocket, loadConfig } from "./config.js";
-import { availableLanguages } from "./images.js";
+import { integrationHost } from "./test/integration.js";
 
 /**
  * The load the runner is sized for: a classroom of thirty students pressing
@@ -20,26 +17,8 @@ import { availableLanguages } from "./images.js";
  * experiences as "it answered" rather than "it hung".
  */
 
-const SOCKET = detectSocket();
-const config = loadConfig({
-  LOG_LEVEL: "fatal",
-  ...(SOCKET === null ? {} : { PODMAN_SOCKET: SOCKET }),
-});
-
-function ready(): boolean {
-  try {
-    const base =
-      config.PODMAN_SOCKET === null ? [] : ["--remote", "--url", `unix://${config.PODMAN_SOCKET}`];
-    const images = execFileSync(
-      config.PODMAN_BIN,
-      [...base, "images", "--format", "{{.Repository}}:{{.Tag}}"],
-      { encoding: "utf8", timeout: 20_000 },
-    );
-    return availableLanguages(images.split("\n"), config).includes("c");
-  } catch {
-    return false;
-  }
-}
+const host = integrationHost();
+const config = host.config;
 
 const REQUESTS = 30;
 /** The window the thirty students press Run in. */
@@ -49,7 +28,7 @@ const SOURCE =
 
 let app: FastifyInstance | null = null;
 
-describe.skipIf(!ready())("thirty runs at once", () => {
+describe.skipIf(!host.has("c"))("thirty runs at once", () => {
   beforeAll(async () => {
     app = await buildApp({ config });
   });

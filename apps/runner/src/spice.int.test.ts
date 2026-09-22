@@ -1,13 +1,9 @@
-import { execFileSync } from "node:child_process";
-
 import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { detectSocket, loadConfig, type RunnerConfig } from "./config.js";
-import { createEngine, type Engine } from "./engine.js";
+import type { Engine } from "./engine.js";
 import { executeRequest } from "./execute.js";
-import { availableLanguages } from "./images.js";
-import { probeEngine } from "./probe.js";
+import { announce, integrationEngine, integrationHost } from "./test/integration.js";
 
 /**
  * The `spice` language against a real container (ADR-019).
@@ -25,53 +21,15 @@ import { probeEngine } from "./probe.js";
  * this image adds no environment variable, no mount and no network.
  */
 
-const SOCKET = detectSocket();
+const host = integrationHost();
+announce(host, "the spice suite", "spice");
 
-function engineIsReachable(): { ok: boolean; hasSpice: boolean; config: RunnerConfig } {
-  const config = loadConfig({
-    LOG_LEVEL: "fatal",
-    ...(SOCKET === null ? {} : { PODMAN_SOCKET: SOCKET }),
-  });
-  try {
-    const base =
-      config.PODMAN_SOCKET === null ? [] : ["--remote", "--url", `unix://${config.PODMAN_SOCKET}`];
-    const images = execFileSync(
-      config.PODMAN_BIN,
-      [...base, "images", "--format", "{{.Repository}}:{{.Tag}}"],
-      { encoding: "utf8", timeout: 20_000 },
-    );
-    return {
-      ok: true,
-      hasSpice: availableLanguages(images.split("\n"), config).includes("spice"),
-      config,
-    };
-  } catch {
-    return { ok: false, hasSpice: false, config };
-  }
-}
-
-const probe = engineIsReachable();
-
-if (!probe.ok) {
-  console.warn("[runner] Podman is not reachable: the spice suite is skipped.");
-} else if (!probe.hasSpice) {
-  console.warn("[runner] no quiz-runner-spice image: run images/build.sh spice first.");
-}
-
-const config = probe.config;
+const config = host.config;
 let engine: Engine;
 
 beforeAll(async () => {
-  if (!probe.ok) return;
-  const probed = await probeEngine(config);
-  engine = createEngine({
-    podmanBin: config.PODMAN_BIN,
-    socket: config.PODMAN_SOCKET,
-    seccompProfile: config.RUNNER_SECCOMP,
-    usernsAuto: probed.capabilities.usernsAuto,
-    runtime: probed.capabilities.runtime,
-    capabilities: probed.capabilities,
-  });
+  if (!host.ok) return;
+  engine = await integrationEngine(host);
 });
 
 /**
@@ -134,7 +92,7 @@ function dataRows(stdout: string): string[][] {
     );
 }
 
-describe.skipIf(!probe.ok || !probe.hasSpice)("spice in a real container", () => {
+describe.skipIf(!host.has("spice"))("spice in a real container", () => {
   it("simulates a netlist and writes its table on stdout", async () => {
     const outcome = await run(
       request([{ name: "s0.cir", content: RC_LOWPASS }], [{ name: "s0", args: ["s0.cir"], stdin: "" }]),
