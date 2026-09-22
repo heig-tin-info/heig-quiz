@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { CourseSummary, PoolDetail } from "@quiz/contracts";
+import type { CourseSummary, PoolDetail, PoolSummary } from "@quiz/contracts";
 
 import { Shell } from "./Shell";
 import { resetShortcuts, useShortcuts } from "./shortcuts";
@@ -67,6 +67,7 @@ function renderShell({
   navigate = vi.fn(),
   onToggleStudentView = vi.fn(),
   pool,
+  poolList,
   path,
   children,
 }: {
@@ -79,6 +80,8 @@ function renderShell({
   onToggleStudentView?: () => void;
   /** Seeds the pool the sidebar unfolds on a `pool` route. */
   pool?: PoolDetail;
+  /** Seeds the pool LIST the "all pools" state of the sidebar draws. */
+  poolList?: PoolSummary[];
   /** URL the frame reads `?category=` from. */
   path?: string;
   /** What the frame wraps; a screen registering its own shortcuts, here. */
@@ -87,6 +90,7 @@ function renderShell({
   const queryClient = makeQueryClient();
   queryClient.setQueryData(["courses"], courses);
   if (pool) queryClient.setQueryData(["pool", pool.pool.id], pool);
+  if (poolList) queryClient.setQueryData(["pools"], poolList);
   renderWithProviders(
     <Shell
       me={me}
@@ -434,5 +438,85 @@ describe("Shell shortcut strip", () => {
     await userEvent.click(screen.getByRole("button", { name: "Open menu" }));
     const drawer = screen.getByRole("dialog", { name: "Quiz" });
     expect(within(drawer).queryByText("Shortcuts")).toBeNull();
+  });
+});
+
+/*
+ * The three states the "Question pools" row cycles through (ADR-017):
+ * collapsed, the active pool's tree, every pool. The choice is a habit, so it
+ * lives in `localStorage` — which is what these tests seed and read back.
+ */
+describe("Shell pool navigation states", () => {
+  const POOLS: PoolSummary[] = [
+    {
+      ...POOL.pool,
+      questionCount: 7,
+      role: "owner",
+      ownerName: "Prof Démo",
+      memberCount: 0,
+      updatedAt: "2026-09-18T08:00:00.000Z",
+    },
+    {
+      id: "p2",
+      name: "Embedded",
+      icon: null,
+      visibility: "private",
+      ownerId: "u1",
+      isPersonal: false,
+      createdAt: "2026-01-01T08:00:00.000Z",
+      updatedAt: "2026-09-18T08:00:00.000Z",
+      questionCount: 4,
+      role: "contributor",
+      ownerName: "Prof Démo",
+      memberCount: 0,
+    },
+  ];
+
+  afterEach(() => localStorage.removeItem("quiz-pools-nav"));
+
+  const poolsRow = () => within(sidebar()).getByRole("button", { name: "Question pools" });
+
+  it("cycles active → all → collapsed from inside the pool section", async () => {
+    renderShell({
+      route: { view: "pool", id: "p1" },
+      pool: POOL,
+      poolList: POOLS,
+      path: "/pools/p1",
+    });
+    // Today's behaviour is the default: the pool being read, with its tree.
+    expect(within(sidebar()).getByRole("button", { name: "All questions" })).toBeInTheDocument();
+    expect(within(sidebar()).queryByRole("button", { name: /^Embedded/ })).toBeNull();
+
+    await userEvent.click(poolsRow());
+    expect(within(sidebar()).getByRole("button", { name: /^Embedded/ })).toBeInTheDocument();
+    // The pool being read keeps its folders in the wider list.
+    expect(within(sidebar()).getByRole("button", { name: "Arrays" })).toBeInTheDocument();
+
+    await userEvent.click(poolsRow());
+    expect(within(sidebar()).queryByRole("button", { name: /^Embedded/ })).toBeNull();
+    expect(within(sidebar()).queryByRole("button", { name: "All questions" })).toBeNull();
+    expect(poolsRow()).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("remembers the state across a remount", async () => {
+    renderShell({ route: { view: "pools" }, poolList: POOLS });
+    await userEvent.click(poolsRow());
+    expect(localStorage.getItem("quiz-pools-nav")).toBe("all");
+  });
+
+  it("navigates, and does not cycle, when the click comes from another section", async () => {
+    localStorage.setItem("quiz-pools-nav", "collapsed");
+    const { navigate } = renderShell({ route: { view: "home" }, poolList: POOLS });
+    await userEvent.click(poolsRow());
+    expect(navigate).toHaveBeenCalledWith({ view: "pools" });
+    // A collapsed section opens rather than staying shut behind the arrival.
+    expect(localStorage.getItem("quiz-pools-nav")).toBe("active");
+  });
+
+  it("opens the pool a row of the all-pools list names", async () => {
+    localStorage.setItem("quiz-pools-nav", "all");
+    const { navigate } = renderShell({ route: { view: "pools" }, poolList: POOLS });
+    await userEvent.click(within(sidebar()).getByRole("button", { name: /^Embedded/ }));
+    expect(navigate).toHaveBeenCalledWith({ view: "pool", id: "p2" });
   });
 });

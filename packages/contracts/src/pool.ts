@@ -339,6 +339,72 @@ export const CopyBody = z.object({
 });
 export type CopyBody = z.infer<typeof CopyBody>;
 
+/**
+ * `POST /questions/move` — the question CHANGES pool and keeps its id, so
+ * every evaluation item frozen on one of its versions keeps resolving
+ * (F-EVAL-03). A copy duplicates (F-POOL-04); a move relocates.
+ *
+ * One body for one question and for twenty: the drag-and-drop of the sidebar
+ * sends a list of one, the bulk bar sends the selection, and the server has a
+ * single path to test. `categoryId` names a category OF THE TARGET pool; its
+ * absence files the questions at the root.
+ */
+export const MoveBody = z.object({
+  questionIds: z.array(z.uuid()).min(1).max(200),
+  targetPoolId: z.uuid(),
+  categoryId: z.uuid().nullable().optional(),
+  /**
+   * The retry the UI sends after the teacher answered the 409: link the
+   * target pool to the courses the conflict named, as part of the move. It is
+   * honoured only for the courses the caller is staff of (`staffAccess`).
+   */
+  linkCourses: z.boolean().optional(),
+});
+export type MoveBody = z.infer<typeof MoveBody>;
+
+/**
+ * A course whose evaluations use one of the questions being moved, while the
+ * target pool is not among the pools that course draws from. Named in the
+ * 409 so the dialog can say WHICH classroom is concerned rather than "this
+ * question is used somewhere".
+ */
+export const MoveBlockingCourse = z.object({
+  courseId: z.uuid(),
+  courseName: z.string(),
+  courseCode: z.string(),
+  classrooms: z.array(z.object({ id: z.uuid(), name: z.string() })),
+  /** The caller holds a staff seat, so `linkCourses: true` can cover it. */
+  mayLink: z.boolean(),
+});
+export type MoveBlockingCourse = z.infer<typeof MoveBlockingCourse>;
+
+/**
+ * The 409 of a refused move, in three flavours, all shaped the same so the
+ * client parses one schema:
+ *   - `pool_not_linked`: ask the teacher, retry with `linkCourses: true`;
+ *   - `course_forbidden`: a named course is not theirs to link — no retry;
+ *   - `name_taken`: the target pool already has a question by that internal
+ *     name, and a move keeps the name it moves (ADR-017).
+ */
+export const MoveConflict = z.object({
+  error: z.enum(["pool_not_linked", "course_forbidden", "name_taken"]),
+  message: z.string(),
+  courses: z.array(MoveBlockingCourse).default([]),
+  /** The internal names that already exist in the target pool. */
+  names: z.array(z.string()).default([]),
+});
+export type MoveConflict = z.infer<typeof MoveConflict>;
+
+export const MoveResult = z.object({
+  moved: z.number().int(),
+  questionIds: z.array(z.uuid()),
+  targetPoolId: z.uuid(),
+  categoryId: z.uuid().nullable(),
+  /** The courses the move linked the target pool to, if any. */
+  linkedCourseIds: z.array(z.uuid()),
+});
+export type MoveResult = z.infer<typeof MoveResult>;
+
 export const VersionParam = z.object({
   id: z.uuid(),
   number: z.coerce.number().int().min(1),

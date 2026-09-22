@@ -13,7 +13,7 @@
 import { randomUUID } from "node:crypto";
 
 import fastifyMultipart from "@fastify/multipart";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
@@ -24,6 +24,7 @@ import {
   CopyBody,
   DeprecateBody,
   DraftPut,
+  MoveBody,
   PoolCreate,
   PoolCandidateQuery,
   PoolMemberInvite,
@@ -40,6 +41,9 @@ import {
   TryBody,
   VersionParam,
   type Asset,
+  type MoveBlockingCourse,
+  type MoveConflict,
+  type MoveResult,
   type QuestionTypeId,
   type TryResult,
 } from "@quiz/contracts";
@@ -819,6 +823,167 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     poolChanged(target.id);
     const [created] = await app.db.select().from(questions).where(eq(questions.id, id));
     return reply.code(201).send(await service.questionDetail(app.db, created!));
+  });
+
+
+  /**
+   * `POST /questions/move` — the question changes pool and KEEPS its id.
+   *
+   * It is the sibling of `/copy` above and its opposite: a copy is a new
+   * question that remembers where it came from, a move is the same question
+   * somewhere else. Everything frozen on one of its versions goes on
+   * resolving, which is precisely why the id may not change (F-EVAL-03).
+   *
+   * One route for one question and for twenty: the drag-and-drop of the
+   * sidebar sends a list of one. Rights are the ones the two halves of a move
+   * really are — `contributor` on every SOURCE pool (what it takes to delete
+   * a question from it) and `contributor` on the TARGET (what it takes to
+   * create one there) — and a target the caller cannot reach is a 404, like
+   * any entity they cannot see (invariant 6).
+   *
+   * The refusal that matters is the third one: a classroom already PLAYS one
+   * of these questions, and the target pool is not among the pools its course
+   * draws from. Moving would leave the staff of that course unable to reach
+   * the question again. The server always checks it; the client only asks the
+   * teacher and retries with `linkCourses: true`, which links the pool to
+   * those courses — never to a course the caller is not staff of (ADR-017).
+   */
+  app.post("/app/api/questions/move", { preHandler: requireTeacher }, async (req, reply) => {
+    const body = MoveBody.safeParse(req.body);
+    if (!body.success) return invalid(reply, body.error);
+    const ids = [...new Set(body.data.questionIds)];
+
+    // Every source question is LOADED under `poolAccess`, in one query: a
+    // list that came back short holds at least one question this caller
+    // cannot see, and the answer is the same 404 a missing id would give.
+    const sources = await app.db
+      .select({ question: questions, pool: pools })
+      .from(questions)
+      .innerJoin(pools, eq(questions.poolId, pools.id))
+      .where(and(inArray(questions.id, ids), mine(req)));
+    if (sources.length !== ids.length) return reply.code(404).send({ error: "not_found" });
+
+    const [target] = await app.db
+      .select()
+      .from(pools)
+      .where(and(eq(pools.id, body.data.targetPoolId), mine(req)))
+      .limit(1);
+    if (!target) return reply.code(404).send({ error: "not_found" });
+
+    const sourcePools = new Map(sources.map((row) => [row.pool.id, row.pool]));
+    for (const pool of [...sourcePools.values(), target]) {
+      if (!(await requirePoolRole(app, req, reply, pool, "contributor"))) return reply;
+    }
+
+    // A category is a category OF THE TARGET; one belonging to another pool
+    // is as good as missing.
+    const categoryId = body.data.categoryId ?? null;
+    if (categoryId !== null) {
+      const [category] = await app.db
+        .select({ id: categories.id })
+        .from(categories)
+        .where(and(eq(categories.id, categoryId), eq(categories.poolId, target.id)))
+        .limit(1);
+      if (!category) return reply.code(404).send({ error: "not_found" });
+    }
+
+    const using = await service.coursesUsingQuestions(app.db, ids);
+    const linked = await service.coursesLinkedToPool(
+      app.db,
+      target.id,
+      using.map((c) => c.courseId),
+    );
+    const blocking = using.filter((c) => !linked.has(c.courseId));
+    const seats =
+      req.user!.role === "admin"
+        ? null
+        : await service.staffSeatsOf(app.db, req.user!.id, blocking.map((c) => c.courseId));
+    const named: MoveBlockingCourse[] = blocking.map((c) => ({
+      ...c,
+      mayLink: seats === null || seats.has(c.courseId),
+    }));
+
+    let linkCourseIds: string[] = [];
+    if (named.length > 0) {
+      if (body.data.linkCourses !== true) {
+        const conflict: MoveConflict = {
+          error: "pool_not_linked",
+          message: `This question is used by ${named[0]!.courseCode}; the pool "${target.name}" is not one of that course's pools`,
+          courses: named,
+          names: [],
+        };
+        return reply.code(409).send(conflict);
+      }
+      const forbidden = named.filter((c) => !c.mayLink);
+      if (forbidden.length > 0) {
+        const conflict: MoveConflict = {
+          error: "course_forbidden",
+          message: `You are not on the teaching staff of ${forbidden[0]!.courseCode}, so this pool cannot be added to it`,
+          courses: forbidden,
+          names: [],
+        };
+        return reply.code(409).send(conflict);
+      }
+      linkCourseIds = named.map((c) => c.courseId);
+    }
+
+    try {
+      await service.moveQuestions(app.db, {
+        questions: sources.map((row) => row.question),
+        targetPoolId: target.id,
+        categoryId,
+        linkCourseIds,
+      });
+    } catch (error) {
+      if (error instanceof service.MoveNameTaken) {
+        const conflict: MoveConflict = {
+          error: "name_taken",
+          message: `The pool "${target.name}" already has a question named ${error.names[0]}`,
+          courses: [],
+          names: error.names,
+        };
+        return reply.code(409).send(conflict);
+      }
+      throw error;
+    }
+
+    for (const row of sources) {
+      await audit(app.db, {
+        actorUserId: req.user!.id,
+        actorType: "user",
+        action: "question.move",
+        subjectType: "question",
+        subjectId: row.question.id,
+        payload: {
+          fromPoolId: row.pool.id,
+          toPoolId: target.id,
+          categoryId,
+          internalName: row.question.internalName,
+        },
+      });
+    }
+    for (const courseId of linkCourseIds) {
+      await audit(app.db, {
+        actorUserId: req.user!.id,
+        actorType: "user",
+        action: "course.pools_update",
+        subjectType: "course",
+        subjectId: courseId,
+        payload: { addedPoolId: target.id, reason: "question.move" },
+      });
+      publish("courses", [`course:${courseId}`, `teacher:${req.user!.id}`]);
+    }
+    // Both ends refresh: the questions left one list and joined another.
+    for (const poolId of new Set([...sourcePools.keys(), target.id])) poolChanged(poolId);
+
+    const result: MoveResult = {
+      moved: sources.length,
+      questionIds: sources.map((row) => row.question.id),
+      targetPoolId: target.id,
+      categoryId,
+      linkedCourseIds: linkCourseIds,
+    };
+    return result;
   });
 
   // --- Preview and try ---------------------------------------------------

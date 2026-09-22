@@ -471,6 +471,28 @@ const en = {
   "pool.bulk.newCategory": "New category…",
   "pool.bulk.done": "{n} questions updated.",
   "pool.bulk.failed": "{n} questions could not be updated.",
+  "pool.bulk.movePool": "Move to another pool",
+
+  // --- Moving questions to another pool (ADR-017) ---
+  "pool.move.title": "Move {n} questions to another pool",
+  "pool.move.title.one": "Move this question to another pool",
+  "pool.move.action": "Move",
+  "pool.move.pool": "Target pool",
+  "pool.move.choosePool": "Choose a pool…",
+  "pool.move.noTarget": "There is no other pool you may write to.",
+  "pool.move.dropInto": "Move into {pool}",
+  "pool.move.done": "{n} questions moved to {pool}.",
+  "pool.move.done.one": "{name} moved to {pool}.",
+  "pool.move.failed": "These questions could not be moved.",
+  "pool.move.nameTaken": "The target pool already has a question named {name}.",
+  "pool.move.forbidden":
+    "You are not on the teaching staff of {course}, so this pool cannot be added to it.",
+  "pool.move.usedTitle": "Already used in a classroom",
+  "pool.move.usedBody.one":
+    "This question is already used in {classrooms}. Add the pool “{pool}” to {courses} so the class keeps reaching it?",
+  "pool.move.usedBody":
+    "These questions are already used in {classrooms}. Add the pool “{pool}” to {courses} so those classes keep reaching them?",
+  "pool.move.usedConfirm": "Add the pool and move",
 
   // --- Question editor (question/) ---
   "question.notFound": "This question does not exist, or you do not have access to it.",
@@ -2084,6 +2106,28 @@ const fr: Record<keyof Dict, string> = {
   "pool.bulk.newCategory": "Nouvelle catégorie…",
   "pool.bulk.done": "{n} questions mises à jour.",
   "pool.bulk.failed": "{n} questions n'ont pas pu être mises à jour.",
+  "pool.bulk.movePool": "Déplacer vers une autre banque",
+
+  // --- Déplacer des questions vers une autre banque (ADR-017) ---
+  "pool.move.title": "Déplacer {n} questions vers une autre banque",
+  "pool.move.title.one": "Déplacer cette question vers une autre banque",
+  "pool.move.action": "Déplacer",
+  "pool.move.pool": "Banque de destination",
+  "pool.move.choosePool": "Choisir une banque…",
+  "pool.move.noTarget": "Il n'y a aucune autre banque où vous pouvez écrire.",
+  "pool.move.dropInto": "Déplacer dans {pool}",
+  "pool.move.done": "{n} questions déplacées vers {pool}.",
+  "pool.move.done.one": "{name} déplacée vers {pool}.",
+  "pool.move.failed": "Ces questions n'ont pas pu être déplacées.",
+  "pool.move.nameTaken": "La banque de destination contient déjà une question nommée {name}.",
+  "pool.move.forbidden":
+    "Vous ne faites pas partie de l'équipe enseignante de {course} : la banque ne peut pas y être ajoutée.",
+  "pool.move.usedTitle": "Déjà utilisée dans une classe",
+  "pool.move.usedBody.one":
+    "Cette question est déjà utilisée dans {classrooms}. Ajouter la banque « {pool} » à {courses} pour que la classe continue d'y accéder ?",
+  "pool.move.usedBody":
+    "Ces questions sont déjà utilisées dans {classrooms}. Ajouter la banque « {pool} » à {courses} pour que ces classes continuent d'y accéder ?",
+  "pool.move.usedConfirm": "Ajouter la banque et déplacer",
 
   // --- Question editor (question/) ---
   "question.notFound": "Cette question n'existe pas, ou vous n'y avez pas accès.",

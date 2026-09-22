@@ -7,6 +7,7 @@ import type { CategoryNode, PoolDetail } from "@quiz/contracts";
 import { api, apiErrorMessage } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
+import { useMoveQuestions, useQuestionDrop, type QuestionDrag } from "./move";
 import { useToast } from "../notify";
 import { useSearchParam } from "../router";
 import { Button, cx, Field, Menu, Modal, Skeleton } from "../ui";
@@ -24,6 +25,11 @@ import { Button, cx, Field, Menu, Modal, Skeleton } from "../ui";
  * The selected category is the `?category=` search parameter, not a state of
  * either component: the sidebar writes it and the pool page reads it, and
  * `useSearchParam` keeps every instance on the screen in sync.
+ *
+ * Every row is also a DROP TARGET for questions dragged out of the pool table
+ * (ADR-017): dropping on a category files the questions there, dropping on
+ * "All questions" files them at the root. A `reader` seat has no drop, for the
+ * same reason it has no menu — what is not permitted is absent.
  */
 
 /** Flattens the sibling list of a node, for a move that renumbers positions. */
@@ -47,6 +53,7 @@ function CategoryRow({
   onRename,
   onDelete,
   onMove,
+  onDropQuestions,
   siblings,
   readOnly,
 }: {
@@ -58,6 +65,8 @@ function CategoryRow({
   onRename: (node: CategoryNode) => void;
   onDelete: (node: CategoryNode) => void;
   onMove: (node: CategoryNode, direction: -1 | 1) => void;
+  /** Questions dropped on this folder (ADR-017). */
+  onDropQuestions: (drag: QuestionDrag, categoryId: string) => void;
   siblings: CategoryNode[];
   /** A pool the caller only reads: the tree selects and edits nothing. */
   readOnly: boolean;
@@ -66,12 +75,15 @@ function CategoryRow({
   const [open, setOpen] = useState(true);
   const active = selected === node.id;
   const index = siblings.findIndex((s) => s.id === node.id);
+  const drop = useQuestionDrop((drag) => onDropQuestions(drag, node.id), !readOnly);
   return (
     <li>
       <div
+        {...drop.handlers}
         className={cx(
           "group flex items-center gap-1 rounded-[10px] pr-1 transition-colors",
           active ? "bg-accent-soft" : "hover:bg-surface-2",
+          drop.over && "outline-2 outline-offset-[-2px] outline-accent",
         )}
       >
         {node.children.length > 0 ? (
@@ -146,6 +158,7 @@ function CategoryRow({
               onRename={onRename}
               onDelete={onDelete}
               onMove={onMove}
+              onDropQuestions={onDropQuestions}
               siblings={node.children}
               readOnly={readOnly}
             />
@@ -167,6 +180,7 @@ function CategoryList({
   categories,
   selected,
   onSelect,
+  onDropQuestions,
   readOnly,
 }: {
   poolId: string;
@@ -174,6 +188,8 @@ function CategoryList({
   /** `null` is "all questions". */
   selected: string | null;
   onSelect: (id: string | null) => void;
+  /** Questions dropped on a folder, or on "All questions" (`null`). */
+  onDropQuestions: (drag: QuestionDrag, categoryId: string | null) => void;
   /**
    * A `reader` seat on the pool (F-POOL-05): the tree still NAVIGATES — that
    * is what a reader came for — and offers no way to change it. Nothing is
@@ -256,6 +272,9 @@ function CategoryList({
     setForm({ mode: "create", parentId });
   };
 
+  /** "All questions" is the pool's ROOT as a drop target (ADR-017). */
+  const rootDrop = useQuestionDrop((drag) => onDropQuestions(drag, null), !readOnly);
+
   return (
     <>
       <ul className="space-y-0.5">
@@ -264,11 +283,13 @@ function CategoryList({
             type="button"
             onClick={() => onSelect(null)}
             aria-current={selected === null ? "true" : undefined}
+            {...rootDrop.handlers}
             className={cx(
               "flex w-full items-center gap-2 rounded-[10px] px-2.5 py-1.5 text-left text-[13px] transition-colors",
               selected === null
                 ? "bg-accent-soft font-semibold text-accent"
                 : "text-fg-muted hover:bg-surface-2 hover:text-fg",
+              rootDrop.over && "outline-2 outline-offset-[-2px] outline-accent",
             )}
           >
             <Layers className="size-4 shrink-0 text-fg-faint" />
@@ -289,6 +310,7 @@ function CategoryList({
             }}
             onDelete={askDelete}
             onMove={move}
+            onDropQuestions={onDropQuestions}
             siblings={categories}
             readOnly={readOnly}
           />
@@ -364,9 +386,21 @@ function SidebarPool({ label }: { label: ReactNode }) {
  * uses, so react-query serves both from one request, and it writes the
  * selection to `?category=`, which is what the page reads back.
  */
-export function SidebarCategories({ poolId }: { poolId: string }) {
+export function SidebarCategories({
+  poolId,
+  heading = true,
+}: {
+  poolId: string;
+  /**
+   * The pool's own name above its folders. The "all pools" list already draws
+   * that row itself (PoolNav.tsx), and two lines with the same name is a list
+   * a reader has to parse twice.
+   */
+  heading?: boolean;
+}) {
   const t = useT();
   const [category, setCategory] = useSearchParam("category", "");
+  const move = useMoveQuestions();
   const detail = useQuery<PoolDetail>({
     queryKey: ["pool", poolId],
     queryFn: () => api(`/app/api/pools/${poolId}`),
@@ -374,9 +408,11 @@ export function SidebarCategories({ poolId }: { poolId: string }) {
 
   return (
     <div className="ml-3 space-y-0.5 border-l border-line pl-1.5">
-      <SidebarPool
-        label={detail.data ? detail.data.pool.name : <Skeleton className="h-4 w-24" />}
-      />
+      {heading ? (
+        <SidebarPool
+          label={detail.data ? detail.data.pool.name : <Skeleton className="h-4 w-24" />}
+        />
+      ) : null}
       {detail.isLoading ? (
         <div className="space-y-1 px-2.5 py-1.5">
           <Skeleton className="h-4 w-28" />
@@ -390,6 +426,15 @@ export function SidebarCategories({ poolId }: { poolId: string }) {
           categories={detail.data.categories}
           selected={category === "" ? null : category}
           onSelect={(id) => setCategory(id ?? "")}
+          onDropQuestions={(drag, categoryId) =>
+            void move({
+              questionIds: drag.questionIds,
+              targetPoolId: poolId,
+              targetPoolName: detail.data!.pool.name,
+              categoryId,
+              label: drag.label,
+            })
+          }
           readOnly={detail.data.role === "reader"}
         />
       )}

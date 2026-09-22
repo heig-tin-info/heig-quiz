@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, FileQuestion, Plus } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type DragEvent } from "react";
 
 import type { PoolDetail, QuestionDetail, QuestionPage, QuestionRow } from "@quiz/contracts";
 
@@ -26,6 +26,7 @@ import {
   Spinner,
 } from "../ui";
 import { BulkBar } from "./BulkBar";
+import { setQuestionDrag } from "./move";
 import {
   EMPTY_FILTERS,
   questionQuery,
@@ -64,6 +65,12 @@ import { QuestionTypePicker } from "./QuestionTypePicker";
  * "Load more" would then append a second, differently ordered page under the
  * first. Changing the sort therefore changes the query key, which is what
  * makes TanStack drop the cursor and start again at page one.
+ *
+ * A row (and a card) can be DRAGGED onto a pool, or onto a category of the
+ * pool being read, in the application sidebar: that MOVES the question there
+ * (ADR-017). The gesture obeys the tick boxes — dragging a ticked row takes
+ * the whole selection — and the bulk bar carries the same action for anyone
+ * without a mouse.
  *
  * A pool the caller only READS (`PoolDetail.role === "reader"`, F-POOL-05)
  * loses the create, edit, duplicate, delete and bulk actions and the tick
@@ -270,6 +277,20 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
       return next;
     });
 
+  /**
+   * Starting a drag from a row or a card. What travels is the SELECTION when
+   * the dragged question is part of it, and that one question otherwise: the
+   * gesture obeys what is ticked, exactly as the bulk bar does, and dragging
+   * an unticked row never silently takes twenty others with it.
+   */
+  const startDrag = (event: DragEvent, row: QuestionRow) => {
+    const ids = checked.has(row.id) && checkedIds.length > 0 ? checkedIds : [row.id];
+    setQuestionDrag(event, {
+      questionIds: ids,
+      label: ids.length === 1 ? row.internalName : String(ids.length),
+    });
+  };
+
   const duplicate = useMutation({
     mutationFn: (row: QuestionRow) =>
       api<QuestionDetail>(`/app/api/questions/${row.id}/copy`, {
@@ -444,6 +465,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                 onEdit={(row) => navigate({ view: "question", id: row.id })}
                 onDuplicate={(row) => duplicate.mutate(row)}
                 onDelete={(row) => void askDelete(row)}
+                onDragStart={readOnly ? undefined : startDrag}
                 readOnly={readOnly}
               />
             ) : (
@@ -462,6 +484,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                 sort={filters.sort}
                 dir={filters.dir}
                 onSort={sortBy}
+                onDragStart={readOnly ? undefined : startDrag}
                 readOnly={readOnly}
               />
             )}

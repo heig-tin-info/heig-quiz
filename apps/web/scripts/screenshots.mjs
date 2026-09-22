@@ -208,8 +208,28 @@ const scenes = [
   { name: "pool-bulk-move", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
       await p.getByLabel(/ptr-arith-01/).first().check();
       await p.getByRole("button", { name: /^(move to a category|déplacer)$/i }).first().click();
-      await p.getByLabel(/^(Category|Catégorie)$/).selectOption("__new__");
-      await p.getByLabel(/^(Category name|Nom de la catégorie)$/).fill("Tableaux");
+      // Scoped to the dialog: the toolbar's "Group by" has a Category pill too.
+      const sheet = p.getByRole("dialog");
+      await sheet.getByLabel(/^(Category|Catégorie)$/).selectOption("__new__");
+      await sheet.getByLabel(/^(Category name|Nom de la catégorie)$/).fill("Tableaux");
+    } },
+  // ADR-017: the sidebar showing EVERY pool (the third state of the
+  // "Question pools" row), which is what a question is dragged onto.
+  { name: "pool-nav-all", role: "teacher", path: "/pools/p1", ls: { "quiz-pools-nav": "all" } },
+  // The bulk bar's "Move to another pool", with a target picked so its
+  // category select is on screen too.
+  { name: "pool-move-pool", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
+      await p.getByLabel(/ptr-null-check/).first().check();
+      await p.getByRole("button", { name: /^(move to another pool|déplacer vers une autre banque)$/i }).first().click();
+      await p.getByLabel(/^(Target pool|Banque de destination)$/).selectOption({ index: 1 });
+    } },
+  // The refusal that becomes a question: a classroom already plays this
+  // question and the target pool is not one of its course's.
+  { name: "pool-move-used", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
+      await p.getByLabel(/ptr-arith-01/).first().check();
+      await p.getByRole("button", { name: /^(move to another pool|déplacer vers une autre banque)$/i }).first().click();
+      await p.getByLabel(/^(Target pool|Banque de destination)$/).selectOption({ index: 1 });
+      await p.getByRole("button", { name: /^(move|déplacer)$/i }).first().click();
     } },
   { name: "pool-new-question", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.getByRole("button", { name: /nouvelle question|new question/i }).first().click() },
   // The categories live in the frame's sidebar now, so on a phone they are
