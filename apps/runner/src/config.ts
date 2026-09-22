@@ -86,8 +86,22 @@ const EnvSchema = z.object({
   /** An alternative OCI runtime, e.g. `runsc` (gVisor). Empty = the host default, probed at startup. */
   RUNNER_RUNTIME: z.enum(["auto", "none", "runsc"]).default("auto"),
 
+  /**
+   * The three ceilings on what ONE request may ask for.
+   *
+   * `RunnerRequest` bounds its own limits, but that schema is the caller's
+   * contract: it says what a question type may write, not what this machine
+   * can afford. A deployment whose VM has 4 GB for four concurrent containers
+   * lowers `RUNNER_MAX_MEMORY_MB` and every request is clamped, whatever it
+   * asked for. The defaults are the schema's own maxima, so out of the box
+   * they change nothing.
+   */
   /** Hard ceiling on the per-request `limits.outputKb`, per stream and per case. */
   RUNNER_MAX_OUTPUT_KB: z.coerce.number().int().min(1).max(4096).default(256),
+  /** Hard ceiling on the per-request `limits.memoryMb`, per container. */
+  RUNNER_MAX_MEMORY_MB: z.coerce.number().int().min(16).max(8192).default(512),
+  /** Hard ceiling on the per-request `limits.timeMs`, per case. */
+  RUNNER_MAX_TIME_MS: z.coerce.number().int().min(100).max(600_000).default(20_000),
   /** Size of the tmpfs mounted at /work. Source, objects and binary all live there. */
   RUNNER_WORKDIR_MB: z.coerce.number().int().min(4).max(512).default(32),
   /** Budget of the compilation step, which is not the budget of a test case. */

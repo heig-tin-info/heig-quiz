@@ -207,14 +207,35 @@ only if a Podman socket is there. Point the API at it with
 
 ## Configuration
 
-Everything is in `src/config.ts`, validated at startup. The ones that matter:
-`PORT` (3200), `PODMAN_SOCKET` (auto), `PODMAN_REMOTE` (auto), `PODMAN_BIN`,
-`RUNNER_CONCURRENCY` (4), `RUNNER_QUEUE_MAX` (32), `RUNNER_IMAGE_PREFIX`
-(`quiz-runner`), `RUNNER_SECCOMP` (the profile shipped here),
-`RUNNER_USERNS_AUTO` (auto), `RUNNER_RUNTIME` (auto — `runsc` when the host
-has gVisor), `RUNNER_MAX_OUTPUT_KB` (256), `RUNNER_WORKDIR_MB` (32),
-`RUNNER_COMPILE_TIMEOUT_MS` (20 000), `RUNNER_CASE_GRACE_MS` (2000),
-`RUNNER_REQUEST_TIMEOUT_MS` (120 000).
+Everything is in `src/config.ts`, validated at startup.
+
+| Variable | Default | What it settles |
+| --- | --- | --- |
+| `PORT` | 3200 | The port; `HOST` is `0.0.0.0` of its own namespace. |
+| `PODMAN_BIN` | `podman` | The binary. `podman-remote` works; `docker` does not. |
+| `PODMAN_SOCKET` | auto | User socket, then the rootful one. |
+| `PODMAN_REMOTE` | auto | `false` drives the local CLI: the escape hatch. |
+| `RUNNER_CONCURRENCY` | 4 | Containers at a time. |
+| `RUNNER_QUEUE_MAX` | 32 | Waiting requests before `429`. |
+| `RUNNER_IMAGE_PREFIX` / `_TAG` | `quiz-runner` / `latest` | `quiz-runner-c:latest`. |
+| `RUNNER_SECCOMP` | the profile shipped here | Resolved by the Podman server (above). |
+| `RUNNER_USERNS_AUTO` | auto | Probed once at startup. |
+| `RUNNER_RUNTIME` | auto | `runsc` when the host has gVisor. |
+| `RUNNER_MAX_OUTPUT_KB` | 256 | Ceiling on `limits.outputKb`, per stream and per case. |
+| `RUNNER_MAX_MEMORY_MB` | 512 | Ceiling on `limits.memoryMb`, per container. |
+| `RUNNER_MAX_TIME_MS` | 20 000 | Ceiling on `limits.timeMs`, per case. |
+| `RUNNER_WORKDIR_MB` | 32 | Size of the `/work` and `/tmp` tmpfs. |
+| `RUNNER_COMPILE_TIMEOUT_MS` | 20 000 | Budget of the build step. |
+| `RUNNER_CASE_GRACE_MS` | 2000 | How long past a case's deadline the service waits. |
+| `RUNNER_REQUEST_TIMEOUT_MS` | 120 000 | Ceiling on a whole request, all cases together. |
+
+The three `RUNNER_MAX_*` ceilings default to the upper bounds of
+`RunnerRequest.limits` (`packages/core/src/runner.ts`), so a fresh deployment
+clamps nothing. They exist because that schema is the CALLER's contract — what
+a question type may write — and not a statement about what this machine can
+afford: a VM with 4 GB for four concurrent containers lowers
+`RUNNER_MAX_MEMORY_MB` and every request is capped, whatever it asked for
+(`effectiveLimits` in `execute.ts`).
 
 `RUNNER_TOKEN` is the one exception to "no secret": the shared bearer the API
 presents on every call, checked on both routes in constant time, required in

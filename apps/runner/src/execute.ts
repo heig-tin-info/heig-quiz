@@ -79,12 +79,32 @@ export function prepareFiles(files: RunnerRequest["files"]): PreparedFile[] {
   });
 }
 
+/**
+ * The limits actually applied: what the request asked for, capped by what this
+ * deployment allows.
+ *
+ * The wire schema bounds them too, but it is the CALLER's contract — it says
+ * what a question type may write, not what this machine can afford. The three
+ * ceilings default to the schema's own maxima, so clamping is invisible until
+ * an operator lowers one (`config.ts`).
+ */
+export function effectiveLimits(
+  request: RunnerRequest,
+  config: RunnerConfig,
+): { timeMs: number; memoryMb: number; outputBytes: number } {
+  return {
+    timeMs: Math.min(request.limits.timeMs, config.RUNNER_MAX_TIME_MS),
+    memoryMb: Math.min(request.limits.memoryMb, config.RUNNER_MAX_MEMORY_MB),
+    outputBytes: Math.min(request.limits.outputKb, config.RUNNER_MAX_OUTPUT_KB) * 1024,
+  };
+}
+
 /** How long the container is allowed to exist, in seconds. */
 export function containerTtlSeconds(request: RunnerRequest, config: RunnerConfig): number {
   const cases = request.action === "check" ? 0 : request.cases.length;
   const budget =
     config.RUNNER_COMPILE_TIMEOUT_MS +
-    cases * (request.limits.timeMs + config.RUNNER_CASE_GRACE_MS) +
+    cases * (effectiveLimits(request, config).timeMs + config.RUNNER_CASE_GRACE_MS) +
     // The uploads, plus the slack a `podman exec` round trip costs.
     (request.files.length + 2) * 2000;
   return Math.ceil(Math.min(budget, config.RUNNER_REQUEST_TIMEOUT_MS) / 1000) + 5;
@@ -130,12 +150,13 @@ export async function executeRequest(
     );
   }
 
-  const outputBytes = Math.min(request.limits.outputKb, config.RUNNER_MAX_OUTPUT_KB) * 1024;
+  const limits = effectiveLimits(request, config);
+  const outputBytes = limits.outputBytes;
   const name = (deps.containerName ?? (() => `quiz-run-${randomUUID()}`))();
   const create = {
     name,
     image: imageRef(config, request.language),
-    memoryMb: request.limits.memoryMb,
+    memoryMb: limits.memoryMb,
     pidsLimit: 64,
     cpus: 1,
     workdirMb: config.RUNNER_WORKDIR_MB,
@@ -182,19 +203,19 @@ export async function executeRequest(
 
     for (const testCase of request.cases) {
       if (Date.now() > deadline) {
-        cases.push(dead(request.limits.timeMs));
+        cases.push(dead(limits.timeMs));
         continue;
       }
-      const seconds = Math.max(1, Math.ceil(request.limits.timeMs / 1000));
+      const seconds = Math.max(1, Math.ceil(limits.timeMs / 1000));
       const result = await engine.exec(name, {
         // The in-container reaper, then the program and its own `argv[1..]`.
         // The service's own deadline is below.
         argv: caseArgv(plan.run, seconds, testCase.args),
         stdin: testCase.stdin,
-        timeoutMs: request.limits.timeMs + config.RUNNER_CASE_GRACE_MS,
+        timeoutMs: limits.timeMs + config.RUNNER_CASE_GRACE_MS,
         maxBytes: outputBytes,
       });
-      const verdict = classify(result, request.limits.timeMs);
+      const verdict = classify(result, limits.timeMs);
       cases.push({
         exitCode: verdict.exitCode,
         stdout: result.stdout,
@@ -213,7 +234,7 @@ export async function executeRequest(
         await engine.remove(name);
         const restarted = await start().catch(() => null);
         if (restarted === null || !restarted.ok) {
-          while (cases.length < request.cases.length) cases.push(dead(request.limits.timeMs));
+          while (cases.length < request.cases.length) cases.push(dead(limits.timeMs));
           break;
         }
       }

@@ -17,6 +17,24 @@ describe("loadConfig", () => {
     });
   });
 
+  it("caps a request at the schema's own maxima until an operator lowers one", () => {
+    // The three ceilings default to `RunnerRequest.limits`'s upper bounds
+    // (packages/core/src/runner.ts), so a fresh deployment clamps nothing.
+    const config = loadConfig({ PODMAN_SOCKET: "/tmp/x.sock", RUNNER_SECCOMP: SECCOMP });
+    expect(config).toMatchObject({
+      RUNNER_MAX_OUTPUT_KB: 256,
+      RUNNER_MAX_MEMORY_MB: 512,
+      RUNNER_MAX_TIME_MS: 20_000,
+    });
+    const tight = loadConfig({
+      PODMAN_SOCKET: "/tmp/x.sock",
+      RUNNER_SECCOMP: SECCOMP,
+      RUNNER_MAX_MEMORY_MB: "128",
+      RUNNER_MAX_TIME_MS: "3000",
+    });
+    expect(tight).toMatchObject({ RUNNER_MAX_MEMORY_MB: 128, RUNNER_MAX_TIME_MS: 3000 });
+  });
+
   it("ships a seccomp profile of its own and refuses to start without one", () => {
     expect(loadConfig({ PODMAN_SOCKET: "/tmp/x.sock" }).RUNNER_SECCOMP).toBe(SECCOMP);
     expect(() =>
