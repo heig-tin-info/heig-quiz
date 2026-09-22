@@ -30,7 +30,7 @@ import * as evaluationService from "../modules/evaluation/service.js";
 import { loadConfig, typeOf } from "../modules/pool/config.js";
 import * as poolService from "../modules/pool/service.js";
 
-export interface SeedOptions {
+interface SeedOptions {
   teacherId?: string;
   /** Existing user ids to enrol; otherwise `students` accounts are created. */
   studentIds?: string[];

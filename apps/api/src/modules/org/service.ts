@@ -20,7 +20,7 @@ import { emailIn, knownEmails } from "../../identity.js";
  */
 const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
-export function newJoinCode(): string {
+function newJoinCode(): string {
   const bytes = randomBytes(8);
   return Array.from(bytes, (b) => ALPHABET[b % ALPHABET.length]).join("");
 }
@@ -63,7 +63,7 @@ async function mintCode(db: Db, classroomId: string): Promise<string> {
   throw new Error("could not mint a free join code");
 }
 
-export type JoinOutcome =
+type JoinOutcome =
   | { ok: true; status: "joined" | "already" }
   | { ok: false; reason: "claimed_by_other" };
 

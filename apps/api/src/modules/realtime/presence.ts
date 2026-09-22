@@ -12,7 +12,7 @@
  * process (ADR-001, ADR-009).
  */
 
-export interface PresenceRecord {
+interface PresenceRecord {
   userId: string;
   lastSeenAt: Date;
   /** Open SSE connections of that user on that evaluation. */
@@ -20,7 +20,7 @@ export interface PresenceRecord {
   online: boolean;
 }
 
-export interface PresenceChange {
+interface PresenceChange {
   evaluationId: string;
   userId: string;
   online: boolean;

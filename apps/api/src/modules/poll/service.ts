@@ -60,7 +60,7 @@ import { solutionView, studentViewOf } from "../live/studentView.js";
 import { loadConfig, typeOf } from "../pool/config.js";
 import * as events from "./events.js";
 
-export type GuestRecord = typeof guestParticipants.$inferSelect;
+type GuestRecord = typeof guestParticipants.$inferSelect;
 
 // --- Failures -------------------------------------------------------------
 
@@ -82,7 +82,7 @@ export class PollTypeRefused extends PollError {
   }
 }
 
-export class PollUnpublished extends PollError {
+class PollUnpublished extends PollError {
   constructor() {
     super("unpublished", 422, "this question has no published version");
   }
@@ -94,15 +94,15 @@ export class PollUnpublished extends PollError {
  * No `I`, `O`, `0` or `1`: the code is read off a beamer at the back of a
  * lecture hall and typed on a phone (F-LIVE-13).
  */
-export const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-export const CODE_LENGTH = 6;
+const CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const CODE_LENGTH = 6;
 
 /**
  * How long a finished poll still answers on its code. A phone that scanned
  * the QR must keep showing the question and the revealed key while the
  * teacher comments it; two hours later the code is free again.
  */
-export const ENDED_GRACE_MS = 2 * 60 * 60 * 1000;
+const ENDED_GRACE_MS = 2 * 60 * 60 * 1000;
 
 function drawCode(): string {
   const bytes = randomBytes(CODE_LENGTH);
@@ -129,7 +129,7 @@ function stillAddressable(now: Date) {
 }
 
 /** A code no running poll holds. Six characters is 32^6 ≈ 10^9 draws. */
-export async function freeCode(db: Db, now: Date): Promise<string> {
+async function freeCode(db: Db, now: Date): Promise<string> {
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const code = drawCode();
     if (!(await codeTaken(db, code, now))) return code;
@@ -157,7 +157,7 @@ export function newGuestToken(): string {
  * index on `token_hash` requires — and what stops a hash read out of one
  * poll's table from being replayed as another poll's participant.
  */
-export function guestHash(token: string, evaluationId: string): string {
+function guestHash(token: string, evaluationId: string): string {
   return createHash("sha256").update(`${token}:${evaluationId}`).digest("hex");
 }
 
@@ -245,7 +245,7 @@ export async function pollById(db: Db, evaluationId: string): Promise<Evaluation
 // --- Creating and running -------------------------------------------------
 
 /** F-LIVE-13: the question is a poll type AND it has a published version. */
-export async function assertPollable(db: Db, questionId: string): Promise<void> {
+async function assertPollable(db: Db, questionId: string): Promise<void> {
   const [question] = await db
     .select()
     .from(questions)
@@ -461,7 +461,7 @@ export async function tallyOf(db: Db, evaluation: EvaluationRecord): Promise<Pol
 }
 
 /** The tally, out on `evaluation:<id>`, staff only, coalesced 500 ms. */
-export async function emitTally(
+async function emitTally(
   db: Db,
   evaluation: EvaluationRecord,
   now: Date,

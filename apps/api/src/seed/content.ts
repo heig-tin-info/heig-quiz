@@ -11,7 +11,7 @@
  * looks them up before it writes, so running it twice changes nothing.
  */
 
-export type QuestionTypeName = "mcq" | "short" | "cloze" | "code" | "circuit";
+type QuestionTypeName = "mcq" | "short" | "cloze" | "code" | "circuit";
 
 export interface QuestionSpec {
   /** Unique inside its pool, and the key the seed is idempotent on. */
@@ -63,7 +63,7 @@ export interface EvaluationSpec {
  * `answers`, or mapped to `null`, was left untouched — which the grading pass
  * settles as a validated zero (F-GRADE-01).
  */
-export interface PaperSpec {
+interface PaperSpec {
   /** Persona key from `auth/dev.ts`. */
   persona: string;
   /** False = closed by the teacher rather than handed in (an expired attempt). */
@@ -126,7 +126,7 @@ const POINTERS = "Pointeurs et mémoire";
 const STRINGS = "Chaînes de caractères";
 const TYPES = "Types et opérateurs";
 
-export const C_POOL: PoolSpec = {
+const C_POOL: PoolSpec = {
   name: "Programmation C",
   icon: "cpu",
   courseCode: "PRG1",
@@ -400,7 +400,7 @@ export const C_POOL: PoolSpec = {
 const DC = "Régime continu";
 const SEMICONDUCTORS = "Semi-conducteurs";
 
-export const ELECTRONICS_POOL: PoolSpec = {
+const ELECTRONICS_POOL: PoolSpec = {
   name: "Électronique",
   icon: "circuit-board",
   courseCode: null,

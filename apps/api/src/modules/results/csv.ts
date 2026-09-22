@@ -20,7 +20,7 @@ import type { ResultsView } from "@quiz/contracts";
 export const BOM = "﻿";
 export const SEPARATOR = ";";
 /** A header built from `internal_name` is truncated to this (§4.6). */
-export const HEADER_MAX = 30;
+const HEADER_MAX = 30;
 
 /**
  * RFC-4180 quoting, with the separator of this file. A field is quoted only

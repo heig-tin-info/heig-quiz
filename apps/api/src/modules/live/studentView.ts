@@ -69,7 +69,7 @@ export function stripMetadata(value: unknown, depth = 0): unknown {
   return out;
 }
 
-export interface StudentViewInput {
+interface StudentViewInput {
   /** Registered question-type id, from `questions.type`. */
   type: string;
   /** The two columns of `question_versions` — never a hand-built object. */

@@ -20,7 +20,7 @@ import { loadConfig, typeOf } from "../modules/pool/config.js";
 import * as poolService from "../modules/pool/service.js";
 import { seedLive } from "./live.js";
 
-export interface CodeFixture {
+interface CodeFixture {
   evaluationId: string;
   itemId: string;
   attemptId: string;

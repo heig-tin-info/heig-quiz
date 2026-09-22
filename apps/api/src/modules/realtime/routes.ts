@@ -32,11 +32,11 @@ import * as bus from "./bus.js";
 import { presence } from "./presence.js";
 
 /** `:ping` cadence (ADR-005) and the two `clock` cadences of §4.8. */
-export const PING_MS = 25_000;
+const PING_MS = 25_000;
 export const CLOCK_MS = 10_000;
 export const FAST_CLOCK_MS = 1_000;
 /** A stream whose writes stopped reaching the socket is closed (WP5 brief). */
-export const IDLE_CLOSE_MS = 60_000;
+const IDLE_CLOSE_MS = 60_000;
 const IDLE_SWEEP_MS = 5_000;
 
 type Watch =

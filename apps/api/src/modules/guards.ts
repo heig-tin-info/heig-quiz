@@ -50,7 +50,7 @@ export function staffAccess(userId: string): SQL {
  * One definition, two names: `staffAccess` reads well next to a `courses`
  * query, `courseAccess` next to `poolAccess` below.
  */
-export const courseAccess = staffAccess;
+const courseAccess = staffAccess;
 
 /**
  * `"table"."column"`, always — the same precaution as `qualified` in
@@ -120,7 +120,7 @@ export async function poolRoleOf(
 }
 
 /** An `owner` does everything a `contributor` does, and so on down. */
-export const roleAllows = poolRoleAllows;
+const roleAllows = poolRoleAllows;
 
 /**
  * The WRITE half of the pool motif, used by every write route of the module.
@@ -152,7 +152,7 @@ export async function requirePoolRole(
  * Same predicate expressed against a query that only has `classrooms` in
  * scope, so a classroom route does not have to join `courses` for the check.
  */
-export function staffAccessOfClassroom(userId: string): SQL {
+function staffAccessOfClassroom(userId: string): SQL {
   return sql`EXISTS (SELECT 1 FROM ${courseStaff} WHERE ${courseStaff.courseId} = ${classrooms.courseId} AND ${courseStaff.userId} = ${userId})`;
 }
 
@@ -261,10 +261,10 @@ export async function accessibleEnrollment(
 // Pool loaders — same motif, `poolAccess` instead of `staffAccess`.
 // ---------------------------------------------------------------------------
 
-export type AccessiblePool = typeof pools.$inferSelect;
+type AccessiblePool = typeof pools.$inferSelect;
 
 /** Loads a pool by id if and only if `poolAccess` holds; 404 otherwise. */
-export async function loadPool(
+async function loadPool(
   app: FastifyInstance,
   req: FastifyRequest,
   reply: FastifyReply,
@@ -336,7 +336,7 @@ export async function accessibleCategory(
 // missing entity would produce too (invariant 6).
 // ---------------------------------------------------------------------------
 
-export interface EvaluationScope {
+interface EvaluationScope {
   evaluation: typeof evaluations.$inferSelect;
   classroom: typeof classrooms.$inferSelect;
 }
@@ -463,7 +463,7 @@ export async function staffAttempt(
 // an unreachable one is a 404 (invariant 6).
 // ---------------------------------------------------------------------------
 
-export interface AnswerScope {
+interface AnswerScope {
   answer: typeof answers.$inferSelect;
   attempt: typeof attempts.$inferSelect;
   evaluation: typeof evaluations.$inferSelect;
@@ -489,7 +489,7 @@ export async function staffAnswer(
   return row;
 }
 
-export interface GradingScope {
+interface GradingScope {
   grading: typeof gradings.$inferSelect;
   evaluation: typeof evaluations.$inferSelect;
 }

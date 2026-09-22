@@ -40,15 +40,15 @@ import {
 import { Coalescer } from "./coalesce.js";
 
 /** PLAN-MVP §4.8 routing table. */
-export const CELL_WINDOW_MS = 250;
-export const PRESENCE_WINDOW_MS = 1000;
+const CELL_WINDOW_MS = 250;
+const PRESENCE_WINDOW_MS = 1000;
 /** docs/spec/05 §5.4: the poll aggregate goes out at most twice a second. */
-export const POLL_WINDOW_MS = 500;
+const POLL_WINDOW_MS = 500;
 
 export const evaluationTopic = (id: string): Topic => `evaluation:${id}`;
-export const attemptTopic = (id: string): Topic => `attempt:${id}`;
+const attemptTopic = (id: string): Topic => `attempt:${id}`;
 export const userTopic = (id: string): Topic => `user:${id}`;
-export const teacherTopic = (id: string): Topic => `teacher:${id}`;
+const teacherTopic = (id: string): Topic => `teacher:${id}`;
 
 /** The one low-level exit. Everything below funnels through it. */
 export function emit(event: ServerEvent, topics: Topic[], audience: Audience = "all"): void {

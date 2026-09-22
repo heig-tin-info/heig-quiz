@@ -77,7 +77,7 @@ export class CommentRequired extends GradingError {
   }
 }
 
-export class NotPending extends GradingError {
+class NotPending extends GradingError {
   constructor() {
     super("not_pending", 409, "this grading is not a proposal any more");
   }
@@ -92,7 +92,7 @@ export const pairKey = (attemptId: string, itemId: string): PairKey =>
 
 // --- The single writer ----------------------------------------------------
 
-export interface WriteGradingInput {
+interface WriteGradingInput {
   attemptId: string;
   itemId: string;
   /** Null when the student never answered (F-GRADE-01). */
@@ -506,7 +506,7 @@ export async function validateGrading(
   });
 }
 
-export interface BatchFilter {
+interface BatchFilter {
   itemId?: string | undefined;
   source?: GradingSource | undefined;
   confidence?: "low" | "medium" | "high" | undefined;

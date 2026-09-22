@@ -43,12 +43,12 @@ import * as events from "./events.js";
 import { pairKey, standingGradings, writeGrading, type PairKey } from "./service.js";
 
 /** How often the progress event goes out while a pass is running (§5.4). */
-export const PROGRESS_EVERY = 25;
+const PROGRESS_EVERY = 25;
 
 /** Low priority: a container run must never delay the deterministic half. */
-export const RUNNER_PRIORITY = -10;
+const RUNNER_PRIORITY = -10;
 
-export interface EvaluationGradingJob {
+interface EvaluationGradingJob {
   evaluationId: string;
   /** Restricts the pass to these items; omitted = the whole evaluation. */
   itemIds?: string[];
@@ -56,7 +56,7 @@ export interface EvaluationGradingJob {
   regradeNote?: string;
 }
 
-export interface RunnerGradingJob {
+interface RunnerGradingJob {
   evaluationId: string;
   attemptId: string;
   itemId: string;
@@ -348,7 +348,7 @@ async function gradeOne(
 
 // --- The runner pass ------------------------------------------------------
 
-export async function enqueueRunnerGrading(
+async function enqueueRunnerGrading(
   app: FastifyInstance,
   job: RunnerGradingJob,
 ): Promise<void> {
@@ -365,7 +365,7 @@ export async function enqueueRunnerGrading(
  * `app.runner`, chosen once at boot by `RUNNER_MODE`; under the default stub
  * it throws `RunnerUnavailable` and this ends as a proposal (decision D14).
  */
-export async function runRunnerGrading(
+async function runRunnerGrading(
   app: FastifyInstance,
   job: RunnerGradingJob,
 ): Promise<void> {

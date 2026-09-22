@@ -29,7 +29,7 @@ import type { FastifyInstance } from "fastify";
 export const GRADING_EVALUATION_QUEUE = "grading.evaluation";
 export const GRADING_RUNNER_QUEUE = "grading.runner";
 
-export interface SendOptions {
+interface SendOptions {
   /** At most one pending job per key, as pg-boss defines it. */
   singletonKey?: string;
   retryLimit?: number;
@@ -39,7 +39,7 @@ export interface SendOptions {
   priority?: number;
 }
 
-export interface JobHandler<T> {
+interface JobHandler<T> {
   (data: T): Promise<void>;
 }
 

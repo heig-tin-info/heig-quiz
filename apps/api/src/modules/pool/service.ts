@@ -705,7 +705,7 @@ export async function describeTag(
 }
 
 /** The one spelling a tag is stored under, everywhere. */
-export function normalizeTag(tag: string): string {
+function normalizeTag(tag: string): string {
   return tag.trim().replace(/^#/, "").toLowerCase();
 }
 
@@ -1382,7 +1382,7 @@ export async function putDraft(
  * type-agnostic: a new question type needs no hook for its images to be
  * reachable during an exam.
  */
-export function assetReferences(value: unknown): string[] {
+function assetReferences(value: unknown): string[] {
   const found = new Set<string>();
   const pattern = /asset:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi;
   for (const match of JSON.stringify(value ?? null).matchAll(pattern)) {
@@ -1617,7 +1617,7 @@ export async function isVersionInUse(db: Db, versionId: string): Promise<boolean
 }
 
 /** True when ANY published version of the question is referenced (F-QST-11). */
-export async function isQuestionInUse(db: Db, questionId: string): Promise<boolean> {
+async function isQuestionInUse(db: Db, questionId: string): Promise<boolean> {
   const [row] = await db
     .select({ id: evaluationItems.id })
     .from(evaluationItems)
@@ -1726,7 +1726,7 @@ async function freeName(db: Db, poolId: string, name: string): Promise<string> {
 // ---------------------------------------------------------------------------
 
 /** One course that plays a question being moved, with its classrooms. */
-export interface UsingCourse {
+interface UsingCourse {
   courseId: string;
   courseName: string;
   courseCode: string;
