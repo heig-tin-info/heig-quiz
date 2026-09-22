@@ -24,6 +24,7 @@
     "@quiz/core": "workspace:*",
     "@quiz/domain": "workspace:*",
     "@quiz/qt-cloze": "workspace:*",
+    "@quiz/qt-circuit": "workspace:*",
     "@quiz/qt-code": "workspace:*",
     "@quiz/qt-mcq": "workspace:*",
     "@quiz/qt-short": "workspace:*",

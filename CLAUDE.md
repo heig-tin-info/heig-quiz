@@ -49,6 +49,9 @@ packages/
   qt-mcq/     question type: multiple choice (./server, ./client)
   qt-short/   question type: short answer (./server, ./client)
   qt-cloze/   question type: fill in the blanks (./server, ./client)
+  qt-code/    question type: code graded by the runner (./server, ./client)
+  qt-circuit/ question type: two-port schematic, graded by ngspice simulation
+              (./server, ./client, ./canvas)
 docs/
   spec/       the product specification (above)
   adr/        the architecture decisions inherited from heig-classroom
@@ -56,8 +59,11 @@ mockups/      HTML mockups of the target screens
 infra/        Keycloak development realm
 ```
 
-`packages/qt-mcq`, `qt-short`, `qt-cloze` and `qt-code` exist and are
-registered in `packages/registry` in two places (`./server` and `./client`).
+`packages/qt-mcq`, `qt-short`, `qt-cloze`, `qt-code` and `qt-circuit` exist
+and are registered in `packages/registry` in two places (`./server` and
+`./client`). `qt-circuit` (ADR-019) grades a schematic by simulating it with
+ngspice through the runner's `spice` language; its rules are in
+`docs/spec/04-types-de-questions.md` §4.11.
 Packages still to create, in this order (`docs/spec/05-architecture.md`, 5.2
 and `docs/PLAN-MVP.md` §8): `packages/canonical`, `packages/ui`,
 `packages/cli`.

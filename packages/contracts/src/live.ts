@@ -206,6 +206,26 @@ export type RunBody = z.infer<typeof RunBody>;
 export const RunAccepted = z.object({ requestId: z.uuid() });
 export type RunAccepted = z.infer<typeof RunAccepted>;
 
+/**
+ * The student's own run button for a question type that builds its OWN
+ * request — "Simulate" on a `circuit` (ADR-019), and whatever comes after it.
+ *
+ * The envelope is all this schema can say: the shape of `answer` belongs to
+ * the question type, and the server parses it with that type's own
+ * `answerSchema` before anything else happens (`simulateAnswer` in the live
+ * service). Invariant 7 is met by the two together — an envelope validated
+ * here, a payload validated by the schema the type and the client share.
+ *
+ * The answer to `POST /app/api/attempts/:id/simulate` is the raw
+ * `RunnerOutcome` of `@quiz/core`: the client half of the type reads it, and
+ * no SSE frame repeats it — the response IS the delivery.
+ */
+export const SimulateBody = z.object({
+  itemId: z.uuid(),
+  answer: z.unknown(),
+});
+export type SimulateBody = z.infer<typeof SimulateBody>;
+
 // --- Student home ---------------------------------------------------------
 
 export const EvaluationCard = z.object({

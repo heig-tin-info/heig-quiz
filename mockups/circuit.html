@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Schéma, éditeur de blocs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#eef1f3; --side:#e2e7eb; --ink:#17212b; --muted:#66727d; --rule:#cfd7dd;
+  --grid:#dde3e8; --grid2:#c9d2d9; --accent:#2f5bea; --accent-soft:rgba(47,91,234,.10);
+  --btn:#f5f7f8; --btn-h:#ffffff;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#10161b; --side:#151c22; --ink:#d9e2e8; --muted:#8a97a2; --rule:#26313a;
+    --grid:#182128; --grid2:#223039; --accent:#7f9dff; --accent-soft:rgba(127,157,255,.14);
+    --btn:#1b242b; --btn-h:#222d35; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#10161b; --side:#151c22; --ink:#d9e2e8; --muted:#8a97a2; --rule:#26313a;
+  --grid:#182128; --grid2:#223039; --accent:#7f9dff; --accent-soft:rgba(127,157,255,.14);
+  --btn:#1b242b; --btn-h:#222d35; color-scheme:dark;
+}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:border-box}
+body{height:100%;margin:0;background:var(--paper);color:var(--ink);
+  font:14px/1.45 "Archivo",system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
+.app{display:grid;grid-template-columns:232px 1fr;height:100%}
+
+aside{background:var(--side);border-right:1px solid var(--rule);overflow-y:auto;user-select:none;
+  display:flex;flex-direction:column;gap:22px;padding:20px 16px 18px}
+.brand h1{margin:0;font-size:22px;font-weight:700;letter-spacing:-.02em}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:12.5px}
+aside h2{margin:0 0 8px;font-size:12.5px;font-weight:600;color:var(--muted)}
+button{font:inherit;color:inherit}
+.tools{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.tool,.act{display:flex;align-items:center;gap:8px;border:1px solid var(--rule);background:var(--btn);
+  border-radius:6px;padding:7px 9px;cursor:pointer;text-align:left}
+.tool:hover,.act:hover{background:var(--btn-h)}
+.tool svg{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.tool.on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.tool span{flex:1;font-weight:500;font-size:13px}
+kbd{font:500 10.5px "JetBrains Mono",ui-monospace,monospace;color:var(--muted);border:1px solid var(--rule);
+  border-radius:4px;padding:1px 4px;background:var(--paper);white-space:nowrap}
+.palette{display:flex;flex-direction:column;gap:6px}
+.pal{display:grid;grid-template-columns:64px 1fr auto;align-items:center;gap:10px;border:1px solid var(--rule);
+  background:var(--btn);border-radius:6px;padding:6px 10px 6px 6px;cursor:grab;touch-action:none}
+.pal:hover{background:var(--btn-h)}
+.pal.on{border-color:var(--accent);background:var(--accent-soft)}
+.pal svg{width:64px;height:38px;display:block}
+.pal b{font-weight:500;font-size:13.5px}
+.pal small{display:block;color:var(--muted);font-size:11.5px}
+.note{margin:8px 0 0;color:var(--muted);font-size:12px}
+.acts{display:grid;grid-template-columns:1fr;gap:5px}
+.act{justify-content:space-between;font-size:13px;padding:6px 9px}
+.act:disabled{opacity:.45;cursor:default}
+.help{margin-top:auto;color:var(--muted);font-size:12px;line-height:1.6}
+.help div{display:flex;justify-content:space-between;gap:8px}
+button:focus-visible,.pal:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+main{position:relative;overflow:hidden;min-width:0}
+#cv{display:block;width:100%;height:100%;touch-action:none;background:var(--paper)}
+#cv.m-wire{cursor:crosshair}
+#cv.m-place{cursor:copy}
+.gmin{fill:none;stroke:var(--grid);stroke-width:1}
+.gmaj{fill:none;stroke:var(--grid2);stroke-width:1}
+.axis{stroke:var(--grid2);stroke-width:1.5}
+
+.sym path,.sym rect{fill:none;stroke:var(--ink);stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.sym .f{fill:var(--paper)}
+.sym .thick{stroke-width:2.6;stroke-linecap:butt}
+.mark{fill:none;stroke:var(--ink);stroke-width:1.4;stroke-linecap:round}
+.hit{fill:transparent;stroke:none;cursor:move}
+.comp.sel .hit{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1;stroke-dasharray:3 3}
+.comp.sel .sym path,.comp.sel .sym rect,.comp.sel .mark{stroke:var(--accent)}
+.pin{fill:var(--paper);stroke:var(--ink);stroke-width:1.2}
+.pin.on{display:none}
+.m-wire .pin{stroke:var(--accent)}
+.lab{font:500 11.5px "JetBrains Mono",ui-monospace,monospace;fill:var(--ink);pointer-events:none}
+.lab .vl{fill:var(--muted)}
+.comp.sel .lab .nm{fill:var(--accent)}
+.wln{fill:none;stroke:var(--ink);stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round}
+.whit{fill:none;stroke:transparent;stroke-width:12;cursor:pointer}
+.wire.sel .wln{stroke:var(--accent);stroke-width:2.3}
+.dot{fill:var(--ink)}
+#over *{pointer-events:none}
+#over .via{pointer-events:all;fill:var(--paper);stroke:var(--accent);stroke-width:1.6;cursor:move}
+.draft{fill:none;stroke:var(--accent);stroke-width:1.7;stroke-dasharray:6 4;stroke-linejoin:round}
+.dvia{fill:var(--accent)}
+.hov{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.6}
+.ghost{opacity:.5}
+.box{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1;stroke-dasharray:4 3}
+.xh{stroke:var(--accent);stroke-width:1.2}
+
+.status{position:absolute;left:12px;right:12px;bottom:10px;display:flex;gap:14px;align-items:center;
+  pointer-events:none;font-size:12.5px;color:var(--muted)}
+.status .md{color:var(--ink);font-weight:600;background:var(--side);border:1px solid var(--rule);border-radius:5px;padding:2px 8px}
+.status .hint{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.status .pos{font:500 11.5px "JetBrains Mono",ui-monospace,monospace}
+.insp{position:absolute;top:12px;right:12px;width:210px;background:var(--side);border:1px solid var(--rule);
+  border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.insp[hidden]{display:none}
+.insp-t{font-weight:600;font-size:13.5px}
+.insp label{display:grid;grid-template-columns:62px 1fr;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+.insp input{width:100%;border:1px solid var(--rule);border-radius:5px;background:var(--paper);color:var(--ink);
+  padding:5px 7px;font:500 12.5px "JetBrains Mono",ui-monospace,monospace}
+
+@media (max-width:760px){
+  .app{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  aside{flex-direction:row;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;gap:18px;padding:10px 12px;
+    border-right:0;border-bottom:1px solid var(--rule);max-height:42vh}
+  aside>section,aside>header{flex:none;width:210px}
+  .help{display:none}
+  .status .hint{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <header class="brand">
+      <h1>Schéma</h1>
+      <p>Éditeur de blocs, grille de 20 px</p>
+    </header>
+
+    <section>
+      <h2>Outils</h2>
+      <div class="tools">
+        <button class="tool" data-mode="select" title="Sélection (Échap)">
+          <svg viewBox="0 0 16 16"><path d="M3 2l9 5.2-4 1-2 4.3z"/></svg><span>Sélection</span>
+        </button>
+        <button class="tool" data-mode="wire" title="Connexion (W)">
+          <svg viewBox="0 0 16 16"><circle cx="3" cy="12" r="1.6"/><circle cx="13" cy="4" r="1.6"/><path d="M4.6 12H8V4h3.4"/></svg><span>Fil</span>
+        </button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Composants</h2>
+      <div class="palette" id="palette"></div>
+      <p class="note">Un clic pose en série, un glisser pose une seule pièce.</p>
+    </section>
+
+    <section>
+      <h2>Transformer</h2>
+      <div class="acts">
+        <button class="act" data-act="rot">Tourner de 90° <kbd>Espace</kbd></button>
+        <button class="act" data-act="fh">Miroir horizontal <kbd>H</kbd></button>
+        <button class="act" data-act="fv">Miroir vertical <kbd>V</kbd></button>
+        <button class="act" data-act="dup">Dupliquer <kbd>Ctrl D</kbd></button>
+        <button class="act" data-act="del">Supprimer <kbd>Suppr</kbd></button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Historique</h2>
+      <div class="acts">
+        <button class="act" data-act="undo">Annuler <kbd>Ctrl Z</kbd></button>
+        <button class="act" data-act="redo">Rétablir <kbd>Ctrl Y</kbd></button>
+        <button class="act" data-act="clear">Nouveau schéma</button>
+      </div>
+    </section>
+
+    <div class="help">
+      <div><span>Zoom</span><span>molette</span></div>
+      <div><span>Déplacer la vue</span><span>clic droit glissé</span></div>
+      <div><span>Annuler l'étape</span><span>clic droit</span></div>
+      <div><span>Sélection multiple</span><span>Maj + clic</span></div>
+      <div><span>Retirer un point</span><span>double clic</span></div>
+      <div><span>Poser un composant</span><span>1 à 5</span></div>
+    </div>
+  </aside>
+
+  <main>
+    <svg id="cv" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <pattern id="gmin" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path class="gmin" d="M20 0H0V20"/>
+        </pattern>
+        <pattern id="gmaj" width="100" height="100" patternUnits="userSpaceOnUse">
+          <rect width="100" height="100" fill="url(#gmin)"/>
+          <path class="gmaj" d="M100 0H0V100"/>
+        </pattern>
+      </defs>
+      <g id="world">
+        <rect x="-20000" y="-20000" width="40000" height="40000" fill="url(#gmaj)"/>
+        <g id="wires"></g>
+        <g id="comps"></g>
+        <g id="over"></g>
+      </g>
+    </svg>
+
+    <div id="insp" class="insp" hidden>
+      <div class="insp-t" id="iType"></div>
+      <label><span>Repère</span><input id="iName" spellcheck="false" autocomplete="off"></label>
+      <label id="iValL"><span>Valeur</span><input id="iVal" spellcheck="false" autocomplete="off"></label>
+    </div>
+
+    <div class="status">
+      <span class="md" id="stMode"></span>
+      <span class="hint" id="stHint"></span>
+      <span class="pos" id="stPos"></span>
+    </div>
+  </main>
+</div>
+
+<script>
+(() => {
+'use strict';
+const G = 20, TURN = 4;
+const $ = s => document.querySelector(s);
+const svg = $('#cv'), world = $('#world'), Lw = $('#wires'), Lc = $('#comps'), Lo = $('#over');
+
+/* Matrices d'orientation 2x2 au format SVG [a b c d] */
+const ID = [1,0,0,1], ROT = [0,1,-1,0], FH = [-1,0,0,1], FV = [1,0,0,-1];
+const mul = (A,B) => [A[0]*B[0]+A[2]*B[1], A[1]*B[0]+A[3]*B[1], A[0]*B[2]+A[2]*B[3], A[1]*B[2]+A[3]*B[3]].map(v=>v+0);
+const ap = (m,x,y) => [m[0]*x+m[2]*y+0, m[1]*x+m[3]*y+0];
+const DIRS = [[1,0],[0,1],[-1,0],[0,-1]];
+const dirOf = (dx,dy) => dx>0?0:dy>0?1:dx<0?2:3;
+const snap = v => Math.round(v/G)*G;
+
+/* Bibliothèque de symboles (coordonnées locales, bornes sur la grille) */
+const LIB = {
+  L:{name:'Self', prefix:'L', value:'10µH', key:'1',
+     pins:[{x:-40,y:0,d:2},{x:40,y:0,d:0}], body:[-30,-10,60,20], lab:[0,-15], vb:'-46 -18 92 36',
+     draw:'<path d="M-40 0H-30a7.5 7.5 0 0 1 15 0a7.5 7.5 0 0 1 15 0a7.5 7.5 0 0 1 15 0a7.5 7.5 0 0 1 15 0H40"/>'},
+  C:{name:'Condensateur', prefix:'C', value:'100nF', key:'2',
+     pins:[{x:-20,y:0,d:2},{x:20,y:0,d:0}], body:[-10,-16,20,32], lab:[0,-21], vb:'-26 -20 52 40',
+     draw:'<path d="M-20 0H-5M5 0H20"/><path class="thick" d="M-5 -14V14M5 -14V14"/>'},
+  R:{name:'Résistance', prefix:'R', value:'10k', key:'3',
+     pins:[{x:-40,y:0,d:2},{x:40,y:0,d:0}], body:[-30,-10,60,20], lab:[0,-17], vb:'-46 -18 92 36',
+     draw:'<path d="M-40 0H-24M24 0H40"/><rect class="f" x="-24" y="-8" width="48" height="16" rx="1.5"/>'},
+  U:{name:'Ampli op', prefix:'U', value:'', key:'4',
+     pins:[{x:-40,y:-20,d:2},{x:-40,y:20,d:2},{x:40,y:0,d:0}], body:[-28,-36,60,72], lab:[0,-41], vb:'-46 -40 92 80',
+     marks:[{x:-17,y:-20,t:'-'},{x:-17,y:20,t:'+'}],
+     draw:'<path d="M-40 -20H-25M-40 20H-25M30 0H40"/><path class="f" d="M-25 -35V35L30 0Z"/>'},
+  G:{name:'Masse', prefix:'GND', value:'', key:'5',
+     pins:[{x:0,y:0,d:3}], body:[-12,6,24,24], lab:null, vb:'-18 -6 36 36',
+     draw:'<path d="M0 0V16M-12 16H12M-7 21H7M-2.5 26H2.5"/>'}
+};
+for (const k in LIB){ // zone de préhension : corps + bornes
+  const L = LIB[k], xs=[L.body[0],L.body[0]+L.body[2],...L.pins.map(p=>p.x)], ys=[L.body[1],L.body[1]+L.body[3],...L.pins.map(p=>p.y)];
+  const x0=Math.min(...xs)-4,y0=Math.min(...ys)-4; L.hit=[x0,y0,Math.max(...xs)+4-x0,Math.max(...ys)+4-y0];
+}
+
+/* État */
+let S = {seq:1, comps:[], wires:[]};
+let view = {x:80, y:60, k:1};
+let sel = new Set(), mode = 'select', placeType = null;
+let ghost = {x:0,y:0,m:ID.slice(),show:false};
+let drag = null, draft = null, palDrag = null, hoverPin = null;
+let cursor = {x:0,y:0}, lastW = {x:0,y:0}, cursorIn = false, lastVia = null;
+let undoS = [], redoS = [];
+const STORE = 'schema-blocs-v1';
+
+const cmap = () => new Map(S.comps.map(c=>[c.id,c]));
+function pinPos(c,i){
+  const p = LIB[c.type].pins[i], [x,y] = ap(c.m,p.x,p.y), [dx,dy] = ap(c.m,DIRS[p.d][0],DIRS[p.d][1]);
+  return {x:c.x+x, y:c.y+y, d:dirOf(dx,dy)};
+}
+function resolve(e,cm){
+  if (e.c){ const c = cm.get(e.c); return c ? pinPos(c,e.p) : null; }
+  return {x:e.x, y:e.y, d:-1};
+}
+function rectOf(c,r){
+  const [x,y,w,h] = r, p1 = ap(c.m,x,y), p2 = ap(c.m,x+w,y+h);
+  return {x0:c.x+Math.min(p1[0],p2[0]), y0:c.y+Math.min(p1[1],p2[1]), x1:c.x+Math.max(p1[0],p2[0]), y1:c.y+Math.max(p1[1],p2[1])};
+}
+function pinAt(x,y){
+  const r = Math.max(6, 9/view.k); let best = null, bd = r*r;
+  for (const c of S.comps) LIB[c.type].pins.forEach((_,i)=>{
+    const q = pinPos(c,i), d = (q.x-x)**2+(q.y-y)**2;
+    if (d < bd){ bd = d; best = {c:c.id,p:i}; }
+  });
+  return best;
+}
+
+/* Routage orthogonal A* avec pénalité de virage et évitement des corps */
+class Heap{
+  constructor(){this.p=[];this.v=[]}
+  get size(){return this.v.length}
+  push(p,v){const P=this.p,V=this.v;let i=V.length;P.push(p);V.push(v);
+    while(i>0){const j=(i-1)>>1;if(P[j]<=p)break;P[i]=P[j];V[i]=V[j];i=j}P[i]=p;V[i]=v}
+  pop(){const P=this.p,V=this.v,top=V[0],lp=P.pop(),lv=V.pop(),n=V.length;
+    if(n){let i=0;for(;;){let l=2*i+1;if(l>=n)break;const r=l+1;if(r<n&&P[r]<P[l])l=r;if(P[l]>=lp)break;P[i]=P[l];V[i]=V[l];i=l}P[i]=lp;V[i]=lv}
+    return top}
+}
+function astar(ax,ay,ad,bx,by,bd,blk,used){
+  if (ax===bx && ay===by) return {pts:[[ax,ay]], dir:ad};
+  const need = bd>=0 ? (bd+2)%4 : -1;
+  for (const M of [6,20]){
+    const x0=Math.min(ax,bx)-M, y0=Math.min(ay,by)-M, W=Math.abs(ax-bx)+2*M+1, H=Math.abs(ay-by)+2*M+1, N=W*H*5;
+    const gS=new Float64Array(N).fill(Infinity), par=new Int32Array(N).fill(-1), done=new Uint8Array(N);
+    const idx=(x,y,d)=>((y-y0)*W+(x-x0))*5+(d+1);
+    const heap=new Heap(), s=idx(ax,ay,ad); gS[s]=0; heap.push(Math.abs(ax-bx)+Math.abs(ay-by), s);
+    while (heap.size){
+      const cur=heap.pop(); if (done[cur]) continue; done[cur]=1;
+      const d=cur%5-1, cell=(cur/5)|0, x=cell%W+x0, y=((cell/W)|0)+y0;
+      if (x===bx && y===by){
+        const pts=[]; let k=cur;
+        while (k>=0){ const c2=(k/5)|0; pts.push([c2%W+x0, ((c2/W)|0)+y0]); k=par[k]; }
+        return {pts:pts.reverse(), dir:d};
+      }
+      const g=gS[cur];
+      for (let nd=0; nd<4; nd++){
+        if (d>=0 && nd===(d+2)%4) continue;
+        const nx=x+DIRS[nd][0], ny=y+DIRS[nd][1];
+        if (nx<x0||ny<y0||nx>=x0+W||ny>=y0+H) continue;
+        const goal = nx===bx && ny===by, key = nx+','+ny;
+        if (!goal && blk.has(key)) continue;
+        let c = 1 + (d>=0 && nd!==d ? TURN : 0);
+        if (goal && need>=0 && nd!==need) c += nd===bd ? TURN*3 : TURN;
+        const u = used.get(key); if (u && (u & (nd%2?2:1))) c += 2.5;
+        const ni=idx(nx,ny,nd), g2=g+c;
+        if (g2<gS[ni]){ gS[ni]=g2; par[ni]=cur; heap.push(g2+Math.abs(nx-bx)+Math.abs(ny-by), ni); }
+      }
+    }
+  }
+  return {pts:[[ax,ay],[bx,ay],[bx,by]], dir: by!==ay ? (by>ay?1:3) : (bx>ax?0:2)};
+}
+function routeEnds(E,blk,used){
+  let pts=[], dir=E[0].d;
+  for (let i=0; i<E.length-1; i++){
+    const a=E[i], b=E[i+1], last=i===E.length-2;
+    const r=astar(a.x/G,a.y/G,dir,b.x/G,b.y/G,last?b.d:-1,blk,used);
+    if (pts.length) r.pts.shift();
+    pts.push(...r.pts); if (r.dir>=0) dir=r.dir;
+  }
+  return pts;
+}
+function markUsed(p,used){
+  for (let i=0;i<p.length-1;i++){
+    const bit = p[i][1]===p[i+1][1] ? 1 : 2;
+    for (const q of [p[i],p[i+1]]){ const k=q[0]+','+q[1]; used.set(k,(used.get(k)||0)|bit); }
+  }
+}
+function simplify(p){
+  if (p.length<3) return p;
+  const o=[p[0]];
+  for (let i=1;i<p.length-1;i++){
+    const a=o[o.length-1], b=p[i], c=p[i+1];
+    if (a[0]===b[0]&&a[1]===b[1]) continue;
+    const s1=[Math.sign(b[0]-a[0]),Math.sign(b[1]-a[1])], s2=[Math.sign(c[0]-b[0]),Math.sign(c[1]-b[1])];
+    if (s1[0]===s2[0]&&s1[1]===s2[1]) continue;
+    o.push(b);
+  }
+  o.push(p[p.length-1]); return o;
+}
+function buildBlock(){
+  const blk=new Set();
+  for (const c of S.comps){
+    const r=rectOf(c,LIB[c.type].body);
+    for (let gx=Math.ceil(r.x0/G); gx<=Math.floor(r.x1/G); gx++)
+      for (let gy=Math.ceil(r.y0/G); gy<=Math.floor(r.y1/G); gy++)
+        if (gx*G>r.x0 && gx*G<r.x1 && gy*G>r.y0 && gy*G<r.y1) blk.add(gx+','+gy);
+    LIB[c.type].pins.forEach((_,i)=>{ const q=pinPos(c,i); blk.add(q.x/G+','+q.y/G); });
+  }
+  return blk;
+}
+function computeRoutes(){
+  const cm=cmap(), blk=buildBlock(), used=new Map(), R=new Map();
+  for (const w of S.wires){
+    const a=resolve(w.a,cm), b=resolve(w.b,cm); if (!a||!b) continue;
+    const pts=routeEnds([a,...w.via.map(v=>({x:v.x,y:v.y,d:-1})),b],blk,used);
+    markUsed(pts,used);
+    R.set(w.id, simplify(pts).map(([x,y])=>[x*G,y*G]));
+  }
+  return {R,blk,used,cm};
+}
+const pathD = p => 'M'+p.map(q=>q[0]+' '+q[1]).join('L');
+
+/* Points de jonction */
+function junctions(R){
+  const cnt=new Map(), pinKeys=new Set();
+  for (const c of S.comps) LIB[c.type].pins.forEach((_,i)=>{ const q=pinPos(c,i); pinKeys.add(q.x+','+q.y); });
+  for (const [,p] of R) for (const e of [p[0],p[p.length-1]]){ const k=e[0]+','+e[1]; cnt.set(k,(cnt.get(k)||0)+1); }
+  let h='';
+  for (const [k,n] of cnt){
+    const [x,y]=k.split(',').map(Number); let t=n+(pinKeys.has(k)?1:0);
+    outer: for (const [,p] of R){
+      const f=p[0], l=p[p.length-1];
+      if ((f[0]===x&&f[1]===y)||(l[0]===x&&l[1]===y)) continue;
+      for (let i=0;i<p.length-1;i++){
+        const a=p[i], b=p[i+1];
+        if (x>=Math.min(a[0],b[0])&&x<=Math.max(a[0],b[0])&&y>=Math.min(a[1],b[1])&&y<=Math.max(a[1],b[1])){ t+=2; break outer; }
+      }
+    }
+    if (t>=3) h+=`<circle class="dot" cx="${x}" cy="${y}" r="3.6"/>`;
+  }
+  return h;
+}
+
+/* Dessin d'un composant */
+function compSVG(c,o={}){
+  const L=LIB[c.type], m=c.m, [hx,hy,hw,hh]=L.hit;
+  let h=`<g class="comp${o.sel?' sel':''}"${o.ghost?'':` data-comp="${c.id}"`}>`;
+  h+=`<g transform="matrix(${m.join(' ')} ${c.x} ${c.y})"><rect class="hit" x="${hx}" y="${hy}" width="${hw}" height="${hh}" rx="3"/><g class="sym">${L.draw}</g></g>`;
+  for (const mk of L.marks||[]){
+    const [x,y]=ap(m,mk.x,mk.y), X=c.x+x, Y=c.y+y;
+    h+=`<path class="mark" d="M${X-3.5} ${Y}h7${mk.t==='+'?`M${X} ${Y-3.5}v7`:''}"/>`;
+  }
+  L.pins.forEach((_,i)=>{ const q=pinPos(c,i); h+=`<circle class="pin${o.conn&&o.conn.has(c.id+':'+i)?' on':''}" cx="${q.x}" cy="${q.y}" r="2.6"/>`; });
+  if (L.lab && !o.ghost){
+    const [lx,ly]=ap(m,L.lab[0],L.lab[1]); let anchor='middle', dy='0';
+    if (Math.abs(lx)>Math.abs(ly)){ anchor=lx>0?'start':'end'; dy='0.35em'; } else if (ly>0) dy='0.8em';
+    h+=`<text class="lab" x="${c.x+lx}" y="${c.y+ly}" dy="${dy}" text-anchor="${anchor}"><tspan class="nm">${esc(c.name)}</tspan>${c.value?`<tspan class="vl" dx="6">${esc(c.value)}</tspan>`:''}</text>`;
+  }
+  return h+'</g>';
+}
+const esc = s => String(s).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]));
+
+/* Rendu */
+let routes = new Map(), rq = 0;
+function requestRender(){ if (!rq) rq = requestAnimationFrame(()=>{ rq=0; render(); }); }
+function render(){
+  world.setAttribute('transform',`translate(${view.x} ${view.y}) scale(${view.k})`);
+  svg.setAttribute('class','m-'+mode);
+  const {R,blk,used,cm} = computeRoutes(); routes = R;
+
+  let h='';
+  for (const w of S.wires){
+    const p=R.get(w.id); if (!p) continue; const d=pathD(p);
+    h+=`<g class="wire${sel.has(w.id)?' sel':''}" data-wire="${w.id}"><path class="whit" d="${d}"/><path class="wln" d="${d}"/></g>`;
+  }
+  Lw.innerHTML = h + junctions(R);
+
+  const conn=new Set(); for (const w of S.wires) for (const e of [w.a,w.b]) if (e.c) conn.add(e.c+':'+e.p);
+  Lc.innerHTML = S.comps.map(c=>compSVG(c,{sel:sel.has(c.id),conn})).join('');
+
+  let o='';
+  for (const w of S.wires) if (sel.has(w.id)) w.via.forEach((v,i)=>{ o+=`<rect class="via" data-wire="${w.id}" data-via="${i}" x="${v.x-4.5}" y="${v.y-4.5}" width="9" height="9" rx="1.5"/>`; });
+  if (draft){
+    const start=resolve(draft.a,cm);
+    if (start){
+      const end = hoverPin ? pinPos(cm.get(hoverPin.c),hoverPin.p) : {x:cursor.x,y:cursor.y,d:-1};
+      const pts = simplify(routeEnds([start,...draft.via.map(v=>({x:v.x,y:v.y,d:-1})),end],blk,used)).map(([x,y])=>[x*G,y*G]);
+      o+=`<path class="draft" d="${pathD(pts)}"/>`;
+      for (const v of draft.via) o+=`<circle class="dvia" cx="${v.x}" cy="${v.y}" r="3"/>`;
+    }
+  }
+  if (hoverPin){ const c=cm.get(hoverPin.c); if (c){ const q=pinPos(c,hoverPin.p); o+=`<circle class="hov" cx="${q.x}" cy="${q.y}" r="6.5"/>`; } }
+  if (mode==='place' && ghost.show) o+=`<g class="ghost">${compSVG({type:placeType,x:ghost.x,y:ghost.y,m:ghost.m},{ghost:true})}</g>`;
+  if (mode==='wire' && cursorIn && !hoverPin) o+=`<path class="xh" d="M${cursor.x-5} ${cursor.y}h10M${cursor.x} ${cursor.y-5}v10"/>`;
+  if (drag && drag.kind==='box'){
+    const x=Math.min(drag.x0,drag.x1), y=Math.min(drag.y0,drag.y1);
+    o+=`<rect class="box" x="${x}" y="${y}" width="${Math.abs(drag.x1-drag.x0)}" height="${Math.abs(drag.y1-drag.y0)}"/>`;
+  }
+  Lo.innerHTML = o;
+  renderUI();
+}
+
+/* Interface latérale, inspecteur, barre d'état */
+const pal = $('#palette');
+for (const k in LIB){
+  const L=LIB[k], el=document.createElement('div');
+  el.className='pal'; el.dataset.type=k; el.tabIndex=0;
+  el.innerHTML=`<svg viewBox="${L.vb}">${compSVG({type:k,x:0,y:0,m:ID},{ghost:true})}</svg><div><b>${L.name}</b><small>${L.prefix}${L.prefix==='GND'?'':'1, 2, 3…'}</small></div><kbd>${L.key}</kbd>`;
+  el.addEventListener('pointerdown', e=>{
+    if (e.button!==0) return; e.preventDefault();
+    const same = mode==='place' && placeType===k;
+    enterPlace(k); palDrag={x:e.clientX,y:e.clientY,moved:false,same};
+    if (el.hasPointerCapture && el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+  });
+  el.addEventListener('keydown', e=>{ if (e.key==='Enter'){ enterPlace(k); } });
+  pal.appendChild(el);
+}
+document.querySelectorAll('.tool').forEach(b=>b.addEventListener('click',()=>setMode(b.dataset.mode)));
+document.querySelectorAll('.act').forEach(b=>b.addEventListener('click',()=>{
+  const a=b.dataset.act;
+  if (a==='rot') transform(ROT); else if (a==='fh') transform(FH); else if (a==='fv') transform(FV);
+  else if (a==='dup') duplicate(); else if (a==='del') del(); else if (a==='undo') undo(); else if (a==='redo') redo();
+  else if (a==='clear'){ pushUndo(); S={seq:1,comps:[],wires:[]}; sel.clear(); draft=null; save(); render(); }
+  b.blur();
+}));
+
+const insp=$('#insp'), iName=$('#iName'), iVal=$('#iVal'), iValL=$('#iValL'), iType=$('#iType');
+let inspId=null, inspDirty=false;
+function renderUI(){
+  document.querySelectorAll('.tool').forEach(b=>b.classList.toggle('on', b.dataset.mode===mode || (mode==='place'&&b.dataset.mode==='select'&&false)));
+  document.querySelectorAll('.pal').forEach(p=>p.classList.toggle('on', mode==='place' && p.dataset.type===placeType));
+  const has = sel.size>0 || mode==='place';
+  document.querySelectorAll('[data-act="rot"],[data-act="fh"],[data-act="fv"]').forEach(b=>b.disabled=!has);
+  document.querySelector('[data-act="dup"]').disabled = ![...sel].some(i=>i[0]==='c');
+  document.querySelector('[data-act="del"]').disabled = !sel.size;
+  document.querySelector('[data-act="undo"]').disabled = !undoS.length;
+  document.querySelector('[data-act="redo"]').disabled = !redoS.length;
+
+  const ids=[...sel]; const one = ids.length===1 && ids[0][0]==='c' ? S.comps.find(c=>c.id===ids[0]) : null;
+  if (!one){ insp.hidden=true; inspId=null; }
+  else {
+    insp.hidden=false;
+    if (inspId!==one.id || (document.activeElement!==iName && document.activeElement!==iVal)){
+      inspId=one.id; iType.textContent=LIB[one.type].name; iName.value=one.name; iVal.value=one.value;
+      iValL.style.display = one.type==='G' ? 'none' : '';
+    }
+  }
+
+  const names={select:'Sélection',wire:'Fil',place:'Pose'};
+  $('#stMode').textContent = names[mode];
+  $('#stHint').textContent =
+    mode==='place' ? `${LIB[placeType].name} : clic pour poser, Espace pour tourner, H ou V pour le miroir, Échap pour terminer` :
+    mode==='wire' ? (draft ? 'Clic : point de passage. Clic sur une borne ou un fil : terminer. Double clic : extrémité libre. Échap : abandonner'
+                           : 'Cliquez une borne, ou un fil existant pour créer une dérivation') :
+    sel.size ? `${sel.size} élément${sel.size>1?'s':''} sélectionné${sel.size>1?'s':''}. Glisser pour déplacer, Espace pour tourner, H ou V pour le miroir`
+             : 'Glissez un composant sur la grille. Un clic sur une borne démarre un fil';
+  $('#stPos').textContent = `x ${cursor.x}  y ${cursor.y}  ${Math.round(view.k*100)} %`;
+}
+function inspEdit(field,input){
+  input.addEventListener('focus',()=>{ inspDirty=false; });
+  input.addEventListener('input',()=>{
+    const c=S.comps.find(x=>x.id===inspId); if (!c) return;
+    if (!inspDirty){ pushUndo(); inspDirty=true; }
+    c[field]=input.value; save(); render();
+  });
+  input.addEventListener('keydown',e=>{ if (e.key==='Enter'||e.key==='Escape') input.blur(); });
+}
+inspEdit('name',iName); inspEdit('value',iVal);
+
+/* Historique et persistance */
+function pushUndo(){ undoS.push(JSON.stringify(S)); if (undoS.length>200) undoS.shift(); redoS=[]; }
+function undo(){ if (!undoS.length) return; redoS.push(JSON.stringify(S)); S=JSON.parse(undoS.pop()); sel.clear(); draft=null; save(); render(); }
+function redo(){ if (!redoS.length) return; undoS.push(JSON.stringify(S)); S=JSON.parse(redoS.pop()); sel.clear(); draft=null; save(); render(); }
+function save(){ try{ localStorage.setItem(STORE, JSON.stringify({S,view})); }catch(e){} }
+function load(){
+  try{
+    const d=JSON.parse(localStorage.getItem(STORE)||'null');
+    if (d && d.S && Array.isArray(d.S.comps) && Array.isArray(d.S.wires)){ S=d.S; if (d.view) view=d.view; return true; }
+  }catch(e){}
+  return false;
+}
+
+/* Opérations */
+function nextName(prefix){
+  if (prefix==='GND') return 'GND';
+  let n=0; const re=new RegExp('^'+prefix+'(\\d+)$');
+  for (const c of S.comps){ const m=re.exec(c.name); if (m) n=Math.max(n,+m[1]); }
+  return prefix+(n+1);
+}
+function newComp(type,x,y,m){
+  const L=LIB[type];
+  return {id:'c'+S.seq++, type, x, y, m:m.slice(), name:nextName(L.prefix), value:L.value};
+}
+function enterPlace(type){ mode='place'; placeType=type; ghost.m=ID.slice(); draft=null; ghost.x=cursor.x; ghost.y=cursor.y; render(); }
+function setMode(m){ mode=m; if (m!=='place') placeType=null; if (m!=='wire') draft=null; hoverPin=null; render(); }
+function placeAt(){
+  if (!ghost.show || !placeType) return;
+  pushUndo(); const c=newComp(placeType,ghost.x,ghost.y,ghost.m); S.comps.push(c);
+  sel=new Set([c.id]); save(); render();
+}
+function linkedWires(csId){
+  return S.wires.filter(w=>sel.has(w.id) || (w.a.c && w.b.c && csId.has(w.a.c) && csId.has(w.b.c)));
+}
+function transform(T){
+  if (mode==='place'){ ghost.m=mul(T,ghost.m); render(); return; }
+  const cs=S.comps.filter(c=>sel.has(c.id)), csId=new Set(cs.map(c=>c.id)), ws=linkedWires(csId);
+  const pts = cs.length ? cs.map(c=>[c.x,c.y]) : ws.flatMap(w=>[...w.via.map(v=>[v.x,v.y]),...[w.a,w.b].filter(e=>!e.c).map(e=>[e.x,e.y])]);
+  if (!pts.length) return;
+  if (!drag) pushUndo(); else drag.moved=true;
+  const xs=pts.map(p=>p[0]), ys=pts.map(p=>p[1]);
+  const cx=snap((Math.min(...xs)+Math.max(...xs))/2), cy=snap((Math.min(...ys)+Math.max(...ys))/2);
+  const tp=(x,y)=>{ const [a,b]=ap(T,x-cx,y-cy); return [cx+a,cy+b]; };
+  for (const c of cs){ [c.x,c.y]=tp(c.x,c.y); c.m=mul(T,c.m); }
+  for (const w of ws){
+    for (const v of w.via) [v.x,v.y]=tp(v.x,v.y);
+    for (const e of [w.a,w.b]) if (!e.c) [e.x,e.y]=tp(e.x,e.y);
+  }
+  if (drag && drag.kind==='move'){ captureMove(drag); drag.sx=lastW.x; drag.sy=lastW.y; drag.dx=drag.dy=0; }
+  save(); render();
+}
+function del(){
+  if (!sel.size) return; pushUndo();
+  const gone=new Set(S.comps.filter(c=>sel.has(c.id)).map(c=>c.id));
+  S.comps=S.comps.filter(c=>!gone.has(c.id));
+  S.wires=S.wires.filter(w=>!sel.has(w.id) && !(w.a.c&&gone.has(w.a.c)) && !(w.b.c&&gone.has(w.b.c)));
+  sel.clear(); save(); render();
+}
+function duplicate(){
+  const cs=S.comps.filter(c=>sel.has(c.id)); if (!cs.length) return; pushUndo();
+  const map=new Map(), nsel=new Set(), off=40;
+  for (const c of cs){ const n=newComp(c.type,c.x+off,c.y+off,c.m); n.value=c.value; S.comps.push(n); map.set(c.id,n.id); nsel.add(n.id); }
+  for (const w of linkedWires(new Set(map.keys()))){
+    if (!(w.a.c&&map.has(w.a.c)&&w.b.c&&map.has(w.b.c))) continue;
+    const n={id:'w'+S.seq++, a:{c:map.get(w.a.c),p:w.a.p}, b:{c:map.get(w.b.c),p:w.b.p}, via:w.via.map(v=>({x:v.x+off,y:v.y+off}))};
+    S.wires.push(n); nsel.add(n.id);
+  }
+  sel=nsel; save(); render();
+}
+function captureMove(d){
+  const csId=new Set(S.comps.filter(c=>sel.has(c.id)).map(c=>c.id));
+  d.orig=new Map(S.comps.filter(c=>csId.has(c.id)).map(c=>[c.id,[c.x,c.y]]));
+  d.worig=new Map(linkedWires(csId).map(w=>[w.id,JSON.parse(JSON.stringify({via:w.via,a:w.a,b:w.b}))]));
+}
+function applyMove(d){
+  const cm=cmap();
+  for (const [id,[x,y]] of d.orig){ const c=cm.get(id); c.x=x+d.dx; c.y=y+d.dy; }
+  for (const w of S.wires){
+    const o=d.worig.get(w.id); if (!o) continue;
+    w.via=o.via.map(v=>({x:v.x+d.dx,y:v.y+d.dy}));
+    if (!w.a.c){ w.a={x:o.a.x+d.dx,y:o.a.y+d.dy}; }
+    if (!w.b.c){ w.b={x:o.b.x+d.dx,y:o.b.y+d.dy}; }
+  }
+}
+function boxSelect(d){
+  const x0=Math.min(d.x0,d.x1), x1=Math.max(d.x0,d.x1), y0=Math.min(d.y0,d.y1), y1=Math.max(d.y0,d.y1);
+  sel=new Set(d.base);
+  for (const c of S.comps){ const r=rectOf(c,LIB[c.type].hit); if (r.x1>=x0&&r.x0<=x1&&r.y1>=y0&&r.y0<=y1) sel.add(c.id); }
+  for (const [id,p] of routes) if (p.every(q=>q[0]>=x0&&q[0]<=x1&&q[1]>=y0&&q[1]<=y1)) sel.add(id);
+}
+
+/* Outil fil */
+function wireClick(pin,tEl,w){
+  if (mode!=='wire') mode='wire';
+  const pt={x:snap(w.x), y:snap(w.y)}, onWire=tEl.closest && tEl.closest('[data-wire]');
+  if (!draft){
+    if (pin) draft={a:{c:pin.c,p:pin.p}, via:[]};
+    else if (onWire) draft={a:pt, via:[]};
+    render(); return;
+  }
+  if (pin){
+    if (draft.a.c===pin.c && draft.a.p===pin.p && !draft.via.length) return;
+    return finishWire({c:pin.c,p:pin.p});
+  }
+  if (onWire) return finishWire(pt);
+  const lv=draft.via[draft.via.length-1];
+  if (lv && lv.x===pt.x && lv.y===pt.y){ draft.via.pop(); return finishWire(pt); }
+  draft.via.push(pt); render();
+}
+function finishWire(b){
+  pushUndo();
+  S.wires.push({id:'w'+S.seq++, a:draft.a, b, via:draft.via});
+  draft=null; hoverPin=null; save(); render();
+}
+function cancelStep(){
+  if (draft){ if (draft.via.length) draft.via.pop(); else draft=null; }
+  else if (mode!=='select') setMode('select');
+  render();
+}
+
+/* Pointeur */
+function toWorld(e){
+  const r=svg.getBoundingClientRect();
+  return {x:(e.clientX-r.left-view.x)/view.k, y:(e.clientY-r.top-view.y)/view.k,
+          inside:e.clientX>=r.left&&e.clientX<=r.right&&e.clientY>=r.top&&e.clientY<=r.bottom};
+}
+svg.addEventListener('contextmenu',e=>e.preventDefault());
+svg.addEventListener('pointerdown',e=>{
+  const w=toWorld(e); lastW=w; cursor={x:snap(w.x),y:snap(w.y)};
+  if (document.activeElement && document.activeElement!==document.body) document.activeElement.blur();
+  try{ svg.setPointerCapture(e.pointerId); }catch(_){}
+  if (e.button===1 || e.button===2){
+    e.preventDefault();
+    drag={kind:'pan',cx:e.clientX,cy:e.clientY,vx:view.x,vy:view.y,moved:false,btn:e.button}; return;
+  }
+  if (e.button!==0) return;
+  const t=e.target, pin=pinAt(w.x,w.y);
+  if (mode==='place'){ ghost.x=cursor.x; ghost.y=cursor.y; ghost.show=true; placeAt(); return; }
+
+  const via=t.closest('[data-via]');
+  if (via && mode==='select'){
+    const wid=via.dataset.wire, i=+via.dataset.via, now=performance.now();
+    if (lastVia && lastVia.wid===wid && lastVia.i===i && now-lastVia.t<380){
+      pushUndo(); S.wires.find(x=>x.id===wid).via.splice(i,1); lastVia=null; save(); render(); return;
+    }
+    lastVia={wid,i,t:now};
+    drag={kind:'via',wid,i,snapS:JSON.stringify(S),moved:false}; return;
+  }
+  if (mode==='wire' || (pin && !e.shiftKey)){ wireClick(pin,t,w); return; }
+
+  const ce=t.closest('[data-comp]'), we=t.closest('[data-wire]');
+  const id = ce ? ce.dataset.comp : we ? we.dataset.wire : null;
+  if (id){
+    const was=sel.has(id);
+    if (e.shiftKey){ was ? sel.delete(id) : sel.add(id); }
+    else if (!was){ sel=new Set([id]); }
+    if (sel.has(id)){
+      drag={kind:'move',sx:w.x,sy:w.y,dx:0,dy:0,moved:false,snapS:JSON.stringify(S),collapse:(!e.shiftKey&&was)?id:null};
+      captureMove(drag);
+    }
+    render(); return;
+  }
+  drag={kind:'box',x0:w.x,y0:w.y,x1:w.x,y1:w.y,base:e.shiftKey?new Set(sel):new Set()};
+  if (!e.shiftKey) sel.clear();
+  render();
+});
+window.addEventListener('pointermove',e=>{
+  const w=toWorld(e); lastW=w; cursorIn=w.inside; cursor={x:snap(w.x),y:snap(w.y)};
+  if (palDrag && Math.hypot(e.clientX-palDrag.x,e.clientY-palDrag.y)>5) palDrag.moved=true;
+  if (mode==='place'){ ghost.x=cursor.x; ghost.y=cursor.y; ghost.show=w.inside; }
+  hoverPin = (mode==='wire' || (mode==='select' && !drag)) && w.inside ? pinAt(w.x,w.y) : null;
+  if (drag){
+    if (drag.kind==='pan'){
+      const dx=e.clientX-drag.cx, dy=e.clientY-drag.cy;
+      if (Math.abs(dx)+Math.abs(dy)>3) drag.moved=true;
+      view.x=drag.vx+dx; view.y=drag.vy+dy;
+    } else if (drag.kind==='move'){
+      const dx=snap(w.x-drag.sx), dy=snap(w.y-drag.sy);
+      if (dx!==drag.dx || dy!==drag.dy){ drag.dx=dx; drag.dy=dy; drag.moved=true; applyMove(drag); }
+    } else if (drag.kind==='box'){
+      drag.x1=w.x; drag.y1=w.y; boxSelect(drag);
+    } else if (drag.kind==='via'){
+      const v=S.wires.find(x=>x.id===drag.wid).via[drag.i];
+      if (v.x!==cursor.x || v.y!==cursor.y){ v.x=cursor.x; v.y=cursor.y; drag.moved=true; }
+    }
+  }
+  requestRender();
+});
+window.addEventListener('pointerup',e=>{
+  if (palDrag){
+    const pd=palDrag; palDrag=null;
+    if (pd.moved){
+      const w=toWorld(e);
+      if (w.inside){ ghost.x=snap(w.x); ghost.y=snap(w.y); ghost.show=true; placeAt(); }
+      setMode('select');
+    } else if (pd.same) setMode('select');
+    render(); return;
+  }
+  if (!drag) return;
+  const d=drag; drag=null;
+  if (d.kind==='pan'){ if (!d.moved && d.btn===2) cancelStep(); save(); }
+  else if (d.kind==='move' || d.kind==='via'){
+    if (d.moved){ undoS.push(d.snapS); redoS=[]; save(); }
+    else if (d.collapse && !e.shiftKey) sel=new Set([d.collapse]);
+  }
+  render();
+});
+svg.addEventListener('pointerleave',()=>{ cursorIn=false; if (mode==='place' && !palDrag){ ghost.show=false; } requestRender(); });
+svg.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const r=svg.getBoundingClientRect(), sx=e.clientX-r.left, sy=e.clientY-r.top;
+  const k2=Math.min(4,Math.max(.25,view.k*Math.exp(-e.deltaY*.0015)));
+  view.x=sx-(sx-view.x)*k2/view.k; view.y=sy-(sy-view.y)*k2/view.k; view.k=k2;
+  requestRender(); save();
+},{passive:false});
+
+/* Clavier */
+window.addEventListener('keydown',e=>{
+  if (e.target.matches && e.target.matches('input,textarea')) return;
+  const k=e.key, lk=k.toLowerCase(), mod=e.ctrlKey||e.metaKey;
+  if (mod){
+    if (lk==='z'){ e.preventDefault(); e.shiftKey?redo():undo(); }
+    else if (lk==='y'){ e.preventDefault(); redo(); }
+    else if (lk==='d'){ e.preventDefault(); duplicate(); }
+    else if (lk==='a'){ e.preventDefault(); sel=new Set([...S.comps,...S.wires].map(x=>x.id)); render(); }
+    return;
+  }
+  if (k===' ' || lk==='r'){ e.preventDefault(); transform(ROT); }
+  else if (lk==='h'){ transform(FH); }
+  else if (lk==='v'){ transform(FV); }
+  else if (lk==='w'){ setMode(mode==='wire'?'select':'wire'); }
+  else if (k==='Delete' || k==='Backspace'){ e.preventDefault(); del(); }
+  else if (k==='Escape'){
+    if (draft) draft=null; else if (mode!=='select') setMode('select'); else sel.clear();
+    render();
+  } else {
+    const t=Object.keys(LIB).find(x=>LIB[x].key===k);
+    if (t){ enterPlace(t); ghost.show=cursorIn; render(); }
+  }
+});
+window.addEventListener('resize',requestRender);
+
+/* Exemple de départ : amplificateur inverseur */
+function demo(){
+  const add=(type,x,y,m,value)=>{ const c=newComp(type,x,y,m||ID); if (value!==undefined) c.value=value; S.comps.push(c); return c.id; };
+  const U=add('U',400,300), R1=add('R',260,280,ID,'10k'), R2=add('R',400,200,ID,'100k'),
+        C1=add('C',400,140,ID,'22pF'), GN=add('G',340,380), RL=add('R',520,360,ROT,'1k'), G2=add('G',520,420);
+  const w=(a,ap,b,bp)=>S.wires.push({id:'w'+S.seq++, a:{c:a,p:ap}, b:{c:b,p:bp}, via:[]});
+  w(R1,1,U,0); w(R2,0,U,0); w(R2,1,U,2); w(C1,0,R2,0); w(C1,1,R2,1); w(U,1,GN,0); w(U,2,RL,0); w(RL,1,G2,0);
+}
+if (!load()) demo();
+render();
+})();
+</script>
+</body>
+</html>

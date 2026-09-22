@@ -65,6 +65,32 @@ const SPECS: Readonly<Record<RunnerLanguage, Spec>> = {
       run: [PROGRAM],
     }),
   },
+  /**
+   * ngspice, for the `circuit` question type (ADR-019).
+   *
+   * Nothing is built: a netlist is the program. `compile` is therefore `null`
+   * and a malformed netlist reaches the student as a FAILED CASE (ngspice
+   * exits non-zero and says why on stderr), not as a compile error — unlike
+   * `python`, where `py_compile` exists precisely so a syntax error is not
+   * reported four times over. ngspice has no such check mode: `-b` on a
+   * netlist is both the parse and the run.
+   *
+   * The netlist file is NOT in the run plan: it is the case's `args`. One
+   * request carries one schematic and several stimuli — `s0.cir`, `s1.cir` …,
+   * one file per stimulus, all rebuilt server-side (invariant 14) — and the
+   * case named `s0` runs with `args: ["s0.cir"]`. `caseArgv` therefore yields
+   * `timeout -s KILL <s> ngspice -b s0.cir`, and one container serves every
+   * stimulus of the answer.
+   *
+   * A case with NO argument is not a hang: `ngspice -b` then reads its stdin,
+   * which the engine closes immediately (`engine.exec` ends the stream), and
+   * it exits 1 with "no simulations run" in a few milliseconds. Verified on
+   * ngspice 42 (apps/runner/README.md).
+   */
+  spice: {
+    sources: [".cir"],
+    plan: () => ({ compile: null, run: ["ngspice", "-b"] }),
+  },
 };
 
 /** The main file of a request: the first file the language can build from. */

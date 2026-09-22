@@ -1,0 +1,15 @@
+* RC low-pass
+Vin in 0 SIN(0 1 1000)
+R1 in out 1.59k
+C1 out 0 100n
+Vmeas outl 0 0
+Rload out outl 1e6
+.tran 10u 5m 0
+.control
+set wr_vecnames
+set wr_singlescale
+run
+linearize v(in) v(out) i(Vmeas)
+wrdata /dev/stdout v(in) v(out) i(Vmeas)
+.endc
+.end

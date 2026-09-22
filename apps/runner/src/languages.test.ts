@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { caseArgv } from "./execute.js";
 import { mainSource, planFor, sanitizeFileName, splitCompileArgs } from "./languages.js";
 
 describe("sanitizeFileName", () => {
@@ -71,5 +72,26 @@ describe("planFor", () => {
   it("refuses a request with no source of that language", () => {
     expect(planFor("c", ["readme.txt"], [])).toBeNull();
     expect(mainSource("cpp", ["main.cc"])).toBe("main.cc");
+  });
+
+  /**
+   * `spice` builds nothing and names no file: the netlist of a stimulus is
+   * the case's `args` (ADR-019). A plan that named `s0.cir` would make every
+   * case of a request simulate the first stimulus.
+   */
+  it("runs a netlist from the case's arguments, and builds nothing", () => {
+    expect(planFor("spice", ["s0.cir", "s1.cir"], [])).toEqual({
+      compile: null,
+      run: ["ngspice", "-b"],
+    });
+    expect(mainSource("spice", ["notes.txt", "s0.cir"])).toBe("s0.cir");
+    expect(planFor("spice", ["main.c"], [])).toBeNull();
+  });
+
+  it("gives spice the same argv shape every other language gets", () => {
+    const plan = planFor("spice", ["s0.cir"], [])!;
+    expect(caseArgv(plan.run, 5, ["s0.cir"])).toEqual([
+      "timeout", "-s", "KILL", "5", "ngspice", "-b", "s0.cir",
+    ]);
   });
 });

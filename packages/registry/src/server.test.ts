@@ -3,11 +3,11 @@ import { describe, expect, it } from "vitest";
 import { clientRegistry, questionTypeClient } from "./client.js";
 import { QUESTION_TYPE_IDS, questionType, registeredServerIds, serverRegistry } from "./server.js";
 
-/** The four MVP types. */
-const REGISTERED = ["mcq", "short", "cloze", "code"] as const;
+/** The four MVP types, and `circuit` (docs/spec/04 §4.11, brought forward). */
+const REGISTERED = ["mcq", "short", "cloze", "code", "circuit"] as const;
 
 describe("the static registries", () => {
-  it("hold the four MVP types, in both halves", () => {
+  it("hold every registered type, in both halves", () => {
     expect(registeredServerIds()).toEqual([...REGISTERED]);
     expect(Object.keys(clientRegistry)).toEqual([...REGISTERED]);
   });
@@ -23,8 +23,8 @@ describe("the static registries", () => {
     expect(() => questionType("rich")).toThrow(UnknownQuestionType);
   });
 
-  it("expose the four MVP ids", () => {
-    expect(QUESTION_TYPE_IDS).toEqual(["mcq", "short", "cloze", "code"]);
+  it("expose the five ids", () => {
+    expect(QUESTION_TYPE_IDS).toEqual(["mcq", "short", "cloze", "code", "circuit"]);
     expect(Object.keys(serverRegistry)).toEqual([...REGISTERED]);
   });
 

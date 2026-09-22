@@ -22,6 +22,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, ChevronLeft, ChevronRight, Home, Send } from "lucide-react";
 
 import type { AttemptView } from "@quiz/contracts";
+import type { RunnerOutcome } from "@quiz/core/server";
 import { questionTypeClient } from "@quiz/registry/client";
 
 import { useAttempt } from "../attempt/useAttempt";
@@ -38,9 +39,37 @@ import { PausedOverlay } from "./PausedOverlay";
 import { PlayerShell } from "./PlayerShell";
 import type { CodeAnswer, CodeRunOptions, CodeStudent } from "@quiz/qt-code/client";
 
+import { api, ApiError } from "../api";
 import { runCode } from "../runner/codeRun";
 import { QuestionHost } from "./QuestionHost";
 import { SubmitDialog } from "./SubmitDialog";
+
+/**
+ * The `circuit` player's "Simulate", which has no browser half: only the
+ * server may turn a schematic into a SPICE netlist (invariant 14), so this is
+ * one call and its answer is read here rather than by the package.
+ *
+ * Three of the four outcomes are not errors and must not read as one:
+ * `503 runner_unavailable` is the default deployment (decision D14),
+ * `429` is the per-attempt budget of N-SEC-07, and anything else is a real
+ * failure the player shows in red.
+ */
+async function simulateCircuit(
+  attemptId: string,
+  itemId: string,
+  answer: unknown,
+): Promise<RunnerOutcome | "unavailable" | "rate_limited"> {
+  try {
+    return await api<RunnerOutcome>(`/app/api/attempts/${attemptId}/simulate`, {
+      method: "POST",
+      body: JSON.stringify({ itemId, answer }),
+    });
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 503) return "unavailable";
+    if (error instanceof ApiError && error.status === 429) return "rate_limited";
+    throw error;
+  }
+}
 
 /** "Has something been written here?" is the question TYPE's call, not ours. */
 function isAnswered(item: PlayerItem, answer: unknown): boolean {
@@ -313,6 +342,12 @@ export function Player({
                             run(item.id, (answer as { regions?: string[] }).regions ?? [], manual),
                           options: options as CodeRunOptions | undefined,
                         }),
+                    }
+                  : {})}
+                {...(item.type === "circuit"
+                  ? {
+                      onSimulate: (answer: unknown) =>
+                        simulateCircuit(initial.attempt.id, item.id, answer),
                     }
                   : {})}
               />

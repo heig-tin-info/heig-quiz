@@ -1,3 +1,4 @@
+import { Plot, SchematicEditor, SchematicView, withRoutes, type PlotProps, type SchematicEditorProps } from "@quiz/qt-circuit/canvas";
 import { useState } from "react";
 
 import { useT } from "./i18n";
@@ -85,6 +86,70 @@ Ce qui suit est retiré par l'assainissement, et doit rester visible comme du te
 <script>alert('xss')</script>
 
 <img src="https://evil.example/pixel.png" onerror="alert(1)">`;
+
+
+/* --- WP12, the `circuit` canvas -------------------------------------------
+   The editor, the read-only view and the waveform plot, on one page, so the
+   screenshot pass covers them before a `circuit` question exists to hold them.
+   Their words come from the host, and a real question passes them through
+   `t()`; here they keep the package's English defaults, like the hard-coded
+   labels above — this page is development only and never ships. */
+
+type CircuitSchematic = SchematicEditorProps["value"];
+type CircuitPalette = SchematicEditorProps["palette"];
+type CircuitSeries = NonNullable<PlotProps["series"]>;
+
+const CIRCUIT_PALETTE: CircuitPalette = {
+  kinds: ["R", "C", "L", "D", "DS", "DZ", "NPN", "PNP", "NMOS", "PMOS", "NMOSD", "PMOSD", "OPAMP", "GND", "VCC", "VEE"],
+  maxComponents: 12,
+};
+
+/** An inverting amplifier into a load: every symbol family, wired for real. */
+const CIRCUIT_DEMO: CircuitSchematic = withRoutes({
+  components: [
+    { id: "c1", kind: "R", x: 160, y: 160, m: [1, 0, 0, 1], name: "R1", value: "10k" },
+    { id: "c2", kind: "R", x: 320, y: 100, m: [1, 0, 0, 1], name: "R2", value: "100k" },
+    { id: "c3", kind: "OPAMP", x: 320, y: 180, m: [1, 0, 0, 1], name: "U1", value: "" },
+    { id: "c4", kind: "GND", x: 280, y: 320, m: [1, 0, 0, 1], name: "GND", value: "" },
+    { id: "c5", kind: "R", x: 680, y: 280, m: [0, 1, -1, 0], name: "R3", value: "1k" },
+    { id: "c6", kind: "GND", x: 680, y: 400, m: [1, 0, 0, 1], name: "GND", value: "" },
+    { id: "c7", kind: "C", x: 320, y: 40, m: [1, 0, 0, 1], name: "C1", value: "22p" },
+  ],
+  wires: [
+    { id: "w1", a: { kind: "port", port: "in+" }, b: { kind: "pin", c: "c1", p: 0 }, via: [], points: [[0, 160], [120, 160]] },
+    { id: "w2", a: { kind: "pin", c: "c1", p: 1 }, b: { kind: "pin", c: "c3", p: 0 }, via: [], points: [[200, 160], [280, 160]] },
+    { id: "w3", a: { kind: "pin", c: "c2", p: 0 }, b: { kind: "pin", c: "c3", p: 0 }, via: [], points: [[280, 100], [280, 160]] },
+    { id: "w4", a: { kind: "pin", c: "c2", p: 1 }, b: { kind: "pin", c: "c3", p: 2 }, via: [], points: [[360, 100], [360, 180]] },
+    { id: "w5", a: { kind: "pin", c: "c7", p: 0 }, b: { kind: "pin", c: "c2", p: 0 }, via: [], points: [[300, 40], [280, 100]] },
+    { id: "w6", a: { kind: "pin", c: "c7", p: 1 }, b: { kind: "pin", c: "c2", p: 1 }, via: [], points: [[340, 40], [360, 100]] },
+    { id: "w7", a: { kind: "pin", c: "c3", p: 1 }, b: { kind: "pin", c: "c4", p: 0 }, via: [], points: [[280, 200], [280, 320]] },
+    { id: "w8", a: { kind: "pin", c: "c3", p: 2 }, b: { kind: "pin", c: "c5", p: 0 }, via: [], points: [[360, 180], [680, 240]] },
+    { id: "w9", a: { kind: "pin", c: "c5", p: 1 }, b: { kind: "pin", c: "c6", p: 0 }, via: [], points: [[680, 320], [680, 400]] },
+    { id: "w10", a: { kind: "pin", c: "c3", p: 2 }, b: { kind: "port", port: "out+" }, via: [{ x: 580, y: 160 }], points: [[360, 180], [800, 160]] },
+    { id: "w11", a: { kind: "port", port: "out-" }, b: { kind: "pin", c: "c6", p: 0 }, via: [], points: [[800, 320], [680, 400]] },
+  ],
+});
+
+/** 5 ms of a 1 kHz sine through a gain of −2, with the reference beside it. */
+function circuitSeries(gain: number, slew: number): CircuitSeries {
+  const t: number[] = [];
+  const vin: number[] = [];
+  const vout: number[] = [];
+  const iout: number[] = [];
+  for (let i = 0; i < 250; i += 1) {
+    const time = (i / 249) * 0.005;
+    const drive = Math.sin(2 * Math.PI * 1000 * time);
+    const out = gain * Math.sin(2 * Math.PI * 1000 * time - slew);
+    t.push(time);
+    vin.push(drive);
+    vout.push(out);
+    iout.push(out / 2500);
+  }
+  return { t, vin, vout, iout };
+}
+
+const CIRCUIT_SERIES = circuitSeries(-2, 0.35);
+const CIRCUIT_EXPECTED = circuitSeries(-2, 0);
 
 /** A section of the gallery: a heading and a row of specimens. */
 function Row({ title, children }: { title: string; children: React.ReactNode }) {
@@ -208,6 +273,39 @@ export function DevGallery() {
           <MarkdownView source={source} />
         </Card>
       </section>
+
+      <section className="space-y-3">
+        <SectionHeading title="Circuit: schematic editor" />
+        <CircuitEditorDemo />
+      </section>
+
+      <section className="space-y-3">
+        <SectionHeading title="Circuit: schematic view and waveforms" />
+        <div className="grid items-start gap-4 lg:grid-cols-2">
+          <Card>
+            <SchematicView schematic={CIRCUIT_DEMO} height={260} />
+          </Card>
+          <div className="space-y-4">
+            <Plot series={CIRCUIT_SERIES} expected={CIRCUIT_EXPECTED} title="Sine, 1 kHz" height={200} />
+            <Plot series={null} height={120} />
+          </div>
+        </div>
+      </section>
     </div>
   );
 }
+
+/** The editor is controlled, so the gallery has to hold its value. */
+function CircuitEditorDemo() {
+  const [schematic, setSchematic] = useState<CircuitSchematic>(CIRCUIT_DEMO);
+  return (
+    <SchematicEditor
+      value={schematic}
+      onChange={setSchematic}
+      palette={CIRCUIT_PALETTE}
+      supplies={{ vcc: 12, vee: -12 }}
+      highlightPins={[{ c: "c5", p: 1 }]}
+    />
+  );
+}
+

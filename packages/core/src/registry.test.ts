@@ -7,8 +7,8 @@ import { defineClientRegistry, defineServerRegistry, makeLookup, registeredIds }
 const fake = { id: "mcq" } as const;
 
 describe("question type ids", () => {
-  it("lists exactly the four MVP types", () => {
-    expect(QUESTION_TYPE_IDS).toEqual(["mcq", "short", "cloze", "code"]);
+  it("lists the four MVP types and the circuit type", () => {
+    expect(QUESTION_TYPE_IDS).toEqual(["mcq", "short", "cloze", "code", "circuit"]);
   });
 
   it("narrows a raw string", () => {

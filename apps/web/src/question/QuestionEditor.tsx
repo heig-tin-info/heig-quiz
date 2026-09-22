@@ -11,6 +11,7 @@ import type {
   TryResult,
   ZodIssueLite,
 } from "@quiz/contracts";
+import type { CircuitConfig, CircuitDetails } from "@quiz/qt-circuit/client";
 import { referenceRegions, type CodeConfig, type CodeDetails } from "@quiz/qt-code/client";
 
 import { api, apiErrorMessage } from "../api";
@@ -296,6 +297,34 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
     [flush, id],
   );
 
+  /**
+   * "Simulate the reference" (`CircuitEditor`).
+   *
+   * There is no browser half and there never will be: a SPICE netlist is
+   * assembled SERVER-SIDE from the stored schematic and the stimulus
+   * (invariant 14), so the teacher's own circuit is posted as an ANSWER to
+   * `POST /questions/:id/try` and what comes back is this type's own
+   * breakdown — the waveforms already decimated and already paired with the
+   * stimulus that produced them.
+   *
+   * `runner_unavailable` is the default deployment (decision D14), not a
+   * failure: the editor says so in one line and publication is unaffected.
+   */
+  const trySimulateReference = useCallback(
+    async (raw: unknown): Promise<TryOutcome> => {
+      const config = raw as CircuitConfig;
+      // The route grades what the server HOLDS, so the draft goes first.
+      flush();
+      const result = await api<TryResult>(`/app/api/questions/${id}/try`, {
+        method: "POST",
+        body: JSON.stringify({ source: "draft", answer: { schematic: config.reference } }),
+      });
+      if (result.status !== "graded") return "unavailable";
+      return { details: result.details as CircuitDetails };
+    },
+    [flush, id],
+  );
+
   // docs/spec/08 §8.4: Ctrl+S saves (the automatic save is invisible and a
   // teacher wants to be sure), Ctrl+Shift+P publishes, Ctrl+Shift+M shows the
   // student preview, Ctrl+Enter tries the question. All four are reachable
@@ -542,6 +571,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
                   uploadAsset={uploadAsset}
                   aside={scoringSlot}
                   {...(data.meta.type === "code" ? { onTry: tryReference } : {})}
+                  {...(data.meta.type === "circuit" ? { onTry: trySimulateReference } : {})}
                 />
               ) : (
                 <Spinner />

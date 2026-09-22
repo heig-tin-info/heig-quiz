@@ -54,6 +54,19 @@ import {
   type CodePlayerStrings,
   type CodeReviewStrings,
 } from "@quiz/qt-code/client";
+import {
+  CANVAS_STRINGS,
+  EDITOR_STRINGS as CIRCUIT_EDITOR_STRINGS,
+  KIND_LABELS,
+  PLAYER_STRINGS as CIRCUIT_PLAYER_STRINGS,
+  REVIEW_STRINGS as CIRCUIT_REVIEW_STRINGS,
+  type CanvasStrings,
+  type CircuitEditorProps,
+  type CircuitEditorStrings,
+  type CircuitPlayerStrings,
+  type CircuitReviewStrings,
+  type KindLabels,
+} from "@quiz/qt-circuit/client";
 
 import { HelpIcon } from "./help";
 import type { Dict, TFunction } from "./i18n";
@@ -177,6 +190,42 @@ export const editorStrings = {
     removeCase: (name) => t("qt.code.e.removeCase", { name }),
     totalPoints: (n) => t(n === 1 ? "qt.code.e.totalPoints.one" : "qt.code.e.totalPoints", { n }),
   }),
+  circuit: (t: TFunction): CircuitEditorStrings => ({
+    ...translated(t, CIRCUIT_EDITOR_STRINGS, "qt.circuit.e"),
+    stimulus: (n) => t("qt.circuit.e.stimulus", { n }),
+    removeStimulus: (name) => t("qt.circuit.e.removeStimulus", { name }),
+    totalPoints: (n) =>
+      t(n === 1 ? "qt.circuit.e.totalPoints.one" : "qt.circuit.e.totalPoints", { n }),
+    tryDone: (n) => t(n === 1 ? "qt.circuit.e.tryDone.one" : "qt.circuit.e.tryDone", { n }),
+  }),
+};
+
+/**
+ * The component kinds and the canvas, translated the same way but keyed by
+ * something other than a sentence: a `ComponentKind` (`qt.circuit.kind.R`)
+ * and the canvas's own dictionary (`qt.circuit.c.*`). They are built once and
+ * handed to all three surfaces, because the same twelve words label a palette
+ * chip, a symbol and a diagnostic.
+ */
+export const circuitKindLabels = (t: TFunction): KindLabels =>
+  translated(t, KIND_LABELS, "qt.circuit.kind");
+
+export const circuitCanvasStrings = (t: TFunction): CanvasStrings => {
+  const kinds = circuitKindLabels(t);
+  return {
+    ...translated(t, CANVAS_STRINGS, "qt.circuit.c"),
+    componentCount: (used, max) => t("qt.circuit.c.componentCount", { used, max }),
+    paletteFull: (max) => t("qt.circuit.c.paletteFull", { max }),
+    hintSelection: (n) =>
+      t(n === 1 ? "qt.circuit.c.hintSelection.one" : "qt.circuit.c.hintSelection", { n }),
+    hintPlace: (kind) => t("qt.circuit.c.hintPlace", { kind }),
+    cursor: (x, y) => t("qt.circuit.c.cursor", { x, y }),
+    // The canvas asks for a kind's label through a function; the dictionary
+    // above is what answers it, so the palette, the inspector and the chips
+    // of the editor all say the same word.
+    kind: (kind) => kinds[kind],
+    port: (port) => port,
+  };
 };
 
 export const playerStrings = {
@@ -193,6 +242,31 @@ export const playerStrings = {
     exitMismatch: (got, want) => t("qt.code.p.exitMismatch", { got, want }),
     exitCode: (code) => t("qt.code.p.exitCode", { code }),
   }),
+  circuit: (t: TFunction): CircuitPlayerStrings => ({
+    ...translated(t, CIRCUIT_PLAYER_STRINGS, "qt.circuit.p"),
+    components: (n, max) => t("qt.circuit.p.components", { n, max }),
+    issueFloatingPin: (ref) => t("qt.circuit.p.issueFloatingPin", { ref }),
+    issueUnconnectedPort: (ref) => t("qt.circuit.p.issueUnconnectedPort", { ref }),
+    issueDanglingWire: (ref) => t("qt.circuit.p.issueDanglingWire", { ref }),
+    issueMissingValue: (ref) => t("qt.circuit.p.issueMissingValue", { ref }),
+    issueInvalidValue: (ref) => t("qt.circuit.p.issueInvalidValue", { ref }),
+    issueValueOutOfRange: (ref) => t("qt.circuit.p.issueValueOutOfRange", { ref }),
+    issueDuplicateName: (ref) => t("qt.circuit.p.issueDuplicateName", { ref }),
+    issueKindNotAllowed: (ref) => t("qt.circuit.p.issueKindNotAllowed", { ref }),
+    hiddenStimuli: (count, points) =>
+      t(count === 1 ? "qt.circuit.p.hiddenStimuli.one" : "qt.circuit.p.hiddenStimuli", {
+        count,
+        points,
+      }),
+    srcDc: (volts) => t("qt.circuit.p.srcDc", { volts }),
+    srcSine: (amplitude, frequency) => t("qt.circuit.p.srcSine", { amplitude, frequency }),
+    srcPulse: (low, high, frequency) => t("qt.circuit.p.srcPulse", { low, high, frequency }),
+    srcStep: (from, to, atMs) => t("qt.circuit.p.srcStep", { from, to, atMs }),
+    loadResistor: (value) => t("qt.circuit.p.loadResistor", { value }),
+    loadCapacitor: (value) => t("qt.circuit.p.loadCapacitor", { value }),
+    window: (ms) => t("qt.circuit.p.window", { ms }),
+    plot: (name) => t("qt.circuit.p.plot", { name }),
+  }),
 };
 
 export const reviewStrings = {
@@ -204,6 +278,21 @@ export const reviewStrings = {
     score: (points, max) => t("qt.code.r.score", { points, max }),
     hiddenSummary: (passed, count) => t("qt.code.r.hiddenSummary", { passed, count }),
     exitMismatch: (got, want) => t("qt.code.r.exitMismatch", { got, want }),
+  }),
+  circuit: (t: TFunction): CircuitReviewStrings => ({
+    ...translated(t, CIRCUIT_REVIEW_STRINGS, "qt.circuit.r"),
+    score: (points, max) => t("qt.circuit.r.score", { points, max }),
+    netSummary: (components, nets) => t("qt.circuit.r.netSummary", { components, nets }),
+    hiddenStimulus: (n) => t("qt.circuit.r.hiddenStimulus", { n }),
+    errorPercent: (percent) => t("qt.circuit.r.errorPercent", { percent }),
+    issueFloatingPin: (ref) => t("qt.circuit.r.issueFloatingPin", { ref }),
+    issueUnconnectedPort: (ref) => t("qt.circuit.r.issueUnconnectedPort", { ref }),
+    issueDanglingWire: (ref) => t("qt.circuit.r.issueDanglingWire", { ref }),
+    issueMissingValue: (ref) => t("qt.circuit.r.issueMissingValue", { ref }),
+    issueInvalidValue: (ref) => t("qt.circuit.r.issueInvalidValue", { ref }),
+    issueValueOutOfRange: (ref) => t("qt.circuit.r.issueValueOutOfRange", { ref }),
+    issueDuplicateName: (ref) => t("qt.circuit.r.issueDuplicateName", { ref }),
+    issueKindNotAllowed: (ref) => t("qt.circuit.r.issueKindNotAllowed", { ref }),
   }),
 };
 
@@ -227,13 +316,17 @@ export function EditorSkeleton({ label }: { label: string }) {
 }
 
 /**
- * What the host may answer the `code` editor's "Try the reference solution".
+ * What the host may answer a type's "try it yourself" button with.
  *
- * Read off that editor's own prop rather than restated here: the browser
+ * Read off each editor's own prop rather than restated here: the browser
  * runner returns a raw `RunnerOutcome`, `POST /questions/:id/try` returns a
- * grading, and which shapes exist is the question type's business.
+ * grading, the `circuit` editor wants that grading's own breakdown — and
+ * which shapes exist is the question type's business, never the host's. The
+ * union widens by one member per type that gains a try button.
  */
-export type TryOutcome = Awaited<ReturnType<NonNullable<CodeEditorProps["onTry"]>>>;
+export type TryOutcome =
+  | Awaited<ReturnType<NonNullable<CodeEditorProps["onTry"]>>>
+  | Awaited<ReturnType<NonNullable<CircuitEditorProps["onTry"]>>>;
 
 function Unknown({ children }: { children: ReactNode }) {
   return <p className="text-sm text-fg-muted">{children}</p>;
@@ -250,6 +343,10 @@ interface EditorHostProps {
   disabled?: boolean;
   issues?: readonly ConfigIssue[];
   strings?: unknown;
+  /** `circuit` only: the canvas ships a dictionary of its own (`qt.circuit.c.*`). */
+  canvasStrings?: unknown;
+  /** `circuit` only: the component names, keyed by kind (`qt.circuit.kind.*`). */
+  kindLabels?: unknown;
   renderMarkdown?: (source: string) => ReactNode;
   renderHelp?: (topic: string) => ReactNode;
   RichText?: RichTextComponent;
@@ -303,9 +400,10 @@ export function QuestionEditorHost({
    */
   aside?: HTMLElement | null;
   /**
-   * `code` only: runs the teacher's reference solution (`CodeEditorProps`).
-   * The screen decides where it runs — `src/runner/` picks the browser or the
-   * backend from `CodeConfig.runtime`, exactly as it does for a student.
+   * `code` and `circuit`: runs (or simulates) the teacher's own answer. The
+   * screen decides where it runs — `src/runner/` picks the browser or the
+   * backend from `CodeConfig.runtime` for a code question, and a circuit is
+   * always the server's, since only it may assemble a netlist (invariant 14).
    */
   onTry?: (config: unknown) => Promise<TryOutcome>;
 }) {
@@ -321,6 +419,9 @@ export function QuestionEditorHost({
         {...(disabled === undefined ? {} : { disabled })}
         {...(issues === undefined ? {} : { issues })}
         strings={strings}
+        {...(client.id === "circuit"
+          ? { canvasStrings: circuitCanvasStrings(t), kindLabels: circuitKindLabels(t) }
+          : {})}
         renderMarkdown={renderBlock}
         renderHelp={renderHelp}
         RichText={LazyRichText}
@@ -338,9 +439,11 @@ interface PlayerHostProps {
   onChange: (next: unknown) => void;
   readOnly: boolean;
   strings?: unknown;
+  canvasStrings?: unknown;
   renderMarkdown?: (source: string) => ReactNode;
   onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable">;
   allowManualRun?: boolean;
+  onSimulate?: (answer: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
 }
 
 export function QuestionPlayerHost({
@@ -352,6 +455,7 @@ export function QuestionPlayerHost({
   readOnly,
   onRun,
   allowManualRun,
+  onSimulate,
 }: {
   t: TFunction;
   type: string;
@@ -362,6 +466,12 @@ export function QuestionPlayerHost({
   /** `code` only: the run the type's player offers, from `src/runner/`. */
   onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable">;
   allowManualRun?: boolean;
+  /**
+   * `circuit` only: the simulation its player offers. It has no browser half
+   * — a netlist is assembled server-side (invariant 14) — so it is one call,
+   * and its two words are the graceful paths (D14, N-SEC-07).
+   */
+  onSimulate?: (answer: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
 }) {
   const client = questionType(type);
   if (!client) return <Unknown>{t("qt.unknown")}</Unknown>;
@@ -378,9 +488,11 @@ export function QuestionPlayerHost({
           onChange={onChange}
           readOnly={readOnly}
           strings={playerStrings[client.id](t)}
+          {...(client.id === "circuit" ? { canvasStrings: circuitCanvasStrings(t) } : {})}
           renderMarkdown={renderInline}
           {...(onRun === undefined ? {} : { onRun })}
           {...(allowManualRun === undefined ? {} : { allowManualRun })}
+          {...(onSimulate === undefined ? {} : { onSimulate })}
         />
       </Suspense>
     </ScrollableCode>
@@ -396,6 +508,7 @@ interface ReviewHostProps {
   maxPoints: number;
   audience: "teacher" | "student";
   strings?: unknown;
+  canvasStrings?: unknown;
   renderMarkdown?: (source: string) => ReactNode;
 }
 
@@ -438,6 +551,7 @@ export function QuestionReviewHost({
           maxPoints={maxPoints}
           audience={audience}
           strings={reviewStrings[client.id](t)}
+          {...(client.id === "circuit" ? { canvasStrings: circuitCanvasStrings(t) } : {})}
           renderMarkdown={renderInline}
         />
       </Suspense>

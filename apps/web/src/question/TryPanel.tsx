@@ -87,6 +87,15 @@ export function TryPanel({
     <div className="space-y-5">
       <Card className="space-y-4 p-5">
         <SectionHeading title={t("question.try.title")} description={t("question.try.hint")} />
+        {/*
+         * `circuit` gets no `onSimulate` here, and its player hides the
+         * button accordingly. The API has no route that simulates a question
+         * OUTSIDE an attempt — `POST /attempts/:id/simulate` is the only one,
+         * and this panel has no attempt — so offering the button would be
+         * offering something nothing can serve, exactly as the `code` branch
+         * below has no backend run. The teacher's own check is "Simulate the
+         * reference" on the edit tab, which posts to `POST /questions/:id/try`.
+         */}
         <QuestionPlayerHost
           t={t}
           type={type}

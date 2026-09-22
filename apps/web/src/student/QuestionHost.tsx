@@ -27,14 +27,17 @@ import { questionTypeClient } from "@quiz/registry/client";
 import { useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { Alert, ScrollableCode, Spinner } from "../ui";
-import { playerStringsFor } from "./questionStrings";
+import { circuitCanvasStringsFor, playerStringsFor } from "./questionStrings";
 
 /** What every shipped player accepts on top of the core contract. */
 interface HostPlayerProps extends PlayerProps<unknown, unknown> {
   strings?: unknown;
+  /** `circuit` only: the canvas ships a dictionary of its own. */
+  canvasStrings?: unknown;
   renderMarkdown?: (source: string) => ReactNode;
   onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable">;
   allowManualRun?: boolean;
+  onSimulate?: (answer: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
 }
 
 /*
@@ -53,6 +56,7 @@ export function QuestionHost({
   readOnly,
   onRun,
   allowManualRun,
+  onSimulate,
 }: {
   type: string;
   student: unknown;
@@ -63,6 +67,13 @@ export function QuestionHost({
   onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable">;
   /** `code` only: whether the free stdin box has a runner that will take it. */
   allowManualRun?: boolean;
+  /**
+   * `circuit` only: the simulation of `POST /attempts/:id/simulate`. It sits
+   * beside `onRun` rather than inside it because the two answer different
+   * questions — a program's output against a case, a circuit's waveform
+   * against a stimulus — and neither has a browser half to fall back on here.
+   */
+  onSimulate?: (answer: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
 }) {
   const t = useT();
   let Player: ComponentType<HostPlayerProps>;
@@ -88,9 +99,11 @@ export function QuestionHost({
           onChange={onChange}
           readOnly={readOnly}
           strings={playerStringsFor(type, t)}
+          {...(type === "circuit" ? { canvasStrings: circuitCanvasStringsFor(t) } : {})}
           renderMarkdown={renderMarkdown}
           {...(onRun ? { onRun } : {})}
           {...(allowManualRun === undefined ? {} : { allowManualRun })}
+          {...(onSimulate ? { onSimulate } : {})}
         />
       </Suspense>
     </ScrollableCode>
