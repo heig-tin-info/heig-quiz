@@ -118,11 +118,21 @@ function applyCell(state: GridState, event: Extract<ServerEvent, { type: "dashbo
   const cell = row.cells[cellIndex]!;
   // The stale-write rule of the autosave protocol, read from the other end.
   if (event.revision < cell.revision) return state;
+  /*
+   * The verdict the frame carries is the LIVE one (ADR-020): the answer just
+   * changed, so a verdict computed from the previous one is stale whatever it
+   * said. A cell that already holds a real grading keeps it — the frame
+   * cannot produce one, and a teacher's validated verdict is not overwritten
+   * by a preview.
+   */
+  const keepGrading = cell.verdict !== null && !cell.provisional;
   const next: DashboardCell = {
     ...cell,
     status: event.status,
     revision: event.revision,
     points: event.points,
+    verdict: keepGrading ? cell.verdict : event.verdict,
+    provisional: keepGrading ? cell.provisional : event.verdict !== null,
     // `summary` only travels when the teacher asked for the answers; keeping
     // the previous one on a null would show an answer the toggle just hid.
     summary: event.summary,
@@ -131,6 +141,8 @@ function applyCell(state: GridState, event: Extract<ServerEvent, { type: "dashbo
     next.status === cell.status &&
     next.revision === cell.revision &&
     next.points === cell.points &&
+    next.verdict === cell.verdict &&
+    next.provisional === cell.provisional &&
     next.summary === cell.summary
   ) {
     return state;

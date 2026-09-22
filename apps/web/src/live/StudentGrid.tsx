@@ -368,10 +368,19 @@ export function StudentGrid({
                   <span className="block text-[13px] font-semibold tabular-nums">
                     {total ? percent(total.completion) : "—"}
                   </span>
+                  {/* The success rate, and what KIND of rate it is. With the
+                      "Results" switch on, the server grades the answers it
+                      already holds (ADR-020), so this reads the live rate and
+                      says so; with it off, and before the grading pass has
+                      run, there is nothing to read yet. */}
                   <span className="block text-[10px] text-fg-faint">
                     {total?.successRate == null
-                      ? t("live.grid.afterClose")
-                      : t("live.grid.successRate", { rate: percent(total.successRate) })}
+                      ? showResults
+                        ? t("live.grid.noneGradable")
+                        : t("live.grid.afterClose")
+                      : total.provisional
+                        ? t("live.grid.successRateLive", { rate: percent(total.successRate) })
+                        : t("live.grid.successRate", { rate: percent(total.successRate) })}
                   </span>
                 </td>
               );

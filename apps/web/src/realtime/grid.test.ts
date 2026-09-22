@@ -32,6 +32,7 @@ function cellEvent(over: Partial<Extract<ServerEvent, { type: "dashboard.cell" }
     revision: 4,
     points: null,
     summary: "B",
+    verdict: null,
     ...over,
   } satisfies ServerEvent;
 }
@@ -160,6 +161,7 @@ describe("applyGridEvent — dashboard.attempt", () => {
       revision: 1,
       points: null,
       summary: "42",
+      verdict: null,
     });
     expect(answered.view.rows[1]!.cells[0]!.status).toBe("done");
   });
@@ -175,6 +177,7 @@ describe("applyGridEvent — dashboard.attempt", () => {
       revision: 1,
       points: null,
       summary: null,
+      verdict: null,
     });
     expect(before.view.totals[0]!.completion).toBe(0.5);
     // A third row enters: the same one done is now a third of them.

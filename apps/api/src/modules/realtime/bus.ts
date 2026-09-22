@@ -26,6 +26,7 @@ import type {
   RunnerResultEvent,
   ServerEvent,
   Topic,
+  Verdict,
 } from "@quiz/contracts";
 
 import { iso, isoOrNull } from "../../clock.js";
@@ -164,6 +165,7 @@ export function dashboardCell(input: {
   revision: number;
   points: number | null;
   summary: string | null;
+  verdict: Verdict | null;
 }): void {
   cells.push(`${input.attemptId}:${input.itemId}`, { type: "dashboard.cell", ...input });
 }

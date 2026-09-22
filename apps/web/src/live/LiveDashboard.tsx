@@ -72,7 +72,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
     null,
   );
 
-  const { query, clock, connected } = useDashboard(id, toggles.answers);
+  const { query, clock, connected } = useDashboard(id, toggles.answers, toggles.results);
   // One tick a second drives every countdown on the page; the clock itself is
   // the server's, so they all agree (DESIGN.md, Countdown).
   useNow(1000);
@@ -98,9 +98,9 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   }, [isPoll, id, navigate]);
 
   const refresh = useCallback(() => {
-    void qc.invalidateQueries({ queryKey: dashboardKey(id, toggles.answers) });
+    void qc.invalidateQueries({ queryKey: dashboardKey(id, toggles.answers, toggles.results) });
     void qc.invalidateQueries({ queryKey: evaluationKey(id) });
-  }, [qc, id, toggles.answers]);
+  }, [qc, id, toggles.answers, toggles.results]);
 
   const control = useMutation({
     mutationFn: (v: { path: string; body?: unknown }) =>
@@ -383,7 +383,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
       )}
 
       <div className={cx("flex flex-wrap items-center justify-between gap-4", lobby && "hidden")}>
-        <Legend />
+        <Legend showResults={toggles.results} />
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-faint">
           <span>{t("live.hint")}</span>
           <span className="inline-flex items-center gap-1">

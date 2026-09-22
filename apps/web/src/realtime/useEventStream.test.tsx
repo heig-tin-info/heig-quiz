@@ -106,6 +106,7 @@ describe("useEventStream", () => {
         revision: 2,
         points: null,
         summary: "B",
+        verdict: null,
       }),
     );
     expect(onEvent).toHaveBeenCalledTimes(1);

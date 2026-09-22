@@ -11,6 +11,11 @@ import { VerdictCell, type VerdictState } from "../ui";
  * "Results" switch replaces them with. `pending` is left out on purpose: it
  * belongs to the grading screen, and a legend that lists a state the grid
  * cannot show is a legend nobody trusts.
+ *
+ * With the switch ON, the three verdicts appear while the quiz is still
+ * running: the server grades the answers it already holds (ADR-020), for the
+ * question types it can grade without the runner. The legend says so in one
+ * line rather than letting the teacher wonder whether a green cell is final.
  */
 const SHOWN = [
   ["blank", "verdict.blank"],
@@ -22,21 +27,26 @@ const SHOWN = [
   ["wrong", "verdict.wrong"],
 ] as const satisfies readonly (readonly [VerdictState, keyof Dict])[];
 
-export function Legend() {
+export function Legend({ showResults = false }: { showResults?: boolean }) {
   const t = useT();
   return (
-    <ul
-      aria-label={t("live.legend")}
-      className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-fg-muted"
-    >
-      {SHOWN.map(([state, key]) => (
-        <li key={state} className="flex items-center gap-1.5">
-          <span className="w-8">
-            <VerdictCell state={state} />
-          </span>
-          {t(key)}
-        </li>
-      ))}
-    </ul>
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-fg-muted">
+      <ul
+        aria-label={t("live.legend")}
+        className="flex flex-wrap items-center gap-x-4 gap-y-2"
+      >
+        {SHOWN.map(([state, key]) => (
+          <li key={state} className="flex items-center gap-1.5">
+            <span className="w-8">
+              <VerdictCell state={state} />
+            </span>
+            {t(key)}
+          </li>
+        ))}
+      </ul>
+      <span className="text-fg-faint">
+        {showResults ? t("live.legend.live") : t("live.legend.off")}
+      </span>
+    </div>
   );
 }
