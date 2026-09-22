@@ -26,7 +26,18 @@ import type { Route } from "./router";
 import { SidebarCategories } from "./pool/CategoryTree";
 import { shortcutCaps, useActiveShortcuts, useGlobalShortcuts } from "./shortcuts";
 import { setThemeChoice, useResolvedTheme, useThemeChoice } from "./theme";
-import { Button, cx, IconButton, Kbd, modKey, useLayer, Z, type IconType } from "./ui";
+import {
+  Button,
+  cx,
+  IconButton,
+  Kbd,
+  modKey,
+  Tip,
+  useLayer,
+  useTruncated,
+  Z,
+  type IconType,
+} from "./ui";
 
 /**
  * Application frame: a 240 px sidebar on desktop (navigation, the teacher's
@@ -61,6 +72,51 @@ function NavItem({
       <span className="min-w-0 flex-1 truncate">{label}</span>
       {trailing}
     </button>
+  );
+}
+
+/**
+ * A classroom in the sidebar: its name, and its course code as the second
+ * name beside it. The name is the one label of the frame that is routinely
+ * too long for 240 px — "Prog-C-2026-2027-test" is a classroom a teacher
+ * really creates — so the row carries a `Tip` with the whole of it, and only
+ * when the ellipsis is actually there (`useTruncated`). The `Tip` wraps the
+ * ROW, not the text: React's `onFocus` rides `focusin`, which bubbles, so a
+ * teacher who reaches the row with the Tab key reads the name the same way a
+ * pointer does.
+ */
+function ClassroomNavItem({
+  name,
+  courseCode,
+  active,
+  onClick,
+}: {
+  name: string;
+  courseCode: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const [nameRef, truncated] = useTruncated<HTMLSpanElement>();
+  return (
+    <Tip label={truncated ? name : null} className="block">
+      <NavItem
+        icon={School}
+        label={
+          <span className="flex min-w-0 items-baseline gap-1.5">
+            <span ref={nameRef} className="truncate">
+              {name}
+            </span>
+            {/* `fg-muted`: a course code is the classroom's other name, not
+                decoration, and this row sits on `accent-soft` when it is the
+                one being read — the one background `fg-faint` still falls
+                short of 4.5:1 on (W1). */}
+            <span className="shrink-0 text-[11px] text-fg-muted">{courseCode}</span>
+          </span>
+        }
+        active={active}
+        onClick={onClick}
+      />
+    </Tip>
   );
 }
 
@@ -179,20 +235,10 @@ function Nav({
           </p>
           <div className="space-y-0.5">
             {shownRooms.map((r) => (
-              <NavItem
+              <ClassroomNavItem
                 key={r.id}
-                icon={School}
-                label={
-                  <span className="flex min-w-0 items-baseline gap-1.5">
-                    <span className="truncate">{r.name}</span>
-                    {/* `fg-muted`: a course code is the classroom's other
-                        name, not decoration, and this row sits on
-                        `accent-soft` when it is the one being read — the one
-                        background `fg-faint` still falls short of 4.5:1 on
-                        (W1). */}
-                    <span className="shrink-0 text-[11px] text-fg-muted">{r.courseCode}</span>
-                  </span>
-                }
+                name={r.name}
+                courseCode={r.courseCode}
                 active={currentRoom === r.id}
                 onClick={() => go({ view: "classroom", id: r.id })}
               />

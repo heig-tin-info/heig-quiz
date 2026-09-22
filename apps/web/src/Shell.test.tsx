@@ -1,4 +1,4 @@
-import { screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -175,6 +175,59 @@ describe("Shell sidebar", () => {
     // WP9: "Home" is the student heading; the teacher sections are gone.
     expect(nav.getByRole("button", { name: "Home" })).toBeInTheDocument();
     expect(nav.queryByRole("button", { name: /^Classroom 1(?!\d)/ })).toBeNull();
+  });
+});
+
+/*
+ * A classroom name that does not fit 240 px is cut by an ellipsis, and the
+ * whole of it has to be readable without opening the classroom. jsdom runs no
+ * layout, so the clipping is stated here: a `scrollWidth` wider than the
+ * `clientWidth` is exactly what a browser reports for a truncated label.
+ * Both navigations (sidebar and drawer) render the list, hence the counting
+ * of copies rather than a single match — the bubble is one MORE copy.
+ */
+describe("Shell sidebar classroom names", () => {
+  const measures = (scrollWidth: number, clientWidth: number) => {
+    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(scrollWidth);
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(clientWidth);
+  };
+  const row = () => within(sidebar()).getByRole("button", { name: /^Classroom 1(?!\d)/ });
+  afterEach(() => vi.restoreAllMocks());
+
+  it("reveals the full name on hover when the ellipsis cut it", () => {
+    measures(240, 120);
+    vi.useFakeTimers();
+    renderShell();
+    const copies = screen.getAllByText("Classroom 1").length;
+    fireEvent.mouseEnter(row().parentElement!);
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(screen.getAllByText("Classroom 1")).toHaveLength(copies + 1);
+  });
+
+  it("reveals it to the keyboard as well, on the row that takes the focus", () => {
+    measures(240, 120);
+    vi.useFakeTimers();
+    renderShell();
+    const copies = screen.getAllByText("Classroom 1").length;
+    act(() => row().focus());
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(screen.getAllByText("Classroom 1")).toHaveLength(copies + 1);
+  });
+
+  it("says nothing when the name fits: a tooltip repeating a readable label is noise", () => {
+    measures(120, 120);
+    vi.useFakeTimers();
+    renderShell();
+    const copies = screen.getAllByText("Classroom 1").length;
+    fireEvent.mouseEnter(row().parentElement!);
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(screen.getAllByText("Classroom 1")).toHaveLength(copies);
   });
 });
 

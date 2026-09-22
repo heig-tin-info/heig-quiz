@@ -35,7 +35,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
-import type { ComponentType, ReactNode, RefObject } from "react";
+import type { ComponentType, ReactNode, RefCallback, RefObject } from "react";
 
 import type { DateFormat, Me } from "@quiz/contracts";
 
@@ -465,6 +465,35 @@ export function Tip({
         : null}
     </span>
   );
+}
+
+/**
+ * Is this element's text really cut by its ellipsis? A `truncate` label drops
+ * what it cannot fit and the reader needs the rest — but ONLY then: a tooltip
+ * that repeats a label already fully readable is noise on every row. Pair it
+ * with `Tip` and pass the full text as the label only when this says `true`.
+ *
+ * The answer changes with the width of the frame, so the element is measured
+ * again whenever it resizes. The ref is a callback ref rather than a
+ * `useRef`: the node may be replaced (wrapping the row in a `Tip` re-parents
+ * it), and the measurement has to follow the node that is actually on screen.
+ */
+export function useTruncated<T extends HTMLElement>(): [RefCallback<T>, boolean] {
+  const [node, setNode] = useState<T | null>(null);
+  const [truncated, setTruncated] = useState(false);
+  useEffect(() => {
+    if (!node) return;
+    // One pixel of slack: a fractional text width rounds scrollWidth up by
+    // itself, and a row that is not clipped must not claim it is.
+    const measure = () => setTruncated(node.scrollWidth > node.clientWidth + 1);
+    measure();
+    // jsdom has no ResizeObserver; the one measurement above still stands.
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [node]);
+  return [setNode, truncated];
 }
 
 // --- Buttons ---
@@ -1580,7 +1609,9 @@ export function PageHeader({
         {eyebrow ? <div className="mb-1.5 text-[13px] text-fg-muted">{eyebrow}</div> : null}
         <h1 className="flex items-center gap-2 text-[28px] font-bold leading-tight tracking-[-0.02em]">
           <span className="min-w-0">{title}</span>
-          {help ? <HelpIcon topic={help} className="shrink-0 self-center" /> : null}
+          {/* `HelpIcon` carries its own `shrink-0` and its own placement on
+              the line: a title says WHICH topic, never where the "?" goes. */}
+          {help ? <HelpIcon topic={help} /> : null}
         </h1>
         {description ? <div className="mt-1.5 text-sm text-fg-muted">{description}</div> : null}
       </div>
