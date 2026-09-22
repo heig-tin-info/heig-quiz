@@ -1,19 +1,19 @@
-import type { RunnerLanguage } from "@quiz/core/server";
+import { RunnerLanguage } from "@quiz/core/server";
 
 import type { RunnerConfig } from "./config.js";
 import type { Engine } from "./engine.js";
 
-/** The six languages of the contract; an image may exist for any subset. */
-export const LANGUAGES: readonly RunnerLanguage[] = [
-  "c",
-  "cpp",
-  "python",
-  "js",
-  "rust",
-  // ngspice, for the `circuit` question type (ADR-019). A language in the
-  // runner's eyes only: one image, one run plan, the same hardened container.
-  "spice",
-];
+/**
+ * The languages of the contract, in its own order; an image may exist for any
+ * subset.
+ *
+ * Taken from the schema rather than written out again: this list and
+ * `RunnerLanguage` must agree, and a language added to the contract with no
+ * image simply reports as unavailable — which is the behaviour anyway
+ * (`availableLanguages` below), and better than a request the service accepts
+ * and cannot serve.
+ */
+export const LANGUAGES: readonly RunnerLanguage[] = RunnerLanguage.options;
 
 /** `quiz-runner-c:latest` — what images/build.sh tags. */
 export function imageRef(config: RunnerConfig, language: RunnerLanguage): string {

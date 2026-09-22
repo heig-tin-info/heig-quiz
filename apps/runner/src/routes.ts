@@ -79,8 +79,8 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
       queued: stats.queued,
       avgMs: stats.avgMs,
       ...(reason === undefined ? {} : { reason }),
-      // Beyond the contract, for `GET /admin/runner` and for a human reading
-      // the service directly. `RunnerHealth.safeParse` drops them silently.
+      // Beyond the contract, for the admin health panel and for a human
+      // curling the service. `RunnerHealth.safeParse` drops them silently.
       running: stats.running,
       concurrency: stats.concurrency,
       queueMax: stats.queueMax,
