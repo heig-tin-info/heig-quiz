@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { PoolDetail, QuestionDetail } from "@quiz/contracts";
 
+import { labelIssues } from "../test/labels";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { AUTOSAVE_DELAY_MS } from "./autosave";
 import { QuestionEditor } from "./QuestionEditor";
@@ -383,16 +384,23 @@ describe("QuestionEditor — mcq", () => {
   }, 20_000);
 
   /*
-   * `MarkdownField` names its own surface through `aria-label` and draws a
-   * label the screen hides (`[&>label]:hidden`), because the "?" has to be a
-   * SIBLING of the label and that component has no slot for it. The visible
-   * row is the screen's, and this is what says the two stay together.
+   * `MarkdownField` names its own surface through `aria-label` and leaves its
+   * caption out (`labelHidden`), because the "?" has to be a SIBLING of the
+   * caption and that component has no slot for it. The visible row is the
+   * screen's, and this is what says the two stay together.
    */
   it("offers the help of the explanation field beside its label", async () => {
     mockFetch(routes(mcqDetail()));
     renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
     const row = (await screen.findAllByText("Explanation")).find((el) => el.tagName === "SPAN");
     expect(within(row!.parentElement!).getByRole("button", { name: "Help" })).toBeInTheDocument();
+  }, 20_000);
+
+  it("gives every <label for> of the screen a control to point at", async () => {
+    mockFetch(routes(mcqDetail()));
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    await screen.findByLabelText("Statement");
+    expect(labelIssues()).toEqual([]);
   }, 20_000);
 });
 
@@ -411,6 +419,13 @@ describe("QuestionEditor — code", () => {
       expect(calls.some((c) => c.url === "/app/api/questions/q2/publish")).toBe(true),
     );
   });
+
+  it("gives every <label for> of the screen a control to point at", async () => {
+    mockFetch(routes(codeDetail()));
+    renderWithProviders(<QuestionEditor id="q2" navigate={vi.fn()} />);
+    await screen.findByLabelText("Starting code");
+    expect(labelIssues()).toEqual([]);
+  }, 20_000);
 
   /*
    * "Try the reference solution". The mock question says `runtime: "backend"`,

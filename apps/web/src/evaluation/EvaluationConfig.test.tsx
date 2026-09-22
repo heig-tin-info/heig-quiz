@@ -9,6 +9,7 @@ import {
   makeEvaluationDetail,
   makeItemRow,
 } from "../test/live-fixtures";
+import { labelIssues } from "../test/labels";
 import {
   fail,
   mockFetch,
@@ -129,6 +130,24 @@ describe("EvaluationConfig", () => {
         feedbackPolicy: { when: "immediate" },
       });
     });
+  });
+
+  /*
+   * "Time and mode" is the densest form of the flow: a duration, two dates
+   * and three segmented controls, plus everything the advanced disclosure
+   * holds. Every caption there has to name a real control.
+   */
+  it("gives every <label for> of the timing step a control to point at", async () => {
+    const user = userEvent.setup();
+    mockFetch(routes());
+    renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+      route: "/evaluations/x?step=timing",
+    });
+    expect(await screen.findByRole("button", { name: /^advanced options$/i })).toBeInTheDocument();
+    expect(labelIssues()).toEqual([]);
+    await user.click(screen.getByRole("button", { name: /^advanced options$/i }));
+    await screen.findByRole("radio", { name: /^on release$/i });
+    expect(labelIssues()).toEqual([]);
   });
 
   it("an exam is never offered immediate feedback (F-EVAL-11)", async () => {
