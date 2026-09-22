@@ -54,7 +54,6 @@ import {
   QuizCoreError,
   type FinalizeContext,
   type GradeContext,
-  type RunnerService,
 } from "@quiz/core/server";
 
 import { audit } from "../../audit.js";
@@ -104,16 +103,6 @@ function coreFailure(reply: FastifyReply, error: unknown): FastifyReply | null {
     return reply.code(422).send({ error: error.code, message: error.message });
   }
   return null;
-}
-
-/**
- * The runner decoration is added by WP3 (`RUNNER_MODE`); until then — and on
- * any instance that runs without one — `POST /try` answers
- * `runner_unavailable` instead of failing (decision D14). Typed structurally
- * on purpose, so this file does not have to declare the decorator WP3 owns.
- */
-function runnerOf(app: FastifyInstance): RunnerService | undefined {
-  return (app as unknown as { runner?: RunnerService }).runner;
 }
 
 export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
@@ -1076,15 +1065,18 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
         itemPoints: t.defaultPoints(loaded.config),
         now: new Date(),
       };
-      const runner = runnerOf(app);
-      const ctx: GradeContext = { ...base, runner: runner ?? unavailableRunner };
+      // `app.runner` is always decorated (`modules/runner/index.ts`); on a
+      // machine without a container engine it is the `UnavailableRunner`,
+      // whose `run()` rejects with `RunnerUnavailable` (decision D14).
+      const runner = app.runner;
+      const ctx: GradeContext = { ...base, runner };
       const result = await t.grade(loaded.config, answer, ctx);
 
       if (result.kind === "graded") {
         return graded(result.points, result.maxPoints, result.details, t.toSolution(loaded.config, view));
       }
       if (result.via === "llm") return { status: "llm_unavailable" } satisfies TryResult;
-      if (!runner || !t.finalizeRunner) {
+      if (!t.finalizeRunner) {
         return { status: "runner_unavailable", reason: "not_configured" } satisfies TryResult;
       }
       const outcome = await runner.run(result.request);
@@ -1235,16 +1227,3 @@ function graded(
   return { status: "graded", points, maxPoints, details, solution };
 }
 
-/**
- * Stands in for the real runner until WP3 decorates the app with one. It is
- * never reached by the grading worker (which WP6 owns); `POST /try` catches
- * its `RunnerUnavailable` and answers `runner_unavailable`.
- */
-const unavailableRunner: RunnerService = {
-  run() {
-    return Promise.reject(new RunnerUnavailable("not_configured"));
-  },
-  health() {
-    return Promise.resolve({ ok: false, languages: [], queued: 0, avgMs: null, reason: "not_configured" });
-  },
-};

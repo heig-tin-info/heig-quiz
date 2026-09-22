@@ -204,8 +204,8 @@ expect 200 "POST /attempts/:id/submit"
 step "close, grade, release"
 api "$TEACHER" POST "/app/api/evaluations/$EVAL_ID/close" '{}'
 expect 200 "POST /evaluations/:id/close"
-api "$TEACHER" POST "/app/api/evaluations/$EVAL_ID/grade" '{}'
-expect 202 "POST /evaluations/:id/grade"
+api "$TEACHER" POST "/app/api/evaluations/$EVAL_ID/grading/run" '{}'
+expect 202 "POST /evaluations/:id/grading/run"
 wait_grading "$EVAL_ID"
 api "$TEACHER" GET "/app/api/evaluations/$EVAL_ID/grading"; expect 200 "GET /evaluations/:id/grading"
 TOTAL="$(jqx '.counts.total' 'grading counts')"

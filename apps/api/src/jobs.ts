@@ -14,8 +14,6 @@ import { PgBoss } from "pg-boss";
 
 import type { FastifyInstance } from "fastify";
 
-/** Purge of expired sessions, wired into the ticker. */
-export const HOUSEKEEPING_QUEUE = "housekeeping.purge";
 
 /**
  * The grading queues (PLAN-MVP §5.4). Their names live here, next to the
@@ -51,12 +49,9 @@ export interface JobQueue {
   send<T extends object>(name: string, data: T, options?: SendOptions): Promise<void>;
   work<T extends object>(name: string, handler: JobHandler<T>): Promise<void>;
   stop(): Promise<void>;
-  /** False for the in-process development runner. */
-  readonly durable: boolean;
 }
 
 class PgBossQueue implements JobQueue {
-  readonly durable = true;
   constructor(
     private readonly boss: PgBoss,
     private readonly runWorkers: boolean,
@@ -84,7 +79,6 @@ class PgBossQueue implements JobQueue {
  * started yet, which is the property the callers rely on.
  */
 class InProcessQueue implements JobQueue {
-  readonly durable = false;
   private readonly handlers = new Map<string, JobHandler<never>>();
   private readonly pending: { name: string; data: object; key?: string | undefined }[] = [];
   private readonly keys = new Set<string>();
@@ -174,8 +168,6 @@ export async function startJobs(
     await boss.start();
     queue = new PgBossQueue(boss, opts.runWorkers);
   }
-
-  await queue.createQueue(HOUSEKEEPING_QUEUE, { retryLimit: 0 });
 
   app.decorate("boss", queue);
   app.addHook("onClose", async () => {

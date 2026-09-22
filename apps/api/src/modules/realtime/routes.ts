@@ -1,13 +1,9 @@
 /**
  * THE Server-Sent Events stream (ADR-005, PLAN-MVP §4.8).
  *
- * ONE handler, mounted at two paths:
- *   - `/app/api/events` — the path the plan names, and the one every new
- *     client uses; it accepts `?watch=evaluation:<id>` / `?watch=attempt:<id>`;
- *   - `/app/events` — the inherited path the shipped SPA already opens
- *     (`apps/web/src/live.ts`). Same handler, same frames: keeping the alias
- *     costs one line and lets WP8/WP9 migrate the client when they touch it,
- *     instead of breaking a screen that works today.
+ * ONE handler, mounted at `/app/api/events` — the path the plan names and the
+ * one every client opens; it accepts `?watch=evaluation:<id>` /
+ * `?watch=attempt:<id>`.
  *
  * Wire grammar, chosen so both clients read the same stream:
  *   - a HINT goes out as an UNNAMED frame (`data: {…}`), which is what
@@ -70,8 +66,6 @@ interface Stream {
 
 const open = new Set<Stream>();
 
-/** Exposed for the tests: how many streams this process is serving. */
-export const openStreamCount = (): number => open.size;
 
 function write(stream: Stream, chunk: string, now: number): void {
   const flushed = stream.res.write(chunk);
@@ -409,8 +403,6 @@ export async function realtimePlugin(app: FastifyInstance) {
 
   const guarded = { preHandler: (req: FastifyRequest, reply: FastifyReply) => app.requireSession(req, reply) };
   app.get("/app/api/events", guarded, handler);
-  // The inherited path, same handler (see the header of this file).
-  app.get("/app/events", guarded, handler);
 }
 
 /** F-LIVE-02: the ring everybody in the lobby watches. Coalesced 1 s. */

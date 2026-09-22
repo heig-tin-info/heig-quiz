@@ -1641,14 +1641,6 @@ export async function softDeleteQuestion(db: Db, question: QuestionRecord): Prom
     .where(eq(questions.id, question.id));
 }
 
-export async function restoreQuestion(db: Db, question: QuestionRecord): Promise<void> {
-  const now = new Date();
-  await db
-    .update(questions)
-    .set({ deletedAt: null, updatedAt: now })
-    .where(eq(questions.id, question.id));
-}
-
 /** `?hard=1`: the rows really go away (cascade on versions and tags). */
 export async function hardDeleteQuestion(db: Db, question: QuestionRecord): Promise<void> {
   if (await isQuestionInUse(db, question.id)) throw new VersionInUse();

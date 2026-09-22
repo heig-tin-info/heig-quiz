@@ -292,8 +292,8 @@ export async function accessiblePool(
 
 /**
  * `/questions/:id` — the question AND its pool, so a handler never has to
- * re-check anything. Soft-deleted questions are loaded on purpose: restoring
- * and hard-deleting them are routes too.
+ * re-check anything. Soft-deleted questions are loaded on purpose: hard
+ * deletion is a route too.
  */
 export async function accessibleQuestion(
   app: FastifyInstance,
