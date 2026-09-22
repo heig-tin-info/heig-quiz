@@ -1,7 +1,6 @@
 import { RunnerLanguage } from "@quiz/core/server";
 
 import type { RunnerConfig } from "./config.js";
-import type { Engine } from "./engine.js";
 
 /**
  * The languages of the contract, in its own order; an image may exist for any
@@ -38,12 +37,4 @@ export function availableLanguages(
     const ref = imageRef(config, language);
     return refs.some((candidate) => candidate === ref || candidate.endsWith(`/${ref}`));
   });
-}
-
-/** Asks the engine, once per call; `GET /health` caches it for a few seconds. */
-export async function listAvailableLanguages(
-  engine: Engine,
-  config: RunnerConfig,
-): Promise<RunnerLanguage[]> {
-  return availableLanguages(await engine.listImages(), config);
 }
