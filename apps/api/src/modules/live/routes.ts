@@ -365,8 +365,13 @@ export async function livePlugin(app: FastifyInstance) {
         now,
       });
       // 202: the authoritative delivery is the `runner.result` SSE frame; the
-      // body repeats it so a client without a stream still works.
-      return reply.code(202).send(outcome satisfies RunAccepted);
+      // body repeats it so a client without a stream still works. A FRESH
+      // literal, not `outcome` itself: only a literal gets the excess-property
+      // check, so a field added to the service's return type cannot leak onto
+      // the wire without this line being edited too.
+      return reply
+        .code(202)
+        .send({ requestId: outcome.requestId, result: outcome.result } satisfies RunAccepted);
     } catch (error) {
       return failure(reply, error, now);
     }

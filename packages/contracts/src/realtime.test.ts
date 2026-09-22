@@ -20,6 +20,11 @@ import {
  * annotation is half the check: a new member of `ServerEvent` with no entry
  * here does not compile. The tests are the other half, so the same omission
  * is also red rather than only unbuildable.
+ *
+ * What this does NOT catch: an event that IS staff-only but is written `false`
+ * here and left out of `STAFF_ONLY_EVENTS` — both lists agree, so the suite is
+ * green and the frame reaches every student. Closing that needs the audience
+ * on the schema itself (`staffEvent(z.object({…}))`, P-09's second option).
  */
 const STAFF_ONLY: Record<ServerEventName, boolean> = {
   snapshot: false,

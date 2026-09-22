@@ -120,12 +120,11 @@ describe("useEventStream", () => {
 
   it("subscribes to the whole named grammar of the contracts", () => {
     render(<Probe watch={`evaluation:${EVALUATION_ID}`} />);
-    // The list is the contracts' own, so a new member of `ServerEvent` is
-    // subscribed to without a second list being edited (FC-09).
-    expect([...NAMED_EVENTS].sort()).toEqual([...SERVER_EVENT_NAMES].sort());
     expect([...NAMED_EVENTS]).toContain("snapshot");
     expect([...NAMED_EVENTS]).toContain("clock");
     expect([...NAMED_EVENTS]).toContain("lobby.count");
+    // The connection subscribes to the contracts' own list, so a new member of
+    // `ServerEvent` is listened for without a second list being edited (FC-09).
     expect(live()[0]!.subscribed().sort()).toEqual([...SERVER_EVENT_NAMES].sort());
     // The hint has no name; `onmessage` is the only way in.
     expect(live()[0]!.subscribed()).not.toContain("hint");
