@@ -11,12 +11,13 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import type { ClassroomDetail } from "@quiz/contracts";
+import type { ClassroomDetail, EvaluationSummary } from "@quiz/contracts";
 
 import { api, apiErrorMessage, useMe } from "./api";
 import { useConfirm } from "./confirm";
 import { useT } from "./i18n";
 // WP8: evaluation + dashboard
+import { evaluationsKey } from "./evaluation/common";
 import { EvaluationList } from "./evaluation/EvaluationList";
 import { useToast } from "./notify";
 import { RosterImport } from "./RosterImport";
@@ -26,14 +27,15 @@ import {
   Badge,
   Button,
   Card,
+  cx,
   EmptyState,
-  Field,
+  inputClass,
   Menu,
-  Modal,
   PageHeader,
   QueryError,
   Skeleton,
   Tabs,
+  Tip,
 } from "./ui";
 
 /**
@@ -48,50 +50,97 @@ import {
 
 type Tab = "roster" | "evaluations";
 
-function RenameModal({ room, onClose }: { room: ClassroomDetail; onClose: () => void }) {
+/**
+ * The classroom name, renamed where it is written.
+ *
+ * Hovering the title reveals a pencil — the affordance that says this name is
+ * a control and not a heading — and a click on either the name or the pencil
+ * swaps it for an input holding the name, selected. Enter saves, Escape
+ * cancels and LEAVING THE FIELD SAVES, the same contract as the points field
+ * of the evaluation question list (`evaluation/ItemsStep.tsx`), the app's
+ * other edit-in-place: a teacher who clicks away does not silently lose what
+ * they typed. A blank name is not a name, so it cancels instead of saving.
+ *
+ * The request is the PATCH the "Rename" menu item used to open a modal for;
+ * the modal is gone, this is the whole of it.
+ */
+function ClassroomName({ room }: { room: ClassroomDetail }) {
   const t = useT();
   const qc = useQueryClient();
-  const [form, setForm] = useState({ name: room.name, period: room.period });
-  const save = useMutation({
-    mutationFn: () =>
-      api(`/app/api/classrooms/${room.id}`, { method: "PATCH", body: JSON.stringify(form) }),
-    onSuccess: async () => {
-      await qc.invalidateQueries();
-      onClose();
-    },
+  const toast = useToast();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(room.name);
+
+  const rename = useMutation({
+    mutationFn: (name: string) =>
+      api(`/app/api/classrooms/${room.id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
+    // The name is on the course page and in the classroom list too, so
+    // everything that carries it is dropped, exactly as the modal did.
+    onSuccess: () => qc.invalidateQueries(),
+    onError: (error) => toast(apiErrorMessage(error, t("classrooms.renameFailed")), "error"),
   });
+
+  if (editing) {
+    const commit = () => {
+      const next = value.trim();
+      setEditing(false);
+      if (next !== "" && next !== room.name) rename.mutate(next);
+    };
+    return (
+      <input
+        aria-label={t("classrooms.name")}
+        value={value}
+        autoFocus
+        // The whole name is selected, so the common case — a new name rather
+        // than an edit of this one — is one keystroke away.
+        onFocus={(e) => e.currentTarget.select()}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          // Both keys unmount the input, so neither leaves a blur behind that
+          // would save a second time.
+          if (e.key === "Enter") commit();
+          else if (e.key === "Escape") {
+            setValue(room.name);
+            setEditing(false);
+          }
+        }}
+        // The title's own type at the height of its own line box (28 px over
+        // `leading-tight`, so 36 px), which is what keeps the tabs below from
+        // jumping when the heading turns into a field. `size` keeps the field
+        // about as wide as what it holds.
+        className={cx(
+          inputClass,
+          "h-9 max-w-full text-[28px] font-bold leading-tight tracking-[-0.02em]",
+        )}
+        size={Math.max(value.length, 8)}
+      />
+    );
+  }
+
   return (
-    <Modal
-      title={t("classrooms.rename")}
-      onClose={onClose}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button onClick={() => save.mutate()} loading={save.isPending}>
-            {t("common.save")}
-          </Button>
-        </>
-      }
+    <button
+      type="button"
+      // The name is IN the label: this button is the whole text of the <h1>,
+      // and a bare "Rename classroom" would leave the heading naming no
+      // classroom at all. Same shape as the roster's per-row menu label.
+      aria-label={t("classrooms.renameName", { name: room.name })}
+      onClick={() => {
+        // From the server, not from the last edit: another session may have
+        // renamed the classroom since this component was mounted.
+        setValue(room.name);
+        setEditing(true);
+      }}
+      className="group inline-flex items-center gap-1.5 rounded-sm text-left"
     >
-      <div className="space-y-4">
-        <Field
-          label={t("classrooms.name")}
-          required
-          fullWidth
-          autoFocus
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-        />
-        <Field
-          label={t("classrooms.period")}
-          fullWidth
-          value={form.period}
-          onChange={(e) => setForm({ ...form, period: e.target.value })}
-        />
-      </div>
-    </Modal>
+      {/* While the PATCH is in flight the new name is already on screen: the
+          old one coming back for one frame reads as a failed save. */}
+      <span>{rename.isPending ? (rename.variables ?? room.name) : room.name}</span>
+      <Pencil
+        aria-hidden
+        className="size-5 shrink-0 text-fg-faint opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+      />
+    </button>
   );
 }
 
@@ -102,7 +151,6 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
   const toast = useToast();
   const me = useMe();
   const [importing, setImporting] = useState(false);
-  const [renaming, setRenaming] = useState(false);
   // "" and not a tab name: which tab opens depends on the roster, which is
   // not loaded yet when this runs. The empty value means "whatever the page
   // decides"; a click always writes a real one.
@@ -111,6 +159,16 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
   const room = useQuery<ClassroomDetail>({
     queryKey: ["classroom", id],
     queryFn: () => api(`/app/api/classrooms/${id}`),
+  });
+  /**
+   * The evaluations, for the number on their tab. It is the query the list
+   * itself runs, key included, so the count and the rows are one cache entry
+   * and can never disagree — a count carried by the classroom payload would
+   * still read "2" the moment after a third evaluation was created.
+   */
+  const evaluations = useQuery<EvaluationSummary[]>({
+    queryKey: evaluationsKey(id),
+    queryFn: () => api(`/app/api/classrooms/${id}/evaluations`),
   });
 
   const invalidate = () => qc.invalidateQueries();
@@ -162,7 +220,9 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
   const data = room.data;
   const students = data.roster.filter((r) => !r.staff);
   // An empty roster is what blocks everything, so it is what the page opens
-  // on; once there are students, the work is in the evaluations.
+  // on; once there are students, the work is in the evaluations. The teacher's
+  // own seat does not count: a classroom holding nothing else is still one to
+  // fill.
   const tab: Tab =
     tabParam === "roster" || tabParam === "evaluations"
       ? tabParam
@@ -191,7 +251,7 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
         }
         title={
           <span className="flex flex-wrap items-baseline gap-3">
-            {data.name}
+            <ClassroomName room={data} />
             {data.period ? (
               <span className="text-base font-normal text-fg-muted">{data.period}</span>
             ) : null}
@@ -200,6 +260,21 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
         }
         actions={
           <>
+            {/* Secondary, and to the left of the primary: it is a detour into
+                the student view, not what the page is for. A seat already
+                taken is not an action but an answer — the button stays and
+                says so on hover, rather than vanishing and shifting the row
+                under the pointer. */}
+            <Tip label={seat ? t("roster.joined") : null}>
+              <Button
+                variant="secondary"
+                disabled={seat != null}
+                loading={join.isPending}
+                onClick={() => join.mutate()}
+              >
+                <GraduationCap /> {t("roster.join")}
+              </Button>
+            </Tip>
             {/* The roster tab's one primary action. On the evaluations tab the
                 list carries its own, and two accent fills would make the
                 squint test ambiguous. */}
@@ -211,15 +286,6 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
             <Menu
               label={t("common.actions")}
               items={[
-                {
-                  label: seat ? t("roster.joined") : t("roster.join"),
-                  icon: GraduationCap,
-                  // The state when the menu opened: a seat already taken is
-                  // not an action, it is an answer.
-                  disabled: seat != null,
-                  onSelect: () => join.mutate(),
-                },
-                { label: t("classrooms.rename"), icon: Pencil, onSelect: () => setRenaming(true) },
                 data.archivedAt
                   ? {
                       label: t("classrooms.unarchive"),
@@ -261,8 +327,17 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
           onChange={setTab}
           label={t("classrooms.tabs")}
           items={[
-            { value: "roster", label: t("roster.title"), count: students.length, icon: Users },
-            { value: "evaluations", label: t("eval.title"), icon: ClipboardList },
+            // The whole roster, staff seats included: the number on a tab
+            // promises the number of rows behind it.
+            { value: "roster", label: t("roster.title"), count: data.roster.length, icon: Users },
+            {
+              value: "evaluations",
+              label: t("eval.title"),
+              // No number while the list is loading or failed: a "0" that
+              // means "not known yet" is worse than no count at all.
+              count: evaluations.data?.length,
+              icon: ClipboardList,
+            },
           ]}
         />
 
@@ -296,7 +371,6 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
       {importing ? (
         <RosterImport classroomId={id} onClose={() => setImporting(false)} />
       ) : null}
-      {renaming ? <RenameModal room={data} onClose={() => setRenaming(false)} /> : null}
     </div>
   );
 }
