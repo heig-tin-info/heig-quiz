@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 import { remoteArgs, type EngineCapabilities } from "./engine.js";
+import { availableLanguages, imageRef } from "./images.js";
 import type { RunnerConfig } from "./config.js";
 
 const execFileAsync = promisify(execFile);
@@ -29,29 +30,46 @@ interface PodmanInfo {
   };
 }
 
-type Run = (args: string[], timeout?: number) => Promise<string>;
+/** One `podman` command, its stdout. Injected by the unit test. */
+export type PodmanRun = (args: string[], timeoutMs?: number) => Promise<string>;
 
-/** Any runner image will do to find out whether `--userns=auto` starts. */
-async function probeImage(run: Run, config: RunnerConfig): Promise<string | null> {
-  const images = await run(["images", "--format", "{{.Repository}}:{{.Tag}}"]).catch(() => "");
-  const found = images
-    .split("\n")
-    .map((line) => line.trim())
-    .find((line) => line.includes(`${config.RUNNER_IMAGE_PREFIX}-`));
-  return found ?? null;
-}
-
-export async function probeEngine(config: RunnerConfig): Promise<ProbeResult> {
+/**
+ * The real spawner: the connection flags of invariant 13, then the command.
+ *
+ * It is not `engine.ts`'s: the probe answers the very question the engine's
+ * options are built from, so it runs before an `Engine` exists. What it does
+ * share is `remoteArgs`, which is the part that must not drift.
+ */
+export function podmanRun(config: RunnerConfig): PodmanRun {
   const base = remoteArgs(config.PODMAN_SOCKET);
-  const notes: string[] = [];
-
-  const run = async (args: string[], timeout = 30_000): Promise<string> => {
+  return async (args, timeoutMs = 30_000) => {
     const { stdout } = await execFileAsync(config.PODMAN_BIN, [...base, ...args], {
-      timeout,
+      timeout: timeoutMs,
       maxBuffer: 8 * 1024 * 1024,
     });
     return stdout;
   };
+}
+
+/**
+ * A runner image to try `--userns=auto` on, or `null`.
+ *
+ * It reads the image list with the same rule `GET /health` answers with
+ * (`availableLanguages`), so the probe cannot pick something the service would
+ * never run — and it names it the short way, which is what the command line
+ * takes.
+ */
+async function probeImage(run: PodmanRun, config: RunnerConfig): Promise<string | null> {
+  const images = await run(["images", "--format", "{{.Repository}}:{{.Tag}}"]).catch(() => "");
+  const language = availableLanguages(images.split("\n"), config)[0];
+  return language === undefined ? null : imageRef(config, language);
+}
+
+export async function probeEngine(
+  config: RunnerConfig,
+  run: PodmanRun = podmanRun(config),
+): Promise<ProbeResult> {
+  const notes: string[] = [];
 
   const version = (await run(["--version"])).trim();
 
@@ -68,16 +86,17 @@ export async function probeEngine(config: RunnerConfig): Promise<ProbeResult> {
   }
 
   // gVisor: used when the host has it and the configuration did not forbid it.
-  // This machine has none; the production VM may grow one without a code change.
+  // This machine has none; the production VM may grow one without a code
+  // change. The runtime comes out of the `info` above — asking a second time,
+  // with another format string, was two round trips for one answer.
   let runtime: string | null = null;
   if (config.RUNNER_RUNTIME === "runsc") {
     runtime = "runsc";
   } else if (config.RUNNER_RUNTIME === "auto") {
-    const hasRunsc = await run(["info", "--format", "{{.Host.OCIRuntime.Name}}"])
-      .then((out) => out.trim() === "runsc")
-      .catch(() => false);
-    runtime = hasRunsc ? "runsc" : null;
-    if (!hasRunsc && hostRuntime !== null) notes.push(`oci runtime ${hostRuntime}, no gVisor`);
+    runtime = hostRuntime === "runsc" ? "runsc" : null;
+    if (runtime === null && hostRuntime !== null) {
+      notes.push(`oci runtime ${hostRuntime}, no gVisor`);
+    }
   }
 
   let usernsAuto = config.RUNNER_USERNS_AUTO === "true";
@@ -109,7 +128,14 @@ export async function probeEngine(config: RunnerConfig): Promise<ProbeResult> {
   }
 
   return {
-    capabilities: { version, rootless, remote: base.length > 0, usernsAuto, runtime, cgroupVersion },
+    capabilities: {
+      version,
+      rootless,
+      remote: config.PODMAN_SOCKET !== null,
+      usernsAuto,
+      runtime,
+      cgroupVersion,
+    },
     notes,
   };
 }
