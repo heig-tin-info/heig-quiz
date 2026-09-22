@@ -55,10 +55,20 @@ podman --remote --url unix://<socket> run -d
 ```
 
 `src/engine.test.ts` asserts that list flag for flag, that no `-v`/`--mount`
-is ever produced, and that the environment is exactly those two variables.
+is ever produced, that the environment is exactly those two variables, and —
+against a `podman` that records its argv — that every command the engine sends
+carries `--remote --url unix://<socket>` (invariant 13).
 `src/podman.int.test.ts` proves the consequences on a real engine: no network,
 a read-only root, a non-root uid, the memory limit killing, the wall clock
-firing, the output truncated.
+firing, the output truncated, the seccomp profile in force.
+
+**`RUNNER_SECCOMP` is resolved by the Podman SERVER, not by this process.** A
+`--remote` client hands the daemon a path and the daemon is what opens it, so
+the `existsSync` check in `loadConfig` is a local sanity check only — it
+catches a typo on a workstation, and says nothing about the profile the
+container actually got. What proves that is a container: `perf_event_open`
+comes back `-1 EPERM` under `infra/seccomp/runner.json` and `-1 EFAULT` without
+it, which is the assertion in `src/podman.int.test.ts`.
 
 ### Rootless vs rootful
 

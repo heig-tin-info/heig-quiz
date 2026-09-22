@@ -278,7 +278,39 @@ for (const language of ["c", "python"] as const) {
   });
 }
 
+/**
+ * A syscall the profile denies, asked for with a deliberately invalid
+ * argument.
+ *
+ * `perf_event_open` is `SCMP_ACT_ERRNO` / EPERM in `infra/seccomp/runner.json`
+ * for a process holding neither `CAP_PERFMON` nor `CAP_SYS_ADMIN` — which
+ * `--cap-drop=ALL` guarantees. The attribute pointer is NULL on purpose: a
+ * filter answers before the kernel ever looks at it, so EPERM means the
+ * profile fired, while the EFAULT of a container without one means it did not.
+ */
+const PERF_EVENT_OPEN =
+  "#define _GNU_SOURCE\n" +
+  "#include <stdio.h>\n#include <errno.h>\n#include <unistd.h>\n#include <sys/syscall.h>\n" +
+  "int main(void){long rc=syscall(SYS_perf_event_open,(void*)0,0,-1,-1,0UL);" +
+  'printf("%ld %d\\n",rc,errno);return 0;}\n';
+
 describe.skipIf(!has("c"))("the container itself", () => {
+  it("has the seccomp profile in force, and not merely configured", async () => {
+    // Invariant 12. `loadConfig` checks that the profile EXISTS on this host,
+    // which is a local sanity check and nothing more: the path travels to the
+    // Podman server and the server is what opens it (`--remote`, and in
+    // production `/etc/quiz-runner/seccomp.json`). The only witness that the
+    // profile applied is a container, and what it can report is the errno.
+    const outcome = await run(request("c", PERF_EVENT_OPEN));
+    expect(outcome.compile.ok).toBe(true);
+    const [rc, errno] = outcome.cases[0]!.stdout.trim().split(" ").map(Number);
+    expect(rc).toBe(-1);
+    // EPERM is the profile's own `errnoRet`; ENOSYS is what a filter that
+    // removes the syscall outright answers. Anything else — EFAULT above all
+    // — means the call reached the kernel and no profile was in the way.
+    expect([1, 38]).toContain(errno);
+  });
+
   it("runs as a user that is not root and owns nothing outside /work", async () => {
     const outcome = await run(
       request(
