@@ -398,6 +398,12 @@ export const CircuitDetails = z.object({
   stimuli: z.array(StimulusDetail),
   earned: z.number(),
   total: z.number(),
+  /**
+   * Echo of `config.showExpected`: `studentDetails` only ever sees the
+   * details, and it has to know whether the reference's curve was published
+   * on the visible stimuli before it lets one through (`grade.ts`).
+   */
+  showExpected: z.boolean().optional(),
   /** Machine reason when `runner !== "ok"` or nothing was graded. */
   reason: z.string().optional(),
 });

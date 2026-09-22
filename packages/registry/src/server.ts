@@ -7,6 +7,7 @@
  *
  * Registering a type is two lines: an import and an entry in `serverRegistry`.
  */
+import { circuitServer } from "@quiz/qt-circuit/server";
 import { codeServer } from "@quiz/qt-code/server";
 
 import {
@@ -26,12 +27,13 @@ export const serverRegistry: Partial<Record<QuestionTypeId, AnyQuestionTypeServe
     short: shortServer,
     cloze: clozeServer,
     code: codeServer,
+    circuit: circuitServer,
   });
 
 /** Total lookup; an unregistered id throws `UnknownQuestionType`. */
 export const questionType = makeLookup<AnyQuestionTypeServer>(serverRegistry);
 
-/** The ids that are actually wired up right now (all four MVP types). */
+/** The ids that are actually wired up right now (the four MVP types and `circuit`). */
 export const registeredServerIds = (): string[] => registeredIds(serverRegistry);
 
 /**
