@@ -12,7 +12,8 @@ import { useId, type JSX } from "react";
 import { BOX, GRID, LIBRARY, MAJOR, PORT_IDS, type PortId } from "../library.js";
 import type { Schematic, SchematicComponent, Wire } from "../schema.js";
 
-import { CANVAS_STRINGS, withStrings, type CanvasStrings } from "./canvasStrings.js";
+import { resolveStrings } from "@quiz/core/client";
+import { CANVAS_STRINGS, type CanvasStrings } from "./canvasStrings.js";
 import {
   boxOutline,
   componentLabel,
@@ -364,7 +365,7 @@ export function SchematicView({
   flaggedPorts,
   "aria-label": ariaLabel,
 }: SchematicViewProps): JSX.Element {
-  const s = withStrings(CANVAS_STRINGS, strings);
+  const s = resolveStrings(CANVAS_STRINGS, strings);
   const id = safeId(useId());
   const connected = connectedPins(schematic);
   const routes = new Map<string, ReadonlyArray<readonly [number, number]>>(

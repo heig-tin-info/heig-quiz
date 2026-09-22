@@ -17,4 +17,4 @@ export { SchematicView } from "./SchematicView.js";
 export { Plot, type PlotProps } from "./Plot.js";
 export { withRoutes } from "./router.js";
 
-export { CANVAS_STRINGS, withStrings, type CanvasStrings } from "./canvasStrings.js";
+export { CANVAS_STRINGS, type CanvasStrings } from "./canvasStrings.js";

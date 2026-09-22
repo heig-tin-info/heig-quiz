@@ -116,13 +116,3 @@ export const CANVAS_STRINGS: CanvasStrings = {
   seriesIout: "i(out)",
   showCurrent: "Show current",
 };
-
-/** Fills the gaps of a partial override with the defaults above. */
-export function withStrings<T extends object>(defaults: T, override?: Partial<T> | undefined): T {
-  if (override === undefined) return defaults;
-  const out = { ...defaults };
-  for (const [k, v] of Object.entries(override)) {
-    if (v !== undefined) (out as Record<string, unknown>)[k] = v;
-  }
-  return out;
-}

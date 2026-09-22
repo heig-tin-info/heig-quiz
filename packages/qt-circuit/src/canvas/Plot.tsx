@@ -15,7 +15,8 @@ import { useEffect, useMemo, useRef, useState, type JSX } from "react";
 
 import type { SeriesSet } from "../schema.js";
 
-import { CANVAS_STRINGS, withStrings, type CanvasStrings } from "./canvasStrings.js";
+import { resolveStrings } from "@quiz/core/client";
+import { CANVAS_STRINGS, type CanvasStrings } from "./canvasStrings.js";
 import {
   cx,
   plotAxis,
@@ -141,7 +142,7 @@ const DASH_EXPECTED = "5 4";
 const DASH_CURRENT = "2 3";
 
 export function Plot({ series, expected, strings, height = 240, className, title }: PlotProps): JSX.Element {
-  const s = withStrings(CANVAS_STRINGS, strings);
+  const s = resolveStrings(CANVAS_STRINGS, strings);
   const wrapper = useRef<HTMLDivElement | null>(null);
   const [width, setWidth] = useState(DEFAULT_WIDTH);
   const [showCurrent, setShowCurrent] = useState(false);

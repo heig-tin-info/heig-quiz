@@ -137,7 +137,6 @@ export {
   KIND_LABELS,
   PLAYER_STRINGS,
   REVIEW_STRINGS,
-  withStrings,
   type CanvasStrings,
   type CircuitEditorStrings,
   type CircuitPlayerStrings,

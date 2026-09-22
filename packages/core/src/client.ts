@@ -233,10 +233,28 @@ export interface ConfigIssue {
  */
 export type StringOverrides<K extends string> = Partial<Readonly<Record<K, string>>>;
 
-/** Merges a component's English defaults with the host's overrides. Total, pure. */
-export function resolveStrings<K extends string>(
-  defaults: Readonly<Record<K, string>>,
-  overrides?: StringOverrides<K>,
-): Readonly<Record<K, string>> {
-  return overrides === undefined ? defaults : { ...defaults, ...overrides };
+/**
+ * Merges a component's English defaults with the host's overrides. Total, pure.
+ *
+ * `T` is the dictionary itself rather than a `Record<K, string>`: the code and
+ * circuit dictionaries carry parameterised entries (`lockedRegions: (n) =>
+ * string`), and a dictionary is still a dictionary when one of its values
+ * takes an argument. `Partial<T>` keeps the keys bound to `keyof T`, so a key
+ * the defaults do not declare is still a compile error — and it keeps each
+ * value's own type, which a `Record<keyof T, string>` would flatten.
+ *
+ * An override whose value is `undefined` is SKIPPED, it does not blank the
+ * default. That is not defensive: `apps/web/tsconfig.json` does not turn on
+ * `exactOptionalPropertyTypes`, and the host builds these dictionaries by
+ * reflection over the defaults (`translated()` in `questionTypes.tsx`), so an
+ * explicit `undefined` is reachable and a spread would render an empty label.
+ * This is the ONLY string merge in the repository; the rule lives here once.
+ */
+export function resolveStrings<T extends object>(defaults: T, overrides?: Partial<T>): T {
+  if (overrides === undefined) return defaults;
+  const out = { ...defaults };
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value !== undefined) (out as Record<string, unknown>)[key] = value;
+  }
+  return out;
 }

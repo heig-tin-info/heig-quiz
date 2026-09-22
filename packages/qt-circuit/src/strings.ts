@@ -423,8 +423,3 @@ export const REVIEW_STRINGS: CircuitReviewStrings = {
   runnerError: "The circuit could not be simulated; it is waiting for a manual grade.",
   runnerNone: "This circuit was not simulated.",
 };
-
-/** Merges a partial override on top of the English defaults. */
-export function withStrings<T extends object>(defaults: T, override?: Partial<T>): T {
-  return override === undefined ? defaults : { ...defaults, ...override };
-}

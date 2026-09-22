@@ -106,7 +106,6 @@ export {
   EDITOR_STRINGS,
   PLAYER_STRINGS,
   REVIEW_STRINGS,
-  withStrings,
   type CodeEditorStrings,
   type CodePlayerStrings,
   type CodeReviewStrings,

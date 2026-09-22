@@ -49,7 +49,8 @@ import {
   type WireEnd,
 } from "../schema.js";
 
-import { CANVAS_STRINGS, withStrings, type CanvasStrings } from "./canvasStrings.js";
+import { resolveStrings } from "@quiz/core/client";
+import { CANVAS_STRINGS, type CanvasStrings } from "./canvasStrings.js";
 import {
   canvasArea,
   cx,
@@ -257,7 +258,7 @@ export function SchematicEditor({
   id,
   "aria-label": ariaLabel,
 }: SchematicEditorProps): JSX.Element {
-  const s = withStrings(CANVAS_STRINGS, strings);
+  const s = resolveStrings(CANVAS_STRINGS, strings);
   const reactId = useId();
   const patternId = (id ?? reactId).replace(/[^A-Za-z0-9_-]/g, "_");
 
