@@ -16,10 +16,15 @@ import { QueueFull, type RunQueue } from "./queue.js";
  *
  * `POST /run` answers, by design:
  *   200  a `RunnerOutcome`, including one where nothing compiled;
- *   400  a body that is not a `RunnerRequest`;
+ *   400  a body that is not a `RunnerRequest`, or one with no source file for
+ *        its language — both are the caller's to fix, and retrying will not;
  *   401  no `Authorization: Bearer <RUNNER_TOKEN>` while one is configured;
  *   429  the queues are full (`Retry-After`), which the API surfaces as `RunnerBusy`;
  *   503  no image for that language, or the engine refused to start a container.
+ *
+ * The line between 400 and 503 is whether a RETRY could ever help: `HttpRunner`
+ * sends a 502/503 a second time, and nothing that is the request's own fault
+ * belongs on that side.
  *
  * The 401 covers `/health` too, on purpose: a token the API got wrong is then
  * a runner reported `down` by `/healthz`, not one that says `up` and refuses
@@ -126,6 +131,12 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
       }
       const reason = error instanceof ExecuteError ? error.reason : "engine_error";
       request.log.error({ err: error, reason }, "run failed");
+      // A request whose files hold no source for its language will never
+      // succeed, however many times it is sent: that is the caller's mistake,
+      // and `HttpRunner` retries a 503 twice before giving up on it.
+      if (reason === "no_source_file") {
+        return reply.code(400).send({ error: reason });
+      }
       return reply.code(503).send({ error: reason });
     }
   });

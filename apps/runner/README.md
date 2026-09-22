@@ -7,6 +7,22 @@ POST /run      a RunnerRequest  ->  a RunnerOutcome        (packages/core/src/ru
 GET  /health   a RunnerHealth: languages, queue, engine
 ```
 
+`POST /run` answers, by design:
+
+| Status | Body | When | What the API does with it |
+| --- | --- | --- | --- |
+| 200 | a `RunnerOutcome` | served, including "nothing compiled" | uses it |
+| 400 | `invalid_request` | the body is not a `RunnerRequest` | `RunnerUnavailable`, no retry |
+| 400 | `no_source_file` | no file of that language in the request | `RunnerUnavailable`, no retry |
+| 401 | `unauthorized` | no or wrong `Authorization: Bearer` | reported `down` by `/healthz` |
+| 429 | `queue_full` + `Retry-After` | both queues are full | `RunnerBusy`; the job waits |
+| 503 | `language_unavailable` | no image for that language here | `RunnerUnavailable` |
+| 503 | `engine_error`, `upload_failed` | the engine would not start or write | retried once, then `RunnerUnavailable` |
+
+The line between 400 and 503 is whether a RETRY could ever help: `HttpRunner`
+sends a 502/503 a second time (`apps/api/src/modules/runner/http.ts`), so
+nothing that is the request's own fault belongs on that side.
+
 The API talks to it through `apps/api/src/modules/runner/http.ts` when
 `RUNNER_MODE=http`. With `RUNNER_MODE=stub` — the default everywhere, and the
 only possibility on a machine without a container engine — nothing here is

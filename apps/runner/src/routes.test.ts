@@ -119,6 +119,21 @@ describe("POST /run", () => {
     expect(res.json()).toMatchObject({ error: "invalid_request" });
   });
 
+  it("refuses a request with no source file for its language, as a 400", async () => {
+    const engine = createFakeEngine();
+    const server = await start(engine);
+    const res = await server.inject({
+      method: "POST",
+      url: "/run",
+      payload: { ...REQUEST, files: [{ name: "notes.txt", content: "hello" }] },
+    });
+    // 400 and not 503: the request will never succeed, and `HttpRunner`
+    // retries a 503. Nothing was started, either.
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: "no_source_file" });
+    expect(engine.created).toEqual([]);
+  });
+
   it("refuses an unknown language before it starts anything", async () => {
     const server = await start(createFakeEngine());
     const res = await server.inject({

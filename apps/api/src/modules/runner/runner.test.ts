@@ -122,6 +122,9 @@ describe("HttpRunner", () => {
       reply.code(429).header("retry-after", "2").send({ error: "busy" }),
     );
     server.post("/down/run", async (_req, reply) => reply.code(503).send({ error: "no_engine" }));
+    server.post("/bad/run", async (_req, reply) =>
+      reply.code(400).send({ error: "no_source_file" }),
+    );
     server.post("/teapot/run", async (_req, reply) => reply.code(418).send({ error: "teapot" }));
     server.post("/slow/run", async (_req, reply) => {
       await new Promise((resolve) => setTimeout(resolve, 300));
@@ -197,6 +200,18 @@ describe("HttpRunner", () => {
     await expect(runnerAt("/down", 2000, 0).run(REQUEST)).rejects.toBeInstanceOf(
       RunnerUnavailable,
     );
+    expect(hits).toHaveLength(1);
+  });
+
+  it("never retries a 400: the request is the one that is wrong", async () => {
+    // The runner answers 400 for a request with no source file for its
+    // language (`apps/runner/src/routes.ts`). Sending it again would produce
+    // the same answer, three times as slowly, which is what a 503 costs.
+    hits = [];
+    await expect(runnerAt("/bad").run(REQUEST)).rejects.toMatchObject({
+      code: "runner_unavailable",
+      reason: "http_400",
+    });
     expect(hits).toHaveLength(1);
   });
 
