@@ -182,3 +182,9 @@ export {
   SPICE_LIMITS,
 } from "./grade.js";
 export type { BuildRequestOptions, CaseLayout, SimulationResult } from "./grade.js";
+/*
+ * The netlist the grade is computed from (ADR-019 §3, invariant 14). It is a
+ * server concern, so it leaves the package here and not through `./client`.
+ */
+export { extractNets } from "./netlist.js";
+export type { Netlist, NetlistIssue } from "./netlist.js";
