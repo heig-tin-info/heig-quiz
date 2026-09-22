@@ -18,13 +18,42 @@ import type { PollRow } from "./pollTally";
  * Revealed, the key is never colour alone (DESIGN.md, VerdictCell): the
  * correct row gains a tick AND the word, and the others fade rather than turn
  * red — nobody in the room is being marked wrong.
+ *
+ * From six rows up, and only on a screen wide enough for it, they go in TWO
+ * columns: eight bars in one column is a list so tall that the fit has to
+ * shrink the whole wall to a third of its size to hold it, and the room then
+ * reads none of it. Two columns halve the height for the same text, so the
+ * type stays big. The flow is column-MAJOR (`grid-flow-col` over an explicit
+ * number of rows), so A–D are the left column and E–H the right one: the
+ * letters still read down, the way they are called out.
  */
+
+/** From this many rows on, the wall is better read in two columns. */
+const TWO_COLUMNS_FROM = 6;
+
 export function PollBars({ rows, revealed }: { rows: PollRow[]; revealed: boolean }) {
   const t = useT();
   const lettered = rows.some((r) => r.letter !== null);
+  const split = rows.length >= TWO_COLUMNS_FROM;
   return (
     <ul
-      className="flex list-none flex-col gap-[clamp(8px,1.2vh,18px)] p-0"
+      className={cx(
+        "flex list-none flex-col gap-[clamp(8px,1.2vh,18px)] p-0",
+        // `lg:` is the VIEWPORT's width, which on this screen is the wall
+        // itself: a narrow window keeps the single column it can read.
+        split && "lg:grid lg:grid-flow-col lg:gap-x-[clamp(28px,3.4vw,72px)]",
+      )}
+      style={
+        split
+          ? {
+              gridTemplateRows: `repeat(${Math.ceil(rows.length / 2)}, auto)`,
+              // `minmax(0, 1fr)`, never `1fr`: a bare `1fr` floors a column at
+              // its MIN-CONTENT width, so a long choice pushes the grid past
+              // the wall instead of wrapping inside its half of it.
+              gridAutoColumns: "minmax(0, 1fr)",
+            }
+          : undefined
+      }
       // The bars move as the answers arrive; a reader who cannot see them
       // move gets the whole distribution read out instead.
       aria-live="polite"
