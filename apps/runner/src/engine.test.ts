@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -81,10 +81,81 @@ describe("containerArgs", () => {
     expect(args).not.toContain("--env-file");
   });
 
-  it("speaks to the socket, never to a local engine that would be another one", () => {
-    // Invariant 13: `--remote --url` or the explicit local escape hatch.
-    const remote = engine();
-    expect(remote.capabilities.remote).toBe(true);
+});
+
+/**
+ * Invariant 13, against a `podman` that records what it was called with.
+ *
+ * `containerArgs()` deliberately does NOT carry the connection flags — they
+ * are prepended by the spawner, for `exec`, `rm` and `images` as well — so no
+ * assertion on its list can see them. This is the only place that does: delete
+ * the three lines that build them and four expectations break at once.
+ */
+describe("--remote --url, on every command the engine sends", () => {
+  /** A `podman` that appends its argv to a log, one argument per line. */
+  function recorder(): { bin: string; calls: () => string[][] } {
+    const dir = mkdtempSync(join(tmpdir(), "quiz-runner-argv-"));
+    const log = join(dir, "argv.log");
+    const bin = join(dir, "podman");
+    writeFileSync(
+      bin,
+      `#!/bin/sh\nfor arg in "$@"; do printf '%s\\n' "$arg" >> ${log}; done\n` +
+        `printf '%s\\n' '@@END@@' >> ${log}\nexit 0\n`,
+    );
+    chmodSync(bin, 0o755);
+    return {
+      bin,
+      calls: () =>
+        readFileSync(log, "utf8")
+          .split("@@END@@\n")
+          .filter((block) => block !== "")
+          .map((block) => block.split("\n").filter((line) => line !== "")),
+    };
+  }
+
+  /** Every method that reaches Podman, once each, in this order. */
+  async function exercise(bin: string, socket: string | null): Promise<void> {
+    const subject = engine({ podmanBin: bin, socket });
+    await subject.create(CREATE);
+    await subject.exec(CREATE.name, {
+      argv: ["true"],
+      stdin: "",
+      timeoutMs: 5000,
+      maxBytes: 1024,
+    });
+    await subject.remove(CREATE.name);
+    await subject.listImages();
+  }
+
+  it("prefixes create, exec, rm and images with the socket of the engine", async () => {
+    const podman = recorder();
+    await exercise(podman.bin, "/run/podman/podman.sock");
+
+    const calls = podman.calls();
+    expect(calls).toHaveLength(4);
+    for (const argv of calls) {
+      expect(argv.slice(0, 3)).toEqual([
+        "--remote",
+        "--url",
+        "unix:///run/podman/podman.sock",
+      ]);
+    }
+    // The subcommand comes right after them, never before: a `podman run`
+    // that reached the CLI first would already have chosen its engine.
+    expect(calls.map((argv) => argv[3])).toEqual(["run", "exec", "rm", "images"]);
+  });
+
+  it("passes no --remote at all on the explicit local escape hatch", async () => {
+    const podman = recorder();
+    await exercise(podman.bin, null);
+
+    const calls = podman.calls();
+    expect(calls).toHaveLength(4);
+    for (const argv of calls) {
+      expect(argv).not.toContain("--remote");
+      expect(argv).not.toContain("--url");
+    }
+    expect(calls.map((argv) => argv[0])).toEqual(["run", "exec", "rm", "images"]);
   });
 });
 
