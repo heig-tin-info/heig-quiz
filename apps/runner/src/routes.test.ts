@@ -133,6 +133,10 @@ describe("POST /run", () => {
   });
 
   it("answers 429 with a Retry-After once the queues are full", async () => {
+    // The QUEUE's rule — the depth, the priority, the Retry-After it computes
+    // — is proven in `queue.test.ts`. What is proven here is the one thing
+    // HTTP adds: a `QueueFull` becomes a 429 with the header, which is what
+    // `HttpRunner` turns into `RunnerBusy`.
     // One slot, one waiting request; the third is refused.
     let release = (): void => undefined;
     const held = new Promise<void>((resolve) => {
@@ -178,47 +182,5 @@ describe("POST /run", () => {
     const res = await server.inject({ method: "POST", url: "/run", payload: REQUEST });
     expect(res.statusCode).toBe(503);
     expect(res.json()).toMatchObject({ error: "engine_error" });
-  });
-
-  it("serves the interactive queue first", async () => {
-    const seen: string[] = [];
-    let release = (): void => undefined;
-    const held = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const engine = createFakeEngine((call) => {
-      if (call.argv[0] === "cp") seen.push(call.stdin);
-      return {};
-    });
-    const blocking = {
-      ...engine,
-      create: async (options: Parameters<typeof engine.create>[0]) => {
-        if (seen.length === 0 && blocked === false) {
-          blocked = true;
-          await held;
-        }
-        await engine.create(options);
-      },
-    };
-    let blocked = false;
-    const server = await start(blocking as FakeEngine, { RUNNER_CONCURRENCY: 1 });
-
-    const payload = (name: string, priority: RunnerRequest["priority"]) => ({
-      ...REQUEST,
-      priority,
-      files: [{ name: "main.c", content: name }],
-    });
-
-    const busy = server.inject({ method: "POST", url: "/run", payload: payload("busy", "grading") });
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    const queued = [
-      server.inject({ method: "POST", url: "/run", payload: payload("grading", "grading") }),
-      server.inject({ method: "POST", url: "/run", payload: payload("interactive", "interactive") }),
-    ];
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    release();
-    await Promise.all([busy, ...queued]);
-
-    expect(seen).toEqual(["busy", "interactive", "grading"]);
   });
 });

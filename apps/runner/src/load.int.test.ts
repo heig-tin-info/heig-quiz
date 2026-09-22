@@ -80,33 +80,4 @@ describe.skipIf(!host.has("c"))("thirty runs at once", () => {
     // lands right after the last question, not minutes later.
     expect(total).toBeLessThan(WINDOW_MS + 10_000);
   });
-
-  it("refuses the overflow with 429 rather than queueing it for ever", async () => {
-    const small = await buildApp({
-      config: { ...config, RUNNER_CONCURRENCY: 1, RUNNER_QUEUE_MAX: 2 },
-    });
-    try {
-      const payload: RunnerRequest = {
-        language: "c",
-        files: [{ name: "main.c", content: SOURCE }],
-        compileArgs: "",
-        action: "run",
-        limits: { timeMs: 2000, memoryMb: 128, outputKb: 64 },
-        cases: [{ name: "one", args: [], stdin: "1\n" }],
-        priority: "grading",
-      };
-      const answers = await Promise.all(
-        Array.from({ length: 8 }, () =>
-          small.inject({ method: "POST", url: "/run", payload }),
-        ),
-      );
-      const statuses = answers.map((res) => res.statusCode);
-      expect(statuses).toContain(429);
-      expect(statuses.filter((status) => status === 200).length).toBeGreaterThan(0);
-      const busy = answers.find((res) => res.statusCode === 429);
-      expect(Number(busy?.headers["retry-after"])).toBeGreaterThanOrEqual(1);
-    } finally {
-      await small.close();
-    }
-  });
 });
