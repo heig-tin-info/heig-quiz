@@ -65,6 +65,18 @@ nav = [
     ] },
     { "MVP plan" = "PLAN-MVP.md" },
     { "API review (2026-09-20)" = "API-REVIEW-2026-09-20.md" },
+    { "Code audit (2026-09-22)" = [
+      { "Synthesis and refactoring plan" = "CODE-AUDIT-2026-09-22.md" },
+      { "Backend" = "audit-2026-09-22/backend.md" },
+      { "Frontend core" = "audit-2026-09-22/frontend-core.md" },
+      { "Frontend feature screens" = "audit-2026-09-22/frontend-features.md" },
+      { "Runner" = "audit-2026-09-22/runner.md" },
+      { "Shared packages" = "audit-2026-09-22/packages.md" },
+      { "Database" = "audit-2026-09-22/database.md" },
+      { "Metrics: complexity" = "audit-2026-09-22/metrics-complexity.md" },
+      { "Metrics: clones" = "audit-2026-09-22/metrics-clones.md" },
+      { "Metrics: unused exports" = "audit-2026-09-22/metrics-knip.md" },
+    ] },
   ] },
 ]
 
