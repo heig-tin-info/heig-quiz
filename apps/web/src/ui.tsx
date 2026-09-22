@@ -2,7 +2,6 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
-  Building2,
   ChartPie,
   Check,
   ChevronDown,
@@ -141,7 +140,7 @@ const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /** Tabbable descendants of `root`, in document order, skipping hidden ones. */
-export function focusableIn(root: HTMLElement): HTMLElement[] {
+function focusableIn(root: HTMLElement): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
     (el) => el.offsetWidth > 0 || el.offsetHeight > 0 || el === document.activeElement,
   );
@@ -496,8 +495,8 @@ export function useTruncated<T extends HTMLElement>(): [RefCallback<T>, boolean]
 
 // --- Buttons ---
 
-export type ButtonVariant = "primary" | "secondary" | "subtle" | "ghost" | "danger";
-export type ButtonSize = "sm" | "md" | "lg";
+type ButtonVariant = "primary" | "secondary" | "subtle" | "ghost" | "danger";
+type ButtonSize = "sm" | "md" | "lg";
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary: "bg-accent text-on-fill hover:bg-accent-hover",
@@ -648,21 +647,6 @@ export function Initials({
   );
 }
 
-/** Public GitHub avatar of an organization, with an icon fallback. */
-export function OrgAvatar({ login, className = "size-5" }: { login: string; className?: string }) {
-  const [failed, setFailed] = useState(false);
-  if (failed) return <Building2 className={`${className} text-fg-faint`} />;
-  return (
-    <img
-      src={`https://github.com/${login}.png?size=64`}
-      alt=""
-      referrerPolicy="no-referrer"
-      onError={() => setFailed(true)}
-      className={`shrink-0 rounded-md ${className}`}
-    />
-  );
-}
-
 // --- Dates ---
 
 /** Account preference adopted in App.tsx; module-level on purpose — date
@@ -755,13 +739,6 @@ export function humanize(slug: string): string {
     .filter(Boolean)
     .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
     .join(" ");
-}
-
-/** Current local time formatted for a datetime-local input. */
-export function localDateTimeInputValue(date = new Date()): string {
-  const d = new Date(date);
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
 }
 
 // --- Floating layers: dialog, sheet, menu ---
@@ -1356,15 +1333,6 @@ export function modKey(): string {
   const agent = navigator as Navigator & { userAgentData?: { platform?: string } };
   const platform = agent.userAgentData?.platform ?? navigator.platform ?? "";
   return /mac|iphone|ipad|ipod/i.test(platform) ? "⌘" : "Ctrl";
-}
-
-/** GitHub brand mark (brand icons were removed from lucide). */
-export function GithubIcon({ className = "size-4" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 16 16" fill="currentColor" className={className} aria-hidden>
-      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
-    </svg>
-  );
 }
 
 export type Tone = "green" | "amber" | "red" | "zinc" | "accent";
@@ -2068,7 +2036,7 @@ export const inputClass =
   "rounded-field border border-line-strong bg-surface px-3 text-sm text-fg transition-colors placeholder:text-fg-faint hover:border-fg-faint focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-50 disabled:hover:border-line-strong";
 
 /** Control heights, aligned on the button scale of DESIGN.md (sm 28, md 34). */
-export type InputSize = "sm" | "md";
+type InputSize = "sm" | "md";
 export const inputSize: Record<InputSize, string> = {
   sm: "h-7",
   md: "h-8.5",
@@ -2467,9 +2435,9 @@ export function formatRemaining(ms: number): string {
 }
 
 /** Under a minute everything is urgent, whatever the evaluation's own threshold. */
-export const COUNTDOWN_DANGER_S = 60;
+const COUNTDOWN_DANGER_S = 60;
 
-export type CountdownPhase = "normal" | "warning" | "danger" | "over";
+type CountdownPhase = "normal" | "warning" | "danger" | "over";
 
 /** Which of the four phases `remaining` ms falls in, given the warn threshold. */
 export function countdownPhase(remainingMs: number, warnUnderS: number): CountdownPhase {
@@ -2682,7 +2650,7 @@ const SEGMENT_GAP = 4;
  * measured yet" (first paint, or a test with no layout) and shows everything:
  * the strip must never come up thinned out on a screen that had the room.
  */
-export function segmentLabelStep(width: number, count: number): 1 | 5 | 10 {
+function segmentLabelStep(width: number, count: number): 1 | 5 | 10 {
   if (width <= 0 || count <= 1) return 1;
   const per = (width - SEGMENT_GAP * (count - 1)) / count;
   if (per >= 22) return 1;

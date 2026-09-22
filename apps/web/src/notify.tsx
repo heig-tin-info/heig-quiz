@@ -57,7 +57,7 @@ const ICONS: Record<NoticeKind, typeof UserPlus> = {
  * menu has nowhere else to say so, because the menu closes as it is picked.
  * It is neutral on purpose — nothing has gone right or wrong yet.
  */
-export type ToastTone = "success" | "error" | "warning" | "progress";
+type ToastTone = "success" | "error" | "warning" | "progress";
 
 const TONE_ICONS: Record<ToastTone, typeof CheckCircle2> = {
   success: CheckCircle2,

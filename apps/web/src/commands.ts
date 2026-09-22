@@ -36,7 +36,7 @@ import type { IconType } from "./ui";
  * explicit context is testable by writing that context down.
  */
 
-export type CommandGroupId = "navigate" | "action" | "help";
+type CommandGroupId = "navigate" | "action" | "help";
 
 export interface Command {
   /** Stable id: used as the React key, the option DOM id and in tests. */
@@ -86,7 +86,7 @@ export interface CommandContext {
 export const CLASSROOM_COMMAND_PREFIX = "classroom:";
 
 /** Id prefix of the per-pool commands (WP7). */
-export const POOL_COMMAND_PREFIX = "pool:";
+const POOL_COMMAND_PREFIX = "pool:";
 
 /**
  * How many classrooms the palette lists while nothing is typed. A teacher can

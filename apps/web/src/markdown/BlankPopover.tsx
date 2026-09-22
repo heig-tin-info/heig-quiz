@@ -21,7 +21,7 @@ import { createPortal } from "react-dom";
 import { useT } from "../i18n";
 import { Button, cx, IconButton, inputClass, useLayer, Z } from "../ui";
 
-export type BlankMode = "any" | "select" | "number" | "regex";
+type BlankMode = "any" | "select" | "number" | "regex";
 
 /** One row of the answer list, in both list modes. */
 interface Answer {
@@ -29,7 +29,7 @@ interface Answer {
   correct: boolean;
 }
 
-export interface BlankPopoverProps {
+interface BlankPopoverProps {
   /** Viewport rectangle of the chip this card belongs to. */
   anchor: { top: number; bottom: number; left: number };
   /** The body as stored, or "" for a hole that was just typed. */
@@ -62,7 +62,7 @@ const EMPTY: Draft = {
 };
 
 /** The card's fields, read out of an existing body through the domain parser. */
-export function draftFromBody(body: string): Draft {
+function draftFromBody(body: string): Draft {
   const blank = parseBlankBody(body);
   if (typeof blank === "string") return EMPTY;
   const weight = String(blank.weight);
@@ -102,7 +102,7 @@ function round6(n: number): number {
  * The blank is BUILT and then formatted, never concatenated: the one path from
  * the card to the text goes through `formatBlank`.
  */
-export function bodyFromDraft(draft: Draft): string | null {
+function bodyFromDraft(draft: Draft): string | null {
   const weight = Number(draft.weight.replace(",", "."));
   const w = Number.isFinite(weight) && weight > 0 ? weight : 1;
   const blank = blankFromDraft(draft, w);
