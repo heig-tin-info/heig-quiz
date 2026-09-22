@@ -1,25 +1,33 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { FolderInput, Tag, Trash2, X } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { FolderInput, FolderSymlink, Tag, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
-import type { Category, CategoryNode, QuestionRow } from "@quiz/contracts";
+import type { Category, CategoryNode, PoolDetail, PoolSummary, QuestionRow } from "@quiz/contracts";
 
 import { api, apiErrorMessage } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
+import { useMoveQuestions } from "./move";
 import { useToast } from "../notify";
-import { Button, Field, IconButton, Modal, Select, Z } from "../ui";
+import { Button, Field, IconButton, Modal, Select, Spinner, Z } from "../ui";
 
 /**
  * What to do with the ticked questions (mockup `08-pool.html`): a floating
  * bar that only exists while a selection does. It is the one place in the
  * screen allowed a shadow — it genuinely sits above the table.
  *
- * The three operations are sequential calls to the ordinary routes
+ * Three of the four operations are sequential calls to the ordinary routes
  * (`PATCH /questions/:id`, `DELETE /questions/:id`): the API has no bulk
- * endpoint, and a teacher moving twenty questions is not a reason to invent
- * one. What the bar owes the reader is a single report at the end, which is
- * what `runAll` produces.
+ * endpoint for them, and a teacher tagging twenty questions is not a reason to
+ * invent one. What the bar owes the reader is a single report at the end,
+ * which is what `runAll` produces.
+ *
+ * "Move to another pool" is the exception and is ONE call
+ * (`POST /questions/move`, ADR-017): a move can be refused for the whole
+ * selection at once — a classroom plays one of the questions, a name is
+ * already taken there — and twenty separate calls would mean twenty separate
+ * confirmations for one intention. It is also the keyboard's way to do what
+ * the sidebar does with a drag.
  */
 
 /** Flattens the tree into "Parent / Child" labels for the move select. */
@@ -51,11 +59,36 @@ export function BulkBar({
   const qc = useQueryClient();
   const toast = useToast();
   const confirm = useConfirm();
-  const [dialog, setDialog] = useState<"tag" | "move" | null>(null);
+  const moveQuestions = useMoveQuestions();
+  const [dialog, setDialog] = useState<"tag" | "move" | "pool" | null>(null);
   const [tag, setTag] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
+  /**
+   * The move has a busy flag of its OWN: `busy` is the bar's, and the Delete
+   * button reads it, so sharing it would spin a destructive button while
+   * something else is running.
+   */
+  const [moving, setMoving] = useState(false);
+  /** The chosen target pool of the "another pool" dialog, and its category. */
+  const [targetPoolId, setTargetPoolId] = useState("");
+  const [targetCategoryId, setTargetCategoryId] = useState("");
+
+  // The pools the teacher may WRITE to, this one excluded: a move to the pool
+  // the questions are already in is what the category dialog above is for.
+  const pools = useQuery<PoolSummary[]>({
+    queryKey: ["pools"],
+    queryFn: () => api("/app/api/pools"),
+    enabled: dialog === "pool",
+  });
+  const targets = (pools.data ?? []).filter((p) => p.id !== poolId && p.role !== "reader");
+  // The chosen pool's folders, on the key its own screen uses.
+  const target = useQuery<PoolDetail>({
+    queryKey: ["pool", targetPoolId],
+    queryFn: () => api(`/app/api/pools/${targetPoolId}`),
+    enabled: dialog === "pool" && targetPoolId !== "",
+  });
 
   /** Runs one call per question, counts the failures, reports once. */
   const runAll = async (step: (id: string) => Promise<unknown>) => {
@@ -123,6 +156,31 @@ export function BulkBar({
     );
   };
 
+  /**
+   * The selection into another pool, in one call. The dialog closes on a
+   * success and STAYS on a refusal, because every refusal the server has
+   * (a taken name, a course that is not the caller's) is answered by picking
+   * another pool — which is the very control the dialog holds.
+   */
+  const moveToPool = async () => {
+    const pool = targets.find((p) => p.id === targetPoolId);
+    if (!pool) return;
+    setMoving(true);
+    const done = await moveQuestions({
+      questionIds: ids,
+      targetPoolId: pool.id,
+      targetPoolName: pool.name,
+      categoryId: targetCategoryId === "" ? null : targetCategoryId,
+      label: ids.length === 1 ? (rows.find((r) => r.id === ids[0])?.internalName ?? "") : "",
+    });
+    setMoving(false);
+    if (!done) return;
+    setDialog(null);
+    setTargetPoolId("");
+    setTargetCategoryId("");
+    onClear();
+  };
+
   const remove = async () => {
     const ok = await confirm({
       title: t("pool.bulk.delete"),
@@ -139,7 +197,13 @@ export function BulkBar({
       <div
         role="region"
         aria-label={t("pool.bulk.selected", { n: ids.length })}
-        className={`fixed inset-x-0 bottom-4 mx-auto flex w-[min(40rem,calc(100%-2rem))] flex-wrap items-center gap-2 rounded-full border border-line bg-surface px-4 py-2 shadow-overlay ${Z.popover}`}
+        // 48 rem, not 40: the fourth action ("another pool") is what pushed
+        // the row onto a second line at the old width, and a pill bar that
+        // wraps reads as two bars. The radius is 28 px rather than `full`:
+        // on one line the browser clamps it to half the height, so the pill is
+        // unchanged, and on a phone — where four actions really do wrap — the
+        // bar stays a rounded rectangle instead of becoming a lens.
+        className={`fixed inset-x-0 bottom-4 mx-auto flex w-[min(48rem,calc(100%-2rem))] flex-wrap items-center gap-2 rounded-[28px] border border-line bg-surface px-4 py-2 shadow-overlay ${Z.popover}`}
       >
         <span className="text-[13px] font-medium tabular-nums">
           {t("pool.bulk.selected", { n: ids.length })}
@@ -149,6 +213,9 @@ export function BulkBar({
         </Button>
         <Button size="sm" variant="ghost" onClick={() => setDialog("move")}>
           <FolderInput /> {t("pool.bulk.move")}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => setDialog("pool")}>
+          <FolderSymlink /> {t("pool.bulk.movePool")}
         </Button>
         <Button size="sm" variant="ghost" onClick={() => void remove()} loading={busy}>
           <Trash2 /> {t("pool.bulk.delete")}
@@ -228,6 +295,66 @@ export function BulkBar({
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
               />
+            ) : null}
+          </div>
+        </Modal>
+      ) : null}
+
+      {/* Two fields, so a Modal and not a Sheet (DESIGN.md › layers). The
+          category select only appears once a pool is chosen AND that pool has
+          folders: an empty select is a question with no answers. */}
+      {dialog === "pool" ? (
+        <Modal
+          title={t(ids.length === 1 ? "pool.move.title.one" : "pool.move.title", {
+            n: ids.length,
+          })}
+          onClose={() => setDialog(null)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setDialog(null)}>
+                {t("common.cancel")}
+              </Button>
+              <Button onClick={() => void moveToPool()} loading={moving} disabled={targetPoolId === ""}>
+                {t("pool.move.action")}
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-3">
+            {pools.isLoading ? (
+              <Spinner className="py-4" />
+            ) : targets.length === 0 ? (
+              <p className="text-[13px] text-fg-muted">{t("pool.move.noTarget")}</p>
+            ) : (
+              <Select
+                label={t("pool.move.pool")}
+                value={targetPoolId}
+                onChange={(e) => {
+                  setTargetPoolId(e.target.value);
+                  setTargetCategoryId("");
+                }}
+              >
+                <option value="">{t("pool.move.choosePool")}</option>
+                {targets.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+            {targetPoolId !== "" && (target.data?.categories.length ?? 0) > 0 ? (
+              <Select
+                label={t("question.meta.category")}
+                value={targetCategoryId}
+                onChange={(e) => setTargetCategoryId(e.target.value)}
+              >
+                <option value="">{t("pool.bulk.root")}</option>
+                {flatten(target.data!.categories).map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
+                  </option>
+                ))}
+              </Select>
             ) : null}
           </div>
         </Modal>
