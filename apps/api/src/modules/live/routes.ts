@@ -145,7 +145,7 @@ export async function livePlugin(app: FastifyInstance) {
       events.lobbyChanged(
         scope.evaluation.id,
         presence.count(scope.evaluation.id),
-        await service.enrolledCount(app.db, scope.evaluation.classroomId),
+        await service.enrolledCount(app.db, scope.evaluation),
       );
       return result.kind === "lobby"
         ? { kind: "lobby", view: result.view }
@@ -412,6 +412,7 @@ export async function livePlugin(app: FastifyInstance) {
       return service.dashboardView(app.db, scope.evaluation, {
         now: app.clock.now(),
         includeAnswers: query.data.includeAnswers,
+        includeResults: query.data.results,
       });
     },
   );

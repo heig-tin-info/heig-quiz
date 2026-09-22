@@ -11,9 +11,11 @@
  *   - Space: generous (32) between the ring, the rules and the footer line.
  *   - Finish: one card for the rules, hairlines, no shadow.
  *
- * It watches `evaluation:<id>` — a student legitimately receives
- * `lobby.count` and `evaluation.state` there (§4.8) — and calls `onStart` the
- * moment the state turns `running`, so nobody has to reload to begin.
+ * It watches `lobby:<id>` — the same topic as the teacher's dashboard, so a
+ * student legitimately receives `lobby.count` and `evaluation.state` there
+ * (§4.8), and the subject is also what makes the connection COUNT as present
+ * (F-LIVE-02). It calls `onStart` the moment the state turns `running`, so
+ * nobody has to reload to begin.
  */
 import { useState } from "react";
 import { CheckCheck, Clock, Save, ShieldCheck } from "lucide-react";
@@ -55,7 +57,7 @@ export function Lobby({
   // sees that the page is alive while nothing else moves.
   const tick = useNow(1_000);
 
-  useAttemptStream(`evaluation:${view.evaluation.id}`, {
+  useAttemptStream(`lobby:${view.evaluation.id}`, {
     onEvent: (event) => {
       if (event.type === "clock" || event.type === "snapshot") clock.sample(event.serverNow);
       if (event.type === "lobby.count") {

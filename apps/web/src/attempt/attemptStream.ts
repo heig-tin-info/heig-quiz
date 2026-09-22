@@ -16,8 +16,16 @@ import { useEffect, useRef } from "react";
 
 import { ServerEvent } from "@quiz/contracts";
 
-/** The two subjects a student watches: their attempt, or the lobby. */
-export type WatchSubject = `attempt:${string}` | `evaluation:${string}`;
+/**
+ * The two subjects a student watches: their attempt, or the lobby.
+ *
+ * `lobby:` and not `evaluation:` — the two carry the same topic and the same
+ * authorisation, and the subject is what tells the server which side of the
+ * room the connection is on. Only a `lobby:` (or one's own `attempt:`) counts
+ * as PRESENT, which is what lets a teacher who holds a roster seat and walks
+ * their own quiz be a body in the room like anybody else (ADR-018).
+ */
+export type WatchSubject = `attempt:${string}` | `lobby:${string}`;
 
 /** The frames the player and the lobby act on. Nothing else is subscribed. */
 export const WATCHED_EVENTS = [

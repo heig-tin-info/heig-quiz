@@ -36,6 +36,7 @@ export function makeCell(overrides: Partial<DashboardCell> & { itemId: string })
   return {
     status: "empty",
     verdict: null,
+    provisional: false,
     points: null,
     revision: 0,
     summary: null,
@@ -106,7 +107,12 @@ export function makeDashboard(rows = 3, items = 4): DashboardView {
       milestone: false,
     })),
     rows: Array.from({ length: rows }, (_, i) => makeRow(i, itemIds)),
-    totals: itemIds.map((itemId) => ({ itemId, completion: 0, successRate: null })),
+    totals: itemIds.map((itemId) => ({
+      itemId,
+      completion: 0,
+      successRate: null,
+      provisional: false,
+    })),
   };
 }
 

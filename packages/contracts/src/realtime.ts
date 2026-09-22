@@ -16,6 +16,7 @@
 import { z } from "zod";
 
 import { EvaluationState } from "./evaluation.js";
+import { Verdict } from "./grading.js";
 import { AttemptState, CellStatus, ClosedBy } from "./live.js";
 import type { NoticeKind } from "./notifications.js";
 
@@ -32,9 +33,20 @@ export const Topic = z.union([
 ]);
 export type Topic = z.infer<typeof Topic>;
 
-/** The subjects a client may ask to watch: `?watch=evaluation:<id>`. */
+/**
+ * The subjects a client may ask to watch: `?watch=evaluation:<id>`.
+ *
+ * `evaluation:` and `lobby:` carry the SAME topic and the same authorisation;
+ * what they say apart is which side of the room the connection is on. The
+ * teacher's dashboard watches `evaluation:`, a participant's waiting room
+ * watches `lobby:` — and a participant is what PRESENCE counts (F-LIVE-02).
+ * Before the two were told apart, the server guessed from the caller's role,
+ * so a teacher who holds a roster seat and walks their own quiz (ADR-018) was
+ * never counted present: their lobby looked exactly like a dashboard.
+ */
 export const WatchSubject = z.union([
   z.templateLiteral(["evaluation:", z.uuid()]),
+  z.templateLiteral(["lobby:", z.uuid()]),
   z.templateLiteral(["attempt:", z.uuid()]),
 ]);
 export type WatchSubject = z.infer<typeof WatchSubject>;
@@ -102,6 +114,13 @@ export const DashboardCellEvent = z.object({
   revision: z.number().int(),
   points: z.number().nullable(),
   summary: z.string().nullable(),
+  /**
+   * The verdict this answer WOULD get if the evaluation closed now, for the
+   * deterministic types only (ADR-020). `null` when the type is graded by the
+   * runner or the answer cannot be graded yet. It is a preview, never a
+   * grading on record, and it never leaves a staff connection.
+   */
+  verdict: Verdict.nullable(),
 });
 export type DashboardCellEvent = z.infer<typeof DashboardCellEvent>;
 

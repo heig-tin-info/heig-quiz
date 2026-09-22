@@ -798,6 +798,7 @@ describe("dashboard read model (F-DASH-01..04)", () => {
     const view = await service.dashboardView(db, evaluation, {
       now: clock.now(),
       includeAnswers: false,
+      includeResults: false,
     });
     expect(view.rows).toHaveLength(2);
     expect(view.items).toHaveLength(2);
@@ -813,6 +814,7 @@ describe("dashboard read model (F-DASH-01..04)", () => {
     const withAnswers = await service.dashboardView(db, evaluation, {
       now: clock.now(),
       includeAnswers: true,
+      includeResults: false,
     });
     const cell = withAnswers.rows
       .find((r) => r.userId === seed.studentIds[0]!)!

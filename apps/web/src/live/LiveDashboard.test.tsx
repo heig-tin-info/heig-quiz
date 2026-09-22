@@ -39,13 +39,15 @@ const navigate = vi.fn();
 
 function setup(view = makeDashboard(3, 4), extra: Record<string, ReturnType<typeof ok>> = {}) {
   const queryClient = makeQueryClient();
-  queryClient.setQueryData(dashboardKey(EVALUATION_ID, true), initialGrid(view));
+  queryClient.setQueryData(dashboardKey(EVALUATION_ID, true, true), initialGrid(view));
   const stubs = mockFetch({
     [`GET /app/api/evaluations/${EVALUATION_ID}`]: ok(makeEvaluationDetail()),
-    // Turning the answers off changes the query key, so the other variant
-    // must exist: the toggle genuinely refetches (`?includeAnswers=0`).
-    [`GET /app/api/evaluations/${EVALUATION_ID}/dashboard?includeAnswers=0`]: ok(view),
-    [`GET /app/api/evaluations/${EVALUATION_ID}/dashboard?includeAnswers=1`]: ok(view),
+    // Each toggle changes the query key, so every variant must exist: they
+    // genuinely refetch (`?includeAnswers=…&results=…`).
+    [`GET /app/api/evaluations/${EVALUATION_ID}/dashboard?includeAnswers=0&results=0`]: ok(view),
+    [`GET /app/api/evaluations/${EVALUATION_ID}/dashboard?includeAnswers=0&results=1`]: ok(view),
+    [`GET /app/api/evaluations/${EVALUATION_ID}/dashboard?includeAnswers=1&results=0`]: ok(view),
+    [`GET /app/api/evaluations/${EVALUATION_ID}/dashboard?includeAnswers=1&results=1`]: ok(view),
     ...extra,
   });
   const rendered = renderWithProviders(
@@ -86,6 +88,17 @@ describe("LiveDashboard — the grid", () => {
     setup();
     expect(await screen.findByText(/3 students/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/cell states/i)).toBeInTheDocument();
+  });
+
+  /* ADR-020: with the switch on, the class row is a LIVE rate and says so. */
+  it("reads the class row as a live success rate while the quiz runs", async () => {
+    const view = makeDashboard(3, 2);
+    view.totals[0] = { ...view.totals[0]!, successRate: 0.5, provisional: true };
+    setup(view);
+    expect(await screen.findByText(/50 % live/i)).toBeInTheDocument();
+    // The other question has nothing gradable yet, and the footer says that
+    // rather than the old, now inaccurate "after closing".
+    expect(screen.getByText(/graded at closing/i)).toBeInTheDocument();
   });
 
   it("falls back to an empty state when the roster is empty", async () => {

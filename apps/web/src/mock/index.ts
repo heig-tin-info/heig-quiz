@@ -2885,10 +2885,23 @@ const itemQuestion = (item: { questionId: string }): MockQuestion | null =>
 interface MockCell {
   itemId: string;
   status: "empty" | "seen" | "in_progress" | "done";
-  verdict: null;
+  /**
+   * The live verdict of ADR-020: with the "Results" switch on, the real
+   * server grades the answer it already holds. The mock fakes it the only
+   * way a mock can — deterministically, from the cell's own coordinates —
+   * so the screen it draws is the screen the teacher gets.
+   */
+  verdict: "correct" | "partial" | "wrong" | null;
+  provisional: boolean;
   points: null;
   revision: number;
   summary: string | null;
+}
+
+/** A stable verdict per cell, so a re-render never reshuffles the colours. */
+function mockVerdict(seed: number): "correct" | "partial" | "wrong" {
+  const n = seed % 10;
+  return n < 6 ? "correct" : n < 8 ? "partial" : "wrong";
 }
 
 interface MockItem {
@@ -3047,10 +3060,12 @@ function makeRows(e: MockEvaluation, started: boolean): MockRowState[] {
                 ? "seen"
                 : "empty";
         const question = itemQuestion(item);
+        const answered = status === "done" || status === "in_progress";
         return {
           itemId: item.id,
           status,
-          verdict: null,
+          verdict: answered ? mockVerdict(index * 7 + i * 3) : null,
+          provisional: answered,
           points: null,
           revision: status === "empty" || status === "seen" ? 0 : 1 + i,
           // `seen` carries nothing on purpose: there is no answer to preview.
@@ -3226,7 +3241,8 @@ function staffRow(e: MockEvaluation): MockRowState {
     cells: e.items.map((item, i) => ({
       itemId: item.id,
       status: "done" as const,
-      verdict: null,
+      verdict: mockVerdict(i * 3),
+      provisional: true,
       points: null,
       revision: 1 + i,
       summary: null,
@@ -3363,10 +3379,25 @@ const dashboardView = (e: MockEvaluation, includeAnswers: boolean) => {
       const done = classRows.filter(
         (r) => r.cells.find((c) => c.itemId === item.id)?.status === "done",
       ).length;
+      const graded = classRows
+        .map((r) => r.cells.find((c) => c.itemId === item.id))
+        .filter((c) => c?.verdict != null);
+      const rate =
+        graded.length === 0
+          ? null
+          : Math.round(
+              (graded.reduce(
+                (sum, c) => sum + (c!.verdict === "correct" ? 1 : c!.verdict === "partial" ? 0.5 : 0),
+                0,
+              ) /
+                graded.length) *
+                100,
+            ) / 100;
       return {
         itemId: item.id,
         completion: started === 0 ? 0 : Math.round((done / started) * 100) / 100,
-        successRate: null,
+        successRate: rate,
+        provisional: rate !== null,
       };
     }),
   };
@@ -5763,6 +5794,8 @@ class MockEventSource {
       const question = itemQuestion(item);
       cell.status = cell.status === "empty" ? "in_progress" : "done";
       cell.revision += 1;
+      cell.verdict = mockVerdict(index * 7 + cell.revision * 3);
+      cell.provisional = true;
       cell.summary =
         cell.status === "done" && question !== null
           ? summaryOf(question, index + cell.revision)
@@ -5776,6 +5809,7 @@ class MockEventSource {
         revision: cell.revision,
         points: null,
         summary: cell.summary,
+        verdict: cell.verdict,
       });
     });
 

@@ -14,8 +14,13 @@ import type { Tone } from "../ui";
 
 export const evaluationsKey = (classroomId: string) => ["evaluations", classroomId] as const;
 export const evaluationKey = (id: string) => ["evaluation", id] as const;
-export const dashboardKey = (id: string, includeAnswers: boolean) =>
-  ["dashboard", id, includeAnswers] as const;
+/**
+ * Both toggles are in the key because both are in the REQUEST: the answers
+ * travel only with `?includeAnswers=1`, and the live verdicts of ADR-020 are
+ * computed only with `?results=1`. A cached variant of one is not the other.
+ */
+export const dashboardKey = (id: string, includeAnswers: boolean, includeResults = false) =>
+  ["dashboard", id, includeAnswers, includeResults] as const;
 
 /**
  * Green is running, amber is "waiting for you", zinc is at rest. The accent

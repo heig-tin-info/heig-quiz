@@ -6,7 +6,7 @@
  * coalescing. The service never formats an event itself, so there is one
  * place to read when asking "who sees this, and how often".
  */
-import type { CellStatus, ClosedBy } from "@quiz/contracts";
+import type { CellStatus, ClosedBy, Verdict } from "@quiz/contracts";
 
 import * as bus from "../realtime/bus.js";
 import type { EvaluationRecord } from "../evaluation/service.js";
@@ -72,6 +72,17 @@ export function attemptRemoved(evaluationId: string, userId: string): void {
   bus.hint("evaluations", [bus.evaluationTopic(evaluationId), bus.userTopic(userId)]);
 }
 
+/**
+ * The grid gained or lost a ROW rather than a cell — a staff seat that just
+ * took the quiz (ADR-018, decision 3: a staff seat with no attempt is listed
+ * nowhere). No typed frame carries a new row, and inventing one for a case
+ * only a teacher can cause would put a roster change in the live path of a
+ * running exam; the dashboards watching the evaluation re-read instead.
+ */
+export function rosterChanged(evaluationId: string): void {
+  bus.hint("evaluations", [bus.evaluationTopic(evaluationId)]);
+}
+
 export function deadlineChanged(
   evaluation: EvaluationRecord,
   attempt: AttemptRow,
@@ -97,7 +108,14 @@ export function attemptClosed(
   bus.attemptClosed({ attemptId: attempt.id, evaluationId, closedBy, now });
 }
 
-/** Coalesced 250 ms per `(attemptId, itemId)`, staff connections only. */
+/**
+ * Coalesced 250 ms per `(attemptId, itemId)`, staff connections only.
+ *
+ * `verdict` is the live preview of ADR-020 and travels on every frame: the
+ * bus has no idea which teacher has the "Results" switch on, and one
+ * `grade()` of a deterministic answer costs about what the `summary` beside
+ * it already costs. `points` stays null — a provisional score is not a score.
+ */
 export function cellChanged(input: {
   evaluationId: string;
   attemptId: string;
@@ -105,6 +123,7 @@ export function cellChanged(input: {
   status: CellStatus;
   revision: number;
   summary: string | null;
+  verdict: Verdict | null;
 }): void {
   bus.dashboardCell({ ...input, points: null });
 }

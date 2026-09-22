@@ -370,10 +370,22 @@ describe("the staff attempt is shown, badged, and counted nowhere (ADR-018)", ()
     expect(view.rows.some((r: { staff: boolean }) => r.staff)).toBe(false);
   });
 
-  it("leaves the lobby denominator to the class", async () => {
+  /*
+   * The one place a staff seat DOES count, and the reason it is not a
+   * contradiction of decision 4: the lobby ring is not a statistic, it is how
+   * many people are in the room. A teacher who took a seat and opened the
+   * quiz is one of them, and a denominator that left them out read "1 / 0"
+   * on the screen whose whole message is "you are here".
+   */
+  it("counts a staff seat that took the evaluation in the lobby denominator", async () => {
     const db = server.app.db;
     const world = await running();
+    const evaluation = await reload(db, world.seed.evaluationId);
+    // Before the walk: the class alone. A staff seat with no attempt is
+    // listed nowhere and counted nowhere (decision 3).
+    await post(`/app/api/classrooms/${world.seed.classroomId}/self-enroll`, teacher.headers);
+    expect(await service.enrolledCount(db, evaluation)).toBe(1);
     await walkAsStaff(world);
-    expect(await service.enrolledCount(db, world.seed.classroomId)).toBe(1);
+    expect(await service.enrolledCount(db, evaluation)).toBe(2);
   });
 });
