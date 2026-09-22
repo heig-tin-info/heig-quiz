@@ -190,10 +190,10 @@ export interface QuestionTypeClient<
   summarize(answer: TAnswer | null, student: TStudent): string;
 }
 
-export { QUESTION_TYPE_IDS, isQuestionTypeId } from "./contract.js";
+export { QUESTION_TYPE_IDS } from "./contract.js";
 export type { QuestionTypeId } from "./contract.js";
 export { defineClientRegistry, makeLookup } from "./registry.js";
-export type { AnyQuestionTypeClient, ClientRegistry } from "./registry.js";
+export type { AnyQuestionTypeClient } from "./registry.js";
 export { UnknownQuestionType } from "./errors.js";
 export * from "./rng.js";
 

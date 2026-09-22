@@ -10,7 +10,7 @@ import type { ShortAnswer, ShortDetails, ShortSolution, ShortStudent } from "./s
 import { shortReviewStrings, type ShortReviewStringKey } from "./strings.js";
 import { cx, helpClass } from "./ui.js";
 
-export type ShortReviewProps = ReviewProps<
+type ShortReviewProps = ReviewProps<
   ShortStudent,
   ShortAnswer,
   ShortSolution,

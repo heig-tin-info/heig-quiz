@@ -22,7 +22,7 @@ import type {
 import { REVIEW_STRINGS, withStrings, type CircuitReviewStrings } from "./strings.js";
 import { badge, card, cx, hint, lockedBlock, sectionTitle, table } from "./styles.js";
 
-export interface CircuitReviewProps
+interface CircuitReviewProps
   extends ReviewProps<CircuitStudent, CircuitAnswer, CircuitSolution, CircuitDetails> {
   strings?: Partial<CircuitReviewStrings> | undefined;
   /** The canvas has a dictionary of its own; the host translates it too. */

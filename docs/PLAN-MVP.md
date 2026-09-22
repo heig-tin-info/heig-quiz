@@ -1897,7 +1897,7 @@ here follows §1–§10 verbatim.
 
 | # | Plan | Implemented | Why |
 |---|---|---|---|
-| W1-1 | §1 lists `packages/core` exports `.` and `./client` | `.`, `./server` (the same module as `.`), `./client` and `./rng` | The WP1 brief requires an explicit `./server` entry; `./rng` makes the `@quiz/core/rng` import path of §7.5 real |
+| W1-1 | §1 lists `packages/core` exports `.` and `./client` | `./server`, `./client` and `./rng` | The WP1 brief requires an explicit `./server` entry; `./rng` makes the `@quiz/core/rng` import path of §7.5 real. `.` was a byte copy of `./server` that nothing ever imported and is gone (audit P-18) |
 | W1-2 | §7.1 puts `roundToTenth` in `grade.ts`, the §7 file list puts it in `round.ts` | `round.ts` owns `Rounding`, `roundToTenth`, `round2` and `clamp`; `grade.ts` imports them | The two statements contradict each other and a symbol cannot be exported twice through `index.ts` |
 | W1-3 | §1.1 exports `shuffle` | `shuffle`, plus `seededShuffle` as a documented alias | The WP1 brief names the function `seededShuffle`; both names denote the same function, so neither WP2..WP6 nor the supervisor has to adapt |
 | W1-4 | §1.5 `makeLookup(m: Record<string, T>)` | `makeLookup(m: Readonly<Record<string, T \| undefined>>)` | A registry that is still empty (or partial until WP3 lands) is typed `Partial<Record<QuestionTypeId, …>>`, which does not satisfy `Record<string, T>` under `exactOptionalPropertyTypes`. A full registry is still accepted unchanged |

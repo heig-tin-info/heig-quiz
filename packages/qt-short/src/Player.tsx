@@ -24,7 +24,7 @@ import {
 import { shortPlayerStrings, type ShortPlayerStringKey } from "./strings.js";
 import { cx, helpClass, inputClass, labelClass } from "./ui.js";
 
-export type ShortPlayerProps = PlayerProps<ShortStudent, ShortAnswer> & {
+type ShortPlayerProps = PlayerProps<ShortStudent, ShortAnswer> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
   disabled?: boolean;
   strings?: StringOverrides<ShortPlayerStringKey>;

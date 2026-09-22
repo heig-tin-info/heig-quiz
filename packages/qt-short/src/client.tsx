@@ -14,7 +14,7 @@ import type {
   ShortStudent,
 } from "./schema.js";
 
-export type ShortClient = QuestionTypeClient<
+type ShortClient = QuestionTypeClient<
   ShortConfig,
   ShortAnswer,
   ShortStudent,
@@ -64,9 +64,6 @@ export const shortClient: ShortClient = {
  * this module, undoing the `lazy` above (rollup: INEFFECTIVE_DYNAMIC_IMPORT).
  * A host that genuinely needs one imports the file directly. Types only here.
  */
-export type { ShortEditorProps } from "./Editor.js";
-export type { ShortPlayerProps } from "./Player.js";
-export type { ShortReviewProps } from "./Review.js";
 export {
   shortEditorStrings,
   shortPlayerStrings,

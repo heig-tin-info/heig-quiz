@@ -138,7 +138,7 @@ export function Ports({
 // Components
 // ---------------------------------------------------------------------------
 
-export interface ComponentGlyphProps {
+interface ComponentGlyphProps {
   component: SchematicComponent;
   selected?: boolean | undefined;
   /** A half-transparent preview under the cursor: no label, no mouse target. */
@@ -344,7 +344,7 @@ export function SymbolPreview({
 // The view
 // ---------------------------------------------------------------------------
 
-export interface SchematicViewProps {
+interface SchematicViewProps {
   schematic: Schematic;
   strings?: Partial<CanvasStrings> | undefined;
   className?: string | undefined;

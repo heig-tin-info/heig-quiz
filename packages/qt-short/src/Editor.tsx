@@ -36,7 +36,7 @@ import {
   Segmented,
 } from "./ui.js";
 
-export type ShortEditorProps = Omit<EditorProps<ShortConfig>, "uploadAsset"> & {
+type ShortEditorProps = Omit<EditorProps<ShortConfig>, "uploadAsset"> & {
   uploadAsset?: EditorProps<ShortConfig>["uploadAsset"];
   issues?: readonly ConfigIssue[];
   strings?: StringOverrides<ShortEditorStringKey>;

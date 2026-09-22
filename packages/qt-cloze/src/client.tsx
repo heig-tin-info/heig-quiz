@@ -14,7 +14,7 @@ import type {
   ClozeStudent,
 } from "./schema.js";
 
-export type ClozeClient = QuestionTypeClient<
+type ClozeClient = QuestionTypeClient<
   ClozeConfig,
   ClozeAnswer,
   ClozeStudent,
@@ -69,10 +69,7 @@ export const clozeClient: ClozeClient = {
  * this module, undoing the `lazy` above (rollup: INEFFECTIVE_DYNAMIC_IMPORT).
  * A host that genuinely needs one imports the file directly. Types only here.
  */
-export type { ClozeEditorProps } from "./Editor.js";
-export type { ClozePlayerProps } from "./Player.js";
-export type { ClozeReviewProps } from "./Review.js";
-export { ClozeFallbackText, splitBlocks, type ClozeTextProps, type ClozeTextRenderer } from "./text.js";
+export { ClozeFallbackText, splitBlocks, type ClozeTextRenderer } from "./text.js";
 export {
   clozeEditorStrings,
   clozePlayerStrings,

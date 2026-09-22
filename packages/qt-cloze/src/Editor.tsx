@@ -30,7 +30,7 @@ import {
   sectionClass,
 } from "./ui.js";
 
-export type ClozeEditorProps = Omit<EditorProps<ClozeConfig>, "uploadAsset"> & {
+type ClozeEditorProps = Omit<EditorProps<ClozeConfig>, "uploadAsset"> & {
   uploadAsset?: EditorProps<ClozeConfig>["uploadAsset"];
   issues?: readonly ConfigIssue[];
   strings?: StringOverrides<ClozeEditorStringKey>;

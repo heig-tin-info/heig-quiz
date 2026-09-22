@@ -23,7 +23,6 @@ export const McqChoiceSchema = z.object({
 export type McqChoice = z.infer<typeof McqChoiceSchema>;
 
 export const McqModeSchema = z.enum(["single", "multiple"]);
-export type McqMode = z.infer<typeof McqModeSchema>;
 
 /**
  * How a `multiple` question is scored (docs/04 §4.4; `@quiz/domain/mcqScore`
@@ -63,7 +62,6 @@ export type McqQuestionPolicy = z.infer<typeof McqQuestionPolicySchema>;
  * (the teacher's Try panel, which has no evaluation).
  */
 export const McqDefaultsSchema = z.object({ policy: McqPolicySchema });
-export type McqDefaults = z.infer<typeof McqDefaultsSchema>;
 
 /** The fallback everywhere `inherit` cannot be resolved. */
 export const MCQ_DEFAULT_POLICY: McqPolicy = "all_or_nothing";

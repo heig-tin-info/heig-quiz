@@ -6,14 +6,6 @@
  */
 import { z } from "zod";
 
-/** Error envelope of the whole API: `{ error, message?, details? }`. */
-export const ApiError = z.object({
-  error: z.string(),
-  message: z.string().optional(),
-  details: z.unknown().optional(),
-});
-export type ApiError = z.infer<typeof ApiError>;
-
 /** `/…/:id` — the only path shape the loaders of `guards.ts` accept. */
 export const IdParam = z.object({ id: z.uuid() });
 export type IdParam = z.infer<typeof IdParam>;

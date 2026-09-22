@@ -124,8 +124,7 @@ export type {
  * genuinely needs one imports the file directly.
  */
 export type { CircuitEditorProps, CircuitTryOutcome } from "./Editor.js";
-export type { CircuitPlayerProps, CircuitSimulateOutcome } from "./Player.js";
-export type { CircuitReviewProps } from "./Review.js";
+export type { CircuitSimulateOutcome } from "./Player.js";
 export {
   CANVAS_STRINGS,
   EDITOR_STRINGS,

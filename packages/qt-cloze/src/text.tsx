@@ -15,7 +15,7 @@ import type { ReactNode } from "react";
 import { CLOZE_SENTINEL_PATTERN } from "@quiz/domain";
 import { cx } from "./ui.js";
 
-export interface ClozeTextProps {
+interface ClozeTextProps {
   /** The sentinel-bearing markdown, exactly as `toStudent` sent it. */
   template: string;
   /** The control (or the verdict) to place at blank `index`. */

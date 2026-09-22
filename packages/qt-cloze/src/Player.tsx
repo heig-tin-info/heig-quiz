@@ -13,7 +13,7 @@ import { clozePlayerStrings, type ClozePlayerStringKey } from "./strings.js";
 import { ClozeFallbackText, type ClozeTextRenderer } from "./text.js";
 import { cx, helpClass, inputClass } from "./ui.js";
 
-export type ClozePlayerProps = PlayerProps<ClozeStudent, ClozeAnswer> & {
+type ClozePlayerProps = PlayerProps<ClozeStudent, ClozeAnswer> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
   disabled?: boolean;
   strings?: StringOverrides<ClozePlayerStringKey>;

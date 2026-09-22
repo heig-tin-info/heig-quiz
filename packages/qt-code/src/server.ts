@@ -159,8 +159,13 @@ export const codeServer: QuestionTypeServer<
   fromCanonical,
 };
 
-export * from "./grade.js";
-export * from "./schema.js";
+/*
+ * The pure halves a host takes from here: the runner finalizer the API calls
+ * on a finished run, and the two schemas it parses a stored row with. Named
+ * one by one rather than `export *`, so the published surface is the list.
+ */
+export { finalizeRunnerCode } from "./grade.js";
+export { CodeConfig, CodeDetails } from "./schema.js";
 export { fromCanonical, toCanonical } from "./canonical.js";
 /*
  * The reference solution read as regions (docs/spec/04 §4.7). Exported from

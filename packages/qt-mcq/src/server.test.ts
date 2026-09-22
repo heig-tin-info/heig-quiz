@@ -6,7 +6,7 @@ import { readFileSync } from "node:fs";
 import { ConfigMigrationError } from "@quiz/core/server";
 import { describe, expect, it } from "vitest";
 import { fromCanonical, toCanonical } from "./canonical.js";
-import { multipleConfig, SECRET_CONFIG } from "./fixtures.js";
+import { multipleConfig, SECRET_CONFIG } from "./test/fixtures.js";
 import { MCQ_CONFIG_VERSION, McqConfigSchema, emptyMcqDraft } from "./schema.js";
 import { choiceOrder, mcqServer } from "./server.js";
 

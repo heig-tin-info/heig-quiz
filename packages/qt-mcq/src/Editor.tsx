@@ -75,7 +75,7 @@ import {
   TrashIcon,
 } from "./ui.js";
 
-export type McqEditorProps = Omit<EditorProps<McqConfig>, "uploadAsset"> & {
+type McqEditorProps = Omit<EditorProps<McqConfig>, "uploadAsset"> & {
   /** The rich editor uses it; the textarea fallback does not. */
   uploadAsset?: EditorProps<McqConfig>["uploadAsset"];
   /** What the last save reported, as zod paths (decision D16). */

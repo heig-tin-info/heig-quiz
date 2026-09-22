@@ -11,7 +11,7 @@ import type { McqAnswer, McqStudent } from "./schema.js";
 import { mcqStatsStrings, type McqStatsStringKey } from "./strings.js";
 import { choiceLetter, helpClass } from "./ui.js";
 
-export type McqStatsProps = StatsProps<McqStudent, McqAnswer> & {
+type McqStatsProps = StatsProps<McqStudent, McqAnswer> & {
   strings?: StringOverrides<McqStatsStringKey>;
 };
 

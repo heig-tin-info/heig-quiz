@@ -101,9 +101,7 @@ export type {
  * genuinely needs one imports the file directly.
  */
 export type { CodeEditorProps } from "./Editor.js";
-export type { CodePlayerProps, CodeRunOptions, CodeRunStage } from "./Player.js";
-export type { CodeReviewProps } from "./Review.js";
-export type { CodeAreaProps } from "./MonacoHost.js";
+export type { CodeRunOptions, CodeRunStage } from "./Player.js";
 export {
   EDITOR_STRINGS,
   PLAYER_STRINGS,

@@ -21,7 +21,6 @@ export const inputClass =
 export const labelClass = "text-[13px] font-medium text-fg";
 export const helpClass = "text-xs text-fg-faint";
 export const sectionClass = "flex flex-col gap-2";
-export const legendClass = "text-[13px] font-medium text-fg";
 
 /** The issues whose path starts with `path` (decision D16 reporting). */
 export function issuesAt(
@@ -49,9 +48,4 @@ export function IssueList({ issues }: { issues: readonly ConfigIssue[] }): React
       ))}
     </ul>
   );
-}
-
-/** Letter of a choice, as the editor and the review show it: A, B, C… */
-export function choiceLetter(index: number): string {
-  return String.fromCharCode(65 + (index % 26));
 }

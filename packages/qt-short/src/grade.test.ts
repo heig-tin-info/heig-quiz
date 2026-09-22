@@ -6,7 +6,7 @@
  */
 import { isGraded } from "@quiz/core/server";
 import { describe, expect, it } from "vitest";
-import { config, gradeContext } from "./fixtures.js";
+import { config, gradeContext } from "./test/fixtures.js";
 import type { ShortConfig } from "./schema.js";
 import { shortServer } from "./server.js";
 

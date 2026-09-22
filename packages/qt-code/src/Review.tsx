@@ -13,7 +13,7 @@ import type { CodeAnswer, CodeCaseDetail, CodeDetails, CodeSolution, CodeStudent
 import { REVIEW_STRINGS, withStrings, type CodeReviewStrings } from "./strings.js";
 import { badge, card, cx, hint, lockedBlock, sectionTitle, table } from "./styles.js";
 
-export interface CodeReviewProps
+interface CodeReviewProps
   extends ReviewProps<CodeStudent, CodeAnswer, CodeSolution, CodeDetails> {
   /** docs/06 Q8: the policy may name the hidden cases once the results are out. */
   showHiddenCaseNames?: boolean | undefined;

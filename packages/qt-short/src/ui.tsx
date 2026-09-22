@@ -21,7 +21,6 @@ export const inputClass =
 export const labelClass = "text-[13px] font-medium text-fg";
 export const helpClass = "text-xs text-fg-faint";
 export const sectionClass = "flex flex-col gap-2";
-export const legendClass = "text-[13px] font-medium text-fg";
 
 /** Secondary button chrome (pill, hairline), for the editor's add/remove actions. */
 export const buttonClass =

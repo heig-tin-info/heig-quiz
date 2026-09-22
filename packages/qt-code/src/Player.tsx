@@ -42,7 +42,7 @@ export interface CodeRunOptions {
   onStage?: ((stage: CodeRunStage) => void) | undefined;
 }
 
-export interface CodePlayerProps extends PlayerProps<CodeStudent, CodeAnswer> {
+interface CodePlayerProps extends PlayerProps<CodeStudent, CodeAnswer> {
   /**
    * Runs the VISIBLE cases and resolves with the runner's outcome, whose
    * `cases` are those visible cases in order. The host posts to

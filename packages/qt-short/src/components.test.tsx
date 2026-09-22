@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ShortEditor } from "./Editor.js";
 import { ShortPlayer } from "./Player.js";
 import { ShortReview } from "./Review.js";
-import { config, SECRET_CONFIG } from "./fixtures.js";
+import { config, SECRET_CONFIG } from "./test/fixtures.js";
 import { emptyShortDraft } from "./schema.js";
 import { shortServer } from "./server.js";
 

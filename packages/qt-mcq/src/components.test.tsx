@@ -10,7 +10,7 @@ import { McqEditor } from "./Editor.js";
 import { McqPlayer } from "./Player.js";
 import { McqReview } from "./Review.js";
 import { McqStats } from "./Stats.js";
-import { multipleConfig, SECRET_CONFIG } from "./fixtures.js";
+import { multipleConfig, SECRET_CONFIG } from "./test/fixtures.js";
 import { emptyMcqDraft, MCQ_MAX_CHOICES } from "./schema.js";
 import { mcqServer } from "./server.js";
 

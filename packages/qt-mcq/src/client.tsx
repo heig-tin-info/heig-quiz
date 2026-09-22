@@ -10,7 +10,7 @@ import type { QuestionTypeClient } from "@quiz/core/client";
 import type { McqAnswer, McqConfig, McqDetails, McqSolution, McqStudent } from "./schema.js";
 import { choiceLetter } from "./ui.js";
 
-export type McqClient = QuestionTypeClient<McqConfig, McqAnswer, McqStudent, McqSolution, McqDetails>;
+type McqClient = QuestionTypeClient<McqConfig, McqAnswer, McqStudent, McqSolution, McqDetails>;
 
 /** A ticked list: the mark of a multiple-choice question in a type picker. */
 function McqIcon({ className = "size-4" }: { className?: string }) {
@@ -62,10 +62,6 @@ export const mcqClient: McqClient = {
  * this module, undoing the `lazy` above (rollup: INEFFECTIVE_DYNAMIC_IMPORT).
  * A host that genuinely needs one imports the file directly. Types only here.
  */
-export type { McqEditorProps } from "./Editor.js";
-export type { McqPlayerProps } from "./Player.js";
-export type { McqReviewProps } from "./Review.js";
-export type { McqStatsProps } from "./Stats.js";
 export {
   mcqEditorStrings,
   mcqPlayerStrings,

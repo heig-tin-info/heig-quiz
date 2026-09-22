@@ -1,12 +1,9 @@
-/**
- * Test fixtures. Kept out of the build (`tsconfig.json` excludes tests only, so
- * this file compiles too — it is small, typed and shared by four suites).
- */
+/** Test fixtures for the `mcq` suites (excluded from the build). */
 import type { GradeContext, RunnerService } from "@quiz/core/server";
-import { MCQ_CONFIG_VERSION, McqConfigSchema, type McqConfig } from "./schema.js";
+import { MCQ_CONFIG_VERSION, McqConfigSchema, type McqConfig } from "../schema.js";
 
 /** No question type of WP2 touches the runner; calling it is a bug, so it throws. */
-export const noRunner: RunnerService = {
+const noRunner: RunnerService = {
   run() {
     throw new Error("the mcq type must never call the runner");
   },

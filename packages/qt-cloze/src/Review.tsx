@@ -13,7 +13,7 @@ import { clozeReviewStrings, type ClozeReviewStringKey } from "./strings.js";
 import { ClozeFallbackText, type ClozeTextRenderer } from "./text.js";
 import { cx, helpClass } from "./ui.js";
 
-export type ClozeReviewProps = ReviewProps<
+type ClozeReviewProps = ReviewProps<
   ClozeStudent,
   ClozeAnswer,
   ClozeSolution,

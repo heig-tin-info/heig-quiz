@@ -31,7 +31,7 @@ import { badge, button, card, cx, hint, sectionTitle, strip } from "./styles.js"
 /** What the host answers "Simulate" with; the two words are graceful paths. */
 export type CircuitSimulateOutcome = RunnerOutcome | "unavailable" | "rate_limited";
 
-export interface CircuitPlayerProps extends PlayerProps<CircuitStudent, CircuitAnswer> {
+interface CircuitPlayerProps extends PlayerProps<CircuitStudent, CircuitAnswer> {
   /**
    * Runs the VISIBLE stimuli and resolves with the runner's outcome, whose
    * cases are those stimuli in order. The host posts to
