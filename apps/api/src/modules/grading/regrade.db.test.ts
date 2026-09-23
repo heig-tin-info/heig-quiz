@@ -175,3 +175,73 @@ describe("regrade (F-GRADE-06, F-GRADE-09)", () => {
     expect(wrong.statusCode).toBe(404);
   });
 });
+
+/**
+ * The order of the refusals, which the wrappers of `modules/http.ts` must
+ * keep (audit B-02). The cell and regrade routes validate their body BEFORE
+ * loading their scope; the evaluation-wide ones load their scope first.
+ */
+describe("the order of the refusals, over HTTP", () => {
+  it("refuses session, params, then body and scope in each route's own order", async () => {
+    const { evaluation, items, answer } = await graded();
+    const badBody = { points: "many" };
+
+    expect((await post(`/app/api/answers/x/gradings`, {}, badBody)).statusCode).toBe(401);
+    expect((await post(`/app/api/answers/x/gradings`, student.headers, badBody)).statusCode).toBe(403);
+    const badParams = await post(`/app/api/answers/x/gradings`, teacher.headers, badBody);
+    expect(badParams.statusCode).toBe(404);
+    expect(badParams.json()).toEqual({ error: "not_found" });
+
+    // Body first: a malformed override is a 400 even off the staff.
+    const bodyFirst = await post(`/app/api/answers/${answer.id}/gradings`, other.headers, badBody);
+    expect(bodyFirst.statusCode).toBe(400);
+    expect(bodyFirst.json().error).toBe("validation");
+    const regrade = await post(
+      `/app/api/evaluations/${evaluation.id}/items/${items[0]!.item.id}/regrade`,
+      other.headers,
+      {},
+    );
+    expect(regrade.statusCode).toBe(400);
+
+    // Scope first: off the staff, the 404 wins over the malformed body.
+    const scopeFirst = await post(
+      `/app/api/evaluations/${evaluation.id}/grading/validate-batch`,
+      other.headers,
+      { state: "validated" },
+    );
+    expect(scopeFirst.statusCode).toBe(404);
+    expect(scopeFirst.json()).toEqual({ error: "not_found" });
+  });
+
+  it("overrides through both entry points and maps the module's refusals", async () => {
+    const { answer } = await graded();
+    const first = await post(`/app/api/answers/${answer.id}/gradings`, teacher.headers, {
+      points: 0.25,
+      comment: "through the answer",
+    });
+    expect(first.statusCode).toBe(200);
+    const gradingId = first.json().id as string;
+
+    // Off the staff, a well-formed override of the grading is a 404.
+    const foreign = await post(`/app/api/gradings/${gradingId}/override`, other.headers, {
+      points: 1,
+      comment: "not mine",
+    });
+    expect(foreign.statusCode).toBe(404);
+
+    const second = await post(`/app/api/gradings/${gradingId}/override`, teacher.headers, {
+      points: 0.75,
+      comment: "through the grading",
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toMatchObject({ points: 0.75, source: "manual", state: "validated" });
+
+    // A validated grading is no proposal: `NotPending` comes back as its own 409.
+    const again = await post(`/app/api/gradings/${second.json().id}/validate`, teacher.headers);
+    expect(again.statusCode).toBe(409);
+    expect(again.json()).toEqual({
+      error: "not_pending",
+      message: "this grading is not a proposal any more",
+    });
+  });
+});
