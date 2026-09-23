@@ -17,37 +17,34 @@
  *      Step 3 is defence in depth: a type that respects its contract loses
  *      nothing to it, and a type that slips gains no reach.
  */
-import type { StudentView } from "@quiz/core/server";
+import { COMMON_FORBIDDEN_STUDENT_KEYS, type StudentView } from "@quiz/core/server";
 
 import { loadConfig, typeOf } from "../pool/config.js";
 
 /**
  * Keys a student payload may never carry, whatever produced it.
  *
- * `expected` is deliberately ABSENT from this list: `code` publishes the
+ * The floor comes from `@quiz/core/server` and is shared with the five
+ * per-type leak tests, so a key thought of in one place is enforced in all of
+ * them (audit 2026-09-22, finding P-06). What follows is what this exit adds
+ * on top: the names the STORAGE layer uses (`answerKey`, `configVersion`) and
+ * the ones only some types have (`hiddenCases`, `matcher`, `regex`,
+ * `solution`, `tolerance`, `isCorrect`).
+ *
+ * `expected` is deliberately ABSENT from both halves: `code` publishes the
  * expected output of its VISIBLE cases on purpose (docs/04 §4.7, deviation
  * W3-4). What must never travel is the hidden half, and that is covered by
  * the secret-value search of the leak test, which is the check that matters.
  */
 export const FORBIDDEN_STUDENT_KEYS: readonly string[] = [
+  ...COMMON_FORBIDDEN_STUDENT_KEYS,
   "answerKey",
-  "answers",
-  "changeNote",
   "configVersion",
-  "correct",
-  "deprecationNote",
-  "difficulty",
-  "explanation",
   "hiddenCases",
-  "internalName",
   "isCorrect",
   "matcher",
-  "matchers",
-  "pattern",
-  "referenceSolution",
   "regex",
   "solution",
-  "tags",
   "tolerance",
 ];
 

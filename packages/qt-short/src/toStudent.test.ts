@@ -1,31 +1,26 @@
 /** The mandatory leak test (PLAN-MVP §2.5, docs/05 §5.7, N-SEC-04). */
 import { describe, expect, it } from "vitest";
+import { COMMON_FORBIDDEN_STUDENT_KEYS } from "@quiz/core/server";
 import { SECRET_CONFIG, SECRET_VALUES } from "./test/fixtures.js";
 import { shortServer } from "./server.js";
 
+/*
+ * The shared floor (`@quiz/core/server`) plus what only `short` has: the
+ * matcher's own vocabulary, which says how the answer is compared and
+ * therefore what it looks like.
+ */
 const FORBIDDEN_KEYS = [
-  "correct",
-  "matchers",
-  "answers",
+  ...COMMON_FORBIDDEN_STUDENT_KEYS,
   "expected",
-  "pattern",
-  "value",
+  "policy",
+  "reference",
   "tolerance",
-  "toleranceMode",
   "toleranceDays",
   "toleranceMinutes",
+  "toleranceMode",
   "unit",
   "unitRequired",
-  "policy",
-  "penalty",
-  "compare",
-  "compileArgs",
-  "explanation",
-  "internalName",
-  "tags",
-  "difficulty",
-  "rubric",
-  "reference",
+  "value",
 ];
 
 describe("toStudent", () => {

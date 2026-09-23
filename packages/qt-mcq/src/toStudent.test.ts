@@ -5,28 +5,23 @@
  * no secret VALUE. The second one is what catches a leak that renamed a field.
  */
 import { describe, expect, it } from "vitest";
+import { COMMON_FORBIDDEN_STUDENT_KEYS } from "@quiz/core/server";
 import { SECRET_CONFIG } from "./test/fixtures.js";
 import { McqConfigSchema } from "./schema.js";
 import { mcqServer } from "./server.js";
 
+/*
+ * The shared floor (`@quiz/core/server`) plus what only `mcq` has. `mode` is
+ * absent on purpose: it is a member of `McqStudent` — the player needs to know
+ * whether it draws radios or checkboxes — which is why it is not in the floor.
+ */
 const FORBIDDEN_KEYS = [
-  "correct",
-  "matchers",
-  "answers",
-  "expected",
-  "pattern",
-  "value",
-  "tolerance",
-  "policy",
-  "penalty",
+  ...COMMON_FORBIDDEN_STUDENT_KEYS,
   "allowNegative",
-  "compare",
-  "compileArgs",
-  "explanation",
-  "internalName",
-  "tags",
-  "difficulty",
-  "rubric",
+  "expected",
+  "policy",
+  "tolerance",
+  "value",
 ];
 
 describe("toStudent", () => {

@@ -1,27 +1,22 @@
 /** The mandatory leak test (PLAN-MVP §2.5, docs/05 §5.7, N-SEC-04). */
 import { describe, expect, it } from "vitest";
+import { COMMON_FORBIDDEN_STUDENT_KEYS } from "@quiz/core/server";
 import { config, SECRET_CONFIG, SECRET_VALUES } from "./test/fixtures.js";
 import { clozeServer } from "./server.js";
 
+/*
+ * The shared floor (`@quiz/core/server`) plus what only `cloze` has: a blank
+ * publishes its `kind`, never its `mode`, and the regex `flags` say as much
+ * about the key as the pattern does.
+ */
 const FORBIDDEN_KEYS = [
-  "correct",
-  "matchers",
-  "answers",
+  ...COMMON_FORBIDDEN_STUDENT_KEYS,
   "expected",
-  "pattern",
   "flags",
-  "value",
-  "tolerance",
   "mode",
   "policy",
-  "penalty",
-  "compare",
-  "compileArgs",
-  "explanation",
-  "internalName",
-  "tags",
-  "difficulty",
-  "rubric",
+  "tolerance",
+  "value",
 ];
 
 const view = { seed: 7, itemId: "i", shuffle: true };

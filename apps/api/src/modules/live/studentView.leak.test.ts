@@ -23,7 +23,10 @@
 import { describe, expect, it } from "vitest";
 
 import { questionType, registeredServerIds, registerForTests } from "@quiz/registry/server";
-import type { AnyQuestionTypeServer } from "@quiz/core/server";
+import {
+  COMMON_FORBIDDEN_STUDENT_KEYS,
+  type AnyQuestionTypeServer,
+} from "@quiz/core/server";
 
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
 import { FORBIDDEN_STUDENT_KEYS, studentView, stripMetadata } from "./studentView.js";
@@ -216,6 +219,62 @@ function checkType(id: string, type: AnyQuestionTypeServer): void {
     ).toBe(true);
   }
 }
+
+/**
+ * The list this exit filtered on before `COMMON_FORBIDDEN_STUDENT_KEYS`
+ * existed (audit 2026-09-22, finding P-06). It is pinned here so the
+ * refactoring can be read as what it is: nothing was lost, and the floor the
+ * five per-type tests share added four keys this list had missed.
+ */
+const FORBIDDEN_STUDENT_KEYS_BEFORE_P06 = [
+  "answerKey",
+  "answers",
+  "changeNote",
+  "configVersion",
+  "correct",
+  "deprecationNote",
+  "difficulty",
+  "explanation",
+  "hiddenCases",
+  "internalName",
+  "isCorrect",
+  "matcher",
+  "matchers",
+  "pattern",
+  "referenceSolution",
+  "regex",
+  "solution",
+  "tags",
+  "tolerance",
+];
+
+describe("the forbidden-key list only grows", () => {
+  it("still forbids everything it forbade before the shared floor", () => {
+    for (const key of FORBIDDEN_STUDENT_KEYS_BEFORE_P06) {
+      expect(FORBIDDEN_STUDENT_KEYS, key).toContain(key);
+    }
+  });
+
+  it("is a superset of the floor every question type shares", () => {
+    for (const key of COMMON_FORBIDDEN_STUDENT_KEYS) {
+      expect(FORBIDDEN_STUDENT_KEYS, key).toContain(key);
+    }
+  });
+
+  it("gained exactly the four keys the floor had and this exit had not", () => {
+    const before = new Set(FORBIDDEN_STUDENT_KEYS_BEFORE_P06);
+    expect(FORBIDDEN_STUDENT_KEYS.filter((key) => !before.has(key)).sort()).toEqual([
+      "compare",
+      "compileArgs",
+      "penalty",
+      "rubric",
+    ]);
+  });
+
+  it("holds no duplicate, so the two halves do not overlap", () => {
+    expect(new Set(FORBIDDEN_STUDENT_KEYS).size).toBe(FORBIDDEN_STUDENT_KEYS.length);
+  });
+});
 
 describe("studentView never leaks the key (invariant 4)", () => {
   const ids = registeredServerIds();

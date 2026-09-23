@@ -7,6 +7,8 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { COMMON_FORBIDDEN_STUDENT_KEYS } from "@quiz/core/server";
+
 import { CodeConfig, CodeStudent } from "./schema.js";
 import { codeServer } from "./server.js";
 import {
@@ -21,31 +23,19 @@ import {
 } from "./test/fixtures.js";
 
 /*
- * The list of §2.5, minus `expected`: a VISIBLE case publishes its expected
- * output on purpose — the player shows "stdin / expected / got" and the
- * student is meant to compare them (docs/spec/04 §4.7). The hidden ones are
- * covered by the value search below, which is the check that actually
- * matters here.
+ * The shared floor (`@quiz/core/server`) plus what only `code` has. `expected`
+ * is in neither: a VISIBLE case publishes its expected output on purpose —
+ * the player shows "stdin / expected / got" and the student is meant to
+ * compare them (docs/spec/04 §4.7). The hidden ones are covered by the value
+ * search below, which is the check that actually matters here.
  */
 const FORBIDDEN_KEYS = [
-  "correct",
-  "matchers",
-  "answers",
-  "pattern",
-  "tolerance",
-  "policy",
-  "penalty",
-  "compare",
-  "compileArgs",
-  "referenceSolution",
-  "explanation",
-  "internalName",
-  "tags",
-  "difficulty",
-  "rubric",
+  ...COMMON_FORBIDDEN_STUDENT_KEYS,
+  "action",
   "content",
   "files",
-  "action",
+  "policy",
+  "tolerance",
 ];
 
 const SECRET_VALUES = [
