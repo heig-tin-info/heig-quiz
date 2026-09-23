@@ -252,7 +252,7 @@ export async function progressOf(db: Db, evaluationId: string): Promise<GradingP
     }
     const reason = reasonOf(row.details);
     if (reason === "llm_not_configured") llm += 1;
-    else if (reason === "runner_unavailable" || reason === "runner_busy") runner += 1;
+    else if (reason === "runner_unavailable") runner += 1;
     else failed += 1;
   }
   return { done, total, pending: { runner, llm }, failed };
