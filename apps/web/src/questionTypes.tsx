@@ -50,9 +50,6 @@ import {
   PLAYER_STRINGS,
   REVIEW_STRINGS,
   type CodeEditorProps,
-  type CodeEditorStrings,
-  type CodePlayerStrings,
-  type CodeReviewStrings,
 } from "@quiz/qt-code/client";
 import {
   CANVAS_STRINGS,
@@ -62,9 +59,6 @@ import {
   REVIEW_STRINGS as CIRCUIT_REVIEW_STRINGS,
   type CanvasStrings,
   type CircuitEditorProps,
-  type CircuitEditorStrings,
-  type CircuitPlayerStrings,
-  type CircuitReviewStrings,
   type KindLabels,
 } from "@quiz/qt-circuit/client";
 
@@ -117,8 +111,11 @@ export function typeHint(t: TFunction, id: string): string {
 /**
  * Translates a package's string dictionary key by key: every key `k` of
  * `defaults` is looked up as `<prefix>.<k>` in `i18n.tsx`. Keys whose default
- * is a function (the `code` type parameterizes a few of its sentences) are
- * skipped here and rebuilt by hand below.
+ * is a function are skipped: only the circuit canvas has two (`kind`,
+ * `port`), and they are lookups rather than sentences. A parameterised
+ * sentence is a `{var}` template on both sides, so it goes through like any
+ * other key — `.one` variants included, since a package names them
+ * `"<key>.one"` too.
  */
 function translated<T extends object>(t: TFunction, defaults: T, prefix: string): T {
   const out: Record<string, unknown> = {};
@@ -176,23 +173,8 @@ export const editorStrings = {
   }),
   short: (t: TFunction) => translated(t, shortEditorStrings, "qt.short.e"),
   cloze: (t: TFunction) => translated(t, clozeEditorStrings, "qt.cloze.e"),
-  code: (t: TFunction): CodeEditorStrings => ({
-    ...translated(t, EDITOR_STRINGS, "qt.code.e"),
-    case: (n) => t("qt.code.e.case", { n }),
-    lockedRegions: (n) =>
-      t(n === 1 ? "qt.code.e.lockedRegions.one" : "qt.code.e.lockedRegions", { n }),
-    tryResult: (passed, total) => t("qt.code.e.tryResult", { passed, total }),
-    removeCase: (name) => t("qt.code.e.removeCase", { name }),
-    totalPoints: (n) => t(n === 1 ? "qt.code.e.totalPoints.one" : "qt.code.e.totalPoints", { n }),
-  }),
-  circuit: (t: TFunction): CircuitEditorStrings => ({
-    ...translated(t, CIRCUIT_EDITOR_STRINGS, "qt.circuit.e"),
-    stimulus: (n) => t("qt.circuit.e.stimulus", { n }),
-    removeStimulus: (name) => t("qt.circuit.e.removeStimulus", { name }),
-    totalPoints: (n) =>
-      t(n === 1 ? "qt.circuit.e.totalPoints.one" : "qt.circuit.e.totalPoints", { n }),
-    tryDone: (n) => t(n === 1 ? "qt.circuit.e.tryDone.one" : "qt.circuit.e.tryDone", { n }),
-  }),
+  code: (t: TFunction) => translated(t, EDITOR_STRINGS, "qt.code.e"),
+  circuit: (t: TFunction) => translated(t, CIRCUIT_EDITOR_STRINGS, "qt.circuit.e"),
 };
 
 /**
@@ -209,12 +191,6 @@ export const circuitCanvasStrings = (t: TFunction): CanvasStrings => {
   const kinds = circuitKindLabels(t);
   return {
     ...translated(t, CANVAS_STRINGS, "qt.circuit.c"),
-    componentCount: (used, max) => t("qt.circuit.c.componentCount", { used, max }),
-    paletteFull: (max) => t("qt.circuit.c.paletteFull", { max }),
-    hintSelection: (n) =>
-      t(n === 1 ? "qt.circuit.c.hintSelection.one" : "qt.circuit.c.hintSelection", { n }),
-    hintPlace: (kind) => t("qt.circuit.c.hintPlace", { kind }),
-    cursor: (x, y) => t("qt.circuit.c.cursor", { x, y }),
     // The canvas asks for a kind's label through a function; the dictionary
     // above is what answers it, so the palette, the inspector and the chips
     // of the editor all say the same word.
@@ -227,68 +203,16 @@ export const playerStrings = {
   mcq: (t: TFunction) => translated(t, mcqPlayerStrings, "qt.mcq.p"),
   short: (t: TFunction) => translated(t, shortPlayerStrings, "qt.short.p"),
   cloze: (t: TFunction) => translated(t, clozePlayerStrings, "qt.cloze.p"),
-  code: (t: TFunction): CodePlayerStrings => ({
-    ...translated(t, PLAYER_STRINGS, "qt.code.p"),
-    editableRegion: (n) => t("qt.code.p.editableRegion", { n }),
-    hiddenCases: (count, points) =>
-      t(count === 1 ? "qt.code.p.hiddenCases.one" : "qt.code.p.hiddenCases", { count, points }),
-    limits: (timeMs, memoryMb) => t("qt.code.p.limits", { timeMs, memoryMb }),
-    command: (args) => t("qt.code.p.command", { args }),
-    exitMismatch: (got, want) => t("qt.code.p.exitMismatch", { got, want }),
-    exitCode: (code) => t("qt.code.p.exitCode", { code }),
-  }),
-  circuit: (t: TFunction): CircuitPlayerStrings => ({
-    ...translated(t, CIRCUIT_PLAYER_STRINGS, "qt.circuit.p"),
-    components: (n, max) => t("qt.circuit.p.components", { n, max }),
-    issueFloatingPin: (ref) => t("qt.circuit.p.issueFloatingPin", { ref }),
-    issueUnconnectedPort: (ref) => t("qt.circuit.p.issueUnconnectedPort", { ref }),
-    issueDanglingWire: (ref) => t("qt.circuit.p.issueDanglingWire", { ref }),
-    issueMissingValue: (ref) => t("qt.circuit.p.issueMissingValue", { ref }),
-    issueInvalidValue: (ref) => t("qt.circuit.p.issueInvalidValue", { ref }),
-    issueValueOutOfRange: (ref) => t("qt.circuit.p.issueValueOutOfRange", { ref }),
-    issueDuplicateName: (ref) => t("qt.circuit.p.issueDuplicateName", { ref }),
-    issueKindNotAllowed: (ref) => t("qt.circuit.p.issueKindNotAllowed", { ref }),
-    hiddenStimuli: (count, points) =>
-      t(count === 1 ? "qt.circuit.p.hiddenStimuli.one" : "qt.circuit.p.hiddenStimuli", {
-        count,
-        points,
-      }),
-    srcDc: (volts) => t("qt.circuit.p.srcDc", { volts }),
-    srcSine: (amplitude, frequency) => t("qt.circuit.p.srcSine", { amplitude, frequency }),
-    srcPulse: (low, high, frequency) => t("qt.circuit.p.srcPulse", { low, high, frequency }),
-    srcStep: (from, to, atMs) => t("qt.circuit.p.srcStep", { from, to, atMs }),
-    loadResistor: (value) => t("qt.circuit.p.loadResistor", { value }),
-    loadCapacitor: (value) => t("qt.circuit.p.loadCapacitor", { value }),
-    window: (ms) => t("qt.circuit.p.window", { ms }),
-    plot: (name) => t("qt.circuit.p.plot", { name }),
-  }),
+  code: (t: TFunction) => translated(t, PLAYER_STRINGS, "qt.code.p"),
+  circuit: (t: TFunction) => translated(t, CIRCUIT_PLAYER_STRINGS, "qt.circuit.p"),
 };
 
 export const reviewStrings = {
   mcq: (t: TFunction) => translated(t, mcqReviewStrings, "qt.mcq.r"),
   short: (t: TFunction) => translated(t, shortReviewStrings, "qt.short.r"),
   cloze: (t: TFunction) => translated(t, clozeReviewStrings, "qt.cloze.r"),
-  code: (t: TFunction): CodeReviewStrings => ({
-    ...translated(t, REVIEW_STRINGS, "qt.code.r"),
-    score: (points, max) => t("qt.code.r.score", { points, max }),
-    hiddenSummary: (passed, count) => t("qt.code.r.hiddenSummary", { passed, count }),
-    exitMismatch: (got, want) => t("qt.code.r.exitMismatch", { got, want }),
-  }),
-  circuit: (t: TFunction): CircuitReviewStrings => ({
-    ...translated(t, CIRCUIT_REVIEW_STRINGS, "qt.circuit.r"),
-    score: (points, max) => t("qt.circuit.r.score", { points, max }),
-    netSummary: (components, nets) => t("qt.circuit.r.netSummary", { components, nets }),
-    hiddenStimulus: (n) => t("qt.circuit.r.hiddenStimulus", { n }),
-    errorPercent: (percent) => t("qt.circuit.r.errorPercent", { percent }),
-    issueFloatingPin: (ref) => t("qt.circuit.r.issueFloatingPin", { ref }),
-    issueUnconnectedPort: (ref) => t("qt.circuit.r.issueUnconnectedPort", { ref }),
-    issueDanglingWire: (ref) => t("qt.circuit.r.issueDanglingWire", { ref }),
-    issueMissingValue: (ref) => t("qt.circuit.r.issueMissingValue", { ref }),
-    issueInvalidValue: (ref) => t("qt.circuit.r.issueInvalidValue", { ref }),
-    issueValueOutOfRange: (ref) => t("qt.circuit.r.issueValueOutOfRange", { ref }),
-    issueDuplicateName: (ref) => t("qt.circuit.r.issueDuplicateName", { ref }),
-    issueKindNotAllowed: (ref) => t("qt.circuit.r.issueKindNotAllowed", { ref }),
-  }),
+  code: (t: TFunction) => translated(t, REVIEW_STRINGS, "qt.code.r"),
+  circuit: (t: TFunction) => translated(t, CIRCUIT_REVIEW_STRINGS, "qt.circuit.r"),
 };
 
 /** `mcq` answer distribution (WP10 results screens). */

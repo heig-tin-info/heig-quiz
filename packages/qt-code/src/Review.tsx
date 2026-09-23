@@ -7,7 +7,7 @@
  * filtering itself happened server-side in `studentDetails`; this component
  * renders what it was given and never reconstructs a key.
  */
-import { resolveStrings } from "@quiz/core/client";
+import { fmt, resolveStrings } from "@quiz/core/client";
 import type { MarkdownRenderer, ReviewProps } from "@quiz/core/client";
 
 import type { CodeAnswer, CodeCaseDetail, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
@@ -44,7 +44,7 @@ function verdictOf(
   if (detail.ok) return s.passed;
   if (detail.exitCode === null) return s.crashed;
   if (spec !== undefined && spec.expectedExitCode !== null && detail.exitCode !== spec.expectedExitCode) {
-    return s.exitMismatch(String(detail.exitCode), spec.expectedExitCode);
+    return fmt(s.exitMismatch, { got: String(detail.exitCode), want: spec.expectedExitCode });
   }
   if (spec !== undefined && !spec.compareStdout) return s.failed;
   return spec === undefined ? s.failed : s.outputMismatch;
@@ -99,7 +99,7 @@ export function CodeReview({
 
       <div className="flex flex-wrap items-center gap-2">
         <span className={cx(sectionTitle, "tabular-nums")}>
-          {s.score(points ?? 0, maxPoints)}
+          {fmt(s.score, { points: points ?? 0, max: maxPoints })}
         </span>
         {details.runner === "unavailable" ? (
           <span className={badge("warning")}>{s.runnerUnavailable}</span>
@@ -184,7 +184,7 @@ export function CodeReview({
       )}
 
       {hidden.length > 0 ? (
-        <p className={hint}>{s.hiddenSummary(hiddenPassed, hidden.length)}</p>
+        <p className={hint}>{fmt(s.hiddenSummary, { passed: hiddenPassed, count: hidden.length })}</p>
       ) : null}
 
       {solution !== null && solution.referenceSolution !== "" ? (

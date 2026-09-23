@@ -5,6 +5,11 @@
  * object filled from its own dictionary — which is where the French entries
  * live (N-I18N-01). The defaults exist so the components are usable, and
  * testable, on their own.
+ *
+ * A parameterised sentence is a TEMPLATE filled by `fmt` from
+ * `@quiz/core/client` (`"Case {n}"`), never a function: the host's `t()` uses
+ * the same `{var}` syntax, so it translates these entries key by key like any
+ * other. A count-dependent sentence has a `<key>.one` sibling, used for 1.
  */
 import { LIBRARY, type ComponentKind, type PortId } from "../library.js";
 
@@ -18,8 +23,8 @@ export interface CanvasStrings {
 
   components: string;
   /** "3 / 10" under the palette heading: what is placed against what is allowed. */
-  componentCount: (used: number, max: number) => string;
-  paletteFull: (max: number) => string;
+  componentCount: string;
+  paletteFull: string;
 
   rotate: string;
   mirrorHorizontal: string;
@@ -42,11 +47,12 @@ export interface CanvasStrings {
   modeWire: string;
   modePlace: string;
   hintSelect: string;
-  hintSelection: (n: number) => string;
+  hintSelection: string;
+  "hintSelection.one": string;
   hintWire: string;
   hintWireDrawing: string;
-  hintPlace: (kind: string) => string;
-  cursor: (x: number, y: number) => string;
+  hintPlace: string;
+  cursor: string;
 
   /** The label of a kind, for a palette tooltip and the inspector title. */
   kind: (kind: ComponentKind) => string;
@@ -72,8 +78,8 @@ export const CANVAS_STRINGS: CanvasStrings = {
   toolWire: "Wire",
 
   components: "Components",
-  componentCount: (used, max) => `${used} / ${max}`,
-  paletteFull: (max) => `You may place ${max} components.`,
+  componentCount: "{used} / {max}",
+  paletteFull: "You may place {max} components.",
 
   rotate: "Rotate",
   mirrorHorizontal: "Mirror horizontally",
@@ -96,11 +102,12 @@ export const CANVAS_STRINGS: CanvasStrings = {
   modeWire: "Wire",
   modePlace: "Place",
   hintSelect: "Pick a component on the left, then click the grid. Click a pin to start a wire.",
-  hintSelection: (n) => (n === 1 ? "1 item selected. Drag to move, R to rotate, H or V to mirror." : `${n} items selected. Drag to move, R to rotate, H or V to mirror.`),
+  hintSelection: "{n} items selected. Drag to move, R to rotate, H or V to mirror.",
+  "hintSelection.one": "1 item selected. Drag to move, R to rotate, H or V to mirror.",
   hintWire: "Click a pin, a port, or an existing wire to branch off it.",
   hintWireDrawing: "Click to add a corner. Click a pin, a port or a wire to finish. Escape cancels.",
-  hintPlace: (kind) => `${kind}: click to place, R to rotate, H or V to mirror, Escape to stop.`,
-  cursor: (x, y) => `x ${x}  y ${y}`,
+  hintPlace: "{kind}: click to place, R to rotate, H or V to mirror, Escape to stop.",
+  cursor: "x {x}  y {y}",
 
   kind: (kind) => LIBRARY[kind].label,
   port: (port) => port,

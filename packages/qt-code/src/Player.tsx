@@ -14,7 +14,7 @@
  */
 import { useId, useState } from "react";
 
-import { resolveStrings } from "@quiz/core/client";
+import { fmt, plural, resolveStrings } from "@quiz/core/client";
 import type { MarkdownRenderer, PlayerProps } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 import { compareOutput } from "@quiz/domain/compareOutput";
@@ -100,7 +100,7 @@ function verdictOf(
   const wantExit =
     visibleCase.expectedExitCode === undefined ? 0 : visibleCase.expectedExitCode;
   if (wantExit !== null && result.exitCode !== wantExit) {
-    return { label: s.exitMismatch(String(result.exitCode), wantExit), ok: false };
+    return { label: fmt(s.exitMismatch, { got: String(result.exitCode), want: wantExit }), ok: false };
   }
   if (
     visibleCase.compareStdout !== false &&
@@ -193,7 +193,9 @@ export function CodePlayer({
 
       <div className="flex flex-wrap items-center gap-2">
         <span className={badge()}>{student.language}</span>
-        <span className={badge()}>{s.limits(student.limits.timeMs, student.limits.memoryMb)}</span>
+        <span className={badge()}>
+          {fmt(s.limits, { timeMs: student.limits.timeMs, memoryMb: student.limits.memoryMb })}
+        </span>
         {student.allOrNothing ? <span className={badge("warning")}>{s.allOrNothing}</span> : null}
       </div>
 
@@ -219,7 +221,7 @@ export function CodePlayer({
           return (
             <CodeArea
               key={i}
-              label={s.editableRegion(index + 1)}
+              label={fmt(s.editableRegion, { n: index + 1 })}
               language={student.language}
               value={regions[index] ?? ""}
               onChange={readOnly ? undefined : (next) => writeRegion(index, next)}
@@ -320,7 +322,7 @@ export function CodePlayer({
                             as "no input at all". */}
                         {(visibleCase.args ?? []).length > 0 ? (
                           <span className="block text-fg-muted">
-                            {s.command((visibleCase.args ?? []).join(" "))}
+                            {fmt(s.command, { args: (visibleCase.args ?? []).join(" ") })}
                           </span>
                         ) : null}
                         {visibleCase.stdin ||
@@ -355,7 +357,10 @@ export function CodePlayer({
         )}
 
         {student.hiddenCount > 0 ? (
-          <p className={hint}>{s.hiddenCases(student.hiddenCount, student.hiddenPoints)}</p>
+          <p className={hint}>{plural(s, "hiddenCases", student.hiddenCount, {
+              count: student.hiddenCount,
+              points: student.hiddenPoints,
+            })}</p>
         ) : null}
       </section>
 
@@ -440,7 +445,7 @@ export function CodePlayer({
                     ? s.outOfMemory
                     : manualResult.exitCode === null
                       ? s.crashed
-                      : s.exitCode(String(manualResult.exitCode))}
+                      : fmt(s.exitCode, { code: String(manualResult.exitCode) })}
               </p>
             </div>
           )}

@@ -17,7 +17,7 @@
  */
 import { useMemo, useState } from "react";
 
-import { resolveStrings } from "@quiz/core/client";
+import { fmt, plural, resolveStrings } from "@quiz/core/client";
 import type { MarkdownRenderer, PlayerProps } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 
@@ -59,25 +59,25 @@ type SimState =
 function sentence(issue: NetlistIssue, s: CircuitPlayerStrings): string {
   switch (issue.code) {
     case "floating_pin":
-      return s.issueFloatingPin(issue.ref);
+      return fmt(s.issueFloatingPin, { ref: issue.ref });
     case "unconnected_port":
-      return s.issueUnconnectedPort(issue.ref);
+      return fmt(s.issueUnconnectedPort, { ref: issue.ref });
     case "dangling_wire":
-      return s.issueDanglingWire(issue.ref);
+      return fmt(s.issueDanglingWire, { ref: issue.ref });
     case "no_ground":
       return s.issueNoGround;
     case "missing_value":
-      return s.issueMissingValue(issue.ref);
+      return fmt(s.issueMissingValue, { ref: issue.ref });
     case "invalid_value":
-      return s.issueInvalidValue(issue.ref);
+      return fmt(s.issueInvalidValue, { ref: issue.ref });
     case "value_out_of_range":
-      return s.issueValueOutOfRange(issue.ref);
+      return fmt(s.issueValueOutOfRange, { ref: issue.ref });
     case "duplicate_name":
-      return s.issueDuplicateName(issue.ref);
+      return fmt(s.issueDuplicateName, { ref: issue.ref });
     case "too_many_components":
       return s.issueTooManyComponents;
     case "kind_not_allowed":
-      return s.issueKindNotAllowed(issue.ref);
+      return fmt(s.issueKindNotAllowed, { ref: issue.ref });
     default:
       return issue.ref;
   }
@@ -87,17 +87,24 @@ function sentence(issue: NetlistIssue, s: CircuitPlayerStrings): string {
 function describeSource(source: Source, s: CircuitPlayerStrings): string {
   switch (source.kind) {
     case "dc":
-      return s.srcDc(formatValue(source.volts));
+      return fmt(s.srcDc, { volts: formatValue(source.volts) });
     case "sine":
-      return s.srcSine(formatValue(source.amplitude), `${formatValue(source.frequencyHz)}Hz`);
+      return fmt(s.srcSine, {
+        amplitude: formatValue(source.amplitude),
+        frequency: `${formatValue(source.frequencyHz)}Hz`,
+      });
     case "pulse":
-      return s.srcPulse(
-        formatValue(source.low),
-        formatValue(source.high),
-        `${formatValue(source.frequencyHz)}Hz`,
-      );
+      return fmt(s.srcPulse, {
+        low: formatValue(source.low),
+        high: formatValue(source.high),
+        frequency: `${formatValue(source.frequencyHz)}Hz`,
+      });
     case "step":
-      return s.srcStep(formatValue(source.from), formatValue(source.to), formatValue(source.atMs));
+      return fmt(s.srcStep, {
+        from: formatValue(source.from),
+        to: formatValue(source.to),
+        atMs: formatValue(source.atMs),
+      });
   }
 }
 
@@ -106,9 +113,9 @@ function describeLoad(load: Load, s: CircuitPlayerStrings): string {
     case "open":
       return s.loadOpen;
     case "resistor":
-      return s.loadResistor(formatValue(load.ohms));
+      return fmt(s.loadResistor, { value: formatValue(load.ohms) });
     case "capacitor":
-      return s.loadCapacitor(formatValue(load.farads));
+      return fmt(s.loadCapacitor, { value: formatValue(load.farads) });
   }
 }
 
@@ -116,7 +123,7 @@ function describeStimulus(stimulus: StudentStimulus, s: CircuitPlayerStrings): s
   return [
     describeSource(stimulus.source, s),
     describeLoad(stimulus.load, s),
-    s.window(formatValue(stimulus.analysis.stopMs)),
+    fmt(s.window, { ms: formatValue(stimulus.analysis.stopMs) }),
   ].join(" · ");
 }
 
@@ -231,7 +238,7 @@ export function CircuitPlayer({
          */}
         <div className={strip} role="status">
           <span className={badge(netlist.counted > student.palette.maxComponents ? "danger" : "neutral")}>
-            {s.components(netlist.counted, student.palette.maxComponents)}
+            {fmt(s.components, { n: netlist.counted, max: student.palette.maxComponents })}
           </span>
           {/*
            * An untouched box is not a box full of mistakes: every port is
@@ -318,12 +325,12 @@ export function CircuitPlayer({
             {results.map((result, i) =>
               result.series === null ? (
                 <p key={i} className={hint}>
-                  {s.plot(result.name)} — {s.noSeries}
+                  {fmt(s.plot, { name: result.name })} — {s.noSeries}
                 </p>
               ) : (
                 <Plot
                   key={i}
-                  title={s.plot(result.name)}
+                  title={fmt(s.plot, { name: result.name })}
                   series={result.series}
                   height={180}
                   {...(student.showExpected && result.expected !== null
@@ -337,7 +344,10 @@ export function CircuitPlayer({
         )}
 
         {student.hiddenCount > 0 ? (
-          <p className={hint}>{s.hiddenStimuli(student.hiddenCount, student.hiddenPoints)}</p>
+          <p className={hint}>{plural(s, "hiddenStimuli", student.hiddenCount, {
+              count: student.hiddenCount,
+              points: student.hiddenPoints,
+            })}</p>
         ) : null}
       </section>
     </div>

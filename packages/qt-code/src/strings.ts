@@ -5,6 +5,11 @@
  * the app), so every component takes a `strings` prop that the host fills from
  * its own dictionary — which is where the French entries live (N-I18N-01).
  * The defaults below exist so the component is usable, and testable, alone.
+ *
+ * A parameterised sentence is a TEMPLATE filled by `fmt` from
+ * `@quiz/core/client` (`"Case {n}"`), never a function: the host's `t()` uses
+ * the same `{var}` syntax, so it translates these entries key by key like any
+ * other. A count-dependent sentence has a `<key>.one` sibling, used for 1.
  */
 
 export interface CodeEditorStrings {
@@ -13,7 +18,8 @@ export interface CodeEditorStrings {
   language: string;
   template: string;
   templateHint: string;
-  lockedRegions: (n: number) => string;
+  lockedRegions: string;
+  "lockedRegions.one": string;
   studentPreview: string;
   locked: string;
   editable: string;
@@ -24,9 +30,9 @@ export interface CodeEditorStrings {
   tryUnavailable: string;
   tryCompileFailed: string;
   tryRegionsMismatch: string;
-  tryResult: (passed: number, total: number) => string;
+  tryResult: string;
   cases: string;
-  case: (n: number) => string;
+  case: string;
   caseName: string;
   args: string;
   argsHint: string;
@@ -41,7 +47,7 @@ export interface CodeEditorStrings {
   timeMs: string;
   timeMsHint: string;
   addCase: string;
-  removeCase: (name: string) => string;
+  removeCase: string;
   runtime: string;
   runtimeBackend: string;
   runtimeBrowser: string;
@@ -65,7 +71,8 @@ export interface CodeEditorStrings {
   numericAbs: string;
   numericRel: string;
   epsilon: string;
-  totalPoints: (n: number) => string;
+  totalPoints: string;
+  "totalPoints.one": string;
 }
 
 export const EDITOR_STRINGS: CodeEditorStrings = {
@@ -75,7 +82,8 @@ export const EDITOR_STRINGS: CodeEditorStrings = {
   template: "Starting code",
   templateHint:
     "What the student receives. Lines between @@lock and @@endlock are read-only: the server rebuilds the file from this template, never from the text the browser sends.",
-  lockedRegions: (n) => (n === 1 ? "1 locked region" : `${n} locked regions`),
+  lockedRegions: "{n} locked regions",
+  "lockedRegions.one": "1 locked region",
   studentPreview: "What the student can edit",
   locked: "Locked",
   editable: "Editable",
@@ -88,9 +96,9 @@ export const EDITOR_STRINGS: CodeEditorStrings = {
   tryCompileFailed: "The reference solution does not compile.",
   tryRegionsMismatch:
     "The reference solution does not match the starting code: it must hold one piece per editable region, separated by a @@next comment line.",
-  tryResult: (passed, total) => `${passed} of ${total} cases pass.`,
+  tryResult: "{passed} of {total} cases pass.",
   cases: "Test cases",
-  case: (n) => `Case ${n}`,
+  case: "Case {n}",
   caseName: "Name",
   args: "Arguments",
   argsHint: "One argument per line. Blank lines are ignored.",
@@ -105,7 +113,7 @@ export const EDITOR_STRINGS: CodeEditorStrings = {
   timeMs: "Time (ms)",
   timeMsHint: "Empty: use the question limit.",
   addCase: "Add a case",
-  removeCase: (name) => `Remove the case ${name}`,
+  removeCase: "Remove the case {name}",
   runtime: "Run in",
   runtimeBackend: "The server",
   runtimeBrowser: "The browser",
@@ -129,12 +137,13 @@ export const EDITOR_STRINGS: CodeEditorStrings = {
   numericAbs: "Absolute tolerance",
   numericRel: "Relative tolerance",
   epsilon: "Epsilon",
-  totalPoints: (n) => (n === 1 ? "1 point in total" : `${n} points in total`),
+  totalPoints: "{n} points in total",
+  "totalPoints.one": "1 point in total",
 };
 
 export interface CodePlayerStrings {
   locked: string;
-  editableRegion: (n: number) => string;
+  editableRegion: string;
   run: string;
   running: string;
   loadingRuntime: string;
@@ -144,12 +153,13 @@ export interface CodePlayerStrings {
   runHint: string;
   visibleCases: string;
   noVisibleCases: string;
-  hiddenCases: (count: number, points: number) => string;
+  hiddenCases: string;
+  "hiddenCases.one": string;
   files: string;
   caseName: string;
   stdin: string;
   noStdin: string;
-  command: (args: string) => string;
+  command: string;
   expected: string;
   expectedAnyOutput: string;
   got: string;
@@ -161,23 +171,23 @@ export interface CodePlayerStrings {
   outOfMemory: string;
   crashed: string;
   truncated: string;
-  exitMismatch: (got: string, want: number) => string;
+  exitMismatch: string;
   outputMismatch: string;
   compileFailed: string;
   compileOk: string;
   allOrNothing: string;
-  limits: (timeMs: number, memoryMb: number) => string;
+  limits: string;
   manual: string;
   manualHint: string;
   manualArgs: string;
   manualRun: string;
   manualOutput: string;
-  exitCode: (code: string) => string;
+  exitCode: string;
 }
 
 export const PLAYER_STRINGS: CodePlayerStrings = {
   locked: "Locked — provided by your teacher",
-  editableRegion: (n) => `Your code, region ${n}`,
+  editableRegion: "Your code, region {n}",
   run: "Run",
   running: "Running…",
   loadingRuntime: "Loading the language runtime… this happens once.",
@@ -188,15 +198,13 @@ export const PLAYER_STRINGS: CodePlayerStrings = {
   runHint: "Runs the visible cases. Hidden cases are only run when the question is graded.",
   visibleCases: "Visible cases",
   noVisibleCases: "Your teacher did not publish any visible case.",
-  hiddenCases: (count, points) =>
-    count === 1
-      ? `1 hidden case, worth ${points} point(s).`
-      : `${count} hidden cases, worth ${points} point(s) in total.`,
+  hiddenCases: "{count} hidden cases, worth {points} point(s) in total.",
+  "hiddenCases.one": "1 hidden case, worth {points} point(s).",
   files: "Files available to your program",
   caseName: "Case",
   stdin: "stdin",
   noStdin: "No input",
-  command: (args) => `$ program ${args}`,
+  command: "$ program {args}",
   expected: "Expected",
   expectedAnyOutput: "Any output",
   got: "Got",
@@ -208,23 +216,23 @@ export const PLAYER_STRINGS: CodePlayerStrings = {
   outOfMemory: "Out of memory",
   crashed: "Crashed",
   truncated: "Output truncated",
-  exitMismatch: (got, want) => `exit ${got} ≠ ${want}`,
+  exitMismatch: "exit {got} ≠ {want}",
   outputMismatch: "Output differs",
   compileFailed: "Compilation failed",
   compileOk: "Compiled",
   allOrNothing: "All cases must pass to score.",
-  limits: (timeMs, memoryMb) => `${timeMs} ms · ${memoryMb} MB`,
+  limits: "{timeMs} ms · {memoryMb} MB",
   manual: "Try it yourself",
   manualHint:
     "Run your program once on an input of your own. One argument per line; nothing here is graded.",
   manualArgs: "Arguments",
   manualRun: "Run once",
   manualOutput: "Output",
-  exitCode: (code) => `exit ${code}`,
+  exitCode: "exit {code}",
 };
 
 export interface CodeReviewStrings {
-  score: (points: number, max: number) => string;
+  score: string;
   compileFailed: string;
   compilerOutput: string;
   cases: string;
@@ -239,10 +247,10 @@ export interface CodeReviewStrings {
   timedOut: string;
   outOfMemory: string;
   crashed: string;
-  exitMismatch: (got: string, want: number) => string;
+  exitMismatch: string;
   outputMismatch: string;
   points: string;
-  hiddenSummary: (passed: number, count: number) => string;
+  hiddenSummary: string;
   hiddenCase: string;
   runnerUnavailable: string;
   runnerBusy: string;
@@ -253,7 +261,7 @@ export interface CodeReviewStrings {
 }
 
 export const REVIEW_STRINGS: CodeReviewStrings = {
-  score: (points, max) => `${points} / ${max} points`,
+  score: "{points} / {max} points",
   compileFailed: "Compilation failed",
   compilerOutput: "Compiler output",
   cases: "Cases",
@@ -268,10 +276,10 @@ export const REVIEW_STRINGS: CodeReviewStrings = {
   timedOut: "Timed out",
   outOfMemory: "Out of memory",
   crashed: "Crashed",
-  exitMismatch: (got, want) => `exit ${got} ≠ ${want}`,
+  exitMismatch: "exit {got} ≠ {want}",
   outputMismatch: "Output differs",
   points: "Points",
-  hiddenSummary: (passed, count) => `Hidden cases: ${passed} of ${count} passed.`,
+  hiddenSummary: "Hidden cases: {passed} of {count} passed.",
   hiddenCase: "Hidden case",
   runnerUnavailable: "The runner was unavailable; this answer is waiting for a manual grade.",
   runnerBusy: "The runner was busy; this answer is waiting for a manual grade.",

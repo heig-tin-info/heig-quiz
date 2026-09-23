@@ -15,7 +15,7 @@
 import { useId, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { resolveStrings } from "@quiz/core/client";
+import { fmt, plural, resolveStrings } from "@quiz/core/client";
 import type { ConfigIssue, EditorProps, MarkdownRenderer } from "@quiz/core/client";
 
 import { Plot, SchematicEditor, type CanvasStrings } from "./canvas/index.js";
@@ -574,7 +574,7 @@ export function CircuitEditor({
       <section className={cx(card, "flex flex-col gap-3 p-4")}>
         <div className="flex flex-wrap items-center gap-2">
           <h3 className={sectionTitle}>{s.stimuli}</h3>
-          <span className={badge()}>{s.totalPoints(totalStimulusPoints(config))}</span>
+          <span className={badge()}>{plural(s, "totalPoints", totalStimulusPoints(config))}</span>
           <button
             type="button"
             className={button("secondary", "sm", "ml-auto")}
@@ -583,7 +583,7 @@ export function CircuitEditor({
               patch({
                 stimuli: [
                   ...config.stimuli,
-                  emptyStimulus({ name: s.stimulus(config.stimuli.length + 1) }),
+                  emptyStimulus({ name: fmt(s.stimulus, { n: config.stimuli.length + 1 }) }),
                 ],
               })
             }
@@ -600,7 +600,7 @@ export function CircuitEditor({
               <div className="flex flex-wrap items-end gap-3">
                 <div className="flex min-w-40 flex-1 flex-col gap-1.5">
                   <label className={label} htmlFor={`${ids}-sname-${i}`}>
-                    {s.stimulus(i + 1)}
+                    {fmt(s.stimulus, { n: i + 1 })}
                   </label>
                   <input
                     id={`${ids}-sname-${i}`}
@@ -634,7 +634,7 @@ export function CircuitEditor({
                 <button
                   type="button"
                   className={button("ghost", "sm")}
-                  aria-label={s.removeStimulus(stimulus.name)}
+                  aria-label={fmt(s.removeStimulus, { name: stimulus.name })}
                   disabled={disabled}
                   onClick={() => patch({ stimuli: config.stimuli.filter((_, j) => j !== i) })}
                 >
@@ -818,7 +818,7 @@ export function CircuitEditor({
                 {/* The stimuli that produced a WAVEFORM, not the ones that
                     were sent: a count the plots below do not back up is a
                     count the teacher has to distrust. */}
-                {s.tryDone(tryState.details.stimuli.filter((d) => d.series !== null).length)}
+                {plural(s, "tryDone", tryState.details.stimuli.filter((d) => d.series !== null).length)}
               </p>
             ) : null}
           </div>
