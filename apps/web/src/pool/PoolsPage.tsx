@@ -17,10 +17,10 @@ import { useState, type ReactNode } from "react";
 
 import type { Me, Pool, PoolSummary } from "@quiz/contracts";
 
-import { api, apiErrorMessage, useMe } from "../api";
+import { api, useMe } from "../api";
 import { useConfirm } from "../confirm";
 import { useT, type TFunction } from "../i18n";
-import { useToast } from "../notify";
+import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
 import {
   Badge,
@@ -30,7 +30,9 @@ import {
   EmptyState,
   Field,
   FormDialog,
+  FormError,
   Menu,
+  type MenuItem,
   PageHeader,
   pressable,
   QueryError,
@@ -40,7 +42,6 @@ import {
   Spinner,
   T,
   Tip,
-  type MenuItem,
 } from "../ui";
 import { PoolIcon } from "./PoolIcon";
 import { PoolIconPicker } from "./PoolIconPicker";
@@ -139,6 +140,7 @@ function usePoolActions(pool: PoolSummary, me: Me | null | undefined): PoolActio
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
+  const toastError = useErrorToast();
   const confirm = useConfirm();
   const [edit, setEdit] = useState<"form" | "icon" | null>(null);
   const [sharing, setSharing] = useState(false);
@@ -150,7 +152,7 @@ function usePoolActions(pool: PoolSummary, me: Me | null | undefined): PoolActio
   const remove = useMutation({
     mutationFn: () => api(`/app/api/pools/${pool.id}`, { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: poolsKey }),
-    onError: (error) => toast(apiErrorMessage(error, t("error.save")), "error"),
+    onError: toastError("error.save"),
   });
   const leave = useMutation({
     mutationFn: () =>
@@ -159,7 +161,7 @@ function usePoolActions(pool: PoolSummary, me: Me | null | undefined): PoolActio
       await qc.invalidateQueries({ queryKey: poolsKey });
       toast(t("pools.leaveDone", { name: pool.name }), "success");
     },
-    onError: (error) => toast(apiErrorMessage(error, t("error.save")), "error"),
+    onError: toastError("error.save"),
   });
 
   const items: MenuItem[] = [];
@@ -282,13 +284,7 @@ export function PoolFormModal({
       submitting={save.isPending}
       canSubmit={name.trim() !== ""}
       dense
-      error={
-        save.isError ? (
-          <p className="text-[13px] text-danger">
-            {apiErrorMessage(save.error, t("pools.createFailed"))}
-          </p>
-        ) : null
-      }
+      error={<FormError error={save.error} fallback={t("pools.createFailed")} />}
     >
       <div className="flex items-end gap-3">
         <div className="flex flex-col gap-1.5">

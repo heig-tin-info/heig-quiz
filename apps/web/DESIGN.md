@@ -240,6 +240,15 @@ with a keyboard-reachable dismiss button.
   a failure reads the same everywhere and there is one place to change it.
   Queries retry once and never on a 4xx (`main.tsx`), so the error state
   arrives in about a second: three retries read as a hang, not as a failure.
+- FormError: QueryError's counterpart for a WRITE that failed, said where
+  the reader acted — nothing while the mutation's `error` is null, otherwise
+  the server's message or the fallback. Without a title it is one 13 px
+  `danger` line, the shape a dialog puts under its fields (`FormDialog`'s
+  `error` slot); with a `title` it is a danger `Alert`, the shape a step, a
+  sheet or a page uses, where a bare red line would be lost. It exists
+  because seventeen sites spelled out `isError ? … apiErrorMessage … : null`
+  by hand. It lives beside QueryError (`queryError.tsx`), for the same
+  reason: `ui/` never imports the HTTP client.
 - Field: label 13 px 500 above, 12 px radius, `line-strong` border, accent
   ring on focus. The `<label>` covers the text only and points at the control
   through `htmlFor`; the help "?" is its sibling, never inside it, or that
@@ -336,7 +345,10 @@ with a keyboard-reachable dismiss button.
 - Toast: bottom-right, `surface` + hairline + overlay shadow. Tones
   `success` / `error` / `warning`, plus `progress` (a neutral spinner) for
   "this has started", which is the only report an action taken from a menu
-  can get.
+  can get. A failed mutation reports through `useErrorToast()` (`notify.tsx`):
+  `onError: toastError("error.save")` — the server's message or the
+  translated fallback key, always in the `error` tone, so no call site can
+  pick another one.
 - Empty state: icon in a `surface-2` circle, title, one line, one action.
 - Notification bell (`src/notifications/NotificationBell.tsx`): the account's
   own inbox, beside the account row in the sidebar and beside the avatar in

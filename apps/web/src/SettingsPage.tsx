@@ -2,7 +2,7 @@ import { useState } from "react";
 import { BellRing, GraduationCap, School, ShieldCheck, SlidersHorizontal } from "lucide-react";
 
 import { AvatarEditor } from "./AvatarEditor";
-import { apiErrorMessage, useMePatch } from "./api";
+import { useMePatch } from "./api";
 import { useI18n, LOCALES } from "./i18n";
 import {
   DATE_FORMATS,
@@ -19,6 +19,7 @@ import {
   Badge,
   Card,
   formatDateTimeAs,
+  FormError,
   isoDateTime,
   PageHeader,
   SectionHeading,
@@ -122,9 +123,7 @@ function PreferencesCard({ me }: { me: Me }) {
         </SettingRow>
         {me.role === "student" ? null : <McqPolicyRow me={me} />}
       </Card>
-      {saveDate.isError ? (
-        <p className="text-[13px] text-danger">{apiErrorMessage(saveDate.error, t("error.save"))}</p>
-      ) : null}
+      <FormError error={saveDate.error} fallback={t("error.save")} />
     </section>
   );
 }

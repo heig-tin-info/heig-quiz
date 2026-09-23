@@ -4,11 +4,11 @@ import { useState } from "react";
 
 import type { PreviewResult, VersionRow } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
-import { useToast } from "../notify";
+import { useErrorToast, useToast } from "../notify";
 import {
   Alert,
   Badge,
@@ -83,13 +83,14 @@ export function VersionHistory({
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
+  const toastError = useErrorToast();
   const confirm = useConfirm();
   const [viewing, setViewing] = useState<number | null>(null);
   const [deprecating, setDeprecating] = useState<VersionRow | null>(null);
   const [note, setNote] = useState("");
 
   const invalidate = () => qc.invalidateQueries({ queryKey: questionKey(questionId) });
-  const fail = (error: unknown) => toast(apiErrorMessage(error, t("error.save")), "error");
+  const fail = toastError("error.save");
 
   const restore = useMutation({
     mutationFn: (number: number) =>

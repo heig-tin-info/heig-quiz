@@ -14,12 +14,12 @@ import { useState } from "react";
 
 import type { ClassroomDetail, EvaluationSummary } from "@quiz/contracts";
 
-import { api, apiErrorMessage, useMe } from "./api";
+import { api, useMe } from "./api";
 import { useConfirm } from "./confirm";
 import { useT } from "./i18n";
 // WP8: evaluation + dashboard
 import { EvaluationList } from "./evaluation/EvaluationList";
-import { useToast } from "./notify";
+import { useErrorToast, useToast } from "./notify";
 import { RosterImport } from "./RosterImport";
 import { RosterTable } from "./RosterTable";
 import { useSearchParam, type Route } from "./router";
@@ -70,7 +70,7 @@ type Tab = "roster" | "evaluations";
 function ClassroomName({ room }: { room: ClassroomDetail }) {
   const t = useT();
   const qc = useQueryClient();
-  const toast = useToast();
+  const toastError = useErrorToast();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(room.name);
 
@@ -80,7 +80,7 @@ function ClassroomName({ room }: { room: ClassroomDetail }) {
     // The name is on the course page and in the classroom list too, so
     // everything that carries it is dropped, exactly as the modal did.
     onSuccess: () => qc.invalidateQueries(),
-    onError: (error) => toast(apiErrorMessage(error, t("classrooms.renameFailed")), "error"),
+    onError: toastError("classrooms.renameFailed"),
   });
 
   if (editing) {
@@ -157,7 +157,7 @@ function ClassroomName({ room }: { room: ClassroomDetail }) {
 function PeriodModal({ room, onClose }: { room: ClassroomDetail; onClose: () => void }) {
   const t = useT();
   const qc = useQueryClient();
-  const toast = useToast();
+  const toastError = useErrorToast();
   const [period, setPeriod] = useState(room.period);
   const save = useMutation({
     mutationFn: () =>
@@ -169,7 +169,7 @@ function PeriodModal({ room, onClose }: { room: ClassroomDetail; onClose: () => 
       await qc.invalidateQueries();
       onClose();
     },
-    onError: (error) => toast(apiErrorMessage(error, t("error.save")), "error"),
+    onError: toastError("error.save"),
   });
   return (
     <FormDialog
@@ -196,6 +196,7 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
   const qc = useQueryClient();
   const confirm = useConfirm();
   const toast = useToast();
+  const toastError = useErrorToast();
   const me = useMe();
   const [importing, setImporting] = useState(false);
   const [editingPeriod, setEditingPeriod] = useState(false);
@@ -230,7 +231,7 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
       await qc.invalidateQueries({ queryKey: classroomKey(id) });
       toast(t("roster.joinDone"), "success");
     },
-    onError: (error) => toast(apiErrorMessage(error, t("roster.joinFailed")), "error"),
+    onError: toastError("roster.joinFailed"),
   });
   const archive = useMutation({
     mutationFn: (to: "archive" | "unarchive") =>

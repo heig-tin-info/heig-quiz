@@ -22,7 +22,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { EvaluationDetail, ItemRow } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { useT, type TFunction } from "../i18n";
 import { useToast } from "../notify";
@@ -34,6 +34,7 @@ import {
   Card,
   cx,
   EmptyState,
+  FormError,
   IconButton,
   inputClass,
   inputSize,
@@ -432,11 +433,7 @@ export function ItemsStep({ detail }: { detail: EvaluationDetail }) {
         />
       ) : null}
 
-      {failed ? (
-        <Alert tone="danger" title={t("eval.saveFailed")}>
-          {apiErrorMessage(failed, t("error.server"))}
-        </Alert>
-      ) : null}
+      <FormError error={failed} title={t("eval.saveFailed")} />
 
       {items.length === 0 ? (
         <Card>

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "./api";
+import { useErrorToast } from "./notify";
 import { renderWithProviders } from "./test/render";
 import {
   Alert,
@@ -12,6 +13,7 @@ import {
   EmptyState,
   Field,
   FormDialog,
+  FormError,
   InlineTitle,
   Menu,
   Modal,
@@ -902,6 +904,52 @@ describe("QueryError", () => {
       <QueryError title="Could not load" error={new Error("x")} onRetry={vi.fn()} retrying />,
     );
     expect(screen.getByRole("button", { name: "Retry" })).toBeDisabled();
+  });
+});
+
+describe("FormError", () => {
+  it("renders nothing until the write has failed", () => {
+    renderWithProviders(<FormError error={null} fallback="Could not save" title="Failed" />);
+    expect(screen.queryByText("Could not save")).toBeNull();
+    expect(screen.queryByText("Failed")).toBeNull();
+  });
+
+  it("is the one red line under a dialog's fields, with the server's message", () => {
+    renderWithProviders(
+      <FormError error={new ApiError(409, { message: "Code already taken" })} fallback="x" />,
+    );
+    const line = screen.getByText("Code already taken");
+    expect(line.tagName).toBe("P");
+    expect(line).toHaveClass("text-danger");
+  });
+
+  it("becomes a titled alert, falling back to the translated error.server", () => {
+    renderWithProviders(<FormError error={new Error("x")} title="Could not save" />);
+    expect(screen.getByRole("status")).toHaveTextContent("Could not save");
+    expect(screen.getByText("The server did not answer. Try again in a moment.")).toBeVisible();
+  });
+});
+
+describe("useErrorToast", () => {
+  function Failing({ error }: { error: unknown }) {
+    const toastError = useErrorToast();
+    return (
+      <button type="button" onClick={() => toastError("error.save")(error)}>
+        Fail
+      </button>
+    );
+  }
+
+  it("toasts the server's message in the error tone", async () => {
+    renderWithProviders(<Failing error={new ApiError(422, { message: "Name is taken" })} />);
+    await userEvent.click(screen.getByRole("button", { name: "Fail" }));
+    expect(await screen.findByText("Name is taken")).toBeVisible();
+  });
+
+  it("falls back to the translated key when the server said nothing", async () => {
+    renderWithProviders(<Failing error={new Error("network")} />, { locale: "fr" });
+    await userEvent.click(screen.getByRole("button", { name: "Fail" }));
+    expect(await screen.findByText("Impossible d'enregistrer cette modification.")).toBeVisible();
   });
 });
 

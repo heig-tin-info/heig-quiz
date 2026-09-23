@@ -6,10 +6,10 @@ import { Button } from "./ui/controls";
 import { Alert, PageHeader } from "./ui/page";
 
 /*
- * The two failure primitives that read an `ApiError`. They stay in the app,
+ * The failure primitives that read an `ApiError`. They stay in the app,
  * beside `api.ts`, so that `ui/` never imports the HTTP client: the
  * presentational half (`Alert`, `PageHeader`) is a primitive, the message
- * extraction is not. `ui/index.tsx` re-exports both, so every screen keeps
+ * extraction is not. `ui/index.tsx` re-exports them, so every screen keeps
  * importing them from `./ui`.
  */
 
@@ -79,5 +79,37 @@ export function PageError({
       <PageHeader title={title} />
       <QueryError title={t("error.title")} {...rest} />
     </div>
+  );
+}
+
+/**
+ * A write that failed, said where the reader acted: nothing while `error` is
+ * null (a mutation's `error` is null until it fails), otherwise what the
+ * server said, or `fallback`.
+ *
+ * Without a `title` it is the one-line paragraph a dialog puts under its
+ * fields (`FormDialog`'s `error` slot). With one it is a danger `Alert` —
+ * the shape a step, a sheet or a page uses, where a bare red line would be
+ * lost among the sections.
+ */
+export function FormError({
+  error,
+  fallback,
+  title,
+}: {
+  error: unknown;
+  /** Defaults to the translated `error.server`, like `QueryError`'s. */
+  fallback?: string;
+  title?: string;
+}) {
+  const t = useT();
+  if (error == null) return null;
+  const message = apiErrorMessage(error, fallback ?? t("error.server"));
+  return title ? (
+    <Alert tone="danger" title={title}>
+      {message}
+    </Alert>
+  ) : (
+    <p className="text-[13px] text-danger">{message}</p>
   );
 }

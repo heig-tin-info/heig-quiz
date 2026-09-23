@@ -4,17 +4,17 @@ import { useMemo, useState } from "react";
 
 import type { EvaluationDetail, PoolSummary, QuestionPage } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useT } from "../i18n";
 import { EMPTY_FILTERS, questionQuery, type QuestionFilters } from "../pool/filters";
 import { DifficultyDots } from "../pool/QuestionTable";
 import { QUESTION_TYPE_IDS, typeLabel } from "../questionTypes";
 import {
-  Alert,
   Badge,
   Button,
   Checkbox,
   EmptyState,
+  FormError,
   QueryError,
   SearchInput,
   Select,
@@ -261,11 +261,7 @@ export function AddQuestionsSheet({
           </>
         )}
 
-        {add.isError ? (
-          <Alert tone="danger" title={t("eval.saveFailed")}>
-            {apiErrorMessage(add.error, t("error.server"))}
-          </Alert>
-        ) : null}
+        <FormError error={add.error} title={t("eval.saveFailed")} />
       </div>
     </Sheet>
   );

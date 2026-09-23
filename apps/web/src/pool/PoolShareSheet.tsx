@@ -14,7 +14,7 @@ import type {
 import { api, ApiError, apiErrorMessage } from "../api";
 import { useConfirm } from "../confirm";
 import { useT, type TFunction } from "../i18n";
-import { useToast } from "../notify";
+import { useErrorToast } from "../notify";
 import { TeacherPicker, nameOf } from "./TeacherPicker";
 import {
   Button,
@@ -144,7 +144,7 @@ function MemberRow({
 export function PoolShareSheet({ pool, onClose }: { pool: PoolSummary; onClose: () => void }) {
   const t = useT();
   const qc = useQueryClient();
-  const toast = useToast();
+  const toastError = useErrorToast();
   const key = poolMembersKey(pool.id);
   const [text, setText] = useState("");
   const [selected, setSelected] = useState<PoolCandidate | null>(null);
@@ -168,7 +168,7 @@ export function PoolShareSheet({ pool, onClose }: { pool: PoolSummary; onClose: 
         qc.invalidateQueries({ queryKey: key }),
       ]);
     },
-    onError: (error) => toast(apiErrorMessage(error, t("error.save")), "error"),
+    onError: toastError("error.save"),
   });
 
   const invite = useMutation({
@@ -251,7 +251,7 @@ export function PoolShareSheet({ pool, onClose }: { pool: PoolSummary; onClose: 
                   key={m.userId}
                   poolId={pool.id}
                   member={m}
-                  onBusy={(error) => toast(apiErrorMessage(error, t("error.save")), "error")}
+                  onBusy={toastError("error.save")}
                 />
               ))}
               {rows.filter((m) => !m.isOwner).length === 0 ? (

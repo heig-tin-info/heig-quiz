@@ -13,19 +13,19 @@ import { useState } from "react";
 
 import type { EvaluationMode, EvaluationSummary } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { gradingLinks } from "../grading";
 import { useT } from "../i18n";
 import type { Route } from "../router";
 import {
-  Alert,
   Badge,
   Button,
   Card,
   EmptyState,
   Field,
   FormDialog,
+  FormError,
   Menu,
   pressable,
   QueryError,
@@ -83,13 +83,7 @@ function NewEvaluationModal({
       submitLabel={t("eval.create")}
       submitting={create.isPending}
       canSubmit={title.trim() !== ""}
-      error={
-        create.isError ? (
-          <Alert tone="danger" title={t("eval.createFailed")}>
-            {apiErrorMessage(create.error, t("error.server"))}
-          </Alert>
-        ) : null
-      }
+      error={<FormError error={create.error} title={t("eval.createFailed")} />}
     >
       <Field
         label={t("eval.titleLabel")}

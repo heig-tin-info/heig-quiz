@@ -4,10 +4,10 @@ import { useMemo, useState, type DragEvent } from "react";
 
 import type { PoolDetail, QuestionDetail, QuestionPage, QuestionRow } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
-import { useToast } from "../notify";
+import { useErrorToast, useToast } from "../notify";
 import { QUESTION_TYPE_IDS, typeIcon, typeLabel } from "../questionTypes";
 import type { Route } from "../router";
 import { useSearchParam } from "../router";
@@ -19,6 +19,7 @@ import {
   EmptyState,
   Field,
   FormDialog,
+  FormError,
   PageError,
   PageHeader,
   QueryError,
@@ -168,13 +169,7 @@ function NewQuestionModal({
       submitLabel={t("pool.newQuestionAction")}
       submitting={create.isPending}
       canSubmit={name.trim() !== ""}
-      error={
-        create.isError ? (
-          <p className="text-[13px] text-danger">
-            {apiErrorMessage(create.error, t("pool.createFailed"))}
-          </p>
-        ) : null
-      }
+      error={<FormError error={create.error} fallback={t("pool.createFailed")} />}
     >
       <fieldset>
         <legend className="mb-2 text-[13px] font-medium">{t("pool.questionType")}</legend>
@@ -197,6 +192,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
+  const toastError = useErrorToast();
   const confirm = useConfirm();
   // Everything but the category is local to the screen; the category is the
   // sidebar's selection, and "" means "all questions".
@@ -292,7 +288,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
       toast(t("question.duplicated"), "success");
       await qc.invalidateQueries({ queryKey: poolKey(id) });
     },
-    onError: (error) => toast(apiErrorMessage(error, t("error.save")), "error"),
+    onError: toastError("error.save"),
   });
 
   const remove = useMutation({
@@ -300,7 +296,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: poolKey(id) });
     },
-    onError: (error) => toast(apiErrorMessage(error, t("question.deleteFailed")), "error"),
+    onError: toastError("question.deleteFailed"),
   });
 
   const askDelete = async (row: QuestionRow) => {

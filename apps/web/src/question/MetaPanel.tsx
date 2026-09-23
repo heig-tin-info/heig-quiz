@@ -3,9 +3,9 @@ import { useState } from "react";
 
 import type { CategoryNode, QuestionMeta, QuestionPatch } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useT } from "../i18n";
-import { useToast } from "../notify";
+import { useErrorToast } from "../notify";
 import { Card, Field, SectionHeading, Segmented, Select } from "../ui";
 import { TagInput } from "./TagInput";
 import { poolKey, questionKey } from "../queryKeys";
@@ -39,7 +39,7 @@ export function MetaPanel({
 }) {
   const t = useT();
   const qc = useQueryClient();
-  const toast = useToast();
+  const toastError = useErrorToast();
   const [name, setName] = useState(meta.internalName);
 
   const patch = useMutation({
@@ -51,7 +51,7 @@ export function MetaPanel({
       // vocabulary the tag field suggests from, which a new tag just joined.
       await qc.invalidateQueries({ queryKey: poolKey(meta.poolId) });
     },
-    onError: (error) => toast(apiErrorMessage(error, t("question.meta.saveFailed")), "error"),
+    onError: toastError("question.meta.saveFailed"),
   });
 
   return (

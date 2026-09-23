@@ -13,12 +13,12 @@ import type {
 import type { CircuitConfig, CircuitDetails } from "@quiz/qt-circuit/client";
 import { referenceRegions, type CodeConfig, type CodeDetails } from "@quiz/qt-code/client";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { HelpIcon } from "../help";
 import { useT } from "../i18n";
 import { MarkdownField } from "../markdown/MarkdownField";
-import { useToast } from "../notify";
+import { useErrorToast, useToast } from "../notify";
 import { QuestionEditorHost, typeIcon, typeLabel, type TryOutcome } from "../questionTypes";
 import { routeToPath, useSearchParam, type Route } from "../router";
 import { BrowserRunnerUnavailable, runnerFor } from "../runner";
@@ -81,6 +81,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
+  const toastError = useErrorToast();
   const confirm = useConfirm();
   const [rawTab, setTab] = useSearchParam("tab", "edit");
   const tab: Tab = rawTab === "try" || rawTab === "versions" ? rawTab : "edit";
@@ -203,7 +204,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
       await qc.invalidateQueries({ queryKey: poolKey(poolId) });
       navigate({ view: "question", id: copy.meta.id });
     },
-    onError: (error) => toast(apiErrorMessage(error, t("error.save")), "error"),
+    onError: toastError("error.save"),
   });
 
   const remove = useMutation({
@@ -213,7 +214,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
       if (poolId) navigate({ view: "pool", id: poolId });
       else navigate({ view: "pools" });
     },
-    onError: (error) => toast(apiErrorMessage(error, t("question.deleteFailed")), "error"),
+    onError: toastError("question.deleteFailed"),
   });
 
   const askDelete = useCallback(async () => {

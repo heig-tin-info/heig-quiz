@@ -16,10 +16,10 @@ import { useState, type ReactNode } from "react";
 
 import type { CourseDetail, CourseSummary, PoolSummary } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "./api";
+import { api } from "./api";
 import { useConfirm } from "./confirm";
 import { useT } from "./i18n";
-import { useToast } from "./notify";
+import { useErrorToast } from "./notify";
 import type { Route } from "./router";
 import {
   Button,
@@ -27,6 +27,7 @@ import {
   EmptyState,
   Field,
   FormDialog,
+  FormError,
   Initials,
   Menu,
   type MenuItem,
@@ -91,13 +92,7 @@ function NewCourseModal({ onClose }: { onClose: () => void }) {
       submitLabel={t("courses.newAction")}
       submitting={create.isPending}
       canSubmit={form.name.trim() !== "" && form.code.trim() !== ""}
-      error={
-        create.isError ? (
-          <p className="text-[13px] text-danger">
-            {apiErrorMessage(create.error, t("courses.createFailed"))}
-          </p>
-        ) : null
-      }
+      error={<FormError error={create.error} fallback={t("courses.createFailed")} />}
     >
       <Field
         label={t("courses.name")}
@@ -143,13 +138,7 @@ function NewClassroomModal({ course, onClose }: { course: CourseSummary; onClose
       submitLabel={t("common.create")}
       submitting={create.isPending}
       canSubmit={form.name.trim() !== ""}
-      error={
-        create.isError ? (
-          <p className="text-[13px] text-danger">
-            {apiErrorMessage(create.error, t("courses.createFailed"))}
-          </p>
-        ) : null
-      }
+      error={<FormError error={create.error} fallback={t("courses.createFailed")} />}
     >
       <Field
         label={t("classrooms.name")}
@@ -195,13 +184,7 @@ function AddStaffModal({ course, onClose }: { course: CourseSummary; onClose: ()
       submitting={add.isPending}
       canSubmit={email.trim() !== ""}
       dense
-      error={
-        add.isError ? (
-          <p className="text-[13px] text-danger">
-            {apiErrorMessage(add.error, t("courses.staffUnknown"))}
-          </p>
-        ) : null
-      }
+      error={<FormError error={add.error} fallback={t("courses.staffUnknown")} />}
     >
       <Field
         label={t("courses.staffEmail")}
@@ -233,7 +216,7 @@ function CoursePools({
   const t = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
-  const toast = useToast();
+  const toastError = useErrorToast();
 
   const detail = useQuery<CourseDetail>({
     queryKey: courseKey(course.id),
@@ -258,7 +241,7 @@ function CoursePools({
     },
     // The menu is closed by the time the call answers, so the failure has
     // nowhere to render but a toast (DESIGN.md › Menu).
-    onError: (error) => toast(apiErrorMessage(error, t("pools.linkSaveFailed")), "error"),
+    onError: toastError("pools.linkSaveFailed"),
   });
 
   const unlink = async (pool: { id: string; name: string }) => {

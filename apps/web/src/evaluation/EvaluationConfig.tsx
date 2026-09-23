@@ -12,18 +12,18 @@ import {
 
 import { EvaluationPatch, type ClassroomDetail, type EvaluationDetail } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { gradingLinks } from "../grading";
 import { useT } from "../i18n";
-import { useToast } from "../notify";
+import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
 import { useSearchParam } from "../router";
 import {
-  Alert,
   Badge,
   Button,
   cx,
+  FormError,
   InlineTitle,
   Menu,
   PageError,
@@ -78,6 +78,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
   const qc = useQueryClient();
   const confirm = useConfirm();
   const toast = useToast();
+  const toastError = useErrorToast();
   const [rawStep, setStep] = useSearchParam("step", "questions");
   const step: Step = isStep(rawStep) ? rawStep : "questions";
 
@@ -111,7 +112,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
       await qc.invalidateQueries({ queryKey: evaluationKey(id) });
       toast(t("eval.resetAttempt.done"), "success");
     },
-    onError: (error) => toast(apiErrorMessage(error, t("eval.resetAttempt.failed")), "error"),
+    onError: toastError("eval.resetAttempt.failed"),
   });
 
   const remove = useMutation({
@@ -169,7 +170,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
     if (!parsed.success) return;
     patch.mutate(parsed.data, {
       onSuccess: () => toast(t("sync.saved"), "success"),
-      onError: (error) => toast(apiErrorMessage(error, t("eval.saveFailed")), "error"),
+      onError: toastError("eval.saveFailed"),
     });
   };
 
@@ -300,11 +301,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
         ]}
       />
 
-      {remove.isError ? (
-        <Alert tone="danger" title={t("eval.saveFailed")}>
-          {apiErrorMessage(remove.error, t("error.server"))}
-        </Alert>
-      ) : null}
+      <FormError error={remove.error} title={t("eval.saveFailed")} />
 
       <TabPanel idPrefix="eval-step" value={step}>
         {step === "questions" ? (
