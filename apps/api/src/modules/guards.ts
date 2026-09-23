@@ -13,7 +13,7 @@
  * the reply-aware loader is that finder plus the 404. One query, two doors.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { and, eq, getTableName, isNotNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
+import { and, eq, getTableName, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { PoolRole } from "@quiz/contracts";
@@ -423,7 +423,6 @@ export async function findReachableEvaluation(
       and(
         eq(enrollments.classroomId, evaluations.classroomId),
         eq(enrollments.userId, user.id),
-        isNotNull(enrollments.userId),
       ),
     )
     .where(eq(evaluations.id, evaluationId))

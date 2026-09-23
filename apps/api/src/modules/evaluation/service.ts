@@ -316,7 +316,7 @@ export function studentEvaluationRows(db: Db, userId: string) {
       attempts,
       and(eq(attempts.evaluationId, evaluations.id), eq(attempts.userId, userId)),
     )
-    .where(and(eq(enrollments.userId, userId), isNotNull(enrollments.userId)));
+    .where(eq(enrollments.userId, userId));
 }
 
 /** The total points of each evaluation, in one grouped query. */
@@ -466,7 +466,6 @@ async function selfOf(
       and(
         eq(enrollments.classroomId, row.classroomId),
         eq(enrollments.userId, userId),
-        isNotNull(enrollments.userId),
       ),
     )
     .limit(1);
