@@ -31,6 +31,7 @@ import {
 } from "./geometry.js";
 
 type Apply = (next: Schematic, continuing?: boolean) => void;
+type Mode = "select" | "wire" | "place";
 type Point = { x: number; y: number };
 
 /** A press in open space: the rubber band, and what was selected before it. */
@@ -315,6 +316,55 @@ export interface KeyActions {
   escape: () => void;
   /** Arms the palette kind at this index (0-based). */
   arm: (index: number) => void;
+}
+
+/**
+ * The editor's answer to each key. Escape unwinds one level: the wire being
+ * drawn, then the armed tool, then the selection.
+ */
+export function keyActions(e: {
+  undo: () => void;
+  redo: () => void;
+  duplicate: () => void;
+  remove: () => void;
+  transform: (t: Orientation) => void;
+  value: Schematic;
+  setSelection: Dispatch<SetStateAction<ReadonlySet<string>>>;
+  kinds: readonly ComponentKind[];
+  mode: Mode;
+  setMode: Dispatch<SetStateAction<Mode>>;
+  setPlaceKind: Dispatch<SetStateAction<ComponentKind | null>>;
+  /** A wire is being drawn. */
+  drafting: boolean;
+  setDraft: (draft: null) => void;
+}): KeyActions {
+  return {
+    undo: e.undo,
+    redo: e.redo,
+    duplicate: e.duplicate,
+    selectAll: () => e.setSelection(new Set([...e.value.components.map((c) => c.id), ...e.value.wires.map((w) => w.id)])),
+    transform: e.transform,
+    toggleWire: () => {
+      e.setMode(e.mode === "wire" ? "select" : "wire");
+      e.setPlaceKind(null);
+      e.setDraft(null);
+    },
+    remove: e.remove,
+    escape: () => {
+      if (e.drafting) e.setDraft(null);
+      else if (e.mode !== "select") {
+        e.setMode("select");
+        e.setPlaceKind(null);
+      } else e.setSelection(new Set());
+    },
+    arm: (index) => {
+      const kind = e.kinds[index];
+      if (kind === undefined) return;
+      e.setMode("place");
+      e.setPlaceKind(kind);
+      e.setDraft(null);
+    },
+  };
 }
 
 interface KeyBinding {
