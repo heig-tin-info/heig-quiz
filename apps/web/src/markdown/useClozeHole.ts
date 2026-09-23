@@ -1,7 +1,7 @@
 import type { Editor } from "@tiptap/core";
 import { NodeSelection } from "@tiptap/pm/state";
 import { useEditorState } from "@tiptap/react";
-import { useEffect, useState, type RefObject } from "react";
+import { useEffect, useState, type MouseEvent, type RefObject } from "react";
 
 import { clozeHolePossibilities, type ClozeHolePossibility } from "./clozeHole";
 
@@ -10,6 +10,14 @@ export interface HoleAnchor {
   top: number;
   bottom: number;
   left: number;
+}
+
+/** The hole the blank card is open on. */
+export interface OpenHole {
+  pos: number;
+  body: string;
+  created: boolean;
+  anchor: HoleAnchor;
 }
 
 /** What the read-only popover under a multi-answer chip shows. */
@@ -63,19 +71,14 @@ export function previewAt(target: EventTarget | null): HolePreview | null {
  * multi-answer chip. `editorRef` is read when the teacher acts: the openers
  * are handed to the editor's options, which exist before it does.
  */
-export function useClozeHole(editorRef: RefObject<Editor | null>) {
+export function useClozeHole(editorRef: RefObject<Editor | null>, holes: boolean) {
   /**
    * The `{{…}}` hole being written, when there is one. A hole is an atom:
    * there is nothing to type into the chip, so it is edited in a card anchored
    * under it (`BlankPopover`), which asks for the SHAPE of the blank instead
    * of the grammar.
    */
-  const [hole, setHole] = useState<null | {
-    pos: number;
-    body: string;
-    created: boolean;
-    anchor: HoleAnchor;
-  }>(null);
+  const [hole, setHole] = useState<OpenHole | null>(null);
   /** The read-only list under a hovered multi-answer chip. */
   const [hoverPreview, setHoverPreview] = useState<HolePreview | null>(null);
 
@@ -121,6 +124,19 @@ export function useClozeHole(editorRef: RefObject<Editor | null>) {
     editor?.commands.focus();
   }
 
+  /*
+   * A chip shows the FIRST possibility and how many more there are; the
+   * whole list is one hover away, read-only. Delegated from the field,
+   * because the chips are ProseMirror's DOM and a React node view per hole
+   * would rebuild on every keystroke. Only a cloze field listens.
+   */
+  const hoverHandlers = holes
+    ? {
+        onMouseOver: (e: MouseEvent) => setHoverPreview(previewAt(e.target)),
+        onMouseOut: () => setHoverPreview(null),
+      }
+    : {};
+
   return {
     hole,
     openHole,
@@ -128,7 +144,7 @@ export function useClozeHole(editorRef: RefObject<Editor | null>) {
     applyHole,
     cancelHole,
     hoverPreview,
-    setHoverPreview,
+    hoverHandlers,
   };
 }
 

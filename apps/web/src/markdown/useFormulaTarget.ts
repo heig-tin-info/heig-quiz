@@ -18,7 +18,7 @@ import { isMathNode } from "./richTextKeys";
  * first means the dialog only ever mounts already resolved, one microtask
  * after the transaction, and the chunk is still a chunk.
  */
-type FormulaDialogComponent = typeof FormulaDialog;
+export type FormulaDialogComponent = typeof FormulaDialog;
 let formulaDialog: FormulaDialogComponent | null = null;
 
 /** Where the formula dialog will write, and what it starts from. */

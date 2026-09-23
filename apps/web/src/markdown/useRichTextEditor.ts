@@ -1,7 +1,7 @@
 import type { Editor } from "@tiptap/core";
 import type { EditorView } from "@tiptap/pm/view";
 import { ReactNodeViewRenderer, useEditor } from "@tiptap/react";
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useRef, type MouseEvent, type RefObject } from "react";
 
 import type { RichTextProps } from "@quiz/core/client";
 
@@ -324,4 +324,31 @@ export function useRichTextSync(
     if (editor.isEditable === !disabled) return;
     editor.setEditable(!disabled);
   }, [editor, disabled]);
+}
+
+/**
+ * A click that lands on the field's CHROME — its padding, the strip beside
+ * the compact toolbar — rather than on the contenteditable itself.
+ *
+ * The whole bordered box is the field, so it must take the caret: the
+ * surface fills the box (`min-h-*` on `.rt-surface` above), and what is
+ * left over is the padding, which ProseMirror never hears about. The caret
+ * goes to the position nearest the pointer, and to the end of the text when
+ * the layout cannot answer — a click under the last line is a click after
+ * the last word. `preventDefault` keeps the field from blurring first.
+ */
+export function focusFromChrome(event: MouseEvent, editor: Editor | null, disabled: boolean): void {
+  if (!editor || disabled) return;
+  const target = event.target instanceof Element ? event.target : null;
+  if (target === null) return;
+  // The surface heard it already, and a control inside the box — a toolbar
+  // button, the language field of a code block — owns its own click.
+  if (target.closest(".rt-surface, button, input, select, textarea, a")) return;
+  event.preventDefault();
+  const box = (editor.view.dom as HTMLElement).getBoundingClientRect();
+  const at = editor.view.posAtCoords({
+    left: Math.min(Math.max(event.clientX, box.left + 1), box.right - 1),
+    top: Math.min(Math.max(event.clientY, box.top + 1), box.bottom - 1),
+  });
+  editor.commands.focus(at === null ? "end" : at.pos);
 }

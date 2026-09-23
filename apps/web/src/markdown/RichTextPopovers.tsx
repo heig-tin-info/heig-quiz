@@ -5,13 +5,17 @@ import { createPortal } from "react-dom";
 
 import { useT } from "../i18n";
 import { Button, cx, IconButton, inputClass, Menu, Z } from "../ui";
-import type { HolePreview } from "./useClozeHole";
+import { BlankPopover } from "./BlankPopover";
+import type { Formula } from "./FormulaDialog";
+import type { HolePreview, OpenHole } from "./useClozeHole";
+import type { FormulaDialogComponent, FormulaTarget } from "./useFormulaTarget";
 
 /*
  * What the rich text field opens over or beside itself: the link prompt, the
- * table menu, and the read-only list under a multi-answer hole. The formula
- * dialog (FormulaDialog.tsx) and the blank card (BlankPopover.tsx) have files
- * of their own; their state lives in useFormulaTarget.ts and useClozeHole.ts.
+ * table menu, the read-only list under a multi-answer hole, and the overlay
+ * that places the blank card and the formula dialog. Those two have files of
+ * their own (BlankPopover.tsx, FormulaDialog.tsx); their state lives in
+ * useClozeHole.ts and useFormulaTarget.ts.
  */
 
 /**
@@ -171,5 +175,63 @@ export function HolePreviewPopover({ preview }: { preview: HolePreview }) {
       </ul>
     </div>,
     document.body,
+  );
+}
+
+/**
+ * What floats over the field: the blank card on the hole being written, the
+ * read-only list under a multi-answer chip, and the formula dialog once its
+ * chunk has arrived.
+ */
+export function RichTextOverlays({
+  hole,
+  onApplyHole,
+  onCancelHole,
+  hoverPreview,
+  selectionPreview,
+  source,
+  formula,
+  Dialog,
+  allowDisplay,
+  onInsertFormula,
+  onCancelFormula,
+}: {
+  hole: OpenHole | null;
+  onApplyHole: (body: string) => void;
+  onCancelHole: () => void;
+  hoverPreview: HolePreview | null;
+  selectionPreview: HolePreview | null;
+  source: boolean;
+  formula: FormulaTarget | null;
+  Dialog: FormulaDialogComponent | null;
+  allowDisplay: boolean;
+  onInsertFormula: (formula: Formula) => void;
+  onCancelFormula: () => void;
+}) {
+  /** The card wins over the list: they would otherwise sit on top of each other. */
+  const preview = hole !== null || source ? null : (hoverPreview ?? selectionPreview);
+  return (
+    <>
+      {hole ? (
+        <BlankPopover
+          key={`hole-${hole.pos}`}
+          anchor={hole.anchor}
+          body={hole.body}
+          onApply={onApplyHole}
+          onCancel={onCancelHole}
+        />
+      ) : null}
+
+      {preview ? <HolePreviewPopover preview={preview} /> : null}
+
+      {formula && Dialog ? (
+        <Dialog
+          initial={{ latex: formula.latex, display: formula.display }}
+          allowDisplay={allowDisplay}
+          onInsert={onInsertFormula}
+          onCancel={onCancelFormula}
+        />
+      ) : null}
+    </>
   );
 }

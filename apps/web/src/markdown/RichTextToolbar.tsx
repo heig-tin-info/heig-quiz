@@ -125,13 +125,18 @@ export function useRichTextShortcuts({
   inline,
   holes,
   shortcuts,
-  enabled,
+  focused,
+  disabled,
+  source,
 }: {
   inCode: boolean;
   inline: boolean;
   holes: boolean;
   shortcuts: readonly RichTextShortcut[];
-  enabled: boolean;
+  /** The strip follows the caret, and stays silent in a disabled field and in the source pane. */
+  focused: boolean;
+  disabled: boolean;
+  source: boolean;
 }): void {
   const t = useT();
   const live: Shortcut[] = inCode
@@ -153,7 +158,7 @@ export function useRichTextShortcuts({
         ...(holes ? [{ keys: "{{", label: t("md.blank.insert") }] : []),
         ...shortcuts.map((s) => ({ keys: s.keys, label: s.label })),
       ];
-  useShortcuts(live, enabled);
+  useShortcuts(live, focused && !disabled && !source);
 }
 
 /** What a toolbar action reaches outside the editor. */
