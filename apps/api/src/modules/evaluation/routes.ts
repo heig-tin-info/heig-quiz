@@ -11,7 +11,6 @@
  */
 import { and, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { z } from "zod";
 
 import {
   EvaluationCreate,
@@ -28,7 +27,7 @@ import {
   type EvaluationDetail,
 } from "@quiz/contracts";
 
-import { audit, type AuditAction } from "../../audit.js";
+import { tracer } from "../../audit.js";
 import { classrooms, courses } from "../../db/schema.js";
 import { loadConfig, typeOf } from "../pool/config.js";
 import {
@@ -38,22 +37,10 @@ import {
   staffAccess,
   teacherGuard,
 } from "../guards.js";
+import { emptyBody, invalid } from "../http.js";
 import * as live from "../live/service.js";
 import { evaluationChanged } from "./events.js";
 import * as service from "./service.js";
-
-const emptyBody = (body: unknown) => (body === undefined || body === null ? {} : body);
-
-function invalid(reply: FastifyReply, error: z.ZodError) {
-  return reply.code(400).send({
-    error: "validation",
-    details: error.issues.map((i) => ({
-      path: i.path.map(String),
-      code: i.code,
-      message: i.message,
-    })),
-  });
-}
 
 /** Everything this module refuses carries its own status and machine code. */
 function evaluationFailure(reply: FastifyReply, error: unknown): FastifyReply | null {
@@ -67,15 +54,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
   const requireTeacher = teacherGuard(app);
 
   /** The audit entry every write of this module leaves behind. */
-  const trace = (req: FastifyRequest, action: AuditAction, id: string, payload?: unknown) =>
-    audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action,
-      subjectType: "evaluation",
-      subjectId: id,
-      ...(payload === undefined ? {} : { payload }),
-    });
+  const trace = tracer(app);
 
   const detail = (
     req: FastifyRequest,
@@ -110,7 +89,10 @@ export async function evaluationPlugin(app: FastifyInstance) {
           preset: body.data.preset,
           createdBy: req.user!.id,
         });
-        await trace(req, "evaluation.create", row.id, { title: row.title, mode: row.mode });
+        await trace(req, "evaluation.create", "evaluation", row.id, {
+          title: row.title,
+          mode: row.mode,
+        });
         evaluationChanged(scope.room.id, row.id);
         return reply.code(201).send(service.toEvaluation(row));
       } catch (error) {
@@ -137,7 +119,9 @@ export async function evaluationPlugin(app: FastifyInstance) {
       const row = await service.patchEvaluation(app.db, scope.evaluation, body.data, {
         attemptCount,
       });
-      await trace(req, "evaluation.update", row.id, { fields: Object.keys(body.data) });
+      await trace(req, "evaluation.update", "evaluation", row.id, {
+        fields: Object.keys(body.data),
+      });
       evaluationChanged(row.classroomId, row.id);
       return detail(req, row);
     } catch (error) {
@@ -156,7 +140,9 @@ export async function evaluationPlugin(app: FastifyInstance) {
       return reply.code(409).send({ error: "confirm_mismatch" });
     }
     await service.deleteEvaluation(app.db, scope.evaluation);
-    await trace(req, "evaluation.delete", scope.evaluation.id, { title: scope.evaluation.title });
+    await trace(req, "evaluation.delete", "evaluation", scope.evaluation.id, {
+      title: scope.evaluation.title,
+    });
     evaluationChanged(scope.evaluation.classroomId, scope.evaluation.id);
     return reply.code(204).send();
   });
@@ -192,7 +178,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
         title: body.data.title,
         createdBy: req.user!.id,
       });
-      await trace(req, "evaluation.duplicate", row.id, { from: scope.evaluation.id });
+      await trace(req, "evaluation.duplicate", "evaluation", row.id, { from: scope.evaluation.id });
       evaluationChanged(target, row.id);
       return reply.code(201).send(service.toEvaluation(row));
     },
@@ -219,7 +205,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
           ),
         { attemptCount },
       );
-      await trace(req, "evaluation.items_update", scope.evaluation.id, {
+      await trace(req, "evaluation.items_update", "evaluation", scope.evaluation.id, {
         added: body.data.questionIds.length,
       });
       evaluationChanged(scope.evaluation.classroomId, scope.evaluation.id);
@@ -248,7 +234,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
           body.data,
           { attemptCount },
         );
-        await trace(req, "evaluation.items_update", scope.evaluation.id, {
+        await trace(req, "evaluation.items_update", "evaluation", scope.evaluation.id, {
           itemId: params.data.itemId,
         });
         evaluationChanged(scope.evaluation.classroomId, scope.evaluation.id);
@@ -272,7 +258,9 @@ export async function evaluationPlugin(app: FastifyInstance) {
         const items = await service.reorderItems(app.db, scope.evaluation, body.data.itemIds, {
           attemptCount,
         });
-        await trace(req, "evaluation.items_update", scope.evaluation.id, { reordered: true });
+        await trace(req, "evaluation.items_update", "evaluation", scope.evaluation.id, {
+          reordered: true,
+        });
         evaluationChanged(scope.evaluation.classroomId, scope.evaluation.id);
         return items;
       } catch (error) {
@@ -292,7 +280,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
       try {
         const attemptCount = await service.attemptCount(app.db, scope.evaluation.id);
         await service.deleteItem(app.db, scope.evaluation, params.data.itemId, { attemptCount });
-        await trace(req, "evaluation.items_update", scope.evaluation.id, {
+        await trace(req, "evaluation.items_update", "evaluation", scope.evaluation.id, {
           removed: params.data.itemId,
         });
         evaluationChanged(scope.evaluation.classroomId, scope.evaluation.id);
@@ -320,7 +308,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
           body.data.itemIds,
           { attemptCount },
         );
-        await trace(req, "evaluation.items_versions", scope.evaluation.id, {
+        await trace(req, "evaluation.items_versions", "evaluation", scope.evaluation.id, {
           itemIds: body.data.itemIds ?? "all",
         });
         evaluationChanged(scope.evaluation.classroomId, scope.evaluation.id);
@@ -345,7 +333,10 @@ export async function evaluationPlugin(app: FastifyInstance) {
         body.data.to,
         app.clock.now(),
       );
-      await trace(req, "evaluation.state", row.id, { from: scope.evaluation.state, to: row.state });
+      await trace(req, "evaluation.state", "evaluation", row.id, {
+        from: scope.evaluation.state,
+        to: row.state,
+      });
       evaluationChanged(row.classroomId, row.id);
       return service.toEvaluation(row);
     } catch (error) {

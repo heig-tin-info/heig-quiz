@@ -11,46 +11,25 @@
  * route itself contains no policy logic at all.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { z } from "zod";
 
 import { IdParam, ReleaseBody } from "@quiz/contracts";
 
-import { audit, type AuditAction } from "../../audit.js";
+import { tracer } from "../../audit.js";
 import { iso } from "../../clock.js";
 import { accessibleEvaluation, ownAttempt, teacherGuard } from "../guards.js";
+import { emptyBody, invalid } from "../http.js";
 import { byId } from "../evaluation/service.js";
 import * as gradingEvents from "../grading/events.js";
 import * as bus from "../realtime/bus.js";
 import { csvFilename, resultsCsv } from "./csv.js";
 import * as service from "./service.js";
 
-const emptyBody = (body: unknown) => (body === undefined || body === null ? {} : body);
-
-function invalid(reply: FastifyReply, error: z.ZodError) {
-  return reply.code(400).send({
-    error: "validation",
-    details: error.issues.map((i) => ({
-      path: i.path.map(String),
-      code: i.code,
-      message: i.message,
-    })),
-  });
-}
-
 export async function resultsPlugin(app: FastifyInstance) {
   const requireTeacher = teacherGuard(app);
   const requireSession = (req: FastifyRequest, reply: FastifyReply) =>
     app.requireSession(req, reply);
 
-  const trace = (req: FastifyRequest, action: AuditAction, id: string, payload?: unknown) =>
-    audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action,
-      subjectType: "evaluation",
-      subjectId: id,
-      ...(payload === undefined ? {} : { payload }),
-    });
+  const trace = tracer(app);
 
   // --- Teacher -----------------------------------------------------------
 
@@ -103,9 +82,8 @@ export async function resultsPlugin(app: FastifyInstance) {
     const again = scope.evaluation.releasedAt !== null;
     try {
       const released = await service.releaseResults(app.db, scope.evaluation, now);
-      await trace(req, again ? "results.rerelease" : "results.release", scope.evaluation.id, {
-        rows: released.rows,
-      });
+      const action = again ? "results.rerelease" : "results.release";
+      await trace(req, action, "evaluation", scope.evaluation.id, { rows: released.rows });
       await announce(scope.evaluation.id);
       return { releasedAt: iso(released.releasedAt), rows: released.rows, released: true };
     } catch (error) {
@@ -126,7 +104,7 @@ export async function resultsPlugin(app: FastifyInstance) {
       const scope = await accessibleEvaluation(app, req, reply);
       if (!scope) return reply;
       await service.unreleaseResults(app.db, scope.evaluation, now);
-      await trace(req, "results.unrelease", scope.evaluation.id);
+      await trace(req, "results.unrelease", "evaluation", scope.evaluation.id);
       await announce(scope.evaluation.id);
       return { releasedAt: null, rows: 0, released: false };
     },

@@ -8,7 +8,6 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { and, eq, ne } from "drizzle-orm";
-import { z } from "zod";
 
 import {
   AnswerIdParam,
@@ -23,7 +22,7 @@ import {
   ValidateGradingBody,
 } from "@quiz/contracts";
 
-import { audit, type AuditAction } from "../../audit.js";
+import { tracer, type AuditAction } from "../../audit.js";
 import { evaluationItems, gradings, questionVersions } from "../../db/schema.js";
 import {
   accessibleEvaluation,
@@ -32,24 +31,12 @@ import {
   staffGrading,
   teacherGuard,
 } from "../guards.js";
+import { emptyBody, invalid } from "../http.js";
 import { joinedItems } from "../evaluation/service.js";
 import { markModifiedAfterRelease } from "../results/service.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "./jobs.js";
 import * as service from "./service.js";
-
-const emptyBody = (body: unknown) => (body === undefined || body === null ? {} : body);
-
-function invalid(reply: FastifyReply, error: z.ZodError) {
-  return reply.code(400).send({
-    error: "validation",
-    details: error.issues.map((i) => ({
-      path: i.path.map(String),
-      code: i.code,
-      message: i.message,
-    })),
-  });
-}
 
 function failure(app: FastifyInstance, reply: FastifyReply, error: unknown): FastifyReply {
   if (error instanceof service.GradingError) {
@@ -62,21 +49,7 @@ function failure(app: FastifyInstance, reply: FastifyReply, error: unknown): Fas
 export async function gradingPlugin(app: FastifyInstance) {
   const requireTeacher = teacherGuard(app);
 
-  const trace = (
-    req: FastifyRequest,
-    action: AuditAction,
-    subjectType: string,
-    id: string,
-    payload?: unknown,
-  ) =>
-    audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action,
-      subjectType,
-      subjectId: id,
-      ...(payload === undefined ? {} : { payload }),
-    });
+  const trace = tracer(app);
 
   // --- The automatic pass ------------------------------------------------
 
