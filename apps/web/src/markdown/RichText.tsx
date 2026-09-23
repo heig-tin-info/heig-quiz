@@ -1,27 +1,14 @@
 import type { Editor } from "@tiptap/core";
 import { NodeSelection } from "@tiptap/pm/state";
 import { EditorContent, ReactNodeViewRenderer, useEditor, useEditorState } from "@tiptap/react";
-import {
-  Bold,
-  Check,
-  Code,
-  FileCode2,
-  Image as ImageIcon,
-  Italic,
-  Link as LinkIcon,
-  RectangleEllipsis,
-  Sigma,
-  SquareCode,
-  Table as TableIcon,
-} from "lucide-react";
+import { Check, FileCode2 } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import type { RichTextProps } from "@quiz/core/client";
 
 import { useT } from "../i18n";
-import { useShortcuts, type Shortcut } from "../shortcuts";
-import { Button, cx, IconButton, inputClass, Menu, modKey, Z, type IconType } from "../ui";
+import { Button, cx, IconButton, inputClass, Z } from "../ui";
 import { BlankPopover } from "./BlankPopover";
 import {
   clozeHolePossibilities,
@@ -34,6 +21,13 @@ import type { Formula, FormulaDialog } from "./FormulaDialog";
 import { ImageToolsContext, ImageView } from "./ImageView";
 import "./richtext.css";
 import { handleRichTextKeyDown, isMathNode } from "./richTextKeys";
+import {
+  RichTextToolbar,
+  runToolbarAction,
+  toolbarActions,
+  useRichTextMarks,
+  useRichTextShortcuts,
+} from "./RichTextToolbar";
 import { SourcePane } from "./SourcePane";
 import { INLINE_INPUT_RULES, richTextExtensions } from "./tiptap";
 
@@ -102,25 +96,8 @@ function serialize(editor: Editor): string {
   return restoreHolePipes(editor.getMarkdown().trim());
 }
 
-/** One toolbar action; `actions` below filters out the ones a mode cannot serve. */
-interface Action {
-  key: string;
-  icon: IconType;
-  labelKey:
-    | "md.bold"
-    | "md.italic"
-    | "md.code"
-    | "md.codeBlock"
-    | "md.math"
-    | "md.image"
-    | "md.link"
-    | "md.table"
-    | "md.blank.insert";
-  shortcut?: string;
-}
-
 /** Where the formula dialog will write, and what it starts from. */
-interface FormulaTarget extends Formula {
+export interface FormulaTarget extends Formula {
   /** Position of the math node being edited, or null for a new one. */
   node: number | null;
   /** Text range the formula replaces (the selection the Σ button was pressed on). */
@@ -453,29 +430,7 @@ export function RichText({
     });
   }
 
-  /*
-   * Which marks the caret sits in, for the pressed state of the toolbar.
-   * `useEditorState` and not `shouldRerenderOnTransaction`: the second
-   * re-renders this component on every keystroke, which in a long prompt is
-   * the whole document reconciled per character.
-   */
-  const marks = useEditorState({
-    editor,
-    selector: ({ editor: e }) =>
-      e === null
-        ? {}
-        : {
-            bold: e.isActive("bold"),
-            italic: e.isActive("italic"),
-            code: e.isActive("code"),
-            codeBlock: e.isActive("codeBlock"),
-            math: e.isActive("inlineMath") || e.isActive("blockMath"),
-            link: e.isActive("link"),
-            // Not `table`, which is a toolbar ACTION key: a caret inside a
-            // table must not light the "insert a table" button up.
-            inTable: e.isActive("table"),
-          },
-  }) as Partial<Record<string, boolean>>;
+  const marks = useRichTextMarks(editor);
 
   /**
    * The chip the caret has SELECTED, as one string so the selector can be
@@ -564,121 +519,13 @@ export function RichText({
     [uploadImage],
   );
 
-  /** Every action the toolbar can offer, before the mode filters it. */
-  const ACTIONS: Action[] = [
-    { key: "bold", icon: Bold, labelKey: "md.bold", shortcut: `${modKey()}+B` },
-    { key: "italic", icon: Italic, labelKey: "md.italic", shortcut: `${modKey()}+I` },
-    { key: "code", icon: Code, labelKey: "md.code" },
-    { key: "codeBlock", icon: SquareCode, labelKey: "md.codeBlock" },
-    { key: "math", icon: Sigma, labelKey: "md.math" },
-    { key: "image", icon: ImageIcon, labelKey: "md.image" },
-    { key: "table", icon: TableIcon, labelKey: "md.table" },
-    { key: "link", icon: LinkIcon, labelKey: "md.link" },
-    // Only a cloze field has holes, and only there is the button drawn.
-    { key: "blank", icon: RectangleEllipsis, labelKey: "md.blank.insert", shortcut: "{{" },
-  ];
-
-  const actions = ACTIONS.filter(
-    (a) =>
-      (a.key !== "image" || showImage) &&
-      (a.key !== "blank" || holes) &&
-      // A one-paragraph field has nowhere to put a fenced block, and a table
-      // in a row of a list is a shape no one asked a CHOICE for. The schema
-      // still knows both, so a stored one is never dropped (tiptap.ts).
-      ((a.key !== "codeBlock" && a.key !== "table") || !inline),
-  );
-
-  /*
-   * What the app's shortcut strip shows while the caret is in this field: the
-   * two formatting keys every rich field answers to, plus whatever the host
-   * added (a list of choices answers Tab and Enter). Registered on focus, so
-   * the strip follows the caret and not merely the screen.
-   */
-  /*
-   * INSIDE A FENCED BLOCK the strip says something else entirely, and it has
-   * to: Enter is a line of code and not the next choice, Tab is an indent and
-   * not a new row, and a host's "Tab — Add a choice" would be a lie while the
-   * caret is in there. The marks are dropped with them — a code block carries
-   * none, so Ctrl+B does nothing in it.
-   */
-  const live: Shortcut[] = marks.codeBlock
-    ? [
-        ...(inline
-          ? [
-              { keys: "Enter", label: t("md.code.newLine") },
-              { keys: `${modKey()}+Enter`, label: t("md.code.leave") },
-            ]
-          : []),
-        { keys: "Tab", label: t("md.code.indent") },
-      ]
-    : [
-        { keys: `${modKey()}+B`, label: t("md.bold") },
-        { keys: `${modKey()}+I`, label: t("md.italic") },
-        // Only an inline field: a block field splits its paragraph on plain
-        // Enter, and teaching a second key for the same thing is noise.
-        ...(inline ? [{ keys: `${modKey()}+Enter`, label: t("md.newLine") }] : []),
-        ...(holes ? [{ keys: "{{", label: t("md.blank.insert") }] : []),
-        ...shortcuts.map((s) => ({ keys: s.keys, label: s.label })),
-      ];
-  useShortcuts(live, focused && !disabled && !source);
-
-  function run(key: string) {
-    if (!editor) return;
-    switch (key) {
-      case "bold":
-        editor.chain().focus().toggleBold().run();
-        return;
-      case "italic":
-        editor.chain().focus().toggleItalic().run();
-        return;
-      case "code":
-        editor.chain().focus().toggleCode().run();
-        return;
-      case "codeBlock":
-        editor.chain().focus().toggleCodeBlock().run();
-        return;
-      case "image":
-        file.current?.click();
-        return;
-      case "table":
-        // Three by three with a header row: the shape a teacher draws on a
-        // slide, and the one GFM writes with the least ceremony.
-        editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
-        return;
-      case "math": {
-        const { selection } = editor.state;
-        if (selection instanceof NodeSelection && isMathNode(selection.node.type.name)) {
-          openMath(selection.from, selection.node.attrs.latex, selection.node.type.name);
-          return;
-        }
-        // A selected run of text is what the formula starts from: select
-        // `x^2`, press Σ, and it is already in the dialog.
-        const text = editor.state.doc.textBetween(selection.from, selection.to);
-        void openFormula({
-          latex: text,
-          display: false,
-          node: null,
-          range: selection.empty ? null : { from: selection.from, to: selection.to },
-          created: false,
-        });
-        return;
-      }
-      case "blank": {
-        /*
-         * An EMPTY chip, which `onUpdate` opens the card on at once — the very
-         * path typing `{{` takes, so the button and the two braces cannot end
-         * up meaning two different things.
-         */
-        editor.chain().focus().insertContent({ type: "clozeHole", attrs: { body: "" } }).run();
-        return;
-      }
-      case "link": {
-        const href = editor.getAttributes("link").href;
-        setAsking({ initial: typeof href === "string" ? href : "" });
-        return;
-      }
-    }
-  }
+  useRichTextShortcuts({
+    inCode: marks.codeBlock === true,
+    inline,
+    holes,
+    shortcuts,
+    enabled: focused && !disabled && !source,
+  });
 
   /** Writes what the formula dialog collected, where it was opened from. */
   function applyFormula({ latex, display }: Formula) {
@@ -788,35 +635,6 @@ export function RichText({
     setAsking(null);
   }
 
-  /*
-   * What can be done to the TABLE the caret is in. A menu and not seven more
-   * icons in the row: they only exist while the caret is in a table, and a
-   * strip that grows by seven buttons under the teacher's hand is the row of
-   * icon buttons DESIGN.md sends to a menu. It is drawn only when there is a
-   * table to act on, so nothing is reserved for it either.
-   */
-  const tableMenu =
-    marks.inTable === true && !disabled && editor !== null ? (
-      <Menu
-        label={t("md.table.menu")}
-        align="start"
-        trigger={
-          <IconButton size="sm" label={t("md.table.menu")} onMouseDown={(e) => e.preventDefault()}>
-            <TableIcon />
-          </IconButton>
-        }
-        items={[
-          { label: t("md.table.rowBefore"), onSelect: () => editor.chain().focus().addRowBefore().run() },
-          { label: t("md.table.rowAfter"), onSelect: () => editor.chain().focus().addRowAfter().run() },
-          { label: t("md.table.columnBefore"), onSelect: () => editor.chain().focus().addColumnBefore().run() },
-          { label: t("md.table.columnAfter"), onSelect: () => editor.chain().focus().addColumnAfter().run() },
-          { label: t("md.table.deleteRow"), separator: true, danger: true, onSelect: () => editor.chain().focus().deleteRow().run() },
-          { label: t("md.table.deleteColumn"), danger: true, onSelect: () => editor.chain().focus().deleteColumn().run() },
-          { label: t("md.table.deleteTable"), danger: true, onSelect: () => editor.chain().focus().deleteTable().run() },
-        ]}
-      />
-    ) : null;
-
   /** The card wins over the list: they would otherwise sit on top of each other. */
   const preview = hole !== null || source ? null : (hoverPreview ?? selectionPreview);
 
@@ -836,40 +654,23 @@ export function RichText({
 
   /** The row of actions, drawn the same above a block field and inside an inline one. */
   const toolbarRow = (
-    <div
-      role="toolbar"
-      aria-label={t("md.toolbar")}
-      aria-controls={fieldId}
-      className="flex flex-wrap items-center gap-0.5"
-    >
-      {actions.map((a) => (
-        <IconButton
-          key={a.key}
-          size="sm"
-          label={a.shortcut ? `${t(a.labelKey)} (${a.shortcut})` : t(a.labelKey)}
-          // A code block carries no mark and holds no node: bold, a formula
-          // and a picture cannot land in one. The fence toggle stays, since it
-          // is the way back out of the block.
-          disabled={
-            disabled || editor === null || (marks.codeBlock === true && a.key !== "codeBlock")
-          }
-          {...(marks[a.key] === undefined ? {} : { active: marks[a.key] })}
-          // The toolbar of an inline field lives INSIDE it: pressing a button
-          // must format the selection, not take the caret out of the row.
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => run(a.key)}
-        >
-          <a.icon />
-        </IconButton>
-      ))}
-      {tableMenu}
-      {sourceButton}
-      {uploading > 0 ? (
-        <span role="status" className="ml-1 text-xs text-fg-muted">
-          {t("md.uploading")}
-        </span>
-      ) : null}
-    </div>
+    <RichTextToolbar
+      fieldId={fieldId}
+      editor={editor}
+      marks={marks}
+      actions={toolbarActions({ showImage, holes, inline })}
+      disabled={disabled}
+      uploading={uploading}
+      sourceButton={sourceButton}
+      onRun={(key) =>
+        runToolbarAction(editor, key, {
+          pickImage: () => file.current?.click(),
+          openMath,
+          openFormula,
+          askLink: (initial) => setAsking({ initial }),
+        })
+      }
+    />
   );
 
   return (
