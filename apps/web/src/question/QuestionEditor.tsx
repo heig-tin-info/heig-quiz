@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Copy, Eye, Play, Save, Trash2, CloudUpload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -14,11 +14,10 @@ import type { CircuitConfig, CircuitDetails } from "@quiz/qt-circuit/client";
 import { referenceRegions, type CodeConfig, type CodeDetails } from "@quiz/qt-code/client";
 
 import { api } from "../api";
-import { useConfirm } from "../confirm";
 import { HelpIcon } from "../help";
 import { useT } from "../i18n";
 import { MarkdownField } from "../markdown/MarkdownField";
-import { useErrorToast, useToast } from "../notify";
+import { useToast } from "../notify";
 import { QuestionEditorHost, typeIcon, typeLabel, type TryOutcome } from "../questionTypes";
 import { routeToPath, useSearchParam, type Route } from "../router";
 import { BrowserRunnerUnavailable, runnerFor } from "../runner";
@@ -47,6 +46,7 @@ import { toConfigIssues } from "./issues";
 import { MetaPanel } from "./MetaPanel";
 import { PublishDialog } from "./PublishDialog";
 import { TryPanel } from "./TryPanel";
+import { useQuestionActions } from "./useQuestionActions";
 import { VersionHistory } from "./VersionHistory";
 import { poolKey, questionKey } from "../queryKeys";
 
@@ -82,8 +82,6 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
-  const toastError = useErrorToast();
-  const confirm = useConfirm();
   const [rawTab, setTab] = useSearchParam("tab", "edit");
   const tab: Tab = rawTab === "try" || rawTab === "versions" ? rawTab : "edit";
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -194,41 +192,10 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
     [poolId],
   );
 
-  const duplicate = useMutation({
-    mutationFn: () =>
-      api<QuestionDetail>(`/app/api/questions/${id}/copy`, {
-        method: "POST",
-        body: JSON.stringify({ targetPoolId: poolId }),
-      }),
-    onSuccess: async (copy) => {
-      toast(t("question.duplicated"), "success");
-      await qc.invalidateQueries({ queryKey: poolKey(poolId) });
-      navigate({ view: "question", id: copy.meta.id });
-    },
-    onError: toastError("error.save"),
+  const { duplicate, askDelete } = useQuestionActions(poolId, {
+    onDuplicated: (copy) => navigate({ view: "question", id: copy.meta.id }),
+    onDeleted: () => navigate(poolId ? { view: "pool", id: poolId } : { view: "pools" }),
   });
-
-  const remove = useMutation({
-    mutationFn: () => api(`/app/api/questions/${id}`, { method: "DELETE" }),
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: poolKey(poolId) });
-      if (poolId) navigate({ view: "pool", id: poolId });
-      else navigate({ view: "pools" });
-    },
-    onError: toastError("question.deleteFailed"),
-  });
-
-  const askDelete = useCallback(async () => {
-    if (!meta) return;
-    const ok = await confirm({
-      title: t("question.delete"),
-      message: t("question.deleteConfirm", { name: meta.internalName }),
-      confirmLabel: t("common.delete"),
-      cancelLabel: t("common.cancel"),
-      danger: true,
-    });
-    if (ok) remove.mutate();
-  }, [confirm, meta, remove, t]);
 
   const { flush } = autosave;
 
@@ -531,14 +498,14 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
                     {
                       label: t("question.duplicate"),
                       icon: Copy,
-                      onSelect: () => duplicate.mutate(),
+                      onSelect: () => duplicate(data.meta),
                     },
                     {
                       label: t("question.delete"),
                       icon: Trash2,
                       danger: true,
                       separator: true,
-                      onSelect: () => void askDelete(),
+                      onSelect: () => void askDelete(data.meta),
                     },
                   ]}
                 />

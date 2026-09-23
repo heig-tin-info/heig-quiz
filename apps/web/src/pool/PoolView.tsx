@@ -5,9 +5,7 @@ import { useMemo, useState, type DragEvent } from "react";
 import type { PoolDetail, QuestionDetail, QuestionPage, QuestionRow } from "@quiz/contracts";
 
 import { api } from "../api";
-import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
-import { useErrorToast, useToast } from "../notify";
 import { QUESTION_TYPE_IDS, typeIcon, typeLabel } from "../questionTypes";
 import type { Route } from "../router";
 import { useSearchParam } from "../router";
@@ -41,6 +39,7 @@ import { QuestionCards, QuestionCardsSkeleton } from "./QuestionCards";
 import { groupQuestions, isGroupBy, type GroupBy } from "./QuestionGroups";
 import { QuestionTable, QuestionTableSkeleton } from "./QuestionTable";
 import { QuestionTypePicker } from "./QuestionTypePicker";
+import { useQuestionActions } from "../question/useQuestionActions";
 import { poolKey, poolQuestionsKey } from "../queryKeys";
 
 /**
@@ -157,9 +156,6 @@ function NewQuestionModal({
 export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) => void }) {
   const t = useT();
   const qc = useQueryClient();
-  const toast = useToast();
-  const toastError = useErrorToast();
-  const confirm = useConfirm();
   // Everything but the category is local to the screen; the category is the
   // sidebar's selection, and "" means "all questions".
   const [filters, setFilters] = useState<QuestionFilters>(EMPTY_FILTERS);
@@ -245,37 +241,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
     });
   };
 
-  const duplicate = useMutation({
-    mutationFn: (row: QuestionRow) =>
-      api<QuestionDetail>(`/app/api/questions/${row.id}/copy`, {
-        method: "POST",
-        body: JSON.stringify({ targetPoolId: id }),
-      }),
-    onSuccess: async () => {
-      toast(t("question.duplicated"), "success");
-      await qc.invalidateQueries({ queryKey: poolKey(id) });
-    },
-    onError: toastError("error.save"),
-  });
-
-  const remove = useMutation({
-    mutationFn: (row: QuestionRow) => api(`/app/api/questions/${row.id}`, { method: "DELETE" }),
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: poolKey(id) });
-    },
-    onError: toastError("question.deleteFailed"),
-  });
-
-  const askDelete = async (row: QuestionRow) => {
-    const ok = await confirm({
-      title: t("question.delete"),
-      message: t("question.deleteConfirm", { name: row.internalName }),
-      confirmLabel: t("common.delete"),
-      cancelLabel: t("common.cancel"),
-      danger: true,
-    });
-    if (ok) remove.mutate(row);
-  };
+  const { duplicate, askDelete } = useQuestionActions(id);
 
   if (pool.isLoading) {
     return <PageSkeleton />;
@@ -406,7 +372,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                 checked={checked}
                 onToggleCheck={toggleCheck}
                 onEdit={(row) => navigate({ view: "question", id: row.id })}
-                onDuplicate={(row) => duplicate.mutate(row)}
+                onDuplicate={(row) => duplicate(row)}
                 onDelete={(row) => void askDelete(row)}
                 onDragStart={readOnly ? undefined : startDrag}
                 readOnly={readOnly}
@@ -422,7 +388,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                   )
                 }
                 onEdit={(row) => navigate({ view: "question", id: row.id })}
-                onDuplicate={(row) => duplicate.mutate(row)}
+                onDuplicate={(row) => duplicate(row)}
                 onDelete={(row) => void askDelete(row)}
                 sort={filters.sort}
                 dir={filters.dir}
