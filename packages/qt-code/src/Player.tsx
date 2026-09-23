@@ -29,6 +29,7 @@ import {
   cx,
   hint,
   input,
+  isLocked,
   lockedBlock,
   markdown,
   sectionTitle,
@@ -73,6 +74,8 @@ interface CodePlayerProps extends PlayerProps<CodeStudent, CodeAnswer> {
    * RUNS a question outside an attempt.
    */
   allowManualRun?: boolean | undefined;
+  /** Alias of `readOnly`, for hosts that speak in disabled controls. */
+  disabled?: boolean | undefined;
   strings?: Partial<CodePlayerStrings> | undefined;
   /** The host's sanitised markdown view; plain text when absent. */
   renderMarkdown?: MarkdownRenderer | undefined;
@@ -134,6 +137,7 @@ export function CodePlayer({
   answer,
   onChange,
   readOnly,
+  disabled,
   onRun,
   allowManualRun,
   strings,
@@ -141,6 +145,7 @@ export function CodePlayer({
   monaco,
 }: CodePlayerProps) {
   const s = resolveStrings(PLAYER_STRINGS, strings);
+  const locked = isLocked(readOnly, disabled);
   const ids = useId();
   const [run, setRun] = useState<RunState>({ status: "idle" });
   /** The free input of §4.7: one argument per line, and a stdin of your own. */
@@ -242,8 +247,8 @@ export function CodePlayer({
               label={fmt(s.editableRegion, { n: index + 1 })}
               language={student.language}
               value={regions[index] ?? ""}
-              onChange={readOnly ? undefined : (next) => writeRegion(index, next)}
-              readOnly={readOnly}
+              onChange={locked ? undefined : (next) => writeRegion(index, next)}
+              readOnly={locked}
               minLines={4}
               monaco={monaco}
             />
@@ -258,7 +263,7 @@ export function CodePlayer({
             <button
               type="button"
               className={button("primary", "sm", "ml-auto")}
-              disabled={readOnly || busy}
+              disabled={locked || busy}
               onClick={() => void runVisibleCases()}
             >
               {run.status === "running" ? s.running : s.run}
@@ -390,7 +395,7 @@ export function CodePlayer({
             <button
               type="button"
               className={button("secondary", "sm", "ml-auto")}
-              disabled={readOnly || busy}
+              disabled={locked || busy}
               onClick={() => void runManual()}
             >
               {manual.status === "running" ? s.running : s.manualRun}
@@ -410,7 +415,7 @@ export function CodePlayer({
                 rows={2}
                 aria-label={s.manualArgs}
                 className={cx(input, "w-full py-1.5 font-mono")}
-                disabled={readOnly}
+                disabled={locked}
                 value={manualArgs}
                 onChange={(e) => setManualArgs(e.target.value)}
               />
@@ -427,7 +432,7 @@ export function CodePlayer({
                 rows={2}
                 aria-label={s.stdin}
                 className={cx(input, "w-full py-1.5 font-mono")}
-                disabled={readOnly}
+                disabled={locked}
                 value={manualStdin}
                 onChange={(e) => setManualStdin(e.target.value)}
               />

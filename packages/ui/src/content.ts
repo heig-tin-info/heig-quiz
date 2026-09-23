@@ -16,6 +16,15 @@ export function markdown(render: MarkdownRenderer | undefined, source: string): 
 }
 
 /**
+ * Whether a player takes input no more (audit P-01o): `readOnly` — the
+ * attempt is submitted, paused or expired — or its alias `disabled`, for
+ * hosts that speak in disabled controls. Every player honours both.
+ */
+export function isLocked(readOnly: boolean, disabled: boolean | undefined): boolean {
+  return readOnly || disabled === true;
+}
+
+/**
  * The type's own grading breakdown, or `null` when `details` is not one.
  *
  * `details` comes off the wire as whatever `gradings.details` holds: this

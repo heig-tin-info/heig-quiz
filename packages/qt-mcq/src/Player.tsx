@@ -10,7 +10,7 @@ import type { MarkdownRenderer, PlayerProps, StringOverrides } from "@quiz/core/
 import { resolveStrings } from "@quiz/core/client";
 import type { McqAnswer, McqStudent } from "./schema.js";
 import { mcqPlayerStrings, type McqPlayerStringKey } from "./strings.js";
-import { cx, markdown } from "@quiz/ui";
+import { cx, isLocked, markdown } from "@quiz/ui";
 import { choiceLetter, helpClass, Pastille } from "./ui.js";
 
 type McqPlayerProps = PlayerProps<McqStudent, McqAnswer> & {
@@ -30,7 +30,7 @@ export function McqPlayer({
   renderMarkdown,
 }: McqPlayerProps) {
   const s = resolveStrings(mcqPlayerStrings, strings);
-  const locked = readOnly || disabled === true;
+  const locked = isLocked(readOnly, disabled);
   const selected = answer?.selected ?? [];
   const multiple = student.mode === "multiple";
   const limit = student.maxSelections;

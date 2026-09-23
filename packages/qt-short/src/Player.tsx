@@ -22,7 +22,7 @@ import {
   type ShortStudent,
 } from "./schema.js";
 import { shortPlayerStrings, type ShortPlayerStringKey } from "./strings.js";
-import { cx, markdown } from "@quiz/ui";
+import { cx, isLocked, markdown } from "@quiz/ui";
 import { helpClass, inputClass, labelClass } from "./ui.js";
 
 type ShortPlayerProps = PlayerProps<ShortStudent, ShortAnswer> & {
@@ -82,7 +82,7 @@ export function ShortPlayer({
   renderMarkdown,
 }: ShortPlayerProps) {
   const s = resolveStrings(shortPlayerStrings, strings);
-  const locked = readOnly || disabled === true;
+  const locked = isLocked(readOnly, disabled);
   /*
    * A payload minted before v2 carries no constraints. The types say it
    * cannot happen; a student sitting an exam behind a white screen because it

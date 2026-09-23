@@ -114,6 +114,12 @@ describe("CircuitPlayer", () => {
     expect(screen.getByText("2 hidden stimuli, worth 3 point(s) in total.")).toBeInTheDocument();
   });
 
+  it("honours `disabled` exactly as `readOnly`, like every other player", () => {
+    setup({ disabled: true, onSimulate: async () => outcome(1) });
+    // The canvas is stubbed here; the button is what a locked answer shows.
+    expect(screen.getByRole("button", { name: "Simulate" })).toBeDisabled();
+  });
+
   it("offers Simulate only when the host can serve it", () => {
     setup();
     expect(screen.queryByRole("button", { name: "Simulate" })).not.toBeInTheDocument();

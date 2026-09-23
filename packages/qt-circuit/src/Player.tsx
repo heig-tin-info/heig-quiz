@@ -27,7 +27,7 @@ import { formatValue, LIBRARY, PORT_IDS, type PortId } from "./library.js";
 import { extractNets, type NetlistIssue } from "./netlist.js";
 import type { CircuitAnswer, CircuitStudent, Load, Source, StudentStimulus } from "./schema.js";
 import { PLAYER_STRINGS, type CircuitPlayerStrings } from "./strings.js";
-import { badge, button, card, cx, hint, markdown, sectionTitle } from "@quiz/ui";
+import { badge, button, card, cx, hint, isLocked, markdown, sectionTitle } from "@quiz/ui";
 
 import { strip } from "./styles.js";
 
@@ -42,6 +42,8 @@ interface CircuitPlayerProps extends PlayerProps<CircuitStudent, CircuitAnswer> 
    * (invariant 14); nothing about the simulation is ever stored in the answer.
    */
   onSimulate?: ((answer: CircuitAnswer) => Promise<CircuitSimulateOutcome>) | undefined;
+  /** Alias of `readOnly`, for hosts that speak in disabled controls. */
+  disabled?: boolean | undefined;
   strings?: Partial<CircuitPlayerStrings> | undefined;
   /** The canvas has a dictionary of its own; the host translates it too. */
   canvasStrings?: Partial<CanvasStrings> | undefined;
@@ -134,12 +136,14 @@ export function CircuitPlayer({
   answer,
   onChange,
   readOnly,
+  disabled,
   onSimulate,
   strings,
   canvasStrings,
   renderMarkdown,
 }: CircuitPlayerProps) {
   const s = resolveStrings(PLAYER_STRINGS, strings);
+  const locked = isLocked(readOnly, disabled);
   const [sim, setSim] = useState<SimState>({ status: "idle" });
 
   const schematic = useMemo(
@@ -228,7 +232,7 @@ export function CircuitPlayer({
           onChange={(next) => onChange({ schematic: next })}
           palette={student.palette}
           supplies={student.supplies}
-          readOnly={readOnly}
+          readOnly={locked}
           highlightPins={highlightPins}
           highlightPorts={highlightPorts}
           {...(canvasStrings === undefined ? {} : { strings: canvasStrings })}
@@ -274,7 +278,7 @@ export function CircuitPlayer({
             <button
               type="button"
               className={button("secondary", "sm", "ml-auto")}
-              disabled={readOnly || empty || sim.status === "running"}
+              disabled={locked || empty || sim.status === "running"}
               onClick={() => void simulate()}
             >
               {sim.status === "running" ? s.simulating : s.simulate}

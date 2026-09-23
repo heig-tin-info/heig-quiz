@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { breakdownOf, markdown } from "./content.js";
+import { breakdownOf, isLocked, markdown } from "./content.js";
+
+describe("isLocked", () => {
+  it("locks on readOnly or on disabled", () => {
+    expect(isLocked(false, undefined)).toBe(false);
+    expect(isLocked(false, false)).toBe(false);
+    expect(isLocked(true, undefined)).toBe(true);
+    expect(isLocked(false, true)).toBe(true);
+  });
+});
 
 describe("markdown", () => {
   it("renders through the host when it lent a renderer, as text otherwise", () => {

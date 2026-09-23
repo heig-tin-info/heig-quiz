@@ -72,6 +72,12 @@ describe("CodePlayer", () => {
     expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
   });
 
+  it("honours `disabled` exactly as `readOnly`, like every other player", () => {
+    setup({ disabled: true, onRun: async () => outcome([]) });
+    expect(screen.getByLabelText("Your code, region 1")).toHaveAttribute("readonly");
+    expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
+  });
+
   it("hides the Run button entirely when the host wires no runner", () => {
     setup();
     expect(screen.queryByRole("button", { name: "Run" })).toBeNull();
