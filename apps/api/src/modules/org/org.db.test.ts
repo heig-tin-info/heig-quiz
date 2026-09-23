@@ -233,3 +233,61 @@ describe("GET /courses/:id", () => {
     expect(body.pools[0].questionCount).toBe(0);
   });
 });
+
+/**
+ * The order of the refusals, which the org routes keep on `teacherRoute`
+ * (audit B-02, B-12): session and role (preHandler) → params (404) → the
+ * entity under `staffAccess` (404, invariant 6) → body (400). The 400 is
+ * still the raw-`issues` shape of these routes (B-03's second shape).
+ */
+describe("the order of the refusals, over HTTP", () => {
+  it("refuses session, role, params, access, then body", async () => {
+    const student = await server.signIn("student");
+    const entryId = randomUUID();
+    await server.app.db.insert(enrollments).values({
+      id: entryId,
+      classroomId,
+      nom: "Liskov",
+      prenom: "Barbara",
+      email: `barbara-${entryId.slice(0, 8)}@heig.test`,
+    });
+    const patch = (url: string, headers: Record<string, string>, payload: unknown) =>
+      server.app.inject({ method: "PATCH", url, headers, payload });
+
+    for (const [url, badBody] of [
+      [`/app/api/courses/${courseId}`, { name: 42 }],
+      [`/app/api/classrooms/${classroomId}`, { name: 42 }],
+      [`/app/api/classrooms/${classroomId}/roster/${entryId}`, { timeBonusPercent: 4000 }],
+    ] as const) {
+      const badParams = url.replace(/[0-9a-f-]{36}$/, "x");
+      expect((await patch(url, {}, badBody)).statusCode).toBe(401);
+      expect((await patch(url, student.headers, badBody)).statusCode).toBe(403);
+      const malformedId = await patch(badParams, teacher.headers, badBody);
+      expect(malformedId.statusCode).toBe(404);
+      expect(malformedId.json()).toEqual({ error: "not_found" });
+      // Out of reach: the 404 wins over the malformed body.
+      const unreachable = await patch(url, outsider.headers, badBody);
+      expect(unreachable.statusCode).toBe(404);
+      expect(unreachable.json()).toEqual({ error: "not_found" });
+      const malformed = await patch(url, teacher.headers, badBody);
+      expect(malformed.statusCode).toBe(400);
+      expect(malformed.json().error).toBe("validation");
+      expect(Array.isArray(malformed.json().issues)).toBe(true);
+    }
+
+    // A second parameter is checked with the first: a malformed staff id is
+    // the same 404 as a course out of reach.
+    const del = (url: string, headers: Record<string, string>) =>
+      server.app.inject({ method: "DELETE", url, headers });
+    expect((await del(`/app/api/courses/${courseId}/staff/x`, teacher.headers)).statusCode).toBe(
+      404,
+    );
+    expect(
+      (await del(`/app/api/courses/${courseId}/staff/${teacher.id}`, outsider.headers)).statusCode,
+    ).toBe(404);
+    // …and the last seat of the staff is never removed.
+    const last = await del(`/app/api/courses/${courseId}/staff/${teacher.id}`, teacher.headers);
+    expect(last.statusCode).toBe(409);
+    expect(last.json().error).toBe("last_staff");
+  });
+});

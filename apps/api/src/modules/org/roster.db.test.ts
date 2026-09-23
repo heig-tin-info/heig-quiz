@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 
-import { classrooms, courses, enrollments, userEmails, users } from "../db/schema.js";
-import { testDb, type TestDb } from "../test/db.js";
+import { classrooms, courses, enrollments, userEmails, users } from "../../db/schema.js";
+import { testDb, type TestDb } from "../../test/db.js";
 import { claimEnrollments, claimForExistingUsers } from "./roster.js";
 
 async function seedClassroom(db: TestDb) {

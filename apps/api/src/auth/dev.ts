@@ -19,7 +19,7 @@ import { eq } from "drizzle-orm";
 import { audit } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import { users } from "../db/schema.js";
-import { claimEnrollments } from "../modules/roster.js";
+import { claimEnrollments } from "../modules/org/service.js";
 import { syncUserEmails } from "./claims.js";
 import { returnToOf, safeReturnTo } from "./returnTo.js";
 import type { SessionUser } from "./plugin.js";

@@ -10,7 +10,7 @@ import { avatars, users } from "../db/schema.js";
 import { publish } from "../events.js";
 import { MePatch, type PublicConfig } from "@quiz/contracts";
 
-import { claimEnrollments } from "../modules/roster.js";
+import { claimEnrollments } from "../modules/org/service.js";
 import { roleForIdentity } from "../roles.js";
 import { addressesOf, affiliationsOf, recordIdpClaims, syncUserEmails } from "./claims.js";
 import { devLoginRoutes } from "./dev.js";

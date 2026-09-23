@@ -210,9 +210,11 @@ refuses a `pglite://` URL there.
 
 ## Conventions
 
-- Modules of the API live in `apps/api/src/modules/<name>/` with at most
-  `routes.ts`, `service.ts`, `events.ts`, `jobs.ts`. A module never imports
-  another module's `routes.ts`; it calls its `service.ts`.
+- Modules of the API live in `apps/api/src/modules/<name>/` with
+  `routes.ts`, `service.ts`, `events.ts`, `jobs.ts`; a module may split its
+  service into cohesive files under its directory; `service.ts` stays the
+  entry other modules import. A module never imports another module's
+  `routes.ts`; it calls its `service.ts`.
 - The Drizzle schema is split by module under `apps/api/src/db/` and
   re-exported by `db/schema.ts`. A table belongs to one module. Another
   module may read it by join; it never writes it.

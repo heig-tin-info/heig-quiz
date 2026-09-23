@@ -7,7 +7,7 @@
  * `details` built by `issuesOf()` from `@quiz/contracts`, the same function
  * the client parses with `ZodIssueLite` (invariant 7).
  *
- * Two other 400 shapes still live inline in `courses.ts`/`org/routes.ts`
+ * Two other 400 shapes still live inline in `org/routes.ts`
  * (`{ error: "validation", issues }`, the raw zod issues) and in
  * `realtime/routes.ts`/`notifications/routes.ts` (bare
  * `{ error: "validation" }`). Aligning them is a wire change and gets its

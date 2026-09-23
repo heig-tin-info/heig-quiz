@@ -22,7 +22,6 @@ import { publish } from "./events.js";
 import { adminPlugin } from "./modules/admin.js";
 import { adminGuard } from "./modules/guards.js";
 import { avatarPlugin } from "./modules/avatar.js";
-import { coursesPlugin } from "./modules/courses.js";
 import { evaluationPlugin } from "./modules/evaluation/routes.js";
 import { gradingPlugin } from "./modules/grading/routes.js";
 import { registerGradingJobs } from "./modules/grading/jobs.js";
@@ -35,7 +34,6 @@ import { flushCoalescers } from "./modules/realtime/bus.js";
 import { realtimePlugin } from "./modules/realtime/routes.js";
 import { resultsPlugin } from "./modules/results/routes.js";
 import { createRunner, runnerCheck } from "./modules/runner/index.js";
-import { studentPlugin } from "./modules/student.js";
 import { startJobs } from "./jobs.js";
 import { startTicker } from "./ticker.js";
 
@@ -156,8 +154,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(realtimePlugin);
   await app.register(adminPlugin, { config });
   await app.register(avatarPlugin);
-  await app.register(coursesPlugin, { config });
-  await app.register(orgPlugin);
+  await app.register(orgPlugin, { config });
   await app.register(poolPlugin, { config });
   await app.register(pollPlugin, { config });
   await app.register(evaluationPlugin);
@@ -165,7 +162,6 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(gradingPlugin);
   await app.register(resultsPlugin);
   await app.register(notificationsPlugin);
-  await app.register(studentPlugin);
 
   // Job queue + ticker. A database that is unreachable at boot does not kill
   // the server: healthz stays degraded until restart.
