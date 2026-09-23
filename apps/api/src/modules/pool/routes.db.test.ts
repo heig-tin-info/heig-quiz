@@ -1038,3 +1038,80 @@ describe("question listing over HTTP", () => {
     expect(mixed.json().error).toBe("invalid_cursor");
   });
 });
+
+/**
+ * The order of the refusals, which `teacherRoute` and the role-carrying
+ * loaders of `pool/routes.ts` must keep (audit B-02): session and role
+ * (preHandler) → params (404) → the entity under `poolAccess` (404) → the
+ * pool role (403) → sub-params and body (400).
+ */
+describe("the order of the refusals, over HTTP", () => {
+  it("refuses session, params, access, role, then body", async () => {
+    const reader = await server.signIn("teacher");
+    const student = await server.signIn("student");
+    const created = await server.app.inject({
+      method: "POST",
+      url: "/app/api/pools",
+      headers: owner.headers,
+      payload: { name: "Refusal order pool", visibility: "public" },
+    });
+    const open = created.json().id as string;
+    const hidden = await server.app.inject({
+      method: "POST",
+      url: "/app/api/pools",
+      headers: owner.headers,
+      payload: { name: "Refusal order private pool" },
+    });
+    const closed = hidden.json().id as string;
+    const patch = (url: string, headers: Record<string, string>, payload: unknown) =>
+      server.app.inject({ method: "PATCH", url, headers, payload });
+    const badBody = { name: 42 };
+
+    expect((await patch(`/app/api/pools/x`, {}, badBody)).statusCode).toBe(401);
+    expect((await patch(`/app/api/pools/x`, student.headers, badBody)).statusCode).toBe(403);
+    const badParams = await patch(`/app/api/pools/x`, owner.headers, badBody);
+    expect(badParams.statusCode).toBe(404);
+    expect(badParams.json()).toEqual({ error: "not_found" });
+
+    // Out of reach: the 404 of invariant 6 wins over the malformed body.
+    const unreachable = await patch(`/app/api/pools/${closed}`, reader.headers, badBody);
+    expect(unreachable.statusCode).toBe(404);
+    expect(unreachable.json()).toEqual({ error: "not_found" });
+
+    // Readable but not writable: the role's 403 wins over the malformed body.
+    const readOnly = await patch(`/app/api/pools/${open}`, reader.headers, badBody);
+    expect(readOnly.statusCode).toBe(403);
+    expect(readOnly.json()).toEqual({
+      error: "forbidden",
+      message: "Only an owner of this pool may do that",
+      role: "reader",
+    });
+    // …and before a sub-parameter too: a tag name too long for `TagParam`.
+    const longTag = "t".repeat(65);
+    const tagAsReader = await patch(`/app/api/pools/${open}/tags/${longTag}`, reader.headers, {
+      description: "x",
+    });
+    expect(tagAsReader.statusCode).toBe(403);
+    const tagAsOwner = await patch(`/app/api/pools/${open}/tags/${longTag}`, owner.headers, {
+      description: "x",
+    });
+    expect(tagAsOwner.statusCode).toBe(400);
+    expect(tagAsOwner.json().error).toBe("validation");
+
+    const malformed = await patch(`/app/api/pools/${open}`, owner.headers, badBody);
+    expect(malformed.statusCode).toBe(400);
+    expect(malformed.json().error).toBe("validation");
+  });
+
+  it("hands a multipart limit's 413 to Fastify's handler, as before the wrapper", async () => {
+    const body = multipart(Buffer.alloc(5_000_001, 1), "big.png", "image/png");
+    const res = await server.app.inject({
+      method: "POST",
+      url: `/app/api/pools/${poolId}/assets`,
+      headers: { ...owner.headers, "content-type": body.contentType },
+      payload: body.payload,
+    });
+    expect(res.statusCode).toBe(413);
+    expect(res.json()).toMatchObject({ code: "FST_REQ_FILE_TOO_LARGE", statusCode: 413 });
+  });
+});

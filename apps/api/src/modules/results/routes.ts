@@ -34,7 +34,7 @@ export async function resultsPlugin(app: FastifyInstance) {
     if (error instanceof service.ResultsError) {
       return reply.code(error.status).send({ error: error.code, message: error.message });
     }
-    app.log.error({ err: error, cause: (error as Error)?.cause }, "results route failed");
+    reply.log.error({ err: error, cause: (error as Error)?.cause }, "results route failed");
     return reply.code(500).send({ error: "internal_error" });
   }
 

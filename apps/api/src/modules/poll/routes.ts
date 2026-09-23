@@ -65,7 +65,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     if (error instanceof live.LiveError) {
       return reply.code(error.status).send({ error: error.code, message: error.message });
     }
-    app.log.error({ err: error, cause: (error as Error)?.cause }, "poll route failed");
+    reply.log.error({ err: error, cause: (error as Error)?.cause }, "poll route failed");
     return reply.code(500).send({ error: "internal_error" });
   }
 
