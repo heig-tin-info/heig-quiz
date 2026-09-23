@@ -139,6 +139,7 @@ function dropIntoRichText(view: EditorView, event: DragEvent, upload: ImageUploa
  * component, and `settled`: the markdown it last agreed on with its host.
  */
 export function useRichTextEditor(o: RichTextEditorOptions) {
+  // Handlers close over this render's `o`: useEditor re-applies options on every render, so none goes stale.
   /*
    * The callbacks live in refs, and the editor is built once. Passing them to
    * `useEditor` directly would rebuild the whole ProseMirror view on every
