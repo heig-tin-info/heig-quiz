@@ -16,7 +16,7 @@ import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import { FORBIDDEN_STUDENT_KEYS } from "../live/studentView.js";
 import * as poolService from "../pool/service.js";
-import { GUEST_COOKIE } from "./service.js";
+import { createPoll, GUEST_COOKIE } from "./service.js";
 
 let server: TestServer;
 let teacher: { id: string; headers: Record<string, string> };
@@ -159,6 +159,35 @@ describe("creating and starting a poll", () => {
     expect(other.json().evaluation.code).not.toBe(code);
     // Closed straight away: it is only here for the uniqueness check.
     await post(`/app/api/evaluations/${other.json().evaluation.id}/poll/end`, teacher.headers);
+  });
+
+  it("lets the unique index settle two concurrent creates that draw the same code", async () => {
+    // Both creates draw "RACE22" first; the index refuses whichever writes
+    // second, and that one draws again. No check-then-insert is involved.
+    const drawsOf = (...codes: string[]) => () => codes.shift() ?? "UNUSED";
+    const input = {
+      classroomId: seed.classroomId,
+      questionId,
+      anonymous: false,
+      createdBy: teacher.id,
+      now: new Date(),
+    };
+    const [a, b] = await Promise.all([
+      createPoll(server.app.db, { ...input, drawCode: drawsOf("RACE22", "RACE33") }),
+      createPoll(server.app.db, { ...input, drawCode: drawsOf("RACE22", "RACE44") }),
+    ]);
+    const codes = [a.evaluation.accessCode, b.evaluation.accessCode].sort();
+    expect(codes[0]).toBe("RACE22");
+    expect(["RACE33", "RACE44"]).toContain(codes[1]);
+
+    // A code no longer drawable at all ends in a 503, not a duplicate.
+    await expect(
+      createPoll(server.app.db, { ...input, drawCode: () => "RACE22" }),
+    ).rejects.toMatchObject({ code: "code_exhausted", status: 503 });
+
+    for (const scope of [a, b]) {
+      await post(`/app/api/evaluations/${scope.evaluation.id}/poll/end`, teacher.headers);
+    }
   });
 
   it("answers 404 to a teacher who is not on the classroom's staff", async () => {

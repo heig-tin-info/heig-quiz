@@ -70,3 +70,22 @@ export function createDb(databaseUrl: string, log: PoolLogger = console): DbHand
     close: () => pool.end(),
   };
 }
+
+/**
+ * True when `err` is PostgreSQL's `unique_violation` (23505) on the named
+ * index. Drizzle wraps the driver's error in `cause`, and node-postgres and
+ * PGlite both carry `code` and `constraint`, so the chain is walked.
+ */
+export function isUniqueViolation(err: unknown, constraint: string): boolean {
+  let e: unknown = err;
+  while (typeof e === "object" && e !== null) {
+    const { code, constraint: name, cause } = e as {
+      code?: unknown;
+      constraint?: unknown;
+      cause?: unknown;
+    };
+    if (code === "23505") return name === constraint;
+    e = cause;
+  }
+  return false;
+}

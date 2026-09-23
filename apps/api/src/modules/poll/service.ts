@@ -35,7 +35,7 @@ import {
 import { pollTally, type PollType } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
-import type { Db } from "../../db/client.js";
+import { isUniqueViolation, type Db } from "../../db/client.js";
 import {
   answers,
   attempts,
@@ -100,41 +100,29 @@ const CODE_LENGTH = 6;
 /**
  * How long a finished poll still answers on its code. A phone that scanned
  * the QR must keep showing the question and the revealed key while the
- * teacher comments it; two hours later the code is free again.
+ * teacher comments it; two hours later the code no longer answers. Only
+ * the running polls hold their code exclusively (the unique index); should a
+ * new poll draw the code of one in its grace period — one chance in 10^9 —
+ * {@link byCode} answers with the newer one.
  */
 const ENDED_GRACE_MS = 2 * 60 * 60 * 1000;
 
-function drawCode(): string {
+/** One uniformly drawn session code. Six characters is 32^6 ≈ 10^9 codes. */
+export function drawCode(): string {
   const bytes = randomBytes(CODE_LENGTH);
   let out = "";
   for (const byte of bytes) out += CODE_ALPHABET[byte % CODE_ALPHABET.length];
   return out;
 }
 
-/** A code is taken while its poll is still reachable by it (see {@link byCode}). */
-async function codeTaken(db: Db, code: string, now: Date): Promise<boolean> {
-  const [row] = await db
-    .select({ id: evaluations.id })
-    .from(evaluations)
-    .where(and(eq(evaluations.mode, "poll"), eq(evaluations.accessCode, code), stillAddressable(now)))
-    .limit(1);
-  return row !== undefined;
-}
+/** How many codes `createPoll` draws before giving up; one collision is already rare. */
+const CODE_DRAWS = 20;
 
 function stillAddressable(now: Date) {
   return or(
     eq(evaluations.state, "running"),
     gte(evaluations.closedAt, new Date(now.getTime() - ENDED_GRACE_MS)),
   );
-}
-
-/** A code no running poll holds. Six characters is 32^6 ≈ 10^9 draws. */
-async function freeCode(db: Db, now: Date): Promise<string> {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const code = drawCode();
-    if (!(await codeTaken(db, code, now))) return code;
-  }
-  throw new PollError("code_exhausted", 503, "could not draw a free session code");
 }
 
 // --- Guest identity (F-AUTH-05) ------------------------------------------
@@ -275,6 +263,8 @@ export async function createPoll(
     anonymous: boolean;
     createdBy: string;
     now: Date;
+    /** The code draw, injectable so a test can force a collision. */
+    drawCode?: () => string;
   },
 ): Promise<PollScope> {
   await assertPollable(db, input.questionId);
@@ -283,19 +273,33 @@ export async function createPoll(
     .from(questions)
     .where(eq(questions.id, input.questionId))
     .limit(1);
-  const created = await createPollEvaluation(db, {
-    classroomId: input.classroomId,
-    title: question?.internalName ?? "Poll",
-    createdBy: input.createdBy,
-    questionId: input.questionId,
-    accessCode: await freeCode(db, input.now),
-    anonymous: input.anonymous,
-    defaultPoints: (type, version) =>
-      typeOf(type).defaultPoints(
-        loadConfig(type, { config: version.config, configVersion: version.configVersion }),
-      ),
-    now: input.now,
-  });
+  // No check-then-insert: the partial unique index on the codes of the
+  // running polls refuses a collision, even between two concurrent creates,
+  // and the draw starts over.
+  const draw = input.drawCode ?? drawCode;
+  let created: Awaited<ReturnType<typeof createPollEvaluation>> | undefined;
+  for (let n = 0; created === undefined; n += 1) {
+    if (n === CODE_DRAWS) {
+      throw new PollError("code_exhausted", 503, "could not draw a free session code");
+    }
+    try {
+      created = await createPollEvaluation(db, {
+        classroomId: input.classroomId,
+        title: question?.internalName ?? "Poll",
+        createdBy: input.createdBy,
+        questionId: input.questionId,
+        accessCode: draw(),
+        anonymous: input.anonymous,
+        defaultPoints: (type, version) =>
+          typeOf(type).defaultPoints(
+            loadConfig(type, { config: version.config, configVersion: version.configVersion }),
+          ),
+        now: input.now,
+      });
+    } catch (err) {
+      if (!isUniqueViolation(err, "evaluations_running_poll_code_uq")) throw err;
+    }
+  }
   const scope = await scopeOf(db, created.evaluation);
   if (!scope) throw new PollError("internal_error", 500, "poll item vanished after insert");
   events.pollStarted(scope.evaluation, input.now);
