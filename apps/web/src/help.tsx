@@ -1,9 +1,13 @@
 import { CircleHelp, X } from "lucide-react";
-import { createContext, useContext, useId, useRef, useState, type ReactNode } from "react";
+import { useContext, useId, useRef, useState, type ReactNode } from "react";
 
 import { useI18n } from "./i18n";
 import { Markdown } from "./markdown";
-import { humanize, Tip, useLayer, Z } from "./ui";
+import { HelpContext, humanize, useLayer, Z } from "./ui";
+
+// `HelpIcon` lives beside the primitives that place it (`PageHeader`,
+// `FieldLabel`, …); re-exported so its importers keep one path to the help.
+export { HelpIcon } from "./ui";
 
 /**
  * Contextual help: small "?" icons on the main components open a drawer on
@@ -27,8 +31,6 @@ function helpSource(topic: string, locale: string): string | null {
     SOURCES[`./help/${topic}.${locale}.md`] ?? SOURCES[`./help/${topic}.md`] ?? null
   );
 }
-
-const HelpContext = createContext<{ open: (key: string) => void }>({ open: () => {} });
 
 /**
  * The help drawer, for a surface that opens a topic without a "?" icon of its
@@ -87,56 +89,6 @@ export function helpTopics(
       return { topic, title: (source && firstHeading(source)) || humanize(topic) };
     })
     .sort((a, b) => a.title.localeCompare(b.title, locale));
-}
-
-/**
- * The "?" beside a title, a label or a section heading. It sits on the text
- * line, and both of its dimensions are decided HERE, once, for every call
- * site — a "?" placed by hand next to one title and not the next is exactly
- * the sloppiness this replaces.
- *
- * Size: 16 px. The icon is read as a mark next to a word, not as an action of
- * its own; at 14 px it disappeared under a 28 px page title, and one step up
- * is enough — a bigger circle beside a 13 px label would outweigh the label.
- *
- * Vertical placement: the icon belongs to ONE LINE of text — the first one of
- * the title it follows, even when that title wraps. Two things put it there:
- *
- *  - the STRUT below, an empty line of the surrounding text inside the
- *    wrapper. It makes the wrapper exactly one line tall, whatever the
- *    line-height around it, so `self-start` lands the icon on the first line
- *    of a wrapped title instead of leaving it floating between the two — and
- *    in a plain text flow (no flex row) it gives the wrapper the text's own
- *    baseline, which is the same alignment by another road;
- *  - the em NUDGE. Centered in that line, the icon still reads as lifted: the
- *    line box is taller than the letters and hangs below them (it carries the
- *    descender space and the leading), so its middle sits above the middle of
- *    what the eye reads. The nudge puts the icon back on the letters, between
- *    the cap-height middle and the x-height middle. In `em` on purpose: the
- *    error it corrects is a fraction of the font size, so the one value holds
- *    at 13 px and at 28 px and no call site has to re-tune it.
- */
-export function HelpIcon({ topic, className = "" }: { topic: string; className?: string }) {
-  const { t } = useI18n();
-  const { open } = useContext(HelpContext);
-  return (
-    <Tip label={t("help.title")} className="inline-flex shrink-0 items-center self-start">
-      <span aria-hidden className="w-0 overflow-hidden">
-        {"\u200b"}
-      </span>
-      <button
-        type="button"
-        aria-label={t("help.title")}
-        onClick={(e) => {
-          e.stopPropagation();
-          open(topic);
-        }}
-        className={`inline-flex translate-y-[0.0625em] items-center justify-center rounded-full p-0.5 text-fg-faint transition-colors hover:text-accent ${className}`}
-      >
-        <CircleHelp className="size-4" />
-      </button>
-    </Tip>
-  );
 }
 
 export function HelpProvider({ children }: { children: ReactNode }) {
