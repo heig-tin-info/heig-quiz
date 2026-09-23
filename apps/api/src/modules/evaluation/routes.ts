@@ -26,30 +26,27 @@ import {
   type EvaluationDetail,
 } from "@quiz/contracts";
 
-import { tracer } from "../../audit.js";
+import { tracer, type AuditAction } from "../../audit.js";
 import { loadConfig, typeOf } from "../pool/config.js";
-import {
-  accessibleClassroom,
-  accessibleEvaluation,
-  findAccessibleClassroom,
-  loadEvaluation,
-  teacherGuard,
-} from "../guards.js";
-import { emptyBody, invalid } from "../http.js";
+import { findAccessibleClassroom, loadEvaluation, teacherGuard } from "../guards.js";
+import { notFound, teacherRoute } from "../http.js";
 import * as live from "../live/service.js";
 import { evaluationChanged } from "./events.js";
 import * as service from "./service.js";
 
-/** Everything this module refuses carries its own status and machine code. */
-function evaluationFailure(reply: FastifyReply, error: unknown): FastifyReply | null {
-  if (error instanceof service.EvaluationError) {
-    return reply.code(error.status).send({ error: error.code, message: error.message });
-  }
-  return null;
-}
-
 export async function evaluationPlugin(app: FastifyInstance) {
   const requireTeacher = teacherGuard(app);
+
+  /** Everything this module refuses carries its own status and machine code; the rest is a 500. */
+  function failure(reply: FastifyReply, error: unknown): FastifyReply {
+    if (error instanceof service.EvaluationError) {
+      return reply.code(error.status).send({ error: error.code, message: error.message });
+    }
+    app.log.error({ err: error, cause: (error as Error)?.cause }, "evaluation route failed");
+    return reply.code(500).send({ error: "internal_error" });
+  }
+
+  const teacher = teacherRoute(app, failure);
 
   /** The audit entry every write of this module leaves behind. */
   const trace = tracer(app);
@@ -59,32 +56,56 @@ export async function evaluationPlugin(app: FastifyInstance) {
     row: service.EvaluationRecord,
   ): Promise<EvaluationDetail> => service.evaluationDetail(app.db, row, req.user!.id);
 
+  // The loaders of invariant 6, each answering its own 404.
+  const staffClassroom = async (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => {
+    const scope = await findAccessibleClassroom(app.db, req.user!, p.id);
+    if (scope) return scope;
+    await notFound(reply);
+    return null;
+  };
+  const staffEvaluation = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
+    loadEvaluation(app, req, reply, p.id);
+
+  /**
+   * One write of the evaluation's content (B-09): what is legal depends on
+   * whether an attempt exists, so the count is read first and handed to the
+   * service; then the audit entry and the SSE refresh, in that order.
+   */
+  async function contentWrite<T>(
+    req: FastifyRequest,
+    evaluation: service.EvaluationRecord,
+    action: AuditAction,
+    payload: unknown,
+    write: (ctx: { attemptCount: number }) => Promise<T>,
+  ): Promise<T> {
+    const attemptCount = await service.attemptCount(app.db, evaluation.id);
+    const result = await write({ attemptCount });
+    await trace(req, action, "evaluation", evaluation.id, payload);
+    evaluationChanged(evaluation.classroomId, evaluation.id);
+    return result;
+  }
+
   // --- Collection --------------------------------------------------------
 
   app.get(
     "/app/api/classrooms/:id/evaluations",
     { preHandler: requireTeacher },
-    async (req, reply) => {
-      const scope = await accessibleClassroom(app, req, reply);
-      if (!scope) return reply;
-      return service.listEvaluations(app.db, scope.room.id);
-    },
+    teacher({ params: IdParam, load: staffClassroom }, ({ scope }) =>
+      service.listEvaluations(app.db, scope.room.id),
+    ),
   );
 
   app.post(
     "/app/api/classrooms/:id/evaluations",
     { preHandler: requireTeacher },
-    async (req, reply) => {
-      const scope = await accessibleClassroom(app, req, reply);
-      if (!scope) return reply;
-      const body = EvaluationCreate.safeParse(req.body);
-      if (!body.success) return invalid(reply, body.error);
-      try {
+    teacher(
+      { params: IdParam, body: EvaluationCreate, load: staffClassroom },
+      async ({ req, reply, body, scope }) => {
         const row = await service.createEvaluation(app.db, {
           classroomId: scope.room.id,
-          title: body.data.title,
-          mode: body.data.mode,
-          preset: body.data.preset,
+          title: body.title,
+          mode: body.mode,
+          preset: body.preset,
           createdBy: req.user!.id,
         });
         await trace(req, "evaluation.create", "evaluation", row.id, {
@@ -93,244 +114,193 @@ export async function evaluationPlugin(app: FastifyInstance) {
         });
         evaluationChanged(scope.room.id, row.id);
         return reply.code(201).send(service.toEvaluation(row));
-      } catch (error) {
-        return evaluationFailure(reply, error) ?? reply.code(500).send({ error: "internal_error" });
-      }
-    },
+      },
+    ),
   );
 
   // --- One evaluation ----------------------------------------------------
 
-  app.get("/app/api/evaluations/:id", { preHandler: requireTeacher }, async (req, reply) => {
-    const scope = await accessibleEvaluation(app, req, reply);
-    if (!scope) return reply;
-    return detail(req, scope.evaluation);
-  });
+  app.get(
+    "/app/api/evaluations/:id",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: staffEvaluation }, ({ req, scope }) =>
+      detail(req, scope.evaluation),
+    ),
+  );
 
-  app.patch("/app/api/evaluations/:id", { preHandler: requireTeacher }, async (req, reply) => {
-    const scope = await accessibleEvaluation(app, req, reply);
-    if (!scope) return reply;
-    const body = EvaluationPatch.safeParse(req.body);
-    if (!body.success) return invalid(reply, body.error);
-    try {
-      const attemptCount = await service.attemptCount(app.db, scope.evaluation.id);
-      const row = await service.patchEvaluation(app.db, scope.evaluation, body.data, {
-        attemptCount,
-      });
-      await trace(req, "evaluation.update", "evaluation", row.id, {
-        fields: Object.keys(body.data),
-      });
-      evaluationChanged(row.classroomId, row.id);
-      return detail(req, row);
-    } catch (error) {
-      return evaluationFailure(reply, error) ?? reply.code(500).send({ error: "internal_error" });
-    }
-  });
+  app.patch(
+    "/app/api/evaluations/:id",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: EvaluationPatch, load: staffEvaluation },
+      async ({ req, body, scope }) => {
+        const row = await contentWrite(
+          req,
+          scope.evaluation,
+          "evaluation.update",
+          { fields: Object.keys(body) },
+          (ctx) => service.patchEvaluation(app.db, scope.evaluation, body, ctx),
+        );
+        return detail(req, row);
+      },
+    ),
+  );
 
-  app.delete("/app/api/evaluations/:id", { preHandler: requireTeacher }, async (req, reply) => {
-    const scope = await accessibleEvaluation(app, req, reply);
-    if (!scope) return reply;
-    const body = EvaluationDelete.safeParse(emptyBody(req.body));
-    if (!body.success) return invalid(reply, body.error);
-    // Naming the evaluation is the confirmation: a destructive action is
-    // never one click away from a live grid.
-    if (body.data.confirmTitle !== scope.evaluation.title) {
-      return reply.code(409).send({ error: "confirm_mismatch" });
-    }
-    await service.deleteEvaluation(app.db, scope.evaluation);
-    await trace(req, "evaluation.delete", "evaluation", scope.evaluation.id, {
-      title: scope.evaluation.title,
-    });
-    evaluationChanged(scope.evaluation.classroomId, scope.evaluation.id);
-    return reply.code(204).send();
-  });
+  app.delete(
+    "/app/api/evaluations/:id",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: EvaluationDelete, optionalBody: true, load: staffEvaluation },
+      async ({ req, reply, body, scope }) => {
+        // Naming the evaluation is the confirmation: a destructive action is
+        // never one click away from a live grid.
+        if (body.confirmTitle !== scope.evaluation.title) {
+          return reply.code(409).send({ error: "confirm_mismatch" });
+        }
+        await service.deleteEvaluation(app.db, scope.evaluation);
+        await trace(req, "evaluation.delete", "evaluation", scope.evaluation.id, {
+          title: scope.evaluation.title,
+        });
+        evaluationChanged(scope.evaluation.classroomId, scope.evaluation.id);
+        return reply.code(204).send();
+      },
+    ),
+  );
 
   app.post(
     "/app/api/evaluations/:id/duplicate",
     { preHandler: requireTeacher },
-    async (req, reply) => {
-      const scope = await accessibleEvaluation(app, req, reply);
-      if (!scope) return reply;
-      const body = EvaluationDuplicate.safeParse(req.body);
-      if (!body.success) return invalid(reply, body.error);
-      // A copy into another classroom is a write there: it goes through the
-      // same predicate, so a teacher cannot seed a room they cannot reach.
-      let target = scope.classroom.id;
-      if (body.data.classroomId !== undefined && body.data.classroomId !== target) {
-        const other = await findAccessibleClassroom(app.db, req.user!, body.data.classroomId);
-        if (!other) return reply.code(404).send({ error: "not_found" });
-        target = other.room.id;
-      }
-      const row = await service.duplicateEvaluation(app.db, scope.evaluation, {
-        classroomId: target,
-        title: body.data.title,
-        createdBy: req.user!.id,
-      });
-      await trace(req, "evaluation.duplicate", "evaluation", row.id, { from: scope.evaluation.id });
-      evaluationChanged(target, row.id);
-      return reply.code(201).send(service.toEvaluation(row));
-    },
+    teacher(
+      { params: IdParam, body: EvaluationDuplicate, load: staffEvaluation },
+      async ({ req, reply, body, scope }) => {
+        // A copy into another classroom is a write there: it goes through the
+        // same predicate, so a teacher cannot seed a room they cannot reach.
+        let target = scope.classroom.id;
+        if (body.classroomId !== undefined && body.classroomId !== target) {
+          const other = await findAccessibleClassroom(app.db, req.user!, body.classroomId);
+          if (!other) return notFound(reply);
+          target = other.room.id;
+        }
+        const row = await service.duplicateEvaluation(app.db, scope.evaluation, {
+          classroomId: target,
+          title: body.title,
+          createdBy: req.user!.id,
+        });
+        await trace(req, "evaluation.duplicate", "evaluation", row.id, { from: scope.evaluation.id });
+        evaluationChanged(target, row.id);
+        return reply.code(201).send(service.toEvaluation(row));
+      },
+    ),
   );
 
   // --- Items -------------------------------------------------------------
 
-  app.post("/app/api/evaluations/:id/items", { preHandler: requireTeacher }, async (req, reply) => {
-    const scope = await accessibleEvaluation(app, req, reply);
-    if (!scope) return reply;
-    const body = ItemsAdd.safeParse(req.body);
-    if (!body.success) return invalid(reply, body.error);
-    try {
-      const attemptCount = await service.attemptCount(app.db, scope.evaluation.id);
-      const items = await service.addItems(
-        app.db,
-        scope.evaluation,
-        body.data.questionIds,
-        // F-EVAL-02: the type decides the default weight, from the config it
-        // owns — this module never looks inside a config.
-        (type, version) =>
-          typeOf(type).defaultPoints(
-            loadConfig(type, { config: version.config, configVersion: version.configVersion }),
-          ),
-        { attemptCount },
-      );
-      await trace(req, "evaluation.items_update", "evaluation", scope.evaluation.id, {
-        added: body.data.questionIds.length,
-      });
-      evaluationChanged(scope.evaluation.classroomId, scope.evaluation.id);
-      return items;
-    } catch (error) {
-      return evaluationFailure(reply, error) ?? reply.code(500).send({ error: "internal_error" });
-    }
-  });
+  app.post(
+    "/app/api/evaluations/:id/items",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: ItemsAdd, load: staffEvaluation },
+      ({ req, body, scope }) =>
+        contentWrite(
+          req,
+          scope.evaluation,
+          "evaluation.items_update",
+          { added: body.questionIds.length },
+          (ctx) =>
+            service.addItems(
+              app.db,
+              scope.evaluation,
+              body.questionIds,
+              // F-EVAL-02: the type decides the default weight, from the config it
+              // owns — this module never looks inside a config.
+              (type, version) =>
+                typeOf(type).defaultPoints(
+                  loadConfig(type, { config: version.config, configVersion: version.configVersion }),
+                ),
+              ctx,
+            ),
+        ),
+    ),
+  );
 
   app.patch(
     "/app/api/evaluations/:id/items/:itemId",
     { preHandler: requireTeacher },
-    async (req, reply) => {
-      const params = ItemParam.safeParse(req.params);
-      if (!params.success) return reply.code(404).send({ error: "not_found" });
-      const scope = await loadEvaluation(app, req, reply, params.data.id);
-      if (!scope) return reply;
-      const body = ItemPatch.safeParse(req.body);
-      if (!body.success) return invalid(reply, body.error);
-      try {
-        const attemptCount = await service.attemptCount(app.db, scope.evaluation.id);
-        const items = await service.patchItem(
-          app.db,
+    teacher(
+      { params: ItemParam, body: ItemPatch, load: staffEvaluation },
+      ({ req, params, body, scope }) =>
+        contentWrite(
+          req,
           scope.evaluation,
-          params.data.itemId,
-          body.data,
-          { attemptCount },
-        );
-        await trace(req, "evaluation.items_update", "evaluation", scope.evaluation.id, {
-          itemId: params.data.itemId,
-        });
-        evaluationChanged(scope.evaluation.classroomId, scope.evaluation.id);
-        return items;
-      } catch (error) {
-        return evaluationFailure(reply, error) ?? reply.code(500).send({ error: "internal_error" });
-      }
-    },
+          "evaluation.items_update",
+          { itemId: params.itemId },
+          (ctx) => service.patchItem(app.db, scope.evaluation, params.itemId, body, ctx),
+        ),
+    ),
   );
 
   app.put(
     "/app/api/evaluations/:id/items/order",
     { preHandler: requireTeacher },
-    async (req, reply) => {
-      const scope = await accessibleEvaluation(app, req, reply);
-      if (!scope) return reply;
-      const body = ItemsOrder.safeParse(req.body);
-      if (!body.success) return invalid(reply, body.error);
-      try {
-        const attemptCount = await service.attemptCount(app.db, scope.evaluation.id);
-        const items = await service.reorderItems(app.db, scope.evaluation, body.data.itemIds, {
-          attemptCount,
-        });
-        await trace(req, "evaluation.items_update", "evaluation", scope.evaluation.id, {
-          reordered: true,
-        });
-        evaluationChanged(scope.evaluation.classroomId, scope.evaluation.id);
-        return items;
-      } catch (error) {
-        return evaluationFailure(reply, error) ?? reply.code(500).send({ error: "internal_error" });
-      }
-    },
+    teacher(
+      { params: IdParam, body: ItemsOrder, load: staffEvaluation },
+      ({ req, body, scope }) =>
+        contentWrite(req, scope.evaluation, "evaluation.items_update", { reordered: true }, (ctx) =>
+          service.reorderItems(app.db, scope.evaluation, body.itemIds, ctx),
+        ),
+    ),
   );
 
   app.delete(
     "/app/api/evaluations/:id/items/:itemId",
     { preHandler: requireTeacher },
-    async (req, reply) => {
-      const params = ItemParam.safeParse(req.params);
-      if (!params.success) return reply.code(404).send({ error: "not_found" });
-      const scope = await loadEvaluation(app, req, reply, params.data.id);
-      if (!scope) return reply;
-      try {
-        const attemptCount = await service.attemptCount(app.db, scope.evaluation.id);
-        await service.deleteItem(app.db, scope.evaluation, params.data.itemId, { attemptCount });
-        await trace(req, "evaluation.items_update", "evaluation", scope.evaluation.id, {
-          removed: params.data.itemId,
-        });
-        evaluationChanged(scope.evaluation.classroomId, scope.evaluation.id);
-        return reply.code(204).send();
-      } catch (error) {
-        return evaluationFailure(reply, error) ?? reply.code(500).send({ error: "internal_error" });
-      }
-    },
+    teacher({ params: ItemParam, load: staffEvaluation }, async ({ req, reply, params, scope }) => {
+      await contentWrite(
+        req,
+        scope.evaluation,
+        "evaluation.items_update",
+        { removed: params.itemId },
+        (ctx) => service.deleteItem(app.db, scope.evaluation, params.itemId, ctx),
+      );
+      return reply.code(204).send();
+    }),
   );
 
   /** F-EVAL-03: the one-click "use the latest version", while it is still legal. */
   app.post(
     "/app/api/evaluations/:id/items/update-versions",
     { preHandler: requireTeacher },
-    async (req, reply) => {
-      const scope = await accessibleEvaluation(app, req, reply);
-      if (!scope) return reply;
-      const body = UpdateVersions.safeParse(emptyBody(req.body));
-      if (!body.success) return invalid(reply, body.error);
-      try {
-        const attemptCount = await service.attemptCount(app.db, scope.evaluation.id);
-        const items = await service.updateVersions(
-          app.db,
+    teacher(
+      { params: IdParam, body: UpdateVersions, optionalBody: true, load: staffEvaluation },
+      ({ req, body, scope }) =>
+        contentWrite(
+          req,
           scope.evaluation,
-          body.data.itemIds,
-          { attemptCount },
-        );
-        await trace(req, "evaluation.items_versions", "evaluation", scope.evaluation.id, {
-          itemIds: body.data.itemIds ?? "all",
-        });
-        evaluationChanged(scope.evaluation.classroomId, scope.evaluation.id);
-        return items;
-      } catch (error) {
-        return evaluationFailure(reply, error) ?? reply.code(500).send({ error: "internal_error" });
-      }
-    },
+          "evaluation.items_versions",
+          { itemIds: body.itemIds ?? "all" },
+          (ctx) => service.updateVersions(app.db, scope.evaluation, body.itemIds, ctx),
+        ),
+    ),
   );
 
   // --- State and preview -------------------------------------------------
 
-  app.post("/app/api/evaluations/:id/state", { preHandler: requireTeacher }, async (req, reply) => {
-    const scope = await accessibleEvaluation(app, req, reply);
-    if (!scope) return reply;
-    const body = EvaluationStateBody.safeParse(req.body);
-    if (!body.success) return invalid(reply, body.error);
-    try {
-      const row = await service.transition(
-        app.db,
-        scope.evaluation,
-        body.data.to,
-        app.clock.now(),
-      );
-      await trace(req, "evaluation.state", "evaluation", row.id, {
-        from: scope.evaluation.state,
-        to: row.state,
-      });
-      evaluationChanged(row.classroomId, row.id);
-      return service.toEvaluation(row);
-    } catch (error) {
-      return evaluationFailure(reply, error) ?? reply.code(500).send({ error: "internal_error" });
-    }
-  });
+  app.post(
+    "/app/api/evaluations/:id/state",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: EvaluationStateBody, load: staffEvaluation },
+      async ({ req, now, body, scope }) => {
+        const row = await service.transition(app.db, scope.evaluation, body.to, now);
+        await trace(req, "evaluation.state", "evaluation", row.id, {
+          from: scope.evaluation.state,
+          to: row.state,
+        });
+        evaluationChanged(row.classroomId, row.id);
+        return service.toEvaluation(row);
+      },
+    ),
+  );
 
   /**
    * "See it as a student" (§4.3): a REAL student view built by
@@ -340,12 +310,8 @@ export async function evaluationPlugin(app: FastifyInstance) {
   app.post(
     "/app/api/evaluations/:id/preview",
     { preHandler: requireTeacher },
-    async (req, reply) => {
-      const params = IdParam.safeParse(req.params);
-      if (!params.success) return reply.code(404).send({ error: "not_found" });
-      const scope = await loadEvaluation(app, req, reply, params.data.id);
-      if (!scope) return reply;
-      return live.previewView(app.db, scope.evaluation, app.clock.now());
-    },
+    teacher({ params: IdParam, load: staffEvaluation }, ({ now, scope }) =>
+      live.previewView(app.db, scope.evaluation, now),
+    ),
   );
 }

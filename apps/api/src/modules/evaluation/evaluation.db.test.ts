@@ -326,3 +326,65 @@ describe("duplicate into another classroom, over HTTP (invariant 6)", () => {
     }
   });
 });
+
+/**
+ * The order of the refusals, which `teacherRoute` in `modules/http.ts` must
+ * keep (audit B-02): session and role (the preHandler) → params (404) →
+ * scope (the loader's 404) → body (400) → the module's error map.
+ */
+describe("the order of the refusals, over HTTP", () => {
+  it("refuses session, params, scope, body, then maps the service error", async () => {
+    const server = await testServer();
+    try {
+      const teacher = await server.signIn("teacher");
+      const student = await server.signIn("student");
+      const stranger = await server.signIn("teacher");
+      const mine = await seedLive(server.app.db, { teacherId: teacher.id });
+      const itemUrl = `/app/api/evaluations/${mine.evaluationId}/items/${mine.itemIds[0]}`;
+      const patch = (url: string, headers: Record<string, string>, payload: unknown) =>
+        server.app.inject({ method: "PATCH", url, headers, payload });
+      const badBody = { points: "many" };
+
+      expect((await patch("/app/api/evaluations/x/items/y", {}, badBody)).statusCode).toBe(401);
+      expect((await patch("/app/api/evaluations/x/items/y", student.headers, badBody)).statusCode).toBe(403);
+
+      const badParams = await patch("/app/api/evaluations/x/items/y", teacher.headers, badBody);
+      expect(badParams.statusCode).toBe(404);
+      expect(badParams.json()).toEqual({ error: "not_found" });
+
+      // Off the staff, the scope's 404 wins over the malformed body.
+      const offStaff = await patch(itemUrl, stranger.headers, badBody);
+      expect(offStaff.statusCode).toBe(404);
+      expect(offStaff.json()).toEqual({ error: "not_found" });
+      const offStaffCreate = await server.app.inject({
+        method: "POST",
+        url: `/app/api/classrooms/${mine.classroomId}/evaluations`,
+        headers: stranger.headers,
+        payload: {},
+      });
+      expect(offStaffCreate.statusCode).toBe(404);
+
+      const malformed = await patch(itemUrl, teacher.headers, badBody);
+      expect(malformed.statusCode).toBe(400);
+      expect(malformed.json().error).toBe("validation");
+
+      // Once an attempt exists, the service's `Locked` comes back as its own 409.
+      await server.app.db
+        .insert(attempts)
+        .values({ id: randomUUID(), evaluationId: mine.evaluationId, userId: mine.studentIds[0]!, seed: 1 });
+      const locked = await server.app.inject({
+        method: "PUT",
+        url: `/app/api/evaluations/${mine.evaluationId}/items/order`,
+        headers: teacher.headers,
+        payload: { itemIds: [...mine.itemIds].reverse() },
+      });
+      expect(locked.statusCode).toBe(409);
+      expect(locked.json()).toEqual({
+        error: "locked",
+        message: "an attempt exists: the structure is frozen",
+      });
+    } finally {
+      await server.close();
+    }
+  });
+});
