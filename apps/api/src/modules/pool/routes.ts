@@ -768,11 +768,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       async ({ req, reply, body, scope }) => {
         // The target pool must be reachable too, or a copy would be a way to
         // write into someone else's pool.
-        const [target] = await app.db
-          .select()
-          .from(pools)
-          .where(and(eq(pools.id, body.targetPoolId), mine(req)))
-          .limit(1);
+        const target = await reachablePool(req, body.targetPoolId);
         if (!target) return reply.code(404).send({ error: "not_found" });
         // Reading the source is enough to copy FROM it; writing the copy needs a
         // contributor's seat on the TARGET.
@@ -1137,10 +1133,11 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
 
   /**
    * The one image of a multipart upload, or null once the refusal is sent:
-   * `415` when it is not multipart, `400` without a file, `413` past the
-   * size limit, and `415` again when the BYTES are not an accepted image —
-   * the bytes decide the type, not the header, so an SVG (or anything else)
-   * sniffs to nothing and is refused here.
+   * `415` when it is not multipart, `400` without a file, and `415` again
+   * when the BYTES are not an accepted image — the bytes decide the type, not
+   * the header, so an SVG (or anything else) sniffs to nothing and is refused
+   * here. Past `ASSETS_MAX_BYTES` the `413` is Fastify's: `toBuffer()` throws
+   * `FST_REQ_FILE_TOO_LARGE`, which the wrapper hands to the global handler.
    */
   async function readImage(
     req: FastifyRequest,
@@ -1156,13 +1153,6 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       return null;
     }
     const bytes = await part.toBuffer();
-    if (part.file.truncated) {
-      await reply.code(413).send({
-        error: "too_large",
-        message: `Images are limited to ${config.ASSETS_MAX_BYTES} bytes`,
-      });
-      return null;
-    }
     const facts = sniffImage(bytes);
     if (!facts || !isAllowedMime(facts.mime)) {
       await reply.code(415).send({
