@@ -35,6 +35,7 @@ import {
   type ItemPatch,
   type ItemRow,
   type McqPolicy,
+  type ReleasedGrades,
 } from "@quiz/contracts";
 
 import { round2 } from "@quiz/domain";
@@ -747,6 +748,75 @@ export async function patchEvaluation(
 
 export async function deleteEvaluation(db: Db, row: EvaluationRecord): Promise<void> {
   await db.delete(evaluations).where(eq(evaluations.id, row.id));
+}
+
+// --- Narrow writers for the other modules ----------------------------------
+//
+// `evaluations` and `evaluation_items` belong to this module (CLAUDE.md,
+// Conventions). What `live`, `poll`, `results` and `grading` need to change
+// on them goes through one of these, each carrying its own `updatedAt` bump,
+// rather than through an UPDATE of their own.
+
+/** `live.extendTime`: the shared deadline of a `deadline`-timed evaluation. */
+export async function setClosesAt(db: DbOrTx, id: string, closesAt: Date, now: Date): Promise<void> {
+  await db.update(evaluations).set({ closesAt, updatedAt: now }).where(eq(evaluations.id, id));
+}
+
+/** `poll.setRevealed`: the poll switches and the feedback policy, moved together. */
+export async function setPollSettings(
+  db: DbOrTx,
+  id: string,
+  values: Required<Pick<typeof evaluations.$inferInsert, "settings" | "feedbackPolicy">>,
+  now: Date,
+): Promise<void> {
+  await db
+    .update(evaluations)
+    .set({ ...values, updatedAt: now })
+    .where(eq(evaluations.id, id));
+}
+
+/** `results.releaseResults`: the frozen grades (ADR-012) and the state they imply. */
+export async function setRelease(
+  db: DbOrTx,
+  id: string,
+  release: { releasedAt: Date; releasedGrades: ReleasedGrades },
+  now: Date,
+): Promise<void> {
+  await db
+    .update(evaluations)
+    .set({ ...release, modifiedAfterRelease: false, state: "released", updatedAt: now })
+    .where(eq(evaluations.id, id));
+}
+
+/** `results.unreleaseResults`: the release pair, cleared (the state moves separately). */
+export async function clearRelease(db: DbOrTx, id: string, now: Date): Promise<void> {
+  await db
+    .update(evaluations)
+    .set({ releasedAt: null, releasedGrades: null, modifiedAfterRelease: false, updatedAt: now })
+    .where(eq(evaluations.id, id));
+}
+
+/** F-GRADE-09: a correction landed after the release. */
+export async function setModifiedAfterRelease(db: DbOrTx, id: string, now: Date): Promise<void> {
+  await db
+    .update(evaluations)
+    .set({ modifiedAfterRelease: true, updatedAt: now })
+    .where(eq(evaluations.id, id));
+}
+
+/**
+ * A regrade onto another published version of the same question (F-GRADE-06).
+ * `evaluation_items` has no `updatedAt` of its own.
+ */
+export async function retargetItemVersion(
+  db: DbOrTx,
+  itemId: string,
+  questionVersionId: string,
+): Promise<void> {
+  await db
+    .update(evaluationItems)
+    .set({ questionVersionId })
+    .where(eq(evaluationItems.id, itemId));
 }
 
 /**

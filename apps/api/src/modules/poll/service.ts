@@ -18,7 +18,7 @@
  * the code answers — an account, or (when the poll is anonymous) a browser
  * identified by the `quiz_guest` cookie and a row in `guest_participants`.
  */
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomBytes } from "node:crypto";
 
 import { and, asc, count, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
@@ -43,7 +43,6 @@ import {
   courses,
   evaluationItems,
   evaluations,
-  guestParticipants,
   questionVersions,
   questions,
 } from "../../db/schema.js";
@@ -51,6 +50,7 @@ import {
   byId,
   createPollEvaluation,
   joinedItems,
+  setPollSettings,
   settingsOf,
   type EvaluationRecord,
   type JoinedItem,
@@ -59,8 +59,6 @@ import * as live from "../live/service.js";
 import { solutionView, studentViewOf } from "../live/studentView.js";
 import { loadConfig, typeOf } from "../pool/config.js";
 import * as events from "./events.js";
-
-type GuestRecord = typeof guestParticipants.$inferSelect;
 
 // --- Failures -------------------------------------------------------------
 
@@ -132,55 +130,13 @@ export const GUEST_COOKIE = "quiz_guest";
 export const GUEST_COOKIE_PATH = "/app/api/p";
 export const GUEST_TTL_S = 12 * 60 * 60;
 
-/** The value that lives in the browser. Never stored server-side. */
+/**
+ * The value that lives in the browser. Never stored server-side: the guest
+ * row holds its hash, and that row is the `live` module's (`guestByToken`,
+ * `ensureGuest`), which owns `guest_participants`.
+ */
 export function newGuestToken(): string {
   return randomBytes(32).toString("base64url");
-}
-
-/**
- * What the database holds: `sha256(token:evaluation)`.
- *
- * Binding the hash to the evaluation is what lets ONE cookie serve a browser
- * across several polls — one row per (evaluation, browser), as the unique
- * index on `token_hash` requires — and what stops a hash read out of one
- * poll's table from being replayed as another poll's participant.
- */
-function guestHash(token: string, evaluationId: string): string {
-  return createHash("sha256").update(`${token}:${evaluationId}`).digest("hex");
-}
-
-export async function guestByToken(
-  db: Db,
-  evaluationId: string,
-  token: string,
-): Promise<GuestRecord | null> {
-  const [row] = await db
-    .select()
-    .from(guestParticipants)
-    .where(eq(guestParticipants.tokenHash, guestHash(token, evaluationId)))
-    .limit(1);
-  return row ?? null;
-}
-
-/** Idempotent: the same cookie always lands on the same guest row. */
-export async function ensureGuest(
-  db: Db,
-  evaluationId: string,
-  token: string,
-  now: Date,
-): Promise<GuestRecord> {
-  await db
-    .insert(guestParticipants)
-    .values({
-      id: randomUUID(),
-      evaluationId,
-      tokenHash: guestHash(token, evaluationId),
-      createdAt: now,
-    })
-    .onConflictDoNothing({ target: guestParticipants.tokenHash });
-  const row = await guestByToken(db, evaluationId, token);
-  if (!row) throw new PollError("internal_error", 500, "guest vanished after insert");
-  return row;
 }
 
 // --- Loading a poll -------------------------------------------------------
@@ -325,14 +281,12 @@ export async function setRevealed(
     showKey: revealed,
     showExplanation: revealed,
   };
-  await db
-    .update(evaluations)
-    .set({
-      settings: { ...settings, poll: { ...pollSettingsOf(evaluation), revealed } },
-      feedbackPolicy,
-      updatedAt: now,
-    })
-    .where(eq(evaluations.id, evaluation.id));
+  await setPollSettings(
+    db,
+    evaluation.id,
+    { settings: { ...settings, poll: { ...pollSettingsOf(evaluation), revealed } }, feedbackPolicy },
+    now,
+  );
   const row = (await byId(db, evaluation.id))!;
   events.pollChanged(row);
   return row;

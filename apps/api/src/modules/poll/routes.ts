@@ -279,7 +279,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     if (!scope) return null;
     const token = req.cookies[service.GUEST_COOKIE];
     const guest =
-      req.user || !token ? null : await service.guestByToken(app.db, found.evaluation.id, token);
+      req.user || !token ? null : await live.guestByToken(app.db, found.evaluation.id, token);
     return {
       scope,
       state: found.state,
@@ -332,7 +332,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
         // The cookie IS the identity: minted here, once per browser, and
         // never readable by a script.
         const token = req.cookies[service.GUEST_COOKIE] ?? service.newGuestToken();
-        const guest = await service.ensureGuest(app.db, scope.evaluation.id, token, now);
+        const guest = await live.ensureGuest(app.db, scope.evaluation.id, token, now);
         reply.setCookie(service.GUEST_COOKIE, token, {
           path: service.GUEST_COOKIE_PATH,
           httpOnly: true,

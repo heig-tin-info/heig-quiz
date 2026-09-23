@@ -16,8 +16,9 @@
  *
  * `results` owns no table. It reads `gradings` (the `grading` module's),
  * `answers` and `attempts` (`live`'s) and `evaluations` (`evaluation`'s) by
- * join, and the only column it writes is the release pair of `evaluations`,
- * which is what a release IS.
+ * join. The release pair of `evaluations`, which is what a release IS, is
+ * written through the `evaluation` module's narrow writers (`setRelease`,
+ * `clearRelease`, `setModifiedAfterRelease`), never by an UPDATE of its own.
  */
 import { and, asc, eq, inArray } from "drizzle-orm";
 
@@ -43,14 +44,16 @@ import {
   answers,
   attempts,
   enrollments,
-  evaluations,
   gradings,
 } from "../../db/schema.js";
 import {
   applyState,
+  clearRelease,
   feedbackOf,
   joinedItems,
   scaleOf,
+  setModifiedAfterRelease,
+  setRelease,
   settingsOf,
   staffAttemptIds,
   staffRosterWithAttempt,
@@ -271,16 +274,7 @@ export async function releaseResults(
         perItem: r.perItem,
       })),
   };
-  await db
-    .update(evaluations)
-    .set({
-      releasedAt,
-      releasedGrades: snapshot,
-      modifiedAfterRelease: false,
-      state: "released",
-      updatedAt: now,
-    })
-    .where(eq(evaluations.id, evaluation.id));
+  await setRelease(db, evaluation.id, { releasedAt, releasedGrades: snapshot }, now);
   return { releasedAt, rows: snapshot.rows.length };
 }
 
@@ -301,10 +295,7 @@ export async function unreleaseResults(
   // Both or neither: a cleared `released_at` on a row still `released`
   // would leave the two readings of "released" disagreeing.
   await db.transaction(async (tx) => {
-    await tx
-      .update(evaluations)
-      .set({ releasedAt: null, releasedGrades: null, modifiedAfterRelease: false, updatedAt: now })
-      .where(eq(evaluations.id, evaluation.id));
+    await clearRelease(tx, evaluation.id, now);
     await applyState(tx, evaluation, "closed", now);
   });
 }
@@ -320,10 +311,7 @@ export async function markModifiedAfterRelease(
   now: Date,
 ): Promise<boolean> {
   if (evaluation.releasedAt === null) return false;
-  await db
-    .update(evaluations)
-    .set({ modifiedAfterRelease: true, updatedAt: now })
-    .where(eq(evaluations.id, evaluation.id));
+  await setModifiedAfterRelease(db, evaluation.id, now);
   return true;
 }
 

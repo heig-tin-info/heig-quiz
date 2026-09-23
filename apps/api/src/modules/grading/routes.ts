@@ -24,10 +24,10 @@ import {
 } from "@quiz/contracts";
 
 import { tracer, type AuditAction } from "../../audit.js";
-import { evaluationItems, gradings, questionVersions } from "../../db/schema.js";
+import { gradings, questionVersions } from "../../db/schema.js";
 import { loadEvaluation, staffAnswer, staffGrading, teacherGuard } from "../guards.js";
 import { notFound, teacherRoute } from "../http.js";
-import { joinedItems } from "../evaluation/service.js";
+import { joinedItems, retargetItemVersion } from "../evaluation/service.js";
 import { markModifiedAfterRelease } from "../results/service.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "./jobs.js";
@@ -263,10 +263,7 @@ export async function gradingPlugin(app: FastifyInstance) {
             )
             .limit(1);
           if (!version) return notFound(reply);
-          await app.db
-            .update(evaluationItems)
-            .set({ questionVersionId: version.id })
-            .where(eq(evaluationItems.id, item.item.id));
+          await retargetItemVersion(app.db, item.item.id, version.id);
           note = `${note} (re-graded with version ${body.toVersionNumber})`;
         }
 
