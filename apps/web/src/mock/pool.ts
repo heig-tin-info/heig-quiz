@@ -1166,7 +1166,7 @@ export const questionDetail = (q: MockQuestion) => ({
  * catches the mistakes a teacher actually makes on these screens, so the
  * "publication refused" path is reachable in the mock.
  */
-function draftIssues(q: MockQuestion): { path: string[]; code: string; message: string }[] {
+export function draftIssues(q: MockQuestion): { path: string[]; code: string; message: string }[] {
   const config = q.draft.config as Record<string, unknown>;
   const out: { path: string[]; code: string; message: string }[] = [];
   const prompt = typeof config.prompt === "string" ? config.prompt : "";

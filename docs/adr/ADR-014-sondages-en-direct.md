@@ -163,3 +163,42 @@ Four facts of the existing codebase shape the design:
 6. **A `poll.tally` addressed to everyone.** The room would read the distribution as it
    forms, which changes the answers — and it would publish the majority answer before the
    reveal.
+
+## Addendum (2026-09-23): a question written in the launcher is not saved
+
+Decision 3 made the personal `Polls` pool the only home of a poll question: "Ask a new
+question" created a question there and sent the teacher to the full editor, to publish it
+and come back. In the middle of a lecture that is four screens for one question. The
+launcher's second tab now holds the type's own editor and starts the poll on what is
+written, without saving anything a teacher would find again:
+
+1. **`POST /app/api/polls/inline`** (`PollInlineCreate`: `classroomId`, `anonymous`,
+   `type`, `config`). The classroom is loaded through the staff predicate, like
+   `POST /polls`; a type other than `mcq`/`short` is the same `422 poll_type`; the
+   config goes through the type's own `configSchema` through the registry (`saveConfig`,
+   the publication gate) and a refusal is `422 config_invalid` with the zod issues, which
+   the launcher places under the fields. The launch is audited as `poll.create` with
+   `inline: true`.
+2. **The content is an ordinary frozen version of a question that belongs to no pool.**
+   `questions.pool_id` becomes nullable (migration `0010_poll_unsaved_questions`); the
+   `pool` service's `createUnsavedQuestion` writes the question with `pool_id` null and ONE
+   published version (number 1, no draft), and the poll's item freezes it exactly as it
+   freezes a saved question's. Everything downstream — `studentView`/`toStudent`
+   (invariant 4), the key on reveal, the tally, the grading pass, "Run again" — is the
+   same code on the same tables. Its name, and the poll's title, is the start of its
+   statement: what the room reads anyway.
+3. **Nothing reaches it but its polls.** Every pool listing filters on `pool_id`, and
+   `findAccessibleQuestion` joins `pools`, so it is in no list, no search, no count and no
+   editor; `addItems` refuses it for any other evaluation. A teacher who wants to keep a
+   question writes it in the `Polls` pool, and it shows in the "Pick a question" tab.
+4. **No marks, so no marking settings.** `EditorProps.ungraded` asks an editor to leave out
+   what only decides a mark: the scoring card of `mcq` (policy, cap, shuffle opt-out), the
+   points and the prefilters of `short`. The KEY stays — the type's schema requires one,
+   and it is what "Reveal" shows. An unsaved question has no pool to hold an image, so the
+   launcher lends no upload.
+
+Rejected: a nullable `evaluation_items.question_version_id` beside an inline `config`
+column. Every reader of an item — `joinedItems`, grading, results, the dashboard, the
+autosave gate — joins `question_versions` and `questions`; a second shape of item would
+have to be taught to each of them, and a second path to `toStudent` is the one thing
+invariant 4 forbids.

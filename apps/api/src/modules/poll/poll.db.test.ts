@@ -9,9 +9,16 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
-import { attempts, evaluations, guestParticipants, pools, questions } from "../../db/schema.js";
+import {
+  attempts,
+  auditLog,
+  evaluations,
+  guestParticipants,
+  pools,
+  questions,
+} from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import { FORBIDDEN_STUDENT_KEYS } from "../live/studentView.js";
@@ -497,6 +504,134 @@ describe("the public view of a short poll never carries the answer", () => {
       `/app/api/evaluations/${created.json().evaluation.id}/poll/end`,
       teacher.headers,
     );
+  });
+});
+
+/**
+ * "Ask a new question" (ADR-014, addendum 2026-09-23): the question is written
+ * in the launcher, validated by its type's own schema, run at once, and saved
+ * in no pool.
+ */
+describe("a poll on a question written in the launcher and never saved", () => {
+  const SECRET = "S3CR3T-INLINE";
+  const inline = (headers: Record<string, string>, body: Record<string, unknown>) =>
+    post("/app/api/polls/inline", headers, {
+      classroomId: seed.classroomId,
+      anonymous: true,
+      ...body,
+    });
+  const unsavedCount = async () =>
+    (await server.app.db.select().from(questions).where(isNull(questions.poolId))).length;
+
+  it("starts the poll, titled by its statement, on a question no pool holds", async () => {
+    const before = await unsavedCount();
+    const created = await inline(teacher.headers, { type: "mcq", config: MCQ_CONFIG });
+    expect(created.statusCode).toBe(201);
+    const body = created.json();
+    expect(body.evaluation).toMatchObject({
+      state: "running",
+      title: MCQ_CONFIG.prompt,
+      classroomName: "A",
+    });
+    expect(body.question.type).toBe("mcq");
+    expect(body.question.solution).toEqual({ correct: [0] });
+
+    // One question more, and it belongs to no pool: nothing lists it, and
+    // the editor's route cannot reach it.
+    expect(await unsavedCount()).toBe(before + 1);
+    const [row] = await server.app.db
+      .select()
+      .from(questions)
+      .where(eq(questions.id, body.question.id));
+    expect(row!.poolId).toBeNull();
+    const picks = await get("/app/api/polls/questions", teacher.headers);
+    expect((picks.json() as { id: string }[]).map((p) => p.id)).not.toContain(body.question.id);
+    expect((await get(`/app/api/questions/${body.question.id}`, teacher.headers)).statusCode).toBe(404);
+
+    // Audited like the other path, and says which path it was.
+    const [entry] = await server.app.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.action, "poll.create"), eq(auditLog.subjectId, body.evaluation.id)));
+    expect(entry!.payload).toMatchObject({
+      questionId: body.question.id,
+      inline: true,
+      type: "mcq",
+      code: body.evaluation.code,
+    });
+
+    // "Run again" works on it like on any other poll.
+    const again = await post(`/app/api/evaluations/${body.evaluation.id}/poll/again`, teacher.headers);
+    expect(again.statusCode).toBe(201);
+    expect(again.json().question.id).toBe(body.question.id);
+    for (const id of [body.evaluation.id, again.json().evaluation.id]) {
+      await post(`/app/api/evaluations/${id}/poll/end`, teacher.headers);
+    }
+  });
+
+  it("reaches a phone only through toStudent: no key, no matcher (invariant 4)", async () => {
+    const created = await inline(teacher.headers, {
+      type: "short",
+      config: {
+        configVersion: 2,
+        prompt: "Le mot de passe ?",
+        matchers: [{ kind: "exact", value: SECRET }],
+      },
+    });
+    expect(created.statusCode).toBe(201);
+    const shortCode = created.json().evaluation.code as string;
+
+    const view = await get(`/app/api/p/${shortCode}`);
+    expect(view.statusCode).toBe(200);
+    expect(JSON.stringify(view.json())).not.toContain(SECRET);
+    const serialized = JSON.stringify(view.json().question.student);
+    for (const forbidden of FORBIDDEN_STUDENT_KEYS) {
+      expect(serialized, `public view leaked "${forbidden}"`).not.toContain(`"${forbidden}"`);
+    }
+    expect(view.json().question.student).toMatchObject({ prompt: "Le mot de passe ?" });
+    expect(view.json().solution).toBeNull();
+
+    // Same for the mcq key: not a `correct` flag anywhere before the reveal.
+    const mcq = await inline(teacher.headers, { type: "mcq", config: MCQ_CONFIG });
+    const mcqView = await get(`/app/api/p/${mcq.json().evaluation.code}`);
+    expect(JSON.stringify(mcqView.json())).not.toContain('"correct"');
+    for (const id of [created.json().evaluation.id, mcq.json().evaluation.id]) {
+      await post(`/app/api/evaluations/${id}/poll/end`, teacher.headers);
+    }
+  });
+
+  it("refuses content its type's schema refuses, and writes nothing", async () => {
+    const before = await unsavedCount();
+    const noKey = await inline(teacher.headers, {
+      type: "mcq",
+      config: { ...MCQ_CONFIG, choices: [{ text: "A" }, { text: "B" }] },
+    });
+    expect(noKey.statusCode).toBe(422);
+    expect(noKey.json().error).toBe("config_invalid");
+    expect(noKey.json().details.length).toBeGreaterThan(0);
+
+    const empty = await inline(teacher.headers, { type: "short", config: { prompt: "" } });
+    expect(empty.statusCode).toBe(422);
+    expect(empty.json().error).toBe("config_invalid");
+
+    const code = await inline(teacher.headers, { type: "code", config: {} });
+    expect(code.statusCode).toBe(422);
+    expect(code.json().error).toBe("poll_type");
+
+    const malformed = await inline(teacher.headers, { type: "mcq", config: MCQ_CONFIG, classroomId: "x" });
+    expect(malformed.statusCode).toBe(400);
+    expect(await unsavedCount()).toBe(before);
+  });
+
+  it("is a teacher's act, in a classroom they teach", async () => {
+    const before = await unsavedCount();
+    expect((await inline({}, { type: "mcq", config: MCQ_CONFIG })).statusCode).toBe(401);
+    expect((await inline(outsider.headers, { type: "mcq", config: MCQ_CONFIG })).statusCode).toBe(403);
+    const stranger = await server.signIn("teacher");
+    const offStaff = await inline(stranger.headers, { type: "mcq", config: MCQ_CONFIG });
+    expect(offStaff.statusCode).toBe(404);
+    expect(offStaff.json()).toEqual({ error: "not_found" });
+    expect(await unsavedCount()).toBe(before);
   });
 });
 

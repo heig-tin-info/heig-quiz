@@ -394,6 +394,7 @@ interface EditorHostProps {
   RichText?: RichTextComponent;
   uploadAsset?: (file: File) => Promise<string>;
   aside?: HTMLElement | null;
+  ungraded?: boolean;
   onTry?: (config: unknown) => Promise<TryOutcome>;
 }
 
@@ -425,6 +426,7 @@ export function QuestionEditorHost({
   disabled,
   uploadAsset,
   aside,
+  ungraded,
   onTry,
 }: {
   t: TFunction;
@@ -433,7 +435,11 @@ export function QuestionEditorHost({
   onChange: (next: unknown) => void;
   issues?: readonly ConfigIssue[];
   disabled?: boolean;
-  uploadAsset: (file: File) => Promise<string>;
+  /**
+   * The pool's image upload. Absent — the poll launcher's unsaved question,
+   * which has no pool to hold an image — the editors offer no upload.
+   */
+  uploadAsset?: (file: File) => Promise<string>;
   /**
    * The element of the screen's right column a type's editor may portal its
    * settings into (`EditorProps.aside`). It is the host's layout decision,
@@ -441,6 +447,8 @@ export function QuestionEditorHost({
    * simply keeps everything in one column.
    */
   aside?: HTMLElement | null;
+  /** No marks to give (the poll launcher): `EditorProps.ungraded`. */
+  ungraded?: boolean;
   /**
    * `code` and `circuit`: runs (or simulates) the teacher's own answer. The
    * screen decides where it runs — `src/runner/` picks the browser or the
@@ -467,8 +475,9 @@ export function QuestionEditorHost({
         renderMarkdown={renderBlock}
         renderHelp={renderHelp}
         RichText={LazyRichText}
-        uploadAsset={uploadAsset}
+        {...(uploadAsset === undefined ? {} : { uploadAsset })}
         {...(aside === undefined ? {} : { aside })}
+        {...(ungraded === undefined ? {} : { ungraded })}
         {...(onTry === undefined ? {} : { onTry })}
       />
     </Suspense>

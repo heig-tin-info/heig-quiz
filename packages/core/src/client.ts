@@ -54,6 +54,14 @@ export interface EditorProps<TConfig> {
    * mounted, so it is state on the host side and a re-render here.
    */
   aside?: HTMLElement | null;
+  /**
+   * The host gives no marks: a live poll written in the launcher (ADR-014,
+   * addendum 2026-09-23). The editor then leaves out every setting that only
+   * decides a MARK — a scoring policy, a points field, a normalisation of the
+   * comparison — and keeps what the room reads and the key the teacher
+   * reveals. An editor with nothing of the kind simply ignores it.
+   */
+  ungraded?: boolean;
 }
 
 /**

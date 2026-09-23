@@ -1819,7 +1819,7 @@ export const en = {
   "poll.questionsFailed": "Could not load your questions.",
   "poll.noQuestions": "No question to poll yet",
   "poll.noQuestionsBody":
-    "A poll runs a multiple choice or a short answer. Write one and it shows up here.",
+    "A poll runs a multiple choice or a short answer. Write one in your Polls pool and it shows up here, or ask a new question right now.",
   "poll.noMatch": "No question matches this search.",
   "poll.neverUsed": "Never polled",
   "poll.usedOnce": "Polled once",
@@ -1830,9 +1830,10 @@ export const en = {
   "poll.anonymous": "Anyone with the code answers",
   "poll.anonymousHint": "No account needed, and no name is ever shown.",
   "poll.startFailed": "Could not start the poll.",
-  "poll.createQuestion": "Create question",
   "poll.newHint":
-    "The editor opens on the new question. Publish it, then come back here to run it.",
+    "Nothing is saved: the question lives with this poll only. To keep one for later, write it in your Polls pool.",
+  "poll.incomplete":
+    "The question is not complete yet. The fields that need attention are marked below.",
   "poll.openProjection": "Open projection",
   "poll.opening": "Opening the projection…",
   "poll.notFound": "This poll is not available.",

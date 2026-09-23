@@ -50,6 +50,22 @@ export const PollQuestionCreate = z.object({
 });
 export type PollQuestionCreate = z.infer<typeof PollQuestionCreate>;
 
+/**
+ * `POST /app/api/polls/inline`: creates AND starts a poll on a question the
+ * teacher writes in the launcher and does not keep (ADR-014, addendum
+ * 2026-09-23). `config` is the type's own configuration; the server
+ * validates it with that type's `configSchema` through the registry — the
+ * same gate as a publication — and answers `422 config_invalid` with the
+ * zod issues otherwise. No pool receives the question.
+ */
+export const PollInlineCreate = z.object({
+  classroomId: z.uuid(),
+  anonymous: z.boolean().default(false),
+  type: PollQuestionType,
+  config: z.unknown(),
+});
+export type PollInlineCreate = z.infer<typeof PollInlineCreate>;
+
 /** A pollable question of the teacher's personal pool, most recently used first. */
 export const PollQuestionPick = z.object({
   id: z.uuid(),

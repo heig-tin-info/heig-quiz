@@ -89,6 +89,17 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 export type PoolRow = typeof pools.$inferSelect;
 type QuestionRecord = typeof questions.$inferSelect;
+
+/**
+ * The pool of a question this module was handed. Every route reaches a
+ * question THROUGH its pool (`findAccessibleQuestion` joins `pools`), and the
+ * only questions without one — the unsaved questions of a poll (ADR-014,
+ * addendum 2026-09-23) — are never reached that way; a null here is a bug.
+ */
+function poolOf(question: QuestionRecord): string {
+  if (question.poolId === null) throw new Error(`question ${question.id} belongs to no pool`);
+  return question.poolId;
+}
 type VersionRecord = typeof questionVersions.$inferSelect;
 
 /** A draft cannot be published while its config does not satisfy the schema (D16). */
@@ -1159,7 +1170,7 @@ export async function listQuestions(db: Db, poolId: string, search: QuestionSear
 function metaJson(question: QuestionRecord, tags: string[]): QuestionMeta {
   return {
     id: question.id,
-    poolId: question.poolId,
+    poolId: poolOf(question),
     type: question.type,
     internalName: question.internalName,
     categoryId: question.categoryId,
@@ -1254,6 +1265,81 @@ export async function createQuestion(
   return id;
 }
 
+/**
+ * A question that belongs to NO pool: the one a teacher writes straight into
+ * the poll launcher and does not keep (ADR-014, addendum 2026-09-23).
+ *
+ * It is born PUBLISHED — version 1, no draft — because the only thing that
+ * will ever read it is the poll that freezes that version, and a draft is
+ * something to come back to. The configuration goes through the type's own
+ * schema (`saveConfig`), the same gate as a publication, so an unsaved
+ * question is exactly as valid as a saved one; a refusal is `DraftInvalid`
+ * with the zod issues, for the launcher to place under its fields.
+ *
+ * It lives HERE because `questions` and `question_versions` are this
+ * module's tables. Nothing reaches it afterwards but its evaluation item: no
+ * pool lists it, and `findAccessibleQuestion` joins `pools`.
+ */
+export async function createUnsavedQuestion(
+  db: Db,
+  input: { type: string; config: unknown; createdBy: string; now: Date },
+): Promise<{ questionId: string; versionId: string; internalName: string }> {
+  const t = typeOf(input.type);
+  let config: ReturnType<typeof saveConfig>;
+  try {
+    config = saveConfig(input.type, input.config);
+  } catch (error) {
+    throw new DraftInvalid(issuesOf(error));
+  }
+  const internalName = unsavedName(input.type, config.config);
+  const questionId = randomUUID();
+  const versionId = randomUUID();
+  await db.transaction(async (tx) => {
+    await tx.insert(questions).values({
+      id: questionId,
+      poolId: null,
+      type: input.type,
+      internalName,
+      createdBy: input.createdBy,
+      shuffleable: t.shuffleable(config.config),
+      createdAt: input.now,
+      updatedAt: input.now,
+    });
+    await tx.insert(questionVersions).values({
+      id: versionId,
+      questionId,
+      number: 1,
+      config: config.config,
+      configVersion: config.configVersion,
+      searchText: searchTextOf(input.type, internalName, config.config),
+      publishedAt: input.now,
+      publishedBy: input.createdBy,
+      updatedAt: input.now,
+      createdAt: input.now,
+    });
+  });
+  return { questionId, versionId, internalName };
+}
+
+/**
+ * The name of an unsaved question, and therefore the title of its poll: the
+ * start of its statement, as plain text. The statement is what the room
+ * reads anyway, so the title reveals nothing a participant does not see.
+ */
+function unsavedName(type: string, config: unknown): string {
+  const prompt = (config as { prompt?: unknown }).prompt;
+  const line =
+    typeof prompt === "string"
+      ? prompt
+          .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+          .replace(/[`*_#>$\\]+/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+      : "";
+  if (line === "") return type;
+  return line.length <= 80 ? line : `${line.slice(0, 79).trimEnd()}…`;
+}
+
 /** The draft row of a question (`number is null`), or `MissingDraft`. */
 export async function draftOf(db: Db, questionId: string): Promise<VersionRecord> {
   const [row] = await db
@@ -1322,7 +1408,7 @@ export async function patchQuestion(
         await tx
           .insert(questionTags)
           .values(unique.map((tag) => ({ questionId: question.id, tag })));
-        await ensurePoolTags(tx, question.poolId, unique);
+        await ensurePoolTags(tx, poolOf(question), unique);
       }
     }
     if (patch.internalName !== undefined) {

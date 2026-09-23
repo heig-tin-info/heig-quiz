@@ -72,6 +72,12 @@ export {
   type ShortPlayerStringKey,
   type ShortReviewStringKey,
 } from "./strings.js";
+/*
+ * The empty configuration is a VALUE a host needs to write a question with no
+ * draft behind it — the poll launcher's unsaved question. `schema.ts` holds no
+ * React, so exporting it undoes no `lazy`.
+ */
+export { emptyShortDraft } from "./schema.js";
 export type {
   ShortAnswer,
   ShortConfig,

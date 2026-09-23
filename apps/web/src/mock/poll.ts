@@ -5,6 +5,7 @@ import type {
 import {
   D,
   MockError,
+  MockValidation,
   flags,
   iso,
   on,
@@ -30,6 +31,7 @@ import {
 import {
   ME_MEMBER,
   MockQuestion,
+  draftIssues,
   emptyConfig,
   frozenConfig,
   makeQuestion,
@@ -566,8 +568,37 @@ on("POST", "/app/api/polls/questions", (_m, body) => {
 on("GET", "/app/api/polls", () => teacherPolls.map(pollSummary));
 
 /** Creates the evaluation AND starts it: there is no draft state for a poll. */
-on("POST", "/app/api/polls", (_m, body) => {
-  const q = questionOr404(String(body.questionId));
+on("POST", "/app/api/polls", (_m, body) => startPoll(questionOr404(String(body.questionId)), body));
+
+/**
+ * A poll on a question written in the launcher (`PollInlineCreate`): checked
+ * the way a publication is, then run — and pushed into NO pool, exactly as
+ * the API keeps it out of every one.
+ */
+on("POST", "/app/api/polls/inline", (_m, body) => {
+  const type = String(body.type);
+  if (type !== "mcq" && type !== "short") {
+    throw new MockError(422, `a poll cannot run a "${type}" question`);
+  }
+  const config = (body.config ?? {}) as Record<string, unknown>;
+  const q = makeQuestion({
+    poolId: "",
+    type,
+    internalName: String(config.prompt ?? type).slice(0, 80),
+    categoryId: null,
+    difficulty: 2,
+    shuffleable: true,
+    randomizable: false,
+    tags: [],
+    config,
+    published: [{ number: 1, changeNote: "", daysAgo: 0 }],
+  });
+  const issues = draftIssues(q);
+  if (issues.length > 0) throw new MockValidation("The question is incomplete", issues);
+  return startPoll(q, body);
+});
+
+function startPoll(q: MockQuestion, body: Record<string, unknown>) {
   const config = frozenConfig(q);
   const code = `QZ${Math.floor(rand() * 9000 + 1000)}`;
   const choiceCount = ((config.choices ?? []) as unknown[]).length;
@@ -596,7 +627,7 @@ on("POST", "/app/api/polls", (_m, body) => {
   teacherPolls.push(tp);
   seedPollEvaluation(tp, code);
   return pollTeacherView(tp);
-});
+}
 
 on("GET", "/app/api/evaluations/:id/poll", (m) => pollTeacherView(teacherPollOr404(m.groups!.id!)));
 
