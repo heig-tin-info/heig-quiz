@@ -97,6 +97,11 @@ describe("CircuitReview", () => {
     expect(screen.getByText("Reference circuit")).toBeInTheDocument();
   });
 
+  it("reads an ungraded answer as a dash, never as zero points", () => {
+    setup({ points: null });
+    expect(screen.getByText("— / 2 points")).toBeInTheDocument();
+  });
+
   it("never shows the reference to a student", () => {
     setup({ audience: "student" });
     expect(screen.getAllByTestId("schematic-view")).toHaveLength(1);

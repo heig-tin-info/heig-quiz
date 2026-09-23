@@ -43,6 +43,11 @@ describe("CodeReview", () => {
     expect(screen.getByText("Failed")).toBeInTheDocument();
   });
 
+  it("reads an ungraded answer as a dash, never as zero points", () => {
+    setup(studentDetails(graded.details), { points: null });
+    expect(screen.getByText("— / 10 points")).toBeInTheDocument();
+  });
+
   it("names the check that failed once the key travelled with the details", () => {
     setup(graded.details, {
       audience: "teacher",

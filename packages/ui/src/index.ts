@@ -34,3 +34,4 @@ export {
   table,
   type BadgeTone,
 } from "./styles.js";
+export { pointsOrDash, ScoreHeader, Verdict, verdictTone } from "./verdict.js";

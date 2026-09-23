@@ -21,7 +21,18 @@ import type {
   StimulusDetail,
 } from "./schema.js";
 import { REVIEW_STRINGS, type CircuitReviewStrings } from "./strings.js";
-import { badge, card, cx, hint, lockedBlock, sectionTitle, table } from "@quiz/ui";
+import {
+  badge,
+  card,
+  cx,
+  hint,
+  lockedBlock,
+  pointsOrDash,
+  sectionTitle,
+  table,
+  Verdict,
+  verdictTone,
+} from "@quiz/ui";
 
 interface CircuitReviewProps
   extends ReviewProps<CircuitStudent, CircuitAnswer, CircuitSolution, CircuitDetails> {
@@ -164,7 +175,7 @@ export function CircuitReview({
       {statement}
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className={cx(sectionTitle, "tabular-nums")}>{fmt(s.score, { points: points ?? 0, max: maxPoints })}</span>
+        <span className={cx(sectionTitle, "tabular-nums")}>{fmt(s.score, { points: pointsOrDash(points), max: maxPoints })}</span>
         {breakdown?.mode === "manual" ? <span className={badge()}>{s.manualGrade}</span> : null}
         {breakdown?.mode === "llm" ? <span className={badge()}>{s.llmPending}</span> : null}
         {breakdown?.runner === "unavailable" ? (
@@ -252,37 +263,29 @@ export function CircuitReview({
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ detail, label }, i) => (
-                <tr key={i} className={table.row}>
-                  <td className={cx(table.td, "font-medium")}>{label}</td>
-                  <td className={table.td}>
-                    <span
-                      className={badge(
-                        detail.series === null && detail.error === null
-                          ? "neutral"
-                          : detail.ok
-                            ? "success"
-                            : "danger",
-                      )}
-                    >
-                      {detail.series === null && detail.error === null
-                        ? s.notRun
-                        : detail.ok
-                          ? s.passed
-                          : s.failed}
-                    </span>
-                  </td>
-                  <td className={cx(table.td, "text-right tabular-nums")}>
-                    {detail.error === null ? "—" : fmt(s.errorPercent, { percent: errorPercent(detail.error) })}
-                  </td>
-                  <td className={cx(table.td, "text-fg-muted")}>
-                    {detail.reason === undefined ? "—" : reasonText(detail.reason, s)}
-                  </td>
-                  <td className={cx(table.td, "text-right tabular-nums")}>
-                    {detail.ok ? detail.points : 0} / {detail.points}
-                  </td>
-                </tr>
-              ))}
+              {rows.map(({ detail, label }, i) => {
+                // Neither a waveform nor a distance: the stimulus never ran.
+                const ok = detail.series === null && detail.error === null ? null : detail.ok;
+                return (
+                  <tr key={i} className={table.row}>
+                    <td className={cx(table.td, "font-medium")}>{label}</td>
+                    <td className={table.td}>
+                      <Verdict tone={verdictTone(ok)}>
+                        {ok === null ? s.notRun : ok ? s.passed : s.failed}
+                      </Verdict>
+                    </td>
+                    <td className={cx(table.td, "text-right tabular-nums")}>
+                      {detail.error === null ? "—" : fmt(s.errorPercent, { percent: errorPercent(detail.error) })}
+                    </td>
+                    <td className={cx(table.td, "text-fg-muted")}>
+                      {detail.reason === undefined ? "—" : reasonText(detail.reason, s)}
+                    </td>
+                    <td className={cx(table.td, "text-right tabular-nums")}>
+                      {detail.ok ? detail.points : 0} / {detail.points}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

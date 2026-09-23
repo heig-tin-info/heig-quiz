@@ -12,7 +12,18 @@ import type { MarkdownRenderer, ReviewProps } from "@quiz/core/client";
 
 import type { CodeAnswer, CodeCaseDetail, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
 import { REVIEW_STRINGS, type CodeReviewStrings } from "./strings.js";
-import { badge, card, cx, hint, lockedBlock, sectionTitle, table } from "@quiz/ui";
+import {
+  badge,
+  card,
+  cx,
+  hint,
+  lockedBlock,
+  pointsOrDash,
+  sectionTitle,
+  table,
+  Verdict,
+  verdictTone,
+} from "@quiz/ui";
 import { caseVerdict } from "./verdict.js";
 
 interface CodeReviewProps
@@ -122,7 +133,7 @@ export function CodeReview({
 
       <div className="flex flex-wrap items-center gap-2">
         <span className={cx(sectionTitle, "tabular-nums")}>
-          {fmt(s.score, { points: points ?? 0, max: maxPoints })}
+          {fmt(s.score, { points: pointsOrDash(points), max: maxPoints })}
         </span>
         {details.runner === "unavailable" ? (
           <span className={badge("warning")}>{s.runnerUnavailable}</span>
@@ -191,9 +202,9 @@ export function CodeReview({
                     {detail.actual ?? "—"}
                   </td>
                   <td className={table.td}>
-                    <span className={badge(detail.ok ? "success" : "danger")}>
+                    <Verdict tone={verdictTone(detail.ok)}>
                       {verdictOf(detail, spec, solution?.compare, s)}
-                    </span>
+                    </Verdict>
                   </td>
                   <td className={cx(table.td, "text-right tabular-nums")}>
                     {detail.ok ? detail.points : 0} / {detail.points}
