@@ -79,18 +79,6 @@ const SPICE_PREFIX: Readonly<Record<ComponentKind, string>> = {
   VEE: "",
 };
 
-/** The shared model card of a kind, and its name; the zener has one card per instance. */
-const MODEL_OF_KIND: Readonly<Partial<Record<ComponentKind, { name: string; card: string }>>> = {
-  D: { name: "DSI", card: ".model DSI D(IS=1e-14 N=1)" },
-  DS: { name: "DSCH", card: ".model DSCH D(IS=1e-8 N=1.05)" },
-  NPN: { name: "QNPN", card: ".model QNPN NPN(BF=100)" },
-  PNP: { name: "QPNP", card: ".model QPNP PNP(BF=100)" },
-  NMOS: { name: "NMOSE", card: ".model NMOSE NMOS(LEVEL=1 VTO=1 KP=1e-3)" },
-  PMOS: { name: "PMOSE", card: ".model PMOSE PMOS(LEVEL=1 VTO=-1 KP=1e-3)" },
-  NMOSD: { name: "NMOSD", card: ".model NMOSD NMOS(LEVEL=1 VTO=-1 KP=1e-3)" },
-  PMOSD: { name: "PMOSD", card: ".model PMOSD PMOS(LEVEL=1 VTO=1 KP=1e-3)" },
-};
-
 // ---------------------------------------------------------------------------
 // Numbers and names
 // ---------------------------------------------------------------------------
@@ -226,6 +214,99 @@ const CONTROL_BLOCK = [
 // buildNetlist
 // ---------------------------------------------------------------------------
 
+/** A model card and the name the element lines refer to it by. */
+interface Model {
+  name: string;
+  card: string;
+}
+
+/** What an emitter needs to know about one placed component. */
+interface EmitContext {
+  component: SchematicComponent;
+  /** The sanitized element name, from {@link elementName}. */
+  name: string;
+  /** The net of pin `i`, in the library's ELECTRICAL pin order. */
+  at: (i: number) => string;
+  rails: { vcc: number; vee: number };
+}
+
+/** One component's element line and, when it needs one, its model card. */
+interface Emitted {
+  line: string;
+  model?: Model;
+}
+
+type Emitter = (context: EmitContext) => Emitted;
+
+/** R, C, L: two nodes and the value. */
+const passive: Emitter = ({ component, name, at }) => ({
+  line: `${name} ${at(0)} ${at(1)} ${spiceNumber(componentValue(component))}`,
+});
+
+/** Anode, cathode, and a model card shared by every instance of the kind. */
+const diode =
+  (model: Model): Emitter =>
+  ({ name, at }) => ({ line: `${name} ${at(0)} ${at(1)} ${model.name}`, model });
+
+/** Collector, base, emitter. */
+const bjt =
+  (model: Model): Emitter =>
+  ({ name, at }) => ({ line: `${name} ${at(0)} ${at(1)} ${at(2)} ${model.name}`, model });
+
+/**
+ * Drain, gate, source — and the bulk tied to the source: a discrete MOSFET is
+ * built that way and the student has no fourth pin to wire it with.
+ */
+const mosfet =
+  (model: Model): Emitter =>
+  ({ name, at }) => ({ line: `${name} ${at(0)} ${at(1)} ${at(2)} ${at(2)} ${model.name}`, model });
+
+/** A zener's breakdown voltage is per instance, so is its model card. */
+const zener: Emitter = ({ component, name, at }) => {
+  const modelName = `DZ_${name}`;
+  return {
+    line: `${name} ${at(0)} ${at(1)} ${modelName}`,
+    model: {
+      name: modelName,
+      card: `.model ${modelName} D(IS=1e-14 BV=${spiceNumber(componentValue(component))} IBV=1e-3)`,
+    },
+  };
+};
+
+// An ideal op-amp with rails: a VCVS whose transfer table saturates.
+// The 100 µV knee is the open-loop gain (150 000 with ±15 V rails),
+// high enough for a virtual short and low enough to converge — both
+// an inverting amplifier and a comparator are in the integration
+// suite because of this line.
+const opamp: Emitter = ({ name, at, rails }) => ({
+  line: `${name} ${at(2)} 0 TABLE {V(${at(1)},${at(0)})} = (-1e-4, ${spiceNumber(rails.vee)}) (1e-4, ${spiceNumber(rails.vcc)})`,
+});
+
+/**
+ * How each kind becomes SPICE, with its shared model card where it has one;
+ * `null` for the terminals, which name a net and emit no element. Kept here
+ * and not in `library.ts`: the library is imported by the canvas and must not
+ * learn SPICE.
+ */
+const EMITTERS: Readonly<Record<ComponentKind, Emitter | null>> = {
+  R: passive,
+  C: passive,
+  L: passive,
+  D: diode({ name: "DSI", card: ".model DSI D(IS=1e-14 N=1)" }),
+  DS: diode({ name: "DSCH", card: ".model DSCH D(IS=1e-8 N=1.05)" }),
+  DZ: zener,
+  NPN: bjt({ name: "QNPN", card: ".model QNPN NPN(BF=100)" }),
+  PNP: bjt({ name: "QPNP", card: ".model QPNP PNP(BF=100)" }),
+  NMOS: mosfet({ name: "NMOSE", card: ".model NMOSE NMOS(LEVEL=1 VTO=1 KP=1e-3)" }),
+  PMOS: mosfet({ name: "PMOSE", card: ".model PMOSE PMOS(LEVEL=1 VTO=-1 KP=1e-3)" }),
+  NMOSD: mosfet({ name: "NMOSD", card: ".model NMOSD NMOS(LEVEL=1 VTO=-1 KP=1e-3)" }),
+  PMOSD: mosfet({ name: "PMOSD", card: ".model PMOSD PMOS(LEVEL=1 VTO=1 KP=1e-3)" }),
+  OPAMP: opamp,
+  GND: null,
+  VCC: null,
+  VEE: null,
+};
+
 interface Devices {
   elements: string[];
   models: string[];
@@ -248,74 +329,15 @@ function emitDevices(schematic: Schematic, harness: Harness): Devices {
   const rails = opampRails(harness.supplies);
 
   for (const component of schematic.components) {
-    const spec = LIBRARY[component.kind];
-    if (spec.terminal) continue;
+    const emit = EMITTERS[component.kind];
+    if (emit === null) continue;
     const name = elementName(component.kind, component.name, used);
     // The pins come out of the library in ELECTRICAL order, which is exactly
     // the order SPICE wants (anode/cathode, collector/base/emitter…).
-    const nets = spec.pins.map((_pin: PinSpec, i: number) => netOf(component.id, i));
-    const at = (i: number): string => nets[i] ?? "0";
-
-    switch (component.kind) {
-      case "R":
-      case "C":
-      case "L":
-        elements.push(`${name} ${at(0)} ${at(1)} ${spiceNumber(componentValue(component))}`);
-        break;
-      case "D":
-      case "DS": {
-        const model = MODEL_OF_KIND[component.kind];
-        if (model !== undefined) {
-          models.set(model.name, model.card);
-          elements.push(`${name} ${at(0)} ${at(1)} ${model.name}`);
-        }
-        break;
-      }
-      case "DZ": {
-        // A zener's breakdown voltage is per instance, so is its model card.
-        const modelName = `DZ_${name}`;
-        models.set(
-          modelName,
-          `.model ${modelName} D(IS=1e-14 BV=${spiceNumber(componentValue(component))} IBV=1e-3)`,
-        );
-        elements.push(`${name} ${at(0)} ${at(1)} ${modelName}`);
-        break;
-      }
-      case "NPN":
-      case "PNP": {
-        const model = MODEL_OF_KIND[component.kind];
-        if (model !== undefined) {
-          models.set(model.name, model.card);
-          elements.push(`${name} ${at(0)} ${at(1)} ${at(2)} ${model.name}`);
-        }
-        break;
-      }
-      case "NMOS":
-      case "PMOS":
-      case "NMOSD":
-      case "PMOSD": {
-        const model = MODEL_OF_KIND[component.kind];
-        if (model !== undefined) {
-          models.set(model.name, model.card);
-          // Bulk tied to the source: a discrete MOSFET is built that way and
-          // the student has no fourth pin to wire it with.
-          elements.push(`${name} ${at(0)} ${at(1)} ${at(2)} ${at(2)} ${model.name}`);
-        }
-        break;
-      }
-      case "OPAMP":
-        // An ideal op-amp with rails: a VCVS whose transfer table saturates.
-        // The 100 µV knee is the open-loop gain (150 000 with ±15 V rails),
-        // high enough for a virtual short and low enough to converge — both
-        // an inverting amplifier and a comparator are in the integration
-        // suite because of this line.
-        elements.push(
-          `${name} ${at(2)} 0 TABLE {V(${at(1)},${at(0)})} = (-1e-4, ${spiceNumber(rails.vee)}) (1e-4, ${spiceNumber(rails.vcc)})`,
-        );
-        break;
-      default:
-        break;
-    }
+    const nets = LIBRARY[component.kind].pins.map((_pin: PinSpec, i: number) => netOf(component.id, i));
+    const { line, model } = emit({ component, name, at: (i) => nets[i] ?? "0", rails });
+    if (model !== undefined) models.set(model.name, model.card);
+    elements.push(line);
   }
 
   return {

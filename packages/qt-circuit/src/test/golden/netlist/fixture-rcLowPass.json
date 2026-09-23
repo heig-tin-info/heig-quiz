@@ -1,0 +1,430 @@
+{
+ "nets": {
+  "common": {
+   "nets": [
+    {
+     "id": 0,
+     "name": "in",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 0
+      },
+      {
+       "port": "in+"
+      }
+     ]
+    },
+    {
+     "id": 1,
+     "name": "out",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 1
+      },
+      {
+       "c": "c2",
+       "p": 0
+      },
+      {
+       "port": "out+"
+      }
+     ]
+    },
+    {
+     "id": 2,
+     "name": "0",
+     "pins": [
+      {
+       "c": "c2",
+       "p": 1
+      },
+      {
+       "c": "c3",
+       "p": 0
+      },
+      {
+       "port": "in-"
+      },
+      {
+       "port": "out-"
+      }
+     ]
+    }
+   ],
+   "netOfPin": [
+    [
+     "c1:0",
+     0
+    ],
+    [
+     "port:in+",
+     0
+    ],
+    [
+     "c1:1",
+     1
+    ],
+    [
+     "c2:0",
+     1
+    ],
+    [
+     "port:out+",
+     1
+    ],
+    [
+     "c2:1",
+     2
+    ],
+    [
+     "c3:0",
+     2
+    ],
+    [
+     "port:in-",
+     2
+    ],
+    [
+     "port:out-",
+     2
+    ]
+   ],
+   "issues": [],
+   "counted": 2
+  },
+  "floating": {
+   "nets": [
+    {
+     "id": 0,
+     "name": "in",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 0
+      },
+      {
+       "port": "in+"
+      }
+     ]
+    },
+    {
+     "id": 1,
+     "name": "out",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 1
+      },
+      {
+       "c": "c2",
+       "p": 0
+      },
+      {
+       "port": "out+"
+      }
+     ]
+    },
+    {
+     "id": 2,
+     "name": "inn",
+     "pins": [
+      {
+       "port": "in-"
+      }
+     ]
+    },
+    {
+     "id": 3,
+     "name": "outn",
+     "pins": [
+      {
+       "port": "out-"
+      }
+     ]
+    },
+    {
+     "id": 4,
+     "name": "0",
+     "pins": [
+      {
+       "c": "c2",
+       "p": 1
+      },
+      {
+       "c": "c3",
+       "p": 0
+      }
+     ]
+    }
+   ],
+   "netOfPin": [
+    [
+     "c1:0",
+     0
+    ],
+    [
+     "port:in+",
+     0
+    ],
+    [
+     "c1:1",
+     1
+    ],
+    [
+     "c2:0",
+     1
+    ],
+    [
+     "port:out+",
+     1
+    ],
+    [
+     "port:in-",
+     2
+    ],
+    [
+     "port:out-",
+     3
+    ],
+    [
+     "c2:1",
+     4
+    ],
+    [
+     "c3:0",
+     4
+    ]
+   ],
+   "issues": [
+    {
+     "code": "unconnected_port",
+     "ref": "in-"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "out-"
+    }
+   ],
+   "counted": 2
+  },
+  "palette+supplies": {
+   "nets": [
+    {
+     "id": 0,
+     "name": "in",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 0
+      },
+      {
+       "port": "in+"
+      }
+     ]
+    },
+    {
+     "id": 1,
+     "name": "out",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 1
+      },
+      {
+       "c": "c2",
+       "p": 0
+      },
+      {
+       "port": "out+"
+      }
+     ]
+    },
+    {
+     "id": 2,
+     "name": "0",
+     "pins": [
+      {
+       "c": "c2",
+       "p": 1
+      },
+      {
+       "c": "c3",
+       "p": 0
+      },
+      {
+       "port": "in-"
+      },
+      {
+       "port": "out-"
+      }
+     ]
+    }
+   ],
+   "netOfPin": [
+    [
+     "c1:0",
+     0
+    ],
+    [
+     "port:in+",
+     0
+    ],
+    [
+     "c1:1",
+     1
+    ],
+    [
+     "c2:0",
+     1
+    ],
+    [
+     "port:out+",
+     1
+    ],
+    [
+     "c2:1",
+     2
+    ],
+    [
+     "c3:0",
+     2
+    ],
+    [
+     "port:in-",
+     2
+    ],
+    [
+     "port:out-",
+     2
+    ]
+   ],
+   "issues": [],
+   "counted": 2
+  },
+  "no-rails": {
+   "nets": [
+    {
+     "id": 0,
+     "name": "in",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 0
+      },
+      {
+       "port": "in+"
+      }
+     ]
+    },
+    {
+     "id": 1,
+     "name": "out",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 1
+      },
+      {
+       "c": "c2",
+       "p": 0
+      },
+      {
+       "port": "out+"
+      }
+     ]
+    },
+    {
+     "id": 2,
+     "name": "inn",
+     "pins": [
+      {
+       "port": "in-"
+      }
+     ]
+    },
+    {
+     "id": 3,
+     "name": "outn",
+     "pins": [
+      {
+       "port": "out-"
+      }
+     ]
+    },
+    {
+     "id": 4,
+     "name": "0",
+     "pins": [
+      {
+       "c": "c2",
+       "p": 1
+      },
+      {
+       "c": "c3",
+       "p": 0
+      }
+     ]
+    }
+   ],
+   "netOfPin": [
+    [
+     "c1:0",
+     0
+    ],
+    [
+     "port:in+",
+     0
+    ],
+    [
+     "c1:1",
+     1
+    ],
+    [
+     "c2:0",
+     1
+    ],
+    [
+     "port:out+",
+     1
+    ],
+    [
+     "port:in-",
+     2
+    ],
+    [
+     "port:out-",
+     3
+    ],
+    [
+     "c2:1",
+     4
+    ],
+    [
+     "c3:0",
+     4
+    ]
+   ],
+   "issues": [
+    {
+     "code": "unconnected_port",
+     "ref": "in-"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "out-"
+    }
+   ],
+   "counted": 2
+  }
+ },
+ "decks": {
+  "common-default-rails/sine": "* quiz circuit\nR1 in out 1.59e+3\nC1 out 0 1e-7\nVin in 0 SIN(5e-1 1e+0 1e+3)\nRload out outl 1e+12\nVmeas outl 0 0\n.tran 1e-5 5e-3 0\n.control\nset wr_vecnames\nset wr_singlescale\nrun\nlinearize v(in) v(out) i(Vmeas)\nwrdata /dev/stdout v(in) v(out) i(Vmeas)\n.endc\n.end\n",
+  "common-default-rails/bare": "* quiz circuit\nR1 in out 1.59e+3\nC1 out 0 1e-7\n.end\n",
+  "split-dual-rails/step": "* quiz circuit\n* issue: unconnected_port in-\n* issue: unconnected_port out-\nR1 in out 1.59e+3\nC1 out 0 1e-7\nVcc vcc 0 DC 1.5e+1\nVee vee 0 DC -1.5e+1\nVin src inn PWL(0 0 1e-3 0 1.000001e-3 5e+0)\nRs src in 5e+1\nRload out outl 1e+4\nVmeas outl outn 0\n.tran 4.5e-5 1e-2 1e-3\n.control\nset wr_vecnames\nset wr_singlescale\nrun\nlinearize v(in) v(out) i(Vmeas)\nwrdata /dev/stdout v(in) v(out) i(Vmeas)\n.endc\n.end\n",
+  "split-dual-rails/bare": "* quiz circuit\n* issue: unconnected_port in-\n* issue: unconnected_port out-\nR1 in out 1.59e+3\nC1 out 0 1e-7\n.end\n",
+  "common-single-rail/pulse": "* quiz circuit\nR1 in out 1.59e+3\nC1 out 0 1e-7\nVcc vcc 0 DC 5e+0\nVin in 0 PULSE(-1e+0 1e+0 0 1n 1n 5e-5 2e-4)\nCload out outl 1e-9\nVmeas outl 0 0\n.tran 1e-5 1e-3 0\n.control\nset wr_vecnames\nset wr_singlescale\nrun\nlinearize v(in) v(out) i(Vmeas)\nwrdata /dev/stdout v(in) v(out) i(Vmeas)\n.endc\n.end\n",
+  "common-single-rail/bare": "* quiz circuit\nR1 in out 1.59e+3\nC1 out 0 1e-7\n.end\n"
+ }
+}
