@@ -99,6 +99,15 @@ export const PoolMembers = z.object({
 });
 export type PoolMembers = z.infer<typeof PoolMembers>;
 
+/**
+ * `GET /pools?scope=`: `mine` (the default) is what the caller reaches as a
+ * teacher — their own pools, the ones they were named in, the public ones and
+ * the ones their courses draw from — and that holds for an admin too. `all`
+ * is every pool of the instance, and is honoured for an admin only.
+ */
+export const PoolListQuery = z.object({ scope: z.enum(["mine", "all"]).default("mine") });
+export type PoolListQuery = z.infer<typeof PoolListQuery>;
+
 /** `GET /pools/:id/candidates?q=`: a few letters of a name or an address. */
 export const PoolCandidateQuery = z.object({ q: z.string().trim().max(100).default("") });
 export type PoolCandidateQuery = z.infer<typeof PoolCandidateQuery>;

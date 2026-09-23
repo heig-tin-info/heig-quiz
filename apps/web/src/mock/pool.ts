@@ -1500,7 +1500,17 @@ export const questionOr404 = (id: string) => {
   return q;
 };
 
-on("GET", "/app/api/pools", () => pools.map(poolSummary));
+// `?scope=all` (an admin's switch) adds the private pools of other teachers.
+on("GET", "/app/api/pools", (_m, _b, url) =>
+  pools
+    .filter(
+      (p) =>
+        url.searchParams.get("scope") === "all" ||
+        p.ownerId === "u-me" ||
+        p.visibility !== "private",
+    )
+    .map(poolSummary),
+);
 on("POST", "/app/api/pools", (_m, body) => {
   const pool: MockPool = {
     id: nextId("p"),

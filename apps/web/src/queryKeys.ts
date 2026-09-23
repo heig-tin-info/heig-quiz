@@ -33,6 +33,8 @@ export const classroomKey = (id: string | null) => ["classroom", id] as const;
 // --- Pools and questions -----------------------------------------------------
 
 export const poolsKey = ["pools"] as const;
+/** An admin's `?scope=all` list: under `poolsKey`, so every invalidation of it reaches this one too. */
+export const allPoolsKey = ["pools", "all"] as const;
 /** The prefix of EVERY pool's cache — details, questions, tags — for a move across pools. */
 export const anyPoolKey = ["pool"] as const;
 /** `undefined` while the id is not known yet (a question editor before its detail loads). */

@@ -1734,6 +1734,7 @@ export const en = {
   "pools.visibility.sharedNone": "shared",
   "pools.visibility.public": "public",
   "pools.owner": "Owner",
+  "pools.showAll": "Show other teachers' pools",
   "pools.role": "My role",
   "pools.updated": "Updated",
   "pools.updatedColumn": "Updated",
