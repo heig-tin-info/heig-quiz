@@ -2,6 +2,7 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+import { applyTheme, getThemeChoice } from "./theme";
 import { TeacherHome } from "./TeacherHome";
 import { makeClassroomSummary, makeCourseSummary } from "./test/fixtures";
 import { mockFetch, ok, renderWithProviders } from "./test/render";
@@ -128,5 +129,35 @@ describe("TeacherHome", () => {
     mockFetch({ [`GET ${COURSES}`]: { status: 500, body: { message: "boom" } } });
     renderWithProviders(<TeacherHome navigate={vi.fn()} />);
     expect(await screen.findByRole("button", { name: /Retry/ })).toBeVisible();
+  });
+});
+
+/*
+ * A private window (or blocked site data) makes `localStorage` THROW rather
+ * than return null. Before FC-08 the courses-view reader, the locale and the
+ * theme all read it unguarded, so this page crashed at boot. The path a
+ * teacher takes to it is exercised whole: the theme applied by `main.tsx`,
+ * the I18nProvider's initial locale, then the page and its remembered view.
+ */
+describe("TeacherHome in a private window", () => {
+  it("renders when every localStorage access throws", async () => {
+    const denied = () => {
+      throw new DOMException("The operation is insecure.", "SecurityError");
+    };
+    mockFetch({ [`GET ${COURSES}`]: ok([makeCourseSummary()]) });
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(denied);
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(denied);
+    // `renderWithProviders` seeds the locale with setItem before rendering;
+    // the theme is applied first, as `main.tsx` does, with setItem refused.
+    const setItem = vi.spyOn(Storage.prototype, "setItem").mockImplementation(denied);
+    expect(() => applyTheme(getThemeChoice())).not.toThrow();
+    setItem.mockRestore();
+    renderWithProviders(<TeacherHome navigate={vi.fn()} />);
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(denied);
+
+    expect(await screen.findByText("Programmation C")).toBeVisible();
+    // The remembered view falls back to cards, and picking one still works.
+    await userEvent.click(screen.getByRole("radio", { name: "List" }));
+    expect(screen.getByRole("radio", { name: "List" })).toBeChecked();
   });
 });

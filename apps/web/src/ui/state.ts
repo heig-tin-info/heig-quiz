@@ -23,6 +23,15 @@ export function writeStored(key: string, value: string): void {
   }
 }
 
+/** Removing may throw like the other two; a stale key is harmless. */
+export function removeStored(key: string): void {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // Nothing to clean in a storage that cannot be read either.
+  }
+}
+
 /**
  * A choice the reader makes once and expects to find again — table or cards,
  * the grouping of a list, the classroom of the last poll — remembered per
@@ -83,18 +92,18 @@ export function isTyping(target: EventTarget | null): boolean {
  */
 export function useFullscreen(): [boolean, () => void] {
   const [on, setOn] = useState(false);
+  // The browser call lives in the toggle and not in a `setOn` updater: an
+  // updater must be pure, and StrictMode runs it twice.
   const toggle = useCallback(() => {
-    setOn((was) => {
-      const ignore = () => {};
-      try {
-        if (!was) document.documentElement.requestFullscreen?.().catch(ignore);
-        else if (document.fullscreenElement) document.exitFullscreen?.().catch(ignore);
-      } catch {
-        /* the in-page mode is enough */
-      }
-      return !was;
-    });
-  }, []);
+    const ignore = () => {};
+    try {
+      if (!on) document.documentElement.requestFullscreen?.().catch(ignore);
+      else if (document.fullscreenElement) document.exitFullscreen?.().catch(ignore);
+    } catch {
+      /* the in-page mode is enough */
+    }
+    setOn(!on);
+  }, [on]);
   useEffect(() => {
     const sync = () => setOn(document.fullscreenElement !== null);
     document.addEventListener("fullscreenchange", sync);

@@ -253,7 +253,10 @@ live in `ui/state.ts`, each written once.
   never worth a crash — the page simply starts on the fallback. It exists
   because five screens wrote that reader by hand, and two of them crashed in
   a private window. The storage keys are the ones those screens always used,
-  so nobody loses a remembered view.
+  so nobody loses a remembered view. The theme, the locale mirror and the
+  notification preferences, which are not choices of this shape, go through
+  the same guarded `readStored` / `writeStored` / `removeStored`: a guard on
+  the page is worth nothing if the boot crashed first.
 - `isTyping(target)`: a single-letter shortcut (`f`, `r`, `v`, an arrow) is
   not one while the keystroke lands in an input, a textarea, a select or a
   contenteditable surface — there it is a letter the reader is writing. Every
@@ -332,7 +335,7 @@ live in `ui/state.ts`, each written once.
   because seventeen sites spelled out `isError ? … apiErrorMessage … : null`
   by hand. It lives beside QueryError (`queryError.tsx`), for the same
   reason: `ui/` never imports the HTTP client.
-- Field: label 13 px 500 above, 12 px radius, `line-strong` border, accent
+- Field: label 13 px 500 above, 10 px radius (`rounded-field`), `line-strong` border, accent
   ring on focus. The `<label>` covers the text only and points at the control
   through `htmlFor`; the help "?" is its sibling, never inside it, or that
   button becomes the labelled control and the input loses its name. Two heights, from the button scale: `sm` 28 px for a control

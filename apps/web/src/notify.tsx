@@ -5,7 +5,7 @@ import type { NoticeKind } from "@quiz/contracts";
 
 import { apiErrorMessage } from "./api";
 import { useT, type Dict } from "./i18n";
-import { Z } from "./ui";
+import { readStored, writeStored, Z } from "./ui";
 
 /**
  * Toasts, bottom right, slide-in/out (see `toast-*` keyframes in style.css).
@@ -31,7 +31,7 @@ const PREFS_KEY = "quiz-notify-prefs";
 export function notifyPrefs(): Record<NoticeKind, boolean> {
   const defaults = { ...NOTICE_DEFAULTS };
   try {
-    const stored = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}") as Partial<
+    const stored = JSON.parse(readStored(PREFS_KEY) ?? "{}") as Partial<
       Record<NoticeKind, boolean>
     >;
     return { ...defaults, ...stored };
@@ -43,7 +43,7 @@ export function notifyPrefs(): Record<NoticeKind, boolean> {
 export function setNotifyPref(kind: NoticeKind, enabled: boolean) {
   const prefs = notifyPrefs();
   prefs[kind] = enabled;
-  localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  writeStored(PREFS_KEY, JSON.stringify(prefs));
 }
 
 const ICONS: Record<NoticeKind, typeof UserPlus> = {
