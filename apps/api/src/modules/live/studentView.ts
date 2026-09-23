@@ -55,19 +55,34 @@ export const FORBIDDEN_STUDENT_KEYS: readonly string[] = [
 const forbidden = new Set(FORBIDDEN_STUDENT_KEYS);
 
 /**
- * Removes the teacher-only keys anywhere in the structure, returning a new
- * value. Arrays and plain objects are walked; everything else is returned
- * as-is, so a payload of scalars costs nothing.
+ * Removes the `forbidden` keys anywhere in the structure, returning a new
+ * value. Arrays and plain objects are walked, twelve levels deep; everything
+ * else is returned as-is, so a payload of scalars costs nothing.
+ *
+ * `keep(object, key)` spares one forbidden key of one object — the single
+ * exception the feedback strip needs (`results/service.ts`). The two callers
+ * keep their own key LIST, which is the auditable surface; this is the walk.
  */
-export function stripMetadata(value: unknown, depth = 0): unknown {
+export function stripKeys(
+  value: unknown,
+  keys: ReadonlySet<string>,
+  keep?: (object: Record<string, unknown>, key: string) => boolean,
+  depth = 0,
+): unknown {
   if (depth > 12 || value === null || typeof value !== "object") return value;
-  if (Array.isArray(value)) return value.map((v) => stripMetadata(v, depth + 1));
+  if (Array.isArray(value)) return value.map((v) => stripKeys(v, keys, keep, depth + 1));
+  const object = value as Record<string, unknown>;
   const out: Record<string, unknown> = {};
-  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-    if (forbidden.has(key)) continue;
-    out[key] = stripMetadata(child, depth + 1);
+  for (const [key, child] of Object.entries(object)) {
+    if (keys.has(key) && !keep?.(object, key)) continue;
+    out[key] = stripKeys(child, keys, keep, depth + 1);
   }
   return out;
+}
+
+/** Removes the teacher-only keys ({@link FORBIDDEN_STUDENT_KEYS}) anywhere in the structure. */
+export function stripMetadata(value: unknown): unknown {
+  return stripKeys(value, forbidden);
 }
 
 interface StudentViewInput {
