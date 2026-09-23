@@ -32,12 +32,15 @@ import {
   badge,
   button,
   card,
+  CheckboxField,
   cx,
+  FieldCell,
   hint,
   input,
   inputSm,
   IssueList,
   label,
+  NumberField,
   PromptField,
   sectionTitle,
 } from "@quiz/ui";
@@ -100,6 +103,9 @@ const NEW_CASE: CodeCase = {
   points: 1,
   timeMs: null,
 };
+
+/** A checkbox in the column of settings: no fixed height, the body ink. */
+const SETTING = "flex items-center gap-2 text-[13px] text-fg";
 
 /** The top-level settings "Advanced options" holds, as zod paths. */
 const ADVANCED_PATHS = [
@@ -240,10 +246,7 @@ export function CodeEditor({
           <IssueList issues={issuesAt(issues, "prompt")} />
         </div>
         <div className="flex flex-wrap items-end gap-4">
-          <div className="flex flex-col gap-1.5">
-            <label className={label} htmlFor={`${ids}-language`}>
-              {s.language}
-            </label>
+          <FieldCell label={s.language} htmlFor={`${ids}-language`}>
             <select
               id={`${ids}-language`}
               disabled={disabled}
@@ -257,17 +260,14 @@ export function CodeEditor({
                 </option>
               ))}
             </select>
-          </div>
+          </FieldCell>
           {/*
            * Only for a language the browser runner ships (ADR-015). For every
            * other one the question has no choice to offer, and a disabled
            * control that can never be enabled is worse than no control.
            */}
           {browserCapable(config.language) ? (
-            <div className="flex flex-col gap-1.5">
-              <label className={label} htmlFor={`${ids}-runtime`}>
-                {s.runtime}
-              </label>
+            <FieldCell label={s.runtime} htmlFor={`${ids}-runtime`}>
               <select
                 id={`${ids}-runtime`}
                 disabled={disabled}
@@ -278,7 +278,7 @@ export function CodeEditor({
                 <option value="backend">{s.runtimeBackend}</option>
                 <option value="runno">{s.runtimeBrowser}</option>
               </select>
-            </div>
+            </FieldCell>
           ) : null}
         </div>
         {browserCapable(config.language) ? <p className={hint}>{s.runtimeHint}</p> : null}
@@ -393,10 +393,11 @@ export function CodeEditor({
           {config.tests.cases.map((testCase, i) => (
             <li key={i} className="rounded-card border border-line bg-surface-2 p-3">
               <div className="flex flex-wrap items-end gap-3">
-                <div className="flex min-w-40 flex-1 flex-col gap-1.5">
-                  <label className={label} htmlFor={`${ids}-name-${i}`}>
-                    {fmt(s.case, { n: i + 1 })}
-                  </label>
+                <FieldCell
+                  label={fmt(s.case, { n: i + 1 })}
+                  htmlFor={`${ids}-name-${i}`}
+                  className="min-w-40 flex-1"
+                >
                   <input
                     id={`${ids}-name-${i}`}
                     className={cx(inputSm, "w-full font-medium")}
@@ -405,54 +406,39 @@ export function CodeEditor({
                     value={testCase.name}
                     onChange={(e) => patchCase(i, { name: e.target.value })}
                   />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className={label} htmlFor={`${ids}-points-${i}`}>
-                    {s.points}
-                  </label>
-                  <input
-                    id={`${ids}-points-${i}`}
-                    type="number"
-                    min={0}
-                    step={0.5}
-                    className={cx(inputSm, "w-20 text-right tabular-nums")}
-                    aria-label={`${s.points} ${i + 1}`}
-                    disabled={disabled}
-                    value={testCase.points}
-                    onChange={(e) => patchCase(i, { points: Number(e.target.value) || 0 })}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className={label} htmlFor={`${ids}-time-${i}`}>
-                    {s.timeMs}
-                  </label>
-                  <input
-                    id={`${ids}-time-${i}`}
-                    type="number"
-                    min={100}
-                    step={100}
-                    placeholder={String(config.limits.timeMs)}
-                    className={cx(inputSm, "w-24 text-right tabular-nums")}
-                    aria-label={`${s.timeMs} ${i + 1}`}
-                    disabled={disabled}
-                    value={testCase.timeMs ?? ""}
-                    onChange={(e) =>
-                      patchCase(i, {
-                        timeMs: e.target.value === "" ? null : Number(e.target.value),
-                      })
-                    }
-                  />
-                </div>
-                <label className="flex h-7 items-center gap-2 text-[13px] text-fg-muted">
-                  <input
-                    type="checkbox"
-                    aria-label={`${s.hidden} ${i + 1}`}
-                    disabled={disabled}
-                    checked={!testCase.visible}
-                    onChange={(e) => patchCase(i, { visible: !e.target.checked })}
-                  />
-                  {s.hidden}
-                </label>
+                </FieldCell>
+                <NumberField
+                  id={`${ids}-points-${i}`}
+                  label={s.points}
+                  aria-label={`${s.points} ${i + 1}`}
+                  value={testCase.points}
+                  min={0}
+                  step={0.5}
+                  width="w-20"
+                  disabled={disabled}
+                  onChange={(points) => patchCase(i, { points: points || 0 })}
+                />
+                <NumberField
+                  id={`${ids}-time-${i}`}
+                  label={s.timeMs}
+                  aria-label={`${s.timeMs} ${i + 1}`}
+                  value={testCase.timeMs}
+                  min={100}
+                  step={100}
+                  placeholder={String(config.limits.timeMs)}
+                  width="w-24"
+                  disabled={disabled}
+                  onChange={(timeMs) => patchCase(i, { timeMs })}
+                  onClear={() => patchCase(i, { timeMs: null })}
+                />
+                <CheckboxField
+                  className="flex h-7 items-center gap-2 text-[13px] text-fg-muted"
+                  label={s.hidden}
+                  aria-label={`${s.hidden} ${i + 1}`}
+                  checked={!testCase.visible}
+                  disabled={disabled}
+                  onChange={(hidden) => patchCase(i, { visible: !hidden })}
+                />
                 <button
                   type="button"
                   className={button("ghost", "sm")}
@@ -465,10 +451,7 @@ export function CodeEditor({
               </div>
 
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5">
-                  <label className={label} htmlFor={`${ids}-args-${i}`}>
-                    {s.args}
-                  </label>
+                <FieldCell label={s.args} htmlFor={`${ids}-args-${i}`}>
                   <textarea
                     id={`${ids}-args-${i}`}
                     rows={2}
@@ -479,11 +462,8 @@ export function CodeEditor({
                     onChange={(e) => writeArgs(i, e.target.value)}
                   />
                   <p className={hint}>{s.argsHint}</p>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className={label} htmlFor={`${ids}-stdin-${i}`}>
-                    {s.stdin}
-                  </label>
+                </FieldCell>
+                <FieldCell label={s.stdin} htmlFor={`${ids}-stdin-${i}`}>
                   <textarea
                     id={`${ids}-stdin-${i}`}
                     rows={2}
@@ -493,27 +473,26 @@ export function CodeEditor({
                     value={testCase.stdin}
                     onChange={(e) => patchCase(i, { stdin: e.target.value })}
                   />
-                </div>
+                </FieldCell>
               </div>
 
               <div className="mt-3 flex flex-wrap items-end gap-3">
-                <label className="flex h-8.5 items-center gap-2 text-[13px] text-fg">
-                  <input
-                    type="checkbox"
-                    aria-label={`${s.compareStdout} ${i + 1}`}
-                    disabled={disabled}
-                    checked={testCase.compareStdout !== false}
-                    onChange={(e) => patchCase(i, { compareStdout: e.target.checked })}
-                  />
-                  {s.compareStdout}
-                </label>
+                <CheckboxField
+                  className="flex h-8.5 items-center gap-2 text-[13px] text-fg"
+                  label={s.compareStdout}
+                  aria-label={`${s.compareStdout} ${i + 1}`}
+                  checked={testCase.compareStdout !== false}
+                  disabled={disabled}
+                  onChange={(compareStdout) => patchCase(i, { compareStdout })}
+                />
                 {/* Off, there is no expected output to write: the case checks
                     the exit code alone, so the field goes away with it. */}
                 {testCase.compareStdout !== false ? (
-                  <div className="flex min-w-48 flex-1 flex-col gap-1.5">
-                    <label className={label} htmlFor={`${ids}-expected-${i}`}>
-                      {s.expected}
-                    </label>
+                  <FieldCell
+                    label={s.expected}
+                    htmlFor={`${ids}-expected-${i}`}
+                    className="min-w-48 flex-1"
+                  >
                     <input
                       id={`${ids}-expected-${i}`}
                       className={cx(inputSm, "w-full font-mono")}
@@ -522,30 +501,21 @@ export function CodeEditor({
                       value={testCase.expected}
                       onChange={(e) => patchCase(i, { expected: e.target.value })}
                     />
-                  </div>
+                  </FieldCell>
                 ) : null}
-                <div className="flex flex-col gap-1.5">
-                  <label className={label} htmlFor={`${ids}-exit-${i}`}>
-                    {s.exitCode}
-                  </label>
-                  <input
-                    id={`${ids}-exit-${i}`}
-                    type="number"
-                    min={0}
-                    max={255}
-                    placeholder={s.exitCodeAny}
-                    className={cx(inputSm, "w-24 text-right tabular-nums")}
-                    aria-label={`${s.exitCode} ${i + 1}`}
-                    disabled={disabled}
-                    value={testCase.expectedExitCode ?? ""}
-                    onChange={(e) =>
-                      patchCase(i, {
-                        expectedExitCode:
-                          e.target.value === "" ? null : Number(e.target.value) || 0,
-                      })
-                    }
-                  />
-                </div>
+                <NumberField
+                  id={`${ids}-exit-${i}`}
+                  label={s.exitCode}
+                  aria-label={`${s.exitCode} ${i + 1}`}
+                  value={testCase.expectedExitCode}
+                  min={0}
+                  max={255}
+                  placeholder={s.exitCodeAny}
+                  width="w-24"
+                  disabled={disabled}
+                  onChange={(code) => patchCase(i, { expectedExitCode: code || 0 })}
+                  onClear={() => patchCase(i, { expectedExitCode: null })}
+                />
               </div>
               <IssueList issues={issuesAt(issues, "tests", "cases", i)} />
             </li>
@@ -560,10 +530,7 @@ export function CodeEditor({
       <details className={cx(card, "p-4")}>
         <summary className={cx(sectionTitle, "cursor-pointer")}>{s.advanced}</summary>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-1.5">
-            <label className={label} htmlFor={`${ids}-action`}>
-              {s.action}
-            </label>
+          <FieldCell label={s.action} htmlFor={`${ids}-action`}>
             <select
               id={`${ids}-action`}
               disabled={disabled}
@@ -574,11 +541,8 @@ export function CodeEditor({
               <option value="run">{s.actionRun}</option>
               <option value="check">{s.actionCheck}</option>
             </select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className={label} htmlFor={`${ids}-args`}>
-              {s.compileArgs}
-            </label>
+          </FieldCell>
+          <FieldCell label={s.compileArgs} htmlFor={`${ids}-args`}>
             <input
               id={`${ids}-args`}
               className={cx(input, "h-8.5 font-mono")}
@@ -586,11 +550,8 @@ export function CodeEditor({
               value={config.compileArgs}
               onChange={(e) => patch({ compileArgs: e.target.value })}
             />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className={label} htmlFor={`${ids}-time`}>
-              {s.timeLimit}
-            </label>
+          </FieldCell>
+          <FieldCell label={s.timeLimit} htmlFor={`${ids}-time`}>
             <input
               id={`${ids}-time`}
               type="number"
@@ -608,11 +569,8 @@ export function CodeEditor({
                 })
               }
             />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className={label} htmlFor={`${ids}-memory`}>
-              {s.memoryLimit}
-            </label>
+          </FieldCell>
+          <FieldCell label={s.memoryLimit} htmlFor={`${ids}-memory`}>
             <input
               id={`${ids}-memory`}
               type="number"
@@ -630,11 +588,8 @@ export function CodeEditor({
                 })
               }
             />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className={label} htmlFor={`${ids}-output`}>
-              {s.outputLimit}
-            </label>
+          </FieldCell>
+          <FieldCell label={s.outputLimit} htmlFor={`${ids}-output`}>
             <input
               id={`${ids}-output`}
               type="number"
@@ -652,11 +607,8 @@ export function CodeEditor({
                 })
               }
             />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className={label} htmlFor={`${ids}-rpm`}>
-              {s.runsPerMinute}
-            </label>
+          </FieldCell>
+          <FieldCell label={s.runsPerMinute} htmlFor={`${ids}-rpm`}>
             <input
               id={`${ids}-rpm`}
               type="number"
@@ -667,47 +619,34 @@ export function CodeEditor({
               value={config.runsPerMinute}
               onChange={(e) => patch({ runsPerMinute: Number(e.target.value) || 1 })}
             />
-          </div>
-          <label className="flex items-center gap-2 text-[13px] text-fg">
-            <input
-              type="checkbox"
-              disabled={disabled}
-              checked={config.allOrNothing}
-              onChange={(e) => patch({ allOrNothing: e.target.checked })}
-            />
-            {s.allOrNothing}
-          </label>
+          </FieldCell>
+          <CheckboxField
+            className="flex items-center gap-2 text-[13px] text-fg"
+            label={s.allOrNothing}
+            checked={config.allOrNothing}
+            disabled={disabled}
+            onChange={(allOrNothing) => patch({ allOrNothing })}
+          />
           <p className={cx(hint, "sm:col-span-2")}>{s.allOrNothingHint}</p>
 
           <h4 className={cx("text-[13px] font-medium text-fg", "sm:col-span-2")}>{s.compare}</h4>
-          <label className="flex items-center gap-2 text-[13px] text-fg">
-            <input
-              type="checkbox"
-              disabled={disabled}
-              checked={config.tests.compare.trimTrailing}
-              onChange={(e) =>
-                patchTests({
-                  compare: { ...config.tests.compare, trimTrailing: e.target.checked },
-                })
-              }
-            />
-            {s.trimTrailing}
-          </label>
-          <label className="flex items-center gap-2 text-[13px] text-fg">
-            <input
-              type="checkbox"
-              disabled={disabled}
-              checked={config.tests.compare.ignoreCase}
-              onChange={(e) =>
-                patchTests({ compare: { ...config.tests.compare, ignoreCase: e.target.checked } })
-              }
-            />
-            {s.ignoreCase}
-          </label>
-          <div className="flex flex-col gap-1.5">
-            <label className={label} htmlFor={`${ids}-numeric`}>
-              {s.numeric}
-            </label>
+          <CheckboxField
+            className={SETTING}
+            label={s.trimTrailing}
+            checked={config.tests.compare.trimTrailing}
+            disabled={disabled}
+            onChange={(trimTrailing) =>
+              patchTests({ compare: { ...config.tests.compare, trimTrailing } })
+            }
+          />
+          <CheckboxField
+            className={SETTING}
+            label={s.ignoreCase}
+            checked={config.tests.compare.ignoreCase}
+            disabled={disabled}
+            onChange={(ignoreCase) => patchTests({ compare: { ...config.tests.compare, ignoreCase } })}
+          />
+          <FieldCell label={s.numeric} htmlFor={`${ids}-numeric`}>
             <select
               id={`${ids}-numeric`}
               disabled={disabled}
@@ -732,12 +671,9 @@ export function CodeEditor({
               <option value="abs">{s.numericAbs}</option>
               <option value="rel">{s.numericRel}</option>
             </select>
-          </div>
+          </FieldCell>
           {config.tests.compare.numeric === null ? null : (
-            <div className="flex flex-col gap-1.5">
-              <label className={label} htmlFor={`${ids}-epsilon`}>
-                {s.epsilon}
-              </label>
+            <FieldCell label={s.epsilon} htmlFor={`${ids}-epsilon`}>
               <input
                 id={`${ids}-epsilon`}
                 type="number"
@@ -758,7 +694,7 @@ export function CodeEditor({
                   })
                 }
               />
-            </div>
+            </FieldCell>
           )}
         </div>
       </details>

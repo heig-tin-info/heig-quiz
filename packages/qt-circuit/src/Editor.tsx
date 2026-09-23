@@ -41,17 +41,21 @@ import {
   badge,
   button,
   card,
+  CheckboxField,
   cx,
+  FieldCell,
   hint,
   input,
   inputSm,
   IssueList,
   label,
+  NumberField,
   PromptField,
   sectionTitle,
+  Segmented,
 } from "@quiz/ui";
 
-import { chip, segment, segmentTrack, selectSm } from "./styles.js";
+import { chip, selectSm } from "./styles.js";
 
 /**
  * What the host answers "Simulate the reference" with.
@@ -120,6 +124,9 @@ const KIND_GROUPS: ReadonlyArray<{
   { title: "groupTerminals", kinds: ["GND", "VCC", "VEE"] },
 ];
 
+/** A checkbox in a column of settings: no fixed height, the body ink. */
+const SETTING = "flex items-center gap-2 text-[13px] text-fg";
+
 /** A fresh source of each kind, so switching kinds never lands on an invalid one. */
 function defaultSource(kind: Source["kind"]): Source {
   switch (kind) {
@@ -143,90 +150,6 @@ function defaultLoad(kind: Load["kind"]): Load {
     case "capacitor":
       return { kind: "capacitor", farads: 1e-7 };
   }
-}
-
-/** A segmented control: one `<label>` per value around an `sr-only` radio. */
-function Segmented<T extends string>({
-  name,
-  value,
-  options,
-  onChange,
-  disabled,
-  labelledBy,
-}: {
-  name: string;
-  value: T;
-  options: ReadonlyArray<{ value: T; label: string }>;
-  onChange: (value: T) => void;
-  disabled?: boolean | undefined;
-  labelledBy?: string | undefined;
-}): ReactNode {
-  return (
-    <div
-      role="radiogroup"
-      {...(labelledBy === undefined ? {} : { "aria-labelledby": labelledBy })}
-      className={segmentTrack}
-    >
-      {options.map((option) => (
-        <label key={option.value} className={segment(value === option.value, disabled === true)}>
-          <input
-            type="radio"
-            name={name}
-            className="sr-only"
-            checked={value === option.value}
-            disabled={disabled}
-            onChange={() => onChange(option.value)}
-          />
-          {option.label}
-        </label>
-      ))}
-    </div>
-  );
-}
-
-/** A labelled number field, which this editor is mostly made of. */
-function NumberField({
-  id,
-  text,
-  value,
-  onChange,
-  disabled,
-  min,
-  max,
-  step,
-  placeholder,
-  width = "w-28",
-}: {
-  id: string;
-  text: string;
-  value: number;
-  onChange: (value: number) => void;
-  disabled?: boolean | undefined;
-  min?: number | undefined;
-  max?: number | undefined;
-  step?: number | string | undefined;
-  placeholder?: string | undefined;
-  width?: string;
-}): ReactNode {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label className={label} htmlFor={id}>
-        {text}
-      </label>
-      <input
-        id={id}
-        type="number"
-        className={cx(inputSm, width, "text-right tabular-nums")}
-        disabled={disabled}
-        {...(min === undefined ? {} : { min })}
-        {...(max === undefined ? {} : { max })}
-        {...(step === undefined ? {} : { step })}
-        {...(placeholder === undefined ? {} : { placeholder })}
-        value={Number.isFinite(value) ? value : ""}
-        onChange={(e) => onChange(e.target.value === "" ? 0 : Number(e.target.value))}
-      />
-    </div>
-  );
 }
 
 export function CircuitEditor({
@@ -343,7 +266,7 @@ export function CircuitEditor({
         <>
           <NumberField
             id={`${ids}-tolerance`}
-            text={s.tolerance}
+            label={s.tolerance}
             value={config.grading.tolerance}
             min={0.001}
             max={1}
@@ -354,10 +277,7 @@ export function CircuitEditor({
           <p className={hint}>{s.toleranceHint}</p>
         </>
       ) : (
-        <div className="flex flex-col gap-1.5">
-          <label className={label} htmlFor={`${ids}-rubric`}>
-            {s.rubric}
-          </label>
+        <FieldCell label={s.rubric} htmlFor={`${ids}-rubric`}>
           <textarea
             id={`${ids}-rubric`}
             rows={4}
@@ -367,18 +287,16 @@ export function CircuitEditor({
             onChange={(e) => patch({ grading: { ...config.grading, rubric: e.target.value } })}
           />
           <p className={hint}>{s.rubricHint}</p>
-        </div>
+        </FieldCell>
       )}
 
-      <label className="flex items-center gap-2 text-[13px] text-fg">
-        <input
-          type="checkbox"
-          disabled={disabled || config.reference === null}
-          checked={config.showExpected}
-          onChange={(e) => patch({ showExpected: e.target.checked })}
-        />
-        {s.showExpected}
-      </label>
+      <CheckboxField
+        className={SETTING}
+        label={s.showExpected}
+        checked={config.showExpected}
+        disabled={disabled || config.reference === null}
+        onChange={(showExpected) => patch({ showExpected })}
+      />
       <p className={hint}>{s.showExpectedHint}</p>
       <IssueList issues={issuesAt(issues, "showExpected")} />
     </section>
@@ -450,7 +368,7 @@ export function CircuitEditor({
         <div className="flex flex-wrap items-end gap-3">
           <NumberField
             id={`${ids}-max`}
-            text={s.maxComponents}
+            label={s.maxComponents}
             value={config.palette.maxComponents}
             min={1}
             max={30}
@@ -473,54 +391,30 @@ export function CircuitEditor({
            * control to switch it off, and a checkbox beside every rail would
            * be two things for one fact.
            */}
-          <div className="flex flex-col gap-1.5">
-            <label className={label} htmlFor={`${ids}-vcc`}>
-              {s.vcc}
-            </label>
-            <input
-              id={`${ids}-vcc`}
-              type="number"
-              min={0}
-              max={100}
-              step="any"
-              placeholder={s.supplyNone}
-              className={cx(inputSm, "w-28 text-right tabular-nums")}
-              disabled={disabled}
-              value={config.supplies.vcc ?? ""}
-              onChange={(e) =>
-                patch({
-                  supplies: {
-                    ...config.supplies,
-                    vcc: e.target.value === "" ? null : Number(e.target.value),
-                  },
-                })
-              }
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className={label} htmlFor={`${ids}-vee`}>
-              {s.vee}
-            </label>
-            <input
-              id={`${ids}-vee`}
-              type="number"
-              min={-100}
-              max={0}
-              step="any"
-              placeholder={s.supplyNone}
-              className={cx(inputSm, "w-28 text-right tabular-nums")}
-              disabled={disabled}
-              value={config.supplies.vee ?? ""}
-              onChange={(e) =>
-                patch({
-                  supplies: {
-                    ...config.supplies,
-                    vee: e.target.value === "" ? null : Number(e.target.value),
-                  },
-                })
-              }
-            />
-          </div>
+          <NumberField
+            id={`${ids}-vcc`}
+            label={s.vcc}
+            value={config.supplies.vcc}
+            min={0}
+            max={100}
+            step="any"
+            placeholder={s.supplyNone}
+            disabled={disabled}
+            onChange={(vcc) => patch({ supplies: { ...config.supplies, vcc } })}
+            onClear={() => patch({ supplies: { ...config.supplies, vcc: null } })}
+          />
+          <NumberField
+            id={`${ids}-vee`}
+            label={s.vee}
+            value={config.supplies.vee}
+            min={-100}
+            max={0}
+            step="any"
+            placeholder={s.supplyNone}
+            disabled={disabled}
+            onChange={(vee) => patch({ supplies: { ...config.supplies, vee } })}
+            onClear={() => patch({ supplies: { ...config.supplies, vee: null } })}
+          />
         </div>
         <IssueList issues={issuesAt(issues, "supplies")} />
       </section>
@@ -552,10 +446,11 @@ export function CircuitEditor({
           {config.stimuli.map((stimulus, i) => (
             <li key={i} className="rounded-card border border-line bg-surface-2 p-3">
               <div className="flex flex-wrap items-end gap-3">
-                <div className="flex min-w-40 flex-1 flex-col gap-1.5">
-                  <label className={label} htmlFor={`${ids}-sname-${i}`}>
-                    {fmt(s.stimulus, { n: i + 1 })}
-                  </label>
+                <FieldCell
+                  label={fmt(s.stimulus, { n: i + 1 })}
+                  htmlFor={`${ids}-sname-${i}`}
+                  className="min-w-40 flex-1"
+                >
                   <input
                     id={`${ids}-sname-${i}`}
                     className={cx(inputSm, "w-full font-medium")}
@@ -564,10 +459,10 @@ export function CircuitEditor({
                     value={stimulus.name}
                     onChange={(e) => patchStimulus(i, { name: e.target.value })}
                   />
-                </div>
+                </FieldCell>
                 <NumberField
                   id={`${ids}-spoints-${i}`}
-                  text={s.points}
+                  label={s.points}
                   value={stimulus.points}
                   min={0}
                   step={0.5}
@@ -575,16 +470,14 @@ export function CircuitEditor({
                   disabled={disabled}
                   onChange={(points) => patchStimulus(i, { points })}
                 />
-                <label className="flex h-7 items-center gap-2 text-[13px] text-fg-muted">
-                  <input
-                    type="checkbox"
-                    aria-label={`${s.hidden} ${i + 1}`}
-                    disabled={disabled}
-                    checked={!stimulus.visible}
-                    onChange={(e) => patchStimulus(i, { visible: !e.target.checked })}
-                  />
-                  {s.hidden}
-                </label>
+                <CheckboxField
+                  className="flex h-7 items-center gap-2 text-[13px] text-fg-muted"
+                  label={s.hidden}
+                  aria-label={`${s.hidden} ${i + 1}`}
+                  checked={!stimulus.visible}
+                  disabled={disabled}
+                  onChange={(hidden) => patchStimulus(i, { visible: !hidden })}
+                />
                 <button
                   type="button"
                   className={button("ghost", "sm")}
@@ -623,7 +516,7 @@ export function CircuitEditor({
                   />
                   <NumberField
                     id={`${ids}-sohms-${i}`}
-                    text={s.sourceOhms}
+                    label={s.sourceOhms}
                     value={stimulus.sourceOhms}
                     min={0}
                     step="any"
@@ -634,10 +527,7 @@ export function CircuitEditor({
               </div>
 
               <div className="mt-3 flex flex-wrap items-end gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className={label} htmlFor={`${ids}-load-${i}`}>
-                    {s.load}
-                  </label>
+                <FieldCell label={s.load} htmlFor={`${ids}-load-${i}`}>
                   <select
                     id={`${ids}-load-${i}`}
                     className={cx(selectSm, "w-32")}
@@ -651,11 +541,11 @@ export function CircuitEditor({
                     <option value="resistor">{s.loadResistor}</option>
                     <option value="capacitor">{s.loadCapacitor}</option>
                   </select>
-                </div>
+                </FieldCell>
                 {stimulus.load.kind === "resistor" ? (
                   <NumberField
                     id={`${ids}-lohms-${i}`}
-                    text={s.loadOhms}
+                    label={s.loadOhms}
                     value={stimulus.load.ohms}
                     min={0.001}
                     step="any"
@@ -666,7 +556,7 @@ export function CircuitEditor({
                 {stimulus.load.kind === "capacitor" ? (
                   <NumberField
                     id={`${ids}-lfarads-${i}`}
-                    text={s.loadFarads}
+                    label={s.loadFarads}
                     value={stimulus.load.farads}
                     min={1e-15}
                     step="any"
@@ -684,7 +574,7 @@ export function CircuitEditor({
                 <div className="flex flex-wrap items-end gap-3">
                 <NumberField
                   id={`${ids}-stop-${i}`}
-                  text={s.stopMs}
+                  label={s.stopMs}
                   value={stimulus.analysis.stopMs}
                   min={0.001}
                   step="any"
@@ -696,7 +586,7 @@ export function CircuitEditor({
                 />
                 <NumberField
                   id={`${ids}-skip-${i}`}
-                  text={s.skipMs}
+                  label={s.skipMs}
                   value={stimulus.analysis.skipMs}
                   min={0}
                   step="any"
@@ -708,7 +598,7 @@ export function CircuitEditor({
                 />
                 <NumberField
                   id={`${ids}-pts-${i}`}
-                  text={s.samples}
+                  label={s.samples}
                   value={stimulus.analysis.points}
                   min={50}
                   max={2000}
@@ -803,19 +693,17 @@ export function CircuitEditor({
       <details className={cx(card, "p-4")}>
         <summary className={cx(sectionTitle, "cursor-pointer")}>{s.advanced}</summary>
         <div className="mt-4 flex flex-col gap-3">
-          <label className="flex items-center gap-2 text-[13px] text-fg">
-            <input
-              type="checkbox"
-              disabled={disabled}
-              checked={config.commonGround}
-              onChange={(e) => patch({ commonGround: e.target.checked })}
-            />
-            {s.commonGround}
-          </label>
+          <CheckboxField
+            className={SETTING}
+            label={s.commonGround}
+            checked={config.commonGround}
+            disabled={disabled}
+            onChange={(commonGround) => patch({ commonGround })}
+          />
           <p className={hint}>{s.commonGroundHint}</p>
           <NumberField
             id={`${ids}-spm`}
-            text={s.simulationsPerMinute}
+            label={s.simulationsPerMinute}
             value={config.simulationsPerMinute}
             min={1}
             max={30}
@@ -860,7 +748,7 @@ function SourceFields({
       return (
         <NumberField
           id={`${idPrefix}-volts`}
-          text={s.volts}
+          label={s.volts}
           value={source.volts}
           step="any"
           disabled={disabled}
@@ -872,7 +760,7 @@ function SourceFields({
         <>
           <NumberField
             id={`${idPrefix}-amp`}
-            text={s.amplitude}
+            label={s.amplitude}
             value={source.amplitude}
             min={0}
             step="any"
@@ -881,7 +769,7 @@ function SourceFields({
           />
           <NumberField
             id={`${idPrefix}-freq`}
-            text={s.frequency}
+            label={s.frequency}
             value={source.frequencyHz}
             min={0.01}
             step="any"
@@ -890,7 +778,7 @@ function SourceFields({
           />
           <NumberField
             id={`${idPrefix}-offset`}
-            text={s.offset}
+            label={s.offset}
             value={source.offset}
             step="any"
             disabled={disabled}
@@ -903,7 +791,7 @@ function SourceFields({
         <>
           <NumberField
             id={`${idPrefix}-low`}
-            text={s.low}
+            label={s.low}
             value={source.low}
             step="any"
             disabled={disabled}
@@ -911,7 +799,7 @@ function SourceFields({
           />
           <NumberField
             id={`${idPrefix}-high`}
-            text={s.high}
+            label={s.high}
             value={source.high}
             step="any"
             disabled={disabled}
@@ -919,7 +807,7 @@ function SourceFields({
           />
           <NumberField
             id={`${idPrefix}-pfreq`}
-            text={s.frequency}
+            label={s.frequency}
             value={source.frequencyHz}
             min={0.01}
             step="any"
@@ -928,7 +816,7 @@ function SourceFields({
           />
           <NumberField
             id={`${idPrefix}-duty`}
-            text={s.dutyCycle}
+            label={s.dutyCycle}
             value={source.dutyCycle}
             min={0.01}
             max={0.99}
@@ -943,7 +831,7 @@ function SourceFields({
         <>
           <NumberField
             id={`${idPrefix}-from`}
-            text={s.stepFrom}
+            label={s.stepFrom}
             value={source.from}
             step="any"
             disabled={disabled}
@@ -951,7 +839,7 @@ function SourceFields({
           />
           <NumberField
             id={`${idPrefix}-to`}
-            text={s.stepTo}
+            label={s.stepTo}
             value={source.to}
             step="any"
             disabled={disabled}
@@ -959,7 +847,7 @@ function SourceFields({
           />
           <NumberField
             id={`${idPrefix}-at`}
-            text={s.stepAt}
+            label={s.stepAt}
             value={source.atMs}
             min={0}
             step="any"

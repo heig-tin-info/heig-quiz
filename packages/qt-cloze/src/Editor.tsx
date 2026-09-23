@@ -19,7 +19,7 @@ import { issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import { describeBlank, parseCloze } from "@quiz/domain/cloze";
 import { type ClozeConfig } from "./schema.js";
 import { clozeEditorStrings, type ClozeEditorStringKey } from "./strings.js";
-import { cx, IssueList, PromptField } from "@quiz/ui";
+import { CheckboxField, cx, IssueList, PromptField } from "@quiz/ui";
 import {
   helpClass,
   inputClass,
@@ -34,6 +34,9 @@ type ClozeEditorProps = Omit<EditorProps<ClozeConfig>, "uploadAsset"> & {
   /** The host's WYSIWYG editor; a textarea when the host has none. */
   RichText?: RichTextComponent;
 };
+
+/** The two switches of the text sit in a row of their own, at body size. */
+const CHECKBOX = "inline-flex items-center gap-1.5 text-sm text-fg-muted";
 
 export function ClozeEditor({
   config,
@@ -79,26 +82,20 @@ export function ClozeEditor({
       </section>
 
       <section className={cx(sectionClass, "flex-row flex-wrap gap-4")}>
-        <label className="inline-flex items-center gap-1.5 text-sm text-fg-muted">
-          <input
-            type="checkbox"
-            className="size-4 accent-accent"
-            checked={config.caseSensitive}
-            disabled={disabled}
-            onChange={(e) => patch({ caseSensitive: e.target.checked })}
-          />
-          {s.caseSensitive}
-        </label>
-        <label className="inline-flex items-center gap-1.5 text-sm text-fg-muted">
-          <input
-            type="checkbox"
-            className="size-4 accent-accent"
-            checked={config.shuffleOptions}
-            disabled={disabled}
-            onChange={(e) => patch({ shuffleOptions: e.target.checked })}
-          />
-          {s.shuffleOptions}
-        </label>
+        <CheckboxField
+          className={CHECKBOX}
+          label={s.caseSensitive}
+          checked={config.caseSensitive}
+          disabled={disabled}
+          onChange={(caseSensitive) => patch({ caseSensitive })}
+        />
+        <CheckboxField
+          className={CHECKBOX}
+          label={s.shuffleOptions}
+          checked={config.shuffleOptions}
+          disabled={disabled}
+          onChange={(shuffleOptions) => patch({ shuffleOptions })}
+        />
       </section>
 
       <section className={sectionClass}>

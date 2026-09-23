@@ -53,7 +53,7 @@ import {
   type McqQuestionPolicy,
 } from "./schema.js";
 import { mcqEditorStrings, type McqEditorStringKey } from "./strings.js";
-import { cx, IssueList, PromptField } from "@quiz/ui";
+import { cx, IssueList, PromptField, Segmented } from "@quiz/ui";
 import {
   buttonClass,
   cardClass,
@@ -67,7 +67,6 @@ import {
   labelClass,
   Pastille,
   sectionClass,
-  Segmented,
   Tip,
   TrashIcon,
 } from "./ui.js";

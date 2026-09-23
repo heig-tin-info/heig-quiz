@@ -21,16 +21,20 @@ import {
   type ShortMatcher,
 } from "./schema.js";
 import { shortEditorStrings, type ShortEditorStringKey } from "./strings.js";
-import { cx, IssueList, PromptField } from "@quiz/ui";
+import {
+  CheckboxField,
+  cx,
+  FieldCell,
+  IssueList,
+  PromptField,
+  Segmented,
+} from "@quiz/ui";
 import {
   buttonClass,
-  CheckboxField,
-  FieldCell,
   helpClass,
   inputClass,
   labelClass,
   sectionClass,
-  Segmented,
 } from "./ui.js";
 
 type ShortEditorProps = Omit<EditorProps<ShortConfig>, "uploadAsset"> & {
@@ -175,16 +179,13 @@ function MatcherFields({
               onPatch(next);
             }}
           />
-          <label className="inline-flex items-center gap-1.5 text-[13px] text-fg-muted">
-            <input
-              type="checkbox"
-              className="size-4 accent-accent"
-              checked={matcher.unitRequired}
-              disabled={disabled}
-              onChange={(e) => onPatch({ ...matcher, unitRequired: e.target.checked })}
-            />
-            {s.unitRequired}
-          </label>
+          <CheckboxField
+            className="inline-flex items-center gap-1.5 text-[13px] text-fg-muted"
+            label={s.unitRequired}
+            checked={matcher.unitRequired}
+            disabled={disabled}
+            onChange={(unitRequired) => onPatch({ ...matcher, unitRequired })}
+          />
         </>
       );
     case "date":
@@ -295,7 +296,7 @@ function ConstraintFields({
     case "text":
       return (
         <>
-          <FieldCell label={s.minLength} htmlFor="short-min-length">
+          <FieldCell labelClassName={labelClass} label={s.minLength} htmlFor="short-min-length">
             <input
               id="short-min-length"
               type="number"
@@ -307,7 +308,7 @@ function ConstraintFields({
               onChange={(e) => onPatch({ ...constraints, minLength: Number(e.target.value) })}
             />
           </FieldCell>
-          <FieldCell label={s.maxLength} htmlFor="short-max-length">
+          <FieldCell labelClassName={labelClass} label={s.maxLength} htmlFor="short-max-length">
             <input
               id="short-max-length"
               type="number"
@@ -324,7 +325,7 @@ function ConstraintFields({
     case "number":
       return (
         <>
-          <FieldCell label={s.min} htmlFor="short-min">
+          <FieldCell labelClassName={labelClass} label={s.min} htmlFor="short-min">
             <input
               id="short-min"
               type="number"
@@ -335,7 +336,7 @@ function ConstraintFields({
               onChange={(e) => onPatch(withOptionalNumber(constraints, "min", e.target.value))}
             />
           </FieldCell>
-          <FieldCell label={s.max} htmlFor="short-max">
+          <FieldCell labelClassName={labelClass} label={s.max} htmlFor="short-max">
             <input
               id="short-max"
               type="number"
@@ -357,7 +358,7 @@ function ConstraintFields({
     case "date":
       return (
         <>
-          <FieldCell label={s.from} htmlFor="short-from">
+          <FieldCell labelClassName={labelClass} label={s.from} htmlFor="short-from">
             <input
               id="short-from"
               type="date"
@@ -367,7 +368,7 @@ function ConstraintFields({
               onChange={(e) => onPatch(withOptionalDate(constraints, "from", e.target.value))}
             />
           </FieldCell>
-          <FieldCell label={s.to} htmlFor="short-to">
+          <FieldCell labelClassName={labelClass} label={s.to} htmlFor="short-to">
             <input
               id="short-to"
               type="date"

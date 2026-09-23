@@ -41,26 +41,5 @@ export function chip(on: boolean, disabled = false): string {
   );
 }
 
-/**
- * The segmented control of `apps/web/src/ui.tsx`, mirrored class for class as
- * `qt-mcq/ui.tsx` mirrors it: a recessed track, the chosen pill lifted onto
- * `surface`. The caller draws the `role="radiogroup"` track with
- * {@link segmentTrack} and one `<label>` per option with {@link segment}, each
- * holding an `sr-only` native radio.
- */
-export const segmentTrack =
-  "inline-flex shrink-0 flex-wrap items-center gap-0.5 rounded-full bg-surface-3 p-0.75";
-
-export function segment(on: boolean, disabled = false): string {
-  return cx(
-    "inline-flex h-7 items-center justify-center rounded-full px-3 text-[13px] font-medium transition-colors",
-    "has-focus-visible:ring-2 has-focus-visible:ring-accent/50",
-    on
-      ? "bg-surface text-fg ring-1 ring-line-strong/70"
-      : cx("text-fg-muted", !disabled && "cursor-pointer hover:text-fg"),
-    disabled && "opacity-60",
-  );
-}
-
 /** A quiet one-line strip under a canvas: the counts and the diagnostics. */
 export const strip = "flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-fg-muted";

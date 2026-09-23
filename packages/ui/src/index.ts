@@ -34,6 +34,7 @@ export {
   table,
   type BadgeTone,
 } from "./styles.js";
+export { CheckboxField, FieldCell, NumberField, Segmented } from "./fields.js";
 export { IssueList } from "./issues.js";
 export { PromptField } from "./PromptField.js";
 export { pointsOrDash, ScoreHeader, Verdict, verdictTone } from "./verdict.js";
