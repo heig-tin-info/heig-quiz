@@ -9,7 +9,7 @@
 import { randomUUID } from "node:crypto";
 
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { GRACE_MS } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
@@ -23,6 +23,7 @@ import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { UnavailableRunner } from "../runner/unavailable.js";
 import { applyState, itemRows, settingsOf } from "../evaluation/service.js";
+import { presence } from "../realtime/presence.js";
 import * as service from "./service.js";
 
 let db: Db;
@@ -848,5 +849,34 @@ describe("settings round trip", () => {
     expect(settings.navigation).toBe("forward_only");
     expect(settings.presentation).toBe("zen");
     expect(settings.shuffleChoices).toBe(true);
+  });
+});
+
+describe("the lobby tick (step 3)", () => {
+  afterEach(() => presence.reset());
+
+  it("starts an auto lobby once every student is present, and never a manual one", async () => {
+    const auto = await seedLive(db, { settings: { lobby: "auto" } });
+    const manual = await seedLive(db, { settings: { lobby: "manual" } });
+    for (const seed of [auto, manual]) {
+      await applyState(db, await reload(db, seed.evaluationId), "lobby", clock.now());
+    }
+    const ours = new Set([auto.evaluationId, manual.evaluationId]);
+    const tick = async () =>
+      (await service.autoStartFullLobbies(db, clock.now()))
+        .map((row) => row.id)
+        .filter((id) => ours.has(id));
+
+    // Nobody in the room, then half of it: nothing starts.
+    expect(await tick()).toEqual([]);
+    presence.join(auto.evaluationId, auto.studentIds[0]!, clock.now());
+    for (const id of manual.studentIds) presence.join(manual.evaluationId, id, clock.now());
+    expect(await tick()).toEqual([]);
+
+    // The whole class of the auto lobby: it starts; the full manual one waits.
+    for (const id of auto.studentIds) presence.join(auto.evaluationId, id, clock.now());
+    expect(await tick()).toEqual([auto.evaluationId]);
+    expect((await reload(db, auto.evaluationId)).state).toBe("running");
+    expect((await reload(db, manual.evaluationId)).state).toBe("lobby");
   });
 });
