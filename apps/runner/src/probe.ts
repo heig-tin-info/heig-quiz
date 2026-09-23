@@ -114,8 +114,11 @@ export async function probeEngine(
         usernsAuto = false;
         notes.push("no runner image to probe --userns=auto with: flag not passed");
       } else {
+        // `--pull=never`: the reference is the short one the service uses, and
+        // a host that somehow resolved it to a registry must not start a boot
+        // by downloading something. The runner never pulls (README).
         usernsAuto = await run(
-          ["run", "--rm", "--userns=auto", "--network", "none", image, "true"],
+          ["run", "--rm", "--pull=never", "--userns=auto", "--network", "none", image, "true"],
           60_000,
         )
           .then(() => true)

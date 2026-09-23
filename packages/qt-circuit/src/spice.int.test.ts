@@ -30,7 +30,9 @@ const IMAGE = "localhost/quiz-runner-spice:latest";
 const TIMEOUT_MS = 60_000;
 
 /**
- * The ONE `podman run` of this repository that is not `containerArgs()`.
+ * A `podman run` that is not `containerArgs()` — the only one that runs a
+ * student-shaped workload (the startup probe of `apps/runner` starts a
+ * throwaway `true` as well; `apps/runner/README.md` covers both).
  *
  * `@quiz/runner` is an app (ADR-016) and no `packages/*` depends on an app, so
  * this suite cannot call `executeRequest` the way `apps/runner`'s own spice

@@ -92,7 +92,8 @@ describe("probeEngine", () => {
     // The short name Podman takes on a command line, and the flags of a probe
     // that must not touch anything: nothing kept, no network.
     expect(podman.calls.find((args) => args[0] === "run")).toEqual([
-      "run", "--rm", "--userns=auto", "--network", "none", "quiz-runner-c:latest", "true",
+      "run", "--rm", "--pull=never", "--userns=auto", "--network", "none",
+      "quiz-runner-c:latest", "true",
     ]);
   });
 
