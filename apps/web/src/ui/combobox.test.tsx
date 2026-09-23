@@ -94,6 +94,21 @@ describe("useCombobox — picker", () => {
     expect(esc.stopPropagation).not.toHaveBeenCalled();
   });
 
+  it("clamps the highlight to the last row when the list shrinks under it", () => {
+    const { result, onPick, rerender } = setup({ count: 5 });
+    act(() => result.current.inputProps.onFocus!());
+    act(() => result.current.inputProps.onKeyDown(key("ArrowUp")));
+    expect(result.current.active).toBe(4);
+
+    rerender({ count: 2 });
+    expect(result.current.active).toBe(1);
+    expect(result.current.inputProps["aria-activedescendant"]).toBe(
+      result.current.optionProps(1).id,
+    );
+    act(() => result.current.inputProps.onKeyDown(key("Enter")));
+    expect(onPick).toHaveBeenCalledWith(1);
+  });
+
   it("starts the highlight over when the query changes", () => {
     const { result, rerender } = setup({ query: "a" });
     act(() => result.current.inputProps.onFocus!());
