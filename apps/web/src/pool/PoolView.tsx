@@ -1,8 +1,8 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Eye, FileQuestion, Plus } from "lucide-react";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Eye, Plus } from "lucide-react";
 import { useMemo, useState, type DragEvent } from "react";
 
-import type { PoolDetail, QuestionDetail, QuestionPage, QuestionRow } from "@quiz/contracts";
+import type { CategoryNode, PoolDetail, QuestionPage, QuestionRow } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useT } from "../i18n";
@@ -13,19 +13,15 @@ import { useScreenCommands } from "../screenCommands";
 import {
   Badge,
   Button,
-  Card,
-  EmptyState,
-  FormDialog,
-  FormError,
   PageError,
   PageHeader,
   PageSkeleton,
   ParentLink,
   QueryError,
-  Spinner,
   usePersistentChoice,
 } from "../ui";
 import { BulkBar } from "./BulkBar";
+import { categoryPaths, findCategory } from "./categories";
 import { setQuestionDrag } from "./move";
 import {
   EMPTY_FILTERS,
@@ -34,10 +30,11 @@ import {
   type QuestionSort,
 } from "./filters";
 import { FilterBar, type ListView } from "./FilterBar";
-import { QuestionCards, QuestionCardsSkeleton } from "./QuestionCards";
+import { NewQuestionModal } from "./NewQuestionModal";
+import { PoolEmpty, PoolListSkeleton, PoolListTail } from "./PoolListStates";
+import { QuestionCards } from "./QuestionCards";
 import { groupQuestions, isGroupBy, type GroupBy } from "./QuestionGroups";
-import { QuestionTable, QuestionTableSkeleton } from "./QuestionTable";
-import { NewQuestionForm } from "../question/NewQuestionForm";
+import { QuestionTable } from "./QuestionTable";
 import { useQuestionActions } from "../question/useQuestionActions";
 import { poolKey, poolQuestionsKey } from "../queryKeys";
 
@@ -85,66 +82,46 @@ const VIEW_KEY = "quiz-pool-view";
 const VIEWS: readonly ListView[] = ["cards", "list"];
 const GROUP_KEY = "quiz-pool-group";
 
-/** "Pointeurs / Arithmétique" for every node, and the tree's own order. */
-function categoryPaths(
-  nodes: PoolDetail["categories"],
-  prefix = "",
-): { id: string; label: string }[] {
-  return nodes.flatMap((node) => {
-    const label = prefix ? `${prefix} / ${node.name}` : node.name;
-    return [{ id: node.id, label }, ...categoryPaths(node.children, label)];
-  });
+/**
+ * What the list is drawn from, derived once per change of its inputs rather
+ * than on every render: the selected category's node, every category's
+ * "Parent / Child" path, and the rows cut into the chosen groups. A tally of
+ * checked rows or a keystroke in the filter bar re-renders the screen; none of
+ * them changes the tree or the page of rows.
+ */
+function useListing(
+  categories: readonly CategoryNode[] | undefined,
+  categoryId: string | null,
+  rows: QuestionRow[],
+  group: GroupBy,
+) {
+  const t = useT();
+  const tree = categories ?? NO_CATEGORIES;
+  const category = useMemo(
+    () => (categoryId ? findCategory(tree, categoryId) : null),
+    [tree, categoryId],
+  );
+  const paths = useMemo(() => categoryPaths(tree), [tree]);
+  const groups = useMemo(
+    () =>
+      groupQuestions(
+        rows,
+        group,
+        {
+          type: (typeId) => typeLabel(t, typeId),
+          category: (catId) => paths.find((p) => p.id === catId)?.label ?? catId,
+          noTag: t("pool.group.noTag"),
+          noCategory: t("pool.bulk.root"),
+        },
+        QUESTION_TYPE_IDS,
+        paths.map((p) => p.id),
+      ),
+    [rows, group, paths, t],
+  );
+  return { category, groups };
 }
 
-function NewQuestionModal({
-  poolId,
-  categoryId,
-  initialType,
-  onClose,
-  onCreated,
-}: {
-  poolId: string;
-  categoryId: string | null;
-  /** The palette can ask for a type ("New question — Code"). */
-  initialType: string;
-  onClose: () => void;
-  onCreated: (question: QuestionDetail) => void;
-}) {
-  const t = useT();
-  const [type, setType] = useState<string>(initialType);
-  const [name, setName] = useState("");
-  const create = useMutation({
-    mutationFn: () =>
-      api<QuestionDetail>(`/app/api/pools/${poolId}/questions`, {
-        method: "POST",
-        body: JSON.stringify({
-          type,
-          internalName: name.trim(),
-          ...(categoryId ? { categoryId } : {}),
-        }),
-      }),
-    onSuccess: onCreated,
-  });
-  return (
-    <FormDialog
-      title={t("pool.newQuestion")}
-      onClose={onClose}
-      onSubmit={() => create.mutate()}
-      submitLabel={t("pool.newQuestionAction")}
-      submitting={create.isPending}
-      canSubmit={name.trim() !== ""}
-      error={<FormError error={create.error} fallback={t("pool.createFailed")} />}
-    >
-      <NewQuestionForm
-        types={QUESTION_TYPE_IDS}
-        value={type}
-        onChange={setType}
-        name={name}
-        onName={setName}
-      />
-    </FormDialog>
-  );
-}
+const NO_CATEGORIES: readonly CategoryNode[] = [];
 
 export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) => void }) {
   const t = useT();
@@ -235,6 +212,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   };
 
   const { duplicate, askDelete } = useQuestionActions(id);
+  const { category, groups } = useListing(pool.data?.categories, categoryId, rows, group);
 
   if (pool.isLoading) {
     return <PageSkeleton />;
@@ -252,24 +230,10 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   }
 
   const detail = pool.data!;
-  const category = categoryId ? findCategory(detail.categories, categoryId) : null;
   // `reader` is the one role that may not write (F-POOL-05). An API that does
   // not say (the mock of an older shape) is treated as the role it used to
   // imply, so the screen never silently loses its actions.
   const readOnly = detail.role === "reader";
-  const paths = categoryPaths(detail.categories);
-  const groups = groupQuestions(
-    rows,
-    group,
-    {
-      type: (typeId) => typeLabel(t, typeId),
-      category: (catId) => paths.find((p) => p.id === catId)?.label ?? catId,
-      noTag: t("pool.group.noTag"),
-      noCategory: t("pool.bulk.root"),
-    },
-    QUESTION_TYPE_IDS,
-    paths.map((p) => p.id),
-  );
 
   return (
     <div className="space-y-6">
@@ -315,13 +279,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
         />
 
         {questions.isLoading ? (
-          view === "cards" ? (
-            <QuestionCardsSkeleton />
-          ) : (
-            <Card>
-              <QuestionTableSkeleton />
-            </Card>
-          )
+          <PoolListSkeleton view={view} />
         ) : questions.isError ? (
           <QueryError
             title={t("pool.title")}
@@ -331,32 +289,14 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
             fallback={t("error.server")}
           />
         ) : rows.length === 0 ? (
-          <Card>
-            <EmptyState
-              icon={FileQuestion}
-              title={t(detail.questionCount === 0 ? "pool.empty.title" : "pool.emptyFiltered.title")}
-              action={
-                detail.questionCount === 0 ? (
-                  readOnly ? undefined : (
-                    <Button onClick={() => setCreating(QUESTION_TYPE_IDS[0]!)}>
-                      <Plus /> {t("pool.newQuestion")}
-                    </Button>
-                  )
-                ) : (
-                  <Button
-                    variant="secondary"
-                    // The sort is not a filter: clearing what hides the rows
-                    // must not also change the order they come back in.
-                    onClick={() => setFilters((f) => ({ ...EMPTY_FILTERS, sort: f.sort, dir: f.dir }))}
-                  >
-                    {t("pool.filter.clear")}
-                  </Button>
-                )
-              }
-            >
-              {t(detail.questionCount === 0 ? "pool.empty.body" : "pool.emptyFiltered.body")}
-            </EmptyState>
-          </Card>
+          <PoolEmpty
+            questionCount={detail.questionCount}
+            readOnly={readOnly}
+            onCreate={() => setCreating(QUESTION_TYPE_IDS[0]!)}
+            // The sort is not a filter: clearing what hides the rows must not
+            // also change the order they come back in.
+            onClearFilters={() => setFilters((f) => ({ ...EMPTY_FILTERS, sort: f.sort, dir: f.dir }))}
+          />
         ) : (
           <>
             {view === "cards" ? (
@@ -390,20 +330,12 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
                 readOnly={readOnly}
               />
             )}
-            {questions.hasNextPage ? (
-              <div className="flex justify-center">
-                <Button
-                  variant="secondary"
-                  loading={questions.isFetchingNextPage}
-                  onClick={() => void questions.fetchNextPage()}
-                >
-                  {t("pool.loadMore")}
-                </Button>
-              </div>
-            ) : null}
-            {questions.isFetching && !questions.isFetchingNextPage ? (
-              <Spinner className="py-2" />
-            ) : null}
+            <PoolListTail
+              hasNextPage={questions.hasNextPage}
+              fetchingNext={questions.isFetchingNextPage}
+              refetching={questions.isFetching && !questions.isFetchingNextPage}
+              onLoadMore={() => void questions.fetchNextPage()}
+            />
           </>
         )}
       </div>
@@ -433,17 +365,4 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
       ) : null}
     </div>
   );
-}
-
-/** The node of `id` anywhere in the tree. */
-function findCategory(
-  nodes: PoolDetail["categories"],
-  id: string,
-): PoolDetail["categories"][number] | null {
-  for (const node of nodes) {
-    if (node.id === id) return node;
-    const found = findCategory(node.children, id);
-    if (found) return found;
-  }
-  return null;
 }

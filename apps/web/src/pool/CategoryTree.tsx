@@ -7,6 +7,7 @@ import type { CategoryNode, PoolDetail } from "@quiz/contracts";
 import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
+import { findCategory } from "./categories";
 import { useMoveQuestions, useQuestionDrop, type QuestionDrag } from "./move";
 import { useErrorToast } from "../notify";
 import { useSearchParam } from "../router";
@@ -36,13 +37,7 @@ import { poolKey } from "../queryKeys";
 /** Flattens the sibling list of a node, for a move that renumbers positions. */
 function siblingsOf(tree: CategoryNode[], parentId: string | null): CategoryNode[] {
   if (parentId === null) return tree;
-  const stack = [...tree];
-  while (stack.length) {
-    const node = stack.shift()!;
-    if (node.id === parentId) return node.children;
-    stack.push(...node.children);
-  }
-  return [];
+  return findCategory(tree, parentId)?.children ?? [];
 }
 
 function CategoryRow({

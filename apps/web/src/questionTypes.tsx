@@ -2,7 +2,7 @@
  * The browser-side question-type hookup (PLAN-MVP §1.4, §8 WP7).
  *
  * `@quiz/registry/client` holds the static registry; this module is what the
- * pool and the editor talk to. It does three things and nothing else:
+ * pool and the editor talk to. It does four things and nothing else:
  *
  * 1. mounts a type's `Editor` / `Player` / `Review` behind `Suspense`, so the
  *    chunk of a type (Monaco included, N-PERF-05) is fetched only by a screen
@@ -11,7 +11,9 @@
  *    through its `strings` prop — a `qt-*` package may not import the app, so
  *    the host translates (N-I18N-01, deviation W2-3);
  * 3. injects the app's sanitised `MarkdownView` as `renderMarkdown` and the
- *    pool's asset upload as `uploadAsset`.
+ *    pool's asset upload as `uploadAsset`;
+ * 4. picks the editor's "try it yourself" adapter for a type
+ *    (`tryAdapterFor`), so the editor screen never branches on a type id.
  *
  * The cast on the three components is deliberate: the registry erases five
  * type parameters (`AnyQuestionTypeClient`), so the props a concrete editor
@@ -22,6 +24,7 @@
  */
 import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
 
+import type { TryResult } from "@quiz/contracts";
 import type { ConfigIssue, RichTextComponent } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 import {
@@ -48,7 +51,10 @@ import {
 import {
   EDITOR_STRINGS,
   PLAYER_STRINGS,
+  referenceRegions,
   REVIEW_STRINGS,
+  type CodeConfig,
+  type CodeDetails,
   type CodeEditorProps,
 } from "@quiz/qt-code/client";
 import {
@@ -58,13 +64,18 @@ import {
   PLAYER_STRINGS as CIRCUIT_PLAYER_STRINGS,
   REVIEW_STRINGS as CIRCUIT_REVIEW_STRINGS,
   type CanvasStrings,
+  type CircuitConfig,
+  type CircuitDetails,
   type CircuitEditorProps,
   type KindLabels,
 } from "@quiz/qt-circuit/client";
 
+import { api } from "./api";
 import { HelpIcon } from "./help";
 import type { Dict, TFunction } from "./i18n";
 import { MarkdownView } from "./markdown/MarkdownView";
+import { BrowserRunnerUnavailable, runnerFor } from "./runner";
+import { referenceRunRequest } from "./runner/codeRun";
 import { ScrollableCode, Skeleton, type IconType } from "./ui";
 
 /**
@@ -246,6 +257,118 @@ function EditorSkeleton({ label }: { label: string }) {
 export type TryOutcome =
   | Awaited<ReturnType<NonNullable<CodeEditorProps["onTry"]>>>
   | Awaited<ReturnType<NonNullable<CircuitEditorProps["onTry"]>>>;
+
+/** What a "try" adapter needs from the editor screen that mounts it. */
+export interface TryContext {
+  /** The question whose DRAFT `POST /questions/:id/try` grades. */
+  id: string;
+  /** Saves the local draft now: the try route grades what the server HOLDS. */
+  flush: () => void;
+}
+
+type TryAdapter = (config: unknown) => Promise<TryOutcome>;
+
+/**
+ * "Try the reference solution" (`CodeEditor`), on whichever runner the
+ * question asks for — the same choice a STUDENT'S "Run" goes through
+ * (`src/runner/`, ADR-015), so a teacher rehearses on the engine their
+ * class will meet.
+ *
+ * The reference solution is read as one piece per editable region
+ * (`referenceRegions`, `@@next` between them). The editor refuses a
+ * mismatch before it ever calls this, which is why `null` below is a bug
+ * and not a state: it throws rather than inventing a verdict.
+ *
+ *  - `runtime: "runno"`: the browser runner runs the program assembled
+ *    here from the DRAFT's template and those regions, with the teacher's
+ *    compiler flags and the real content of the extra files — the editor
+ *    holds the whole config, so nothing has to be withheld the way
+ *    `toStudent` withholds it from a student. It answers a raw
+ *    `RunnerOutcome` and the editor judges the cases itself.
+ *  - `runtime: "backend"`, or a browser runtime that would not load:
+ *    `POST /questions/:id/try` grades the reference solution as an ANSWER.
+ *    It returns a grading, not a run (`TryResult` carries no per-case
+ *    runner outcome), so what comes back is the server's own verdict —
+ *    `{ graded }` — and the editor shows it instead of re-deciding it.
+ */
+function tryReference({ id, flush }: TryContext): TryAdapter {
+  return async (raw) => {
+    const config = raw as CodeConfig;
+    const regions = referenceRegions(config);
+    if (regions === null) throw new Error("reference solution does not fit the template");
+
+    const browser = await runnerFor(config.runtime, config.language);
+    if (browser !== null) {
+      try {
+        return await browser.run(referenceRunRequest(config, regions));
+      } catch (error) {
+        // The runtime did not load on this deployment: the server answers
+        // the same question, exactly as it does for a student.
+        if (!(error instanceof BrowserRunnerUnavailable)) throw error;
+      }
+    }
+
+    // The route grades what the server HOLDS, so the draft goes first.
+    flush();
+    const result = await api<TryResult>(`/app/api/questions/${id}/try`, {
+      method: "POST",
+      body: JSON.stringify({ source: "draft", answer: { regions } }),
+    });
+    if (result.status !== "graded") return "unavailable";
+    const details = result.details as CodeDetails;
+    if (details.runner !== "ok") return "unavailable";
+    return {
+      graded: {
+        // `null` is a language with no compile step, not a failure.
+        compileOk: details.compile?.ok ?? true,
+        passed: details.cases.filter((c) => c.ok).length,
+        total: details.cases.length,
+      },
+    };
+  };
+}
+
+/**
+ * "Simulate the reference" (`CircuitEditor`).
+ *
+ * There is no browser half and there never will be: a SPICE netlist is
+ * assembled SERVER-SIDE from the stored schematic and the stimulus
+ * (invariant 14), so the teacher's own circuit is posted as an ANSWER to
+ * `POST /questions/:id/try` and what comes back is this type's own
+ * breakdown — the waveforms already decimated and already paired with the
+ * stimulus that produced them.
+ *
+ * `runner_unavailable` is the default deployment (decision D14), not a
+ * failure: the editor says so in one line and publication is unaffected.
+ */
+function trySimulateReference({ id, flush }: TryContext): TryAdapter {
+  return async (raw) => {
+    const config = raw as CircuitConfig;
+    // The route grades what the server HOLDS, so the draft goes first.
+    flush();
+    const result = await api<TryResult>(`/app/api/questions/${id}/try`, {
+      method: "POST",
+      body: JSON.stringify({ source: "draft", answer: { schematic: config.reference } }),
+    });
+    if (result.status !== "graded") return "unavailable";
+    return { details: result.details as CircuitDetails };
+  };
+}
+
+/**
+ * The editor's "try it yourself" for a type, or `undefined` for a type that
+ * has no such button. One adapter per type that gains one, keyed here so the
+ * editor screen never branches on a type id.
+ *
+ * (The student player's `simulateCircuit` is not one of these: it posts to
+ * `POST /attempts/:id/simulate`, answers a raw `RunnerOutcome` and maps the
+ * attempt's 429 budget — a different route with a different contract.)
+ */
+export function tryAdapterFor(type: string, context: TryContext): TryAdapter | undefined {
+  if (type === "code") return tryReference(context);
+  if (type === "circuit") return trySimulateReference(context);
+  return undefined;
+}
 
 function Unknown({ children }: { children: ReactNode }) {
   return <p className="text-sm text-fg-muted">{children}</p>;

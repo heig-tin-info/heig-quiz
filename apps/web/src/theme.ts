@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 import { readStored, removeStored, writeStored } from "./ui/state";
 
@@ -94,4 +94,27 @@ export function applyTheme(choice: ThemeChoice) {
     m.addEventListener("change", onChange);
     unsubscribe = () => m.removeEventListener("change", onChange);
   }
+}
+
+/**
+ * Dark unless this browser explicitly asked for light. It toggles the class
+ * directly rather than going through `applyTheme`, so leaving the projection
+ * gives the rest of the app its own theme back without ever having persisted
+ * the beamer's; the toggle button below is what persists a real choice.
+ */
+export function useProjectionTheme(): { dark: boolean; toggle: () => void } {
+  const choice = useThemeChoice();
+  const dark = choice !== "light";
+  useEffect(() => {
+    const root = document.documentElement;
+    const before = root.classList.contains("dark");
+    const scheme = root.style.colorScheme;
+    root.classList.toggle("dark", dark);
+    root.style.colorScheme = dark ? "dark" : "light";
+    return () => {
+      root.classList.toggle("dark", before);
+      root.style.colorScheme = scheme;
+    };
+  }, [dark]);
+  return { dark, toggle: () => setThemeChoice(dark ? "light" : "dark") };
 }
