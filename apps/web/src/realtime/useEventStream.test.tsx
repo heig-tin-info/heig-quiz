@@ -1,9 +1,13 @@
+import { QueryClientProvider } from "@tanstack/react-query";
 import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SERVER_EVENT_NAMES, type ServerEvent } from "@quiz/contracts";
 
+import { useGradingProgress } from "../grading/progress";
+import { gradingProgressKey } from "../queryKeys";
 import { EVALUATION_ID, liveAt } from "../test/live-fixtures";
+import { makeQueryClient, mockFetch, ok } from "../test/render";
 import {
   NAMED_EVENTS,
   resetEventStream,
@@ -128,6 +132,65 @@ describe("useEventStream", () => {
     expect(live()[0]!.subscribed().sort()).toEqual([...SERVER_EVENT_NAMES].sort());
     // The hint has no name; `onmessage` is the only way in.
     expect(live()[0]!.subscribed()).not.toContain("hint");
+  });
+
+  it("delivers grading.progress, the frame the grading panel reads", () => {
+    const onEvent = vi.fn();
+    render(<Probe watch={`evaluation:${EVALUATION_ID}`} onEvent={onEvent} />);
+    act(() =>
+      live()[0]!.send({
+        type: "grading.progress",
+        evaluationId: EVALUATION_ID,
+        done: 3,
+        total: 8,
+        phase: "auto",
+      }),
+    );
+    expect(onEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "grading.progress", done: 3, total: 8 }),
+    );
+  });
+
+  it("the grading progress joins the page's connection and writes the cache", async () => {
+    mockFetch({
+      [`GET /app/api/evaluations/${EVALUATION_ID}/grading/progress`]: ok({
+        done: 0,
+        total: 8,
+        pending: { runner: 1, llm: 0 },
+        failed: 0,
+      }),
+    });
+    const queryClient = makeQueryClient();
+    function Panel() {
+      useGradingProgress(EVALUATION_ID);
+      return null;
+    }
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Probe />
+        <Panel />
+      </QueryClientProvider>,
+    );
+    // The shell's hint stream and the panel share ONE socket (FF-01).
+    expect(live()).toHaveLength(1);
+    await waitFor(() =>
+      expect(queryClient.getQueryData(gradingProgressKey(EVALUATION_ID))).toBeDefined(),
+    );
+    act(() =>
+      live()[0]!.send({
+        type: "grading.progress",
+        evaluationId: EVALUATION_ID,
+        done: 5,
+        total: 8,
+        phase: "auto",
+      }),
+    );
+    expect(queryClient.getQueryData(gradingProgressKey(EVALUATION_ID))).toEqual({
+      done: 5,
+      total: 8,
+      pending: { runner: 1, llm: 0 },
+      failed: 0,
+    });
   });
 
   it("routes the snapshot, the clock and the unnamed hint to their handlers", () => {
