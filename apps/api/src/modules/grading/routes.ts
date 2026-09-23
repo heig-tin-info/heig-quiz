@@ -26,7 +26,7 @@ import {
 import { tracer, type AuditAction } from "../../audit.js";
 import { evaluationItems, gradings, questionVersions } from "../../db/schema.js";
 import { loadEvaluation, staffAnswer, staffGrading, teacherGuard } from "../guards.js";
-import { notFound, teacherBodyFirstRoute, teacherRoute } from "../http.js";
+import { notFound, teacherRoute } from "../http.js";
 import { joinedItems } from "../evaluation/service.js";
 import { markModifiedAfterRelease } from "../results/service.js";
 import * as events from "./events.js";
@@ -45,10 +45,8 @@ export async function gradingPlugin(app: FastifyInstance) {
     return reply.code(500).send({ error: "internal_error" });
   }
 
-  /** Params, scope, then body — the evaluation-wide routes. */
+  /** Params, scope, then body: access is loaded before anything else is checked (invariant 6). */
   const teacher = teacherRoute(app, failure);
-  /** Params, body, then scope — the order the cell and regrade routes always had. */
-  const bodyFirst = teacherBodyFirstRoute(app, failure);
 
   const trace = tracer(app);
 
@@ -151,7 +149,7 @@ export async function gradingPlugin(app: FastifyInstance) {
   app.post(
     "/app/api/answers/:answerId/gradings",
     { preHandler: requireTeacher },
-    bodyFirst(
+    teacher(
       {
         params: AnswerIdParam,
         body: ManualGradingBody,
@@ -176,7 +174,7 @@ export async function gradingPlugin(app: FastifyInstance) {
   app.post(
     "/app/api/gradings/:id/override",
     { preHandler: requireTeacher },
-    bodyFirst(
+    teacher(
       { params: GradingIdParam, body: ManualGradingBody, load: gradingOf },
       ({ req, now, body, scope }) =>
         applyOverride(
@@ -198,7 +196,7 @@ export async function gradingPlugin(app: FastifyInstance) {
   app.post(
     "/app/api/gradings/:id/validate",
     { preHandler: requireTeacher },
-    bodyFirst(
+    teacher(
       { params: GradingIdParam, body: ValidateGradingBody, optionalBody: true, load: gradingOf },
       async ({ req, now, body, scope }) => {
         const row = await service.validateGrading(app.db, scope.grading, body, req.user!.id, now);
@@ -245,7 +243,7 @@ export async function gradingPlugin(app: FastifyInstance) {
   app.post(
     "/app/api/evaluations/:id/items/:itemId/regrade",
     { preHandler: requireTeacher },
-    bodyFirst(
+    teacher(
       { params: ItemParam, body: RegradeBody, load: staffEvaluation },
       async ({ req, reply, now, params, body, scope }) => {
         const items = await joinedItems(app.db, scope.evaluation.id);

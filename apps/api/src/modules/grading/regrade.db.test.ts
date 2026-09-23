@@ -178,11 +178,11 @@ describe("regrade (F-GRADE-06, F-GRADE-09)", () => {
 
 /**
  * The order of the refusals, which the wrappers of `modules/http.ts` must
- * keep (audit B-02). The cell and regrade routes validate their body BEFORE
- * loading their scope; the evaluation-wide ones load their scope first.
+ * keep (audit B-02). Every route loads its scope before it looks at the body
+ * (invariant 6): off the staff, a malformed body is still a 404.
  */
 describe("the order of the refusals, over HTTP", () => {
-  it("refuses session, params, then body and scope in each route's own order", async () => {
+  it("refuses session, params, scope, then body", async () => {
     const { evaluation, items, answer } = await graded();
     const badBody = { points: "many" };
 
@@ -192,18 +192,16 @@ describe("the order of the refusals, over HTTP", () => {
     expect(badParams.statusCode).toBe(404);
     expect(badParams.json()).toEqual({ error: "not_found" });
 
-    // Body first: a malformed override is a 400 even off the staff.
-    const bodyFirst = await post(`/app/api/answers/${answer.id}/gradings`, other.headers, badBody);
-    expect(bodyFirst.statusCode).toBe(400);
-    expect(bodyFirst.json().error).toBe("validation");
+    // Off the staff, the scope's 404 wins over the malformed body, on every route.
+    const override = await post(`/app/api/answers/${answer.id}/gradings`, other.headers, badBody);
+    expect(override.statusCode).toBe(404);
+    expect(override.json()).toEqual({ error: "not_found" });
     const regrade = await post(
       `/app/api/evaluations/${evaluation.id}/items/${items[0]!.item.id}/regrade`,
       other.headers,
       {},
     );
-    expect(regrade.statusCode).toBe(400);
-
-    // Scope first: off the staff, the 404 wins over the malformed body.
+    expect(regrade.statusCode).toBe(404);
     const scopeFirst = await post(
       `/app/api/evaluations/${evaluation.id}/grading/validate-batch`,
       other.headers,
@@ -211,6 +209,11 @@ describe("the order of the refusals, over HTTP", () => {
     );
     expect(scopeFirst.statusCode).toBe(404);
     expect(scopeFirst.json()).toEqual({ error: "not_found" });
+
+    // On the staff, the same malformed body is the 400 it always was.
+    const malformed = await post(`/app/api/answers/${answer.id}/gradings`, teacher.headers, badBody);
+    expect(malformed.statusCode).toBe(400);
+    expect(malformed.json().error).toBe("validation");
   });
 
   it("overrides through both entry points and maps the module's refusals", async () => {
@@ -222,12 +225,20 @@ describe("the order of the refusals, over HTTP", () => {
     expect(first.statusCode).toBe(200);
     const gradingId = first.json().id as string;
 
-    // Off the staff, a well-formed override of the grading is a 404.
+    // Off the staff, an override of the grading is a 404, well-formed or not.
     const foreign = await post(`/app/api/gradings/${gradingId}/override`, other.headers, {
       points: 1,
       comment: "not mine",
     });
     expect(foreign.statusCode).toBe(404);
+    const foreignMalformed = await post(`/app/api/gradings/${gradingId}/override`, other.headers, {
+      points: "many",
+    });
+    expect(foreignMalformed.statusCode).toBe(404);
+    const foreignValidate = await post(`/app/api/gradings/${gradingId}/validate`, other.headers, {
+      points: "many",
+    });
+    expect(foreignValidate.statusCode).toBe(404);
 
     const second = await post(`/app/api/gradings/${gradingId}/override`, teacher.headers, {
       points: 0.75,

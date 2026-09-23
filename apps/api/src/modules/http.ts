@@ -166,12 +166,3 @@ export const studentRoute = wrapper("body-first");
  * loader's 404), body/query (400), then the handler under `failure`.
  */
 export const teacherRoute = wrapper("scope-first");
-
-/**
- * `teacherBodyFirstRoute(app, failure)(spec, handler)` — the order of
- * `studentRoute` behind a teacher guard. Four grading routes have always
- * validated their body before loading their scope; moving them onto
- * `teacherRoute` would turn a 400 into a 404 for a caller off the staff,
- * which is a wire change and gets its own commit.
- */
-export const teacherBodyFirstRoute = wrapper("body-first");
