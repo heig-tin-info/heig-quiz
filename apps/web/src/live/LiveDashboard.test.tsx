@@ -278,9 +278,9 @@ describe("LiveDashboard — states", () => {
 
 /*
  * FC-03 / FF-12: the dashboard lends its six commands to the palette while it
- * is mounted. The palette shows them where `buildCommands` puts them, so the
- * assertion is the WHOLE flat list in palette order — a refactoring that
- * merges the screen's commands at another point moves them and fails here.
+ * is mounted, FIRST within their group (the screen's actions outrank the
+ * generic ones). The assertion is the WHOLE flat list in palette order, so a
+ * change of merge point moves them and fails here.
  */
 describe("LiveDashboard — command palette", () => {
   const paletteContext = (): CommandContext => ({
@@ -313,18 +313,18 @@ describe("LiveDashboard — command palette", () => {
     setup(makeDashboard(2, 2));
     await screen.findByText("Nadia Roux 0");
     expect(paletteIds()).toEqual([
+      "live:configure",
       "nav:home",
       "nav:settings",
       "nav:pools",
       "nav:grading",
       "nav:results",
-      "live:configure",
-      "action:theme",
-      "action:locale",
-      "action:signout",
       "live:pause",
       "live:extend",
       "live:close",
+      "action:theme",
+      "action:locale",
+      "action:signout",
       "help:docs",
       "help:sources",
     ]);
@@ -336,16 +336,16 @@ describe("LiveDashboard — command palette", () => {
     setup(view);
     await screen.findByText(/waiting room/i);
     expect(paletteIds()).toEqual([
+      "live:configure",
       "nav:home",
       "nav:settings",
       "nav:pools",
       "nav:grading",
       "nav:results",
-      "live:configure",
+      "live:start",
       "action:theme",
       "action:locale",
       "action:signout",
-      "live:start",
       "help:docs",
       "help:sources",
     ]);

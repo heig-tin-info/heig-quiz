@@ -103,7 +103,7 @@ function openExternal(url: string) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
-/** Every command the viewer of `ctx` can run, plus the mounted screen's own. */
+/** The mounted screen's own commands first, then every command the viewer of `ctx` can run. */
 export function buildCommands(ctx: CommandContext): Command[] {
   const { t, navigate } = ctx;
   const commands: Command[] = [
@@ -292,12 +292,6 @@ export function buildCommands(ctx: CommandContext): Command[] {
       run: () => openExternal(SOURCES_URL),
     },
   );
-  // WP8: the commands the MOUNTED SCREEN lends to the palette — the live
-  // dashboard's start / pause / +5 min / close, the editor's "Publish this
-  // question". Read here, at the moment the palette opens, so that every
-  // command it shows comes out of this one function; `screenCommands.ts`
-  // holds the registry and the rule.
-  commands.push(...screenCommands());
 
   for (const { topic, title } of ctx.helpTopics) {
     commands.push({
@@ -310,7 +304,13 @@ export function buildCommands(ctx: CommandContext): Command[] {
     });
   }
 
-  return commands;
+  // WP8: the commands the MOUNTED SCREEN lends to the palette — the live
+  // dashboard's start / pause / +5 min / close, the editor's "Publish this
+  // question". They come FIRST, and `groupCommands` keeps that order inside
+  // each group: the screen under the palette is what the reader is working
+  // on, so its own actions outrank the generic ones. `screenCommands.ts`
+  // holds the registry and the rule.
+  return [...screenCommands(), ...commands];
 }
 
 /**

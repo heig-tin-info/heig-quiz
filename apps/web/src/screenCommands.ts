@@ -12,7 +12,8 @@ import type { Command } from "./commands";
  * that a pool screen is open, or which question the editor holds. So a screen
  * declares its own commands here while it is mounted, and `buildCommands`
  * reads them when the palette opens, which is why a stale closure is not a
- * thing.
+ * thing. They come FIRST within their group, before the generic ones: the
+ * screen under the palette is what the reader is working on.
  *
  * One slot and not a set of sources: exactly one screen is mounted under the
  * palette at a time, and two of them would mean two "Publish" entries.

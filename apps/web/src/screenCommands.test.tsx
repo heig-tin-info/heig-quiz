@@ -2,7 +2,7 @@ import { render } from "@testing-library/react";
 import { Eye } from "lucide-react";
 import { describe, expect, it, vi } from "vitest";
 
-import { buildCommands, type Command, type CommandContext } from "./commands";
+import { buildCommands, groupCommands, type Command, type CommandContext } from "./commands";
 import type { TFunction } from "./i18n";
 import { screenCommands, useScreenCommands } from "./screenCommands";
 import { makeMe } from "./test/fixtures";
@@ -42,7 +42,7 @@ describe("useScreenCommands", () => {
   });
 });
 
-/** A teacher standing on the home screen, with one help topic to sit after. */
+/** A teacher standing on the home screen. */
 const context = (): CommandContext => ({
   t: ((key: string) => key) as TFunction,
   locale: "en",
@@ -62,13 +62,18 @@ const context = (): CommandContext => ({
 });
 
 describe("buildCommands and the mounted screen", () => {
-  it("folds the screen's commands in after the external links, before the topics", () => {
+  it("puts the screen's commands first within their group, before the generic ones", () => {
     const commands: Command[] = [
-      { id: "question:publish", label: "Publish", icon: Eye, group: "help", run: vi.fn() },
+      { id: "question:publish", label: "Publish", icon: Eye, group: "action", run: vi.fn() },
     ];
     const { unmount } = render(<Screen commands={commands} />);
-    const ids = buildCommands(context()).map((c) => c.id);
-    expect(ids.slice(-3)).toEqual(["help:sources", "question:publish", "help:roster"]);
+    const actions = groupCommands(buildCommands(context())).find((g) => g.group === "action");
+    expect(actions?.commands.map((c) => c.id)).toEqual([
+      "question:publish",
+      "action:theme",
+      "action:locale",
+      "action:signout",
+    ]);
     unmount();
     expect(buildCommands(context()).map((c) => c.id)).not.toContain("question:publish");
   });
