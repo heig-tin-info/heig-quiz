@@ -16,6 +16,7 @@ import { TestClock } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { attempts, evaluationItems, evaluations, questions } from "../../db/schema.js";
 import { testDb } from "../../test/db.js";
+import { testServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { loadConfig, typeOf } from "../pool/config.js";
@@ -296,5 +297,32 @@ describe("the pool module sees the freeze", () => {
       .from(questions)
       .where(eq(questions.id, seed.questionIds[0]!));
     await expect(poolService.softDeleteQuestion(db, question!)).rejects.toThrow();
+  });
+});
+
+describe("duplicate into another classroom, over HTTP (invariant 6)", () => {
+  it("answers 404 to a classroom the caller is not staff of", async () => {
+    const server = await testServer();
+    try {
+      const teacher = await server.signIn("teacher");
+      const mine = await seedLive(server.app.db, { teacherId: teacher.id });
+      // A classroom of a course someone else teaches.
+      const theirs = await seedLive(server.app.db);
+      const duplicate = (classroomId: string) =>
+        server.app.inject({
+          method: "POST",
+          url: `/app/api/evaluations/${mine.evaluationId}/duplicate`,
+          headers: teacher.headers,
+          payload: { classroomId, title: "Copy" },
+        });
+      const denied = await duplicate(theirs.classroomId);
+      expect(denied.statusCode).toBe(404);
+      expect(denied.json()).toEqual({ error: "not_found" });
+      // Into a second classroom of their OWN, the same call goes through.
+      const other = await seedLive(server.app.db, { teacherId: teacher.id });
+      expect((await duplicate(other.classroomId)).statusCode).toBe(201);
+    } finally {
+      await server.close();
+    }
   });
 });

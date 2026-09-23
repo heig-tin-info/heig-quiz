@@ -174,6 +174,24 @@ describe("creating and starting a poll", () => {
       ).statusCode,
     ).toBe(404);
   });
+
+  it("answers 404 to its own classroom with a question from a pool it cannot reach", async () => {
+    // Another teacher's personal pool is private: the classroom passes, the
+    // question does not, and the answer is the one a missing question gives.
+    const colleague = await server.signIn("teacher");
+    const foreign = await post("/app/api/polls/questions", colleague.headers, {
+      type: "mcq",
+      internalName: "Foreign question",
+    });
+    expect(foreign.statusCode).toBe(201);
+    const denied = await post("/app/api/polls", teacher.headers, {
+      classroomId: seed.classroomId,
+      questionId: foreign.json().meta.id as string,
+      anonymous: true,
+    });
+    expect(denied.statusCode).toBe(404);
+    expect(denied.json()).toEqual({ error: "not_found" });
+  });
 });
 
 describe("the public page (F-AUTH-05)", () => {

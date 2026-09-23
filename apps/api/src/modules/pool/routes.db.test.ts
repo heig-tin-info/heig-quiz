@@ -92,6 +92,32 @@ describe("guards (invariant 6)", () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it("answers 404 on a question of a pool the teacher cannot reach, read or write", async () => {
+    const id = await createQuestion("guarded question");
+    const read = await server.app.inject({
+      method: "GET",
+      url: `/app/api/questions/${id}`,
+      headers: stranger.headers,
+    });
+    expect(read.statusCode).toBe(404);
+    expect(read.json()).toEqual({ error: "not_found" });
+    const write = await server.app.inject({
+      method: "PATCH",
+      url: `/app/api/questions/${id}`,
+      headers: stranger.headers,
+      payload: { internalName: "hijacked" },
+    });
+    expect(write.statusCode).toBe(404);
+    expect(write.json()).toEqual({ error: "not_found" });
+    // The owner still reaches it, so the 404 above is the predicate, not a miss.
+    const own = await server.app.inject({
+      method: "GET",
+      url: `/app/api/questions/${id}`,
+      headers: owner.headers,
+    });
+    expect(own.statusCode).toBe(200);
+  });
+
   it("refuses a student outright, whatever the pool", async () => {
     const student = await server.signIn("student");
     const res = await server.app.inject({
