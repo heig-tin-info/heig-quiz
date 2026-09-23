@@ -8,6 +8,7 @@ import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { Card, Field, SectionHeading, Segmented, Select } from "../ui";
 import { TagInput } from "./TagInput";
+import { poolKey, questionKey } from "../queryKeys";
 
 /**
  * What a question IS, next to what it says: name, category, difficulty, tags
@@ -45,10 +46,10 @@ export function MetaPanel({
     mutationFn: (body: QuestionPatch) =>
       api(`/app/api/questions/${meta.id}`, { method: "PATCH", body: JSON.stringify(body) }),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["question", meta.id] });
+      await qc.invalidateQueries({ queryKey: questionKey(meta.id) });
       // Prefix match: this also refreshes `["pool", id, "tags"]`, the
       // vocabulary the tag field suggests from, which a new tag just joined.
-      await qc.invalidateQueries({ queryKey: ["pool", meta.poolId] });
+      await qc.invalidateQueries({ queryKey: poolKey(meta.poolId) });
     },
     onError: (error) => toast(apiErrorMessage(error, t("question.meta.saveFailed")), "error"),
   });

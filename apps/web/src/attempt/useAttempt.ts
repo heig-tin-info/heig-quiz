@@ -41,6 +41,7 @@ import {
   type PlayerAction,
   type PlayerState,
 } from "./playerReducer";
+import { attemptKey } from "../queryKeys";
 
 /** Why the attempt stopped accepting writes. `null` while it is running. */
 interface ClosedInfo {
@@ -110,7 +111,7 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
   const preview = initial?.attempt.preview === true;
 
   const query = useQuery<AttemptOrLobby>({
-    queryKey: ["attempt", attemptId],
+    queryKey: attemptKey(attemptId),
     queryFn: () => api<AttemptOrLobby>(`/app/api/attempts/${attemptId}`),
     ...(initial ? { initialData: { kind: "attempt", view: initial } } : {}),
     // The stream is the live channel; this is only the safety net of §6.5.

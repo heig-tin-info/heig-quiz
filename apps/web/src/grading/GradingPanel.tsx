@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { BarChart3, CheckCheck, RefreshCcw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -41,6 +41,13 @@ import { gradingLinks } from "./index";
 import { RegradeSheet } from "./RegradeSheet";
 import { OverrideSheet } from "./OverrideSheet";
 import { useGradingProgress } from "./progress";
+import {
+  evaluationKey,
+  gradingQueueKey,
+  gradingRosterKey,
+  resultsByQuestionKey,
+} from "../queryKeys";
+import { useGradingInvalidate } from "./useGradingInvalidate";
 
 /**
  * The grading panel (F-GRADE-03 to 06, mockup `04-correction.html`).
@@ -71,7 +78,6 @@ export function GradingPanel({
 }) {
   const t = useT();
   const toast = useToast();
-  const qc = useQueryClient();
 
   const [order, setOrder] = useState<"question" | "student">("question");
   const [showNames, setShowNames] = useState(false);
@@ -86,7 +92,7 @@ export function GradingPanel({
   // --- The evaluation and its items -------------------------------------
 
   const evaluation = useQuery<EvaluationDetail>({
-    queryKey: ["evaluation", evaluationId],
+    queryKey: evaluationKey(evaluationId),
     queryFn: () => api(`/app/api/evaluations/${evaluationId}`),
   });
 
@@ -110,7 +116,7 @@ export function GradingPanel({
    * below prints, because they come from the same place.
    */
   const roster = useQuery<GradingQueue>({
-    queryKey: ["grading", evaluationId, "roster", items[0]?.id ?? "", anonymous],
+    queryKey: gradingRosterKey(evaluationId, items[0]?.id ?? "", anonymous),
     enabled: order === "student" && items.length > 0,
     queryFn: () =>
       api(
@@ -143,7 +149,7 @@ export function GradingPanel({
         : `by=student&attemptId=${step.key}`;
 
   const queue = useQuery<GradingQueue>({
-    queryKey: ["grading", evaluationId, "queue", scopeParam, stateFilter, anonymous],
+    queryKey: gradingQueueKey(evaluationId, scopeParam, stateFilter, anonymous),
     enabled: scopeParam !== null,
     queryFn: () =>
       api(
@@ -160,7 +166,7 @@ export function GradingPanel({
    * error state, so a grading session is not interrupted by a secondary read.
    */
   const byQuestion = useQuery<ByQuestion[]>({
-    queryKey: ["results", evaluationId, "by-question"],
+    queryKey: resultsByQuestionKey(evaluationId),
     retry: false,
     queryFn: () => api(`/app/api/evaluations/${evaluationId}/results/by-question`),
   });
@@ -213,10 +219,7 @@ export function GradingPanel({
 
   // --- Mutations ---------------------------------------------------------
 
-  const invalidate = () => {
-    void qc.invalidateQueries({ queryKey: ["grading", evaluationId] });
-    void qc.invalidateQueries({ queryKey: ["results", evaluationId] });
-  };
+  const invalidate = useGradingInvalidate(evaluationId);
 
   const validate = useMutation({
     mutationFn: (gradingId: string) =>

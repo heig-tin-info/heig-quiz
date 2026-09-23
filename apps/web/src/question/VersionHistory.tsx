@@ -24,6 +24,7 @@ import {
   Skeleton,
   T,
 } from "../ui";
+import { questionKey, questionPreviewKey } from "../queryKeys";
 
 /**
  * Where a student view keeps its statement: `prompt`, or `template` for a
@@ -50,7 +51,7 @@ function statementOf(student: unknown): string {
 function VersionPreview({ questionId, number }: { questionId: string; number: number }) {
   const t = useT();
   const preview = useQuery<PreviewResult>({
-    queryKey: ["question", questionId, "preview", number],
+    queryKey: questionPreviewKey(questionId, number),
     queryFn: () =>
       api(`/app/api/questions/${questionId}/preview`, {
         method: "POST",
@@ -87,7 +88,7 @@ export function VersionHistory({
   const [deprecating, setDeprecating] = useState<VersionRow | null>(null);
   const [note, setNote] = useState("");
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["question", questionId] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: questionKey(questionId) });
   const fail = (error: unknown) => toast(apiErrorMessage(error, t("error.save")), "error");
 
   const restore = useMutation({

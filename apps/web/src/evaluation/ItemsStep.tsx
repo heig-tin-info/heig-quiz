@@ -41,7 +41,7 @@ import {
   Tip,
 } from "../ui";
 import { AddQuestionsSheet } from "./AddQuestionsSheet";
-import { evaluationKey } from "./common";
+import { evaluationKey } from "../queryKeys";
 
 /**
  * Step 1 of the novice flow (docs/spec/08 §8.2): WHICH questions, in WHICH

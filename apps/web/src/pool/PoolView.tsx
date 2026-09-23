@@ -38,6 +38,7 @@ import { QuestionCards, QuestionCardsSkeleton } from "./QuestionCards";
 import { groupQuestions, isGroupBy, type GroupBy } from "./QuestionGroups";
 import { QuestionTable, QuestionTableSkeleton } from "./QuestionTable";
 import { QuestionTypePicker } from "./QuestionTypePicker";
+import { poolKey, poolQuestionsKey } from "../queryKeys";
 
 /**
  * The pool screen (mockup `08-pool.html`): the questions across the full
@@ -217,7 +218,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const [prefs, setPrefs] = usePrefs();
 
   const pool = useQuery<PoolDetail>({
-    queryKey: ["pool", id],
+    queryKey: poolKey(id),
     queryFn: () => api(`/app/api/pools/${id}`),
   });
   const mayWrite = pool.data?.role !== "reader";
@@ -241,7 +242,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const search = useMemo<QuestionFilters>(() => ({ ...filters, categoryId }), [filters, categoryId]);
   const query = questionQuery(search);
   const questions = useInfiniteQuery<QuestionPage>({
-    queryKey: ["pool", id, "questions", query],
+    queryKey: poolQuestionsKey(id, query),
     queryFn: ({ pageParam }) =>
       api(`/app/api/pools/${id}/questions${questionQuery(search, pageParam as string | null)}`),
     initialPageParam: null as string | null,
@@ -299,7 +300,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
       }),
     onSuccess: async () => {
       toast(t("question.duplicated"), "success");
-      await qc.invalidateQueries({ queryKey: ["pool", id] });
+      await qc.invalidateQueries({ queryKey: poolKey(id) });
     },
     onError: (error) => toast(apiErrorMessage(error, t("error.save")), "error"),
   });
@@ -307,7 +308,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const remove = useMutation({
     mutationFn: (row: QuestionRow) => api(`/app/api/questions/${row.id}`, { method: "DELETE" }),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["pool", id] });
+      await qc.invalidateQueries({ queryKey: poolKey(id) });
     },
     onError: (error) => toast(apiErrorMessage(error, t("question.deleteFailed")), "error"),
   });
@@ -524,7 +525,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
           onClose={() => setCreating(null)}
           onCreated={async (question) => {
             setCreating(null);
-            await qc.invalidateQueries({ queryKey: ["pool", id] });
+            await qc.invalidateQueries({ queryKey: poolKey(id) });
             navigate({ view: "question", id: question.meta.id });
           }}
         />

@@ -7,6 +7,7 @@ import { ApiError, api } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
+import { anyPoolKey, coursesKey, poolsKey } from "../queryKeys";
 
 /**
  * Moving questions to another pool (ADR-017), on both sides of the gesture:
@@ -189,9 +190,9 @@ export function useMoveQuestions(): (request: MoveRequest) => Promise<boolean> {
 
       // Both pools changed, and so did the course list when the move linked
       // the pool to a course: everything keyed on them re-reads.
-      await qc.invalidateQueries({ queryKey: ["pool"] });
-      await qc.invalidateQueries({ queryKey: ["pools"] });
-      if (result.linkedCourseIds.length) await qc.invalidateQueries({ queryKey: ["courses"] });
+      await qc.invalidateQueries({ queryKey: anyPoolKey });
+      await qc.invalidateQueries({ queryKey: poolsKey });
+      if (result.linkedCourseIds.length) await qc.invalidateQueries({ queryKey: coursesKey });
       toast(
         result.moved === 1 && request.label
           ? t("pool.move.done.one", { name: request.label, pool: request.targetPoolName })

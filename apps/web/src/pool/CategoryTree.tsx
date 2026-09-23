@@ -11,6 +11,7 @@ import { useMoveQuestions, useQuestionDrop, type QuestionDrag } from "./move";
 import { useToast } from "../notify";
 import { useSearchParam } from "../router";
 import { Button, cx, Field, Menu, Modal, Skeleton } from "../ui";
+import { poolKey } from "../queryKeys";
 
 /**
  * The categories of a pool. They live in the application SIDEBAR, under the
@@ -206,7 +207,7 @@ function CategoryList({
   >(null);
   const [name, setName] = useState("");
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["pool", poolId] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: poolKey(poolId) });
   const fail = (error: unknown) => toast(apiErrorMessage(error, t("pool.categoryFailed")), "error");
 
   const create = useMutation({
@@ -402,7 +403,7 @@ export function SidebarCategories({
   const [category, setCategory] = useSearchParam("category", "");
   const move = useMoveQuestions();
   const detail = useQuery<PoolDetail>({
-    queryKey: ["pool", poolId],
+    queryKey: poolKey(poolId),
     queryFn: () => api(`/app/api/pools/${poolId}`),
   });
 

@@ -19,6 +19,7 @@ import {
   VerdictCell,
 } from "../ui";
 import { cellState } from "./cells";
+import { attemptInspectKey } from "../queryKeys";
 
 /**
  * F-DASH-05: one student's whole paper, read from the grid.
@@ -65,7 +66,7 @@ export function InspectModal({
   const t = useT();
   const { view } = state;
   const inspect = useQuery<AttemptInspect>({
-    queryKey: ["attempt-inspect", evaluationId, row.attemptId],
+    queryKey: attemptInspectKey(evaluationId, row.attemptId),
     enabled: row.attemptId !== null,
     queryFn: () => api(`/app/api/evaluations/${evaluationId}/attempts/${row.attemptId}`),
   });

@@ -34,13 +34,13 @@ import {
   T,
 } from "../ui";
 import {
-  evaluationsKey,
   evaluationStateLabel,
   hasDashboard,
   isGraded,
   isLive,
   stateTone,
 } from "./common";
+import { evaluationsKey } from "../queryKeys";
 
 /**
  * The evaluations of one classroom, under its roster.

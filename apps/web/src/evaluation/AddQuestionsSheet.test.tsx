@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { PoolSummary, QuestionPage } from "@quiz/contracts";
 
 import { PAGE_SIZE } from "../pool/filters";
+import { poolKey, poolQuestionsKey } from "../queryKeys";
 import {
   makeQueryClient,
   mockFetch,
@@ -15,16 +16,15 @@ import {
 import { AddQuestionsSheet } from "./AddQuestionsSheet";
 
 /*
- * The question picker of F-EVAL-01, pinned against what it does TODAY.
+ * The question picker of F-EVAL-01.
  *
- * This file is the safety net the FF-07 / FF-11 clean-up needs: the filters
- * still build a query string by hand here (`?type=…&difficulty=…`) and the
- * list is still cached under its own `["pool-questions", …]` root — both are
- * a later pull request's business. The difficulty half of FF-11 is done: the
- * rows render the tested `DifficultyDots` and the type list comes from
- * `QUESTION_TYPE_IDS`. Each is asserted where a change is visible — the
- * request that leaves, the cache key that is invalidated, the text that a
- * screen reader would read — rather than through a snapshot that would only
+ * The filters go through the pool screen's own `questionQuery`
+ * (`pool/filters.ts`, FF-11) and the list is cached under the pool screen's
+ * own `poolQuestionsKey` (FF-07), so a question created in the pool is not
+ * stale here. The rows render the tested `DifficultyDots` and the type list
+ * comes from `QUESTION_TYPE_IDS`. Each is asserted where a change is visible
+ * — the request that leaves, the cache key that is invalidated, the text that
+ * a screen reader would read — rather than through a snapshot that would only
  * say "something moved".
  */
 
@@ -87,19 +87,13 @@ const PAGE: QuestionPage = {
 const EMPTY: QuestionPage = { items: [], nextCursor: null };
 
 /**
- * One stubbed questions endpoint, registered under BOTH spellings of the
- * same request: the one the sheet builds by hand today, and the one with the
- * `&limit=25` that `pool/filters.ts` `questionQuery` always appends last.
- * FF-11 routes this sheet through that builder, and a route table that only
- * knew today's spelling would answer 404 the day it does — a red suite that
- * says nothing about the behaviour under test.
+ * One stubbed questions endpoint, spelled as `pool/filters.ts` `questionQuery`
+ * spells it: the filters in their fixed order, then the page size last.
+ * `filters` is the part before the `limit` (`""` or `"?type=code"`).
  */
-function questions(search: string, reply: ReturnType<typeof ok>) {
-  const paged = search === "" ? `?limit=${PAGE_SIZE}` : `${search}&limit=${PAGE_SIZE}`;
-  return {
-    [`GET /app/api/pools/p1/questions${search}`]: reply,
-    [`GET /app/api/pools/p1/questions${paged}`]: reply,
-  };
+function questions(filters: string, reply: ReturnType<typeof ok>, pool = "p1") {
+  const query = filters === "" ? `?limit=${PAGE_SIZE}` : `${filters}&limit=${PAGE_SIZE}`;
+  return { [`GET /app/api/pools/${pool}/questions${query}`]: reply };
 }
 
 function routes(over: Record<string, ReturnType<typeof ok>> = {}) {
@@ -114,10 +108,10 @@ function routes(over: Record<string, ReturnType<typeof ok>> = {}) {
  * The filter parameters of the last questions request, as ordered pairs.
  *
  * Parsed rather than compared as a string, and `limit` is dropped: paging is
- * not filtering, and it is exactly the parameter FF-11 will start sending.
- * What the tests below pin is WHICH filters travel and IN WHAT ORDER — the
- * order matters because the query string is also the TanStack Query key, so
- * two spellings of one filter state are two cache entries.
+ * not filtering (the one test that pins the whole string is below). What the
+ * tests pin is WHICH filters travel and IN WHAT ORDER — the order matters
+ * because the query string is also the TanStack Query key, so two spellings
+ * of one filter state are two cache entries.
  */
 function lastQuestionQuery(calls: RecordedCall[]): [string, string][] {
   const call = [...calls].reverse().find((c) => c.url.includes("/questions"));
@@ -180,10 +174,7 @@ describe("AddQuestionsSheet — the pool", () => {
 
   it("switches pool, refetches, and drops what was ticked in the old one", async () => {
     const user = userEvent.setup();
-    const { calls } = setup({
-      "GET /app/api/pools/p2/questions": ok(EMPTY),
-      [`GET /app/api/pools/p2/questions?limit=${PAGE_SIZE}`]: ok(EMPTY),
-    });
+    const { calls } = setup(questions("", ok(EMPTY), "p2"));
     await screen.findByText("ptr-arith-01");
 
     await user.click(within(rowOf("ptr-arith-01")).getByRole("checkbox"));
@@ -225,10 +216,8 @@ describe("AddQuestionsSheet — the filters", () => {
 
   /*
    * The ORDER of the parameters is part of what is pinned: the query string
-   * is also the cache key (`["pool-questions", poolId, search]`), so a
-   * reordering is a cache miss, not a cosmetic change. FF-11 replaces this
-   * hand-rolled builder with `pool/filters.ts`; this is the expectation that
-   * has to keep holding afterwards.
+   * is also the cache key (`poolQuestionsKey(poolId, search)`), so a
+   * reordering is a cache miss, not a cosmetic change.
    */
   it("combines the search, the type and the difficulty in that order", async () => {
     const user = userEvent.setup();
@@ -249,6 +238,19 @@ describe("AddQuestionsSheet — the filters", () => {
         ["type", "code"],
         ["difficulty", "3"],
       ]),
+    );
+  });
+
+  it("asks with the pool screen's own query string, page size included", async () => {
+    const user = userEvent.setup();
+    const { calls } = setup(questions("?q=ptr", ok(PAGE)));
+    await screen.findByText("ptr-arith-01");
+
+    await user.type(screen.getByLabelText("Search a question…"), "ptr");
+    await waitFor(() =>
+      expect(calls.filter((c) => c.url.includes("/questions")).at(-1)?.url).toBe(
+        `/app/api/pools/p1/questions?q=ptr&limit=${PAGE_SIZE}`,
+      ),
     );
   });
 
@@ -333,6 +335,49 @@ describe("AddQuestionsSheet — the rows", () => {
   });
 });
 
+/*
+ * FF-07: the picker and the pool screen used to cache `GET /pools/:id/questions`
+ * under two roots, so a question created in the pool screen stayed invisible
+ * here until the picker's own entry expired. Both now read `poolQuestionsKey`,
+ * which sits under `poolKey`, the key every question write invalidates.
+ */
+describe("AddQuestionsSheet — the cache it shares with the pool screen", () => {
+  it("caches the list under the pool screen's key", async () => {
+    const { queryClient } = setup();
+    await screen.findByText("ptr-arith-01");
+    expect(
+      queryClient.getQueryData(poolQuestionsKey("p1", `?limit=${PAGE_SIZE}`)),
+    ).toMatchObject({ pages: [PAGE] });
+  });
+
+  it("refetches when the pool is invalidated, as a question created there does", async () => {
+    const { calls, queryClient } = setup();
+    await screen.findByText("ptr-arith-01");
+    const before = questionQueries(calls).length;
+
+    await queryClient.invalidateQueries({ queryKey: poolKey("p1") });
+    await waitFor(() => expect(questionQueries(calls).length).toBe(before + 1));
+  });
+
+  it("loads the next page on demand instead of cutting the list at one page", async () => {
+    const user = userEvent.setup();
+    const next: QuestionPage = {
+      items: [row({ id: "q4", internalName: "struct-padding" })],
+      nextCursor: null,
+    };
+    setup({
+      ...questions("", ok({ ...PAGE, nextCursor: "c2" })),
+      [`GET /app/api/pools/p1/questions?limit=${PAGE_SIZE}&cursor=c2`]: ok(next),
+    });
+    await screen.findByText("ptr-arith-01");
+
+    await user.click(screen.getByRole("button", { name: "Load more" }));
+    expect(await screen.findByText("struct-padding")).toBeVisible();
+    expect(screen.getAllByRole("listitem")).toHaveLength(4);
+    expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+  });
+});
+
 describe("AddQuestionsSheet — adding", () => {
   it("keeps the action disabled until something is ticked, then counts it", async () => {
     const user = userEvent.setup();
@@ -369,6 +414,49 @@ describe("AddQuestionsSheet — adding", () => {
       body: { questionIds: ["q3", "q1"] },
     });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["evaluation", "e1"] });
+  });
+
+  /*
+   * The picker is paged since it shares the pool screen's query: a selection
+   * made on page 1 must survive "Load more", and the rows of two pages must
+   * not overlap, or the teacher ticks one question twice.
+   */
+  it("keeps what was ticked on page 1 after loading page 2, and posts both", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const all = Array.from({ length: 30 }, (_, i) =>
+      row({ id: `q${i + 1}`, internalName: `question-${String(i + 1).padStart(2, "0")}` }),
+    );
+    const { calls } = setup(
+      {
+        ...questions("", ok({ items: all.slice(0, PAGE_SIZE), nextCursor: "c2" })),
+        [`GET /app/api/pools/p1/questions?limit=${PAGE_SIZE}&cursor=c2`]: ok({
+          items: all.slice(PAGE_SIZE),
+          nextCursor: null,
+        }),
+        "POST /app/api/evaluations/e1/items": ok({}),
+      },
+      { onClose },
+    );
+    await screen.findByText("question-01");
+    expect(screen.getAllByRole("listitem")).toHaveLength(PAGE_SIZE);
+
+    await user.click(within(rowOf("question-03")).getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Load more" }));
+    await screen.findByText("question-28");
+    await user.click(within(rowOf("question-28")).getByRole("checkbox"));
+
+    const names = screen.getAllByRole("listitem").map((li) => li.textContent);
+    expect(names).toHaveLength(30);
+    expect(new Set(names).size).toBe(30);
+    expect(within(rowOf("question-03")).getByRole("checkbox")).toBeChecked();
+
+    await user.click(screen.getByRole("button", { name: "Add 2 questions" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(calls.find((c) => c.method === "POST")).toMatchObject({
+      url: "/app/api/evaluations/e1/items",
+      body: { questionIds: ["q3", "q28"] },
+    });
   });
 
   it("unticks what was ticked", async () => {

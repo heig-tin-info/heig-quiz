@@ -25,6 +25,7 @@ import { leaveStudentView, studentViewOn } from "../studentView";
 import { Button, Card, EmptyState, Field, QueryError, Spinner } from "../ui";
 import { Lobby } from "./Lobby";
 import { Player } from "./Player";
+import { attemptEntryKey } from "../queryKeys";
 
 const errorCode = (error: unknown): string | null =>
   error instanceof ApiError ? ((error.body as { error?: string })?.error ?? null) : null;
@@ -46,7 +47,7 @@ export function AttemptPage({
   const [sent, setSent] = useState<string | null>(null);
 
   const entry = useQuery<AttemptOrLobby>({
-    queryKey: ["attempt", "enter", evaluationId, sent],
+    queryKey: attemptEntryKey(evaluationId, sent),
     // A refusal the server SPELLS OUT (a wrong access code, a blocked network,
     // an evaluation that is not open) has its own screen below and must never
     // be retried. A failure with no answer at all — the socket died, a proxy

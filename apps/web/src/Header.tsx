@@ -18,6 +18,7 @@ import quizLogo from "./assets/quiz.svg";
 import { useT } from "./i18n";
 import { setThemeChoice, useResolvedTheme } from "./theme";
 import { Avatar, cx, IconButton, Menu, Segmented, type MenuItem } from "./ui";
+import { meKey } from "./queryKeys";
 
 /**
  * The mark: the product's wordmark — four speech bubbles spelling Q U I Z,
@@ -44,7 +45,7 @@ export function useSignOut(): () => void {
   const qc = useQueryClient();
   const logout = useMutation({
     mutationFn: () => api("/app/auth/logout", { method: "POST" }),
-    onSuccess: () => qc.setQueryData(["me"], null),
+    onSuccess: () => qc.setQueryData(meKey, null),
   });
   return () => logout.mutate();
 }

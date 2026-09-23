@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
 import type { GradingQueueItem } from "@quiz/contracts";
@@ -7,6 +7,7 @@ import { api, apiErrorMessage } from "../api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { Alert, Button, Field, Sheet, Textarea } from "../ui";
+import { useGradingInvalidate } from "./useGradingInvalidate";
 
 /**
  * F-GRADE-06: one question, graded again across every attempt, optionally
@@ -25,7 +26,7 @@ export function RegradeSheet({
 }) {
   const t = useT();
   const toast = useToast();
-  const qc = useQueryClient();
+  const invalidateGrading = useGradingInvalidate(evaluationId);
   const [note, setNote] = useState("");
   const [version, setVersion] = useState("");
   const [touched, setTouched] = useState(false);
@@ -41,8 +42,7 @@ export function RegradeSheet({
         }),
       }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["grading", evaluationId] });
-      void qc.invalidateQueries({ queryKey: ["results", evaluationId] });
+      invalidateGrading();
       toast(t("grading.regrade.started"), "progress");
       onClose();
     },

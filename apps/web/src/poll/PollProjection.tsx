@@ -32,6 +32,7 @@ import {
   questionScale,
   waitingOf,
 } from "./pollTally";
+import { pollKey } from "../queryKeys";
 
 /**
  * The projection of a running poll (mockup 10, F-LIVE-13 / F-LIVE-14).
@@ -77,8 +78,6 @@ import {
  * is the room's lighting. Only an explicit "light" already stored in this
  * browser keeps it light, and the toggle here writes that same choice.
  */
-
-export const pollKey = (id: string) => ["poll", id] as const;
 
 /** The states in which the poll is over and "Run again" is what is left. */
 function isEnded(state: string): boolean {

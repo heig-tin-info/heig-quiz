@@ -45,6 +45,7 @@ import {
 import { PoolIcon } from "./PoolIcon";
 import { PoolIconPicker } from "./PoolIconPicker";
 import { PoolShareSheet } from "./PoolShareSheet";
+import { poolsKey } from "../queryKeys";
 
 /**
  * The teacher's question pools.
@@ -148,14 +149,14 @@ function usePoolActions(pool: PoolSummary, me: Me | null | undefined): PoolActio
 
   const remove = useMutation({
     mutationFn: () => api(`/app/api/pools/${pool.id}`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["pools"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: poolsKey }),
     onError: (error) => toast(apiErrorMessage(error, t("error.save")), "error"),
   });
   const leave = useMutation({
     mutationFn: () =>
       api(`/app/api/pools/${pool.id}/members/${me?.id ?? ""}`, { method: "DELETE" }),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["pools"] });
+      await qc.invalidateQueries({ queryKey: poolsKey });
       toast(t("pools.leaveDone", { name: pool.name }), "success");
     },
     onError: (error) => toast(apiErrorMessage(error, t("error.save")), "error"),
@@ -252,7 +253,7 @@ export function PoolFormModal({
         : api<Pool>("/app/api/pools", { method: "POST", body });
     },
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["pools"] });
+      await qc.invalidateQueries({ queryKey: poolsKey });
       onClose();
     },
   });
@@ -443,7 +444,7 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
   const [view, setView] = usePoolsView();
 
   const pools = useQuery<PoolSummary[]>({
-    queryKey: ["pools"],
+    queryKey: poolsKey,
     queryFn: () => api("/app/api/pools"),
   });
   const rows = pools.data ?? [];

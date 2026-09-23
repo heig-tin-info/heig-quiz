@@ -24,6 +24,7 @@ import {
   T,
   useSortableTable,
 } from "./ui";
+import { adminTeachersKey } from "./queryKeys";
 
 type SortKey = "email" | "name" | "lastLoginAt" | "courses" | "grantedAt";
 
@@ -41,11 +42,11 @@ export function AdminPage() {
   const [email, setEmail] = useState("");
 
   const teachers = useQuery<AdminTeacher[]>({
-    queryKey: ["admin-teachers"],
+    queryKey: adminTeachersKey,
     queryFn: () => api("/app/api/admin/teachers"),
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["admin-teachers"] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: adminTeachersKey });
   const grant = useMutation({
     mutationFn: () =>
       api("/app/api/admin/teachers", { method: "POST", body: JSON.stringify({ email }) }),

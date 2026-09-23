@@ -2,12 +2,12 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { dashboardKey } from "../evaluation/common";
 import { initialGrid } from "../realtime/grid";
 import { resetEventStream } from "../realtime/useEventStream";
 import { EVALUATION_ID, makeDashboard, makeEvaluationDetail } from "../test/live-fixtures";
 import { makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
 import { LiveDashboard } from "./LiveDashboard";
+import { dashboardKey } from "../queryKeys";
 
 /*
  * The full-screen mode of the live dashboard, pinned before FF-06 moves

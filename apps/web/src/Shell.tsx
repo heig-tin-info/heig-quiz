@@ -38,6 +38,7 @@ import {
   Z,
   type IconType,
 } from "./ui";
+import { coursesKey, poolsKey } from "./queryKeys";
 
 /**
  * Application frame: a 240 px sidebar on desktop (navigation, the teacher's
@@ -167,7 +168,7 @@ function Nav({
 }) {
   const t = useT();
   const courses = useQuery<CourseSummary[]>({
-    queryKey: ["courses"],
+    queryKey: coursesKey,
     queryFn: () => api("/app/api/courses"),
     enabled: teacherUi,
   });
@@ -368,14 +369,14 @@ export function Shell({
   // The same query `Nav` runs, deduplicated by react-query on the shared key:
   // the palette lists the classrooms the sidebar lists, at no extra request.
   const courses = useQuery<CourseSummary[]>({
-    queryKey: ["courses"],
+    queryKey: coursesKey,
     queryFn: () => api("/app/api/courses"),
     enabled: teacherUi,
   });
   // Same shape as the classroom list above: the palette lists the pools a
   // teacher can jump to, on the key the pool screens already use.
   const pools = useQuery<PoolSummary[]>({
-    queryKey: ["pools"],
+    queryKey: poolsKey,
     queryFn: () => api("/app/api/pools"),
     enabled: teacherUi,
   });

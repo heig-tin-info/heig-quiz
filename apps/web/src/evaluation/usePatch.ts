@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { EvaluationDetail, EvaluationPatch } from "@quiz/contracts";
 
 import { api } from "../api";
-import { evaluationKey } from "./common";
+import { evaluationKey } from "../queryKeys";
 
 /**
  * The one writer of the configuration screen. Every control on the three

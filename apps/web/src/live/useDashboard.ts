@@ -4,10 +4,10 @@ import { useCallback } from "react";
 import { DashboardView } from "@quiz/contracts";
 
 import { api } from "../api";
-import { dashboardKey } from "../evaluation/common";
 import { applyGridEvent, initialGrid, type GridState } from "../realtime/grid";
 import { useEventStream } from "../realtime/useEventStream";
 import { useServerClock, type ServerClock } from "../realtime/useServerClock";
+import { dashboardKey } from "../queryKeys";
 
 /**
  * The live dashboard as one hook: the read model, the stream that moves it,

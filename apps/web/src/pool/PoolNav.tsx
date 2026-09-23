@@ -10,6 +10,7 @@ import { cx, Skeleton } from "../ui";
 import { SidebarCategories } from "./CategoryTree";
 import { useMoveQuestions, useQuestionDrop, type QuestionDrag } from "./move";
 import { PoolIcon } from "./PoolIcon";
+import { poolsKey } from "../queryKeys";
 
 /**
  * The "Question pools" section of the application sidebar, and the three
@@ -151,7 +152,7 @@ export function PoolNavTree({
   // The same key the pool screens and the palette use: react-query serves all
   // three from one request.
   const pools = useQuery<PoolSummary[]>({
-    queryKey: ["pools"],
+    queryKey: poolsKey,
     queryFn: () => api("/app/api/pools"),
     enabled: state === "all",
   });

@@ -49,6 +49,7 @@ import {
   Skeleton,
   useNow,
 } from "../ui";
+import { studentClassroomsKey, studentHomeKey } from "../queryKeys";
 
 const MODE_KEY = {
   exam: "shome.mode.exam",
@@ -172,11 +173,11 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
   const t = useT();
   const now = useNow(30_000);
   const home = useQuery<StudentHomeData>({
-    queryKey: ["student", "home"],
+    queryKey: studentHomeKey,
     queryFn: () => api("/app/api/student/home"),
   });
   const rooms = useQuery<StudentClassroom[]>({
-    queryKey: ["student", "classrooms"],
+    queryKey: studentClassroomsKey,
     queryFn: () => api("/app/api/student/classrooms"),
   });
 

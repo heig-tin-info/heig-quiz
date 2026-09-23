@@ -33,8 +33,6 @@ import {
   Tabs,
 } from "../ui";
 import {
-  evaluationKey,
-  evaluationsKey,
   evaluationStateLabel,
   isGraded,
   stateTone,
@@ -43,6 +41,7 @@ import { ItemsStep } from "./ItemsStep";
 import { LaunchStep } from "./LaunchStep";
 import { TimingStep } from "./TimingStep";
 import { useEvaluationPatch } from "./usePatch";
+import { classroomKey, evaluationKey, evaluationsKey } from "../queryKeys";
 
 /**
  * The three-screen configuration of docs/spec/08 §8.2: choose the questions,
@@ -89,7 +88,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
   const patch = useEvaluationPatch(id);
   const classroomId = detail.data?.evaluation.classroomId ?? null;
   const classroom = useQuery<ClassroomDetail>({
-    queryKey: ["classroom", classroomId],
+    queryKey: classroomKey(classroomId),
     enabled: classroomId !== null,
     queryFn: () => api(`/app/api/classrooms/${classroomId}`),
   });

@@ -36,6 +36,7 @@ import { ExportButton } from "./ExportButton";
 import { GradeTable } from "./GradeTable";
 import { Histogram } from "./Histogram";
 import { StatsRow } from "./StatsRow";
+import { evaluationKey, resultsByQuestionKey, resultsKey, resultsViewKey } from "../queryKeys";
 
 type Tab = "students" | "questions";
 
@@ -64,12 +65,12 @@ export function ResultsView({
   const [releasing, setReleasing] = useState(false);
 
   const results = useQuery<ResultsPayload>({
-    queryKey: ["results", evaluationId, "view"],
+    queryKey: resultsViewKey(evaluationId),
     queryFn: () => api(`/app/api/evaluations/${evaluationId}/results`),
   });
 
   const byQuestion = useQuery<ByQuestion[]>({
-    queryKey: ["results", evaluationId, "by-question"],
+    queryKey: resultsByQuestionKey(evaluationId),
     enabled: tab === "questions",
     queryFn: () => api(`/app/api/evaluations/${evaluationId}/results/by-question`),
   });
@@ -81,8 +82,8 @@ export function ResultsView({
         body: JSON.stringify(on ? { confirm: true } : {}),
       }),
     onSuccess: (_data, on) => {
-      void qc.invalidateQueries({ queryKey: ["results", evaluationId] });
-      void qc.invalidateQueries({ queryKey: ["evaluation", evaluationId] });
+      void qc.invalidateQueries({ queryKey: resultsKey(evaluationId) });
+      void qc.invalidateQueries({ queryKey: evaluationKey(evaluationId) });
       toast(t(on ? "results.release.done" : "results.unrelease.done"), "success");
     },
     onError: (error) => toast(apiErrorMessage(error, t("results.release.failed")), "error"),
@@ -111,7 +112,7 @@ export function ResultsView({
    * it, and the eyebrow simply stays a label until it arrives.
    */
   const evaluation = useQuery<EvaluationDetail>({
-    queryKey: ["evaluation", evaluationId],
+    queryKey: evaluationKey(evaluationId),
     queryFn: () => api(`/app/api/evaluations/${evaluationId}`),
     retry: false,
   });

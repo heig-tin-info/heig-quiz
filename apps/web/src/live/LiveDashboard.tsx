@@ -6,7 +6,6 @@ import type { DashboardRow, EvaluationDetail } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
-import { dashboardKey, evaluationKey } from "../evaluation/common";
 import { gradingLinks } from "../grading";
 import { useT } from "../i18n";
 import { presence } from "../realtime/grid";
@@ -30,6 +29,7 @@ import { LiveHeader, type LiveControls } from "./LiveHeader";
 import { StudentGrid } from "./StudentGrid";
 import { useDashboard } from "./useDashboard";
 import { useLiveCommands } from "./useLiveCommands";
+import { dashboardKey, evaluationKey } from "../queryKeys";
 
 /**
  * The live dashboard (mockup 03, F-DASH, F-LIVE-11).
