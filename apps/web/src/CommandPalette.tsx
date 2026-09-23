@@ -11,7 +11,6 @@ import {
   type CommandContext,
 } from "./commands";
 import type { TFunction } from "./i18n";
-import { screenCommands } from "./screenCommands";
 import { cx, Kbd, useLayer, useScrollLock, Z } from "./ui";
 
 /*
@@ -59,15 +58,14 @@ export function CommandPalette(props: CommandPaletteProps) {
 
   // Rebuilt on every render rather than memoized: a few dozen objects, each
   // closing over the current context, against a dependency array that would
-  // have to list every field of that context to stay honest.
-  // The global registry, plus whatever the screen under the palette declared
-  // while it was mounted (`screenCommands`): "Publish this question" exists
-  // in the editor and nowhere else.
+  // have to list every field of that context to stay honest. `buildCommands`
+  // folds in whatever the screen under the palette declared while it was
+  // mounted: "Publish this question" exists in the editor and nowhere else.
   const all =
     props.commands ??
     // The union above guarantees the context is there when `commands` is not;
     // TypeScript cannot narrow a rest-free union by an absent property.
-    [...screenCommands(), ...buildCommands(props as unknown as CommandContext)];
+    buildCommands(props as unknown as CommandContext);
   const groups = groupCommands(capClassrooms(filterCommands(query, all), query));
   // The list the arrows walk is the one the eye walks: the groups in their
   // fixed order, not the score order the filter returned.

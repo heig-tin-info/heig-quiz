@@ -2,16 +2,25 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  buildCommands,
+  capClassrooms,
+  filterCommands,
+  groupCommands,
+  type CommandContext,
+} from "../commands";
 import { dashboardKey } from "../evaluation/common";
+import type { TFunction } from "../i18n";
 import { initialGrid } from "../realtime/grid";
 import { resetEventStream } from "../realtime/useEventStream";
+import { makeMe } from "../test/fixtures";
+import { labelIssues } from "../test/labels";
 import {
   EVALUATION_ID,
   id,
   makeDashboard,
   makeEvaluationDetail,
 } from "../test/live-fixtures";
-import { labelIssues } from "../test/labels";
 import { makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
 import { LiveDashboard } from "./LiveDashboard";
 
@@ -264,5 +273,88 @@ describe("LiveDashboard — states", () => {
     mockFetch({});
     renderWithProviders(<LiveDashboard id={EVALUATION_ID} navigate={navigate} />);
     expect(await screen.findByText(/dashboard unavailable/i)).toBeInTheDocument();
+  });
+});
+
+/*
+ * FC-03 / FF-12: the dashboard lends its six commands to the palette while it
+ * is mounted. The palette shows them where `buildCommands` puts them, so the
+ * assertion is the WHOLE flat list in palette order — a refactoring that
+ * merges the screen's commands at another point moves them and fails here.
+ */
+describe("LiveDashboard — command palette", () => {
+  const paletteContext = (): CommandContext => ({
+    // Ids are what this suite asserts, so the identity `t` is enough; the
+    // labels themselves are covered by `commands.test.ts`.
+    t: ((key: string) => key) as TFunction,
+    locale: "en",
+    setLocale: vi.fn(),
+    route: { view: "live", id: EVALUATION_ID },
+    navigate: vi.fn(),
+    me: makeMe(),
+    teacherUi: true,
+    studentView: false,
+    courses: [],
+    themeChoice: "system",
+    resolvedTheme: "light",
+    setThemeChoice: vi.fn(),
+    openHelp: vi.fn(),
+    helpTopics: [],
+    signOut: vi.fn(),
+  });
+
+  /** Exactly what the palette walks: grouped, in the order the rows appear. */
+  const paletteIds = () =>
+    groupCommands(capClassrooms(filterCommands("", buildCommands(paletteContext())), "")).flatMap(
+      (g) => g.commands.map((c) => c.id),
+    );
+
+  it("offers pause, +5 min, close and configure while the quiz runs", async () => {
+    setup(makeDashboard(2, 2));
+    await screen.findByText("Nadia Roux 0");
+    expect(paletteIds()).toEqual([
+      "nav:home",
+      "nav:settings",
+      "nav:pools",
+      "nav:grading",
+      "nav:results",
+      "live:configure",
+      "action:theme",
+      "action:locale",
+      "action:signout",
+      "live:pause",
+      "live:extend",
+      "live:close",
+      "help:docs",
+      "help:sources",
+    ]);
+  });
+
+  it("offers start instead, in the same place, from the waiting room", async () => {
+    const view = makeDashboard(4, 3);
+    view.evaluation.state = "lobby";
+    setup(view);
+    await screen.findByText(/waiting room/i);
+    expect(paletteIds()).toEqual([
+      "nav:home",
+      "nav:settings",
+      "nav:pools",
+      "nav:grading",
+      "nav:results",
+      "live:configure",
+      "action:theme",
+      "action:locale",
+      "action:signout",
+      "live:start",
+      "help:docs",
+      "help:sources",
+    ]);
+  });
+
+  it("leaves nothing behind when the dashboard unmounts", async () => {
+    const { unmount } = setup(makeDashboard(2, 2));
+    await screen.findByText("Nadia Roux 0");
+    unmount();
+    expect(paletteIds().filter((id) => id.startsWith("live:"))).toEqual([]);
   });
 });
