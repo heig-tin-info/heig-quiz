@@ -265,15 +265,29 @@ export interface JoinedItem {
   question: typeof questions.$inferSelect;
 }
 
-export async function joinedItems(db: Db, evaluationId: string): Promise<JoinedItem[]> {
-  const rows = await db
+const selectJoinedItems = (db: Db) =>
+  db
     .select({ item: evaluationItems, version: questionVersions, question: questions })
     .from(evaluationItems)
     .innerJoin(questionVersions, eq(evaluationItems.questionVersionId, questionVersions.id))
-    .innerJoin(questions, eq(questionVersions.questionId, questions.id))
+    .innerJoin(questions, eq(questionVersions.questionId, questions.id));
+
+export async function joinedItems(db: Db, evaluationId: string): Promise<JoinedItem[]> {
+  return selectJoinedItems(db)
     .where(eq(evaluationItems.evaluationId, evaluationId))
     .orderBy(asc(evaluationItems.position));
-  return rows;
+}
+
+/** One item of one evaluation, by primary key — not the whole list filtered. */
+export async function joinedItem(
+  db: Db,
+  evaluationId: string,
+  itemId: string,
+): Promise<JoinedItem | null> {
+  const [row] = await selectJoinedItems(db)
+    .where(and(eq(evaluationItems.id, itemId), eq(evaluationItems.evaluationId, evaluationId)))
+    .limit(1);
+  return row ?? null;
 }
 
 /** The highest published version number of each question, in one query. */

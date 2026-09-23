@@ -85,7 +85,7 @@ import {
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
-import { gradeDefaults, joinedItems } from "../evaluation/service.js";
+import { gradeDefaults, joinedItem, joinedItems } from "../evaluation/service.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
 import {
@@ -837,8 +837,7 @@ async function itemOf(
   evaluationId: string,
   itemId: string,
 ): Promise<JoinedItem | null> {
-  const items = await joinedItems(db, evaluationId);
-  return items.find((i) => i.item.id === itemId) ?? null;
+  return joinedItem(db, evaluationId, itemId);
 }
 
 /** One line, and never wider than a cell (`ANSWER_SUMMARY_MAX`). */
@@ -1051,20 +1050,20 @@ export async function saveAnswer(
   const { evaluation, attempt, itemId, revision, now } = input;
   assertWritable(evaluation, attempt, now);
 
-  const joined = await itemOf(db, evaluation.id, itemId);
+  // Free navigation needs this one item only. A locking mode needs the whole
+  // ordered list anyway, so the item is taken from it rather than read twice.
+  const settings = settingsOf(evaluation);
+  const ordered =
+    settings.navigation === "free"
+      ? null
+      : orderItems(await joinedItems(db, evaluation.id), settings, attempt.seed, evaluation.id);
+  const joined = ordered
+    ? (ordered.find((o) => o.item.id === itemId) ?? null)
+    : await itemOf(db, evaluation.id, itemId);
   if (!joined) throw new LiveError("not_found", 404);
 
-  const settings = settingsOf(evaluation);
   const stored = await answersOf(db, attempt.id);
-  if (settings.navigation !== "free") {
-    const ordered = orderItems(
-      await joinedItems(db, evaluation.id),
-      settings,
-      attempt.seed,
-      evaluation.id,
-    );
-    if (lockedItemIds(settings, ordered, stored).has(itemId)) throw new ItemLocked();
-  }
+  if (ordered && lockedItemIds(settings, ordered, stored).has(itemId)) throw new ItemLocked();
 
   // Never persist garbage: the type's own schema is the gate (§4.7 step 6).
   const type = typeOf(joined.question.type);
