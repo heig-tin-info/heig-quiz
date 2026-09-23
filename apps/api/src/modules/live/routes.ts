@@ -82,10 +82,9 @@ export async function livePlugin(app: FastifyInstance) {
     if (error instanceof evaluationService.EvaluationError) {
       return reply.code(error.status).send({ error: error.code, message: error.message });
     }
-    app.log.error({ err: error }, "live route failed");
+    app.log.error({ err: error, cause: (error as Error)?.cause }, "live route failed");
     return reply.code(500).send({ error: "internal_error" });
   }
-
 
   const trace = tracer(app);
   const student = studentRoute(app, failure);
@@ -371,8 +370,7 @@ export async function livePlugin(app: FastifyInstance) {
         {
           params: IdParam,
           // Only `start` has a body, and it is validated, not read.
-          body: path === "start" ? StartBody : undefined,
-          optionalBody: true,
+          ...(path === "start" ? { body: StartBody, optionalBody: true } : {}),
           load: staffEvaluation,
         },
         async ({ req, now, scope }) => {

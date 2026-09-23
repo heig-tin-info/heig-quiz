@@ -74,8 +74,11 @@ export interface RouteSpec<
   params: P;
   /** A schema from `@quiz/contracts`; a mismatch is `invalid()`. */
   body?: B;
-  /** Parse `emptyBody(req.body)`: no body means all defaults instead of a 400. */
-  optionalBody?: boolean;
+  /**
+   * Parse `emptyBody(req.body)`: no body means all defaults instead of a 400.
+   * Only meaningful with a `body`, so without one the type forbids it.
+   */
+  optionalBody?: [B] extends [Schema] ? boolean : never;
   /** Parsed as `req.query ?? {}`; a mismatch is `invalid()`. */
   query?: Q;
   /**
