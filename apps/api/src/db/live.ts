@@ -65,8 +65,12 @@ export const attempts = pgTable(
      * The account that holds this attempt — NULL for a guest of a poll, and
      * only then: the check constraint below is what makes "exactly one owner"
      * a property of the schema rather than of a service.
+     *
+     * NO ACTION, like `enrollments.user_id`: deleting an account must never
+     * erase its answers, gradings and journal in passing. An account leaves
+     * by `users.anonymized_at` (ADR-003 §5), not by a DELETE.
      */
-    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").references(() => users.id),
     guestId: uuid("guest_id").references(() => guestParticipants.id, { onDelete: "cascade" }),
     state: text("state", { enum: ["not_started", "in_progress", "submitted", "expired"] })
       .notNull()
