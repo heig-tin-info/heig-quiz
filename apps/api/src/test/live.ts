@@ -112,7 +112,6 @@ export async function seedLive(db: Db, options: SeedOptions = {}): Promise<Seede
       nom: `Nom${index}`,
       prenom: `Prenom${index}`,
       email: `student-${index}-${classroomId.slice(0, 6)}@heig.test`,
-      status: "claimed",
       userId,
       claimedAt: new Date(),
       timeBonusPercent: index === 0 ? (options.timeBonusPercent ?? 0) : 0,

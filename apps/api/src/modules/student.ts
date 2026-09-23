@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 
 import type { StudentClassroom } from "@quiz/contracts";
 
@@ -27,7 +27,7 @@ export async function studentPlugin(app: FastifyInstance) {
         .from(enrollments)
         .innerJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
         .innerJoin(courses, eq(classrooms.courseId, courses.id))
-        .where(and(eq(enrollments.userId, req.user!.id), eq(enrollments.status, "claimed")))
+        .where(and(eq(enrollments.userId, req.user!.id), isNotNull(enrollments.userId)))
         .orderBy(courses.code, classrooms.name);
       if (rows.length === 0) return [];
       const staff = await app.db

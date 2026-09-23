@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { parseRosterCsv, rosterFromRows, type Cell, type RosterParse } from "@quiz/domain";
 
 import { audit } from "../audit.js";
@@ -52,10 +52,10 @@ export async function importRoster(
             ...(row.timeBonusPercent > 0 ? { timeBonusPercent: row.timeBonusPercent } : {}),
           },
         })
-        .returning({ claimedAt: enrollments.claimedAt, status: enrollments.status });
+        .returning({ claimedAt: enrollments.claimedAt, userId: enrollments.userId });
       // xmax = 0 is Postgres's insert marker, but let's stay portable:
       // we count as "inserted" what was not yet claimed nor known.
-      if (res && res.status === "pending" && res.claimedAt === null) inserted += 1;
+      if (res && res.userId === null && res.claimedAt === null) inserted += 1;
       else updated += 1;
     }
   });
@@ -88,7 +88,7 @@ export async function claimEnrollments(db: Db, user: { id: string }) {
       email: enrollments.email,
     })
     .from(enrollments)
-    .where(and(eq(enrollments.status, "pending"), emailIn(enrollments.email, emails)));
+    .where(and(isNull(enrollments.userId), emailIn(enrollments.email, emails)));
   if (pending.length === 0) return 0;
 
   const shared = await sharedWithOthers(
@@ -124,8 +124,8 @@ export async function claimEnrollments(db: Db, user: { id: string }) {
     try {
       await db
         .update(enrollments)
-        .set({ status: "claimed", userId: user.id, claimedAt: new Date() })
-        .where(and(eq(enrollments.id, entry.id), eq(enrollments.status, "pending")));
+        .set({ userId: user.id, claimedAt: new Date() })
+        .where(and(eq(enrollments.id, entry.id), isNull(enrollments.userId)));
       claimed += 1;
       publish("roster", [`classroom:${entry.classroomId}`, `user:${user.id}`], {
         kind: "student_joined",
@@ -167,7 +167,7 @@ export async function claimForExistingUsers(db: Db, classroomId: string) {
         eq(userEmails.verified, true),
       ),
     )
-    .where(and(eq(enrollments.classroomId, classroomId), eq(enrollments.status, "pending")));
+    .where(and(eq(enrollments.classroomId, classroomId), isNull(enrollments.userId)));
 
   // One entry claimed by two accounts, or one account claiming two entries
   // of this classroom: ambiguous either way.
@@ -204,8 +204,8 @@ export async function claimForExistingUsers(db: Db, classroomId: string) {
     try {
       await db
         .update(enrollments)
-        .set({ status: "claimed", userId: m.userId, claimedAt: new Date() })
-        .where(and(eq(enrollments.id, m.enrollmentId), eq(enrollments.status, "pending")));
+        .set({ userId: m.userId, claimedAt: new Date() })
+        .where(and(eq(enrollments.id, m.enrollmentId), isNull(enrollments.userId)));
       claimed += 1;
       await audit(db, {
         actorUserId: m.userId,
@@ -233,7 +233,8 @@ export async function rosterView(db: Db, classroomId: string) {
       nom: enrollments.nom,
       prenom: enrollments.prenom,
       email: enrollments.email,
-      status: enrollments.status,
+      // Claimed is attached to an account; there is no other truth (D-09).
+      status: sql<"pending" | "claimed">`case when ${enrollments.userId} is null then 'pending' else 'claimed' end`,
       conflictFlag: enrollments.conflictFlag,
       staff: enrollments.staff,
       timeBonusPercent: enrollments.timeBonusPercent,

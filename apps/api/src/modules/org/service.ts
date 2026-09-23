@@ -94,7 +94,7 @@ export async function joinClassroom(
     if (existing.userId !== null) return { ok: false, reason: "claimed_by_other" };
     await db
       .update(enrollments)
-      .set({ status: "claimed", userId: user.id, claimedAt: new Date(), conflictFlag: false })
+      .set({ userId: user.id, claimedAt: new Date(), conflictFlag: false })
       .where(eq(enrollments.id, existing.id));
     return { ok: true, status: "joined" };
   }
@@ -109,7 +109,6 @@ export async function joinClassroom(
       nom: user.familyName,
       prenom: user.givenName,
       email: user.email.trim().toLowerCase(),
-      status: "claimed",
       userId: user.id,
       claimedAt: new Date(),
     })

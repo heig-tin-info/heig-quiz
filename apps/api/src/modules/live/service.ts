@@ -270,7 +270,7 @@ export async function participantOf(
       and(
         eq(enrollments.classroomId, evaluation.classroomId),
         eq(enrollments.userId, userId),
-        eq(enrollments.status, "claimed"),
+        isNotNull(enrollments.userId),
       ),
     )
     .limit(1);
@@ -311,7 +311,7 @@ async function seatOf(
       and(
         eq(enrollments.classroomId, evaluation.classroomId),
         eq(enrollments.userId, userId),
-        eq(enrollments.status, "claimed"),
+        isNotNull(enrollments.userId),
       ),
     )
     .limit(1);
