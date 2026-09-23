@@ -1,12 +1,12 @@
 import axe from "axe-core";
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AttemptOrLobby, AttemptView } from "@quiz/contracts";
 
-import { mockFetch, noContent, ok, renderWithProviders } from "../test/render";
+import { fail, mockFetch, noContent, ok, renderWithProviders } from "../test/render";
 import { AttemptPage } from "./Attempt";
 
 /*
@@ -488,4 +488,79 @@ describe("the zen player", () => {
     });
     expect(results.violations.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([]);
   });
+});
+
+/*
+ * F-EVAL-13 over the page's one connection: the player journals a
+ * `reconnect` and replays what the server has not acknowledged when a LOST
+ * connection comes back — and does neither on the first open.
+ */
+class FakeStream {
+  static last: FakeStream | null = null;
+  onopen: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  onmessage: ((e: MessageEvent) => void) | null = null;
+  constructor(readonly url: string) {
+    FakeStream.last = this;
+  }
+  addEventListener() {}
+  removeEventListener() {}
+  close() {}
+}
+
+describe("the zen player's connection", () => {
+  afterEach(() => {
+    FakeStream.last = null;
+    // Only EventSource: the jsdom setup's own stubs must survive (Attempt.test).
+    vi.stubGlobal("EventSource", undefined);
+  });
+
+  it(
+    "journals one reconnect and replays the unacked answer on a reopen, not on the first open",
+    { timeout: 15_000 },
+    async () => {
+      vi.stubGlobal("EventSource", FakeStream);
+      const view = attemptView();
+      let failing = true;
+      const saves: unknown[] = [];
+      const { calls } = mockFetch({
+        [`POST /app/api/evaluations/${EVAL}/attempt`]: ok(entry(view)),
+        [`GET /app/api/attempts/${ATTEMPT}`]: ok(entry(view)),
+        [`POST /app/api/attempts/${ATTEMPT}/position`]: noContent(),
+        [`POST /app/api/attempts/${ATTEMPT}/events`]: noContent(),
+        [`PUT /app/api/attempts/${ATTEMPT}/answers/i2`]: (call) => {
+          saves.push(call.body);
+          return failing
+            ? fail(503)
+            : ok({ revision: 3, accepted: true, serverNow: "2026-09-20T10:00:02.000Z" });
+        },
+      });
+      render(view);
+      const field = await screen.findByLabelText("Votre réponse");
+      const stream = FakeStream.last!;
+      expect(stream.url).toBe(`/app/api/events?watch=attempt%3A${ATTEMPT}`);
+      const reconnects = () =>
+        calls.filter(
+          (c) =>
+            c.url.endsWith("/events") && (c.body as { kind?: string } | null)?.kind === "reconnect",
+        );
+
+      act(() => stream.onopen?.());
+      expect(reconnects()).toHaveLength(0);
+
+      // Two refused writes: the next backoff retry is a full second away.
+      await userEvent.type(field, "2");
+      await waitFor(() => expect(saves).toHaveLength(2), { timeout: 3_000 });
+      failing = false;
+
+      act(() => {
+        stream.onerror?.();
+        stream.onopen?.();
+      });
+      // The replay leaves at once, well before the backoff would have sent it.
+      await waitFor(() => expect(saves).toHaveLength(3), { timeout: 400 });
+      expect((saves[2] as { payload: { text: string } }).payload.text).toBe("42");
+      await waitFor(() => expect(reconnects()).toHaveLength(1));
+    },
+  );
 });

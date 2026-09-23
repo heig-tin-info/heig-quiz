@@ -187,6 +187,15 @@ export interface EventStreamOptions {
   onHint?: (hint: HintEvent) => void;
   /** Called on every (re)connection, and every `SAFETY_REFETCH_MS` while watching. */
   onRefresh?: () => void;
+  /** The first open this subscriber sees. */
+  onFirstOpen?: () => void;
+  /**
+   * Every later open: the browser's own reconnection after an error, the
+   * watchdog's after a silence, or a reopen on a changed subject. The player
+   * replays its unacknowledged answers and journals a `reconnect` here
+   * (F-EVAL-13), which the first open must not do.
+   */
+  onReopen?: () => void;
   /**
    * The once-a-minute belt-and-braces refetch. On by default for a watcher,
    * off for the hint-only shell stream: invalidating every query of the app
@@ -209,10 +218,19 @@ export function useEventStream(options: EventStreamOptions = {}): { connected: b
 
   useEffect(() => {
     if (!enabled) return;
+    // Counted per subscriber, not per socket: the socket outlives the screens
+    // that join and leave it.
+    let hasOpened = false;
     const subscriber: Subscriber = {
       watch,
       connection: setConnected,
-      opened: () => latest.current.onRefresh?.(),
+      opened: () => {
+        const o = latest.current;
+        if (hasOpened) o.onReopen?.();
+        else o.onFirstOpen?.();
+        hasOpened = true;
+        o.onRefresh?.();
+      },
       handle: (event) => {
         const o = latest.current;
         if (event.type === "clock") o.onClock?.(event.serverNow);

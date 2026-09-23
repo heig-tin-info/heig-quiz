@@ -240,6 +240,40 @@ describe("useEventStream", () => {
     expect(onRefresh).toHaveBeenCalledTimes(1);
   });
 
+  it("tells the first open from a reopen (F-EVAL-13)", () => {
+    const onFirstOpen = vi.fn();
+    const onReopen = vi.fn();
+    render(
+      <Probe watch={`attempt:${EVALUATION_ID}`} onFirstOpen={onFirstOpen} onReopen={onReopen} />,
+    );
+    const es = live()[0]!;
+    act(() => es.open());
+    expect(onFirstOpen).toHaveBeenCalledTimes(1);
+    expect(onReopen).not.toHaveBeenCalled();
+    // The browser's own reconnection: an error, then the same socket reopens.
+    act(() => {
+      es.onerror?.();
+      es.open();
+    });
+    expect(onFirstOpen).toHaveBeenCalledTimes(1);
+    expect(onReopen).toHaveBeenCalledTimes(1);
+  });
+
+  it("counts the watchdog's fresh socket as a reopen, not a first open", () => {
+    vi.useFakeTimers();
+    const onFirstOpen = vi.fn();
+    const onReopen = vi.fn();
+    render(
+      <Probe watch={`attempt:${EVALUATION_ID}`} onFirstOpen={onFirstOpen} onReopen={onReopen} />,
+    );
+    act(() => FakeEventSource.instances[0]!.open());
+    act(() => void vi.advanceTimersByTime(SILENCE_MS + 5_000));
+    expect(FakeEventSource.instances).toHaveLength(2);
+    act(() => FakeEventSource.instances[1]!.open());
+    expect(onFirstOpen).toHaveBeenCalledTimes(1);
+    expect(onReopen).toHaveBeenCalledTimes(1);
+  });
+
   it("reopens the connection after 30 s without a clock", () => {
     vi.useFakeTimers();
     render(<Probe watch={`evaluation:${EVALUATION_ID}`} />);
