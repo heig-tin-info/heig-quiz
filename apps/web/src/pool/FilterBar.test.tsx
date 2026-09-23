@@ -212,21 +212,18 @@ describe("FilterBar · how the list is drawn", () => {
     expect(onView).toHaveBeenCalledWith("cards");
   });
 
-  it("carries the grouping and the sort", async () => {
-    const { onChange, onGroup, user } = setup();
-    // Two segmented tracks, and "Type" is a choice in both: the radiogroup's
-    // own name is what tells them apart, for the test as for a screen reader.
+  it("carries the grouping, and no sort control of its own", async () => {
+    const { onGroup, user } = setup();
     const grouping = screen.getByRole("radiogroup", { name: "Group by" });
     await user.click(within(grouping).getByRole("radio", { name: "Type" }));
     expect(onGroup).toHaveBeenCalledWith("type");
-    const sorting = screen.getByRole("radiogroup", { name: "Sort by" });
-    await user.click(within(sorting).getByRole("radio", { name: "Name" }));
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ sort: "name" }));
+    // The column headers sort; the bar does not repeat them.
+    expect(screen.queryByRole("radiogroup", { name: "Sort by" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Ascending|Descending/ })).not.toBeInTheDocument();
   });
 
-  it("flips the direction from one button", async () => {
-    const { onChange, user } = setup();
-    await user.click(screen.getByRole("button", { name: "Descending" }));
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ dir: "asc" }));
+  it("shows how many questions the search matches, filtered or not", () => {
+    setup();
+    expect(screen.getByText("7 questions")).toHaveAttribute("aria-live", "polite");
   });
 });

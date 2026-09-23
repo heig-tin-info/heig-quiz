@@ -82,9 +82,10 @@ const PAGE: QuestionPage = {
     row({ id: "q3", type: "short", internalName: "array-decay", difficulty: 5, deprecated: true }),
   ],
   nextCursor: null,
+  total: 3,
 };
 
-const EMPTY: QuestionPage = { items: [], nextCursor: null };
+const EMPTY: QuestionPage = { items: [], nextCursor: null, total: 0 };
 
 /**
  * One stubbed questions endpoint, spelled as `pool/filters.ts` `questionQuery`
@@ -364,6 +365,7 @@ describe("AddQuestionsSheet — the cache it shares with the pool screen", () =>
     const next: QuestionPage = {
       items: [row({ id: "q4", internalName: "struct-padding" })],
       nextCursor: null,
+      total: 4,
     };
     setup({
       ...questions("", ok({ ...PAGE, nextCursor: "c2" })),
@@ -429,10 +431,14 @@ describe("AddQuestionsSheet — adding", () => {
     );
     const { calls } = setup(
       {
-        ...questions("", ok({ items: all.slice(0, PAGE_SIZE), nextCursor: "c2" })),
+        ...questions(
+          "",
+          ok({ items: all.slice(0, PAGE_SIZE), nextCursor: "c2", total: all.length }),
+        ),
         [`GET /app/api/pools/p1/questions?limit=${PAGE_SIZE}&cursor=c2`]: ok({
           items: all.slice(PAGE_SIZE),
           nextCursor: null,
+          total: all.length,
         }),
         "POST /app/api/evaluations/e1/items": ok({}),
       },

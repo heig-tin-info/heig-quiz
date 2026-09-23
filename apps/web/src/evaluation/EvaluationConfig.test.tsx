@@ -58,6 +58,7 @@ function routes(
         },
       ],
       nextCursor: null,
+      total: 1,
     }),
     ...extra,
   };

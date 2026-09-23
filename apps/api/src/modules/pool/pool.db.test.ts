@@ -377,6 +377,21 @@ describe("search", () => {
     expect(second.items[0]!.id).not.toBe(first.items[0]!.id);
     expect(second.nextCursor).toBeNull();
   });
+
+  it("counts every question the search matches, on every page", async () => {
+    const first = await service.listQuestions(db, searchPool, search({ limit: 1 }));
+    expect(first.total).toBe(2);
+    const second = await service.listQuestions(
+      db,
+      searchPool,
+      search({ limit: 1, cursor: first.nextCursor }),
+    );
+    expect(second.total).toBe(2);
+    const tagged = await service.listQuestions(db, searchPool, search({ tag: ["memory"] }));
+    expect(tagged.total).toBe(1);
+    const none = await service.listQuestions(db, searchPool, search({ q: "nothing-matches" }));
+    expect(none.total).toBe(0);
+  });
 });
 
 describe("categories and copies", () => {

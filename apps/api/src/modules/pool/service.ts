@@ -1111,6 +1111,12 @@ function rowJson(
  */
 export async function listQuestions(db: Db, poolId: string, search: QuestionSearch) {
   const clauses = searchWhere(poolId, search);
+  // Counted before the cursor narrows the clauses: the total of the search,
+  // the same on every page, and not the size of the page.
+  const [counted] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(questions)
+    .where(and(...clauses));
   const spec = SORT_KEYS[search.sort];
   const key = spec.expr(search.dir);
   const descending = search.dir === "desc";
@@ -1146,6 +1152,7 @@ export async function listQuestions(db: Db, poolId: string, search: QuestionSear
             id: last.question.id,
           })
         : null,
+    total: counted?.n ?? 0,
   };
 }
 

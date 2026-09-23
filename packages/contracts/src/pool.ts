@@ -231,7 +231,11 @@ export const QuestionRow = z.object({
 });
 export type QuestionRow = z.infer<typeof QuestionRow>;
 
-export const QuestionPage = pageOf(QuestionRow);
+/**
+ * One page of a pool's questions. `total` counts EVERY question the search
+ * matches, not the page: the screen says "42 questions" while it holds 25.
+ */
+export const QuestionPage = pageOf(QuestionRow).extend({ total: z.number().int().nonnegative() });
 export type QuestionPage = z.infer<typeof QuestionPage>;
 
 /**

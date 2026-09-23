@@ -1780,7 +1780,7 @@ on("GET", "/app/api/pools/:id/questions", (m, _body, url) => {
   const start = cursor ? matching.findIndex((x) => x.id === cursor) + 1 : 0;
   const page = matching.slice(start, start + limit);
   const next = start + limit < matching.length ? page.at(-1)!.id : null;
-  return { items: page.map(questionRow), nextCursor: next };
+  return { items: page.map(questionRow), nextCursor: next, total: matching.length };
 });
 
 on("POST", "/app/api/pools/:id/questions", (m, body) => {
