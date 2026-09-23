@@ -194,6 +194,12 @@ function checkType(id: string, type: AnyQuestionTypeServer): void {
     { seed: 987_654, shuffle: true },
   ]) {
     const payload = studentView({ type: id, version, itemId, ...view });
+    // The strip is defence in depth, never a filter a legitimate type relies
+    // on: for a type that follows its contract it must remove NOTHING. This
+    // is what catches a future floor entry that silently eats a legitimate
+    // optional field (mcq `maxSelections`, short `placeholder`).
+    const raw = type.toStudent(config, { itemId, ...view });
+    expect(stripMetadata(raw), `${id}: stripMetadata removed a legitimate field`).toEqual(raw);
     const serialized = JSON.stringify(payload);
 
     for (const forbidden of FORBIDDEN_STUDENT_KEYS) {
@@ -223,8 +229,8 @@ function checkType(id: string, type: AnyQuestionTypeServer): void {
 /**
  * The list this exit filtered on before `COMMON_FORBIDDEN_STUDENT_KEYS`
  * existed (audit 2026-09-22, finding P-06). It is pinned here so the
- * refactoring can be read as what it is: nothing was lost, and the floor the
- * five per-type tests share added four keys this list had missed.
+ * refactoring can be read as what it is: nothing was lost. The list may grow
+ * past it freely; it may never shrink below it.
  */
 const FORBIDDEN_STUDENT_KEYS_BEFORE_P06 = [
   "answerKey",
@@ -259,16 +265,6 @@ describe("the forbidden-key list only grows", () => {
     for (const key of COMMON_FORBIDDEN_STUDENT_KEYS) {
       expect(FORBIDDEN_STUDENT_KEYS, key).toContain(key);
     }
-  });
-
-  it("gained exactly the four keys the floor had and this exit had not", () => {
-    const before = new Set(FORBIDDEN_STUDENT_KEYS_BEFORE_P06);
-    expect(FORBIDDEN_STUDENT_KEYS.filter((key) => !before.has(key)).sort()).toEqual([
-      "compare",
-      "compileArgs",
-      "penalty",
-      "rubric",
-    ]);
   });
 
   it("holds no duplicate, so the two halves do not overlap", () => {
