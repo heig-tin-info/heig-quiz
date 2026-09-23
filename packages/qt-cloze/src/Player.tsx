@@ -11,7 +11,7 @@ import { resolveStrings } from "@quiz/core/client";
 import type { ClozeAnswer, ClozeStudent } from "./schema.js";
 import { clozePlayerStrings, type ClozePlayerStringKey } from "./strings.js";
 import { ClozeFallbackText, type ClozeTextRenderer } from "./text.js";
-import { cx, helpClass, inputClass } from "./ui.js";
+import { cx, helpClass, inputClass, isLocked } from "@quiz/ui";
 
 type ClozePlayerProps = PlayerProps<ClozeStudent, ClozeAnswer> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
@@ -43,7 +43,7 @@ export function ClozePlayer({
   renderText,
 }: ClozePlayerProps) {
   const s = resolveStrings(clozePlayerStrings, strings);
-  const locked = readOnly || disabled === true;
+  const locked = isLocked(readOnly, disabled);
   const given = answer?.blanks ?? [];
   const count = student.blanks.length;
 

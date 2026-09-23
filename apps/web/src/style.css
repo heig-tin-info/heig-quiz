@@ -1,10 +1,11 @@
 @import "tailwindcss";
 @import "@fontsource-variable/manrope";
 @import "@fontsource-variable/jetbrains-mono";
-@source "../../../packages/{qt-mcq,qt-short,qt-cloze,qt-code,qt-circuit}/src";
+@source "../../../packages/{ui,qt-mcq,qt-short,qt-cloze,qt-code,qt-circuit}/src";
 
-/* The question-type packages render their own markup with these utilities and
-   live outside Vite's root, so Tailwind has to be told to scan them. */
+/* The question-type packages, and `packages/ui` whose primitives they share,
+   render their own markup with these utilities and live outside Vite's root,
+   so Tailwind has to be told to scan them. */
 
 /* Class-based theme toggle on <html>, on top of the system default. */
 @custom-variant dark (&:where(.dark, .dark *));

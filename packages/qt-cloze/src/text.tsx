@@ -13,7 +13,7 @@
  */
 import type { ReactNode } from "react";
 import { CLOZE_SENTINEL_PATTERN } from "@quiz/domain/cloze";
-import { cx } from "./ui.js";
+import { cx } from "@quiz/ui";
 
 interface ClozeTextProps {
   /** The sentinel-bearing markdown, exactly as `toStudent` sent it. */

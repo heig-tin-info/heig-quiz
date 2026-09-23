@@ -9,8 +9,8 @@
  */
 import { useId, useState } from "react";
 
-import { fmt, plural, resolveStrings } from "@quiz/core/client";
-import type { EditorProps, MarkdownRenderer } from "@quiz/core/client";
+import { fmt, issuesAt, plural, resolveStrings, rootIssues } from "@quiz/core/client";
+import type { ConfigIssue, EditorProps, MarkdownRenderer } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 
 import { CodeArea } from "./MonacoHost.js";
@@ -28,7 +28,27 @@ import {
 } from "./schema.js";
 import { EDITOR_STRINGS, type CodeEditorStrings } from "./strings.js";
 import { caseVerdict } from "./verdict.js";
-import { badge, button, card, cx, hint, input, inputSm, label, sectionTitle } from "./styles.js";
+import {
+  badge,
+  card,
+  CheckboxField,
+  cx,
+  FieldCell,
+  hint,
+  input,
+  inputSm,
+  IssueList,
+  label,
+  NumberField,
+  patchAt,
+  PromptField,
+  RemoveRowButton,
+  removeAt,
+  RowList,
+  RowListHeader,
+  sectionTitle,
+  TryPanel,
+} from "@quiz/ui";
 
 export interface CodeEditorProps extends EditorProps<CodeConfig> {
   /**
@@ -46,6 +66,8 @@ export interface CodeEditorProps extends EditorProps<CodeConfig> {
    * error (`RUNNER_MODE=stub` is the default).
    */
   onTry?: ((config: CodeConfig) => Promise<CodeTryOutcome>) | undefined;
+  /** Validation problems of the stored draft (decision D16), placed by field. */
+  issues?: readonly ConfigIssue[] | undefined;
   strings?: Partial<CodeEditorStrings> | undefined;
   /**
    * The host's sanitised markdown view, used to preview the statement under
@@ -87,6 +109,20 @@ const NEW_CASE: CodeCase = {
   timeMs: null,
 };
 
+/** A checkbox in the column of settings: no fixed height, the body ink. */
+const SETTING = "flex items-center gap-2 text-[13px] text-fg";
+
+/** The top-level settings "Advanced options" holds, as zod paths. */
+const ADVANCED_PATHS = [
+  "action",
+  "compileArgs",
+  "limits",
+  "runsPerMinute",
+  "allOrNothing",
+  "files",
+  "configVersion",
+] as const;
+
 /** The languages the browser runner can run; anything else is the server's. */
 const browserCapable = (language: CodeLanguage): boolean =>
   (RUNNO_LANGUAGES as readonly string[]).includes(language);
@@ -95,6 +131,7 @@ export function CodeEditor({
   config,
   onChange,
   disabled,
+  issues = [],
   onTry,
   strings,
   RichText,
@@ -115,9 +152,7 @@ export function CodeEditor({
   const patchTests = (next: Partial<CodeConfig["tests"]>) =>
     patch({ tests: { ...config.tests, ...next } });
   const patchCase = (index: number, next: Partial<CodeCase>) =>
-    patchTests({
-      cases: config.tests.cases.map((c, i) => (i === index ? { ...c, ...next } : c)),
-    });
+    patchTests({ cases: patchAt(config.tests.cases, index, next) });
   const setCases = (cases: CodeCase[]) => {
     // The drafts are keyed by position, so a removal would shift them onto the
     // wrong case. Dropping them re-reads every row from the config.
@@ -133,6 +168,15 @@ export function CodeEditor({
         .filter((line) => line !== ""),
     });
   };
+
+  /*
+   * The settings folded into "Advanced options" report ABOVE the fold: an
+   * issue inside a closed <details> is an issue nobody reads.
+   */
+  const advancedIssues = ADVANCED_PATHS.flatMap((key) => issuesAt(issues, key));
+  const caseIssues = issuesAt(issues, "tests").filter(
+    (issue) => !(issue.path[1] === "cases" && typeof issue.path[2] === "number"),
+  );
 
   const segments = splitForDisplay(config.template, config.language);
   const lockedCount = segments.filter((seg) => seg.kind === "locked").length;
@@ -185,54 +229,27 @@ export function CodeEditor({
 
   return (
     <div className="flex flex-col gap-6">
+      <IssueList issues={rootIssues(issues)} />
+
       <section className={cx(card, "flex flex-col gap-4 p-4")}>
         <h3 className={sectionTitle}>{s.questionSection}</h3>
         <div className="flex flex-col gap-1.5">
-          {/*
-           * A caption and not a `<label for>` when the host lent its rich
-           * editor: its surface is a contenteditable, which is not a labelable
-           * element — the browser reports such a `for` as matching no control,
-           * and the field takes its name from `aria-label` instead. The
-           * textarea fallback is a real control and keeps its label.
-           */}
-          {RichText ? (
-            <span className={label}>{s.prompt}</span>
-          ) : (
-            <label className={label} htmlFor={`${ids}-prompt`}>
-              {s.prompt}
-            </label>
-          )}
-          {/*
-           * The host's WYSIWYG editor when it lent one (`EditorProps.RichText`),
-           * the textarea otherwise. No preview under either: the rich field IS
-           * the preview, and under a textarea a second rendering of the string
-           * the teacher is looking at is noise.
-           */}
-          {RichText ? (
-            <RichText
-              id={`${ids}-prompt`}
-              aria-label={s.prompt}
-              value={config.prompt}
-              onChange={(prompt) => patch({ prompt })}
-              {...(disabled === undefined ? {} : { disabled })}
-              {...(uploadAsset === undefined ? {} : { uploadImage: uploadAsset })}
-            />
-          ) : (
-            <textarea
-              id={`${ids}-prompt`}
-              rows={5}
-              disabled={disabled}
-              value={config.prompt}
-              onChange={(e) => patch({ prompt: e.target.value })}
-              className={cx(input, "w-full py-2 leading-relaxed")}
-            />
-          )}
+          <PromptField
+            id={`${ids}-prompt`}
+            label={s.prompt}
+            value={config.prompt}
+            onChange={(prompt) => patch({ prompt })}
+            disabled={disabled}
+            RichText={RichText}
+            uploadImage={uploadAsset}
+            rows={5}
+            labelClassName={label}
+            textareaClassName={cx(input, "w-full py-2 leading-relaxed")}
+          />
+          <IssueList issues={issuesAt(issues, "prompt")} />
         </div>
         <div className="flex flex-wrap items-end gap-4">
-          <div className="flex flex-col gap-1.5">
-            <label className={label} htmlFor={`${ids}-language`}>
-              {s.language}
-            </label>
+          <FieldCell label={s.language} htmlFor={`${ids}-language`}>
             <select
               id={`${ids}-language`}
               disabled={disabled}
@@ -246,17 +263,14 @@ export function CodeEditor({
                 </option>
               ))}
             </select>
-          </div>
+          </FieldCell>
           {/*
            * Only for a language the browser runner ships (ADR-015). For every
            * other one the question has no choice to offer, and a disabled
            * control that can never be enabled is worse than no control.
            */}
           {browserCapable(config.language) ? (
-            <div className="flex flex-col gap-1.5">
-              <label className={label} htmlFor={`${ids}-runtime`}>
-                {s.runtime}
-              </label>
+            <FieldCell label={s.runtime} htmlFor={`${ids}-runtime`}>
               <select
                 id={`${ids}-runtime`}
                 disabled={disabled}
@@ -267,10 +281,11 @@ export function CodeEditor({
                 <option value="backend">{s.runtimeBackend}</option>
                 <option value="runno">{s.runtimeBrowser}</option>
               </select>
-            </div>
+            </FieldCell>
           ) : null}
         </div>
         {browserCapable(config.language) ? <p className={hint}>{s.runtimeHint}</p> : null}
+        <IssueList issues={[...issuesAt(issues, "language"), ...issuesAt(issues, "runtime")]} />
       </section>
 
       <section className={cx(card, "flex flex-col gap-3 p-4")}>
@@ -291,6 +306,7 @@ export function CodeEditor({
           minLines={10}
           monaco={monaco}
         />
+        <IssueList issues={issuesAt(issues, "template")} />
         <h4 className="text-[13px] font-medium text-fg-muted">{s.studentPreview}</h4>
         <ol className="flex flex-col gap-1">
           {segments.map((segment, i) => (
@@ -323,66 +339,57 @@ export function CodeEditor({
           minLines={6}
           monaco={monaco}
         />
+        <IssueList issues={issuesAt(issues, "referenceSolution")} />
         {onTry === undefined ? null : (
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              className={button("secondary", "sm")}
-              disabled={disabled || tryState.status === "running"}
-              onClick={() => void runReference()}
-            >
-              {tryState.status === "running" ? s.trying : s.tryReference}
-            </button>
-            {tryState.status === "unavailable" ? (
-              <p role="status" className={hint}>
-                {s.tryUnavailable}
-              </p>
-            ) : null}
-            {tryState.status === "failed" ? (
-              <p role="status" className="text-[13px] text-danger">
-                {tryState.reason === "regions" ? s.tryRegionsMismatch : s.tryCompileFailed}
-              </p>
-            ) : null}
-            {tryState.status === "done" ? (
-              <p role="status" className={hint}>
-                {fmt(s.tryResult, { passed: tryState.passed, total: tryState.total })}
-              </p>
-            ) : null}
-          </div>
+          <TryPanel
+            label={s.tryReference}
+            runningLabel={s.trying}
+            running={tryState.status === "running"}
+            disabled={disabled}
+            onTry={() => void runReference()}
+            status={
+              tryState.status === "unavailable"
+                ? { tone: "hint", text: s.tryUnavailable }
+                : tryState.status === "failed"
+                  ? {
+                      tone: "danger",
+                      text: tryState.reason === "regions" ? s.tryRegionsMismatch : s.tryCompileFailed,
+                    }
+                  : tryState.status === "done"
+                    ? {
+                        tone: "hint",
+                        text: fmt(s.tryResult, { passed: tryState.passed, total: tryState.total }),
+                      }
+                    : null
+            }
+          />
         )}
       </section>
 
       {/*
-       * One PANEL per case, not one table row.
-       *
-       * A case now carries ten fields — a name, a command line, an input, an
-       * expected output and the two checks that decide whether it passed, plus
-       * its points, its budget and its visibility. Ten columns is not a table
-       * a teacher can read at 1440 px, let alone on a laptop; a panel gives
-       * each case a heading and three short lines (DESIGN.md, tables).
+       * One PANEL per case (`RowList`): a case carries ten fields — a name, a
+       * command line, an input, an expected output and the two checks that
+       * decide whether it passed, plus its points, its budget and its
+       * visibility — and ten columns is not a table.
        */}
       <section className={cx(card, "flex flex-col gap-3 p-4")}>
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className={sectionTitle}>{s.cases}</h3>
-          <span className={badge()}>{plural(s, "totalPoints", totalCasePoints(config))}</span>
-          <button
-            type="button"
-            className={button("secondary", "sm", "ml-auto")}
-            disabled={disabled}
-            onClick={() => setCases([...config.tests.cases, { ...NEW_CASE }])}
-          >
-            {s.addCase}
-          </button>
-        </div>
+        <RowListHeader
+          title={s.cases}
+          count={plural(s, "totalPoints", totalCasePoints(config))}
+          addLabel={s.addCase}
+          addDisabled={disabled}
+          onAdd={() => setCases([...config.tests.cases, { ...NEW_CASE }])}
+        />
 
-        <ol className="flex flex-col gap-3">
-          {config.tests.cases.map((testCase, i) => (
-            <li key={i} className="rounded-card border border-line bg-surface-2 p-3">
+        <RowList items={config.tests.cases}>
+          {(testCase, i) => (
+            <>
               <div className="flex flex-wrap items-end gap-3">
-                <div className="flex min-w-40 flex-1 flex-col gap-1.5">
-                  <label className={label} htmlFor={`${ids}-name-${i}`}>
-                    {fmt(s.case, { n: i + 1 })}
-                  </label>
+                <FieldCell
+                  label={fmt(s.case, { n: i + 1 })}
+                  htmlFor={`${ids}-name-${i}`}
+                  className="min-w-40 flex-1"
+                >
                   <input
                     id={`${ids}-name-${i}`}
                     className={cx(inputSm, "w-full font-medium")}
@@ -391,70 +398,48 @@ export function CodeEditor({
                     value={testCase.name}
                     onChange={(e) => patchCase(i, { name: e.target.value })}
                   />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className={label} htmlFor={`${ids}-points-${i}`}>
-                    {s.points}
-                  </label>
-                  <input
-                    id={`${ids}-points-${i}`}
-                    type="number"
-                    min={0}
-                    step={0.5}
-                    className={cx(inputSm, "w-20 text-right tabular-nums")}
-                    aria-label={`${s.points} ${i + 1}`}
-                    disabled={disabled}
-                    value={testCase.points}
-                    onChange={(e) => patchCase(i, { points: Number(e.target.value) || 0 })}
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className={label} htmlFor={`${ids}-time-${i}`}>
-                    {s.timeMs}
-                  </label>
-                  <input
-                    id={`${ids}-time-${i}`}
-                    type="number"
-                    min={100}
-                    step={100}
-                    placeholder={String(config.limits.timeMs)}
-                    className={cx(inputSm, "w-24 text-right tabular-nums")}
-                    aria-label={`${s.timeMs} ${i + 1}`}
-                    disabled={disabled}
-                    value={testCase.timeMs ?? ""}
-                    onChange={(e) =>
-                      patchCase(i, {
-                        timeMs: e.target.value === "" ? null : Number(e.target.value),
-                      })
-                    }
-                  />
-                </div>
-                <label className="flex h-7 items-center gap-2 text-[13px] text-fg-muted">
-                  <input
-                    type="checkbox"
-                    aria-label={`${s.hidden} ${i + 1}`}
-                    disabled={disabled}
-                    checked={!testCase.visible}
-                    onChange={(e) => patchCase(i, { visible: !e.target.checked })}
-                  />
-                  {s.hidden}
-                </label>
-                <button
-                  type="button"
-                  className={button("ghost", "sm")}
-                  aria-label={fmt(s.removeCase, { name: testCase.name })}
+                </FieldCell>
+                <NumberField
+                  id={`${ids}-points-${i}`}
+                  label={s.points}
+                  aria-label={`${s.points} ${i + 1}`}
+                  value={testCase.points}
+                  min={0}
+                  step={0.5}
+                  width="w-20"
+                  disabled={disabled}
+                  onChange={(points) => patchCase(i, { points: points || 0 })}
+                />
+                <NumberField
+                  id={`${ids}-time-${i}`}
+                  label={s.timeMs}
+                  aria-label={`${s.timeMs} ${i + 1}`}
+                  value={testCase.timeMs}
+                  min={100}
+                  step={100}
+                  placeholder={String(config.limits.timeMs)}
+                  width="w-24"
+                  disabled={disabled}
+                  onChange={(timeMs) => patchCase(i, { timeMs })}
+                  onClear={() => patchCase(i, { timeMs: null })}
+                />
+                <CheckboxField
+                  className="flex h-7 items-center gap-2 text-[13px] text-fg-muted"
+                  label={s.hidden}
+                  aria-label={`${s.hidden} ${i + 1}`}
+                  checked={!testCase.visible}
+                  disabled={disabled}
+                  onChange={(hidden) => patchCase(i, { visible: !hidden })}
+                />
+                <RemoveRowButton
+                  label={fmt(s.removeCase, { name: testCase.name })}
                   disabled={disabled || config.tests.cases.length <= 1}
-                  onClick={() => setCases(config.tests.cases.filter((_, j) => j !== i))}
-                >
-                  ×
-                </button>
+                  onClick={() => setCases(removeAt(config.tests.cases, i))}
+                />
               </div>
 
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5">
-                  <label className={label} htmlFor={`${ids}-args-${i}`}>
-                    {s.args}
-                  </label>
+                <FieldCell label={s.args} htmlFor={`${ids}-args-${i}`}>
                   <textarea
                     id={`${ids}-args-${i}`}
                     rows={2}
@@ -465,11 +450,8 @@ export function CodeEditor({
                     onChange={(e) => writeArgs(i, e.target.value)}
                   />
                   <p className={hint}>{s.argsHint}</p>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className={label} htmlFor={`${ids}-stdin-${i}`}>
-                    {s.stdin}
-                  </label>
+                </FieldCell>
+                <FieldCell label={s.stdin} htmlFor={`${ids}-stdin-${i}`}>
                   <textarea
                     id={`${ids}-stdin-${i}`}
                     rows={2}
@@ -479,27 +461,26 @@ export function CodeEditor({
                     value={testCase.stdin}
                     onChange={(e) => patchCase(i, { stdin: e.target.value })}
                   />
-                </div>
+                </FieldCell>
               </div>
 
               <div className="mt-3 flex flex-wrap items-end gap-3">
-                <label className="flex h-8.5 items-center gap-2 text-[13px] text-fg">
-                  <input
-                    type="checkbox"
-                    aria-label={`${s.compareStdout} ${i + 1}`}
-                    disabled={disabled}
-                    checked={testCase.compareStdout !== false}
-                    onChange={(e) => patchCase(i, { compareStdout: e.target.checked })}
-                  />
-                  {s.compareStdout}
-                </label>
+                <CheckboxField
+                  className="flex h-8.5 items-center gap-2 text-[13px] text-fg"
+                  label={s.compareStdout}
+                  aria-label={`${s.compareStdout} ${i + 1}`}
+                  checked={testCase.compareStdout !== false}
+                  disabled={disabled}
+                  onChange={(compareStdout) => patchCase(i, { compareStdout })}
+                />
                 {/* Off, there is no expected output to write: the case checks
                     the exit code alone, so the field goes away with it. */}
                 {testCase.compareStdout !== false ? (
-                  <div className="flex min-w-48 flex-1 flex-col gap-1.5">
-                    <label className={label} htmlFor={`${ids}-expected-${i}`}>
-                      {s.expected}
-                    </label>
+                  <FieldCell
+                    label={s.expected}
+                    htmlFor={`${ids}-expected-${i}`}
+                    className="min-w-48 flex-1"
+                  >
                     <input
                       id={`${ids}-expected-${i}`}
                       className={cx(inputSm, "w-full font-mono")}
@@ -508,45 +489,36 @@ export function CodeEditor({
                       value={testCase.expected}
                       onChange={(e) => patchCase(i, { expected: e.target.value })}
                     />
-                  </div>
+                  </FieldCell>
                 ) : null}
-                <div className="flex flex-col gap-1.5">
-                  <label className={label} htmlFor={`${ids}-exit-${i}`}>
-                    {s.exitCode}
-                  </label>
-                  <input
-                    id={`${ids}-exit-${i}`}
-                    type="number"
-                    min={0}
-                    max={255}
-                    placeholder={s.exitCodeAny}
-                    className={cx(inputSm, "w-24 text-right tabular-nums")}
-                    aria-label={`${s.exitCode} ${i + 1}`}
-                    disabled={disabled}
-                    value={testCase.expectedExitCode ?? ""}
-                    onChange={(e) =>
-                      patchCase(i, {
-                        expectedExitCode:
-                          e.target.value === "" ? null : Number(e.target.value) || 0,
-                      })
-                    }
-                  />
-                </div>
+                <NumberField
+                  id={`${ids}-exit-${i}`}
+                  label={s.exitCode}
+                  aria-label={`${s.exitCode} ${i + 1}`}
+                  value={testCase.expectedExitCode}
+                  min={0}
+                  max={255}
+                  placeholder={s.exitCodeAny}
+                  width="w-24"
+                  disabled={disabled}
+                  onChange={(code) => patchCase(i, { expectedExitCode: code || 0 })}
+                  onClear={() => patchCase(i, { expectedExitCode: null })}
+                />
               </div>
-            </li>
-          ))}
-        </ol>
+              <IssueList issues={issuesAt(issues, "tests", "cases", i)} />
+            </>
+          )}
+        </RowList>
+        <IssueList issues={caseIssues} />
         <p className={hint}>{s.timeMsHint}</p>
         <p className={hint}>{s.exitCodeHint}</p>
       </section>
 
+      <IssueList issues={advancedIssues} />
       <details className={cx(card, "p-4")}>
         <summary className={cx(sectionTitle, "cursor-pointer")}>{s.advanced}</summary>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-1.5">
-            <label className={label} htmlFor={`${ids}-action`}>
-              {s.action}
-            </label>
+          <FieldCell label={s.action} htmlFor={`${ids}-action`}>
             <select
               id={`${ids}-action`}
               disabled={disabled}
@@ -557,11 +529,8 @@ export function CodeEditor({
               <option value="run">{s.actionRun}</option>
               <option value="check">{s.actionCheck}</option>
             </select>
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className={label} htmlFor={`${ids}-args`}>
-              {s.compileArgs}
-            </label>
+          </FieldCell>
+          <FieldCell label={s.compileArgs} htmlFor={`${ids}-args`}>
             <input
               id={`${ids}-args`}
               className={cx(input, "h-8.5 font-mono")}
@@ -569,11 +538,8 @@ export function CodeEditor({
               value={config.compileArgs}
               onChange={(e) => patch({ compileArgs: e.target.value })}
             />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className={label} htmlFor={`${ids}-time`}>
-              {s.timeLimit}
-            </label>
+          </FieldCell>
+          <FieldCell label={s.timeLimit} htmlFor={`${ids}-time`}>
             <input
               id={`${ids}-time`}
               type="number"
@@ -591,11 +557,8 @@ export function CodeEditor({
                 })
               }
             />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className={label} htmlFor={`${ids}-memory`}>
-              {s.memoryLimit}
-            </label>
+          </FieldCell>
+          <FieldCell label={s.memoryLimit} htmlFor={`${ids}-memory`}>
             <input
               id={`${ids}-memory`}
               type="number"
@@ -613,11 +576,8 @@ export function CodeEditor({
                 })
               }
             />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className={label} htmlFor={`${ids}-output`}>
-              {s.outputLimit}
-            </label>
+          </FieldCell>
+          <FieldCell label={s.outputLimit} htmlFor={`${ids}-output`}>
             <input
               id={`${ids}-output`}
               type="number"
@@ -635,11 +595,8 @@ export function CodeEditor({
                 })
               }
             />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <label className={label} htmlFor={`${ids}-rpm`}>
-              {s.runsPerMinute}
-            </label>
+          </FieldCell>
+          <FieldCell label={s.runsPerMinute} htmlFor={`${ids}-rpm`}>
             <input
               id={`${ids}-rpm`}
               type="number"
@@ -650,47 +607,34 @@ export function CodeEditor({
               value={config.runsPerMinute}
               onChange={(e) => patch({ runsPerMinute: Number(e.target.value) || 1 })}
             />
-          </div>
-          <label className="flex items-center gap-2 text-[13px] text-fg">
-            <input
-              type="checkbox"
-              disabled={disabled}
-              checked={config.allOrNothing}
-              onChange={(e) => patch({ allOrNothing: e.target.checked })}
-            />
-            {s.allOrNothing}
-          </label>
+          </FieldCell>
+          <CheckboxField
+            className="flex items-center gap-2 text-[13px] text-fg"
+            label={s.allOrNothing}
+            checked={config.allOrNothing}
+            disabled={disabled}
+            onChange={(allOrNothing) => patch({ allOrNothing })}
+          />
           <p className={cx(hint, "sm:col-span-2")}>{s.allOrNothingHint}</p>
 
           <h4 className={cx("text-[13px] font-medium text-fg", "sm:col-span-2")}>{s.compare}</h4>
-          <label className="flex items-center gap-2 text-[13px] text-fg">
-            <input
-              type="checkbox"
-              disabled={disabled}
-              checked={config.tests.compare.trimTrailing}
-              onChange={(e) =>
-                patchTests({
-                  compare: { ...config.tests.compare, trimTrailing: e.target.checked },
-                })
-              }
-            />
-            {s.trimTrailing}
-          </label>
-          <label className="flex items-center gap-2 text-[13px] text-fg">
-            <input
-              type="checkbox"
-              disabled={disabled}
-              checked={config.tests.compare.ignoreCase}
-              onChange={(e) =>
-                patchTests({ compare: { ...config.tests.compare, ignoreCase: e.target.checked } })
-              }
-            />
-            {s.ignoreCase}
-          </label>
-          <div className="flex flex-col gap-1.5">
-            <label className={label} htmlFor={`${ids}-numeric`}>
-              {s.numeric}
-            </label>
+          <CheckboxField
+            className={SETTING}
+            label={s.trimTrailing}
+            checked={config.tests.compare.trimTrailing}
+            disabled={disabled}
+            onChange={(trimTrailing) =>
+              patchTests({ compare: { ...config.tests.compare, trimTrailing } })
+            }
+          />
+          <CheckboxField
+            className={SETTING}
+            label={s.ignoreCase}
+            checked={config.tests.compare.ignoreCase}
+            disabled={disabled}
+            onChange={(ignoreCase) => patchTests({ compare: { ...config.tests.compare, ignoreCase } })}
+          />
+          <FieldCell label={s.numeric} htmlFor={`${ids}-numeric`}>
             <select
               id={`${ids}-numeric`}
               disabled={disabled}
@@ -715,12 +659,9 @@ export function CodeEditor({
               <option value="abs">{s.numericAbs}</option>
               <option value="rel">{s.numericRel}</option>
             </select>
-          </div>
+          </FieldCell>
           {config.tests.compare.numeric === null ? null : (
-            <div className="flex flex-col gap-1.5">
-              <label className={label} htmlFor={`${ids}-epsilon`}>
-                {s.epsilon}
-              </label>
+            <FieldCell label={s.epsilon} htmlFor={`${ids}-epsilon`}>
               <input
                 id={`${ids}-epsilon`}
                 type="number"
@@ -741,7 +682,7 @@ export function CodeEditor({
                   })
                 }
               />
-            </div>
+            </FieldCell>
           )}
         </div>
       </details>

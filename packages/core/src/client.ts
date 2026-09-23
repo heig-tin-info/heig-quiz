@@ -224,6 +224,23 @@ export interface ConfigIssue {
 }
 
 /**
+ * The issues whose path starts with `path` — what an editor places under the
+ * field that path names. Pure, and here rather than in `@quiz/ui`: it is the
+ * contract's reading of a {@link ConfigIssue}, not a matter of design.
+ */
+export function issuesAt(
+  issues: readonly ConfigIssue[],
+  ...path: (string | number)[]
+): ConfigIssue[] {
+  return issues.filter((issue) => path.every((part, i) => issue.path[i] === part));
+}
+
+/** The issues that belong to the config as a whole (an empty zod path). */
+export function rootIssues(issues: readonly ConfigIssue[]): ConfigIssue[] {
+  return issues.filter((issue) => issue.path.length === 0);
+}
+
+/**
  * The UI strings a question-type component accepts.
  *
  * Every component ships a complete English dictionary and takes a partial

@@ -11,7 +11,7 @@ import { resolveStrings } from "@quiz/core/client";
 import type { ClozeAnswer, ClozeDetails, ClozeSolution, ClozeStudent } from "./schema.js";
 import { clozeReviewStrings, type ClozeReviewStringKey } from "./strings.js";
 import { ClozeFallbackText, type ClozeTextRenderer } from "./text.js";
-import { cx, helpClass } from "./ui.js";
+import { breakdownOf, cx, helpClass, ScoreHeader, Verdict, verdictTone } from "@quiz/ui";
 
 type ClozeReviewProps = ReviewProps<
   ClozeStudent,
@@ -22,8 +22,6 @@ type ClozeReviewProps = ReviewProps<
   strings?: StringOverrides<ClozeReviewStringKey>;
   renderText?: ClozeTextRenderer;
 };
-
-const badgeClass = "inline-flex h-5.5 items-center rounded-full px-2 text-xs font-medium";
 
 /** What the student wrote, as a reader sees it: the label for a dropdown. */
 function givenLabel(student: ClozeStudent, index: number, given: string | null): string | null {
@@ -45,14 +43,8 @@ export function ClozeReview({
 }: ClozeReviewProps) {
   const s = resolveStrings(clozeReviewStrings, strings);
   const given = answer?.blanks ?? [];
-  /*
-   * `details` comes off the wire as whatever `gradings.details` holds, which
-   * is this type's breakdown OR a grading-level marker (an unreadable
-   * configuration, a grader that threw). A marker has no `perBlank`, and
-   * reading it as one is a crash on a page whose whole job is to reassure.
-   * Without verdicts the blanks simply read neutral, which is honest.
-   */
-  const perBlank = Array.isArray(details?.perBlank) ? details.perBlank : [];
+  // Without a breakdown the blanks simply read neutral, which is honest.
+  const perBlank = breakdownOf(details, "perBlank")?.perBlank ?? [];
   const verdicts = new Map(perBlank.map((blank) => [blank.index, blank]));
   const expected = new Map(solution?.blanks.map((blank) => [blank.index, blank.expected]) ?? []);
   const Text = renderText ?? ClozeFallbackText;
@@ -103,15 +95,9 @@ export function ClozeReview({
                     <span className="font-mono text-fg">{label}</span>
                   )}
                   {verdict ? (
-                    <span
-                      className={cx(
-                        badgeClass,
-                        "ml-2",
-                        verdict.ok ? "bg-success-soft text-success" : "bg-danger-soft text-danger",
-                      )}
-                    >
+                    <Verdict tone={verdictTone(verdict.ok)} className="ml-2">
                       {verdict.ok ? s.correct : s.incorrect}
-                    </span>
+                    </Verdict>
                   ) : null}
                 </td>
                 {expected.size > 0 ? (
@@ -123,17 +109,13 @@ export function ClozeReview({
         </tbody>
       </table>
 
-      <p className="text-sm text-fg-muted">
-        <span className="font-medium text-fg">{s.score}</span>{" "}
-        <span className="tabular-nums">
-          {points === null ? "—" : points} / {maxPoints}
-        </span>
+      <ScoreHeader label={s.score} points={points} maxPoints={maxPoints}>
         {typeof details?.total === "number" ? (
           <span className="ml-2 text-fg-faint">
             · {s.weights} {details.earned}/{details.total}
           </span>
         ) : null}
-      </p>
+      </ScoreHeader>
     </div>
   );
 }

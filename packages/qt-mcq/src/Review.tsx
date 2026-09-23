@@ -9,14 +9,12 @@ import type { MarkdownRenderer, ReviewProps, StringOverrides } from "@quiz/core/
 import { resolveStrings } from "@quiz/core/client";
 import type { McqAnswer, McqDetails, McqSolution, McqStudent } from "./schema.js";
 import { mcqReviewStrings, type McqReviewStringKey } from "./strings.js";
-import { cx, helpClass } from "./ui.js";
+import { type BadgeTone, cx, helpClass, markdown, ScoreHeader, Verdict } from "@quiz/ui";
 
 type McqReviewProps = ReviewProps<McqStudent, McqAnswer, McqSolution, McqDetails> & {
   strings?: StringOverrides<McqReviewStringKey>;
   renderMarkdown?: MarkdownRenderer;
 };
-
-const badgeClass = "inline-flex h-5.5 items-center rounded-full px-2 text-xs font-medium";
 
 export function McqReview({
   student,
@@ -35,24 +33,24 @@ export function McqReview({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-fg">
-        {renderMarkdown ? renderMarkdown(student.prompt) : student.prompt}
+        {markdown(renderMarkdown, student.prompt)}
       </p>
 
       <ul className="flex flex-col gap-1.5">
         {student.choices.map((choice) => {
           const chosen = selected.includes(choice.id);
           const correct = key === null ? null : key.has(choice.id);
-          const verdict =
+          const verdict: { tone: BadgeTone; label: string } | null =
             correct === null
               ? chosen
-                ? { tone: "bg-surface-3 text-fg-muted", label: s.chosen }
+                ? { tone: "neutral", label: s.chosen }
                 : null
               : chosen && correct
-                ? { tone: "bg-success-soft text-success", label: s.correct }
+                ? { tone: "success", label: s.correct }
                 : chosen && !correct
-                  ? { tone: "bg-danger-soft text-danger", label: s.incorrect }
+                  ? { tone: "danger", label: s.incorrect }
                   : !chosen && correct
-                    ? { tone: "bg-warning-soft text-warning", label: s.missed }
+                    ? { tone: "warning", label: s.missed }
                     : null;
           return (
             <li
@@ -63,9 +61,9 @@ export function McqReview({
               )}
             >
               <span className="min-w-0">
-                {renderMarkdown ? renderMarkdown(choice.text) : choice.text}
+                {markdown(renderMarkdown, choice.text)}
               </span>
-              {verdict ? <span className={cx(badgeClass, verdict.tone)}>{verdict.label}</span> : null}
+              {verdict ? <Verdict tone={verdict.tone}>{verdict.label}</Verdict> : null}
             </li>
           );
         })}
@@ -73,17 +71,13 @@ export function McqReview({
 
       {selected.length === 0 ? <p className={helpClass}>{s.noAnswer}</p> : null}
 
-      <p className="text-sm text-fg-muted">
-        <span className="font-medium text-fg">{s.score}</span>{" "}
-        <span className="tabular-nums">
-          {points === null ? "—" : points} / {maxPoints}
-        </span>
+      <ScoreHeader label={s.score} points={points} maxPoints={maxPoints}>
         {typeof details?.C === "number" ? (
           <span className="ml-2 text-fg-faint">
             · {s.breakdown} {details.c}/{details.C} · {s.wrongTicked} {details.w}/{details.W}
           </span>
         ) : null}
-      </p>
+      </ScoreHeader>
       {details?.truncated ? <p className={helpClass}>{s.truncated}</p> : null}
     </div>
   );

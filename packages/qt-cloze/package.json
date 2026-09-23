@@ -21,7 +21,8 @@
   },
   "dependencies": {
     "@quiz/core": "workspace:*",
-    "@quiz/domain": "workspace:*"
+    "@quiz/domain": "workspace:*",
+    "@quiz/ui": "workspace:*"
   },
   "peerDependencies": {
     "react": "^19.0.0",

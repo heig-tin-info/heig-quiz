@@ -9,7 +9,7 @@
  * the list is reorderable and numbered.
  */
 import type { ConfigIssue, EditorProps, MarkdownRenderer, StringOverrides } from "@quiz/core/client";
-import { resolveStrings } from "@quiz/core/client";
+import { issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import {
   defaultShortConstraints,
   defaultShortPrefilters,
@@ -29,12 +29,12 @@ import {
   helpClass,
   inputClass,
   IssueList,
-  issuesAt,
   labelClass,
-  rootIssues,
+  PromptField,
+  removeAt,
   sectionClass,
   Segmented,
-} from "./ui.js";
+} from "@quiz/ui";
 
 type ShortEditorProps = Omit<EditorProps<ShortConfig>, "uploadAsset"> & {
   uploadAsset?: EditorProps<ShortConfig>["uploadAsset"];
@@ -178,16 +178,13 @@ function MatcherFields({
               onPatch(next);
             }}
           />
-          <label className="inline-flex items-center gap-1.5 text-[13px] text-fg-muted">
-            <input
-              type="checkbox"
-              className="size-4 accent-accent"
-              checked={matcher.unitRequired}
-              disabled={disabled}
-              onChange={(e) => onPatch({ ...matcher, unitRequired: e.target.checked })}
-            />
-            {s.unitRequired}
-          </label>
+          <CheckboxField
+            className="inline-flex items-center gap-1.5 text-[13px] text-fg-muted"
+            label={s.unitRequired}
+            checked={matcher.unitRequired}
+            disabled={disabled}
+            onChange={(unitRequired) => onPatch({ ...matcher, unitRequired })}
+          />
         </>
       );
     case "date":
@@ -298,7 +295,7 @@ function ConstraintFields({
     case "text":
       return (
         <>
-          <FieldCell label={s.minLength} htmlFor="short-min-length">
+          <FieldCell labelClassName={labelClass} label={s.minLength} htmlFor="short-min-length">
             <input
               id="short-min-length"
               type="number"
@@ -310,7 +307,7 @@ function ConstraintFields({
               onChange={(e) => onPatch({ ...constraints, minLength: Number(e.target.value) })}
             />
           </FieldCell>
-          <FieldCell label={s.maxLength} htmlFor="short-max-length">
+          <FieldCell labelClassName={labelClass} label={s.maxLength} htmlFor="short-max-length">
             <input
               id="short-max-length"
               type="number"
@@ -327,7 +324,7 @@ function ConstraintFields({
     case "number":
       return (
         <>
-          <FieldCell label={s.min} htmlFor="short-min">
+          <FieldCell labelClassName={labelClass} label={s.min} htmlFor="short-min">
             <input
               id="short-min"
               type="number"
@@ -338,7 +335,7 @@ function ConstraintFields({
               onChange={(e) => onPatch(withOptionalNumber(constraints, "min", e.target.value))}
             />
           </FieldCell>
-          <FieldCell label={s.max} htmlFor="short-max">
+          <FieldCell labelClassName={labelClass} label={s.max} htmlFor="short-max">
             <input
               id="short-max"
               type="number"
@@ -360,7 +357,7 @@ function ConstraintFields({
     case "date":
       return (
         <>
-          <FieldCell label={s.from} htmlFor="short-from">
+          <FieldCell labelClassName={labelClass} label={s.from} htmlFor="short-from">
             <input
               id="short-from"
               type="date"
@@ -370,7 +367,7 @@ function ConstraintFields({
               onChange={(e) => onPatch(withOptionalDate(constraints, "from", e.target.value))}
             />
           </FieldCell>
-          <FieldCell label={s.to} htmlFor="short-to">
+          <FieldCell labelClassName={labelClass} label={s.to} htmlFor="short-to">
             <input
               id="short-to"
               type="date"
@@ -417,45 +414,17 @@ export function ShortEditor({
       <IssueList issues={rootIssues(issues)} />
 
       <section className={sectionClass}>
-        {/*
-         * A caption and not a `<label for>` when the host lent its rich
-         * editor: its surface is a contenteditable, which is not a labelable
-         * element — the browser reports such a `for` as matching no control,
-         * and the field takes its name from `aria-label` instead. The
-         * textarea fallback is a real control and keeps its label.
-         */}
-        {RichText ? (
-          <span className={labelClass}>{s.prompt}</span>
-        ) : (
-          <label className={labelClass} htmlFor="short-prompt">
-            {s.prompt}
-          </label>
-        )}
-        {/*
-         * The host's WYSIWYG editor when it lent one, the textarea otherwise.
-         * There is no preview block under either: with `RichText` the field IS
-         * the preview, and under a textarea a second rendering of the string
-         * the teacher is looking at is noise.
-         */}
-        {RichText ? (
-          <RichText
-            id="short-prompt"
-            aria-label={s.prompt}
-            value={config.prompt}
-            onChange={(prompt) => patch({ prompt })}
-            {...(disabled === undefined ? {} : { disabled })}
-            {...(uploadAsset === undefined ? {} : { uploadImage: uploadAsset })}
-          />
-        ) : (
-          <textarea
-            id="short-prompt"
-            rows={4}
-            className={cx(inputClass, "w-full resize-y font-mono text-[13px]")}
-            value={config.prompt}
-            disabled={disabled}
-            onChange={(e) => patch({ prompt: e.target.value })}
-          />
-        )}
+        <PromptField
+          id="short-prompt"
+          label={s.prompt}
+          value={config.prompt}
+          onChange={(prompt) => patch({ prompt })}
+          disabled={disabled}
+          RichText={RichText}
+          uploadImage={uploadAsset}
+          labelClassName={labelClass}
+          textareaClassName={cx(inputClass, "w-full resize-y font-mono text-[13px]")}
+        />
         <IssueList issues={issuesAt(issues, "prompt")} />
       </section>
 
@@ -582,7 +551,7 @@ export function ShortEditor({
                 className={cx(buttonClass, "ml-auto w-7 px-0 text-fg-muted hover:text-danger")}
                 aria-label={`${s.removeMatcher} ${index + 1}`}
                 disabled={disabled || config.matchers.length <= 1}
-                onClick={() => setMatchers(config.matchers.filter((_, i) => i !== index))}
+                onClick={() => setMatchers(removeAt(config.matchers, index))}
               >
                 ×
               </button>

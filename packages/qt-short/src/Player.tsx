@@ -22,7 +22,7 @@ import {
   type ShortStudent,
 } from "./schema.js";
 import { shortPlayerStrings, type ShortPlayerStringKey } from "./strings.js";
-import { cx, helpClass, inputClass, labelClass } from "./ui.js";
+import { cx, helpClass, inputClass, isLocked, labelClass, markdown } from "@quiz/ui";
 
 type ShortPlayerProps = PlayerProps<ShortStudent, ShortAnswer> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
@@ -81,7 +81,7 @@ export function ShortPlayer({
   renderMarkdown,
 }: ShortPlayerProps) {
   const s = resolveStrings(shortPlayerStrings, strings);
-  const locked = readOnly || disabled === true;
+  const locked = isLocked(readOnly, disabled);
   /*
    * A payload minted before v2 carries no constraints. The types say it
    * cannot happen; a student sitting an exam behind a white screen because it
@@ -100,7 +100,7 @@ export function ShortPlayer({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-lg leading-relaxed text-fg">
-        {renderMarkdown ? renderMarkdown(student.prompt) : student.prompt}
+        {markdown(renderMarkdown, student.prompt)}
       </p>
       <div className="flex flex-col gap-1.5">
         <label className={labelClass} htmlFor="short-answer">

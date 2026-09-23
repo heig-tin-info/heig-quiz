@@ -10,7 +10,8 @@ import type { MarkdownRenderer, PlayerProps, StringOverrides } from "@quiz/core/
 import { resolveStrings } from "@quiz/core/client";
 import type { McqAnswer, McqStudent } from "./schema.js";
 import { mcqPlayerStrings, type McqPlayerStringKey } from "./strings.js";
-import { choiceLetter, cx, helpClass, Pastille } from "./ui.js";
+import { cx, helpClass, isLocked, markdown } from "@quiz/ui";
+import { choiceLetter, Pastille } from "./ui.js";
 
 type McqPlayerProps = PlayerProps<McqStudent, McqAnswer> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
@@ -29,7 +30,7 @@ export function McqPlayer({
   renderMarkdown,
 }: McqPlayerProps) {
   const s = resolveStrings(mcqPlayerStrings, strings);
-  const locked = readOnly || disabled === true;
+  const locked = isLocked(readOnly, disabled);
   const selected = answer?.selected ?? [];
   const multiple = student.mode === "multiple";
   const limit = student.maxSelections;
@@ -49,7 +50,7 @@ export function McqPlayer({
   return (
     <fieldset className="flex flex-col gap-4" disabled={locked}>
       <legend className="mb-2 text-lg leading-relaxed text-fg">
-        {renderMarkdown ? renderMarkdown(student.prompt) : student.prompt}
+        {markdown(renderMarkdown, student.prompt)}
       </legend>
       <p className={helpClass}>{instructions}</p>
       <ul className="flex flex-col gap-2">
@@ -89,7 +90,7 @@ export function McqPlayer({
                  * line of `.md-body` at this size (40 − 22).
                  */}
                 <span className="mt-2.25 min-w-0">
-                  {renderMarkdown ? renderMarkdown(choice.text) : choice.text}
+                  {markdown(renderMarkdown, choice.text)}
                 </span>
               </label>
             </li>

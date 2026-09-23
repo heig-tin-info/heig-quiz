@@ -18,7 +18,6 @@
  *    through the very same affordance (focus it, Space, arrows, Space).
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 import {
   closestCenter,
   DndContext,
@@ -44,7 +43,7 @@ import type {
   RichTextComponent,
   StringOverrides,
 } from "@quiz/core/client";
-import { resolveStrings } from "@quiz/core/client";
+import { issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import {
   MCQ_MAX_CHOICES,
   MCQ_MIN_CHOICES,
@@ -54,23 +53,26 @@ import {
 } from "./schema.js";
 import { mcqEditorStrings, type McqEditorStringKey } from "./strings.js";
 import {
+  AsideSection,
   buttonClass,
-  cardClass,
   cardTitleClass,
-  choiceLetter,
   cx,
-  gripClass,
-  GripIcon,
   helpClass,
-  iconButtonClass,
   inputClass,
   IssueList,
-  issuesAt,
   labelClass,
-  Pastille,
-  rootIssues,
+  patchAt,
+  PromptField,
+  removeAt,
   sectionClass,
   Segmented,
+} from "@quiz/ui";
+import {
+  choiceLetter,
+  gripClass,
+  GripIcon,
+  iconButtonClass,
+  Pastille,
   Tip,
   TrashIcon,
 } from "./ui.js";
@@ -261,42 +263,6 @@ export function McqEditor({
     setChoices(choices);
   }
 
-  /*
-   * A caption and not a `<label for>` when the host lent its rich editor: its
-   * surface is a contenteditable, which is not a labelable element — the
-   * browser reports such a `for` as matching no control, and the field takes
-   * its name from `aria-label` instead. The textarea fallback is a real
-   * control and keeps its label.
-   */
-  const promptLabel = RichText ? (
-    <span className={labelClass}>{s.prompt}</span>
-  ) : (
-    <label className={labelClass} htmlFor="mcq-prompt">
-      {s.prompt}
-    </label>
-  );
-
-  const promptField = RichText ? (
-    <RichText
-      id="mcq-prompt"
-      aria-label={s.prompt}
-      value={config.prompt}
-      onChange={(prompt) => patch({ prompt })}
-      {...(disabled === undefined ? {} : { disabled })}
-      {...(uploadAsset === undefined ? {} : { uploadImage: uploadAsset })}
-    />
-  ) : (
-    <textarea
-      id="mcq-prompt"
-      rows={4}
-      className={cx(inputClass, "w-full resize-y font-mono text-[13px]")}
-      aria-label={s.prompt}
-      value={config.prompt}
-      disabled={disabled}
-      onChange={(e) => patch({ prompt: e.target.value })}
-    />
-  );
-
   /**
    * How the question is marked — the one block the host may take away.
    *
@@ -307,7 +273,7 @@ export function McqEditor({
    * node renders in the main column, one section among the others.
    */
   const scoring = (
-    <section className={cx(aside ? cardClass : "", "flex flex-col gap-3")}>
+    <AsideSection aside={aside}>
       <h3 className={aside ? cardTitleClass : labelClass}>{s.scoring}</h3>
 
       {/*
@@ -395,24 +361,28 @@ export function McqEditor({
         </label>
         <p className={cx(helpClass, "pl-6")}>{s.neverShuffleHint}</p>
       </div>
-    </section>
+    </AsideSection>
   );
 
-  const main = (
+  return (
     <div className="flex flex-col gap-6">
       <IssueList issues={rootIssues(issues)} />
 
       <section className={sectionClass}>
-        {promptLabel}
-        {promptField}
+        {/* `renderMarkdown` is accepted — the player and the review need
+            it — and is used for nothing here: `PromptField` draws no preview. */}
+        <PromptField
+          id="mcq-prompt"
+          label={s.prompt}
+          value={config.prompt}
+          onChange={(prompt) => patch({ prompt })}
+          disabled={disabled}
+          RichText={RichText}
+          uploadImage={uploadAsset}
+          labelClassName={labelClass}
+          textareaClassName={cx(inputClass, "w-full resize-y font-mono text-[13px]")}
+        />
         <IssueList issues={issuesAt(issues, "prompt")} />
-        {/*
-         * No preview block under the statement any more. With `RichText` the
-         * field IS the preview; without it, the textarea shows the source and
-         * a second rendering of the same string is noise. `renderMarkdown` is
-         * still accepted — the player and the review need it — and is used
-         * for nothing here.
-         */}
       </section>
 
       <section className={sectionClass}>
@@ -440,13 +410,9 @@ export function McqEditor({
                   removable={config.choices.length > MCQ_MIN_CHOICES}
                   {...(RichText === undefined ? {} : { RichText })}
                   {...(uploadAsset === undefined ? {} : { uploadAsset })}
-                  onText={(text) =>
-                    setChoices(config.choices.map((c, i) => (i === index ? { ...c, text } : c)))
-                  }
-                  onCorrect={(correct) =>
-                    setChoices(config.choices.map((c, i) => (i === index ? { ...c, correct } : c)))
-                  }
-                  onRemove={() => setChoices(config.choices.filter((_, i) => i !== index))}
+                  onText={(text) => setChoices(patchAt(config.choices, index, { text }))}
+                  onCorrect={(correct) => setChoices(patchAt(config.choices, index, { correct }))}
+                  onRemove={() => setChoices(removeAt(config.choices, index))}
                   onEnter={() => {
                     // Enter walks to the next choice, and makes one when there
                     // is none: writing four answers is four lines and four
@@ -491,17 +457,8 @@ export function McqEditor({
         </div>
       </section>
 
-      {aside ? null : scoring}
+      {scoring}
     </div>
-  );
-
-  return aside ? (
-    <>
-      {main}
-      {createPortal(scoring, aside)}
-    </>
-  ) : (
-    main
   );
 }
 

@@ -12,7 +12,20 @@ import type { MarkdownRenderer, ReviewProps } from "@quiz/core/client";
 
 import type { CodeAnswer, CodeCaseDetail, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
 import { REVIEW_STRINGS, type CodeReviewStrings } from "./strings.js";
-import { badge, card, cx, hint, lockedBlock, sectionTitle, table } from "./styles.js";
+import {
+  badge,
+  breakdownOf,
+  card,
+  cx,
+  hint,
+  lockedBlock,
+  markdown,
+  pointsOrDash,
+  sectionTitle,
+  table,
+  Verdict,
+  verdictTone,
+} from "@quiz/ui";
 import { caseVerdict } from "./verdict.js";
 
 interface CodeReviewProps
@@ -91,17 +104,14 @@ export function CodeReview({
   /* The statement, so a verdict is never read without the question it judges. */
   const statement = (
     <div className="whitespace-pre-wrap text-sm text-fg">
-      {renderMarkdown ? renderMarkdown(student.prompt) : student.prompt}
+      {markdown(renderMarkdown, student.prompt)}
     </div>
   );
 
-  /*
-   * `details` is whatever `gradings.details` holds: this type's breakdown, or
-   * a grading-level marker with no `cases` at all — an absent answer, an
-   * unreadable configuration, a grader that threw. Both read the same to a
-   * student, and reading a marker as a breakdown is a blank page.
-   */
-  if (details === null || !Array.isArray(details.cases)) {
+  // No breakdown — an absent answer, a grading-level marker — reads the same
+  // to a student either way.
+  const breakdown = breakdownOf(details, "cases");
+  if (breakdown === null) {
     return (
       <div className="flex flex-col gap-3">
         {statement}
@@ -112,8 +122,8 @@ export function CodeReview({
 
   // The key, when it travelled: it is what turns "Failed" into "exit 1 ≠ 0".
   const specs = new Map<string, CaseSpec>((solution?.cases ?? []).map((c) => [c.name, c]));
-  const shown = details.cases.filter((c) => c.visible || reveal);
-  const hidden = details.cases.filter((c) => !c.visible && !reveal);
+  const shown = breakdown.cases.filter((c) => c.visible || reveal);
+  const hidden = breakdown.cases.filter((c) => !c.visible && !reveal);
   const hiddenPassed = hidden.filter((c) => c.ok).length;
 
   return (
@@ -122,21 +132,21 @@ export function CodeReview({
 
       <div className="flex flex-wrap items-center gap-2">
         <span className={cx(sectionTitle, "tabular-nums")}>
-          {fmt(s.score, { points: points ?? 0, max: maxPoints })}
+          {fmt(s.score, { points: pointsOrDash(points), max: maxPoints })}
         </span>
-        {details.runner === "unavailable" ? (
+        {breakdown.runner === "unavailable" ? (
           <span className={badge("warning")}>{s.runnerUnavailable}</span>
         ) : null}
-        {details.runner === "busy" ? <span className={badge("warning")}>{s.runnerBusy}</span> : null}
-        {details.runner === "error" ? <span className={badge("danger")}>{s.runnerError}</span> : null}
+        {breakdown.runner === "busy" ? <span className={badge("warning")}>{s.runnerBusy}</span> : null}
+        {breakdown.runner === "error" ? <span className={badge("danger")}>{s.runnerError}</span> : null}
       </div>
 
-      {details.compile !== null && !details.compile.ok ? (
+      {breakdown.compile !== null && !breakdown.compile.ok ? (
         <section className={cx(card, "flex flex-col gap-2 p-4")}>
           <h3 className={cx(sectionTitle, "text-danger")}>{s.compileFailed}</h3>
-          {details.compile.stderr === "" ? null : (
+          {breakdown.compile.stderr === "" ? null : (
             <pre className={lockedBlock} aria-label={s.compilerOutput}>
-              <code>{details.compile.stderr}</code>
+              <code>{breakdown.compile.stderr}</code>
             </pre>
           )}
         </section>
@@ -191,9 +201,9 @@ export function CodeReview({
                     {detail.actual ?? "—"}
                   </td>
                   <td className={table.td}>
-                    <span className={badge(detail.ok ? "success" : "danger")}>
+                    <Verdict tone={verdictTone(detail.ok)}>
                       {verdictOf(detail, spec, solution?.compare, s)}
-                    </span>
+                    </Verdict>
                   </td>
                   <td className={cx(table.td, "text-right tabular-nums")}>
                     {detail.ok ? detail.points : 0} / {detail.points}

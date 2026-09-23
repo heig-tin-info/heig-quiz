@@ -24,7 +24,7 @@ import { Component, lazy, Suspense } from "react";
 import type { ReactNode } from "react";
 
 import type { CodeLanguage } from "./schema.js";
-import { codeArea, cx } from "./styles.js";
+import { codeArea, cx } from "@quiz/ui";
 
 /** The Monaco language ids, which differ from ours for JavaScript. */
 const MONACO_LANGUAGE: Record<CodeLanguage, string> = {

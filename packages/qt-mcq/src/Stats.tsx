@@ -9,7 +9,8 @@ import { resolveStrings } from "@quiz/core/client";
 import { mcqDistribution } from "@quiz/domain/stats";
 import type { McqAnswer, McqStudent } from "./schema.js";
 import { mcqStatsStrings, type McqStatsStringKey } from "./strings.js";
-import { choiceLetter, helpClass } from "./ui.js";
+import { choiceLetter } from "./ui.js";
+import { helpClass } from "@quiz/ui";
 
 type McqStatsProps = StatsProps<McqStudent, McqAnswer> & {
   strings?: StringOverrides<McqStatsStringKey>;
