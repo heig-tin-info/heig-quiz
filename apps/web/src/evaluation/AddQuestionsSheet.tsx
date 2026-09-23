@@ -1,11 +1,12 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Library, Search } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { EvaluationDetail, PoolSummary, QuestionPage } from "@quiz/contracts";
 
 import { api, apiErrorMessage } from "../api";
 import { useT } from "../i18n";
+import { EMPTY_FILTERS, questionQuery, type QuestionFilters } from "../pool/filters";
 import { DifficultyDots } from "../pool/QuestionTable";
 import { QUESTION_TYPE_IDS, typeLabel } from "../questionTypes";
 import {
@@ -21,7 +22,7 @@ import {
   Skeleton,
   Tip,
 } from "../ui";
-import { evaluationKey, poolsKey } from "../queryKeys";
+import { evaluationKey, poolQuestionsKey, poolsKey } from "../queryKeys";
 
 /**
  * The question picker (F-EVAL-01): a pool on the left of the filter bar, a
@@ -61,16 +62,34 @@ export function AddQuestionsSheet({
   });
   const current = poolId ?? pools.data?.[0]?.id ?? null;
 
-  const params = new URLSearchParams();
-  if (q.trim()) params.set("q", q.trim());
-  if (type) params.set("type", type);
-  if (difficulty) params.set("difficulty", difficulty);
-  const search = params.toString();
-  const questions = useQuery<QuestionPage>({
-    queryKey: ["pool-questions", current, search],
+  // The pool screen's own filter state and query string (`pool/filters.ts`),
+  // so an equal search is the SAME request under the SAME key as the pool
+  // screen's list: a question created there is not stale here, and whatever
+  // invalidates the pool invalidates this list too.
+  const filters = useMemo<QuestionFilters>(
+    () => ({
+      ...EMPTY_FILTERS,
+      q,
+      types: type ? [type] : [],
+      difficulties: difficulty ? [Number(difficulty)] : [],
+    }),
+    [q, type, difficulty],
+  );
+  const search = questionQuery(filters);
+  const questions = useInfiniteQuery<QuestionPage>({
+    queryKey: poolQuestionsKey(current ?? "", search),
     enabled: current !== null,
-    queryFn: () => api(`/app/api/pools/${current}/questions${search ? `?${search}` : ""}`),
+    queryFn: ({ pageParam }) =>
+      api(
+        `/app/api/pools/${current}/questions${questionQuery(filters, pageParam as string | null)}`,
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
   });
+  const rows = useMemo(
+    () => (questions.data?.pages ?? []).flatMap((page) => page.items),
+    [questions.data],
+  );
 
   const add = useMutation({
     mutationFn: () =>
@@ -190,41 +209,56 @@ export function AddQuestionsSheet({
             retrying={questions.isFetching}
             fallback={t("error.server")}
           />
-        ) : (questions.data?.items ?? []).length === 0 ? (
+        ) : rows.length === 0 ? (
           <EmptyState icon={Search} title={t("picker.empty.title")}>
             {t("picker.empty.body")}
           </EmptyState>
         ) : (
-          <ul className="divide-y divide-line rounded-field border border-line">
-            {questions.data!.items.map((row) => {
-              const unpublished = row.latestNumber === null;
-              const already = existing.has(row.id);
-              return (
-                <li key={row.id} className="flex items-center gap-3 px-3 py-2">
-                  <Checkbox
-                    checked={already || picked.includes(row.id)}
-                    disabled={unpublished || already}
-                    onChange={() => toggle(row.id)}
-                    label={
-                      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className="truncate font-medium">{row.internalName}</span>
-                        <span className="text-xs text-fg-faint">{typeLabel(t, row.type)}</span>
-                        <DifficultyDots value={row.difficulty} />
-                        {row.deprecated ? (
-                          <Badge tone="amber">{t("eval.questions.deprecated")}</Badge>
-                        ) : null}
-                        {unpublished ? (
-                          <Tip label={t("picker.unpublishedHint")}>
-                            <Badge tone="zinc">{t("picker.unpublished")}</Badge>
-                          </Tip>
-                        ) : null}
-                      </span>
-                    }
-                  />
-                </li>
-              );
-            })}
-          </ul>
+          <>
+            <ul className="divide-y divide-line rounded-field border border-line">
+              {rows.map((row) => {
+                const unpublished = row.latestNumber === null;
+                const already = existing.has(row.id);
+                return (
+                  <li key={row.id} className="flex items-center gap-3 px-3 py-2">
+                    <Checkbox
+                      checked={already || picked.includes(row.id)}
+                      disabled={unpublished || already}
+                      onChange={() => toggle(row.id)}
+                      label={
+                        <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="truncate font-medium">{row.internalName}</span>
+                          <span className="text-xs text-fg-faint">{typeLabel(t, row.type)}</span>
+                          <DifficultyDots value={row.difficulty} />
+                          {row.deprecated ? (
+                            <Badge tone="amber">{t("eval.questions.deprecated")}</Badge>
+                          ) : null}
+                          {unpublished ? (
+                            <Tip label={t("picker.unpublishedHint")}>
+                              <Badge tone="zinc">{t("picker.unpublished")}</Badge>
+                            </Tip>
+                          ) : null}
+                        </span>
+                      }
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+            {/* One page is what the pool screen asks for too; the rest is one
+                click away, never silently cut off. */}
+            {questions.hasNextPage ? (
+              <div className="flex justify-center">
+                <Button
+                  variant="secondary"
+                  loading={questions.isFetchingNextPage}
+                  onClick={() => void questions.fetchNextPage()}
+                >
+                  {t("pool.loadMore")}
+                </Button>
+              </div>
+            ) : null}
+          </>
         )}
 
         {add.isError ? (

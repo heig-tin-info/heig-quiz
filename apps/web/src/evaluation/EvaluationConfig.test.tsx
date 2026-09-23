@@ -2,6 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { PAGE_SIZE } from "../pool/filters";
 import { makeClassroomDetail } from "../test/fixtures";
 import {
   EVALUATION_ID,
@@ -40,7 +41,8 @@ function routes(
     "GET /app/api/pools": ok([
       { id: id("pool", 1), name: "PRG1", visibility: "private", ownerId: "u", isPersonal: false, createdAt: detail.evaluation.createdAt, questionCount: 1 },
     ]),
-    [`GET /app/api/pools/${id("pool", 1)}/questions`]: ok({
+    // The picker asks with the pool screen's own query string (FF-11).
+    [`GET /app/api/pools/${id("pool", 1)}/questions?limit=${PAGE_SIZE}`]: ok({
       items: [
         {
           id: QUESTION,
