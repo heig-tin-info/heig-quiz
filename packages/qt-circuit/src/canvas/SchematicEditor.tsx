@@ -16,6 +16,28 @@
  *
  * Keyboard is scoped to the editor, never to the window: several of these may
  * sit on one page, and the app has shortcuts of its own.
+ *
+ * Hook order, as React sees it (flattened, top to bottom). It is recorded
+ * here because the editor is being split into hooks, and a split must keep
+ * the same hooks, unconditionally, in a stated order:
+ *   1 useId                       18 useRef lastVia            35 useCallback toWorld
+ *   2 useRef rootRef              19 useMemo kinds             36 useCallback slack
+ *   3 useRef svgRef               20 useCallback apply         37 useCallback wireUnder
+ *   4 useRef canvasRef            21 useMemo displayed         38 useCallback componentUnder
+ *   5 useHistory (2 refs,         22 useMemo routes            39 useCallback viaUnder
+ *     1 state, 4 callbacks)       23 useMemo obstacles         40 useCallback onPointerDown
+ *   6 useState mode               24 useMemo connected         41 useCallback onPointerMove
+ *   7 useState placeKind          25 useMemo byId              42 useCallback onPointerUp
+ *   8 useState ghost              26 useCallback place         43 useEffect measure
+ *   9 useState selection          27 useCallback removeSel.    44 useEffect wheel
+ *  10 useState draft              28 useCallback transformSel. 45 useEffect palette drag
+ *  11 useState drag               29 useCallback duplicate     46 useCallback onKeyDown
+ *  12 useState view               30 useCallback undo          47 useMemo selectedComponent
+ *  13 useState cursor             31 useCallback redo          48 useState nameDraft
+ *  14 useState hover              32 useCallback finishWire    49 useRef editing
+ *  15 useState palDrag            33 useCallback wireClick     50 useCallback editComponent
+ *  16 useState canvasHeight       34 useCallback cancelStep    51 useMemo draftPoints
+ *  17 useRef dragRef
  */
 import {
   useCallback,
