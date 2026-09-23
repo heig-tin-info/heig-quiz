@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { and, eq } from "drizzle-orm";
 
-import { attempts, guestParticipants, pools, questions } from "../../db/schema.js";
+import { attempts, evaluations, guestParticipants, pools, questions } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import { FORBIDDEN_STUDENT_KEYS } from "../live/studentView.js";
@@ -170,7 +170,7 @@ describe("creating and starting a poll", () => {
       questionId,
       anonymous: false,
       createdBy: teacher.id,
-      now: new Date(),
+      now: server.clock.now(),
     };
     const [a, b] = await Promise.all([
       createPoll(server.app.db, { ...input, drawCode: drawsOf("RACE22", "RACE33") }),
@@ -188,6 +188,52 @@ describe("creating and starting a poll", () => {
     for (const scope of [a, b]) {
       await post(`/app/api/evaluations/${scope.evaluation.id}/poll/end`, teacher.headers);
     }
+  });
+
+  it("does not draw the code of a poll ended less than two hours ago", async () => {
+    // RACE22 and its sibling were ended just above: a phone may still be on
+    // them, so the draw skips them and takes the next code.
+    const scope = await createPoll(server.app.db, {
+      classroomId: seed.classroomId,
+      questionId,
+      anonymous: false,
+      createdBy: teacher.id,
+      now: server.clock.now(),
+      drawCode: ((codes: string[]) => () => codes.shift() ?? "UNUSED")(["RACE22", "GRACE2"]),
+    });
+    expect(scope.evaluation.accessCode).toBe("GRACE2");
+    await post(`/app/api/evaluations/${scope.evaluation.id}/poll/end`, teacher.headers);
+  });
+
+  it("answers 409 code_taken, not a 500, when a poll would run again on a code now held", async () => {
+    // No route leads a poll back to `running` today; the row is put in
+    // `paused` by hand to reach the generic resume route, which must then
+    // meet the unique index with a clean refusal.
+    const input = {
+      classroomId: seed.classroomId,
+      questionId,
+      anonymous: false,
+      createdBy: teacher.id,
+      now: server.clock.now(),
+    };
+    const first = await createPoll(server.app.db, { ...input, drawCode: () => "HELD22" });
+    await server.app.db
+      .update(evaluations)
+      .set({ state: "paused", pausedAt: server.clock.now() })
+      .where(eq(evaluations.id, first.evaluation.id));
+    // Paused, never closed: no phone can reach it by code, so the code is
+    // free for a new poll.
+    const second = await createPoll(server.app.db, { ...input, drawCode: () => "HELD22" });
+
+    const resumed = await post(`/app/api/evaluations/${first.evaluation.id}/resume`, teacher.headers);
+    expect(resumed.statusCode).toBe(409);
+    expect(resumed.json().error).toBe("code_taken");
+
+    await post(`/app/api/evaluations/${second.evaluation.id}/poll/end`, teacher.headers);
+    await server.app.db
+      .update(evaluations)
+      .set({ state: "closed", closedAt: server.clock.now() })
+      .where(eq(evaluations.id, first.evaluation.id));
   });
 
   it("answers 404 to a teacher who is not on the classroom's staff", async () => {

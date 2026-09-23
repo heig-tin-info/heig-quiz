@@ -41,7 +41,7 @@ import {
 import { round2 } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
-import type { Db } from "../../db/client.js";
+import { isUniqueViolation, type Db } from "../../db/client.js";
 import {
   attempts,
   coursePools,
@@ -103,6 +103,18 @@ class NoPublishedVersion extends EvaluationError {
 class QuestionNotInCourse extends EvaluationError {
   constructor(readonly questionId: string) {
     super("question_not_in_course", 422, `question ${questionId} is not in a pool of this course`);
+  }
+}
+
+/**
+ * A poll cannot run again on a session code another running poll now holds
+ * (`evaluations_running_poll_code_uq`). No route leads a poll back to
+ * `running` today (it cannot pause, and the authoring transitions refuse
+ * it); should one appear, it answers this 409 instead of a 500.
+ */
+export class CodeTaken extends EvaluationError {
+  constructor() {
+    super("code_taken", 409, "another running poll holds this session code");
   }
 }
 
@@ -854,7 +866,11 @@ export async function tryApplyState(
     .set(next)
     // The compare-and-set: the row must still be where the caller saw it.
     .where(and(eq(evaluations.id, row.id), eq(evaluations.state, row.state)))
-    .returning({ id: evaluations.id });
+    .returning({ id: evaluations.id })
+    .catch((err: unknown) => {
+      if (isUniqueViolation(err, "evaluations_running_poll_code_uq")) throw new CodeTaken();
+      throw err;
+    });
   if (updated.length === 0) return null;
   return (await byId(db, row.id))!;
 }

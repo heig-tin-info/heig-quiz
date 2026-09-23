@@ -98,10 +98,10 @@ const CODE_LENGTH = 6;
 /**
  * How long a finished poll still answers on its code. A phone that scanned
  * the QR must keep showing the question and the revealed key while the
- * teacher comments it; two hours later the code no longer answers. Only
- * the running polls hold their code exclusively (the unique index); should a
- * new poll draw the code of one in its grace period — one chance in 10^9 —
- * {@link byCode} answers with the newer one.
+ * teacher comments it; two hours later the code is free again. A code is
+ * therefore not drawn while a poll can still be reached by it
+ * ({@link codeTaken}); the unique index on the running polls is the backstop
+ * that makes two concurrent draws of one code safe.
  */
 const ENDED_GRACE_MS = 2 * 60 * 60 * 1000;
 
@@ -121,6 +121,16 @@ function stillAddressable(now: Date) {
     eq(evaluations.state, "running"),
     gte(evaluations.closedAt, new Date(now.getTime() - ENDED_GRACE_MS)),
   );
+}
+
+/** A code is taken while its poll is still reachable by it (see {@link byCode}). */
+async function codeTaken(db: Db, code: string, now: Date): Promise<boolean> {
+  const [row] = await db
+    .select({ id: evaluations.id })
+    .from(evaluations)
+    .where(and(eq(evaluations.mode, "poll"), eq(evaluations.accessCode, code), stillAddressable(now)))
+    .limit(1);
+  return row !== undefined;
 }
 
 // --- Guest identity (F-AUTH-05) ------------------------------------------
@@ -229,22 +239,25 @@ export async function createPoll(
     .from(questions)
     .where(eq(questions.id, input.questionId))
     .limit(1);
-  // No check-then-insert: the partial unique index on the codes of the
-  // running polls refuses a collision, even between two concurrent creates,
-  // and the draw starts over.
+  // A code a poll can still be reached by (running, or ended within the
+  // grace period) is not drawn. The check alone would race two concurrent
+  // creates: the partial unique index on the running polls' codes refuses
+  // the second insert, and the draw starts over.
   const draw = input.drawCode ?? drawCode;
   let created: Awaited<ReturnType<typeof createPollEvaluation>> | undefined;
   for (let n = 0; created === undefined; n += 1) {
     if (n === CODE_DRAWS) {
       throw new PollError("code_exhausted", 503, "could not draw a free session code");
     }
+    const code = draw();
+    if (await codeTaken(db, code, input.now)) continue;
     try {
       created = await createPollEvaluation(db, {
         classroomId: input.classroomId,
         title: question?.internalName ?? "Poll",
         createdBy: input.createdBy,
         questionId: input.questionId,
-        accessCode: draw(),
+        accessCode: code,
         anonymous: input.anonymous,
         defaultPoints: (type, version) =>
           typeOf(type).defaultPoints(
