@@ -118,7 +118,6 @@ describe("the inbox", () => {
     const listed = await service.listNotifications(db, alice);
     expect(listed.items.map((n) => n.id)).not.toContain(orphan);
     // It is still counted as unread: the row exists, only its sentence is lost.
-    // It carries no `poolId` either, so the dangling filter leaves it alone.
     expect(listed.unread).toBeGreaterThan(0);
     await db.delete(notifications).where(eq(notifications.id, orphan));
   });
@@ -135,30 +134,26 @@ describe("the inbox", () => {
     // The bell would otherwise offer a row that opens on a 404.
     expect(after.items.map((n) => n.id)).not.toContain(created.id);
     expect(after.unread).toBe(before.unread - 1);
-    // The row is still there; only the READ hides it. `deletePool` removes it.
-    const [row] = await db.select().from(notifications).where(eq(notifications.id, created.id));
-    expect(row).toBeDefined();
-    await db.delete(notifications).where(eq(notifications.id, created.id));
   });
 });
 
-describe("dropPoolNotifications", () => {
-  it("removes every row pointing at one pool and leaves the others standing", async () => {
+describe("deleting a pool", () => {
+  it("deletes every row pointing at it, through the foreign key, and leaves the others", async () => {
     const doomed = await seedPool("Pool supprimé");
     const kept = await seedPool("Pool gardé");
     const a = await service.notify(db, alice, poolShared(doomed, "Pool supprimé"));
     const b = await service.notify(db, bob, poolShared(doomed, "Pool supprimé"));
     const c = await service.notify(db, alice, poolShared(kept, "Pool gardé"));
+    const [stored] = await db.select().from(notifications).where(eq(notifications.id, a.id));
+    expect(stored!.poolId).toBe(doomed);
 
-    expect(await service.dropPoolNotifications(db, doomed)).toBe(2);
+    await db.delete(pools).where(eq(pools.id, doomed));
 
-    const gone = await db.select().from(notifications).where(eq(notifications.userId, alice));
-    expect(gone.map((r) => r.id)).not.toContain(a.id);
-    expect(gone.map((r) => r.id)).toContain(c.id);
+    const alices = await db.select().from(notifications).where(eq(notifications.userId, alice));
+    expect(alices.map((r) => r.id)).not.toContain(a.id);
+    expect(alices.map((r) => r.id)).toContain(c.id);
     const bobs = await db.select().from(notifications).where(eq(notifications.id, b.id));
     expect(bobs).toHaveLength(0);
-    // Nothing left: a second call is a no-op.
-    expect(await service.dropPoolNotifications(db, doomed)).toBe(0);
   });
 });
 
