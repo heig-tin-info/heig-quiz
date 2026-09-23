@@ -16,9 +16,9 @@ Click **Poll** in the sidebar, or open the command palette with `Ctrl+K` and cho
 
 The launcher has two tabs, because there are exactly two ways to have a question.
 
-**Pick a question** lists the multiple-choice and short-answer questions of your personal poll pool, the most recently used first: a question you just published but never polled sits at the top too. Each row shows the internal name, the first line of the statement and how many times it was polled. The search box filters by name or statement. Select a row, and the primary action becomes **Start the poll**.
+**Pick a question** lists the multiple-choice and short-answer questions of your personal **Polls** pool, the most recently used first. Each row shows the internal name, the first line of the statement and how many times it was polled. The search box filters by name or statement. Select a row, and the primary action becomes **Start the poll**. Until you have kept a question (see below), the tab says so and points to the other one.
 
-**Ask a new question** takes a type and an internal name, and **Create question** opens the question editor on it. This is a deliberate detour and not a hidden mode: the editor is the same one as everywhere else, you publish the question there, and the launcher is one click away afterwards with the new question waiting at the top of its list. See `question-types.md` for what a multiple-choice or a short-answer question can hold.
+**Ask a new question** holds the question type's own editor, without anything that only decides a mark. Write the statement and the choices (or the accepted answers), and **Start the poll** runs it at once. Marking a correct answer is optional: without one, the poll simply collects opinions. Nothing is saved at this point; the question lives with its poll until you keep it. See `question-types.md` for what a multiple-choice or a short-answer question can hold.
 
 Two settings sit above the list on the first tab:
 
@@ -41,7 +41,7 @@ From top to bottom: the course and classroom with a **Live** pulse, the statemen
 
 The footer carries the ring of answers received out of people present, the join address, the six-character session code and its QR code. A crossed eye reminds the room that no name is shown.
 
-The controls at the top right are the segmented **Live** / **Answer revealed** switch, the theme toggle, **Full screen** and a menu holding **End poll** and **Back to the classroom**. Nothing else happens on this screen.
+The controls at the top right are the segmented **Live** / **Answer revealed** switch, the theme toggle, **Full screen** and a menu holding **Keep this question** (for a question written in the launcher), **End poll** and **Back to the classroom**. Nothing else happens on this screen.
 
 !!! note
     The distribution is sent only to you. A phone in the room never sees how the votes are spread before you reveal the answer, so the majority does not drag the undecided along.
@@ -97,7 +97,9 @@ The code keeps working for two hours after the end. A phone that reloads the pag
 
 ## Where the question lives afterwards
 
-The first poll question you create goes into a personal pool named **Polls**, created for you at that moment. It is an ordinary pool from then on: it shows on your pools page, you can rename it, share it and add questions to it like any other. See `classrooms.md` for how pools are linked to courses.
+A question written in the launcher is saved nowhere until you say so. **Keep this question**, in the menu while the poll runs or beside **Run again** once it has ended, puts it in your personal pool named **Polls**, created for you by the first question you keep. The button then reads **Kept in Polls** and opens the question in its pool. It is an ordinary pool from then on: it shows on your pools page, you can rename it, share it and add questions to it like any other. See `classrooms.md` for how pools are linked to courses.
+
+A kept question without a correct answer runs polls only. The evaluation's question picker shows it greyed out, marked **polls only**, and the question editor says so in one line. You can open and read it without adding anything; publishing a new version of it asks for a correct answer, like any pool question.
 
 The poll itself stays in the classroom's evaluation list with the mode **Poll**, so you can open its projection again later to show the tally, and a signed-in student who answered can find it among their past evaluations. Since a poll is one question, the grading and results screens described in `grading.md` have little to say about it.
 

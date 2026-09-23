@@ -38,6 +38,8 @@ const mcq = (
   type: "mcq",
   student: { prompt: "How many bytes?", choices, mode: "single" },
   solution: { correct },
+  saved: false,
+  pool: null,
 });
 
 describe("pollRows — mcq", () => {
@@ -92,6 +94,8 @@ describe("pollRows — short", () => {
     type: "short",
     student: { prompt: "Complexity?" },
     solution: { expected },
+    saved: false,
+    pool: null,
   });
 
   it("marks an accepted answer however it was spelt", () => {
@@ -168,7 +172,7 @@ describe("the arithmetic of the wall", () => {
 describe("the strings around the tally", () => {
   it("takes the prompt from whichever student view it got", () => {
     expect(promptOf(mcq([], []))).toBe("How many bytes?");
-    expect(promptOf({ id: "q", type: "short", student: null, solution: null })).toBe("");
+    expect(promptOf({ id: "q", type: "short", student: null, solution: null, saved: false, pool: null })).toBe("");
   });
 
   it("prints the host a participant types, and never throws on a bad URL", () => {

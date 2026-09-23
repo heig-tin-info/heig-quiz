@@ -316,6 +316,13 @@ export interface MockTeacherPoll {
   counts: number[];
   /** `short`: the spellings seen, first one kept, most frequent first. */
   texts: { text: string; count: number }[];
+  /**
+   * The pool question the poll runs; null for one written in the launcher
+   * and not kept yet — "Keep this question" is what sets it.
+   */
+  questionId?: string | null;
+  /** The unsaved question of an inline poll, attached as-is on "Keep". */
+  unsaved?: MockQuestion;
 }
 
 export const teacherPolls: MockTeacherPoll[] = [];
@@ -372,6 +379,8 @@ if (!flags.empty && polls.length >= 5) {
       // The distribution of mockup 10: the key leads without winning.
       counts: [27, 14, 8, 3],
       texts: [],
+      // Kept in the Polls pool after an earlier lecture.
+      questionId: questions.find((q) => q.poolId === "p0" && q.type === "mcq")?.id ?? null,
     },
     {
       id: POLL_SHORT,
@@ -469,8 +478,80 @@ function pollTeacherView(tp: MockTeacherPoll) {
     },
     joinUrl: `${window.location.origin}/p/${poll.code}`,
     settings: { anonymous: poll.anonymous, revealed },
-    question: { id: uuid(), type: poll.type, student: poll.student, solution: poll.solution },
+    question: {
+      id: tp.questionId ?? tp.id,
+      type: poll.type,
+      student: poll.student,
+      solution: poll.solution,
+      ...savedIn(tp),
+    },
     tally: tallyOf(tp, poll),
+  };
+}
+
+/** `saved` and `pool` of the teacher view: where "Keep this question" put it. */
+function savedIn(tp: MockTeacherPoll): { saved: boolean; pool: { id: string; name: string } | null } {
+  const q = tp.questionId ? questions.find((x) => x.id === tp.questionId) : undefined;
+  const pool = q ? pools.find((p) => p.id === q.poolId) : undefined;
+  return { saved: q !== undefined, pool: pool ? { id: pool.id, name: pool.name } : null };
+}
+
+/** The teacher's personal pool, made on first use like `ensurePersonalPool`. */
+function ensurePersonalPool() {
+  let personal = pools.find((p) => p.isPersonal && p.ownerId === "u-me");
+  if (!personal) {
+    personal = {
+      id: "p0",
+      name: "Polls",
+      icon: "message-circle-question",
+      visibility: "private",
+      ownerId: "u-me",
+      isPersonal: true,
+      createdAt: iso(0),
+      updatedAt: iso(0),
+    };
+    pools.push(personal);
+    poolMembers[personal.id] = [{ ...ME_MEMBER, role: "owner", addedAt: iso(0) }];
+  }
+  return personal;
+}
+
+/** A name free in the pool: the statement, then "… (2)", "… (3)". */
+function keptName(poolId: string, name: string): string {
+  const taken = (candidate: string) =>
+    questions.some(
+      (q) => q.poolId === poolId && q.deletedAt === null && q.internalName.toLowerCase() === candidate.toLowerCase(),
+    );
+  for (let n = 1; n < 50; n += 1) {
+    const candidate = n === 1 ? name : `${name} (${n})`;
+    if (!taken(candidate)) return candidate;
+  }
+  return `${name} ${uuid().slice(0, 8)}`;
+}
+
+/**
+ * The content of a seeded poll, which was never a mock question: rebuilt from
+ * what the wall holds, the statement and the key.
+ */
+function configOfPoll(poll: MockPoll): Record<string, unknown> {
+  const student = poll.student as Record<string, unknown>;
+  if (poll.type === "mcq") {
+    const correct = (poll.solution as { correct: number[] }).correct;
+    return {
+      configVersion: 2,
+      prompt: student.prompt,
+      mode: student.mode,
+      choices: ((student.choices ?? []) as { text: string }[]).map((c, i) => ({
+        text: c.text,
+        correct: correct.includes(i),
+      })),
+    };
+  }
+  const expected = (poll.solution as { expected: string[] }).expected;
+  return {
+    configVersion: 2,
+    prompt: student.prompt,
+    matchers: expected.map((value) => ({ kind: "exact", value, points: 1 })),
   };
 }
 
@@ -548,8 +629,16 @@ setInterval(() => {
  * launcher when they come back from the editor.
  */
 on("GET", "/app/api/polls/questions", () => {
+  // The personal pool only, like the API — and none at all before the first
+  // "Keep this question": an empty list, never a 404.
+  const personal = pools.find((p) => p.isPersonal && p.ownerId === "u-me");
   const pollable = questions.filter(
-    (q) => q.deletedAt === null && q.versions.length > 0 && (q.type === "mcq" || q.type === "short"),
+    (q) =>
+      personal !== undefined &&
+      q.poolId === personal.id &&
+      q.deletedAt === null &&
+      q.versions.length > 0 &&
+      (q.type === "mcq" || q.type === "short"),
   );
   return pollable
     .map((q, i) => {
@@ -578,21 +667,7 @@ on("GET", "/app/api/polls/questions", () => {
  * use, exactly as the route would ensure it server-side.
  */
 on("POST", "/app/api/polls/questions", (_m, body) => {
-  let personal = pools.find((p) => p.isPersonal && p.ownerId === "u-me");
-  if (!personal) {
-    personal = {
-      id: "p0",
-      name: "Mes questions",
-      icon: "user",
-      visibility: "private",
-      ownerId: "u-me",
-      isPersonal: true,
-      createdAt: iso(0),
-      updatedAt: iso(0),
-    };
-    pools.push(personal);
-    poolMembers[personal.id] = [{ ...ME_MEMBER, role: "owner", addedAt: iso(0) }];
-  }
+  const personal = ensurePersonalPool();
   const type = String(body.type) as MockQuestion["type"];
   const created = makeQuestion({
     poolId: personal.id,
@@ -640,10 +715,14 @@ on("POST", "/app/api/polls/inline", (_m, body) => {
   });
   const issues = draftIssues(q, { keyOptional: true });
   if (issues.length > 0) throw new MockValidation("The question is incomplete", issues);
-  return startPoll(q, body);
+  return startPoll(q, body, { unsaved: true });
 });
 
-function startPoll(q: MockQuestion, body: Record<string, unknown>) {
+function startPoll(
+  q: MockQuestion,
+  body: Record<string, unknown>,
+  options: { unsaved?: boolean } = {},
+) {
   const config = frozenConfig(q);
   const code = `QZ${Math.floor(rand() * 9000 + 1000)}`;
   const choiceCount = ((config.choices ?? []) as unknown[]).length;
@@ -668,6 +747,7 @@ function startPoll(q: MockQuestion, body: Record<string, unknown>) {
     answered: 0,
     counts: q.type === "short" ? [] : new Array<number>(choiceCount).fill(0),
     texts: [],
+    ...(options.unsaved ? { questionId: null, unsaved: q } : { questionId: q.id }),
   };
   teacherPolls.push(tp);
   seedPollEvaluation(tp, code);
@@ -705,9 +785,49 @@ on("POST", "/app/api/evaluations/:id/poll/again", (m) => {
     answered: 0,
     counts: previous.type === "mcq" ? tp.counts.map(() => 0) : [],
     texts: [],
+    questionId: tp.questionId ?? null,
+    ...(tp.unsaved ? { unsaved: tp.unsaved } : {}),
   };
   teacherPolls.push(next);
   seedPollEvaluation(next, code);
   return pollTeacherView(next);
 });
 
+/**
+ * "Keep this question" (ADR-014, addenda item 6): the poll's unsaved question
+ * joins the personal pool, created on first use. Idempotent — a poll whose
+ * question already sits in a pool answers its view unchanged.
+ */
+on("POST", "/app/api/evaluations/:id/poll/keep", (m) => {
+  const tp = teacherPollOr404(m.groups!.id!);
+  if (tp.questionId) return pollTeacherView(tp);
+  const poll = pollOfTeacher(tp)!;
+  const personal = ensurePersonalPool();
+  const q =
+    tp.unsaved ??
+    makeQuestion({
+      poolId: personal.id,
+      type: poll.type,
+      internalName: poll.title,
+      categoryId: null,
+      difficulty: 2,
+      shuffleable: true,
+      randomizable: false,
+      tags: [],
+      config: configOfPoll(poll),
+      published: [{ number: 1, changeNote: "", daysAgo: 0 }],
+    });
+  q.poolId = personal.id;
+  q.internalName = keptName(personal.id, q.internalName);
+  q.updatedAt = iso(0);
+  questions.push(q);
+  // Every show of hands on the same question is now a show of hands on a
+  // kept one.
+  for (const other of teacherPolls) {
+    if (other === tp || (tp.unsaved !== undefined && other.unsaved === tp.unsaved)) {
+      other.questionId = q.id;
+      delete other.unsaved;
+    }
+  }
+  return pollTeacherView(tp);
+});

@@ -100,6 +100,17 @@ class NoPublishedVersion extends EvaluationError {
   }
 }
 
+/**
+ * The question's published version holds no answer key: a question kept
+ * after an opinion poll (ADR-014, addenda 2026-09-23). It can run a poll
+ * again; an evaluation would grade the whole class against nothing.
+ */
+class QuestionKeyless extends EvaluationError {
+  constructor(readonly questionId: string) {
+    super("question_keyless", 422, `question ${questionId} has no correct answer: polls only`);
+  }
+}
+
 class QuestionNotInCourse extends EvaluationError {
   constructor(readonly questionId: string) {
     super("question_not_in_course", 422, `question ${questionId} is not in a pool of this course`);
@@ -1018,8 +1029,10 @@ async function nextPosition(db: Db, evaluationId: string): Promise<number> {
 
 /**
  * Adds questions at the end, each frozen on its current published version
- * (F-EVAL-03). Points default to `type.defaultPoints` — supplied by the
- * caller, so this file never imports the registry.
+ * (F-EVAL-03). Points default to `type.defaultPoints` and the presence of a
+ * key to `type.hasKey` — both supplied by the caller, so this file never
+ * imports the registry. A version without a key is refused
+ * (`422 question_keyless`): only a poll runs one.
  */
 export async function addItems(
   db: Db,
@@ -1027,6 +1040,7 @@ export async function addItems(
   questionIds: string[],
   defaultPoints: (type: string, version: typeof questionVersions.$inferSelect) => number,
   ctx: { attemptCount: number },
+  keyed: (type: string, version: typeof questionVersions.$inferSelect) => boolean = () => true,
 ): Promise<ItemRow[]> {
   if (ctx.attemptCount > 0) throw new Locked();
   const allowed = await coursePoolIds(db, row.id);
@@ -1048,6 +1062,7 @@ export async function addItems(
     }
     const version = versions.get(questionId);
     if (!version) throw new NoPublishedVersion(questionId);
+    if (!keyed(question.type, version)) throw new QuestionKeyless(questionId);
     values.push({
       id: randomUUID(),
       evaluationId: row.id,

@@ -53,6 +53,7 @@ function routes(
           categoryId: null,
           latestNumber: 1,
           hasDraftChanges: false,
+          keyless: false,
           updatedAt: detail.evaluation.createdAt,
           deprecated: false,
         },

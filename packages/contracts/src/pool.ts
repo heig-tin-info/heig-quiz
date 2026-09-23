@@ -252,6 +252,12 @@ export const QuestionRow = z.object({
   updatedAt: z.string(),
   deprecated: z.boolean(),
   deletedAt: z.string().nullable(),
+  /**
+   * The latest published version holds no answer key: a question kept after
+   * an opinion poll (ADR-014, addenda 2026-09-23). It can run a poll again,
+   * never an evaluation (`422 question_keyless`).
+   */
+  keyless: z.boolean(),
 });
 export type QuestionRow = z.infer<typeof QuestionRow>;
 
@@ -361,6 +367,8 @@ export const QuestionDetail = z.object({
   draft: QuestionDraft,
   versions: z.array(VersionRow),
   latestPublished: VersionRow.nullable(),
+  /** Same as `QuestionRow.keyless`: the latest published version has no key. */
+  keyless: z.boolean(),
 });
 export type QuestionDetail = z.infer<typeof QuestionDetail>;
 

@@ -530,10 +530,16 @@ async function homeOf(
   return row ?? { classroomName: "", courseName: "" };
 }
 
+/**
+ * The teacher's screen. `pool` is the pool holding the question when the
+ * CALLER can open it (the route loads it through the pool predicate); a
+ * colleague's private pool is not named to them.
+ */
 export async function teacherView(
   db: Db,
   scope: PollScope,
   webUrl: string,
+  pool: { id: string; name: string } | null = null,
 ): Promise<PollTeacherView> {
   const { evaluation, item } = scope;
   const [home, tally] = await Promise.all([
@@ -560,6 +566,8 @@ export async function teacherView(
       // The teacher's own screen: the key is theirs whether or not the room
       // has seen it, and the projection decides when to draw it.
       solution: solutionOf(item),
+      saved: item.question.poolId !== null,
+      pool,
     },
     tally,
   };

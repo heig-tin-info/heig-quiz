@@ -132,6 +132,10 @@ export const pools: MockPool[] = [
   { id: "p1", name: "Programmation C", icon: "code", visibility: "shared", ownerId: "u-me", isPersonal: false, createdAt: iso(-300 * D), updatedAt: iso(-2 * H) },
   { id: "p2", name: "Systèmes embarqués", icon: "cpu", visibility: "public", ownerId: "u-me", isPersonal: false, createdAt: iso(-120 * D), updatedAt: iso(-6 * D) },
   { id: "p3", name: "Électronique analogique", icon: "circuit-board", visibility: "shared", ownerId: "t1", isPersonal: false, createdAt: iso(-60 * D), updatedAt: iso(-30 * 60_000) },
+  // The personal pool (F-POOL-01): created by the first "Keep this
+  // question" after a poll (ADR-014, addenda item 6); the launcher's "Pick a
+  // question" tab lists it and nothing else.
+  { id: "p0", name: "Polls", icon: "message-circle-question", visibility: "private", ownerId: "u-me", isPersonal: true, createdAt: iso(-20 * D), updatedAt: iso(-2 * D) },
 ];
 
 const ADA = { userId: "t1", email: "ada.lovelace@heig-vd.ch", givenName: "Ada", familyName: "Lovelace" };
@@ -151,6 +155,7 @@ export const poolMembers: Record<string, MockMember[]> = {
     { ...GRACE, role: "reader", addedAt: iso(-12 * D) },
   ],
   p2: [{ ...ME_MEMBER, role: "owner", addedAt: iso(-120 * D) }],
+  p0: [{ ...ME_MEMBER, role: "owner", addedAt: iso(-20 * D) }],
   // The one pool this browser only READS: the pool screen then draws no
   // create, edit, duplicate, delete or bulk action (F-POOL-05).
   p3: [
@@ -972,6 +977,59 @@ export const questions: MockQuestion[] = [
 ];
 
 /**
+ * Three questions kept after a poll, in the personal pool. The last one was
+ * an opinion poll: no key, so it runs a poll again and never an evaluation
+ * (`keyless`, ADR-014 addenda item 6).
+ */
+questions.push(
+  makeQuestion({
+    poolId: "p0",
+    type: "mcq",
+    internalName: "Que vaut sizeof(char) en C ?",
+    categoryId: null,
+    difficulty: 2,
+    shuffleable: true,
+    randomizable: false,
+    tags: [],
+    config: mcqConfig("Que vaut `sizeof(char)` en C, quelle que soit l'architecture ?", [
+      ["`1`", true],
+      ["`2`", false],
+      ["`4`", false],
+      ["Cela dépend de l'architecture", false],
+    ]),
+    published: [{ number: 1, changeNote: "", daysAgo: 20 }],
+  }),
+  makeQuestion({
+    poolId: "p0",
+    type: "short",
+    internalName: "Combien de bits dans un octet ?",
+    categoryId: null,
+    difficulty: 1,
+    shuffleable: true,
+    randomizable: false,
+    tags: [],
+    config: shortNumber("Combien de bits dans un octet ?", 8),
+    published: [{ number: 1, changeNote: "", daysAgo: 9 }],
+  }),
+  makeQuestion({
+    poolId: "p0",
+    type: "mcq",
+    internalName: "Le rythme des laboratoires vous convient-il ?",
+    categoryId: null,
+    difficulty: 1,
+    shuffleable: true,
+    randomizable: false,
+    tags: [],
+    config: mcqConfig("Le rythme des laboratoires vous convient-il ?", [
+      ["Trop lent", false],
+      ["Juste bien", false],
+      ["Trop rapide", false],
+    ]),
+    published: [{ number: 1, changeNote: "", daysAgo: 2 }],
+  }),
+);
+
+/**
  * One published version is deprecated, like one question is unpublished: the
  * amber badge of the pool table, of the evaluation's question picker and of
  * its item table is then a state of the data rather than a prop.
@@ -1143,7 +1201,23 @@ const questionRow = (q: MockQuestion) => ({
   updatedAt: q.updatedAt,
   deprecated: q.versions.at(-1)?.deprecatedAt !== null && q.versions.length > 0,
   deletedAt: q.deletedAt,
+  keyless: isKeyless(q),
 });
+
+/**
+ * The latest published version holds no key: a question kept after an
+ * opinion poll. Polls only — the API refuses it in an evaluation.
+ */
+export function isKeyless(q: MockQuestion): boolean {
+  const latest = q.versions.at(-1);
+  if (!latest) return false;
+  const config = latest.config as Record<string, unknown>;
+  if (q.type === "mcq") {
+    return !((config.choices ?? []) as { correct: boolean }[]).some((c) => c.correct);
+  }
+  if (q.type === "short") return ((config.matchers ?? []) as unknown[]).length === 0;
+  return false;
+}
 
 const questionMeta = (q: MockQuestion) => ({
   id: q.id,
@@ -1182,6 +1256,7 @@ export const questionDetail = (q: MockQuestion) => ({
   },
   versions: q.versions.map(versionRow),
   latestPublished: q.versions.length ? versionRow(q.versions.at(-1)!) : null,
+  keyless: isKeyless(q),
 });
 
 /**

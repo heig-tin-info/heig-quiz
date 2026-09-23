@@ -50,6 +50,7 @@ export type AuditAction =
   | "grading.validate"
   | "poll.create"
   | "poll.end"
+  | "poll.keep"
   | "poll.reveal"
   | "pool.asset_upload"
   | "pool.create"

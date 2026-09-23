@@ -388,7 +388,10 @@ export function McqEditor({
 
       <section className={sectionClass}>
         <h3 className={labelClass}>{s.choices}</h3>
-        <p className={helpClass}>{s.choicesHint}</p>
+        {/* A poll's key is optional, and the launcher says so once
+            (ADR-014, addendum 2026-09-23): "Tick the correct answers" would
+            contradict it. */}
+        {ungraded ? null : <p className={helpClass}>{s.choicesHint}</p>}
 
         <DndContext
           sensors={sensors}

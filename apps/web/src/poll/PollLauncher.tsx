@@ -64,8 +64,10 @@ import { coursesKey, pollQuestionsKey } from "../queryKeys";
  * mark (`ungraded`: no scoring policy, no points, no prefilters) — a poll
  * gives none — and "Start the poll" sends the content itself
  * (`POST /app/api/polls/inline`). The question is kept with its poll only,
- * in no pool (ADR-014, addendum 2026-09-23); a teacher who wants it for next
- * year writes it in the `Polls` pool, and it shows up in the other tab.
+ * in no pool (ADR-014, addendum 2026-09-23). A teacher who wants it for next
+ * year presses "Keep this question" on the poll screen: it joins the `Polls`
+ * pool — created by that first keep — and shows up in the other tab, whose
+ * empty state says exactly that.
  *
  * The key is optional there: with no correct answer marked, the poll asks
  * for opinions and its reveal is the distribution. One muted line under the

@@ -71,6 +71,17 @@ describe("PollLauncher", () => {
     expect(screen.getByText("Never polled")).toBeVisible();
   });
 
+  it("says where its questions come from while it has none, and points to the other tab", async () => {
+    // No personal pool yet: the API answers an empty list, never a 404.
+    mockFetch({ [`GET ${QUESTIONS}`]: ok([]), [`GET ${COURSES}`]: ok(courses) });
+    renderWithProviders(<PollLauncher navigate={vi.fn()} />);
+
+    expect(await screen.findByText("No question kept yet")).toBeVisible();
+    expect(screen.getByText(/Questions you keep after a poll land here/)).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Ask a new question" }));
+    expect(await screen.findByLabelText("Statement")).toBeVisible();
+  }, 20_000);
+
   it("starts the poll on the picked question and the chosen classroom", async () => {
     const { calls } = mockFetch({
       [`GET ${QUESTIONS}`]: ok(picks),
@@ -207,6 +218,8 @@ describe("PollLauncher", () => {
     // Nothing ticked in advance: a key the teacher never chose would be on the wall.
     expect(screen.getByRole("checkbox", { name: "Choice A is correct" })).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Choice B is correct" })).not.toBeChecked();
+    // …and the editor does not contradict it with "Tick the correct answers".
+    expect(screen.queryByText("Tick the correct answers.")).toBeNull();
 
     await user.type(prompt, "?");
     await user.type(screen.getByLabelText("Text of choice A"), "Y");

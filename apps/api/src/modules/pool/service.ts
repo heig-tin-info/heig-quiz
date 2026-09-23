@@ -52,7 +52,7 @@ import type {
 import { issuesOf } from "@quiz/contracts";
 import { effectivePoolRole } from "@quiz/domain";
 
-import type { Db } from "../../db/client.js";
+import { isUniqueViolation, type Db } from "../../db/client.js";
 import {
   assets,
   attempts,
@@ -76,8 +76,9 @@ import {
 import { audit } from "../../audit.js";
 import { notify } from "../notifications/service.js";
 import { userTopic } from "../realtime/bus.js";
-import { poolPeopleChanged } from "./events.js";
+import { poolChanged, poolPeopleChanged } from "./events.js";
 import {
+  hasKey,
   loadConfig,
   NotPublishable,
   publicationIssuesOf,
@@ -1105,6 +1106,8 @@ interface VersionFacts {
   publishedAt: Date | null;
   deprecated: boolean;
   draftUpdatedAt: Date | null;
+  /** The latest published config, for `keyless`. */
+  latest: { config: unknown; configVersion: number } | null;
 }
 
 /** Latest published number, its deprecation, and the draft's mtime, per question. */
@@ -1121,6 +1124,8 @@ async function versionFactsOf(
       publishedAt: questionVersions.publishedAt,
       deprecatedAt: questionVersions.deprecatedAt,
       updatedAt: questionVersions.updatedAt,
+      config: questionVersions.config,
+      configVersion: questionVersions.configVersion,
     })
     .from(questionVersions)
     .where(inArray(questionVersions.questionId, ids));
@@ -1130,6 +1135,7 @@ async function versionFactsOf(
       publishedAt: null,
       deprecated: false,
       draftUpdatedAt: null,
+      latest: null,
     };
     if (row.number === null) {
       facts.draftUpdatedAt = row.updatedAt;
@@ -1137,6 +1143,7 @@ async function versionFactsOf(
       facts.latestNumber = row.number;
       facts.publishedAt = row.publishedAt;
       facts.deprecated = row.deprecatedAt !== null;
+      facts.latest = { config: row.config, configVersion: row.configVersion };
     }
     out.set(row.questionId, facts);
   }
@@ -1147,6 +1154,21 @@ async function versionFactsOf(
  * The draft moved after the last publication. Publishing writes both rows
  * with the same timestamp, so the comparison is strict.
  */
+/**
+ * A published version that holds no answer key: only a question kept after
+ * an opinion poll has one (ADR-014, addenda 2026-09-23). A config that no
+ * longer parses is not called keyless — that is a different problem, and
+ * the gates that care report it themselves.
+ */
+function isKeyless(type: string, version: { config: unknown; configVersion: number } | null): boolean {
+  if (version === null) return false;
+  try {
+    return !hasKey(type, loadConfig(type, version));
+  } catch {
+    return false;
+  }
+}
+
 function hasDraftChanges(facts: VersionFacts | undefined): boolean {
   if (!facts?.draftUpdatedAt) return false;
   if (!facts.publishedAt) return true;
@@ -1170,6 +1192,7 @@ function rowJson(
     updatedAt: question.updatedAt.toISOString(),
     deprecated: facts?.deprecated ?? false,
     deletedAt: question.deletedAt?.toISOString() ?? null,
+    keyless: isKeyless(question.type, facts?.latest ?? null),
   };
 }
 
@@ -1404,6 +1427,117 @@ function unsavedName(type: string, config: unknown): string {
   return line.length <= 80 ? line : `${line.slice(0, 79).trimEnd()}…`;
 }
 
+/**
+ * "Keep this question" (ADR-014, addenda 2026-09-23, item 6): the unsaved
+ * question of a poll joins the caller's personal pool — created here on
+ * first use (`ensurePersonalPool`). Nothing is copied: the question and its
+ * published version already exist, and the poll that froze that version
+ * keeps pointing at it. The question receives what every pool question has
+ * and it lacked: a pool, a name free in that pool, and a draft to edit —
+ * the published config, stamped with the publication's time so the list
+ * shows no pending change.
+ *
+ * Idempotent: a question already in a pool — kept before, by this caller or
+ * a colleague, or picked from a pool in the first place — is left alone and
+ * `kept` is false. The `pool_id is null` guard on the UPDATE is what makes
+ * two simultaneous keeps attach it once.
+ */
+export async function keepUnsavedQuestion(
+  db: Db,
+  input: { questionId: string; userId: string; now: Date },
+): Promise<{ kept: boolean; poolId: string | null }> {
+  const [question] = await db
+    .select()
+    .from(questions)
+    .where(eq(questions.id, input.questionId))
+    .limit(1);
+  if (!question) throw new Error("the poll's question vanished");
+  if (question.poolId !== null) return { kept: false, poolId: question.poolId };
+  const pool = await ensurePersonalPool(db, input.userId);
+  for (let attempt = 0; ; attempt += 1) {
+    const name =
+      attempt < 3
+        ? await keptName(db, pool.id, question.internalName)
+        : `${question.internalName} ${randomUUID().slice(0, 8)}`;
+    try {
+      const kept = await db.transaction(async (tx) => {
+        const [attached] = await tx
+          .update(questions)
+          .set({ poolId: pool.id, internalName: name, updatedAt: input.now })
+          .where(and(eq(questions.id, question.id), isNull(questions.poolId)))
+          .returning();
+        if (!attached) return false;
+        const [published] = await tx
+          .select()
+          .from(questionVersions)
+          .where(
+            and(eq(questionVersions.questionId, question.id), isNotNull(questionVersions.number)),
+          )
+          .orderBy(desc(questionVersions.number))
+          .limit(1);
+        if (!published) throw new Error("an unsaved question without its published version");
+        const stamp = published.publishedAt ?? published.updatedAt;
+        await tx.insert(questionVersions).values({
+          id: randomUUID(),
+          questionId: question.id,
+          number: null,
+          config: published.config,
+          configVersion: published.configVersion,
+          explanation: published.explanation,
+          searchText: searchTextOf(question.type, name, published.config),
+          // Equal to the publication: `hasDraftChanges` is strict, so the
+          // pool list shows the question as published and unchanged.
+          updatedAt: stamp,
+          createdAt: input.now,
+        });
+        return true;
+      });
+      if (kept) {
+        // The pool's list and the launcher's picks; the caller's own topic
+        // too, since a pool created a moment ago has no subscriber yet.
+        poolChanged(pool.id);
+        poolPeopleChanged([userTopic(input.userId)]);
+        return { kept: true, poolId: pool.id };
+      }
+      // A concurrent keep won: report where it went.
+      const [now] = await db
+        .select({ poolId: questions.poolId })
+        .from(questions)
+        .where(eq(questions.id, question.id));
+      return { kept: false, poolId: now?.poolId ?? null };
+    } catch (error) {
+      // Another question took the name between the check and the write.
+      if (isUniqueViolation(error, "questions_pool_name_uq") && attempt < 3) continue;
+      throw error;
+    }
+  }
+}
+
+/**
+ * `questions_pool_name_uq` is per pool and case-insensitive. A kept question
+ * is named after its statement, and two polls may well have asked the same
+ * thing: the second one becomes "… (2)" rather than a 409 in the middle of a
+ * lecture.
+ */
+async function keptName(db: Db, poolId: string, name: string): Promise<string> {
+  for (let n = 1; n < 50; n += 1) {
+    const candidate = n === 1 ? name : `${name} (${n})`;
+    const [taken] = await db
+      .select({ id: questions.id })
+      .from(questions)
+      .where(
+        and(
+          eq(questions.poolId, poolId),
+          isNull(questions.deletedAt),
+          sql`lower(${questions.internalName}) = lower(${candidate})`,
+        ),
+      )
+      .limit(1);
+    if (!taken) return candidate;
+  }
+  return `${name} ${randomUUID().slice(0, 8)}`;
+}
+
 /** The draft row of a question (`number is null`), or `MissingDraft`. */
 export async function draftOf(db: Db, questionId: string): Promise<VersionRecord> {
   const [row] = await db
@@ -1433,6 +1567,7 @@ export async function questionDetail(db: Db, question: QuestionRecord): Promise<
     draft: draftJson(question.type, draft),
     versions: rows,
     latestPublished: rows[0] ?? null,
+    keyless: isKeyless(question.type, versions[0] ?? null),
   };
 }
 

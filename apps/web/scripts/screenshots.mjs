@@ -233,6 +233,16 @@ const scenes = [
   { name: "poll-projection", role: "teacher", path: "/evaluations/poll/poll", fold: true },
   { name: "poll-projection-revealed", role: "teacher", path: "/evaluations/poll/poll?revealed=1", fold: true },
   { name: "poll-ended", role: "teacher", path: "/evaluations/poll-ended/poll", fold: true },
+  // "Keep this question" (ADR-014, addenda item 6): beside "Run again" once
+  // the poll is over, then "Kept in Polls"; in the menu while it runs.
+  { name: "poll-kept", role: "teacher", path: "/evaluations/poll-ended/poll", fold: true, act: (p) => p.getByRole("button", { name: /keep this question|garder cette question/i }).click() },
+  { name: "poll-keep-menu", role: "teacher", path: "/evaluations/poll-opinion/poll", fold: true, act: (p) => p.getByRole("button", { name: /^actions$/i }).first().click() },
+  // No question kept yet: where they come from, and the other tab.
+  { name: "poll-launcher-empty", role: "teacher", path: "/polls?empty=1" },
+  // The evaluation's picker on the Polls pool: the opinion question is out of reach.
+  { name: "eval-config-picker-keyless", role: "teacher", path: "/evaluations/draft?step=questions", act: async (p) => { await p.getByRole("button", { name: /add questions/i }).first().click(); await p.getByLabel(/^pool$|^banque$/i).selectOption({ label: "Polls" }); } },
+  // The same question in the editor: one muted line, nothing to fix to view it.
+  { name: "question-keyless", role: "teacher", path: "/pools/p0", act: (p) => p.getByRole("button", { name: /^(Edit|Modifier) Le rythme des laboratoires/ }).first().click() },
   // The worst case of the wall: a three-line question and eight choices that
   // wrap. It must come back with no scrollbar and nothing cut off — the band
   // shrinks itself (`fitScale`), so the fold IS the whole screen.

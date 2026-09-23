@@ -24,6 +24,7 @@ import {
   categories,
   coursePools,
   frozenConfig,
+  isKeyless,
   poolOr404,
   poolSummary,
   questionOr404,
@@ -833,6 +834,13 @@ on("POST", "/app/api/evaluations/:id/items", (m, body) => {
     // A question that was never published cannot be added: the picker shows
     // it disabled, and the API refuses it too (F-EVAL-03).
     if (!q || !latest) continue;
+    // A question kept after an opinion poll has no key: polls only.
+    if (isKeyless(q)) {
+      throw new MockPayload(422, {
+        error: "question_keyless",
+        message: `question ${q.id} has no correct answer: polls only`,
+      });
+    }
     e.items.push({
       id: uuid(),
       position: e.items.length + 1,
