@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { OverrideSheet } from "./OverrideSheet";
-import { makeEntry, makeGrading } from "./fixtures";
+import { makeEntry, makeGrading } from "../test/grading-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 
 /*

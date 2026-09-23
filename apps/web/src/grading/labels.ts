@@ -1,5 +1,4 @@
 import type {
-  Grading,
   GradingConfidence,
   GradingEntry,
   GradingSource,
@@ -59,15 +58,6 @@ export function entryVerdict(entry: Pick<GradingEntry, "answerId" | "answer" | "
   if (!grading || grading.state === "proposed") return "pending";
   if (grading.maxPoints > 0 && grading.points >= grading.maxPoints) return "correct";
   return grading.points > 0 ? "partial" : "wrong";
-}
-
-/** "4.5 / 6" — tabular, one decimal at most, never a bare percentage. */
-export function scoreText(t: TFunction, grading: Grading | null, maxPoints?: number): string {
-  if (!grading) return t("grading.notGraded");
-  return t("grading.score", {
-    points: round2(grading.points),
-    max: round2(maxPoints ?? grading.maxPoints),
-  });
 }
 
 /** Two decimals at most, with no trailing zeroes: points are not money. */

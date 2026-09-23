@@ -50,7 +50,7 @@ type ClozeHoleToken = MarkdownToken & { raw?: string; body?: string | null };
  */
 
 /** A private-use code point: it cannot occur in a question a teacher wrote. */
-export const HOLE_PIPE = "\uE000";
+const HOLE_PIPE = "\uE000";
 
 /**
  * Every `|` inside a `{{…}}` body, replaced by `HOLE_PIPE`.
@@ -116,7 +116,7 @@ export function restoreHolePipes(markdown: string): string {
  * first answer and says how many more there are, and the second tone
  * (`info`, DESIGN.md) exists for exactly that distinction.
  */
-export interface ClozeHoleChip {
+interface ClozeHoleChip {
   /** What the pill reads. */
   text: string;
   /** A small suffix: `+2` for the other answers, `▾` for a dropdown, `±t`. */
@@ -124,7 +124,7 @@ export interface ClozeHoleChip {
   tone: "one" | "set" | "machine" | "broken";
 }
 
-export function clozeHoleChip(body: string): ClozeHoleChip {
+function clozeHoleChip(body: string): ClozeHoleChip {
   const blank = parseBlankBody(body);
   if (typeof blank === "string") return { text: body, suffix: null, tone: "broken" };
   const weight = blank.weight === 1 ? "" : `${blank.weight}× `;
@@ -171,7 +171,7 @@ export function clozeHolePossibilities(body: string): ClozeHolePossibility[] | n
   return null;
 }
 
-export const ClozeHole = Node.create({
+const ClozeHole = Node.create({
   name: "clozeHole",
   group: "inline",
   inline: true,

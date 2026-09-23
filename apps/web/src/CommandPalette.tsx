@@ -36,7 +36,7 @@ import { cx, Kbd, useLayer, useScrollLock, Z } from "./ui";
  * here are the four things the palette offers (W15). It still needs `t`, for
  * its own chrome.
  */
-export type CommandPaletteProps = { open: boolean; onClose: () => void } & (
+type CommandPaletteProps = { open: boolean; onClose: () => void } & (
   | ({ commands?: undefined } & CommandContext)
   | { commands: Command[]; t: TFunction }
 );

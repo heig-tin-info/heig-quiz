@@ -35,7 +35,7 @@ import { escapeHtml, highlight } from "./highlight";
  */
 
 /** Where an `asset:<id>` image resolves to. Same origin, no CDN (N-SEC-02). */
-export const ASSET_BASE = "/app/api/assets/";
+const ASSET_BASE = "/app/api/assets/";
 
 /**
  * Ids are what the upload endpoint returns; anything else is not an asset.

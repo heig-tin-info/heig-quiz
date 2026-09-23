@@ -65,7 +65,7 @@ export function escapeHtml(text: string): string {
 }
 
 /** The language family a fence tag maps to, or null for "just escape it". */
-export function languageFamily(lang: string | undefined | null): keyof typeof KEYWORDS | null {
+function languageFamily(lang: string | undefined | null): keyof typeof KEYWORDS | null {
   if (!lang) return null;
   const tag = lang.trim().toLowerCase().split(/\s+/)[0] ?? "";
   return FAMILY[tag] ?? null;

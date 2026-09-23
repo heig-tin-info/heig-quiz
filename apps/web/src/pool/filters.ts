@@ -48,8 +48,8 @@ export interface QuestionFilters {
  * wants at the top. The API's own default (`QuestionSearch`) is the same one,
  * which is why neither parameter is sent while it holds.
  */
-export const DEFAULT_SORT: QuestionSort = "updated";
-export const DEFAULT_DIR: SortDir = "desc";
+const DEFAULT_SORT: QuestionSort = "updated";
+const DEFAULT_DIR: SortDir = "desc";
 
 export const EMPTY_FILTERS: QuestionFilters = {
   q: "",

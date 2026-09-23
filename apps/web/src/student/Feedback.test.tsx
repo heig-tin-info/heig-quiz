@@ -1,7 +1,7 @@
 import { screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { makeFeedback } from "../grading/fixtures";
+import { makeFeedback } from "../test/grading-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 import { Feedback } from "./Feedback";
 

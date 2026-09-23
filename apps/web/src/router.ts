@@ -156,7 +156,7 @@ export function useRoute(): [Route, (r: Route) => void] {
  * kept their own copy and never saw the other's write. One event, dispatched
  * on `window`, is what makes the query string the single source of truth.
  */
-export const SEARCH_PARAM_EVENT = "quiz:searchparam";
+const SEARCH_PARAM_EVENT = "quiz:searchparam";
 
 /**
  * One query-string parameter as state (tabs inside a page, the selected

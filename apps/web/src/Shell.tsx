@@ -150,7 +150,6 @@ function Nav({
   teacherUi,
   poolNav,
   onNavigate,
-  onStartPoll,
 }: {
   me: Me;
   route: Route;
@@ -165,8 +164,6 @@ function Nav({
   poolNav: ReturnType<typeof usePoolNavState>;
   /** Called after any navigation (closes the mobile drawer). */
   onNavigate?: () => void;
-  /** The palette's "Start a poll": goes to the launcher page. */
-  onStartPoll?: () => void;
 }) {
   const t = useT();
   const courses = useQuery<CourseSummary[]>({
@@ -455,7 +452,6 @@ export function Shell({
           navigate={navigate}
           teacherUi={teacherUi}
           poolNav={poolNav}
-          onStartPoll={teacherUi ? () => navigate({ view: "polls" }) : undefined}
         />
         <ShortcutStrip />
         {/* The account row, and beside it the bell: the two things that are
@@ -497,7 +493,6 @@ export function Shell({
               teacherUi={teacherUi}
               poolNav={poolNav}
               onNavigate={() => setDrawer(false)}
-              onStartPoll={teacherUi ? () => navigate({ view: "polls" }) : undefined}
             />
             <div className="border-t border-line p-2">
               {onToggleStudentView ? (

@@ -18,13 +18,13 @@ const KEY = "quiz-theme";
 const LEGACY_KEY = "quiz-ui-theme";
 const media = () => window.matchMedia("(prefers-color-scheme: dark)");
 
-export function initialTheme(): ThemeChoice {
+function initialTheme(): ThemeChoice {
   const stored = localStorage.getItem(KEY);
   return stored === "light" || stored === "dark" ? stored : "system";
 }
 
 /** The theme actually on screen for a choice. */
-export function resolveTheme(choice: ThemeChoice): Theme {
+function resolveTheme(choice: ThemeChoice): Theme {
   return choice === "system" ? (media().matches ? "dark" : "light") : choice;
 }
 

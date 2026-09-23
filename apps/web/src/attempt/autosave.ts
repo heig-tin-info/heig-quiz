@@ -34,18 +34,18 @@ import type { AttemptClosed, AutosaveRequest, AutosaveResponse } from "@quiz/con
 
 import { ApiError } from "../api";
 
-export const DEBOUNCE_MS = 300;
-export const OFFLINE_AFTER_MS = 3_000;
-export const BACKOFF_BASE_MS = 500;
-export const BACKOFF_MAX_MS = 5_000;
+const DEBOUNCE_MS = 300;
+const OFFLINE_AFTER_MS = 3_000;
+const BACKOFF_BASE_MS = 500;
+const BACKOFF_MAX_MS = 5_000;
 
 /** The four states of `SyncBadge` (`ui.tsx`), which is this object's face. */
 export type SyncState = "saved" | "saving" | "offline" | "closed";
 
 /** Posts one autosave. Rejecting with a `410` ApiError closes the attempt. */
-export type AutosaveTransport = (itemId: string, body: AutosaveRequest) => Promise<AutosaveResponse>;
+type AutosaveTransport = (itemId: string, body: AutosaveRequest) => Promise<AutosaveResponse>;
 
-export interface AutosaveHooks {
+interface AutosaveHooks {
   /** The sync badge. Called only when the state actually changes. */
   onState?: (state: SyncState) => void;
   /** `accepted: false`: the server's payload wins and the UI must show it. */

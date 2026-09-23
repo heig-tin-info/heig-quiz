@@ -10,7 +10,7 @@ import { useToast } from "../notify";
 import { Button } from "../ui";
 
 /** Above this many, a batch stops being a gesture and becomes a decision. */
-export const BATCH_CONFIRM_THRESHOLD = 10;
+const BATCH_CONFIRM_THRESHOLD = 10;
 
 export interface BatchScope {
   itemId?: string;

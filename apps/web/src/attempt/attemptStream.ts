@@ -28,7 +28,7 @@ import { ServerEvent } from "@quiz/contracts";
 export type WatchSubject = `attempt:${string}` | `lobby:${string}`;
 
 /** The frames the player and the lobby act on. Nothing else is subscribed. */
-export const WATCHED_EVENTS = [
+const WATCHED_EVENTS = [
   "snapshot",
   "clock",
   "evaluation.state",
@@ -55,7 +55,7 @@ export interface StreamHandlers {
  * Opens the stream and returns the closer. Safe where `EventSource` does not
  * exist (jsdom): it does nothing and says so by returning a no-op.
  */
-export function openAttemptStream(watch: WatchSubject, handlers: StreamHandlers): () => void {
+function openAttemptStream(watch: WatchSubject, handlers: StreamHandlers): () => void {
   if (typeof EventSource === "undefined") return () => {};
   const source = new EventSource(`/app/api/events?watch=${encodeURIComponent(watch)}`);
   let dropped = false;

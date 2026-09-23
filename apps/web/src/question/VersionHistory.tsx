@@ -30,7 +30,7 @@ import {
  * cloze. It lived beside the pool's inspection panel until that panel went;
  * this is its only reader now.
  */
-export function statementOf(student: unknown): string {
+function statementOf(student: unknown): string {
   if (typeof student !== "object" || student === null) return "";
   const record = student as Record<string, unknown>;
   const value = record.prompt ?? record.template;

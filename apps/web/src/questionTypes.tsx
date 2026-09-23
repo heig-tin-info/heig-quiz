@@ -90,15 +90,10 @@ const LazyRichText = lazy(async () => ({
 })) as unknown as RichTextComponent;
 
 export { QUESTION_TYPE_IDS };
-export type { QuestionTypeId };
 
 /** The registry entry, or `undefined` for a type this build does not carry. */
 export function questionType(id: string) {
   return clientRegistry[id as QuestionTypeId];
-}
-
-export function isKnownType(id: string): id is QuestionTypeId {
-  return questionType(id) !== undefined;
 }
 
 /** The type's icon, or a neutral placeholder for an unregistered id. */
@@ -304,7 +299,7 @@ export const statsStrings = {
 // --- Hosts -----------------------------------------------------------------
 
 /** What a lazy chunk shows while it arrives: the shape of what replaces it. */
-export function EditorSkeleton({ label }: { label: string }) {
+function EditorSkeleton({ label }: { label: string }) {
   return (
     <div className="space-y-3" role="status" aria-label={label}>
       <Skeleton className="h-5 w-40" />

@@ -59,7 +59,7 @@ const PANEL_MAX_HEIGHT = 420;
  * closed union, and this is the one place that turns a kind into words, in
  * either language.
  */
-export function notificationSentence(payload: NotificationPayload, t: TFunction): string {
+function notificationSentence(payload: NotificationPayload, t: TFunction): string {
   switch (payload.kind) {
     case "pool_shared":
       return t("notif.poolShared", {
@@ -76,7 +76,7 @@ export function notificationSentence(payload: NotificationPayload, t: TFunction)
 }
 
 /** Where a notification takes the reader: today, always the pool it is about. */
-export function notificationRoute(payload: NotificationPayload): Route {
+function notificationRoute(payload: NotificationPayload): Route {
   return { view: "pool", id: payload.poolId };
 }
 

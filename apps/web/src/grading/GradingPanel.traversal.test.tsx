@@ -7,7 +7,7 @@ import type { GradingEntry } from "@quiz/contracts";
 import { DICTS } from "../i18n";
 import { makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
 import { GradingPanel } from "./GradingPanel";
-import { makeEntry, makeEvaluationDetail, makeGrading, makeQueue } from "./fixtures";
+import { makeEntry, makeEvaluationDetail, makeGrading, makeQueue } from "../test/grading-fixtures";
 
 /*
  * The TRAVERSAL of the grading panel, pinned before FF-05 pulls it out of the
