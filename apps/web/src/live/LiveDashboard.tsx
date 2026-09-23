@@ -19,7 +19,9 @@ import {
   PageError,
   ParentLink,
   Skeleton,
+  isTyping,
   Switch,
+  useFullscreen,
   useNow,
 } from "../ui";
 import { anonymousNumbers } from "./cells";
@@ -55,20 +57,12 @@ interface Toggles {
   results: boolean;
 }
 
-/** A keystroke typed into a field is not a shortcut. */
-function isTyping(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  if (!el || !el.tagName) return false;
-  const tag = el.tagName.toLowerCase();
-  return tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable;
-}
-
 export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Route) => void }) {
   const t = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
   const [toggles, setToggles] = useState<Toggles>({ names: true, answers: true, results: true });
-  const [fullscreen, setFullscreen] = useState(false);
+  const [fullscreen, toggleFullscreen] = useFullscreen();
   const [selected, setSelected] = useState<{ attemptId: string; userId: string; itemId: string } | null>(
     null,
   );
@@ -190,23 +184,6 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
       })();
     },
   };
-
-  const toggleFullscreen = useCallback(() => {
-    setFullscreen((on) => {
-      // The real browser full screen on top of the in-page one: a projector
-      // wants the whole panel. A browser that refuses (a permissions policy,
-      // a headless run) still gets the page-level version, so the rejection
-      // is swallowed on purpose rather than reported.
-      const ignore = () => {};
-      try {
-        if (!on) document.documentElement.requestFullscreen?.().catch(ignore);
-        else if (document.fullscreenElement) document.exitFullscreen?.().catch(ignore);
-      } catch {
-        /* the in-page mode is enough */
-      }
-      return !on;
-    });
-  }, []);
 
   const selectCell = useCallback((row: DashboardRow, itemId: string) => {
     if (row.attemptId === null) return;

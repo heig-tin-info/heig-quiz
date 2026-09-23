@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { usePersistentChoice } from "./state";
+import { isTyping, useFullscreen, usePersistentChoice } from "./state";
 
 const KEY = "quiz-test-choice";
 const VALUES = ["cards", "list"] as const;
@@ -55,5 +55,40 @@ describe("usePersistentChoice", () => {
     expect(result.current[0]).toBe("cards");
     act(() => result.current[1]("list"));
     expect(result.current[0]).toBe("list");
+  });
+});
+
+describe("isTyping", () => {
+  it("is true in a field and in a contenteditable surface, false elsewhere", () => {
+    for (const tag of ["input", "textarea", "select"]) {
+      expect(isTyping(document.createElement(tag))).toBe(true);
+    }
+    const editable = document.createElement("div");
+    // jsdom does not derive `isContentEditable` from the attribute.
+    Object.defineProperty(editable, "isContentEditable", { value: true });
+    expect(isTyping(editable)).toBe(true);
+    expect(isTyping(document.createElement("button"))).toBe(false);
+    expect(isTyping(null)).toBe(false);
+    expect(isTyping(window)).toBe(false);
+  });
+});
+
+describe("useFullscreen", () => {
+  afterEach(() => {
+    Object.defineProperty(document, "fullscreenElement", { configurable: true, get: () => null });
+  });
+
+  it("toggles on and off, and follows the browser leaving on its own", () => {
+    const { result } = renderHook(() => useFullscreen());
+    expect(result.current[0]).toBe(false);
+    act(() => result.current[1]());
+    expect(result.current[0]).toBe(true);
+
+    // What Escape produces in a real browser.
+    Object.defineProperty(document, "fullscreenElement", { configurable: true, get: () => null });
+    act(() => {
+      document.dispatchEvent(new Event("fullscreenchange"));
+    });
+    expect(result.current[0]).toBe(false);
   });
 });

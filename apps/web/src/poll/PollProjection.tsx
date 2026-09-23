@@ -20,7 +20,18 @@ import { MarkdownView } from "../markdown/MarkdownView";
 import { useEventStream } from "../realtime/useEventStream";
 import type { Route } from "../router";
 import { setThemeChoice, useThemeChoice } from "../theme";
-import { Button, cx, IconButton, Menu, PageError, Ring, Segmented, Skeleton } from "../ui";
+import {
+  Button,
+  cx,
+  IconButton,
+  isTyping,
+  Menu,
+  PageError,
+  Ring,
+  Segmented,
+  Skeleton,
+  useFullscreen,
+} from "../ui";
 import { FIT_PROBES, fitScale, layoutWidthFor, nextProbe } from "./fit";
 import { PollBars } from "./PollBars";
 import { PollQr } from "./PollQr";
@@ -84,14 +95,6 @@ function isEnded(state: string): boolean {
   return state === "closed" || state === "grading" || state === "released";
 }
 
-/** A keystroke typed into a field is not a shortcut. */
-function isTyping(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null;
-  if (!el || !el.tagName) return false;
-  const tag = el.tagName.toLowerCase();
-  return tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable;
-}
-
 /**
  * Dark unless this browser explicitly asked for light. It toggles the class
  * directly rather than going through `applyTheme`, so leaving the projection
@@ -113,31 +116,6 @@ function useProjectionTheme(): { dark: boolean; toggle: () => void } {
     };
   }, [dark]);
   return { dark, toggle: () => setThemeChoice(dark ? "light" : "dark") };
-}
-
-/** The in-page and the browser full screen, together (the projector wants both). */
-function useFullscreen(): [boolean, () => void] {
-  const [on, setOn] = useState(false);
-  const toggle = useCallback(() => {
-    setOn((was) => {
-      const ignore = () => {};
-      try {
-        if (!was) document.documentElement.requestFullscreen?.().catch(ignore);
-        else if (document.fullscreenElement) document.exitFullscreen?.().catch(ignore);
-      } catch {
-        /* the in-page mode is enough */
-      }
-      return !was;
-    });
-  }, []);
-  // Escape, F11 and the browser's own chrome all leave full screen without
-  // telling us; the event is the only truth about it.
-  useEffect(() => {
-    const sync = () => setOn(document.fullscreenElement !== null);
-    document.addEventListener("fullscreenchange", sync);
-    return () => document.removeEventListener("fullscreenchange", sync);
-  }, []);
-  return [on, toggle];
 }
 
 /**

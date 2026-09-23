@@ -8,7 +8,8 @@
 //   live      the live primitives (PLAN-MVP §6.4).
 //   forms     the short form in a dialog (FormDialog), on layers + controls.
 //   state     browser state a screen reads: remembered choices
-//             (usePersistentChoice). Imports no sibling.
+//             (usePersistentChoice), isTyping, useFullscreen. Imports no
+//             sibling.
 //
 // `QueryError`, `PageError` and `FormError` come from the app side (they read an
 // `ApiError`), so that nothing under `ui/` imports the HTTP client.

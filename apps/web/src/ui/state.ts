@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 // --- Remembered choices (a viewer's habit, never a state of the data) ---
 
@@ -53,4 +53,52 @@ export function usePersistentChoice<T extends string>(
     [key],
   );
   return [value, set];
+}
+
+// --- The keyboard and the screen ---
+
+/**
+ * A keystroke typed into a field is not a shortcut: `f`, `r`, `v` or an arrow
+ * pressed in an input, a textarea, a select or a contenteditable surface (the
+ * rich editor) belongs to that field.
+ */
+export function isTyping(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el || !el.tagName) return false;
+  const tag = el.tagName.toLowerCase();
+  return (
+    tag === "input" || tag === "textarea" || tag === "select" || el.isContentEditable === true
+  );
+}
+
+/**
+ * The in-page and the browser full screen, together (a projector wants both).
+ *
+ * `on` drives the page-level mode — a `fixed inset-0` stage, which is all a
+ * projector really needs. The browser's own `requestFullscreen` is attempted
+ * on top, and a refusal (a permissions policy, a headless run) is swallowed
+ * on purpose: the page-level mode is enough. Escape, F11 and the browser's
+ * own chrome all leave full screen without going through `toggle`, so the
+ * `fullscreenchange` event is the only truth about it and `on` follows it.
+ */
+export function useFullscreen(): [boolean, () => void] {
+  const [on, setOn] = useState(false);
+  const toggle = useCallback(() => {
+    setOn((was) => {
+      const ignore = () => {};
+      try {
+        if (!was) document.documentElement.requestFullscreen?.().catch(ignore);
+        else if (document.fullscreenElement) document.exitFullscreen?.().catch(ignore);
+      } catch {
+        /* the in-page mode is enough */
+      }
+      return !was;
+    });
+  }, []);
+  useEffect(() => {
+    const sync = () => setOn(document.fullscreenElement !== null);
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
+  return [on, toggle];
 }

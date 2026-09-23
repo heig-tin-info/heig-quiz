@@ -239,6 +239,19 @@ live in `ui/state.ts`, each written once.
   because five screens wrote that reader by hand, and two of them crashed in
   a private window. The storage keys are the ones those screens always used,
   so nobody loses a remembered view.
+- `isTyping(target)`: a single-letter shortcut (`f`, `r`, `v`, an arrow) is
+  not one while the keystroke lands in an input, a textarea, a select or a
+  contenteditable surface — there it is a letter the reader is writing. Every
+  screen-wide key handler asks it first; four screens used to spell it out.
+- `useFullscreen()`: the page-level full screen (a `fixed inset-0` stage,
+  which is all a projector needs) with the browser's own `requestFullscreen`
+  attempted on top and its refusal swallowed. It LISTENS to
+  `fullscreenchange`, because Escape, F11 and the browser's chrome leave the
+  browser full screen without telling the page: the state must follow the
+  browser out, or the reader is left inside an overlay whose button says
+  "Leave full screen" about a full screen already gone. The live dashboard's
+  private copy lacked that listener and did exactly that; the poll projection
+  and the dashboard now share this one.
 
 ## Components
 

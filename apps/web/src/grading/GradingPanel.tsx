@@ -25,6 +25,7 @@ import {
   Button,
   Card,
   EmptyState,
+  isTyping,
   PageError,
   PageHeader,
   QueryError,
@@ -254,18 +255,9 @@ export function GradingPanel({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      const el = document.activeElement as HTMLElement | null;
       // A sheet, a dialog or a field owns the keyboard while it is up: `v`
       // must type a v in the comment box, not validate behind the form.
-      if (
-        el &&
-        (el.tagName === "INPUT" ||
-          el.tagName === "TEXTAREA" ||
-          el.tagName === "SELECT" ||
-          el.isContentEditable)
-      ) {
-        return;
-      }
+      if (isTyping(document.activeElement)) return;
       if (document.querySelector('[role="dialog"]')) return;
       const key = e.key.toLowerCase();
       if (e.key === "ArrowRight") {

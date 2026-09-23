@@ -13,6 +13,7 @@ import {
   Button,
   EmptyState,
   IconButton,
+  isTyping,
   Modal,
   QueryError,
   Skeleton,
@@ -85,9 +86,7 @@ export function InspectModal({
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
       if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-      const el = e.target as HTMLElement | null;
-      const tag = el?.tagName?.toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select" || el?.isContentEditable) return;
+      if (isTyping(e.target)) return;
       e.preventDefault();
       goRow(e.key === "ArrowLeft" ? -1 : 1);
     };

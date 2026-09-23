@@ -10,17 +10,17 @@ import { LiveDashboard } from "./LiveDashboard";
 import { dashboardKey } from "../queryKeys";
 
 /*
- * The full-screen mode of the live dashboard, pinned before FF-06 moves
- * `useFullscreen` into the shared primitives.
+ * The full-screen mode of the live dashboard, on the shared `useFullscreen`
+ * (FF-06).
  *
  * There are TWO full screens stacked here and the distinction is the whole
  * point: the page-level one (a `fixed inset-0` overlay, which is all a
  * projector really needs) and the browser's own `requestFullscreen`, which
- * is attempted on top and whose refusal is swallowed on purpose. The
- * dashboard's copy of the hook drives the first from React state and fires
- * the second as a side effect — and, unlike `PollProjection`'s copy, it
- * NEVER LISTENS to `fullscreenchange`, which is the defect the last block of
- * this file pins so the fix shows up as a flipped test.
+ * is attempted on top and whose refusal is swallowed on purpose. The hook
+ * drives the first from React state, fires the second as a side effect, and
+ * LISTENS to `fullscreenchange` so the overlay follows the browser out —
+ * the dashboard's former private copy did not, which is the defect the last
+ * block of this file pinned before the fix and now guards.
  */
 
 class SilentEventSource {
@@ -199,21 +199,15 @@ describe("LiveDashboard — entering and leaving full screen", () => {
 
 describe("LiveDashboard — the browser leaving full screen on its own", () => {
   /*
-   * DEFECT (FF-06), pinned as it stands TODAY so the fix flips this test.
-   *
-   * `PollProjection` listens for `fullscreenchange` and follows it;
-   * `LiveDashboard`'s copy of the same hook does not. So when the browser
-   * leaves full screen without going through the component — Escape, F11,
-   * a tab switch, the operating system — React's `fullscreen` stays true and
-   * the teacher is left inside the `fixed inset-0` overlay with a header
-   * button that now says "Leave full screen" while the browser has already
-   * left it.
-   *
-   * When the listener is added (the shared `useFullscreen` of FF-06), these
-   * two expectations become `toBeNull()` and "Full screen", and the test is
-   * renamed "follows the browser out of full screen".
+   * FIXED (FF-06). The dashboard's former copy of the hook never listened to
+   * `fullscreenchange`, so when the browser left full screen without going
+   * through the component — Escape, F11, a tab switch, the operating system —
+   * React's `fullscreen` stayed true and the teacher was left inside the
+   * `fixed inset-0` overlay with a header button saying "Leave full screen"
+   * while the browser had already left it. The shared `useFullscreen`
+   * follows the event.
    */
-  it("today: does NOT follow the browser out — the overlay stays up after `fullscreenchange`", async () => {
+  it("follows the browser out of full screen", async () => {
     const user = userEvent.setup();
     setup();
     await screen.findByText("Nadia Roux 0");
@@ -226,11 +220,11 @@ describe("LiveDashboard — the browser leaving full screen on its own", () => {
     setFullscreenElement(null);
     document.dispatchEvent(new Event("fullscreenchange"));
 
-    await waitFor(() => expect(overlay()).not.toBeNull());
-    expect(leaveButton()).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => expect(overlay()).toBeNull());
+    expect(enterButton()).toHaveAttribute("aria-pressed", "false");
   });
 
-  it("today: `F` after such an exit toggles the overlay off rather than back on", async () => {
+  it("`F` after such an exit brings the full screen back rather than toggling it off", async () => {
     const user = userEvent.setup();
     setup();
     await screen.findByText("Nadia Roux 0");
@@ -240,12 +234,13 @@ describe("LiveDashboard — the browser leaving full screen on its own", () => {
     setFullscreenElement(null);
     document.dispatchEvent(new Event("fullscreenchange"));
 
-    // The state and the browser disagree, so the next `f` undoes the state
-    // instead of restoring the browser's full screen: the teacher presses it
-    // expecting to come back and lands in the page. That inversion is the
-    // user-visible cost of the missing listener.
-    await user.keyboard("f");
     await waitFor(() => expect(overlay()).toBeNull());
-    expect(requestFullscreen).toHaveBeenCalledTimes(1);
+
+    // The state followed the browser out, so the next `f` is an ENTER again:
+    // the teacher presses it expecting to come back, and does — the overlay
+    // and a second request for the browser's full screen.
+    await user.keyboard("f");
+    await waitFor(() => expect(overlay()).not.toBeNull());
+    expect(requestFullscreen).toHaveBeenCalledTimes(2);
   });
 });
