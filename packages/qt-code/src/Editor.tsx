@@ -30,7 +30,6 @@ import { EDITOR_STRINGS, type CodeEditorStrings } from "./strings.js";
 import { caseVerdict } from "./verdict.js";
 import {
   badge,
-  button,
   card,
   CheckboxField,
   cx,
@@ -41,7 +40,12 @@ import {
   IssueList,
   label,
   NumberField,
+  patchAt,
   PromptField,
+  RemoveRowButton,
+  removeAt,
+  RowList,
+  RowListHeader,
   sectionTitle,
   TryPanel,
 } from "@quiz/ui";
@@ -148,9 +152,7 @@ export function CodeEditor({
   const patchTests = (next: Partial<CodeConfig["tests"]>) =>
     patch({ tests: { ...config.tests, ...next } });
   const patchCase = (index: number, next: Partial<CodeCase>) =>
-    patchTests({
-      cases: config.tests.cases.map((c, i) => (i === index ? { ...c, ...next } : c)),
-    });
+    patchTests({ cases: patchAt(config.tests.cases, index, next) });
   const setCases = (cases: CodeCase[]) => {
     // The drafts are keyed by position, so a removal would shift them onto the
     // wrong case. Dropping them re-reads every row from the config.
@@ -365,31 +367,23 @@ export function CodeEditor({
       </section>
 
       {/*
-       * One PANEL per case, not one table row.
-       *
-       * A case now carries ten fields — a name, a command line, an input, an
-       * expected output and the two checks that decide whether it passed, plus
-       * its points, its budget and its visibility. Ten columns is not a table
-       * a teacher can read at 1440 px, let alone on a laptop; a panel gives
-       * each case a heading and three short lines (DESIGN.md, tables).
+       * One PANEL per case (`RowList`): a case carries ten fields — a name, a
+       * command line, an input, an expected output and the two checks that
+       * decide whether it passed, plus its points, its budget and its
+       * visibility — and ten columns is not a table.
        */}
       <section className={cx(card, "flex flex-col gap-3 p-4")}>
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className={sectionTitle}>{s.cases}</h3>
-          <span className={badge()}>{plural(s, "totalPoints", totalCasePoints(config))}</span>
-          <button
-            type="button"
-            className={button("secondary", "sm", "ml-auto")}
-            disabled={disabled}
-            onClick={() => setCases([...config.tests.cases, { ...NEW_CASE }])}
-          >
-            {s.addCase}
-          </button>
-        </div>
+        <RowListHeader
+          title={s.cases}
+          count={plural(s, "totalPoints", totalCasePoints(config))}
+          addLabel={s.addCase}
+          addDisabled={disabled}
+          onAdd={() => setCases([...config.tests.cases, { ...NEW_CASE }])}
+        />
 
-        <ol className="flex flex-col gap-3">
-          {config.tests.cases.map((testCase, i) => (
-            <li key={i} className="rounded-card border border-line bg-surface-2 p-3">
+        <RowList items={config.tests.cases}>
+          {(testCase, i) => (
+            <>
               <div className="flex flex-wrap items-end gap-3">
                 <FieldCell
                   label={fmt(s.case, { n: i + 1 })}
@@ -437,15 +431,11 @@ export function CodeEditor({
                   disabled={disabled}
                   onChange={(hidden) => patchCase(i, { visible: !hidden })}
                 />
-                <button
-                  type="button"
-                  className={button("ghost", "sm")}
-                  aria-label={fmt(s.removeCase, { name: testCase.name })}
+                <RemoveRowButton
+                  label={fmt(s.removeCase, { name: testCase.name })}
                   disabled={disabled || config.tests.cases.length <= 1}
-                  onClick={() => setCases(config.tests.cases.filter((_, j) => j !== i))}
-                >
-                  ×
-                </button>
+                  onClick={() => setCases(removeAt(config.tests.cases, i))}
+                />
               </div>
 
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -516,9 +506,9 @@ export function CodeEditor({
                 />
               </div>
               <IssueList issues={issuesAt(issues, "tests", "cases", i)} />
-            </li>
-          ))}
-        </ol>
+            </>
+          )}
+        </RowList>
         <IssueList issues={caseIssues} />
         <p className={hint}>{s.timeMsHint}</p>
         <p className={hint}>{s.exitCodeHint}</p>

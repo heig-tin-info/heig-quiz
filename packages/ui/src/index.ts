@@ -37,5 +37,6 @@ export {
 export { CheckboxField, FieldCell, NumberField, Segmented } from "./fields.js";
 export { IssueList } from "./issues.js";
 export { AsideSection, TryPanel, type TryStatus } from "./panels.js";
+export { patchAt, RemoveRowButton, removeAt, RowList, RowListHeader } from "./rows.js";
 export { PromptField } from "./PromptField.js";
 export { pointsOrDash, ScoreHeader, Verdict, verdictTone } from "./verdict.js";

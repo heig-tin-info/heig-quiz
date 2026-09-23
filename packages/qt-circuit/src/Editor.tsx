@@ -38,8 +38,6 @@ import {
 } from "./strings.js";
 import {
   AsideSection,
-  badge,
-  button,
   card,
   CheckboxField,
   cx,
@@ -50,7 +48,12 @@ import {
   IssueList,
   label,
   NumberField,
+  patchAt,
   PromptField,
+  RemoveRowButton,
+  removeAt,
+  RowList,
+  RowListHeader,
   sectionTitle,
   Segmented,
   TryPanel,
@@ -174,7 +177,7 @@ export function CircuitEditor({
 
   const patch = (next: Partial<CircuitConfig>) => onChange({ ...config, ...next });
   const patchStimulus = (index: number, next: Partial<Stimulus>) =>
-    patch({ stimuli: config.stimuli.map((st, i) => (i === index ? { ...st, ...next } : st)) });
+    patch({ stimuli: patchAt(config.stimuli, index, next) });
 
   const toggleKind = (kind: ComponentKind, on: boolean) => {
     const kinds = on
@@ -421,31 +424,26 @@ export function CircuitEditor({
       </section>
 
       <section className={cx(card, "flex flex-col gap-3 p-4")}>
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className={sectionTitle}>{s.stimuli}</h3>
-          <span className={badge()}>{plural(s, "totalPoints", totalStimulusPoints(config))}</span>
-          <button
-            type="button"
-            className={button("secondary", "sm", "ml-auto")}
-            disabled={disabled || config.stimuli.length >= 4}
-            onClick={() =>
-              patch({
-                stimuli: [
-                  ...config.stimuli,
-                  emptyStimulus({ name: fmt(s.stimulus, { n: config.stimuli.length + 1 }) }),
-                ],
-              })
-            }
-          >
-            {s.addStimulus}
-          </button>
-        </div>
+        <RowListHeader
+          title={s.stimuli}
+          count={plural(s, "totalPoints", totalStimulusPoints(config))}
+          addLabel={s.addStimulus}
+          addDisabled={disabled || config.stimuli.length >= 4}
+          onAdd={() =>
+            patch({
+              stimuli: [
+                ...config.stimuli,
+                emptyStimulus({ name: fmt(s.stimulus, { n: config.stimuli.length + 1 }) }),
+              ],
+            })
+          }
+        />
         <p className={hint}>{s.stimuliHint}</p>
         {config.stimuli.length === 0 ? <p className={hint}>{s.noStimuli}</p> : null}
 
-        <ol className="flex flex-col gap-3">
-          {config.stimuli.map((stimulus, i) => (
-            <li key={i} className="rounded-card border border-line bg-surface-2 p-3">
+        <RowList items={config.stimuli}>
+          {(stimulus, i) => (
+            <>
               <div className="flex flex-wrap items-end gap-3">
                 <FieldCell
                   label={fmt(s.stimulus, { n: i + 1 })}
@@ -479,15 +477,11 @@ export function CircuitEditor({
                   disabled={disabled}
                   onChange={(hidden) => patchStimulus(i, { visible: !hidden })}
                 />
-                <button
-                  type="button"
-                  className={button("ghost", "sm")}
-                  aria-label={fmt(s.removeStimulus, { name: stimulus.name })}
+                <RemoveRowButton
+                  label={fmt(s.removeStimulus, { name: stimulus.name })}
                   disabled={disabled}
-                  onClick={() => patch({ stimuli: config.stimuli.filter((_, j) => j !== i) })}
-                >
-                  ×
-                </button>
+                  onClick={() => patch({ stimuli: removeAt(config.stimuli, i) })}
+                />
               </div>
 
               <div className="mt-3 flex flex-col gap-2">
@@ -613,9 +607,9 @@ export function CircuitEditor({
                 </div>
               </div>
               <IssueList issues={issuesAt(issues, "stimuli", i)} />
-            </li>
-          ))}
-        </ol>
+            </>
+          )}
+        </RowList>
         <IssueList issues={issuesAt(issues, "stimuli").filter((x) => x.path.length === 1)} />
       </section>
 

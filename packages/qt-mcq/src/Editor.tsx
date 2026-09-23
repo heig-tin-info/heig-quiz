@@ -52,7 +52,15 @@ import {
   type McqQuestionPolicy,
 } from "./schema.js";
 import { mcqEditorStrings, type McqEditorStringKey } from "./strings.js";
-import { AsideSection, cx, IssueList, PromptField, Segmented } from "@quiz/ui";
+import {
+  AsideSection,
+  cx,
+  IssueList,
+  patchAt,
+  PromptField,
+  removeAt,
+  Segmented,
+} from "@quiz/ui";
 import {
   buttonClass,
   cardTitleClass,
@@ -402,13 +410,9 @@ export function McqEditor({
                   removable={config.choices.length > MCQ_MIN_CHOICES}
                   {...(RichText === undefined ? {} : { RichText })}
                   {...(uploadAsset === undefined ? {} : { uploadAsset })}
-                  onText={(text) =>
-                    setChoices(config.choices.map((c, i) => (i === index ? { ...c, text } : c)))
-                  }
-                  onCorrect={(correct) =>
-                    setChoices(config.choices.map((c, i) => (i === index ? { ...c, correct } : c)))
-                  }
-                  onRemove={() => setChoices(config.choices.filter((_, i) => i !== index))}
+                  onText={(text) => setChoices(patchAt(config.choices, index, { text }))}
+                  onCorrect={(correct) => setChoices(patchAt(config.choices, index, { correct }))}
+                  onRemove={() => setChoices(removeAt(config.choices, index))}
                   onEnter={() => {
                     // Enter walks to the next choice, and makes one when there
                     // is none: writing four answers is four lines and four

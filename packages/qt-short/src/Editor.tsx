@@ -27,6 +27,7 @@ import {
   FieldCell,
   IssueList,
   PromptField,
+  removeAt,
   Segmented,
 } from "@quiz/ui";
 import {
@@ -552,7 +553,7 @@ export function ShortEditor({
                 className={cx(buttonClass, "ml-auto w-7 px-0 text-fg-muted hover:text-danger")}
                 aria-label={`${s.removeMatcher} ${index + 1}`}
                 disabled={disabled || config.matchers.length <= 1}
-                onClick={() => setMatchers(config.matchers.filter((_, i) => i !== index))}
+                onClick={() => setMatchers(removeAt(config.matchers, index))}
               >
                 ×
               </button>
