@@ -169,6 +169,52 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
     expect((await get(`/app/api/attempts/${attemptId}`, outsider.headers)).statusCode).toBe(404);
   });
 
+  /**
+   * The order of the refusals, which the route wrappers of `modules/http.ts`
+   * must keep (audit B-02): session (the preHandler) → params (404) → then,
+   * for a student, body (400) before the loader's 404, and for a teacher,
+   * the loader's 404 before the body.
+   */
+  it("refuses in the same order as ever: session, params, then body and scope", async () => {
+    const badBody = { revision: "not a number" };
+    const anon = await server.app.inject({
+      method: "PUT",
+      url: `/app/api/attempts/not-a-uuid/answers/also-not`,
+      headers: {},
+      payload: badBody,
+    });
+    expect(anon.statusCode).toBe(401);
+    const studentOnTeacher = await post(`/app/api/evaluations/not-a-uuid/extend`, student.headers, {});
+    expect(studentOnTeacher.statusCode).toBe(403);
+
+    const badParams = await server.app.inject({
+      method: "PUT",
+      url: `/app/api/attempts/not-a-uuid/answers/${itemId}`,
+      headers: student.headers,
+      payload: badBody,
+    });
+    expect(badParams.statusCode).toBe(404);
+    expect(badParams.json()).toEqual({ error: "not_found" });
+
+    // Student: a malformed body is a 400 even on somebody else's attempt.
+    const foreign = await server.app.inject({
+      method: "PUT",
+      url: `/app/api/attempts/${attemptId}/answers/${itemId}`,
+      headers: outsider.headers,
+      payload: badBody,
+    });
+    expect(foreign.statusCode).toBe(400);
+    expect(foreign.json().error).toBe("validation");
+
+    // Teacher: off the staff, the scope's 404 wins over the malformed body.
+    const stranger = await server.signIn("teacher");
+    const offStaff = await post(`/app/api/evaluations/${seed.evaluationId}/extend`, stranger.headers, {
+      minutes: "many",
+    });
+    expect(offStaff.statusCode).toBe(404);
+    expect(offStaff.json()).toEqual({ error: "not_found" });
+  });
+
   it("autosaves, restores and refuses a stale revision", async () => {
     const save = await server.app.inject({
       method: "PUT",
