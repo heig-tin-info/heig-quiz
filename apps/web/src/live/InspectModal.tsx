@@ -5,9 +5,8 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import type { AttemptInspect, DashboardRow } from "@quiz/contracts";
 
 import { api } from "../api";
-import { typeLabel } from "../evaluation/common";
 import { useT } from "../i18n";
-import { QuestionReviewHost } from "../questionTypes";
+import { QuestionReviewHost, typeLabel } from "../questionTypes";
 import type { GridState } from "../realtime/grid";
 import {
   Badge,
@@ -196,7 +195,7 @@ export function InspectModal({
                   <span className="text-[13px] font-semibold">
                     {t("live.grid.question", { n: index + 1 })}
                   </span>
-                  <Badge tone="zinc">{typeLabel(entry.item.type, t)}</Badge>
+                  <Badge tone="zinc">{typeLabel(t, entry.item.type)}</Badge>
                   {cell ? (
                     <span className="w-9">
                       <VerdictCell state={cellState(cell, true)} />

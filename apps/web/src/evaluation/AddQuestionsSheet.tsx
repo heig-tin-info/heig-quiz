@@ -6,6 +6,8 @@ import type { EvaluationDetail, PoolSummary, QuestionPage } from "@quiz/contract
 
 import { api, apiErrorMessage } from "../api";
 import { useT } from "../i18n";
+import { DifficultyDots } from "../pool/QuestionTable";
+import { QUESTION_TYPE_IDS, typeLabel } from "../questionTypes";
 import {
   Alert,
   Badge,
@@ -19,7 +21,7 @@ import {
   Skeleton,
   Tip,
 } from "../ui";
-import { evaluationKey, typeLabel } from "./common";
+import { evaluationKey } from "./common";
 
 /**
  * The question picker (F-EVAL-01): a pool on the left of the filter bar, a
@@ -134,9 +136,9 @@ export function AddQuestionsSheet({
             width="w-40"
           >
             <option value="">{t("picker.allTypes")}</option>
-            {["mcq", "short", "cloze", "code"].map((id) => (
+            {QUESTION_TYPE_IDS.map((id) => (
               <option key={id} value={id}>
-                {typeLabel(id, t)}
+                {typeLabel(t, id)}
               </option>
             ))}
           </Select>
@@ -206,13 +208,8 @@ export function AddQuestionsSheet({
                     label={
                       <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
                         <span className="truncate font-medium">{row.internalName}</span>
-                        <span className="text-xs text-fg-faint">{typeLabel(row.type, t)}</span>
-                        <span
-                          className="text-xs text-fg-faint"
-                          aria-label={t("picker.difficulty")}
-                        >
-                          {"●".repeat(row.difficulty)}
-                        </span>
+                        <span className="text-xs text-fg-faint">{typeLabel(t, row.type)}</span>
+                        <DifficultyDots value={row.difficulty} />
                         {row.deprecated ? (
                           <Badge tone="amber">{t("eval.questions.deprecated")}</Badge>
                         ) : null}
