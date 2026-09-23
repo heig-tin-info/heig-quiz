@@ -37,10 +37,22 @@ import {
   GRADING_RUNNER_QUEUE,
   type JobQueue,
 } from "../../jobs.js";
-import { byId, gradeDefaults, joinedItems } from "../evaluation/service.js";
+import {
+  byId,
+  gradeDefaults,
+  joinedItems,
+  type EvaluationRecord,
+  type JoinedItem,
+} from "../evaluation/service.js";
 import { loadConfig, typeOf } from "../pool/config.js";
 import * as events from "./events.js";
-import { pairKey, standingGradings, writeGrading, type PairKey } from "./service.js";
+import {
+  pairKey,
+  standingGradings,
+  writeGrading,
+  type GradingRecord,
+  type PairKey,
+} from "./service.js";
 
 /** How often the progress event goes out while a pass is running (§5.4). */
 const PROGRESS_EVERY = 25;
@@ -130,26 +142,30 @@ export async function registerGradingJobs(app: FastifyInstance, queue: JobQueue)
 
 // --- The evaluation pass --------------------------------------------------
 
-/**
- * One pass over (attempts × items). Exported because it IS the unit under
- * test: a db test calls it directly and asserts the rows it wrote, with no
- * queue and no timer anywhere.
- */
-export async function runEvaluationGrading(
-  app: FastifyInstance,
-  job: EvaluationGradingJob,
-): Promise<void> {
-  const db = app.db;
-  const evaluation = await byId(db, job.evaluationId);
-  if (!evaluation) return;
+type AttemptRecord = typeof attempts.$inferSelect;
 
+/** What one pass reads up front: the grid, and what already stands on it. */
+interface Pass {
+  items: JoinedItem[];
+  attempts: AttemptRecord[];
+  answers: Map<PairKey, typeof answers.$inferSelect>;
+  standing: Map<PairKey, GradingRecord>;
+  teacherIds: string[];
+}
+
+/** The reads of a pass, or `null` when the grid is empty and there is nothing to do. */
+async function loadPass(
+  db: Db,
+  evaluation: EvaluationRecord,
+  job: EvaluationGradingJob,
+): Promise<Pass | null> {
   const allItems = await joinedItems(db, evaluation.id);
   const items = job.itemIds ? allItems.filter((i) => job.itemIds!.includes(i.item.id)) : allItems;
   const attemptRows = await db
     .select()
     .from(attempts)
     .where(eq(attempts.evaluationId, evaluation.id));
-  if (items.length === 0 || attemptRows.length === 0) return;
+  if (items.length === 0 || attemptRows.length === 0) return null;
 
   const answerRows = await db
     .select()
@@ -160,116 +176,168 @@ export async function runEvaluationGrading(
         attemptRows.map((a) => a.id),
       ),
     );
-  const byPair = new Map(answerRows.map((a) => [pairKey(a.attemptId, a.itemId), a]));
-  const standing = await standingGradings(db, evaluation.id);
-  const teacherIds = await events.staffOf(db, evaluation);
+  return {
+    items,
+    attempts: attemptRows,
+    answers: new Map(answerRows.map((a) => [pairKey(a.attemptId, a.itemId), a])),
+    standing: await standingGradings(db, evaluation.id),
+    teacherIds: await events.staffOf(db, evaluation),
+  };
+}
 
-  const total = items.length * attemptRows.length;
+/**
+ * The progress events of a pass (§5.4): one every {@link PROGRESS_EVERY}
+ * cells, skipped or graded alike, and a final one that says what is left.
+ */
+function progressReporter(evaluation: EvaluationRecord, teacherIds: string[], total: number) {
   let done = 0;
   let sinceEvent = 0;
-  let queuedRunner = 0;
-
-  for (const item of items) {
-    // `loadConfig` is the ONE read pipeline (§1.6): the frozen version is
-    // migrated and parsed once per item, not once per attempt.
-    let config: unknown;
-    try {
-      config = loadConfig(item.question.type, {
-        config: item.version.config,
-        configVersion: item.version.configVersion,
-      });
-    } catch (err) {
-      app.log.error({ err, itemId: item.item.id }, "grading: unreadable question config");
-      config = null;
-    }
-
-    for (const attempt of attemptRows) {
-      const key: PairKey = pairKey(attempt.id, item.item.id);
+  return {
+    /** One cell walked. */
+    tick(): void {
       done += 1;
       sinceEvent += 1;
+      if (sinceEvent < PROGRESS_EVERY) return;
+      sinceEvent = 0;
+      events.progress(evaluation, teacherIds, { done, total, phase: "auto" });
+    },
+    finish(phase: "runner" | "done"): void {
+      events.progress(evaluation, teacherIds, { done, total, phase });
+    },
+  };
+}
 
-      // Idempotency (§5.4): a cell a teacher already settled is never
-      // touched again, so running the job twice changes nothing.
-      const current = standing.get(key);
-      if (current?.state === "validated") {
-        if (sinceEvent >= PROGRESS_EVERY) {
-          sinceEvent = 0;
-          events.progress(evaluation, teacherIds, { done, total, phase: "auto" });
-        }
-        continue;
-      }
+/**
+ * The stored config of one item through `loadConfig`, the ONE read pipeline
+ * (§1.6): migrated and parsed once per item, not once per attempt. `null`
+ * when it cannot be read, and every cell of the item becomes a proposal.
+ */
+function readConfig(app: FastifyInstance, item: JoinedItem): unknown {
+  try {
+    return loadConfig(item.question.type, {
+      config: item.version.config,
+      configVersion: item.version.configVersion,
+    });
+  } catch (err) {
+    app.log.error({ err, itemId: item.item.id }, "grading: unreadable question config");
+    return null;
+  }
+}
 
-      const answer = byPair.get(key) ?? null;
-      const base = {
-        attemptId: attempt.id,
-        itemId: item.item.id,
-        answerId: answer?.id ?? null,
-        maxPoints: item.item.points,
-        now: app.clock.now(),
-        ...(job.regradeNote === undefined ? {} : { regradeNote: job.regradeNote }),
-      };
+/**
+ * One cell that no teacher has settled yet: written, or handed to the runner.
+ * Returns whether it went to the runner.
+ */
+async function gradeCell(
+  app: FastifyInstance,
+  cell: {
+    evaluation: EvaluationRecord;
+    job: EvaluationGradingJob;
+    item: JoinedItem;
+    config: unknown;
+    attempt: AttemptRecord;
+    answer: typeof answers.$inferSelect | null;
+  },
+): Promise<boolean> {
+  const { evaluation, job, item, config, attempt, answer } = cell;
+  const db = app.db;
+  const base = {
+    attemptId: attempt.id,
+    itemId: item.item.id,
+    answerId: answer?.id ?? null,
+    maxPoints: item.item.points,
+    now: app.clock.now(),
+    ...(job.regradeNote === undefined ? {} : { regradeNote: job.regradeNote }),
+  };
 
-      if (config === null) {
-        await writeGrading(db, { ...base, ...failedProposal("config_unreadable") });
-      } else if (answer === null) {
-        // F-GRADE-01: an absent answer is worth zero, and it is settled.
-        //
-        // With NO details: `gradings.details` is the question type's own
-        // breakdown, and no type ever ran here. A marker of another shape is
-        // handed to that type's `Review` further down the line, which is how
-        // a feedback page dies on `details.cases.filter`. The record of what
-        // happened is `answerId: null` beside the zero.
-        await writeGrading(db, {
-          ...base,
-          points: 0,
-          source: "auto",
-          state: "validated",
-          details: null,
-        });
-      } else {
-        const outcome = await gradeOne(app, {
-          type: item.question.type,
-          config,
-          payload: answer.payload,
-          ctx: {
-            seed: attempt.seed,
-            itemId: item.item.id,
-            attemptId: attempt.id,
-            itemPoints: item.item.points,
-            now: base.now,
-            runner: app.runner,
-            // The evaluation's per-type settings: what a question config
-            // that says "inherit" defers to (an mcq's scoring policy).
-            defaults: gradeDefaults(evaluation),
-          },
-        });
-        if (outcome.kind === "written") {
-          await writeGrading(db, { ...base, ...outcome.grading });
-        } else {
-          queuedRunner += 1;
-          await enqueueRunnerGrading(app, {
-            evaluationId: evaluation.id,
-            attemptId: attempt.id,
-            itemId: item.item.id,
-            answerId: answer.id,
-            request: outcome.request,
-            ...(job.regradeNote === undefined ? {} : { regradeNote: job.regradeNote }),
-          });
-        }
-      }
-
-      if (sinceEvent >= PROGRESS_EVERY) {
-        sinceEvent = 0;
-        events.progress(evaluation, teacherIds, { done, total, phase: "auto" });
-      }
-    }
+  if (config === null) {
+    await writeGrading(db, { ...base, ...failedProposal("config_unreadable") });
+    return false;
+  }
+  if (answer === null) {
+    // F-GRADE-01: an absent answer is worth zero, and it is settled.
+    //
+    // With NO details: `gradings.details` is the question type's own
+    // breakdown, and no type ever ran here. A marker of another shape is
+    // handed to that type's `Review` further down the line, which is how
+    // a feedback page dies on `details.cases.filter`. The record of what
+    // happened is `answerId: null` beside the zero.
+    await writeGrading(db, {
+      ...base,
+      points: 0,
+      source: "auto",
+      state: "validated",
+      details: null,
+    });
+    return false;
   }
 
-  events.progress(evaluation, teacherIds, {
-    done,
-    total,
-    phase: queuedRunner > 0 ? "runner" : "done",
+  const outcome = await gradeOne(app, {
+    type: item.question.type,
+    config,
+    payload: answer.payload,
+    ctx: {
+      seed: attempt.seed,
+      itemId: item.item.id,
+      attemptId: attempt.id,
+      itemPoints: item.item.points,
+      now: base.now,
+      runner: app.runner,
+      // The evaluation's per-type settings: what a question config
+      // that says "inherit" defers to (an mcq's scoring policy).
+      defaults: gradeDefaults(evaluation),
+    },
   });
+  if (outcome.kind === "written") {
+    await writeGrading(db, { ...base, ...outcome.grading });
+    return false;
+  }
+  await enqueueRunnerGrading(app, {
+    evaluationId: evaluation.id,
+    attemptId: attempt.id,
+    itemId: item.item.id,
+    answerId: answer.id,
+    request: outcome.request,
+    ...(job.regradeNote === undefined ? {} : { regradeNote: job.regradeNote }),
+  });
+  return true;
+}
+
+/**
+ * One pass over (attempts × items). Exported because it IS the unit under
+ * test: a db test calls it directly and asserts the rows it wrote, with no
+ * queue and no timer anywhere.
+ */
+export async function runEvaluationGrading(
+  app: FastifyInstance,
+  job: EvaluationGradingJob,
+): Promise<void> {
+  const evaluation = await byId(app.db, job.evaluationId);
+  if (!evaluation) return;
+  const pass = await loadPass(app.db, evaluation, job);
+  if (!pass) return;
+
+  const progress = progressReporter(
+    evaluation,
+    pass.teacherIds,
+    pass.items.length * pass.attempts.length,
+  );
+  let queuedRunner = 0;
+  for (const item of pass.items) {
+    const config = readConfig(app, item);
+    for (const attempt of pass.attempts) {
+      const key = pairKey(attempt.id, item.item.id);
+      // Idempotency (§5.4): a cell a teacher already settled is never
+      // touched again, so running the job twice changes nothing.
+      if (pass.standing.get(key)?.state !== "validated") {
+        const answer = pass.answers.get(key) ?? null;
+        const queued = await gradeCell(app, { evaluation, job, item, config, attempt, answer });
+        if (queued) queuedRunner += 1;
+      }
+      progress.tick();
+    }
+  }
+  progress.finish(queuedRunner > 0 ? "runner" : "done");
 }
 
 type GradeOutcome =

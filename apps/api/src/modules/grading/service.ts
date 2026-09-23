@@ -344,10 +344,91 @@ async function historyOf(
   return map;
 }
 
+type AttemptRecord = typeof attempts.$inferSelect;
+
+/** Everything the panel reads besides the items and the attempts, keyed by cell. */
+interface QueueContext {
+  answers: Map<PairKey, typeof answers.$inferSelect>;
+  standing: Map<PairKey, GradingRecord>;
+  history: Map<PairKey, GradingHistoryEntry[]>;
+  roster: Map<string, Roster>;
+  /** The teacher's own test walks (ADR-018). */
+  staffAttempts: ReadonlySet<string>;
+}
+
+/** The five whole-evaluation reads of the panel: one query each, never one per cell. */
+async function loadQueueContext(
+  db: Db,
+  evaluation: EvaluationRecord,
+  attemptRows: readonly AttemptRecord[],
+): Promise<QueueContext> {
+  const answerRows =
+    attemptRows.length === 0
+      ? []
+      : await db
+          .select()
+          .from(answers)
+          .where(
+            inArray(
+              answers.attemptId,
+              attemptRows.map((a) => a.id),
+            ),
+          );
+  return {
+    answers: new Map(answerRows.map((a) => [pairKey(a.attemptId, a.itemId), a])),
+    standing: await standingGradings(db, evaluation.id),
+    history: await historyOf(db, evaluation.id),
+    roster: await rosterOf(db, evaluation.id),
+    // The teacher's own test walk is corrected like any other — they asked
+    // for it — but the panel says whose it is (ADR-018).
+    staffAttempts: await staffAttemptIds(db, evaluation),
+  };
+}
+
+/** One cell of the panel. The views still come from `studentView`/`solutionView` (invariant 4). */
+function entryOf(
+  { attempt, item }: { attempt: AttemptRecord; item: JoinedItem },
+  grading: GradingRecord | null,
+  context: QueueContext,
+  anonymous: boolean,
+): GradingEntry {
+  const key = pairKey(attempt.id, item.item.id);
+  const answer = context.answers.get(key) ?? null;
+  const who = context.roster.get(attempt.id);
+  const version = { config: item.version.config, configVersion: item.version.configVersion };
+  return {
+    answerId: answer?.id ?? null,
+    attemptId: attempt.id,
+    itemId: item.item.id,
+    // A guest has no account behind it: `rosterOf` names it "Guest n".
+    label: anonymous ? (who?.pseudonym ?? "—") : (who?.displayName ?? attempt.userId ?? "—"),
+    staff: context.staffAttempts.has(attempt.id),
+    answer: answer?.payload ?? null,
+    student: studentView({
+      type: item.question.type,
+      version,
+      seed: attempt.seed,
+      itemId: item.item.id,
+      shuffle: false,
+    }),
+    solution: solutionView({
+      type: item.question.type,
+      version,
+      seed: attempt.seed,
+      itemId: item.item.id,
+    }),
+    grading: grading ? toGrading(grading) : null,
+    history: context.history.get(key) ?? [],
+  };
+}
+
 /**
  * `GET /evaluations/:id/grading` (§4.5). Ordered by question (every student's
  * answer to one question, which is how a teacher actually corrects) or by
  * student (the quiz in order, for a dispute).
+ *
+ * The counts are those of the SELECTION (item, attempt), before the state
+ * filter: they are accumulated in the same walk that builds the entries.
  */
 export async function gradingQueue(
   db: Db,
@@ -364,76 +445,25 @@ export async function gradingQueue(
   const selected = query.attemptId
     ? attemptRows.filter((a) => a.id === query.attemptId)
     : attemptRows;
+  const context = await loadQueueContext(db, evaluation, attemptRows);
 
-  const answerRows =
-    attemptRows.length === 0
-      ? []
-      : await db
-          .select()
-          .from(answers)
-          .where(
-            inArray(
-              answers.attemptId,
-              attemptRows.map((a) => a.id),
-            ),
-          );
-  const byPair = new Map(answerRows.map((a) => [pairKey(a.attemptId, a.itemId), a]));
-  const standing = await standingGradings(db, evaluation.id);
-  const history = await historyOf(db, evaluation.id);
-  const roster = await rosterOf(db, evaluation.id);
-  // The teacher's own test walk is corrected like any other — they asked for
-  // it — but the panel says whose it is (ADR-018).
-  const staffAttempts = await staffAttemptIds(db, evaluation);
-
-  const entries: GradingEntry[] = [];
-  const pairs: { attempt: (typeof attemptRows)[number]; item: JoinedItem }[] =
+  const pairs: { attempt: AttemptRecord; item: JoinedItem }[] =
     query.by === "student"
       ? selected.flatMap((attempt) => items.map((item) => ({ attempt, item })))
       : items.flatMap((item) => selected.map((attempt) => ({ attempt, item })));
 
-  for (const { attempt, item } of pairs) {
-    const key = pairKey(attempt.id, item.item.id);
-    const grading = standing.get(key) ?? null;
+  const entries: GradingEntry[] = [];
+  let validated = 0;
+  let proposed = 0;
+  for (const pair of pairs) {
+    const grading = context.standing.get(pairKey(pair.attempt.id, pair.item.item.id)) ?? null;
+    if (grading?.state === "validated") validated += 1;
+    else if (grading?.state === "proposed") proposed += 1;
     if (query.state && grading?.state !== query.state) continue;
-    const answer = byPair.get(key) ?? null;
-    const who = roster.get(attempt.id);
-    const version = { config: item.version.config, configVersion: item.version.configVersion };
-    entries.push({
-      answerId: answer?.id ?? null,
-      attemptId: attempt.id,
-      itemId: item.item.id,
-      // A guest has no account behind it: `rosterOf` names it "Guest n".
-      label: query.anonymous
-        ? (who?.pseudonym ?? "—")
-        : (who?.displayName ?? attempt.userId ?? "—"),
-      staff: staffAttempts.has(attempt.id),
-      answer: answer?.payload ?? null,
-      student: studentView({
-        type: item.question.type,
-        version,
-        seed: attempt.seed,
-        itemId: item.item.id,
-        shuffle: false,
-      }),
-      solution: solutionView({
-        type: item.question.type,
-        version,
-        seed: attempt.seed,
-        itemId: item.item.id,
-      }),
-      grading: grading ? toGrading(grading) : null,
-      history: history.get(key) ?? [],
-    });
+    entries.push(entryOf(pair, grading, context, query.anonymous));
   }
 
   const total = items.length * selected.length;
-  let validated = 0;
-  let proposed = 0;
-  for (const { attempt, item } of pairs) {
-    const grading = standing.get(pairKey(attempt.id, item.item.id));
-    if (grading?.state === "validated") validated += 1;
-    else if (grading?.state === "proposed") proposed += 1;
-  }
   return {
     order: query.by,
     items: items.map((i) => ({
