@@ -8,7 +8,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { GRACE_MS } from "@quiz/domain";
@@ -16,13 +16,13 @@ import { registerForTests } from "@quiz/registry/server";
 
 import { TestClock } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { answers, attempts, evaluations } from "../../db/schema.js";
+import { answers, attempts, evaluationItems, evaluations } from "../../db/schema.js";
 import { subscribe, type BusMessage } from "../../events.js";
 import { testDb } from "../../test/db.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { UnavailableRunner } from "../runner/unavailable.js";
-import { applyState, itemRows, settingsOf } from "../evaluation/service.js";
+import { applyState, itemRows, settingsOf, type EvaluationRecord } from "../evaluation/service.js";
 import { presence } from "../realtime/presence.js";
 import * as service from "./service.js";
 
@@ -389,6 +389,68 @@ describe("navigation enforced server-side (F-EVAL-07, F-LIVE-08)", () => {
     });
     const view = await service.attemptView(db, evaluation, attempt, clock.now());
     expect(view.items.every((i) => !i.locked)).toBe(true);
+  });
+
+  /** The outcome of one autosave: "ok", or the refusal's code. */
+  async function tryWrite(
+    evaluation: EvaluationRecord,
+    attempt: service.AttemptRecord,
+    itemId: string,
+    revision: number,
+  ): Promise<string> {
+    try {
+      await service.saveAnswer(db, { evaluation, attempt, itemId, payload: "x", revision, now: clock.now() });
+      return "ok";
+    } catch (error) {
+      return (error as { code: string }).code;
+    }
+  }
+
+  it("milestones + shuffle: the autosave refuses exactly the items the view shows locked", async () => {
+    // Several attempts, so that a shuffled order is actually observed: the
+    // lock follows the STUDENT's order, not the canonical position.
+    let shuffledSeen = false;
+    for (let run = 0; run < 6; run++) {
+      const { evaluation, attempt, items } = await running({
+        questions: 6,
+        settings: { navigation: "milestones", shuffleItems: true },
+      });
+      for (const i of [1, 4]) {
+        await db.update(evaluationItems).set({ milestone: true }).where(eq(evaluationItems.id, items[i]!.id));
+      }
+      const row = await reload(db, evaluation.id);
+      const order = (await service.attemptView(db, row, attempt, clock.now())).items.map((i) => i.id);
+      if (order.join() !== items.map((i) => i.id).join()) shuffledSeen = true;
+      const target = order.find((id) => id === items[1]!.id || id === items[4]!.id)!;
+      await service.markDone(db, { evaluation: row, attempt, itemId: target, done: true, now: clock.now() });
+      const view = await service.attemptView(db, row, attempt, clock.now());
+      const targetRank = order.indexOf(target);
+      for (const [rank, id] of order.entries()) {
+        const locked = rank <= targetRank;
+        expect(view.items.find((i) => i.id === id)!.locked).toBe(locked);
+        expect(await tryWrite(row, attempt, id, 10 + rank)).toBe(locked ? "item_locked" : "ok");
+      }
+    }
+    expect(shuffledSeen).toBe(true);
+  });
+
+  it("forward_only + shuffle: only the item marked done is refused", async () => {
+    const { evaluation, attempt, items } = await running({
+      questions: 5,
+      settings: { navigation: "forward_only", shuffleItems: true },
+    });
+    await service.markDone(db, { evaluation, attempt, itemId: items[3]!.id, done: true, now: clock.now() });
+    for (const [k, item] of items.entries()) {
+      expect(await tryWrite(evaluation, attempt, item.id, 5 + k)).toBe(k === 3 ? "item_locked" : "ok");
+    }
+  });
+
+  it("an item of ANOTHER evaluation is a 404 in every navigation mode", async () => {
+    const other = await running({ questions: 1 });
+    for (const navigation of ["free", "forward_only", "milestones"] as const) {
+      const { evaluation, attempt } = await running({ settings: { navigation } });
+      expect(await tryWrite(evaluation, attempt, other.items[0]!.id, 1)).toBe("not_found");
+    }
   });
 });
 
@@ -855,13 +917,22 @@ describe("settings round trip", () => {
 describe("the lobby tick (step 3)", () => {
   afterEach(() => presence.reset());
 
-  it("starts an auto lobby once every student is present, and never a manual one", async () => {
+  it("starts an auto lobby once every student is present, never a manual or unset one", async () => {
     const auto = await seedLive(db, { settings: { lobby: "auto" } });
     const manual = await seedLive(db, { settings: { lobby: "manual" } });
-    for (const seed of [auto, manual]) {
+    // No `lobby` key at all: the default, "manual", is what the SQL predicate
+    // of the tick must read too.
+    const unset = await seedLive(db, { settings: { lobby: "auto" } });
+    await db
+      .update(evaluations)
+      .set({ settings: sql`${evaluations.settings} - 'lobby'` })
+      .where(eq(evaluations.id, unset.evaluationId));
+    const [stored] = await db.select().from(evaluations).where(eq(evaluations.id, unset.evaluationId));
+    expect(Object.keys(stored!.settings as object)).not.toContain("lobby");
+    for (const seed of [auto, manual, unset]) {
       await applyState(db, await reload(db, seed.evaluationId), "lobby", clock.now());
     }
-    const ours = new Set([auto.evaluationId, manual.evaluationId]);
+    const ours = new Set([auto.evaluationId, manual.evaluationId, unset.evaluationId]);
     const tick = async () =>
       (await service.autoStartFullLobbies(db, clock.now()))
         .map((row) => row.id)
@@ -870,13 +941,17 @@ describe("the lobby tick (step 3)", () => {
     // Nobody in the room, then half of it: nothing starts.
     expect(await tick()).toEqual([]);
     presence.join(auto.evaluationId, auto.studentIds[0]!, clock.now());
-    for (const id of manual.studentIds) presence.join(manual.evaluationId, id, clock.now());
+    for (const seed of [manual, unset]) {
+      for (const id of seed.studentIds) presence.join(seed.evaluationId, id, clock.now());
+    }
     expect(await tick()).toEqual([]);
 
-    // The whole class of the auto lobby: it starts; the full manual one waits.
+    // The whole class of the auto lobby: it starts; the full manual one and
+    // the full one without the key wait.
     for (const id of auto.studentIds) presence.join(auto.evaluationId, id, clock.now());
     expect(await tick()).toEqual([auto.evaluationId]);
     expect((await reload(db, auto.evaluationId)).state).toBe("running");
     expect((await reload(db, manual.evaluationId)).state).toBe("lobby");
+    expect((await reload(db, unset.evaluationId)).state).toBe("lobby");
   });
 });
