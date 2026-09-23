@@ -65,7 +65,7 @@ The quiz portal takes over the heig-classroom design system as it is. It is alre
 - **Primitives** in `ui.tsx`, 2000 lines: `Button`, `IconButton`, `Card`, `Badge`, `Alert`, `Field`, `Select`, `Textarea`, `Segmented`, `Switch`, `Tabs`, `Menu`, `Modal`, `Sheet`, `PageHeader`, `SectionHeading`, `Stat`, `EmptyState`, `Skeleton`, `Spinner`, `Progress`, `T` table styles with sorting, `useConfirm`, `useLayer`, `useEscape`, `useNow`.
 - **Rules** of the `hgc-ui` skill: five states per asynchronous surface, long forms in a `Sheet`, confirmations through `useConfirm`, seven columns at most, full keyboard support, mandatory screenshot before declaring a screen finished.
 - **Accent difference**: the HEIG-VD red accent of heig-classroom may be kept or replaced by a hue of the quiz's own. A single token to change.
-- **To add** for the quiz: waiting-room progress ring, countdown, students × questions grid, question progress bar, correct / partial / wrong verdict cells with an icon. These components go into `ui.tsx` or into a `packages/ui` if they become numerous.
+- **To add** for the quiz: waiting-room progress ring, countdown, students × questions grid, question progress bar, correct / partial / wrong verdict cells with an icon. These components go into `ui.tsx` or into a `packages/ui` if they become numerous. (Superseded on 2026-09-23: they live in `apps/web/src/ui/live.tsx` since PR #36; `packages/ui`, PR #51, holds the primitives the question-type packages share.)
 
 The `.claude/skills/hgc-ui/SKILL.md` skill is copied into the new repository under a name of the quiz's own, with the paths updated.
 

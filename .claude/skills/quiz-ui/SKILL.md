@@ -33,7 +33,7 @@ is the flow, not the styling. Stop and ask.
 1. Semantic tokens only: `bg-surface`, `text-fg-muted`, `border-line`,
    `bg-accent-soft`… Never `zinc-*`, never hex, never `dark:` variants (the
    tokens swap by themselves under `html.dark`).
-2. Primitives from `src/ui.tsx` before anything hand-rolled: `Button`,
+2. Primitives from `src/ui/` (the `./ui` barrel) before anything hand-rolled: `Button`,
    `IconButton`, `Card`, `Badge`, `Alert`, `Field`/`Select`/`Textarea`,
    `Segmented`, `Switch`, `Tabs`, `Menu`, `Modal`, `Sheet`, `PageHeader`,
    `SectionHeading`, `Stat`, `EmptyState`, `Skeleton`, table styles `T`.
@@ -52,7 +52,7 @@ is the flow, not the styling. Stop and ask.
    (bold), numbers right-aligned and tabular, status as a `Badge`, actions in
    the last column, `—` for empty cells, hover on clickable rows.
 7. **Every** user-facing string goes through `t()` with both an `en` and a
-   `fr` entry in `src/i18n.tsx` — teacher surfaces included (N-I18N-01). The
+   `fr` entry in `src/i18n/{en,fr}.ts` — teacher surfaces included (N-I18N-01). The
    `fr` dictionary is typed `Record<keyof Dict, string>`, so a missing French
    key is a compile error. Keep it that way.
 8. Question content never reaches a student except through the type's

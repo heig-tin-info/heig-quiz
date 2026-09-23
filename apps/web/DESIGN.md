@@ -164,7 +164,7 @@ Two pairs stay below their target, on purpose:
 
 ## Keyboard and focus
 
-A floating layer is not finished until it behaves. `useLayer` in `ui.tsx`
+A floating layer is not finished until it behaves. `useLayer` in `ui/layers.tsx`
 holds the contract for `Modal`, `Sheet`, the confirm dialog, the mobile
 drawer and the help drawer:
 
@@ -209,7 +209,7 @@ that is where the components legitimately differ. They exist because five
 lists and two strips each wrote that arithmetic out by hand.
 
 An element made clickable without being a button (a card, a table row) takes
-`pressable()` from `ui.tsx`: `tabIndex={0}` plus Enter and Space, with Space
+`pressable()` from `ui/layers.tsx`: `tabIndex={0}` plus Enter and Space, with Space
 prevented from scrolling the page. A row keeps `role="row"`; announcing it as
 a button would cost the reader the table around it.
 
@@ -340,7 +340,7 @@ live in `ui/state.ts`, each written once.
   ring on focus. The `<label>` covers the text only and points at the control
   through `htmlFor`; the help "?" is its sibling, never inside it, or that
   button becomes the labelled control and the input loses its name. Two heights, from the button scale: `sm` 28 px for a control
-  inside a table row, `md` 34 px everywhere else (`inputSize` in ui.tsx).
+  inside a table row, `md` 34 px everywhere else (`inputSize` in `ui/controls.tsx`).
   Width is a prop, never a class beside `inputClass`: Tailwind settles two
   width or height utilities on one element by their order in the generated
   stylesheet, not by the order they were written in.
@@ -756,7 +756,7 @@ than turning red. Nobody in the room is being marked wrong.
 
 At most seven visible columns, one dominant identity column, numbers right
 aligned and tabular, status as a `Badge`, actions last, `—` for an empty
-cell. All of it lives in `T` in `ui.tsx`.
+cell. All of it lives in `T` in `ui/page.tsx`.
 
 Seven columns do not fit every width, and the width that matters is the
 TABLE's, never the viewport's: the same pool table is 1120 px wide on a

@@ -266,7 +266,7 @@ export default function App() {
     if (serverLocale) setLocale(serverLocale, false);
   }, [serverLocale, setLocale]);
   // Same for the date format, but synchronously: it must be set before the
-  // first view renders a date (module-level store in ui.tsx, idempotent).
+  // first view renders a date (module-level store in ui/page.tsx, idempotent).
   setDateFormat(me.data?.dateFormat);
 
   // The role computation, once: a teacher (or an admin) in the teacher UI,

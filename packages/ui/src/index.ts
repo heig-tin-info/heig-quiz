@@ -2,7 +2,7 @@
  * `@quiz/ui` — the design-system primitives the question-type surfaces share
  * (docs/spec/05-architecture.md §5.2, docs/PLAN-MVP.md §8).
  *
- * The five `qt-*` packages cannot import `apps/web/src/ui.tsx` (a package
+ * The five `qt-*` packages cannot import `apps/web/src/ui/` (a package
  * never depends on an app), so each of them used to carry its own copy of the
  * same class lists and the same small components — and the copies drifted.
  * They live here once.

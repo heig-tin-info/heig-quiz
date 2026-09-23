@@ -15,7 +15,7 @@ import { useEffect, useSyncExternalStore } from "react";
  * in the palette) and a command rarely has a key.
  */
 export interface Shortcut {
-  /** As shown: "Ctrl+S", "Ctrl+Shift+P", "Tab", "Esc". `modKey()` in ui.tsx spells Ctrl/⌘. */
+  /** As shown: "Ctrl+S", "Ctrl+Shift+P", "Tab", "Esc". `modKey()` in ui/page.tsx spells Ctrl/⌘. */
   keys: string;
   /** Translated, short: "Save", "Try the question". */
   label: string;
