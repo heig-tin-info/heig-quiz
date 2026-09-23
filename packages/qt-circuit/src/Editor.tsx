@@ -15,6 +15,7 @@
 import { useId, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { resolveStrings } from "@quiz/core/client";
 import type { ConfigIssue, EditorProps, MarkdownRenderer } from "@quiz/core/client";
 
 import { Plot, SchematicEditor, type CanvasStrings } from "./canvas/index.js";
@@ -33,7 +34,6 @@ import {
 import {
   EDITOR_STRINGS,
   KIND_LABELS,
-  withStrings,
   type CircuitEditorStrings,
   type KindLabels,
 } from "./strings.js";
@@ -267,8 +267,8 @@ export function CircuitEditor({
   uploadAsset,
   aside,
 }: CircuitEditorProps) {
-  const s = withStrings(EDITOR_STRINGS, strings);
-  const kinds = withStrings(KIND_LABELS, kindLabels);
+  const s = resolveStrings(EDITOR_STRINGS, strings);
+  const kinds = resolveStrings(KIND_LABELS, kindLabels);
   const ids = useId();
   const [tryState, setTryState] = useState<TryState>({ status: "idle" });
 

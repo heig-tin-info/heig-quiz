@@ -51,12 +51,6 @@ export const WatchSubject = z.union([
 ]);
 export type WatchSubject = z.infer<typeof WatchSubject>;
 
-export const EventsQuery = z.object({
-  /** Omitted = the user's own topics only (the legacy hint stream). */
-  watch: WatchSubject.optional(),
-});
-export type EventsQuery = z.infer<typeof EventsQuery>;
-
 // --- Events ---------------------------------------------------------------
 
 /** Sent once, to the opening connection: `DashboardView`, `AttemptView` or `LobbyView`. */

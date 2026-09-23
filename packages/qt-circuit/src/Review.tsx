@@ -9,6 +9,7 @@
  * `studentDetails`; this component renders what it was given and never
  * reconstructs a key.
  */
+import { resolveStrings } from "@quiz/core/client";
 import type { MarkdownRenderer, ReviewProps } from "@quiz/core/client";
 
 import { Plot, SchematicView, type CanvasStrings } from "./canvas/index.js";
@@ -19,10 +20,10 @@ import type {
   CircuitStudent,
   StimulusDetail,
 } from "./schema.js";
-import { REVIEW_STRINGS, withStrings, type CircuitReviewStrings } from "./strings.js";
+import { REVIEW_STRINGS, type CircuitReviewStrings } from "./strings.js";
 import { badge, card, cx, hint, lockedBlock, sectionTitle, table } from "./styles.js";
 
-export interface CircuitReviewProps
+interface CircuitReviewProps
   extends ReviewProps<CircuitStudent, CircuitAnswer, CircuitSolution, CircuitDetails> {
   strings?: Partial<CircuitReviewStrings> | undefined;
   /** The canvas has a dictionary of its own; the host translates it too. */
@@ -116,7 +117,7 @@ export function CircuitReview({
   canvasStrings,
   renderMarkdown,
 }: CircuitReviewProps) {
-  const s = withStrings(REVIEW_STRINGS, strings);
+  const s = resolveStrings(REVIEW_STRINGS, strings);
   const teacher = audience === "teacher";
 
   /* The statement, so a verdict is never read without the question it judges. */

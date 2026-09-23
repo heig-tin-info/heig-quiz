@@ -24,9 +24,6 @@ export const input =
   "rounded-field border border-line-strong bg-surface px-3 text-sm text-fg transition-colors placeholder:text-fg-faint hover:border-fg-faint focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-50";
 
 export const inputSm = `${input} h-7`;
-export const inputMd = `${input} h-8.5`;
-
-export const textarea = `${input} py-2 leading-relaxed`;
 
 export const codeArea =
   "w-full rounded-field border border-line-strong bg-surface px-3 py-2 font-mono text-[13px] leading-[1.55] text-fg transition-colors focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-60";

@@ -14,14 +14,15 @@
  */
 import { useId, useState } from "react";
 
+import { resolveStrings } from "@quiz/core/client";
 import type { MarkdownRenderer, PlayerProps } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
-import { compareOutput } from "@quiz/domain";
+import { compareOutput } from "@quiz/domain/compareOutput";
 
 import { CodeArea } from "./MonacoHost.js";
 import { initialRegions, stripMarkerLines, trimTrailingNewline } from "./segments.js";
 import type { CodeAnswer, CodeStudent } from "./schema.js";
-import { PLAYER_STRINGS, withStrings, type CodePlayerStrings } from "./strings.js";
+import { PLAYER_STRINGS, type CodePlayerStrings } from "./strings.js";
 import { badge, button, card, cx, hint, input, lockedBlock, sectionTitle, table } from "./styles.js";
 
 /** Where a run is, for the one line the player shows while it gets there. */
@@ -42,7 +43,7 @@ export interface CodeRunOptions {
   onStage?: ((stage: CodeRunStage) => void) | undefined;
 }
 
-export interface CodePlayerProps extends PlayerProps<CodeStudent, CodeAnswer> {
+interface CodePlayerProps extends PlayerProps<CodeStudent, CodeAnswer> {
   /**
    * Runs the VISIBLE cases and resolves with the runner's outcome, whose
    * `cases` are those visible cases in order. The host posts to
@@ -121,7 +122,7 @@ export function CodePlayer({
   renderMarkdown,
   monaco,
 }: CodePlayerProps) {
-  const s = withStrings(PLAYER_STRINGS, strings);
+  const s = resolveStrings(PLAYER_STRINGS, strings);
   const ids = useId();
   const [run, setRun] = useState<RunState>({ status: "idle" });
   /** The free input of §4.7: one argument per line, and a stdin of your own. */

@@ -17,6 +17,7 @@
  */
 import { useMemo, useState } from "react";
 
+import { resolveStrings } from "@quiz/core/client";
 import type { MarkdownRenderer, PlayerProps } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 
@@ -25,13 +26,13 @@ import { parseSimulation, type SimulationResult } from "./grade.js";
 import { formatValue, LIBRARY, PORT_IDS, type PortId } from "./library.js";
 import { extractNets, type NetlistIssue } from "./netlist.js";
 import type { CircuitAnswer, CircuitStudent, Load, Source, StudentStimulus } from "./schema.js";
-import { PLAYER_STRINGS, withStrings, type CircuitPlayerStrings } from "./strings.js";
+import { PLAYER_STRINGS, type CircuitPlayerStrings } from "./strings.js";
 import { badge, button, card, cx, hint, sectionTitle, strip } from "./styles.js";
 
 /** What the host answers "Simulate" with; the two words are graceful paths. */
 export type CircuitSimulateOutcome = RunnerOutcome | "unavailable" | "rate_limited";
 
-export interface CircuitPlayerProps extends PlayerProps<CircuitStudent, CircuitAnswer> {
+interface CircuitPlayerProps extends PlayerProps<CircuitStudent, CircuitAnswer> {
   /**
    * Runs the VISIBLE stimuli and resolves with the runner's outcome, whose
    * cases are those stimuli in order. The host posts to
@@ -129,7 +130,7 @@ export function CircuitPlayer({
   canvasStrings,
   renderMarkdown,
 }: CircuitPlayerProps) {
-  const s = withStrings(PLAYER_STRINGS, strings);
+  const s = resolveStrings(PLAYER_STRINGS, strings);
   const [sim, setSim] = useState<SimState>({ status: "idle" });
 
   const schematic = useMemo(

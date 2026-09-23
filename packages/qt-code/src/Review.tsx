@@ -7,13 +7,14 @@
  * filtering itself happened server-side in `studentDetails`; this component
  * renders what it was given and never reconstructs a key.
  */
+import { resolveStrings } from "@quiz/core/client";
 import type { MarkdownRenderer, ReviewProps } from "@quiz/core/client";
 
 import type { CodeAnswer, CodeCaseDetail, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
-import { REVIEW_STRINGS, withStrings, type CodeReviewStrings } from "./strings.js";
+import { REVIEW_STRINGS, type CodeReviewStrings } from "./strings.js";
 import { badge, card, cx, hint, lockedBlock, sectionTitle, table } from "./styles.js";
 
-export interface CodeReviewProps
+interface CodeReviewProps
   extends ReviewProps<CodeStudent, CodeAnswer, CodeSolution, CodeDetails> {
   /** docs/06 Q8: the policy may name the hidden cases once the results are out. */
   showHiddenCaseNames?: boolean | undefined;
@@ -61,7 +62,7 @@ export function CodeReview({
   strings,
   renderMarkdown,
 }: CodeReviewProps) {
-  const s = withStrings(REVIEW_STRINGS, strings);
+  const s = resolveStrings(REVIEW_STRINGS, strings);
   const reveal = audience === "teacher" || showHiddenCaseNames === true;
 
   /* The statement, so a verdict is never read without the question it judges. */

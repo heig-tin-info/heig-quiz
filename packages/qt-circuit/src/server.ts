@@ -2,10 +2,9 @@
  * `@quiz/qt-circuit/server` — the server half of the `circuit` question type.
  *
  * No React, anywhere in this module graph: the API imports it through
- * `@quiz/registry/server`. It also re-exports the pure halves of the package
- * — the library, the schemas, the extractor, the emitter and the parts of
- * `grade.ts` a browser needs — so that `./client` has one place to take them
- * from and the two halves cannot drift apart.
+ * `@quiz/registry/server`. What crosses the package boundary is named one by
+ * one below: the library, the schemas, the extractor and the emitter stay
+ * internal, because nothing outside the package reads them.
  */
 import type { FinalizeContext, GradeContext, QuestionTypeServer } from "@quiz/core/server";
 import { ConfigMigrationError, type RunnerOutcome } from "@quiz/core/server";
@@ -163,10 +162,6 @@ export const circuitServer: QuestionTypeServer<
   fromCanonical,
 };
 
-export * from "./library.js";
-export * from "./netlist.js";
-export * from "./schema.js";
-export * from "./spice.js";
 export { fromCanonical, toCanonical } from "./canonical.js";
 /*
  * The pure parts of the grader. `parseSimulation` reads the outcome of the
@@ -187,3 +182,9 @@ export {
   SPICE_LIMITS,
 } from "./grade.js";
 export type { BuildRequestOptions, CaseLayout, SimulationResult } from "./grade.js";
+/*
+ * The netlist the grade is computed from (ADR-019 §3, invariant 14). It is a
+ * server concern, so it leaves the package here and not through `./client`.
+ */
+export { extractNets } from "./netlist.js";
+export type { Netlist, NetlistIssue } from "./netlist.js";

@@ -14,9 +14,6 @@ import { z } from "zod";
  * listed and marked read over HTTP, refreshed through a `notifications`
  * hint on the user's own topic. Unlike a toast, one survives a reload.
  */
-export const NotificationKind = z.enum(["pool_shared", "pool_ownership"]);
-export type NotificationKind = z.infer<typeof NotificationKind>;
-
 /** What each kind carries; the web app renders the sentence from it. */
 export const NotificationPayload = z.discriminatedUnion("kind", [
   z.object({

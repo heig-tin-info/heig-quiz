@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { ConfigMigrationError } from "@quiz/core/server";
 import { describe, expect, it } from "vitest";
 import { fromCanonical, toCanonical } from "./canonical.js";
-import { config, SECRET_CONFIG } from "./fixtures.js";
+import { config, SECRET_CONFIG } from "./test/fixtures.js";
 import { CLOZE_CONFIG_VERSION, ClozeConfigSchema, emptyClozeDraft } from "./schema.js";
 import { clozeServer, hasSelectBlank } from "./server.js";
 

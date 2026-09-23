@@ -14,7 +14,7 @@
  */
 import type { FinalizeContext, GradeContext, GradeResult, GradedResult } from "@quiz/core/server";
 import { RunnerRequest, type RunnerOutcome } from "@quiz/core/server";
-import { round2 } from "@quiz/domain";
+import { round2 } from "@quiz/domain/round";
 
 import { extractNets, formatIssue, hasPaletteViolation } from "./netlist.js";
 import { buildBareNetlist, buildNetlist, decimate, parseSpiceOutput, type Harness } from "./spice.js";

@@ -1,8 +1,8 @@
 /** Test fixtures for the `short` suites (excluded from the build). */
 import type { GradeContext, RunnerService } from "@quiz/core/server";
-import { ShortConfigSchema, type ShortConfig } from "./schema.js";
+import { ShortConfigSchema, type ShortConfig } from "../schema.js";
 
-export const noRunner: RunnerService = {
+const noRunner: RunnerService = {
   run() {
     throw new Error("the short type must never call the runner");
   },

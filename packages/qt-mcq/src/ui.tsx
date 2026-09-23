@@ -23,15 +23,6 @@ export function cx(...parts: (string | false | null | undefined)[]): string {
 export const inputClass =
   "rounded-field border border-line-strong bg-surface px-3 py-1.5 text-sm text-fg transition-colors placeholder:text-fg-faint hover:border-fg-faint focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-50";
 
-/**
- * A native <select> in the same chrome as the inputs, with room on the right
- * for the browser's own arrow. `apps/web`'s `Select` draws its own chevron
- * over an `appearance-none` control; a leaf package copies the TOKENS, not the
- * icon set, so this one keeps the platform arrow and only reserves the space.
- */
-export const selectClass =
-  "rounded-field border border-line-strong bg-surface py-1.5 pl-3 pr-8 text-sm text-fg transition-colors hover:border-fg-faint focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-50";
-
 export const labelClass = "text-[13px] font-medium text-fg";
 export const helpClass = "text-xs text-fg-faint";
 export const sectionClass = "flex flex-col gap-2";
@@ -47,7 +38,6 @@ export const cardClass = "rounded-card border border-line bg-surface p-4";
 
 /** The 16 px section title of a card, as `SectionHeading` writes it. */
 export const cardTitleClass = "text-base font-bold tracking-tight text-fg";
-export const legendClass = "text-[13px] font-medium text-fg";
 
 /** Secondary button chrome (pill, hairline), for the editor's add/remove actions. */
 export const buttonClass =

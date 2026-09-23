@@ -63,18 +63,18 @@ import {
   type McqScorePolicy,
 } from "@quiz/domain";
 /*
- * The `circuit` type's own parser, used here for the reason the mock uses
- * `@quiz/domain`'s formulas: a grading whose waveforms were invented by hand
- * would prove the markup and nothing about the feature. It is a pure
- * function over a runner outcome, so it costs the mock bundle nothing.
+ * The `circuit` type's own extractor and parser, used here for the reason the
+ * mock uses `@quiz/domain`'s formulas: a grading whose waveforms were invented
+ * by hand would prove the markup and nothing about the feature. Both are pure
+ * functions over a schematic and a runner outcome, so they cost the mock
+ * bundle nothing.
+ *
+ * They come from `/server`, not `/client`: this file IS the server while
+ * `VITE_MOCK=1`, and `./client` no longer re-exports them precisely so that
+ * the grading path stays out of the real app's initial chunk (P-07).
  */
-import {
-  extractNets,
-  parseSimulation,
-  type CircuitStudent,
-  type Schematic,
-  type StimulusDetail,
-} from "@quiz/qt-circuit/client";
+import { extractNets, parseSimulation } from "@quiz/qt-circuit/server";
+import type { CircuitStudent, Schematic, StimulusDetail } from "@quiz/qt-circuit/client";
 import type {
   AdminTeacher,
   AttemptView,

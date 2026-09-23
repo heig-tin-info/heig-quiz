@@ -101,10 +101,6 @@ export const COMPONENT_KINDS = [
 ] as const;
 export type ComponentKind = (typeof COMPONENT_KINDS)[number];
 
-export function isComponentKind(kind: string): kind is ComponentKind {
-  return (COMPONENT_KINDS as readonly string[]).includes(kind);
-}
-
 /** What a component's single parameter means, when it has one. */
 export type ValueRole =
   | { readonly kind: "none" }

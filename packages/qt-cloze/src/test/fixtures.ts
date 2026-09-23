@@ -1,8 +1,8 @@
 /** Test fixtures for the `cloze` suites (excluded from the build). */
 import type { GradeContext, RunnerService } from "@quiz/core/server";
-import { CLOZE_CONFIG_VERSION, ClozeConfigSchema, type ClozeConfig } from "./schema.js";
+import { CLOZE_CONFIG_VERSION, ClozeConfigSchema, type ClozeConfig } from "../schema.js";
 
-export const noRunner: RunnerService = {
+const noRunner: RunnerService = {
   run() {
     throw new Error("the cloze type must never call the runner");
   },

@@ -9,9 +9,10 @@
  */
 import { useId, useState } from "react";
 
+import { resolveStrings } from "@quiz/core/client";
 import type { EditorProps, MarkdownRenderer } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
-import { compareOutput } from "@quiz/domain";
+import { compareOutput } from "@quiz/domain/compareOutput";
 
 import { CodeArea } from "./MonacoHost.js";
 import { referenceRegions } from "./reference.js";
@@ -26,7 +27,7 @@ import {
   type CodeLanguage,
   type CodeRuntime,
 } from "./schema.js";
-import { EDITOR_STRINGS, withStrings, type CodeEditorStrings } from "./strings.js";
+import { EDITOR_STRINGS, type CodeEditorStrings } from "./strings.js";
 import { badge, button, card, cx, hint, input, inputSm, label, sectionTitle } from "./styles.js";
 
 export interface CodeEditorProps extends EditorProps<CodeConfig> {
@@ -100,7 +101,7 @@ export function CodeEditor({
   uploadAsset,
   monaco,
 }: CodeEditorProps) {
-  const s = withStrings(EDITOR_STRINGS, strings);
+  const s = resolveStrings(EDITOR_STRINGS, strings);
   const ids = useId();
   const [tryState, setTryState] = useState<TryState>({ status: "idle" });
   /*

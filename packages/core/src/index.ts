@@ -1,5 +1,5 @@
 /**
- * `@quiz/core` — server-safe entry point (`.` and `./server`).
+ * `@quiz/core` — server-safe entry point (`./server`).
  *
  * Nothing here imports React, at runtime or as a type. The browser half lives
  * in `@quiz/core/client`.

@@ -133,8 +133,6 @@ export const marquee = "fill-accent-soft stroke-accent stroke-[1] [stroke-dashar
 
 export const crosshair = "stroke-accent stroke-[1.2]";
 
-export const hoverRing = "fill-accent-soft stroke-accent stroke-[1.6]";
-
 // --- the plot --------------------------------------------------------------
 
 export const plotFrame = "rounded-card border border-line bg-surface p-3";

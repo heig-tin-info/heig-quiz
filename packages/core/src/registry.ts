@@ -7,7 +7,7 @@
  */
 /* eslint-disable @typescript-eslint/no-explicit-any -- see AnyQuestionTypeServer. */
 import type { QuestionTypeClient } from "./client.js";
-import type { QuestionTypeId, QuestionTypeServer } from "./contract.js";
+import type { QuestionTypeServer } from "./contract.js";
 import { UnknownQuestionType } from "./errors.js";
 
 /**
@@ -21,9 +21,6 @@ import { UnknownQuestionType } from "./errors.js";
  */
 export type AnyQuestionTypeServer = QuestionTypeServer<any, any, any, any, any>;
 export type AnyQuestionTypeClient = QuestionTypeClient<any, any, any, any, any>;
-
-export type ServerRegistry = Partial<Record<QuestionTypeId, AnyQuestionTypeServer>>;
-export type ClientRegistry = Partial<Record<QuestionTypeId, AnyQuestionTypeClient>>;
 
 /** Identity with a constraint: it only exists to type-check the map at its definition site. */
 export function defineServerRegistry<T extends Record<string, AnyQuestionTypeServer>>(m: T): T {

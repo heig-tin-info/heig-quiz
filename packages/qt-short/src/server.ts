@@ -4,7 +4,7 @@
  * No React in this import graph: the API and the grading worker load it.
  */
 import { ConfigMigrationError, type QuestionTypeServer } from "@quiz/core/server";
-import { describeMatcher } from "@quiz/domain";
+import { describeMatcher } from "@quiz/domain/short";
 import { fromCanonical, toCanonical } from "./canonical.js";
 import { gradeShort } from "./grade.js";
 import {

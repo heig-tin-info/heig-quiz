@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { ConfigMigrationError } from "@quiz/core/server";
 import { describe, expect, it } from "vitest";
 import { fromCanonical, toCanonical } from "./canonical.js";
-import { config, SECRET_CONFIG } from "./fixtures.js";
+import { config, SECRET_CONFIG } from "./test/fixtures.js";
 import { emptyShortDraft, ShortConfigSchema } from "./schema.js";
 import { expectedAnswers, migrateShortV1, shortServer } from "./server.js";
 

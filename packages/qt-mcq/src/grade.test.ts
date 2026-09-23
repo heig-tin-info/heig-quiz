@@ -6,7 +6,7 @@
  */
 import { isGraded } from "@quiz/core/server";
 import { describe, expect, it } from "vitest";
-import { gradeContext, multipleConfig } from "./fixtures.js";
+import { gradeContext, multipleConfig } from "./test/fixtures.js";
 import { resolvePolicy } from "./grade.js";
 import {
   MCQ_CONFIG_VERSION,

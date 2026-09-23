@@ -5,7 +5,7 @@
  * no secret VALUE. The second one is what catches a leak that renamed a field.
  */
 import { describe, expect, it } from "vitest";
-import { SECRET_CONFIG } from "./fixtures.js";
+import { SECRET_CONFIG } from "./test/fixtures.js";
 import { McqConfigSchema } from "./schema.js";
 import { mcqServer } from "./server.js";
 

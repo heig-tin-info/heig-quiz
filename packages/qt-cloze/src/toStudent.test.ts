@@ -1,6 +1,6 @@
 /** The mandatory leak test (PLAN-MVP §2.5, docs/05 §5.7, N-SEC-04). */
 import { describe, expect, it } from "vitest";
-import { config, SECRET_CONFIG, SECRET_VALUES } from "./fixtures.js";
+import { config, SECRET_CONFIG, SECRET_VALUES } from "./test/fixtures.js";
 import { clozeServer } from "./server.js";
 
 const FORBIDDEN_KEYS = [

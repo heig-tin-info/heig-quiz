@@ -20,7 +20,8 @@
  * `all_or_nothing`, the same thing an evaluation would default to.
  */
 import type { GradeContext, GradedResult } from "@quiz/core/server";
-import { mcqFraction, round2, truncateSelection } from "@quiz/domain";
+import { mcqFraction, truncateSelection } from "@quiz/domain/mcqScore";
+import { round2 } from "@quiz/domain/round";
 import {
   correctIndices,
   MCQ_DEFAULT_POLICY,

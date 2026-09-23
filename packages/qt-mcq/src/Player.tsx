@@ -12,7 +12,7 @@ import type { McqAnswer, McqStudent } from "./schema.js";
 import { mcqPlayerStrings, type McqPlayerStringKey } from "./strings.js";
 import { choiceLetter, cx, helpClass, Pastille } from "./ui.js";
 
-export type McqPlayerProps = PlayerProps<McqStudent, McqAnswer> & {
+type McqPlayerProps = PlayerProps<McqStudent, McqAnswer> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
   disabled?: boolean;
   strings?: StringOverrides<McqPlayerStringKey>;

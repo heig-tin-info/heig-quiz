@@ -13,14 +13,14 @@
  * own `i` flag is untouched.
  */
 import type { GradedResult } from "@quiz/core/server";
+import { round2 } from "@quiz/domain/round";
 import {
   foldCase,
   matchShortAnswer,
   normalizeInput,
   parseNumericInput,
-  round2,
   type ShortMatcher as DomainMatcher,
-} from "@quiz/domain";
+} from "@quiz/domain/short";
 import type { ShortAnswer, ShortConfig, ShortDetails, ShortPrefilters } from "./schema.js";
 
 /**

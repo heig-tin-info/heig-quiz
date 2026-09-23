@@ -280,8 +280,3 @@ export const REVIEW_STRINGS: CodeReviewStrings = {
   referenceSolution: "Reference solution",
   yourCode: "Your code",
 };
-
-/** Merges a partial override on top of the English defaults. */
-export function withStrings<T extends object>(defaults: T, override?: Partial<T>): T {
-  return override === undefined ? defaults : { ...defaults, ...override };
-}

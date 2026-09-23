@@ -58,8 +58,6 @@ export const Orientation = z
   .refine((m) => Math.abs(m[0] * m[3] - m[1] * m[2]) === 1, { message: "circuit.orientation" });
 export type Orientation = z.infer<typeof Orientation>;
 
-export const IDENTITY: Orientation = [1, 0, 0, 1];
-
 /** A component instance: what the student placed, where, how it is turned, and its value. */
 export const SchematicComponent = z.object({
   /** Unique inside the schematic: `c1`, `c2`… (the editor's counter). */

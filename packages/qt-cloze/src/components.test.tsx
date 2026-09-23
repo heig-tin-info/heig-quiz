@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ClozeEditor } from "./Editor.js";
 import { ClozePlayer } from "./Player.js";
 import { ClozeReview } from "./Review.js";
-import { config, SECRET_CONFIG } from "./fixtures.js";
+import { config, SECRET_CONFIG } from "./test/fixtures.js";
 import { emptyClozeDraft } from "./schema.js";
 import { clozeServer } from "./server.js";
 import { splitBlocks } from "./text.js";

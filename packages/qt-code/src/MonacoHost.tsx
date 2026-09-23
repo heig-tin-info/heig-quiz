@@ -68,7 +68,7 @@ class MonacoBoundary extends Component<
   }
 }
 
-export interface CodeAreaProps {
+interface CodeAreaProps {
   value: string;
   language: CodeLanguage;
   /** Absent (or `undefined`) means read-only, so a caller can pass the flag straight through. */

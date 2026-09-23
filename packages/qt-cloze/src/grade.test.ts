@@ -5,7 +5,7 @@
  */
 import { isGraded } from "@quiz/core/server";
 import { describe, expect, it } from "vitest";
-import { config, gradeContext } from "./fixtures.js";
+import { config, gradeContext } from "./test/fixtures.js";
 import type { ClozeConfig } from "./schema.js";
 import { clozeServer } from "./server.js";
 

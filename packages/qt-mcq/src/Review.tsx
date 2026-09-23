@@ -11,7 +11,7 @@ import type { McqAnswer, McqDetails, McqSolution, McqStudent } from "./schema.js
 import { mcqReviewStrings, type McqReviewStringKey } from "./strings.js";
 import { cx, helpClass } from "./ui.js";
 
-export type McqReviewProps = ReviewProps<McqStudent, McqAnswer, McqSolution, McqDetails> & {
+type McqReviewProps = ReviewProps<McqStudent, McqAnswer, McqSolution, McqDetails> & {
   strings?: StringOverrides<McqReviewStringKey>;
   renderMarkdown?: MarkdownRenderer;
 };

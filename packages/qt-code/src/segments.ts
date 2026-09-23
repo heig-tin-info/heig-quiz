@@ -7,7 +7,7 @@
  * source, so they stay in the stored template — but showing `// @@lock` to a
  * student is noise, so the player hides them (PLAN-MVP §2.4).
  */
-import { splitTemplate } from "@quiz/domain";
+import { splitTemplate } from "@quiz/domain/lockedTemplate";
 
 import type { CodeLanguage, CodeSegment } from "./schema.js";
 

@@ -89,18 +89,24 @@ export const circuitClient: QuestionTypeClient<
 export { CircuitIcon };
 
 /*
- * The PURE things a host may need, and nothing else: the netlist extractor
- * behind the player's diagnostics strip, the parser behind its plots, the
- * component table and the engineering-notation pair. They are plain
- * functions, so they cost the bundle nothing and stay out of the lazy chunks.
+ * The component table and the engineering-notation pair: `summarize` above
+ * already puts `library.js` in this module's graph, so naming them here costs
+ * the bundle nothing.
+ *
+ * `extractNets` and `parseSimulation` are NOT re-exported, and neither are the
+ * `schema.js` builders. A static `export … from` of a VALUE is an edge, and
+ * this module is reached from every page through `@quiz/registry/client`: the
+ * four lines that used to sit here dragged `netlist.ts`, `grade.ts`,
+ * `spice.ts` and `schema.ts` — the whole grading path, and zod with it — into
+ * the initial chunk of a quiz that may hold no circuit at all (N-PERF-05).
+ * The lazy `Player` imports both functions directly; a host that grades reads
+ * them from `@quiz/qt-circuit/server`, which is where ADR-019 §3 puts the
+ * netlist anyway.
  */
-export { extractNets } from "./netlist.js";
 export type { NetlistIssue } from "./netlist.js";
-export { parseSimulation } from "./grade.js";
 export type { SimulationResult } from "./grade.js";
 export { COMPONENT_KINDS, LIBRARY, formatValue, parseValue, valueIssue } from "./library.js";
 export type { ComponentKind, ComponentSpec, PortId } from "./library.js";
-export { emptyCircuitConfig, emptyStimulus, EMPTY_SCHEMATIC } from "./schema.js";
 export type {
   Analysis,
   CircuitAnswer,
@@ -124,15 +130,13 @@ export type {
  * genuinely needs one imports the file directly.
  */
 export type { CircuitEditorProps, CircuitTryOutcome } from "./Editor.js";
-export type { CircuitPlayerProps, CircuitSimulateOutcome } from "./Player.js";
-export type { CircuitReviewProps } from "./Review.js";
+export type { CircuitSimulateOutcome } from "./Player.js";
 export {
   CANVAS_STRINGS,
   EDITOR_STRINGS,
   KIND_LABELS,
   PLAYER_STRINGS,
   REVIEW_STRINGS,
-  withStrings,
   type CanvasStrings,
   type CircuitEditorStrings,
   type CircuitPlayerStrings,

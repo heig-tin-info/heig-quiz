@@ -6,7 +6,7 @@
  * `toStudent` and the grading all call the same `parseCloze`, so what the
  * teacher sees, what the student plays and what is graded cannot drift.
  */
-import { parseCloze } from "@quiz/domain";
+import { parseCloze } from "@quiz/domain/cloze";
 import { z } from "zod";
 
 /**

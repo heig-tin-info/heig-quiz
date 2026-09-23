@@ -6,7 +6,8 @@
  * this module only parses the text once and maps the fraction onto the item.
  */
 import type { GradedResult } from "@quiz/core/server";
-import { gradeCloze, parseCloze, round2 } from "@quiz/domain";
+import { gradeCloze, parseCloze } from "@quiz/domain/cloze";
+import { round2 } from "@quiz/domain/round";
 import type { ClozeAnswer, ClozeConfig, ClozeDetails } from "./schema.js";
 
 export function gradeClozeAnswer(
