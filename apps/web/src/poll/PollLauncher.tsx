@@ -66,14 +66,29 @@ import { coursesKey, pollQuestionsKey } from "../queryKeys";
  * (`POST /app/api/polls/inline`). The question is kept with its poll only,
  * in no pool (ADR-014, addendum 2026-09-23); a teacher who wants it for next
  * year writes it in the `Polls` pool, and it shows up in the other tab.
+ *
+ * The key is optional there: with no correct answer marked, the poll asks
+ * for opinions and its reveal is the distribution. One muted line under the
+ * type picker says so; nothing blocks on it.
  */
 
 /** A poll runs these two types; the picker is limited to them. */
 const POLL_TYPES = ["mcq", "short"] as const;
 type PollType = (typeof POLL_TYPES)[number];
 
-/** The blank question of each type: what the editor starts from. */
-const EMPTY: Record<PollType, () => unknown> = { mcq: emptyMcqDraft, short: emptyShortDraft };
+/**
+ * The blank question of each type: what the editor starts from — with NO
+ * key. A poll may ask an opinion (ADR-014, addendum 2026-09-23), and a
+ * choice ticked in advance would be a "correct answer" on the wall that the
+ * teacher never chose.
+ */
+const EMPTY: Record<PollType, () => unknown> = {
+  mcq: () => {
+    const draft = emptyMcqDraft();
+    return { ...draft, choices: draft.choices.map((c) => ({ ...c, correct: false })) };
+  },
+  short: () => ({ ...emptyShortDraft(), matchers: [] }),
+};
 
 /** The schema's issues of a refused content, when that is why it was refused. */
 function refusedIssues(error: unknown): readonly ZodIssueLite[] | null {
@@ -343,6 +358,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
                 inline.reset();
               }}
             />
+            <p className="mt-2 text-[13px] text-fg-muted">{t("poll.keyOptional")}</p>
           </fieldset>
           <QuestionEditorHost
             t={t}

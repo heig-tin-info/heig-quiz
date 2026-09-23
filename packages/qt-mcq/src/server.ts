@@ -20,6 +20,7 @@ import {
   MCQ_CONFIG_VERSION,
   McqAnswerSchema,
   McqConfigSchema,
+  McqKeylessConfigSchema,
   McqDetailsSchema,
   McqSolutionSchema,
   McqStudentSchema,
@@ -77,6 +78,7 @@ export const mcqServer: QuestionTypeServer<
   configVersion: MCQ_CONFIG_VERSION,
 
   configSchema: McqConfigSchema,
+  keylessConfigSchema: McqKeylessConfigSchema,
   answerSchema: McqAnswerSchema,
   studentSchema: McqStudentSchema,
   solutionSchema: McqSolutionSchema,
@@ -128,6 +130,8 @@ export const mcqServer: QuestionTypeServer<
   },
 
   toSolution: (config) => ({ correct: correctIndices(config) }),
+
+  hasKey: (config) => config.choices.some((choice) => choice.correct),
 
   /**
    * `details.correct` is the answer key, and the breakdown is served to the

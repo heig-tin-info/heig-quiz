@@ -5,6 +5,7 @@ import { choiceLetter } from "@quiz/qt-mcq/client";
 import type { PollTally, PollTeacherView } from "@quiz/contracts";
 
 import {
+  hasKey,
   joinHost,
   percentOf,
   pollRows,
@@ -121,6 +122,16 @@ describe("pollRows — short", () => {
       }),
     );
     expect(rows.map((r) => r.label)).toEqual(["b", "a"]);
+  });
+});
+
+describe("hasKey", () => {
+  it("is false for an opinion poll, whose key names nothing", () => {
+    expect(hasKey({ type: "mcq", solution: { correct: [1] } })).toBe(true);
+    expect(hasKey({ type: "mcq", solution: { correct: [] } })).toBe(false);
+    expect(hasKey({ type: "short", solution: { expected: ["42"] } })).toBe(true);
+    expect(hasKey({ type: "short", solution: { expected: [] } })).toBe(false);
+    expect(hasKey({ type: "short", solution: null })).toBe(false);
   });
 });
 

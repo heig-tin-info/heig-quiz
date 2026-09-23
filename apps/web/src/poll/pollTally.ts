@@ -78,13 +78,27 @@ export function percentOf(count: number, answered: number): number {
   return Math.round((count / answered) * 100);
 }
 
+/** What the rows are drawn from: the teacher's question, or a revealed phone's. */
+type QuestionLike = Pick<PollTeacherView["question"], "type" | "student" | "solution">;
+
+/**
+ * Whether the key names any answer at all. An opinion poll's names none
+ * (ADR-014, addendum 2026-09-23): its reveal marks nothing right — and
+ * therefore nothing wrong — and only shows the distribution.
+ */
+export function hasKey(question: Pick<QuestionLike, "type" | "solution">): boolean {
+  const solution = question.solution as Partial<McqSolutionLike & ShortSolutionLike> | null;
+  const key = question.type === "mcq" ? solution?.correct : solution?.expected;
+  return Array.isArray(key) && key.length > 0;
+}
+
 /** The prompt of the question, whatever its type. */
 export function promptOf(question: PollTeacherView["question"]): string {
   const student = question.student as Partial<McqStudentLike & ShortStudentLike> | null;
   return typeof student?.prompt === "string" ? student.prompt : "";
 }
 
-function mcqRows(question: PollTeacherView["question"], tally: PollTally): PollRow[] {
+function mcqRows(question: QuestionLike, tally: PollTally): PollRow[] {
   const student = question.student as McqStudentLike | null;
   const choices = Array.isArray(student?.choices) ? student.choices : [];
   const solution = question.solution as McqSolutionLike | null;
@@ -104,7 +118,7 @@ function mcqRows(question: PollTeacherView["question"], tally: PollTally): PollR
   });
 }
 
-function shortRows(question: PollTeacherView["question"], tally: PollTally): PollRow[] {
+function shortRows(question: QuestionLike, tally: PollTally): PollRow[] {
   const solution = question.solution as ShortSolutionLike | null;
   const expected = new Set(
     (Array.isArray(solution?.expected) ? solution.expected : []).map(foldPollAnswer),
@@ -126,7 +140,7 @@ function shortRows(question: PollTeacherView["question"], tally: PollTally): Pol
 }
 
 /** The rows of one poll, in the order the room saw them. */
-export function pollRows(question: PollTeacherView["question"], tally: PollTally): PollRow[] {
+export function pollRows(question: QuestionLike, tally: PollTally): PollRow[] {
   return question.type === "mcq" ? mcqRows(question, tally) : shortRows(question, tally);
 }
 

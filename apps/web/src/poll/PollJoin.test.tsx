@@ -42,6 +42,7 @@ function view(patch: Partial<PollPublicView> = {}): PollPublicView {
     settings: { anonymous: true, revealed: false },
     question: { type: "mcq", student: mcqStudent },
     solution: null,
+    tally: null,
     me: { identified: true, loginRequired: false, joined: true, answer: null },
     ...patch,
   };
@@ -143,6 +144,29 @@ describe("the poll participant page", () => {
 
     expect(await screen.findByText("Correct answer")).toBeVisible();
     expect(screen.getByText("Your answer — wrong")).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Send|Update/ })).not.toBeInTheDocument();
+  });
+
+  it("reveals the distribution, and no verdict, when the poll has no key", async () => {
+    render({
+      [`GET ${URL}`]: ok(
+        view({
+          settings: { anonymous: true, revealed: true },
+          solution: { correct: [] },
+          tally: { joined: 5, answered: 4, choices: [{ index: 0, count: 1 }, { index: 1, count: 3 }], answers: [] },
+          me: { identified: true, loginRequired: false, joined: true, answer: { selected: [1] } },
+        }),
+      ),
+    });
+
+    expect(await screen.findByText("The results")).toBeVisible();
+    expect(screen.getByText(/This poll has no correct answer/)).toBeVisible();
+    expect(screen.getByText("25%")).toBeVisible();
+    expect(screen.getByText("75%")).toBeVisible();
+    expect(screen.getByText("Your answer")).toBeVisible();
+    // Nothing is right, so nothing is wrong either.
+    expect(screen.queryByText("Correct answer")).not.toBeInTheDocument();
+    expect(screen.queryByText(/— wrong|— correct/)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Send|Update/ })).not.toBeInTheDocument();
   });
 

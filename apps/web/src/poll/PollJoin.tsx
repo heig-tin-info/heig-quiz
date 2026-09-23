@@ -220,6 +220,7 @@ export function PollJoin({
               type={view.question.type}
               student={view.question.student}
               solution={view.solution}
+              tally={view.tally}
               answer={stored}
             />
           ) : (

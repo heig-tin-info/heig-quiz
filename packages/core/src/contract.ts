@@ -210,6 +210,16 @@ export interface QuestionTypeServer<
   readonly configVersion: number;
 
   readonly configSchema: z.ZodType<TConfig>;
+  /**
+   * `configSchema` with the answer key made OPTIONAL, and nothing else
+   * relaxed: the configuration of an opinion poll, which asks the room
+   * without anything being right (ADR-014, addendum 2026-09-23).
+   *
+   * Only the poll launcher writes through it (`saveConfig(…, { keyOptional:
+   * true })`); a pool question and every evaluation keep `configSchema`, the
+   * gate that demands a key. A type that omits it has no keyless form.
+   */
+  readonly keylessConfigSchema?: z.ZodType<TConfig>;
   readonly answerSchema: z.ZodType<TAnswer>;
   readonly studentSchema: z.ZodType<TStudent>;
   readonly solutionSchema: z.ZodType<TSolution>;
@@ -247,6 +257,14 @@ export interface QuestionTypeServer<
 
   /** Key + rationale for review, served ONLY when the feedback policy allows it. */
   toSolution(config: TConfig, view: StudentView): TSolution;
+
+  /**
+   * Whether this config holds an answer key at all. Only a config accepted
+   * by {@link keylessConfigSchema} can say no; omitting the hook means
+   * "always". A config without a key is not graded: the grading pass skips
+   * its item rather than mark every answer wrong.
+   */
+  hasKey?(config: TConfig): boolean;
 
   /**
    * The grading breakdown as a STUDENT may read it (docs/05 §5.7).

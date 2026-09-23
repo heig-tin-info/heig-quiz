@@ -193,9 +193,37 @@ written, without saving anything a teacher would find again:
    question writes it in the `Polls` pool, and it shows in the "Pick a question" tab.
 4. **No marks, so no marking settings.** `EditorProps.ungraded` asks an editor to leave out
    what only decides a mark: the scoring card of `mcq` (policy, cap, shuffle opt-out), the
-   points and the prefilters of `short`. The KEY stays — the type's schema requires one,
-   and it is what "Reveal" shows. An unsaved question has no pool to hold an image, so the
-   launcher lends no upload.
+   points and the prefilters of `short`. The KEY stays, as something the teacher MAY
+   write — see 5. An unsaved question has no pool to hold an image, so the launcher lends
+   no upload.
+5. **The key is optional: an opinion poll** (decided 2026-09-23, after the first version of
+   this addendum required a key). "Which lab rhythm suits you?" has no right answer, and
+   forcing the teacher to tick one puts a false "Correct answer" on the wall.
+   - *Validation.* The server contract (`@quiz/core`, `QuestionTypeServer`) gains two
+     optional members: `keylessConfigSchema`, the type's `configSchema` with the key made
+     optional and NOTHING else relaxed (an `mcq` still needs two choices, a `single` one at
+     most one key; a `short` matcher that is there is still checked), and `hasKey(config)`.
+     `mcq` and `short` implement both. `saveConfig(type, config, { keyOptional: true })` is
+     the one write that uses it, and only `createUnsavedQuestion` calls it. Publication and
+     the draft issues (`tryLoadConfig`) stay on the strict schema, so a pool question, and
+     therefore every evaluation, still demands a key — tested. The read path
+     (`loadConfig`) parses with the keyless schema when a type has one: a read accepts what
+     any write gate accepted, and a stored config always passed one.
+   - *Grading.* The grading pass skips an item whose config `hasKey` denies: no zero per
+     answer, which would mark the whole room wrong. A keyed poll is graded as before.
+   - *Reveal.* `toSolution` gives an empty key (`{ correct: [] }`, `{ expected: [] }`). The
+     wall marks nothing (no tick, no faded row) and its switch reads "Results shown"
+     instead of "Answer revealed". `PollPublicView` carries the `tally` once revealed
+     (null before), and a phone whose key is empty shows the distribution with its own
+     answer named — no "correct", no "wrong", no score. The question itself still leaves
+     only through `toStudent` (invariant 4).
+   - *Launcher.* The blank question starts WITHOUT a key (no choice ticked, no accepted
+     answer), one muted line says marking one is optional, and the `short` editor lets its
+     last accepted answer go when `ungraded`.
+
+   Rejected: relaxing `configSchema` itself and checking the key at publication only. The
+   type's schema is what the editor's issues, the canonical import and every test read;
+   moving the key out of it would weaken all of them to serve one launcher.
 
 Rejected: a nullable `evaluation_items.question_version_id` beside an inline `config`
 column. Every reader of an item — `joinedItems`, grading, results, the dashboard, the

@@ -58,28 +58,43 @@ export type McqQuestionPolicy = z.infer<typeof McqQuestionPolicySchema>;
  */
 export const McqDefaultsSchema = z.object({ policy: McqPolicySchema });
 
+const McqConfigShape = z.object({
+  configVersion: z.literal(MCQ_CONFIG_VERSION),
+  prompt: z.string().min(1).max(20_000),
+  choices: z.array(McqChoiceSchema).min(MCQ_MIN_CHOICES).max(MCQ_MAX_CHOICES),
+  mode: McqModeSchema.default("single"),
+  /** Player-side guard only; a longer payload is truncated, never refused. */
+  maxSelections: z.number().int().min(1).max(MCQ_MAX_CHOICES).optional(),
+  policy: McqQuestionPolicySchema.default("inherit"),
+  shuffleChoices: z.boolean().default(true),
+});
+
 /**
  * The refinements encode the rules that a shape alone cannot: a question with
  * no key cannot be graded, and `single` is exactly one key scored all or
  * nothing. Their messages are i18n keys, never sentences: the editor shows
  * them and `apps/web` translates them.
  */
-export const McqConfigSchema = z
-  .object({
-    configVersion: z.literal(MCQ_CONFIG_VERSION),
-    prompt: z.string().min(1).max(20_000),
-    choices: z.array(McqChoiceSchema).min(MCQ_MIN_CHOICES).max(MCQ_MAX_CHOICES),
-    mode: McqModeSchema.default("single"),
-    /** Player-side guard only; a longer payload is truncated, never refused. */
-    maxSelections: z.number().int().min(1).max(MCQ_MAX_CHOICES).optional(),
-    policy: McqQuestionPolicySchema.default("inherit"),
-    shuffleChoices: z.boolean().default(true),
-  })
+export const McqConfigSchema = McqConfigShape
   .refine((c) => c.choices.some((x) => x.correct), { message: "mcq.no_correct_choice" })
   .refine((c) => c.mode !== "single" || c.choices.filter((x) => x.correct).length === 1, {
     message: "mcq.single_needs_one",
   })
   // A cap below the size of the key would make the full mark unreachable.
+  .refine(
+    (c) => c.maxSelections === undefined || c.maxSelections >= c.choices.filter((x) => x.correct).length,
+    { message: "mcq.max_below_correct", path: ["maxSelections"] },
+  );
+
+/**
+ * The same question with the key OPTIONAL: an opinion poll (ADR-014, addendum
+ * 2026-09-23). No choice has to be correct; when some are, the rules of the
+ * key still hold — `single` means at most one, and the cap stays above it.
+ */
+export const McqKeylessConfigSchema = McqConfigShape
+  .refine((c) => c.mode !== "single" || c.choices.filter((x) => x.correct).length <= 1, {
+    message: "mcq.single_needs_one",
+  })
   .refine(
     (c) => c.maxSelections === undefined || c.maxSelections >= c.choices.filter((x) => x.correct).length,
     { message: "mcq.max_below_correct", path: ["maxSelections"] },

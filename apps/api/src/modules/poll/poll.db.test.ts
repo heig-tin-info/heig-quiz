@@ -15,6 +15,7 @@ import {
   attempts,
   auditLog,
   evaluations,
+  gradings,
   guestParticipants,
   pools,
   questions,
@@ -602,13 +603,32 @@ describe("a poll on a question written in the launcher and never saved", () => {
 
   it("refuses content its type's schema refuses, and writes nothing", async () => {
     const before = await unsavedCount();
-    const noKey = await inline(teacher.headers, {
+    // The key is optional here; the rest of the schema is not.
+    const oneChoice = await inline(teacher.headers, {
       type: "mcq",
-      config: { ...MCQ_CONFIG, choices: [{ text: "A" }, { text: "B" }] },
+      config: { ...MCQ_CONFIG, choices: [{ text: "A" }] },
     });
-    expect(noKey.statusCode).toBe(422);
-    expect(noKey.json().error).toBe("config_invalid");
-    expect(noKey.json().details.length).toBeGreaterThan(0);
+    expect(oneChoice.statusCode).toBe(422);
+    expect(oneChoice.json().error).toBe("config_invalid");
+    expect(oneChoice.json().details.length).toBeGreaterThan(0);
+
+    const twoKeysSingle = await inline(teacher.headers, {
+      type: "mcq",
+      config: {
+        ...MCQ_CONFIG,
+        choices: [
+          { text: "A", correct: true },
+          { text: "B", correct: true },
+        ],
+      },
+    });
+    expect(twoKeysSingle.statusCode).toBe(422);
+
+    const blankMatcher = await inline(teacher.headers, {
+      type: "short",
+      config: { configVersion: 2, prompt: "?", matchers: [{ kind: "exact", value: "" }] },
+    });
+    expect(blankMatcher.statusCode).toBe(422);
 
     const empty = await inline(teacher.headers, { type: "short", config: { prompt: "" } });
     expect(empty.statusCode).toBe(422);
@@ -632,6 +652,144 @@ describe("a poll on a question written in the launcher and never saved", () => {
     expect(offStaff.statusCode).toBe(404);
     expect(offStaff.json()).toEqual({ error: "not_found" });
     expect(await unsavedCount()).toBe(before);
+  });
+});
+
+/**
+ * An opinion poll (ADR-014, addendum 2026-09-23): a question written in the
+ * launcher may mark nothing correct. It runs, counts and reveals like any
+ * other poll; the reveal simply names no answer, and nothing grades it.
+ */
+describe("an opinion poll, whose question has no key", () => {
+  const OPINION_MCQ = {
+    configVersion: 2,
+    prompt: "Le rythme des laboratoires vous convient-il ?",
+    choices: [
+      { text: "Trop lent", correct: false },
+      { text: "Juste bien", correct: false },
+      { text: "Trop rapide", correct: false },
+    ],
+    mode: "single",
+  };
+  const inline = (body: Record<string, unknown>) =>
+    post("/app/api/polls/inline", teacher.headers, {
+      classroomId: seed.classroomId,
+      anonymous: true,
+      ...body,
+    });
+  const gradingsOf = async (id: string) =>
+    server.app.db
+      .select({ id: gradings.id })
+      .from(gradings)
+      .innerJoin(attempts, eq(attempts.id, gradings.attemptId))
+      .where(eq(attempts.evaluationId, id));
+
+  it("launches an mcq with no choice marked correct, and a short answer with no accepted answer", async () => {
+    const mcq = await inline({ type: "mcq", config: OPINION_MCQ });
+    expect(mcq.statusCode).toBe(201);
+    expect(mcq.json().question.solution).toEqual({ correct: [] });
+
+    const short = await inline({
+      type: "short",
+      config: { configVersion: 2, prompt: "Un mot pour ce cours ?", matchers: [] },
+    });
+    expect(short.statusCode).toBe(201);
+    expect(short.json().question.solution).toEqual({ expected: [] });
+    // Without matchers at all, too: the key is optional, not merely empty.
+    const bare = await inline({ type: "short", config: { configVersion: 2, prompt: "Et vous ?" } });
+    expect(bare.statusCode).toBe(201);
+
+    for (const id of [mcq, short, bare].map((r) => r.json().evaluation.id as string)) {
+      await post(`/app/api/evaluations/${id}/poll/end`, teacher.headers);
+    }
+  });
+
+  it("runs whole: answers, tally, reveal of the distribution, end without grades, run again", async () => {
+    const created = await inline({ type: "mcq", config: OPINION_MCQ });
+    const id = created.json().evaluation.id as string;
+    const pollCode = created.json().evaluation.code as string;
+
+    // Three phones.
+    const votes = [[1], [1], [2]];
+    for (const selected of votes) {
+      const joined = await post(`/app/api/p/${pollCode}/join`);
+      const cookie = `${GUEST_COOKIE}=${guestCookieOf(joined)!}`;
+      const answered = await post(`/app/api/p/${pollCode}/answer`, { cookie }, { payload: { selected } });
+      expect(answered.statusCode).toBe(200);
+    }
+    const before = await get(`/app/api/p/${pollCode}`);
+    expect(before.json()).toMatchObject({ solution: null, tally: null });
+
+    const view = await get(`/app/api/evaluations/${id}/poll`, teacher.headers);
+    expect(view.json().tally).toMatchObject({ joined: 3, answered: 3 });
+    expect(view.json().tally.choices.map((c: { count: number }) => c.count)).toEqual([0, 2, 1]);
+
+    // The reveal names no answer and hands the phones the distribution.
+    const revealed = await post(`/app/api/evaluations/${id}/poll/reveal`, teacher.headers, { revealed: true });
+    expect(revealed.statusCode).toBe(200);
+    const phone = (await get(`/app/api/p/${pollCode}`)).json();
+    expect(phone.solution).toEqual({ correct: [] });
+    expect(phone.tally.choices.map((c: { count: number }) => c.count)).toEqual([0, 2, 1]);
+    // Still only `toStudent` on the question (invariant 4).
+    const serialized = JSON.stringify(phone.question.student);
+    for (const forbidden of FORBIDDEN_STUDENT_KEYS) {
+      expect(serialized, `public view leaked "${forbidden}"`).not.toContain(`"${forbidden}"`);
+    }
+
+    // The end runs the grading pass, which writes nothing: no zero for the
+    // whole room on a question nobody could get wrong.
+    const ended = await post(`/app/api/evaluations/${id}/poll/end`, teacher.headers);
+    expect(ended.statusCode).toBe(200);
+    expect(ended.json().evaluation.state).toBe("closed");
+    expect(await gradingsOf(id)).toHaveLength(0);
+
+    const again = await post(`/app/api/evaluations/${id}/poll/again`, teacher.headers);
+    expect(again.statusCode).toBe(201);
+    expect(again.json().question.solution).toEqual({ correct: [] });
+    expect(again.json().tally).toMatchObject({ joined: 0, answered: 0 });
+    await post(`/app/api/evaluations/${again.json().evaluation.id}/poll/end`, teacher.headers);
+  });
+
+  it("still grades a poll that HAS a key", async () => {
+    const created = await inline({ type: "mcq", config: MCQ_CONFIG });
+    const id = created.json().evaluation.id as string;
+    const pollCode = created.json().evaluation.code as string;
+    const joined = await post(`/app/api/p/${pollCode}/join`);
+    const cookie = `${GUEST_COOKIE}=${guestCookieOf(joined)!}`;
+    await post(`/app/api/p/${pollCode}/answer`, { cookie }, { payload: { selected: [0] } });
+    await post(`/app/api/evaluations/${id}/poll/end`, teacher.headers);
+    expect(await gradingsOf(id)).toHaveLength(1);
+  });
+
+  it("keeps a pool question to its key: publishing one without a key is refused", async () => {
+    const created = await post("/app/api/polls/questions", teacher.headers, {
+      type: "mcq",
+      internalName: "Sans clé",
+    });
+    const qid = created.json().meta.id as string;
+    const [question] = await server.app.db.select().from(questions).where(eq(questions.id, qid));
+    // The draft is stored (D16), and the editor is told why it cannot go out.
+    const saved = await poolService.putDraft(server.app.db, question!, { config: OPINION_MCQ });
+    expect(saved.valid).toBe(false);
+    expect(saved.issues.map((i) => i.message)).toContain("mcq.no_correct_choice");
+    await expect(
+      poolService.publishQuestion(server.app.db, question!, { userId: teacher.id }),
+    ).rejects.toBeInstanceOf(poolService.DraftInvalid);
+    const detail = await get(`/app/api/questions/${qid}`, teacher.headers);
+    expect(detail.json().draft.valid).toBe(false);
+
+    const shortCreated = await post("/app/api/polls/questions", teacher.headers, {
+      type: "short",
+      internalName: "Sans réponse",
+    });
+    const sid = shortCreated.json().meta.id as string;
+    const [shortQuestion] = await server.app.db.select().from(questions).where(eq(questions.id, sid));
+    await poolService.putDraft(server.app.db, shortQuestion!, {
+      config: { configVersion: 2, prompt: "Un mot ?", matchers: [] },
+    });
+    await expect(
+      poolService.publishQuestion(server.app.db, shortQuestion!, { userId: teacher.id }),
+    ).rejects.toBeInstanceOf(poolService.DraftInvalid);
   });
 });
 

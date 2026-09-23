@@ -15,9 +15,14 @@
  * Color: `success` for the key and `danger` for a wrong own pick — semantic,
  * the only two tones on the screen, and both carry a WORD beside the tint (a
  * lecture-hall projector and a red-green reader both lose the tint alone).
+ *
+ * An opinion poll has NO key (ADR-014, addendum 2026-09-23), so there is
+ * nothing right and nothing wrong to show: the reveal is the distribution the
+ * wall shows, with this browser's own answer marked by a word, in no tone.
  */
 import { Check, X } from "lucide-react";
 
+import type { PollTally } from "@quiz/contracts";
 import { foldPollAnswer } from "@quiz/domain";
 import type { McqSolution, McqStudent } from "@quiz/qt-mcq/client";
 import type { ShortSolution, ShortStudent } from "@quiz/qt-short/client";
@@ -25,6 +30,7 @@ import type { ShortSolution, ShortStudent } from "@quiz/qt-short/client";
 import { useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { cx } from "../ui";
+import { hasKey, pollRows, PROJECTION_ROW_CAP } from "./pollTally";
 
 /** The canonical indices an `mcq` payload holds, whatever the server sent. */
 function selectedOf(answer: unknown): number[] {
@@ -161,6 +167,80 @@ function ShortReveal({
 }
 
 /**
+ * The reveal of a poll without a key: the share of the room behind each
+ * answer, in the order the wall draws them, and which one was this
+ * browser's. The bars wear the wall's accent; the rows no tone at all —
+ * nobody is being marked.
+ */
+function ResultsReveal({
+  type,
+  student,
+  solution,
+  tally,
+  answer,
+}: {
+  type: "mcq" | "short";
+  student: unknown;
+  solution: unknown;
+  tally: PollTally;
+  answer: unknown;
+}) {
+  const t = useT();
+  const rows = pollRows({ type, student, solution }, tally).slice(0, PROJECTION_ROW_CAP);
+  const selected = new Set(selectedOf(answer).map((i) => `c${i}`));
+  const text = textOf(answer);
+  const mine = (key: string) =>
+    type === "mcq" ? selected.has(key) : text.trim() !== "" && key === `a${foldPollAnswer(text)}`;
+  return (
+    <div className="flex flex-col gap-3">
+      <p className="text-[13px] text-fg-muted">{t("join.reveal.noKey")}</p>
+      {rows.length === 0 ? (
+        <p className="text-[13px] text-fg-muted">{t("poll.noAnswersYet")}</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {rows.map((row) => {
+            const own = mine(row.key);
+            return (
+              <li
+                key={row.key}
+                className={cx(
+                  "flex flex-col gap-2 rounded-card border px-3 py-2.5 text-sm",
+                  // Neutral, never the accent: on this page red already
+                  // means "wrong", and nothing here is.
+                  own ? "border-line-strong bg-surface-2" : "border-line bg-surface",
+                )}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  {row.markdown ? (
+                    <MarkdownView as="span" source={row.label} inline className="min-w-0" />
+                  ) : (
+                    <span className="min-w-0 break-words">{row.label}</span>
+                  )}
+                  <span className="flex shrink-0 items-center gap-2">
+                    {own ? (
+                      <span className={cx(tagClass, "font-semibold text-fg")}>{t("join.reveal.yours")}</span>
+                    ) : null}
+                    <span className="font-mono text-[13px] font-semibold tabular-nums">
+                      {t("poll.percent", { n: row.percent })}
+                    </span>
+                  </span>
+                </div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-surface-2" aria-hidden>
+                  <span
+                    className="block h-full rounded-full bg-accent"
+                    style={{ width: `${Math.min(100, row.percent)}%` }}
+                  />
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
  * The prompt, then the key. `solution` arrives as `unknown` (the contract
  * cannot name a type's shape), so each branch narrows it structurally: a
  * payload that is not the shape this type publishes renders nothing rather
@@ -170,17 +250,24 @@ export function PollJoinReveal({
   type,
   student,
   solution,
+  tally = null,
   answer,
 }: {
   type: "mcq" | "short";
   student: unknown;
   solution: unknown;
+  /** The distribution: what an opinion poll, which has no key, reveals. */
+  tally?: PollTally | null;
   answer: unknown;
 }) {
   const t = useT();
   const prompt = (student as { prompt?: unknown } | null)?.prompt;
-  const body =
-    type === "mcq" && Array.isArray((solution as McqSolution | null)?.correct) ? (
+  const keyed = hasKey({ type, solution });
+  const body = !keyed ? (
+    tally ? (
+      <ResultsReveal type={type} student={student} solution={solution} tally={tally} answer={answer} />
+    ) : null
+  ) : type === "mcq" && Array.isArray((solution as McqSolution | null)?.correct) ? (
       <McqReveal
         student={student as McqStudent}
         solution={solution as McqSolution}
@@ -194,7 +281,9 @@ export function PollJoinReveal({
       {typeof prompt === "string" ? (
         <MarkdownView source={prompt} className="text-lg leading-relaxed text-fg" />
       ) : null}
-      <p className="text-[13px] font-medium text-fg-muted">{t("join.reveal.title")}</p>
+      <p className="text-[13px] font-medium text-fg-muted">
+        {t(keyed ? "join.reveal.title" : "join.reveal.results")}
+      </p>
       {body}
     </div>
   );

@@ -5,7 +5,7 @@ import type { PollTeacherView } from "@quiz/contracts";
 import { useT } from "../i18n";
 import { Button, IconButton, Menu, Segmented } from "../ui";
 import { PollQr } from "./PollQr";
-import { joinHost } from "./pollTally";
+import { hasKey, joinHost } from "./pollTally";
 
 /**
  * Where the room is: still answering, looking at the key, or done. `ended`
@@ -25,7 +25,7 @@ export function projectionPhase(view: PollTeacherView): ProjectionPhase {
 }
 
 /** The word after the context: one of the three phases, never the colour alone. */
-function PhaseLabel({ phase }: { phase: ProjectionPhase }) {
+function PhaseLabel({ phase, keyed }: { phase: ProjectionPhase; keyed: boolean }) {
   const t = useT();
   if (phase === "ended") {
     return (
@@ -38,7 +38,7 @@ function PhaseLabel({ phase }: { phase: ProjectionPhase }) {
     return (
       <span className="inline-flex items-center gap-1.5 text-[clamp(13px,1.2vw,16px)] font-semibold text-success">
         <Check className="size-[1.1em]" aria-hidden />
-        {t("poll.revealed")}
+        {t(keyed ? "poll.revealed" : "poll.resultsShown")}
       </span>
     );
   }
@@ -93,6 +93,9 @@ export function ProjectionHeader({
    * already there on a beamer.
    */
   const context = `${view.evaluation.courseName} · ${view.evaluation.classroomName}`;
+  // An opinion poll has no answer to reveal; the switch shows the phones
+  // the results instead (ADR-014, addendum 2026-09-23).
+  const keyed = hasKey(view.question);
 
   return (
     <header className="flex flex-wrap items-start gap-[clamp(16px,2.4vw,32px)]">
@@ -101,7 +104,7 @@ export function ProjectionHeader({
           {context}
         </span>
         <span className="size-1 rounded-full bg-fg-faint" aria-hidden />
-        <PhaseLabel phase={phase} />
+        <PhaseLabel phase={phase} keyed={keyed} />
         <span className="ml-auto flex flex-wrap items-center gap-2">
           <Segmented
             name="poll-reveal"
@@ -109,7 +112,7 @@ export function ProjectionHeader({
             onChange={(v) => onReveal(v === "revealed")}
             options={[
               { value: "live", label: t("poll.live") },
-              { value: "revealed", label: t("poll.reveal") },
+              { value: "revealed", label: t(keyed ? "poll.reveal" : "poll.resultsShown") },
             ]}
           />
           {ended ? (

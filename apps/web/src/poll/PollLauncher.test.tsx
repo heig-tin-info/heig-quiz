@@ -142,6 +142,9 @@ describe("PollLauncher", () => {
     // One keystroke: where a caret lands in a fresh contenteditable is jsdom's
     // business, as in `QuestionEditor.test.tsx`.
     await user.type(prompt, "?");
+    // A poll starts with no key at all; the teacher adds one if they want it.
+    expect(screen.queryByLabelText("Value 1")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Add an accepted answer" }));
     await user.type(screen.getByLabelText("Value 1"), "C");
     await user.click(screen.getByRole("button", { name: "Start the poll" }));
 
@@ -167,7 +170,7 @@ describe("PollLauncher", () => {
       "POST /app/api/polls/inline": fail(422, {
         error: "config_invalid",
         message: "The question is incomplete",
-        details: [{ path: [], code: "custom", message: "mcq.no_correct_choice" }],
+        details: [{ path: [], code: "custom", message: "mcq.single_needs_one" }],
       }),
     });
     const navigate = vi.fn();
@@ -181,7 +184,41 @@ describe("PollLauncher", () => {
 
     expect(await screen.findByText("Could not start the poll.")).toBeVisible();
     expect(screen.getByText(/fields that need attention/)).toBeVisible();
-    expect(screen.getByText("Tick at least one correct choice.")).toBeVisible();
+    expect(
+      screen.getByText("A single-answer question has exactly one correct choice."),
+    ).toBeVisible();
     expect(navigate).not.toHaveBeenCalled();
+  }, 20_000);
+
+  it("starts an opinion poll: no choice is correct, and nothing blocks on it", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch({
+      [`GET ${QUESTIONS}`]: ok(picks),
+      [`GET ${COURSES}`]: ok(courses),
+      "POST /app/api/polls/inline": started,
+    });
+    const navigate = vi.fn();
+    renderWithProviders(<PollLauncher navigate={navigate} />);
+
+    await user.click(await screen.findByRole("tab", { name: /Ask a new question/ }));
+    const prompt = await screen.findByLabelText("Statement");
+    // Said once, quietly: the key is optional here.
+    expect(screen.getByText(/Marking a correct answer is optional/)).toBeVisible();
+    // Nothing ticked in advance: a key the teacher never chose would be on the wall.
+    expect(screen.getByRole("checkbox", { name: "Choice A is correct" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Choice B is correct" })).not.toBeChecked();
+
+    await user.type(prompt, "?");
+    await user.type(screen.getByLabelText("Text of choice A"), "Y");
+    await user.type(screen.getByLabelText("Text of choice B"), "N");
+    const start = screen.getByRole("button", { name: "Start the poll" });
+    expect(start).toBeEnabled();
+    await user.click(start);
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "poll", id: "e2" }));
+    const body = calls.find((c) => c.url === "/app/api/polls/inline")?.body as {
+      config: { choices: { text: string; correct: boolean }[] };
+    };
+    expect(body.config.choices.map((c) => c.correct)).toEqual([false, false]);
   }, 20_000);
 });

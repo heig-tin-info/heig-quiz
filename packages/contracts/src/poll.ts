@@ -54,9 +54,10 @@ export type PollQuestionCreate = z.infer<typeof PollQuestionCreate>;
  * `POST /app/api/polls/inline`: creates AND starts a poll on a question the
  * teacher writes in the launcher and does not keep (ADR-014, addendum
  * 2026-09-23). `config` is the type's own configuration; the server
- * validates it with that type's `configSchema` through the registry — the
- * same gate as a publication — and answers `422 config_invalid` with the
- * zod issues otherwise. No pool receives the question.
+ * validates it with that type's `keylessConfigSchema` through the registry —
+ * the gate of a publication with the answer key made optional, for an
+ * opinion poll has none — and answers `422 config_invalid` with the zod
+ * issues otherwise. No pool receives the question.
  */
 export const PollInlineCreate = z.object({
   classroomId: z.uuid(),
@@ -141,6 +142,12 @@ export const PollPublicView = z.object({
     student: z.unknown(),
   }),
   solution: z.unknown().nullable(),
+  /**
+   * The distribution, once the teacher revealed — what the wall shows. It is
+   * all a phone has to show when the question has no key (an opinion poll,
+   * ADR-014 addendum 2026-09-23); null before the reveal.
+   */
+  tally: PollTally.nullable(),
   me: z.object({
     /** A session or a guest cookie identifies this browser. */
     identified: z.boolean(),

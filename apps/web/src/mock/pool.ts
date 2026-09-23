@@ -1169,7 +1169,10 @@ export const questionDetail = (q: MockQuestion) => ({
  * catches the mistakes a teacher actually makes on these screens, so the
  * "publication refused" path is reachable in the mock.
  */
-export function draftIssues(q: MockQuestion): { path: string[]; code: string; message: string }[] {
+export function draftIssues(
+  q: MockQuestion,
+  options: { keyOptional?: boolean } = {},
+): { path: string[]; code: string; message: string }[] {
   const config = q.draft.config as Record<string, unknown>;
   const out: { path: string[]; code: string; message: string }[] = [];
   const prompt = typeof config.prompt === "string" ? config.prompt : "";
@@ -1178,7 +1181,8 @@ export function draftIssues(q: MockQuestion): { path: string[]; code: string; me
   }
   if (q.type === "mcq") {
     const choices = (config.choices ?? []) as { text: string; correct: boolean }[];
-    if (!choices.some((c) => c.correct)) {
+    // An opinion poll asks without a key (`keylessConfigSchema`, ADR-014).
+    if (!options.keyOptional && !choices.some((c) => c.correct)) {
       out.push({ path: ["choices"], code: "custom", message: "mcq.no_correct_choice" });
     }
     if (config.mode === "single" && choices.filter((c) => c.correct).length > 1) {
