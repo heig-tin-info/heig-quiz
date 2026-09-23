@@ -22,7 +22,7 @@ import {
   ValidateGradingBody,
 } from "@quiz/contracts";
 
-import { audit, type AuditAction } from "../../audit.js";
+import { tracer, type AuditAction } from "../../audit.js";
 import { evaluationItems, gradings, questionVersions } from "../../db/schema.js";
 import {
   accessibleEvaluation,
@@ -49,21 +49,7 @@ function failure(app: FastifyInstance, reply: FastifyReply, error: unknown): Fas
 export async function gradingPlugin(app: FastifyInstance) {
   const requireTeacher = teacherGuard(app);
 
-  const trace = (
-    req: FastifyRequest,
-    action: AuditAction,
-    subjectType: string,
-    id: string,
-    payload?: unknown,
-  ) =>
-    audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action,
-      subjectType,
-      subjectId: id,
-      ...(payload === undefined ? {} : { payload }),
-    });
+  const trace = tracer(app);
 
   // --- The automatic pass ------------------------------------------------
 

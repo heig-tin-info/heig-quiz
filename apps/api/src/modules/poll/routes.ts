@@ -36,7 +36,7 @@ import {
   type PollTeacherView,
 } from "@quiz/contracts";
 
-import { audit, type AuditAction } from "../../audit.js";
+import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { CSRF_COOKIE, CSRF_HEADER } from "../../auth/session.js";
 import { classrooms, courses, pools, questions } from "../../db/schema.js";
@@ -52,15 +52,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
   const requireTeacher = teacherGuard(app);
   const secure = config.NODE_ENV === "production";
 
-  const trace = (req: FastifyRequest, action: AuditAction, id: string, payload?: unknown) =>
-    audit(app.db, {
-      actorUserId: req.user?.id ?? null,
-      actorType: "user",
-      action,
-      subjectType: "evaluation",
-      subjectId: id,
-      ...(payload === undefined ? {} : { payload }),
-    });
+  const trace = tracer(app);
 
   function failure(reply: FastifyReply, error: unknown, now: Date): FastifyReply {
     if (error instanceof live.AttemptClosedError) return reply.code(410).send(error.body(now));
@@ -173,13 +165,10 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
         createdBy: req.user!.id,
       });
       const [created] = await app.db.select().from(questions).where(eq(questions.id, id));
-      await audit(app.db, {
-        actorUserId: req.user!.id,
-        actorType: "user",
-        action: "question.create",
-        subjectType: "question",
-        subjectId: id,
-        payload: { poolId: pool.id, type: body.data.type, internalName: body.data.internalName },
+      await trace(req, "question.create", "question", id, {
+        poolId: pool.id,
+        type: body.data.type,
+        internalName: body.data.internalName,
       });
       return reply.code(201).send(await poolService.questionDetail(app.db, created!));
     } catch {
@@ -206,7 +195,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
         createdBy: req.user!.id,
         now,
       });
-      await trace(req, "poll.create", scope.evaluation.id, {
+      await trace(req, "poll.create", "evaluation", scope.evaluation.id, {
         questionId: question.id,
         anonymous: body.data.anonymous,
         code: scope.evaluation.accessCode,
@@ -242,7 +231,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
         body.data.revealed,
         now,
       );
-      await trace(req, "poll.reveal", updated.id, { revealed: body.data.revealed });
+      await trace(req, "poll.reveal", "evaluation", updated.id, { revealed: body.data.revealed });
       return view({ ...scope, evaluation: updated });
     },
   );
@@ -259,7 +248,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
       if (!scope) return notFound(reply);
       try {
         const closed = await service.endPoll(app, scope.evaluation, now);
-        await trace(req, "poll.end", closed.id);
+        await trace(req, "poll.end", "evaluation", closed.id);
         return await view({ ...scope, evaluation: closed });
       } catch (error) {
         return failure(reply, error, now);
@@ -285,7 +274,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
           createdBy: req.user!.id,
           now,
         });
-        await trace(req, "poll.create", again.evaluation.id, {
+        await trace(req, "poll.create", "evaluation", again.evaluation.id, {
           questionId: scope.item.question.id,
           again: scope.evaluation.id,
           code: again.evaluation.accessCode,

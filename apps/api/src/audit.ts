@@ -1,3 +1,5 @@
+import type { FastifyInstance, FastifyRequest } from "fastify";
+
 import type { Db } from "./db/client.js";
 import { auditLog } from "./db/schema.js";
 
@@ -103,4 +105,36 @@ export async function audit(
     subjectId: entry.subjectId,
     payload: entry.payload ?? null,
   });
+}
+
+/** What {@link tracer} hands a route module: one line per audited write. */
+export type Trace = (
+  req: FastifyRequest,
+  action: AuditAction,
+  subjectType: string,
+  subjectId: string,
+  payload?: unknown,
+) => Promise<void>;
+
+/**
+ * The audit entry of a route, with the four constant fields already filled:
+ * the actor is the caller, and the actor type is `user` because an HTTP route
+ * is by definition something a person asked for. Everything a call site still
+ * has to say is what happened and to what.
+ *
+ * `action` stays an {@link AuditAction}, so a typo at a trigger site is a
+ * compile error (invariant 9). The public poll routes have no session, and
+ * `actorUserId` is then null — the row is written all the same, which is the
+ * point of an append-only log.
+ */
+export function tracer(app: FastifyInstance): Trace {
+  return (req, action, subjectType, subjectId, payload) =>
+    audit(app.db, {
+      actorUserId: req.user?.id ?? null,
+      actorType: "user",
+      action,
+      subjectType,
+      subjectId,
+      ...(payload === undefined ? {} : { payload }),
+    });
 }

@@ -57,7 +57,7 @@ import {
   type GradeContext,
 } from "@quiz/core/server";
 
-import { audit } from "../../audit.js";
+import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { assets, categories, pools, questions } from "../../db/schema.js";
 import {
@@ -103,6 +103,7 @@ function coreFailure(reply: FastifyReply, error: unknown): FastifyReply | null {
 export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
   const requireTeacher = teacherGuard(app);
+  const trace = tracer(app);
   const mine = (req: FastifyRequest) =>
     req.user!.role === "admin" ? undefined : poolAccess(req.user!.id);
 
@@ -136,13 +137,9 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     const body = PoolCreate.safeParse(req.body);
     if (!body.success) return invalid(reply, body.error);
     const pool = await service.createPool(app.db, { ...body.data, ownerId: req.user!.id });
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "pool.create",
-      subjectType: "pool",
-      subjectId: pool.id,
-      payload: { name: pool.name, visibility: pool.visibility },
+    await trace(req, "pool.create", "pool", pool.id, {
+      name: pool.name,
+      visibility: pool.visibility,
     });
     // A brand-new pool has no `pool:<id>` subscriber yet — topics are computed
     // at connection time — so the teacher's own topic is the only one that can
@@ -165,14 +162,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     const body = PoolPatch.safeParse(req.body);
     if (!body.success) return invalid(reply, body.error);
     const updated = await service.updatePool(app.db, pool.id, body.data);
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "pool.update",
-      subjectType: "pool",
-      subjectId: pool.id,
-      payload: body.data,
-    });
+    await trace(req, "pool.update", "pool", pool.id, body.data);
     poolChanged(pool.id);
     // A visibility or a name the members see on their own list too.
     poolPeopleChanged(await topicsOf(pool));
@@ -187,14 +177,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     const audience = await topicsOf(pool);
     if (!(await requirePoolRole(app, req, reply, pool, "owner"))) return reply;
     await service.deletePool(app.db, pool.id);
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "pool.delete",
-      subjectType: "pool",
-      subjectId: pool.id,
-      payload: { name: pool.name },
-    });
+    await trace(req, "pool.delete", "pool", pool.id, { name: pool.name });
     poolChanged(pool.id);
     poolPeopleChanged(audience);
     return reply.code(204).send();
@@ -256,13 +239,10 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
         .send({ error: "already_member", message: "This account already holds a seat" });
     }
     const added = await service.addMember(app.db, pool, invitee.id, body.data.role);
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "pool.share",
-      subjectType: "pool",
-      subjectId: pool.id,
-      payload: { userId: invitee.id, email: invitee.email, role: body.data.role },
+    await trace(req, "pool.share", "pool", pool.id, {
+      userId: invitee.id,
+      email: invitee.email,
+      role: body.data.role,
     });
     await notify(app.db, invitee.id, {
       kind: "pool_shared",
@@ -297,13 +277,9 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       const audience = await topicsOf(pool);
       const done = await service.setMemberRole(app.db, pool.id, params.data.userId, body.data.role);
       if (!done) return reply.code(404).send({ error: "not_found" });
-      await audit(app.db, {
-        actorUserId: req.user!.id,
-        actorType: "user",
-        action: "pool.member_update",
-        subjectType: "pool",
-        subjectId: pool.id,
-        payload: { userId: params.data.userId, role: body.data.role },
+      await trace(req, "pool.member_update", "pool", pool.id, {
+        userId: params.data.userId,
+        role: body.data.role,
       });
       poolChanged(pool.id);
       poolPeopleChanged(audience);
@@ -335,13 +311,9 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       const audience = await topicsOf(pool);
       const done = await service.removeMember(app.db, pool.id, params.data.userId);
       if (!done) return reply.code(404).send({ error: "not_found" });
-      await audit(app.db, {
-        actorUserId: req.user!.id,
-        actorType: "user",
-        action: "pool.unshare",
-        subjectType: "pool",
-        subjectId: pool.id,
-        payload: { userId: params.data.userId, left: leaving },
+      await trace(req, "pool.unshare", "pool", pool.id, {
+        userId: params.data.userId,
+        left: leaving,
       });
       poolChanged(pool.id);
       poolPeopleChanged(audience);
@@ -375,13 +347,9 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       params.data.tag,
       body.data.description,
     );
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "tag.describe",
-      subjectType: "pool",
-      subjectId: pool.id,
-      payload: { tag: tag.tag, description: tag.description },
+    await trace(req, "tag.describe", "pool", pool.id, {
+      tag: tag.tag,
+      description: tag.description,
     });
     poolChanged(pool.id);
     return tag;
@@ -404,13 +372,9 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       if (!parent) return reply.code(404).send({ error: "not_found" });
     }
     const category = await service.createCategory(app.db, pool.id, body.data);
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "category.create",
-      subjectType: "category",
-      subjectId: category.id,
-      payload: { poolId: pool.id, name: category.name },
+    await trace(req, "category.create", "category", category.id, {
+      poolId: pool.id,
+      name: category.name,
     });
     poolChanged(pool.id);
     return reply.code(201).send(category);
@@ -438,14 +402,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       }
     }
     const updated = await service.updateCategory(app.db, scope.category.id, body.data);
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "category.update",
-      subjectType: "category",
-      subjectId: scope.category.id,
-      payload: body.data,
-    });
+    await trace(req, "category.update", "category", scope.category.id, body.data);
     poolChanged(scope.pool.id);
     return updated;
   });
@@ -467,14 +424,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
         }
       }
       const tree = await service.reorderCategories(app.db, pool.id, body.data.items);
-      await audit(app.db, {
-        actorUserId: req.user!.id,
-        actorType: "user",
-        action: "category.reorder",
-        subjectType: "pool",
-        subjectId: pool.id,
-        payload: { count: body.data.items.length },
-      });
+      await trace(req, "category.reorder", "pool", pool.id, { count: body.data.items.length });
       poolChanged(pool.id);
       return tree;
     },
@@ -485,13 +435,9 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     if (!scope) return reply;
     if (!(await requirePoolRole(app, req, reply, scope.pool, "contributor"))) return reply;
     await service.deleteCategory(app.db, scope.category.id);
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "category.delete",
-      subjectType: "category",
-      subjectId: scope.category.id,
-      payload: { poolId: scope.pool.id, name: scope.category.name },
+    await trace(req, "category.delete", "category", scope.category.id, {
+      poolId: scope.pool.id,
+      name: scope.category.name,
     });
     poolChanged(scope.pool.id);
     return reply.code(204).send();
@@ -534,13 +480,10 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
         createdBy: req.user!.id,
       });
       const [created] = await app.db.select().from(questions).where(eq(questions.id, id));
-      await audit(app.db, {
-        actorUserId: req.user!.id,
-        actorType: "user",
-        action: "question.create",
-        subjectType: "question",
-        subjectId: id,
-        payload: { poolId: pool.id, type: body.data.type, internalName: body.data.internalName },
+      await trace(req, "question.create", "question", id, {
+        poolId: pool.id,
+        type: body.data.type,
+        internalName: body.data.internalName,
       });
       poolChanged(pool.id);
       return reply.code(201).send(await service.questionDetail(app.db, created!));
@@ -576,14 +519,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
         .code(409)
         .send({ error: "duplicate_name", message: "This pool already has a question by that name" });
     }
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "question.update",
-      subjectType: "question",
-      subjectId: scope.question.id,
-      payload: body.data,
-    });
+    await trace(req, "question.update", "question", scope.question.id, body.data);
     poolChanged(scope.pool.id);
     const [fresh] = await app.db
       .select()
@@ -627,13 +563,9 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
         userId: req.user!.id,
         ...(body.data.changeNote !== undefined ? { changeNote: body.data.changeNote } : {}),
       });
-      await audit(app.db, {
-        actorUserId: req.user!.id,
-        actorType: "user",
-        action: "question.publish",
-        subjectType: "question",
-        subjectId: scope.question.id,
-        payload: { number: version.number, changeNote: version.changeNote },
+      await trace(req, "question.publish", "question", scope.question.id, {
+        number: version.number,
+        changeNote: version.changeNote,
       });
       poolChanged(scope.pool.id);
       return reply.code(201).send(version);
@@ -685,13 +617,8 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       if (!params.success) return reply.code(404).send({ error: "not_found" });
       const done = await service.restoreVersion(app.db, scope.question, params.data.number);
       if (!done) return reply.code(404).send({ error: "not_found" });
-      await audit(app.db, {
-        actorUserId: req.user!.id,
-        actorType: "user",
-        action: "question.restore_version",
-        subjectType: "question",
-        subjectId: scope.question.id,
-        payload: { number: params.data.number },
+      await trace(req, "question.restore_version", "question", scope.question.id, {
+        number: params.data.number,
       });
       poolChanged(scope.pool.id);
       const [fresh] = await app.db
@@ -720,13 +647,9 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
         body.data.note,
       );
       if (!version) return reply.code(404).send({ error: "not_found" });
-      await audit(app.db, {
-        actorUserId: req.user!.id,
-        actorType: "user",
-        action: "question.deprecate",
-        subjectType: "question",
-        subjectId: scope.question.id,
-        payload: { number: params.data.number, note: body.data.note },
+      await trace(req, "question.deprecate", "question", scope.question.id, {
+        number: params.data.number,
+        note: body.data.note,
       });
       poolChanged(scope.pool.id);
       return version;
@@ -763,13 +686,9 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       }
       throw error;
     }
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "question.delete",
-      subjectType: "question",
-      subjectId: scope.question.id,
-      payload: { hard: query.data.hard === true, internalName: scope.question.internalName },
+    await trace(req, "question.delete", "question", scope.question.id, {
+      hard: query.data.hard === true,
+      internalName: scope.question.internalName,
     });
     poolChanged(scope.pool.id);
     return reply.code(204).send();
@@ -796,13 +715,9 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       categoryId: body.data.categoryId ?? null,
       userId: req.user!.id,
     });
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "question.copy",
-      subjectType: "question",
-      subjectId: id,
-      payload: { from: scope.question.id, targetPoolId: target.id },
+    await trace(req, "question.copy", "question", id, {
+      from: scope.question.id,
+      targetPoolId: target.id,
     });
     poolChanged(target.id);
     const [created] = await app.db.select().from(questions).where(eq(questions.id, id));
@@ -932,28 +847,17 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     }
 
     for (const row of sources) {
-      await audit(app.db, {
-        actorUserId: req.user!.id,
-        actorType: "user",
-        action: "question.move",
-        subjectType: "question",
-        subjectId: row.question.id,
-        payload: {
-          fromPoolId: row.pool.id,
-          toPoolId: target.id,
-          categoryId,
-          internalName: row.question.internalName,
-        },
+      await trace(req, "question.move", "question", row.question.id, {
+        fromPoolId: row.pool.id,
+        toPoolId: target.id,
+        categoryId,
+        internalName: row.question.internalName,
       });
     }
     for (const courseId of linkCourseIds) {
-      await audit(app.db, {
-        actorUserId: req.user!.id,
-        actorType: "user",
-        action: "course.pools_update",
-        subjectType: "course",
-        subjectId: courseId,
-        payload: { addedPoolId: target.id, reason: "question.move" },
+      await trace(req, "course.pools_update", "course", courseId, {
+        addedPoolId: target.id,
+        reason: "question.move",
       });
       publish("courses", [`course:${courseId}`, `teacher:${req.user!.id}`]);
     }
@@ -1146,13 +1050,10 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       const [raced] = await app.db.select().from(assets).where(eq(assets.sha256, sha256)).limit(1);
       return reply.code(200).send(assetJson(raced!));
     }
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "pool.asset_upload",
-      subjectType: "asset",
-      subjectId: created.id,
-      payload: { poolId: pool.id, mime: created.mime, bytes: created.bytes },
+    await trace(req, "pool.asset_upload", "asset", created.id, {
+      poolId: pool.id,
+      mime: created.mime,
+      bytes: created.bytes,
     });
     return reply.code(201).send(assetJson(created));
   });

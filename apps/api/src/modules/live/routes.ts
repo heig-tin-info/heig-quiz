@@ -32,7 +32,7 @@ import {
   type SubmitResponse,
 } from "@quiz/contracts";
 
-import { audit, type AuditAction } from "../../audit.js";
+import { tracer, type AuditAction } from "../../audit.js";
 import { iso } from "../../clock.js";
 import {
   accessibleEvaluation,
@@ -87,21 +87,7 @@ export async function livePlugin(app: FastifyInstance) {
     return reply.code(500).send({ error: "internal_error" });
   }
 
-  const trace = (
-    req: FastifyRequest,
-    action: AuditAction,
-    subjectType: string,
-    id: string,
-    payload?: unknown,
-  ) =>
-    audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action,
-      subjectType,
-      subjectId: id,
-      ...(payload === undefined ? {} : { payload }),
-    });
+  const trace = tracer(app);
 
   // =========================================================================
   // Student side

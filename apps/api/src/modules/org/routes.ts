@@ -12,7 +12,7 @@ import { and, asc, eq } from "drizzle-orm";
 
 import { CoursePoolsPut, JoinParams, type CourseDetail, type JoinResult } from "@quiz/contracts";
 
-import { audit } from "../../audit.js";
+import { tracer } from "../../audit.js";
 import { classrooms, courseStaff, courses, users } from "../../db/schema.js";
 import { publish } from "../../events.js";
 import { accessibleCourse, poolAccess, teacherGuard } from "../guards.js";
@@ -21,6 +21,7 @@ import { joinClassroom } from "./service.js";
 
 export async function orgPlugin(app: FastifyInstance) {
   const requireTeacher = teacherGuard(app);
+  const trace = tracer(app);
 
   /** `GET /courses/:id` — the course, its staff, its pools and its classrooms. */
   app.get("/app/api/courses/:id", { preHandler: requireTeacher }, async (req, reply) => {
@@ -84,13 +85,8 @@ export async function orgPlugin(app: FastifyInstance) {
       body.data.poolIds,
       req.user!.role === "admin" ? undefined : poolAccess(req.user!.id),
     );
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "course.pools_update",
-      subjectType: "course",
-      subjectId: course.id,
-      payload: { poolIds: linked.map((p) => p.id) },
+    await trace(req, "course.pools_update", "course", course.id, {
+      poolIds: linked.map((p) => p.id),
     });
     publish("courses", [`course:${course.id}`, `teacher:${req.user!.id}`]);
     for (const pool of linked) publish("pool", [`pool:${pool.id}`]);
@@ -130,14 +126,7 @@ export async function orgPlugin(app: FastifyInstance) {
         });
       }
       if (outcome.status === "joined") {
-        await audit(app.db, {
-          actorUserId: me.id,
-          actorType: "user",
-          action: "roster.join",
-          subjectType: "classroom",
-          subjectId: row.room.id,
-          payload: { email: me.email },
-        });
+        await trace(req, "roster.join", "classroom", row.room.id, { email: me.email });
         publish(
           "roster",
           [`classroom:${row.room.id}`, `user:${me.id}`],

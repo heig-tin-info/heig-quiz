@@ -12,7 +12,7 @@ import {
 } from "@quiz/contracts";
 import type { Cell } from "@quiz/domain";
 
-import { audit } from "../audit.js";
+import { tracer } from "../audit.js";
 import { publish } from "../events.js";
 import type { AppConfig } from "../config.js";
 import { avatars, classrooms, courseStaff, courses, enrollments, users } from "../db/schema.js";
@@ -58,6 +58,7 @@ async function staffOf(app: FastifyInstance, courseIds: string[]) {
 export async function coursesPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
   const requireTeacher = teacherGuard(app);
+  const trace = tracer(app);
 
   // --- Courses ---
 
@@ -140,14 +141,7 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
     // The creator is the first member of the staff: a course without a staff
     // would be reachable by nobody but an admin.
     await app.db.insert(courseStaff).values({ courseId: id, userId: req.user!.id });
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "course.create",
-      subjectType: "course",
-      subjectId: id,
-      payload: { name: created.name, code },
-    });
+    await trace(req, "course.create", "course", id, { name: created.name, code });
     publish("courses", [`teacher:${req.user!.id}`]);
     return reply.code(201).send({ ...created, createdAt: created.createdAt.toISOString() });
   });
@@ -168,14 +162,7 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
       })
       .where(eq(courses.id, course.id))
       .returning();
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "course.update",
-      subjectType: "course",
-      subjectId: course.id,
-      payload: body.data,
-    });
+    await trace(req, "course.update", "course", course.id, body.data);
     return updated;
   });
 
@@ -183,13 +170,9 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
     const course = await accessibleCourse(app, req, reply);
     if (!course) return reply;
     await app.db.delete(courses).where(eq(courses.id, course.id));
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "course.delete",
-      subjectType: "course",
-      subjectId: course.id,
-      payload: { name: course.name, code: course.code },
+    await trace(req, "course.delete", "course", course.id, {
+      name: course.name,
+      code: course.code,
     });
     return reply.code(204).send();
   });
@@ -225,14 +208,7 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
     // Immediate effect: a colleague added mid-session sees the course
     // without signing out and in again.
     await syncRoleOfUser(app.db, config, userId);
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "course.staff_add",
-      subjectType: "course",
-      subjectId: course.id,
-      payload: { userId, email: body.data.email },
-    });
+    await trace(req, "course.staff_add", "course", course.id, { userId, email: body.data.email });
     publish("courses", [`teacher:${userId}`, `course:${course.id}`]);
     return reply.code(201).send({ userId });
   });
@@ -263,14 +239,7 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
           and(eq(courseStaff.courseId, course.id), eq(courseStaff.userId, params.data.uid)),
         );
       await syncRoleOfUser(app.db, config, params.data.uid);
-      await audit(app.db, {
-        actorUserId: req.user!.id,
-        actorType: "user",
-        action: "course.staff_remove",
-        subjectType: "course",
-        subjectId: course.id,
-        payload: { userId: params.data.uid },
-      });
+      await trace(req, "course.staff_remove", "course", course.id, { userId: params.data.uid });
       publish("courses", [`teacher:${params.data.uid}`, `course:${course.id}`]);
       return reply.code(204).send();
     },
@@ -294,13 +263,9 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
         period: body.data.period.trim(),
       })
       .returning();
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "classroom.create",
-      subjectType: "classroom",
-      subjectId: room!.id,
-      payload: { name: room!.name, courseId: course.id },
+    await trace(req, "classroom.create", "classroom", room!.id, {
+      name: room!.name,
+      courseId: course.id,
     });
     publish("classrooms", [`course:${course.id}`, `teacher:${req.user!.id}`]);
     return reply.code(201).send(room);
@@ -330,13 +295,8 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
     // when there is none, which `org/service.ts` owns (F-ORG-06).
     if (body.data.joinCodeEnabled !== undefined) {
       const state = await setJoinCode(app.db, scope.room.id, body.data.joinCodeEnabled);
-      await audit(app.db, {
-        actorUserId: req.user!.id,
-        actorType: "user",
-        action: "classroom.join_code",
-        subjectType: "classroom",
-        subjectId: scope.room.id,
-        payload: { enabled: state.joinCodeEnabled },
+      await trace(req, "classroom.join_code", "classroom", scope.room.id, {
+        enabled: state.joinCodeEnabled,
       });
     }
     const [updated] = await app.db
@@ -349,13 +309,9 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
       .where(eq(classrooms.id, scope.room.id))
       .returning();
     if (body.data.name !== undefined || body.data.period !== undefined) {
-      await audit(app.db, {
-        actorUserId: req.user!.id,
-        actorType: "user",
-        action: "classroom.rename",
-        subjectType: "classroom",
-        subjectId: scope.room.id,
-        payload: { from: scope.room.name, to: updated!.name },
+      await trace(req, "classroom.rename", "classroom", scope.room.id, {
+        from: scope.room.name,
+        to: updated!.name,
       });
     }
     return updated;
@@ -375,14 +331,7 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
           .update(classrooms)
           .set({ archivedAt: value ? new Date() : null, updatedAt: new Date() })
           .where(eq(classrooms.id, scope.room.id));
-        await audit(app.db, {
-          actorUserId: req.user!.id,
-          actorType: "user",
-          action,
-          subjectType: "classroom",
-          subjectId: scope.room.id,
-          payload: { name: scope.room.name },
-        });
+        await trace(req, action, "classroom", scope.room.id, { name: scope.room.name });
         return reply.code(204).send();
       },
     );
@@ -392,14 +341,7 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
     const scope = await accessibleClassroom(app, req, reply);
     if (!scope) return reply;
     await app.db.delete(classrooms).where(eq(classrooms.id, scope.room.id));
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "classroom.delete",
-      subjectType: "classroom",
-      subjectId: scope.room.id,
-      payload: { name: scope.room.name },
-    });
+    await trace(req, "classroom.delete", "classroom", scope.room.id, { name: scope.room.name });
     return reply.code(204).send();
   });
 
@@ -435,13 +377,7 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
         // UNIQUE(classroom_id, user_id): already enrolled under another address.
         return reply.code(409).send({ error: "already_enrolled" });
       }
-      await audit(app.db, {
-        actorUserId: me.id,
-        actorType: "user",
-        action: "roster.self_enroll",
-        subjectType: "classroom",
-        subjectId: scope.room.id,
-      });
+      await trace(req, "roster.self_enroll", "classroom", scope.room.id);
       publish("roster", [`classroom:${scope.room.id}`, `user:${me.id}`]);
       return reply.code(201).send({ ok: true });
     },
@@ -472,14 +408,7 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
       // Atomic import: nothing was written.
       return reply.code(400).send({ error: "roster_invalid", errors: parse.errors });
     }
-    await audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action: "roster.import",
-      subjectType: "classroom",
-      subjectId: scope.room.id,
-      payload: { rows: parse.rows.length },
-    });
+    await trace(req, "roster.import", "classroom", scope.room.id, { rows: parse.rows.length });
     // Students already registered on the platform are attached immediately.
     await claimForExistingUsers(app.db, scope.room.id);
     return reply.code(200).send({ rows: parse.rows.length, ...summary });
@@ -516,14 +445,7 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
           })
           .where(eq(enrollments.id, entry.id))
           .returning();
-        await audit(app.db, {
-          actorUserId: req.user!.id,
-          actorType: "user",
-          action: "roster.update",
-          subjectType: "enrollment",
-          subjectId: entry.id,
-          payload: { ...body.data, emailChanged },
-        });
+        await trace(req, "roster.update", "enrollment", entry.id, { ...body.data, emailChanged });
         if (emailChanged) await claimForExistingUsers(app.db, entry.classroomId);
         return updated;
       } catch {
@@ -546,14 +468,7 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
         .set({ status: "pending", userId: null, claimedAt: null, conflictFlag: false })
         .where(eq(enrollments.id, entry.id))
         .returning();
-      await audit(app.db, {
-        actorUserId: req.user!.id,
-        actorType: "user",
-        action: "roster.unclaim",
-        subjectType: "enrollment",
-        subjectId: entry.id,
-        payload: { previousUserId: entry.userId },
-      });
+      await trace(req, "roster.unclaim", "enrollment", entry.id, { previousUserId: entry.userId });
       return updated;
     },
   );
@@ -565,13 +480,10 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
       const entry = await accessibleEnrollment(app, req, reply);
       if (!entry) return reply;
       await app.db.delete(enrollments).where(eq(enrollments.id, entry.id));
-      await audit(app.db, {
-        actorUserId: req.user!.id,
-        actorType: "user",
-        action: "roster.remove",
-        subjectType: "enrollment",
-        subjectId: entry.id,
-        payload: { nom: entry.nom, prenom: entry.prenom, email: entry.email },
+      await trace(req, "roster.remove", "enrollment", entry.id, {
+        nom: entry.nom,
+        prenom: entry.prenom,
+        email: entry.email,
       });
       return reply.code(204).send();
     },

@@ -14,7 +14,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { IdParam, ReleaseBody } from "@quiz/contracts";
 
-import { audit, type AuditAction } from "../../audit.js";
+import { tracer } from "../../audit.js";
 import { iso } from "../../clock.js";
 import { accessibleEvaluation, ownAttempt, teacherGuard } from "../guards.js";
 import { emptyBody, invalid } from "../http.js";
@@ -29,15 +29,7 @@ export async function resultsPlugin(app: FastifyInstance) {
   const requireSession = (req: FastifyRequest, reply: FastifyReply) =>
     app.requireSession(req, reply);
 
-  const trace = (req: FastifyRequest, action: AuditAction, id: string, payload?: unknown) =>
-    audit(app.db, {
-      actorUserId: req.user!.id,
-      actorType: "user",
-      action,
-      subjectType: "evaluation",
-      subjectId: id,
-      ...(payload === undefined ? {} : { payload }),
-    });
+  const trace = tracer(app);
 
   // --- Teacher -----------------------------------------------------------
 
@@ -90,9 +82,8 @@ export async function resultsPlugin(app: FastifyInstance) {
     const again = scope.evaluation.releasedAt !== null;
     try {
       const released = await service.releaseResults(app.db, scope.evaluation, now);
-      await trace(req, again ? "results.rerelease" : "results.release", scope.evaluation.id, {
-        rows: released.rows,
-      });
+      const action = again ? "results.rerelease" : "results.release";
+      await trace(req, action, "evaluation", scope.evaluation.id, { rows: released.rows });
       await announce(scope.evaluation.id);
       return { releasedAt: iso(released.releasedAt), rows: released.rows, released: true };
     } catch (error) {
@@ -113,7 +104,7 @@ export async function resultsPlugin(app: FastifyInstance) {
       const scope = await accessibleEvaluation(app, req, reply);
       if (!scope) return reply;
       await service.unreleaseResults(app.db, scope.evaluation, now);
-      await trace(req, "results.unrelease", scope.evaluation.id);
+      await trace(req, "results.unrelease", "evaluation", scope.evaluation.id);
       await announce(scope.evaluation.id);
       return { releasedAt: null, rows: 0, released: false };
     },
