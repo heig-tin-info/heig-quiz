@@ -43,6 +43,7 @@ import {
   NumberField,
   PromptField,
   sectionTitle,
+  TryPanel,
 } from "@quiz/ui";
 
 export interface CodeEditorProps extends EditorProps<CodeConfig> {
@@ -338,31 +339,28 @@ export function CodeEditor({
         />
         <IssueList issues={issuesAt(issues, "referenceSolution")} />
         {onTry === undefined ? null : (
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              className={button("secondary", "sm")}
-              disabled={disabled || tryState.status === "running"}
-              onClick={() => void runReference()}
-            >
-              {tryState.status === "running" ? s.trying : s.tryReference}
-            </button>
-            {tryState.status === "unavailable" ? (
-              <p role="status" className={hint}>
-                {s.tryUnavailable}
-              </p>
-            ) : null}
-            {tryState.status === "failed" ? (
-              <p role="status" className="text-[13px] text-danger">
-                {tryState.reason === "regions" ? s.tryRegionsMismatch : s.tryCompileFailed}
-              </p>
-            ) : null}
-            {tryState.status === "done" ? (
-              <p role="status" className={hint}>
-                {fmt(s.tryResult, { passed: tryState.passed, total: tryState.total })}
-              </p>
-            ) : null}
-          </div>
+          <TryPanel
+            label={s.tryReference}
+            runningLabel={s.trying}
+            running={tryState.status === "running"}
+            disabled={disabled}
+            onTry={() => void runReference()}
+            status={
+              tryState.status === "unavailable"
+                ? { tone: "hint", text: s.tryUnavailable }
+                : tryState.status === "failed"
+                  ? {
+                      tone: "danger",
+                      text: tryState.reason === "regions" ? s.tryRegionsMismatch : s.tryCompileFailed,
+                    }
+                  : tryState.status === "done"
+                    ? {
+                        tone: "hint",
+                        text: fmt(s.tryResult, { passed: tryState.passed, total: tryState.total }),
+                      }
+                    : null
+            }
+          />
         )}
       </section>
 

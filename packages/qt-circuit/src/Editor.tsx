@@ -13,7 +13,6 @@
  * convention, the simulation budget — folds into "Advanced options".
  */
 import { useId, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 
 import { fmt, issuesAt, plural, resolveStrings, rootIssues } from "@quiz/core/client";
 import type { ConfigIssue, EditorProps, MarkdownRenderer } from "@quiz/core/client";
@@ -38,6 +37,7 @@ import {
   type KindLabels,
 } from "./strings.js";
 import {
+  AsideSection,
   badge,
   button,
   card,
@@ -53,6 +53,7 @@ import {
   PromptField,
   sectionTitle,
   Segmented,
+  TryPanel,
 } from "@quiz/ui";
 
 import { chip, selectSm } from "./styles.js";
@@ -231,7 +232,7 @@ export function CircuitEditor({
    * the others.
    */
   const grading = (
-    <section className={cx(aside ? cx(card, "p-4") : "", "flex flex-col gap-3")}>
+    <AsideSection aside={aside}>
       {/*
        * The "?" is a SIBLING of the heading, never inside it (DESIGN.md):
        * the three modes are the one choice on this screen a teacher cannot
@@ -299,10 +300,10 @@ export function CircuitEditor({
       />
       <p className={hint}>{s.showExpectedHint}</p>
       <IssueList issues={issuesAt(issues, "showExpected")} />
-    </section>
+    </AsideSection>
   );
 
-  const main = (
+  return (
     <div className="flex flex-col gap-6">
       <IssueList issues={rootIssues(issues)} />
 
@@ -634,38 +635,40 @@ export function CircuitEditor({
         <IssueList issues={issuesAt(issues, "reference")} />
 
         {onTry === undefined ? null : (
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              className={button("secondary", "sm")}
-              disabled={disabled || tryState.status === "running"}
-              onClick={() => void simulateReference()}
-            >
-              {tryState.status === "running" ? s.trying : s.tryReference}
-            </button>
-            {tryState.status === "unavailable" ? (
-              <p role="status" className={hint}>
-                {s.tryUnavailable}
-              </p>
-            ) : null}
-            {tryState.status === "failed" ? (
-              <p role="status" className="text-[13px] text-danger">
-                {tryState.reason === "reference"
-                  ? s.tryNeedsReference
-                  : tryState.reason === "stimulus"
-                    ? s.tryNeedsStimulus
-                    : s.tryFailed}
-              </p>
-            ) : null}
-            {tryState.status === "done" ? (
-              <p role="status" className={hint}>
-                {/* The stimuli that produced a WAVEFORM, not the ones that
-                    were sent: a count the plots below do not back up is a
-                    count the teacher has to distrust. */}
-                {plural(s, "tryDone", tryState.details.stimuli.filter((d) => d.series !== null).length)}
-              </p>
-            ) : null}
-          </div>
+          <TryPanel
+            label={s.tryReference}
+            runningLabel={s.trying}
+            running={tryState.status === "running"}
+            disabled={disabled}
+            onTry={() => void simulateReference()}
+            status={
+              tryState.status === "unavailable"
+                ? { tone: "hint", text: s.tryUnavailable }
+                : tryState.status === "failed"
+                  ? {
+                      tone: "danger",
+                      text:
+                        tryState.reason === "reference"
+                          ? s.tryNeedsReference
+                          : tryState.reason === "stimulus"
+                            ? s.tryNeedsStimulus
+                            : s.tryFailed,
+                    }
+                  : tryState.status === "done"
+                    ? {
+                        tone: "hint",
+                        // The stimuli that produced a WAVEFORM, not the ones
+                        // that were sent: a count the plots below do not back
+                        // up is a count the teacher has to distrust.
+                        text: plural(
+                          s,
+                          "tryDone",
+                          tryState.details.stimuli.filter((d) => d.series !== null).length,
+                        ),
+                      }
+                    : null
+            }
+          />
         )}
         {tryState.status === "done" ? (
           <div
@@ -715,17 +718,8 @@ export function CircuitEditor({
         </div>
       </details>
 
-      {aside ? null : grading}
+      {grading}
     </div>
-  );
-
-  return aside ? (
-    <>
-      {main}
-      {createPortal(grading, aside)}
-    </>
-  ) : (
-    main
   );
 }
 

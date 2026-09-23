@@ -18,7 +18,6 @@
  *    through the very same affordance (focus it, Space, arrows, Space).
  */
 import { useEffect, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 import {
   closestCenter,
   DndContext,
@@ -53,10 +52,9 @@ import {
   type McqQuestionPolicy,
 } from "./schema.js";
 import { mcqEditorStrings, type McqEditorStringKey } from "./strings.js";
-import { cx, IssueList, PromptField, Segmented } from "@quiz/ui";
+import { AsideSection, cx, IssueList, PromptField, Segmented } from "@quiz/ui";
 import {
   buttonClass,
-  cardClass,
   cardTitleClass,
   choiceLetter,
   gripClass,
@@ -267,7 +265,7 @@ export function McqEditor({
    * node renders in the main column, one section among the others.
    */
   const scoring = (
-    <section className={cx(aside ? cardClass : "", "flex flex-col gap-3")}>
+    <AsideSection aside={aside}>
       <h3 className={aside ? cardTitleClass : labelClass}>{s.scoring}</h3>
 
       {/*
@@ -355,10 +353,10 @@ export function McqEditor({
         </label>
         <p className={cx(helpClass, "pl-6")}>{s.neverShuffleHint}</p>
       </div>
-    </section>
+    </AsideSection>
   );
 
-  const main = (
+  return (
     <div className="flex flex-col gap-6">
       <IssueList issues={rootIssues(issues)} />
 
@@ -455,17 +453,8 @@ export function McqEditor({
         </div>
       </section>
 
-      {aside ? null : scoring}
+      {scoring}
     </div>
-  );
-
-  return aside ? (
-    <>
-      {main}
-      {createPortal(scoring, aside)}
-    </>
-  ) : (
-    main
   );
 }
 
