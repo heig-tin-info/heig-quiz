@@ -744,8 +744,9 @@ export function humanize(slug: string): string {
 // --- Floating layers: dialog, sheet, menu ---
 
 function LayerClose({ onClose }: { onClose: () => void }) {
+  const t = useT();
   return (
-    <IconButton label="Close" onClick={onClose} className="-mr-1.5">
+    <IconButton label={t("common.close")} onClick={onClose} className="-mr-1.5">
       <X />
     </IconButton>
   );
@@ -972,7 +973,7 @@ export function menuPosition(
  */
 export function Menu({
   items,
-  label = "More actions",
+  label: givenLabel,
   trigger,
   align = "end",
 }: {
@@ -982,6 +983,8 @@ export function Menu({
   trigger?: ReactNode;
   align?: "start" | "end";
 }) {
+  const t = useT();
+  const label = givenLabel ?? t("common.moreActions");
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<MenuPlacement | null>(null);
   /** Index of the focused item in `items`; -1 when the menu was opened by mouse. */
@@ -1272,11 +1275,12 @@ export function Menu({
 
 /** Centered spinner for a panel whose data is still loading. */
 export function Spinner({ label, className = "py-12" }: { label?: string; className?: string }) {
+  const t = useT();
   return (
     <div
       role="status"
       aria-live="polite"
-      aria-label={label ?? "Loading"}
+      aria-label={label ?? t("common.loading")}
       className={`flex flex-col items-center justify-center gap-2 ${className}`}
     >
       <Loader2 className="size-5 animate-spin text-fg-faint" />

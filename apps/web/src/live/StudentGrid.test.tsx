@@ -321,21 +321,15 @@ describe("StudentGrid — the class row", () => {
     expect(screen.getByText("50 %")).toBeVisible();
   });
 
-  /*
-   * DEFECT, pinned as it stands so the fix is a visible flip of this test.
-   *
-   * `live.grid.students` is "{n} students" with no singular form, so a class
-   * of one — or a class where every other row is staff, which is the case
-   * built here — reads "1 students". N-I18N-01 owns both dictionaries, and
-   * French has the same hole ("{n} étudiants"). When a `.one` variant is
-   * added, the expectation becomes "1 student" and the `today:` goes.
-   */
-  it("today: excludes the staff rows from the count, and says \"1 students\" for the one left", () => {
+  // A class of one — or, as built here, a class where every other row is
+  // staff — says "1 student", in both dictionaries (`live.grid.students.one`).
+  it("excludes the staff rows from the count, and says \"1 student\" for the one left", () => {
     const view = viewIn("running", 3, 2);
     view.rows[1] = { ...view.rows[1]!, staff: true };
     view.rows[2] = { ...view.rows[2]!, staff: true };
     setup(view);
-    expect(screen.getByText(/\b1 students\b/)).toBeVisible();
+    expect(screen.getByText(/\b1 student\b/)).toBeVisible();
+    expect(screen.queryByText(/\b1 students\b/)).toBeNull();
   });
 
   it("says the rate is a live one while the answers are being graded as they land", () => {

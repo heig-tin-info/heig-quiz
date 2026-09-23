@@ -275,18 +275,18 @@ export function DevGallery() {
       </section>
 
       <section className="space-y-3">
-        <SectionHeading title="Circuit: schematic editor" />
+        <SectionHeading title={t("dev.ui.circuitEditor")} />
         <CircuitEditorDemo />
       </section>
 
       <section className="space-y-3">
-        <SectionHeading title="Circuit: schematic view and waveforms" />
+        <SectionHeading title={t("dev.ui.circuitView")} />
         <div className="grid items-start gap-4 lg:grid-cols-2">
           <Card>
             <SchematicView schematic={CIRCUIT_DEMO} height={260} />
           </Card>
           <div className="space-y-4">
-            <Plot series={CIRCUIT_SERIES} expected={CIRCUIT_EXPECTED} title="Sine, 1 kHz" height={200} />
+            <Plot series={CIRCUIT_SERIES} expected={CIRCUIT_EXPECTED} title={t("dev.ui.sine")} height={200} />
             <Plot series={null} height={120} />
           </div>
         </div>

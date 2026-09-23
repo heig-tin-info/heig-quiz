@@ -24,6 +24,7 @@ import {
   Segmented,
   Select,
   Sheet,
+  Spinner,
   Switch,
   SyncBadge,
   TabPanel,
@@ -143,6 +144,15 @@ describe("Modal", () => {
     // Portal: the panel is a child of <body>, not of the render container.
     expect(dialog.closest("[data-testid='container']")).toBeNull();
     expect(dialog.parentElement?.parentElement).toBe(document.body);
+  });
+
+  it("names its close button in the reader's language", async () => {
+    renderWithProviders(
+      <LayerHarness render={(close) => <Modal title="Archiver ?" onClose={close}>…</Modal>} />,
+      { locale: "fr" },
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Open" }));
+    expect(within(screen.getByRole("dialog")).getByRole("button", { name: "Fermer" })).toBeVisible();
   });
 
   it("closes on Escape", async () => {
@@ -507,6 +517,21 @@ function TabsHarness({ onChange }: { onChange: (v: DemoTab) => void }) {
     </>
   );
 }
+
+describe("the default accessible names", () => {
+  // English names in a French render are what no other test looks for (FC-20).
+  it("are translated for a menu trigger and a spinner", () => {
+    renderWithProviders(
+      <>
+        <Menu items={[{ label: "Renommer", onSelect: () => {} }]} />
+        <Spinner />
+      </>,
+      { locale: "fr" },
+    );
+    expect(screen.getByRole("button", { name: "Plus d'actions" })).toBeVisible();
+    expect(screen.getByRole("status", { name: "Chargement…" })).toBeInTheDocument();
+  });
+});
 
 describe("Tabs", () => {
   it("keeps one tab in the Tab order (roving tabindex)", () => {

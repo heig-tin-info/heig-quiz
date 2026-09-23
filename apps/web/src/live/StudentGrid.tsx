@@ -108,6 +108,7 @@ export function StudentGrid({
   const { view } = state;
   const totals = new Map(view.totals.map((x) => [x.itemId, x]));
   const percent = (v: number) => `${Math.round(v * 100)} %`;
+  const studentCount = view.rows.filter((r) => !r.staff).length;
 
   // Mirrors of the server's own rules, so no button is offered that the API
   // would refuse (`live/service.ts`): `extendTime` and `closeAttempt` only
@@ -356,7 +357,9 @@ export function StudentGrid({
             >
               {t("live.grid.class")}{" "}
               <span className="font-normal text-fg-muted">
-                · {t("live.grid.students", { n: view.rows.filter((r) => !r.staff).length })}
+                · {t(studentCount === 1 ? "live.grid.students.one" : "live.grid.students", {
+                  n: studentCount,
+                })}
               </span>
             </th>
             <td className={cx(T.td, "text-right text-fg-faint")}>—</td>
