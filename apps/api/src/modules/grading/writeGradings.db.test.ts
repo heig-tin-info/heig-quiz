@@ -136,6 +136,25 @@ describe("writeGradings", () => {
     expect(standingOnB.map((r) => r.state).sort()).toEqual(["proposed", "validated"]);
   });
 
+  it("refuses a batch that names one cell twice, and writes nothing", async () => {
+    const { items, attemptIds } = await closedGrid(1, 1);
+    const cell = {
+      attemptId: attemptIds[0]!,
+      itemId: items[0]!.item.id,
+      answerId: null,
+      maxPoints: 1,
+      points: 0,
+      source: "auto" as const,
+      state: "proposed" as const,
+      now: NOW,
+    };
+    await expect(writeGradings(db, [cell, { ...cell, state: "validated" }])).rejects.toThrow(
+      /appears twice in one batch/,
+    );
+    const rows = await db.select().from(gradings).where(eq(gradings.attemptId, cell.attemptId));
+    expect(rows).toHaveLength(0);
+  });
+
   it("writes nothing for an empty batch", async () => {
     expect(await writeGradings(db, [])).toEqual([]);
   });

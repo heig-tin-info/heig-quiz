@@ -135,8 +135,10 @@ const WRITE_CHUNK = 500;
  * cell. A new `proposed` one only supersedes a previous PROPOSAL: a proposal
  * must never quietly unseat a grade a teacher already validated, and the
  * callers that produce proposals skip a validated cell anyway (idempotency).
- * A cell appears at most once per batch; `gradings_pair_validated_uq` still
- * refuses a second validated grading on one cell.
+ * A cell appears at most once per batch — the supersede chain of a cell is
+ * built from ONE row per cell, so a duplicate throws before anything is
+ * written; `gradings_pair_validated_uq` still refuses a second validated
+ * grading on one cell.
  *
  * The rows come back in the order of `inputs`.
  */
@@ -144,6 +146,14 @@ export async function writeGradings(
   db: Db,
   inputs: readonly WriteGradingInput[],
 ): Promise<GradingRecord[]> {
+  const seen = new Set<PairKey>();
+  for (const input of inputs) {
+    const key = pairKey(input.attemptId, input.itemId);
+    if (seen.has(key)) {
+      throw new Error(`writeGradings: cell ${key} appears twice in one batch`);
+    }
+    seen.add(key);
+  }
   const out: GradingRecord[] = [];
   for (let start = 0; start < inputs.length; start += WRITE_CHUNK) {
     out.push(...(await writeChunk(db, inputs.slice(start, start + WRITE_CHUNK))));
