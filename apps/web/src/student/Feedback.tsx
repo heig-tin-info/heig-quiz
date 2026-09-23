@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Hourglass } from "lucide-react";
 
 import type { FeedbackPending, StudentFeedback } from "@quiz/contracts";
+import { formatGrade, formatPoints } from "@quiz/domain";
 
 import { api } from "../api";
 import { useT, type Dict } from "../i18n";
@@ -102,10 +103,10 @@ export function Feedback({ attemptId }: { attemptId: string }) {
       {header(data.evaluation.releasedAt)}
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <Stat label={t("feedback.grade")} value={data.grade.toFixed(1)} />
+        <Stat label={t("feedback.grade")} value={formatGrade(data.grade)} />
         <Stat
           label={t("feedback.points")}
-          value={`${Math.round(data.points * 100) / 100} / ${data.totalPoints}`}
+          value={`${formatPoints(data.points)} / ${data.totalPoints}`}
         />
       </div>
 
@@ -129,7 +130,7 @@ export function Feedback({ attemptId }: { attemptId: string }) {
                   <Badge tone="zinc">{t("feedback.notGraded")}</Badge>
                 ) : (
                   <span className="text-[15px] font-semibold tabular-nums">
-                    {Math.round(item.points * 100) / 100} / {item.maxPoints}
+                    {formatPoints(item.points)} / {item.maxPoints}
                   </span>
                 )}
               </div>

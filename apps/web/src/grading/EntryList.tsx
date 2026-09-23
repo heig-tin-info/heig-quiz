@@ -2,10 +2,11 @@ import { GraduationCap } from "lucide-react";
 import type { ReactNode } from "react";
 
 import type { GradingEntry, GradingQueueItem } from "@quiz/contracts";
+import { formatPoints } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import { Badge, cx, pressable, VerdictCell } from "../ui";
-import { confidenceLabel, confidenceTone, entryVerdict, round2, sourceLabel, sourceTone } from "./labels";
+import { confidenceLabel, confidenceTone, entryVerdict, sourceLabel, sourceTone } from "./labels";
 
 /** Stable identity of a cell: one grading per (attempt, item). */
 export const entryKey = (e: Pick<GradingEntry, "attemptId" | "itemId">) =>
@@ -87,8 +88,8 @@ export function EntryList({
               <span className="w-16 shrink-0 text-right text-[13px] font-semibold tabular-nums">
                 {grading
                   ? t("grading.score", {
-                      points: round2(grading.points),
-                      max: round2(grading.maxPoints),
+                      points: formatPoints(grading.points),
+                      max: formatPoints(grading.maxPoints),
                     })
                   : "—"}
               </span>

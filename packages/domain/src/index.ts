@@ -7,6 +7,7 @@
 export * from "./cloze.js";
 export * from "./compareOutput.js";
 export * from "./deadline.js";
+export * from "./format.js";
 export * from "./grade.js";
 export * from "./lockedTemplate.js";
 export * from "./mcqScore.js";

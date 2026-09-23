@@ -2,12 +2,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import type { Grading, GradingEntry } from "@quiz/contracts";
+import { formatPoints } from "@quiz/domain";
 
 import { api, apiErrorMessage } from "../api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { Alert, Button, Field, Sheet, Textarea } from "../ui";
-import { round2 } from "./labels";
 
 /**
  * F-GRADE-05: the teacher's own grading, with its MANDATORY comment. The
@@ -34,7 +34,7 @@ export function OverrideSheet({
   const toast = useToast();
   const qc = useQueryClient();
   const [points, setPoints] = useState(() =>
-    entry.grading ? round2(entry.grading.points) : "0",
+    entry.grading ? formatPoints(entry.grading.points) : "0",
   );
   const [comment, setComment] = useState(entry.grading?.comment ?? "");
   const [touched, setTouched] = useState(false);
@@ -95,7 +95,7 @@ export function OverrideSheet({
         <p className="text-sm text-fg-muted">{entry.label}</p>
         <Field
           label={t("grading.override.points")}
-          hint={t("grading.override.max", { max: round2(maxPoints) })}
+          hint={t("grading.override.max", { max: formatPoints(maxPoints) })}
           type="number"
           step="0.5"
           min={0}
@@ -108,7 +108,7 @@ export function OverrideSheet({
         />
         {touched && pointsInvalid ? (
           <p className="text-[13px] text-danger">
-            {t("grading.override.pointsInvalid", { max: round2(maxPoints) })}
+            {t("grading.override.pointsInvalid", { max: formatPoints(maxPoints) })}
           </p>
         ) : null}
         <div className="space-y-1.5">

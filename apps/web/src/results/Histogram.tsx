@@ -1,4 +1,4 @@
-import { MAX_GRADE } from "@quiz/domain";
+import { formatGrade, MAX_GRADE } from "@quiz/domain";
 import type { ResultsStats } from "@quiz/contracts";
 
 import { useT } from "../i18n";
@@ -6,8 +6,8 @@ import { cx } from "../ui";
 
 /** How the buckets of `@quiz/domain#histogram` are named on screen. */
 export function bucketLabel(bucket: number, step: number): string {
-  if (bucket >= MAX_GRADE) return bucket.toFixed(1);
-  return `${bucket.toFixed(1)}–${(bucket + step).toFixed(1)}`;
+  if (bucket >= MAX_GRADE) return formatGrade(bucket);
+  return `${formatGrade(bucket)}–${formatGrade(bucket + step)}`;
 }
 
 /**

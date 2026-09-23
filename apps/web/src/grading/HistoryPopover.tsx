@@ -2,10 +2,11 @@ import { History, PencilLine, RefreshCcw } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 
 import type { GradingHistoryEntry } from "@quiz/contracts";
+import { formatPoints } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import { Badge, Button, cx, RelativeTime, useEscape, Z } from "../ui";
-import { gradingStateLabel, round2, sourceLabel, stateTone } from "./labels";
+import { gradingStateLabel, sourceLabel, stateTone } from "./labels";
 
 /**
  * The gradings a cell went through, newest first (deviation W6-19): who
@@ -71,7 +72,7 @@ export function HistoryPopover({ history }: { history: GradingHistoryEntry[] }) 
                 <li key={h.id} className="border-t border-line pt-2 first:border-t-0 first:pt-0">
                   <div className="flex items-center gap-2">
                     <span className="text-[13px] font-semibold tabular-nums">
-                      {t("grading.score", { points: round2(h.points), max: round2(h.maxPoints) })}
+                      {t("grading.score", { points: formatPoints(h.points), max: formatPoints(h.maxPoints) })}
                     </span>
                     <Badge tone={stateTone(h.state)}>{gradingStateLabel(t, h.state)}</Badge>
                     {h.source === "manual" ? (
