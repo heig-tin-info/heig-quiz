@@ -66,7 +66,6 @@ import {
   type Palette,
   type SchematicComponent,
   type Supplies,
-  type Wire,
   type WireEnd,
 } from "../schema.js";
 
@@ -114,19 +113,13 @@ import {
   hitRectOf,
   indexOf,
   newComponent,
-  nextId,
   pinAt,
-  pinPosition,
-  portPosition,
-  resolveEnd,
-  sameEnd,
   snap,
   viewBoxAttr,
-  type PinPoint,
   type PinTarget,
 } from "./geometry.js";
 import { useHistory } from "./history.js";
-import { blockedCells, computeRoutes, onPolyline, pathOf, route, withRoutes } from "./router.js";
+import { blockedCells, computeRoutes, pathOf, withRoutes } from "./router.js";
 import {
   ComponentGlyph,
   GridDefs,
@@ -149,6 +142,7 @@ import {
   useSelection,
   type BoxDrag,
 } from "./useSelection.js";
+import { useWireDrawing } from "./useWireDrawing.js";
 import { panStart, panned, useViewport, type PanDrag } from "./useViewport.js";
 
 export interface SchematicEditorProps {
@@ -180,14 +174,6 @@ type Drag =
   | BoxDrag
   | PanDrag
   | { kind: "via"; wire: string; index: number; moved: boolean };
-
-interface Draft {
-  readonly a: WireEnd;
-  readonly via: ReadonlyArray<{ x: number; y: number }>;
-}
-
-const endOf = (target: PinTarget): WireEnd =>
-  target.kind === "pin" ? { kind: "pin", c: target.c, p: target.p } : { kind: "port", port: target.port };
 
 /** The move the box allows, out of the one the pointer asked for. */
 function clampDelta(components: readonly SchematicComponent[], dx: number, dy: number): { dx: number; dy: number } {
@@ -265,7 +251,6 @@ export function SchematicEditor({
     m: ORIENT_0,
     show: false,
   });
-  const [draft, setDraft] = useState<Draft | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const { view, setView, canvasHeight, toWorld, slack, fit, zoom } = useViewport(svgRef, canvasRef, height);
   const [cursor, setCursor] = useState<{ x: number; y: number; inside: boolean }>({
@@ -344,6 +329,21 @@ export function SchematicEditor({
     [apply, full, ghost.m, placeKind, readOnly, value],
   );
 
+  const { draft, setDraft, wireClick, cancelStep, wireUnder, draftPoints } = useWireDrawing({
+    value,
+    apply,
+    byId,
+    obstacles,
+    routes,
+    slack,
+    mode,
+    setMode,
+    setPlaceKind,
+    setHover,
+    cursor,
+    hover,
+  });
+
   const undo = useCallback(() => {
     const previous = history.undo(value);
     if (previous === undefined) return;
@@ -360,84 +360,7 @@ export function SchematicEditor({
     onChange(next);
   }, [history, onChange, value]);
 
-  // --- the wire tool -----------------------------------------------------
-
-  const finishWire = useCallback(
-    (a: WireEnd, via: ReadonlyArray<{ x: number; y: number }>, b: WireEnd) => {
-      const pa = resolveEnd(a, byId);
-      const pb = resolveEnd(b, byId);
-      if (pa === null || pb === null) return;
-      const points = route([pa, ...via.map((v) => ({ x: v.x, y: v.y, d: -1 as const })), pb], obstacles);
-      const wire: Wire = {
-        id: nextId(
-          "w",
-          value.wires.map((w) => w.id),
-        ),
-        a,
-        b,
-        via: via.map((v) => ({ x: v.x, y: v.y })),
-        points,
-      };
-      apply({ components: value.components, wires: [...value.wires, wire] });
-      setDraft(null);
-      setHover(null);
-    },
-    [apply, byId, obstacles, value],
-  );
-
-  const wireClick = useCallback(
-    (target: PinTarget | null, onWire: string | null, world: { x: number; y: number }) => {
-      const point = clampPoint(world.x, world.y);
-      if (draft === null) {
-        if (target !== null) setDraft({ a: endOf(target), via: [] });
-        else if (onWire !== null) setDraft({ a: { kind: "free", ...point }, via: [] });
-        return;
-      }
-      if (target !== null) {
-        const end = endOf(target);
-        if (sameEnd(draft.a, end) && draft.via.length === 0) return;
-        finishWire(draft.a, draft.via, end);
-        return;
-      }
-      if (onWire !== null) {
-        finishWire(draft.a, draft.via, { kind: "free", ...point });
-        return;
-      }
-      const last = draft.via[draft.via.length - 1];
-      if (last !== undefined && last.x === point.x && last.y === point.y) {
-        /* A second click on the same spot: that corner becomes a free end. */
-        finishWire(draft.a, draft.via.slice(0, -1), { kind: "free", ...point });
-        return;
-      }
-      if (draft.via.length >= 16) return;
-      setDraft({ a: draft.a, via: [...draft.via, point] });
-    },
-    [draft, finishWire],
-  );
-
-  const cancelStep = useCallback(() => {
-    if (draft !== null) {
-      setDraft(draft.via.length > 0 ? { a: draft.a, via: draft.via.slice(0, -1) } : null);
-      return;
-    }
-    if (mode !== "select") {
-      setMode("select");
-      setPlaceKind(null);
-    }
-  }, [draft, mode]);
-
   // --- the pointer -------------------------------------------------------
-
-  const wireUnder = useCallback(
-    (x: number, y: number): string | null => {
-      const r = slack();
-      for (const [wid, points] of routes) {
-        if (onPolyline(points, x, y, r)) return wid;
-      }
-      return null;
-    },
-    [routes, slack],
-  );
 
   const componentUnder = useCallback(
     (x: number, y: number): string | null => {
@@ -729,24 +652,6 @@ export function SchematicEditor({
     },
     [apply, selectedComponent, value],
   );
-
-  // --- the draft polyline, drawn under the cursor ------------------------
-
-  const draftPoints = useMemo(() => {
-    if (draft === null) return null;
-    const a = resolveEnd(draft.a, byId);
-    if (a === null) return null;
-    let end: PinPoint | null = { x: cursor.x, y: cursor.y, d: -1 };
-    if (hover !== null) {
-      if (hover.kind === "port") end = portPosition(hover.port);
-      else {
-        const c = byId.get(hover.c);
-        end = c === undefined ? null : pinPosition(c, hover.p);
-      }
-    }
-    if (end === null) return null;
-    return route([a, ...draft.via.map((v) => ({ x: v.x, y: v.y, d: -1 as const })), end], obstacles);
-  }, [byId, cursor.x, cursor.y, draft, hover, obstacles]);
 
   // --- render ------------------------------------------------------------
 
