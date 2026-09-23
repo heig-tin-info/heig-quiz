@@ -300,6 +300,18 @@ live in `ui/state.ts`, each written once.
   with the name written beside it (a roster row) carries neither. It exists
   because three places drew "a picture, or initials", and two of them had no
   fallback.
+- PersonPill / PeopleStack: a group of people as a row of 24 px discs — the
+  staff of a course, the teachers of a classroom. A disc carries the name in a
+  `Tip` and nothing else, because a name is all a reader wants while scanning;
+  the address and whatever may be done to that person's seat wait inside the
+  `Popover` the disc opens, where they cost the row nothing and where the name
+  is already written beside them. Those actions go through `Actions`, so one
+  of them is one icon button. The row has a ceiling (`max`, ten): past it the
+  rest becomes a single "+N" disc in the `Initials` colours, opening on the
+  WHOLE list, one line per person. It exists because the staff used to be a
+  hairline-separated strip under the classrooms with the word STAFF over three
+  discs, and "remove Pierre Roulet from the staff" was an item in the course's
+  own menu — an action about a person, filed under the thing they are on.
 - ParentLink: the way back up, as the `PageHeader` eyebrow — the parent's
   name (a course, a pool, a classroom) as a plain button. The eyebrow sets
   the 13 px `fg-muted`; the link adds `fg` AND an underline on hover, with
@@ -429,6 +441,29 @@ live in `ui/state.ts`, each written once.
   An item's `disabled` describes the state when the menu was opened, never a
   busy state: picking an item closes the menu, so a pending flag there is
   invisible. A toast reports the progress instead.
+- Actions: the actions of ONE record — a course, a pool, a table row — drawn
+  as the shape their NUMBER deserves: one or two icon buttons side by side,
+  the `Menu` from three on. The call site hands over the list and never picks
+  the shape, which is what makes "a row of three or more icon buttons is a
+  menu" true by construction instead of true by review; it also means the
+  same list drawn on a card and in a table row cannot come out as two
+  different things. An item that cannot be a button — no icon, or an `href`
+  or a `description`, which are rows of text — sends the whole list to the
+  menu, and so does `menu`, for a list whose length varies with the state and
+  would otherwise flicker between two shapes under the reader's pointer. It
+  exists because "how many is too many" was being answered by hand at every
+  site, and the answers had started to differ.
+- Popover: a small floating card hung on a trigger — a colleague's name and
+  address behind their disc, the list behind a "+2". Built from the same two
+  pieces as `Menu` (`menuPosition`, `useLayer`), so it closes on the same four
+  things (outside click, Escape, page scroll, resize) and its panel wears the
+  same chrome: `menu` radius, hairline, popover shadow, `Z.popover`, 12 px of
+  padding, 14 rem wide at least and 20 at most. It is a `dialog` and not a
+  `menu` — what it holds is a card one may act IN, which arrows do not walk.
+  Two ways in: `click` for what a reader goes looking for, `hover` (150 ms in,
+  150 ms of grace out, so the pointer can travel the 6 px gap) for what a
+  pointer brushes past. A hover popover is still clickable, because a touch
+  screen has no hover at all. A bare label is a `Tip`, not this.
 - Combobox (`ui/combobox.tsx`): a text field with a list under it — the tag
   field, the teacher picker, the pool search's `tag:` / `type:` completions.
   `useCombobox` holds the ARIA combobox with virtual focus: `role="combobox"`,
@@ -781,6 +816,27 @@ Below the last threshold the table still scrolls sideways. The actions cell
 then takes `T.stickyEnd` (`sticky right-0` on the row's own fill, hover
 included), because a row whose actions are off screen is a row you cannot
 act on, and that was the bug the priorities were added for.
+
+Every table sorts by its column labels, through one motif. A head is
+declared as DATA — one `Column` per column, carrying its label, its
+priority class and its width — and `TableHead` (`ui/page.tsx`) draws it, so
+the head and the priorities can no longer disagree and every table of the
+app sorts the same way: click a label to order by it, click it again to flip
+it. The affordance is the arrow, and it stays inside the hairline aesthetic:
+a faint `ArrowUpDown` that fades in on hover and on keyboard focus, in the
+DOM the whole time so nothing shifts when it appears, and the solid
+`ArrowUp` / `ArrowDown` in `fg` on the column that is sorted — which also
+carries `aria-sort`, the same answer for a reader who cannot see the arrow.
+On a right-aligned column the arrow hangs to the LEFT of the label, so the
+word stays flush with the figures under it.
+
+`useSortableTable` takes a `null` initial sort, and `null` is not "sorted by
+the first column": it is the order the rows arrived in, kept until the
+reader asks for another one. The evaluations of a classroom come ordered the
+way that classroom works through them and the versions of a question come
+newest first; reshuffling either on mount throws away an answer nobody
+clicked for. The tick box, the actions column and a column of prose take
+`sortable: false` — they never sort, and the actions label stays `sr-only`.
 
 A row with a `colSpan` needs care: a cell spanning a column the container has
 hidden leaves that row one column wider than every other one, and the table

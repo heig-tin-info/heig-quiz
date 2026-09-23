@@ -4,7 +4,7 @@ import type { ResultRow, ResultRowState } from "@quiz/contracts";
 import { formatGrade, formatPoints } from "@quiz/domain";
 
 import { formatDuration, useT, type Dict, type TFunction } from "../i18n";
-import { Badge, cx, SortHeader, T, useSortableTable, type Tone } from "../ui";
+import { Badge, cx, T, TableHead, useSortableTable, type Column, type Tone } from "../ui";
 
 type Key = "name" | "email" | "points" | "grade" | "duration" | "state";
 
@@ -55,37 +55,25 @@ export function GradeTable({ rows }: { rows: ResultRow[] }) {
     { key: "name", dir: 1 },
   );
 
+  const columns: Column<Key>[] = [
+    { key: "name", label: t("results.col.student") },
+    /* The e-mail is the column the table can do without: hiding it brings
+       the grade back on screen without a sideways scroll. It goes last of
+       the two, after the duration — a grade sheet is read by name, and the
+       duration is the figure a teacher looks at once. Both measure the
+       TABLE's width, not the phone's: this table also lives inside a tab
+       beside a histogram. */
+    { key: "email", label: t("results.col.email"), className: T.colHigh },
+    { key: "points", label: t("results.col.points"), right: true },
+    { key: "grade", label: t("results.col.grade"), right: true },
+    { key: "duration", label: t("results.col.duration"), right: true, className: T.colLow },
+    { key: "state", label: t("results.col.state") },
+  ];
+
   return (
     <div className={cx(T.container, "overflow-x-auto rounded-card border border-line bg-surface")}>
       <table className={T.table}>
-        <thead className={T.head}>
-          <tr>
-            <SortHeader k="name" sort={sort} onToggle={toggle}>
-              {t("results.col.student")}
-            </SortHeader>
-            {/* The e-mail is the column the table can do without: hiding it
-                brings the grade back on screen without a sideways scroll. It
-                goes last of the two, after the duration — a grade sheet is
-                read by name, and the duration is the figure a teacher looks
-                at once. Both measure the TABLE's width, not the phone's:
-                this table also lives inside a tab beside a histogram. */}
-            <SortHeader k="email" sort={sort} onToggle={toggle} className={T.colHigh}>
-              {t("results.col.email")}
-            </SortHeader>
-            <SortHeader k="points" sort={sort} onToggle={toggle} right>
-              {t("results.col.points")}
-            </SortHeader>
-            <SortHeader k="grade" sort={sort} onToggle={toggle} right>
-              {t("results.col.grade")}
-            </SortHeader>
-            <SortHeader k="duration" sort={sort} onToggle={toggle} right className={T.colLow}>
-              {t("results.col.duration")}
-            </SortHeader>
-            <SortHeader k="state" sort={sort} onToggle={toggle}>
-              {t("results.col.state")}
-            </SortHeader>
-          </tr>
-        </thead>
+        <TableHead columns={columns} sort={sort} onToggle={toggle} />
         <tbody>
           {sorted.map((row) => (
             <tr key={row.userId} className={T.row}>

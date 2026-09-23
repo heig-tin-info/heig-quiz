@@ -125,6 +125,122 @@ describe("TeacherHome", () => {
     ]);
   });
 
+  it("offers the two course actions as icon buttons, named", async () => {
+    mockFetch({ [`GET ${COURSES}`]: ok([makeCourseSummary()]) });
+    renderWithProviders(<TeacherHome navigate={vi.fn()} />);
+
+    // Two actions, so two buttons and NO overflow menu: `Actions` decides the
+    // shape, and a course has exactly these two things beyond its classrooms.
+    expect(await screen.findByRole("button", { name: "Add a staff member" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "Delete course" })).toBeVisible();
+    expect(screen.queryByRole("button", { name: "More actions" })).toBeNull();
+  });
+
+  it("removes a staff member from that person's own card", async () => {
+    const { calls } = mockFetch({
+      [`GET ${COURSES}`]: ok([
+        makeCourseSummary({
+          staff: [
+            {
+              userId: "u-1",
+              givenName: "Marie",
+              familyName: "Dupont",
+              email: "marie.dupont@heig-vd.ch",
+              avatarUrl: null,
+            },
+            {
+              userId: "u-2",
+              givenName: "Pierre",
+              familyName: "Roulet",
+              email: "pierre.roulet@heig-vd.ch",
+              avatarUrl: null,
+            },
+          ],
+        }),
+      ]),
+      "DELETE /app/api/courses/c1/staff/u-2": ok(undefined),
+    });
+    renderWithProviders(<TeacherHome navigate={vi.fn()} />);
+
+    // The disc names the colleague; the card behind it holds their address
+    // and the one thing that may be done to their seat.
+    await userEvent.click(await screen.findByRole("button", { name: "Pierre Roulet" }));
+    const card = screen.getByRole("dialog", { name: "Pierre Roulet" });
+    expect(within(card).getByText("pierre.roulet@heig-vd.ch")).toBeVisible();
+    await userEvent.click(within(card).getByRole("button", { name: "Remove from the staff" }));
+
+    const confirmDialog = await screen.findByRole("dialog", {
+      name: /Remove Pierre Roulet from the staff/,
+    });
+    await userEvent.click(
+      within(confirmDialog).getByRole("button", { name: "Remove from the staff" }),
+    );
+    expect(calls.filter((c) => c.method === "DELETE")).toEqual([
+      { url: "/app/api/courses/c1/staff/u-2", method: "DELETE", body: null },
+    ]);
+  });
+
+  it("unlinks a pool from the icon beside it", async () => {
+    const { calls } = mockFetch({
+      [`GET ${COURSES}`]: ok([makeCourseSummary()]),
+      "GET /app/api/courses/c1": ok({
+        course: { id: "c1", name: "Programmation C", code: "PRG1" },
+        staff: [],
+        pools: [{ id: "p1", name: "Pointers", questionCount: 7 }],
+        classrooms: [],
+      }),
+      "GET /app/api/pools": ok([]),
+      "PUT /app/api/courses/c1/pools": ok(undefined),
+    });
+    renderWithProviders(<TeacherHome navigate={vi.fn()} />);
+
+    // One action, one icon: no menu to open on the way to it.
+    await userEvent.click(await screen.findByRole("button", { name: "Unlink from this course" }));
+    const dialog = await screen.findByRole("dialog", { name: /Unlink from this course/ });
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Unlink from this course" }),
+    );
+    expect(calls.filter((c) => c.method === "PUT")).toEqual([
+      { url: "/app/api/courses/c1/pools", method: "PUT", body: { poolIds: [] } },
+    ]);
+  });
+
+  it("sorts the table on the column that was clicked", async () => {
+    mockFetch({
+      [`GET ${COURSES}`]: ok([
+        makeCourseSummary({ id: "c1", name: "Algorithmique", code: "ALG", staff: [] }),
+        makeCourseSummary({
+          id: "c2",
+          name: "Programmation C",
+          code: "PRG1",
+          staff: [
+            {
+              userId: "u-1",
+              givenName: "Marie",
+              familyName: "Dupont",
+              email: "marie.dupont@heig-vd.ch",
+              avatarUrl: null,
+            },
+          ],
+        }),
+      ]),
+    });
+    renderWithProviders(<TeacherHome navigate={vi.fn()} />, { route: "/" });
+    await userEvent.click(await screen.findByRole("radio", { name: "List" }));
+
+    // The initial sort is the name, ascending.
+    const names = () =>
+      screen.getAllByRole("row").slice(1).map((row) => row.textContent ?? "");
+    expect(names()[0]).toContain("Algorithmique");
+
+    // Staff ascending puts the course with nobody on it first, and clicking
+    // the same column again flips it.
+    await userEvent.click(screen.getByRole("button", { name: "Staff" }));
+    expect(names()[0]).toContain("Algorithmique");
+    await userEvent.click(screen.getByRole("button", { name: "Staff" }));
+    expect(names()[0]).toContain("Programmation C");
+  });
+
   it("says so when the list cannot be read, and offers a retry", async () => {
     mockFetch({ [`GET ${COURSES}`]: { status: 500, body: { message: "boom" } } });
     renderWithProviders(<TeacherHome navigate={vi.fn()} />);

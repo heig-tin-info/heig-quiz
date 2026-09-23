@@ -23,6 +23,9 @@ import {
   RelativeTime,
   Skeleton,
   T,
+  TableHead,
+  useSortableTable,
+  type Column,
 } from "../ui";
 import { questionKey, questionPreviewKey } from "../queryKeys";
 
@@ -73,6 +76,12 @@ function VersionPreview({ questionId, number }: { questionId: string; number: nu
   return <MarkdownView source={statementOf(preview.data?.student)} size="sm" />;
 }
 
+type VersionSort = "version" | "publishedAt";
+
+/** A version ranks on its number and on the stamp it was published at. */
+const versionRank = (v: VersionRow, key: VersionSort): string | number =>
+  key === "version" ? v.number : v.publishedAt;
+
 export function VersionHistory({
   questionId,
   versions,
@@ -88,6 +97,21 @@ export function VersionHistory({
   const [viewing, setViewing] = useState<number | null>(null);
   const [deprecating, setDeprecating] = useState<VersionRow | null>(null);
   const [note, setNote] = useState("");
+
+  /* No initial sort: the server hands the versions over newest first, which
+     is the order a teacher reads a history in. */
+  const { sorted, sort, toggle } = useSortableTable<VersionRow, VersionSort>(
+    versions,
+    versionRank,
+    null,
+  );
+  const columns: Column<VersionSort>[] = [
+    { key: "version", label: t("pool.col.version") },
+    { key: "publishedAt", label: t("question.versions.publishedAt") },
+    // A change note is prose: there is no order to put it in.
+    { key: "note", label: t("question.changeNote"), sortable: false },
+    { key: "actions", label: t("common.actions"), sortable: false, srOnly: true },
+  ];
 
   const invalidate = () => qc.invalidateQueries({ queryKey: questionKey(questionId) });
   const fail = toastError("error.save");
@@ -129,18 +153,9 @@ export function VersionHistory({
     <div className="space-y-4">
       <Card className="overflow-x-auto">
         <table className={T.table}>
-          <thead className={T.head}>
-            <tr>
-              <th className={T.th}>{t("pool.col.version")}</th>
-              <th className={T.th}>{t("question.versions.publishedAt")}</th>
-              <th className={T.th}>{t("question.changeNote")}</th>
-              <th className={T.th}>
-                <span className="sr-only">{t("common.actions")}</span>
-              </th>
-            </tr>
-          </thead>
+          <TableHead columns={columns} sort={sort} onToggle={toggle} />
           <tbody>
-            {versions.map((v) => (
+            {sorted.map((v) => (
               <tr key={v.number} className={cx(T.row, T.rowHover)}>
                 <td className={T.td}>
                   <span className="flex items-center gap-2">

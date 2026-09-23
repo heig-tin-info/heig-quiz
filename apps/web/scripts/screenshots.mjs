@@ -64,6 +64,9 @@ const scenes = [
   // The same list as a table; the choice lives in localStorage.
   { name: "teacher-home-list", role: "teacher", path: "/", ls: { "quiz-courses-view": "list" } },
   { name: "teacher-home-list-many", role: "teacher", path: "/?many=1", ls: { "quiz-courses-view": "list" } },
+  // The staff lives on the title line as a row of discs; the card behind one
+  // of them is where a colleague's address and their seat are.
+  { name: "teacher-home-staff", role: "teacher", path: "/", fold: true, act: (p) => p.getByRole("button", { name: "Prof Démo", exact: true }).first().click() },
   { name: "course-link-pool", role: "teacher", path: "/", fold: true, act: (p) => p.getByRole("button", { name: /link a pool|lier une banque/i }).first().click() },
   { name: "course-new", role: "teacher", path: "/", act: (p) => p.getByRole("button", { name: /new course/i }).first().click() },
   { name: "classroom-new", role: "teacher", path: "/", act: (p) => p.getByRole("button", { name: /new classroom/i }).first().click() },

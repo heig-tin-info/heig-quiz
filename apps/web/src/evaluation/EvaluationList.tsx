@@ -16,7 +16,7 @@ import type { EvaluationMode, EvaluationSummary } from "@quiz/contracts";
 import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { gradingLinks } from "../grading";
-import { useT } from "../i18n";
+import { useT, type TFunction } from "../i18n";
 import type { Route } from "../router";
 import {
   Badge,
@@ -32,6 +32,9 @@ import {
   Segmented,
   Skeleton,
   T,
+  TableHead,
+  useSortableTable,
+  type Column,
 } from "../ui";
 import {
   evaluationStateLabel,
@@ -113,6 +116,28 @@ function NewEvaluationModal({
   );
 }
 
+type EvaluationSort = "title" | "mode" | "questions" | "points" | "attempts";
+
+/** What each column of the list is ordered on; the mode by its own word. */
+function evaluationRank(
+  row: EvaluationSummary,
+  key: EvaluationSort,
+  t: TFunction,
+): string | number {
+  switch (key) {
+    case "mode":
+      return t(`eval.mode.${row.mode}`);
+    case "questions":
+      return row.itemCount;
+    case "points":
+      return row.totalPoints;
+    case "attempts":
+      return row.attemptCount;
+    default:
+      return row.title;
+  }
+}
+
 export function EvaluationList({
   classroomId,
   navigate,
@@ -129,6 +154,24 @@ export function EvaluationList({
     queryKey: evaluationsKey(classroomId),
     queryFn: () => api(`/app/api/classrooms/${classroomId}/evaluations`),
   });
+
+  /* No initial sort: the server hands the evaluations over in the order this
+     classroom works through them — the drafts being written, then what is
+     scheduled, then what is over — and that order is the answer to "what is
+     next" nobody clicked for. A click on a label replaces it. */
+  const { sorted, sort, toggle } = useSortableTable<EvaluationSummary, EvaluationSort>(
+    list.data ?? [],
+    (row, key) => evaluationRank(row, key, t),
+    null,
+  );
+  const columns: Column<EvaluationSort>[] = [
+    { key: "title", label: t("eval.titleLabel") },
+    { key: "mode", label: t("eval.mode") },
+    { key: "questions", label: t("eval.step.questions"), right: true, className: T.colHigh },
+    { key: "points", label: t("eval.col.points"), right: true, className: T.colMid },
+    { key: "attempts", label: t("eval.col.attempts"), right: true, className: T.colLow },
+    { key: "actions", label: t("common.actions"), sortable: false, srOnly: true, className: "w-10" },
+  ];
 
   const invalidate = () => qc.invalidateQueries({ queryKey: evaluationsKey(classroomId) });
   const duplicate = useMutation({
@@ -205,20 +248,9 @@ export function EvaluationList({
            menu are what the list is for, and they stay. */
         <Card className={`${T.container} overflow-hidden`}>
           <table className={T.table}>
-            <thead className={T.head}>
-              <tr>
-                <th className={T.th}>{t("eval.titleLabel")}</th>
-                <th className={T.th}>{t("eval.mode")}</th>
-                <th className={`${T.th} ${T.colHigh} text-right`}>{t("eval.step.questions")}</th>
-                <th className={`${T.th} ${T.colMid} text-right`}>{t("eval.col.points")}</th>
-                <th className={`${T.th} ${T.colLow} text-right`}>{t("eval.col.attempts")}</th>
-                <th className={`${T.th} w-10`}>
-                  <span className="sr-only">{t("common.actions")}</span>
-                </th>
-              </tr>
-            </thead>
+            <TableHead columns={columns} sort={sort} onToggle={toggle} />
             <tbody>
-              {list.data.map((row) => (
+              {sorted.map((row) => (
                 <tr
                   key={row.id}
                   className={`${T.row} ${T.rowHover} cursor-pointer`}

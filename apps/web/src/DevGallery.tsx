@@ -1,12 +1,18 @@
 import { Plot, SchematicEditor, SchematicView, withRoutes, type PlotProps, type SchematicEditorProps } from "@quiz/qt-circuit/canvas";
+import { Pencil, Trash2, UserMinus } from "lucide-react";
 import { useState } from "react";
 
 import { useT } from "./i18n";
 import { MarkdownField } from "./markdown/MarkdownField";
 import { MarkdownView } from "./markdown/MarkdownView";
 import {
+  Actions,
+  Button,
   Card,
   Countdown,
+  PeopleStack,
+  PersonPill,
+  Popover,
   PageHeader,
   ProgressSegments,
   Ring,
@@ -14,20 +20,43 @@ import {
   SyncBadge,
   VerdictCell,
   useNow,
+  type Person,
   type SegmentState,
   type SyncState,
   type VerdictState,
 } from "./ui";
 
 /*
- * `/dev/ui` — every state of the live primitives on one page, so a screenshot
- * pass covers them all instead of hunting them across five screens that do
- * not exist yet. Development only: App.tsx routes here behind
+ * `/dev/ui` — every state of the primitives that HAVE states on one page, so a
+ * screenshot pass covers them all instead of hunting them across five screens
+ * that do not exist yet. Development only: App.tsx routes here behind
  * `import.meta.env.DEV`, and only for a teacher.
  *
  * It is a gallery, not a screen: the one-primary-action rule does not apply,
  * and it deliberately shows things side by side that never share a page.
  */
+
+/** Three colleagues and the nine that make a row overflow. */
+const PEOPLE: Person[] = [
+  ["Marie", "Dupont"],
+  ["Pierre", "Roulet"],
+  ["Ada", "Lovelace"],
+  ["Grace", "Hopper"],
+  ["Margaret", "Hamilton"],
+  ["Barbara", "Liskov"],
+  ["Dennis", "Ritchie"],
+  ["Alan", "Turing"],
+  ["Edsger", "Dijkstra"],
+  ["Donald", "Knuth"],
+  ["Linus", "Torvalds"],
+  ["Ken", "Thompson"],
+].map(([givenName, familyName], i) => ({
+  userId: `u${i + 1}`,
+  givenName: givenName!,
+  familyName: familyName!,
+  email: `${givenName!.toLowerCase()}.${familyName!.toLowerCase()}@heig-vd.ch`,
+  avatarUrl: null,
+}));
 
 const VERDICT_STATES: VerdictState[] = [
   "blank",
@@ -185,6 +214,68 @@ export function DevGallery() {
   return (
     <div className="space-y-8 pb-16">
       <PageHeader title={t("dev.ui.title")} description={t("dev.ui.subtitle")} />
+
+      <Row title={t("dev.ui.actions")}>
+        <Specimen name="one">
+          <Actions label="One" items={[{ label: "Delete", icon: Trash2, danger: true }]} />
+        </Specimen>
+        <Specimen name="two">
+          <Actions
+            label="Two"
+            items={[
+              { label: "Rename", icon: Pencil },
+              { label: "Delete", icon: Trash2, danger: true },
+            ]}
+          />
+        </Specimen>
+        <Specimen name="three">
+          <Actions
+            label="Three"
+            items={[
+              { label: "Rename", icon: Pencil },
+              { label: "Remove from the staff", icon: UserMinus },
+              { label: "Delete", icon: Trash2, danger: true },
+            ]}
+          />
+        </Specimen>
+        <Specimen name="disabled">
+          <Actions
+            label="Disabled"
+            items={[
+              { label: "Rename", icon: Pencil, disabled: true },
+              { label: "Delete", icon: Trash2, danger: true },
+            ]}
+          />
+        </Specimen>
+      </Row>
+
+      <Row title={t("dev.ui.popover")}>
+        <Specimen name="click">
+          <Popover label={t("dev.ui.popover")} trigger={<Button size="sm" variant="secondary">{t("dev.ui.popover")}</Button>}>
+            <p className="text-[13px] text-fg-muted">{t("dev.ui.subtitle")}</p>
+          </Popover>
+        </Specimen>
+        <Specimen name="hover">
+          <Popover open="hover" align="start" label={t("dev.ui.popover")} trigger={<Button size="sm" variant="ghost">{t("dev.ui.popover")}</Button>}>
+            <p className="text-[13px] text-fg-muted">{t("dev.ui.subtitle")}</p>
+          </Popover>
+        </Specimen>
+      </Row>
+
+      <Row title={t("dev.ui.people")}>
+        <Specimen name="pill">
+          <PersonPill person={PEOPLE[0]!} />
+        </Specimen>
+        <Specimen name="stack">
+          <PeopleStack people={PEOPLE.slice(0, 3)} />
+        </Specimen>
+        <Specimen name="overflow">
+          <PeopleStack
+            people={PEOPLE}
+            actions={() => [{ label: "Remove from the staff", icon: UserMinus, danger: true }]}
+          />
+        </Specimen>
+      </Row>
 
       <Row title={t("dev.ui.countdown")}>
         <Specimen name="normal">

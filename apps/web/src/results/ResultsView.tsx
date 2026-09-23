@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, BarChart3, ClipboardCheck, Send, Users } from "lucide-react";
+import { AlertTriangle, BarChart3, ClipboardCheck, Send, Undo2, Users } from "lucide-react";
 import { useState } from "react";
 
 import type {
@@ -18,11 +18,11 @@ import type { Route } from "../router";
 import { useSearchParam } from "../router";
 import { useScreenCommands } from "../screenCommands";
 import {
+  Actions,
   Alert,
   Button,
   Card,
   EmptyState,
-  Menu,
   PageError,
   PageHeader,
   PageSkeleton,
@@ -190,11 +190,14 @@ export function ResultsView({
               <Send /> {t(view.released ? "results.release.again" : "results.release")}
             </Button>
             {view.released ? (
-              <Menu
+              // One action, so one icon button: `Actions` is what turns a
+              // single-item overflow menu into the thing it always was.
+              <Actions
                 label={t("common.actions")}
                 items={[
                   {
                     label: t("results.unrelease"),
+                    icon: Undo2,
                     danger: true,
                     onSelect: () => void ask(false),
                   },
