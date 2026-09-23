@@ -1,0 +1,1060 @@
+{
+ "nets": {
+  "common": {
+   "nets": [
+    {
+     "id": 0,
+     "name": "0",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 0
+      },
+      {
+       "c": "c1",
+       "p": 1
+      },
+      {
+       "c": "c2",
+       "p": 0
+      },
+      {
+       "c": "c2",
+       "p": 1
+      },
+      {
+       "c": "c3",
+       "p": 0
+      },
+      {
+       "c": "c3",
+       "p": 2
+      },
+      {
+       "c": "c5",
+       "p": 0
+      },
+      {
+       "c": "c5",
+       "p": 1
+      },
+      {
+       "c": "c6",
+       "p": 1
+      },
+      {
+       "c": "c6",
+       "p": 2
+      },
+      {
+       "port": "in-"
+      },
+      {
+       "port": "out-"
+      }
+     ]
+    },
+    {
+     "id": 1,
+     "name": "in",
+     "pins": [
+      {
+       "port": "in+"
+      }
+     ]
+    },
+    {
+     "id": 2,
+     "name": "out",
+     "pins": [
+      {
+       "port": "out+"
+      }
+     ]
+    },
+    {
+     "id": 3,
+     "name": "n1",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 2
+      },
+      {
+       "c": "c5",
+       "p": 2
+      },
+      {
+       "c": "c6",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 4,
+     "name": "n2",
+     "pins": [
+      {
+       "c": "c3",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 5,
+     "name": "n3",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 6,
+     "name": "n4",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 7,
+     "name": "n5",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 2
+      }
+     ]
+    }
+   ],
+   "netOfPin": [
+    [
+     "c1:0",
+     0
+    ],
+    [
+     "c1:1",
+     0
+    ],
+    [
+     "c2:0",
+     0
+    ],
+    [
+     "c2:1",
+     0
+    ],
+    [
+     "c3:0",
+     0
+    ],
+    [
+     "c3:2",
+     0
+    ],
+    [
+     "c5:0",
+     0
+    ],
+    [
+     "c5:1",
+     0
+    ],
+    [
+     "c6:1",
+     0
+    ],
+    [
+     "c6:2",
+     0
+    ],
+    [
+     "port:in-",
+     0
+    ],
+    [
+     "port:out-",
+     0
+    ],
+    [
+     "port:in+",
+     1
+    ],
+    [
+     "port:out+",
+     2
+    ],
+    [
+     "c1:2",
+     3
+    ],
+    [
+     "c5:2",
+     3
+    ],
+    [
+     "c6:0",
+     3
+    ],
+    [
+     "c3:1",
+     4
+    ],
+    [
+     "c4:0",
+     5
+    ],
+    [
+     "c4:1",
+     6
+    ],
+    [
+     "c4:2",
+     7
+    ]
+   ],
+   "issues": [
+    {
+     "code": "floating_pin",
+     "ref": "M1.B"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "R2"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "R2.C"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "R2.B"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "R2.E"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "R2"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "in+"
+    }
+   ],
+   "counted": 6
+  },
+  "floating": {
+   "nets": [
+    {
+     "id": 0,
+     "name": "outn",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 0
+      },
+      {
+       "c": "c1",
+       "p": 1
+      },
+      {
+       "c": "c2",
+       "p": 0
+      },
+      {
+       "c": "c2",
+       "p": 1
+      },
+      {
+       "c": "c3",
+       "p": 0
+      },
+      {
+       "c": "c3",
+       "p": 2
+      },
+      {
+       "c": "c5",
+       "p": 0
+      },
+      {
+       "c": "c5",
+       "p": 1
+      },
+      {
+       "c": "c6",
+       "p": 1
+      },
+      {
+       "c": "c6",
+       "p": 2
+      },
+      {
+       "port": "out-"
+      }
+     ]
+    },
+    {
+     "id": 1,
+     "name": "in",
+     "pins": [
+      {
+       "port": "in+"
+      }
+     ]
+    },
+    {
+     "id": 2,
+     "name": "inn",
+     "pins": [
+      {
+       "port": "in-"
+      }
+     ]
+    },
+    {
+     "id": 3,
+     "name": "out",
+     "pins": [
+      {
+       "port": "out+"
+      }
+     ]
+    },
+    {
+     "id": 4,
+     "name": "n1",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 2
+      },
+      {
+       "c": "c5",
+       "p": 2
+      },
+      {
+       "c": "c6",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 5,
+     "name": "n2",
+     "pins": [
+      {
+       "c": "c3",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 6,
+     "name": "n3",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 7,
+     "name": "n4",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 8,
+     "name": "n5",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 2
+      }
+     ]
+    }
+   ],
+   "netOfPin": [
+    [
+     "c1:0",
+     0
+    ],
+    [
+     "c1:1",
+     0
+    ],
+    [
+     "c2:0",
+     0
+    ],
+    [
+     "c2:1",
+     0
+    ],
+    [
+     "c3:0",
+     0
+    ],
+    [
+     "c3:2",
+     0
+    ],
+    [
+     "c5:0",
+     0
+    ],
+    [
+     "c5:1",
+     0
+    ],
+    [
+     "c6:1",
+     0
+    ],
+    [
+     "c6:2",
+     0
+    ],
+    [
+     "port:out-",
+     0
+    ],
+    [
+     "port:in+",
+     1
+    ],
+    [
+     "port:in-",
+     2
+    ],
+    [
+     "port:out+",
+     3
+    ],
+    [
+     "c1:2",
+     4
+    ],
+    [
+     "c5:2",
+     4
+    ],
+    [
+     "c6:0",
+     4
+    ],
+    [
+     "c3:1",
+     5
+    ],
+    [
+     "c4:0",
+     6
+    ],
+    [
+     "c4:1",
+     7
+    ],
+    [
+     "c4:2",
+     8
+    ]
+   ],
+   "issues": [
+    {
+     "code": "floating_pin",
+     "ref": "M1.B"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "R2"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "R2.C"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "R2.B"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "R2.E"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "R2"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "in+"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "in-"
+    },
+    {
+     "code": "no_ground",
+     "ref": ""
+    }
+   ],
+   "counted": 6
+  },
+  "palette+supplies": {
+   "nets": [
+    {
+     "id": 0,
+     "name": "0",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 0
+      },
+      {
+       "c": "c1",
+       "p": 1
+      },
+      {
+       "c": "c2",
+       "p": 0
+      },
+      {
+       "c": "c2",
+       "p": 1
+      },
+      {
+       "c": "c3",
+       "p": 0
+      },
+      {
+       "c": "c3",
+       "p": 2
+      },
+      {
+       "c": "c5",
+       "p": 0
+      },
+      {
+       "c": "c5",
+       "p": 1
+      },
+      {
+       "c": "c6",
+       "p": 1
+      },
+      {
+       "c": "c6",
+       "p": 2
+      },
+      {
+       "port": "in-"
+      },
+      {
+       "port": "out-"
+      }
+     ]
+    },
+    {
+     "id": 1,
+     "name": "in",
+     "pins": [
+      {
+       "port": "in+"
+      }
+     ]
+    },
+    {
+     "id": 2,
+     "name": "out",
+     "pins": [
+      {
+       "port": "out+"
+      }
+     ]
+    },
+    {
+     "id": 3,
+     "name": "n1",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 2
+      },
+      {
+       "c": "c5",
+       "p": 2
+      },
+      {
+       "c": "c6",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 4,
+     "name": "n2",
+     "pins": [
+      {
+       "c": "c3",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 5,
+     "name": "n3",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 6,
+     "name": "n4",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 7,
+     "name": "n5",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 2
+      }
+     ]
+    }
+   ],
+   "netOfPin": [
+    [
+     "c1:0",
+     0
+    ],
+    [
+     "c1:1",
+     0
+    ],
+    [
+     "c2:0",
+     0
+    ],
+    [
+     "c2:1",
+     0
+    ],
+    [
+     "c3:0",
+     0
+    ],
+    [
+     "c3:2",
+     0
+    ],
+    [
+     "c5:0",
+     0
+    ],
+    [
+     "c5:1",
+     0
+    ],
+    [
+     "c6:1",
+     0
+    ],
+    [
+     "c6:2",
+     0
+    ],
+    [
+     "port:in-",
+     0
+    ],
+    [
+     "port:out-",
+     0
+    ],
+    [
+     "port:in+",
+     1
+    ],
+    [
+     "port:out+",
+     2
+    ],
+    [
+     "c1:2",
+     3
+    ],
+    [
+     "c5:2",
+     3
+    ],
+    [
+     "c6:0",
+     3
+    ],
+    [
+     "c3:1",
+     4
+    ],
+    [
+     "c4:0",
+     5
+    ],
+    [
+     "c4:1",
+     6
+    ],
+    [
+     "c4:2",
+     7
+    ]
+   ],
+   "issues": [
+    {
+     "code": "kind_not_allowed",
+     "ref": "Rload"
+    },
+    {
+     "code": "kind_not_allowed",
+     "ref": "R2"
+    },
+    {
+     "code": "kind_not_allowed",
+     "ref": "M1"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "M1.B"
+    },
+    {
+     "code": "kind_not_allowed",
+     "ref": "R2"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "R2"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "R2.C"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "R2.B"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "R2.E"
+    },
+    {
+     "code": "kind_not_allowed",
+     "ref": "R2"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "R2"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "in+"
+    },
+    {
+     "code": "too_many_components",
+     "ref": ""
+    }
+   ],
+   "counted": 6
+  },
+  "no-rails": {
+   "nets": [
+    {
+     "id": 0,
+     "name": "outn",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 0
+      },
+      {
+       "c": "c1",
+       "p": 1
+      },
+      {
+       "c": "c2",
+       "p": 0
+      },
+      {
+       "c": "c2",
+       "p": 1
+      },
+      {
+       "c": "c3",
+       "p": 0
+      },
+      {
+       "c": "c3",
+       "p": 2
+      },
+      {
+       "c": "c5",
+       "p": 0
+      },
+      {
+       "c": "c5",
+       "p": 1
+      },
+      {
+       "c": "c6",
+       "p": 1
+      },
+      {
+       "c": "c6",
+       "p": 2
+      },
+      {
+       "port": "out-"
+      }
+     ]
+    },
+    {
+     "id": 1,
+     "name": "in",
+     "pins": [
+      {
+       "port": "in+"
+      }
+     ]
+    },
+    {
+     "id": 2,
+     "name": "inn",
+     "pins": [
+      {
+       "port": "in-"
+      }
+     ]
+    },
+    {
+     "id": 3,
+     "name": "out",
+     "pins": [
+      {
+       "port": "out+"
+      }
+     ]
+    },
+    {
+     "id": 4,
+     "name": "n1",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 2
+      },
+      {
+       "c": "c5",
+       "p": 2
+      },
+      {
+       "c": "c6",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 5,
+     "name": "n2",
+     "pins": [
+      {
+       "c": "c3",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 6,
+     "name": "n3",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 7,
+     "name": "n4",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 8,
+     "name": "n5",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 2
+      }
+     ]
+    }
+   ],
+   "netOfPin": [
+    [
+     "c1:0",
+     0
+    ],
+    [
+     "c1:1",
+     0
+    ],
+    [
+     "c2:0",
+     0
+    ],
+    [
+     "c2:1",
+     0
+    ],
+    [
+     "c3:0",
+     0
+    ],
+    [
+     "c3:2",
+     0
+    ],
+    [
+     "c5:0",
+     0
+    ],
+    [
+     "c5:1",
+     0
+    ],
+    [
+     "c6:1",
+     0
+    ],
+    [
+     "c6:2",
+     0
+    ],
+    [
+     "port:out-",
+     0
+    ],
+    [
+     "port:in+",
+     1
+    ],
+    [
+     "port:in-",
+     2
+    ],
+    [
+     "port:out+",
+     3
+    ],
+    [
+     "c1:2",
+     4
+    ],
+    [
+     "c5:2",
+     4
+    ],
+    [
+     "c6:0",
+     4
+    ],
+    [
+     "c3:1",
+     5
+    ],
+    [
+     "c4:0",
+     6
+    ],
+    [
+     "c4:1",
+     7
+    ],
+    [
+     "c4:2",
+     8
+    ]
+   ],
+   "issues": [
+    {
+     "code": "floating_pin",
+     "ref": "M1.B"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "R2"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "R2.C"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "R2.B"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "R2.E"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "R2"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "in+"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "in-"
+    },
+    {
+     "code": "no_ground",
+     "ref": ""
+    }
+   ],
+   "counted": 6
+  }
+ },
+ "decks": {
+  "common-default-rails/sine": "* quiz circuit\n* issue: floating_pin M1.B\n* issue: duplicate_name R2\n* issue: floating_pin R2.C\n* issue: floating_pin R2.B\n* issue: floating_pin R2.E\n* issue: duplicate_name R2\n* issue: unconnected_port in+\nMRload 0 0 n1 n1 PMOSE\nDR2 0 0 DSI\nQM1 0 n2 0 QPNP\nQR2 n3 n4 n5 QPNP\nMR2 0 0 n1 n1 PMOSE\nQL1 n1 0 0 QNPN\n.model DSI D(IS=1e-14 N=1)\n.model PMOSE PMOS(LEVEL=1 VTO=-1 KP=1e-3)\n.model QNPN NPN(BF=100)\n.model QPNP PNP(BF=100)\nVin in 0 SIN(5e-1 1e+0 1e+3)\nRload out outl 1e+12\nVmeas outl 0 0\n.tran 1e-5 5e-3 0\n.control\nset wr_vecnames\nset wr_singlescale\nrun\nlinearize v(in) v(out) i(Vmeas)\nwrdata /dev/stdout v(in) v(out) i(Vmeas)\n.endc\n.end\n",
+  "common-default-rails/bare": "* quiz circuit\n* issue: floating_pin M1.B\n* issue: duplicate_name R2\n* issue: floating_pin R2.C\n* issue: floating_pin R2.B\n* issue: floating_pin R2.E\n* issue: duplicate_name R2\n* issue: unconnected_port in+\nMRload 0 0 n1 n1 PMOSE\nDR2 0 0 DSI\nQM1 0 n2 0 QPNP\nQR2 n3 n4 n5 QPNP\nMR2 0 0 n1 n1 PMOSE\nQL1 n1 0 0 QNPN\n.model DSI D(IS=1e-14 N=1)\n.model PMOSE PMOS(LEVEL=1 VTO=-1 KP=1e-3)\n.model QNPN NPN(BF=100)\n.model QPNP PNP(BF=100)\n.end\n",
+  "split-dual-rails/step": "* quiz circuit\n* issue: floating_pin M1.B\n* issue: duplicate_name R2\n* issue: floating_pin R2.C\n* issue: floating_pin R2.B\n* issue: floating_pin R2.E\n* issue: duplicate_name R2\n* issue: unconnected_port in+\n* issue: unconnected_port in-\n* issue: no_ground\nMRload outn outn n1 n1 PMOSE\nDR2 outn outn DSI\nQM1 outn n2 outn QPNP\nQR2 n3 n4 n5 QPNP\nMR2 outn outn n1 n1 PMOSE\nQL1 n1 outn outn QNPN\n.model DSI D(IS=1e-14 N=1)\n.model PMOSE PMOS(LEVEL=1 VTO=-1 KP=1e-3)\n.model QNPN NPN(BF=100)\n.model QPNP PNP(BF=100)\nVcc vcc 0 DC 1.5e+1\nVee vee 0 DC -1.5e+1\nVin src inn PWL(0 0 1e-3 0 1.000001e-3 5e+0)\nRs src in 5e+1\nRload out outl 1e+4\nVmeas outl outn 0\n.tran 4.5e-5 1e-2 1e-3\n.control\nset wr_vecnames\nset wr_singlescale\nrun\nlinearize v(in) v(out) i(Vmeas)\nwrdata /dev/stdout v(in) v(out) i(Vmeas)\n.endc\n.end\n",
+  "split-dual-rails/bare": "* quiz circuit\n* issue: floating_pin M1.B\n* issue: duplicate_name R2\n* issue: floating_pin R2.C\n* issue: floating_pin R2.B\n* issue: floating_pin R2.E\n* issue: duplicate_name R2\n* issue: unconnected_port in+\n* issue: unconnected_port in-\n* issue: no_ground\nMRload outn outn n1 n1 PMOSE\nDR2 outn outn DSI\nQM1 outn n2 outn QPNP\nQR2 n3 n4 n5 QPNP\nMR2 outn outn n1 n1 PMOSE\nQL1 n1 outn outn QNPN\n.model DSI D(IS=1e-14 N=1)\n.model PMOSE PMOS(LEVEL=1 VTO=-1 KP=1e-3)\n.model QNPN NPN(BF=100)\n.model QPNP PNP(BF=100)\n.end\n",
+  "common-single-rail/pulse": "* quiz circuit\n* issue: floating_pin M1.B\n* issue: duplicate_name R2\n* issue: floating_pin R2.C\n* issue: floating_pin R2.B\n* issue: floating_pin R2.E\n* issue: duplicate_name R2\n* issue: unconnected_port in+\nMRload 0 0 n1 n1 PMOSE\nDR2 0 0 DSI\nQM1 0 n2 0 QPNP\nQR2 n3 n4 n5 QPNP\nMR2 0 0 n1 n1 PMOSE\nQL1 n1 0 0 QNPN\n.model DSI D(IS=1e-14 N=1)\n.model PMOSE PMOS(LEVEL=1 VTO=-1 KP=1e-3)\n.model QNPN NPN(BF=100)\n.model QPNP PNP(BF=100)\nVcc vcc 0 DC 5e+0\nVin in 0 PULSE(-1e+0 1e+0 0 1n 1n 5e-5 2e-4)\nCload out outl 1e-9\nVmeas outl 0 0\n.tran 1e-5 1e-3 0\n.control\nset wr_vecnames\nset wr_singlescale\nrun\nlinearize v(in) v(out) i(Vmeas)\nwrdata /dev/stdout v(in) v(out) i(Vmeas)\n.endc\n.end\n",
+  "common-single-rail/bare": "* quiz circuit\n* issue: floating_pin M1.B\n* issue: duplicate_name R2\n* issue: floating_pin R2.C\n* issue: floating_pin R2.B\n* issue: floating_pin R2.E\n* issue: duplicate_name R2\n* issue: unconnected_port in+\nMRload 0 0 n1 n1 PMOSE\nDR2 0 0 DSI\nQM1 0 n2 0 QPNP\nQR2 n3 n4 n5 QPNP\nMR2 0 0 n1 n1 PMOSE\nQL1 n1 0 0 QNPN\n.model DSI D(IS=1e-14 N=1)\n.model PMOSE PMOS(LEVEL=1 VTO=-1 KP=1e-3)\n.model QNPN NPN(BF=100)\n.model QPNP PNP(BF=100)\n.end\n"
+ }
+}

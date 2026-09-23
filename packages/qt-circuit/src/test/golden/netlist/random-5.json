@@ -1,0 +1,1640 @@
+{
+ "nets": {
+  "common": {
+   "nets": [
+    {
+     "id": 0,
+     "name": "0",
+     "pins": [
+      {
+       "c": "c3",
+       "p": 1
+      },
+      {
+       "c": "c7",
+       "p": 0
+      },
+      {
+       "c": "c8",
+       "p": 0
+      },
+      {
+       "c": "c8",
+       "p": 1
+      },
+      {
+       "port": "in-"
+      },
+      {
+       "port": "out-"
+      }
+     ]
+    },
+    {
+     "id": 1,
+     "name": "in",
+     "pins": [
+      {
+       "port": "in+"
+      }
+     ]
+    },
+    {
+     "id": 2,
+     "name": "out",
+     "pins": [
+      {
+       "port": "out+"
+      }
+     ]
+    },
+    {
+     "id": 3,
+     "name": "n1",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 4,
+     "name": "n2",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 5,
+     "name": "n3",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 2
+      }
+     ]
+    },
+    {
+     "id": 6,
+     "name": "n4",
+     "pins": [
+      {
+       "c": "c2",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 7,
+     "name": "n5",
+     "pins": [
+      {
+       "c": "c2",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 8,
+     "name": "n6",
+     "pins": [
+      {
+       "c": "c2",
+       "p": 2
+      }
+     ]
+    },
+    {
+     "id": 9,
+     "name": "n7",
+     "pins": [
+      {
+       "c": "c3",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 10,
+     "name": "n8",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 11,
+     "name": "n9",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 12,
+     "name": "n10",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 2
+      }
+     ]
+    },
+    {
+     "id": 13,
+     "name": "n11",
+     "pins": [
+      {
+       "c": "c5",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 14,
+     "name": "n12",
+     "pins": [
+      {
+       "c": "c5",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 15,
+     "name": "n13",
+     "pins": [
+      {
+       "c": "c6",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 16,
+     "name": "n14",
+     "pins": [
+      {
+       "c": "c6",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 17,
+     "name": "n15",
+     "pins": [
+      {
+       "c": "c8",
+       "p": 2
+      }
+     ]
+    }
+   ],
+   "netOfPin": [
+    [
+     "c3:1",
+     0
+    ],
+    [
+     "c7:0",
+     0
+    ],
+    [
+     "c8:0",
+     0
+    ],
+    [
+     "c8:1",
+     0
+    ],
+    [
+     "port:in-",
+     0
+    ],
+    [
+     "port:out-",
+     0
+    ],
+    [
+     "port:in+",
+     1
+    ],
+    [
+     "port:out+",
+     2
+    ],
+    [
+     "c1:0",
+     3
+    ],
+    [
+     "c1:1",
+     4
+    ],
+    [
+     "c1:2",
+     5
+    ],
+    [
+     "c2:0",
+     6
+    ],
+    [
+     "c2:1",
+     7
+    ],
+    [
+     "c2:2",
+     8
+    ],
+    [
+     "c3:0",
+     9
+    ],
+    [
+     "c4:0",
+     10
+    ],
+    [
+     "c4:1",
+     11
+    ],
+    [
+     "c4:2",
+     12
+    ],
+    [
+     "c5:0",
+     13
+    ],
+    [
+     "c5:1",
+     14
+    ],
+    [
+     "c6:0",
+     15
+    ],
+    [
+     "c6:1",
+     16
+    ],
+    [
+     "c8:2",
+     17
+    ]
+   ],
+   "issues": [
+    {
+     "code": "floating_pin",
+     "ref": "Q1.-"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "Q1.+"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "Q1.out"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "L1.C"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "L1.B"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "L1.E"
+    },
+    {
+     "code": "invalid_value",
+     "ref": "x"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "x.1"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "Q1"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "Q1.D"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "Q1.G"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "Q1.S"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "x"
+    },
+    {
+     "code": "missing_value",
+     "ref": "x"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "x.1"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "x.2"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "x"
+    },
+    {
+     "code": "value_out_of_range",
+     "ref": "x"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "x.A"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "x.K"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "R2.S"
+    },
+    {
+     "code": "dangling_wire",
+     "ref": "w2"
+    },
+    {
+     "code": "dangling_wire",
+     "ref": "w6"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "in+"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "out+"
+    }
+   ],
+   "counted": 7
+  },
+  "floating": {
+   "nets": [
+    {
+     "id": 0,
+     "name": "0",
+     "pins": [
+      {
+       "c": "c3",
+       "p": 1
+      },
+      {
+       "c": "c7",
+       "p": 0
+      },
+      {
+       "c": "c8",
+       "p": 0
+      },
+      {
+       "c": "c8",
+       "p": 1
+      },
+      {
+       "port": "in-"
+      }
+     ]
+    },
+    {
+     "id": 1,
+     "name": "in",
+     "pins": [
+      {
+       "port": "in+"
+      }
+     ]
+    },
+    {
+     "id": 2,
+     "name": "out",
+     "pins": [
+      {
+       "port": "out+"
+      }
+     ]
+    },
+    {
+     "id": 3,
+     "name": "outn",
+     "pins": [
+      {
+       "port": "out-"
+      }
+     ]
+    },
+    {
+     "id": 4,
+     "name": "n1",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 5,
+     "name": "n2",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 6,
+     "name": "n3",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 2
+      }
+     ]
+    },
+    {
+     "id": 7,
+     "name": "n4",
+     "pins": [
+      {
+       "c": "c2",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 8,
+     "name": "n5",
+     "pins": [
+      {
+       "c": "c2",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 9,
+     "name": "n6",
+     "pins": [
+      {
+       "c": "c2",
+       "p": 2
+      }
+     ]
+    },
+    {
+     "id": 10,
+     "name": "n7",
+     "pins": [
+      {
+       "c": "c3",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 11,
+     "name": "n8",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 12,
+     "name": "n9",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 13,
+     "name": "n10",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 2
+      }
+     ]
+    },
+    {
+     "id": 14,
+     "name": "n11",
+     "pins": [
+      {
+       "c": "c5",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 15,
+     "name": "n12",
+     "pins": [
+      {
+       "c": "c5",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 16,
+     "name": "n13",
+     "pins": [
+      {
+       "c": "c6",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 17,
+     "name": "n14",
+     "pins": [
+      {
+       "c": "c6",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 18,
+     "name": "n15",
+     "pins": [
+      {
+       "c": "c8",
+       "p": 2
+      }
+     ]
+    }
+   ],
+   "netOfPin": [
+    [
+     "c3:1",
+     0
+    ],
+    [
+     "c7:0",
+     0
+    ],
+    [
+     "c8:0",
+     0
+    ],
+    [
+     "c8:1",
+     0
+    ],
+    [
+     "port:in-",
+     0
+    ],
+    [
+     "port:in+",
+     1
+    ],
+    [
+     "port:out+",
+     2
+    ],
+    [
+     "port:out-",
+     3
+    ],
+    [
+     "c1:0",
+     4
+    ],
+    [
+     "c1:1",
+     5
+    ],
+    [
+     "c1:2",
+     6
+    ],
+    [
+     "c2:0",
+     7
+    ],
+    [
+     "c2:1",
+     8
+    ],
+    [
+     "c2:2",
+     9
+    ],
+    [
+     "c3:0",
+     10
+    ],
+    [
+     "c4:0",
+     11
+    ],
+    [
+     "c4:1",
+     12
+    ],
+    [
+     "c4:2",
+     13
+    ],
+    [
+     "c5:0",
+     14
+    ],
+    [
+     "c5:1",
+     15
+    ],
+    [
+     "c6:0",
+     16
+    ],
+    [
+     "c6:1",
+     17
+    ],
+    [
+     "c8:2",
+     18
+    ]
+   ],
+   "issues": [
+    {
+     "code": "floating_pin",
+     "ref": "Q1.-"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "Q1.+"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "Q1.out"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "L1.C"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "L1.B"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "L1.E"
+    },
+    {
+     "code": "invalid_value",
+     "ref": "x"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "x.1"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "Q1"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "Q1.D"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "Q1.G"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "Q1.S"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "x"
+    },
+    {
+     "code": "missing_value",
+     "ref": "x"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "x.1"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "x.2"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "x"
+    },
+    {
+     "code": "value_out_of_range",
+     "ref": "x"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "x.A"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "x.K"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "R2.S"
+    },
+    {
+     "code": "dangling_wire",
+     "ref": "w2"
+    },
+    {
+     "code": "dangling_wire",
+     "ref": "w6"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "in+"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "out+"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "out-"
+    }
+   ],
+   "counted": 7
+  },
+  "palette+supplies": {
+   "nets": [
+    {
+     "id": 0,
+     "name": "0",
+     "pins": [
+      {
+       "c": "c3",
+       "p": 1
+      },
+      {
+       "c": "c7",
+       "p": 0
+      },
+      {
+       "c": "c8",
+       "p": 0
+      },
+      {
+       "c": "c8",
+       "p": 1
+      },
+      {
+       "port": "in-"
+      },
+      {
+       "port": "out-"
+      }
+     ]
+    },
+    {
+     "id": 1,
+     "name": "in",
+     "pins": [
+      {
+       "port": "in+"
+      }
+     ]
+    },
+    {
+     "id": 2,
+     "name": "out",
+     "pins": [
+      {
+       "port": "out+"
+      }
+     ]
+    },
+    {
+     "id": 3,
+     "name": "n1",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 4,
+     "name": "n2",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 5,
+     "name": "n3",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 2
+      }
+     ]
+    },
+    {
+     "id": 6,
+     "name": "n4",
+     "pins": [
+      {
+       "c": "c2",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 7,
+     "name": "n5",
+     "pins": [
+      {
+       "c": "c2",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 8,
+     "name": "n6",
+     "pins": [
+      {
+       "c": "c2",
+       "p": 2
+      }
+     ]
+    },
+    {
+     "id": 9,
+     "name": "n7",
+     "pins": [
+      {
+       "c": "c3",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 10,
+     "name": "n8",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 11,
+     "name": "n9",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 12,
+     "name": "n10",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 2
+      }
+     ]
+    },
+    {
+     "id": 13,
+     "name": "n11",
+     "pins": [
+      {
+       "c": "c5",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 14,
+     "name": "n12",
+     "pins": [
+      {
+       "c": "c5",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 15,
+     "name": "n13",
+     "pins": [
+      {
+       "c": "c6",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 16,
+     "name": "n14",
+     "pins": [
+      {
+       "c": "c6",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 17,
+     "name": "n15",
+     "pins": [
+      {
+       "c": "c8",
+       "p": 2
+      }
+     ]
+    }
+   ],
+   "netOfPin": [
+    [
+     "c3:1",
+     0
+    ],
+    [
+     "c7:0",
+     0
+    ],
+    [
+     "c8:0",
+     0
+    ],
+    [
+     "c8:1",
+     0
+    ],
+    [
+     "port:in-",
+     0
+    ],
+    [
+     "port:out-",
+     0
+    ],
+    [
+     "port:in+",
+     1
+    ],
+    [
+     "port:out+",
+     2
+    ],
+    [
+     "c1:0",
+     3
+    ],
+    [
+     "c1:1",
+     4
+    ],
+    [
+     "c1:2",
+     5
+    ],
+    [
+     "c2:0",
+     6
+    ],
+    [
+     "c2:1",
+     7
+    ],
+    [
+     "c2:2",
+     8
+    ],
+    [
+     "c3:0",
+     9
+    ],
+    [
+     "c4:0",
+     10
+    ],
+    [
+     "c4:1",
+     11
+    ],
+    [
+     "c4:2",
+     12
+    ],
+    [
+     "c5:0",
+     13
+    ],
+    [
+     "c5:1",
+     14
+    ],
+    [
+     "c6:0",
+     15
+    ],
+    [
+     "c6:1",
+     16
+    ],
+    [
+     "c8:2",
+     17
+    ]
+   ],
+   "issues": [
+    {
+     "code": "floating_pin",
+     "ref": "Q1.-"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "Q1.+"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "Q1.out"
+    },
+    {
+     "code": "kind_not_allowed",
+     "ref": "L1"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "L1.C"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "L1.B"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "L1.E"
+    },
+    {
+     "code": "invalid_value",
+     "ref": "x"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "x.1"
+    },
+    {
+     "code": "kind_not_allowed",
+     "ref": "Q1"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "Q1"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "Q1.D"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "Q1.G"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "Q1.S"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "x"
+    },
+    {
+     "code": "missing_value",
+     "ref": "x"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "x.1"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "x.2"
+    },
+    {
+     "code": "kind_not_allowed",
+     "ref": "x"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "x"
+    },
+    {
+     "code": "value_out_of_range",
+     "ref": "x"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "x.A"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "x.K"
+    },
+    {
+     "code": "kind_not_allowed",
+     "ref": "R2"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "R2.S"
+    },
+    {
+     "code": "dangling_wire",
+     "ref": "w2"
+    },
+    {
+     "code": "dangling_wire",
+     "ref": "w6"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "in+"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "out+"
+    },
+    {
+     "code": "too_many_components",
+     "ref": ""
+    }
+   ],
+   "counted": 7
+  },
+  "no-rails": {
+   "nets": [
+    {
+     "id": 0,
+     "name": "0",
+     "pins": [
+      {
+       "c": "c3",
+       "p": 1
+      },
+      {
+       "c": "c7",
+       "p": 0
+      },
+      {
+       "c": "c8",
+       "p": 0
+      },
+      {
+       "c": "c8",
+       "p": 1
+      },
+      {
+       "port": "in-"
+      }
+     ]
+    },
+    {
+     "id": 1,
+     "name": "in",
+     "pins": [
+      {
+       "port": "in+"
+      }
+     ]
+    },
+    {
+     "id": 2,
+     "name": "out",
+     "pins": [
+      {
+       "port": "out+"
+      }
+     ]
+    },
+    {
+     "id": 3,
+     "name": "outn",
+     "pins": [
+      {
+       "port": "out-"
+      }
+     ]
+    },
+    {
+     "id": 4,
+     "name": "n1",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 5,
+     "name": "n2",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 6,
+     "name": "n3",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 2
+      }
+     ]
+    },
+    {
+     "id": 7,
+     "name": "n4",
+     "pins": [
+      {
+       "c": "c2",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 8,
+     "name": "n5",
+     "pins": [
+      {
+       "c": "c2",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 9,
+     "name": "n6",
+     "pins": [
+      {
+       "c": "c2",
+       "p": 2
+      }
+     ]
+    },
+    {
+     "id": 10,
+     "name": "n7",
+     "pins": [
+      {
+       "c": "c3",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 11,
+     "name": "n8",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 12,
+     "name": "n9",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 13,
+     "name": "n10",
+     "pins": [
+      {
+       "c": "c4",
+       "p": 2
+      }
+     ]
+    },
+    {
+     "id": 14,
+     "name": "n11",
+     "pins": [
+      {
+       "c": "c5",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 15,
+     "name": "n12",
+     "pins": [
+      {
+       "c": "c5",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 16,
+     "name": "n13",
+     "pins": [
+      {
+       "c": "c6",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 17,
+     "name": "n14",
+     "pins": [
+      {
+       "c": "c6",
+       "p": 1
+      }
+     ]
+    },
+    {
+     "id": 18,
+     "name": "n15",
+     "pins": [
+      {
+       "c": "c8",
+       "p": 2
+      }
+     ]
+    }
+   ],
+   "netOfPin": [
+    [
+     "c3:1",
+     0
+    ],
+    [
+     "c7:0",
+     0
+    ],
+    [
+     "c8:0",
+     0
+    ],
+    [
+     "c8:1",
+     0
+    ],
+    [
+     "port:in-",
+     0
+    ],
+    [
+     "port:in+",
+     1
+    ],
+    [
+     "port:out+",
+     2
+    ],
+    [
+     "port:out-",
+     3
+    ],
+    [
+     "c1:0",
+     4
+    ],
+    [
+     "c1:1",
+     5
+    ],
+    [
+     "c1:2",
+     6
+    ],
+    [
+     "c2:0",
+     7
+    ],
+    [
+     "c2:1",
+     8
+    ],
+    [
+     "c2:2",
+     9
+    ],
+    [
+     "c3:0",
+     10
+    ],
+    [
+     "c4:0",
+     11
+    ],
+    [
+     "c4:1",
+     12
+    ],
+    [
+     "c4:2",
+     13
+    ],
+    [
+     "c5:0",
+     14
+    ],
+    [
+     "c5:1",
+     15
+    ],
+    [
+     "c6:0",
+     16
+    ],
+    [
+     "c6:1",
+     17
+    ],
+    [
+     "c8:2",
+     18
+    ]
+   ],
+   "issues": [
+    {
+     "code": "floating_pin",
+     "ref": "Q1.-"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "Q1.+"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "Q1.out"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "L1.C"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "L1.B"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "L1.E"
+    },
+    {
+     "code": "invalid_value",
+     "ref": "x"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "x.1"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "Q1"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "Q1.D"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "Q1.G"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "Q1.S"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "x"
+    },
+    {
+     "code": "missing_value",
+     "ref": "x"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "x.1"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "x.2"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "x"
+    },
+    {
+     "code": "value_out_of_range",
+     "ref": "x"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "x.A"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "x.K"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "R2.S"
+    },
+    {
+     "code": "dangling_wire",
+     "ref": "w2"
+    },
+    {
+     "code": "dangling_wire",
+     "ref": "w6"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "in+"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "out+"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "out-"
+    }
+   ],
+   "counted": 7
+  }
+ },
+ "decks": {
+  "common-default-rails/sine": "* quiz circuit\n* issue: floating_pin Q1.-\n* issue: floating_pin Q1.+\n* issue: floating_pin Q1.out\n* issue: floating_pin L1.C\n* issue: floating_pin L1.B\n* issue: floating_pin L1.E\n* issue: invalid_value x\n* issue: floating_pin x.1\n* issue: duplicate_name Q1\n* issue: floating_pin Q1.D\n* issue: floating_pin Q1.G\n* issue: floating_pin Q1.S\n* issue: duplicate_name x\n* issue: missing_value x\n* issue: floating_pin x.1\n* issue: floating_pin x.2\n* issue: duplicate_name x\n* issue: value_out_of_range x\n* issue: floating_pin x.A\n* issue: floating_pin x.K\n* issue: floating_pin R2.S\n* issue: dangling_wire w2\n* issue: dangling_wire w6\n* issue: unconnected_port in+\n* issue: unconnected_port out+\nEQ1 n3 0 TABLE {V(n2,n1)} = (-1e-4, -1.5e+1) (1e-4, 1.5e+1)\nQL1 n4 n5 n6 QPNP\nRx n7 0 1e+4\nMQ1 n8 n9 n10 n10 PMOSD\nCx n11 n12 1e-7\nDx n13 n14 DZ_Dx\nMR2 0 0 n15 n15 NMOSD\n.model DZ_Dx D(IS=1e-14 BV=1e+20 IBV=1e-3)\n.model NMOSD NMOS(LEVEL=1 VTO=-1 KP=1e-3)\n.model PMOSD PMOS(LEVEL=1 VTO=1 KP=1e-3)\n.model QPNP PNP(BF=100)\nVin in 0 SIN(5e-1 1e+0 1e+3)\nRload out outl 1e+12\nVmeas outl 0 0\n.tran 1e-5 5e-3 0\n.control\nset wr_vecnames\nset wr_singlescale\nrun\nlinearize v(in) v(out) i(Vmeas)\nwrdata /dev/stdout v(in) v(out) i(Vmeas)\n.endc\n.end\n",
+  "common-default-rails/bare": "* quiz circuit\n* issue: floating_pin Q1.-\n* issue: floating_pin Q1.+\n* issue: floating_pin Q1.out\n* issue: floating_pin L1.C\n* issue: floating_pin L1.B\n* issue: floating_pin L1.E\n* issue: invalid_value x\n* issue: floating_pin x.1\n* issue: duplicate_name Q1\n* issue: floating_pin Q1.D\n* issue: floating_pin Q1.G\n* issue: floating_pin Q1.S\n* issue: duplicate_name x\n* issue: missing_value x\n* issue: floating_pin x.1\n* issue: floating_pin x.2\n* issue: duplicate_name x\n* issue: value_out_of_range x\n* issue: floating_pin x.A\n* issue: floating_pin x.K\n* issue: floating_pin R2.S\n* issue: dangling_wire w2\n* issue: dangling_wire w6\n* issue: unconnected_port in+\n* issue: unconnected_port out+\nEQ1 n3 0 TABLE {V(n2,n1)} = (-1e-4, -1.5e+1) (1e-4, 1.5e+1)\nQL1 n4 n5 n6 QPNP\nRx n7 0 1e+4\nMQ1 n8 n9 n10 n10 PMOSD\nCx n11 n12 1e-7\nDx n13 n14 DZ_Dx\nMR2 0 0 n15 n15 NMOSD\n.model DZ_Dx D(IS=1e-14 BV=1e+20 IBV=1e-3)\n.model NMOSD NMOS(LEVEL=1 VTO=-1 KP=1e-3)\n.model PMOSD PMOS(LEVEL=1 VTO=1 KP=1e-3)\n.model QPNP PNP(BF=100)\n.end\n",
+  "split-dual-rails/step": "* quiz circuit\n* issue: floating_pin Q1.-\n* issue: floating_pin Q1.+\n* issue: floating_pin Q1.out\n* issue: floating_pin L1.C\n* issue: floating_pin L1.B\n* issue: floating_pin L1.E\n* issue: invalid_value x\n* issue: floating_pin x.1\n* issue: duplicate_name Q1\n* issue: floating_pin Q1.D\n* issue: floating_pin Q1.G\n* issue: floating_pin Q1.S\n* issue: duplicate_name x\n* issue: missing_value x\n* issue: floating_pin x.1\n* issue: floating_pin x.2\n* issue: duplicate_name x\n* issue: value_out_of_range x\n* issue: floating_pin x.A\n* issue: floating_pin x.K\n* issue: floating_pin R2.S\n* issue: dangling_wire w2\n* issue: dangling_wire w6\n* issue: unconnected_port in+\n* issue: unconnected_port out+\n* issue: unconnected_port out-\nEQ1 n3 0 TABLE {V(n2,n1)} = (-1e-4, -1.5e+1) (1e-4, 1.5e+1)\nQL1 n4 n5 n6 QPNP\nRx n7 0 1e+4\nMQ1 n8 n9 n10 n10 PMOSD\nCx n11 n12 1e-7\nDx n13 n14 DZ_Dx\nMR2 0 0 n15 n15 NMOSD\n.model DZ_Dx D(IS=1e-14 BV=1e+20 IBV=1e-3)\n.model NMOSD NMOS(LEVEL=1 VTO=-1 KP=1e-3)\n.model PMOSD PMOS(LEVEL=1 VTO=1 KP=1e-3)\n.model QPNP PNP(BF=100)\nVcc vcc 0 DC 1.5e+1\nVee vee 0 DC -1.5e+1\nVin src inn PWL(0 0 1e-3 0 1.000001e-3 5e+0)\nRs src in 5e+1\nRload out outl 1e+4\nVmeas outl outn 0\n.tran 4.5e-5 1e-2 1e-3\n.control\nset wr_vecnames\nset wr_singlescale\nrun\nlinearize v(in) v(out) i(Vmeas)\nwrdata /dev/stdout v(in) v(out) i(Vmeas)\n.endc\n.end\n",
+  "split-dual-rails/bare": "* quiz circuit\n* issue: floating_pin Q1.-\n* issue: floating_pin Q1.+\n* issue: floating_pin Q1.out\n* issue: floating_pin L1.C\n* issue: floating_pin L1.B\n* issue: floating_pin L1.E\n* issue: invalid_value x\n* issue: floating_pin x.1\n* issue: duplicate_name Q1\n* issue: floating_pin Q1.D\n* issue: floating_pin Q1.G\n* issue: floating_pin Q1.S\n* issue: duplicate_name x\n* issue: missing_value x\n* issue: floating_pin x.1\n* issue: floating_pin x.2\n* issue: duplicate_name x\n* issue: value_out_of_range x\n* issue: floating_pin x.A\n* issue: floating_pin x.K\n* issue: floating_pin R2.S\n* issue: dangling_wire w2\n* issue: dangling_wire w6\n* issue: unconnected_port in+\n* issue: unconnected_port out+\n* issue: unconnected_port out-\nEQ1 n3 0 TABLE {V(n2,n1)} = (-1e-4, -1.5e+1) (1e-4, 1.5e+1)\nQL1 n4 n5 n6 QPNP\nRx n7 0 1e+4\nMQ1 n8 n9 n10 n10 PMOSD\nCx n11 n12 1e-7\nDx n13 n14 DZ_Dx\nMR2 0 0 n15 n15 NMOSD\n.model DZ_Dx D(IS=1e-14 BV=1e+20 IBV=1e-3)\n.model NMOSD NMOS(LEVEL=1 VTO=-1 KP=1e-3)\n.model PMOSD PMOS(LEVEL=1 VTO=1 KP=1e-3)\n.model QPNP PNP(BF=100)\n.end\n",
+  "common-single-rail/pulse": "* quiz circuit\n* issue: floating_pin Q1.-\n* issue: floating_pin Q1.+\n* issue: floating_pin Q1.out\n* issue: floating_pin L1.C\n* issue: floating_pin L1.B\n* issue: floating_pin L1.E\n* issue: invalid_value x\n* issue: floating_pin x.1\n* issue: duplicate_name Q1\n* issue: floating_pin Q1.D\n* issue: floating_pin Q1.G\n* issue: floating_pin Q1.S\n* issue: duplicate_name x\n* issue: missing_value x\n* issue: floating_pin x.1\n* issue: floating_pin x.2\n* issue: duplicate_name x\n* issue: value_out_of_range x\n* issue: floating_pin x.A\n* issue: floating_pin x.K\n* issue: floating_pin R2.S\n* issue: dangling_wire w2\n* issue: dangling_wire w6\n* issue: unconnected_port in+\n* issue: unconnected_port out+\nEQ1 n3 0 TABLE {V(n2,n1)} = (-1e-4, 0) (1e-4, 5e+0)\nQL1 n4 n5 n6 QPNP\nRx n7 0 1e+4\nMQ1 n8 n9 n10 n10 PMOSD\nCx n11 n12 1e-7\nDx n13 n14 DZ_Dx\nMR2 0 0 n15 n15 NMOSD\n.model DZ_Dx D(IS=1e-14 BV=1e+20 IBV=1e-3)\n.model NMOSD NMOS(LEVEL=1 VTO=-1 KP=1e-3)\n.model PMOSD PMOS(LEVEL=1 VTO=1 KP=1e-3)\n.model QPNP PNP(BF=100)\nVcc vcc 0 DC 5e+0\nVin in 0 PULSE(-1e+0 1e+0 0 1n 1n 5e-5 2e-4)\nCload out outl 1e-9\nVmeas outl 0 0\n.tran 1e-5 1e-3 0\n.control\nset wr_vecnames\nset wr_singlescale\nrun\nlinearize v(in) v(out) i(Vmeas)\nwrdata /dev/stdout v(in) v(out) i(Vmeas)\n.endc\n.end\n",
+  "common-single-rail/bare": "* quiz circuit\n* issue: floating_pin Q1.-\n* issue: floating_pin Q1.+\n* issue: floating_pin Q1.out\n* issue: floating_pin L1.C\n* issue: floating_pin L1.B\n* issue: floating_pin L1.E\n* issue: invalid_value x\n* issue: floating_pin x.1\n* issue: duplicate_name Q1\n* issue: floating_pin Q1.D\n* issue: floating_pin Q1.G\n* issue: floating_pin Q1.S\n* issue: duplicate_name x\n* issue: missing_value x\n* issue: floating_pin x.1\n* issue: floating_pin x.2\n* issue: duplicate_name x\n* issue: value_out_of_range x\n* issue: floating_pin x.A\n* issue: floating_pin x.K\n* issue: floating_pin R2.S\n* issue: dangling_wire w2\n* issue: dangling_wire w6\n* issue: unconnected_port in+\n* issue: unconnected_port out+\nEQ1 n3 0 TABLE {V(n2,n1)} = (-1e-4, 0) (1e-4, 5e+0)\nQL1 n4 n5 n6 QPNP\nRx n7 0 1e+4\nMQ1 n8 n9 n10 n10 PMOSD\nCx n11 n12 1e-7\nDx n13 n14 DZ_Dx\nMR2 0 0 n15 n15 NMOSD\n.model DZ_Dx D(IS=1e-14 BV=1e+20 IBV=1e-3)\n.model NMOSD NMOS(LEVEL=1 VTO=-1 KP=1e-3)\n.model PMOSD PMOS(LEVEL=1 VTO=1 KP=1e-3)\n.model QPNP PNP(BF=100)\n.end\n"
+ }
+}

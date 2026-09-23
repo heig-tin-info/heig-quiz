@@ -1,0 +1,540 @@
+{
+ "nets": {
+  "common": {
+   "nets": [
+    {
+     "id": 0,
+     "name": "in",
+     "pins": [
+      {
+       "port": "in+"
+      }
+     ]
+    },
+    {
+     "id": 1,
+     "name": "0",
+     "pins": [
+      {
+       "port": "in-"
+      },
+      {
+       "port": "out-"
+      }
+     ]
+    },
+    {
+     "id": 2,
+     "name": "out",
+     "pins": [
+      {
+       "port": "out+"
+      }
+     ]
+    },
+    {
+     "id": 3,
+     "name": "n1",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 4,
+     "name": "vee",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 1
+      },
+      {
+       "c": "c2",
+       "p": 0
+      },
+      {
+       "c": "c3",
+       "p": 0
+      }
+     ]
+    }
+   ],
+   "netOfPin": [
+    [
+     "port:in+",
+     0
+    ],
+    [
+     "port:in-",
+     1
+    ],
+    [
+     "port:out-",
+     1
+    ],
+    [
+     "port:out+",
+     2
+    ],
+    [
+     "c1:0",
+     3
+    ],
+    [
+     "c1:1",
+     4
+    ],
+    [
+     "c2:0",
+     4
+    ],
+    [
+     "c3:0",
+     4
+    ]
+   ],
+   "issues": [
+    {
+     "code": "value_out_of_range",
+     "ref": "M1"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "M1.1"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "C1"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "in+"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "out+"
+    }
+   ],
+   "counted": 1
+  },
+  "floating": {
+   "nets": [
+    {
+     "id": 0,
+     "name": "in",
+     "pins": [
+      {
+       "port": "in+"
+      }
+     ]
+    },
+    {
+     "id": 1,
+     "name": "inn",
+     "pins": [
+      {
+       "port": "in-"
+      }
+     ]
+    },
+    {
+     "id": 2,
+     "name": "out",
+     "pins": [
+      {
+       "port": "out+"
+      }
+     ]
+    },
+    {
+     "id": 3,
+     "name": "outn",
+     "pins": [
+      {
+       "port": "out-"
+      }
+     ]
+    },
+    {
+     "id": 4,
+     "name": "n1",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 5,
+     "name": "vee",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 1
+      },
+      {
+       "c": "c2",
+       "p": 0
+      },
+      {
+       "c": "c3",
+       "p": 0
+      }
+     ]
+    }
+   ],
+   "netOfPin": [
+    [
+     "port:in+",
+     0
+    ],
+    [
+     "port:in-",
+     1
+    ],
+    [
+     "port:out+",
+     2
+    ],
+    [
+     "port:out-",
+     3
+    ],
+    [
+     "c1:0",
+     4
+    ],
+    [
+     "c1:1",
+     5
+    ],
+    [
+     "c2:0",
+     5
+    ],
+    [
+     "c3:0",
+     5
+    ]
+   ],
+   "issues": [
+    {
+     "code": "value_out_of_range",
+     "ref": "M1"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "M1.1"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "C1"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "in+"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "in-"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "out+"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "out-"
+    },
+    {
+     "code": "no_ground",
+     "ref": ""
+    }
+   ],
+   "counted": 1
+  },
+  "palette+supplies": {
+   "nets": [
+    {
+     "id": 0,
+     "name": "in",
+     "pins": [
+      {
+       "port": "in+"
+      }
+     ]
+    },
+    {
+     "id": 1,
+     "name": "0",
+     "pins": [
+      {
+       "port": "in-"
+      },
+      {
+       "port": "out-"
+      }
+     ]
+    },
+    {
+     "id": 2,
+     "name": "out",
+     "pins": [
+      {
+       "port": "out+"
+      }
+     ]
+    },
+    {
+     "id": 3,
+     "name": "n1",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 4,
+     "name": "vee",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 1
+      },
+      {
+       "c": "c2",
+       "p": 0
+      },
+      {
+       "c": "c3",
+       "p": 0
+      }
+     ]
+    }
+   ],
+   "netOfPin": [
+    [
+     "port:in+",
+     0
+    ],
+    [
+     "port:in-",
+     1
+    ],
+    [
+     "port:out-",
+     1
+    ],
+    [
+     "port:out+",
+     2
+    ],
+    [
+     "c1:0",
+     3
+    ],
+    [
+     "c1:1",
+     4
+    ],
+    [
+     "c2:0",
+     4
+    ],
+    [
+     "c3:0",
+     4
+    ]
+   ],
+   "issues": [
+    {
+     "code": "value_out_of_range",
+     "ref": "M1"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "M1.1"
+    },
+    {
+     "code": "kind_not_allowed",
+     "ref": "C1"
+    },
+    {
+     "code": "kind_not_allowed",
+     "ref": "C1"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "C1"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "in+"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "out+"
+    }
+   ],
+   "counted": 1
+  },
+  "no-rails": {
+   "nets": [
+    {
+     "id": 0,
+     "name": "in",
+     "pins": [
+      {
+       "port": "in+"
+      }
+     ]
+    },
+    {
+     "id": 1,
+     "name": "inn",
+     "pins": [
+      {
+       "port": "in-"
+      }
+     ]
+    },
+    {
+     "id": 2,
+     "name": "out",
+     "pins": [
+      {
+       "port": "out+"
+      }
+     ]
+    },
+    {
+     "id": 3,
+     "name": "outn",
+     "pins": [
+      {
+       "port": "out-"
+      }
+     ]
+    },
+    {
+     "id": 4,
+     "name": "n1",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 0
+      }
+     ]
+    },
+    {
+     "id": 5,
+     "name": "vee",
+     "pins": [
+      {
+       "c": "c1",
+       "p": 1
+      },
+      {
+       "c": "c2",
+       "p": 0
+      },
+      {
+       "c": "c3",
+       "p": 0
+      }
+     ]
+    }
+   ],
+   "netOfPin": [
+    [
+     "port:in+",
+     0
+    ],
+    [
+     "port:in-",
+     1
+    ],
+    [
+     "port:out+",
+     2
+    ],
+    [
+     "port:out-",
+     3
+    ],
+    [
+     "c1:0",
+     4
+    ],
+    [
+     "c1:1",
+     5
+    ],
+    [
+     "c2:0",
+     5
+    ],
+    [
+     "c3:0",
+     5
+    ]
+   ],
+   "issues": [
+    {
+     "code": "value_out_of_range",
+     "ref": "M1"
+    },
+    {
+     "code": "floating_pin",
+     "ref": "M1.1"
+    },
+    {
+     "code": "kind_not_allowed",
+     "ref": "C1"
+    },
+    {
+     "code": "kind_not_allowed",
+     "ref": "C1"
+    },
+    {
+     "code": "duplicate_name",
+     "ref": "C1"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "in+"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "in-"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "out+"
+    },
+    {
+     "code": "unconnected_port",
+     "ref": "out-"
+    },
+    {
+     "code": "no_ground",
+     "ref": ""
+    }
+   ],
+   "counted": 1
+  }
+ },
+ "decks": {
+  "common-default-rails/sine": "* quiz circuit\n* issue: value_out_of_range M1\n* issue: floating_pin M1.1\n* issue: kind_not_allowed C1\n* issue: kind_not_allowed C1\n* issue: duplicate_name C1\n* issue: unconnected_port in+\n* issue: unconnected_port out+\nCM1 n1 vee 1e+3\nVin in 0 SIN(5e-1 1e+0 1e+3)\nRload out outl 1e+12\nVmeas outl 0 0\n.tran 1e-5 5e-3 0\n.control\nset wr_vecnames\nset wr_singlescale\nrun\nlinearize v(in) v(out) i(Vmeas)\nwrdata /dev/stdout v(in) v(out) i(Vmeas)\n.endc\n.end\n",
+  "common-default-rails/bare": "* quiz circuit\n* issue: value_out_of_range M1\n* issue: floating_pin M1.1\n* issue: kind_not_allowed C1\n* issue: kind_not_allowed C1\n* issue: duplicate_name C1\n* issue: unconnected_port in+\n* issue: unconnected_port out+\nCM1 n1 vee 1e+3\n.end\n",
+  "split-dual-rails/step": "* quiz circuit\n* issue: value_out_of_range M1\n* issue: floating_pin M1.1\n* issue: duplicate_name C1\n* issue: unconnected_port in+\n* issue: unconnected_port in-\n* issue: unconnected_port out+\n* issue: unconnected_port out-\n* issue: no_ground\nCM1 n1 vee 1e+3\nVcc vcc 0 DC 1.5e+1\nVee vee 0 DC -1.5e+1\nVin src inn PWL(0 0 1e-3 0 1.000001e-3 5e+0)\nRs src in 5e+1\nRload out outl 1e+4\nVmeas outl outn 0\n.tran 4.5e-5 1e-2 1e-3\n.control\nset wr_vecnames\nset wr_singlescale\nrun\nlinearize v(in) v(out) i(Vmeas)\nwrdata /dev/stdout v(in) v(out) i(Vmeas)\n.endc\n.end\n",
+  "split-dual-rails/bare": "* quiz circuit\n* issue: value_out_of_range M1\n* issue: floating_pin M1.1\n* issue: duplicate_name C1\n* issue: unconnected_port in+\n* issue: unconnected_port in-\n* issue: unconnected_port out+\n* issue: unconnected_port out-\n* issue: no_ground\nCM1 n1 vee 1e+3\n.end\n",
+  "common-single-rail/pulse": "* quiz circuit\n* issue: value_out_of_range M1\n* issue: floating_pin M1.1\n* issue: kind_not_allowed C1\n* issue: kind_not_allowed C1\n* issue: duplicate_name C1\n* issue: unconnected_port in+\n* issue: unconnected_port out+\nCM1 n1 vee 1e+3\nVcc vcc 0 DC 5e+0\nVin in 0 PULSE(-1e+0 1e+0 0 1n 1n 5e-5 2e-4)\nCload out outl 1e-9\nVmeas outl 0 0\n.tran 1e-5 1e-3 0\n.control\nset wr_vecnames\nset wr_singlescale\nrun\nlinearize v(in) v(out) i(Vmeas)\nwrdata /dev/stdout v(in) v(out) i(Vmeas)\n.endc\n.end\n",
+  "common-single-rail/bare": "* quiz circuit\n* issue: value_out_of_range M1\n* issue: floating_pin M1.1\n* issue: kind_not_allowed C1\n* issue: kind_not_allowed C1\n* issue: duplicate_name C1\n* issue: unconnected_port in+\n* issue: unconnected_port out+\nCM1 n1 vee 1e+3\n.end\n"
+ }
+}
