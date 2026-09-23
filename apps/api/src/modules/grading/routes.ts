@@ -15,6 +15,7 @@ import {
   GradingIdParam,
   GradingQuery,
   GradingRunBody,
+  IdParam,
   ItemParam,
   type GradingRunAccepted,
   ManualGradingBody,
@@ -24,32 +25,38 @@ import {
 
 import { tracer, type AuditAction } from "../../audit.js";
 import { evaluationItems, gradings, questionVersions } from "../../db/schema.js";
-import {
-  accessibleEvaluation,
-  loadEvaluation,
-  staffAnswer,
-  staffGrading,
-  teacherGuard,
-} from "../guards.js";
-import { emptyBody, invalid } from "../http.js";
+import { loadEvaluation, staffAnswer, staffGrading, teacherGuard } from "../guards.js";
+import { notFound, teacherRoute } from "../http.js";
 import { joinedItems } from "../evaluation/service.js";
 import { markModifiedAfterRelease } from "../results/service.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "./jobs.js";
 import * as service from "./service.js";
 
-function failure(app: FastifyInstance, reply: FastifyReply, error: unknown): FastifyReply {
-  if (error instanceof service.GradingError) {
-    return reply.code(error.status).send({ error: error.code, message: error.message });
-  }
-  app.log.error({ err: error }, "grading route failed");
-  return reply.code(500).send({ error: "internal_error" });
-}
-
 export async function gradingPlugin(app: FastifyInstance) {
   const requireTeacher = teacherGuard(app);
 
+  /** Maps every failure of the module to its status; the rest is a 500. */
+  function failure(reply: FastifyReply, error: unknown): FastifyReply {
+    if (error instanceof service.GradingError) {
+      return reply.code(error.status).send({ error: error.code, message: error.message });
+    }
+    app.log.error({ err: error, cause: (error as Error)?.cause }, "grading route failed");
+    return reply.code(500).send({ error: "internal_error" });
+  }
+
+  /** Params, scope, then body: access is loaded before anything else is checked (invariant 6). */
+  const teacher = teacherRoute(app, failure);
+
   const trace = tracer(app);
+
+  // The loaders of invariant 6, each answering its own 404.
+  const staffEvaluation = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
+    loadEvaluation(app, req, reply, p.id);
+  const answerOf = (req: FastifyRequest, reply: FastifyReply, p: { answerId: string }) =>
+    staffAnswer(app, req, reply, p.answerId);
+  const gradingOf = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
+    staffGrading(app, req, reply, p.id);
 
   // --- The automatic pass ------------------------------------------------
 
@@ -58,93 +65,105 @@ export async function gradingPlugin(app: FastifyInstance) {
    * and skips every cell that already has a validated grading, so pressing the
    * button twice costs one pass and changes nothing that a teacher settled.
    */
-  const runHandler = async (req: FastifyRequest, reply: FastifyReply) => {
-    const scope = await accessibleEvaluation(app, req, reply);
-    if (!scope) return reply;
-    const body = GradingRunBody.safeParse(emptyBody(req.body));
-    if (!body.success) return invalid(reply, body.error);
-    const items = await joinedItems(app.db, scope.evaluation.id);
-    const known = new Set(items.map((i) => i.item.id));
-    const itemIds = (body.data.itemIds ?? [...known]).filter((id) => known.has(id));
-    const queued = await enqueueEvaluationGrading(app, {
-      evaluationId: scope.evaluation.id,
-      ...(body.data.itemIds ? { itemIds } : {}),
-    });
-    await trace(req, "grading.run", "evaluation", scope.evaluation.id, { itemIds });
-    return reply
-      .code(202)
-      .send({
-        evaluationId: scope.evaluation.id,
-        itemIds,
-        queued,
-      } satisfies GradingRunAccepted);
-  };
-
-  app.post("/app/api/evaluations/:id/grading/run", { preHandler: requireTeacher }, runHandler);
+  app.post(
+    "/app/api/evaluations/:id/grading/run",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: GradingRunBody, optionalBody: true, load: staffEvaluation },
+      async ({ req, reply, body, scope }) => {
+        const items = await joinedItems(app.db, scope.evaluation.id);
+        const known = new Set(items.map((i) => i.item.id));
+        const itemIds = (body.itemIds ?? [...known]).filter((id) => known.has(id));
+        const queued = await enqueueEvaluationGrading(app, {
+          evaluationId: scope.evaluation.id,
+          ...(body.itemIds ? { itemIds } : {}),
+        });
+        await trace(req, "grading.run", "evaluation", scope.evaluation.id, { itemIds });
+        return reply
+          .code(202)
+          .send({
+            evaluationId: scope.evaluation.id,
+            itemIds,
+            queued,
+          } satisfies GradingRunAccepted);
+      },
+    ),
+  );
 
   app.get(
     "/app/api/evaluations/:id/grading/progress",
     { preHandler: requireTeacher },
-    async (req, reply) => {
-      const scope = await accessibleEvaluation(app, req, reply);
-      if (!scope) return reply;
-      return service.progressOf(app.db, scope.evaluation.id);
-    },
+    teacher({ params: IdParam, load: staffEvaluation }, ({ scope }) =>
+      service.progressOf(app.db, scope.evaluation.id),
+    ),
   );
 
   // --- The panel ---------------------------------------------------------
 
-  app.get("/app/api/evaluations/:id/grading", { preHandler: requireTeacher }, async (req, reply) => {
-    const scope = await accessibleEvaluation(app, req, reply);
-    if (!scope) return reply;
-    const query = GradingQuery.safeParse(req.query ?? {});
-    if (!query.success) return invalid(reply, query.error);
-    return service.gradingQueue(app.db, scope.evaluation, query.data);
-  });
+  app.get(
+    "/app/api/evaluations/:id/grading",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, query: GradingQuery, load: staffEvaluation }, ({ query, scope }) =>
+      service.gradingQueue(app.db, scope.evaluation, query),
+    ),
+  );
 
   /** The whole history of one answer, newest first (F-GRADE-05). */
-  app.get("/app/api/answers/:answerId/gradings", { preHandler: requireTeacher }, async (req, reply) => {
-    const params = AnswerIdParam.safeParse(req.params);
-    if (!params.success) return reply.code(404).send({ error: "not_found" });
-    const scope = await staffAnswer(app, req, reply, params.data.answerId);
-    if (!scope) return reply;
-    return service.historyOfCell(app.db, scope.answer.attemptId, scope.answer.itemId);
-  });
+  app.get(
+    "/app/api/answers/:answerId/gradings",
+    { preHandler: requireTeacher },
+    teacher({ params: AnswerIdParam, load: answerOf }, ({ scope }) =>
+      service.historyOfCell(app.db, scope.answer.attemptId, scope.answer.itemId),
+    ),
+  );
 
   // --- Manual correction -------------------------------------------------
 
-  /** F-GRADE-05: the override, with its mandatory comment. */
+  /**
+   * F-GRADE-05: the override, with its mandatory comment. Two entry points
+   * for one correction (B-10): the cell is found from the answer here, and
+   * from the grading below.
+   */
+  async function applyOverride(
+    req: FastifyRequest,
+    evaluation: Parameters<typeof events.gradingChanged>[0],
+    cell: Parameters<typeof service.manualOverride>[1],
+    body: ManualGradingBody,
+    now: Date,
+  ) {
+    const row = await service.manualOverride(
+      app.db,
+      cell,
+      {
+        points: body.points,
+        comment: body.comment,
+        ...(body.details === undefined ? {} : { details: body.details }),
+      },
+      req.user!.id,
+      now,
+    );
+    await afterCorrection(req, evaluation, row, "grading.override");
+    return service.toGrading(row);
+  }
+
   app.post(
     "/app/api/answers/:answerId/gradings",
     { preHandler: requireTeacher },
-    async (req, reply) => {
-      const now = app.clock.now();
-      const params = AnswerIdParam.safeParse(req.params);
-      if (!params.success) return reply.code(404).send({ error: "not_found" });
-      const body = ManualGradingBody.safeParse(req.body);
-      if (!body.success) return invalid(reply, body.error);
-      const scope = await staffAnswer(app, req, reply, params.data.answerId);
-      if (!scope) return reply;
-      const cell = await service.cellOfAnswer(app.db, params.data.answerId);
-      if (!cell) return reply.code(404).send({ error: "not_found" });
-      try {
-        const row = await service.manualOverride(
-          app.db,
-          { ...cell },
-          {
-            points: body.data.points,
-            comment: body.data.comment,
-            ...(body.data.details === undefined ? {} : { details: body.data.details }),
-          },
-          req.user!.id,
-          now,
-        );
-        await afterCorrection(req, scope.evaluation, row, "grading.override");
-        return service.toGrading(row);
-      } catch (error) {
-        return failure(app, reply, error);
-      }
-    },
+    teacher(
+      {
+        params: AnswerIdParam,
+        body: ManualGradingBody,
+        load: async (req, reply, p) => {
+          const scope = await answerOf(req, reply, p);
+          if (!scope) return null;
+          const cell = await service.cellOfAnswer(app.db, p.answerId);
+          if (cell) return { evaluation: scope.evaluation, cell };
+          await notFound(reply);
+          return null;
+        },
+      },
+      ({ req, now, body, scope }) => applyOverride(req, scope.evaluation, { ...scope.cell }, body, now),
+    ),
   );
 
   /**
@@ -152,93 +171,66 @@ export async function gradingPlugin(app: FastifyInstance) {
    * absent answer, so the panel shows an entry the plan's `/answers/:id` path
    * cannot address (deviation W6-3).
    */
-  app.post("/app/api/gradings/:id/override", { preHandler: requireTeacher }, async (req, reply) => {
-    const now = app.clock.now();
-    const params = GradingIdParam.safeParse(req.params);
-    if (!params.success) return reply.code(404).send({ error: "not_found" });
-    const body = ManualGradingBody.safeParse(req.body);
-    if (!body.success) return invalid(reply, body.error);
-    const scope = await staffGrading(app, req, reply, params.data.id);
-    if (!scope) return reply;
-    try {
-      const row = await service.manualOverride(
-        app.db,
-        {
-          attemptId: scope.grading.attemptId,
-          itemId: scope.grading.itemId,
-          answerId: scope.grading.answerId,
-          maxPoints: scope.grading.maxPoints,
-        },
-        {
-          points: body.data.points,
-          comment: body.data.comment,
-          ...(body.data.details === undefined ? {} : { details: body.data.details }),
-        },
-        req.user!.id,
-        now,
-      );
-      await afterCorrection(req, scope.evaluation, row, "grading.override");
-      return service.toGrading(row);
-    } catch (error) {
-      return failure(app, reply, error);
-    }
-  });
+  app.post(
+    "/app/api/gradings/:id/override",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: GradingIdParam, body: ManualGradingBody, load: gradingOf },
+      ({ req, now, body, scope }) =>
+        applyOverride(
+          req,
+          scope.evaluation,
+          {
+            attemptId: scope.grading.attemptId,
+            itemId: scope.grading.itemId,
+            answerId: scope.grading.answerId,
+            maxPoints: scope.grading.maxPoints,
+          },
+          body,
+          now,
+        ),
+    ),
+  );
 
   /** F-GRADE-04: validating one proposal, possibly adjusting it on the way. */
-  app.post("/app/api/gradings/:id/validate", { preHandler: requireTeacher }, async (req, reply) => {
-    const now = app.clock.now();
-    const params = GradingIdParam.safeParse(req.params);
-    if (!params.success) return reply.code(404).send({ error: "not_found" });
-    const body = ValidateGradingBody.safeParse(emptyBody(req.body));
-    if (!body.success) return invalid(reply, body.error);
-    const scope = await staffGrading(app, req, reply, params.data.id);
-    if (!scope) return reply;
-    try {
-      const row = await service.validateGrading(
-        app.db,
-        scope.grading,
-        body.data,
-        req.user!.id,
-        now,
-      );
-      await afterCorrection(req, scope.evaluation, row, "grading.validate");
-      return service.toGrading(row);
-    } catch (error) {
-      return failure(app, reply, error);
-    }
-  });
+  app.post(
+    "/app/api/gradings/:id/validate",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: GradingIdParam, body: ValidateGradingBody, optionalBody: true, load: gradingOf },
+      async ({ req, now, body, scope }) => {
+        const row = await service.validateGrading(app.db, scope.grading, body, req.user!.id, now);
+        await afterCorrection(req, scope.evaluation, row, "grading.validate");
+        return service.toGrading(row);
+      },
+    ),
+  );
 
   /** F-GRADE-04: the filtered batch ("every high-confidence proposal of q3"). */
   app.post(
     "/app/api/evaluations/:id/grading/validate-batch",
     { preHandler: requireTeacher },
-    async (req, reply) => {
-      const now = app.clock.now();
-      const scope = await accessibleEvaluation(app, req, reply);
-      if (!scope) return reply;
-      const body = BatchValidateBody.safeParse(emptyBody(req.body));
-      if (!body.success) return invalid(reply, body.error);
-      try {
+    teacher(
+      { params: IdParam, body: BatchValidateBody, optionalBody: true, load: staffEvaluation },
+      async ({ req, now, body, scope }) => {
         const validated = await service.batchValidate(
           app.db,
           scope.evaluation.id,
-          body.data,
+          body,
           req.user!.id,
           now,
         );
         if (validated > 0) {
           await markModifiedAfterRelease(app.db, scope.evaluation, now);
           await trace(req, "grading.validate", "evaluation", scope.evaluation.id, {
-            ...body.data,
+            ...body,
             validated,
           });
           events.gradingChanged(scope.evaluation);
         }
         return { validated };
-      } catch (error) {
-        return failure(app, reply, error);
-      }
-    },
+      },
+    ),
   );
 
   // --- Regrade (F-GRADE-06) ----------------------------------------------
@@ -251,63 +243,59 @@ export async function gradingPlugin(app: FastifyInstance) {
   app.post(
     "/app/api/evaluations/:id/items/:itemId/regrade",
     { preHandler: requireTeacher },
-    async (req, reply) => {
-      const now = app.clock.now();
-      const params = ItemParam.safeParse(req.params);
-      if (!params.success) return reply.code(404).send({ error: "not_found" });
-      const body = RegradeBody.safeParse(req.body);
-      if (!body.success) return invalid(reply, body.error);
-      const scope = await loadEvaluation(app, req, reply, params.data.id);
-      if (!scope) return reply;
-      const items = await joinedItems(app.db, scope.evaluation.id);
-      const item = items.find((i) => i.item.id === params.data.itemId);
-      if (!item) return reply.code(404).send({ error: "not_found" });
+    teacher(
+      { params: ItemParam, body: RegradeBody, load: staffEvaluation },
+      async ({ req, reply, now, params, body, scope }) => {
+        const items = await joinedItems(app.db, scope.evaluation.id);
+        const item = items.find((i) => i.item.id === params.itemId);
+        if (!item) return notFound(reply);
 
-      let note = body.data.note.trim();
-      if (body.data.toVersionNumber !== undefined) {
-        const [version] = await app.db
-          .select({ id: questionVersions.id })
-          .from(questionVersions)
-          .where(
-            and(
-              eq(questionVersions.questionId, item.question.id),
-              eq(questionVersions.number, body.data.toVersionNumber),
-            ),
-          )
-          .limit(1);
-        if (!version) return reply.code(404).send({ error: "not_found" });
+        let note = body.note.trim();
+        if (body.toVersionNumber !== undefined) {
+          const [version] = await app.db
+            .select({ id: questionVersions.id })
+            .from(questionVersions)
+            .where(
+              and(
+                eq(questionVersions.questionId, item.question.id),
+                eq(questionVersions.number, body.toVersionNumber),
+              ),
+            )
+            .limit(1);
+          if (!version) return notFound(reply);
+          await app.db
+            .update(evaluationItems)
+            .set({ questionVersionId: version.id })
+            .where(eq(evaluationItems.id, item.item.id));
+          note = `${note} (re-graded with version ${body.toVersionNumber})`;
+        }
+
+        // The pass skips a cell that already holds a validated grading, so a
+        // regrade starts by standing everything down. Nothing is deleted: the
+        // history of §4.5 is the whole chain.
         await app.db
-          .update(evaluationItems)
-          .set({ questionVersionId: version.id })
-          .where(eq(evaluationItems.id, item.item.id));
-        note = `${note} (re-graded with version ${body.data.toVersionNumber})`;
-      }
+          .update(gradings)
+          .set({ state: "superseded" })
+          .where(and(eq(gradings.itemId, item.item.id), ne(gradings.state, "superseded")));
 
-      // The pass skips a cell that already holds a validated grading, so a
-      // regrade starts by standing everything down. Nothing is deleted: the
-      // history of §4.5 is the whole chain.
-      await app.db
-        .update(gradings)
-        .set({ state: "superseded" })
-        .where(and(eq(gradings.itemId, item.item.id), ne(gradings.state, "superseded")));
-
-      const queued = await enqueueEvaluationGrading(app, {
-        evaluationId: scope.evaluation.id,
-        itemIds: [item.item.id],
-        regradeNote: note,
-      });
-      const modified = await markModifiedAfterRelease(app.db, scope.evaluation, now);
-      await trace(req, "grading.regrade", "evaluation", scope.evaluation.id, {
-        itemId: item.item.id,
-        note,
-        toVersionNumber: body.data.toVersionNumber ?? null,
-        modifiedAfterRelease: modified,
-      });
-      events.gradingChanged(scope.evaluation);
-      return reply
-        .code(202)
-        .send({ evaluationId: scope.evaluation.id, itemIds: [item.item.id], queued });
-    },
+        const queued = await enqueueEvaluationGrading(app, {
+          evaluationId: scope.evaluation.id,
+          itemIds: [item.item.id],
+          regradeNote: note,
+        });
+        const modified = await markModifiedAfterRelease(app.db, scope.evaluation, now);
+        await trace(req, "grading.regrade", "evaluation", scope.evaluation.id, {
+          itemId: item.item.id,
+          note,
+          toVersionNumber: body.toVersionNumber ?? null,
+          modifiedAfterRelease: modified,
+        });
+        events.gradingChanged(scope.evaluation);
+        return reply
+          .code(202)
+          .send({ evaluationId: scope.evaluation.id, itemIds: [item.item.id], queued });
+      },
+    ),
   );
 
   /** What every single-cell correction does afterwards, in one place. */

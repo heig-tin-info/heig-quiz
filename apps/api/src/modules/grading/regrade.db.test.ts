@@ -7,12 +7,13 @@
  * that lands after the results were published marks the evaluation
  * "modified after publication" (F-GRADE-09).
  */
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { registerForTests } from "@quiz/registry/server";
 
-import { answers, evaluations, gradings } from "../../db/schema.js";
+import { answers, auditLog, evaluations, gradings } from "../../db/schema.js";
+import { subscribe } from "../../events.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { seedLive } from "../../test/live.js";
@@ -174,4 +175,154 @@ describe("regrade (F-GRADE-06, F-GRADE-09)", () => {
     );
     expect(wrong.statusCode).toBe(404);
   });
+});
+
+/**
+ * The order of the refusals, which the wrappers of `modules/http.ts` must
+ * keep (audit B-02). Every route loads its scope before it looks at the body
+ * (invariant 6): off the staff, a malformed body is still a 404.
+ */
+describe("the order of the refusals, over HTTP", () => {
+  it("refuses session, params, scope, then body", async () => {
+    const { evaluation, items, answer } = await graded();
+    const badBody = { points: "many" };
+
+    expect((await post(`/app/api/answers/x/gradings`, {}, badBody)).statusCode).toBe(401);
+    expect((await post(`/app/api/answers/x/gradings`, student.headers, badBody)).statusCode).toBe(403);
+    const badParams = await post(`/app/api/answers/x/gradings`, teacher.headers, badBody);
+    expect(badParams.statusCode).toBe(404);
+    expect(badParams.json()).toEqual({ error: "not_found" });
+
+    // Off the staff, the scope's 404 wins over the malformed body, on every route.
+    const override = await post(`/app/api/answers/${answer.id}/gradings`, other.headers, badBody);
+    expect(override.statusCode).toBe(404);
+    expect(override.json()).toEqual({ error: "not_found" });
+    const regrade = await post(
+      `/app/api/evaluations/${evaluation.id}/items/${items[0]!.item.id}/regrade`,
+      other.headers,
+      {},
+    );
+    expect(regrade.statusCode).toBe(404);
+    const scopeFirst = await post(
+      `/app/api/evaluations/${evaluation.id}/grading/validate-batch`,
+      other.headers,
+      { state: "validated" },
+    );
+    expect(scopeFirst.statusCode).toBe(404);
+    expect(scopeFirst.json()).toEqual({ error: "not_found" });
+
+    // On the staff, the same malformed body is the 400 it always was.
+    const malformed = await post(`/app/api/answers/${answer.id}/gradings`, teacher.headers, badBody);
+    expect(malformed.statusCode).toBe(400);
+    expect(malformed.json().error).toBe("validation");
+  });
+
+  it("overrides through both entry points and maps the module's refusals", async () => {
+    const { answer } = await graded();
+    const first = await post(`/app/api/answers/${answer.id}/gradings`, teacher.headers, {
+      points: 0.25,
+      comment: "through the answer",
+    });
+    expect(first.statusCode).toBe(200);
+    const gradingId = first.json().id as string;
+
+    // Off the staff, an override of the grading is a 404, well-formed or not.
+    const foreign = await post(`/app/api/gradings/${gradingId}/override`, other.headers, {
+      points: 1,
+      comment: "not mine",
+    });
+    expect(foreign.statusCode).toBe(404);
+    const foreignMalformed = await post(`/app/api/gradings/${gradingId}/override`, other.headers, {
+      points: "many",
+    });
+    expect(foreignMalformed.statusCode).toBe(404);
+    const foreignValidate = await post(`/app/api/gradings/${gradingId}/validate`, other.headers, {
+      points: "many",
+    });
+    expect(foreignValidate.statusCode).toBe(404);
+
+    const second = await post(`/app/api/gradings/${gradingId}/override`, teacher.headers, {
+      points: 0.75,
+      comment: "through the grading",
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toMatchObject({ points: 0.75, source: "manual", state: "validated" });
+
+    // A validated grading is no proposal: `NotPending` comes back as its own 409.
+    const again = await post(`/app/api/gradings/${second.json().id}/validate`, teacher.headers);
+    expect(again.statusCode).toBe(409);
+    expect(again.json()).toEqual({
+      error: "not_pending",
+      message: "this grading is not a proposal any more",
+    });
+  });
+});
+
+/**
+ * What an override DOES besides answering (F-GRADE-05, F-GRADE-09), through
+ * both entry points of B-10: the audit row, the `grading` refresh hint, and
+ * the "modified after publication" flag once the results are out.
+ */
+describe("the side effects of an override, through both entry points", () => {
+  const entries = [
+    ["POST /answers/:answerId/gradings", "answer"],
+    ["POST /gradings/:id/override", "grading"],
+  ] as const;
+
+  for (const [name, via] of entries) {
+    it(`audits, hints and flags the release: ${name}`, async () => {
+      const db = server.app.db;
+      const { evaluation, answer } = await graded();
+      const released = await post(`/app/api/evaluations/${evaluation.id}/release`, teacher.headers, {
+        confirm: true,
+      });
+      expect(released.statusCode).toBe(200);
+
+      const [standing] = await db
+        .select({ id: gradings.id })
+        .from(gradings)
+        .where(and(eq(gradings.answerId, answer.id), eq(gradings.state, "validated")));
+      const url =
+        via === "answer"
+          ? `/app/api/answers/${answer.id}/gradings`
+          : `/app/api/gradings/${standing!.id}/override`;
+
+      const hints: string[][] = [];
+      const stop = subscribe((m) => {
+        if (m.kind === "hint" && m.type === "grading") hints.push([...m.topics]);
+      });
+      let res;
+      try {
+        res = await post(url, teacher.headers, { points: 0.5, comment: `via the ${via}` });
+      } finally {
+        stop();
+      }
+      expect(res.statusCode).toBe(200);
+      const row = res.json();
+
+      const audit = await db
+        .select()
+        .from(auditLog)
+        .where(and(eq(auditLog.action, "grading.override"), eq(auditLog.subjectId, row.id)));
+      expect(audit).toHaveLength(1);
+      expect(audit[0]).toMatchObject({
+        actorUserId: teacher.id,
+        subjectType: "grading",
+        payload: {
+          evaluationId: evaluation.id,
+          attemptId: answer.attemptId,
+          itemId: answer.itemId,
+          points: 0.5,
+        },
+      });
+
+      expect(hints).toContainEqual([
+        `evaluation:${evaluation.id}`,
+        `classroom:${evaluation.classroomId}`,
+      ]);
+
+      const after = (await db.select().from(evaluations).where(eq(evaluations.id, evaluation.id)))[0]!;
+      expect(after.modifiedAfterRelease).toBe(true);
+    });
+  }
 });

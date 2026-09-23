@@ -368,21 +368,38 @@ describe("the order of the refusals, over HTTP", () => {
       expect(malformed.statusCode).toBe(400);
       expect(malformed.json().error).toBe("validation");
 
-      // Once an attempt exists, the service's `Locked` comes back as its own 409.
+      // Once an attempt exists, every content write refuses with the service's
+      // own 409 — which also proves each route hands the REAL attempt count to
+      // the service (a route passing `{ attemptCount: 0 }` would answer 200).
       await server.app.db
         .insert(attempts)
         .values({ id: randomUUID(), evaluationId: mine.evaluationId, userId: mine.studentIds[0]!, seed: 1 });
-      const locked = await server.app.inject({
-        method: "PUT",
-        url: `/app/api/evaluations/${mine.evaluationId}/items/order`,
-        headers: teacher.headers,
-        payload: { itemIds: [...mine.itemIds].reverse() },
-      });
-      expect(locked.statusCode).toBe(409);
-      expect(locked.json()).toEqual({
-        error: "locked",
-        message: "an attempt exists: the structure is frozen",
-      });
+      const base = `/app/api/evaluations/${mine.evaluationId}`;
+      const locked = { error: "locked", message: "an attempt exists: the structure is frozen" };
+      const writes: [string, "POST" | "PATCH" | "PUT" | "DELETE", string, unknown, unknown][] = [
+        ["patch evaluation", "PATCH", base, { durationS: 600 }, locked],
+        ["add items", "POST", `${base}/items`, { questionIds: mine.questionIds.slice(0, 1) }, locked],
+        ["patch item", "PATCH", itemUrl, { points: 3 }, locked],
+        ["reorder", "PUT", `${base}/items/order`, { itemIds: [...mine.itemIds].reverse() }, locked],
+        ["delete item", "DELETE", itemUrl, undefined, locked],
+        [
+          "update versions",
+          "POST",
+          `${base}/items/update-versions`,
+          {},
+          { error: "attempts_exist", message: "versions cannot be updated once an attempt exists" },
+        ],
+      ];
+      for (const [name, method, url, payload, expected] of writes) {
+        const res = await server.app.inject({
+          method,
+          url,
+          headers: teacher.headers,
+          ...(payload === undefined ? {} : { payload }),
+        });
+        expect(res.statusCode, name).toBe(409);
+        expect(res.json(), name).toEqual(expected);
+      }
     } finally {
       await server.close();
     }
