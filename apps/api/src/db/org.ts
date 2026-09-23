@@ -1,8 +1,7 @@
 /**
  * Organisation: courses, their teaching staff, classrooms and rosters
- * (PLAN-MVP §3.1). Owned by the `org` module (`modules/courses.ts`,
- * `modules/org/`, `modules/roster.ts`); every other module reads them by
- * join and never writes them.
+ * (PLAN-MVP §3.1). Owned by the `org` module (`modules/org/`); every other
+ * module reads them by join and never writes them.
  */
 import { sql } from "drizzle-orm";
 import {

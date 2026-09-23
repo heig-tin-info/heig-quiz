@@ -91,7 +91,7 @@ async function roleForUser(
  *
  * Both entry points below go through it, which is why the pool succession
  * (F-POOL-05) is wired here and not in `modules/admin.ts`: revoking a grant
- * is only one of the two ways the role falls (`courses.ts` removes the last
+ * is only one of the two ways the role falls (`org/routes.ts` removes the last
  * staff seat through `syncRoleOfUser`), and an account is NEVER deleted —
  * "removed from the system" means exactly "no longer teacher nor admin".
  *

@@ -3,11 +3,11 @@ import { randomUUID } from "node:crypto";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { parseRosterCsv, rosterFromRows, type Cell, type RosterParse } from "@quiz/domain";
 
-import { audit } from "../audit.js";
-import { publish } from "../events.js";
-import type { Db } from "../db/client.js";
-import { avatars, enrollments, userEmails, users } from "../db/schema.js";
-import { emailIn, knownEmails, normalizeEmail, sharedWithOthers } from "../identity.js";
+import { audit } from "../../audit.js";
+import { publish } from "../../events.js";
+import type { Db } from "../../db/client.js";
+import { avatars, enrollments, userEmails, users } from "../../db/schema.js";
+import { emailIn, knownEmails, normalizeEmail, sharedWithOthers } from "../../identity.js";
 
 interface RosterImportSummary {
   inserted: number;
