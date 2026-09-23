@@ -315,6 +315,18 @@ async function rosterOf(db: Db, evaluationId: string): Promise<Map<string, Roste
   );
 }
 
+/** One line of a cell's history: the panel's and the cell route's, the same DTO. */
+const historyEntry = (grading: GradingRecord): GradingHistoryEntry => ({
+  id: grading.id,
+  points: grading.points,
+  maxPoints: grading.maxPoints,
+  source: grading.source,
+  state: grading.state,
+  gradedAt: iso(grading.gradedAt),
+  comment: grading.comment,
+  regradeNote: grading.regradeNote,
+});
+
 async function historyOf(
   db: Db,
   evaluationId: string,
@@ -329,16 +341,7 @@ async function historyOf(
   for (const { grading } of rows) {
     const key = pairKey(grading.attemptId, grading.itemId);
     const list = map.get(key) ?? [];
-    list.push({
-      id: grading.id,
-      points: grading.points,
-      maxPoints: grading.maxPoints,
-      source: grading.source,
-      state: grading.state,
-      gradedAt: iso(grading.gradedAt),
-      comment: grading.comment,
-      regradeNote: grading.regradeNote,
-    });
+    list.push(historyEntry(grading));
     map.set(key, list);
   }
   return map;
@@ -589,16 +592,7 @@ export async function historyOfCell(
     .from(gradings)
     .where(and(eq(gradings.attemptId, attemptId), eq(gradings.itemId, itemId)))
     .orderBy(...NEWEST_FIRST);
-  return rows.map((g) => ({
-    id: g.id,
-    points: g.points,
-    maxPoints: g.maxPoints,
-    source: g.source,
-    state: g.state,
-    gradedAt: iso(g.gradedAt),
-    comment: g.comment,
-    regradeNote: g.regradeNote,
-  }));
+  return rows.map(historyEntry);
 }
 
 /**

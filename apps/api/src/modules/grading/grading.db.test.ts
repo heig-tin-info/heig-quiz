@@ -308,6 +308,10 @@ describe("the panel queue (F-GRADE-03)", () => {
         regradeNote: null,
       },
     ]);
+    // The cell route reads the same history, line for line.
+    expect(await service.historyOfCell(db, right!.attemptId, right!.itemId)).toEqual(
+      right!.history,
+    );
   });
 });
 
