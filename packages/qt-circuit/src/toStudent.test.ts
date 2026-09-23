@@ -9,6 +9,8 @@
  */
 import { describe, expect, it } from "vitest";
 
+import { COMMON_FORBIDDEN_STUDENT_KEYS } from "@quiz/core/server";
+
 import { CircuitStudent } from "./schema.js";
 import { circuitServer } from "./server.js";
 import {
@@ -20,19 +22,20 @@ import {
   circuitConfig,
 } from "./test/fixtures.js";
 
+/*
+ * The shared floor (`@quiz/core/server`) plus what only `circuit` has: the
+ * reference schematic, the grading block it lives beside, and the `mode` of
+ * that block — which tells the student whether a simulation or an LLM reads
+ * the answer.
+ */
 const FORBIDDEN_KEYS = [
-  "reference",
-  "rubric",
-  "tolerance",
-  "grading",
-  "explanation",
-  "tags",
-  "difficulty",
-  "correct",
-  "answers",
-  "policy",
+  ...COMMON_FORBIDDEN_STUDENT_KEYS,
   "expected",
+  "grading",
   "mode",
+  "policy",
+  "reference",
+  "tolerance",
 ];
 
 const SECRET_VALUES = [

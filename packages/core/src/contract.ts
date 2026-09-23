@@ -88,6 +88,43 @@ export interface StudentView {
   shuffle: boolean;
 }
 
+/**
+ * The FLOOR of the forbidden-key blacklists of invariant 4 (docs/05 §5.7).
+ *
+ * Every leak test — the five per-type `toStudent.test.ts` and the API's
+ * `studentView.leak.test.ts` — starts from this list and adds its own extras.
+ * Before it existed, six hand-maintained lists disagreed with one another in
+ * both directions, so a key one type thought about was missed by the next
+ * (audit 2026-09-22, finding P-06).
+ *
+ * The rule for a member: the key names the ANSWER KEY or the teacher's own
+ * metadata, in every type, so no `toStudent` may ever publish it. A key one
+ * type legitimately publishes therefore stays out of the floor and is checked
+ * per type instead — `mode` is a member of `McqStudent`, and `code` publishes
+ * the `expected` output of its VISIBLE cases on purpose (docs/04 §4.7,
+ * deviation W3-4). Adding a key here makes every list stricter at once: if a
+ * type's leak test goes red because of it, that type has a leak.
+ *
+ * This list only grows.
+ */
+export const COMMON_FORBIDDEN_STUDENT_KEYS: readonly string[] = [
+  "answers",
+  "changeNote",
+  "compare",
+  "compileArgs",
+  "correct",
+  "deprecationNote",
+  "difficulty",
+  "explanation",
+  "internalName",
+  "matchers",
+  "pattern",
+  "penalty",
+  "referenceSolution",
+  "rubric",
+  "tags",
+];
+
 export interface GradeContext {
   seed: number;
   itemId: string;
