@@ -275,6 +275,21 @@ export async function participantOf(
 }
 
 /**
+ * Who holds an existing attempt: the account's claimed seat when there is
+ * one, and otherwise the row's own owner with no time bonus — a guest, or an
+ * account whose seat has gone since.
+ */
+async function participantOfAttempt(
+  db: Db,
+  evaluation: EvaluationRecord,
+  attempt: AttemptRecord,
+): Promise<Participant> {
+  const seat =
+    attempt.userId === null ? null : await participantOf(db, evaluation, attempt.userId);
+  return seat ?? { userId: attempt.userId, guestId: attempt.guestId, timeBonusPercent: 0 };
+}
+
+/**
  * The caller's own seat in the classroom of an evaluation, or `null`.
  *
  * `staff` is what tells a teacher's test walk apart from a student's attempt
@@ -635,13 +650,7 @@ export async function attemptOrLobbyView(
   now: Date,
 ): Promise<AttemptOrLobby> {
   if (!contentVisible(evaluation.state)) {
-    const seat =
-      attempt.userId === null ? null : await participantOf(db, evaluation, attempt.userId);
-    const participant: Participant = seat ?? {
-      userId: attempt.userId,
-      guestId: attempt.guestId,
-      timeBonusPercent: 0,
-    };
+    const participant = await participantOfAttempt(db, evaluation, attempt);
     return { kind: "lobby", view: await lobbyView(db, evaluation, participant, now) };
   }
   return { kind: "attempt", view: await attemptView(db, evaluation, attempt, now) };
@@ -1787,13 +1796,7 @@ export async function reopenAttempt(
   now: Date,
 ): Promise<AttemptRecord> {
   if (attempt.state === "in_progress") return attempt;
-  const seat =
-    attempt.userId === null ? null : await participantOf(db, evaluation, attempt.userId);
-  const participant: Participant = seat ?? {
-    userId: attempt.userId,
-    guestId: attempt.guestId,
-    timeBonusPercent: 0,
-  };
+  const participant = await participantOfAttempt(db, evaluation, attempt);
   const { deadlineAt, bonusS } = deadlineFor(evaluation, {
     startedAt: attempt.startedAt ?? now,
     timeBonusPercent: participant.timeBonusPercent,
