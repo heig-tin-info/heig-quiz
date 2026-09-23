@@ -14,7 +14,7 @@ import { cx, isTyping, PageError, Skeleton, useFullscreen } from "../ui";
 import { PollBars } from "./PollBars";
 import { ProjectionFooter } from "./ProjectionFooter";
 import { ProjectionHeader, projectionPhase } from "./ProjectionHeader";
-import { pollRows, PROJECTION_ROW_CAP, promptOf, questionScale } from "./pollTally";
+import { hasKey, pollRows, PROJECTION_ROW_CAP, promptOf, questionScale } from "./pollTally";
 import { useStageFit } from "./useStageFit";
 import { pollKey } from "../queryKeys";
 
@@ -77,6 +77,8 @@ function ProjectionQuestion({
 }) {
   const t = useT();
   const allRows = useMemo(() => pollRows(view.question, view.tally), [view]);
+  // No key, nothing to mark: the bars of an opinion poll stay as they are.
+  const marked = revealed && hasKey(view.question);
   const rows = allRows.slice(0, PROJECTION_ROW_CAP);
   const overflow = allRows.length - rows.length;
   return (
@@ -93,7 +95,7 @@ function ProjectionQuestion({
         <p className="text-[clamp(16px,1.6vw,22px)] text-fg-muted">{t("poll.noAnswersYet")}</p>
       ) : (
         <>
-          <PollBars rows={rows} revealed={revealed} />
+          <PollBars rows={rows} revealed={marked} />
           {overflow > 0 ? (
             <p className="text-[clamp(13px,1.2vw,17px)] text-fg-faint">
               {t(overflow === 1 ? "poll.moreAnswers.one" : "poll.moreAnswers", { n: overflow })}

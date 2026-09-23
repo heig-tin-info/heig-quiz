@@ -14,6 +14,7 @@ import {
   SHORT_CONFIG_VERSION,
   ShortAnswerSchema,
   ShortConfigSchema,
+  ShortKeylessConfigSchema,
   ShortDetailsSchema,
   ShortSolutionSchema,
   ShortStudentSchema,
@@ -92,6 +93,7 @@ export const shortServer: QuestionTypeServer<
   configVersion: SHORT_CONFIG_VERSION,
 
   configSchema: ShortConfigSchema,
+  keylessConfigSchema: ShortKeylessConfigSchema,
   answerSchema: ShortAnswerSchema,
   studentSchema: ShortStudentSchema,
   solutionSchema: ShortSolutionSchema,
@@ -135,6 +137,8 @@ export const shortServer: QuestionTypeServer<
   },
 
   toSolution: (config) => ({ expected: expectedAnswers(config) }),
+
+  hasKey: (config) => config.matchers.length > 0,
 
   /**
    * `matchedIndex` and `matchedKind` describe WHICH matcher accepted the

@@ -44,12 +44,21 @@ export function typeOf(type: string): AnyQuestionTypeServer {
  * stored config does not satisfy the (possibly migrated) schema — which only
  * ever happens for a draft, and the callers that tolerate one use
  * {@link tryLoadConfig}.
+ *
+ * A read accepts what ANY write gate accepted, so it parses with the type's
+ * keyless schema when it has one: the question of an opinion poll was
+ * written without a key (`saveConfig(…, { keyOptional: true })`, ADR-014,
+ * addendum 2026-09-23), and its poll, its tally and its "run again" read it
+ * like any other. The gates themselves — publication, the draft issues —
+ * stay on `configSchema` and still demand a key.
  */
 export function loadConfig(type: string, row: ConfigRow): unknown {
   const t = typeOf(type);
-  const migrated =
-    row.configVersion === t.configVersion ? row.config : t.migrate(row.config, row.configVersion);
-  return t.configSchema.parse(migrated);
+  return (t.keylessConfigSchema ?? t.configSchema).parse(migrated(t, row));
+}
+
+function migrated(t: AnyQuestionTypeServer, row: ConfigRow): unknown {
+  return row.configVersion === t.configVersion ? row.config : t.migrate(row.config, row.configVersion);
 }
 
 /**
@@ -65,7 +74,10 @@ export function loadConfig(type: string, row: ConfigRow): unknown {
  */
 export function tryLoadConfig(type: string, row: ConfigRow): ConfigOutcome {
   try {
-    return { ok: true, config: loadConfig(type, row) };
+    // The STRICT schema: a draft and the version a pool previews must hold a
+    // key, and the editor is told when one does not.
+    const t = typeOf(type);
+    return { ok: true, config: t.configSchema.parse(migrated(t, row)) };
   } catch (error) {
     return { ok: false, config: raise(typeOf(type), row.config, row.configVersion), issues: issuesOf(error) };
   }
@@ -101,10 +113,27 @@ function raise(t: AnyQuestionTypeServer, config: unknown, fromVersion: number): 
 /**
  * Every write. The config is parsed and stamped with the type's CURRENT
  * version, so a stored draft never lags behind the schema.
+ *
+ * `keyOptional` is the poll launcher's write and nobody else's: the type's
+ * `keylessConfigSchema`, an opinion poll's question (ADR-014, addendum
+ * 2026-09-23). A type without one keeps its strict schema.
  */
-export function saveConfig(type: string, config: unknown): ConfigRow {
+export function saveConfig(
+  type: string,
+  config: unknown,
+  options: { keyOptional?: boolean } = {},
+): ConfigRow {
   const t = typeOf(type);
-  return { config: t.configSchema.parse(config), configVersion: t.configVersion };
+  const schema = options.keyOptional ? (t.keylessConfigSchema ?? t.configSchema) : t.configSchema;
+  return { config: schema.parse(config), configVersion: t.configVersion };
+}
+
+/**
+ * Whether a parsed config holds an answer key. Always true but for the
+ * keyless question of an opinion poll, which nothing grades.
+ */
+export function hasKey(type: string, config: unknown): boolean {
+  return typeOf(type).hasKey?.(config) ?? true;
 }
 
 /**
@@ -143,7 +172,7 @@ export function searchTextOf(type: string, internalName: string, config: unknown
   let fromType = "";
   try {
     const t = typeOf(type);
-    fromType = t.searchText(t.configSchema.parse(config));
+    fromType = t.searchText((t.keylessConfigSchema ?? t.configSchema).parse(config));
   } catch {
     // Invalid or half-written draft: index whatever text it already holds,
     // so a teacher can find the question they left unfinished.

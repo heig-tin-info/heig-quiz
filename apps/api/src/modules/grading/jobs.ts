@@ -44,7 +44,7 @@ import {
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
-import { loadConfig, typeOf } from "../pool/config.js";
+import { hasKey, loadConfig, typeOf } from "../pool/config.js";
 import * as events from "./events.js";
 import {
   pairKey,
@@ -318,6 +318,13 @@ export async function runEvaluationGrading(
   const writes: WriteGradingInput[] = [];
   for (const item of pass.items) {
     const config = readConfig(app, item);
+    // An opinion poll's question has no key (ADR-014, addendum 2026-09-23):
+    // there is nothing to be right about, so nothing is written — not a
+    // zero per answer, which would mark the whole room wrong.
+    if (config !== null && !hasKey(item.question.type, config)) {
+      for (const _ of pass.attempts) progress.tick();
+      continue;
+    }
     for (const attempt of pass.attempts) {
       const key = pairKey(attempt.id, item.item.id);
       // Idempotency (§5.4): a cell a teacher already settled is never

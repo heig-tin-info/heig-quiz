@@ -232,11 +232,15 @@ const scenes = [
   // shrinks itself (`fitScale`), so the fold IS the whole screen.
   { name: "poll-projection-long", role: "teacher", path: "/evaluations/poll-long/poll", fold: true },
   { name: "poll-projection-long-revealed", role: "teacher", path: "/evaluations/poll-long/poll?revealed=1", fold: true },
+  // An opinion poll: no key, so the reveal marks nothing and says "Results
+  // shown"; the phone gets the distribution instead of a verdict.
+  { name: "poll-projection-opinion-revealed", role: "teacher", path: "/evaluations/poll-opinion/poll?revealed=1", fold: true },
   // The participant's half, as a GUEST: no session at all, which is what a
   // phone in the room has (`?as=guest` in src/mock/poll.ts).
   { name: "join-mcq", role: "teacher", path: "/p/QZ4F7K?as=guest" },
   { name: "join-revealed", role: "teacher", path: "/p/QZ4F7K?as=guest&revealed=1" },
   { name: "join-ended", role: "teacher", path: "/p/EN6D3D?as=guest" },
+  { name: "join-opinion-revealed", role: "teacher", path: "/p/AV3R8T?as=guest&revealed=1" },
   { name: "pool", role: "teacher", path: "/pools/p1" },
   { name: "pool-empty", role: "teacher", path: "/pools/p1?empty=1", settle: 800 },
   { name: "pool-error", role: "teacher", path: "/pools/p1?fail=1", settle: 2500 },

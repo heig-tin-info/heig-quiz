@@ -6,8 +6,10 @@ import {
   McqAnswerSchema,
   McqConfigSchema,
   McqDefaultsSchema,
+  McqKeylessConfigSchema,
   type McqConfig,
 } from "./schema.js";
+import { mcqServer } from "./server.js";
 
 /** A valid config, with the field under test overridden by each row. */
 function base(): Record<string, unknown> {
@@ -25,6 +27,34 @@ const twoKeys = [
   { text: "a", correct: true },
   { text: "b", correct: true },
 ];
+
+describe("McqKeylessConfigSchema (an opinion poll)", () => {
+  const noKey = () => ({
+    ...base(),
+    choices: [
+      { text: "a", correct: false },
+      { text: "b", correct: false },
+    ],
+  });
+
+  it("accepts no correct choice, where the graded schema refuses it", () => {
+    expect(McqConfigSchema.safeParse(noKey()).success).toBe(false);
+    const parsed = McqKeylessConfigSchema.parse(noKey());
+    expect(mcqServer.hasKey!(parsed)).toBe(false);
+    expect(mcqServer.toSolution(parsed, { seed: 0, itemId: "i", shuffle: false })).toEqual({ correct: [] });
+    expect(mcqServer.hasKey!(McqKeylessConfigSchema.parse(base()))).toBe(true);
+  });
+
+  it("relaxes nothing else", () => {
+    expect(McqKeylessConfigSchema.safeParse({ ...noKey(), choices: [{ text: "a" }] }).success).toBe(false);
+    expect(McqKeylessConfigSchema.safeParse({ ...noKey(), prompt: "" }).success).toBe(false);
+    // A key that IS there still follows its rules: single means one.
+    expect(McqKeylessConfigSchema.safeParse({ ...base(), choices: twoKeys, mode: "single" }).success).toBe(false);
+    expect(
+      McqKeylessConfigSchema.safeParse({ ...base(), choices: twoKeys, mode: "multiple", maxSelections: 1 }).success,
+    ).toBe(false);
+  });
+});
 
 describe("McqConfigSchema", () => {
   const accepted: [string, Record<string, unknown>][] = [

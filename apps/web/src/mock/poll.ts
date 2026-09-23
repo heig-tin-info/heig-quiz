@@ -55,6 +55,8 @@ import {
 //                                           long statement and eight choices
 //                                           of two lines, which is what the
 //                                           beamer has to shrink to fit
+//   AV3R8T  running, anonymous, mcq         an opinion poll: NO key, so the
+//                                           reveal shows the distribution
 //
 // Two switches, read from the PAGE url at request time and not at import, so
 // a screenshot flips one without reloading the module — and the running
@@ -185,6 +187,29 @@ export const polls: MockPoll[] = [
     joined: false,
     answer: null,
   },
+  {
+    // An opinion poll (ADR-014, addendum 2026-09-23): nothing is right, so
+    // the key is empty and "Reveal" hands the phones the distribution.
+    code: "AV3R8T",
+    title: "Avis — rythme des laboratoires",
+    state: "running",
+    anonymous: true,
+    revealed: false,
+    type: "mcq",
+    student: {
+      prompt: "Le rythme des laboratoires vous convient-il ?",
+      mode: "single",
+      choices: [
+        { id: 0, text: "Trop lent" },
+        { id: 1, text: "Juste bien" },
+        { id: 2, text: "Un peu rapide" },
+        { id: 3, text: "Beaucoup trop rapide" },
+      ],
+    },
+    solution: { correct: [] },
+    joined: true,
+    answer: { selected: [2] },
+  },
 ];
 
 const pollOr404 = (code: string): MockPoll => {
@@ -205,6 +230,7 @@ function pollPublicView(poll: MockPoll): PollPublicView {
     // Never before the teacher says so: the key is the one thing on this
     // payload a participant must not be able to read early (invariant 4).
     solution: revealed ? poll.solution : null,
+    tally: revealed ? publicTally(poll) : null,
     me: {
       identified: !loginRequired,
       loginRequired,
@@ -212,6 +238,12 @@ function pollPublicView(poll: MockPoll): PollPublicView {
       answer: poll.answer,
     },
   };
+}
+
+/** The distribution a phone reads once revealed: its teacher poll's, when it has one. */
+function publicTally(poll: MockPoll): PollPublicView["tally"] {
+  const tp = teacherPolls.find((t) => t.code === poll.code);
+  return tp ? tallyOf(tp, poll) : { joined: 0, answered: 0, choices: [], answers: [] };
 }
 
 on("GET", "/app/api/p/:code", (m) => pollPublicView(pollOr404(m.groups!.code!)));
@@ -249,6 +281,7 @@ on("POST", "/app/api/p/:code/answer", (m, body) => {
 //   /evaluations/poll-ended/poll  one that is over
 //   /evaluations/poll-long/poll   a long statement and eight choices: the
 //                                 one the wall has to shrink to fit
+//   /evaluations/poll-opinion/poll  an opinion poll, with no key at all
 //
 // The tally GROWS while you look at it: `POLL_TICK` moves it and the fake SSE
 // stream pushes the WHOLE aggregate as a `poll.tally` frame, exactly as the
@@ -259,6 +292,7 @@ const POLL_RUNNING = "00000000-0000-4000-9000-000000000001";
 const POLL_SHORT = "00000000-0000-4000-9000-000000000002";
 const POLL_ENDED = "00000000-0000-4000-9000-000000000003";
 const POLL_LONG = "00000000-0000-4000-9000-000000000004";
+const POLL_OPINION = "00000000-0000-4000-9000-000000000005";
 
 /** How often the fake room answers, in ms. */
 const POLL_TICK = 1200;
@@ -326,7 +360,7 @@ function seedPollEvaluation(tp: MockTeacherPoll, alias: string): void {
   aliased.set(alias, tp.id);
 }
 
-if (!flags.empty && polls.length >= 4) {
+if (!flags.empty && polls.length >= 5) {
   teacherPolls.push(
     {
       id: POLL_RUNNING,
@@ -378,11 +412,22 @@ if (!flags.empty && polls.length >= 4) {
       counts: [6, 18, 4, 11, 2, 3, 2, 3],
       texts: [],
     },
+    {
+      id: POLL_OPINION,
+      code: polls[4]!.code,
+      classroomId: EVAL_ROOM,
+      createdAt: iso(-3 * 60_000),
+      joined: 44,
+      answered: 39,
+      counts: [3, 21, 11, 4],
+      texts: [],
+    },
   );
   seedPollEvaluation(teacherPolls[0]!, "poll");
   seedPollEvaluation(teacherPolls[1]!, "poll-short");
   seedPollEvaluation(teacherPolls[2]!, "poll-ended");
   seedPollEvaluation(teacherPolls[3]!, "poll-long");
+  seedPollEvaluation(teacherPolls[4]!, "poll-opinion");
 }
 
 const answeredOf = (tp: MockTeacherPoll): number => tp.answered;
@@ -593,7 +638,7 @@ on("POST", "/app/api/polls/inline", (_m, body) => {
     config,
     published: [{ number: 1, changeNote: "", daysAgo: 0 }],
   });
-  const issues = draftIssues(q);
+  const issues = draftIssues(q, { keyOptional: true });
   if (issues.length > 0) throw new MockValidation("The question is incomplete", issues);
   return startPoll(q, body);
 });

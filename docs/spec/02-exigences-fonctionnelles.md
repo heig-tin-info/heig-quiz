@@ -92,7 +92,7 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 | F-LIVE-10 | The student may hand in before the end after a confirmation. At the deadline the attempt is closed by the server. | P1 | M |
 | F-LIVE-11 | The teacher may pause, resume, add 1, 5 or 10 minutes to everybody or to one student, and close. Every action is propagated immediately and logged. | P1 | M |
 | F-LIVE-12 | A late student starts with the full duration in `duration` mode, or until the common end in `deadline` mode. The teacher may grant them time individually. | P1 | M |
-| F-LIVE-13 | `poll` mode: one question, aggregated results live on the teacher's screen, reveal of the correct answer on demand, possibility to relaunch the same question. | P2 | M |
+| F-LIVE-13 | `poll` mode: one question, aggregated results live on the teacher's screen, reveal of the correct answer on demand, possibility to relaunch the same question. A question written for the poll alone may have no correct answer (an opinion poll): the reveal then shows the distribution only, and nothing is graded (ADR-014, addendum 2026-09-23). | P2 | M |
 | F-LIVE-14 | The teacher may project a "presentation" view without student names: completion rate, and in `poll` the distribution of answers. | P2 | S |
 
 ## F-DASH Teacher's live dashboard

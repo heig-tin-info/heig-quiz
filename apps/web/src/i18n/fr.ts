@@ -1810,6 +1810,8 @@ export const fr: Record<keyof Dict, string> = {
   "join.reveal.accepted": "Réponses acceptées",
   "join.reveal.matched": "Parmi les réponses acceptées",
   "join.reveal.notMatched": "Pas parmi les réponses acceptées",
+  "join.reveal.results": "Les résultats",
+  "join.reveal.noKey": "Ce sondage n'a pas de bonne réponse : voici comment la salle a répondu.",
 
   "poll.nav": "Sondage",
   "poll.start": "Lancer un sondage",
@@ -1836,6 +1838,7 @@ export const fr: Record<keyof Dict, string> = {
   "poll.startFailed": "Impossible de lancer le sondage.",
   "poll.newHint":
     "Rien n'est enregistré : la question n'existe qu'avec ce sondage. Pour la garder, écrivez-la dans votre banque Polls.",
+  "poll.keyOptional": "Indiquer une bonne réponse est facultatif : sans elle, le sondage recueille simplement des avis.",
   "poll.incomplete":
     "La question n'est pas encore complète. Les champs à revoir sont signalés ci-dessous.",
   "poll.openProjection": "Ouvrir la projection",
@@ -1844,6 +1847,7 @@ export const fr: Record<keyof Dict, string> = {
   "poll.live": "En direct",
   "poll.reveal": "Réponse révélée",
   "poll.revealed": "Réponse révélée",
+  "poll.resultsShown": "Résultats affichés",
   "poll.ended": "Sondage terminé",
   "poll.again": "Relancer",
   "poll.end": "Terminer le sondage",

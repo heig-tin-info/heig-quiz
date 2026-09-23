@@ -59,7 +59,9 @@ export interface EditorProps<TConfig> {
    * addendum 2026-09-23). The editor then leaves out every setting that only
    * decides a MARK — a scoring policy, a points field, a normalisation of the
    * comparison — and keeps what the room reads and the key the teacher
-   * reveals. An editor with nothing of the kind simply ignores it.
+   * reveals, which is OPTIONAL there (`keylessConfigSchema`): an editor lets
+   * the last row of a key go. An editor with nothing of the kind simply
+   * ignores it.
    */
   ungraded?: boolean;
 }

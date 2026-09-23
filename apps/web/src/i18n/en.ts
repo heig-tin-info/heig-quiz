@@ -1822,6 +1822,8 @@ export const en = {
   "join.reveal.accepted": "Accepted answers",
   "join.reveal.matched": "Among the accepted answers",
   "join.reveal.notMatched": "Not among the accepted answers",
+  "join.reveal.results": "The results",
+  "join.reveal.noKey": "This poll has no correct answer: here is how the room answered.",
 
   // The teacher's half of a poll (F-LIVE-13 / F-LIVE-14): the launcher, and
   // the projection thrown on the lecture-hall wall.
@@ -1850,6 +1852,7 @@ export const en = {
   "poll.startFailed": "Could not start the poll.",
   "poll.newHint":
     "Nothing is saved: the question lives with this poll only. To keep one for later, write it in your Polls pool.",
+  "poll.keyOptional": "Marking a correct answer is optional: without one, the poll simply collects opinions.",
   "poll.incomplete":
     "The question is not complete yet. The fields that need attention are marked below.",
   "poll.openProjection": "Open projection",
@@ -1858,6 +1861,7 @@ export const en = {
   "poll.live": "Live",
   "poll.reveal": "Answer revealed",
   "poll.revealed": "Answer revealed",
+  "poll.resultsShown": "Results shown",
   "poll.ended": "Poll ended",
   "poll.again": "Run again",
   "poll.end": "End poll",

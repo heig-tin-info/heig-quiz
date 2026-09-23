@@ -600,6 +600,7 @@ export async function publicView(
     settings,
     question: { type: item.question.type as PollType, student: studentOf(item) },
     solution: settings.revealed ? solutionOf(item) : null,
+    tally: settings.revealed ? await tallyOf(db, evaluation) : null,
     me: {
       identified: viewer.userId !== null || viewer.guestId !== null,
       loginRequired: !viewer.loggedIn && !settings.anonymous,

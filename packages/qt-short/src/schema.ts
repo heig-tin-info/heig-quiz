@@ -125,47 +125,62 @@ export function defaultShortPrefilters(): ShortPrefilters {
   return { trim: true, lowercase: true };
 }
 
-export const ShortConfigSchema = z
-  .object({
-    configVersion: z.literal(SHORT_CONFIG_VERSION),
-    prompt: z.string().min(1).max(20_000),
-    /** Drives the input type of the player and which constraints are read. */
-    kind: ShortKindSchema.default("text"),
-    constraints: ShortConstraintsSchema.default(defaultShortConstraints),
-    prefilters: ShortPrefiltersSchema.default(defaultShortPrefilters),
-    placeholder: z.string().max(80).optional(),
-    matchers: z.array(ShortMatcherSchema).min(1).max(SHORT_MAX_MATCHERS),
-  })
-  .superRefine((config, ctx) => {
-    config.matchers.forEach((matcher, index) => {
-      if (matcher.kind === "regex" && !isValidPattern(matcher.pattern, matcher.flags)) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["matchers", index, "pattern"],
-          message: "short.invalid_pattern",
-        });
-      }
-      // A field that only takes whole numbers cannot expect 3.5.
-      if (config.constraints.integer && matcher.kind === "number" && !Number.isInteger(matcher.value)) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["matchers", index, "value"],
-          message: "short.integer_expected",
-        });
-      }
-    });
+const ShortConfigShape = z.object({
+  configVersion: z.literal(SHORT_CONFIG_VERSION),
+  prompt: z.string().min(1).max(20_000),
+  /** Drives the input type of the player and which constraints are read. */
+  kind: ShortKindSchema.default("text"),
+  constraints: ShortConstraintsSchema.default(defaultShortConstraints),
+  prefilters: ShortPrefiltersSchema.default(defaultShortPrefilters),
+  placeholder: z.string().max(80).optional(),
+  matchers: z.array(ShortMatcherSchema).min(1).max(SHORT_MAX_MATCHERS),
+});
 
-    const c = config.constraints;
-    if (c.minLength > c.maxLength) {
-      ctx.addIssue({ code: "custom", path: ["constraints", "maxLength"], message: "short.length_range" });
+function refineShortConfig(
+  config: z.infer<typeof ShortConfigShape>,
+  ctx: z.RefinementCtx,
+): void {
+  config.matchers.forEach((matcher, index) => {
+    if (matcher.kind === "regex" && !isValidPattern(matcher.pattern, matcher.flags)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["matchers", index, "pattern"],
+        message: "short.invalid_pattern",
+      });
     }
-    if (c.min !== undefined && c.max !== undefined && c.min > c.max) {
-      ctx.addIssue({ code: "custom", path: ["constraints", "max"], message: "short.number_range" });
-    }
-    if (c.from !== undefined && c.to !== undefined && c.from > c.to) {
-      ctx.addIssue({ code: "custom", path: ["constraints", "to"], message: "short.date_range" });
+    // A field that only takes whole numbers cannot expect 3.5.
+    if (config.constraints.integer && matcher.kind === "number" && !Number.isInteger(matcher.value)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["matchers", index, "value"],
+        message: "short.integer_expected",
+      });
     }
   });
+
+  const c = config.constraints;
+  if (c.minLength > c.maxLength) {
+    ctx.addIssue({ code: "custom", path: ["constraints", "maxLength"], message: "short.length_range" });
+  }
+  if (c.min !== undefined && c.max !== undefined && c.min > c.max) {
+    ctx.addIssue({ code: "custom", path: ["constraints", "max"], message: "short.number_range" });
+  }
+  if (c.from !== undefined && c.to !== undefined && c.from > c.to) {
+    ctx.addIssue({ code: "custom", path: ["constraints", "to"], message: "short.date_range" });
+  }
+}
+
+export const ShortConfigSchema = ShortConfigShape.superRefine(refineShortConfig);
+
+/**
+ * The same question with the key OPTIONAL: an opinion poll (ADR-014, addendum
+ * 2026-09-23) may accept no answer at all. Only the minimum goes; a matcher
+ * that IS there is still checked like any other.
+ */
+export const ShortKeylessConfigSchema = ShortConfigShape.extend({
+  matchers: z.array(ShortMatcherSchema).max(SHORT_MAX_MATCHERS).default([]),
+}).superRefine(refineShortConfig);
+
 export type ShortConfig = z.infer<typeof ShortConfigSchema>;
 
 export const ShortAnswerSchema = z.object({ text: z.string().max(SHORT_MAX_ANSWER_LENGTH) });

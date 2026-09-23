@@ -4,8 +4,10 @@ import {
   emptyShortDraft,
   ShortAnswerSchema,
   ShortConfigSchema,
+  ShortKeylessConfigSchema,
   ShortMatcherSchema,
 } from "./schema.js";
+import { shortServer } from "./server.js";
 
 function base(): Record<string, unknown> {
   return {
@@ -109,6 +111,28 @@ describe("ShortConfigSchema", () => {
       matchers: [{ kind: "llm", rubric: "Explains the tri-state." }],
     });
     expect(hasLlmMatcher(config.matchers)).toBe(true);
+  });
+});
+
+describe("ShortKeylessConfigSchema (an opinion poll)", () => {
+  it("accepts no accepted answer, where the graded schema refuses it", () => {
+    const keyless = { ...base(), matchers: [] };
+    expect(ShortConfigSchema.safeParse(keyless).success).toBe(false);
+    const parsed = ShortKeylessConfigSchema.parse(keyless);
+    expect(shortServer.hasKey!(parsed)).toBe(false);
+    expect(shortServer.toSolution(parsed, { seed: 0, itemId: "i", shuffle: false })).toEqual({ expected: [] });
+    // Absent is the same as empty.
+    const { matchers: _matchers, ...bare } = base();
+    expect(ShortKeylessConfigSchema.parse(bare).matchers).toEqual([]);
+  });
+
+  it("relaxes nothing else", () => {
+    expect(ShortKeylessConfigSchema.safeParse({ ...base(), prompt: "" }).success).toBe(false);
+    expect(ShortKeylessConfigSchema.safeParse({ ...base(), matchers: [{ kind: "exact", value: "" }] }).success).toBe(false);
+    expect(
+      ShortKeylessConfigSchema.safeParse({ ...base(), constraints: { minLength: 9, maxLength: 3 } }).success,
+    ).toBe(false);
+    expect(shortServer.hasKey!(ShortKeylessConfigSchema.parse(base()))).toBe(true);
   });
 });
 

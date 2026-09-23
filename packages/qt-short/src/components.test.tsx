@@ -130,6 +130,18 @@ describe("ShortEditor", () => {
     expect(screen.queryByText("Share of the item awarded by this matcher.")).not.toBeInTheDocument();
   });
 
+  it("lets a poll drop its last accepted answer: the key is optional there", async () => {
+    const one = { ...config(), matchers: [config().matchers[0]!] };
+    const { unmount } = render(<ShortEditor config={one} onChange={() => {}} />);
+    expect(screen.getByRole("button", { name: /Remove accepted answer 1/ })).toBeDisabled();
+    unmount();
+
+    const onChange = vi.fn();
+    render(<ShortEditor config={one} onChange={onChange} ungraded />);
+    await userEvent.click(screen.getByRole("button", { name: /Remove accepted answer 1/ }));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ matchers: [] }));
+  });
+
   it("takes the host's French strings", () => {
     render(<ShortEditor config={config()} onChange={() => {}} strings={{ prompt: "Énoncé" }} />);
     expect(screen.getByLabelText("Énoncé")).toBeInTheDocument();

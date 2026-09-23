@@ -1330,9 +1330,10 @@ export async function createQuestion(
  * It is born PUBLISHED — version 1, no draft — because the only thing that
  * will ever read it is the poll that freezes that version, and a draft is
  * something to come back to. The configuration goes through the type's own
- * schema (`saveConfig`), the same gate as a publication, so an unsaved
- * question is exactly as valid as a saved one; a refusal is `DraftInvalid`
- * with the zod issues, for the launcher to place under its fields.
+ * schema (`saveConfig`), the same gate as a publication with ONE exception:
+ * the key is optional (`keyOptional`, the type's `keylessConfigSchema`), for
+ * a poll may ask an opinion. A refusal is `DraftInvalid` with the zod
+ * issues, for the launcher to place under its fields.
  *
  * It lives HERE because `questions` and `question_versions` are this
  * module's tables. Nothing reaches it afterwards but its evaluation item: no
@@ -1345,7 +1346,7 @@ export async function createUnsavedQuestion(
   const t = typeOf(input.type);
   let config: ReturnType<typeof saveConfig>;
   try {
-    config = saveConfig(input.type, input.config);
+    config = saveConfig(input.type, input.config, { keyOptional: true });
   } catch (error) {
     throw new DraftInvalid(issuesOf(error));
   }

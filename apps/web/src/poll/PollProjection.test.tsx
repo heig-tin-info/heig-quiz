@@ -181,6 +181,29 @@ describe("PollProjection", () => {
     expect(await screen.findByText("Correct answer")).toBeVisible();
   });
 
+  it("marks nothing right when the poll has no key, and says results instead", async () => {
+    const { calls } = mockFetch({
+      [`GET ${POLL}`]: ok(view({ question: { id: "q1", type: "mcq", student: view().question.student, solution: { correct: [] } } })),
+      [`POST ${POLL}/reveal`]: ok(
+        view({
+          settings: { anonymous: true, revealed: true },
+          question: { id: "q1", type: "mcq", student: view().question.student, solution: { correct: [] } },
+        }),
+      ),
+    });
+    renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
+    await screen.findByRole("heading", { name: /How many bytes/ });
+
+    await userEvent.click(screen.getByRole("radio", { name: "Results shown" }));
+    expect(await screen.findByText("Results shown", { selector: "span" })).toBeVisible();
+    expect(calls.find((c) => c.url === `${POLL}/reveal`)?.body).toEqual({ revealed: true });
+    // The distribution stays whole: no tick, no word, no faded row.
+    expect(screen.getByText("75%")).toBeVisible();
+    expect(screen.queryByText("Correct answer")).toBeNull();
+    expect(screen.queryByText("Answer revealed")).toBeNull();
+    expect(screen.getByText("25%").className).not.toContain("text-fg-faint");
+  });
+
   it("reveals through the server, never locally", async () => {
     const { calls } = mockFetch({
       [`GET ${POLL}`]: ok(view()),
