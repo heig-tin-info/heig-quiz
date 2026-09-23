@@ -1,6 +1,8 @@
 /*
  * What every evaluation surface needs to agree on: the query keys, the badge
- * tone of a state, and the two labels a type and a state carry.
+ * tone of a state and the label that goes with it. The label of a question
+ * TYPE is not here: it belongs to the registry, and `questionTypes.tsx` is
+ * the one place that reads it.
  *
  * It is a module and not a handful of local constants because the list, the
  * configuration screen and the live dashboard all show the same state badge,
@@ -44,13 +46,6 @@ export function stateTone(state: EvaluationState): Tone {
 
 export function stateLabel(state: EvaluationState, t: TFunction): string {
   return t(`eval.state.${state}` as keyof Dict);
-}
-
-/** The four MVP types; anything else falls back to its own id. */
-export function typeLabel(type: string, t: TFunction): string {
-  return type === "mcq" || type === "short" || type === "cloze" || type === "code"
-    ? t(`eval.type.${type}` as keyof Dict)
-    : type;
 }
 
 /** Live means "there are students in it right now", which is what routes the row click. */

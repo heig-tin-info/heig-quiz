@@ -26,6 +26,7 @@ import { api, apiErrorMessage } from "../api";
 import { useConfirm } from "../confirm";
 import { useT, type TFunction } from "../i18n";
 import { useToast } from "../notify";
+import { typeLabel } from "../questionTypes";
 import {
   Alert,
   Badge,
@@ -40,7 +41,7 @@ import {
   Tip,
 } from "../ui";
 import { AddQuestionsSheet } from "./AddQuestionsSheet";
-import { evaluationKey, typeLabel } from "./common";
+import { evaluationKey } from "./common";
 
 /**
  * Step 1 of the novice flow (docs/spec/08 §8.2): WHICH questions, in WHICH
@@ -241,7 +242,7 @@ function ItemCard({
             {item.deprecated ? <Badge tone="red">{t("eval.questions.deprecated")}</Badge> : null}
           </span>
           <span className="text-xs text-fg-faint">
-            {typeLabel(item.type, t)} · {t("eval.questions.version", { n: item.versionNumber })}
+            {typeLabel(t, item.type)} · {t("eval.questions.version", { n: item.versionNumber })}
           </span>
         </span>
         <PointsField item={item} disabled={locked} onCommit={onPoints} />
