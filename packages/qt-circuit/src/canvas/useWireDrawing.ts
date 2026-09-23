@@ -28,9 +28,9 @@ import {
   type PinTarget,
 } from "./geometry.js";
 import { onPolyline, route, type Obstacles } from "./router.js";
+import type { Mode } from "./useSelection.js";
 
 type Point = { x: number; y: number };
-type Mode = "select" | "wire" | "place";
 
 /** The wire being drawn: where it started, and the corners clicked since. */
 export interface Draft {

@@ -53,7 +53,7 @@ import { blockedCells, computeRoutes, withRoutes } from "./router.js";
 import { connectedPins, type FlaggedPin } from "./SchematicView.js";
 import { usePartDragging, type Ghost } from "./usePartDragging.js";
 import { usePointerTools, type Cursor } from "./usePointerTools.js";
-import { editorKey, isTerminal, keyActions, useSelection } from "./useSelection.js";
+import { editorKey, isTerminal, keyActions, useSelection, type Mode } from "./useSelection.js";
 import { useViewport } from "./useViewport.js";
 import { useWireDrawing } from "./useWireDrawing.js";
 
@@ -78,8 +78,6 @@ export interface SchematicEditorProps {
   id?: string | undefined;
   "aria-label"?: string | undefined;
 }
-
-type Mode = "select" | "wire" | "place";
 
 export function SchematicEditor({
   value,

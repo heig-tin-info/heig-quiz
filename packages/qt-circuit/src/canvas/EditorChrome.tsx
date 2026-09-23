@@ -58,10 +58,9 @@ import {
 import { TOOL_ICONS } from "./symbols.js";
 import type { Drag, Ghost } from "./usePartDragging.js";
 import type { Cursor } from "./usePointerTools.js";
-import { isTerminal } from "./useSelection.js";
+import { isTerminal, type Mode } from "./useSelection.js";
 import type { Draft } from "./useWireDrawing.js";
 
-type Mode = "select" | "wire" | "place";
 type Routes = ReadonlyMap<string, Array<[number, number]>>;
 
 /** A component name the schema takes: a letter, then up to eleven of letters, digits, `_+-`. */

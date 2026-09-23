@@ -31,7 +31,8 @@ import {
 } from "./geometry.js";
 
 type Apply = (next: Schematic, continuing?: boolean) => void;
-type Mode = "select" | "wire" | "place";
+/** The armed tool: select and drag, draw wires, or place the kind in hand. */
+export type Mode = "select" | "wire" | "place";
 type Point = { x: number; y: number };
 
 /** A press in open space: the rubber band, and what was selected before it. */

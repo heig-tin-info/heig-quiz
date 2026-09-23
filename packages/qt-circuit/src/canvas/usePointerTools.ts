@@ -37,11 +37,10 @@ import {
   type MoveDrag,
   type ViaDrag,
 } from "./usePartDragging.js";
-import { boxSelection, boxStart, pressed } from "./useSelection.js";
+import { boxSelection, boxStart, pressed, type Mode } from "./useSelection.js";
 import { panStart, panned, type WorldPoint } from "./useViewport.js";
 
 type Point = { x: number; y: number };
-type Mode = "select" | "wire" | "place";
 type SvgPointer = ReactPointerEvent<SVGSVGElement>;
 
 /** The cursor as the status bar shows it: on the grid, and whether it is over the canvas. */
@@ -90,8 +89,12 @@ export interface PointerHandlers {
 }
 
 export function usePointerTools(t: PointerTools): PointerHandlers {
-  /* Setters and refs are stable and stay out of the lists; everything else
-     the handlers read is in them, so `t` is never read stale. */
+  /* The handlers read everything through `t`, so these three dependency
+     lists are kept BY HAND: each names every non-setter, non-ref field its
+     handler (and the functions it calls) reads. Setters and refs are stable
+     and stay out. Adding a field to `PointerTools` that a handler reads means
+     adding it to that handler's list here — check all three — or the handler
+     reads a stale value. */
   const onPointerDown = useCallback(
     (e: SvgPointer) => pointerDown(t, e),
     [

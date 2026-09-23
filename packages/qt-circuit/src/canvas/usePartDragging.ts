@@ -28,11 +28,10 @@ import { BOX, type ComponentKind } from "../library.js";
 import type { Orientation, Schematic, SchematicComponent, Wire, WireEnd } from "../schema.js";
 
 import { clampPoint, clampToBox, extentOf, hitRectOf, snap } from "./geometry.js";
-import { linkedWires, type BoxDrag } from "./useSelection.js";
+import { linkedWires, type BoxDrag, type Mode } from "./useSelection.js";
 import type { PanDrag, WorldPoint } from "./useViewport.js";
 
 type Point = { x: number; y: number };
-type Mode = "select" | "wire" | "place";
 
 /** A press on a selected part: the selection follows the pointer, cell by cell. */
 export interface MoveDrag {
