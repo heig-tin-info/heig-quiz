@@ -7,12 +7,13 @@
  * that lands after the results were published marks the evaluation
  * "modified after publication" (F-GRADE-09).
  */
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { registerForTests } from "@quiz/registry/server";
 
-import { answers, evaluations, gradings } from "../../db/schema.js";
+import { answers, auditLog, evaluations, gradings } from "../../db/schema.js";
+import { subscribe } from "../../events.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { seedLive } from "../../test/live.js";
@@ -255,4 +256,73 @@ describe("the order of the refusals, over HTTP", () => {
       message: "this grading is not a proposal any more",
     });
   });
+});
+
+/**
+ * What an override DOES besides answering (F-GRADE-05, F-GRADE-09), through
+ * both entry points of B-10: the audit row, the `grading` refresh hint, and
+ * the "modified after publication" flag once the results are out.
+ */
+describe("the side effects of an override, through both entry points", () => {
+  const entries = [
+    ["POST /answers/:answerId/gradings", "answer"],
+    ["POST /gradings/:id/override", "grading"],
+  ] as const;
+
+  for (const [name, via] of entries) {
+    it(`audits, hints and flags the release: ${name}`, async () => {
+      const db = server.app.db;
+      const { evaluation, answer } = await graded();
+      const released = await post(`/app/api/evaluations/${evaluation.id}/release`, teacher.headers, {
+        confirm: true,
+      });
+      expect(released.statusCode).toBe(200);
+
+      const [standing] = await db
+        .select({ id: gradings.id })
+        .from(gradings)
+        .where(and(eq(gradings.answerId, answer.id), eq(gradings.state, "validated")));
+      const url =
+        via === "answer"
+          ? `/app/api/answers/${answer.id}/gradings`
+          : `/app/api/gradings/${standing!.id}/override`;
+
+      const hints: string[][] = [];
+      const stop = subscribe((m) => {
+        if (m.kind === "hint" && m.type === "grading") hints.push([...m.topics]);
+      });
+      let res;
+      try {
+        res = await post(url, teacher.headers, { points: 0.5, comment: `via the ${via}` });
+      } finally {
+        stop();
+      }
+      expect(res.statusCode).toBe(200);
+      const row = res.json();
+
+      const audit = await db
+        .select()
+        .from(auditLog)
+        .where(and(eq(auditLog.action, "grading.override"), eq(auditLog.subjectId, row.id)));
+      expect(audit).toHaveLength(1);
+      expect(audit[0]).toMatchObject({
+        actorUserId: teacher.id,
+        subjectType: "grading",
+        payload: {
+          evaluationId: evaluation.id,
+          attemptId: answer.attemptId,
+          itemId: answer.itemId,
+          points: 0.5,
+        },
+      });
+
+      expect(hints).toContainEqual([
+        `evaluation:${evaluation.id}`,
+        `classroom:${evaluation.classroomId}`,
+      ]);
+
+      const after = (await db.select().from(evaluations).where(eq(evaluations.id, evaluation.id)))[0]!;
+      expect(after.modifiedAfterRelease).toBe(true);
+    });
+  }
 });
