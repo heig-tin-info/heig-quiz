@@ -16,7 +16,7 @@ import { registerForTests } from "@quiz/registry/server";
 
 import { TestClock } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { answers, attempts, evaluationItems, evaluations } from "../../db/schema.js";
+import { answers, attemptEvents, attempts, evaluationItems, evaluations } from "../../db/schema.js";
 import { subscribe, type BusMessage } from "../../events.js";
 import { testDb } from "../../test/db.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
@@ -313,6 +313,115 @@ describe("autosave (§4.7)", () => {
     ).rejects.toMatchObject({ code: "answer_invalid", status: 422 });
     const stored = await db.select().from(answers).where(eq(answers.attemptId, attempt.id));
     expect(stored).toHaveLength(0);
+  });
+});
+
+describe("whether an attempt is still writable (invariant 5)", () => {
+  /**
+   * Every state an evaluation and an attempt can be in around the deadline,
+   * through the four gates that decide it: the answer write (`saveAnswer`,
+   * and `markDone` whose own `irreversible` comes only after the gate), the
+   * lighter `isOpen`/`assertOpen` of the position and the journal, and
+   * `submitAttempt`. One line per case, so a change in which error wins is a
+   * visible diff of this table.
+   */
+  it("refuses with the same reason, in the same order, in every state", async () => {
+    const { evaluation, attempt, items } = await running({
+      settings: { navigation: "forward_only" },
+    });
+    // The first item is marked done, so un-marking it is `irreversible` once
+    // past the gate; the second is free to be written.
+    const itemId = items[0]!.id;
+    await service.markDone(db, { evaluation, attempt, itemId, done: true, now: clock.now() });
+    const deadline = new Date(clock.now().getTime() + 60_000);
+    const instants = {
+      before: new Date(deadline.getTime() - 1),
+      at: new Date(deadline.getTime() + GRACE_MS),
+      after: new Date(deadline.getTime() + GRACE_MS + 1),
+    };
+    const outcome = async (run: () => Promise<unknown>): Promise<string> => {
+      try {
+        await run();
+        return "ok";
+      } catch (error) {
+        if (error instanceof service.AttemptClosedError) return `410 ${error.reason}`;
+        if (error instanceof service.LiveError) return error.code;
+        throw error;
+      }
+    };
+
+    let revision = 1;
+    const lines: string[] = [];
+    for (const evState of ["lobby", "running", "paused", "closed"] as const) {
+      for (const atState of ["in_progress", "submitted", "expired"] as const) {
+        for (const [when, now] of Object.entries(instants)) {
+          const ev: EvaluationRecord = { ...evaluation, state: evState };
+          const at = { ...attempt, state: atState, deadlineAt: deadline };
+          const save = await outcome(() =>
+            service.saveAnswer(db, {
+              evaluation: ev,
+              attempt: at,
+              itemId: items[1]!.id,
+              payload: "x",
+              revision: ++revision,
+              now,
+            }),
+          );
+          const done = await outcome(() =>
+            service.markDone(db, { evaluation: ev, attempt: at, itemId, done: false, now }),
+          );
+          const open = service.isOpen(ev, at, now) ? "open" : "shut";
+          const assert = await outcome(async () => service.assertOpen(ev, at, now));
+          const submit = await outcome(() => service.submitAttempt(db, ev, at, now));
+          // `submitAttempt` really writes: put the row back for the next case.
+          await db
+            .update(attempts)
+            .set({ state: "in_progress", submittedAt: null, closedAt: null, closedBy: null })
+            .where(eq(attempts.id, attempt.id));
+          lines.push(
+            `${evState} ${atState} ${when}: save=${save} done=${done} ${open} assert=${assert} submit=${submit}`,
+          );
+        }
+      }
+    }
+    expect(lines).toEqual([
+      "lobby in_progress before: save=410 evaluation_closed done=410 evaluation_closed shut assert=410 evaluation_closed submit=ok",
+      "lobby in_progress at: save=410 evaluation_closed done=410 evaluation_closed shut assert=410 evaluation_closed submit=ok",
+      "lobby in_progress after: save=410 evaluation_closed done=410 evaluation_closed shut assert=410 evaluation_closed submit=ok",
+      "lobby submitted before: save=410 submitted done=410 submitted shut assert=410 submitted submit=410 submitted",
+      "lobby submitted at: save=410 submitted done=410 submitted shut assert=410 submitted submit=410 submitted",
+      "lobby submitted after: save=410 submitted done=410 submitted shut assert=410 submitted submit=410 submitted",
+      "lobby expired before: save=410 deadline done=410 deadline shut assert=410 deadline submit=410 deadline",
+      "lobby expired at: save=410 deadline done=410 deadline shut assert=410 deadline submit=410 deadline",
+      "lobby expired after: save=410 deadline done=410 deadline shut assert=410 deadline submit=410 deadline",
+      "running in_progress before: save=ok done=irreversible open assert=ok submit=ok",
+      "running in_progress at: save=ok done=irreversible open assert=ok submit=ok",
+      "running in_progress after: save=410 deadline done=410 deadline shut assert=410 deadline submit=ok",
+      "running submitted before: save=410 submitted done=410 submitted shut assert=410 submitted submit=410 submitted",
+      "running submitted at: save=410 submitted done=410 submitted shut assert=410 submitted submit=410 submitted",
+      "running submitted after: save=410 submitted done=410 submitted shut assert=410 submitted submit=410 submitted",
+      "running expired before: save=410 deadline done=410 deadline shut assert=410 deadline submit=410 deadline",
+      "running expired at: save=410 deadline done=410 deadline shut assert=410 deadline submit=410 deadline",
+      "running expired after: save=410 deadline done=410 deadline shut assert=410 deadline submit=410 deadline",
+      "paused in_progress before: save=410 paused done=410 paused open assert=ok submit=ok",
+      "paused in_progress at: save=410 paused done=410 paused open assert=ok submit=ok",
+      "paused in_progress after: save=410 paused done=410 paused shut assert=410 deadline submit=ok",
+      "paused submitted before: save=410 submitted done=410 submitted shut assert=410 submitted submit=410 submitted",
+      "paused submitted at: save=410 submitted done=410 submitted shut assert=410 submitted submit=410 submitted",
+      "paused submitted after: save=410 submitted done=410 submitted shut assert=410 submitted submit=410 submitted",
+      "paused expired before: save=410 deadline done=410 deadline shut assert=410 deadline submit=410 deadline",
+      "paused expired at: save=410 deadline done=410 deadline shut assert=410 deadline submit=410 deadline",
+      "paused expired after: save=410 deadline done=410 deadline shut assert=410 deadline submit=410 deadline",
+      "closed in_progress before: save=410 evaluation_closed done=410 evaluation_closed shut assert=410 evaluation_closed submit=ok",
+      "closed in_progress at: save=410 evaluation_closed done=410 evaluation_closed shut assert=410 evaluation_closed submit=ok",
+      "closed in_progress after: save=410 evaluation_closed done=410 evaluation_closed shut assert=410 evaluation_closed submit=ok",
+      "closed submitted before: save=410 submitted done=410 submitted shut assert=410 submitted submit=410 submitted",
+      "closed submitted at: save=410 submitted done=410 submitted shut assert=410 submitted submit=410 submitted",
+      "closed submitted after: save=410 submitted done=410 submitted shut assert=410 submitted submit=410 submitted",
+      "closed expired before: save=410 deadline done=410 deadline shut assert=410 deadline submit=410 deadline",
+      "closed expired at: save=410 deadline done=410 deadline shut assert=410 deadline submit=410 deadline",
+      "closed expired after: save=410 deadline done=410 deadline shut assert=410 deadline submit=410 deadline",
+    ]);
   });
 });
 
@@ -757,6 +866,48 @@ describe("running code (POST /attempts/:id/run)", () => {
     ).resolves.toMatchObject({ result: { status: "ok" } });
   });
 
+  it("journals the run before running it, and publishes the result on the student's topic", async () => {
+    const { evaluation, attempt, itemId } = await codeAttempt();
+    const frames: Record<string, unknown>[] = [];
+    const unsubscribe = subscribe((message: BusMessage) => {
+      if (message.kind !== "data" || message.event.type !== "runner.result") return;
+      frames.push({ ...message.event, audience: message.audience, topics: message.topics });
+    });
+    try {
+      const { requestId, result } = await service.runVisibleCases(db, {
+        runner: recorder().runner,
+        evaluation,
+        attempt,
+        itemId,
+        regions: ["return 0;"],
+        now: clock.now(),
+      });
+      expect(frames).toHaveLength(1);
+      expect(frames[0]).toMatchObject({ requestId, itemId, result });
+      // A runner that is down still costs a run: the journal row comes first.
+      await expect(
+        service.runVisibleCases(db, {
+          runner: new UnavailableRunner("not_configured"),
+          evaluation,
+          attempt,
+          itemId,
+          regions: ["return 0;"],
+          now: clock.now(),
+        }),
+      ).rejects.toMatchObject({ code: "runner_unavailable" });
+      expect(frames).toHaveLength(1);
+      const journal = await db
+        .select()
+        .from(attemptEvents)
+        .where(eq(attemptEvents.attemptId, attempt.id));
+      expect(journal.map((e) => e.kind)).toEqual(["run", "run"]);
+      expect(journal[0]!.details).toEqual({ itemId, requestId });
+      expect(Object.keys(journal[1]!.details as object).sort()).toEqual(["itemId", "requestId"]);
+    } finally {
+      unsubscribe();
+    }
+  });
+
   /** A recording runner: it answers nothing useful, it remembers the request. */
   function recorder(): {
     requests: { cases: { name: string; args: string[]; stdin: string }[] }[];
@@ -900,6 +1051,39 @@ describe("the teacher preview (§4.3)", () => {
     // Seed 0: two previews of the same evaluation are identical.
     const again = await service.previewView(db, row, clock.now());
     expect(again.items.map((i) => i.id)).toEqual(view.items.map((i) => i.id));
+  });
+
+  it("is the attempt view of a seed-0 attempt with no answer, byte for byte but the header", async () => {
+    const { evaluation, attempt } = await running({
+      questions: 3,
+      settings: { shuffleItems: true, navigation: "forward_only" },
+    });
+    await db.update(attempts).set({ seed: 0 }).where(eq(attempts.id, attempt.id));
+    const zero = { ...attempt, seed: 0 };
+    const student = await service.attemptView(db, evaluation, zero, clock.now());
+    const preview = await service.previewView(db, evaluation, clock.now());
+    expect(JSON.stringify(preview.evaluation)).toBe(JSON.stringify(student.evaluation));
+    expect(JSON.stringify(preview.items)).toBe(JSON.stringify(student.items));
+    expect(student.attempt).toEqual({
+      id: attempt.id,
+      state: "in_progress",
+      startedAt: attempt.startedAt!.toISOString(),
+      deadlineAt: attempt.deadlineAt?.toISOString() ?? null,
+      lastItemId: attempt.lastItemId,
+      serverNow: clock.now().toISOString(),
+      preview: false,
+      readOnly: false,
+    });
+    expect(preview.attempt).toEqual({
+      id: service.PREVIEW_ATTEMPT_ID,
+      state: "in_progress",
+      startedAt: clock.now().toISOString(),
+      deadlineAt: null,
+      lastItemId: null,
+      serverNow: clock.now().toISOString(),
+      preview: true,
+      readOnly: false,
+    });
   });
 });
 

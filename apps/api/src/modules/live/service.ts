@@ -46,6 +46,7 @@ import {
   RunnerBusy,
   RunnerUnavailable,
   type AnyQuestionTypeServer,
+  type FinalizeContext,
   type RunnerOutcome,
   type RunnerRequest,
   type RunnerService,
@@ -272,6 +273,21 @@ export async function participantOf(
     )
     .limit(1);
   return row ? { userId, guestId: null, timeBonusPercent: row.timeBonusPercent } : null;
+}
+
+/**
+ * Who holds an existing attempt: the account's claimed seat when there is
+ * one, and otherwise the row's own owner with no time bonus — a guest, or an
+ * account whose seat has gone since.
+ */
+async function participantOfAttempt(
+  db: Db,
+  evaluation: EvaluationRecord,
+  attempt: AttemptRecord,
+): Promise<Participant> {
+  const seat =
+    attempt.userId === null ? null : await participantOf(db, evaluation, attempt.userId);
+  return seat ?? { userId: attempt.userId, guestId: attempt.guestId, timeBonusPercent: 0 };
 }
 
 /**
@@ -635,13 +651,7 @@ export async function attemptOrLobbyView(
   now: Date,
 ): Promise<AttemptOrLobby> {
   if (!contentVisible(evaluation.state)) {
-    const seat =
-      attempt.userId === null ? null : await participantOf(db, evaluation, attempt.userId);
-    const participant: Participant = seat ?? {
-      userId: attempt.userId,
-      guestId: attempt.guestId,
-      timeBonusPercent: 0,
-    };
+    const participant = await participantOfAttempt(db, evaluation, attempt);
     return { kind: "lobby", view: await lobbyView(db, evaluation, participant, now) };
   }
   return { kind: "attempt", view: await attemptView(db, evaluation, attempt, now) };
@@ -653,13 +663,10 @@ export async function attemptView(
   attempt: AttemptRecord,
   now: Date,
 ): Promise<AttemptView> {
-  const settings = settingsOf(evaluation);
-  const items = await joinedItems(db, evaluation.id);
-  const ordered = orderItems(items, settings, attempt.seed, evaluation.id);
-  const answered = await answersOf(db, attempt.id);
-  const locked = lockedItemIds(settings, ordered, answered);
-  return {
-    attempt: {
+  return viewOf(db, evaluation, {
+    seed: attempt.seed,
+    answered: await answersOf(db, attempt.id),
+    header: {
       id: attempt.id,
       state: attempt.state,
       startedAt: isoOrNull(attempt.startedAt),
@@ -669,18 +676,7 @@ export async function attemptView(
       preview: false,
       readOnly: readOnlyFor(evaluation, attempt),
     },
-    evaluation: {
-      id: evaluation.id,
-      title: evaluation.title,
-      mode: evaluation.mode,
-      state: evaluation.state,
-      settings,
-      feedbackPolicy: feedbackOf(evaluation),
-      pausedAt: isoOrNull(evaluation.pausedAt),
-      totalPoints: Math.round(items.reduce((s, i) => s + i.item.points, 0) * 100) / 100,
-    },
-    items: attemptItems(ordered, answered, locked, settings, attempt.seed),
-  };
+  });
 }
 
 /**
@@ -692,12 +688,10 @@ export async function previewView(
   evaluation: EvaluationRecord,
   now: Date,
 ): Promise<AttemptView> {
-  const settings = settingsOf(evaluation);
-  const items = await joinedItems(db, evaluation.id);
-  const ordered = orderItems(items, settings, 0, evaluation.id);
-  const empty = new Map<string, AnswerRecord>();
-  return {
-    attempt: {
+  return viewOf(db, evaluation, {
+    seed: 0,
+    answered: new Map(),
+    header: {
       id: PREVIEW_ATTEMPT_ID,
       state: "in_progress",
       startedAt: iso(now),
@@ -707,6 +701,31 @@ export async function previewView(
       preview: true,
       readOnly: false,
     },
+  });
+}
+
+/**
+ * The one builder behind {@link attemptView} and {@link previewView}: the two
+ * differ only by the seed, the stored answers and the `attempt` header, so
+ * both go through `attemptItems` -> `studentView` (invariant 4) by
+ * construction.
+ */
+async function viewOf(
+  db: Db,
+  evaluation: EvaluationRecord,
+  input: {
+    seed: number;
+    answered: ReadonlyMap<string, AnswerRecord>;
+    header: AttemptView["attempt"];
+  },
+): Promise<AttemptView> {
+  const { seed, answered } = input;
+  const settings = settingsOf(evaluation);
+  const items = await joinedItems(db, evaluation.id);
+  const ordered = orderItems(items, settings, seed, evaluation.id);
+  const locked = lockedItemIds(settings, ordered, answered);
+  return {
+    attempt: input.header,
     evaluation: {
       id: evaluation.id,
       title: evaluation.title,
@@ -717,7 +736,7 @@ export async function previewView(
       pausedAt: isoOrNull(evaluation.pausedAt),
       totalPoints: Math.round(items.reduce((s, i) => s + i.item.points, 0) * 100) / 100,
     },
-    items: attemptItems(ordered, empty, new Set(), settings, 0),
+    items: attemptItems(ordered, answered, locked, settings, seed),
   };
 }
 
@@ -790,31 +809,57 @@ export async function enterEvaluation(
 // --- Autosave (§4.7) ------------------------------------------------------
 
 /**
- * The gate, in the order the plan fixes. It runs BEFORE the write, and the
- * same rule (`GRACE_MS`) is what the ticker uses to expire the attempt — the
- * two must never drift (decision D12).
+ * How far a gate reaches, from the strictest to the loosest:
+ *   - `answer`: a write to an answer. A PAUSED evaluation refuses it
+ *     (decision D17: the client greys out and buffers; nothing is lost);
+ *   - `presence`: the position, the journal, the sign of life. A paused
+ *     evaluation allows it — the student is still in the room;
+ *   - `submit`: handing the attempt in. Only the attempt's own state counts.
  */
+type GateScope = "answer" | "presence" | "submit";
+
+/**
+ * THE rule of "may this attempt still be written to", as the reason it may
+ * not, or `null`. The arms run in the order the plan fixes, and the grace
+ * window is `GRACE_MS`, the same rule the ticker expires the attempt by —
+ * the two must never drift (decision D12, invariant 5).
+ */
+function closedReason(
+  evaluation: EvaluationRecord,
+  attempt: AttemptRecord,
+  now: Date,
+  scope: GateScope,
+): AttemptClosed["reason"] | null {
+  if (attempt.state !== "in_progress") {
+    return attempt.state === "submitted" ? "submitted" : "deadline";
+  }
+  if (scope === "submit") return null;
+  if (evaluation.state === "paused") {
+    if (scope === "answer") return "paused";
+  } else if (evaluation.state !== "running") {
+    return "evaluation_closed";
+  }
+  return pastGrace(attempt.deadlineAt, now) ? "deadline" : null;
+}
+
+/** {@link closedReason} as the 410 of §4.7. */
+function assertGate(
+  evaluation: EvaluationRecord,
+  attempt: AttemptRecord,
+  now: Date,
+  scope: GateScope,
+): void {
+  const reason = closedReason(evaluation, attempt, now, scope);
+  if (reason !== null) throw new AttemptClosedError(reason, attempt.deadlineAt);
+}
+
+/** The gate of an answer write. It runs BEFORE the write. */
 function assertWritable(
   evaluation: EvaluationRecord,
   attempt: AttemptRecord,
   now: Date,
 ): void {
-  if (attempt.state !== "in_progress") {
-    throw new AttemptClosedError(
-      attempt.state === "submitted" ? "submitted" : "deadline",
-      attempt.deadlineAt,
-    );
-  }
-  if (evaluation.state === "paused") {
-    // Decision D17: the client greys out and buffers; nothing is lost.
-    throw new AttemptClosedError("paused", attempt.deadlineAt);
-  }
-  if (evaluation.state !== "running") {
-    throw new AttemptClosedError("evaluation_closed", attempt.deadlineAt);
-  }
-  if (pastGrace(attempt.deadlineAt, now)) {
-    throw new AttemptClosedError("deadline", attempt.deadlineAt);
-  }
+  assertGate(evaluation, attempt, now, "answer");
 }
 
 /**
@@ -832,9 +877,7 @@ export function isOpen(
   attempt: AttemptRecord,
   now: Date,
 ): boolean {
-  if (attempt.state !== "in_progress") return false;
-  if (evaluation.state !== "running" && evaluation.state !== "paused") return false;
-  return !pastGrace(attempt.deadlineAt, now);
+  return closedReason(evaluation, attempt, now, "presence") === null;
 }
 
 /** {@link isOpen}, as the 410 of §4.7. */
@@ -843,18 +886,7 @@ export function assertOpen(
   attempt: AttemptRecord,
   now: Date,
 ): void {
-  if (attempt.state !== "in_progress") {
-    throw new AttemptClosedError(
-      attempt.state === "submitted" ? "submitted" : "deadline",
-      attempt.deadlineAt,
-    );
-  }
-  if (evaluation.state !== "running" && evaluation.state !== "paused") {
-    throw new AttemptClosedError("evaluation_closed", attempt.deadlineAt);
-  }
-  if (pastGrace(attempt.deadlineAt, now)) {
-    throw new AttemptClosedError("deadline", attempt.deadlineAt);
-  }
+  assertGate(evaluation, attempt, now, "presence");
 }
 
 async function itemOf(
@@ -1230,12 +1262,7 @@ export async function submitAttempt(
   attempt: AttemptRecord,
   now: Date,
 ): Promise<AttemptRecord> {
-  if (attempt.state !== "in_progress") {
-    throw new AttemptClosedError(
-      attempt.state === "submitted" ? "submitted" : "deadline",
-      attempt.deadlineAt,
-    );
-  }
+  assertGate(evaluation, attempt, now, "submit");
   await db
     .update(attempts)
     .set({
@@ -1342,6 +1369,89 @@ function runnableView(student: unknown): RunnableStudentView {
 const DEFAULT_RUNS_PER_MINUTE = 10;
 
 /**
+ * The common gate of `POST /attempts/:id/run` and `/simulate`, in this order:
+ * the attempt is writable (invariant 5), the item belongs to the evaluation,
+ * the type has the capability the button needs, the journal-counted budget
+ * is not spent (N-SEC-07), the answer parses under the type's own schema
+ * (invariant 7), and the stored config loads.
+ */
+async function attemptRunContext<T>(
+  db: Db,
+  input: {
+    evaluation: EvaluationRecord;
+    attempt: AttemptRecord;
+    itemId: string;
+    now: Date;
+    /** The hook the button runs through; `undefined` is `not_runnable`. */
+    capability: (type: AnyQuestionTypeServer) => T | undefined;
+    /** The per-minute budget the type publishes in its student view. */
+    budget: (student: RunnableStudentView) => number | undefined;
+    answer: unknown;
+  },
+) {
+  const { evaluation, attempt, itemId, now } = input;
+  // The server owns the clock: a run is a write's worth of work, so it is
+  // refused past the deadline exactly like an autosave (invariant 5).
+  assertWritable(evaluation, attempt, now);
+  const joined = await itemOf(db, evaluation.id, itemId);
+  // 404 and not 403: an item of another evaluation is indistinguishable from
+  // one that does not exist (invariant 6).
+  if (!joined) throw new LiveError("not_found", 404);
+
+  const type = typeOf(joined.question.type);
+  const capability = input.capability(type);
+  if (capability === undefined) throw new NotRunnable();
+
+  const version = { config: joined.version.config, configVersion: joined.version.configVersion };
+  const student = runnableView(
+    studentView({ type: joined.question.type, version, seed: attempt.seed, itemId, shuffle: false }),
+  );
+
+  // N-SEC-07: the budget is the question's own, counted from the journal
+  // rather than from a table of its own. Both buttons count `run` events, so
+  // a student cannot double their budget by using both on one attempt.
+  const limit = input.budget(student) ?? DEFAULT_RUNS_PER_MINUTE;
+  const used = await countRecentEvents(db, attempt.id, "run", new Date(now.getTime() - 60_000));
+  if (used >= limit) throw new RateLimited(60);
+
+  const answer = type.answerSchema.safeParse(input.answer);
+  if (!answer.success) throw new AnswerInvalid(answer.error.issues);
+
+  const config: unknown = loadConfig(joined.question.type, version);
+  const ctx: FinalizeContext = {
+    seed: attempt.seed,
+    itemId,
+    attemptId: attempt.id,
+    itemPoints: joined.item.points,
+    now,
+    // Same per-type settings as the grading pass: what the student tries
+    // must not be scored under a different policy than the final grading.
+    defaults: gradeDefaults(evaluation),
+  };
+  return { type, capability, student, config, answer: answer.data as unknown, ctx };
+}
+
+/**
+ * Journals a student's run (nothing student-supplied: the file names are the
+ * type's, invariant 14), then runs it; a busy or absent runner is the 503.
+ */
+async function runForStudent(
+  db: Db,
+  input: { runner: RunnerService; attempt: AttemptRecord; request: RunnerRequest; now: Date },
+  details: Record<string, unknown>,
+): Promise<{ requestId: string; outcome: RunnerOutcome }> {
+  const requestId = randomUUID();
+  await logAttemptEvent(db, input.attempt.id, "run", { ...details, requestId }, input.now);
+  try {
+    return { requestId, outcome: await input.runner.run(input.request) };
+  } catch (error) {
+    if (error instanceof RunnerBusy) throw new RunnerDown("busy");
+    if (error instanceof RunnerUnavailable) throw new RunnerDown(error.reason);
+    throw error;
+  }
+}
+
+/**
  * `POST /attempts/:id/run` — the student's Run button.
  *
  * Only the VISIBLE cases are sent (or the student's own stdin), the source is
@@ -1365,46 +1475,21 @@ export async function runVisibleCases(
     now: Date;
   },
 ): Promise<{ requestId: string; result: RunnerResultEvent["result"] }> {
-  const { evaluation, attempt, itemId, now } = input;
-  assertWritable(evaluation, attempt, now);
-  const joined = await itemOf(db, evaluation.id, itemId);
-  if (!joined) throw new LiveError("not_found", 404);
-
-  const type = typeOf(joined.question.type);
-  // A type with no second half has nothing a runner could finish.
-  if (!type.finalizeRunner) throw new NotRunnable();
-
-  const version = { config: joined.version.config, configVersion: joined.version.configVersion };
-  const student = runnableView(
-    studentView({ type: joined.question.type, version, seed: attempt.seed, itemId, shuffle: false }),
-  );
-
-  // N-SEC-07: the budget is the question's own `runsPerMinute`, counted from
-  // the journal rather than from a table of its own.
-  const limit = student.runsPerMinute ?? DEFAULT_RUNS_PER_MINUTE;
-  const used = await countRecentEvents(db, attempt.id, "run", new Date(now.getTime() - 60_000));
-  if (used >= limit) throw new RateLimited(60);
-
-  const answer = type.answerSchema.safeParse({ regions: input.regions });
-  if (!answer.success) throw new AnswerInvalid(answer.error.issues);
-
-  const config = loadConfig(joined.question.type, version);
-  const first = await type.grade(config, answer.data, {
-    seed: attempt.seed,
-    itemId,
-    attemptId: attempt.id,
-    itemPoints: joined.item.points,
-    now,
-    runner: input.runner,
-    // Same per-type settings as the grading pass: a run from the player must
-    // not be scored under a different policy than the final grading.
-    defaults: gradeDefaults(evaluation),
+  const { attempt, itemId } = input;
+  const prepared = await attemptRunContext(db, {
+    ...input,
+    // A type with no second half has nothing a runner could finish.
+    capability: (type) => type.finalizeRunner,
+    budget: (student) => student.runsPerMinute,
+    answer: { regions: input.regions },
   });
+  const { type, config, answer, ctx } = prepared;
+  const first = await type.grade(config, answer, { ...ctx, runner: input.runner });
   // `grade` assembles the request server-side from the template and the
   // regions (invariant 14); nothing the browser sent becomes a file name.
   if (first.kind !== "pending" || first.via !== "runner") throw new NotRunnable();
 
-  const visible = student.visibleCases ?? [];
+  const visible = prepared.student.visibleCases ?? [];
   const visibleNames = new Set(visible.map((c) => c.name));
   const specOf = new Map(visible.map((c) => [c.name, c]));
   // Only what the student may already see: their own stdin, or the VISIBLE
@@ -1417,56 +1502,46 @@ export async function runVisibleCases(
       : [{ name: "stdin", args: input.args ?? [], stdin: input.stdin }];
   const request = { ...first.request, cases, priority: "interactive" as const };
 
-  const requestId = randomUUID();
-  await logAttemptEvent(db, attempt.id, "run", { itemId, requestId }, now);
-
-  let result: RunnerResultEvent["result"];
-  try {
-    const outcome = await input.runner.run(request);
-    result = {
-      status: "ok",
-      compile: { ok: outcome.compile.ok, stderr: outcome.compile.stderr },
-      cases: cases.map((c, index) => {
-        const run = outcome.cases[index];
-        const spec = specOf.get(c.name);
-        // Nothing to compare when the case does not compare stdout, and
-        // nothing to show either.
-        const expected = spec === undefined || !spec.compareStdout ? "" : spec.expected;
-        // The same two independent checks `finalizeRunnerCode` applies, so the
-        // player's verdict and the grade cannot disagree (ADR-015). A free
-        // stdin try has no case behind it: exit 0 is all it can mean.
-        const exitOk =
-          run === undefined
-            ? false
-            : spec === undefined
-              ? run.exitCode === 0
-              : spec.expectedExitCode === null
-                ? run.exitCode !== null
-                : run.exitCode === spec.expectedExitCode;
-        const stdoutOk =
-          run !== undefined &&
-          (spec === undefined || !spec.compareStdout || compareOutput(spec.expected, run.stdout));
-        return {
-          name: c.name,
-          ok: run !== undefined && !run.timedOut && exitOk && stdoutOk,
-          // The facts the player names the failure by ("exit 1 ≠ 0", "Output
-          // differs", "Timed out"): the same fields a browser run reports.
-          exitCode: run?.exitCode ?? null,
-          stdout: run?.stdout ?? "",
-          stderr: run?.stderr ?? "",
-          expected,
-          ms: run?.ms ?? 0,
-          timedOut: run?.timedOut ?? false,
-          oom: run?.oom ?? false,
-          truncated: run?.truncated ?? false,
-        };
-      }),
-    };
-  } catch (error) {
-    if (error instanceof RunnerBusy) throw new RunnerDown("busy");
-    if (error instanceof RunnerUnavailable) throw new RunnerDown(error.reason);
-    throw error;
-  }
+  const { requestId, outcome } = await runForStudent(db, { ...input, request }, { itemId });
+  const result: RunnerResultEvent["result"] = {
+    status: "ok",
+    compile: { ok: outcome.compile.ok, stderr: outcome.compile.stderr },
+    cases: cases.map((c, index) => {
+      const run = outcome.cases[index];
+      const spec = specOf.get(c.name);
+      // Nothing to compare when the case does not compare stdout, and
+      // nothing to show either.
+      const expected = spec === undefined || !spec.compareStdout ? "" : spec.expected;
+      // The same two independent checks `finalizeRunnerCode` applies, so the
+      // player's verdict and the grade cannot disagree (ADR-015). A free
+      // stdin try has no case behind it: exit 0 is all it can mean.
+      const exitOk =
+        run === undefined
+          ? false
+          : spec === undefined
+            ? run.exitCode === 0
+            : spec.expectedExitCode === null
+              ? run.exitCode !== null
+              : run.exitCode === spec.expectedExitCode;
+      const stdoutOk =
+        run !== undefined &&
+        (spec === undefined || !spec.compareStdout || compareOutput(spec.expected, run.stdout));
+      return {
+        name: c.name,
+        ok: run !== undefined && !run.timedOut && exitOk && stdoutOk,
+        // The facts the player names the failure by ("exit 1 ≠ 0", "Output
+        // differs", "Timed out"): the same fields a browser run reports.
+        exitCode: run?.exitCode ?? null,
+        stdout: run?.stdout ?? "",
+        stderr: run?.stderr ?? "",
+        expected,
+        ms: run?.ms ?? 0,
+        timedOut: run?.timedOut ?? false,
+        oom: run?.oom ?? false,
+        truncated: run?.truncated ?? false,
+      };
+    }),
+  };
 
   // The result travels on the student's own topic (§4.8) AND in the response,
   // so a client that lost its stream is not left waiting.
@@ -1504,68 +1579,30 @@ export async function simulateAnswer(
     now: Date;
   },
 ): Promise<RunnerOutcome> {
-  const { evaluation, attempt, itemId, now } = input;
-  // The server owns the clock: a simulation is a write's worth of work, so it
-  // is refused past the deadline exactly like an autosave (invariant 5).
-  assertWritable(evaluation, attempt, now);
-  const joined = await itemOf(db, evaluation.id, itemId);
-  // 404 and not 403: an item of another evaluation is indistinguishable from
-  // one that does not exist (invariant 6).
-  if (!joined) throw new LiveError("not_found", 404);
-
-  const type = typeOf(joined.question.type);
-  const build = type.interactiveRequest?.bind(type);
-  // A type with no button of its own. `code` is not one of them: it keeps its
-  // older, case-filtering `/run` route.
-  if (!build) throw new NotRunnable();
-
-  const version = { config: joined.version.config, configVersion: joined.version.configVersion };
-  const student = runnableView(
-    studentView({ type: joined.question.type, version, seed: attempt.seed, itemId, shuffle: false }),
-  );
-
-  // N-SEC-07: the same journal-counted budget as `/run`, under whichever name
-  // the type publishes it — a circuit says `simulationsPerMinute`, a code
-  // question says `runsPerMinute`. Both are counted as `run` events, so a
-  // student cannot double their budget by using both buttons of one attempt.
-  const limit = student.simulationsPerMinute ?? student.runsPerMinute ?? DEFAULT_RUNS_PER_MINUTE;
-  const used = await countRecentEvents(db, attempt.id, "run", new Date(now.getTime() - 60_000));
-  if (used >= limit) throw new RateLimited(60);
-
-  // Invariant 7's second half: the envelope was parsed by `SimulateBody`, the
-  // payload is parsed by the schema the type and the client share.
-  const answer = type.answerSchema.safeParse(input.answer);
-  if (!answer.success) throw new AnswerInvalid(answer.error.issues);
-
-  const config = loadConfig(joined.question.type, version);
-  const built = build(config, answer.data, {
-    seed: attempt.seed,
-    itemId,
-    attemptId: attempt.id,
-    itemPoints: joined.item.points,
-    now,
-    // Same per-type settings as the grading pass, so what the student tries is
-    // what the grading will score.
-    defaults: gradeDefaults(evaluation),
+  const prepared = await attemptRunContext(db, {
+    ...input,
+    // A type with no button of its own. `code` is not one of them: it keeps
+    // its older, case-filtering `/run` route.
+    capability: (type) => type.interactiveRequest?.bind(type),
+    // The same budget as `/run`, under whichever name the type publishes it:
+    // a circuit says `simulationsPerMinute`, a code question `runsPerMinute`.
+    budget: (student) => student.simulationsPerMinute ?? student.runsPerMinute,
+    // Invariant 7's second half: the envelope was parsed by `SimulateBody`,
+    // the payload is parsed by the schema the type and the client share.
+    answer: input.answer,
   });
+  const built = prepared.capability(prepared.config, prepared.answer, prepared.ctx);
   if (built === null) throw new NothingToRun();
 
-  // The student is waiting in front of the screen: never the grading queue.
-  const request: RunnerRequest = { ...built, priority: "interactive" };
-  const requestId = randomUUID();
   // `kind: "simulate"` tells the two buttons apart in the journal; the EVENT
   // stays a `run`, because the budget is one and the audit union is closed
-  // (invariant 9). Nothing student-supplied is journalled: the file names are
-  // the type's (invariant 14).
-  await logAttemptEvent(db, attempt.id, "run", { itemId, requestId, kind: "simulate" }, now);
-
-  try {
-    return await input.runner.run(request);
-  } catch (error) {
-    if (error instanceof RunnerBusy) throw new RunnerDown("busy");
-    if (error instanceof RunnerUnavailable) throw new RunnerDown(error.reason);
-    throw error;
-  }
+  // (invariant 9).
+  const request: RunnerRequest = { ...built, priority: "interactive" };
+  const { outcome } = await runForStudent(db, { ...input, request }, {
+    itemId: input.itemId,
+    kind: "simulate",
+  });
+  return outcome;
 }
 
 // --- Teacher controls (§5.1, F-LIVE-11) -----------------------------------
@@ -1770,13 +1807,7 @@ export async function reopenAttempt(
   now: Date,
 ): Promise<AttemptRecord> {
   if (attempt.state === "in_progress") return attempt;
-  const seat =
-    attempt.userId === null ? null : await participantOf(db, evaluation, attempt.userId);
-  const participant: Participant = seat ?? {
-    userId: attempt.userId,
-    guestId: attempt.guestId,
-    timeBonusPercent: 0,
-  };
+  const participant = await participantOfAttempt(db, evaluation, attempt);
   const { deadlineAt, bonusS } = deadlineFor(evaluation, {
     startedAt: attempt.startedAt ?? now,
     timeBonusPercent: participant.timeBonusPercent,
