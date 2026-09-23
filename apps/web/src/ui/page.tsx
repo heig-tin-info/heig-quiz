@@ -5,7 +5,7 @@ import type { ReactNode, RefObject } from "react";
 import type { DateFormat, Me } from "@quiz/contracts";
 
 import { useI18n, useT } from "../i18n";
-import { cx, HelpIcon, Tip, type IconType, useNow } from "./layers";
+import { cx, HelpIcon, rovingIndex, Tip, type IconType, useNow } from "./layers";
 
 // --- Sortable tables (one motif for every hand-rolled table) ---
 
@@ -850,13 +850,10 @@ export function Tabs<V extends string>({
       ? `linear-gradient(to right, transparent 0, #000 ${edges.left ? TAB_FADE : "0px"}, #000 calc(100% - ${edges.right ? TAB_FADE : "0px"}), transparent 100%)`
       : undefined;
   const onKeyDown = (e: React.KeyboardEvent) => {
-    const keys = ["ArrowRight", "ArrowLeft", "Home", "End"];
-    if (!keys.includes(e.key) || items.length === 0) return;
+    const next = rovingIndex(e.key, roving, items.length);
+    if (next === null) return;
     e.preventDefault();
-    const i = roving;
-    const next =
-      e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : e.key === "Home" ? 0 : items.length - 1;
-    const target = items[(next + items.length) % items.length];
+    const target = items[next];
     if (!target) return;
     onChange(target.value);
     refs.current[target.value]?.focus();

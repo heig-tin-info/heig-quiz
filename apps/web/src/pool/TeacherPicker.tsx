@@ -5,7 +5,7 @@ import type { PoolCandidate, PoolCandidates } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useT } from "../i18n";
-import { FieldLabel, Initials, Z, cx, inputClass, inputSize } from "../ui";
+import { cx, FieldLabel, Initials, inputClass, inputSize, listboxIndex, Z } from "../ui";
 import { poolCandidatesKey } from "../queryKeys";
 
 /**
@@ -76,14 +76,11 @@ export function TeacherPicker({
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "ArrowDown") {
+    const next = listboxIndex(e.key, active, rows.length);
+    if (next !== null) {
       e.preventDefault();
       setOpen(true);
-      if (rows.length) setActive((i) => (i + 1) % rows.length);
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setOpen(true);
-      if (rows.length) setActive((i) => (i - 1 + rows.length) % rows.length);
+      setActive(next);
     } else if (e.key === "Enter") {
       // With a row under the highlight, Enter picks it; otherwise the form
       // has it, and submits what is typed.

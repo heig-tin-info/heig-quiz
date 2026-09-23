@@ -182,6 +182,16 @@ move and select with wrap, Home/End jump. A `value` matching no item still
 leaves the first tab reachable, so a hand-edited URL cannot take the whole
 strip out of the Tab order.
 
+The index arithmetic behind those keys is written once, in `ui/layers.tsx`:
+`listboxIndex` for a vertical list (the menu, the palette, the tag, teacher
+and filter comboboxes — arrows wrap, and Home/End only where the list owns
+them, since in a text field they move the caret) and `rovingIndex` for a
+horizontal roving strip (`Tabs`, `ProgressSegments`). They return the next
+index or null and nothing else: `preventDefault`, opening the list and
+moving the focus stay at each call site, because that is where the
+components legitimately differ. They exist because five lists and two
+strips each wrote that arithmetic out by hand.
+
 An element made clickable without being a button (a card, a table row) takes
 `pressable()` from `ui.tsx`: `tabIndex={0}` plus Enter and Space, with Space
 prevented from scrolling the page. A row keeps `role="row"`; announcing it as

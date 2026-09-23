@@ -5,7 +5,9 @@ import {
   countdownPhase,
   formatDateTimeAs,
   formatRemaining,
+  listboxIndex,
   menuPosition,
+  rovingIndex,
   scrollEdges,
 } from "./ui";
 
@@ -184,5 +186,52 @@ describe("countdownPhase", () => {
   it("is over at the deadline and past it", () => {
     expect(countdownPhase(0, 300)).toBe("over");
     expect(countdownPhase(-1, 300)).toBe("over");
+  });
+});
+
+describe("listboxIndex", () => {
+  it("moves with the arrows and wraps at both ends", () => {
+    expect(listboxIndex("ArrowDown", 0, 3)).toBe(1);
+    expect(listboxIndex("ArrowDown", 2, 3)).toBe(0);
+    expect(listboxIndex("ArrowUp", 0, 3)).toBe(2);
+    expect(listboxIndex("ArrowUp", 2, 3)).toBe(1);
+  });
+
+  it("lands on the first or the last row when nothing is highlighted (the menu)", () => {
+    expect(listboxIndex("ArrowDown", -1, 3)).toBe(0);
+    expect(listboxIndex("ArrowUp", -1, 3)).toBe(2);
+  });
+
+  it("keeps the arrows on an empty list, so the caller still prevents the caret move", () => {
+    expect(listboxIndex("ArrowDown", 0, 0)).toBe(0);
+    expect(listboxIndex("ArrowUp", 0, 0)).toBe(0);
+  });
+
+  it("leaves Home and End to a text field unless the list owns them", () => {
+    expect(listboxIndex("Home", 2, 3)).toBeNull();
+    expect(listboxIndex("End", 0, 3)).toBeNull();
+    expect(listboxIndex("Home", 2, 3, { ends: true })).toBe(0);
+    expect(listboxIndex("End", 0, 3, { ends: true })).toBe(2);
+    expect(listboxIndex("End", 0, 0, { ends: true })).toBe(0);
+  });
+
+  it("does not own any other key", () => {
+    expect(listboxIndex("Enter", 1, 3, { ends: true })).toBeNull();
+    expect(listboxIndex("ArrowRight", 1, 3, { ends: true })).toBeNull();
+  });
+});
+
+describe("rovingIndex", () => {
+  it("moves right and left with wrap, and jumps to the ends", () => {
+    expect(rovingIndex("ArrowRight", 0, 3)).toBe(1);
+    expect(rovingIndex("ArrowRight", 2, 3)).toBe(0);
+    expect(rovingIndex("ArrowLeft", 0, 3)).toBe(2);
+    expect(rovingIndex("Home", 2, 3)).toBe(0);
+    expect(rovingIndex("End", 0, 3)).toBe(2);
+  });
+
+  it("owns nothing on an empty strip, nor the vertical arrows", () => {
+    expect(rovingIndex("ArrowRight", 0, 0)).toBeNull();
+    expect(rovingIndex("ArrowDown", 0, 3)).toBeNull();
   });
 });

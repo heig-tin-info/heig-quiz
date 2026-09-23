@@ -17,7 +17,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useT } from "../i18n";
-import { cx, type IconType } from "./layers";
+import { cx, rovingIndex, type IconType } from "./layers";
 
 // --- Live primitives (PLAN-MVP §6.4) ---
 //
@@ -332,18 +332,10 @@ export function ProgressSegments({
   const step = segmentLabelStep(width, segments.length);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    const keys = ["ArrowRight", "ArrowLeft", "Home", "End"];
-    if (!keys.includes(e.key)) return;
     const buttons = Array.from(strip.current?.querySelectorAll("button") ?? []);
-    if (buttons.length === 0) return;
     const from = buttons.indexOf(document.activeElement as HTMLButtonElement);
-    const at = from === -1 ? current : from;
-    const next =
-      e.key === "Home"
-        ? 0
-        : e.key === "End"
-          ? buttons.length - 1
-          : (at + (e.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+    const next = rovingIndex(e.key, from === -1 ? current : from, buttons.length);
+    if (next === null) return;
     e.preventDefault();
     buttons[next]?.focus();
   };

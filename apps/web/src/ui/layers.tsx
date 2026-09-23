@@ -654,6 +654,51 @@ export interface MenuItem {
 /** Height assumed for the panel when deciding to flip it upward. */
 const MENU_FLIP_MARGIN = 280;
 
+// --- Keyboard arithmetic shared by the lists and the strips ---
+
+/**
+ * The next highlighted row of a vertical list (a listbox, a menu, the command
+ * palette) for `key`, or null when the key is not the list's. The arrows
+ * wrap; with nothing highlighted yet (`active < 0`) ArrowDown lands on the
+ * first row and ArrowUp on the last. An empty list keeps `active`, so the
+ * caller still owns the key (the arrows must not move a caret meanwhile).
+ * Home and End jump only when `ends` is set: in a text field that owns its
+ * caret (a tag or teacher combobox) they belong to the field.
+ *
+ * Only the index: each call site keeps its own `preventDefault` and its own
+ * side effects (opening the list, focusing a row), which is where the
+ * components differ — DESIGN.md › Keyboard and focus.
+ */
+export function listboxIndex(
+  key: string,
+  active: number,
+  count: number,
+  { ends = false }: { ends?: boolean } = {},
+): number | null {
+  if (key === "ArrowDown" || key === "ArrowUp") {
+    if (count === 0) return active;
+    if (active < 0) return key === "ArrowDown" ? 0 : count - 1;
+    return (active + (key === "ArrowDown" ? 1 : count - 1)) % count;
+  }
+  if (ends && key === "Home") return 0;
+  if (ends && key === "End") return Math.max(0, count - 1);
+  return null;
+}
+
+/**
+ * The next stop of a horizontal roving-tabindex strip (`Tabs`,
+ * `ProgressSegments`): ArrowRight / ArrowLeft with wrap, Home / End to the
+ * ends. Null for any other key, and for an empty strip.
+ */
+export function rovingIndex(key: string, current: number, count: number): number | null {
+  if (count === 0) return null;
+  if (key === "ArrowRight") return (current + 1 + count) % count;
+  if (key === "ArrowLeft") return (current - 1 + count) % count;
+  if (key === "Home") return 0;
+  if (key === "End") return count - 1;
+  return null;
+}
+
 /** How long after opening a scroll is treated as the opening, not a dismissal. */
 const MENU_SCROLL_GRACE = 200;
 
@@ -838,15 +883,10 @@ export function Menu({
       return;
     }
     if (reachable.length === 0) return;
-    const at = reachable.indexOf(active);
-    const go = (next: number) => {
-      e.preventDefault();
-      setActive(reachable[(next + reachable.length) % reachable.length] ?? -1);
-    };
-    if (e.key === "ArrowDown") go(at + 1);
-    else if (e.key === "ArrowUp") go(at < 0 ? reachable.length - 1 : at - 1);
-    else if (e.key === "Home") go(0);
-    else if (e.key === "End") go(reachable.length - 1);
+    const next = listboxIndex(e.key, reachable.indexOf(active), reachable.length, { ends: true });
+    if (next === null) return;
+    e.preventDefault();
+    setActive(reachable[next] ?? -1);
   };
 
   const triggerProps = {

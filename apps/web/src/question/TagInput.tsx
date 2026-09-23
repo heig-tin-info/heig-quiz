@@ -7,7 +7,7 @@ import type { PoolTag } from "@quiz/contracts";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { useErrorToast } from "../notify";
-import { Tip, Z, cx, inputClass } from "../ui";
+import { cx, inputClass, listboxIndex, Tip, Z } from "../ui";
 import { poolTagsKey } from "../queryKeys";
 
 /**
@@ -127,14 +127,11 @@ export function TagInput({
   }, [describing]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "ArrowDown") {
+    const next = listboxIndex(e.key, active, rows);
+    if (next !== null) {
       e.preventDefault();
       setOpen(true);
-      if (rows) setActive((i) => (i + 1) % rows);
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setOpen(true);
-      if (rows) setActive((i) => (i - 1 + rows) % rows);
+      setActive(next);
     } else if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
       if (open && rows) pick(active);
