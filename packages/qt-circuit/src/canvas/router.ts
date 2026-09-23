@@ -204,7 +204,8 @@ function stepCost(d: number, nd: number, nx: number, ny: number, goal: Goal, obs
 /**
  * One A* pass inside a window: the leg, or `null` when the goal cannot be
  * reached within it. The heuristic is the Manhattan distance, and the heap
- * breaks ties by insertion order, which is what makes a route reproducible.
+ * is deterministic (a plain binary heap, same pushes → same pops), which is
+ * what makes a route reproducible.
  */
 function searchWindow(
   w: SearchWindow,
