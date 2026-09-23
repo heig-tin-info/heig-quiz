@@ -17,6 +17,7 @@ import {
   InlineTitle,
   Menu,
   Modal,
+  PersonAvatar,
   pressable,
   ProgressSegments,
   PageError,
@@ -1007,6 +1008,37 @@ describe("EmptyState", () => {
     const Icon = () => <svg aria-hidden />;
     renderWithProviders(<EmptyState icon={Icon} title="Time is up" titleAs="h1" />);
     expect(screen.getByRole("heading", { level: 1, name: "Time is up" })).toBeVisible();
+  });
+});
+
+describe("PersonAvatar", () => {
+  it("shows the picture, and the initials once the picture fails to load", () => {
+    const { container } = renderWithProviders(
+      <PersonAvatar name={["Ada", "Lovelace"]} src="https://idp.example/dead.png" />,
+    );
+    const img = container.querySelector("img")!;
+    expect(img).toHaveAttribute("alt", "");
+    fireEvent.error(img);
+    expect(container.querySelector("img")).toBeNull();
+    expect(screen.getByText("AL")).toBeVisible();
+  });
+
+  it("names a lone avatar and shows the full name as a Tip, never a native title", () => {
+    vi.useFakeTimers();
+    renderWithProviders(<PersonAvatar name={["Ada", "Lovelace"]} src={null} label="Ada Lovelace" />);
+    const disc = screen.getByRole("img", { name: "Ada Lovelace" });
+    expect(disc).not.toHaveAttribute("title");
+    fireEvent.mouseEnter(disc.parentElement!);
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(screen.getByText("Ada Lovelace")).toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
+  it("gives the signed-in user's own disc the accent fill", () => {
+    renderWithProviders(<PersonAvatar name={["Ada", "Lovelace"]} src={null} tone="accent" />);
+    expect(screen.getByText("AL")).toHaveClass("bg-accent", "text-on-fill");
   });
 });
 

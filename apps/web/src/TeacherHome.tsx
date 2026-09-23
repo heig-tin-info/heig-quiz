@@ -28,10 +28,10 @@ import {
   Field,
   FormDialog,
   FormError,
-  Initials,
   Menu,
   type MenuItem,
   PageHeader,
+  PersonAvatar,
   QueryError,
   SectionHeading,
   Segmented,
@@ -406,21 +406,15 @@ function useCourseActions(course: CourseSummary): {
 function StaffAvatars({ course }: { course: CourseSummary }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {course.staff.map((s) =>
-        s.avatarUrl ? (
-          <img
-            key={s.userId}
-            src={s.avatarUrl}
-            alt={`${s.givenName} ${s.familyName}`}
-            title={`${s.givenName} ${s.familyName}`}
-            className="size-6 rounded-full object-cover"
-          />
-        ) : (
-          <span key={s.userId} title={`${s.givenName} ${s.familyName}`}>
-            <Initials name={[s.givenName, s.familyName]} className="size-6 text-[10px]" />
-          </span>
-        ),
-      )}
+      {course.staff.map((s) => (
+        <PersonAvatar
+          key={s.userId}
+          name={[s.givenName, s.familyName]}
+          src={s.avatarUrl}
+          label={`${s.givenName} ${s.familyName}`}
+          className="size-6 text-[10px]"
+        />
+      ))}
     </div>
   );
 }

@@ -222,6 +222,15 @@ with a keyboard-reachable dismiss button.
 - Badge: pill, soft background, 12 px, tones green / amber / red / zinc /
   accent. Status is a badge; a count is plain text.
 - Card: `surface` + hairline + 16 px radius; padding 16–20.
+- PersonAvatar: a person as a round picture, or their two initials on
+  `surface-3` in `fg-muted` when there is no picture OR when it fails to load
+  (an IdP picture URL goes stale, and a broken-image glyph is not a face).
+  The signed-in user's own disc (`Avatar`) takes the `accent` tone. An
+  avatar standing alone — the row of a course's staff — carries the full
+  name as its accessible name and as a `Tip`, never a native `title`; one
+  with the name written beside it (a roster row) carries neither. It exists
+  because three places drew "a picture, or initials", and two of them had no
+  fallback.
 - Logo: the product's wordmark (`src/assets/quiz.svg`), four speech bubbles
   spelling Q U I Z, as an `<img alt="Quiz">`. It is the file, not inline JSX:
   the same mark is delivered elsewhere, and a retyped copy is a second
