@@ -167,6 +167,33 @@ export interface StudentDetailsPolicy {
   showHiddenCaseNames: boolean;
 }
 
+/**
+ * What {@link QuestionTypeServer.aggregate} hands the class debrief of one
+ * item (F-RES-03). Both fields are optional: a type fills the statistics that
+ * mean something for it and leaves the rest out.
+ */
+export interface ItemAggregate {
+  /**
+   * How often each answer was given, as `[key, count]` pairs in the order the
+   * keys were first met. The key is what the teacher reads: a canonical
+   * choice index, `"1: Galilee"` for a blank, the text of a short answer.
+   * The caller sorts, truncates and labels.
+   */
+  distribution?: ReadonlyArray<readonly [key: string, count: number]>;
+  /** How many graded attempts passed each named test case. */
+  casePassRate?: ReadonlyArray<{ name: string; passed: number; total: number }>;
+}
+
+/**
+ * The `[key, count]` pairs of {@link ItemAggregate.distribution}: every key
+ * counted, in first-seen order.
+ */
+export function tallyKeys(keys: Iterable<string>): [string, number][] {
+  const counts = new Map<string, number>();
+  for (const key of keys) counts.set(key, (counts.get(key) ?? 0) + 1);
+  return [...counts.entries()];
+}
+
 // ---------------------------------------------------------------------------
 // QuestionTypeServer
 // ---------------------------------------------------------------------------
@@ -248,6 +275,22 @@ export interface QuestionTypeServer<
    * caller its own generic fallback.
    */
   summarizeAnswer?(config: TConfig, answer: TAnswer): string;
+
+  /**
+   * The per-type statistics of one item over the class (F-RES-03, audit
+   * B-15): the answer distribution, a test-case pass rate.
+   *
+   * `answers` are the stored payloads of the class's answers to the item and
+   * `details` the `details` of its validated gradings, both RAW — they are
+   * not re-parsed, because a payload stored under an older schema must still
+   * be counted, so an implementation skips what it does not recognise. The
+   * result is teacher-facing only. Omitting the hook means "no per-type
+   * statistics": the item shows its success rate and nothing more.
+   */
+  aggregate?(input: {
+    answers: readonly unknown[];
+    details: readonly unknown[];
+  }): ItemAggregate;
 
   /** Phase 2 random values; absent in MVP packages. */
   randomize?(config: TConfig, seed: number): TConfig;

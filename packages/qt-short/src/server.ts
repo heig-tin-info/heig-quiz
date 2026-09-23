@@ -3,7 +3,7 @@
  *
  * No React in this import graph: the API and the grading worker load it.
  */
-import { ConfigMigrationError, type QuestionTypeServer } from "@quiz/core/server";
+import { ConfigMigrationError, tallyKeys, type QuestionTypeServer } from "@quiz/core/server";
 import { describeMatcher } from "@quiz/domain/short";
 import { fromCanonical, toCanonical } from "./canonical.js";
 import { gradeShort } from "./grade.js";
@@ -159,6 +159,21 @@ export const shortServer: QuestionTypeServer<
    * would otherwise break the row.
    */
   summarizeAnswer: (_config, answer) => answer.text.replace(/\s+/g, " ").trim(),
+
+  /**
+   * By the text the student typed, trimmed. A bare string is counted too: it
+   * is how a free-text answer was stored before `{ text }`.
+   */
+  aggregate({ answers }) {
+    const keys: string[] = [];
+    for (const payload of answers) {
+      if (typeof payload === "string") keys.push(payload.trim());
+      else if (payload && typeof payload === "object" && "text" in payload) {
+        keys.push(String((payload as { text: unknown }).text ?? "").trim());
+      }
+    }
+    return { distribution: tallyKeys(keys) };
+  },
 
   /**
    * The search index is teacher-facing (`question_versions.search`), so the

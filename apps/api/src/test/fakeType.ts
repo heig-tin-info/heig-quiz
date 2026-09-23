@@ -13,11 +13,12 @@
  */
 import { z } from "zod";
 
-import type {
-  GradeContext,
-  GradeResult,
-  QuestionTypeServer,
-  StudentView,
+import {
+  tallyKeys,
+  type GradeContext,
+  type GradeResult,
+  type QuestionTypeServer,
+  type StudentView,
 } from "@quiz/core/server";
 
 const FakeConfig = z.object({
@@ -65,6 +66,15 @@ export const fakeShort: QuestionTypeServer<
   },
   toSolution(config: FakeConfig) {
     return { answer: config.answer };
+  },
+
+  /** Like `short`: counted by the text typed, trimmed (the debrief of F-RES-03). */
+  aggregate({ answers }) {
+    return {
+      distribution: tallyKeys(
+        answers.filter((a): a is string => typeof a === "string").map((a) => a.trim()),
+      ),
+    };
   },
 
   grade(config: FakeConfig, answer: string | null, ctx: GradeContext): GradeResult<

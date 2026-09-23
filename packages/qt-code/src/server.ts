@@ -140,6 +140,25 @@ export const codeServer: QuestionTypeServer<
     return studentDetails(details, { showHiddenCaseNames: policy.showHiddenCaseNames });
   },
 
+  /**
+   * How many graded attempts passed each named case (F-RES-03). The answer
+   * distribution of a program is meaningless; this is the useful number.
+   */
+  aggregate({ details }) {
+    const tally = new Map<string, { passed: number; total: number }>();
+    for (const row of details) {
+      const parsed = CodeDetails.safeParse(row);
+      if (!parsed.success) continue;
+      for (const c of parsed.data.cases) {
+        const acc = tally.get(c.name) ?? { passed: 0, total: 0 };
+        acc.total += 1;
+        if (c.ok) acc.passed += 1;
+        tally.set(c.name, acc);
+      }
+    }
+    return { casePassRate: [...tally.entries()].map(([name, acc]) => ({ name, ...acc })) };
+  },
+
   grade(config: CodeConfig, answer: CodeAnswer | null, ctx: GradeContext) {
     return gradeCode(config, answer, ctx);
   },
