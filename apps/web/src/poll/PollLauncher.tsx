@@ -13,13 +13,12 @@ import { api } from "../api";
 import { fuzzyFilter } from "../fuzzy";
 import { useT } from "../i18n";
 import { TypeGlyph } from "../pool/QuestionTable";
-import { QuestionTypePicker } from "../pool/QuestionTypePicker";
+import { NewQuestionForm } from "../question/NewQuestionForm";
 import type { Route } from "../router";
 import {
   Button,
   cx,
   EmptyState,
-  Field,
   FormError,
   PageHeader,
   pressable,
@@ -310,18 +309,12 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
         </div>
       ) : (
         <div className="mt-5 space-y-4">
-          <fieldset>
-            <legend className="mb-2 text-[13px] font-medium">{t("pool.questionType")}</legend>
-            <QuestionTypePicker types={POLL_TYPES} value={type} onChange={setType} />
-          </fieldset>
-          <Field
-            label={t("pool.questionName")}
-            hint={t("pool.questionNameHint")}
-            fullWidth
-            autoFocus
-            placeholder={t("pool.questionNamePlaceholder")}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+          <NewQuestionForm
+            types={POLL_TYPES}
+            value={type}
+            onChange={setType}
+            name={name}
+            onName={setName}
           />
           <p className="text-[13px] text-fg-muted">{t("poll.newHint")}</p>
           <FormError error={create.error} title={t("pool.createFailed")} />

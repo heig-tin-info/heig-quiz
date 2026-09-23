@@ -15,7 +15,6 @@ import {
   Button,
   Card,
   EmptyState,
-  Field,
   FormDialog,
   FormError,
   PageError,
@@ -38,7 +37,7 @@ import { FilterBar, type ListView } from "./FilterBar";
 import { QuestionCards, QuestionCardsSkeleton } from "./QuestionCards";
 import { groupQuestions, isGroupBy, type GroupBy } from "./QuestionGroups";
 import { QuestionTable, QuestionTableSkeleton } from "./QuestionTable";
-import { QuestionTypePicker } from "./QuestionTypePicker";
+import { NewQuestionForm } from "../question/NewQuestionForm";
 import { useQuestionActions } from "../question/useQuestionActions";
 import { poolKey, poolQuestionsKey } from "../queryKeys";
 
@@ -136,18 +135,12 @@ function NewQuestionModal({
       canSubmit={name.trim() !== ""}
       error={<FormError error={create.error} fallback={t("pool.createFailed")} />}
     >
-      <fieldset>
-        <legend className="mb-2 text-[13px] font-medium">{t("pool.questionType")}</legend>
-        <QuestionTypePicker types={QUESTION_TYPE_IDS} value={type} onChange={setType} />
-      </fieldset>
-      <Field
-        label={t("pool.questionName")}
-        hint={t("pool.questionNameHint")}
-        fullWidth
-        autoFocus
-        placeholder={t("pool.questionNamePlaceholder")}
-        value={name}
-        onChange={(e) => setName(e.target.value)}
+      <NewQuestionForm
+        types={QUESTION_TYPE_IDS}
+        value={type}
+        onChange={setType}
+        name={name}
+        onName={setName}
       />
     </FormDialog>
   );
