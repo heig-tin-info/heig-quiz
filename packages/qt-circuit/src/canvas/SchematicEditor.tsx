@@ -53,7 +53,6 @@ import {
 
 import {
   BOX,
-  GRID,
   LIBRARY,
   formatValue,
   valueIssue,
@@ -114,10 +113,8 @@ import {
   extentOf,
   hitRectOf,
   indexOf,
-  multiply,
   newComponent,
   nextId,
-  overlaps,
   pinAt,
   pinPosition,
   portPosition,
@@ -142,6 +139,16 @@ import {
   type FlaggedPin,
 } from "./SchematicView.js";
 import { TOOL_ICONS } from "./symbols.js";
+import {
+  boxSelection,
+  boxStart,
+  editorKey,
+  isTerminal,
+  linkedWires,
+  pressed,
+  useSelection,
+  type BoxDrag,
+} from "./useSelection.js";
 import { panStart, panned, useViewport, type PanDrag } from "./useViewport.js";
 
 export interface SchematicEditorProps {
@@ -170,7 +177,7 @@ type Mode = "select" | "wire" | "place";
 
 type Drag =
   | { kind: "move"; sx: number; sy: number; dx: number; dy: number; moved: boolean; collapse: string | null }
-  | { kind: "box"; x0: number; y0: number; x1: number; y1: number; base: ReadonlySet<string> }
+  | BoxDrag
   | PanDrag
   | { kind: "via"; wire: string; index: number; moved: boolean };
 
@@ -179,20 +186,8 @@ interface Draft {
   readonly via: ReadonlyArray<{ x: number; y: number }>;
 }
 
-const isTerminal = (kind: ComponentKind): boolean => LIBRARY[kind].terminal;
-
 const endOf = (target: PinTarget): WireEnd =>
   target.kind === "pin" ? { kind: "pin", c: target.c, p: target.p } : { kind: "port", port: target.port };
-
-/** Selected wires, plus the wires wholly inside the selected components. */
-function linkedWires(schematic: Schematic, selection: ReadonlySet<string>): Wire[] {
-  const picked = new Set(schematic.components.filter((c) => selection.has(c.id)).map((c) => c.id));
-  return schematic.wires.filter(
-    (w) =>
-      selection.has(w.id) ||
-      (w.a.kind === "pin" && w.b.kind === "pin" && picked.has(w.a.c) && picked.has(w.b.c)),
-  );
-}
 
 /** The move the box allows, out of the one the pointer asked for. */
 function clampDelta(components: readonly SchematicComponent[], dx: number, dy: number): { dx: number; dy: number } {
@@ -240,23 +235,6 @@ function movedBy(schematic: Schematic, selection: ReadonlySet<string>, dx: numbe
   };
 }
 
-/** After a rotation, the offset that brings the whole group back inside the box. */
-function fitOffset(components: readonly SchematicComponent[]): { dx: number; dy: number } {
-  let dx = 0;
-  let dy = 0;
-  for (const c of components) {
-    const e = extentOf(c);
-    if (e.x0 + dx < 0) dx = -e.x0;
-    if (e.y0 + dy < 0) dy = -e.y0;
-  }
-  for (const c of components) {
-    const e = extentOf(c);
-    if (e.x1 + dx > BOX.width) dx = BOX.width - e.x1;
-    if (e.y1 + dy > BOX.height) dy = BOX.height - e.y1;
-  }
-  return { dx: snap(dx), dy: snap(dy) };
-}
-
 export function SchematicEditor({
   value,
   onChange,
@@ -287,7 +265,6 @@ export function SchematicEditor({
     m: ORIENT_0,
     show: false,
   });
-  const [selection, setSelection] = useState<ReadonlySet<string>>(new Set());
   const [draft, setDraft] = useState<Draft | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const { view, setView, canvasHeight, toWorld, slack, fit, zoom } = useViewport(svgRef, canvasRef, height);
@@ -330,6 +307,16 @@ export function SchematicEditor({
     [history, onChange, value],
   );
 
+  const { selection, setSelection, removeSelection, transformSelection, duplicate } = useSelection({
+    value,
+    apply,
+    readOnly,
+    placing: mode === "place",
+    setGhost,
+    used,
+    maxComponents: palette.maxComponents,
+  });
+
   // --- what is drawn right now ------------------------------------------
   const displayed = useMemo(() => {
     if (drag?.kind === "move" && drag.moved) return movedBy(value, selection, drag.dx, drag.dy);
@@ -356,125 +343,6 @@ export function SchematicEditor({
     },
     [apply, full, ghost.m, placeKind, readOnly, value],
   );
-
-  const removeSelection = useCallback(() => {
-    if (readOnly || selection.size === 0) return;
-    const gone = new Set(value.components.filter((c) => selection.has(c.id)).map((c) => c.id));
-    apply({
-      components: value.components.filter((c) => !gone.has(c.id)),
-      wires: value.wires.filter(
-        (w) =>
-          !selection.has(w.id) &&
-          !(w.a.kind === "pin" && gone.has(w.a.c)) &&
-          !(w.b.kind === "pin" && gone.has(w.b.c)),
-      ),
-    });
-    setSelection(new Set());
-  }, [apply, readOnly, selection, value]);
-
-  const transformSelection = useCallback(
-    (t: Orientation) => {
-      if (readOnly) return;
-      if (mode === "place") {
-        setGhost((g) => ({ ...g, m: multiply(t, g.m) }));
-        return;
-      }
-      const picked = value.components.filter((c) => selection.has(c.id));
-      const wires = linkedWires(value, selection);
-      const points: Array<[number, number]> =
-        picked.length > 0
-          ? picked.map((c) => [c.x, c.y])
-          : wires.flatMap((w) => [
-              ...w.via.map((v) => [v.x, v.y] as [number, number]),
-              ...[w.a, w.b]
-                .filter((e): e is Extract<WireEnd, { kind: "free" }> => e.kind === "free")
-                .map((e) => [e.x, e.y] as [number, number]),
-            ]);
-      if (points.length === 0) return;
-      const xs = points.map((p) => p[0]);
-      const ys = points.map((p) => p[1]);
-      const cxc = snap((Math.min(...xs) + Math.max(...xs)) / 2);
-      const cyc = snap((Math.min(...ys) + Math.max(...ys)) / 2);
-      const turn = (x: number, y: number): [number, number] => [
-        cxc + t[0] * (x - cxc) + t[2] * (y - cyc),
-        cyc + t[1] * (x - cxc) + t[3] * (y - cyc),
-      ];
-      const pickedIds = new Set(picked.map((c) => c.id));
-      const wireIds = new Set(wires.map((w) => w.id));
-      let components = value.components.map((c) => {
-        if (!pickedIds.has(c.id)) return c;
-        const [nx, ny] = turn(c.x, c.y);
-        return { ...c, x: nx, y: ny, m: multiply(t, c.m) };
-      });
-      const off = fitOffset(components.filter((c) => pickedIds.has(c.id)));
-      components = components.map((c) =>
-        pickedIds.has(c.id) ? { ...c, ...clampToBox(c.kind, c.m, c.x + off.dx, c.y + off.dy) } : c,
-      );
-      const turnEnd = (e: WireEnd): WireEnd => {
-        if (e.kind !== "free") return e;
-        const [nx, ny] = turn(e.x, e.y);
-        return { kind: "free", ...clampPoint(nx + off.dx, ny + off.dy) };
-      };
-      apply({
-        components,
-        wires: value.wires.map((w) => {
-          if (!wireIds.has(w.id)) return w;
-          return {
-            ...w,
-            a: turnEnd(w.a),
-            b: turnEnd(w.b),
-            via: w.via.map((v) => {
-              const [nx, ny] = turn(v.x, v.y);
-              return clampPoint(nx + off.dx, ny + off.dy);
-            }),
-          };
-        }),
-      });
-    },
-    [apply, mode, readOnly, selection, value],
-  );
-
-  const duplicate = useCallback(() => {
-    if (readOnly) return;
-    const picked = value.components.filter((c) => selection.has(c.id));
-    if (picked.length === 0) return;
-    const extra = picked.filter((c) => !isTerminal(c.kind)).length;
-    if (used + extra > palette.maxComponents) return;
-    const off = 2 * GRID;
-    const components = [...value.components];
-    const wires = [...value.wires];
-    const map = new Map<string, string>();
-    const fresh = new Set<string>();
-    for (const c of picked) {
-      const n: SchematicComponent = {
-        ...newComponent(c.kind, c.x + off, c.y + off, c.m, components),
-        value: c.value,
-      };
-      components.push(n);
-      map.set(c.id, n.id);
-      fresh.add(n.id);
-    }
-    for (const w of linkedWires(value, selection)) {
-      if (w.a.kind !== "pin" || w.b.kind !== "pin") continue;
-      const a = map.get(w.a.c);
-      const b = map.get(w.b.c);
-      if (a === undefined || b === undefined) continue;
-      const n: Wire = {
-        id: nextId(
-          "w",
-          wires.map((x) => x.id),
-        ),
-        a: { kind: "pin", c: a, p: w.a.p },
-        b: { kind: "pin", c: b, p: w.b.p },
-        via: w.via.map((v) => clampPoint(v.x + off, v.y + off)),
-        points: w.points,
-      };
-      wires.push(n);
-      fresh.add(n.id);
-    }
-    apply({ components, wires });
-    setSelection(fresh);
-  }, [apply, palette.maxComponents, readOnly, selection, used, value]);
 
   const undo = useCallback(() => {
     const previous = history.undo(value);
@@ -659,13 +527,7 @@ export function SchematicEditor({
       const hitId = componentUnder(w.x, w.y) ?? onWire;
       if (hitId !== null) {
         const was = selection.has(hitId);
-        let next = new Set(selection);
-        if (e.shiftKey) {
-          if (was) next.delete(hitId);
-          else next.add(hitId);
-        } else if (!was) {
-          next = new Set([hitId]);
-        }
+        const next = pressed(selection, hitId, e.shiftKey);
         setSelection(next);
         if (next.has(hitId) && !readOnly) {
           setDrag({
@@ -680,14 +542,7 @@ export function SchematicEditor({
         }
         return;
       }
-      setDrag({
-        kind: "box",
-        x0: w.x,
-        y0: w.y,
-        x1: w.x,
-        y1: w.y,
-        base: e.shiftKey ? new Set(selection) : new Set(),
-      });
+      setDrag(boxStart(w, e.shiftKey, selection));
       if (!e.shiftKey) setSelection(new Set());
     },
     [
@@ -771,21 +626,7 @@ export function SchematicEditor({
         else if (d.collapse !== null && !e.shiftKey) setSelection(new Set([d.collapse]));
         return;
       }
-      if (d.kind === "box") {
-        const x0 = Math.min(d.x0, d.x1);
-        const x1 = Math.max(d.x0, d.x1);
-        const y0 = Math.min(d.y0, d.y1);
-        const y1 = Math.max(d.y0, d.y1);
-        const rect = { x0, y0, x1, y1 };
-        const next = new Set(d.base);
-        for (const c of displayed.components) {
-          if (overlaps(hitRectOf(c), rect)) next.add(c.id);
-        }
-        for (const [wid, points] of routes) {
-          if (points.every((p) => p[0] >= x0 && p[0] <= x1 && p[1] >= y0 && p[1] <= y1)) next.add(wid);
-        }
-        setSelection(next);
-      }
+      if (d.kind === "box") setSelection(boxSelection(d, displayed.components, routes));
     },
     [apply, displayed.components, routes, selection, value],
   );
@@ -824,58 +665,39 @@ export function SchematicEditor({
   // --- the keyboard, scoped to this editor -------------------------------
 
   const onKeyDown = useCallback(
-    (e: ReactKeyboardEvent<HTMLDivElement>) => {
-      const target = e.target as HTMLElement | null;
-      if (target !== null && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
-      const k = e.key;
-      const lower = k.toLowerCase();
-      if (e.ctrlKey || e.metaKey) {
-        if (lower === "z") {
-          e.preventDefault();
-          if (e.shiftKey) redo();
-          else undo();
-        } else if (lower === "y") {
-          e.preventDefault();
-          redo();
-        } else if (lower === "d") {
-          e.preventDefault();
-          duplicate();
-        } else if (lower === "a") {
-          e.preventDefault();
-          setSelection(new Set([...value.components.map((c) => c.id), ...value.wires.map((w) => w.id)]));
-        }
-        return;
-      }
-      if (k === " " || lower === "r") {
-        e.preventDefault();
-        transformSelection(ROTATE);
-      } else if (lower === "h") {
-        transformSelection(MIRROR_X);
-      } else if (lower === "v") {
-        transformSelection(MIRROR_Y);
-      } else if (lower === "w" && !readOnly) {
-        setMode(mode === "wire" ? "select" : "wire");
-        setPlaceKind(null);
-        setDraft(null);
-      } else if (k === "Delete" || k === "Backspace") {
-        e.preventDefault();
-        removeSelection();
-      } else if (k === "Escape") {
-        if (draft !== null) setDraft(null);
-        else if (mode !== "select") {
-          setMode("select");
-          setPlaceKind(null);
-        } else setSelection(new Set());
-      } else if (/^[1-9]$/.test(k) && !readOnly) {
-        const kind = kinds[Number(k) - 1];
-        if (kind !== undefined) {
-          setMode("place");
-          setPlaceKind(kind);
-          setDraft(null);
-        }
-      }
-    },
-    [draft, duplicate, kinds, mode, readOnly, redo, removeSelection, transformSelection, undo, value],
+    (e: ReactKeyboardEvent<HTMLDivElement>) =>
+      editorKey(
+        e,
+        {
+          undo,
+          redo,
+          duplicate,
+          selectAll: () => setSelection(new Set([...value.components.map((c) => c.id), ...value.wires.map((w) => w.id)])),
+          transform: transformSelection,
+          toggleWire: () => {
+            setMode(mode === "wire" ? "select" : "wire");
+            setPlaceKind(null);
+            setDraft(null);
+          },
+          remove: removeSelection,
+          escape: () => {
+            if (draft !== null) setDraft(null);
+            else if (mode !== "select") {
+              setMode("select");
+              setPlaceKind(null);
+            } else setSelection(new Set());
+          },
+          arm: (index) => {
+            const kind = kinds[index];
+            if (kind === undefined) return;
+            setMode("place");
+            setPlaceKind(kind);
+            setDraft(null);
+          },
+        },
+        readOnly,
+      ),
+    [draft, duplicate, kinds, mode, readOnly, redo, removeSelection, setSelection, transformSelection, undo, value],
   );
 
   // --- the inspector -----------------------------------------------------
