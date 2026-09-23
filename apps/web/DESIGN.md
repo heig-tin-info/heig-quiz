@@ -262,6 +262,16 @@ live in `ui/state.ts`, each written once.
 - Badge: pill, soft background, 12 px, tones green / amber / red / zinc /
   accent. Status is a badge; a count is plain text.
 - Card: `surface` + hairline + 16 px radius; padding 16–20.
+- NotePanel: a note set INSIDE a card — an explanation, a teacher's comment,
+  a reference solution — as a 12 px uppercase semibold eyebrow in `fg-faint`
+  over its body, in a `field`-radius (10 px) panel. ONE rhythm: **12 px of
+  padding, 4 px between the eyebrow and the body** — the "tight inside a
+  group" end of the spacing scale, since the panel is one group nested in a
+  card that already has its 16–20 of air. Two tones: `soft` (`surface-2`, a
+  recess) for what the product says, and `outlined` (a `line-strong` hairline
+  on `surface`) for what a person wrote to this reader. It exists because
+  five such panels were written by hand with two paddings (12 and 16) and
+  two gaps (4 and 6).
 - PersonAvatar: a person as a round picture, or their two initials on
   `surface-3` in `fg-muted` when there is no picture OR when it fails to load
   (an IdP picture URL goes stale, and a broken-image glyph is not a face).

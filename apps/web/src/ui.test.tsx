@@ -17,6 +17,7 @@ import {
   InlineTitle,
   Menu,
   Modal,
+  NotePanel,
   PageHeader,
   ParentLink,
   PersonAvatar,
@@ -1010,6 +1011,32 @@ describe("EmptyState", () => {
     const Icon = () => <svg aria-hidden />;
     renderWithProviders(<EmptyState icon={Icon} title="Time is up" titleAs="h1" />);
     expect(screen.getByRole("heading", { level: 1, name: "Time is up" })).toBeVisible();
+  });
+});
+
+describe("NotePanel", () => {
+  it("names its body with the eyebrow, in one panel shape", () => {
+    renderWithProviders(
+      <NotePanel eyebrow="Explanation">
+        <p>Because pointers are addresses.</p>
+      </NotePanel>,
+    );
+    const eyebrow = screen.getByText("Explanation");
+    const panel = eyebrow.parentElement!;
+    expect(panel).toHaveClass("rounded-field", "p-3", "bg-surface-2");
+    expect(eyebrow.nextElementSibling).toHaveClass("mt-1");
+    expect(screen.getByText("Because pointers are addresses.")).toBeVisible();
+  });
+
+  it("outlines what a person wrote", () => {
+    renderWithProviders(
+      <NotePanel eyebrow="Comment" tone="outlined">
+        <p>Good start.</p>
+      </NotePanel>,
+    );
+    const panel = screen.getByText("Comment").parentElement!;
+    expect(panel).toHaveClass("border", "border-line-strong", "bg-surface");
+    expect(panel).not.toHaveClass("bg-surface-2");
   });
 });
 

@@ -8,7 +8,16 @@ import { api } from "../api";
 import { useT, type Dict } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { QuestionReviewHost } from "../questionTypes";
-import { Badge, Card, EmptyState, QueryError, RelativeTime, Skeleton, Stat } from "../ui";
+import {
+  Badge,
+  Card,
+  EmptyState,
+  NotePanel,
+  QueryError,
+  RelativeTime,
+  Skeleton,
+  Stat,
+} from "../ui";
 import { attemptFeedbackKey } from "../queryKeys";
 
 /**
@@ -149,21 +158,15 @@ export function Feedback({ attemptId }: { attemptId: string }) {
               />
 
               {item.explanation ? (
-                <div className="rounded-field bg-surface-2 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-                    {t("feedback.explanation")}
-                  </p>
-                  <MarkdownView size="sm" className="mt-1.5" source={item.explanation} />
-                </div>
+                <NotePanel eyebrow={t("feedback.explanation")}>
+                  <MarkdownView size="sm" source={item.explanation} />
+                </NotePanel>
               ) : null}
 
               {item.comment ? (
-                <div className="rounded-field border border-line-strong p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-                    {t("feedback.comment")}
-                  </p>
-                  <p className="mt-1.5 text-sm">{item.comment}</p>
-                </div>
+                <NotePanel eyebrow={t("feedback.comment")} tone="outlined">
+                  <p className="text-sm">{item.comment}</p>
+                </NotePanel>
               ) : null}
             </Card>
           ))}

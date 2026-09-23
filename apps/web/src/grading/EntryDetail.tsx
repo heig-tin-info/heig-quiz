@@ -6,7 +6,7 @@ import { formatPoints } from "@quiz/domain";
 import { useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { QuestionReviewHost } from "../questionTypes";
-import { Badge, Button, Kbd } from "../ui";
+import { Badge, Button, Kbd, NotePanel } from "../ui";
 import { HistoryPopover } from "./HistoryPopover";
 import { confidenceLabel, confidenceTone, sourceLabel, sourceTone } from "./labels";
 
@@ -69,12 +69,9 @@ export function EntryDetail({
       ) : null}
 
       {explanation ? (
-        <div className="rounded-field bg-surface-2 p-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-            {t("grading.explanation")}
-          </p>
-          <MarkdownView size="sm" className="mt-1" source={explanation} />
-        </div>
+        <NotePanel eyebrow={t("grading.explanation")}>
+          <MarkdownView size="sm" source={explanation} />
+        </NotePanel>
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3">

@@ -511,6 +511,38 @@ export function Card({
   );
 }
 
+/**
+ * A note set inside a card: a 12 px uppercase eyebrow naming it ("Explanation",
+ * "Comment", "Reference solution") over its body, in a field-radius panel
+ * with 12 px of padding and 4 px between the eyebrow and the body.
+ *
+ * `soft` (a `surface-2` recess) is for what the product says — an
+ * explanation, a key; `outlined` (a `line-strong` hairline on `surface`) is
+ * for what a person wrote to this reader — a teacher's comment. DESIGN.md ›
+ * Components › NotePanel.
+ */
+export function NotePanel({
+  eyebrow,
+  tone = "soft",
+  children,
+}: {
+  eyebrow: ReactNode;
+  tone?: "soft" | "outlined";
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={cx(
+        "rounded-field p-3",
+        tone === "soft" ? "bg-surface-2" : "border border-line-strong bg-surface",
+      )}
+    >
+      <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">{eyebrow}</p>
+      <div className="mt-1">{children}</div>
+    </div>
+  );
+}
+
 /** Title row of a page: one h1, an optional line under it, the actions right. */
 export function PageHeader({
   eyebrow,
