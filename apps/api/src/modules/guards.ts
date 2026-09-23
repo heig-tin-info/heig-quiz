@@ -6,6 +6,11 @@
  * teacher API: load the entity if and only if the current user has access to
  * its course, otherwise reply 404 and return null — indistinguishable from a
  * missing entity.
+ *
+ * Where a caller cannot answer through a `reply` (the SSE handler, a route
+ * that resolves a second entity from its body), the loader is split: a
+ * `find…` FINDER returns the entity or null and never touches the reply, and
+ * the reply-aware loader is that finder plus the 404. One query, two doors.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { and, eq, getTableName, sql, type AnyColumn, type SQL } from "drizzle-orm";
@@ -183,12 +188,19 @@ async function notFound(reply: FastifyReply): Promise<null> {
   return null;
 }
 
+/** Who is asking: the two fields every access decision reads. */
+export interface Caller {
+  id: string;
+  role: string;
+}
+
 /**
  * An admin reaches every course; anyone else needs a staff seat. Keeping
- * this in one helper is what stops the two rules drifting apart.
+ * this in one helper is what stops the two rules drifting apart — every
+ * query gated by `staffAccess` or `poolAccess` goes through it.
  */
-function accessWhere(req: FastifyRequest, predicate: SQL): SQL | undefined {
-  return req.user!.role === "admin" ? undefined : predicate;
+export function accessWhere(user: Pick<Caller, "role">, predicate: SQL): SQL | undefined {
+  return user.role === "admin" ? undefined : predicate;
 }
 
 /** Loads the course if and only if the current user is on its staff. */
@@ -202,13 +214,24 @@ export async function accessibleCourse(
   const [course] = await app.db
     .select()
     .from(courses)
-    .where(and(eq(courses.id, params.data.id), accessWhere(req, staffAccess(req.user!.id))))
+    .where(and(eq(courses.id, params.data.id), accessWhere(req.user!, staffAccess(req.user!.id))))
     .limit(1);
   if (!course) return notFound(reply);
   return course;
 }
 
 const ClassroomParam = z.object({ id: z.uuid() });
+
+/** The classroom + its course if the caller is on its staff; null otherwise. */
+export async function findAccessibleClassroom(db: Db, user: Caller, classroomId: string) {
+  const [row] = await db
+    .select({ room: classrooms, course: courses })
+    .from(classrooms)
+    .innerJoin(courses, eq(classrooms.courseId, courses.id))
+    .where(and(eq(classrooms.id, classroomId), accessWhere(user, staffAccess(user.id))))
+    .limit(1);
+  return row ?? null;
+}
 
 /** Loads the classroom + its course, gated by the same predicate. */
 export async function accessibleClassroom(
@@ -218,16 +241,7 @@ export async function accessibleClassroom(
 ) {
   const params = ClassroomParam.safeParse(req.params);
   if (!params.success) return notFound(reply);
-  const [row] = await app.db
-    .select({ room: classrooms, course: courses })
-    .from(classrooms)
-    .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(
-      and(eq(classrooms.id, params.data.id), accessWhere(req, staffAccess(req.user!.id))),
-    )
-    .limit(1);
-  if (!row) return notFound(reply);
-  return row;
+  return (await findAccessibleClassroom(app.db, req.user!, params.data.id)) ?? notFound(reply);
 }
 
 const EnrollmentParam = z.object({ id: z.uuid(), eid: z.uuid() });
@@ -249,7 +263,7 @@ export async function accessibleEnrollment(
       and(
         eq(enrollments.id, params.data.eid),
         eq(enrollments.classroomId, params.data.id),
-        accessWhere(req, staffAccess(req.user!.id)),
+        accessWhere(req.user!, staffAccess(req.user!.id)),
       ),
     )
     .limit(1);
@@ -273,7 +287,7 @@ async function loadPool(
   const [pool] = await app.db
     .select()
     .from(pools)
-    .where(and(eq(pools.id, poolId), accessWhere(req, poolAccess(req.user!.id))))
+    .where(and(eq(pools.id, poolId), accessWhere(req.user!, poolAccess(req.user!.id))))
     .limit(1);
   if (!pool) return notFound(reply);
   return pool;
@@ -290,26 +304,35 @@ export async function accessiblePool(
   return loadPool(app, req, reply, params.data.id);
 }
 
+type QuestionScope = { question: typeof questions.$inferSelect; pool: AccessiblePool };
+
 /**
- * `/questions/:id` — the question AND its pool, so a handler never has to
- * re-check anything. Soft-deleted questions are loaded on purpose: hard
- * deletion is a route too.
+ * The question AND its pool if `poolAccess` holds; null otherwise.
+ * Soft-deleted questions are found on purpose: hard deletion is a route too.
  */
+export async function findAccessibleQuestion(
+  db: Db,
+  user: Caller,
+  questionId: string,
+): Promise<QuestionScope | null> {
+  const [row] = await db
+    .select({ question: questions, pool: pools })
+    .from(questions)
+    .innerJoin(pools, eq(questions.poolId, pools.id))
+    .where(and(eq(questions.id, questionId), accessWhere(user, poolAccess(user.id))))
+    .limit(1);
+  return row ?? null;
+}
+
+/** `/questions/:id` — so a handler never has to re-check anything. */
 export async function accessibleQuestion(
   app: FastifyInstance,
   req: FastifyRequest,
   reply: FastifyReply,
-): Promise<{ question: typeof questions.$inferSelect; pool: AccessiblePool } | null> {
+): Promise<QuestionScope | null> {
   const params = IdParam.safeParse(req.params);
   if (!params.success) return notFound(reply);
-  const [row] = await app.db
-    .select({ question: questions, pool: pools })
-    .from(questions)
-    .innerJoin(pools, eq(questions.poolId, pools.id))
-    .where(and(eq(questions.id, params.data.id), accessWhere(req, poolAccess(req.user!.id))))
-    .limit(1);
-  if (!row) return notFound(reply);
-  return row;
+  return (await findAccessibleQuestion(app.db, req.user!, params.data.id)) ?? notFound(reply);
 }
 
 /** `/categories/:id` — the category AND its pool. */
@@ -324,7 +347,7 @@ export async function accessibleCategory(
     .select({ category: categories, pool: pools })
     .from(categories)
     .innerJoin(pools, eq(categories.poolId, pools.id))
-    .where(and(eq(categories.id, params.data.id), accessWhere(req, poolAccess(req.user!.id))))
+    .where(and(eq(categories.id, params.data.id), accessWhere(req.user!, poolAccess(req.user!.id))))
     .limit(1);
   if (!row) return notFound(reply);
   return row;
@@ -353,7 +376,7 @@ export async function loadEvaluation(
     .from(evaluations)
     .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
     .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(and(eq(evaluations.id, evaluationId), accessWhere(req, staffAccess(req.user!.id))))
+    .where(and(eq(evaluations.id, evaluationId), accessWhere(req.user!, staffAccess(req.user!.id))))
     .limit(1);
   if (!row) return notFound(reply);
   return row;
@@ -370,41 +393,52 @@ export async function accessibleEvaluation(
   return loadEvaluation(app, req, reply, params.data.id);
 }
 
+type ReachableEvaluation = { evaluation: typeof evaluations.$inferSelect; staff: boolean };
+
 /**
  * The same evaluation seen from the student side: reachable through a CLAIMED
  * roster seat in its classroom, and nothing else. A staff member also passes,
- * which is what makes the teacher preview and the dashboard share one loader.
+ * which is what makes the teacher preview, the dashboard and the SSE stream
+ * share one predicate. Null when neither holds.
  */
-export async function reachableEvaluation(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
+export async function findReachableEvaluation(
+  db: Db,
+  user: Caller,
   evaluationId: string,
-): Promise<{ evaluation: typeof evaluations.$inferSelect; staff: boolean } | null> {
-  const [row] = await app.db
+): Promise<ReachableEvaluation | null> {
+  const [row] = await db
     .select({ evaluation: evaluations, classroom: classrooms })
     .from(evaluations)
     .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
     .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(and(eq(evaluations.id, evaluationId), accessWhere(req, staffAccess(req.user!.id))))
+    .where(and(eq(evaluations.id, evaluationId), accessWhere(user, staffAccess(user.id))))
     .limit(1);
   if (row) return { evaluation: row.evaluation, staff: true };
 
-  const [student] = await app.db
+  const [student] = await db
     .select({ evaluation: evaluations })
     .from(evaluations)
     .innerJoin(
       enrollments,
       and(
         eq(enrollments.classroomId, evaluations.classroomId),
-        eq(enrollments.userId, req.user!.id),
+        eq(enrollments.userId, user.id),
         eq(enrollments.status, "claimed"),
       ),
     )
     .where(eq(evaluations.id, evaluationId))
     .limit(1);
-  if (!student) return notFound(reply);
-  return { evaluation: student.evaluation, staff: false };
+  return student ? { evaluation: student.evaluation, staff: false } : null;
+}
+
+/** `findReachableEvaluation`, answering 404 when it finds nothing. */
+export async function reachableEvaluation(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  evaluationId: string,
+): Promise<ReachableEvaluation | null> {
+  return (await findReachableEvaluation(app.db, req.user!, evaluationId)) ?? notFound(reply);
 }
 
 /**
@@ -449,7 +483,7 @@ export async function staffAttempt(
       and(
         eq(attempts.id, attemptId),
         eq(attempts.evaluationId, evaluationId),
-        accessWhere(req, staffAccess(req.user!.id)),
+        accessWhere(req.user!, staffAccess(req.user!.id)),
       ),
     )
     .limit(1);
@@ -483,7 +517,7 @@ export async function staffAnswer(
     .innerJoin(evaluations, eq(attempts.evaluationId, evaluations.id))
     .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
     .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(and(eq(answers.id, answerId), accessWhere(req, staffAccess(req.user!.id))))
+    .where(and(eq(answers.id, answerId), accessWhere(req.user!, staffAccess(req.user!.id))))
     .limit(1);
   if (!row) return notFound(reply);
   return row;
@@ -508,7 +542,7 @@ export async function staffGrading(
     .innerJoin(evaluations, eq(attempts.evaluationId, evaluations.id))
     .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
     .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(and(eq(gradings.id, gradingId), accessWhere(req, staffAccess(req.user!.id))))
+    .where(and(eq(gradings.id, gradingId), accessWhere(req.user!, staffAccess(req.user!.id))))
     .limit(1);
   if (!row) return notFound(reply);
   return row;

@@ -26,7 +26,7 @@ import { WatchSubject, isStaffOnly, type ServerEvent } from "@quiz/contracts";
 import { iso } from "../../clock.js";
 import { classrooms, courses, enrollments, evaluations, pools } from "../../db/schema.js";
 import { subscribe, type BusMessage } from "../../events.js";
-import { poolAccess, staffAccess } from "../guards.js";
+import { accessWhere, findReachableEvaluation, poolAccess, staffAccess } from "../guards.js";
 import * as live from "../live/service.js";
 import * as bus from "./bus.js";
 import { presence } from "./presence.js";
@@ -101,7 +101,7 @@ async function topicsOf(app: FastifyInstance, req: FastifyRequest): Promise<Set<
       .select({ courseId: courses.id, roomId: classrooms.id })
       .from(courses)
       .leftJoin(classrooms, eq(classrooms.courseId, courses.id))
-      .where(me.role === "admin" ? undefined : staffAccess(me.id));
+      .where(accessWhere(me, staffAccess(me.id)));
     for (const row of own) {
       topics.add(`course:${row.courseId}`);
       if (row.roomId) topics.add(`classroom:${row.roomId}`);
@@ -109,7 +109,7 @@ async function topicsOf(app: FastifyInstance, req: FastifyRequest): Promise<Set<
     const reachablePools = await app.db
       .select({ id: pools.id })
       .from(pools)
-      .where(me.role === "admin" ? undefined : poolAccess(me.id));
+      .where(accessWhere(me, poolAccess(me.id)));
     for (const pool of reachablePools) topics.add(`pool:${pool.id}`);
   } else {
     const rooms = await app.db
@@ -130,7 +130,7 @@ async function resolveWatch(
   const separator = subject.indexOf(":");
   const [kind, id] = [subject.slice(0, separator), subject.slice(separator + 1)];
   if (kind === "evaluation") {
-    const scope = await reachable(app, req, id);
+    const scope = await findReachableEvaluation(app.db, req.user!, id);
     if (!scope) return null;
     return { watch: { kind: "evaluation", evaluationId: id }, staff: scope.staff, participant: false };
   }
@@ -139,7 +139,7 @@ async function resolveWatch(
     // door. What the subject adds is the side of the room: this connection
     // draws the waiting room, so it receives no `dashboard.*` whoever opened
     // it, and it counts as present when its user holds a seat.
-    const scope = await reachable(app, req, id);
+    const scope = await findReachableEvaluation(app.db, req.user!, id);
     if (!scope) return null;
     const seat = await live.participantOf(app.db, scope.evaluation, req.user!.id);
     return { watch: { kind: "lobby", evaluationId: id }, staff: false, participant: seat !== null };
@@ -147,7 +147,7 @@ async function resolveWatch(
   if (kind === "attempt") {
     const attempt = await live.attemptById(app.db, id);
     if (!attempt) return null;
-    const scope = await reachable(app, req, attempt.evaluationId);
+    const scope = await findReachableEvaluation(app.db, req.user!, attempt.evaluationId);
     if (!scope) return null;
     // A student watches their OWN attempt; a staff member watches any of
     // the evaluation's, which is what the dashboard's cell inspector needs.
@@ -161,37 +161,6 @@ async function resolveWatch(
     };
   }
   return null;
-}
-
-/** The same predicate as `guards.ts#reachableEvaluation`, without the reply. */
-async function reachable(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  evaluationId: string,
-): Promise<{ evaluation: typeof evaluations.$inferSelect; staff: boolean } | null> {
-  const isAdmin = req.user!.role === "admin";
-  const [asStaff] = await app.db
-    .select({ evaluation: evaluations })
-    .from(evaluations)
-    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
-    .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(and(eq(evaluations.id, evaluationId), isAdmin ? undefined : staffAccess(req.user!.id)))
-    .limit(1);
-  if (asStaff) return { evaluation: asStaff.evaluation, staff: true };
-  const [asStudent] = await app.db
-    .select({ evaluation: evaluations })
-    .from(evaluations)
-    .innerJoin(
-      enrollments,
-      and(
-        eq(enrollments.classroomId, evaluations.classroomId),
-        eq(enrollments.userId, req.user!.id),
-        eq(enrollments.status, "claimed"),
-      ),
-    )
-    .where(eq(evaluations.id, evaluationId))
-    .limit(1);
-  return asStudent ? { evaluation: asStudent.evaluation, staff: false } : null;
 }
 
 /** The `snapshot` frame: the whole state of the watched subject, once. */

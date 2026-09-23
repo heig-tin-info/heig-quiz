@@ -22,6 +22,7 @@ import {
   accessibleClassroom,
   accessibleCourse,
   accessibleEnrollment,
+  accessWhere,
   staffAccess,
   teacherGuard,
 } from "./guards.js";
@@ -66,7 +67,7 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
     const rows = await app.db
       .select({ id: courses.id, name: courses.name, code: courses.code, createdAt: courses.createdAt })
       .from(courses)
-      .where(req.user!.role === "admin" ? undefined : staffAccess(req.user!.id))
+      .where(accessWhere(req.user!, staffAccess(req.user!.id)))
       .orderBy(asc(courses.code));
     const ids = rows.map((r) => r.id);
     const rooms = ids.length
