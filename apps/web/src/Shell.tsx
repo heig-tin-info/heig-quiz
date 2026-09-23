@@ -21,7 +21,6 @@ import { CommandPalette } from "./CommandPalette";
 import { Logo, UserMenu, useSignOut, ViewModeToggle } from "./Header";
 import { helpTopics, useHelp } from "./help";
 import { useI18n, useT } from "./i18n";
-import { NotificationBell } from "./notifications/NotificationBell";
 import { sectionOf, type Route } from "./router";
 import { inPoolSection, PoolNavTree, usePoolNavState } from "./pool/PoolNav";
 import { shortcutCaps, useActiveShortcuts, useGlobalShortcuts } from "./shortcuts";
@@ -415,6 +414,7 @@ export function Shell({
       onOpenSettings={() => navigate({ view: "settings" })}
       studentView={studentView}
       onToggleStudentView={onToggleStudentView}
+      notifications={teacherUi ? { navigate } : undefined}
     />
   );
   /*
@@ -457,17 +457,14 @@ export function Shell({
           poolNav={poolNav}
         />
         <ShortcutStrip />
-        {/* The account row, and beside it the bell: the two things that are
-            about the PERSON rather than about the page, at the bottom of the
+        {/* The account row: what is about the PERSON rather than about the
+            page (the inbox included, inside its menu), at the bottom of the
             column where the eye leaves the navigation. */}
         <div className="border-t border-line p-2">
           {onToggleStudentView ? (
             <div className="mb-2 flex justify-center">{viewToggle(false)}</div>
           ) : null}
-          <div className="flex items-center gap-1">
-            <div className="min-w-0 flex-1">{userMenu(false)}</div>
-            {teacherUi ? <NotificationBell navigate={navigate} /> : null}
-          </div>
+          {userMenu(false)}
         </div>
       </aside>
 
@@ -524,9 +521,6 @@ export function Shell({
           <IconButton label={t("palette.open")} onClick={() => setPalette(true)}>
             <Search />
           </IconButton>
-          {/* Beside the avatar, hanging from its own right edge: the top bar
-              has nothing else on that side to push the panel out of. */}
-          {teacherUi ? <NotificationBell navigate={navigate} align="end" /> : null}
           {userMenu(true)}
         </div>
 

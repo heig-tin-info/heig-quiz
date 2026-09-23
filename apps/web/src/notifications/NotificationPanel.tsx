@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bell, BellOff, CheckCheck } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { BellOff, CheckCheck } from "lucide-react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import type { Notification, NotificationList, NotificationPayload } from "@quiz/contracts";
@@ -12,7 +12,6 @@ import {
   Button,
   cx,
   EmptyState,
-  IconButton,
   menuPosition,
   pressable,
   QueryError,
@@ -25,9 +24,11 @@ import {
 import { notificationsKey } from "../queryKeys";
 
 /**
- * The bell: what happened to this account while it was away (F-POOL-05 for
- * now — a pool shared, a pool inherited). Unlike a toast, a notification
- * survives a reload, so the list is a query and not a state.
+ * The inbox: what happened to this account while it was away (F-POOL-05 for
+ * now — a pool shared, a pool inherited). It lives in the account menu — an
+ * item "Notifications" and a count on the avatar — rather than behind a bell
+ * of its own, which sat beside the account row and truncated the e-mail.
+ * Unlike a toast, a notification survives a reload, so the list is a query and not a state.
  *
  * It refreshes by itself: the API sends a `notifications` hint on the user's
  * own SSE topic and `useLiveUpdates` invalidates every active query on any
@@ -36,13 +37,13 @@ import { notificationsKey } from "../queryKeys";
  *
  * The panel is a floating layer built from the same two pieces as `Menu` —
  * `menuPosition` for the coordinates and `useLayer` for Escape, the outside
- * click and the focus coming back to the bell — because the rows are
+ * click and the focus coming back to the account menu — because the rows are
  * sentences with a date and a read mark in them, which a `MenuItem` (a label
  * and a muted second line) cannot carry. It is a `dialog` and not a `menu`:
  * arrows scroll a list of sentences here, they do not walk a set of commands.
  */
 
-/** How many the bell asks for; the server caps the list, `unread` counts all. */
+/** How many the inbox asks for; the server caps the list, `unread` counts all. */
 export const NOTIFICATION_LIMIT = 30;
 const LIST_URL = `/app/api/notifications?limit=${NOTIFICATION_LIMIT}`;
 
@@ -118,45 +119,111 @@ function NotificationRow({
   );
 }
 
-export function NotificationBell({
+/** The inbox query, shared by the badge on the avatar and the panel. */
+function useInbox(enabled = true) {
+  return useQuery<NotificationList>({
+    queryKey: notificationsKey,
+    queryFn: () => api(LIST_URL),
+    enabled,
+  });
+}
+
+/** How many are unread, for the account menu's badge and label; 0 while loading. */
+export function useUnreadNotifications(enabled: boolean): number {
+  return useInbox(enabled).data?.unread ?? 0;
+}
+
+/**
+ * The count on the avatar. A count on an icon, so it carries the accent fill
+ * rather than a soft badge: it is the one thing on that row that is new.
+ * `aria-hidden`: the trigger's label says it in words.
+ */
+export function UnreadBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      aria-hidden="true"
+      className="pointer-events-none absolute -right-1 -top-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-on-fill tabular-nums ring-2 ring-canvas"
+    >
+      {count > BADGE_CAP ? `${BADGE_CAP}+` : count}
+    </span>
+  );
+}
+
+/**
+ * The panel, opened from the account menu's "Notifications" item and hung
+ * from the menu's trigger (`anchor`). Closing it hands the focus back to the
+ * first button inside `anchor` — the account menu's trigger.
+ */
+export function NotificationPanel({
+  open,
+  onClose,
+  anchor,
   navigate,
   align = "start",
 }: {
+  open: boolean;
+  onClose: () => void;
+  anchor: React.RefObject<HTMLElement | null>;
   navigate: (r: Route) => void;
-  /** Which edge of the bell the panel hangs from (`end` in the phone top bar). */
+  /** Which edge of the anchor the panel hangs from (`end` in the phone top bar). */
   align?: "start" | "end";
 }) {
   const t = useT();
   const qc = useQueryClient();
-  const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<MenuPlacement | null>(null);
-  const anchor = useRef<HTMLSpanElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const titleId = useId();
 
-  const list = useQuery<NotificationList>({
-    queryKey: notificationsKey,
-    queryFn: () => api(LIST_URL),
-  });
+  const list = useInbox();
 
-  const close = useCallback((restoreFocus: boolean) => {
-    setOpen(false);
-    if (restoreFocus) anchor.current?.querySelector<HTMLElement>("button")?.focus();
-  }, []);
-  useLayer(panel, () => close(true), { trap: false, enabled: open });
+  const close = useCallback(
+    (restoreFocus: boolean) => {
+      onClose();
+      if (restoreFocus) anchor.current?.querySelector<HTMLElement>("button")?.focus();
+    },
+    [onClose, anchor],
+  );
+  const shown = open && pos !== null;
+  useLayer(panel, () => close(true), { trap: false, enabled: shown });
 
-  // Outside click, like `Menu`: a click on the bell itself is the toggle
-  // below, and one inside the panel is the reader using it.
+  // Outside click, like `Menu`: one inside the panel is the reader using it.
   useEffect(() => {
-    if (!open) return;
+    if (!shown) return;
     const onDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (anchor.current?.contains(target) || panel.current?.contains(target)) return;
+      if (panel.current?.contains(e.target as Node)) return;
       close(false);
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
-  }, [open, close]);
+  }, [shown, close]);
+
+  // Placed from the anchor's rectangle when it opens, before paint.
+  useLayoutEffect(() => {
+    if (!open) {
+      setPos(null);
+      return;
+    }
+    const rect = anchor.current?.getBoundingClientRect();
+    if (!rect) return;
+    const viewport = {
+      width: window.innerWidth,
+      height: window.innerHeight,
+    };
+    const placed = menuPosition(rect, viewport, align, PANEL_MAX_HEIGHT);
+    // `menuPosition` anchors the panel on the trigger and stops there. This
+    // panel is 352 px wide and the phone's avatar sits 12 px from the right
+    // edge, so the anchored panel would hang off the left of the screen:
+    // clamp it to the 16 px gutter, in the direction it hangs from.
+    const width = Math.min(PANEL_WIDTH, viewport.width - 2 * GUTTER);
+    setPos({
+      ...placed,
+      left:
+        align === "end"
+          ? Math.max(placed.left, width + GUTTER)
+          : Math.min(placed.left, viewport.width - width - GUTTER),
+    });
+  }, [open, anchor, align]);
 
   /**
    * Both write routes answer with the WHOLE inbox as it now stands, so the
@@ -182,30 +249,6 @@ export function NotificationBell({
   const unread = list.data?.unread ?? 0;
   const items = list.data?.items ?? [];
 
-  const toggle = () => {
-    if (open) {
-      close(false);
-      return;
-    }
-    const rect = anchor.current?.getBoundingClientRect();
-    if (!rect) return;
-    const viewport = { width: window.innerWidth, height: window.innerHeight };
-    const placed = menuPosition(rect, viewport, align, PANEL_MAX_HEIGHT);
-    // `menuPosition` anchors the panel on the trigger and stops there. This
-    // panel is 352 px wide and the phone's bell sits 20 px from the right
-    // edge, so the anchored panel hung 18 px off the left of the screen:
-    // clamp it to the 16 px gutter, in the direction it hangs from.
-    const width = Math.min(PANEL_WIDTH, viewport.width - 2 * GUTTER);
-    setPos({
-      ...placed,
-      left:
-        align === "end"
-          ? Math.max(placed.left, width + GUTTER)
-          : Math.min(placed.left, viewport.width - width - GUTTER),
-    });
-    setOpen(true);
-  };
-
   const openItem = (item: Notification) => {
     if (item.readAt === null) markRead.mutate(item.id);
     close(false);
@@ -214,27 +257,6 @@ export function NotificationBell({
 
   return (
     <>
-      <span ref={anchor} className="relative inline-flex">
-        <IconButton
-          label={unread > 0 ? t("notif.titleUnread", { n: unread }) : t("notif.title")}
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          onClick={toggle}
-        >
-          <Bell />
-        </IconButton>
-        {unread > 0 ? (
-          // A count on an icon, so it carries the accent fill rather than a
-          // soft badge: it is the one thing on this row that is new.
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute -right-0.5 -top-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-on-fill tabular-nums"
-          >
-            {unread > BADGE_CAP ? `${BADGE_CAP}+` : unread}
-          </span>
-        ) : null}
-      </span>
-
       {open && pos
         ? createPortal(
             <div

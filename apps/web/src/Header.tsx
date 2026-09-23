@@ -1,5 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRef, useState } from "react";
 import {
+  Bell,
   BookOpen,
   Code2,
   GraduationCap,
@@ -15,6 +17,12 @@ import type { Me } from "@quiz/contracts";
 import { api } from "./api";
 import quizLogo from "./assets/quiz.svg";
 import { useT } from "./i18n";
+import {
+  NotificationPanel,
+  UnreadBadge,
+  useUnreadNotifications,
+} from "./notifications/NotificationPanel";
+import type { Route } from "./router";
 import { setThemeChoice, useResolvedTheme } from "./theme";
 import { Avatar, cx, IconButton, Menu, Segmented, type MenuItem } from "./ui";
 import { meKey } from "./queryKeys";
@@ -140,6 +148,7 @@ export function UserMenu({
   onOpenSettings,
   studentView,
   onToggleStudentView,
+  notifications,
 }: {
   me: Me;
   /** Avatar-only trigger (mobile top bar). */
@@ -147,13 +156,40 @@ export function UserMenu({
   onOpenSettings: () => void;
   studentView?: boolean;
   onToggleStudentView?: () => void;
+  /**
+   * The inbox (teacher surfaces only): an item that opens the panel, and the
+   * unread count on the avatar. It used to be a bell beside the account row,
+   * where it truncated the e-mail.
+   */
+  notifications?: { navigate: (r: Route) => void };
 }) {
   const t = useT();
+  const unread = useUnreadNotifications(notifications !== undefined);
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const anchor = useRef<HTMLSpanElement>(null);
+  const align = compact ? "end" : "start";
+  const triggerLabel = unread > 0 ? t("menu.userUnread", { n: unread }) : t("menu.user");
+  const avatar = (
+    <span className="relative inline-flex shrink-0">
+      <Avatar me={me} className="size-8 text-xs" />
+      <UnreadBadge count={unread} />
+    </span>
+  );
   // Shared store, so the Settings segmented control and this toggle can
   // never disagree about what is on screen.
   const theme = useResolvedTheme();
   const signOut = useSignOut();
   const items: MenuItem[] = [
+    ...(notifications
+      ? [
+          {
+            label: t("notif.title"),
+            description: unread > 0 ? t("notif.unreadCount", { n: unread }) : undefined,
+            icon: Bell,
+            onSelect: () => setInboxOpen(true),
+          },
+        ]
+      : []),
     { label: t("menu.settings"), icon: SettingsIcon, onSelect: onOpenSettings },
     ...(onToggleStudentView
       ? [
@@ -176,38 +212,49 @@ export function UserMenu({
     { label: t("menu.signout"), icon: LogOut, onSelect: signOut, separator: true },
   ];
   return (
-    <Menu
-      items={items}
-      label={t("menu.user")}
-      align={compact ? "end" : "start"}
-      trigger={
-        compact ? (
-          <button
-            type="button"
-            aria-label={t("menu.user")}
-            className="rounded-full transition-opacity hover:opacity-80"
-          >
-            <Avatar me={me} className="size-8 text-xs" />
-          </button>
-        ) : (
-          <button
-            type="button"
-            aria-label={t("menu.user")}
-            className={cx(
-              "flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-surface-2",
-            )}
-          >
-            <Avatar me={me} className="size-8 text-xs" />
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-semibold leading-tight">
-                {me.givenName} {me.familyName}
+    <span ref={anchor} className={compact ? "inline-flex" : "block"}>
+      <Menu
+        items={items}
+        label={t("menu.user")}
+        align={align}
+        trigger={
+          compact ? (
+            <button
+              type="button"
+              aria-label={triggerLabel}
+              className="rounded-full transition-opacity hover:opacity-80"
+            >
+              {avatar}
+            </button>
+          ) : (
+            <button
+              type="button"
+              aria-label={triggerLabel}
+              className={cx(
+                "flex w-full items-center gap-2.5 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-surface-2",
+              )}
+            >
+              {avatar}
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-semibold leading-tight">
+                  {me.givenName} {me.familyName}
+                </span>
+                <span className="block truncate text-xs text-fg-muted">{me.email}</span>
               </span>
-              <span className="block truncate text-xs text-fg-muted">{me.email}</span>
-            </span>
-          </button>
-        )
-      }
-    />
+            </button>
+          )
+        }
+      />
+      {notifications ? (
+        <NotificationPanel
+          open={inboxOpen}
+          onClose={() => setInboxOpen(false)}
+          anchor={anchor}
+          navigate={notifications.navigate}
+          align={align}
+        />
+      ) : null}
+    </span>
   );
 }
 

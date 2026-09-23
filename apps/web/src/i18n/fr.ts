@@ -18,6 +18,7 @@ export const fr: Record<keyof Dict, string> = {
   "menu.settings": "Réglages",
   "menu.signout": "Se déconnecter",
   "menu.user": "Menu du compte",
+  "menu.userUnread": "Menu du compte ({n} notifications non lues)",
   "menu.studentView": "Passer en vue étudiant",
   "menu.teacherView": "Revenir en vue enseignant",
   "menu.lightTheme": "Thème clair",
@@ -1761,7 +1762,7 @@ export const fr: Record<keyof Dict, string> = {
   "share.role.owner": "Propriétaire",
 
   "notif.title": "Notifications",
-  "notif.titleUnread": "Notifications ({n} non lues)",
+  "notif.unreadCount": "{n} non lues",
   "notif.markAll": "Tout marquer comme lu",
   "notif.unread": "Non lue",
   "notif.poolShared": "{byName} a partagé la banque « {poolName} » avec vous comme {role}.",
