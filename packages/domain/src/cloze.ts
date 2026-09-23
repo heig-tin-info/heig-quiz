@@ -158,57 +158,77 @@ export function matchClozeHole(src: string): { raw: string; body: string | null 
  * the card showed.
  */
 export function parseBlankBody(body: string, index = 0): ClozeBlank | string {
-  let rest = body;
-  let weight = 1;
-  const weightMatch = /^(\d+(?:\.\d+)?)\*/.exec(rest);
-  if (weightMatch !== null) {
-    weight = Number(weightMatch[1]);
-    rest = rest.slice(weightMatch[0].length);
-  }
+  const { weight, rest } = stripWeight(body);
   if (rest.trim() === "") return "cloze.empty_blank";
+  const head: BlankHead = { index, weight };
+  if (rest.startsWith("#")) return parseNumberBlank(rest, head);
+  const regexMatch = REGEX_BLANK.exec(rest);
+  if (regexMatch !== null) return parseRegexBlank(regexMatch[1]!, regexMatch[2]!, head);
+  return parseChoiceBlank(splitAlternatives(rest), head);
+}
 
-  if (rest.startsWith("#")) {
-    const m = /^#(-?\d+(?:[.,]\d+)?)(?::(\d+(?:[.,]\d+)?)(%?))?$/.exec(rest.trim());
-    if (m === null) return "cloze.invalid_number";
-    const value = Number(m[1]!.replace(",", "."));
-    const rawTolerance = m[2] === undefined ? 0 : Number(m[2].replace(",", "."));
-    const relative = m[3] === "%";
-    return {
-      index,
-      weight,
-      kind: "number",
-      value,
-      tolerance: relative ? rawTolerance / 100 : rawTolerance,
-      mode: relative ? "rel" : "abs",
-    };
-  }
+/** What every blank carries whatever its kind: its position and its weight. */
+interface BlankHead {
+  index: number;
+  weight: number;
+}
 
-  const regexMatch = /^\/([\s\S]*)\/([A-Za-z]*)$/.exec(rest);
-  if (regexMatch !== null) {
-    const pattern = regexMatch[1]!;
-    const flags = regexMatch[2]!;
-    if (!ALLOWED_REGEX_FLAGS.test(flags)) return "cloze.invalid_regex_flags";
-    if (!isValidPattern(pattern, flags)) return "cloze.invalid_regex";
-    return { index, weight, kind: "regex", pattern, flags };
-  }
+/** `/pattern/flags`, the whole body. */
+const REGEX_BLANK = /^\/([\s\S]*)\/([A-Za-z]*)$/;
 
-  const alternatives = splitAlternatives(rest);
-  if (alternatives.some((a) => a.startsWith("="))) {
-    const options: string[] = [];
-    const correct: number[] = [];
-    for (const alternative of alternatives) {
-      const isCorrect = alternative.startsWith("=");
-      const label = unescapeBlank(isCorrect ? alternative.slice(1) : alternative).trim();
-      if (label === "") return "cloze.empty_option";
-      if (isCorrect) correct.push(options.length);
-      options.push(label);
-    }
-    return { index, weight, kind: "select", options, correct };
-  }
+/** Splits an optional `2*` weight prefix off a body; the weight is 1 without one. */
+function stripWeight(body: string): { weight: number; rest: string } {
+  const weightMatch = /^(\d+(?:\.\d+)?)\*/.exec(body);
+  if (weightMatch === null) return { weight: 1, rest: body };
+  return { weight: Number(weightMatch[1]), rest: body.slice(weightMatch[0].length) };
+}
 
+/** `#value` or `#value:tolerance`, the tolerance absolute or `%` relative; `,` is a decimal point. */
+function parseNumberBlank(rest: string, head: BlankHead): ClozeBlank | string {
+  const m = /^#(-?\d+(?:[.,]\d+)?)(?::(\d+(?:[.,]\d+)?)(%?))?$/.exec(rest.trim());
+  if (m === null) return "cloze.invalid_number";
+  const value = Number(m[1]!.replace(",", "."));
+  const rawTolerance = m[2] === undefined ? 0 : Number(m[2].replace(",", "."));
+  const relative = m[3] === "%";
+  return {
+    ...head,
+    kind: "number",
+    value,
+    tolerance: relative ? rawTolerance / 100 : rawTolerance,
+    mode: relative ? "rel" : "abs",
+  };
+}
+
+/** A regular expression, refused when its flags or its pattern are not allowed. */
+function parseRegexBlank(pattern: string, flags: string, head: BlankHead): ClozeBlank | string {
+  if (!ALLOWED_REGEX_FLAGS.test(flags)) return "cloze.invalid_regex_flags";
+  if (!isValidPattern(pattern, flags)) return "cloze.invalid_regex";
+  return { ...head, kind: "regex", pattern, flags };
+}
+
+/**
+ * The `|`-separated alternatives: a `select` as soon as one of them is marked
+ * `=` (the correct options), a `text` of accepted answers otherwise.
+ */
+function parseChoiceBlank(alternatives: string[], head: BlankHead): ClozeBlank | string {
+  if (alternatives.some((a) => a.startsWith("="))) return parseSelectBlank(alternatives, head);
   const answers = alternatives.map((a) => unescapeBlank(a).trim()).filter((a) => a !== "");
   if (answers.length === 0) return "cloze.empty_blank";
-  return { index, weight, kind: "text", answers };
+  return { ...head, kind: "text", answers };
+}
+
+/** A drop-down: every alternative is an option, and the `=` ones are correct. */
+function parseSelectBlank(alternatives: string[], head: BlankHead): ClozeBlank | string {
+  const options: string[] = [];
+  const correct: number[] = [];
+  for (const alternative of alternatives) {
+    const isCorrect = alternative.startsWith("=");
+    const label = unescapeBlank(isCorrect ? alternative.slice(1) : alternative).trim();
+    if (label === "") return "cloze.empty_option";
+    if (isCorrect) correct.push(options.length);
+    options.push(label);
+  }
+  return { ...head, kind: "select", options, correct };
 }
 
 /** Splits on unescaped `|`. */
