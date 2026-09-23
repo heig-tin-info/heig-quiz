@@ -41,7 +41,7 @@ import type { AppConfig } from "../../config.js";
 import { CSRF_COOKIE, CSRF_HEADER } from "../../auth/session.js";
 import { pools, questions } from "../../db/schema.js";
 import { findAccessibleClassroom, findAccessibleQuestion, teacherGuard } from "../guards.js";
-import { emptyBody, invalid, notFound } from "../http.js";
+import { emptyBody, invalid, notFound, teacherRoute } from "../http.js";
 import { byId } from "../evaluation/service.js";
 import * as live from "../live/service.js";
 import * as poolService from "../pool/service.js";
@@ -65,9 +65,11 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     if (error instanceof live.LiveError) {
       return reply.code(error.status).send({ error: error.code, message: error.message });
     }
-    app.log.error({ err: error }, "poll route failed");
+    app.log.error({ err: error, cause: (error as Error)?.cause }, "poll route failed");
     return reply.code(500).send({ error: "internal_error" });
   }
+
+  const teacher = teacherRoute(app, failure);
 
   // =========================================================================
   // Teacher side
@@ -90,6 +92,14 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     const room = await reachableClassroom(req, evaluation.classroomId);
     if (!room) return null;
     return service.scopeOf(app.db, evaluation);
+  }
+
+  /** `reachablePoll` as a loader of invariant 6: it answers its own 404. */
+  async function staffPoll(req: FastifyRequest, reply: FastifyReply, p: { id: string }) {
+    const scope = await reachablePoll(req, p.id);
+    if (scope) return scope;
+    await notFound(reply);
+    return null;
   }
 
   const view = (scope: service.PollScope): Promise<PollTeacherView> =>
@@ -184,84 +194,55 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     }
   });
 
-  app.get("/app/api/evaluations/:id/poll", { preHandler: requireTeacher }, async (req, reply) => {
-    const params = IdParam.safeParse(req.params);
-    if (!params.success) return notFound(reply);
-    const scope = await reachablePoll(req, params.data.id);
-    if (!scope) return notFound(reply);
-    return view(scope);
-  });
+  app.get(
+    "/app/api/evaluations/:id/poll",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: staffPoll }, ({ scope }) => view(scope)),
+  );
 
   app.post(
     "/app/api/evaluations/:id/poll/reveal",
     { preHandler: requireTeacher },
-    async (req, reply) => {
-      const now = app.clock.now();
-      const params = IdParam.safeParse(req.params);
-      if (!params.success) return notFound(reply);
-      const body = PollRevealBody.safeParse(emptyBody(req.body));
-      if (!body.success) return invalid(reply, body.error);
-      const scope = await reachablePoll(req, params.data.id);
-      if (!scope) return notFound(reply);
-      const updated = await service.setRevealed(
-        app.db,
-        scope.evaluation,
-        body.data.revealed,
-        now,
-      );
-      await trace(req, "poll.reveal", "evaluation", updated.id, { revealed: body.data.revealed });
-      return view({ ...scope, evaluation: updated });
-    },
+    teacher(
+      { params: IdParam, body: PollRevealBody, optionalBody: true, load: staffPoll },
+      async ({ req, now, body, scope }) => {
+        const updated = await service.setRevealed(app.db, scope.evaluation, body.revealed, now);
+        await trace(req, "poll.reveal", "evaluation", updated.id, { revealed: body.revealed });
+        return view({ ...scope, evaluation: updated });
+      },
+    ),
   );
 
   /** The end of a poll: closed and graded, never released (ADR-014). */
   app.post(
     "/app/api/evaluations/:id/poll/end",
     { preHandler: requireTeacher },
-    async (req, reply) => {
-      const now = app.clock.now();
-      const params = IdParam.safeParse(req.params);
-      if (!params.success) return notFound(reply);
-      const scope = await reachablePoll(req, params.data.id);
-      if (!scope) return notFound(reply);
-      try {
-        const closed = await service.endPoll(app, scope.evaluation, now);
-        await trace(req, "poll.end", "evaluation", closed.id);
-        return await view({ ...scope, evaluation: closed });
-      } catch (error) {
-        return failure(reply, error, now);
-      }
-    },
+    teacher({ params: IdParam, load: staffPoll }, async ({ req, now, scope }) => {
+      const closed = await service.endPoll(app, scope.evaluation, now);
+      await trace(req, "poll.end", "evaluation", closed.id);
+      return view({ ...scope, evaluation: closed });
+    }),
   );
 
   /** "Run the same question again": a NEW poll, a new code, a clean tally. */
   app.post(
     "/app/api/evaluations/:id/poll/again",
     { preHandler: requireTeacher },
-    async (req, reply) => {
-      const now = app.clock.now();
-      const params = IdParam.safeParse(req.params);
-      if (!params.success) return notFound(reply);
-      const scope = await reachablePoll(req, params.data.id);
-      if (!scope) return notFound(reply);
-      try {
-        const again = await service.createPoll(app.db, {
-          classroomId: scope.evaluation.classroomId,
-          questionId: scope.item.question.id,
-          anonymous: service.pollSettingsOf(scope.evaluation).anonymous,
-          createdBy: req.user!.id,
-          now,
-        });
-        await trace(req, "poll.create", "evaluation", again.evaluation.id, {
-          questionId: scope.item.question.id,
-          again: scope.evaluation.id,
-          code: again.evaluation.accessCode,
-        });
-        return reply.code(201).send(await view(again));
-      } catch (error) {
-        return failure(reply, error, now);
-      }
-    },
+    teacher({ params: IdParam, load: staffPoll }, async ({ req, reply, now, scope }) => {
+      const again = await service.createPoll(app.db, {
+        classroomId: scope.evaluation.classroomId,
+        questionId: scope.item.question.id,
+        anonymous: service.pollSettingsOf(scope.evaluation).anonymous,
+        createdBy: req.user!.id,
+        now,
+      });
+      await trace(req, "poll.create", "evaluation", again.evaluation.id, {
+        questionId: scope.item.question.id,
+        again: scope.evaluation.id,
+        code: again.evaluation.accessCode,
+      });
+      return reply.code(201).send(await view(again));
+    }),
   );
 
   // =========================================================================
