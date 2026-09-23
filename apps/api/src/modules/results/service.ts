@@ -56,6 +56,7 @@ import {
   staffRosterWithAttempt,
   studentEvaluationRows,
   totalPointsByEvaluation,
+  totalPointsOf,
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
@@ -105,7 +106,7 @@ async function computeResults(
   evaluation: EvaluationRecord,
 ): Promise<ComputedResults> {
   const items = await joinedItems(db, evaluation.id);
-  const totalPoints = round2(items.reduce((sum, i) => sum + i.item.points, 0));
+  const totalPoints = totalPointsOf(items.map((i) => i.item));
   const scale = scaleOf(evaluation);
 
   const roster = await db
@@ -480,7 +481,7 @@ export async function studentFeedback(
   }
 
   const items = await joinedItems(db, evaluation.id);
-  const totalPoints = round2(items.reduce((sum, i) => sum + i.item.points, 0));
+  const totalPoints = totalPointsOf(items.map((i) => i.item));
   const answerRows = await db.select().from(answers).where(eq(answers.attemptId, attempt.id));
   const byItem = new Map(answerRows.map((a) => [a.itemId, a]));
   const graded = await db

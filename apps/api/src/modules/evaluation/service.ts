@@ -372,8 +372,15 @@ export async function itemRows(db: Db, evaluationId: string): Promise<ItemRow[]>
   }));
 }
 
+/**
+ * The total points of an evaluation: the sum of its items' points, rounded by
+ * `@quiz/domain#round2` like every other number of the platform (decision
+ * D13). The one definition behind the builder, the attempt view, the live
+ * dashboard, the results and the feedback page, which show the same number.
+ * A caller holding `JoinedItem`s passes `items.map((i) => i.item)`.
+ */
 export const totalPointsOf = (rows: readonly { points: number }[]): number =>
-  Math.round(rows.reduce((sum, r) => sum + r.points, 0) * 100) / 100;
+  round2(rows.reduce((sum, r) => sum + r.points, 0));
 
 export const staleOf = (rows: readonly ItemRow[]): string[] =>
   rows.filter((r) => r.latestVersionNumber !== null && r.latestVersionNumber > r.versionNumber)
