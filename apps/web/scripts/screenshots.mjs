@@ -135,7 +135,7 @@ const scenes = [
   { name: "student-settings", role: "student", path: "/settings" },
 
   // WP9: student player. `TAKE` is the mock's evaluation; `?scene=` picks the
-  // state the fake backend serves (see the WP9 block of src/mock/index.ts).
+  // state the fake backend serves (see the WP9 block of src/mock/student.ts).
   { name: "student-home-eval", role: "student", path: "/" },
   { name: "student-lobby", role: "student", path: `${TAKE}?scene=lobby` },
   { name: "player-mcq", role: "student", path: `${TAKE}?scene=running` },
@@ -215,7 +215,7 @@ const scenes = [
   { name: "poll-projection-long", role: "teacher", path: "/evaluations/poll-long/poll", fold: true },
   { name: "poll-projection-long-revealed", role: "teacher", path: "/evaluations/poll-long/poll?revealed=1", fold: true },
   // The participant's half, as a GUEST: no session at all, which is what a
-  // phone in the room has (`?as=guest` in src/mock/index.ts).
+  // phone in the room has (`?as=guest` in src/mock/poll.ts).
   { name: "join-mcq", role: "teacher", path: "/p/QZ4F7K?as=guest" },
   { name: "join-revealed", role: "teacher", path: "/p/QZ4F7K?as=guest&revealed=1" },
   { name: "join-ended", role: "teacher", path: "/p/EN6D3D?as=guest" },
