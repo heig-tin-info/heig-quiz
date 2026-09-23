@@ -2,7 +2,8 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 
 import { apiErrorMessage } from "./api";
 import { useT } from "./i18n";
-import { Alert, Button, PageHeader } from "./ui/primitives";
+import { Button } from "./ui/controls";
+import { Alert, PageHeader } from "./ui/page";
 
 /*
  * The two failure primitives that read an `ApiError`. They stay in the app,
