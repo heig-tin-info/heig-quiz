@@ -48,6 +48,7 @@ import {
 } from "../../db/schema.js";
 import {
   applyState,
+  cachedGrade,
   clearRelease,
   feedbackOf,
   joinedItems,
@@ -310,9 +311,9 @@ export async function markModifiedAfterRelease(
   evaluation: EvaluationRecord,
   now: Date,
 ): Promise<boolean> {
-  if (evaluation.releasedAt === null) return false;
-  await setModifiedAfterRelease(db, evaluation.id, now);
-  return true;
+  // Re-read by the UPDATE, not trusted from `evaluation`, which the caller
+  // loaded before its own writes (a release may have committed since).
+  return setModifiedAfterRelease(db, evaluation.id, now);
 }
 
 // --- Per-question view (F-RES-03) ----------------------------------------
@@ -514,6 +515,10 @@ export async function studentFeedback(
   });
 
   points = round2(points);
+  // The total is the frozen one while it still holds (D-06); the per-item
+  // points above always come from the gradings, which the snapshot mirrors.
+  const hit =
+    attempt.userId === null ? null : cachedGrade(evaluation, attempt.userId, attempt.id);
   return {
     available: true,
     evaluation: {
@@ -522,9 +527,9 @@ export async function studentFeedback(
       releasedAt: isoOrNull(evaluation.releasedAt),
     },
     attemptId: attempt.id,
-    points,
-    totalPoints,
-    grade: gradeFromPoints(points, totalPoints, scaleOf(evaluation)),
+    points: hit ? hit.points : points,
+    totalPoints: hit ? hit.totalPoints : totalPoints,
+    grade: hit ? hit.grade : gradeFromPoints(points, totalPoints, scaleOf(evaluation)),
     items: result,
   };
 }
@@ -593,19 +598,31 @@ export async function studentResultCards(db: Db, userId: string): Promise<Result
   const rows = (await studentEvaluationRows(db, userId)).filter(
     (row) => row.evaluation.releasedAt !== null,
   );
-  // F-GRADE-09 is explicit: a re-correction after the release UPDATES the
-  // grades. They are therefore recomputed from the validated gradings; the
-  // frozen `released_grades` is the record of what was published, and
-  // `modified_after_release` is what tells the teacher the two have drifted.
-  // Two grouped queries for the whole page, not two per card.
-  const totals = await totalPointsByEvaluation(db, [...new Set(rows.map((r) => r.evaluation.id))]);
+  // The grade frozen at release is served as long as it is still true
+  // (`cachedGrade`, D-06). F-GRADE-09 is explicit: a re-correction after the
+  // release UPDATES the grades, so once `modified_after_release` is set they
+  // are recomputed from the validated gradings. Two grouped queries for the
+  // cards that need it, not two per card — and none when every card is cached.
+  const cached = new Map(
+    rows.map((row) => [
+      row,
+      cachedGrade(row.evaluation, userId, row.attempt?.id ?? null),
+    ]),
+  );
+  const live = rows.filter((row) => cached.get(row) === null);
+  const totals = await totalPointsByEvaluation(db, [...new Set(live.map((r) => r.evaluation.id))]);
   const pointsPerAttempt = await pointsByAttempt(
     db,
-    rows.map((r) => r.attempt?.id).filter((id): id is string => typeof id === "string"),
+    live.map((r) => r.attempt?.id).filter((id): id is string => typeof id === "string"),
   );
   return rows.map((row) => {
-    const totalPoints = totals.get(row.evaluation.id) ?? 0;
-    const points = row.attempt ? (pointsPerAttempt.get(row.attempt.id) ?? 0) : 0;
+    const hit = cached.get(row) ?? null;
+    const totalPoints = hit ? hit.totalPoints : (totals.get(row.evaluation.id) ?? 0);
+    const points = hit
+      ? hit.points
+      : row.attempt
+        ? (pointsPerAttempt.get(row.attempt.id) ?? 0)
+        : 0;
     return {
       evaluationId: row.evaluation.id,
       title: row.evaluation.title,
@@ -616,7 +633,7 @@ export async function studentResultCards(db: Db, userId: string): Promise<Result
       releasedAt: isoOrNull(row.evaluation.releasedAt),
       points,
       totalPoints,
-      grade: gradeFromPoints(points, totalPoints, scaleOf(row.evaluation)),
+      grade: hit ? hit.grade : gradeFromPoints(points, totalPoints, scaleOf(row.evaluation)),
     };
   });
 }

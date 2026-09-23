@@ -37,6 +37,7 @@ import {
   studentEvaluationRows,
   totalPointsByEvaluation,
   totalPointsOf,
+  cachedGrade,
 } from "../evaluation/service.js";
 import * as events from "./events.js";
 import { pointsByAttempt } from "../grading/service.js";
@@ -989,6 +990,8 @@ export async function studentHome(db: Db, userId: string, now: Date): Promise<St
 
   const gradeOf = (row: (typeof rows)[number]): number | null => {
     if (row.evaluation.releasedAt === null) return null;
+    const hit = cachedGrade(row.evaluation, userId, row.attempt?.id ?? null);
+    if (hit) return hit.grade;
     const total = totals.get(row.evaluation.id) ?? 0;
     const points = row.attempt ? (pointsPerAttempt.get(row.attempt.id) ?? 0) : 0;
     return gradeFromPoints(points, total, GradingScale.parse(row.evaluation.gradingScale));
