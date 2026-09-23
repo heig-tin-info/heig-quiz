@@ -34,7 +34,7 @@ const STATE_KEYS: Record<GradingState, keyof Dict> = {
 
 export const sourceLabel = (t: TFunction, s: GradingSource) => t(SOURCE_KEYS[s]);
 export const confidenceLabel = (t: TFunction, c: GradingConfidence) => t(CONFIDENCE_KEYS[c]);
-export const stateLabel = (t: TFunction, s: GradingState) => t(STATE_KEYS[s]);
+export const gradingStateLabel = (t: TFunction, s: GradingState) => t(STATE_KEYS[s]);
 
 /** Low confidence is the one that asks for eyes, so it is the only warm tone. */
 export const confidenceTone = (c: GradingConfidence): Tone =>

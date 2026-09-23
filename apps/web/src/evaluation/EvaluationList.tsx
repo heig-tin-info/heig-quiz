@@ -33,7 +33,14 @@ import {
   Skeleton,
   T,
 } from "../ui";
-import { evaluationsKey, hasDashboard, isGraded, isLive, stateLabel, stateTone } from "./common";
+import {
+  evaluationsKey,
+  evaluationStateLabel,
+  hasDashboard,
+  isGraded,
+  isLive,
+  stateTone,
+} from "./common";
 
 /**
  * The evaluations of one classroom, under its roster.
@@ -237,7 +244,7 @@ export function EvaluationList({
                   <td className={T.td}>
                     <span className="flex flex-wrap items-center gap-2">
                       <span className="font-semibold">{row.title}</span>
-                      <Badge tone={stateTone(row.state)}>{stateLabel(row.state, t)}</Badge>
+                      <Badge tone={stateTone(row.state)}>{evaluationStateLabel(row.state, t)}</Badge>
                     </span>
                   </td>
                   <td className={`${T.td} text-fg-muted`}>

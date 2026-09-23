@@ -23,7 +23,7 @@ const STATE_TONES: Record<ResultRowState, Tone> = {
   expired: "amber",
 };
 
-const stateLabel = (t: TFunction, s: ResultRowState) => t(STATE_KEYS[s]);
+const resultStateLabel = (t: TFunction, s: ResultRowState) => t(STATE_KEYS[s]);
 
 /**
  * One student per row (F-RES-02), absent students included: they are a 1.0
@@ -50,7 +50,7 @@ export function GradeTable({ rows }: { rows: ResultRow[] }) {
               ? row.grade
               : key === "duration"
                 ? (row.durationS ?? -1)
-                : stateLabel(t, row.state),
+                : resultStateLabel(t, row.state),
     { key: "name", dir: 1 },
   );
 
@@ -111,7 +111,7 @@ export function GradeTable({ rows }: { rows: ResultRow[] }) {
                 {row.durationS === null ? "—" : formatDuration(row.durationS * 1000, t)}
               </td>
               <td className={T.td}>
-                <Badge tone={STATE_TONES[row.state]}>{stateLabel(t, row.state)}</Badge>
+                <Badge tone={STATE_TONES[row.state]}>{resultStateLabel(t, row.state)}</Badge>
               </td>
             </tr>
           ))}

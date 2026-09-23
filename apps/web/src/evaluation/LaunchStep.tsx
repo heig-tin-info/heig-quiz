@@ -7,7 +7,7 @@ import { api, apiErrorMessage } from "../api";
 import { formatDuration, useT } from "../i18n";
 import type { Route } from "../router";
 import { Alert, Badge, Button, Card, isoDateTime, SectionHeading, Stat } from "../ui";
-import { evaluationKey, stateLabel, stateTone } from "./common";
+import { evaluationKey, evaluationStateLabel, stateTone } from "./common";
 
 /**
  * Step 3: the last look, and the ONE action that turns a configuration into
@@ -62,7 +62,11 @@ export function LaunchStep({
         icon={Rocket}
         title={t("eval.step.launch")}
         description={t("eval.launch.desc")}
-        actions={<Badge tone={stateTone(evaluation.state)}>{stateLabel(evaluation.state, t)}</Badge>}
+        actions={
+          <Badge tone={stateTone(evaluation.state)}>
+            {evaluationStateLabel(evaluation.state, t)}
+          </Badge>
+        }
       />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

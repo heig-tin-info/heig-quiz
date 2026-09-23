@@ -32,7 +32,13 @@ import {
   TabPanel,
   Tabs,
 } from "../ui";
-import { evaluationKey, evaluationsKey, isGraded, stateLabel, stateTone } from "./common";
+import {
+  evaluationKey,
+  evaluationsKey,
+  evaluationStateLabel,
+  isGraded,
+  stateTone,
+} from "./common";
 import { ItemsStep } from "./ItemsStep";
 import { LaunchStep } from "./LaunchStep";
 import { TimingStep } from "./TimingStep";
@@ -192,7 +198,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
               editLabel={t("eval.rename.of", { title: evaluation.title })}
               inputLabel={t("eval.titleLabel")}
             />
-            <Badge tone={stateTone(evaluation.state)}>{stateLabel(evaluation.state, t)}</Badge>
+            <Badge tone={stateTone(evaluation.state)}>{evaluationStateLabel(evaluation.state, t)}</Badge>
           </span>
         }
         help="evaluation"

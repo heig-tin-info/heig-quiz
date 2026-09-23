@@ -44,7 +44,7 @@ export function stateTone(state: EvaluationState): Tone {
   return STATE_TONE[state];
 }
 
-export function stateLabel(state: EvaluationState, t: TFunction): string {
+export function evaluationStateLabel(state: EvaluationState, t: TFunction): string {
   return t(`eval.state.${state}` as keyof Dict);
 }
 

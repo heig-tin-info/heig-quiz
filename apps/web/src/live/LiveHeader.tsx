@@ -2,7 +2,7 @@ import { ClipboardCheck, Clock, Maximize2, Minimize2, Pause, Play, Square } from
 
 import type { EvaluationState } from "@quiz/contracts";
 
-import { isGraded, stateLabel, stateTone } from "../evaluation/common";
+import { evaluationStateLabel, isGraded, stateTone } from "../evaluation/common";
 import { useT } from "../i18n";
 import { Badge, Button, Countdown, IconButton, Menu, PageHeader } from "../ui";
 
@@ -70,7 +70,7 @@ export function LiveHeader({
       help="live"
       description={
         <span className="flex flex-wrap items-center gap-3">
-          <Badge tone={stateTone(state)}>{stateLabel(state, t)}</Badge>
+          <Badge tone={stateTone(state)}>{evaluationStateLabel(state, t)}</Badge>
           {closesAt && live ? (
             <Countdown
               deadlineAt={Date.parse(closesAt)}
