@@ -1197,8 +1197,6 @@ export const en = {
   "lobby.saving.body": "Your answers are saved continuously and handed in automatically when the time is up.",
   "lobby.attempt.title": "One attempt",
   "lobby.attempt.body": "You take this evaluation once; a reload brings back your answers and your place.",
-  "lobby.clock.title": "The clock is the server's",
-  "lobby.clock.body": "The countdown is the same for everybody, whatever your device says.",
   "lobby.bonus": "Extra time: +{n}% · {time} for you",
   "lobby.duration": "{n} min",
   "lobby.connected": "Connected · clock synchronised",

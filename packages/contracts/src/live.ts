@@ -16,6 +16,7 @@ import {
   EvaluationSettings,
   EvaluationState,
   FeedbackPolicy,
+  Navigation,
 } from "./evaluation.js";
 
 export const AttemptState = z.enum(["not_started", "in_progress", "submitted", "expired"]);
@@ -99,6 +100,12 @@ export const LobbyView = z.object({
     state: EvaluationState,
     announcedDurationS: z.number().int().nullable(),
   }),
+  /**
+   * `settings.navigation`, so the waiting room can state the first of its
+   * three rules (§6.3, F-LIVE-08). A rule of the evaluation, not question
+   * content: it says how the student may move, nothing about what they see.
+   */
+  navigation: Navigation,
   present: z.number().int(),
   enrolled: z.number().int(),
   timeBonusPercent: z.number().int(),

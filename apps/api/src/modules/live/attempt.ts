@@ -752,6 +752,7 @@ export async function lobbyView(
       state: evaluation.state,
       announcedDurationS: evaluation.durationS,
     },
+    navigation: settingsOf(evaluation).navigation,
     present: presence.count(evaluation.id),
     enrolled: await enrolledCount(db, evaluation),
     timeBonusPercent: participant.timeBonusPercent,

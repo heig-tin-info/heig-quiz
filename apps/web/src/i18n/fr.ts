@@ -1192,8 +1192,6 @@ export const fr: Record<keyof Dict, string> = {
   "lobby.saving.body": "Vos réponses sont enregistrées en continu ; la remise est automatique à la fin du temps.",
   "lobby.attempt.title": "Une seule tentative",
   "lobby.attempt.body": "Vous passez cette évaluation une fois ; un rechargement retrouve vos réponses et votre place.",
-  "lobby.clock.title": "L'horloge est celle du serveur",
-  "lobby.clock.body": "Le compte à rebours est le même pour tout le monde, quelle que soit l'heure de votre appareil.",
   "lobby.bonus": "Temps supplémentaire : +{n} % · {time} pour vous",
   "lobby.duration": "{n} min",
   "lobby.connected": "Connecté · horloge synchronisée",
