@@ -36,12 +36,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Send, SearchX } from "lucide-react";
 
 import type { Me, PollPublicView, PublicConfig } from "@quiz/contracts";
-import { questionTypeClient } from "@quiz/registry/client";
 
 import { api, ApiError } from "../api";
 import { useT } from "../i18n";
 import type { Route } from "../router";
-import { QuestionHost } from "../student/QuestionHost";
+import { isAnswered, QuestionHost } from "../student/QuestionHost";
 import { Alert, Button, Card, EmptyState, Field, QueryError, Skeleton } from "../ui";
 import { PollJoinReveal } from "./PollJoinReveal";
 import { configKey, publicPollKey } from "../queryKeys";
@@ -54,15 +53,6 @@ const errorCode = (error: unknown): string | null =>
 
 const statusOf = (error: unknown): number | null =>
   error instanceof ApiError ? error.status : null;
-
-/** "Has something been written here?" is the question TYPE's call, not ours. */
-function isAnswered(type: string, answer: unknown): boolean {
-  try {
-    return questionTypeClient(type).isAnswered(answer ?? null);
-  } catch {
-    return answer !== null && answer !== undefined;
-  }
-}
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
