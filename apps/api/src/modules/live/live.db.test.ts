@@ -17,7 +17,15 @@ import { registerForTests } from "@quiz/registry/server";
 
 import { TestClock } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { answers, attemptEvents, attempts, evaluationItems, evaluations } from "../../db/schema.js";
+import {
+  answers,
+  attemptEvents,
+  attempts,
+  enrollments,
+  evaluationItems,
+  evaluations,
+  users,
+} from "../../db/schema.js";
 import { subscribe, type BusMessage } from "../../events.js";
 import { testDb } from "../../test/db.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
@@ -52,6 +60,37 @@ async function running(options: Parameters<typeof seedLive>[1] = {}) {
   const items = await itemRows(db, row.id);
   return { seed, evaluation: row, attempt, participant, items };
 }
+
+/** The PostgreSQL error under Drizzle's wrapper, whatever the driver. */
+function pgErrorOf(err: unknown): { code?: string; constraint?: string } {
+  let e: unknown = err;
+  while (typeof e === "object" && e !== null) {
+    const { code, cause } = e as { code?: unknown; cause?: unknown };
+    if (typeof code === "string") return e as { code: string; constraint?: string };
+    e = cause;
+  }
+  return {};
+}
+
+describe("an account that holds an attempt (D-10)", () => {
+  it("cannot be deleted: its answers and gradings are never erased in passing", async () => {
+    const { seed, attempt } = await running();
+    const userId = seed.studentIds[0]!;
+    // The roster seat refuses the delete too; take it away to reach attempts.
+    await db.delete(enrollments).where(eq(enrollments.userId, userId));
+
+    const refused = await db
+      .delete(users)
+      .where(eq(users.id, userId))
+      .then(() => null, (err: unknown) => err);
+    expect(pgErrorOf(refused)).toMatchObject({
+      code: "23503",
+      constraint: "attempts_user_id_users_id_fk",
+    });
+    const [kept] = await db.select().from(attempts).where(eq(attempts.id, attempt.id));
+    expect(kept?.userId).toBe(userId);
+  });
+});
 
 describe("entering an evaluation (F-LIVE-01)", () => {
   it("creates ONE attempt however many times it is called", async () => {

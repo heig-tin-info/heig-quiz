@@ -15,7 +15,7 @@
  *   - autosave is ONE statement, never a read-modify-write: the conditional
  *     upsert of §4.7 settles the revision race in the database.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
 
@@ -70,6 +70,7 @@ import {
   attempts,
   enrollments,
   evaluations,
+  guestParticipants,
   users,
 } from "../../db/schema.js";
 import { loadConfig, typeOf } from "../pool/config.js";
@@ -77,6 +78,7 @@ import {
   applyState,
   byId as evaluationById,
   feedbackOf,
+  setClosesAt,
   settingsOf,
   staffRosterWithAttempt,
   toEvaluation,
@@ -270,7 +272,6 @@ export async function participantOf(
       and(
         eq(enrollments.classroomId, evaluation.classroomId),
         eq(enrollments.userId, userId),
-        eq(enrollments.status, "claimed"),
       ),
     )
     .limit(1);
@@ -311,7 +312,6 @@ async function seatOf(
       and(
         eq(enrollments.classroomId, evaluation.classroomId),
         eq(enrollments.userId, userId),
-        eq(enrollments.status, "claimed"),
       ),
     )
     .limit(1);
@@ -405,6 +405,57 @@ function ipAllowed(allowlist: readonly string[], ip: string | undefined): boolea
   if (allowlist.length === 0) return true;
   if (ip === undefined) return false;
   return allowlist.some((prefix) => ip.startsWith(prefix));
+}
+
+// --- Guest participants (F-AUTH-05) ----------------------------------------
+
+type GuestRecord = typeof guestParticipants.$inferSelect;
+
+/**
+ * A poll's guest (F-AUTH-05): a browser that holds the `quiz_guest` cookie
+ * (`modules/poll`). What the database holds is `sha256(token:evaluation)`.
+ *
+ * Binding the hash to the evaluation is what lets ONE cookie serve a browser
+ * across several polls — one row per (evaluation, browser), as the unique
+ * index on `token_hash` requires — and what stops a hash read out of one
+ * poll's table from being replayed as another poll's participant.
+ */
+function guestHash(token: string, evaluationId: string): string {
+  return createHash("sha256").update(`${token}:${evaluationId}`).digest("hex");
+}
+
+export async function guestByToken(
+  db: Db,
+  evaluationId: string,
+  token: string,
+): Promise<GuestRecord | null> {
+  const [row] = await db
+    .select()
+    .from(guestParticipants)
+    .where(eq(guestParticipants.tokenHash, guestHash(token, evaluationId)))
+    .limit(1);
+  return row ?? null;
+}
+
+/** Idempotent: the same cookie always lands on the same guest row. */
+export async function ensureGuest(
+  db: Db,
+  evaluationId: string,
+  token: string,
+  now: Date,
+): Promise<GuestRecord> {
+  await db
+    .insert(guestParticipants)
+    .values({
+      id: randomUUID(),
+      evaluationId,
+      tokenHash: guestHash(token, evaluationId),
+      createdAt: now,
+    })
+    .onConflictDoNothing({ target: guestParticipants.tokenHash });
+  const row = await guestByToken(db, evaluationId, token);
+  if (!row) throw new LiveError("internal_error", 500, "guest vanished after insert");
+  return row;
 }
 
 // --- Attempts -------------------------------------------------------------
@@ -1768,10 +1819,7 @@ export async function extendTime(
   // ticker take them back at the old instant.
   if (target === undefined && settingsOf(evaluation).timing === "deadline" && evaluation.closesAt) {
     const closesAt = new Date(evaluation.closesAt.getTime() + seconds * 1000);
-    await db
-      .update(evaluations)
-      .set({ closesAt, updatedAt: now })
-      .where(eq(evaluations.id, evaluation.id));
+    await setClosesAt(db, evaluation.id, closesAt, now);
     // The dashboard and the players read the new end from this frame.
     events.stateChanged({ ...evaluation, closesAt }, now);
   }

@@ -91,9 +91,6 @@ export const enrollments = pgTable(
     prenom: text("prenom").notNull(),
     /** Normalized (trim + lowercase) at import time. */
     email: text("email").notNull(),
-    status: text("status", { enum: ["pending", "claimed"] })
-      .notNull()
-      .default("pending"),
     userId: uuid("user_id").references(() => users.id),
     claimedAt: timestamp("claimed_at", { withTimezone: true }),
     conflictFlag: boolean("conflict_flag").notNull().default(false),

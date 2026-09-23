@@ -18,7 +18,7 @@
  * the code answers — an account, or (when the poll is anonymous) a browser
  * identified by the `quiz_guest` cookie and a row in `guest_participants`.
  */
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomBytes } from "node:crypto";
 
 import { and, asc, count, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
@@ -35,7 +35,7 @@ import {
 import { pollTally, type PollType } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
-import type { Db } from "../../db/client.js";
+import { isUniqueViolation, type Db } from "../../db/client.js";
 import {
   answers,
   attempts,
@@ -43,7 +43,6 @@ import {
   courses,
   evaluationItems,
   evaluations,
-  guestParticipants,
   questionVersions,
   questions,
 } from "../../db/schema.js";
@@ -51,6 +50,7 @@ import {
   byId,
   createPollEvaluation,
   joinedItems,
+  setPollSettings,
   settingsOf,
   type EvaluationRecord,
   type JoinedItem,
@@ -59,8 +59,6 @@ import * as live from "../live/service.js";
 import { solutionView, studentViewOf } from "../live/studentView.js";
 import { loadConfig, typeOf } from "../pool/config.js";
 import * as events from "./events.js";
-
-type GuestRecord = typeof guestParticipants.$inferSelect;
 
 // --- Failures -------------------------------------------------------------
 
@@ -100,15 +98,29 @@ const CODE_LENGTH = 6;
 /**
  * How long a finished poll still answers on its code. A phone that scanned
  * the QR must keep showing the question and the revealed key while the
- * teacher comments it; two hours later the code is free again.
+ * teacher comments it; two hours later the code is free again. A code is
+ * therefore not drawn while a poll can still be reached by it
+ * ({@link codeTaken}); the unique index on the running polls is the backstop
+ * that makes two concurrent draws of one code safe.
  */
 const ENDED_GRACE_MS = 2 * 60 * 60 * 1000;
 
-function drawCode(): string {
+/** One uniformly drawn session code. Six characters is 32^6 ≈ 10^9 codes. */
+export function drawCode(): string {
   const bytes = randomBytes(CODE_LENGTH);
   let out = "";
   for (const byte of bytes) out += CODE_ALPHABET[byte % CODE_ALPHABET.length];
   return out;
+}
+
+/** How many codes `createPoll` draws before giving up; one collision is already rare. */
+const CODE_DRAWS = 20;
+
+function stillAddressable(now: Date) {
+  return or(
+    eq(evaluations.state, "running"),
+    gte(evaluations.closedAt, new Date(now.getTime() - ENDED_GRACE_MS)),
+  );
 }
 
 /** A code is taken while its poll is still reachable by it (see {@link byCode}). */
@@ -121,22 +133,6 @@ async function codeTaken(db: Db, code: string, now: Date): Promise<boolean> {
   return row !== undefined;
 }
 
-function stillAddressable(now: Date) {
-  return or(
-    eq(evaluations.state, "running"),
-    gte(evaluations.closedAt, new Date(now.getTime() - ENDED_GRACE_MS)),
-  );
-}
-
-/** A code no running poll holds. Six characters is 32^6 ≈ 10^9 draws. */
-async function freeCode(db: Db, now: Date): Promise<string> {
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    const code = drawCode();
-    if (!(await codeTaken(db, code, now))) return code;
-  }
-  throw new PollError("code_exhausted", 503, "could not draw a free session code");
-}
-
 // --- Guest identity (F-AUTH-05) ------------------------------------------
 
 export const GUEST_COOKIE = "quiz_guest";
@@ -144,55 +140,13 @@ export const GUEST_COOKIE = "quiz_guest";
 export const GUEST_COOKIE_PATH = "/app/api/p";
 export const GUEST_TTL_S = 12 * 60 * 60;
 
-/** The value that lives in the browser. Never stored server-side. */
+/**
+ * The value that lives in the browser. Never stored server-side: the guest
+ * row holds its hash, and that row is the `live` module's (`guestByToken`,
+ * `ensureGuest`), which owns `guest_participants`.
+ */
 export function newGuestToken(): string {
   return randomBytes(32).toString("base64url");
-}
-
-/**
- * What the database holds: `sha256(token:evaluation)`.
- *
- * Binding the hash to the evaluation is what lets ONE cookie serve a browser
- * across several polls — one row per (evaluation, browser), as the unique
- * index on `token_hash` requires — and what stops a hash read out of one
- * poll's table from being replayed as another poll's participant.
- */
-function guestHash(token: string, evaluationId: string): string {
-  return createHash("sha256").update(`${token}:${evaluationId}`).digest("hex");
-}
-
-export async function guestByToken(
-  db: Db,
-  evaluationId: string,
-  token: string,
-): Promise<GuestRecord | null> {
-  const [row] = await db
-    .select()
-    .from(guestParticipants)
-    .where(eq(guestParticipants.tokenHash, guestHash(token, evaluationId)))
-    .limit(1);
-  return row ?? null;
-}
-
-/** Idempotent: the same cookie always lands on the same guest row. */
-export async function ensureGuest(
-  db: Db,
-  evaluationId: string,
-  token: string,
-  now: Date,
-): Promise<GuestRecord> {
-  await db
-    .insert(guestParticipants)
-    .values({
-      id: randomUUID(),
-      evaluationId,
-      tokenHash: guestHash(token, evaluationId),
-      createdAt: now,
-    })
-    .onConflictDoNothing({ target: guestParticipants.tokenHash });
-  const row = await guestByToken(db, evaluationId, token);
-  if (!row) throw new PollError("internal_error", 500, "guest vanished after insert");
-  return row;
 }
 
 // --- Loading a poll -------------------------------------------------------
@@ -275,6 +229,8 @@ export async function createPoll(
     anonymous: boolean;
     createdBy: string;
     now: Date;
+    /** The code draw, injectable so a test can force a collision. */
+    drawCode?: () => string;
   },
 ): Promise<PollScope> {
   await assertPollable(db, input.questionId);
@@ -283,19 +239,36 @@ export async function createPoll(
     .from(questions)
     .where(eq(questions.id, input.questionId))
     .limit(1);
-  const created = await createPollEvaluation(db, {
-    classroomId: input.classroomId,
-    title: question?.internalName ?? "Poll",
-    createdBy: input.createdBy,
-    questionId: input.questionId,
-    accessCode: await freeCode(db, input.now),
-    anonymous: input.anonymous,
-    defaultPoints: (type, version) =>
-      typeOf(type).defaultPoints(
-        loadConfig(type, { config: version.config, configVersion: version.configVersion }),
-      ),
-    now: input.now,
-  });
+  // A code a poll can still be reached by (running, or ended within the
+  // grace period) is not drawn. The check alone would race two concurrent
+  // creates: the partial unique index on the running polls' codes refuses
+  // the second insert, and the draw starts over.
+  const draw = input.drawCode ?? drawCode;
+  let created: Awaited<ReturnType<typeof createPollEvaluation>> | undefined;
+  for (let n = 0; created === undefined; n += 1) {
+    if (n === CODE_DRAWS) {
+      throw new PollError("code_exhausted", 503, "could not draw a free session code");
+    }
+    const code = draw();
+    if (await codeTaken(db, code, input.now)) continue;
+    try {
+      created = await createPollEvaluation(db, {
+        classroomId: input.classroomId,
+        title: question?.internalName ?? "Poll",
+        createdBy: input.createdBy,
+        questionId: input.questionId,
+        accessCode: code,
+        anonymous: input.anonymous,
+        defaultPoints: (type, version) =>
+          typeOf(type).defaultPoints(
+            loadConfig(type, { config: version.config, configVersion: version.configVersion }),
+          ),
+        now: input.now,
+      });
+    } catch (err) {
+      if (!isUniqueViolation(err, "evaluations_running_poll_code_uq")) throw err;
+    }
+  }
   const scope = await scopeOf(db, created.evaluation);
   if (!scope) throw new PollError("internal_error", 500, "poll item vanished after insert");
   events.pollStarted(scope.evaluation, input.now);
@@ -321,14 +294,12 @@ export async function setRevealed(
     showKey: revealed,
     showExplanation: revealed,
   };
-  await db
-    .update(evaluations)
-    .set({
-      settings: { ...settings, poll: { ...pollSettingsOf(evaluation), revealed } },
-      feedbackPolicy,
-      updatedAt: now,
-    })
-    .where(eq(evaluations.id, evaluation.id));
+  await setPollSettings(
+    db,
+    evaluation.id,
+    { settings: { ...settings, poll: { ...pollSettingsOf(evaluation), revealed } }, feedbackPolicy },
+    now,
+  );
   const row = (await byId(db, evaluation.id))!;
   events.pollChanged(row);
   return row;

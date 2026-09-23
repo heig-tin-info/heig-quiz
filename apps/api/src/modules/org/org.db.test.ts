@@ -98,7 +98,7 @@ describe("join code (F-ORG-06)", () => {
       .from(enrollments)
       .where(eq(enrollments.userId, student.id));
     expect(rows).toHaveLength(1);
-    expect(rows[0]!.status).toBe("claimed");
+    expect(rows[0]!.userId).toBe(student.id);
   });
 
   it("claims the roster line the teacher had already imported, never a second one", async () => {

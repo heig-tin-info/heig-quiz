@@ -254,7 +254,6 @@ export const questionVersions = pgTable(
     uniqueIndex("question_versions_draft_uq")
       .on(t.questionId)
       .where(sql`${t.number} is null`),
-    index("question_versions_question_idx").on(t.questionId, t.number.desc()),
     index("question_versions_search_idx").using("gin", t.search),
   ],
 );

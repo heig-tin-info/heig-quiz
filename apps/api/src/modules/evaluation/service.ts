@@ -35,12 +35,13 @@ import {
   type ItemPatch,
   type ItemRow,
   type McqPolicy,
+  type ReleasedGrades,
 } from "@quiz/contracts";
 
 import { round2 } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
-import type { Db } from "../../db/client.js";
+import { isUniqueViolation, type Db } from "../../db/client.js";
 import {
   attempts,
   coursePools,
@@ -102,6 +103,18 @@ class NoPublishedVersion extends EvaluationError {
 class QuestionNotInCourse extends EvaluationError {
   constructor(readonly questionId: string) {
     super("question_not_in_course", 422, `question ${questionId} is not in a pool of this course`);
+  }
+}
+
+/**
+ * A poll cannot run again on a session code another running poll now holds
+ * (`evaluations_running_poll_code_uq`). No route leads a poll back to
+ * `running` today (it cannot pause, and the authoring transitions refuse
+ * it); should one appear, it answers this 409 instead of a 500.
+ */
+export class CodeTaken extends EvaluationError {
+  constructor() {
+    super("code_taken", 409, "another running poll holds this session code");
   }
 }
 
@@ -315,7 +328,7 @@ export function studentEvaluationRows(db: Db, userId: string) {
       attempts,
       and(eq(attempts.evaluationId, evaluations.id), eq(attempts.userId, userId)),
     )
-    .where(and(eq(enrollments.userId, userId), eq(enrollments.status, "claimed")));
+    .where(eq(enrollments.userId, userId));
 }
 
 /** The total points of each evaluation, in one grouped query. */
@@ -465,7 +478,6 @@ async function selfOf(
       and(
         eq(enrollments.classroomId, row.classroomId),
         eq(enrollments.userId, userId),
-        eq(enrollments.status, "claimed"),
       ),
     )
     .limit(1);
@@ -749,6 +761,75 @@ export async function deleteEvaluation(db: Db, row: EvaluationRecord): Promise<v
   await db.delete(evaluations).where(eq(evaluations.id, row.id));
 }
 
+// --- Narrow writers for the other modules ----------------------------------
+//
+// `evaluations` and `evaluation_items` belong to this module (CLAUDE.md,
+// Conventions). What `live`, `poll`, `results` and `grading` need to change
+// on them goes through one of these, each carrying its own `updatedAt` bump,
+// rather than through an UPDATE of their own.
+
+/** `live.extendTime`: the shared deadline of a `deadline`-timed evaluation. */
+export async function setClosesAt(db: DbOrTx, id: string, closesAt: Date, now: Date): Promise<void> {
+  await db.update(evaluations).set({ closesAt, updatedAt: now }).where(eq(evaluations.id, id));
+}
+
+/** `poll.setRevealed`: the poll switches and the feedback policy, moved together. */
+export async function setPollSettings(
+  db: DbOrTx,
+  id: string,
+  values: Required<Pick<typeof evaluations.$inferInsert, "settings" | "feedbackPolicy">>,
+  now: Date,
+): Promise<void> {
+  await db
+    .update(evaluations)
+    .set({ ...values, updatedAt: now })
+    .where(eq(evaluations.id, id));
+}
+
+/** `results.releaseResults`: the frozen grades (ADR-012) and the state they imply. */
+export async function setRelease(
+  db: DbOrTx,
+  id: string,
+  release: { releasedAt: Date; releasedGrades: ReleasedGrades },
+  now: Date,
+): Promise<void> {
+  await db
+    .update(evaluations)
+    .set({ ...release, modifiedAfterRelease: false, state: "released", updatedAt: now })
+    .where(eq(evaluations.id, id));
+}
+
+/** `results.unreleaseResults`: the release pair, cleared (the state moves separately). */
+export async function clearRelease(db: DbOrTx, id: string, now: Date): Promise<void> {
+  await db
+    .update(evaluations)
+    .set({ releasedAt: null, releasedGrades: null, modifiedAfterRelease: false, updatedAt: now })
+    .where(eq(evaluations.id, id));
+}
+
+/** F-GRADE-09: a correction landed after the release. */
+export async function setModifiedAfterRelease(db: DbOrTx, id: string, now: Date): Promise<void> {
+  await db
+    .update(evaluations)
+    .set({ modifiedAfterRelease: true, updatedAt: now })
+    .where(eq(evaluations.id, id));
+}
+
+/**
+ * A regrade onto another published version of the same question (F-GRADE-06).
+ * `evaluation_items` has no `updatedAt` of its own.
+ */
+export async function retargetItemVersion(
+  db: DbOrTx,
+  itemId: string,
+  questionVersionId: string,
+): Promise<void> {
+  await db
+    .update(evaluationItems)
+    .set({ questionVersionId })
+    .where(eq(evaluationItems.id, itemId));
+}
+
 /**
  * Applies a state change with its side effects on the row itself, ONLY if the
  * row is still in the state the caller read. `null` means somebody else moved
@@ -785,7 +866,11 @@ export async function tryApplyState(
     .set(next)
     // The compare-and-set: the row must still be where the caller saw it.
     .where(and(eq(evaluations.id, row.id), eq(evaluations.state, row.state)))
-    .returning({ id: evaluations.id });
+    .returning({ id: evaluations.id })
+    .catch((err: unknown) => {
+      if (isUniqueViolation(err, "evaluations_running_poll_code_uq")) throw new CodeTaken();
+      throw err;
+    });
   if (updated.length === 0) return null;
   return (await byId(db, row.id))!;
 }

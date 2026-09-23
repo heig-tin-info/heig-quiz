@@ -9,7 +9,9 @@
  *     under them (F-EVAL-03);
  *   - `evaluations_live_idx` is the partial index the ticker scans every
  *     second: only `lobby`, `running` and `paused` rows are candidates for an
- *     automatic transition, and there are never many of them.
+ *     automatic transition, and there are never many of them;
+ *   - `evaluations_running_poll_code_uq` makes a poll's session code unique
+ *     among the running polls, so the code draw needs no check-then-insert.
  */
 import { sql } from "drizzle-orm";
 import {
@@ -91,6 +93,15 @@ export const evaluations = pgTable(
     index("evaluations_live_idx")
       .on(t.state)
       .where(sql`${t.state} in ('scheduled','lobby','running','paused')`),
+    // Every QR scan of a poll looks its evaluation up by code (`byCode`).
+    index("evaluations_access_code_idx")
+      .on(t.accessCode)
+      .where(sql`${t.accessCode} is not null`),
+    // Two running polls never share a session code: `createPoll` draws a
+    // code and lets this index refuse a collision, then draws again.
+    uniqueIndex("evaluations_running_poll_code_uq")
+      .on(t.accessCode)
+      .where(sql`${t.mode} = 'poll' and ${t.state} = 'running'`),
   ],
 );
 

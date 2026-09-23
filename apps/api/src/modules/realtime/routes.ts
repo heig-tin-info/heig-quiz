@@ -19,7 +19,7 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { ServerResponse } from "node:http";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { WatchSubject, isStaffOnly, type ServerEvent } from "@quiz/contracts";
 
@@ -115,7 +115,7 @@ async function topicsOf(app: FastifyInstance, req: FastifyRequest): Promise<Set<
     const rooms = await app.db
       .select({ id: enrollments.classroomId })
       .from(enrollments)
-      .where(and(eq(enrollments.userId, me.id), eq(enrollments.status, "claimed")));
+      .where(eq(enrollments.userId, me.id));
     for (const room of rooms) topics.add(`classroom:${room.id}`);
   }
   return topics;

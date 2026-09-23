@@ -343,7 +343,103 @@ rollback is a pull of the sha tag, a retag to `:latest` and
 `systemctl restart quiz-runner`, as `deploy.md` §5 prescribes.
 
 Migrations are additive, so an older image runs against a newer schema;
-when in doubt, restore the pre-migration dump first. Note that the next
+when in doubt, restore the pre-migration dump first. Migration 0008 is the
+exception, below. Note that the next
 push to `main` runs both deploy scripts, which pull `latest` again and undo
 the rollback, so a rollback is a way to buy time, not a way to hold a
 version.
+
+### Migration 0008
+
+`apps/api/drizzle/0008_schema_audit.sql` (the database wave of the
+2026-09-22 audit) is **not additive**. It drops `enrollments.status`, which
+every image built before it reads and writes, so once it is applied an
+older image fails on the roster and on every enrolment check: a rollback
+past it needs the down migration below (or the pre-migration dump) first.
+It also drops `api_tokens`, `answer_flags` and `llm_calls` (empty, never
+used), deletes the notifications whose pool no longer exists (the bell
+already hid them), turns `attempts.user_id` from `CASCADE` into
+`NO ACTION`, and adds a partial unique index on the session codes of the
+running polls.
+
+Before deploying it, both preflight queries must return 0 rows / 0:
+
+```sql
+-- Duplicate codes among running polls: the unique index could not be
+-- built, the migration would fail and the container would not start.
+SELECT access_code, count(*) FROM evaluations
+ WHERE mode = 'poll' AND state = 'running' GROUP BY 1 HAVING count(*) > 1;
+-- Enrolments whose status disagrees with user_id (the migration detaches
+-- a 'pending' row that holds an account; there should be none).
+SELECT count(*) FROM enrollments WHERE (status = 'claimed') <> (user_id IS NOT NULL);
+```
+
+The down migration, written for a rollback and never applied by the
+application (the notifications deleted on the way up were invisible and
+are not restored; the three dropped tables come back empty, with the
+definitions of `0001_pool.sql` and `0003_grading.sql`):
+
+```sql
+ALTER TABLE "enrollments" ADD COLUMN "status" text DEFAULT 'pending' NOT NULL;
+UPDATE "enrollments" SET "status" = 'claimed' WHERE "user_id" IS NOT NULL;
+DROP INDEX "evaluations_running_poll_code_uq";
+DROP INDEX "evaluations_access_code_idx";
+DROP INDEX "notifications_pool_idx";
+ALTER TABLE "notifications" DROP CONSTRAINT "notifications_pool_id_pools_id_fk";
+ALTER TABLE "notifications" DROP COLUMN "pool_id";
+CREATE INDEX "attempts_evaluation_idx" ON "attempts" USING btree ("evaluation_id");
+CREATE INDEX "answers_attempt_idx" ON "answers" USING btree ("attempt_id");
+CREATE INDEX "question_versions_question_idx" ON "question_versions" USING btree ("question_id","number" DESC NULLS LAST);
+ALTER TABLE "attempts" DROP CONSTRAINT "attempts_user_id_users_id_fk";
+ALTER TABLE "attempts" ADD CONSTRAINT "attempts_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+CREATE TABLE "api_tokens" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"user_id" uuid NOT NULL,
+	"token_hash" char(64) NOT NULL,
+	"name" text NOT NULL,
+	"scopes" text[] DEFAULT '{}'::text[] NOT NULL,
+	"last_used_at" timestamp with time zone,
+	"expires_at" timestamp with time zone,
+	"revoked_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "api_tokens_token_hash_unique" UNIQUE("token_hash")
+);
+ALTER TABLE "api_tokens" ADD CONSTRAINT "api_tokens_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+CREATE INDEX "api_tokens_user_idx" ON "api_tokens" USING btree ("user_id");
+CREATE TABLE "answer_flags" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"answer_id" uuid NOT NULL,
+	"user_id" uuid NOT NULL,
+	"reason" text NOT NULL,
+	"message" text,
+	"resolved_at" timestamp with time zone,
+	"resolved_by" uuid,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+CREATE TABLE "llm_calls" (
+	"id" uuid PRIMARY KEY NOT NULL,
+	"purpose" text NOT NULL,
+	"provider" text NOT NULL,
+	"model" text NOT NULL,
+	"answer_id" uuid,
+	"prompt_tokens" numeric(10, 0),
+	"completion_tokens" numeric(10, 0),
+	"ms" numeric(10, 0),
+	"ok" text NOT NULL,
+	"error" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+ALTER TABLE "answer_flags" ADD CONSTRAINT "answer_flags_answer_id_answers_id_fk" FOREIGN KEY ("answer_id") REFERENCES "public"."answers"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "answer_flags" ADD CONSTRAINT "answer_flags_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "answer_flags" ADD CONSTRAINT "answer_flags_resolved_by_users_id_fk" FOREIGN KEY ("resolved_by") REFERENCES "public"."users"("id") ON DELETE no action ON UPDATE no action;
+ALTER TABLE "llm_calls" ADD CONSTRAINT "llm_calls_answer_id_answers_id_fk" FOREIGN KEY ("answer_id") REFERENCES "public"."answers"("id") ON DELETE set null ON UPDATE no action;
+CREATE INDEX "answer_flags_answer_idx" ON "answer_flags" USING btree ("answer_id");
+CREATE INDEX "llm_calls_answer_idx" ON "llm_calls" USING btree ("answer_id");
+DELETE FROM "drizzle"."__drizzle_migrations"
+ WHERE "id" = (SELECT max("id") FROM "drizzle"."__drizzle_migrations");
+```
+
+The last statement forgets the migrator's record of 0008 (the newest row),
+so that a later deploy of the current image applies it again rather than
+believing it is still there. Run the whole block in one transaction, after a
+fresh dump.

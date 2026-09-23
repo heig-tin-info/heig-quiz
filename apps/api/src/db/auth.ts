@@ -152,34 +152,6 @@ export const teacherGrants = pgTable("teacher_grants", {
 });
 
 /**
- * Bearer tokens for the `/api/v1` surface — PHASE 2: the table exists so the
- * migration chain never has to grow it later, and nothing reads it in the
- * MVP (decision D18 is deferred, the SPA keeps its session cookies).
- */
-export const apiTokens = pgTable(
-  "api_tokens",
-  {
-    id: uuid("id").primaryKey(),
-    userId: uuid("user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    /** Hex SHA-256 of the token, never the token itself (same rule as sessions). */
-    tokenHash: char("token_hash", { length: 64 }).notNull().unique(),
-    name: text("name").notNull(),
-    /** Coarse capabilities, e.g. `["pool:read"]`. Unused until phase 2. */
-    scopes: text("scopes")
-      .array()
-      .notNull()
-      .default(sql`'{}'::text[]`),
-    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
-    expiresAt: timestamp("expires_at", { withTimezone: true }),
-    revokedAt: timestamp("revoked_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [index("api_tokens_user_idx").on(t.userId)],
-);
-
-/**
  * Append-only audit log (NFR-05, AU-42), platform-wide: it belongs to no
  * single module, and `src/audit.ts` is the only writer. In production the
  * application SQL role has neither UPDATE nor DELETE on it.

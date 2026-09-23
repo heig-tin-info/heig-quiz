@@ -80,7 +80,7 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
             createdAt: classrooms.createdAt,
             archivedAt: classrooms.archivedAt,
             students: sql<number>`count(${enrollments.id}) filter (where not ${enrollments.staff})::int`,
-            claimed: sql<number>`count(${enrollments.id}) filter (where ${enrollments.status} = 'claimed' and not ${enrollments.staff})::int`,
+            claimed: sql<number>`count(${enrollments.id}) filter (where ${enrollments.userId} is not null and not ${enrollments.staff})::int`,
           })
           .from(classrooms)
           .leftJoin(enrollments, eq(enrollments.classroomId, classrooms.id))
@@ -365,14 +365,13 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
             nom: me.familyName,
             prenom: me.givenName,
             email: me.email.trim().toLowerCase(),
-            status: "claimed",
             userId: me.id,
             claimedAt: new Date(),
             staff: true,
           })
           .onConflictDoUpdate({
             target: [enrollments.classroomId, enrollments.email],
-            set: { status: "claimed", userId: me.id, claimedAt: new Date(), staff: true },
+            set: { userId: me.id, claimedAt: new Date(), staff: true },
           });
       } catch {
         // UNIQUE(classroom_id, user_id): already enrolled under another address.
@@ -441,7 +440,7 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
             // Changing the email invalidates the attachment: the entry is
             // again claimable by the holder of the new address.
             ...(emailChanged
-              ? { status: "pending" as const, userId: null, claimedAt: null, conflictFlag: false }
+              ? { userId: null, claimedAt: null, conflictFlag: false }
               : {}),
           })
           .where(eq(enrollments.id, entry.id))
@@ -466,7 +465,7 @@ export async function coursesPlugin(app: FastifyInstance, opts: { config: AppCon
       if (!entry) return reply;
       const [updated] = await app.db
         .update(enrollments)
-        .set({ status: "pending", userId: null, claimedAt: null, conflictFlag: false })
+        .set({ userId: null, claimedAt: null, conflictFlag: false })
         .where(eq(enrollments.id, entry.id))
         .returning();
       await trace(req, "roster.unclaim", "enrollment", entry.id, { previousUserId: entry.userId });

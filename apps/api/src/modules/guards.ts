@@ -423,7 +423,6 @@ export async function findReachableEvaluation(
       and(
         eq(enrollments.classroomId, evaluations.classroomId),
         eq(enrollments.userId, user.id),
-        eq(enrollments.status, "claimed"),
       ),
     )
     .where(eq(evaluations.id, evaluationId))

@@ -59,7 +59,6 @@ describe("claimEnrollments (AU-18/AU-21)", () => {
 
     expect(await claimEnrollments(db, { id: userId })).toBe(1);
     const row = await entry(db, enrollmentId);
-    expect(row.status).toBe("claimed");
     expect(row.userId).toBe(userId);
     expect(row.conflictFlag).toBe(false);
   });
@@ -84,7 +83,7 @@ describe("claimEnrollments (AU-18/AU-21)", () => {
     const enrollmentId = await seedEntry(db, classroomId, "ghost@heig.test");
 
     expect(await claimEnrollments(db, { id })).toBe(0);
-    expect((await entry(db, enrollmentId)).status).toBe("pending");
+    expect((await entry(db, enrollmentId)).userId).toBeNull();
   });
 
   it("flags a conflict instead of double-claiming in the same classroom (AU-21)", async () => {
@@ -96,7 +95,6 @@ describe("claimEnrollments (AU-18/AU-21)", () => {
       nom: "Lovelace",
       prenom: "Ada",
       email: "old.email@heig.test",
-      status: "claimed",
       userId,
       claimedAt: new Date(),
     });
@@ -104,7 +102,6 @@ describe("claimEnrollments (AU-18/AU-21)", () => {
 
     expect(await claimEnrollments(db, { id: userId })).toBe(0);
     const dup = await entry(db, duplicateId);
-    expect(dup.status).toBe("pending");
     expect(dup.userId).toBeNull();
     expect(dup.conflictFlag).toBe(true);
   });
@@ -120,7 +117,7 @@ describe("claimEnrollments (AU-18/AU-21)", () => {
     expect(await claimEnrollments(db, { id: userId })).toBe(0);
     for (const id of [a, b]) {
       const row = await entry(db, id);
-      expect(row.status).toBe("pending");
+      expect(row.userId).toBeNull();
       expect(row.conflictFlag).toBe(true);
     }
   });
@@ -134,7 +131,6 @@ describe("claimEnrollments (AU-18/AU-21)", () => {
 
     expect(await claimEnrollments(db, { id: second })).toBe(0);
     const row = await entry(db, enrollmentId);
-    expect(row.status).toBe("pending");
     expect(row.userId).toBeNull();
     expect(row.conflictFlag).toBe(true);
   });
@@ -164,7 +160,7 @@ describe("claimForExistingUsers (reverse claim)", () => {
 
     expect(await claimForExistingUsers(db, classroomId)).toBe(0);
     const row = await entry(db, enrollmentId);
-    expect(row.status).toBe("pending");
+    expect(row.userId).toBeNull();
     expect(row.conflictFlag).toBe(true);
   });
 });
