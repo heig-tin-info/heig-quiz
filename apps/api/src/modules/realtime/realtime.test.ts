@@ -254,6 +254,43 @@ describe("topic authorisation", () => {
     expect((await openStream(teacher.headers, `attempt:${attempt.id}`)).statusCode).toBe(200);
   });
 
+  it("refuses a classmate's attempt in the same evaluation", async () => {
+    // Both students reach the evaluation: what refuses is the ownership
+    // check on the attempt itself, not the evaluation predicate.
+    const [owner, classmate] = [await server.signIn("student"), await server.signIn("student")];
+    const shared = await seedLive(server.app.db, {
+      teacherId: teacher.id,
+      studentIds: [owner.id, classmate.id],
+      questions: 1,
+    });
+    const running = await applyState(
+      server.app.db,
+      await reload(server.app.db, shared.evaluationId),
+      "running",
+      server.clock.now(),
+    );
+    const live = await import("../live/service.js");
+    const participant = (await live.participantOf(server.app.db, running, owner.id))!;
+    const attempt = await live.ensureAttempt(
+      server.app.db,
+      running,
+      participant,
+      server.clock.now(),
+    );
+
+    const probe = await openStream(classmate.headers, `evaluation:${shared.evaluationId}`);
+    expect(probe.statusCode).toBe(200);
+    expect((await openStream(classmate.headers, `attempt:${attempt.id}`)).statusCode).toBe(404);
+  });
+
+  it("refuses a teacher who holds no seat on the course's staff", async () => {
+    const outsider = await server.signIn("teacher");
+    const lobby = await openStream(outsider.headers, `lobby:${seed.evaluationId}`);
+    expect(lobby.statusCode).toBe(404);
+    const evaluation = await openStream(outsider.headers, `evaluation:${seed.evaluationId}`);
+    expect(evaluation.statusCode).toBe(404);
+  });
+
   it("lets an enrolled student watch the evaluation they are in", async () => {
     const stream = await openStream(student.headers, `evaluation:${seed.evaluationId}`);
     expect(stream.statusCode).toBe(200);

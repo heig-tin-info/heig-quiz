@@ -9,7 +9,6 @@
  * every entity is loaded by a guard that answers 404 (invariant 6), and every
  * write is audited (invariant 9).
  */
-import { and, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import {
@@ -28,13 +27,12 @@ import {
 } from "@quiz/contracts";
 
 import { tracer } from "../../audit.js";
-import { classrooms, courses } from "../../db/schema.js";
 import { loadConfig, typeOf } from "../pool/config.js";
 import {
   accessibleClassroom,
   accessibleEvaluation,
+  findAccessibleClassroom,
   loadEvaluation,
-  staffAccess,
   teacherGuard,
 } from "../guards.js";
 import { emptyBody, invalid } from "../http.js";
@@ -159,19 +157,9 @@ export async function evaluationPlugin(app: FastifyInstance) {
       // same predicate, so a teacher cannot seed a room they cannot reach.
       let target = scope.classroom.id;
       if (body.data.classroomId !== undefined && body.data.classroomId !== target) {
-        const [other] = await app.db
-          .select({ id: classrooms.id })
-          .from(classrooms)
-          .innerJoin(courses, eq(classrooms.courseId, courses.id))
-          .where(
-            and(
-              eq(classrooms.id, body.data.classroomId),
-              req.user!.role === "admin" ? undefined : staffAccess(req.user!.id),
-            ),
-          )
-          .limit(1);
+        const other = await findAccessibleClassroom(app.db, req.user!, body.data.classroomId);
         if (!other) return reply.code(404).send({ error: "not_found" });
-        target = other.id;
+        target = other.room.id;
       }
       const row = await service.duplicateEvaluation(app.db, scope.evaluation, {
         classroomId: target,

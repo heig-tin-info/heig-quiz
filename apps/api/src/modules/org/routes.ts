@@ -15,7 +15,7 @@ import { CoursePoolsPut, JoinParams, type CourseDetail, type JoinResult } from "
 import { tracer } from "../../audit.js";
 import { classrooms, courseStaff, courses, users } from "../../db/schema.js";
 import { publish } from "../../events.js";
-import { accessibleCourse, poolAccess, teacherGuard } from "../guards.js";
+import { accessWhere, accessibleCourse, poolAccess, teacherGuard } from "../guards.js";
 import { poolsOfCourse, setCoursePools } from "../pool/service.js";
 import { joinClassroom } from "./service.js";
 
@@ -83,7 +83,7 @@ export async function orgPlugin(app: FastifyInstance) {
       app.db,
       course.id,
       body.data.poolIds,
-      req.user!.role === "admin" ? undefined : poolAccess(req.user!.id),
+      accessWhere(req.user!, poolAccess(req.user!.id)),
     );
     await trace(req, "course.pools_update", "course", course.id, {
       poolIds: linked.map((p) => p.id),

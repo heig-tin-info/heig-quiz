@@ -64,6 +64,7 @@ import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { assets, categories, pools, questions } from "../../db/schema.js";
 import {
+  accessWhere,
   accessibleCategory,
   accessiblePool,
   accessibleQuestion,
@@ -117,8 +118,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
   const { config } = opts;
   const requireTeacher = teacherGuard(app);
   const trace = tracer(app);
-  const mine = (req: FastifyRequest) =>
-    req.user!.role === "admin" ? undefined : poolAccess(req.user!.id);
+  const mine = (req: FastifyRequest) => accessWhere(req.user!, poolAccess(req.user!.id));
 
   await app.register(fastifyMultipart, {
     limits: { fileSize: config.ASSETS_MAX_BYTES, files: 1, fields: 4 },

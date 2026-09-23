@@ -39,8 +39,8 @@ import {
 import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { CSRF_COOKIE, CSRF_HEADER } from "../../auth/session.js";
-import { classrooms, courses, pools, questions } from "../../db/schema.js";
-import { staffAccess, poolAccess, teacherGuard } from "../guards.js";
+import { pools, questions } from "../../db/schema.js";
+import { findAccessibleClassroom, findAccessibleQuestion, teacherGuard } from "../guards.js";
 import { emptyBody, invalid, notFound } from "../http.js";
 import { byId } from "../evaluation/service.js";
 import * as live from "../live/service.js";
@@ -75,34 +75,12 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
 
   /** The classroom, loaded through the staff predicate — 404 otherwise. */
   async function reachableClassroom(req: FastifyRequest, classroomId: string) {
-    const [row] = await app.db
-      .select({ room: classrooms })
-      .from(classrooms)
-      .innerJoin(courses, eq(classrooms.courseId, courses.id))
-      .where(
-        and(
-          eq(classrooms.id, classroomId),
-          req.user!.role === "admin" ? undefined : staffAccess(req.user!.id),
-        ),
-      )
-      .limit(1);
-    return row?.room ?? null;
+    return (await findAccessibleClassroom(app.db, req.user!, classroomId))?.room ?? null;
   }
 
   /** The question, loaded through the pool predicate — 404 otherwise. */
   async function reachableQuestion(req: FastifyRequest, questionId: string) {
-    const [row] = await app.db
-      .select({ question: questions })
-      .from(questions)
-      .innerJoin(pools, eq(questions.poolId, pools.id))
-      .where(
-        and(
-          eq(questions.id, questionId),
-          req.user!.role === "admin" ? undefined : poolAccess(req.user!.id),
-        ),
-      )
-      .limit(1);
-    return row?.question ?? null;
+    return (await findAccessibleQuestion(app.db, req.user!, questionId))?.question ?? null;
   }
 
   /** The poll, loaded through the staff predicate of its classroom. */
