@@ -1,6 +1,7 @@
 /** Section 3 of the mock — see `index.ts` for the layout. */
 import {
   parseCloze,
+  round2,
   splitTemplate,
 } from "@quiz/domain";
 import type {
@@ -701,17 +702,15 @@ export const dashboardView = (e: MockEvaluation, includeAnswers: boolean) => {
       const rate =
         graded.length === 0
           ? null
-          : Math.round(
-              (graded.reduce(
+          : round2(
+              graded.reduce(
                 (sum, c) => sum + (c!.verdict === "correct" ? 1 : c!.verdict === "partial" ? 0.5 : 0),
                 0,
-              ) /
-                graded.length) *
-                100,
-            ) / 100;
+              ) / graded.length,
+            );
       return {
         itemId: item.id,
-        completion: started === 0 ? 0 : Math.round((done / started) * 100) / 100,
+        completion: started === 0 ? 0 : round2(done / started),
         successRate: rate,
         provisional: rate !== null,
       };

@@ -23,6 +23,7 @@
  *     lower revision is the stale one, always.
  */
 import type { DashboardCell, DashboardRow, DashboardView, ServerEvent } from "@quiz/contracts";
+import { round2 } from "@quiz/domain";
 
 /** The lobby figures, which live outside `DashboardView` (F-LIVE-02). */
 export interface LobbyCount {
@@ -87,7 +88,7 @@ function recomputeTotals(view: DashboardView, itemId: string | null): DashboardV
     const done = view.rows.filter(
       (r) => r.cells.find((c) => c.itemId === total.itemId)?.status === "done",
     ).length;
-    const completion = started === 0 ? 0 : Math.round((done / started) * 100) / 100;
+    const completion = started === 0 ? 0 : round2(done / started);
     if (completion === total.completion) return total;
     changed = true;
     return { ...total, completion };
