@@ -44,91 +44,206 @@ export type Route =
   /** Development only: the gallery of the shared primitives (App.tsx gates it). */
   | { view: "devUi" };
 
+/** The one member of `Route` whose `view` is `V`. */
+export type RouteOf<V extends Route["view"]> = Extract<Route, { view: V }>;
+
+/** The sidebar sections (`Shell`'s `Nav`): the row that stays lit while a view is up. */
+export type NavSection = "home" | "pools" | "polls" | "admin";
+
+/**
+ * Everything the app knows about one view, in one place: how it is written
+ * as a path, how a path is recognized as it, whether a student has a screen
+ * for it, and where it sits in the navigation. `path` and `match` are methods (not arrow properties) so a
+ * spec for one view is usable where a spec for any view is expected.
+ */
+export interface RouteSpec<V extends Route["view"]> {
+  path(route: RouteOf<V>): string;
+  /** The route this path names, or `null` when it is not this view's. */
+  match(parts: string[]): RouteOf<V> | null;
+  /**
+   * A student (or a teacher in student view) has a screen for this view.
+   * Everything else falls through to the student home (`studentView.ts`).
+   */
+  studentSafe: boolean;
+  /** The sidebar row lit while this view is up; absent when none is. */
+  section?: NavSection;
+  /**
+   * Present on the teacher screens of ONE evaluation that link to each other
+   * (the palette's "grading" and "results" entries): the evaluation's id.
+   */
+  evaluationId?(route: RouteOf<V>): string;
+}
+
+/** A view whose path is one fixed segment (`/settings`, `/polls`, …), whatever follows it. */
+function fixed<V extends Route["view"]>(
+  segment: string,
+  route: RouteOf<V>,
+  studentSafe = false,
+): RouteSpec<V> {
+  return {
+    path: () => `/${segment}`,
+    match: ([head]) => (head === segment ? route : null),
+    studentSafe,
+  };
+}
+
+type EvaluationTailView = "live" | "poll" | "grading" | "results";
+
+/** `/evaluations/:id/<tail>`: one of the screens that hang off an evaluation. */
+function evaluationTail<V extends EvaluationTailView>(
+  tail: string,
+  make: (id: string) => RouteOf<V>,
+  extra: NoInfer<Pick<RouteSpec<V>, "section" | "evaluationId">> = {},
+): RouteSpec<V> {
+  return {
+    path: (route) => `/evaluations/${evaluationIdOf(route)}/${tail}`,
+    match: ([head, id, rest]) => (head === "evaluations" && id && rest === tail ? make(id) : null),
+    studentSafe: false,
+    ...extra,
+  };
+}
+
+/** The evaluation a screen of the evaluation family belongs to. */
+function evaluationIdOf(route: RouteOf<EvaluationTailView | "evaluation">): string {
+  return "id" in route ? route.id : route.evaluationId;
+}
+
+/**
+ * The route table: ONE entry per member of `Route`. The mapped type makes a
+ * view added to the union and forgotten here a compile error, and
+ * `router.test.ts` walks the table against the union as well.
+ *
+ * `parsePath` asks the entries IN THIS ORDER and takes the first match. Most
+ * are told apart by their first segment and could sit anywhere; the one
+ * place order matters is the evaluation family: `evaluation` accepts ANY
+ * tail after the id — an unknown tail lands on the configuration screen
+ * rather than on the home — so it comes after `live`, `poll`, `grading` and
+ * `results`. `home` matches nothing: it is the fallback.
+ */
+export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
+  home: { path: () => "/", match: () => null, studentSafe: true, section: "home" },
+  settings: fixed("settings", { view: "settings" }, true),
+  admin: { ...fixed("admin", { view: "admin" }), section: "admin" },
+  classroom: {
+    path: (r) => `/classrooms/${r.id}`,
+    match: ([head, id]) => (head === "classrooms" && id ? { view: "classroom", id } : null),
+    studentSafe: false,
+  },
+  pools: {
+    path: () => "/pools",
+    match: ([head, id]) => (head === "pools" && !id ? { view: "pools" } : null),
+    studentSafe: false,
+    section: "pools",
+  },
+  pool: {
+    path: (r) => `/pools/${r.id}`,
+    match: ([head, id]) => (head === "pools" && id ? { view: "pool", id } : null),
+    studentSafe: false,
+    section: "pools",
+  },
+  polls: { ...fixed("polls", { view: "polls" }), section: "polls" },
+  // `/questions/:id/preview` is the student preview; every other tail is the
+  // editor itself (its tab lives in the query string, not in the path).
+  question: {
+    path: (r) => `/questions/${r.id}`,
+    match: ([head, id, tail]) =>
+      head === "questions" && id && tail !== "preview" ? { view: "question", id } : null,
+    studentSafe: false,
+    // A question is read inside its pool, not beside it.
+    section: "pools",
+  },
+  questionPreview: {
+    path: (r) => `/questions/${r.id}/preview`,
+    match: ([head, id, tail]) =>
+      head === "questions" && id && tail === "preview" ? { view: "questionPreview", id } : null,
+    studentSafe: false,
+  },
+  // WP9: student player
+  attempt: {
+    path: (r) => `/take/${r.evaluationId}`,
+    match: ([head, evaluationId]) =>
+      head === "take" && evaluationId ? { view: "attempt", evaluationId } : null,
+    studentSafe: true,
+  },
+  // A poll's session code, as printed under the QR. Upper-cased so a code
+  // typed by hand on a phone survives the keyboard's habits.
+  join: {
+    path: (r) => `/p/${r.code}`,
+    match: ([head, code]) =>
+      head === "p" && code ? { view: "join", code: code.toUpperCase() } : null,
+    studentSafe: true,
+  },
+  // WP10: the student's feedback on one attempt — the ONE student results page.
+  feedback: {
+    path: (r) => `/attempts/${r.attemptId}/feedback`,
+    match: ([head, attemptId, tail]) =>
+      head === "attempts" && attemptId && tail === "feedback"
+        ? { view: "feedback", attemptId }
+        : null,
+    studentSafe: true,
+  },
+  // WP8 + WP10: ONE place decides what follows an evaluation id, so a new
+  // tail is an entry here and nowhere else.
+  live: evaluationTail("live", (id) => ({ view: "live", id }), { evaluationId: evaluationIdOf }),
+  // The projection IS the poll: the launcher's row stays lit while it is up.
+  poll: evaluationTail("poll", (id) => ({ view: "poll", id }), { section: "polls" }),
+  grading: evaluationTail("grading", (evaluationId) => ({ view: "grading", evaluationId }), {
+    evaluationId: evaluationIdOf,
+  }),
+  results: evaluationTail("results", (evaluationId) => ({ view: "results", evaluationId }), {
+    evaluationId: evaluationIdOf,
+  }),
+  // After the four tails above: this one takes whatever tail is left.
+  evaluation: {
+    path: (r) => `/evaluations/${r.id}`,
+    match: ([head, id]) => (head === "evaluations" && id ? { view: "evaluation", id } : null),
+    studentSafe: false,
+    evaluationId: evaluationIdOf,
+  },
+  // Parsed in every build so the route is one pure function; App.tsx is what
+  // refuses to render it outside development.
+  devUi: {
+    path: () => "/dev/ui",
+    match: ([head, sub]) => (head === "dev" && sub === "ui" ? { view: "devUi" } : null),
+    studentSafe: false,
+  },
+};
+
+/** Every view, in the order `parsePath` asks them. */
+export const ROUTE_VIEWS = Object.keys(ROUTES) as Route["view"][];
+
+/**
+ * The spec of `view`, typed for any route. The one cast of the table: the
+ * compiler cannot correlate `r.view` with the member of `Route` it selects.
+ */
+function specOf(view: Route["view"]): RouteSpec<Route["view"]> {
+  return ROUTES[view] as RouteSpec<Route["view"]>;
+}
+
 export function routeToPath(r: Route): string {
-  switch (r.view) {
-    case "home":
-      return "/";
-    case "settings":
-      return "/settings";
-    case "admin":
-      return "/admin";
-    case "classroom":
-      return `/classrooms/${r.id}`;
-    case "pools":
-      return "/pools";
-    case "pool":
-      return `/pools/${r.id}`;
-    case "question":
-      return `/questions/${r.id}`;
-    case "questionPreview":
-      return `/questions/${r.id}/preview`;
-    // WP9: student player
-    case "attempt":
-      return `/take/${r.evaluationId}`;
-    // WP8: evaluation + dashboard
-    case "evaluation":
-      return `/evaluations/${r.id}`;
-    case "live":
-      return `/evaluations/${r.id}/live`;
-    case "polls":
-      return "/polls";
-    case "poll":
-      return `/evaluations/${r.id}/poll`;
-    case "join":
-      return `/p/${r.code}`;
-    // WP10: grading + results
-    case "grading":
-      return `/evaluations/${r.evaluationId}/grading`;
-    case "results":
-      return `/evaluations/${r.evaluationId}/results`;
-    case "feedback":
-      return `/attempts/${r.attemptId}/feedback`;
-    case "devUi":
-      return "/dev/ui";
-  }
+  return specOf(r.view).path(r);
+}
+
+/** The sidebar section `route` belongs to, or `null` when it lights no row. */
+export function sectionOf(route: Route): NavSection | null {
+  return specOf(route.view).section ?? null;
+}
+
+/**
+ * The evaluation whose teacher screens `route` is one of (configuration,
+ * live dashboard, grading, results), or `null` anywhere else — the poll
+ * projection included: it hangs off an evaluation but links to none of them.
+ */
+export function evaluationInView(route: Route): string | null {
+  return specOf(route.view).evaluationId?.(route) ?? null;
 }
 
 export function parsePath(path: string): Route {
   const parts = path.split("/").filter(Boolean);
-  if (parts[0] === "settings") return { view: "settings" };
-  if (parts[0] === "admin") return { view: "admin" };
-  if (parts[0] === "classrooms" && parts[1]) return { view: "classroom", id: parts[1] };
-  if (parts[0] === "pools") return parts[1] ? { view: "pool", id: parts[1] } : { view: "pools" };
-  if (parts[0] === "polls") return { view: "polls" };
-  // `/questions/:id/preview` is the student preview; every other tail is the
-  // editor itself (its tab lives in the query string, not in the path).
-  if (parts[0] === "questions" && parts[1])
-    return parts[2] === "preview"
-      ? { view: "questionPreview", id: parts[1] }
-      : { view: "question", id: parts[1] };
-  // WP9: student player
-  if (parts[0] === "take" && parts[1]) return { view: "attempt", evaluationId: parts[1] };
-  // A poll's session code, as printed under the QR. Upper-cased so a code
-  // typed by hand on a phone survives the keyboard's habits.
-  if (parts[0] === "p" && parts[1]) return { view: "join", code: parts[1].toUpperCase() };
-  // WP10: the student's feedback on one attempt — the ONE student results page.
-  if (parts[0] === "attempts" && parts[1] && parts[2] === "feedback")
-    return { view: "feedback", attemptId: parts[1] };
-  // WP8 + WP10: ONE place decides what follows an evaluation id, so a new
-  // tail is added here and nowhere else. `evaluation` is the fallback: an
-  // unknown tail lands on the configuration screen rather than on the home.
-  if (parts[0] === "evaluations" && parts[1]) {
-    switch (parts[2]) {
-      case "live":
-        return { view: "live", id: parts[1] };
-      case "poll":
-        return { view: "poll", id: parts[1] };
-      case "grading":
-        return { view: "grading", evaluationId: parts[1] };
-      case "results":
-        return { view: "results", evaluationId: parts[1] };
-      default:
-        return { view: "evaluation", id: parts[1] };
-    }
+  for (const view of ROUTE_VIEWS) {
+    const route = specOf(view).match(parts);
+    if (route) return route;
   }
-  // Parsed in every build so the route is one pure function; App.tsx is what
-  // refuses to render it outside development.
-  if (parts[0] === "dev" && parts[1] === "ui") return { view: "devUi" };
   return { view: "home" };
 }
 

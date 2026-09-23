@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { parsePath, routeToPath, type Route } from "./router";
+import {
+  evaluationInView,
+  parsePath,
+  ROUTE_VIEWS,
+  ROUTES,
+  routeToPath,
+  sectionOf,
+  type Route,
+  type RouteOf,
+} from "./router";
 
 describe("routeToPath / parsePath", () => {
   const routes: Route[] = [
@@ -91,5 +100,95 @@ describe("routeToPath / parsePath", () => {
   it("falls back to the configuration screen for an unknown sub-path", () => {
     expect(parsePath("/evaluations/e-1/nope")).toEqual({ view: "evaluation", id: "e-1" });
     expect(parsePath("/evaluations")).toEqual({ view: "home" });
+  });
+});
+
+describe("ROUTES", () => {
+  // One sample per member of the union. The mapped type makes this object
+  // itself exhaustive: a view added to `Route` and not here fails to compile,
+  // exactly as a view missing from `ROUTES` does.
+  const sample: { [V in Route["view"]]: RouteOf<V> } = {
+    home: { view: "home" },
+    settings: { view: "settings" },
+    admin: { view: "admin" },
+    classroom: { view: "classroom", id: "c-1" },
+    pools: { view: "pools" },
+    pool: { view: "pool", id: "p-1" },
+    polls: { view: "polls" },
+    question: { view: "question", id: "q-1" },
+    questionPreview: { view: "questionPreview", id: "q-1" },
+    attempt: { view: "attempt", evaluationId: "e-1" },
+    join: { view: "join", code: "ABC123" },
+    feedback: { view: "feedback", attemptId: "a-1" },
+    live: { view: "live", id: "e-1" },
+    poll: { view: "poll", id: "e-1" },
+    grading: { view: "grading", evaluationId: "e-1" },
+    results: { view: "results", evaluationId: "e-1" },
+    evaluation: { view: "evaluation", id: "e-1" },
+    devUi: { view: "devUi" },
+  };
+
+  it("has exactly one entry per member of the Route union", () => {
+    expect([...ROUTE_VIEWS].sort()).toEqual(Object.keys(sample).sort());
+    for (const view of ROUTE_VIEWS) expect(ROUTES[view]).toBeDefined();
+  });
+
+  it("round-trips a sample of every view, the table's order included", () => {
+    for (const r of Object.values(sample)) {
+      expect(parsePath(routeToPath(r))).toEqual(r);
+    }
+  });
+
+  it("marks the five views a student has a screen for, and only them", () => {
+    expect(ROUTE_VIEWS.filter((v) => ROUTES[v].studentSafe).sort()).toEqual([
+      "attempt",
+      "feedback",
+      "home",
+      "join",
+      "settings",
+    ]);
+  });
+
+  it("lights the sidebar section of each view, and none for the others", () => {
+    const lit = Object.fromEntries(
+      Object.values(sample).map((r) => [r.view, sectionOf(r)] as const),
+    );
+    expect(lit).toMatchObject({
+      home: "home",
+      pools: "pools",
+      pool: "pools",
+      question: "pools",
+      polls: "polls",
+      poll: "polls",
+      admin: "admin",
+    });
+    const unlit = ROUTE_VIEWS.filter((v) => lit[v] === null).sort();
+    expect(unlit).toEqual(
+      [
+        "attempt",
+        "classroom",
+        "devUi",
+        "evaluation",
+        "feedback",
+        "grading",
+        "join",
+        "live",
+        "questionPreview",
+        "results",
+        "settings",
+      ].sort(),
+    );
+  });
+
+  it("names the evaluation of its four linked teacher screens, and of nothing else", () => {
+    const withEvaluation = Object.values(sample)
+      .filter((r) => evaluationInView(r) !== null)
+      .map((r) => [r.view, evaluationInView(r)]);
+    expect(withEvaluation).toEqual([
+      ["live", "e-1"],
+      ["grading", "e-1"],
+      ["results", "e-1"],
+      ["evaluation", "e-1"],
+    ]);
   });
 });

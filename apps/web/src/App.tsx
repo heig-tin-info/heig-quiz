@@ -1,13 +1,13 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import type { PublicConfig } from "@quiz/contracts";
+import type { Me, PublicConfig } from "@quiz/contracts";
 
 import { api, useMe } from "./api";
 import { Logo } from "./Header";
 import { useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
-import { useRoute } from "./router";
+import { useRoute, type Route, type RouteOf } from "./router";
 import { Shell } from "./Shell";
 import {
   enterStudentView,
@@ -64,10 +64,13 @@ const ResultsView = lazy(() =>
 );
 const SettingsPage = lazy(() => import("./SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const AdminPage = lazy(() => import("./AdminPanel").then((m) => ({ default: m.AdminPage })));
-// Development only. The chunk is still built in production (Vite has no way
-// to know otherwise), but nothing routes to it: `parsePath` returns the view
-// and the guard below sends it home.
-const DevGallery = lazy(() => import("./DevGallery").then((m) => ({ default: m.DevGallery })));
+// Development only, and absent from the production bundle: behind the
+// `import.meta.env.DEV` constant the dynamic import is dead code, so Rollup
+// emits no DevGallery chunk at all. `parsePath` still returns the view; its
+// entry in `PAGES` renders the teacher home in its place (no redirect).
+const DevGallery = import.meta.env.DEV
+  ? lazy(() => import("./DevGallery").then((m) => ({ default: m.DevGallery })))
+  : () => null;
 
 /*
  * Signed-out page. The four decisions, so the door looks like the house:
@@ -133,6 +136,114 @@ const PollLauncher = lazy(() =>
   import("./poll/PollLauncher").then((m) => ({ default: m.PollLauncher })),
 );
 
+/** What every page of the table may need beside its own route. */
+interface PageContext {
+  me: Me;
+  navigate: (r: Route) => void;
+  /** The teacher UI is on: a teacher or an admin, not in student view. */
+  teacherUi: boolean;
+}
+
+type Page<V extends Route["view"]> = (route: RouteOf<V>, ctx: PageContext) => ReactNode;
+
+/**
+ * The page of every view, ONE entry per member of `Route` (the mapped type
+ * makes a missing one a compile error, like `ROUTES` in `router.ts`).
+ *
+ * The student UI only ever reaches the `studentSafe` entries: `App` sends
+ * every other view to `home` first. So a teacher-only entry below can assume
+ * the teacher UI, and `home` is the one entry that asks which UI is on.
+ */
+const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
+  home: (_, c) =>
+    c.teacherUi ? (
+      <TeacherHome navigate={c.navigate} />
+    ) : (
+      // WP9: student player — the student home is their evaluations.
+      <StudentHome me={c.me} navigate={c.navigate} />
+    ),
+  settings: (_, c) => <SettingsPage me={c.me} />,
+  // WP10: the student's own feedback page, reachable in either UI — a teacher
+  // checking the student view opens the same page a student does. It is the
+  // ONE student results page: WP9's `/results/:id` is gone.
+  feedback: (r) => <Feedback attemptId={r.attemptId} />,
+  // WP9: student player — the attempt takes the whole screen (`FULL_SCREEN`).
+  attempt: (r, c) => <AttemptPage evaluationId={r.evaluationId} navigate={c.navigate} />,
+  join: (r, c) => <PollJoin code={r.code} me={c.me} navigate={c.navigate} />,
+  // Invariant 3: the gallery exists in development only. The
+  // route parses in every build; this is what refuses to render it.
+  devUi: (_, c) => (import.meta.env.DEV ? <DevGallery /> : <TeacherHome navigate={c.navigate} />),
+  admin: (_, c) => (c.me.role === "admin" ? <AdminPage /> : <TeacherHome navigate={c.navigate} />),
+  classroom: (r, c) => <ClassroomView id={r.id} navigate={c.navigate} />,
+  polls: (_, c) => <PollLauncher navigate={c.navigate} />,
+  // The projection is for a beamer: no sidebar, no chrome (mockup 10).
+  poll: (r, c) => <PollProjection id={r.id} navigate={c.navigate} />,
+  pools: (_, c) => <PoolsPage navigate={c.navigate} />,
+  pool: (r, c) => <PoolView id={r.id} navigate={c.navigate} />,
+  question: (r, c) => <QuestionEditor id={r.id} navigate={c.navigate} />,
+  // The student preview of ONE question: the player, and therefore the whole
+  // screen, for exactly the reason the attempt takes it — a preview framed by
+  // the teacher's sidebar previews the wrong thing.
+  questionPreview: (r) => <StudentPreviewPage id={r.id} />,
+  // WP8: evaluation + dashboard
+  evaluation: (r, c) => <EvaluationConfig id={r.id} navigate={c.navigate} />,
+  live: (r, c) => <LiveDashboard id={r.id} navigate={c.navigate} />,
+  // WP10: grading + results
+  grading: (r, c) => <GradingPanel evaluationId={r.evaluationId} navigate={c.navigate} />,
+  results: (r, c) => <ResultsView evaluationId={r.evaluationId} navigate={c.navigate} />,
+};
+
+/** The page of `route` (the one cast of the table, as in `router.ts`). */
+function renderPage(route: Route, ctx: PageContext): ReactNode {
+  return (PAGES[route.view] as Page<Route["view"]>)(route, ctx);
+}
+
+/**
+ * The views drawn on the whole screen, with no sidebar. The attempt: a zen
+ * player beside a navigation sidebar is not a zen player, and an exam is the
+ * one place the rest of the app must go away. The question preview, for the
+ * same reason. The poll projection, for a beamer. And the join page, which a
+ * guest with no account reaches as well.
+ */
+const FULL_SCREEN: ReadonlySet<Route["view"]> = new Set([
+  "attempt",
+  "questionPreview",
+  "poll",
+  "join",
+]);
+
+/**
+ * No session. The participant of a poll may have no account
+ * (`settings.poll.anonymous`), and the page itself sends to login otherwise:
+ * the ONE route that renders with no session at all. Everything else is the
+ * landing page.
+ */
+function SignedOut({ route, navigate }: { route: Route; navigate: (r: Route) => void }) {
+  return route.view === "join" ? (
+    <Suspense fallback={<Spinner className="py-24" />}>
+      <PollJoin code={route.code} me={null} navigate={navigate} />
+    </Suspense>
+  ) : (
+    <Landing />
+  );
+}
+
+/**
+ * The student-view switch, both ways. Going IN remembers the page it was
+ * thrown from and lands on that page's student twin — the evaluation's own
+ * `/take/:id` for the two screens that have one, the student home otherwise
+ * (`studentRouteFor`). Coming OUT goes back to the page it was thrown from
+ * (ADR-018), so the walk that began on a live dashboard ends on it and not on
+ * the teacher home.
+ */
+function toggleStudentView(inStudentView: boolean, route: Route, navigate: (r: Route) => void) {
+  if (inStudentView) navigate(leaveStudentView());
+  else {
+    enterStudentView(route);
+    navigate(studentRouteFor(route));
+  }
+}
+
 export default function App() {
   const me = useMe();
   const [route, navigate] = useRoute();
@@ -158,100 +269,30 @@ export default function App() {
   // first view renders a date (module-level store in ui.tsx, idempotent).
   setDateFormat(me.data?.dateFormat);
 
-  // The address bar must name the page the reader got. `replaceState` and not
-  // `navigate`: there is nothing to go back to, the screen does not change,
-  // and pushing a second entry would make Back a no-op.
-  const viewer = me.data;
-  const onTeacherRoute =
-    viewer != null &&
-    !STUDENT_ROUTES.has(route.view) &&
-    !((viewer.role === "teacher" || viewer.role === "admin") && !studentView);
+  // The role computation, once: a teacher (or an admin) in the teacher UI,
+  // or in their own student view; everybody else is a student.
+  const teacher = me.data?.role === "teacher" || me.data?.role === "admin";
+  const inStudentView = teacher && studentView;
+  const teacherUi = teacher && !inStudentView;
+  // The student UI has a screen for the student-safe views only; every other
+  // one is the student home. The address bar must name the page the reader
+  // got: `replaceState` and not `navigate`, because there is nothing to go
+  // back to, the screen does not change, and pushing a second entry would
+  // make Back a no-op.
+  const onTeacherRoute = me.data != null && !teacherUi && !STUDENT_ROUTES.has(route.view);
   useEffect(() => {
     if (onTeacherRoute) window.history.replaceState(null, "", "/");
   }, [onTeacherRoute]);
 
   if (me.isLoading) return null;
-  // Before the session gate: the participant of a poll may have no account
-  // (`settings.poll.anonymous`), and the page itself sends to login otherwise.
-  if (route.view === "join") {
-    return (
-      <Suspense fallback={<Spinner className="py-24" />}>
-        <PollJoin code={route.code} me={me.data ?? null} navigate={navigate} />
-      </Suspense>
-    );
-  }
-  if (!me.data) return <Landing />;
-  const role = me.data.role;
-  const teacher = role === "teacher" || role === "admin";
-  const inStudentView = teacher && studentView;
-  const teacherUi = teacher && !inStudentView;
-
-  // WP9: student player — the attempt takes the whole screen. A zen player
-  // (one question, one action) beside a navigation sidebar is not a zen
-  // player, and an exam is the one place the rest of the app must go away.
-  if (route.view === "attempt") {
-    return (
-      <Suspense fallback={<Spinner className="py-24" />}>
-        <AttemptPage evaluationId={route.evaluationId} navigate={navigate} />
-      </Suspense>
-    );
-  }
-  // The student preview of ONE question: the player, and therefore the whole
-  // screen, for exactly the reason the attempt takes it — a preview framed by
-  // the teacher's sidebar previews the wrong thing.
-  if (route.view === "questionPreview" && teacherUi) {
-    return (
-      <Suspense fallback={<Spinner className="py-24" />}>
-        <StudentPreviewPage id={route.id} />
-      </Suspense>
-    );
-  }
-  // The projection is for a beamer: no sidebar, no chrome (mockup 10).
-  if (route.view === "poll" && teacherUi) {
-    return (
-      <Suspense fallback={<Spinner className="py-24" />}>
-        <PollProjection id={route.id} navigate={navigate} />
-      </Suspense>
-    );
-  }
-
-  const page =
-    route.view === "settings" ? (
-      <SettingsPage me={me.data} />
-    ) : // WP10: the student's own feedback page, reachable in either UI — a
-    // teacher checking the student view opens the same page a student does.
-    // It is the ONE student results page: WP9's `/results/:id` is gone.
-    route.view === "feedback" ? (
-      <Feedback attemptId={route.attemptId} />
-    ) : !teacherUi ? (
-      <StudentHome me={me.data} navigate={navigate} />
-    ) : route.view === "devUi" && import.meta.env.DEV ? (
-      <DevGallery />
-    ) : route.view === "admin" && role === "admin" ? (
-      <AdminPage />
-    ) : route.view === "classroom" ? (
-      <ClassroomView id={route.id} navigate={navigate} />
-    ) : route.view === "polls" ? (
-      <PollLauncher navigate={navigate} />
-    ) : route.view === "pools" ? (
-      <PoolsPage navigate={navigate} />
-    ) : route.view === "pool" ? (
-      <PoolView id={route.id} navigate={navigate} />
-    ) : route.view === "question" ? (
-      <QuestionEditor id={route.id} navigate={navigate} />
-    ) : // WP8: evaluation + dashboard
-    route.view === "evaluation" ? (
-      <EvaluationConfig id={route.id} navigate={navigate} />
-    ) : route.view === "live" ? (
-      <LiveDashboard id={route.id} navigate={navigate} />
-    ) : // WP10: grading + results
-    route.view === "grading" ? (
-      <GradingPanel evaluationId={route.evaluationId} navigate={navigate} />
-    ) : route.view === "results" ? (
-      <ResultsView evaluationId={route.evaluationId} navigate={navigate} />
-    ) : (
-      <TeacherHome navigate={navigate} />
-    );
+  if (!me.data) return <SignedOut route={route} navigate={navigate} />;
+  const shown: Route = onTeacherRoute ? { view: "home" } : route;
+  const page = (
+    <Suspense fallback={<Spinner className="py-24" />}>
+      {renderPage(shown, { me: me.data, navigate, teacherUi })}
+    </Suspense>
+  );
+  if (FULL_SCREEN.has(shown.view)) return page;
 
   return (
     <Shell
@@ -260,27 +301,11 @@ export default function App() {
       navigate={navigate}
       teacherUi={teacherUi}
       studentView={inStudentView}
-      /*
-       * The switch, both ways. Going IN remembers the page it was thrown
-       * from and lands on that page's student twin — the evaluation's own
-       * `/take/:id` for the two screens that have one, the student home
-       * otherwise (`studentRouteFor`). Coming OUT goes back to the page it
-       * was thrown from (ADR-018), so the walk that began on a live
-       * dashboard ends on it and not on the teacher home.
-       */
       onToggleStudentView={
-        teacher
-          ? () => {
-              if (inStudentView) navigate(leaveStudentView());
-              else {
-                enterStudentView(route);
-                navigate(studentRouteFor(route));
-              }
-            }
-          : undefined
+        teacher ? () => toggleStudentView(inStudentView, route, navigate) : undefined
       }
     >
-      <Suspense fallback={<Spinner className="py-24" />}>{page}</Suspense>
+      {page}
     </Shell>
   );
 }

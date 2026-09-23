@@ -25,7 +25,7 @@ import { fuzzyFilter } from "./fuzzy";
 import { gradingLinks } from "./grading";
 import { DOCS_URL, SOURCES_URL } from "./Header";
 import { LOCALES, type Locale, type TFunction } from "./i18n";
-import type { Route } from "./router";
+import { evaluationInView, type Route } from "./router";
 import { screenCommands } from "./screenCommands";
 import type { Theme, ThemeChoice } from "./theme";
 import type { IconType } from "./ui";
@@ -194,14 +194,9 @@ export function buildCommands(ctx: CommandContext): Command[] {
   // Teacher-only, twice over: the student UI never mounts these screens, and
   // in the teacher's own student view `teacherUi` is false, so the palette
   // there offers exactly what a student's does.
-  const evaluationInView =
-    ctx.route.view === "grading" || ctx.route.view === "results"
-      ? ctx.route.evaluationId
-      : ctx.route.view === "evaluation" || ctx.route.view === "live"
-        ? ctx.route.id
-        : null;
-  if (ctx.teacherUi && evaluationInView !== null) {
-    const links = gradingLinks(evaluationInView);
+  const evaluationId = evaluationInView(ctx.route);
+  if (ctx.teacherUi && evaluationId !== null) {
+    const links = gradingLinks(evaluationId);
     commands.push(
       {
         id: "nav:grading",

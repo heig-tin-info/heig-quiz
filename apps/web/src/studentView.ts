@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-import { parsePath, routeToPath, type Route } from "./router";
+import { parsePath, ROUTE_VIEWS, ROUTES, routeToPath, type Route } from "./router";
 
 /**
  * "View as student": the teacher UI switched off, so the app draws what a
@@ -84,17 +84,14 @@ export function useStudentView(): boolean {
 
 /**
  * The routes a student (or a teacher in student view) actually has a screen
- * for. Everything else falls through to `StudentHome` — which is right — but
- * it used to render it UNDER the teacher URL, so a reload or a Back landed
- * on the same wrong address again (W20).
+ * for: the entries of the route table (`router.ts`) marked `studentSafe`.
+ * Everything else falls through to `StudentHome` — which is right — but it
+ * used to render it UNDER the teacher URL, so a reload or a Back landed on
+ * the same wrong address again (W20).
  */
-export const STUDENT_ROUTES = new Set<Route["view"]>([
-  "home",
-  "settings",
-  "feedback",
-  "attempt",
-  "join",
-]);
+export const STUDENT_ROUTES: ReadonlySet<Route["view"]> = new Set(
+  ROUTE_VIEWS.filter((view) => ROUTES[view].studentSafe),
+);
 
 /**
  * Where flipping the switch to "student" lands, from the teacher page it was
