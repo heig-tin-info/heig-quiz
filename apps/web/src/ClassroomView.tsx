@@ -30,9 +30,9 @@ import {
   cx,
   EmptyState,
   Field,
+  FormDialog,
   inputClass,
   Menu,
-  Modal,
   PageHeader,
   QueryError,
   Skeleton,
@@ -172,19 +172,12 @@ function PeriodModal({ room, onClose }: { room: ClassroomDetail; onClose: () => 
     onError: (error) => toast(apiErrorMessage(error, t("error.save")), "error"),
   });
   return (
-    <Modal
+    <FormDialog
       title={t("classrooms.setPeriod")}
       onClose={onClose}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button onClick={() => save.mutate()} loading={save.isPending}>
-            {t("common.save")}
-          </Button>
-        </>
-      }
+      onSubmit={() => save.mutate()}
+      submitLabel={t("common.save")}
+      submitting={save.isPending}
     >
       <Field
         label={t("classrooms.period")}
@@ -194,7 +187,7 @@ function PeriodModal({ room, onClose }: { room: ClassroomDetail; onClose: () => 
         value={period}
         onChange={(e) => setPeriod(e.target.value)}
       />
-    </Modal>
+    </FormDialog>
   );
 }
 

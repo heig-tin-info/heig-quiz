@@ -26,10 +26,10 @@ import {
   Card,
   EmptyState,
   Field,
+  FormDialog,
   Initials,
   Menu,
   type MenuItem,
-  Modal,
   PageHeader,
   QueryError,
   SectionHeading,
@@ -84,49 +84,39 @@ function NewCourseModal({ onClose }: { onClose: () => void }) {
     },
   });
   return (
-    <Modal
+    <FormDialog
       title={t("courses.new")}
       onClose={onClose}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button
-            onClick={() => create.mutate()}
-            loading={create.isPending}
-            disabled={form.name.trim() === "" || form.code.trim() === ""}
-          >
-            {t("courses.newAction")}
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-4">
-        <Field
-          label={t("courses.name")}
-          required
-          fullWidth
-          autoFocus
-          placeholder={t("courses.namePlaceholder")}
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-        />
-        <Field
-          label={t("courses.code")}
-          required
-          fullWidth
-          placeholder={t("courses.codePlaceholder")}
-          value={form.code}
-          onChange={(e) => setForm({ ...form, code: e.target.value })}
-        />
-        {create.isError ? (
+      onSubmit={() => create.mutate()}
+      submitLabel={t("courses.newAction")}
+      submitting={create.isPending}
+      canSubmit={form.name.trim() !== "" && form.code.trim() !== ""}
+      error={
+        create.isError ? (
           <p className="text-[13px] text-danger">
             {apiErrorMessage(create.error, t("courses.createFailed"))}
           </p>
-        ) : null}
-      </div>
-    </Modal>
+        ) : null
+      }
+    >
+      <Field
+        label={t("courses.name")}
+        required
+        fullWidth
+        autoFocus
+        placeholder={t("courses.namePlaceholder")}
+        value={form.name}
+        onChange={(e) => setForm({ ...form, name: e.target.value })}
+      />
+      <Field
+        label={t("courses.code")}
+        required
+        fullWidth
+        placeholder={t("courses.codePlaceholder")}
+        value={form.code}
+        onChange={(e) => setForm({ ...form, code: e.target.value })}
+      />
+    </FormDialog>
   );
 }
 
@@ -146,48 +136,38 @@ function NewClassroomModal({ course, onClose }: { course: CourseSummary; onClose
     },
   });
   return (
-    <Modal
+    <FormDialog
       title={t("classrooms.new")}
       onClose={onClose}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button
-            onClick={() => create.mutate()}
-            loading={create.isPending}
-            disabled={form.name.trim() === ""}
-          >
-            {t("common.create")}
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-4">
-        <Field
-          label={t("classrooms.name")}
-          required
-          fullWidth
-          autoFocus
-          placeholder={t("classrooms.namePlaceholder")}
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-        />
-        <Field
-          label={t("classrooms.period")}
-          fullWidth
-          placeholder={t("classrooms.periodPlaceholder")}
-          value={form.period}
-          onChange={(e) => setForm({ ...form, period: e.target.value })}
-        />
-        {create.isError ? (
+      onSubmit={() => create.mutate()}
+      submitLabel={t("common.create")}
+      submitting={create.isPending}
+      canSubmit={form.name.trim() !== ""}
+      error={
+        create.isError ? (
           <p className="text-[13px] text-danger">
             {apiErrorMessage(create.error, t("courses.createFailed"))}
           </p>
-        ) : null}
-      </div>
-    </Modal>
+        ) : null
+      }
+    >
+      <Field
+        label={t("classrooms.name")}
+        required
+        fullWidth
+        autoFocus
+        placeholder={t("classrooms.namePlaceholder")}
+        value={form.name}
+        onChange={(e) => setForm({ ...form, name: e.target.value })}
+      />
+      <Field
+        label={t("classrooms.period")}
+        fullWidth
+        placeholder={t("classrooms.periodPlaceholder")}
+        value={form.period}
+        onChange={(e) => setForm({ ...form, period: e.target.value })}
+      />
+    </FormDialog>
   );
 }
 
@@ -207,38 +187,33 @@ function AddStaffModal({ course, onClose }: { course: CourseSummary; onClose: ()
     },
   });
   return (
-    <Modal
+    <FormDialog
       title={t("courses.staffAdd")}
       onClose={onClose}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button onClick={() => add.mutate()} loading={add.isPending} disabled={email.trim() === ""}>
-            {t("import.add")}
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-3">
-        <Field
-          label={t("courses.staffEmail")}
-          required
-          type="email"
-          fullWidth
-          autoFocus
-          placeholder="prenom.nom@heig-vd.ch"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        {add.isError ? (
+      onSubmit={() => add.mutate()}
+      submitLabel={t("import.add")}
+      submitting={add.isPending}
+      canSubmit={email.trim() !== ""}
+      dense
+      error={
+        add.isError ? (
           <p className="text-[13px] text-danger">
             {apiErrorMessage(add.error, t("courses.staffUnknown"))}
           </p>
-        ) : null}
-      </div>
-    </Modal>
+        ) : null
+      }
+    >
+      <Field
+        label={t("courses.staffEmail")}
+        required
+        type="email"
+        fullWidth
+        autoFocus
+        placeholder="prenom.nom@heig-vd.ch"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+    </FormDialog>
   );
 }
 

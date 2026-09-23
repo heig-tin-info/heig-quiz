@@ -18,7 +18,7 @@ import {
   Card,
   EmptyState,
   Field,
-  Modal,
+  FormDialog,
   PageError,
   PageHeader,
   QueryError,
@@ -161,45 +161,35 @@ function NewQuestionModal({
     onSuccess: onCreated,
   });
   return (
-    <Modal
+    <FormDialog
       title={t("pool.newQuestion")}
       onClose={onClose}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button
-            onClick={() => create.mutate()}
-            loading={create.isPending}
-            disabled={name.trim() === ""}
-          >
-            {t("pool.newQuestionAction")}
-          </Button>
-        </>
-      }
-    >
-      <div className="space-y-4">
-        <fieldset>
-          <legend className="mb-2 text-[13px] font-medium">{t("pool.questionType")}</legend>
-          <QuestionTypePicker types={QUESTION_TYPE_IDS} value={type} onChange={setType} />
-        </fieldset>
-        <Field
-          label={t("pool.questionName")}
-          hint={t("pool.questionNameHint")}
-          fullWidth
-          autoFocus
-          placeholder={t("pool.questionNamePlaceholder")}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        {create.isError ? (
+      onSubmit={() => create.mutate()}
+      submitLabel={t("pool.newQuestionAction")}
+      submitting={create.isPending}
+      canSubmit={name.trim() !== ""}
+      error={
+        create.isError ? (
           <p className="text-[13px] text-danger">
             {apiErrorMessage(create.error, t("pool.createFailed"))}
           </p>
-        ) : null}
-      </div>
-    </Modal>
+        ) : null
+      }
+    >
+      <fieldset>
+        <legend className="mb-2 text-[13px] font-medium">{t("pool.questionType")}</legend>
+        <QuestionTypePicker types={QUESTION_TYPE_IDS} value={type} onChange={setType} />
+      </fieldset>
+      <Field
+        label={t("pool.questionName")}
+        hint={t("pool.questionNameHint")}
+        fullWidth
+        autoFocus
+        placeholder={t("pool.questionNamePlaceholder")}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+    </FormDialog>
   );
 }
 

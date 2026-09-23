@@ -315,6 +315,15 @@ with a keyboard-reachable dismiss button.
   a document the reader walks through, today the whole of one student's
   answers opened from the live grid — and the footer is how they walk to the
   next one, so it must not sit at the bottom of a hundred lines of code.
+- FormDialog (`ui/forms.tsx`): the short form in a dialog — one to three
+  fields, Cancel (`common.cancel`, always) and ONE submit button whose label
+  is the verb ("Create course", "Save"), spinner while `submitting`, disabled
+  until `canSubmit`, and the failure under the fields. It exists because
+  seven dialogs wrote that footer out by hand, each one a chance to drift.
+  It deliberately has no `size`: a fourth field is
+  the sign the form belongs in a `Sheet`, never a reason to widen the
+  dialog. `dense` (12 px between rows instead of 16) is for a body that is a
+  single row.
 - Menu: overflow for tertiary actions; destructive items last, separated. It
   closes on a page scroll, but not on the scroll its own opening click causes
   (200 ms of grace) nor on one inside the panel. Its panel stacks ABOVE the
