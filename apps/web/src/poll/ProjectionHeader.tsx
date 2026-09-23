@@ -1,4 +1,14 @@
-import { Check, Maximize2, Minimize2, Moon, RotateCcw, Square, Sun } from "lucide-react";
+import {
+  BookmarkCheck,
+  BookmarkPlus,
+  Check,
+  Maximize2,
+  Minimize2,
+  Moon,
+  RotateCcw,
+  Square,
+  Sun,
+} from "lucide-react";
 
 import type { PollTeacherView } from "@quiz/contracts";
 
@@ -68,6 +78,9 @@ export function ProjectionHeader({
   onToggleFullscreen,
   onEnd,
   onBack,
+  onKeep,
+  keepPending,
+  onOpenQuestion,
 }: {
   view: PollTeacherView;
   phase: ProjectionPhase;
@@ -82,6 +95,11 @@ export function ProjectionHeader({
   onToggleFullscreen: () => void;
   onEnd: () => void;
   onBack: () => void;
+  /** "Keep this question": the unsaved question joins the Polls pool. */
+  onKeep: () => void;
+  keepPending: boolean;
+  /** Opens the kept question in its pool's editor. */
+  onOpenQuestion: () => void;
 }) {
   const t = useT();
   const ended = phase === "ended";
@@ -96,6 +114,15 @@ export function ProjectionHeader({
   // An opinion poll has no answer to reveal; the switch shows the phones
   // the results instead (ADR-014, addendum 2026-09-23).
   const keyed = hasKey(view.question);
+  /*
+   * "Keep this question" (ADR-014, addenda item 6). A question written in
+   * the launcher is saved nowhere until the teacher says so. While the room
+   * answers the offer waits in the menu — the wall is the room's, not the
+   * teacher's; once the poll is over it is a secondary button beside "Run
+   * again", then the place it went: "Kept in Polls", which opens it.
+   */
+  const { saved, pool } = view.question;
+  const keptLabel = pool ? t("poll.keptIn", { pool: pool.name }) : null;
 
   return (
     <header className="flex flex-wrap items-start gap-[clamp(16px,2.4vw,32px)]">
@@ -115,6 +142,16 @@ export function ProjectionHeader({
               { value: "revealed", label: t(keyed ? "poll.reveal" : "poll.resultsShown") },
             ]}
           />
+          {ended && !saved ? (
+            <Button size="sm" variant="secondary" onClick={onKeep} loading={keepPending}>
+              <BookmarkPlus /> {t("poll.keep")}
+            </Button>
+          ) : null}
+          {ended && keptLabel ? (
+            <Button size="sm" variant="ghost" onClick={onOpenQuestion}>
+              <BookmarkCheck /> {keptLabel}
+            </Button>
+          ) : null}
           {ended ? (
             <Button size="sm" onClick={onAgain} loading={againPending}>
               <RotateCcw /> {t("poll.again")}
@@ -135,6 +172,12 @@ export function ProjectionHeader({
           <Menu
             label={t("common.actions")}
             items={[
+              ...(ended || saved
+                ? []
+                : [{ label: t("poll.keep"), icon: BookmarkPlus, onSelect: onKeep }]),
+              ...(!ended && keptLabel
+                ? [{ label: keptLabel, icon: BookmarkCheck, onSelect: onOpenQuestion }]
+                : []),
               ...(ended
                 ? []
                 : [{ label: t("poll.end"), icon: Square, danger: true, onSelect: onEnd }]),

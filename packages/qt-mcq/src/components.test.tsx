@@ -172,6 +172,8 @@ describe("McqEditor — the scoring policy", () => {
     expect(screen.queryByText("Scoring")).not.toBeInTheDocument();
     expect(screen.queryByText("Never shuffle this question")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Statement")).toBeInTheDocument();
+    // The key is optional in a poll: no "Tick the correct answers" either.
+    expect(screen.queryByText("Tick the correct answers.")).not.toBeInTheDocument();
   });
 
   it("offers the six policies, in order, inherit first", () => {

@@ -122,6 +122,14 @@ export const PollTeacherView = z.object({
     student: z.unknown(),
     /** The key (`toSolution`): the projection shows it only once revealed. */
     solution: z.unknown(),
+    /**
+     * The question sits in a pool. False for one written in the launcher
+     * and not kept (ADR-014, addenda 2026-09-23): "Keep this question"
+     * (`POST /app/api/evaluations/:id/poll/keep`) is what makes it true.
+     */
+    saved: z.boolean(),
+    /** The pool that holds it, when the caller can open that pool; null otherwise. */
+    pool: z.object({ id: z.uuid(), name: z.string() }).nullable(),
   }),
   tally: PollTally,
 });

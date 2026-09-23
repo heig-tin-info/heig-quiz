@@ -48,6 +48,8 @@ function view(patch: Partial<PollTeacherView> = {}): PollTeacherView {
         ],
       },
       solution: { correct: [1] },
+      saved: false,
+      pool: null,
       ...(patch.question ?? {}),
     },
     tally: {
@@ -124,6 +126,8 @@ describe("PollProjection", () => {
             type: "mcq",
             student: { prompt: "Which of these are true?", mode: "multiple", choices },
             solution: { correct: [1] },
+            saved: false,
+            pool: null,
           },
           tally: {
             joined: 20,
@@ -183,11 +187,11 @@ describe("PollProjection", () => {
 
   it("marks nothing right when the poll has no key, and says results instead", async () => {
     const { calls } = mockFetch({
-      [`GET ${POLL}`]: ok(view({ question: { id: "q1", type: "mcq", student: view().question.student, solution: { correct: [] } } })),
+      [`GET ${POLL}`]: ok(view({ question: { id: "q1", type: "mcq", student: view().question.student, solution: { correct: [] }, saved: false, pool: null } })),
       [`POST ${POLL}/reveal`]: ok(
         view({
           settings: { anonymous: true, revealed: true },
-          question: { id: "q1", type: "mcq", student: view().question.student, solution: { correct: [] } },
+          question: { id: "q1", type: "mcq", student: view().question.student, solution: { correct: [] }, saved: false, pool: null },
         }),
       ),
     });
@@ -238,5 +242,68 @@ describe("PollProjection", () => {
 
     expect(await screen.findByRole("button", { name: /Run again/ })).toBeVisible();
     expect(screen.getByText("Poll ended")).toBeVisible();
+  });
+});
+
+describe("PollProjection — keep this question (ADR-014, addenda item 6)", () => {
+  const ended = {
+    id: ID,
+    classroomId: ROOM,
+    classroomName: "PRG1-2026",
+    courseName: "Programmation C",
+    title: "Warm-up — sizes",
+    state: "closed",
+    code: "QZ4F7K",
+    createdAt: new Date().toISOString(),
+  };
+  const kept = { saved: true, pool: { id: "p0", name: "Polls" } };
+
+  it("keeps an unsaved question from the menu while the room answers", async () => {
+    const { calls } = mockFetch({
+      [`GET ${POLL}`]: ok(view()),
+      [`POST ${POLL}/keep`]: ok(view({ question: { ...view().question, ...kept } })),
+    });
+    renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
+    await screen.findByRole("heading", { name: /How many bytes/ });
+    // The wall is the room's: no button for it while the poll runs.
+    expect(screen.queryByRole("button", { name: /Keep this question/ })).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Actions" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: /Keep this question/ }));
+    expect(calls.some((c) => c.url === `${POLL}/keep`)).toBe(true);
+    expect(await screen.findByText("Kept in Polls")).toBeVisible();
+
+    await userEvent.click(screen.getByRole("button", { name: "Actions" }));
+    expect(screen.queryByRole("menuitem", { name: /Keep this question/ })).toBeNull();
+    expect(screen.getByRole("menuitem", { name: /Kept in Polls/ })).toBeVisible();
+  });
+
+  it("offers Keep beside Run again once the poll is over, then where it went", async () => {
+    const navigate = vi.fn();
+    mockFetch({
+      [`GET ${POLL}`]: ok(view({ evaluation: ended })),
+      [`POST ${POLL}/keep`]: ok(
+        view({ evaluation: ended, question: { ...view().question, ...kept } }),
+      ),
+    });
+    renderWithProviders(<PollProjection id={ID} navigate={navigate} />);
+
+    await userEvent.click(await screen.findByRole("button", { name: /Keep this question/ }));
+    const where = await screen.findByRole("button", { name: /Kept in Polls/ });
+    expect(screen.queryByRole("button", { name: /Keep this question/ })).toBeNull();
+    await userEvent.click(where);
+    expect(navigate).toHaveBeenCalledWith({ view: "question", id: "q1" });
+  });
+
+  it("offers nothing to keep when the question already sits in a pool", async () => {
+    mockFetch({
+      [`GET ${POLL}`]: ok(
+        view({ evaluation: ended, question: { ...view().question, saved: true, pool: null } }),
+      ),
+    });
+    renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
+    expect(await screen.findByRole("button", { name: /Run again/ })).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Keep this question/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Kept in/ })).toBeNull();
   });
 });

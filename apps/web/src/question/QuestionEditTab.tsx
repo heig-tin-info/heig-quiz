@@ -1,4 +1,4 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, MessageCircleQuestion } from "lucide-react";
 import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 
 import type { Asset, PoolDetail, QuestionDetail, ZodIssueLite } from "@quiz/contracts";
@@ -75,6 +75,16 @@ export function QuestionEditTab({
           <Alert tone="warning" icon={AlertTriangle} title={t("question.invalidDraft")}>
             {t("question.invalidDraftBody")}
           </Alert>
+        ) : null}
+        {/* Kept after an opinion poll (ADR-014, addenda item 6): its published
+            version has no key. Opening it asks for nothing; the strict gate
+            applies only when a NEW version is published. One muted line,
+            because nothing is wrong with the question as a poll. */}
+        {data.keyless ? (
+          <p className="flex items-start gap-2 text-[13px] text-fg-muted">
+            <MessageCircleQuestion className="mt-0.5 size-4 shrink-0" aria-hidden />
+            {t("question.keyless")}
+          </p>
         ) : null}
 
         <Card className="p-5">

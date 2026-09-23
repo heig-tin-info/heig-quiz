@@ -494,6 +494,8 @@ export const fr: Record<keyof Dict, string> = {
   "question.invalidDraft": "Ce brouillon est incomplet",
   "question.invalidDraftBody":
     "Il est enregistré tel quel ; la publication réclamera ce qui manque.",
+  "question.keyless":
+    "Gardée après un sondage, sans bonne réponse : elle peut relancer un sondage, pas une évaluation. Publier une nouvelle version en demande une.",
   "question.saveNow": "Enregistrer le brouillon",
   "question.meta": "Propriétés",
   "question.meta.name": "Nom interne",
@@ -1441,6 +1443,8 @@ export const fr: Record<keyof Dict, string> = {
   "picker.noPool.body": "Une banque de questions se crée depuis le cours auquel elle appartient.",
   "picker.unpublished": "brouillon",
   "picker.unpublishedHint": "Une question sans version publiée ne peut pas être ajoutée.",
+  "picker.keyless": "sondages seulement",
+  "picker.keylessHint": "Pas de bonne réponse — sondages seulement.",
   "eval.preset.classroom": "Évaluation en classe",
   "eval.preset.homework": "Exercice à la maison",
   "eval.preset.custom": "Sur mesure",
@@ -1896,9 +1900,9 @@ export const fr: Record<keyof Dict, string> = {
   "poll.searchLabel": "Chercher parmi les questions",
   "poll.searchPlaceholder": "Chercher par nom ou par énoncé…",
   "poll.questionsFailed": "Impossible de charger vos questions.",
-  "poll.noQuestions": "Aucune question à sonder pour l'instant",
+  "poll.noQuestions": "Aucune question gardée pour l'instant",
   "poll.noQuestionsBody":
-    "Un sondage joue un QCM ou une réponse courte. Écrivez-en une dans votre banque Polls et elle apparaîtra ici, ou posez une nouvelle question tout de suite.",
+    "Les questions que vous gardez après un sondage arrivent ici. Posez une nouvelle question maintenant, puis choisissez Garder cette question sur l'écran du sondage.",
   "poll.noMatch": "Aucune question ne correspond à cette recherche.",
   "poll.neverUsed": "Jamais sondée",
   "poll.usedOnce": "Sondée une fois",
@@ -1910,7 +1914,7 @@ export const fr: Record<keyof Dict, string> = {
   "poll.anonymousHint": "Sans compte, et aucun nom n'est jamais affiché.",
   "poll.startFailed": "Impossible de lancer le sondage.",
   "poll.newHint":
-    "Rien n'est enregistré : la question n'existe qu'avec ce sondage. Pour la garder, écrivez-la dans votre banque Polls.",
+    "Rien n'est encore enregistré : la question vit avec ce sondage. Garder cette question, sur l'écran du sondage, la range dans votre banque Polls.",
   "poll.keyOptional": "Indiquer une bonne réponse est facultatif : sans elle, le sondage recueille simplement des avis.",
   "poll.incomplete":
     "La question n'est pas encore complète. Les champs à revoir sont signalés ci-dessous.",
@@ -1923,6 +1927,9 @@ export const fr: Record<keyof Dict, string> = {
   "poll.resultsShown": "Résultats affichés",
   "poll.ended": "Sondage terminé",
   "poll.again": "Relancer",
+  "poll.keep": "Garder cette question",
+  "poll.keptIn": "Gardée dans {pool}",
+  "poll.keepFailed": "Impossible de garder la question.",
   "poll.end": "Terminer le sondage",
   "poll.endConfirm": "Terminer ce sondage ? Plus aucune réponse ne sera acceptée.",
   "poll.back": "Revenir à la classe",

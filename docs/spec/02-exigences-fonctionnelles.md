@@ -31,7 +31,7 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 
 | Id | Requirement | Phase | Prio |
 |---|---|---|---|
-| F-POOL-01 | Every teacher has a private pool created automatically and may create others. | P1 | M |
+| F-POOL-01 | Every teacher has a private pool created automatically and may create others. The personal pool (`Polls`) is created on first use, by the first question the teacher keeps after a live poll (ADR-014, addenda item 6); a teacher who never keeps one never sees it. | P1 | M |
 | F-POOL-02 | A pool contains hierarchical categories and questions. A question is in a single category or at the root. | P1 | M |
 | F-POOL-03 | The list of questions can be filtered by type, tags, difficulty, category, free text on the internal name and the statement. | P1 | M |
 | F-POOL-04 | A question may be copied to another pool. The copy references its origin. | P1 | S |

@@ -37,6 +37,8 @@ import { evaluationKey, poolQuestionsKey, poolsKey } from "../queryKeys";
  * A question with no published version is shown and disabled rather than
  * hidden: "where is my question?" is a worse five minutes than "ah, I never
  * published it" (the server would answer `422 no_published_version` anyway).
+ * So is a question kept after an opinion poll, which has no correct answer
+ * (`keyless`, `422 question_keyless`): it runs polls, never an evaluation.
  */
 export function AddQuestionsSheet({
   evaluationId,
@@ -218,12 +220,15 @@ export function AddQuestionsSheet({
             <ul className="divide-y divide-line rounded-field border border-line">
               {rows.map((row) => {
                 const unpublished = row.latestNumber === null;
+                // Kept after an opinion poll: no key, so it would grade the
+                // class against nothing (`422 question_keyless`).
+                const keyless = !unpublished && row.keyless;
                 const already = existing.has(row.id);
                 return (
                   <li key={row.id} className="flex items-center gap-3 px-3 py-2">
                     <Checkbox
                       checked={already || picked.includes(row.id)}
-                      disabled={unpublished || already}
+                      disabled={unpublished || keyless || already}
                       onChange={() => toggle(row.id)}
                       label={
                         <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
@@ -236,6 +241,11 @@ export function AddQuestionsSheet({
                           {unpublished ? (
                             <Tip label={t("picker.unpublishedHint")}>
                               <Badge tone="zinc">{t("picker.unpublished")}</Badge>
+                            </Tip>
+                          ) : null}
+                          {keyless ? (
+                            <Tip label={t("picker.keylessHint")}>
+                              <Badge tone="zinc">{t("picker.keyless")}</Badge>
                             </Tip>
                           ) : null}
                         </span>

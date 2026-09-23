@@ -103,8 +103,23 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     return null;
   }
 
-  const view = (scope: service.PollScope): Promise<PollTeacherView> =>
-    service.teacherView(app.db, scope, config.WEB_URL);
+  /**
+   * The teacher's screen, naming the question's pool only when the caller
+   * reaches it through the pool predicate (invariant 6): a colleague on the
+   * same staff learns the question is saved, not where a private pool is.
+   */
+  async function view(req: FastifyRequest, scope: service.PollScope): Promise<PollTeacherView> {
+    const home =
+      scope.item.question.poolId === null
+        ? null
+        : ((await findAccessibleQuestion(app.db, req.user!, scope.item.question.id))?.pool ?? null);
+    return service.teacherView(
+      app.db,
+      scope,
+      config.WEB_URL,
+      home ? { id: home.id, name: home.name } : null,
+    );
+  }
 
   /** The teacher's own polls, newest first: the launcher's "run again". */
   app.get("/app/api/polls", { preHandler: requireTeacher }, async (req) =>
@@ -189,7 +204,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
         anonymous: body.data.anonymous,
         code: scope.evaluation.accessCode,
       });
-      return reply.code(201).send(await view(scope));
+      return reply.code(201).send(await view(req, scope));
     } catch (error) {
       return failure(reply, error, now);
     }
@@ -231,7 +246,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
         anonymous: body.data.anonymous,
         code: scope.evaluation.accessCode,
       });
-      return reply.code(201).send(await view(scope));
+      return reply.code(201).send(await view(req, scope));
     } catch (error) {
       if (error instanceof poolService.DraftInvalid) {
         return reply
@@ -245,7 +260,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
   app.get(
     "/app/api/evaluations/:id/poll",
     { preHandler: requireTeacher },
-    teacher({ params: IdParam, load: staffPoll }, ({ scope }) => view(scope)),
+    teacher({ params: IdParam, load: staffPoll }, ({ req, scope }) => view(req, scope)),
   );
 
   app.post(
@@ -256,7 +271,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
       async ({ req, now, body, scope }) => {
         const updated = await service.setRevealed(app.db, scope.evaluation, body.revealed, now);
         await trace(req, "poll.reveal", "evaluation", updated.id, { revealed: body.revealed });
-        return view({ ...scope, evaluation: updated });
+        return view(req, { ...scope, evaluation: updated });
       },
     ),
   );
@@ -268,7 +283,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     teacher({ params: IdParam, load: staffPoll }, async ({ req, now, scope }) => {
       const closed = await service.endPoll(app, scope.evaluation, now);
       await trace(req, "poll.end", "evaluation", closed.id);
-      return view({ ...scope, evaluation: closed });
+      return view(req, { ...scope, evaluation: closed });
     }),
   );
 
@@ -289,7 +304,39 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
         again: scope.evaluation.id,
         code: again.evaluation.accessCode,
       });
-      return reply.code(201).send(await view(again));
+      return reply.code(201).send(await view(req, again));
+    }),
+  );
+
+  /**
+   * "Keep this question" (ADR-014, addenda 2026-09-23, item 6): the unsaved
+   * question of this poll joins the CALLER's personal pool, created on first
+   * use. Whoever manages the poll may keep it (the staff predicate loads the
+   * poll, 404 otherwise); a question that already sits in a pool is left
+   * where it is and the answer is the current view — idempotent.
+   */
+  app.post(
+    "/app/api/evaluations/:id/poll/keep",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: staffPoll }, async ({ req, now, scope }) => {
+      const outcome = await poolService.keepUnsavedQuestion(app.db, {
+        questionId: scope.item.question.id,
+        userId: req.user!.id,
+        now,
+      });
+      if (outcome.kept && outcome.poolId) {
+        const [kept] = await app.db
+          .select({ internalName: questions.internalName })
+          .from(questions)
+          .where(eq(questions.id, scope.item.question.id));
+        await trace(req, "poll.keep", "question", scope.item.question.id, {
+          evaluationId: scope.evaluation.id,
+          poolId: outcome.poolId,
+          internalName: kept?.internalName ?? null,
+        });
+      }
+      const fresh = await service.scopeOf(app.db, scope.evaluation);
+      return view(req, fresh ?? scope);
     }),
   );
 

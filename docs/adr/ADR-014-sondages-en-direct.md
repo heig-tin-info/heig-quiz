@@ -190,7 +190,7 @@ written, without saving anything a teacher would find again:
 3. **Nothing reaches it but its polls.** Every pool listing filters on `pool_id`, and
    `findAccessibleQuestion` joins `pools`, so it is in no list, no search, no count and no
    editor; `addItems` refuses it for any other evaluation. A teacher who wants to keep a
-   question writes it in the `Polls` pool, and it shows in the "Pick a question" tab.
+   question says so after the poll — see 6.
 4. **No marks, so no marking settings.** `EditorProps.ungraded` asks an editor to leave out
    what only decides a mark: the scoring card of `mcq` (policy, cap, shuffle opt-out), the
    points and the prefilters of `short`. The KEY stays, as something the teacher MAY
@@ -224,6 +224,45 @@ written, without saving anything a teacher would find again:
    Rejected: relaxing `configSchema` itself and checking the key at publication only. The
    type's schema is what the editor's issues, the canonical import and every test read;
    moving the key out of it would weaken all of them to serve one launcher.
+6. **"Keep this question"** (decided 2026-09-23). Since the launcher stopped writing into
+   the `Polls` pool, nothing created that pool any more, and "Pick a question" drew from a
+   pool a new teacher could not get. The poll screen now offers to keep the question:
+   - *Route.* `POST /app/api/evaluations/:id/poll/keep`, no body, beside `reveal`, `end` and
+     `again`: the poll is loaded through the staff predicate (404 otherwise, 401/403 before
+     that), so whoever manages the poll may keep its question, and it lands in THEIR
+     personal pool. `pool.keepUnsavedQuestion` calls `ensurePersonalPool` (the pool is still
+     born on first use, now by the first keep) and ATTACHES the question: `pool_id` set, no
+     copy — the question and its published version already exist and the poll keeps
+     pointing at them. It gains what every pool question has: a name free in the pool (its
+     statement, then `… (2)`, since `questions_pool_name_uq` is per pool) and a draft, the
+     published config stamped with the publication's time so the list shows no pending
+     change. The UPDATE is guarded by `pool_id is null`, so two simultaneous keeps attach it
+     once. Keeping a question already in a pool changes nothing and answers the current
+     view (idempotent). Audited as `poll.keep`; the pool's topic and the caller's own topic
+     get a hint (a pool created a moment ago has no subscriber yet).
+   - *View.* `PollTeacherView.question` gains `saved` and `pool` (`{ id, name }`, only when
+     the caller reaches that pool through the pool predicate: a colleague on the same staff
+     learns the question is kept, not where a private pool is). The projection offers the
+     action in its menu while the room answers — the wall is the room's — and as a secondary
+     button beside "Run again" once the poll has ended; afterwards the button reads "Kept in
+     Polls" and opens the question.
+   - *Empty tab.* `GET /polls/questions` still answers `[]` without a personal pool (a read
+     never creates one); the launcher's empty state says questions kept after a poll land
+     there and points to "Ask a new question". The pool is never created in advance: a
+     teacher who never polls never sees an empty `Polls` pool.
+   - *No key, no evaluation.* A kept question may have no key (5). It runs a poll again from
+     the pick list, but `addItems` refuses it with `422 question_keyless` — the route passes
+     the type's `hasKey`, as it passes `defaultPoints` — and the evaluation's question picker
+     shows it disabled, "polls only" (`QuestionRow.keyless`, the latest published version has
+     no key).
+   - *Editor rule.* Opening a keyless kept question asks for nothing: its draft is the
+     keyless config, stored as drafts always are (D16), and the "incomplete" alert appears
+     only once the teacher edits, like any invalid draft. One muted line
+     (`QuestionDetail.keyless`) says it runs polls, not evaluations, and that publishing a
+     new version asks for a key. Publication stays on the strict schema: the only keyless
+     version a pool can hold is the one the poll wrote. Rejected: a keyless publication
+     path for the `Polls` pool — it would make a second kind of pool question that every
+     evaluation path would have to screen, for a question that already runs as it is.
 
 Rejected: a nullable `evaluation_items.question_version_id` beside an inline `config`
 column. Every reader of an item — `joinedItems`, grading, results, the dashboard, the

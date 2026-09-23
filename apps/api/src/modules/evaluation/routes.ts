@@ -27,7 +27,7 @@ import {
 } from "@quiz/contracts";
 
 import { tracer, type AuditAction } from "../../audit.js";
-import { loadConfig, typeOf } from "../pool/config.js";
+import { hasKey, loadConfig, typeOf } from "../pool/config.js";
 import { findAccessibleClassroom, loadEvaluation, teacherGuard } from "../guards.js";
 import { notFound, teacherRoute } from "../http.js";
 import * as live from "../live/service.js";
@@ -218,6 +218,12 @@ export async function evaluationPlugin(app: FastifyInstance) {
                   loadConfig(type, { config: version.config, configVersion: version.configVersion }),
                 ),
               ctx,
+              // A question kept after an opinion poll has no key: polls only.
+              (type, version) =>
+                hasKey(
+                  type,
+                  loadConfig(type, { config: version.config, configVersion: version.configVersion }),
+                ),
             ),
         ),
     ),

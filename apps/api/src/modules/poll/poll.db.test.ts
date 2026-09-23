@@ -14,11 +14,14 @@ import { and, eq, isNull } from "drizzle-orm";
 import {
   attempts,
   auditLog,
+  coursePools,
+  courseStaff,
   evaluations,
   gradings,
   guestParticipants,
   pools,
   questions,
+  questionVersions,
 } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
@@ -790,6 +793,192 @@ describe("an opinion poll, whose question has no key", () => {
     await expect(
       poolService.publishQuestion(server.app.db, shortQuestion!, { userId: teacher.id }),
     ).rejects.toBeInstanceOf(poolService.DraftInvalid);
+  });
+});
+
+describe("keeping the question of a poll (ADR-014, addenda item 6)", () => {
+  const OPINION = {
+    configVersion: 2,
+    prompt: "Quel créneau pour la séance de questions ?",
+    choices: [
+      { text: "Lundi", correct: false },
+      { text: "Jeudi", correct: false },
+    ],
+    mode: "single",
+  };
+  let colleague: { id: string; headers: Record<string, string> };
+  let pollId: string;
+  let keptId: string;
+  let personalId: string;
+
+  const personalOf = (userId: string) =>
+    server.app.db
+      .select()
+      .from(pools)
+      .where(and(eq(pools.ownerId, userId), eq(pools.isPersonal, true)));
+
+  beforeAll(async () => {
+    // A colleague on the course's staff who never polled: no personal pool.
+    colleague = await server.signIn("teacher");
+    await server.app.db.insert(courseStaff).values({ courseId: seed.courseId, userId: colleague.id });
+    const created = await post("/app/api/polls/inline", colleague.headers, {
+      classroomId: seed.classroomId,
+      anonymous: true,
+      type: "mcq",
+      config: OPINION,
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().question).toMatchObject({ saved: false, pool: null });
+    pollId = created.json().evaluation.id as string;
+    keptId = created.json().question.id as string;
+  });
+
+  it("refuses outsiders: no session 401, a student 403, a teacher off the staff 404", async () => {
+    const url = `/app/api/evaluations/${pollId}/poll/keep`;
+    expect((await post(url)).statusCode).toBe(401);
+    expect((await post(url, outsider.headers)).statusCode).toBe(403);
+    const stranger = await server.signIn("teacher");
+    const denied = await post(url, stranger.headers);
+    expect(denied.statusCode).toBe(404);
+    expect(denied.json()).toEqual({ error: "not_found" });
+    expect(await personalOf(stranger.id)).toHaveLength(0);
+    const [row] = await server.app.db.select().from(questions).where(eq(questions.id, keptId));
+    expect(row!.poolId).toBeNull();
+  });
+
+  it("creates the personal pool on first use and attaches the question, without a copy", async () => {
+    expect(await personalOf(colleague.id)).toHaveLength(0);
+    const before = (await server.app.db.select().from(questions)).length;
+    const kept = await post(`/app/api/evaluations/${pollId}/poll/keep`, colleague.headers);
+    expect(kept.statusCode).toBe(200);
+
+    const personal = await personalOf(colleague.id);
+    expect(personal).toHaveLength(1);
+    personalId = personal[0]!.id;
+    expect(kept.json().question).toMatchObject({
+      id: keptId,
+      saved: true,
+      pool: { id: personalId, name: poolService.PERSONAL_POOL_NAME },
+    });
+    expect((await server.app.db.select().from(questions)).length).toBe(before);
+    const [row] = await server.app.db.select().from(questions).where(eq(questions.id, keptId));
+    expect(row).toMatchObject({ poolId: personalId, internalName: OPINION.prompt });
+    // The poll still runs the version it froze; the question gained a draft.
+    const versions = await server.app.db
+      .select()
+      .from(questionVersions)
+      .where(eq(questionVersions.questionId, keptId));
+    expect(versions.map((v) => v.number).sort()).toEqual([1, null]);
+
+    const [entry] = await server.app.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.action, "poll.keep"), eq(auditLog.subjectId, keptId)));
+    expect(entry!.payload).toMatchObject({ evaluationId: pollId, poolId: personalId });
+  });
+
+  it("is idempotent: a second keep changes nothing and audits nothing", async () => {
+    const again = await post(`/app/api/evaluations/${pollId}/poll/keep`, colleague.headers);
+    expect(again.statusCode).toBe(200);
+    expect(again.json().question).toMatchObject({ saved: true, pool: { id: personalId } });
+    expect(await personalOf(colleague.id)).toHaveLength(1);
+    const entries = await server.app.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.action, "poll.keep"), eq(auditLog.subjectId, keptId)));
+    expect(entries).toHaveLength(1);
+    // The owner of the classroom sees it saved, and not in which pool: that
+    // private pool is the colleague's.
+    const theirs = await get(`/app/api/evaluations/${pollId}/poll`, teacher.headers);
+    expect(theirs.json().question).toMatchObject({ saved: true, pool: null });
+  });
+
+  it("lists the kept question in the Polls pool, the launcher and the editor", async () => {
+    const list = await get(`/app/api/pools/${personalId}/questions`, colleague.headers);
+    expect(list.statusCode).toBe(200);
+    const row = (list.json().items as { id: string }[]).find((r) => r.id === keptId);
+    expect(row).toMatchObject({ latestNumber: 1, hasDraftChanges: false, keyless: true });
+
+    const picks = await get("/app/api/polls/questions", colleague.headers);
+    expect((picks.json() as { id: string }[]).map((p) => p.id)).toContain(keptId);
+
+    // The editor opens it; its draft is the keyless config, which the strict
+    // publication gate reports as incomplete — viewing asks for nothing.
+    const detail = await get(`/app/api/questions/${keptId}`, colleague.headers);
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json()).toMatchObject({ keyless: true, draft: { valid: false } });
+    expect(detail.json().latestPublished.number).toBe(1);
+  });
+
+  it("runs a poll again from the pick list", async () => {
+    const again = await post("/app/api/polls", colleague.headers, {
+      classroomId: seed.classroomId,
+      questionId: keptId,
+      anonymous: true,
+    });
+    expect(again.statusCode).toBe(201);
+    expect(again.json().question).toMatchObject({ id: keptId, saved: true, solution: { correct: [] } });
+    await post(`/app/api/evaluations/${again.json().evaluation.id}/poll/end`, colleague.headers);
+  });
+
+  it("names a second question with the same statement apart", async () => {
+    const created = await post("/app/api/polls/inline", colleague.headers, {
+      classroomId: seed.classroomId,
+      anonymous: true,
+      type: "mcq",
+      config: OPINION,
+    });
+    const id = created.json().evaluation.id as string;
+    const kept = await post(`/app/api/evaluations/${id}/poll/keep`, colleague.headers);
+    expect(kept.statusCode).toBe(200);
+    const [row] = await server.app.db
+      .select()
+      .from(questions)
+      .where(eq(questions.id, kept.json().question.id as string));
+    expect(row).toMatchObject({ poolId: personalId, internalName: `${OPINION.prompt} (2)` });
+    await post(`/app/api/evaluations/${id}/poll/end`, colleague.headers);
+  });
+
+  it("refuses a keyless kept question in an evaluation, and accepts a keyed one", async () => {
+    // A keyed poll, kept too.
+    const keyed = await post("/app/api/polls/inline", colleague.headers, {
+      classroomId: seed.classroomId,
+      anonymous: true,
+      type: "mcq",
+      config: MCQ_CONFIG,
+    });
+    const keyedPoll = keyed.json().evaluation.id as string;
+    const keyedId = keyed.json().question.id as string;
+    expect((await post(`/app/api/evaluations/${keyedPoll}/poll/keep`, colleague.headers)).statusCode).toBe(200);
+    await post(`/app/api/evaluations/${keyedPoll}/poll/end`, colleague.headers);
+
+    // The course draws from the Polls pool, so only the key can refuse.
+    await server.app.db.insert(coursePools).values({ courseId: seed.courseId, poolId: personalId });
+    const evaluation = await post(`/app/api/classrooms/${seed.classroomId}/evaluations`, colleague.headers, {
+      title: "Test with kept questions",
+    });
+    expect(evaluation.statusCode).toBe(201);
+    const evaluationId = evaluation.json().id as string;
+
+    const refused = await post(`/app/api/evaluations/${evaluationId}/items`, colleague.headers, {
+      questionIds: [keptId],
+    });
+    expect(refused.statusCode).toBe(422);
+    expect(refused.json().error).toBe("question_keyless");
+
+    const accepted = await post(`/app/api/evaluations/${evaluationId}/items`, colleague.headers, {
+      questionIds: [keyedId],
+    });
+    expect(accepted.statusCode).toBe(200);
+    const list = await get(`/app/api/pools/${personalId}/questions`, colleague.headers);
+    const flags = new Map(
+      (list.json().items as { id: string; keyless: boolean }[]).map((r) => [r.id, r.keyless]),
+    );
+    expect(flags.get(keyedId)).toBe(false);
+  });
+
+  afterAll(async () => {
+    await post(`/app/api/evaluations/${pollId}/poll/end`, colleague.headers);
   });
 });
 

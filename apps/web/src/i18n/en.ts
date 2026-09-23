@@ -499,6 +499,8 @@ export const en = {
   "question.published.toast": "Version {n} published.",
   "question.invalidDraft": "This draft is incomplete",
   "question.invalidDraftBody": "It is saved as it is; publication asks for the missing pieces.",
+  "question.keyless":
+    "Kept after a poll, without a correct answer: it can run a poll again, not an evaluation. Publishing a new version asks for one.",
   "question.saveNow": "Save the draft",
   "question.meta": "Properties",
   "question.meta.name": "Internal name",
@@ -1453,6 +1455,8 @@ export const en = {
   "picker.noPool.body": "A question pool is created from the course it belongs to.",
   "picker.unpublished": "draft only",
   "picker.unpublishedHint": "A question without a published version cannot be added.",
+  "picker.keyless": "polls only",
+  "picker.keylessHint": "No correct answer — polls only.",
   "eval.preset.classroom": "In-class evaluation",
   "eval.preset.homework": "Homework exercise",
   "eval.preset.custom": "Custom",
@@ -1910,9 +1914,9 @@ export const en = {
   "poll.searchLabel": "Search the questions",
   "poll.searchPlaceholder": "Search by name or statement…",
   "poll.questionsFailed": "Could not load your questions.",
-  "poll.noQuestions": "No question to poll yet",
+  "poll.noQuestions": "No question kept yet",
   "poll.noQuestionsBody":
-    "A poll runs a multiple choice or a short answer. Write one in your Polls pool and it shows up here, or ask a new question right now.",
+    "Questions you keep after a poll land here. Ask a new question now, then choose Keep this question on the poll screen.",
   "poll.noMatch": "No question matches this search.",
   "poll.neverUsed": "Never polled",
   "poll.usedOnce": "Polled once",
@@ -1924,7 +1928,7 @@ export const en = {
   "poll.anonymousHint": "No account needed, and no name is ever shown.",
   "poll.startFailed": "Could not start the poll.",
   "poll.newHint":
-    "Nothing is saved: the question lives with this poll only. To keep one for later, write it in your Polls pool.",
+    "Nothing is saved yet: the question lives with this poll. Keep this question, on the poll screen, puts it in your Polls pool.",
   "poll.keyOptional": "Marking a correct answer is optional: without one, the poll simply collects opinions.",
   "poll.incomplete":
     "The question is not complete yet. The fields that need attention are marked below.",
@@ -1937,6 +1941,9 @@ export const en = {
   "poll.resultsShown": "Results shown",
   "poll.ended": "Poll ended",
   "poll.again": "Run again",
+  "poll.keep": "Keep this question",
+  "poll.keptIn": "Kept in {pool}",
+  "poll.keepFailed": "Could not keep the question.",
   "poll.end": "End poll",
   "poll.endConfirm": "End this poll? No further answer is accepted.",
   "poll.back": "Back to the classroom",

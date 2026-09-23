@@ -6,6 +6,7 @@ import type { PollTeacherView, WatchSubject } from "@quiz/contracts";
 import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
+import { useErrorToast, useToast } from "../notify";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { useEventStream } from "../realtime/useEventStream";
 import type { Route } from "../router";
@@ -16,7 +17,7 @@ import { ProjectionFooter } from "./ProjectionFooter";
 import { ProjectionHeader, projectionPhase } from "./ProjectionHeader";
 import { hasKey, pollRows, PROJECTION_ROW_CAP, promptOf, questionScale } from "./pollTally";
 import { useStageFit } from "./useStageFit";
-import { pollKey } from "../queryKeys";
+import { anyPoolKey, pollKey, pollQuestionsKey, poolsKey } from "../queryKeys";
 
 /**
  * The projection of a running poll (mockup 10, F-LIVE-13 / F-LIVE-14).
@@ -165,6 +166,23 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
     },
   });
 
+  const toast = useToast();
+  const toastError = useErrorToast();
+  // "Keep this question": the poll's unsaved question joins the Polls pool,
+  // which the pools list and the launcher's pick list then show.
+  const keep = useMutation({
+    mutationFn: () =>
+      api<PollTeacherView>(`/app/api/evaluations/${id}/poll/keep`, { method: "POST", body: "{}" }),
+    onSuccess: (data) => {
+      qc.setQueryData(key, data);
+      if (data.question.pool) toast(t("poll.keptIn", { pool: data.question.pool.name }), "success");
+      void qc.invalidateQueries({ queryKey: poolsKey });
+      void qc.invalidateQueries({ queryKey: anyPoolKey });
+      void qc.invalidateQueries({ queryKey: pollQuestionsKey });
+    },
+    onError: toastError("poll.keepFailed"),
+  });
+
   const revealed = view?.settings.revealed ?? false;
   const setRevealed = useCallback(
     (next: boolean) => act.mutate({ path: "reveal", body: { revealed: next } }),
@@ -265,6 +283,9 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
         onToggleFullscreen={toggleFullscreen}
         onEnd={endPoll}
         onBack={() => navigate({ view: "classroom", id: view.evaluation.classroomId })}
+        onKeep={() => keep.mutate()}
+        keepPending={keep.isPending}
+        onOpenQuestion={() => navigate({ view: "question", id: view.question.id })}
       />
 
       {/* Band 2 — the question and its distribution: the whole point. The

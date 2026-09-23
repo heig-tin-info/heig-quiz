@@ -68,6 +68,7 @@ const row = (over: Partial<QuestionPage["items"][number]>): QuestionPage["items"
   categoryId: null,
   latestNumber: 1,
   hasDraftChanges: false,
+  keyless: false,
   updatedAt: "2026-09-18T08:00:00.000Z",
   deprecated: false,
   deletedAt: null,
@@ -301,6 +302,23 @@ describe("AddQuestionsSheet — the rows", () => {
     expect(within(rowOf("ptr-null-check")).getByText("draft only")).toBeVisible();
     // The published one next to it is not.
     expect(within(rowOf("ptr-arith-01")).getByRole("checkbox")).toBeEnabled();
+  });
+
+  it("shows a question kept after an opinion poll out of reach: no correct answer", async () => {
+    const page: QuestionPage = {
+      items: [
+        row({ id: "q1", internalName: "lab-rhythm", keyless: true }),
+        row({ id: "q2", internalName: "sizeof-char" }),
+      ],
+      nextCursor: null,
+      total: 2,
+    };
+    setup(questions("", ok(page)));
+    await screen.findByText("lab-rhythm");
+    expect(within(rowOf("lab-rhythm")).getByRole("checkbox")).toBeDisabled();
+    expect(within(rowOf("lab-rhythm")).getByText("polls only")).toBeVisible();
+    expect(within(rowOf("sizeof-char")).getByRole("checkbox")).toBeEnabled();
+    expect(within(rowOf("sizeof-char")).queryByText("polls only")).toBeNull();
   });
 
   it("shows a question already in the evaluation as ticked and disabled", async () => {
