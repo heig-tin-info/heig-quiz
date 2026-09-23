@@ -48,6 +48,34 @@ const PROGRESS_EVERY = 25;
 /** Low priority: a container run must never delay the deterministic half. */
 const RUNNER_PRIORITY = -10;
 
+/**
+ * Every machine reason a pass leaves on a grading it could not settle. They
+ * are wire values: `reasonOf` / `progressOf` (`service.ts`) and the web panel
+ * read them back, so the set is closed here rather than spelled at each site.
+ */
+type ProposalReason =
+  | "config_unreadable"
+  | "answer_invalid"
+  | "grader_error"
+  | "llm_not_configured"
+  | "not_finalizable"
+  | "runner_unavailable"
+  | "runner_error"
+  | "finalize_error";
+
+/**
+ * A proposal worth zero that says why no grader settled the cell — never a
+ * crash and never a silent zero: a teacher decides (§5.4). The reason goes in
+ * `details` (what `reasonOf` reads) and in `comment` (what the panel shows).
+ */
+const failedProposal = (reason: ProposalReason, source: "auto" | "llm" = "auto") => ({
+  points: 0,
+  source,
+  state: "proposed" as const,
+  details: { reason },
+  comment: reason,
+});
+
 interface EvaluationGradingJob {
   evaluationId: string;
   /** Restricts the pass to these items; omitted = the whole evaluation. */
@@ -182,14 +210,7 @@ export async function runEvaluationGrading(
       };
 
       if (config === null) {
-        await writeGrading(db, {
-          ...base,
-          points: 0,
-          source: "auto",
-          state: "proposed",
-          details: { reason: "config_unreadable" },
-          comment: "config_unreadable",
-        });
+        await writeGrading(db, { ...base, ...failedProposal("config_unreadable") });
       } else if (answer === null) {
         // F-GRADE-01: an absent answer is worth zero, and it is settled.
         //
@@ -287,16 +308,7 @@ async function gradeOne(
   if (input.payload !== null) {
     const parsed = type.answerSchema.safeParse(input.payload);
     if (!parsed.success) {
-      return {
-        kind: "written",
-        grading: {
-          points: 0,
-          source: "auto",
-          state: "proposed",
-          details: { reason: "answer_invalid" },
-          comment: "answer_invalid",
-        },
-      };
+      return { kind: "written", grading: failedProposal("answer_invalid") };
     }
     answer = parsed.data;
   }
@@ -306,16 +318,7 @@ async function gradeOne(
     result = await type.grade(input.config, answer, input.ctx);
   } catch (err) {
     app.log.error({ err, itemId: input.ctx.itemId }, "grading: grader threw");
-    return {
-      kind: "written",
-      grading: {
-        points: 0,
-        source: "auto",
-        state: "proposed",
-        details: { reason: "grader_error" },
-        comment: "grader_error",
-      },
-    };
+    return { kind: "written", grading: failedProposal("grader_error") };
   }
 
   if (isGraded(result)) {
@@ -334,16 +337,7 @@ async function gradeOne(
 
   // `pending: llm` — phase 2. The MVP has no provider configured, so the
   // answer arrives in the panel as a proposal worth zero (§5.4).
-  return {
-    kind: "written",
-    grading: {
-      points: 0,
-      source: "llm",
-      state: "proposed",
-      details: { reason: "llm_not_configured" },
-      comment: "llm_not_configured",
-    },
-  };
+  return { kind: "written", grading: failedProposal("llm_not_configured", "llm") };
 }
 
 // --- The runner pass ------------------------------------------------------
@@ -392,14 +386,7 @@ async function runRunnerGrading(
 
   const type = typeOf(item.question.type);
   if (!type.finalizeRunner) {
-    await writeGrading(db, {
-      ...base,
-      points: 0,
-      source: "auto",
-      state: "proposed",
-      details: { reason: "not_finalizable" },
-      comment: "not_finalizable",
-    });
+    await writeGrading(db, { ...base, ...failedProposal("not_finalizable") });
     return;
   }
 
@@ -412,14 +399,7 @@ async function runRunnerGrading(
     if (reason === "runner_error") {
       app.log.error({ err, itemId: job.itemId }, "grading: runner failed");
     }
-    await writeGrading(db, {
-      ...base,
-      points: 0,
-      source: "auto",
-      state: "proposed",
-      details: { reason },
-      comment: reason,
-    });
+    await writeGrading(db, { ...base, ...failedProposal(reason) });
     return;
   }
 
@@ -459,14 +439,7 @@ async function runRunnerGrading(
     });
   } catch (err) {
     app.log.error({ err, itemId: job.itemId }, "grading: finalizeRunner threw");
-    await writeGrading(db, {
-      ...base,
-      points: 0,
-      source: "auto",
-      state: "proposed",
-      details: { reason: "finalize_error" },
-      comment: "finalize_error",
-    });
+    await writeGrading(db, { ...base, ...failedProposal("finalize_error") });
   }
 }
 
