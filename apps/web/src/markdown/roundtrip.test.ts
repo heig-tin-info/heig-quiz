@@ -715,7 +715,7 @@ describe("round trip — cloze holes", () => {
 
 /*
  * The cloze texts this app actually stores, from `apps/api/src/seed/content.ts`
- * and `apps/web/src/mock/index.ts`. A teacher opening one of these questions
+ * and `apps/web/src/mock/pool.ts`. A teacher opening one of these questions
  * and saving it again must get the very same string back, fenced blocks and
  * tables included — that is the whole promise of the rich editor here.
  */
