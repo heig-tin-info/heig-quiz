@@ -799,31 +799,57 @@ export async function enterEvaluation(
 // --- Autosave (§4.7) ------------------------------------------------------
 
 /**
- * The gate, in the order the plan fixes. It runs BEFORE the write, and the
- * same rule (`GRACE_MS`) is what the ticker uses to expire the attempt — the
- * two must never drift (decision D12).
+ * How far a gate reaches, from the strictest to the loosest:
+ *   - `answer`: a write to an answer. A PAUSED evaluation refuses it
+ *     (decision D17: the client greys out and buffers; nothing is lost);
+ *   - `presence`: the position, the journal, the sign of life. A paused
+ *     evaluation allows it — the student is still in the room;
+ *   - `submit`: handing the attempt in. Only the attempt's own state counts.
  */
+type GateScope = "answer" | "presence" | "submit";
+
+/**
+ * THE rule of "may this attempt still be written to", as the reason it may
+ * not, or `null`. The arms run in the order the plan fixes, and the grace
+ * window is `GRACE_MS`, the same rule the ticker expires the attempt by —
+ * the two must never drift (decision D12, invariant 5).
+ */
+function closedReason(
+  evaluation: EvaluationRecord,
+  attempt: AttemptRecord,
+  now: Date,
+  scope: GateScope,
+): AttemptClosed["reason"] | null {
+  if (attempt.state !== "in_progress") {
+    return attempt.state === "submitted" ? "submitted" : "deadline";
+  }
+  if (scope === "submit") return null;
+  if (evaluation.state === "paused") {
+    if (scope === "answer") return "paused";
+  } else if (evaluation.state !== "running") {
+    return "evaluation_closed";
+  }
+  return pastGrace(attempt.deadlineAt, now) ? "deadline" : null;
+}
+
+/** {@link closedReason} as the 410 of §4.7. */
+function assertGate(
+  evaluation: EvaluationRecord,
+  attempt: AttemptRecord,
+  now: Date,
+  scope: GateScope,
+): void {
+  const reason = closedReason(evaluation, attempt, now, scope);
+  if (reason !== null) throw new AttemptClosedError(reason, attempt.deadlineAt);
+}
+
+/** The gate of an answer write. It runs BEFORE the write. */
 function assertWritable(
   evaluation: EvaluationRecord,
   attempt: AttemptRecord,
   now: Date,
 ): void {
-  if (attempt.state !== "in_progress") {
-    throw new AttemptClosedError(
-      attempt.state === "submitted" ? "submitted" : "deadline",
-      attempt.deadlineAt,
-    );
-  }
-  if (evaluation.state === "paused") {
-    // Decision D17: the client greys out and buffers; nothing is lost.
-    throw new AttemptClosedError("paused", attempt.deadlineAt);
-  }
-  if (evaluation.state !== "running") {
-    throw new AttemptClosedError("evaluation_closed", attempt.deadlineAt);
-  }
-  if (pastGrace(attempt.deadlineAt, now)) {
-    throw new AttemptClosedError("deadline", attempt.deadlineAt);
-  }
+  assertGate(evaluation, attempt, now, "answer");
 }
 
 /**
@@ -841,9 +867,7 @@ export function isOpen(
   attempt: AttemptRecord,
   now: Date,
 ): boolean {
-  if (attempt.state !== "in_progress") return false;
-  if (evaluation.state !== "running" && evaluation.state !== "paused") return false;
-  return !pastGrace(attempt.deadlineAt, now);
+  return closedReason(evaluation, attempt, now, "presence") === null;
 }
 
 /** {@link isOpen}, as the 410 of §4.7. */
@@ -852,18 +876,7 @@ export function assertOpen(
   attempt: AttemptRecord,
   now: Date,
 ): void {
-  if (attempt.state !== "in_progress") {
-    throw new AttemptClosedError(
-      attempt.state === "submitted" ? "submitted" : "deadline",
-      attempt.deadlineAt,
-    );
-  }
-  if (evaluation.state !== "running" && evaluation.state !== "paused") {
-    throw new AttemptClosedError("evaluation_closed", attempt.deadlineAt);
-  }
-  if (pastGrace(attempt.deadlineAt, now)) {
-    throw new AttemptClosedError("deadline", attempt.deadlineAt);
-  }
+  assertGate(evaluation, attempt, now, "presence");
 }
 
 async function itemOf(
@@ -1239,12 +1252,7 @@ export async function submitAttempt(
   attempt: AttemptRecord,
   now: Date,
 ): Promise<AttemptRecord> {
-  if (attempt.state !== "in_progress") {
-    throw new AttemptClosedError(
-      attempt.state === "submitted" ? "submitted" : "deadline",
-      attempt.deadlineAt,
-    );
-  }
+  assertGate(evaluation, attempt, now, "submit");
   await db
     .update(attempts)
     .set({
