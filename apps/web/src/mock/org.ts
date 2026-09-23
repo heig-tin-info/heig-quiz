@@ -216,9 +216,25 @@ export const teachers: AdminTeacher[] = [
   },
 ];
 
-/** `?many=1`: 8 courses, 30 classrooms, and 120 students on the first one. */
+/**
+ * `?many=1`: 8 courses, 30 classrooms, 120 students on the first one — and a
+ * staff of twelve on the first course, which is what makes the row of discs
+ * hit its cap and show the "+N" the ordinary scene never reaches.
+ */
 function inflate() {
   rooms[0]!.roster = makeStudents(120, 0.8, "r1");
+  const first = courses[0]!;
+  for (let i = first.staff.length; i < 12; i += 1) {
+    const givenName = FIRST[i]!;
+    const familyName = LAST[i]!;
+    first.staff.push({
+      userId: `u-staff${i + 1}`,
+      givenName,
+      familyName,
+      email: `${slug(givenName)}.${slug(familyName)}@heig-vd.ch`,
+      avatarUrl: null,
+    });
+  }
   const topics = ["Strings", "Structs", "Recursion", "Sorting", "Files", "Makefiles", "Tests", "Pointers"];
   for (let i = courses.length; i < 8; i += 1) {
     courses.push({

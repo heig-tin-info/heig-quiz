@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Loader2, PenLine } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Loader2, PenLine } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 
@@ -20,18 +20,27 @@ const defaultCompare = (x: string | number, y: string | number) =>
 /**
  * Sort state + sorted rows for a client-side table: clicking the active
  * column flips the direction, clicking another selects it ascending.
+ *
+ * `initial` may be `null`, and that is not the same thing as "sorted by the
+ * first column": it means THE ORDER THE ROWS ARRIVED IN, until the reader
+ * asks for another one. A list the server already ordered — evaluations by
+ * state and date, versions newest first — carries a meaning in that order,
+ * and reshuffling it on mount throws it away before anybody clicked anything.
  */
 export function useSortableTable<T, K extends string>(
-  rows: T[],
+  rows: readonly T[],
   rank: (row: T, key: K) => string | number,
-  initial: SortState<NoInfer<K>>,
+  initial: SortState<NoInfer<K>> | null,
   compare: (x: string | number, y: string | number) => number = defaultCompare,
 ) {
-  const [sort, setSort] = useState<SortState<K>>(initial);
+  const [sort, setSort] = useState<SortState<K> | null>(initial);
   const toggle = (k: K) =>
-    setSort((s) => (s.key === k ? { key: k, dir: s.dir === 1 ? -1 : 1 } : { key: k, dir: 1 }));
+    setSort((s) => (s?.key === k ? { key: k, dir: s.dir === 1 ? -1 : 1 } : { key: k, dir: 1 }));
   const sorted = useMemo(
-    () => [...rows].sort((a, b) => compare(rank(a, sort.key), rank(b, sort.key)) * sort.dir),
+    () =>
+      sort === null
+        ? rows
+        : [...rows].sort((a, b) => compare(rank(a, sort.key), rank(b, sort.key)) * sort.dir),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- rank/compare are stable per table
     [rows, sort],
   );
@@ -81,7 +90,20 @@ export const T = {
   stickyEnd: "sticky right-0 bg-surface group-hover:bg-surface-2/70",
 } as const;
 
-/** Clickable column header bound to useSortableTable. */
+/**
+ * Clickable column header bound to `useSortableTable`.
+ *
+ * A column that sorts and does not say so is a feature nobody finds. The
+ * affordance is an arrow and it stays inside the hairline aesthetic: the
+ * active column keeps its solid `ArrowUp`/`ArrowDown` in `fg`, an inactive
+ * one holds a faint `ArrowUpDown` that is drawn at `opacity-0` and fades in
+ * on hover and on keyboard focus. It is in the DOM the whole time, so it
+ * RESERVES its width — a label that jumps 16 px when the pointer arrives is
+ * worse than no affordance at all.
+ *
+ * `aria-sort` on the `<th>` is the same answer for a screen reader, which
+ * cannot see the arrow at all.
+ */
 export function SortHeader<K extends string>({
   k,
   sort,
@@ -91,29 +113,113 @@ export function SortHeader<K extends string>({
   right,
 }: {
   k: K;
-  sort: SortState<K>;
+  /** `null` while the table stands in the order its rows arrived in. */
+  sort: SortState<K> | null;
   onToggle: (k: K) => void;
   children: ReactNode;
   className?: string;
   right?: boolean;
 }) {
-  const active = sort.key === k;
+  const active = sort !== null && sort.key === k;
   return (
-    <th className={cx(T.th, right && "text-right", className)}>
+    <th
+      scope="col"
+      aria-sort={active ? (sort.dir === 1 ? "ascending" : "descending") : undefined}
+      className={cx(T.th, right && "text-right", className)}
+    >
       <button
         type="button"
         className={cx(
-          "inline-flex items-center gap-1 rounded-sm transition-colors hover:text-fg",
+          "group inline-flex items-center gap-1 rounded-sm transition-colors hover:text-fg",
+          // A right-aligned column keeps its LABEL flush with the figures
+          // under it, so the arrow hangs on the label's left instead of
+          // pushing the word out of line with its own numbers.
+          right && "flex-row-reverse",
           active && "text-fg",
         )}
         onClick={() => onToggle(k)}
       >
         {children}
         {active ? (
-          sort.dir === 1 ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />
-        ) : null}
+          sort.dir === 1 ? (
+            <ArrowUp aria-hidden className="size-3 shrink-0" />
+          ) : (
+            <ArrowDown aria-hidden className="size-3 shrink-0" />
+          )
+        ) : (
+          <ArrowUpDown
+            aria-hidden
+            className="size-3 shrink-0 text-fg-faint opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100"
+          />
+        )}
       </button>
     </th>
+  );
+}
+
+/**
+ * One column of a table, as data: its sort key, its label, and the classes
+ * that decide where it goes when the table narrows.
+ *
+ * A column that does not sort (`sortable: false`) is a tick box or an actions
+ * cell: its `key` is then only a name, never handed to `onToggle`.
+ */
+export type Column<K extends string> = {
+  label: ReactNode;
+  /** The label is for screen readers only (the actions column). */
+  srOnly?: boolean;
+  right?: boolean;
+  /** Extra classes: a `T.col*` priority, a width, `T.stickyEnd`. */
+  className?: string;
+} & ({ key: K; sortable?: true } | { key: string; sortable: false });
+
+/**
+ * The whole `<thead>` of a table, from its columns as data.
+ *
+ * Every table used to hand-roll its head, and the two things a head carries —
+ * what the columns ARE and what happens to them on a narrow page — were
+ * written twice, once in the `<th>` and once in the `<td>`. Declared here,
+ * a table says its columns ONCE, the head and the priority classes can no
+ * longer disagree, and every table of the app sorts the same way: click the
+ * label, click it again to flip it.
+ */
+export function TableHead<K extends string>({
+  columns,
+  sort,
+  onToggle,
+}: {
+  columns: Column<K>[];
+  /** `null`: the rows stand in the order they arrived in. */
+  sort: SortState<K> | null;
+  onToggle: (k: K) => void;
+}) {
+  return (
+    <thead className={T.head}>
+      <tr>
+        {columns.map((c) =>
+          c.sortable === false ? (
+            <th
+              key={c.key}
+              scope="col"
+              className={cx(T.th, c.right && "text-right", c.className)}
+            >
+              {c.srOnly ? <span className="sr-only">{c.label}</span> : c.label}
+            </th>
+          ) : (
+            <SortHeader
+              key={c.key}
+              k={c.key}
+              sort={sort}
+              onToggle={onToggle}
+              right={c.right}
+              className={c.className}
+            >
+              {c.srOnly ? <span className="sr-only">{c.label}</span> : c.label}
+            </SortHeader>
+          ),
+        )}
+      </tr>
+    </thead>
   );
 }
 

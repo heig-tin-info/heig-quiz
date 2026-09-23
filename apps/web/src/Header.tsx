@@ -1,7 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   BookOpen,
-  ChevronsUpDown,
   Code2,
   GraduationCap,
   LogOut,
@@ -205,7 +204,6 @@ export function UserMenu({
               </span>
               <span className="block truncate text-xs text-fg-muted">{me.email}</span>
             </span>
-            <ChevronsUpDown className="size-4 shrink-0 text-fg-faint" />
           </button>
         )
       }

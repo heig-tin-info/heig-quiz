@@ -143,6 +143,33 @@ describe("PoolsPage", () => {
     expect(within(row).getByText("shared with 1")).toBeVisible();
   });
 
+  it("sorts the table reading by the column label that was clicked", async () => {
+    mockFetch({
+      [`GET ${POOLS}`]: ok([
+        makePool({ name: "Zoologie", questionCount: 3 }),
+        makePool({ id: "p2", name: "Algèbre", questionCount: 40 }),
+      ]),
+    });
+    renderWithProviders(<PoolsPage navigate={vi.fn()} />, { queryClient: withMe() });
+    await screen.findByText("Zoologie");
+    await userEvent.click(screen.getByRole("radio", { name: "List" }));
+
+    // The shelf arrives in the server's order and stays there until a click.
+    const first = () => screen.getAllByRole("row")[1]!.textContent ?? "";
+    expect(first()).toContain("Zoologie");
+
+    await userEvent.click(screen.getByRole("button", { name: "Name" }));
+    expect(first()).toContain("Algèbre");
+    expect(screen.getByRole("columnheader", { name: "Name" })).toHaveAttribute(
+      "aria-sort",
+      "ascending",
+    );
+
+    // A count sorts as a number, not as the word it is written with.
+    await userEvent.click(screen.getByRole("button", { name: "Questions" }));
+    expect(first()).toContain("Zoologie");
+  });
+
   it("offers the one action from the empty state", async () => {
     mockFetch({ [`GET ${POOLS}`]: ok([]) });
     renderWithProviders(<PoolsPage navigate={vi.fn()} />, { queryClient: withMe() });

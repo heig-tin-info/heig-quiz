@@ -82,7 +82,10 @@ lives in `apps/web/scripts/`.
 - Squint test: is the primary action obvious with the accent stripped?
 - Any raw color, `dark:` variant or shadow in the page flow? Reject.
 - Any new modal holding a form longer than three fields? Should be a sheet.
-- Any row of three or more icon buttons? Should be a menu.
+- Any row of three or more icon buttons? Should be a menu — and `Actions`
+  (`src/ui/actions.tsx`) already decides that by construction. A hand-rolled
+  row of `IconButton`s for the actions of a record, or a `Menu` holding one
+  or two items that both have icons, is what to reject: both are `Actions`.
 - Any `window.confirm`? Reject.
 - Any state missing (loading / empty / error) on a new query? Reject.
 - Any string without a French entry? Compile error, reject.

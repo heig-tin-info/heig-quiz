@@ -27,9 +27,10 @@ import {
   Menu,
   PersonAvatar,
   RelativeTime,
-  SortHeader,
   T,
+  TableHead,
   useSortableTable,
+  type Column,
 } from "./ui";
 import { classroomKey } from "./queryKeys";
 
@@ -299,19 +300,21 @@ export function RosterTable({
         ? x - y
         : String(x).localeCompare(String(y), undefined, { sensitivity: "base" }),
   );
-  const Th = ({
-    k,
-    children,
-    className,
-  }: {
-    k: SortKey;
-    children: React.ReactNode;
-    className?: string;
-  }) => (
-    <SortHeader k={k} sort={sort} onToggle={toggle} className={className}>
-      {children}
-    </SortHeader>
-  );
+  const columns: Column<SortKey>[] = [
+    { key: "nom", label: t("roster.col.lastName") },
+    { key: "prenom", label: t("roster.col.firstName") },
+    { key: "email", label: t("roster.col.email"), className: T.colHigh },
+    { key: "status", label: t("roster.col.status") },
+    { key: "timeBonusPercent", label: t("roster.col.bonus"), className: T.colMid },
+    { key: "lastLoginAt", label: t("roster.col.lastSignIn"), className: T.colLow },
+    {
+      key: "actions",
+      label: t("common.actions"),
+      sortable: false,
+      srOnly: true,
+      className: T.stickyEnd,
+    },
+  ];
 
   return (
     /* Seven columns never fit a phone. The three the teacher can read later
@@ -322,19 +325,7 @@ export function RosterTable({
        scrolls. */
     <div className={cx(T.container, "overflow-x-auto")}>
       <table className={T.table}>
-        <thead>
-          <tr className={T.head}>
-            <Th k="nom">{t("roster.col.lastName")}</Th>
-            <Th k="prenom">{t("roster.col.firstName")}</Th>
-            <Th k="email" className={T.colHigh}>{t("roster.col.email")}</Th>
-            <Th k="status">{t("roster.col.status")}</Th>
-            <Th k="timeBonusPercent" className={T.colMid}>{t("roster.col.bonus")}</Th>
-            <Th k="lastLoginAt" className={T.colLow}>{t("roster.col.lastSignIn")}</Th>
-            <th className={cx(T.th, T.stickyEnd)}>
-              <span className="sr-only">{t("common.actions")}</span>
-            </th>
-          </tr>
-        </thead>
+        <TableHead columns={columns} sort={sort} onToggle={toggle} />
         <tbody>
           {sorted.map((r) => (
             <Row key={r.id} classroomId={classroomId} entry={r} />

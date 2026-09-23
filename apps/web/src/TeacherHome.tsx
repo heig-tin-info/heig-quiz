@@ -9,8 +9,8 @@ import {
   School,
   Trash2,
   Unlink,
+  UserMinus,
   UserPlus,
-  Users,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
@@ -22,6 +22,7 @@ import { useT } from "./i18n";
 import { useErrorToast } from "./notify";
 import type { Route } from "./router";
 import {
+  Actions,
   Button,
   Card,
   EmptyState,
@@ -31,14 +32,18 @@ import {
   Menu,
   type MenuItem,
   PageHeader,
-  PersonAvatar,
+  PeopleStack,
+  type Person,
   QueryError,
   SectionHeading,
   Segmented,
   Skeleton,
   Spinner,
   T,
+  TableHead,
+  type Column,
   usePersistentChoice,
+  useSortableTable,
 } from "./ui";
 import { courseKey, coursesKey, poolsKey } from "./queryKeys";
 
@@ -51,13 +56,21 @@ import { courseKey, coursesKey, poolsKey } from "./queryKeys";
  *
  * Two readings of the same list: cards, which give each course room for its
  * classrooms and its pools, and a table, which answers "which classroom, in
- * which course" in one scan once a teacher has a dozen of them. The choice is
- * the reader's and is remembered, because it is a habit and not a state of
- * the data.
+ * which course" in one scan once a teacher has a dozen of them and sorts by
+ * any of its three columns. The choice is the reader's and is remembered,
+ * because it is a habit and not a state of the data.
+ *
+ * The staff is read on the title line, as a row of discs, and everything
+ * about ONE colleague — their address, their seat — waits inside the disc's
+ * card. The course itself offers two things (a colleague, deletion), so they
+ * are two icon buttons and not a menu; `Actions` is what decides that.
  */
 
 const VIEW_KEY = "quiz-courses-view";
 const VIEWS = ["cards", "list"] as const;
+
+/** What the table may be sorted on: the identity column and the two counts. */
+type CourseSortKey = "name" | "classrooms" | "staff";
 
 function NewCourseModal({ onClose }: { onClose: () => void }) {
   const t = useT();
@@ -242,7 +255,7 @@ function CoursePools({
   };
 
   return (
-    <div className="mt-4 border-t border-line pt-3">
+    <div className="mt-4">
       <div className="flex items-center gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-fg-faint">
           {t("pools.link")}
@@ -291,8 +304,9 @@ function CoursePools({
                   })}
                 </span>
               </button>
-              <Menu
+              <Actions
                 label={t("common.actions")}
+                size="sm"
                 items={[
                   { label: t("pools.unlink"), icon: Unlink, danger: true, onSelect: () => void unlink(pool) },
                 ]}
@@ -311,9 +325,15 @@ function CoursePools({
  * deletion. The card and the table row of the list view share this ONE copy,
  * so the two readings of the same list cannot offer different things; the
  * hook owns the two dialogs those items open as well.
+ *
+ * `items` are the actions of the COURSE and `staffActions` those of one
+ * person, because that is where each is read: the two icon buttons sit beside
+ * the title, and "remove from the staff" waits inside the card of the
+ * colleague it is about, where the name is already written.
  */
 function useCourseActions(course: CourseSummary): {
   items: MenuItem[];
+  staffActions: (person: Person) => MenuItem[];
   newClassroom: () => void;
   dialogs: ReactNode;
 } {
@@ -335,32 +355,39 @@ function useCourseActions(course: CourseSummary): {
 
   return {
     newClassroom: () => setNewRoom(true),
+    // The server refuses to empty a staff (409 `last_staff`); an action that
+    // can only fail is not offered at all, so the last colleague standing has
+    // a card with nothing in it but their address.
+    staffActions: (person) =>
+      course.staff.length <= 1
+        ? []
+        : [
+            {
+              label: t("courses.staffRemove"),
+              icon: UserMinus,
+              danger: true,
+              onSelect: async () => {
+                if (
+                  await confirm({
+                    title: t("courses.staffRemoveConfirm", {
+                      name: `${person.givenName} ${person.familyName}`,
+                      course: course.name,
+                    }),
+                    confirmLabel: t("courses.staffRemove"),
+                    cancelLabel: t("common.cancel"),
+                  })
+                ) {
+                  removeStaff.mutate(person.userId);
+                }
+              },
+            },
+          ],
     items: [
       {
         label: t("courses.staffAdd"),
         icon: UserPlus,
         onSelect: () => setNewStaff(true),
       },
-      // The server refuses to empty a staff (409 `last_staff`); a menu item
-      // that can only fail is not offered at all.
-      ...(course.staff.length <= 1 ? [] : course.staff).map((s) => ({
-        label: t("courses.staffRemove") + ` — ${s.givenName} ${s.familyName}`,
-        icon: Users,
-        onSelect: async () => {
-          if (
-            await confirm({
-              title: t("courses.staffRemoveConfirm", {
-                name: `${s.givenName} ${s.familyName}`,
-                course: course.name,
-              }),
-              confirmLabel: t("courses.staffRemove"),
-              cancelLabel: t("common.cancel"),
-            })
-          ) {
-            removeStaff.mutate(s.userId);
-          }
-        },
-      })),
       {
         label: t("courses.delete"),
         icon: Trash2,
@@ -389,23 +416,6 @@ function useCourseActions(course: CourseSummary): {
   };
 }
 
-/** The staff of a course as a row of avatars, the same in both views. */
-function StaffAvatars({ course }: { course: CourseSummary }) {
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {course.staff.map((s) => (
-        <PersonAvatar
-          key={s.userId}
-          name={[s.givenName, s.familyName]}
-          src={s.avatarUrl}
-          label={`${s.givenName} ${s.familyName}`}
-          className="size-6 text-[10px]"
-        />
-      ))}
-    </div>
-  );
-}
-
 function CourseCard({
   course,
   navigate,
@@ -414,16 +424,20 @@ function CourseCard({
   navigate: (r: Route) => void;
 }) {
   const t = useT();
-  const { items, newClassroom, dialogs } = useCourseActions(course);
+  const { items, staffActions, newClassroom, dialogs } = useCourseActions(course);
 
   return (
     <Card className="p-5">
+      {/* The staff belongs to the title line and not to a row of its own: who
+          teaches a course is part of naming it, and the hairline-separated
+          strip it used to live in said "STAFF" to announce three discs. */}
       <SectionHeading
         icon={Library}
         title={
-          <span className="flex items-baseline gap-2">
+          <span className="flex flex-wrap items-center gap-2">
             {course.name}
             <span className="text-[13px] font-normal text-fg-faint">{course.code}</span>
+            <PeopleStack people={course.staff} actions={staffActions} className="ml-2" />
           </span>
         }
         actions={
@@ -431,7 +445,7 @@ function CourseCard({
             <Button size="sm" variant="secondary" onClick={newClassroom}>
               <Plus /> {t("classrooms.new")}
             </Button>
-            <Menu label={t("common.actions")} items={items} />
+            <Actions items={items} label={t("common.actions")} />
           </>
         }
       />
@@ -462,15 +476,6 @@ function CourseCard({
         )}
       </div>
 
-      {course.staff.length > 0 ? (
-        <div className="mt-4 flex items-center gap-2 border-t border-line pt-3">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-fg-faint">
-            {t("courses.staff")}
-          </span>
-          <StaffAvatars course={course} />
-        </div>
-      ) : null}
-
       <CoursePools course={course} navigate={navigate} />
 
       {dialogs}
@@ -491,7 +496,7 @@ function CourseRow({
   navigate: (r: Route) => void;
 }) {
   const t = useT();
-  const { items, dialogs } = useCourseActions(course);
+  const { items, staffActions, dialogs } = useCourseActions(course);
   return (
     <tr className={T.row}>
       <td className={T.td}>
@@ -523,11 +528,11 @@ function CourseRow({
         {course.staff.length === 0 ? (
           <span className="text-fg-faint">—</span>
         ) : (
-          <StaffAvatars course={course} />
+          <PeopleStack people={course.staff} actions={staffActions} />
         )}
       </td>
       <td className={`${T.td} w-10 text-right`}>
-        <Menu label={t("common.actions")} items={items} />
+        <Actions items={items} label={t("common.actions")} />
         {dialogs}
       </td>
     </tr>
@@ -543,6 +548,27 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
     queryFn: () => api("/app/api/courses"),
   });
   const rows = courses.data ?? [];
+  /**
+   * The table sorts, the cards do not: a card list is read in the order it
+   * was given, while a table is scanned down one column. Three keys, the
+   * three things a column can be worth here — the name, and the two counts.
+   */
+  const { sorted, sort, toggle } = useSortableTable<CourseSummary, CourseSortKey>(
+    rows,
+    (course, key) =>
+      key === "classrooms"
+        ? course.classrooms.length
+        : key === "staff"
+          ? course.staff.length
+          : course.name,
+    { key: "name", dir: 1 },
+  );
+  const columns: Column<CourseSortKey>[] = [
+    { key: "name", label: t("courses.name") },
+    { key: "classrooms", label: t("classrooms.title") },
+    { key: "staff", label: t("courses.staff") },
+    { key: "actions", label: t("common.actions"), sortable: false, srOnly: true, className: "w-10" },
+  ];
 
   /**
    * Two icons and no words: the choice is between two pictures of the same
@@ -622,18 +648,9 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
       ) : view === "list" ? (
         <Card className="overflow-hidden">
           <table className={T.table}>
-            <thead className={T.head}>
-              <tr>
-                <th className={T.th}>{t("courses.name")}</th>
-                <th className={T.th}>{t("classrooms.title")}</th>
-                <th className={T.th}>{t("courses.staff")}</th>
-                <th className={`${T.th} w-10`}>
-                  <span className="sr-only">{t("common.actions")}</span>
-                </th>
-              </tr>
-            </thead>
+            <TableHead columns={columns} sort={sort} onToggle={toggle} />
             <tbody>
-              {rows.map((c) => (
+              {sorted.map((c) => (
                 <CourseRow key={c.id} course={c} navigate={navigate} />
               ))}
             </tbody>

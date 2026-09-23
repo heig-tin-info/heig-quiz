@@ -13,9 +13,10 @@ import {
   pressable,
   RelativeTime,
   Skeleton,
-  SortHeader,
   T,
+  TableHead,
   Tip,
+  type Column,
   type SortState,
 } from "../ui";
 import type { QuestionGroup } from "./QuestionGroups";
@@ -164,40 +165,46 @@ export function QuestionTable({
   const sortState: SortState<QuestionSort> = { key: sort, dir: dir === "asc" ? 1 : -1 };
   // A band spanning the whole width, whatever the container has hidden.
   const span = 7;
+  const columns: Column<QuestionSort>[] = [
+    ...(readOnly
+      ? []
+      : [
+          {
+            key: "select",
+            sortable: false as const,
+            className: "w-8",
+            label: (
+              <Checkbox
+                label={<span className="sr-only">{t("pool.selectAll")}</span>}
+                checked={allChecked}
+                onChange={onToggleAll}
+              />
+            ),
+          },
+        ]),
+    { key: "name", label: t("pool.col.name") },
+    // The tags are read, never ordered: a row carries several of them, and a
+    // list sorted on "the first tag" is an order nobody asked for.
+    { key: "tags", label: t("pool.col.tags"), sortable: false, className: T.colHigh },
+    { key: "difficulty", label: t("pool.col.difficulty"), className: "whitespace-nowrap" },
+    { key: "version", label: t("pool.col.version"), className: T.colLow },
+    { key: "updated", label: t("pool.col.updated"), className: T.colMid },
+    ...(readOnly
+      ? []
+      : [
+          {
+            key: "actions",
+            label: t("common.actions"),
+            sortable: false as const,
+            srOnly: true,
+            className: T.stickyEnd,
+          },
+        ]),
+  ];
   return (
     <div className={cx(T.container, "overflow-x-auto rounded-card border border-line bg-surface")}>
       <table className={T.table}>
-        <thead className={T.head}>
-          <tr>
-            {readOnly ? null : (
-              <th className={cx(T.th, "w-8")}>
-                <Checkbox
-                  label={<span className="sr-only">{t("pool.selectAll")}</span>}
-                  checked={allChecked}
-                  onChange={onToggleAll}
-                />
-              </th>
-            )}
-            <SortHeader k="name" sort={sortState} onToggle={onSort}>
-              {t("pool.col.name")}
-            </SortHeader>
-            <th className={cx(T.th, T.colHigh)}>{t("pool.col.tags")}</th>
-            <SortHeader k="difficulty" sort={sortState} onToggle={onSort} className="whitespace-nowrap">
-              {t("pool.col.difficulty")}
-            </SortHeader>
-            <SortHeader k="version" sort={sortState} onToggle={onSort} className={T.colLow}>
-              {t("pool.col.version")}
-            </SortHeader>
-            <SortHeader k="updated" sort={sortState} onToggle={onSort} className={T.colMid}>
-              {t("pool.col.updated")}
-            </SortHeader>
-            {readOnly ? null : (
-              <th className={cx(T.th, T.stickyEnd)}>
-                <span className="sr-only">{t("common.actions")}</span>
-              </th>
-            )}
-          </tr>
-        </thead>
+        <TableHead columns={columns} sort={sortState} onToggle={onSort} />
         {groups.map((group) => (
           <tbody key={group.key}>
             {group.label === null ? null : (

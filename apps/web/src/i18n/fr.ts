@@ -42,6 +42,7 @@ export const fr: Record<keyof Dict, string> = {
   "common.loading": "Chargement…",
   "common.retry": "Réessayer",
   "common.showAll": "Tout afficher ({n})",
+  "people.more": "{n} de plus",
   "error.server": "Le serveur n'a pas répondu. Réessayez dans un instant.",
   "error.save": "Impossible d'enregistrer cette modification.",
   "error.title": "Une erreur est survenue",
@@ -1125,6 +1126,9 @@ export const fr: Record<keyof Dict, string> = {
   // --- Development gallery (/dev/ui) ---
   "dev.ui.title": "Galerie UI",
   "dev.ui.subtitle": "Chaque primitive du direct dans chaque état, pour le contrôle visuel.",
+  "dev.ui.actions": "Actions d'un élément",
+  "dev.ui.popover": "Bulle flottante",
+  "dev.ui.people": "Personnes",
   "dev.ui.countdown": "Compte à rebours",
   "dev.ui.ring": "Anneau",
   "dev.ui.segments": "Segments de progression",

@@ -43,6 +43,9 @@ export const en = {
   "common.loading": "Loading…",
   "common.retry": "Retry",
   "common.showAll": "Show all ({n})",
+  // A row of people capped by `PeopleStack`: the accessible name of the disc
+  // that stands for everyone it could not draw.
+  "people.more": "{n} more",
   "error.server": "The server did not answer. Try again in a moment.",
   "error.save": "Could not save this change.",
   "error.title": "Something went wrong",
@@ -1130,6 +1133,9 @@ export const en = {
   // --- Development gallery (/dev/ui) ---
   "dev.ui.title": "UI gallery",
   "dev.ui.subtitle": "Every live primitive in every state, for the visual check.",
+  "dev.ui.actions": "Record actions",
+  "dev.ui.popover": "Popover",
+  "dev.ui.people": "People",
   "dev.ui.countdown": "Countdown",
   "dev.ui.ring": "Ring",
   "dev.ui.segments": "Progress segments",

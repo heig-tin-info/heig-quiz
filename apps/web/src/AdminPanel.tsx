@@ -20,9 +20,10 @@ import {
   RelativeTime,
   SectionHeading,
   Skeleton,
-  SortHeader,
   T,
+  TableHead,
   useSortableTable,
+  type Column,
 } from "./ui";
 import { adminTeachersKey } from "./queryKeys";
 
@@ -72,11 +73,14 @@ export function AdminPage() {
         : String(x).localeCompare(String(y), undefined, { sensitivity: "base" }),
   );
 
-  const Th = ({ k, children }: { k: SortKey; children: React.ReactNode }) => (
-    <SortHeader k={k} sort={sort} onToggle={toggle}>
-      {children}
-    </SortHeader>
-  );
+  const columns: Column<SortKey>[] = [
+    { key: "name", label: t("admin.col.person") },
+    { key: "email", label: t("admin.email") },
+    { key: "courses", label: t("admin.col.courses") },
+    { key: "lastLoginAt", label: t("admin.col.lastSignIn") },
+    { key: "grantedAt", label: t("admin.col.granted") },
+    { key: "actions", label: t("common.actions"), sortable: false, srOnly: true },
+  ];
 
   return (
     <div className="space-y-6">
@@ -135,18 +139,7 @@ export function AdminPage() {
         ) : (
           <Card className="overflow-x-auto">
             <table className={cx(T.table, "min-w-180")}>
-              <thead>
-                <tr className={T.head}>
-                  <Th k="name">{t("admin.col.person")}</Th>
-                  <Th k="email">{t("admin.email")}</Th>
-                  <Th k="courses">{t("admin.col.courses")}</Th>
-                  <Th k="lastLoginAt">{t("admin.col.lastSignIn")}</Th>
-                  <Th k="grantedAt">{t("admin.col.granted")}</Th>
-                  <th className={T.th}>
-                    <span className="sr-only">{t("common.actions")}</span>
-                  </th>
-                </tr>
-              </thead>
+              <TableHead columns={columns} sort={sort} onToggle={toggle} />
               <tbody>
                 {sorted.map((r) => (
                   <tr key={r.id} className={cx(T.row, T.rowHover)}>

@@ -41,8 +41,11 @@ import {
   Skeleton,
   Spinner,
   T,
+  TableHead,
   Tip,
   usePersistentChoice,
+  useSortableTable,
+  type Column,
 } from "../ui";
 import { PoolIcon } from "./PoolIcon";
 import { PoolIconPicker } from "./PoolIconPicker";
@@ -412,6 +415,32 @@ function PoolRow({
   );
 }
 
+type PoolSort = "name" | "questions" | "visibility" | "owner" | "role" | "updated";
+
+/**
+ * What each column of the table reading is ordered ON. The visibility ranks
+ * on the ENUM and not on the badge's sentence: what a teacher groups here is
+ * private / shared / public, and "shared with 2" would scatter that group by
+ * its member count. The two columns that show "—" for the reader's own pools
+ * rank those first, where the dash already puts them.
+ */
+function poolRank(pool: PoolSummary, key: PoolSort, mine: boolean, t: TFunction): string | number {
+  switch (key) {
+    case "questions":
+      return pool.questionCount;
+    case "visibility":
+      return pool.visibility;
+    case "owner":
+      return mine ? "" : pool.ownerName;
+    case "role":
+      return pool.role === "owner" ? "" : t(`share.role.${pool.role}`);
+    case "updated":
+      return pool.updatedAt;
+    default:
+      return pool.name;
+  }
+}
+
 export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
   const t = useT();
   const me = useMe();
@@ -423,6 +452,28 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
     queryFn: () => api("/app/api/pools"),
   });
   const rows = pools.data ?? [];
+  /* No initial sort: the server hands the shelf over in its own order, and
+     the reader picks another one by clicking a label. */
+  const { sorted, sort, toggle } = useSortableTable<PoolSummary, PoolSort>(
+    rows,
+    (pool, key) => poolRank(pool, key, me.data != null && pool.ownerId === me.data.id, t),
+    null,
+  );
+  const columns: Column<PoolSort>[] = [
+    { key: "name", label: t("pools.name") },
+    { key: "questions", label: t("pools.questionsColumn"), right: true },
+    { key: "visibility", label: t("pools.visibility") },
+    { key: "owner", label: t("pools.owner"), className: T.colMid },
+    { key: "role", label: t("pools.role"), className: T.colLow },
+    { key: "updated", label: t("pools.updatedColumn"), className: T.colHigh },
+    {
+      key: "actions",
+      label: t("common.actions"),
+      sortable: false,
+      srOnly: true,
+      className: "w-10",
+    },
+  ];
 
   /** Two pictures of one list; the name stays for the pointer and the reader. */
   const viewOption = (value: PoolsView, icon: ReactNode, label: string) => ({
@@ -496,21 +547,9 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
         <Card className="overflow-hidden">
           <div className={cx(T.container, "overflow-x-auto")}>
             <table className={T.table}>
-              <thead className={T.head}>
-                <tr>
-                  <th className={T.th}>{t("pools.name")}</th>
-                  <th className={`${T.th} text-right`}>{t("pools.questionsColumn")}</th>
-                  <th className={T.th}>{t("pools.visibility")}</th>
-                  <th className={`${T.th} ${T.colMid}`}>{t("pools.owner")}</th>
-                  <th className={`${T.th} ${T.colLow}`}>{t("pools.role")}</th>
-                  <th className={`${T.th} ${T.colHigh}`}>{t("pools.updatedColumn")}</th>
-                  <th className={`${T.th} w-10`}>
-                    <span className="sr-only">{t("common.actions")}</span>
-                  </th>
-                </tr>
-              </thead>
+              <TableHead columns={columns} sort={sort} onToggle={toggle} />
               <tbody>
-                {rows.map((pool) => (
+                {sorted.map((pool) => (
                   <PoolRow key={pool.id} pool={pool} me={me.data} navigate={navigate} />
                 ))}
               </tbody>

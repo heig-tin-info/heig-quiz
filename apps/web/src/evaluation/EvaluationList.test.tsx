@@ -134,6 +134,33 @@ describe("EvaluationList", () => {
     );
   });
 
+  it("stands in the server's order until a column label is clicked", async () => {
+    const user = userEvent.setup();
+    mockFetch(
+      list([
+        summary({ title: "Zebra", state: "draft" }),
+        summary({ id: id("evaluation", 2), title: "Alpha", state: "closed" }),
+      ]),
+    );
+    renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} />);
+    await screen.findByText("Zebra");
+
+    // The list arrives the way the classroom works through it, and stays there.
+    const titles = () =>
+      screen
+        .getAllByRole("row")
+        .slice(1)
+        .map((row) => within(row).getAllByRole("cell")[0]?.textContent ?? "");
+    expect(titles()[0]).toContain("Zebra");
+
+    await user.click(screen.getByRole("button", { name: "Title" }));
+    expect(titles()[0]).toContain("Alpha");
+    expect(screen.getByRole("columnheader", { name: "Title" })).toHaveAttribute(
+      "aria-sort",
+      "ascending",
+    );
+  });
+
   it("renders the empty and the failed states", async () => {
     mockFetch(list([]));
     const { unmount } = renderWithProviders(
