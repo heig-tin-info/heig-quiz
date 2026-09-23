@@ -122,6 +122,24 @@ describe("CodePlayer", () => {
     expect(screen.getByLabelText("Your code, region 1")).toBeInTheDocument();
   });
 
+  it("says 'Crashed' for a process with no exit code, and 'Not run' for a missing result", async () => {
+    // Case 1 was killed (no exit code of its own); the runner sent nothing back
+    // for case 2 — both labels come from `caseVerdict`'s failure.
+    setup({ onRun: async () => outcome([{ exitCode: null, stdout: "6\n" }]) });
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    expect(await screen.findByText("Crashed")).toBeInTheDocument();
+    expect(screen.getByText("Not run")).toBeInTheDocument();
+  });
+
+  it("says 'Not run' for every case when the code did not compile", async () => {
+    setup({
+      onRun: async () => outcome([{ stdout: "6\n" }, { stdout: "0\n" }], { ok: false, stderr: "err" }),
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    expect(await screen.findAllByText("Not run")).toHaveLength(2);
+    expect(screen.queryByText("Passed")).toBeNull();
+  });
+
   it("names the check that failed rather than saying only 'Failed'", async () => {
     setup({ onRun: async () => outcome([{ exitCode: 1, stdout: "6\n" }, { stdout: "0\n" }]) });
     fireEvent.click(screen.getByRole("button", { name: "Run" }));
