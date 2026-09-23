@@ -1,7 +1,9 @@
 /** Portal API client: session cookies + double-submit CSRF header. */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { Me } from "@quiz/contracts";
+import type { Me, MePatch } from "@quiz/contracts";
+
+import { meKey } from "./queryKeys";
 
 function csrfToken(): string {
   return (
@@ -58,7 +60,7 @@ export function apiErrorMessage(err: unknown, fallback: string): string {
 /** Current session, or null when signed out (401). */
 export function useMe() {
   return useQuery<Me | null>({
-    queryKey: ["me"],
+    queryKey: meKey,
     retry: false,
     queryFn: async () => {
       try {
@@ -68,5 +70,19 @@ export function useMe() {
         throw e;
       }
     },
+  });
+}
+
+/**
+ * `PATCH /me` — one account preference — then the session refetched, so every
+ * screen reading `useMe()` sees the saved value. The body is the patch as
+ * given: one field per call, which is what each settings row sends.
+ */
+export function useMePatch() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: MePatch) =>
+      api("/app/api/me", { method: "PATCH", body: JSON.stringify(patch) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: meKey }),
   });
 }

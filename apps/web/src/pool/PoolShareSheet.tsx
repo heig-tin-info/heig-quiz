@@ -27,6 +27,7 @@ import {
   Sheet,
   Skeleton,
 } from "../ui";
+import { poolCandidatesKey, poolMembersKey, poolsKey } from "../queryKeys";
 
 /**
  * Who may read and write a pool (F-POOL-05), in one sheet: the visibility of
@@ -73,7 +74,7 @@ function MemberRow({
   const t = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
-  const key = ["pool-members", poolId];
+  const key = poolMembersKey(poolId);
   const name = `${member.givenName} ${member.familyName}`.trim() || member.email;
 
   const setRole = useMutation({
@@ -144,7 +145,7 @@ export function PoolShareSheet({ pool, onClose }: { pool: PoolSummary; onClose: 
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
-  const key = ["pool-members", pool.id];
+  const key = poolMembersKey(pool.id);
   const [text, setText] = useState("");
   const [selected, setSelected] = useState<PoolCandidate | null>(null);
   const [role, setRole] = useState<PoolRole>("reader");
@@ -163,7 +164,7 @@ export function PoolShareSheet({ pool, onClose }: { pool: PoolSummary; onClose: 
       }),
     onSuccess: async () => {
       await Promise.all([
-        qc.invalidateQueries({ queryKey: ["pools"] }),
+        qc.invalidateQueries({ queryKey: poolsKey }),
         qc.invalidateQueries({ queryKey: key }),
       ]);
     },
@@ -185,9 +186,9 @@ export function PoolShareSheet({ pool, onClose }: { pool: PoolSummary; onClose: 
       setSelected(null);
       await Promise.all([
         qc.invalidateQueries({ queryKey: key }),
-        qc.invalidateQueries({ queryKey: ["pools"] }),
+        qc.invalidateQueries({ queryKey: poolsKey }),
         // The newcomer leaves the list of who may still be invited.
-        qc.invalidateQueries({ queryKey: ["pool-candidates", pool.id] }),
+        qc.invalidateQueries({ queryKey: poolCandidatesKey(pool.id) }),
       ]);
     },
   });

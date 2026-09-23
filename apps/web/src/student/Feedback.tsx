@@ -9,6 +9,7 @@ import { useT, type Dict } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { QuestionReviewHost } from "../questionTypes";
 import { Badge, Card, EmptyState, QueryError, RelativeTime, Skeleton, Stat } from "../ui";
+import { attemptFeedbackKey } from "../queryKeys";
 
 /**
  * What a student sees of their own attempt (F-RES-04).
@@ -39,7 +40,7 @@ const PENDING_BODY: Record<FeedbackPending["reason"], keyof Dict> = {
 export function Feedback({ attemptId }: { attemptId: string }) {
   const t = useT();
   const feedback = useQuery<StudentFeedback>({
-    queryKey: ["attempt", attemptId, "feedback"],
+    queryKey: attemptFeedbackKey(attemptId),
     queryFn: () => api(`/app/api/attempts/${attemptId}/feedback`),
   });
 

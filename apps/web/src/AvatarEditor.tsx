@@ -7,6 +7,7 @@ import { AvatarMime } from "@quiz/contracts";
 import { api, apiErrorMessage } from "./api";
 import { useT } from "./i18n";
 import { Button, Modal } from "./ui";
+import { meKey } from "./queryKeys";
 
 /** The one list of accepted types (B-19); the API enforces the same set. */
 const ACCEPT = AvatarMime.options.join(",");
@@ -58,7 +59,7 @@ export function AvatarEditor({
   const dragging = useRef<{ x: number; y: number } | null>(null);
 
   const done = () => {
-    void qc.invalidateQueries({ queryKey: ["me"] });
+    void qc.invalidateQueries({ queryKey: meKey });
     onClose();
   };
   const save = useMutation({

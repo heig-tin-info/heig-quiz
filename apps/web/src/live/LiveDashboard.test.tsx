@@ -9,7 +9,6 @@ import {
   groupCommands,
   type CommandContext,
 } from "../commands";
-import { dashboardKey } from "../evaluation/common";
 import type { TFunction } from "../i18n";
 import { initialGrid } from "../realtime/grid";
 import { resetEventStream } from "../realtime/useEventStream";
@@ -23,6 +22,7 @@ import {
 } from "../test/live-fixtures";
 import { makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
 import { LiveDashboard } from "./LiveDashboard";
+import { dashboardKey } from "../queryKeys";
 
 /*
  * The dashboard, from the three angles the work package cares about: the grid

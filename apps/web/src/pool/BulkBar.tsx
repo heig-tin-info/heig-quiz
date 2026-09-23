@@ -10,6 +10,7 @@ import { useT } from "../i18n";
 import { useMoveQuestions } from "./move";
 import { useToast } from "../notify";
 import { Button, Field, IconButton, Modal, Select, Spinner, Z } from "../ui";
+import { anyPoolKey, poolKey, poolsKey } from "../queryKeys";
 
 /**
  * What to do with the ticked questions (mockup `08-pool.html`): a floating
@@ -78,14 +79,14 @@ export function BulkBar({
   // The pools the teacher may WRITE to, this one excluded: a move to the pool
   // the questions are already in is what the category dialog above is for.
   const pools = useQuery<PoolSummary[]>({
-    queryKey: ["pools"],
+    queryKey: poolsKey,
     queryFn: () => api("/app/api/pools"),
     enabled: dialog === "pool",
   });
   const targets = (pools.data ?? []).filter((p) => p.id !== poolId && p.role !== "reader");
   // The chosen pool's folders, on the key its own screen uses.
   const target = useQuery<PoolDetail>({
-    queryKey: ["pool", targetPoolId],
+    queryKey: poolKey(targetPoolId),
     queryFn: () => api(`/app/api/pools/${targetPoolId}`),
     enabled: dialog === "pool" && targetPoolId !== "",
   });
@@ -103,7 +104,7 @@ export function BulkBar({
     }
     setBusy(false);
     setDialog(null);
-    await qc.invalidateQueries({ queryKey: ["pool"] });
+    await qc.invalidateQueries({ queryKey: anyPoolKey });
     if (failed > 0) toast(t("pool.bulk.failed", { n: failed }), "error");
     else toast(t("pool.bulk.done", { n: ids.length }), "success");
     onClear();
@@ -146,7 +147,7 @@ export function BulkBar({
         toast(apiErrorMessage(error, t("pool.categoryFailed")), "error");
         return;
       }
-      await qc.invalidateQueries({ queryKey: ["pool", poolId] });
+      await qc.invalidateQueries({ queryKey: poolKey(poolId) });
     }
     await runAll((id) =>
       api(`/app/api/questions/${id}`, {

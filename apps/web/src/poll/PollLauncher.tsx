@@ -32,6 +32,7 @@ import {
   Switch,
   Tabs,
 } from "../ui";
+import { coursesKey, pollQuestionsKey } from "../queryKeys";
 
 /**
  * "Start a poll" (F-LIVE-13): one question, thrown on the wall, answered by
@@ -161,12 +162,12 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
   const [name, setName] = useState("");
 
   const picks = useQuery<PollQuestionPick[]>({
-    queryKey: ["poll-questions"],
+    queryKey: pollQuestionsKey,
     queryFn: () => api("/app/api/polls/questions"),
   });
   // The same key the sidebar and the palette already hold: no extra request.
   const courses = useQuery<CourseSummary[]>({
-    queryKey: ["courses"],
+    queryKey: coursesKey,
     queryFn: () => api("/app/api/courses"),
   });
 

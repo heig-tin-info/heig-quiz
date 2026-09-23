@@ -1,9 +1,8 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { BellRing, GraduationCap, School, ShieldCheck, SlidersHorizontal } from "lucide-react";
 
 import { AvatarEditor } from "./AvatarEditor";
-import { api, apiErrorMessage } from "./api";
+import { apiErrorMessage, useMePatch } from "./api";
 import { useI18n, LOCALES } from "./i18n";
 import {
   DATE_FORMATS,
@@ -42,12 +41,7 @@ import {
  */
 function McqPolicyRow({ me }: { me: Me }) {
   const { t } = useI18n();
-  const qc = useQueryClient();
-  const save = useMutation({
-    mutationFn: (mcqPolicy: McqPolicy) =>
-      api("/app/api/me", { method: "PATCH", body: JSON.stringify({ mcqPolicy }) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["me"] }),
-  });
+  const save = useMePatch();
   // A teacher who never opened this page has no preference: the default is
   // the one nobody has to be told about.
   const current = me.mcqPolicy ?? "all_or_nothing";
@@ -60,7 +54,7 @@ function McqPolicyRow({ me }: { me: Me }) {
       <Select
         value={current}
         disabled={save.isPending}
-        onChange={(e) => save.mutate(e.target.value as McqPolicy)}
+        onChange={(e) => save.mutate({ mcqPolicy: e.target.value as McqPolicy })}
         width="w-52"
         aria-label={t("mcq.policy.title")}
       >
@@ -77,14 +71,9 @@ function McqPolicyRow({ me }: { me: Me }) {
 /** Language, appearance, date format — and, for a teacher, MCQ scoring. */
 function PreferencesCard({ me }: { me: Me }) {
   const { t, locale, setLocale } = useI18n();
-  const qc = useQueryClient();
   // Shared store: the account menu toggle reads the same value.
   const theme = useThemeChoice();
-  const saveDate = useMutation({
-    mutationFn: (dateFormat: DateFormat) =>
-      api("/app/api/me", { method: "PATCH", body: JSON.stringify({ dateFormat }) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["me"] }),
-  });
+  const saveDate = useMePatch();
   const current = me.dateFormat ?? "iso";
   const sample = new Date().toISOString();
   return (
@@ -118,7 +107,7 @@ function PreferencesCard({ me }: { me: Me }) {
             onChange={(e) => {
               const f = e.target.value as DateFormat;
               setDateFormat(f);
-              saveDate.mutate(f);
+              saveDate.mutate({ dateFormat: f });
             }}
             width="w-52"
             className="tabular-nums"

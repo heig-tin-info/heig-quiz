@@ -7,7 +7,8 @@ import { api, apiErrorMessage } from "../api";
 import { formatDuration, useT } from "../i18n";
 import type { Route } from "../router";
 import { Alert, Badge, Button, Card, isoDateTime, SectionHeading, Stat } from "../ui";
-import { evaluationKey, evaluationStateLabel, stateTone } from "./common";
+import { evaluationStateLabel, stateTone } from "./common";
+import { evaluationKey } from "../queryKeys";
 
 /**
  * Step 3: the last look, and the ONE action that turns a configuration into

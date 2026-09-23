@@ -10,6 +10,7 @@ import { PlayerShell } from "../student/PlayerShell";
 import { QuestionHost } from "../student/QuestionHost";
 import { Alert, Button, Card, Skeleton } from "../ui";
 import { emptyAnswerOf } from "../questionTypes";
+import { questionPreviewKey } from "../queryKeys";
 
 /**
  * "See what the student sees" for ONE question (docs/spec/08 §8.2), in a page
@@ -43,7 +44,7 @@ import { emptyAnswerOf } from "../questionTypes";
 export function StudentPreviewPage({ id }: { id: string }) {
   const t = useT();
   const preview = useQuery<PreviewResult>({
-    queryKey: ["question", id, "preview", "draft"],
+    queryKey: questionPreviewKey(id, "draft"),
     queryFn: () =>
       api(`/app/api/questions/${id}/preview`, {
         method: "POST",

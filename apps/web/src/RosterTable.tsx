@@ -31,6 +31,7 @@ import {
   T,
   useSortableTable,
 } from "./ui";
+import { classroomKey } from "./queryKeys";
 
 function StudentAvatar({ entry }: { entry: RosterEntry }) {
   const [failed, setFailed] = useState(false);
@@ -59,7 +60,7 @@ function Row({ classroomId, entry }: { classroomId: string; entry: RosterEntry }
     email: entry.email,
     timeBonusPercent: String(entry.timeBonusPercent),
   });
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["classroom", classroomId] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: classroomKey(classroomId) });
   const base = `/app/api/classrooms/${classroomId}/roster/${entry.id}`;
   const fullName = `${entry.prenom} ${entry.nom}`;
 

@@ -22,6 +22,7 @@ import {
   Z,
   type MenuPlacement,
 } from "../ui";
+import { notificationsKey } from "../queryKeys";
 
 /**
  * The bell: what happened to this account while it was away (F-POOL-05 for
@@ -134,7 +135,7 @@ export function NotificationBell({
   const titleId = useId();
 
   const list = useQuery<NotificationList>({
-    queryKey: ["notifications"],
+    queryKey: notificationsKey,
     queryFn: () => api(LIST_URL),
   });
 
@@ -164,8 +165,8 @@ export function NotificationBell({
    * never out of step.
    */
   const adopt = (list: NotificationList | undefined) => {
-    if (list) qc.setQueryData(["notifications"], list);
-    else void qc.invalidateQueries({ queryKey: ["notifications"] });
+    if (list) qc.setQueryData(notificationsKey, list);
+    else void qc.invalidateQueries({ queryKey: notificationsKey });
   };
   const markRead = useMutation({
     mutationFn: (id: string) =>

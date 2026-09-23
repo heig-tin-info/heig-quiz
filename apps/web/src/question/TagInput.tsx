@@ -8,6 +8,7 @@ import { api, apiErrorMessage } from "../api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { Tip, Z, cx, inputClass } from "../ui";
+import { poolTagsKey } from "../queryKeys";
 
 /**
  * The tags of a question, written the way a teacher expects tags to be
@@ -61,7 +62,7 @@ export function TagInput({
   const describeInput = useRef<HTMLInputElement>(null);
 
   const vocabulary = useQuery<PoolTag[]>({
-    queryKey: ["pool", poolId, "tags"],
+    queryKey: poolTagsKey(poolId),
     queryFn: () => api(`/app/api/pools/${poolId}/tags`),
   });
   const known = vocabulary.data ?? [];
@@ -73,7 +74,7 @@ export function TagInput({
         method: "PATCH",
         body: JSON.stringify({ description: body.description }),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["pool", poolId, "tags"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: poolTagsKey(poolId) }),
     onError: (error) => toast(apiErrorMessage(error, t("question.tag.describeFailed")), "error"),
   });
 

@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
 
 import type { BatchValidateBody, BatchValidateResponse, GradingConfidence, GradingSource } from "@quiz/contracts";
@@ -8,6 +8,7 @@ import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { Button } from "../ui";
+import { useGradingInvalidate } from "./useGradingInvalidate";
 
 /** Above this many, a batch stops being a gesture and becomes a decision. */
 const BATCH_CONFIRM_THRESHOLD = 10;
@@ -49,7 +50,7 @@ export function BatchBar({
   const t = useT();
   const toast = useToast();
   const confirm = useConfirm();
-  const qc = useQueryClient();
+  const invalidateGrading = useGradingInvalidate(evaluationId);
 
   const validate = useMutation<BatchValidateResponse, unknown, BatchScope>({
     mutationFn: (body) =>
@@ -58,8 +59,7 @@ export function BatchBar({
         body: JSON.stringify({ ...body, state: "proposed" } satisfies BatchValidateBody),
       }),
     onSuccess: (result) => {
-      void qc.invalidateQueries({ queryKey: ["grading", evaluationId] });
-      void qc.invalidateQueries({ queryKey: ["results", evaluationId] });
+      invalidateGrading();
       toast(t("grading.batch.done", { n: result.validated }), "success");
     },
     onError: (error) => toast(apiErrorMessage(error, t("grading.batch.failed")), "error"),

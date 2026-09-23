@@ -6,6 +6,7 @@ import type { PoolCandidate, PoolCandidates } from "@quiz/contracts";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { FieldLabel, Initials, Z, cx, inputClass, inputSize } from "../ui";
+import { poolCandidatesKey } from "../queryKeys";
 
 /**
  * The teacher to invite, picked by name among the colleagues the pool does
@@ -56,7 +57,7 @@ export function TeacherPicker({
 
   const q = text.trim();
   const candidates = useQuery<PoolCandidates>({
-    queryKey: ["pool-candidates", poolId, q],
+    queryKey: poolCandidatesKey(poolId, q),
     queryFn: () => api(`/app/api/pools/${poolId}/candidates?q=${encodeURIComponent(q)}`),
     // Asked only while the list shows: the sheet opens on the members, not
     // on the directory.

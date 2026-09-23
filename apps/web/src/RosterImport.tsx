@@ -6,6 +6,7 @@ import { api, ApiError } from "./api";
 import { HelpIcon } from "./help";
 import { useT } from "./i18n";
 import { Button, cx, Field, Sheet, Textarea } from "./ui";
+import { classroomKey } from "./queryKeys";
 
 type Cell = string | number | null;
 
@@ -51,7 +52,7 @@ export function RosterImport({ classroomId, onClose }: { classroomId: string; on
             method: "POST",
             body: JSON.stringify(payload),
           }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["classroom", classroomId] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: classroomKey(classroomId) }),
   });
 
   async function handleFile(file: File) {

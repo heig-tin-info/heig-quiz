@@ -21,7 +21,7 @@ import {
   Skeleton,
   Tip,
 } from "../ui";
-import { evaluationKey } from "./common";
+import { evaluationKey, poolsKey } from "../queryKeys";
 
 /**
  * The question picker (F-EVAL-01): a pool on the left of the filter bar, a
@@ -56,7 +56,7 @@ export function AddQuestionsSheet({
   const [picked, setPicked] = useState<string[]>([]);
 
   const pools = useQuery<PoolSummary[]>({
-    queryKey: ["pools"],
+    queryKey: poolsKey,
     queryFn: () => api("/app/api/pools"),
   });
   const current = poolId ?? pools.data?.[0]?.id ?? null;

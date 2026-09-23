@@ -17,6 +17,7 @@ import {
   useStudentView,
 } from "./studentView";
 import { Button, LinkButton, setDateFormat, Spinner } from "./ui";
+import { configKey } from "./queryKeys";
 
 // One chunk per page: a student never downloads the teacher UI and vice versa.
 const TeacherHome = lazy(() => import("./TeacherHome").then((m) => ({ default: m.TeacherHome })));
@@ -85,7 +86,7 @@ function Landing() {
   // The one unauthenticated endpoint. A failure is not an error state here:
   // the OIDC button is the real door and it is always there.
   const config = useQuery<PublicConfig>({
-    queryKey: ["config"],
+    queryKey: configKey,
     queryFn: () => api("/app/api/config"),
     retry: false,
   });

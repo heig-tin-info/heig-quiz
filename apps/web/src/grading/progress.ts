@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import type { GradingProgress, GradingProgressEvent } from "@quiz/contracts";
 
 import { api } from "../api";
+import { gradingKey, gradingProgressKey } from "../queryKeys";
 
 /**
  * How far the automatic pass has got (`GET …/grading/progress`).
@@ -19,10 +20,6 @@ import { api } from "../api";
  * It is deliberately NOT a general stream hook — one event, one query, one
  * screen. The shared `useEventStream` belongs to the live dashboard.
  */
-function gradingProgressKey(evaluationId: string) {
-  return ["grading", evaluationId, "progress"] as const;
-}
-
 export function useGradingProgress(evaluationId: string) {
   const qc = useQueryClient();
   const query = useQuery<GradingProgress>({
@@ -59,7 +56,7 @@ export function useGradingProgress(evaluationId: string) {
       }));
       // The last frame of a pass: the entries themselves are now stale.
       if (event.phase === "done") {
-        void qc.invalidateQueries({ queryKey: ["grading", evaluationId] });
+        void qc.invalidateQueries({ queryKey: gradingKey(evaluationId) });
       }
     };
     source.addEventListener("grading.progress", onProgress as EventListener);

@@ -10,6 +10,7 @@ import { canRunManually, runCode } from "../runner/codeRun";
 import { useT } from "../i18n";
 import { emptyAnswerOf, QuestionPlayerHost, QuestionReviewHost } from "../questionTypes";
 import { Alert, Button, Card, EmptyState, QueryError, SectionHeading, Skeleton } from "../ui";
+import { questionPreviewKey } from "../queryKeys";
 
 /**
  * The teacher's rehearsal (F-QST-09): answer your own question, see the
@@ -43,7 +44,7 @@ export function TryPanel({
   const [answer, setAnswer] = useState<unknown>(null);
 
   const preview = useQuery<PreviewResult>({
-    queryKey: ["question", questionId, "preview", source],
+    queryKey: questionPreviewKey(questionId, source),
     queryFn: () =>
       api(`/app/api/questions/${questionId}/preview`, {
         method: "POST",

@@ -47,6 +47,7 @@ import { MetaPanel } from "./MetaPanel";
 import { PublishDialog } from "./PublishDialog";
 import { TryPanel } from "./TryPanel";
 import { VersionHistory } from "./VersionHistory";
+import { poolKey, questionKey } from "../queryKeys";
 
 /**
  * The question editor (mockups `01-editeur-qcm.html`, `02-editeur-code.html`).
@@ -103,13 +104,13 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   const followToPanel = useRef(false);
 
   const detail = useQuery<QuestionDetail>({
-    queryKey: ["question", id],
+    queryKey: questionKey(id),
     queryFn: () => api(`/app/api/questions/${id}`),
   });
   const meta = detail.data?.meta;
   const poolId = meta?.poolId;
   const pool = useQuery<PoolDetail>({
-    queryKey: ["pool", poolId],
+    queryKey: poolKey(poolId),
     queryFn: () => api(`/app/api/pools/${poolId!}`),
     enabled: poolId !== undefined,
   });
@@ -199,7 +200,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
       }),
     onSuccess: async (copy) => {
       toast(t("question.duplicated"), "success");
-      await qc.invalidateQueries({ queryKey: ["pool", poolId] });
+      await qc.invalidateQueries({ queryKey: poolKey(poolId) });
       navigate({ view: "question", id: copy.meta.id });
     },
     onError: (error) => toast(apiErrorMessage(error, t("error.save")), "error"),
@@ -208,7 +209,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   const remove = useMutation({
     mutationFn: () => api(`/app/api/questions/${id}`, { method: "DELETE" }),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["pool", poolId] });
+      await qc.invalidateQueries({ queryKey: poolKey(poolId) });
       if (poolId) navigate({ view: "pool", id: poolId });
       else navigate({ view: "pools" });
     },
@@ -653,8 +654,8 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
           onPublished={async (version) => {
             setPublishing(false);
             toast(t("question.published.toast", { n: version.number }), "success");
-            await qc.invalidateQueries({ queryKey: ["question", id] });
-            await qc.invalidateQueries({ queryKey: ["pool", poolId] });
+            await qc.invalidateQueries({ queryKey: questionKey(id) });
+            await qc.invalidateQueries({ queryKey: poolKey(poolId) });
           }}
         />
       ) : null}

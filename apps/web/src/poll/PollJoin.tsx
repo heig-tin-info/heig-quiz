@@ -44,6 +44,7 @@ import type { Route } from "../router";
 import { QuestionHost } from "../student/QuestionHost";
 import { Alert, Button, Card, EmptyState, Field, QueryError, Skeleton } from "../ui";
 import { PollJoinReveal } from "./PollJoinReveal";
+import { configKey, publicPollKey } from "../queryKeys";
 
 /** How often a running poll is re-read: the reveal must land while reading. */
 const POLL_MS = 3_000;
@@ -84,7 +85,7 @@ export function PollJoin({
 }) {
   const t = useT();
   const queryClient = useQueryClient();
-  const key = useMemo(() => ["poll", "public", code] as const, [code]);
+  const key = useMemo(() => publicPollKey(code), [code]);
 
   const poll = useQuery<PollPublicView>({
     queryKey: key,
@@ -316,7 +317,7 @@ export function PollJoin({
 function LoginGate({ code, title }: { code: string; title: string }) {
   const t = useT();
   const config = useQuery<PublicConfig>({
-    queryKey: ["config"],
+    queryKey: configKey,
     queryFn: () => api<PublicConfig>("/app/api/config"),
     retry: false,
   });

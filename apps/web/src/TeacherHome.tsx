@@ -38,6 +38,7 @@ import {
   Spinner,
   T,
 } from "./ui";
+import { courseKey, coursesKey, poolsKey } from "./queryKeys";
 
 /**
  * Teacher home: the courses.
@@ -78,7 +79,7 @@ function NewCourseModal({ onClose }: { onClose: () => void }) {
     mutationFn: () =>
       api("/app/api/courses", { method: "POST", body: JSON.stringify(form) }),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["courses"] });
+      await qc.invalidateQueries({ queryKey: coursesKey });
       onClose();
     },
   });
@@ -140,7 +141,7 @@ function NewClassroomModal({ course, onClose }: { course: CourseSummary; onClose
         body: JSON.stringify(form),
       }),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["courses"] });
+      await qc.invalidateQueries({ queryKey: coursesKey });
       onClose();
     },
   });
@@ -201,7 +202,7 @@ function AddStaffModal({ course, onClose }: { course: CourseSummary; onClose: ()
         body: JSON.stringify({ email }),
       }),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["courses"] });
+      await qc.invalidateQueries({ queryKey: coursesKey });
       onClose();
     },
   });
@@ -260,11 +261,11 @@ function CoursePools({
   const toast = useToast();
 
   const detail = useQuery<CourseDetail>({
-    queryKey: ["course", course.id],
+    queryKey: courseKey(course.id),
     queryFn: () => api(`/app/api/courses/${course.id}`),
   });
   const pools = useQuery<PoolSummary[]>({
-    queryKey: ["pools"],
+    queryKey: poolsKey,
     queryFn: () => api("/app/api/pools"),
   });
 
@@ -278,7 +279,7 @@ function CoursePools({
         body: JSON.stringify({ poolIds }),
       }),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["course", course.id] });
+      await qc.invalidateQueries({ queryKey: courseKey(course.id) });
     },
     // The menu is closed by the time the call answers, so the failure has
     // nowhere to render but a toast (DESIGN.md › Menu).
@@ -376,7 +377,7 @@ function useCourseActions(course: CourseSummary): {
   const confirm = useConfirm();
   const [newRoom, setNewRoom] = useState(false);
   const [newStaff, setNewStaff] = useState(false);
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["courses"] });
+  const invalidate = () => qc.invalidateQueries({ queryKey: coursesKey });
   const removeCourse = useMutation({
     mutationFn: () => api(`/app/api/courses/${course.id}`, { method: "DELETE" }),
     onSuccess: invalidate,
@@ -599,7 +600,7 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
   const [creating, setCreating] = useState(false);
   const [view, setView] = useCoursesView();
   const courses = useQuery<CourseSummary[]>({
-    queryKey: ["courses"],
+    queryKey: coursesKey,
     queryFn: () => api("/app/api/courses"),
   });
   const rows = courses.data ?? [];

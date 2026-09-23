@@ -18,7 +18,6 @@ import { api, apiErrorMessage, useMe } from "./api";
 import { useConfirm } from "./confirm";
 import { useT } from "./i18n";
 // WP8: evaluation + dashboard
-import { evaluationsKey } from "./evaluation/common";
 import { EvaluationList } from "./evaluation/EvaluationList";
 import { useToast } from "./notify";
 import { RosterImport } from "./RosterImport";
@@ -40,6 +39,7 @@ import {
   Tabs,
   Tip,
 } from "./ui";
+import { classroomKey, evaluationsKey } from "./queryKeys";
 
 /**
  * One classroom: its roster and its evaluations, one tab each.
@@ -212,7 +212,7 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
   const [tabParam, setTab] = useSearchParam("tab", "");
 
   const room = useQuery<ClassroomDetail>({
-    queryKey: ["classroom", id],
+    queryKey: classroomKey(id),
     queryFn: () => api(`/app/api/classrooms/${id}`),
   });
   /**
@@ -234,7 +234,7 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
   const join = useMutation({
     mutationFn: () => api(`/app/api/classrooms/${id}/self-enroll`, { method: "POST" }),
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["classroom", id] });
+      await qc.invalidateQueries({ queryKey: classroomKey(id) });
       toast(t("roster.joinDone"), "success");
     },
     onError: (error) => toast(apiErrorMessage(error, t("roster.joinFailed")), "error"),
