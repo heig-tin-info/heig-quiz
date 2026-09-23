@@ -152,19 +152,6 @@ export async function resultsPlugin(app: FastifyInstance) {
     return service.studentFeedback(app.db, scope.evaluation, scope.attempt);
   });
 
-  /** The path PLAN-MVP §4.6 names, same handler (deviation W6-5). */
-  app.get(
-    "/app/api/student/attempts/:id/results",
-    { preHandler: requireSession },
-    async (req, reply) => {
-      const params = IdParam.safeParse(req.params);
-      if (!params.success) return reply.code(404).send({ error: "not_found" });
-      const scope = await ownAttempt(app, req, reply, params.data.id);
-      if (!scope) return reply;
-      return service.studentFeedback(app.db, scope.evaluation, scope.attempt);
-    },
-  );
-
   /**
    * The release and its withdrawal are state changes, so they go out as the
    * typed `evaluation.state` event AND as a `results` hint for the students,

@@ -20,12 +20,12 @@ import type { AnyQuestionTypeServer } from "@quiz/core/server";
 import { questionType } from "@quiz/registry/server";
 
 /** The two columns of `question_versions` that carry a configuration. */
-export interface ConfigRow {
+interface ConfigRow {
   config: unknown;
   configVersion: number;
 }
 
-export type ConfigOutcome =
+type ConfigOutcome =
   /** Migrated and parsed. */
   | { ok: true; config: unknown }
   /**

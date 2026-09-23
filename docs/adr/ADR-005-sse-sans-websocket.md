@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted (2026-07-03, phase 3).
+Accepted (2026-07-03, phase 3). Amended 2026-09-22: decision 1's path is
+`GET /app/api/events` in this repository, the whole SPA API living under
+`/app/api`; the `/app/events` alias this record was written against was
+mounted by WP5 and removed once no client opened it. Nothing else of the
+decision changes.
 
 ## Context
 

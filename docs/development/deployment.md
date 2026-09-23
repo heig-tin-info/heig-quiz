@@ -61,7 +61,7 @@ query): the VM has one CPU and already runs another PostgreSQL.
 
 The Caddy fragment does two things beyond proxying to `localhost:3002`: it
 sets the security headers (HSTS, `nosniff`, referrer policy) and it proxies
-`/app/events` with `flush_interval -1`, so the server-sent event stream
+`/app/api/events` with `flush_interval -1`, so the server-sent event stream
 ([ADR-005](../adr/ADR-005-sse-sans-websocket.md)) is never buffered. Port
 3002 because 3000 and 3001 belong to the neighbours.
 

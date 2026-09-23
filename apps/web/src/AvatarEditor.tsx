@@ -2,9 +2,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ImageUp, Trash2, ZoomIn } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
+import { AvatarMime } from "@quiz/contracts";
+
 import { api, apiErrorMessage } from "./api";
 import { useT } from "./i18n";
 import { Button, Modal } from "./ui";
+
+/** The one list of accepted types (B-19); the API enforces the same set. */
+const ACCEPT = AvatarMime.options.join(",");
 
 const VIEW = 288; // on-screen preview
 const OUT = 256; // produced image
@@ -191,7 +196,7 @@ export function AvatarEditor({
         <input
           ref={fileRef}
           type="file"
-          accept="image/jpeg,image/png,image/webp"
+          accept={ACCEPT}
           className="hidden"
           onChange={(e) => {
             const f = e.target.files?.[0];

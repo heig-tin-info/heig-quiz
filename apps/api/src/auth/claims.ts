@@ -79,7 +79,7 @@ const MAIL_CLAIMS = [
   "swissEduPersonPrivateMail",
 ] as const;
 
-export interface KnownAddress {
+interface KnownAddress {
   email: string;
   /** `login`, or the claim the address came from. */
   source: string;

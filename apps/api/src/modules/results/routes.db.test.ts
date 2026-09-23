@@ -105,7 +105,7 @@ describe("the grading panel (§4.5)", () => {
     expect(progress.statusCode).toBe(200);
     expect(progress.json()).toMatchObject({ done: 1, total: 1, failed: 0 });
 
-    const rerun = await post(`/app/api/evaluations/${built.evaluationId}/grade`, teacher.headers, {});
+    const rerun = await post(`/app/api/evaluations/${built.evaluationId}/grading/run`, teacher.headers, {});
     expect(rerun.statusCode).toBe(202);
     expect(rerun.json()).toMatchObject({ evaluationId: built.evaluationId });
   });
@@ -163,13 +163,6 @@ describe("results and the export (§4.6)", () => {
 
     const after = await get(`/app/api/attempts/${built.attemptId}/feedback`, student.headers);
     expect(after.json()).toMatchObject({ available: true, points: 1, grade: 6 });
-    // The plan's own path serves the same thing (deviation W6-5).
-    const alias = await get(
-      `/app/api/student/attempts/${built.attemptId}/results`,
-      student.headers,
-    );
-    expect(alias.json()).toMatchObject({ available: true });
-
     const cardsAfter = await get("/app/api/student/results", student.headers);
     expect(cardsAfter.json()).toHaveLength(1);
     expect(cardsAfter.json()[0]).toMatchObject({ grade: 6, totalPoints: 1 });

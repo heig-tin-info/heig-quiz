@@ -15,16 +15,14 @@ import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
 
-import type { AssetMime } from "@quiz/contracts";
+import { AssetMime } from "@quiz/contracts";
 
-/** The only types a question may embed. SVG is deliberately absent. */
-const ALLOWED: readonly AssetMime[] = ["image/png", "image/jpeg", "image/gif", "image/webp"];
-
+/** The only types a question may embed; `AssetMime` is the one list (B-19). */
 export function isAllowedMime(mime: string): mime is AssetMime {
-  return (ALLOWED as readonly string[]).includes(mime);
+  return AssetMime.safeParse(mime).success;
 }
 
-export interface ImageFacts {
+interface ImageFacts {
   mime: AssetMime;
   width: number | null;
   height: number | null;
@@ -130,7 +128,7 @@ export async function readAsset(assetsDir: string, relativePath: string): Promis
  * `path` comes from the database, but a stored value is still an input:
  * anything that escapes `ASSETS_DIR` is refused rather than read.
  */
-export function safeJoin(assetsDir: string, relativePath: string): string {
+function safeJoin(assetsDir: string, relativePath: string): string {
   const base = resolve(assetsDir);
   const full = resolve(base, relativePath);
   if (full !== base && !full.startsWith(base + sep)) {

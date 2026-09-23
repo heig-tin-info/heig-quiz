@@ -56,7 +56,7 @@ function invalid(reply: FastifyReply, error: z.ZodError) {
 }
 
 /** Everything this module refuses carries its own status and machine code. */
-export function evaluationFailure(reply: FastifyReply, error: unknown): FastifyReply | null {
+function evaluationFailure(reply: FastifyReply, error: unknown): FastifyReply | null {
   if (error instanceof service.EvaluationError) {
     return reply.code(error.status).send({ error: error.code, message: error.message });
   }

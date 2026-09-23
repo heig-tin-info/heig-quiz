@@ -39,7 +39,7 @@ import {
   type QuestionSpec,
 } from "./content.js";
 
-export interface DemoCounts {
+interface DemoCounts {
   pools: number;
   categories: number;
   questions: number;
@@ -363,7 +363,7 @@ async function ensureEvaluation(
 // Entry point
 // ---------------------------------------------------------------------------
 
-export interface DemoContext {
+interface DemoContext {
   courseId: string;
   courseCode: string;
   classroomId: string;

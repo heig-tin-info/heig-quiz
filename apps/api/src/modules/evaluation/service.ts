@@ -52,7 +52,7 @@ import {
 } from "../../db/schema.js";
 
 export type EvaluationRecord = typeof evaluations.$inferSelect;
-export type ItemRecord = typeof evaluationItems.$inferSelect;
+type ItemRecord = typeof evaluationItems.$inferSelect;
 
 // --- Failures -------------------------------------------------------------
 
@@ -84,25 +84,25 @@ export class Locked extends EvaluationError {
   }
 }
 
-export class AttemptsExist extends EvaluationError {
+class AttemptsExist extends EvaluationError {
   constructor() {
     super("attempts_exist", 409, "versions cannot be updated once an attempt exists");
   }
 }
 
-export class NoPublishedVersion extends EvaluationError {
+class NoPublishedVersion extends EvaluationError {
   constructor(readonly questionId: string) {
     super("no_published_version", 422, `question ${questionId} has no published version`);
   }
 }
 
-export class QuestionNotInCourse extends EvaluationError {
+class QuestionNotInCourse extends EvaluationError {
   constructor(readonly questionId: string) {
     super("question_not_in_course", 422, `question ${questionId} is not in a pool of this course`);
   }
 }
 
-export class PollNotImplemented extends EvaluationError {
+class PollNotImplemented extends EvaluationError {
   constructor() {
     super("not_implemented", 501, "poll mode is phase 2 (decision D7)");
   }
@@ -115,7 +115,7 @@ export class PollNotImplemented extends EvaluationError {
  * guarded by "no attempt exists"; `closed → grading → closed → released`
  * belongs to WP6 and is listed so the table stays the one definition.
  */
-export const TRANSITIONS: Readonly<Record<EvaluationState, readonly EvaluationState[]>> = {
+const TRANSITIONS: Readonly<Record<EvaluationState, readonly EvaluationState[]>> = {
   draft: ["scheduled", "lobby", "running"],
   scheduled: ["draft", "lobby", "running", "closed"],
   lobby: ["draft", "running", "closed"],
@@ -132,7 +132,7 @@ export function isLegalTransition(from: EvaluationState, to: EvaluationState): b
 }
 
 /** F-EVAL-04: an `exam` must announce when it ends, one way or the other. */
-export function timingIsValid(row: {
+function timingIsValid(row: {
   mode: EvaluationMode;
   settings: EvaluationSettings;
   durationS: number | null;
@@ -151,7 +151,7 @@ export function timingIsValid(row: {
   }
 }
 
-export interface TransitionContext {
+interface TransitionContext {
   itemCount: number;
   attemptCount: number;
 }
@@ -241,7 +241,7 @@ export function gradeDefaults(row: EvaluationRecord): Readonly<Record<string, un
  * never opened the settings page has none, and the default is the one nobody
  * has to be told about.
  */
-export async function preferredMcqPolicy(db: Db, userId: string): Promise<McqPolicy> {
+async function preferredMcqPolicy(db: Db, userId: string): Promise<McqPolicy> {
   const [row] = await db
     .select({ policy: users.mcqPolicy })
     .from(users)
@@ -481,7 +481,7 @@ export async function listEvaluations(
  * The two presets of §4.3. An exam is timed, forward-only-ish and silent
  * until release; an exercise is open and gives feedback immediately.
  */
-export function presetSettings(preset: "exam" | "exercise"): {
+function presetSettings(preset: "exam" | "exercise"): {
   settings: EvaluationSettings;
   feedbackPolicy: FeedbackPolicy;
 } {
@@ -632,7 +632,7 @@ export async function byId(db: Db, id: string): Promise<EvaluationRecord | null>
  */
 const SAFE_FIELDS = new Set(["title", "accessCode", "ipAllowlist", "feedbackPolicy"]);
 
-export function isStructural(patch: EvaluationPatch): boolean {
+function isStructural(patch: EvaluationPatch): boolean {
   return Object.keys(patch).some((k) => !SAFE_FIELDS.has(k));
 }
 

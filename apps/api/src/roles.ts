@@ -20,7 +20,7 @@ import { courseStaff, teacherGrants, userIdpClaims, users } from "./db/schema.js
 import { knownEmails, normalizeEmail, ownersOf } from "./identity.js";
 import { transferOnLoss } from "./modules/pool/service.js";
 
-export type UserRole = (typeof users.$inferSelect)["role"];
+type UserRole = (typeof users.$inferSelect)["role"];
 
 /** What the rule needs: the addresses of the account, and its affiliations. */
 export interface Identity {
@@ -68,7 +68,7 @@ export async function roleForIdentity(
 }
 
 /** The stored identity of an existing account. */
-export async function roleForUser(
+async function roleForUser(
   db: Db,
   config: AppConfig,
   userId: string,

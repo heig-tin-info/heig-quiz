@@ -9,7 +9,7 @@ import type { Db } from "../db/client.js";
 import { avatars, enrollments, userEmails, users } from "../db/schema.js";
 import { emailIn, knownEmails, normalizeEmail, sharedWithOthers } from "../identity.js";
 
-export interface RosterImportSummary {
+interface RosterImportSummary {
   inserted: number;
   updated: number;
 }

@@ -101,7 +101,7 @@ import { UnavailableRunner } from "../runner/unavailable.js";
 import { isShuffleable, solutionView, studentView } from "./studentView.js";
 
 export type AttemptRecord = typeof attempts.$inferSelect;
-export type AnswerRecord = typeof answers.$inferSelect;
+type AnswerRecord = typeof answers.$inferSelect;
 
 /** The teacher preview borrows a fixed attempt id: nothing is ever stored on it. */
 export const PREVIEW_ATTEMPT_ID = "00000000-0000-4000-8000-000000000000";
@@ -137,17 +137,17 @@ export class AttemptClosedError extends LiveError {
   }
 }
 
-export class NotOpen extends LiveError {
+class NotOpen extends LiveError {
   constructor() {
     super("not_open", 409, "this evaluation is not open");
   }
 }
-export class AccessCodeInvalid extends LiveError {
+class AccessCodeInvalid extends LiveError {
   constructor() {
     super("access_code_invalid", 403);
   }
 }
-export class IpNotAllowed extends LiveError {
+class IpNotAllowed extends LiveError {
   constructor() {
     super("ip_not_allowed", 403);
   }
@@ -157,12 +157,12 @@ export class AnswerInvalid extends LiveError {
     super("answer_invalid", 422);
   }
 }
-export class Irreversible extends LiveError {
+class Irreversible extends LiveError {
   constructor(message = "forward_only: marking a question done cannot be undone") {
     super("irreversible", 409, message);
   }
 }
-export class ItemLocked extends LiveError {
+class ItemLocked extends LiveError {
   constructor(message = "navigation does not allow going back to this question") {
     super("item_locked", 409, message);
   }
@@ -177,7 +177,7 @@ export class RunnerDown extends LiveError {
     super("runner_unavailable", 503, reason);
   }
 }
-export class NotRunnable extends LiveError {
+class NotRunnable extends LiveError {
   constructor() {
     super("not_runnable", 422, "this question type has nothing to run");
   }
@@ -189,7 +189,7 @@ export class NotRunnable extends LiveError {
  * should report as an error, so the student's player says "draw something
  * first" rather than "the simulator is down".
  */
-export class NothingToRun extends LiveError {
+class NothingToRun extends LiveError {
   constructor() {
     super("nothing_to_run", 422, "this answer has nothing to run yet");
   }
@@ -197,7 +197,7 @@ export class NothingToRun extends LiveError {
 
 // --- Deadlines ------------------------------------------------------------
 
-export interface DeadlineParts {
+interface DeadlineParts {
   deadlineAt: Date | null;
   bonusS: number;
 }
@@ -207,7 +207,7 @@ export interface DeadlineParts {
  * student's own start in `duration` timing, and is ignored in `deadline`
  * timing, where the base is the announced window (decision D8).
  */
-export function deadlineFor(
+function deadlineFor(
   evaluation: EvaluationRecord,
   input: { startedAt: Date; timeBonusPercent: number; extraS: number },
 ): DeadlineParts {
@@ -226,7 +226,7 @@ export function deadlineFor(
 }
 
 /** The acceptance rule, shared with the ticker through `GRACE_MS` (D12). */
-export function pastGrace(deadlineAt: Date | null, now: Date): boolean {
+function pastGrace(deadlineAt: Date | null, now: Date): boolean {
   return deadlineAt !== null && now.getTime() > deadlineAt.getTime() + GRACE_MS;
 }
 
@@ -278,7 +278,7 @@ export async function participantOf(
  * (ADR-018): it is written by `POST /classrooms/:id/self-enroll` and it is
  * the only thing that makes the reset route of this module legitimate.
  */
-export async function seatOf(
+async function seatOf(
   db: Db,
   evaluation: EvaluationRecord,
   userId: string,
@@ -358,7 +358,7 @@ export async function enrolledCount(db: Db, evaluation: EvaluationRecord): Promi
 }
 
 /** F-EVAL-12: a prefix list, matched literally against the request address. */
-export function ipAllowed(allowlist: readonly string[], ip: string | undefined): boolean {
+function ipAllowed(allowlist: readonly string[], ip: string | undefined): boolean {
   if (allowlist.length === 0) return true;
   if (ip === undefined) return false;
   return allowlist.some((prefix) => ip.startsWith(prefix));
@@ -480,7 +480,7 @@ export async function markPresent(db: Db, attemptId: string, now: Date): Promise
 
 // --- Item order and navigation -------------------------------------------
 
-export interface OrderedItem extends JoinedItem {
+interface OrderedItem extends JoinedItem {
   /** Rank in the student's own order; `item.position` stays canonical. */
   rank: number;
 }
@@ -490,7 +490,7 @@ export interface OrderedItem extends JoinedItem {
  * reload, the teacher preview and a regrade reproduce the same sequence.
  * `position` remains the canonical order for grading and CSV export.
  */
-export function orderItems(
+function orderItems(
   items: readonly JoinedItem[],
   settings: EvaluationSettings,
   seed: number,
@@ -581,7 +581,7 @@ function attemptItems(
  * evaluation is over the items come back — the student payload carries no
  * key, and `readOnly` says the writes are done.
  */
-export function contentVisible(state: EvaluationRecord["state"]): boolean {
+function contentVisible(state: EvaluationRecord["state"]): boolean {
   return (
     state === "running" ||
     state === "paused" ||
@@ -718,7 +718,7 @@ export async function lobbyView(
 
 // --- Entering an evaluation ----------------------------------------------
 
-export type EnterResult =
+type EnterResult =
   | { kind: "attempt"; view: AttemptView; attempt: AttemptRecord }
   | { kind: "lobby"; view: LobbyView; attempt: AttemptRecord };
 
@@ -769,7 +769,7 @@ export async function enterEvaluation(
  * same rule (`GRACE_MS`) is what the ticker uses to expire the attempt — the
  * two must never drift (decision D12).
  */
-export function assertWritable(
+function assertWritable(
   evaluation: EvaluationRecord,
   attempt: AttemptRecord,
   now: Date,
@@ -854,7 +854,7 @@ function truncate(text: string): string {
  * click away in the inspect modal. Anything else falls back to its own short text form; the raw JSON
  * never reaches a cell.
  */
-export function genericSummary(payload: unknown): string {
+function genericSummary(payload: unknown): string {
   if (payload === null || payload === undefined) return "";
   if (typeof payload === "string") return truncate(payload);
   if (typeof payload === "number" || typeof payload === "boolean") return String(payload);
@@ -893,7 +893,7 @@ export function genericSummary(payload: unknown): string {
  * reused down the column, instead of once per cell — twenty-four students
  * times ten questions is 240 config parses of ten distinct configs.
  */
-export function answerSummarizer(item: JoinedItem): (payload: unknown) => string {
+function answerSummarizer(item: JoinedItem): (payload: unknown) => string {
   let hook: ((payload: unknown) => string) | null = null;
   try {
     const type = typeOf(item.question.type);
@@ -957,7 +957,7 @@ export function summarizeAnswer(item: JoinedItem, payload: unknown): string {
  * Returns `null` for a question this cannot preview, which the caller reads
  * as "no live verdict for this column".
  */
-export function liveGrader(
+function liveGrader(
   item: JoinedItem,
   evaluation: EvaluationRecord,
   now: Date,
@@ -1315,7 +1315,7 @@ function runnableView(student: unknown): RunnableStudentView {
   return out;
 }
 
-export const DEFAULT_RUNS_PER_MINUTE = 10;
+const DEFAULT_RUNS_PER_MINUTE = 10;
 
 /**
  * `POST /attempts/:id/run` — the student's Run button.
@@ -2237,7 +2237,7 @@ export async function autoStartFullLobbies(db: Db, now: Date): Promise<Evaluatio
  * `+1/+5/+10 min` push an attempt past `closes_at`, and closing on
  * `closes_at` alone would take those minutes straight back (F-ORG-07).
  */
-export function autoCloseAt(closesAt: Date, latestAttemptDeadline: Date | null): Date {
+function autoCloseAt(closesAt: Date, latestAttemptDeadline: Date | null): Date {
   const last =
     latestAttemptDeadline !== null && latestAttemptDeadline.getTime() > closesAt.getTime()
       ? latestAttemptDeadline

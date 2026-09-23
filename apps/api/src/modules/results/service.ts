@@ -82,7 +82,7 @@ export class NotReleasable extends ResultsError {
 
 // --- The grade table ------------------------------------------------------
 
-export interface ComputedResults {
+interface ComputedResults {
   totalPoints: number;
   scale: GradingScale;
   items: ResultsItem[];
@@ -93,7 +93,7 @@ export interface ComputedResults {
  * Every row of the grade table, including the students who never showed up
  * (F-RES-02: the export is the class list, not the attempt list).
  */
-export async function computeResults(
+async function computeResults(
   db: Db,
   evaluation: EvaluationRecord,
 ): Promise<ComputedResults> {
@@ -382,7 +382,7 @@ export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<
  * teacher); `short` and `cloze` are counted by the text the student typed,
  * which is what makes "everybody wrote 'Galilee'" visible.
  */
-export function distributionOf(type: string, payloads: readonly unknown[]): AnswerDistributionEntry[] {
+function distributionOf(type: string, payloads: readonly unknown[]): AnswerDistributionEntry[] {
   const counts = new Map<string, number>();
   const add = (key: string) => counts.set(key, (counts.get(key) ?? 0) + 1);
 
@@ -417,7 +417,7 @@ export function distributionOf(type: string, payloads: readonly unknown[]): Answ
 }
 
 /** `code`: how many attempts passed each named test case (F-RES-03). */
-export function casePassRateOf(
+function casePassRateOf(
   rows: readonly { details: unknown }[],
 ): { name: string; passed: number; total: number }[] {
   const tally = new Map<string, { passed: number; total: number }>();
@@ -437,7 +437,7 @@ export function casePassRateOf(
 // --- Student feedback (F-RES-04, docs/05 §5.7) ---------------------------
 
 /** Whether a student may see anything at all right now. */
-export function feedbackAvailable(
+function feedbackAvailable(
   policy: FeedbackPolicy,
   evaluation: EvaluationRecord,
   attemptState: string,
@@ -549,7 +549,7 @@ export async function studentFeedback(
  * `showKey` means the teacher chose to publish the key: the details travel
  * whole, both layers off.
  */
-export const FORBIDDEN_DETAIL_KEYS: readonly string[] = [
+const FORBIDDEN_DETAIL_KEYS: readonly string[] = [
   "correct",
   "expected",
   "matchers",
@@ -569,7 +569,7 @@ const forbiddenDetailKeys = new Set(FORBIDDEN_DETAIL_KEYS);
  * it here would only blank the comparison the review shows. A hidden case
  * never carries one by the time it gets here — layer 1 removed it.
  */
-export function stripDetailKeys(value: unknown, depth = 0): unknown {
+function stripDetailKeys(value: unknown, depth = 0): unknown {
   if (depth > 12 || value === null || typeof value !== "object") return value;
   if (Array.isArray(value)) return value.map((v) => stripDetailKeys(v, depth + 1));
   const entries = value as Record<string, unknown>;
@@ -639,7 +639,7 @@ export async function studentResultCards(db: Db, userId: string): Promise<Result
  * published, not the number the student is shown — and `modified_after_release`
  * is what tells the teacher the two have drifted apart.
  */
-export async function gradeOfAttempt(
+async function gradeOfAttempt(
   db: Db,
   evaluation: EvaluationRecord,
   attemptId: string | null,

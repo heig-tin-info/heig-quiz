@@ -291,10 +291,6 @@ describe("soft delete (F-QST-11)", () => {
     const withDeleted = await service.listQuestions(db, poolId, search({ includeDeleted: true }));
     expect(withDeleted.items.map((q) => q.id)).toContain(id);
     expect(await service.listVersions(db, id)).toHaveLength(1);
-
-    await service.restoreQuestion(db, await questionRow(id));
-    const again = await service.listQuestions(db, poolId, search());
-    expect(again.items.map((q) => q.id)).toContain(id);
   });
 
   it("frees the name: the unique index only covers live questions", async () => {

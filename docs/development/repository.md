@@ -142,7 +142,9 @@ pnpm db:generate         # drizzle-kit generate: a new NNNN_<name>.sql + meta/
 They are applied at startup when `MIGRATE_ON_START=1`, which is the default
 in development and in the container image, on PGlite and on PostgreSQL
 alike. `pnpm --filter @quiz/api db:migrate` applies them by hand against a
-real PostgreSQL (`DATABASE_URL`). Keep migrations additive: production rolls
+real PostgreSQL; it REQUIRES `DATABASE_URL` in the environment and stops
+without one, where `pnpm db:generate` only reads the schema and needs no
+database at all. Keep migrations additive: production rolls
 back by image tag, not by reverse migration (see
 [deployment](deployment.md#rollback)).
 

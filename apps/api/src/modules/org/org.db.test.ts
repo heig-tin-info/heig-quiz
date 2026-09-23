@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import type { CourseDetail } from "@quiz/contracts";
+
 import { classrooms, courseStaff, courses, enrollments, userEmails } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 
@@ -29,13 +31,15 @@ async function enableJoinCode(): Promise<string> {
     payload: { joinCodeEnabled: true },
   });
   expect(patched.statusCode).toBe(200);
-  const state = await server.app.inject({
+  // The code rides on the course detail; there is no route of its own.
+  const detail = await server.app.inject({
     method: "GET",
-    url: `/app/api/classrooms/${classroomId}/join-code`,
+    url: `/app/api/courses/${courseId}`,
     headers: teacher.headers,
   });
-  expect(state.json().joinCodeEnabled).toBe(true);
-  return state.json().joinCode as string;
+  const room = (detail.json() as CourseDetail).classrooms.find((c) => c.id === classroomId);
+  expect(room?.joinCodeEnabled).toBe(true);
+  return room!.joinCode as string;
 }
 
 beforeAll(async () => {
@@ -152,7 +156,7 @@ describe("join code (F-ORG-06)", () => {
   it("is closed to a teacher who is not on the course staff", async () => {
     const res = await server.app.inject({
       method: "GET",
-      url: `/app/api/classrooms/${classroomId}/join-code`,
+      url: `/app/api/classrooms/${classroomId}`,
       headers: outsider.headers,
     });
     expect(res.statusCode).toBe(404);

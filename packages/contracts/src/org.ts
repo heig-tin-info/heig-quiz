@@ -48,13 +48,6 @@ export type ClassroomPatch = z.infer<typeof ClassroomPatch>;
 export const ClassroomArchive = z.object({ archived: z.boolean().default(true) });
 export type ClassroomArchive = z.infer<typeof ClassroomArchive>;
 
-/** What a teacher sees of the join code; `joinCode` is null while disabled and unminted. */
-export const JoinCodeState = z.object({
-  joinCode: z.string().nullable(),
-  joinCodeEnabled: z.boolean(),
-});
-export type JoinCodeState = z.infer<typeof JoinCodeState>;
-
 /** `POST /app/api/join/:code` — the student side of F-ORG-06. */
 export const JoinParams = z.object({ code: z.string().trim().min(4).max(32) });
 export type JoinParams = z.infer<typeof JoinParams>;

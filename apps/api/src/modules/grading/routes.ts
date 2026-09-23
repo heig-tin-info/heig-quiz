@@ -81,10 +81,9 @@ export async function gradingPlugin(app: FastifyInstance) {
   // --- The automatic pass ------------------------------------------------
 
   /**
-   * `POST /evaluations/:id/grading/run` (and its short alias `/grade`). The
-   * job is a singleton per evaluation and skips every cell that already has a
-   * validated grading, so pressing the button twice costs one pass and
-   * changes nothing that a teacher settled.
+   * `POST /evaluations/:id/grading/run`. The job is a singleton per evaluation
+   * and skips every cell that already has a validated grading, so pressing the
+   * button twice costs one pass and changes nothing that a teacher settled.
    */
   const runHandler = async (req: FastifyRequest, reply: FastifyReply) => {
     const scope = await accessibleEvaluation(app, req, reply);
@@ -109,8 +108,6 @@ export async function gradingPlugin(app: FastifyInstance) {
   };
 
   app.post("/app/api/evaluations/:id/grading/run", { preHandler: requireTeacher }, runHandler);
-  // The short form the WP6 brief names; same handler, same contract.
-  app.post("/app/api/evaluations/:id/grade", { preHandler: requireTeacher }, runHandler);
 
   app.get(
     "/app/api/evaluations/:id/grading/progress",

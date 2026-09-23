@@ -15,7 +15,7 @@ import { CoursePoolsPut, JoinParams, type CourseDetail, type JoinResult } from "
 import { audit } from "../../audit.js";
 import { classrooms, courseStaff, courses, users } from "../../db/schema.js";
 import { publish } from "../../events.js";
-import { accessibleClassroom, accessibleCourse, poolAccess, teacherGuard } from "../guards.js";
+import { accessibleCourse, poolAccess, teacherGuard } from "../guards.js";
 import { poolsOfCourse, setCoursePools } from "../pool/service.js";
 import { joinClassroom } from "./service.js";
 
@@ -95,13 +95,6 @@ export async function orgPlugin(app: FastifyInstance) {
     publish("courses", [`course:${course.id}`, `teacher:${req.user!.id}`]);
     for (const pool of linked) publish("pool", [`pool:${pool.id}`]);
     return linked;
-  });
-
-  /** The join code of a classroom, for the teacher who hands it out. */
-  app.get("/app/api/classrooms/:id/join-code", { preHandler: requireTeacher }, async (req, reply) => {
-    const scope = await accessibleClassroom(app, req, reply);
-    if (!scope) return reply;
-    return { joinCode: scope.room.joinCode, joinCodeEnabled: scope.room.joinCodeEnabled };
   });
 
   /**

@@ -20,7 +20,7 @@ import type { Db } from "../../db/client.js";
 import { notifications, pools } from "../../db/schema.js";
 import { hint, userTopic } from "../realtime/bus.js";
 
-export const DEFAULT_LIMIT = 30;
+const DEFAULT_LIMIT = 30;
 
 type NotificationRow = typeof notifications.$inferSelect;
 

@@ -25,7 +25,7 @@ const FakeConfig = z.object({
   statement: z.string(),
   answer: z.string().min(1),
 });
-export type FakeConfig = z.infer<typeof FakeConfig>;
+type FakeConfig = z.infer<typeof FakeConfig>;
 
 const FakeStudent = z.object({ statement: z.string() });
 const FakeSolution = z.object({ answer: z.string() });

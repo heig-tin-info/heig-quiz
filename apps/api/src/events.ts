@@ -45,7 +45,7 @@ export type EventType =
  */
 export type { Topic };
 
-export interface AppEvent {
+interface AppEvent {
   type: EventType;
   topics: Topic[];
   notice?: AppNotice;
@@ -54,7 +54,7 @@ export interface AppEvent {
 /** `staff` drops the message for a student connection (PLAN-MVP §4.8). */
 export type Audience = "all" | "staff";
 
-export interface DataEvent {
+interface DataEvent {
   event: ServerEvent;
   topics: Topic[];
   audience: Audience;

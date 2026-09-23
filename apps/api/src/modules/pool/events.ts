@@ -25,6 +25,6 @@ export function poolPeopleChanged(topics: Topic[]): void {
 }
 
 /** A question changed: same topic as its pool, which is what the UI watches. */
-export function questionChanged(poolId: string, notice?: AppNotice): void {
+function questionChanged(poolId: string, notice?: AppNotice): void {
   poolChanged(poolId, notice);
 }
