@@ -166,6 +166,30 @@ export const CategoryNode: z.ZodType<CategoryNode> = z.lazy(() =>
   Category.extend({ children: z.array(CategoryNode) }),
 );
 
+/**
+ * A folder of the categories page, with the number of live questions filed
+ * DIRECTLY in it — the number the pool's category filter lists — and its
+ * sub-folders. The subtree total is a sum the page draws from these.
+ */
+export interface CategoryCountNode extends Category {
+  questionCount: number;
+  children: CategoryCountNode[];
+}
+export const CategoryCountNode: z.ZodType<CategoryCountNode> = z.lazy(() =>
+  Category.extend({
+    questionCount: z.number().int().min(0),
+    children: z.array(CategoryCountNode),
+  }),
+);
+
+/** `GET /pools/:id/categories`: the tree with its counts, and the pool root's. */
+export const PoolCategories = z.object({
+  categories: z.array(CategoryCountNode),
+  /** Live questions filed in no category at all. */
+  rootQuestionCount: z.number().int().min(0),
+});
+export type PoolCategories = z.infer<typeof PoolCategories>;
+
 export const CategoryCreate = z.object({
   name: z.string().trim().min(1).max(120),
   parentId: z.uuid().nullable().optional(),

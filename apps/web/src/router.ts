@@ -13,6 +13,8 @@ export type Route =
   /** The teacher's question pools (WP7). */
   | { view: "pools" }
   | { view: "pool"; id: string }
+  /** The categories of one pool, as a tree to rename, move and reorder. */
+  | { view: "poolCategories"; id: string }
   | { view: "question"; id: string }
   /**
    * What a student would see for ONE question, in a page of its own
@@ -132,6 +134,14 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   pools: {
     path: () => "/pools",
     match: ([head, id]) => (head === "pools" && !id ? { view: "pools" } : null),
+    studentSafe: false,
+    section: "pools",
+  },
+  // Before `pool`, which takes any tail after the id.
+  poolCategories: {
+    path: (r) => `/pools/${r.id}/categories`,
+    match: ([head, id, tail]) =>
+      head === "pools" && id && tail === "categories" ? { view: "poolCategories", id } : null,
     studentSafe: false,
     section: "pools",
   },

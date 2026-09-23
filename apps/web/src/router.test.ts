@@ -19,6 +19,7 @@ describe("routeToPath / parsePath", () => {
     { view: "classroom", id: "c-1" },
     { view: "pools" },
     { view: "pool", id: "p-1" },
+    { view: "poolCategories", id: "p-1" },
     { view: "question", id: "q-1" },
     { view: "questionPreview", id: "q-1" },
     // WP9: student player
@@ -43,6 +44,8 @@ describe("routeToPath / parsePath", () => {
   it("parses the pool routes, and /pools alone is the list", () => {
     expect(parsePath("/pools")).toEqual({ view: "pools" });
     expect(parsePath("/pools/p-1")).toEqual({ view: "pool", id: "p-1" });
+    expect(parsePath("/pools/p-1/categories")).toEqual({ view: "poolCategories", id: "p-1" });
+    expect(sectionOf({ view: "poolCategories", id: "p-1" })).toBe("pools");
     expect(parsePath("/questions/q-1")).toEqual({ view: "question", id: "q-1" });
     // The editor tab lives in the query string, not in the path.
     expect(parsePath("/questions/q-1/edit")).toEqual({ view: "question", id: "q-1" });
@@ -113,6 +116,7 @@ describe("ROUTES", () => {
     admin: { view: "admin" },
     classroom: { view: "classroom", id: "c-1" },
     pools: { view: "pools" },
+    poolCategories: { view: "poolCategories", id: "p-1" },
     pool: { view: "pool", id: "p-1" },
     polls: { view: "polls" },
     question: { view: "question", id: "q-1" },

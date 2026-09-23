@@ -195,6 +195,9 @@ export const categories: MockCategory[] = [
   { id: "k3", poolId: "p1", parentId: "k1", name: "Allocation dynamique", position: 1 },
   { id: "k4", poolId: "p1", parentId: null, name: "Tableaux", position: 1 },
   { id: "k5", poolId: "p1", parentId: null, name: "Fichiers", position: 2 },
+  // Longer than the sidebar: the name a teacher really gives a chapter, and
+  // the one the truncation tooltip is for.
+  { id: "k-num", poolId: "p1", parentId: null, name: "Numération et codage des entiers", position: 3 },
   { id: "k6", poolId: "p2", parentId: null, name: "Capteurs", position: 0 },
   { id: "k7", poolId: "p2", parentId: null, name: "Bus I²C", position: 1 },
   { id: "k8", poolId: "p3", parentId: null, name: "Amplificateurs", position: 0 },
@@ -1673,6 +1676,15 @@ on("POST", "/app/api/pools/:id/categories", (m, body) => {
   };
   categories.push(category);
   return category;
+});
+on("GET", "/app/api/pools/:id/categories", (m) => {
+  const pool = poolOr404(m.groups!.id!);
+  const live = liveQuestions(pool.id).filter((q) => !q.deletedAt);
+  const count = (id: string | null) => live.filter((q) => q.categoryId === id).length;
+  type CountNode = TreeNode & { questionCount: number; children: CountNode[] };
+  const withCounts = (nodes: TreeNode[]): CountNode[] =>
+    nodes.map((n) => ({ ...n, questionCount: count(n.id), children: withCounts(n.children) }));
+  return { categories: withCounts(categoryTree(pool.id)), rootQuestionCount: count(null) };
 });
 on("PATCH", "/app/api/categories/:id", (m, body) => {
   const category = categories.find((c) => c.id === m.groups!.id);

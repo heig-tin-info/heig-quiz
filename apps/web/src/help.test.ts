@@ -24,6 +24,7 @@ describe("helpTopics", () => {
       "classroom",
       "pools",
       "pool",
+      "categories",
       "question-editor",
       "evaluation",
       "live",

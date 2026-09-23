@@ -49,6 +49,8 @@ export const poolKey = (id: string | undefined) => ["pool", id] as const;
 export const poolQuestionsKey = (poolId: string, search: string) =>
   ["pool", poolId, "questions", search] as const;
 export const poolTagsKey = (poolId: string) => ["pool", poolId, "tags"] as const;
+/** `GET /pools/:id/categories`, the tree with its counts: under the pool, like the tags. */
+export const poolCategoriesKey = (poolId: string) => ["pool", poolId, "categories"] as const;
 export const poolMembersKey = (poolId: string) => ["pool-members", poolId] as const;
 /** Without `q`, the prefix of every search of that pool's candidates. */
 export function poolCandidatesKey(poolId: string): readonly ["pool-candidates", string];

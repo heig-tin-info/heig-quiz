@@ -3,11 +3,10 @@
 ## Categories
 
 While a pool is open, its categories appear in the left sidebar, under
-**Question pools**: **All questions**, **Uncategorized**, then the tree.
-Picking one narrows the table to it. The tree also creates a category or a
-subcategory, renames one, moves it among its siblings, and deletes it —
-deleting a category sends its questions back to the root, it never deletes
-a question.
+**Question pools**: **All questions**, **Categories**, then the tree.
+Picking one narrows the table to it; a name too long for the sidebar shows
+in full on hover. **Categories** opens the page where the tree is edited:
+create, rename, move, reorder and delete.
 
 ## Search and filters
 

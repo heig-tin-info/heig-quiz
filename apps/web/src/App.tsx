@@ -36,6 +36,9 @@ const ClassroomView = lazy(() =>
 // so a student — or a teacher who only runs quizzes — never downloads them.
 const PoolsPage = lazy(() => import("./pool/PoolsPage").then((m) => ({ default: m.PoolsPage })));
 const PoolView = lazy(() => import("./pool/PoolView").then((m) => ({ default: m.PoolView })));
+const CategoriesPage = lazy(() =>
+  import("./pool/CategoriesPage").then((m) => ({ default: m.CategoriesPage })),
+);
 const QuestionEditor = lazy(() =>
   import("./question/QuestionEditor").then((m) => ({ default: m.QuestionEditor })),
 );
@@ -180,6 +183,7 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   poll: (r, c) => <PollProjection id={r.id} navigate={c.navigate} />,
   pools: (_, c) => <PoolsPage navigate={c.navigate} />,
   pool: (r, c) => <PoolView id={r.id} navigate={c.navigate} />,
+  poolCategories: (r, c) => <CategoriesPage id={r.id} navigate={c.navigate} />,
   question: (r, c) => <QuestionEditor id={r.id} navigate={c.navigate} />,
   // The student preview of ONE question: the player, and therefore the whole
   // screen, for exactly the reason the attempt takes it — a preview framed by
