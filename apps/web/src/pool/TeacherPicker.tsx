@@ -1,11 +1,20 @@
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
-import { useEffect, useId, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import type { PoolCandidate, PoolCandidates } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useT } from "../i18n";
-import { cx, FieldLabel, Initials, inputClass, inputSize, listboxIndex, Z } from "../ui";
+import {
+  ComboboxList,
+  ComboboxOption,
+  cx,
+  FieldLabel,
+  Initials,
+  inputClass,
+  inputSize,
+  useCombobox,
+} from "../ui";
 import { poolCandidatesKey } from "../queryKeys";
 
 /**
@@ -47,12 +56,9 @@ export function TeacherPicker({
   onPick: (candidate: PoolCandidate) => void;
 }) {
   const t = useT();
-  const uid = useId();
-  const inputId = `${uid}-input`;
-  const listId = `${uid}-list`;
-  const optionId = (i: number) => `${uid}-option-${i}`;
+  // Held here, not in the combobox: the query below needs it, and the
+  // combobox needs the query's rows.
   const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(0);
   const input = useRef<HTMLInputElement>(null);
 
   const q = text.trim();
@@ -68,49 +74,30 @@ export function TeacherPicker({
   });
   const rows = candidates.data ?? [];
 
-  useEffect(() => setActive(0), [q, open]);
-
-  const pick = (candidate: PoolCandidate) => {
-    onPick(candidate);
-    setOpen(false);
-  };
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    const next = listboxIndex(e.key, active, rows.length);
-    if (next !== null) {
-      e.preventDefault();
-      setOpen(true);
-      setActive(next);
-    } else if (e.key === "Enter") {
-      // With a row under the highlight, Enter picks it; otherwise the form
-      // has it, and submits what is typed.
-      const candidate = open ? rows[active] : undefined;
-      if (candidate) {
-        e.preventDefault();
-        pick(candidate);
-      }
-    } else if (e.key === "Escape" && open) {
-      e.preventDefault();
+  // With a row under the highlight, Enter picks it; otherwise the form has
+  // it, and submits what is typed.
+  const combo = useCombobox({
+    count: rows.length,
+    onPick: (index) => {
+      onPick(rows[index]!);
       setOpen(false);
-    }
-  };
+    },
+    query: q,
+    state: [open, setOpen],
+  });
 
   return (
     <div className="flex min-w-0 flex-1 basis-56 flex-col gap-1.5">
-      <FieldLabel htmlFor={inputId} hint={selected?.email}>
+      <FieldLabel htmlFor={combo.inputId} hint={selected?.email}>
         {t("share.teacher")}
       </FieldLabel>
       <div className="relative">
         <input
           ref={input}
-          id={inputId}
+          id={combo.inputId}
           disabled={disabled}
           value={text}
-          role="combobox"
-          aria-expanded={open}
-          aria-controls={listId}
-          aria-activedescendant={open && rows[active] ? optionId(active) : undefined}
-          aria-autocomplete="list"
+          {...combo.inputProps}
           autoComplete="off"
           spellCheck={false}
           placeholder={t("share.teacherPlaceholder")}
@@ -118,21 +105,11 @@ export function TeacherPicker({
             onText(e.target.value);
             setOpen(true);
           }}
-          onFocus={() => setOpen(true)}
-          // A click on an option fires after the blur, so the list is kept
-          // alive long enough for that click to land.
-          onBlur={() => window.setTimeout(() => setOpen(false), 120)}
-          onKeyDown={onKeyDown}
           className={cx(inputClass, inputSize.md, "w-full")}
         />
 
         {open && !disabled ? (
-          <div
-            id={listId}
-            role="listbox"
-            aria-label={t("share.candidates")}
-            className={`absolute left-0 right-0 top-full ${Z.popover} mt-1 max-h-64 overflow-y-auto rounded-menu border border-line bg-surface p-1 shadow-popover`}
-          >
+          <ComboboxList combobox={combo} label={t("share.candidates")}>
             {candidates.isPending ? (
               <p className="px-2.5 py-2 text-[13px] text-fg-faint">
                 {t("share.candidatesLoading")}
@@ -145,22 +122,13 @@ export function TeacherPicker({
               </p>
             ) : (
               rows.map((candidate, index) => {
-                const isActive = index === active;
+                const isActive = index === combo.active;
                 return (
-                  <div
+                  <ComboboxOption
                     key={candidate.userId}
-                    id={optionId(index)}
-                    role="option"
-                    aria-selected={isActive}
-                    onMouseMove={() => setActive(index)}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => pick(candidate)}
-                    className={cx(
-                      "flex cursor-pointer items-center gap-2.5 rounded-field px-2.5 py-1.5 text-sm",
-                      isActive
-                        ? "bg-accent-soft font-semibold text-accent"
-                        : "text-fg-muted hover:bg-surface-2 hover:text-fg",
-                    )}
+                    combobox={combo}
+                    index={index}
+                    className="flex items-center gap-2.5"
                   >
                     <Initials
                       name={[candidate.givenName, candidate.familyName]}
@@ -177,11 +145,11 @@ export function TeacherPicker({
                         {candidate.email}
                       </span>
                     </span>
-                  </div>
+                  </ComboboxOption>
                 );
               })
             )}
-          </div>
+          </ComboboxList>
         ) : null}
       </div>
     </div>
