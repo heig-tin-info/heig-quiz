@@ -53,7 +53,9 @@ What was deliberately *not* carried over:
 
 ```
 podman --remote --url unix://<socket> run -d
-  --name quiz-run-<uuid> --label quiz.runner=1
+  --name quiz-run-<uuid>
+  --label quiz.runner=1                 # this service's containers, all of them
+  --label quiz.runner.instance=<uuid>   # THIS process's, drawn once at startup
   --userns=auto                       # rootful always; rootless when subuid allows (probed)
   --cap-drop=ALL
   --security-opt no-new-privileges
@@ -134,12 +136,17 @@ host whose Podman service is not running, not the normal path.
 The container is NOT created with `--rm`: it has to outlive the process that
 ran in it, so a case that timed out can be inspected and the next case can
 reuse the same container. What `finally` cannot cover is the service dying
-between `create` and it — an OOM on the host, a restart, a crash — so
-`pruneOrphans()` runs once at startup and removes everything labelled
-`quiz.runner=1`. It is never a reason not to start: a failure is one log line
-and the service serves. One consequence worth knowing: two runners sharing a
-Podman socket would reap each other's containers at boot, which is why a
-deployment gives the service a socket of its own (ADR-016).
+between `create` and it — an OOM on the host, a restart, a crash. The
+container survives that: its only process is `sleep <ttl>`, so it stays **`Up`**
+until the ttl runs out, holding its name and its share of the host.
+
+`pruneOrphans()` therefore runs once at startup. It **lists** the containers
+labelled `quiz.runner=1`, and removes only those whose
+`quiz.runner.instance` is not this process's — a blind
+`rm -f --filter label=quiz.runner=1` would force-kill the running containers of
+a co-tenant instance, or of the old process still draining its queue during a
+restart, and a student's answer with them. It is never a reason not to start:
+a failure is one log line and the service serves.
 
 `timeout` and a cgroup OOM kill both end as exit 137, so the elapsed time
 tells them apart: at the deadline it is `timedOut`, well before it is `oom`.
@@ -205,7 +212,10 @@ Two things are specific to it:
   exits 1 with "no simulations run" in a few milliseconds (verified on
   ngspice 42, `src/spice.int.test.ts`).
 
-**The one `podman run` outside this package.**
+**The `podman run` outside `containerArgs()`.** There are two, and neither
+runs a student's program: the startup probe starts a throwaway `true` to find
+out whether `--userns=auto` works (`src/probe.ts`, `--rm --pull=never
+--userns=auto --network none`), and the suite below.
 `packages/qt-circuit/src/spice.int.test.ts` validates the netlists that type
 emits against a real ngspice, and cannot call `executeRequest`: `@quiz/runner`
 is an app (ADR-016) and no `packages/*` depends on an app. It therefore repeats

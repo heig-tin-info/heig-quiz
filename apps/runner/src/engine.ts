@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 
 /**
  * The only module of the runner that knows about Podman.
@@ -104,14 +105,22 @@ export interface Engine {
   exec(name: string, options: ExecOptions): Promise<ExecResult>;
   remove(name: string): Promise<void>;
   /**
-   * Destroys every container this service ever labelled, whoever created it.
+   * Destroys the containers of OTHER instances of this service, and returns
+   * how many.
    *
    * Called once at startup, and only there. A container is normally removed in
-   * the `finally` of its own request; what that cannot cover is the service
+   * the `finally` of its own request; what that cannot cover is the process
    * being killed between `create` and `finally` — an OOM on the host, a
-   * `systemctl restart`, a crash — which leaves an `Exited` container holding
-   * its name and its share of the disk until someone notices. The label
-   * `quiz.runner=1` is on every one of them, and on nothing else.
+   * `systemctl restart`, a crash. The container survives it: its only process
+   * is `sleep <ttl>`, so it stays `Up` until that runs out, holding its name,
+   * its memory and a slot of the host's.
+   *
+   * `quiz.runner=1` is on every container this service creates and on nothing
+   * else, but it is on the containers of a CO-TENANT instance too — and an old
+   * process still draining its queue is one. So the reaping is scoped by
+   * `quiz.runner.instance`, drawn once per engine: a container of this
+   * instance is never touched here, because the only way one can exist at
+   * startup is if this very process created it, which it has not.
    */
   pruneOrphans(): Promise<number>;
   /** Image references present on the engine, `repository:tag`. */
@@ -126,6 +135,12 @@ export interface EngineOptions {
   usernsAuto: boolean;
   runtime: string | null;
   capabilities: EngineCapabilities;
+  /**
+   * Identifies the containers of THIS process, so that `pruneOrphans()` can
+   * leave a co-tenant's alone. Drawn at random when it is not given; the tests
+   * give it, because it is part of the container's argv.
+   */
+  instanceId?: string;
 }
 
 /** Message fragments Podman uses when the container is not there any more. */
@@ -175,8 +190,21 @@ function collector(maxBytes: number): {
   };
 }
 
+/** The label that tells this process's containers from another instance's. */
+export const INSTANCE_LABEL = "quiz.runner.instance";
+
+/** Every container of this service carries it; nothing else on the host does. */
+export const SERVICE_LABEL = "quiz.runner=1";
+
+/** What `podman ps --format json` gives back, of the little that is read here. */
+interface PodmanPsRow {
+  Id?: string;
+  Labels?: Record<string, string>;
+}
+
 export function createEngine(options: EngineOptions): Engine {
   const base = remoteArgs(options.socket);
+  const instanceId = options.instanceId ?? randomUUID();
 
   function podman(
     args: string[],
@@ -235,7 +263,12 @@ export function createEngine(options: EngineOptions): Engine {
       "--name",
       create.name,
       "--label",
-      "quiz.runner=1",
+      SERVICE_LABEL,
+      // Whose container this is. `pruneOrphans()` reaps by the absence of THIS
+      // value, so that two instances sharing a socket — a restart still
+      // draining beside a fresh one — do not kill each other's runs.
+      "--label",
+      `${INSTANCE_LABEL}=${instanceId}`,
       // --- hardening, from the sibling project's run-hardened.sh (README) ---
       // `--userns=auto`: a private uid range per container. Rootful always
       // has it; a rootless engine only with a large enough /etc/subuid, which
@@ -327,21 +360,46 @@ export function createEngine(options: EngineOptions): Engine {
       // container the moment it exits, and this service needs it to survive
       // its own `sleep` so a case that timed out can still be inspected and
       // the name reused. Reaping is therefore a startup job, not a flag.
-      const result = await podman(["rm", "-f", "--filter", "label=quiz.runner=1"], {
+      //
+      // And not `rm --filter label=quiz.runner=1` either: that would force-kill
+      // a co-tenant instance's RUNNING containers, a student's answer with
+      // them. The list comes first, the instance label decides, and only the
+      // ids that belong to nobody here are removed.
+      const listed = await podman(
+        ["ps", "-a", "--filter", `label=${SERVICE_LABEL}`, "--format", "json"],
+        { timeoutMs: 30_000, maxBytes: 4 * 1024 * 1024 },
+      );
+      if (listed.code !== 0) {
+        throw new EngineError(
+          `podman ps failed (${listed.code ?? "killed"})`,
+          listed.stderr.toString("utf8"),
+        );
+      }
+
+      let rows: PodmanPsRow[];
+      try {
+        rows = JSON.parse(listed.stdout.toString("utf8") || "[]") as PodmanPsRow[];
+      } catch {
+        throw new EngineError("podman ps did not answer json", listed.stdout.toString("utf8"));
+      }
+
+      const foreign = rows
+        .filter((row) => row.Labels?.[INSTANCE_LABEL] !== instanceId)
+        .map((row) => row.Id)
+        .filter((id): id is string => typeof id === "string" && id !== "");
+      if (foreign.length === 0) return 0;
+
+      const removed = await podman(["rm", "-f", "-t", "0", ...foreign], {
         timeoutMs: 60_000,
         maxBytes: 64 * 1024,
       });
-      if (result.code !== 0) {
+      if (removed.code !== 0) {
         throw new EngineError(
-          `podman rm --filter failed (${result.code ?? "killed"})`,
-          result.stderr.toString("utf8"),
+          `podman rm failed (${removed.code ?? "killed"})`,
+          removed.stderr.toString("utf8"),
         );
       }
-      // One id per line; none at all is the ordinary case.
-      return result.stdout
-        .toString("utf8")
-        .split("\n")
-        .filter((line) => line.trim() !== "").length;
+      return foreign.length;
     },
 
     async listImages() {
