@@ -69,7 +69,7 @@ function NavItem({
       aria-current={active ? "page" : undefined}
       aria-expanded={expanded}
       className={cx(
-        "flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-left text-sm transition-colors",
+        "flex w-full items-center gap-2.5 rounded-field px-2.5 py-1.5 text-left text-sm transition-colors",
         active ? "bg-accent-soft font-semibold text-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg",
       )}
     >
@@ -401,7 +401,7 @@ export function Shell({
       type="button"
       onClick={() => navigate({ view: "home" })}
       aria-label={t("app.title")}
-      className="flex shrink-0 items-center rounded-[10px] text-left transition-opacity hover:opacity-80"
+      className="flex shrink-0 items-center rounded-field text-left transition-opacity hover:opacity-80"
     >
       <Logo id={titleId} className={width} />
     </button>

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 
 import { api } from "./api";
+import { readStored, writeStored } from "./ui/state";
 
 /**
  * Lightweight i18n: a flat key -> string dictionary per locale, a `t(key,
@@ -3760,7 +3761,7 @@ const I18nContext = createContext<I18nValue>({
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocaleState] = useState<Locale>(() => {
-    const stored = localStorage.getItem(STORE_KEY);
+    const stored = readStored(STORE_KEY);
     return stored === "fr" || stored === "en" ? stored : "en";
   });
   useEffect(() => {
@@ -3768,7 +3769,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   }, [locale]);
   const setLocale = useCallback((l: Locale, persist = true) => {
     setLocaleState(l);
-    localStorage.setItem(STORE_KEY, l);
+    writeStored(STORE_KEY, l);
     if (persist) {
       void api("/app/api/me", { method: "PATCH", body: JSON.stringify({ locale: l }) }).catch(
         () => {},

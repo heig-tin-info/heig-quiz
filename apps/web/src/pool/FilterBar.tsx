@@ -294,7 +294,7 @@ function SearchBox({
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => pick(option)}
               className={cx(
-                "cursor-pointer truncate rounded-md px-2.5 py-1.5 text-[13px]",
+                "cursor-pointer truncate rounded-field px-2.5 py-1.5 text-[13px]",
                 i === active ? "bg-accent-soft text-accent" : "text-fg-muted",
               )}
             >
@@ -478,7 +478,7 @@ export function FilterBar({
                 versionMax: null,
               })
             }
-            className="rounded-md px-1.5 py-0.5 text-xs text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+            className="rounded-field px-1.5 py-0.5 text-xs text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
           >
             {t("pool.filter.clear")}
           </button>

@@ -5,7 +5,7 @@ import type { ByQuestion } from "@quiz/contracts";
 import { useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { typeLabel, QuestionReviewHost } from "../questionTypes";
-import { Badge, Card, cx, EmptyState, SectionHeading } from "../ui";
+import { Badge, Card, cx, EmptyState, NotePanel, SectionHeading } from "../ui";
 
 const percent = (rate: number | null) => (rate === null ? "—" : `${Math.round(rate * 100)}%`);
 
@@ -83,10 +83,7 @@ export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
                 which this view has none of. F-RES-03 asks for the answer, so
                 the one documented field is read straight off the payload. */}
             {referenceSolution(q.solution) ? (
-              <div className="rounded-field border border-line bg-surface-2 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-                  {t("results.byQuestion.reference")}
-                </p>
+              <NotePanel eyebrow={t("results.byQuestion.reference")}>
                 {/* A focusable scroll region: this block runs past the
                     screen edge on a phone and a keyboard cannot reach into a
                     container that holds nothing focusable (W10). */}
@@ -94,20 +91,17 @@ export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
                   tabIndex={0}
                   role="region"
                   aria-label={t("results.byQuestion.reference")}
-                  className="mt-1.5 overflow-x-auto font-mono text-xs leading-relaxed"
+                  className="overflow-x-auto font-mono text-xs leading-relaxed"
                 >
                   {referenceSolution(q.solution)}
                 </pre>
-              </div>
+              </NotePanel>
             ) : null}
 
             {q.explanation ? (
-              <div className="rounded-field bg-surface-2 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-                  {t("results.byQuestion.explanation")}
-                </p>
-                <MarkdownView size="sm" className="mt-1" source={q.explanation} />
-              </div>
+              <NotePanel eyebrow={t("results.byQuestion.explanation")}>
+                <MarkdownView size="sm" source={q.explanation} />
+              </NotePanel>
             ) : null}
 
             {q.distribution.length > 0 ? (

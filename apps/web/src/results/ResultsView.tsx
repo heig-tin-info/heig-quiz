@@ -25,6 +25,7 @@ import {
   Menu,
   PageError,
   PageHeader,
+  PageSkeleton,
   ParentLink,
   QueryError,
   RelativeTime,
@@ -139,13 +140,7 @@ export function ResultsView({
   ]);
 
   if (results.isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
+    return <PageSkeleton body="summary-and-block" />;
   }
   if (results.isError || !view) {
     return (

@@ -42,6 +42,7 @@ import {
   Spinner,
   T,
   Tip,
+  usePersistentChoice,
 } from "../ui";
 import { PoolIcon } from "./PoolIcon";
 import { PoolIconPicker } from "./PoolIconPicker";
@@ -71,22 +72,9 @@ import { poolsKey } from "../queryKeys";
  * server decides what it accepts, and this only offers what it would accept.
  */
 
-type PoolsView = "cards" | "list";
-
 const VIEW_KEY = "quiz-pools-view";
-
-function usePoolsView(): [PoolsView, (v: PoolsView) => void] {
-  const [view, setView] = useState<PoolsView>(() =>
-    localStorage.getItem(VIEW_KEY) === "list" ? "list" : "cards",
-  );
-  return [
-    view,
-    (v) => {
-      localStorage.setItem(VIEW_KEY, v);
-      setView(v);
-    },
-  ];
-}
+const VIEWS = ["cards", "list"] as const;
+type PoolsView = (typeof VIEWS)[number];
 
 /** The visibility badge of a pool: what it says, and who else is on it. */
 function VisibilityBadge({ pool }: { pool: PoolSummary }) {
@@ -343,7 +331,7 @@ function PoolCard({
         onClick={() => navigate({ view: "pool", id: pool.id })}
         className="flex w-full flex-1 items-start gap-3 p-4 pr-11 text-left transition-colors hover:bg-surface-2/50"
       >
-        <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-[10px] bg-surface-2 text-fg-muted">
+        <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-field bg-surface-2 text-fg-muted">
           <PoolIcon icon={pool.icon} className="size-6" />
         </span>
         <span className="min-w-0 flex-1">
@@ -428,7 +416,7 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
   const t = useT();
   const me = useMe();
   const [creating, setCreating] = useState(false);
-  const [view, setView] = usePoolsView();
+  const [view, setView] = usePersistentChoice(VIEW_KEY, VIEWS, "cards");
 
   const pools = useQuery<PoolSummary[]>({
     queryKey: poolsKey,

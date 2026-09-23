@@ -35,8 +35,8 @@ import {
   modKey,
   PageError,
   PageHeader,
+  PageSkeleton,
   ParentLink,
-  Skeleton,
   Spinner,
   SyncBadge,
   TabPanel,
@@ -440,12 +440,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   const configIssues = useMemo(() => toConfigIssues(t, issues), [t, issues]);
 
   if (detail.isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-72" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
+    return <PageSkeleton />;
   }
   if (detail.isError) {
     return (

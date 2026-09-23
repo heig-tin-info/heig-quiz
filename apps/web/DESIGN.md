@@ -140,6 +140,21 @@ Two pairs stay below their target, on purpose:
   16 px corner around a 13 px row makes the card louder than its contents.
   The pills are untouched — they mark what you press, and that distinction is
   the point of the scale.
+  In the markup the radii are the tokens `rounded-field`, `rounded-card`,
+  `rounded-sheet`, `rounded-menu` and `rounded-key` (`style.css`), never a
+  bracketed pixel value that happens to equal one. Two values stand outside
+  the scale, on purpose:
+  - **28 px, the pool's floating bulk bar.** It is a pill on one line — the
+    browser clamps a radius to half the height, so 28 px on a 44 px bar IS
+    the pill — but on a phone its four actions wrap to two lines, and
+    `rounded-full` would turn that taller bar into a lens. 28 px keeps it a
+    pill while it fits and a rounded rectangle when it does not.
+  - **14 px, the poll projection's QR tile.** The tile belongs to the
+    projection's own scale (below): it is sized with `clamp()` to the wall,
+    88 to 132 px, like every other size on that screen, and its corner is
+    one step above the card's to stay in proportion with a tile larger than
+    anything the 12–28 px scale was drawn for. It is the only 14 px corner
+    in the product, and it exists only on the projector.
 - Separation language: **1 px hairlines** (`line`), one surface level below
   for recessed panels (`surface-2`). No shadows on anything in the page
   flow. Shadows exist only on floating layers (menu, popover, sheet, dialog,
@@ -223,6 +238,39 @@ with a keyboard-reachable dismiss button.
   260 ms for sheets. Easing `cubic-bezier(0.2, 0, 0, 1)`. Presses scale to
   0.97. Honors `prefers-reduced-motion`.
 
+## Browser state
+
+The few things a screen reads from the browser rather than from the server
+live in `ui/state.ts`, each written once.
+
+- `usePersistentChoice(key, values, fallback)`: a choice that is a reader's
+  HABIT and not a state of the data — table or cards, the grouping of the
+  pool, the pool tree's cycle, the classroom of the last poll — remembered per
+  browser in `localStorage`, never in the URL or on the server. `values` is
+  the closed list of choices (or a predicate for an open set, an id); anything
+  else stored gives `fallback`. Both accessors are wrapped: a private window
+  or blocked site data makes `localStorage` THROW, and a remembered habit is
+  never worth a crash — the page simply starts on the fallback. It exists
+  because five screens wrote that reader by hand, and two of them crashed in
+  a private window. The storage keys are the ones those screens always used,
+  so nobody loses a remembered view. The theme, the locale mirror and the
+  notification preferences, which are not choices of this shape, go through
+  the same guarded `readStored` / `writeStored` / `removeStored`: a guard on
+  the page is worth nothing if the boot crashed first.
+- `isTyping(target)`: a single-letter shortcut (`f`, `r`, `v`, an arrow) is
+  not one while the keystroke lands in an input, a textarea, a select or a
+  contenteditable surface — there it is a letter the reader is writing. Every
+  screen-wide key handler asks it first; four screens used to spell it out.
+- `useFullscreen()`: the page-level full screen (a `fixed inset-0` stage,
+  which is all a projector needs) with the browser's own `requestFullscreen`
+  attempted on top and its refusal swallowed. It LISTENS to
+  `fullscreenchange`, because Escape, F11 and the browser's chrome leave the
+  browser full screen without telling the page: the state must follow the
+  browser out, or the reader is left inside an overlay whose button says
+  "Leave full screen" about a full screen already gone. The live dashboard's
+  private copy lacked that listener and did exactly that; the poll projection
+  and the dashboard now share this one.
+
 ## Components
 
 - Button: `primary` (accent fill, white text, one per screen), `secondary`
@@ -232,6 +280,16 @@ with a keyboard-reachable dismiss button.
 - Badge: pill, soft background, 12 px, tones green / amber / red / zinc /
   accent. Status is a badge; a count is plain text.
 - Card: `surface` + hairline + 16 px radius; padding 16–20.
+- NotePanel: a note set INSIDE a card — an explanation, a teacher's comment,
+  a reference solution — as a 12 px uppercase semibold eyebrow in `fg-faint`
+  over its body, in a `field`-radius (10 px) panel. ONE rhythm: **12 px of
+  padding, 4 px between the eyebrow and the body** — the "tight inside a
+  group" end of the spacing scale, since the panel is one group nested in a
+  card that already has its 16–20 of air. Two tones: `soft` (`surface-2`, a
+  recess) for what the product says, and `outlined` (a `line-strong` hairline
+  on `surface`) for what a person wrote to this reader. It exists because
+  five such panels were written by hand with two paddings (12 and 16) and
+  two gaps (4 and 6).
 - PersonAvatar: a person as a round picture, or their two initials on
   `surface-3` in `fg-muted` when there is no picture OR when it fails to load
   (an IdP picture URL goes stale, and a broken-image glyph is not a face).
@@ -277,7 +335,7 @@ with a keyboard-reachable dismiss button.
   because seventeen sites spelled out `isError ? … apiErrorMessage … : null`
   by hand. It lives beside QueryError (`queryError.tsx`), for the same
   reason: `ui/` never imports the HTTP client.
-- Field: label 13 px 500 above, 12 px radius, `line-strong` border, accent
+- Field: label 13 px 500 above, 10 px radius (`rounded-field`), `line-strong` border, accent
   ring on focus. The `<label>` covers the text only and points at the control
   through `htmlFor`; the help "?" is its sibling, never inside it, or that
   button becomes the labelled control and the input loses its name. Two heights, from the button scale: `sm` 28 px for a control
@@ -378,6 +436,17 @@ with a keyboard-reachable dismiss button.
   translated fallback key, always in the `error` tone, so no call site can
   pick another one.
 - Empty state: icon in a `surface-2` circle, title, one line, one action.
+- PageSkeleton: the loading state of a whole page, in ONE shape — a 32 px
+  title bar, optionally the 36 px tabs/toolbar row under it, then a 256 px
+  block, optionally under a 96 px summary strip for a page that opens on
+  figures (results, the student's feedback); 24 px between the rows, the
+  header-to-body gap above. The widths mean nothing and are the same on every
+  page: a skeleton says "a page is coming", and six pages each guessing their
+  own proportions said nothing more. The skeletons that DO mirror their
+  content keep their own shape — the pool's table and cards
+  (`QuestionTableSkeleton`, `QuestionCardsSkeleton`), the grading list
+  (`ListSkeleton`) and the projection's stage — because there the rows are
+  the promise.
 - Notification bell (`src/notifications/NotificationBell.tsx`): the account's
   own inbox, beside the account row in the sidebar and beside the avatar in
   the phone top bar — the two things that are about the PERSON and not about

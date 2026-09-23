@@ -957,7 +957,7 @@ export function Menu({
               {items.map((it, i) => {
                 const Icon = it.icon;
                 const cls = cx(
-                  "flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-left text-sm transition-colors",
+                  "flex w-full items-center gap-2.5 rounded-field px-2.5 py-1.5 text-left text-sm transition-colors",
                   it.disabled
                     ? "pointer-events-none opacity-40"
                     : it.danger

@@ -318,6 +318,34 @@ export function Skeleton({ className = "h-4 w-full" }: { className?: string }) {
   return <div aria-hidden className={`animate-pulse rounded-md bg-surface-3 ${className}`} />;
 }
 
+/**
+ * The loading state of a whole page, in one shape: a title bar (plus the
+ * tabs or toolbar row under it, `header="title-and-bar"`), then the body — a
+ * block, or a summary strip over a block (`body="summary-and-block"`, for a
+ * page that opens on figures). 24 px between the rows, the header-to-body gap
+ * of DESIGN.md › Spacing. The widths mean nothing: a skeleton says "a page is
+ * coming", not what it will hold. `className` carries the page's column
+ * (`mx-auto max-w-180`), never a height.
+ */
+export function PageSkeleton({
+  header = "title",
+  body = "block",
+  className = "",
+}: {
+  header?: "title" | "title-and-bar";
+  body?: "block" | "summary-and-block";
+  className?: string;
+}) {
+  return (
+    <div className={cx("space-y-6", className)}>
+      <Skeleton className="h-8 w-64" />
+      {header === "title-and-bar" ? <Skeleton className="h-9 w-80" /> : null}
+      {body === "summary-and-block" ? <Skeleton className="h-24 w-full" /> : null}
+      <Skeleton className="h-64 w-full" />
+    </div>
+  );
+}
+
 /** Indeterminate progress bar (unknown duration work). */
 export function Progress({ label }: { label: string }) {
   return (
@@ -507,6 +535,38 @@ export function Card({
       )}
     >
       {children}
+    </div>
+  );
+}
+
+/**
+ * A note set inside a card: a 12 px uppercase eyebrow naming it ("Explanation",
+ * "Comment", "Reference solution") over its body, in a field-radius panel
+ * with 12 px of padding and 4 px between the eyebrow and the body.
+ *
+ * `soft` (a `surface-2` recess) is for what the product says — an
+ * explanation, a key; `outlined` (a `line-strong` hairline on `surface`) is
+ * for what a person wrote to this reader — a teacher's comment. DESIGN.md ›
+ * Components › NotePanel.
+ */
+export function NotePanel({
+  eyebrow,
+  tone = "soft",
+  children,
+}: {
+  eyebrow: ReactNode;
+  tone?: "soft" | "outlined";
+  children: ReactNode;
+}) {
+  return (
+    <div
+      className={cx(
+        "rounded-field p-3",
+        tone === "soft" ? "bg-surface-2" : "border border-line-strong bg-surface",
+      )}
+    >
+      <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">{eyebrow}</p>
+      <div className="mt-1">{children}</div>
     </div>
   );
 }

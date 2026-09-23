@@ -17,7 +17,9 @@ import {
   InlineTitle,
   Menu,
   Modal,
+  NotePanel,
   PageHeader,
+  PageSkeleton,
   ParentLink,
   PersonAvatar,
   pressable,
@@ -1010,6 +1012,59 @@ describe("EmptyState", () => {
     const Icon = () => <svg aria-hidden />;
     renderWithProviders(<EmptyState icon={Icon} title="Time is up" titleAs="h1" />);
     expect(screen.getByRole("heading", { level: 1, name: "Time is up" })).toBeVisible();
+  });
+});
+
+describe("PageSkeleton", () => {
+  const blocks = (container: HTMLElement) =>
+    [...container.firstElementChild!.children].map((el) => el.className);
+
+  it("is a title and a block by default, hidden from assistive technology", () => {
+    const { container } = renderWithProviders(<PageSkeleton />);
+    const rows = blocks(container);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toContain("h-8");
+    expect(rows[1]).toContain("h-64");
+    for (const el of container.firstElementChild!.children) {
+      expect(el).toHaveAttribute("aria-hidden");
+    }
+  });
+
+  it("adds the bar under the title and the summary over the block on request", () => {
+    const { container } = renderWithProviders(
+      <PageSkeleton header="title-and-bar" body="summary-and-block" className="max-w-180" />,
+    );
+    expect(container.firstElementChild).toHaveClass("space-y-6", "max-w-180");
+    const rows = blocks(container);
+    expect(rows).toHaveLength(4);
+    expect(rows[1]).toContain("h-9");
+    expect(rows[2]).toContain("h-24");
+  });
+});
+
+describe("NotePanel", () => {
+  it("names its body with the eyebrow, in one panel shape", () => {
+    renderWithProviders(
+      <NotePanel eyebrow="Explanation">
+        <p>Because pointers are addresses.</p>
+      </NotePanel>,
+    );
+    const eyebrow = screen.getByText("Explanation");
+    const panel = eyebrow.parentElement!;
+    expect(panel).toHaveClass("rounded-field", "p-3", "bg-surface-2");
+    expect(eyebrow.nextElementSibling).toHaveClass("mt-1");
+    expect(screen.getByText("Because pointers are addresses.")).toBeVisible();
+  });
+
+  it("outlines what a person wrote", () => {
+    renderWithProviders(
+      <NotePanel eyebrow="Comment" tone="outlined">
+        <p>Good start.</p>
+      </NotePanel>,
+    );
+    const panel = screen.getByText("Comment").parentElement!;
+    expect(panel).toHaveClass("border", "border-line-strong", "bg-surface");
+    expect(panel).not.toHaveClass("bg-surface-2");
   });
 });
 

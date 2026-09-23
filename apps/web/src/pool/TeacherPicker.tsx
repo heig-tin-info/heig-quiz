@@ -156,7 +156,7 @@ export function TeacherPicker({
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => pick(candidate)}
                     className={cx(
-                      "flex cursor-pointer items-center gap-2.5 rounded-[10px] px-2.5 py-1.5 text-sm",
+                      "flex cursor-pointer items-center gap-2.5 rounded-field px-2.5 py-1.5 text-sm",
                       isActive
                         ? "bg-accent-soft font-semibold text-accent"
                         : "text-fg-muted hover:bg-surface-2 hover:text-fg",

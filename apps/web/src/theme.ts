@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from "react";
 
+import { readStored, removeStored, writeStored } from "./ui/state";
+
 /**
  * Light/dark theme. "system" follows the OS and reacts to its changes; an
  * explicit choice is persisted in this browser.
@@ -19,7 +21,7 @@ const LEGACY_KEY = "quiz-ui-theme";
 const media = () => window.matchMedia("(prefers-color-scheme: dark)");
 
 function initialTheme(): ThemeChoice {
-  const stored = localStorage.getItem(KEY);
+  const stored = readStored(KEY);
   return stored === "light" || stored === "dark" ? stored : "system";
 }
 
@@ -73,14 +75,14 @@ export function useResolvedTheme(): Theme {
 let unsubscribe: (() => void) | null = null;
 
 export function applyTheme(choice: ThemeChoice) {
-  localStorage.removeItem(LEGACY_KEY);
+  removeStored(LEGACY_KEY);
   const set = (theme: Theme) => {
     document.documentElement.classList.toggle("dark", theme === "dark");
     document.documentElement.style.colorScheme = theme;
   };
   set(resolveTheme(choice));
-  if (choice === "system") localStorage.removeItem(KEY);
-  else localStorage.setItem(KEY, choice);
+  if (choice === "system") removeStored(KEY);
+  else writeStored(KEY, choice);
   unsubscribe?.();
   unsubscribe = null;
   if (choice === "system") {

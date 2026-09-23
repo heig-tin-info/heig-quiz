@@ -82,7 +82,7 @@ function CategoryRow({
       <div
         {...drop.handlers}
         className={cx(
-          "group flex items-center gap-1 rounded-[10px] pr-1 transition-colors",
+          "group flex items-center gap-1 rounded-field pr-1 transition-colors",
           active ? "bg-accent-soft" : "hover:bg-surface-2",
           drop.over && "outline-2 outline-offset-[-2px] outline-accent",
         )}
@@ -286,7 +286,7 @@ function CategoryList({
             aria-current={selected === null ? "true" : undefined}
             {...rootDrop.handlers}
             className={cx(
-              "flex w-full items-center gap-2 rounded-[10px] px-2.5 py-1.5 text-left text-[13px] transition-colors",
+              "flex w-full items-center gap-2 rounded-field px-2.5 py-1.5 text-left text-[13px] transition-colors",
               selected === null
                 ? "bg-accent-soft font-semibold text-accent"
                 : "text-fg-muted hover:bg-surface-2 hover:text-fg",
@@ -374,7 +374,7 @@ function SidebarPool({ label }: { label: ReactNode }) {
   return (
     <div
       aria-current="page"
-      className="flex w-full items-center gap-2 rounded-[10px] px-2.5 py-1.5 text-[13px] font-semibold text-fg"
+      className="flex w-full items-center gap-2 rounded-field px-2.5 py-1.5 text-[13px] font-semibold text-fg"
     >
       <span className="min-w-0 flex-1 truncate">{label}</span>
     </div>
