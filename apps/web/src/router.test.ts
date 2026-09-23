@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { parsePath, ROUTE_VIEWS, ROUTES, routeToPath, type Route, type RouteOf } from "./router";
+import {
+  evaluationInView,
+  parsePath,
+  ROUTE_VIEWS,
+  ROUTES,
+  routeToPath,
+  sectionOf,
+  type Route,
+  type RouteOf,
+} from "./router";
 
 describe("routeToPath / parsePath", () => {
   const routes: Route[] = [
@@ -137,6 +146,49 @@ describe("ROUTES", () => {
       "home",
       "join",
       "settings",
+    ]);
+  });
+
+  it("lights the sidebar section of each view, and none for the others", () => {
+    const lit = Object.fromEntries(
+      Object.values(sample).map((r) => [r.view, sectionOf(r)] as const),
+    );
+    expect(lit).toMatchObject({
+      home: "home",
+      pools: "pools",
+      pool: "pools",
+      question: "pools",
+      polls: "polls",
+      poll: "polls",
+      admin: "admin",
+    });
+    const unlit = ROUTE_VIEWS.filter((v) => lit[v] === null).sort();
+    expect(unlit).toEqual(
+      [
+        "attempt",
+        "classroom",
+        "devUi",
+        "evaluation",
+        "feedback",
+        "grading",
+        "join",
+        "live",
+        "questionPreview",
+        "results",
+        "settings",
+      ].sort(),
+    );
+  });
+
+  it("names the evaluation of its four linked teacher screens, and of nothing else", () => {
+    const withEvaluation = Object.values(sample)
+      .filter((r) => evaluationInView(r) !== null)
+      .map((r) => [r.view, evaluationInView(r)]);
+    expect(withEvaluation).toEqual([
+      ["live", "e-1"],
+      ["grading", "e-1"],
+      ["results", "e-1"],
+      ["evaluation", "e-1"],
     ]);
   });
 });

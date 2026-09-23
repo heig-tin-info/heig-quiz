@@ -22,7 +22,7 @@ import { Logo, UserMenu, useSignOut, ViewModeToggle } from "./Header";
 import { helpTopics, useHelp } from "./help";
 import { useI18n, useT } from "./i18n";
 import { NotificationBell } from "./notifications/NotificationBell";
-import type { Route } from "./router";
+import { sectionOf, type Route } from "./router";
 import { inPoolSection, PoolNavTree, usePoolNavState } from "./pool/PoolNav";
 import { shortcutCaps, useActiveShortcuts, useGlobalShortcuts } from "./shortcuts";
 import { setThemeChoice, useResolvedTheme, useThemeChoice } from "./theme";
@@ -177,6 +177,8 @@ function Nav({
     onNavigate?.();
   };
   const currentRoom = route.view === "classroom" ? route.id : null;
+  // The row lit for the page on screen, read from the route table.
+  const section = sectionOf(route);
   // Folded by default and not persisted: thirty classrooms turn the sidebar
   // into a scrolling wall, and the teacher who wants them all says so once.
   const [showAll, setShowAll] = useState(false);
@@ -199,7 +201,7 @@ function Nav({
           // WP9: student player — the student home is their evaluations now,
           // not the list of classrooms it used to be.
           label={teacherUi ? t("nav.courses") : t("shome.title")}
-          active={route.view === "home"}
+          active={section === "home"}
           onClick={() => go({ view: "home" })}
         />
         {teacherUi ? (
@@ -209,7 +211,7 @@ function Nav({
               label={t("pools.title")}
               // The three pool routes are one place as far as navigation goes:
               // a question is read inside its pool, not beside it.
-              active={route.view === "pools" || route.view === "pool" || route.view === "question"}
+              active={section === "pools"}
               expanded={poolNav.state !== "collapsed"}
               // One row, two jobs, and they never collide: from outside the
               // section the click NAVIGATES (and unfolds a collapsed tree);
@@ -233,7 +235,7 @@ function Nav({
             <NavItem
               icon={Vote}
               label={t("poll.nav")}
-              active={route.view === "polls" || route.view === "poll"}
+              active={section === "polls"}
               onClick={() => go({ view: "polls" })}
             />
           </>
@@ -244,7 +246,7 @@ function Nav({
           <NavItem
             icon={ShieldCheck}
             label={t("nav.admin")}
-            active={route.view === "admin"}
+            active={section === "admin"}
             onClick={() => go({ view: "admin" })}
           />
         ) : null}

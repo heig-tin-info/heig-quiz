@@ -4,7 +4,7 @@ import type { PoolSummary } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useT } from "../i18n";
-import type { Route } from "../router";
+import { sectionOf, type Route } from "../router";
 import { cx, Skeleton, usePersistentChoice } from "../ui";
 import { SidebarCategories } from "./CategoryTree";
 import { useMoveQuestions, useQuestionDrop, type QuestionDrag } from "./move";
@@ -57,7 +57,7 @@ export function usePoolNavState(): {
 
 /** True while the reader is inside the pool section, whichever of its pages. */
 export function inPoolSection(route: Route): boolean {
-  return route.view === "pools" || route.view === "pool" || route.view === "question";
+  return sectionOf(route) === "pools";
 }
 
 /**

@@ -47,10 +47,13 @@ export type Route =
 /** The one member of `Route` whose `view` is `V`. */
 export type RouteOf<V extends Route["view"]> = Extract<Route, { view: V }>;
 
+/** The sidebar sections (`Shell`'s `Nav`): the row that stays lit while a view is up. */
+export type NavSection = "home" | "pools" | "polls" | "admin";
+
 /**
  * Everything the app knows about one view, in one place: how it is written
- * as a path, how a path is recognized as it, and whether a student has a
- * screen for it. `path` and `match` are methods (not arrow properties) so a
+ * as a path, how a path is recognized as it, whether a student has a screen
+ * for it, and where it sits in the navigation. `path` and `match` are methods (not arrow properties) so a
  * spec for one view is usable where a spec for any view is expected.
  */
 export interface RouteSpec<V extends Route["view"]> {
@@ -62,6 +65,13 @@ export interface RouteSpec<V extends Route["view"]> {
    * Everything else falls through to the student home (`studentView.ts`).
    */
   studentSafe: boolean;
+  /** The sidebar row lit while this view is up; absent when none is. */
+  section?: NavSection;
+  /**
+   * Present on the teacher screens of ONE evaluation that link to each other
+   * (the palette's "grading" and "results" entries): the evaluation's id.
+   */
+  evaluationId?(route: RouteOf<V>): string;
 }
 
 /** A view whose path is one fixed segment (`/settings`, `/polls`, …), whatever follows it. */
@@ -83,15 +93,19 @@ type EvaluationTailView = "live" | "poll" | "grading" | "results";
 function evaluationTail<V extends EvaluationTailView>(
   tail: string,
   make: (id: string) => RouteOf<V>,
+  extra: NoInfer<Pick<RouteSpec<V>, "section" | "evaluationId">> = {},
 ): RouteSpec<V> {
   return {
-    path: (route) => {
-      const r: RouteOf<EvaluationTailView> = route;
-      return `/evaluations/${"id" in r ? r.id : r.evaluationId}/${tail}`;
-    },
+    path: (route) => `/evaluations/${evaluationIdOf(route)}/${tail}`,
     match: ([head, id, rest]) => (head === "evaluations" && id && rest === tail ? make(id) : null),
     studentSafe: false,
+    ...extra,
   };
+}
+
+/** The evaluation a screen of the evaluation family belongs to. */
+function evaluationIdOf(route: RouteOf<EvaluationTailView | "evaluation">): string {
+  return "id" in route ? route.id : route.evaluationId;
 }
 
 /**
@@ -107,9 +121,9 @@ function evaluationTail<V extends EvaluationTailView>(
  * `results`. `home` matches nothing: it is the fallback.
  */
 export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
-  home: { path: () => "/", match: () => null, studentSafe: true },
+  home: { path: () => "/", match: () => null, studentSafe: true, section: "home" },
   settings: fixed("settings", { view: "settings" }, true),
-  admin: fixed("admin", { view: "admin" }),
+  admin: { ...fixed("admin", { view: "admin" }), section: "admin" },
   classroom: {
     path: (r) => `/classrooms/${r.id}`,
     match: ([head, id]) => (head === "classrooms" && id ? { view: "classroom", id } : null),
@@ -119,13 +133,15 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     path: () => "/pools",
     match: ([head, id]) => (head === "pools" && !id ? { view: "pools" } : null),
     studentSafe: false,
+    section: "pools",
   },
   pool: {
     path: (r) => `/pools/${r.id}`,
     match: ([head, id]) => (head === "pools" && id ? { view: "pool", id } : null),
     studentSafe: false,
+    section: "pools",
   },
-  polls: fixed("polls", { view: "polls" }),
+  polls: { ...fixed("polls", { view: "polls" }), section: "polls" },
   // `/questions/:id/preview` is the student preview; every other tail is the
   // editor itself (its tab lives in the query string, not in the path).
   question: {
@@ -133,6 +149,8 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     match: ([head, id, tail]) =>
       head === "questions" && id && tail !== "preview" ? { view: "question", id } : null,
     studentSafe: false,
+    // A question is read inside its pool, not beside it.
+    section: "pools",
   },
   questionPreview: {
     path: (r) => `/questions/${r.id}/preview`,
@@ -166,21 +184,21 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   },
   // WP8 + WP10: ONE place decides what follows an evaluation id, so a new
   // tail is an entry here and nowhere else.
-  live: evaluationTail("live", (id) => ({ view: "live", id })),
-  poll: evaluationTail("poll", (id) => ({ view: "poll", id })),
-  grading: evaluationTail("grading", (evaluationId) => ({
-    view: "grading",
-    evaluationId,
-  })),
-  results: evaluationTail("results", (evaluationId) => ({
-    view: "results",
-    evaluationId,
-  })),
+  live: evaluationTail("live", (id) => ({ view: "live", id }), { evaluationId: evaluationIdOf }),
+  // The projection IS the poll: the launcher's row stays lit while it is up.
+  poll: evaluationTail("poll", (id) => ({ view: "poll", id }), { section: "polls" }),
+  grading: evaluationTail("grading", (evaluationId) => ({ view: "grading", evaluationId }), {
+    evaluationId: evaluationIdOf,
+  }),
+  results: evaluationTail("results", (evaluationId) => ({ view: "results", evaluationId }), {
+    evaluationId: evaluationIdOf,
+  }),
   // After the four tails above: this one takes whatever tail is left.
   evaluation: {
     path: (r) => `/evaluations/${r.id}`,
     match: ([head, id]) => (head === "evaluations" && id ? { view: "evaluation", id } : null),
     studentSafe: false,
+    evaluationId: evaluationIdOf,
   },
   // Parsed in every build so the route is one pure function; App.tsx is what
   // refuses to render it outside development.
@@ -204,6 +222,20 @@ function specOf(view: Route["view"]): RouteSpec<Route["view"]> {
 
 export function routeToPath(r: Route): string {
   return specOf(r.view).path(r);
+}
+
+/** The sidebar section `route` belongs to, or `null` when it lights no row. */
+export function sectionOf(route: Route): NavSection | null {
+  return specOf(route.view).section ?? null;
+}
+
+/**
+ * The evaluation whose teacher screens `route` is one of (configuration,
+ * live dashboard, grading, results), or `null` anywhere else — the poll
+ * projection included: it hangs off an evaluation but links to none of them.
+ */
+export function evaluationInView(route: Route): string | null {
+  return specOf(route.view).evaluationId?.(route) ?? null;
 }
 
 export function parsePath(path: string): Route {
