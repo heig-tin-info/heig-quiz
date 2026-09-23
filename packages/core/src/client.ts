@@ -266,10 +266,13 @@ export function resolveStrings<T extends object>(defaults: T, overrides?: Partia
  * The same `{var}` syntax as the host's `t()` (`apps/web/src/i18n.tsx`), so a
  * package's English default and the host's translation of the same key are
  * one shape, and the host hands them over key by key. An unknown placeholder
- * is left as written rather than rendered as `undefined`.
+ * is left as written rather than rendered as `undefined` — and only `vars`'
+ * OWN keys count, so `{constructor}` cannot read up the prototype chain.
  */
 export function fmt(template: string, vars: Record<string, string | number>): string {
-  return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? `{${k}}`));
+  return template.replace(/\{(\w+)\}/g, (_, k: string) =>
+    Object.hasOwn(vars, k) ? String(vars[k]) : `{${k}}`,
+  );
 }
 
 /**

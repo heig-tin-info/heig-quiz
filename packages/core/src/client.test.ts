@@ -36,6 +36,10 @@ describe("fmt", () => {
   it("leaves an unknown placeholder as written", () => {
     expect(fmt("Case {n}", {})).toBe("Case {n}");
   });
+
+  it("reads only the variables' own keys, never the prototype chain", () => {
+    expect(fmt("{constructor} {toString}", {})).toBe("{constructor} {toString}");
+  });
 });
 
 describe("plural", () => {

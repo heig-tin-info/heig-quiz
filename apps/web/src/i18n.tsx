@@ -3741,7 +3741,9 @@ export type TFunction = (key: keyof Dict, vars?: Record<string, string | number>
 function translate(locale: Locale, key: string, vars?: Record<string, string | number>): string {
   const raw = DICTS[locale]?.[key] ?? DICTS.en[key] ?? key;
   if (!vars) return raw;
-  return raw.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? `{${k}}`));
+  return raw.replace(/\{(\w+)\}/g, (_, k: string) =>
+    Object.hasOwn(vars, k) ? String(vars[k]) : `{${k}}`,
+  );
 }
 
 interface I18nValue {

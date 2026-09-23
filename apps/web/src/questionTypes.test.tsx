@@ -91,6 +91,22 @@ describe("question type strings", () => {
     }
   });
 
+  /*
+   * The package fills a template with ITS variable names; a translation that
+   * names them differently ("{n}" where the package passes `count`) would
+   * show the placeholder itself to that locale's readers.
+   */
+  it.each(DICTIONARIES)("%s names the same placeholders as the package, in both languages", (prefix, defaults) => {
+    const names = (text: string) => [...new Set([...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]))].sort();
+    for (const [key, value] of Object.entries(defaults)) {
+      if (typeof value !== "string" || MAPPED_ELSEWHERE[prefix]?.includes(key)) continue;
+      for (const locale of ["en", "fr"] as const) {
+        const entry = DICTS[locale][`${prefix}.${key}`];
+        expect(names(entry ?? ""), `${prefix}.${key} (${locale})`).toEqual(names(value));
+      }
+    }
+  });
+
   it("gives every type a label and a hint in both languages", () => {
     for (const locale of ["en", "fr"] as const) {
       const t = makeT(locale);
