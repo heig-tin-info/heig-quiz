@@ -23,6 +23,9 @@ import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
 import type { CodeAnswer, CodeConfig, CodeRunOptions, CodeStudent } from "@quiz/qt-code/client";
 
 import { browserCanRun, runWithFallback } from "./index";
+import type { BackendRun, ManualInput } from "./types";
+
+export type { ManualInput } from "./types";
 
 /** The program as it stands: the teacher's locked text around the student's. */
 export function assembleSource(student: CodeStudent, regions: readonly string[]): string {
@@ -44,16 +47,10 @@ export function canRunManually(student: CodeStudent): boolean {
   return student.runtime === "runno" && browserCanRun(student.language);
 }
 
-/** A free input: one command line and one stdin, from the person running it. */
-export interface ManualInput {
-  args: string[];
-  stdin: string;
-}
-
 export function codeRunRequest(
   student: CodeStudent,
   answer: CodeAnswer,
-  manual?: { args: string[]; stdin: string } | undefined,
+  manual?: ManualInput | undefined,
 ): RunnerRequest {
   return {
     language: student.language,
@@ -83,22 +80,19 @@ export async function runCode(args: {
   student: CodeStudent;
   answer: CodeAnswer;
   /**
-   * The API call the caller already had. It receives the free input as well,
-   * because `POST /attempts/:id/run` builds the visible cases server-side and
-   * takes a `stdin` / `args` pair for the free try — the one thing a client
-   * is allowed to choose (invariant 14).
+   * The API call the caller already had. It receives the free input and
+   * NOTHING else: `POST /attempts/:id/run` builds the program and the visible
+   * cases server-side, and takes a `stdin` / `args` pair for the free try —
+   * the one thing a client is allowed to choose (invariant 14).
    */
-  backend: (
-    request: RunnerRequest,
-    manual?: ManualInput | undefined,
-  ) => Promise<RunnerOutcome | "unavailable">;
+  backend: BackendRun;
   options?: CodeRunOptions | undefined;
 }): Promise<RunnerOutcome | "unavailable"> {
   const manual = args.options?.manual;
   const request = codeRunRequest(args.student, args.answer, manual);
   return runWithFallback(request, {
     runtime: args.student.runtime,
-    backend: (built) => args.backend(built, manual),
+    backend: () => args.backend(manual),
     hooks: args.options?.onStage === undefined ? undefined : { onStage: args.options.onStage },
   });
 }

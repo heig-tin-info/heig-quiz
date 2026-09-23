@@ -415,8 +415,11 @@ export function Player({
                         runCode({
                           student: item.student as CodeStudent,
                           answer: answer as CodeAnswer,
-                          // The backend path is the API call it always was.
-                          backend: (_request, manual) =>
+                          // The backend path is the API call it always was. It
+                          // sends the regions and, if there is one, the free
+                          // input: the program itself is rebuilt server-side
+                          // (invariant 14).
+                          backend: (manual) =>
                             run(item.id, (answer as { regions?: string[] }).regions ?? [], manual),
                           options: options as CodeRunOptions | undefined,
                         }),

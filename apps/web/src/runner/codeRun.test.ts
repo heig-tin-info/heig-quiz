@@ -85,7 +85,7 @@ describe("runCode", () => {
     await runCode({
       student: student({ runtime: "backend" }),
       answer: { regions: [] },
-      backend: async (_request, manual) => {
+      backend: async (manual) => {
         seen.push(manual);
         return { compile: { ok: true, stdout: "", stderr: "", ms: 0 }, cases: [] };
       },
@@ -99,7 +99,7 @@ describe("runCode", () => {
     await runCode({
       student: student({ runtime: "backend" }),
       answer: { regions: [] },
-      backend: async (_request, manual) => {
+      backend: async (manual) => {
         seen.push(manual);
         return { compile: { ok: true, stdout: "", stderr: "", ms: 0 }, cases: [] };
       },

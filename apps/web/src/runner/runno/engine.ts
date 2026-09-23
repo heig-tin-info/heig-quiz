@@ -17,6 +17,7 @@
  *    extensionless `/program`, so clang picks the language from the name.
  */
 import { WASI, type WASIFS } from "@runno/wasi";
+import { mainFileName } from "@quiz/domain";
 
 import { extractTarGz, type ArchiveFiles } from "./tar";
 import type { RunnoJob, RunnoLanguage, WorkerMessage } from "./protocol";
@@ -39,8 +40,19 @@ export const RUNTIME_ASSETS: Record<
   },
 };
 
-/** The entry file name per language; the student's source is written there. */
-export const ENTRY_FILE: Record<RunnoLanguage, string> = { c: "main.c", python: "main.py" };
+/**
+ * The entry file name per language; the student's source is written there.
+ *
+ * It is the name the BACKEND runner compiles too (`mainFileName` in
+ * `@quiz/domain`, used by `qt-code`'s `buildRunnerRequest`). The two runners
+ * answer the same shapes, so they must also agree on what the single file is
+ * called: a browser run that compiled `/program` while the grader compiled
+ * `main.c` would differ on the first `#include "main.c"` or `__file__`.
+ */
+export const ENTRY_FILE: Record<RunnoLanguage, string> = {
+  c: mainFileName("c"),
+  python: mainFileName("python"),
+};
 
 const COMPILE_ARGS = [
   "-cc1",

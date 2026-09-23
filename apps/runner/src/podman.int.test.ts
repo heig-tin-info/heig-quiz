@@ -3,11 +3,10 @@ import { execFileSync } from "node:child_process";
 import type { RunnerLanguage, RunnerOutcome, RunnerRequest } from "@quiz/core/server";
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { detectSocket, loadConfig, type RunnerConfig } from "./config.js";
-import { createEngine, type Engine } from "./engine.js";
+import { remoteArgs, type Engine } from "./engine.js";
 import { executeRequest } from "./execute.js";
-import { availableLanguages, imageRef } from "./images.js";
-import { probeEngine } from "./probe.js";
+import { imageRef } from "./images.js";
+import { announce, integrationEngine, integrationHost } from "./test/integration.js";
 
 /**
  * The suite that really starts containers.
@@ -22,50 +21,21 @@ import { probeEngine } from "./probe.js";
  * enough for a classroom.
  */
 
-const SOCKET = detectSocket();
+const host = integrationHost();
+const has = (language: RunnerLanguage): boolean => host.has(language);
+announce(host, "the integration suite");
 
-function engineIsReachable(): { ok: boolean; languages: RunnerLanguage[]; config: RunnerConfig } {
-  const config = loadConfig({ LOG_LEVEL: "fatal", ...(SOCKET === null ? {} : { PODMAN_SOCKET: SOCKET }) });
-  try {
-    const base = config.PODMAN_SOCKET === null ? [] : ["--remote", "--url", `unix://${config.PODMAN_SOCKET}`];
-    const images = execFileSync(
-      config.PODMAN_BIN,
-      [...base, "images", "--format", "{{.Repository}}:{{.Tag}}"],
-      { encoding: "utf8", timeout: 20_000 },
-    );
-    return { ok: true, languages: availableLanguages(images.split("\n"), config), config };
-  } catch {
-    return { ok: false, languages: [], config };
-  }
-}
-
-const probe = engineIsReachable();
-const has = (language: RunnerLanguage): boolean => probe.ok && probe.languages.includes(language);
-
-if (!probe.ok) {
-  console.warn("[runner] Podman is not reachable: the integration suite is skipped.");
-} else if (probe.languages.length === 0) {
-  console.warn("[runner] no quiz-runner-* image: run images/build.sh first.");
-}
-
-const config = probe.config;
+const config = host.config;
 let engine: Engine;
 
 beforeAll(async () => {
-  if (!probe.ok) return;
-  const probed = await probeEngine(config);
-  engine = createEngine({
-    podmanBin: config.PODMAN_BIN,
-    socket: config.PODMAN_SOCKET,
-    seccompProfile: config.RUNNER_SECCOMP,
-    usernsAuto: probed.capabilities.usernsAuto,
-    runtime: probed.capabilities.runtime,
-    capabilities: probed.capabilities,
-  });
+  if (!host.ok) return;
+  engine = await integrationEngine(host);
+  const capabilities = engine.capabilities;
   console.log(
-    `[runner] ${probed.capabilities.version}, rootless=${probed.capabilities.rootless}, ` +
-      `remote=${probed.capabilities.remote}, userns=auto:${probed.capabilities.usernsAuto}, ` +
-      `runtime=${probed.capabilities.runtime ?? "default"}, languages=${probe.languages.join(",")}`,
+    `[runner] ${capabilities.version}, rootless=${capabilities.rootless}, ` +
+      `remote=${capabilities.remote}, userns=auto:${capabilities.usernsAuto}, ` +
+      `runtime=${capabilities.runtime ?? "default"}, languages=${host.languages.join(",")}`,
   );
 });
 
@@ -278,15 +248,67 @@ for (const language of ["c", "python"] as const) {
   });
 }
 
+/**
+ * A syscall the profile denies, asked for with a deliberately invalid
+ * argument.
+ *
+ * `perf_event_open` is `SCMP_ACT_ERRNO` / EPERM in `infra/seccomp/runner.json`
+ * for a process holding neither `CAP_PERFMON` nor `CAP_SYS_ADMIN` — which
+ * `--cap-drop=ALL` guarantees. The attribute pointer is NULL on purpose: a
+ * filter answers before the kernel ever looks at it, so EPERM means the
+ * profile fired, while the EFAULT of a container without one means it did not.
+ */
+const PERF_EVENT_OPEN =
+  "#define _GNU_SOURCE\n" +
+  "#include <stdio.h>\n#include <errno.h>\n#include <unistd.h>\n#include <sys/syscall.h>\n" +
+  "int main(void){long rc=syscall(SYS_perf_event_open,(void*)0,0,-1,-1,0UL);" +
+  'printf("%ld %d\\n",rc,errno);return 0;}\n';
+
+/**
+ * The uid the program runs under, asked of the program itself.
+ *
+ * Every `images/*​/Containerfile` repeats the same `adduser` stanza and the
+ * assertion has to be repeated with it: an image added later with the stanza
+ * forgotten is exactly the mistake this loop catches, and it catches it on
+ * that image rather than on `c`'s. Rust declares `getuid` itself — the image
+ * ships `rustc` with no crate registry to fetch `libc` from, and there is no
+ * network inside the container anyway (invariant 11).
+ */
+const UID = {
+  c: '#include <stdio.h>\n#include <unistd.h>\nint main(void){printf("%d\\n",(int)getuid());return 0;}\n',
+  cpp: '#include <cstdio>\n#include <unistd.h>\nint main(){std::printf("%d\\n",(int)getuid());return 0;}\n',
+  python: "import os\nprint(os.getuid())\n",
+  js: "console.log(process.getuid());\n",
+  rust: 'extern "C" { fn getuid() -> u32; }\nfn main(){ println!("{}", unsafe { getuid() }); }\n',
+} as const;
+
+for (const language of ["c", "cpp", "python", "js", "rust"] as const) {
+  describe.skipIf(!has(language))(`the ${language} image`, () => {
+    it("runs the student's program as a user that is not root", async () => {
+      const outcome = await run(request(language, UID[language]));
+      expect(outcome.compile.ok, outcome.compile.stderr).toBe(true);
+      const uid = Number(outcome.cases[0]!.stdout.trim());
+      expect(Number.isInteger(uid)).toBe(true);
+      expect(uid).not.toBe(0);
+    });
+  });
+}
+
 describe.skipIf(!has("c"))("the container itself", () => {
-  it("runs as a user that is not root and owns nothing outside /work", async () => {
-    const outcome = await run(
-      request(
-        "c",
-        '#include <stdio.h>\n#include <unistd.h>\nint main(void){printf("%d\\n",(int)getuid());return 0;}\n',
-      ),
-    );
-    expect(outcome.cases[0]!.stdout.trim()).not.toBe("0");
+  it("has the seccomp profile in force, and not merely configured", async () => {
+    // Invariant 12. `loadConfig` checks that the profile EXISTS on this host,
+    // which is a local sanity check and nothing more: the path travels to the
+    // Podman server and the server is what opens it (`--remote`, and in
+    // production `/etc/quiz-runner/seccomp.json`). The only witness that the
+    // profile applied is a container, and what it can report is the errno.
+    const outcome = await run(request("c", PERF_EVENT_OPEN));
+    expect(outcome.compile.ok).toBe(true);
+    const [rc, errno] = outcome.cases[0]!.stdout.trim().split(" ").map(Number);
+    expect(rc).toBe(-1);
+    // EPERM is the profile's own `errnoRet`; ENOSYS is what a filter that
+    // removes the syscall outright answers. Anything else — EFAULT above all
+    // — means the call reached the kernel and no profile was in the way.
+    expect([1, 38]).toContain(errno);
   });
 
   it("carries the closed list of environment variables and nothing else", async () => {
@@ -315,7 +337,7 @@ describe.skipIf(!has("c"))("the container itself", () => {
     const listed = execFileSync(
       config.PODMAN_BIN,
       [
-        ...(config.PODMAN_SOCKET === null ? [] : ["--remote", "--url", `unix://${config.PODMAN_SOCKET}`]),
+        ...remoteArgs(config.PODMAN_SOCKET),
         "ps", "-a", "--filter", "label=quiz.runner=1", "--format", "{{.Names}}",
       ],
       { encoding: "utf8" },
@@ -324,7 +346,7 @@ describe.skipIf(!has("c"))("the container itself", () => {
   });
 
   it("has an image for the language it claims to serve", () => {
-    expect(probe.languages.map((language) => imageRef(config, language))).toContain(
+    expect(host.languages.map((language) => imageRef(config, language))).toContain(
       "quiz-runner-c:latest",
     );
   });

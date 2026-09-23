@@ -7,6 +7,22 @@ POST /run      a RunnerRequest  ->  a RunnerOutcome        (packages/core/src/ru
 GET  /health   a RunnerHealth: languages, queue, engine
 ```
 
+`POST /run` answers, by design:
+
+| Status | Body | When | What the API does with it |
+| --- | --- | --- | --- |
+| 200 | a `RunnerOutcome` | served, including "nothing compiled" | uses it |
+| 400 | `invalid_request` | the body is not a `RunnerRequest` | `RunnerUnavailable`, no retry |
+| 400 | `no_source_file` | no file of that language in the request | `RunnerUnavailable`, no retry |
+| 401 | `unauthorized` | no or wrong `Authorization: Bearer` | reported `down` by `/healthz` |
+| 429 | `queue_full` + `Retry-After` | both queues are full | `RunnerBusy`; the job waits |
+| 503 | `language_unavailable` | no image for that language here | `RunnerUnavailable` |
+| 503 | `engine_error`, `upload_failed` | the engine would not start or write | retried once, then `RunnerUnavailable` |
+
+The line between 400 and 503 is whether a RETRY could ever help: `HttpRunner`
+sends a 502/503 a second time (`apps/api/src/modules/runner/http.ts`), so
+nothing that is the request's own fault belongs on that side.
+
 The API talks to it through `apps/api/src/modules/runner/http.ts` when
 `RUNNER_MODE=http`. With `RUNNER_MODE=stub` — the default everywhere, and the
 only possibility on a machine without a container engine — nothing here is
@@ -37,7 +53,9 @@ What was deliberately *not* carried over:
 
 ```
 podman --remote --url unix://<socket> run -d
-  --name quiz-run-<uuid> --label quiz.runner=1
+  --name quiz-run-<uuid>
+  --label quiz.runner=1                 # this service's containers, all of them
+  --label quiz.runner.instance=<uuid>   # THIS process's, drawn once at startup
   --userns=auto                       # rootful always; rootless when subuid allows (probed)
   --cap-drop=ALL
   --security-opt no-new-privileges
@@ -55,10 +73,20 @@ podman --remote --url unix://<socket> run -d
 ```
 
 `src/engine.test.ts` asserts that list flag for flag, that no `-v`/`--mount`
-is ever produced, and that the environment is exactly those two variables.
+is ever produced, that the environment is exactly those two variables, and —
+against a `podman` that records its argv — that every command the engine sends
+carries `--remote --url unix://<socket>` (invariant 13).
 `src/podman.int.test.ts` proves the consequences on a real engine: no network,
 a read-only root, a non-root uid, the memory limit killing, the wall clock
-firing, the output truncated.
+firing, the output truncated, the seccomp profile in force.
+
+**`RUNNER_SECCOMP` is resolved by the Podman SERVER, not by this process.** A
+`--remote` client hands the daemon a path and the daemon is what opens it, so
+the `existsSync` check in `loadConfig` is a local sanity check only — it
+catches a typo on a workstation, and says nothing about the profile the
+container actually got. What proves that is a container: `perf_event_open`
+comes back `-1 EPERM` under `infra/seccomp/runner.json` and `-1 EFAULT` without
+it, which is the assertion in `src/podman.int.test.ts`.
 
 ### Rootless vs rootful
 
@@ -105,6 +133,21 @@ host whose Podman service is not running, not the normal path.
    container, in C and in Python.
 6. The container is destroyed in a `finally`.
 
+The container is NOT created with `--rm`: it has to outlive the process that
+ran in it, so a case that timed out can be inspected and the next case can
+reuse the same container. What `finally` cannot cover is the service dying
+between `create` and it — an OOM on the host, a restart, a crash. The
+container survives that: its only process is `sleep <ttl>`, so it stays **`Up`**
+until the ttl runs out, holding its name and its share of the host.
+
+`pruneOrphans()` therefore runs once at startup. It **lists** the containers
+labelled `quiz.runner=1`, and removes only those whose
+`quiz.runner.instance` is not this process's — a blind
+`rm -f --filter label=quiz.runner=1` would force-kill the running containers of
+a co-tenant instance, or of the old process still draining its queue during a
+restart, and a student's answer with them. It is never a reason not to start:
+a failure is one log line and the service serves.
+
 `timeout` and a cgroup OOM kill both end as exit 137, so the elapsed time
 tells them apart: at the deadline it is `timedOut`, well before it is `oom`.
 When the service's own clock has to fire, or when the OOM killer took the
@@ -136,8 +179,9 @@ images/build.sh rust            # ~700 MB, never built by default
 | `quiz-runner-rust` | alpine 3.20 | `rust`, `cargo` | ~700 MB, on demand |
 | `quiz-runner-spice` | alpine 3.20 | `ngspice` (42) | ~65 MB |
 
-Alpine-based, one toolchain each, a non-root `uid 1000`, no network client, no
-package manager needed at run time. `GET /health` lists the languages whose
+Alpine-based, one toolchain each, a non-root `uid 1000` — asserted image by
+image, by a program that prints its own uid (`src/podman.int.test.ts`) — no
+network client, no package manager needed at run time. `GET /health` lists the languages whose
 image is present; `POST /run` answers `503 language_unavailable` for the
 others — the runner never pulls anything (it has no registry credentials and,
 in production, no route to a registry).
@@ -168,6 +212,23 @@ Two things are specific to it:
   exits 1 with "no simulations run" in a few milliseconds (verified on
   ngspice 42, `src/spice.int.test.ts`).
 
+**The `podman run` outside `containerArgs()`.** There are two, and neither
+runs a student's program: the startup probe starts a throwaway `true` to find
+out whether `--userns=auto` works (`src/probe.ts`, `--rm --pull=never
+--userns=auto --network none`), and the suite below.
+`packages/qt-circuit/src/spice.int.test.ts` validates the netlists that type
+emits against a real ngspice, and cannot call `executeRequest`: `@quiz/runner`
+is an app (ADR-016) and no `packages/*` depends on an app. It therefore repeats
+the flags of `containerArgs()` itself — `--remote --url`, `--cap-drop=ALL`,
+`no-new-privileges`, this package's seccomp profile, `--read-only`, both tmpfs,
+`--pids-limit`, `--memory` without swap, `--cpus`, `--network none` — with ONE
+relaxation, stated here rather than in a comment: **`--userns=auto` is not
+passed there.** The service probes it once at startup against a real image and
+drops it when the engine cannot do it; a test has no such probe, and passing
+the flag blindly would make the suite fail on a rootless workstation instead of
+telling it anything about ngspice. Nothing else is relaxed, nothing is mounted,
+and the containers are `--rm` and unlabelled, so `pruneOrphans()` ignores them.
+
 **What was checked about `.control` blocks.** ngspice's batch mode executes
 the `.control` section of the netlist, and that section has commands that
 touch the host: `shell` runs a command, `source` and `load` read a file,
@@ -197,14 +258,35 @@ only if a Podman socket is there. Point the API at it with
 
 ## Configuration
 
-Everything is in `src/config.ts`, validated at startup. The ones that matter:
-`PORT` (3200), `PODMAN_SOCKET` (auto), `PODMAN_REMOTE` (auto), `PODMAN_BIN`,
-`RUNNER_CONCURRENCY` (4), `RUNNER_QUEUE_MAX` (32), `RUNNER_IMAGE_PREFIX`
-(`quiz-runner`), `RUNNER_SECCOMP` (the profile shipped here),
-`RUNNER_USERNS_AUTO` (auto), `RUNNER_RUNTIME` (auto — `runsc` when the host
-has gVisor), `RUNNER_MAX_OUTPUT_KB` (256), `RUNNER_WORKDIR_MB` (32),
-`RUNNER_COMPILE_TIMEOUT_MS` (20 000), `RUNNER_CASE_GRACE_MS` (2000),
-`RUNNER_REQUEST_TIMEOUT_MS` (120 000).
+Everything is in `src/config.ts`, validated at startup.
+
+| Variable | Default | What it settles |
+| --- | --- | --- |
+| `PORT` | 3200 | The port; `HOST` is `0.0.0.0` of its own namespace. |
+| `PODMAN_BIN` | `podman` | The binary. `podman-remote` works; `docker` does not. |
+| `PODMAN_SOCKET` | auto | User socket, then the rootful one. |
+| `PODMAN_REMOTE` | auto | `false` drives the local CLI: the escape hatch. |
+| `RUNNER_CONCURRENCY` | 4 | Containers at a time. |
+| `RUNNER_QUEUE_MAX` | 32 | Waiting requests before `429`. |
+| `RUNNER_IMAGE_PREFIX` / `_TAG` | `quiz-runner` / `latest` | `quiz-runner-c:latest`. |
+| `RUNNER_SECCOMP` | the profile shipped here | Resolved by the Podman server (above). |
+| `RUNNER_USERNS_AUTO` | auto | Probed once at startup. |
+| `RUNNER_RUNTIME` | auto | `runsc` when the host has gVisor. |
+| `RUNNER_MAX_OUTPUT_KB` | 256 | Ceiling on `limits.outputKb`, per stream and per case. |
+| `RUNNER_MAX_MEMORY_MB` | 512 | Ceiling on `limits.memoryMb`, per container. |
+| `RUNNER_MAX_TIME_MS` | 20 000 | Ceiling on `limits.timeMs`, per case. |
+| `RUNNER_WORKDIR_MB` | 32 | Size of the `/work` and `/tmp` tmpfs. |
+| `RUNNER_COMPILE_TIMEOUT_MS` | 20 000 | Budget of the build step. |
+| `RUNNER_CASE_GRACE_MS` | 2000 | How long past a case's deadline the service waits. |
+| `RUNNER_REQUEST_TIMEOUT_MS` | 120 000 | Ceiling on a whole request, all cases together. |
+
+The three `RUNNER_MAX_*` ceilings default to the upper bounds of
+`RunnerRequest.limits` (`packages/core/src/runner.ts`), so a fresh deployment
+clamps nothing. They exist because that schema is the CALLER's contract — what
+a question type may write — and not a statement about what this machine can
+afford: a VM with 4 GB for four concurrent containers lowers
+`RUNNER_MAX_MEMORY_MB` and every request is capped, whatever it asked for
+(`effectiveLimits` in `execute.ts`).
 
 `RUNNER_TOKEN` is the one exception to "no secret": the shared bearer the API
 presents on every call, checked on both routes in constant time, required in

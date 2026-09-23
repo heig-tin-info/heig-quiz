@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 
 /**
  * The only module of the runner that knows about Podman.
@@ -20,6 +21,19 @@ import { spawn } from "node:child_process";
  * read-only one. The sources travel in through `podman exec` on stdin and the
  * work directory is a tmpfs that dies with the container.
  */
+
+/**
+ * The connection flags of every Podman command, invariant 13 in one place.
+ *
+ * `null` is the explicit local escape hatch (`PODMAN_REMOTE=false`) and is the
+ * ONLY way to get an empty list: a socket always produces `--remote --url`,
+ * because without them the binary silently drives another engine than the one
+ * production runs. Everything that spawns `podman` in this package goes
+ * through here — the service, the startup probe and the integration suites.
+ */
+export function remoteArgs(socket: string | null): string[] {
+  return socket === null ? [] : ["--remote", "--url", `unix://${socket}`];
+}
 
 /** The closed list of environment variables a container gets (invariant 10). */
 export const CONTAINER_ENV: Readonly<Record<string, string>> = Object.freeze({
@@ -90,6 +104,25 @@ export interface Engine {
   create(options: CreateOptions): Promise<void>;
   exec(name: string, options: ExecOptions): Promise<ExecResult>;
   remove(name: string): Promise<void>;
+  /**
+   * Destroys the containers of OTHER instances of this service, and returns
+   * how many.
+   *
+   * Called once at startup, and only there. A container is normally removed in
+   * the `finally` of its own request; what that cannot cover is the process
+   * being killed between `create` and `finally` — an OOM on the host, a
+   * `systemctl restart`, a crash. The container survives it: its only process
+   * is `sleep <ttl>`, so it stays `Up` until that runs out, holding its name,
+   * its memory and a slot of the host's.
+   *
+   * `quiz.runner=1` is on every container this service creates and on nothing
+   * else, but it is on the containers of a CO-TENANT instance too — and an old
+   * process still draining its queue is one. So the reaping is scoped by
+   * `quiz.runner.instance`, drawn once per engine: a container of this
+   * instance is never touched here, because the only way one can exist at
+   * startup is if this very process created it, which it has not.
+   */
+  pruneOrphans(): Promise<number>;
   /** Image references present on the engine, `repository:tag`. */
   listImages(): Promise<string[]>;
 }
@@ -102,6 +135,12 @@ export interface EngineOptions {
   usernsAuto: boolean;
   runtime: string | null;
   capabilities: EngineCapabilities;
+  /**
+   * Identifies the containers of THIS process, so that `pruneOrphans()` can
+   * leave a co-tenant's alone. Drawn at random when it is not given; the tests
+   * give it, because it is part of the container's argv.
+   */
+  instanceId?: string;
 }
 
 /** Message fragments Podman uses when the container is not there any more. */
@@ -151,11 +190,21 @@ function collector(maxBytes: number): {
   };
 }
 
+/** The label that tells this process's containers from another instance's. */
+export const INSTANCE_LABEL = "quiz.runner.instance";
+
+/** Every container of this service carries it; nothing else on the host does. */
+export const SERVICE_LABEL = "quiz.runner=1";
+
+/** What `podman ps --format json` gives back, of the little that is read here. */
+interface PodmanPsRow {
+  Id?: string;
+  Labels?: Record<string, string>;
+}
+
 export function createEngine(options: EngineOptions): Engine {
-  const base =
-    options.socket === null
-      ? []
-      : ["--remote", "--url", `unix://${options.socket}`];
+  const base = remoteArgs(options.socket);
+  const instanceId = options.instanceId ?? randomUUID();
 
   function podman(
     args: string[],
@@ -214,7 +263,12 @@ export function createEngine(options: EngineOptions): Engine {
       "--name",
       create.name,
       "--label",
-      "quiz.runner=1",
+      SERVICE_LABEL,
+      // Whose container this is. `pruneOrphans()` reaps by the absence of THIS
+      // value, so that two instances sharing a socket — a restart still
+      // draining beside a fresh one — do not kill each other's runs.
+      "--label",
+      `${INSTANCE_LABEL}=${instanceId}`,
       // --- hardening, from the sibling project's run-hardened.sh (README) ---
       // `--userns=auto`: a private uid range per container. Rootful always
       // has it; a rootless engine only with a large enough /etc/subuid, which
@@ -299,6 +353,53 @@ export function createEngine(options: EngineOptions): Engine {
 
     async remove(name) {
       await podman(["rm", "-f", "-t", "0", name], { timeoutMs: 30_000, maxBytes: 16 * 1024 });
+    },
+
+    async pruneOrphans() {
+      // Not `--rm` on the container itself: `podman run --rm` deletes the
+      // container the moment it exits, and this service needs it to survive
+      // its own `sleep` so a case that timed out can still be inspected and
+      // the name reused. Reaping is therefore a startup job, not a flag.
+      //
+      // And not `rm --filter label=quiz.runner=1` either: that would force-kill
+      // a co-tenant instance's RUNNING containers, a student's answer with
+      // them. The list comes first, the instance label decides, and only the
+      // ids that belong to nobody here are removed.
+      const listed = await podman(
+        ["ps", "-a", "--filter", `label=${SERVICE_LABEL}`, "--format", "json"],
+        { timeoutMs: 30_000, maxBytes: 4 * 1024 * 1024 },
+      );
+      if (listed.code !== 0) {
+        throw new EngineError(
+          `podman ps failed (${listed.code ?? "killed"})`,
+          listed.stderr.toString("utf8"),
+        );
+      }
+
+      let rows: PodmanPsRow[];
+      try {
+        rows = JSON.parse(listed.stdout.toString("utf8") || "[]") as PodmanPsRow[];
+      } catch {
+        throw new EngineError("podman ps did not answer json", listed.stdout.toString("utf8"));
+      }
+
+      const foreign = rows
+        .filter((row) => row.Labels?.[INSTANCE_LABEL] !== instanceId)
+        .map((row) => row.Id)
+        .filter((id): id is string => typeof id === "string" && id !== "");
+      if (foreign.length === 0) return 0;
+
+      const removed = await podman(["rm", "-f", "-t", "0", ...foreign], {
+        timeoutMs: 60_000,
+        maxBytes: 64 * 1024,
+      });
+      if (removed.code !== 0) {
+        throw new EngineError(
+          `podman rm failed (${removed.code ?? "killed"})`,
+          removed.stderr.toString("utf8"),
+        );
+      }
+      return foreign.length;
     },
 
     async listImages() {

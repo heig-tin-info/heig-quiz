@@ -49,6 +49,18 @@ export async function buildApp({ config, engine }: AppDeps): Promise<FastifyInst
   }
   const theEngine = resolved;
 
+  // Whatever a previous life of this service left behind. A container is
+  // removed in the `finally` of its own request; a process killed between
+  // `create` and that `finally` leaves an `Exited` one holding its name and
+  // its share of the disk. Reaping is a startup job and never a reason not to
+  // start: a failure is one log line, and the service serves.
+  try {
+    const pruned = await theEngine.pruneOrphans();
+    if (pruned > 0) app.log.warn({ pruned }, "removed orphan containers from a previous run");
+  } catch (error) {
+    app.log.warn({ err: error }, "could not prune orphan containers");
+  }
+
   const queue = new RunQueue({
     concurrency: config.RUNNER_CONCURRENCY,
     queueMax: config.RUNNER_QUEUE_MAX,

@@ -268,6 +268,26 @@ describe("executeRequest", () => {
     expect(run?.maxBytes).toBe(16 * 1024);
   });
 
+  it("caps the memory and the wall clock at the service's ceilings too", async () => {
+    // A request may ask for what the wire schema allows; this machine decides
+    // what it gets. The clamp reaches the container's `--memory`, the
+    // in-container reaper, the service's own deadline and the container's ttl.
+    const engine = createFakeEngine();
+    const tight = testConfig({ RUNNER_MAX_MEMORY_MB: 64, RUNNER_MAX_TIME_MS: 1500 });
+    await executeRequest(
+      request({ limits: { timeMs: 20_000, memoryMb: 512, outputKb: 64 } }),
+      { engine, config: tight, containerName: () => "c" },
+    );
+    expect(engine.created[0]?.memoryMb).toBe(64);
+    const run = engine.calls.find((call) => call.argv[0] === "timeout");
+    // `timeout -s KILL 2 …`: 1500 ms rounded up to the second.
+    expect(run?.argv.slice(0, 4)).toEqual(["timeout", "-s", "KILL", "2"]);
+    expect(run?.timeoutMs).toBe(1500 + tight.RUNNER_CASE_GRACE_MS);
+    expect(engine.created[0]?.ttlSeconds).toBe(
+      containerTtlSeconds(request({ limits: { timeMs: 1500, memoryMb: 64, outputKb: 64 } }), tight),
+    );
+  });
+
   it("rebuilds the container after a case that had to be killed", async () => {
     let caseNumber = 0;
     const engine = createFakeEngine((call) => {

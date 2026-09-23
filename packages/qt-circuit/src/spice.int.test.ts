@@ -11,11 +11,14 @@
  * It needs the `quiz-runner-spice` image and a Podman socket, and skips
  * itself cleanly without them: `pnpm test` on a laptop with no container
  * engine still passes, and CI on the runner host covers it. Podman is driven
- * in `--remote` as everywhere else in this repository (invariant 13):
- * without it the binary silently falls back to local rootless mode and the
- * image is not even visible.
+ * in `--remote --url unix://<socket>` as everywhere else in this repository
+ * (invariant 13): without it the binary silently falls back to local rootless
+ * mode and the image is not even visible. The containers carry the runner's
+ * hardening too — see `ngspice()` below and `apps/runner/README.md`.
  */
 import { execFile, execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -26,9 +29,71 @@ import { RAIL, ROT90, at, component, freeEnd, pinEnd, portEnd, resetIds, wire } 
 const IMAGE = "localhost/quiz-runner-spice:latest";
 const TIMEOUT_MS = 60_000;
 
+/**
+ * A `podman run` that is not `containerArgs()` — the only one that runs a
+ * student-shaped workload (the startup probe of `apps/runner` starts a
+ * throwaway `true` as well; `apps/runner/README.md` covers both).
+ *
+ * `@quiz/runner` is an app (ADR-016) and no `packages/*` depends on an app, so
+ * this suite cannot call `executeRequest` the way `apps/runner`'s own spice
+ * suite does. It therefore repeats the hardening here, flag for flag, and
+ * `apps/runner/README.md` names the one flag it cannot repeat — `--userns=auto`
+ * is probed at startup by the service, and a test has no probe. Everything
+ * else is the list of `apps/runner/src/engine.ts`: no capability, no new
+ * privilege, the shipped seccomp profile, a read-only root, two tmpfs, a pid
+ * ceiling, memory without swap, one cpu, no network.
+ *
+ * The label `quiz.runner=1` is deliberately NOT set: it is what the service
+ * reaps at boot, and these containers are `--rm` and belong to no service.
+ */
+const SOCKET =
+  [
+    ...(typeof process.getuid === "function"
+      ? [`/run/user/${process.getuid()}/podman/podman.sock`]
+      : []),
+    "/run/podman/podman.sock",
+  ].find((path) => existsSync(path)) ?? null;
+
+/** Invariant 13. Without it the binary drives another engine than the runner's. */
+const REMOTE =
+  SOCKET === null ? ["--remote"] : ["--remote", "--url", `unix://${SOCKET}`];
+
+/**
+ * The profile the runner ships, found by walking up to the repository root.
+ * A `--remote` client hands the SERVER a path, and the server opens it.
+ */
+const SECCOMP = ((): string | null => {
+  let dir = process.cwd();
+  for (let up = 0; up < 6; up += 1) {
+    const candidate = join(dir, "apps", "runner", "infra", "seccomp", "runner.json");
+    if (existsSync(candidate)) return candidate;
+    const parent = dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+})();
+
+const HARDENING = [
+  "--cap-drop=ALL",
+  "--security-opt", "no-new-privileges",
+  "--security-opt", `seccomp=${SECCOMP}`,
+  "--read-only",
+  "--tmpfs", "/tmp:rw,noexec,nosuid,nodev,size=32m",
+  "--tmpfs", "/work:rw,exec,nosuid,nodev,size=32m,mode=1777",
+  "--pids-limit", "64",
+  "--memory", "512m",
+  "--memory-swap", "512m",
+  "--cpus", "1",
+  "--network", "none",
+];
+
 function imageAvailable(): boolean {
+  // No profile found, no run: a suite that would have to drop the seccomp flag
+  // to execute skips instead (invariant 12 — hardening is never "added later").
+  if (SECCOMP === null) return false;
   try {
-    execFileSync("podman", ["--remote", "image", "exists", IMAGE], { stdio: "ignore" });
+    execFileSync("podman", [...REMOTE, "image", "exists", IMAGE], { stdio: "ignore" });
     return true;
   } catch {
     return false;
@@ -37,12 +102,18 @@ function imageAvailable(): boolean {
 
 const available = imageAvailable();
 
-/** One deck, one container: `--remote`, no pull, the deck on stdin. */
+/** One deck, one hardened container: no pull, the deck on stdin. */
 function ngspice(deck: string): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve) => {
     const child = execFile(
       "podman",
-      ["--remote", "run", "--rm", "-i", "--pull=never", IMAGE, "ngspice", "-b"],
+      [
+        ...REMOTE,
+        "run", "--rm", "-i", "--pull=never",
+        ...HARDENING,
+        "-w", "/work",
+        IMAGE, "ngspice", "-b",
+      ],
       { timeout: TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024 },
       (_error, stdout, stderr) => resolve({ stdout, stderr }),
     );

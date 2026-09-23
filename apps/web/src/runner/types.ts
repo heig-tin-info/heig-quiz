@@ -28,8 +28,24 @@ export interface BrowserRunner {
   run(request: RunnerRequest, hooks?: RunHooks): Promise<RunnerOutcome>;
 }
 
-/** The backend path: the API call, exactly as it is. `"unavailable"` is a 503/429. */
-export type BackendRun = (request: RunnerRequest) => Promise<RunnerOutcome | "unavailable">;
+/** A free input: one command line and one stdin, from the person running it. */
+export interface ManualInput {
+  args: string[];
+  stdin: string;
+}
+
+/**
+ * The backend path: the API call, exactly as it is. `"unavailable"` is a
+ * 503/429.
+ *
+ * It takes NO request. `POST /attempts/:id/run` rebuilds the program from the
+ * stored template and the stored regions and the cases from the published
+ * ones — invariant 14 — so a request assembled in the browser has nowhere to
+ * go, and a parameter holding one is an invitation to send it. The single
+ * thing a client is allowed to choose is the free input, and that is what
+ * travels.
+ */
+export type BackendRun = (manual?: ManualInput) => Promise<RunnerOutcome | "unavailable">;
 
 /** The browser runner could not even start (no runtime files, no worker). */
 export class BrowserRunnerUnavailable extends Error {

@@ -63,7 +63,12 @@ export type RunnerOutcome = z.infer<typeof RunnerOutcome>;
 
 export const RunnerHealth = z.object({
   ok: z.boolean(),
-  languages: z.array(z.string()),
+  /**
+   * The languages this deployment has an image for — a subset of the enum
+   * above, never a free string: a runner announcing something the platform has
+   * no question type for is a runner the API should not believe.
+   */
+  languages: z.array(RunnerLanguage),
   queued: z.number().int(),
   avgMs: z.number().nullable(),
   reason: z.string().optional(),

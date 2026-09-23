@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -6,6 +6,39 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { CONTAINER_ENV, createEngine, type CreateOptions } from "./engine.js";
 import { FAKE_CAPABILITIES } from "./test/fakeEngine.js";
+
+/** This process's containers, in the tests: fixed, because it is part of the argv. */
+const INSTANCE = "11111111-1111-1111-1111-111111111111";
+
+/**
+ * A `podman` that appends its argv to a log, one argument per line, and
+ * answers a `ps` with a canned body.
+ *
+ * It is a shell script and not a mock of `spawn`, so what it records is what
+ * the operating system was really asked to execute.
+ */
+function recorder(psJson = ""): { bin: string; calls: () => string[][] } {
+  const dir = mkdtempSync(join(tmpdir(), "quiz-runner-argv-"));
+  const log = join(dir, "argv.log");
+  const bin = join(dir, "podman");
+  writeFileSync(
+    bin,
+    "#!/bin/sh\nlisting=0\n" +
+      `for arg in "$@"; do printf '%s\\n' "$arg" >> ${log}\n` +
+      '  [ "$arg" = ps ] && listing=1\ndone\n' +
+      `printf '%s\\n' '@@END@@' >> ${log}\n` +
+      `[ "$listing" = 1 ] && printf '%s' ${JSON.stringify(psJson)}\nexit 0\n`,
+  );
+  chmodSync(bin, 0o755);
+  return {
+    bin,
+    calls: () =>
+      readFileSync(log, "utf8")
+        .split("@@END@@\n")
+        .filter((block) => block !== "")
+        .map((block) => block.split("\n").filter((line) => line !== "")),
+  };
+}
 
 const CREATE: CreateOptions = {
   name: "quiz-run-1",
@@ -25,6 +58,7 @@ function engine(overrides: Partial<Parameters<typeof createEngine>[0]> = {}) {
     usernsAuto: true,
     runtime: null,
     capabilities: FAKE_CAPABILITIES,
+    instanceId: INSTANCE,
     ...overrides,
   });
 }
@@ -35,6 +69,7 @@ describe("containerArgs", () => {
       "run", "-d",
       "--name", "quiz-run-1",
       "--label", "quiz.runner=1",
+      "--label", `quiz.runner.instance=${INSTANCE}`,
       "--userns=auto",
       "--cap-drop=ALL",
       "--security-opt", "no-new-privileges",
@@ -80,11 +115,114 @@ describe("containerArgs", () => {
     expect(passed).toEqual(["HOME=/work", "LANG=C.UTF-8"]);
     expect(args).not.toContain("--env-file");
   });
+});
 
-  it("speaks to the socket, never to a local engine that would be another one", () => {
-    // Invariant 13: `--remote --url` or the explicit local escape hatch.
-    const remote = engine();
-    expect(remote.capabilities.remote).toBe(true);
+/**
+ * Invariant 13, against a `podman` that records what it was called with.
+ *
+ * `containerArgs()` deliberately does NOT carry the connection flags — they
+ * are prepended by the spawner, for `exec`, `rm`, `images` and `ps` as well —
+ * so no assertion on its list can see them. This is the only place that does:
+ * delete the three lines that build them and every case below fails.
+ */
+describe("--remote --url, on every command the engine sends", () => {
+
+  /** Every method that reaches Podman, once each, in this order. */
+  async function exercise(bin: string, socket: string | null): Promise<void> {
+    const subject = engine({ podmanBin: bin, socket });
+    await subject.create(CREATE);
+    await subject.exec(CREATE.name, {
+      argv: ["true"],
+      stdin: "",
+      timeoutMs: 5000,
+      maxBytes: 1024,
+    });
+    await subject.remove(CREATE.name);
+    await subject.listImages();
+    await subject.pruneOrphans();
+  }
+
+  it("prefixes every command it sends with the socket of the engine", async () => {
+    const podman = recorder();
+    await exercise(podman.bin, "/run/podman/podman.sock");
+
+    const calls = podman.calls();
+    expect(calls).toHaveLength(5);
+    for (const argv of calls) {
+      expect(argv.slice(0, 3)).toEqual([
+        "--remote",
+        "--url",
+        "unix:///run/podman/podman.sock",
+      ]);
+    }
+    // The subcommand comes right after them, never before: a `podman run`
+    // that reached the CLI first would already have chosen its engine.
+    expect(calls.map((argv) => argv[3])).toEqual(["run", "exec", "rm", "images", "ps"]);
+  });
+
+  it("passes no --remote at all on the explicit local escape hatch", async () => {
+    const podman = recorder();
+    await exercise(podman.bin, null);
+
+    const calls = podman.calls();
+    expect(calls).toHaveLength(5);
+    for (const argv of calls) {
+      expect(argv).not.toContain("--remote");
+      expect(argv).not.toContain("--url");
+    }
+    expect(calls.map((argv) => argv[0])).toEqual(["run", "exec", "rm", "images", "ps"]);
+  });
+});
+
+/**
+ * Reaping, which has to be exact in BOTH directions: everything a dead
+ * instance left behind, and nothing that belongs to a living one.
+ */
+describe("pruneOrphans", () => {
+  const row = (id: string, instance: string | null): unknown => ({
+    Id: id,
+    Labels: {
+      "quiz.runner": "1",
+      ...(instance === null ? {} : { "quiz.runner.instance": instance }),
+    },
+  });
+
+  it("removes another instance's containers and leaves its own alone", async () => {
+    const podman = recorder(
+      JSON.stringify([row("aaaa", "older-instance"), row("bbbb", INSTANCE), row("cccc", null)]),
+    );
+    const removed = await engine({ podmanBin: podman.bin, socket: null }).pruneOrphans();
+
+    expect(removed).toBe(2);
+    const calls = podman.calls();
+    // The list comes first. A `rm -f --filter label=quiz.runner=1` would
+    // force-kill a co-tenant's RUNNING container — a student's answer with it.
+    expect(calls[0]).toEqual(["ps", "-a", "--filter", "label=quiz.runner=1", "--format", "json"]);
+    // `bbbb` carries this instance's label and is not in the removal.
+    expect(calls[1]).toEqual(["rm", "-f", "-t", "0", "aaaa", "cccc"]);
+  });
+
+  it("asks for nothing to be removed when every container is ours", async () => {
+    const podman = recorder(JSON.stringify([row("bbbb", INSTANCE)]));
+    const removed = await engine({ podmanBin: podman.bin, socket: null }).pruneOrphans();
+
+    expect(removed).toBe(0);
+    expect(podman.calls().map((argv) => argv[0])).toEqual(["ps"]);
+  });
+
+  it("removes nothing on an engine with no container at all", async () => {
+    const podman = recorder("[]");
+    expect(await engine({ podmanBin: podman.bin, socket: null }).pruneOrphans()).toBe(0);
+    expect(podman.calls().map((argv) => argv[0])).toEqual(["ps"]);
+  });
+
+  it("gives every engine an instance of its own when none is configured", () => {
+    const labelOf = (args: string[]): string | undefined =>
+      args.find((arg) => arg.startsWith("quiz.runner.instance="));
+    const one = labelOf(engine({ instanceId: undefined }).containerArgs(CREATE));
+    const other = labelOf(engine({ instanceId: undefined }).containerArgs(CREATE));
+    expect(one).toBeDefined();
+    expect(one).not.toBe(other);
   });
 });
 
