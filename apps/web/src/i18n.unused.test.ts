@@ -2,6 +2,9 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { en } from "./i18n/en";
+import { fr } from "./i18n/fr";
+
 /**
  * The dictionary only grows back if nothing watches it.
  *
@@ -10,7 +13,7 @@ import { describe, expect, it } from "vitest";
  * still reads a key: a screen is rewritten, its strings stay, and the
  * dictionary keeps a paragraph nobody renders (FC-01 found fifty of them).
  *
- * So this test reads the `en` block out of `i18n.tsx` and walks every
+ * So this test takes the keys of `en` (`i18n/en.ts`) and walks every
  * non-test source of `apps/web/src` and of every `packages/<pkg>/src` looking for each
  * key. A key counts as read when
  *
@@ -24,15 +27,15 @@ import { describe, expect, it } from "vitest";
  *     head of a template that interpolates, and every `translated` prefix, is
  *     collected first; a key under one of them is live by construction.
  *
- * `i18n.tsx` itself is scanned WITHOUT its two dictionary blocks — otherwise
- * every key would trivially find itself — but WITH the rest of the file,
- * because `formatDuration` at the bottom reads the `dur.*` keys and nothing
+ * The two dictionary files are left out of the corpus — otherwise every key
+ * would trivially find itself — but the rest of `i18n/` stays in it, because
+ * `formatDuration` in `i18n/index.tsx` reads the `dur.*` keys and nothing
  * else does.
  */
 
 const WEB_SRC = import.meta.dirname;
 const REPO = join(WEB_SRC, "..", "..", "..");
-const I18N = join(WEB_SRC, "i18n.tsx");
+const DICTIONARY_FILES = [join(WEB_SRC, "i18n", "en.ts"), join(WEB_SRC, "i18n", "fr.ts")];
 
 /** Every `.ts`/`.tsx` under `dir` that is not a test. */
 function sourcesIn(dir: string, out: string[] = []): string[] {
@@ -48,30 +51,9 @@ function sourcesIn(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-/** The lines of a `const <name> = {` … `};` block, header and closer excluded. */
-function blockBounds(lines: string[], header: string): [number, number] {
-  const start = lines.findIndex((line) => line.startsWith(header));
-  expect(start, `\`${header}\` not found in i18n.tsx`).toBeGreaterThan(-1);
-  const end = lines.indexOf("};", start);
-  expect(end, `end of \`${header}\` not found in i18n.tsx`).toBeGreaterThan(start);
-  return [start, end];
-}
+const keys = Object.keys(en);
 
-const i18nLines = readFileSync(I18N, "utf8").split("\n");
-const [enStart, enEnd] = blockBounds(i18nLines, "const en = {");
-const [frStart, frEnd] = blockBounds(i18nLines, "const fr: Record<keyof Dict, string> = {");
-
-const keys = i18nLines
-  .slice(enStart + 1, enEnd)
-  .map((line) => /^ {2}"([^"]+)":/.exec(line)?.[1])
-  .filter((key): key is string => key !== undefined);
-
-/** `i18n.tsx` minus the two dictionaries: the code that reads them, alone. */
-const i18nCode = [
-  ...i18nLines.slice(0, enStart + 1),
-  ...i18nLines.slice(enEnd, frStart + 1),
-  ...i18nLines.slice(frEnd),
-].join("\n");
+const webSources = sourcesIn(WEB_SRC);
 
 const packageSources = readdirSync(join(REPO, "packages")).flatMap((name) => {
   const src = join(REPO, "packages", name, "src");
@@ -82,8 +64,10 @@ const packageSources = readdirSync(join(REPO, "packages")).flatMap((name) => {
   }
 });
 
-const corpus = [...sourcesIn(WEB_SRC), ...packageSources]
-  .map((path) => (path === I18N ? i18nCode : readFileSync(path, "utf8")))
+/** Every source that could read a key, the dictionaries themselves excluded. */
+const corpus = [...webSources, ...packageSources]
+  .filter((path) => !DICTIONARY_FILES.includes(path))
+  .map((path) => readFileSync(path, "utf8"))
   .join("\n\u0000\n");
 
 /** The literal head of every interpolating template, plus `translated` prefixes. */
@@ -94,19 +78,35 @@ const prefixes = [
   ]),
 ].filter((prefix) => prefix !== "");
 
+/** The keys among `candidates` that no literal and no dynamic prefix reads. */
+function unread(candidates: string[]): string[] {
+  return candidates.filter((key) => {
+    const literal = new RegExp(`["'\`]${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'\`]`);
+    if (literal.test(corpus)) return false;
+    return !prefixes.some((prefix) => key.startsWith(prefix) && key.length > prefix.length);
+  });
+}
+
 describe("the en dictionary", () => {
   it("has keys", () => {
-    // A regex that silently matched nothing would make the next case vacuous.
+    // A regex that silently matched nothing would make the next cases vacuous.
     expect(keys.length).toBeGreaterThan(1000);
+    expect(Object.keys(fr)).toHaveLength(keys.length);
     expect(prefixes.length).toBeGreaterThan(10);
   });
 
+  it("is scanned for in the sources, never in the dictionaries", () => {
+    // The walk does reach both files; the filter is what keeps them out.
+    for (const file of DICTIONARY_FILES) expect(webSources).toContain(file);
+    expect(corpus).not.toContain(`"${keys[0]}": `);
+  });
+
+  it("flags a key nobody reads", () => {
+    // The honesty check: a scanner that finds everything proves nothing.
+    expect(unread(["zz.bogus.neverRendered"])).toEqual(["zz.bogus.neverRendered"]);
+  });
+
   it("carries no key the app never reads", () => {
-    const unread = keys.filter((key) => {
-      const literal = new RegExp(`["'\`]${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}["'\`]`);
-      if (literal.test(corpus)) return false;
-      return !prefixes.some((prefix) => key.startsWith(prefix) && key.length > prefix.length);
-    });
-    expect(unread).toEqual([]);
+    expect(unread(keys)).toEqual([]);
   });
 });
