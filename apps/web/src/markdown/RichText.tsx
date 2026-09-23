@@ -1,6 +1,5 @@
 import type { Editor } from "@tiptap/core";
-import { exitCode, newlineInCode, splitBlock } from "@tiptap/pm/commands";
-import { NodeSelection, type EditorState } from "@tiptap/pm/state";
+import { NodeSelection } from "@tiptap/pm/state";
 import { EditorContent, ReactNodeViewRenderer, useEditor, useEditorState } from "@tiptap/react";
 import {
   Bold,
@@ -34,8 +33,9 @@ import { CodeBlockView } from "./CodeBlockView";
 import type { Formula, FormulaDialog } from "./FormulaDialog";
 import { ImageToolsContext, ImageView } from "./ImageView";
 import "./richtext.css";
+import { handleRichTextKeyDown, isMathNode } from "./richTextKeys";
 import { SourcePane } from "./SourcePane";
-import { INLINE_INPUT_RULES, openCodeFence, richTextExtensions } from "./tiptap";
+import { INLINE_INPUT_RULES, richTextExtensions } from "./tiptap";
 
 /*
  * The WYSIWYG half of the markdown field (docs/spec/05 §5.10, decision
@@ -118,14 +118,6 @@ interface Action {
     | "md.blank.insert";
   shortcut?: string;
 }
-
-/** The two node types a formula can be, as the schema names them. */
-const MATH_TYPES = ["inlineMath", "blockMath"] as const;
-const isMathNode = (name: string): boolean => (MATH_TYPES as readonly string[]).includes(name);
-
-/** Whether the caret sits inside a fenced block, where every key means something else. */
-const inCodeBlock = (state: EditorState): boolean =>
-  state.selection.$from.parent.type.name === "codeBlock";
 
 /** Where the formula dialog will write, and what it starts from. */
 interface FormulaTarget extends Formula {
@@ -322,119 +314,13 @@ export function RichText({
         ...(ariaLabel === undefined ? {} : { "aria-label": ariaLabel }),
       },
       handleKeyDown(view, event) {
-        if (event.key === "Tab" && !event.ctrlKey && !event.metaKey && !event.altKey) {
-          // Inside a fenced block Tab is an INDENT — two spaces, or one level
-          // back on Shift+Tab (`enableTabIndentation` in tiptap.ts). A teacher
-          // writing C there is not asking for another choice.
-          if (inCodeBlock(view.state)) return false;
-          // The host answers first (a list of choices adds a row, or moves on)
-          // and says whether it took the key. Unhandled, Tab leaves the field,
-          // which is what a keyboard user expects of a rich text box.
-          if (onTabRef.current?.(event.shiftKey)) {
-            event.preventDefault();
-            return true;
-          }
-          return false;
-        }
-        if (event.key === "Enter") {
-          // A formula is an atom: there is nothing to type into it, so Enter
-          // on a selected one opens the editor that CAN change it.
-          const { selection } = view.state;
-          if (selection instanceof NodeSelection && isMathNode(selection.node.type.name)) {
-            event.preventDefault();
-            openMath(selection.from, selection.node.attrs.latex, selection.node.type.name);
-            return true;
-          }
-          // A hole is an atom too: Enter on the selected chip edits its body.
-          if (
-            selection instanceof NodeSelection &&
-            selection.node.type.name === "clozeHole" &&
-            selection.node.attrs.body !== null
-          ) {
-            event.preventDefault();
-            openHole(selection.from, String(selection.node.attrs.body ?? ""), false);
-            return true;
-          }
-          /*
-           * A FENCE opens, whichever of the three spellings the teacher used —
-           * plain Enter included, because a line that is nothing but ``` or
-           * ```c is not a choice waiting for the next one (tiptap.ts,
-           * `openCodeFence`, which also closes a fence over what is above it).
-           */
-          if (inline && openCodeFence(view.state, view.dispatch, true)) {
-            event.preventDefault();
-            event.stopPropagation();
-            return true;
-          }
-          /*
-           * The same thing on Ctrl+Enter in a BLOCK field, and here rather
-           * than in the extension's keymap because only this handler has the
-           * EVENT: the question editor answers Ctrl+Enter on `window` with
-           * "Try the question", and a teacher who just opened a fence must not
-           * be carried off to another tab. Plain Enter there is the input
-           * rule's, which needs no such care.
-           */
-          if (
-            !inline &&
-            (event.ctrlKey || event.metaKey) &&
-            openCodeFence(view.state, view.dispatch, false)
-          ) {
-            event.preventDefault();
-            event.stopPropagation();
-            return true;
-          }
-          /*
-           * INSIDE a block, Enter is a line of code and never the next choice.
-           * Ctrl+Enter is the way OUT (a paragraph after the block), plain
-           * Enter falls through to Tiptap — which is what keeps its own
-           * three-empty-lines exit working — and Shift+Enter, which no keymap
-           * binds inside code, is spelled out as the newline it looks like.
-           */
-          if (inline && inCodeBlock(view.state)) {
-            if (event.ctrlKey || event.metaKey) {
-              event.preventDefault();
-              event.stopPropagation();
-              exitCode(view.state, view.dispatch);
-              return true;
-            }
-            if (event.shiftKey) {
-              event.preventDefault();
-              event.stopPropagation();
-              newlineInCode(view.state, view.dispatch);
-              return true;
-            }
-            return false;
-          }
-          /*
-           * A SECOND LINE inside a choice. Plain Enter belongs to the host (it
-           * moves to the next choice), so the modifier is what is left — and
-           * both spellings answer, because a teacher who wants a line break
-           * reaches for Shift+Enter and a developer for Ctrl+Enter.
-           *
-           * It splits the block rather than inserting a hard break: what a
-           * choice is asked to hold is a snippet, and a fence cannot open
-           * inside a paragraph. The new paragraph serializes as a blank line,
-           * which is the markdown for exactly what is on screen.
-           */
-          if (inline && (event.ctrlKey || event.metaKey || event.shiftKey)) {
-            event.preventDefault();
-            // And STOPPED, not merely prevented: the question editor answers
-            // Ctrl+Enter on `window` with "Try the question", and a teacher
-            // who asked a choice for a second line must not be carried off to
-            // another tab. The field publishes its own Ctrl+Enter in the
-            // shortcut strip while it has the caret, so the strip says which
-            // of the two is live.
-            event.stopPropagation();
-            splitBlock(view.state, view.dispatch);
-            return true;
-          }
-          if (inline && onEnterRef.current) {
-            event.preventDefault();
-            onEnterRef.current();
-            return true;
-          }
-        }
-        return false;
+        return handleRichTextKeyDown(view, event, {
+          inline,
+          onTab: onTabRef.current,
+          onEnter: onEnterRef.current,
+          openMath,
+          openHole,
+        });
       },
       handleClickOn(_view, _pos, node, nodePos, _event, direct) {
         if (!direct) return false;
