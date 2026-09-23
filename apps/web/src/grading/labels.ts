@@ -59,3 +59,38 @@ export function entryVerdict(entry: Pick<GradingEntry, "answerId" | "answer" | "
   if (grading.maxPoints > 0 && grading.points >= grading.maxPoints) return "correct";
   return grading.points > 0 ? "partial" : "wrong";
 }
+
+/** The two ways through the panel: every student on one question, or the reverse. */
+export type GradingOrder = "question" | "student";
+
+/** The words of a traversal, which name its steps after what they are. */
+export const ORDER_WORDS: Record<
+  GradingOrder,
+  { heading: keyof Dict; prev: keyof Dict; next: keyof Dict; position: keyof Dict }
+> = {
+  question: {
+    heading: "grading.order.byQuestion",
+    prev: "grading.prevItem",
+    next: "grading.nextItem",
+    position: "grading.item.position",
+  },
+  student: {
+    heading: "grading.order.byStudent",
+    prev: "grading.prevStudent",
+    next: "grading.nextStudent",
+    position: "grading.student.position",
+  },
+};
+
+/**
+ * Proposals first:they are the only reason the teacher opened the panel.
+ * Everything else keeps the order the server sent — the index is the
+ * tie-breaker, so the rule does not lean on the engine's sort being stable.
+ */
+export function proposalsFirst(entries: readonly GradingEntry[]): GradingEntry[] {
+  const rank = (x: GradingEntry) => (x.grading?.state === "proposed" ? 0 : 1);
+  return entries
+    .map((e, i) => ({ e, i }))
+    .sort((a, b) => rank(a.e) - rank(b.e) || a.i - b.i)
+    .map((x) => x.e);
+}
