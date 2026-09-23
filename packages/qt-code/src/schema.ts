@@ -13,12 +13,29 @@
  * the reassembly live in `@quiz/domain/lockedTemplate` and are never
  * re-implemented here (invariant 14: the source is rebuilt server-side).
  */
+import type { RunnerLanguage } from "@quiz/core/server";
+import type { TemplateLanguage } from "@quiz/domain/lockedTemplate";
 import { z } from "zod";
 
-/** The languages of phase 1; the same list as `RunnerLanguage` in `@quiz/core`. */
-export const CODE_LANGUAGES = ["c", "cpp", "python", "js", "rust"] as const;
+/**
+ * The languages a `code` question may pick: `RunnerLanguage` of `@quiz/core`
+ * minus `spice`, which serves the `circuit` type only. A name the runner does
+ * not know fails the `satisfies`; a drift from `TemplateLanguage` (the
+ * languages `@quiz/domain/lockedTemplate` can split) fails the line below.
+ */
+export const CODE_LANGUAGES = [
+  "c",
+  "cpp",
+  "python",
+  "js",
+  "rust",
+] as const satisfies readonly RunnerLanguage[];
 export const CodeLanguage = z.enum(CODE_LANGUAGES);
 export type CodeLanguage = z.infer<typeof CodeLanguage>;
+const _templateLanguagesAgree: [CodeLanguage, TemplateLanguage] extends [TemplateLanguage, CodeLanguage]
+  ? true
+  : never = true;
+void _templateLanguagesAgree;
 
 /**
  * Bumped when the shape below changes; stored in `question_versions.config_version`.
@@ -98,7 +115,7 @@ export const CodeRuntime = z.enum(["backend", "runno"]);
 export type CodeRuntime = z.infer<typeof CodeRuntime>;
 
 /** The languages the browser runner can run (docs/04 §4.7). */
-export const RUNNO_LANGUAGES = ["c", "python"] as const;
+export const RUNNO_LANGUAGES = ["c", "python"] as const satisfies readonly CodeLanguage[];
 
 export const CodeFile = z.object({
   name: z.string().regex(/^[\w.-]{1,40}$/),

@@ -10,10 +10,16 @@
  * template plus the student's editable regions — client text is never accepted
  * for a locked segment.
  */
+import type { RunnerLanguage } from "@quiz/core/server";
 
-export type CodeLanguage = "c" | "cpp" | "python" | "js" | "rust";
+/**
+ * The languages a template may be written in: the runner's, minus `spice`
+ * (a netlist has no editable regions; it serves the `circuit` type only).
+ * `@quiz/qt-code`'s `CodeLanguage` is checked equal to this at compile time.
+ */
+export type TemplateLanguage = Exclude<RunnerLanguage, "spice">;
 
-const LINE_COMMENT: Record<CodeLanguage, readonly string[]> = {
+const LINE_COMMENT: Record<TemplateLanguage, readonly string[]> = {
   c: ["//", "/*"],
   cpp: ["//", "/*"],
   js: ["//", "/*"],
@@ -32,7 +38,7 @@ export interface TemplateSegment {
 }
 
 /** The number of editable regions an answer must carry for this template. */
-export function regionCount(template: string, language: CodeLanguage): number {
+export function regionCount(template: string, language: TemplateLanguage): number {
   return splitTemplate(template, language).filter((s) => s.kind === "editable").length;
 }
 
@@ -49,7 +55,7 @@ export class TemplateRegionMismatch extends Error {
   }
 }
 
-function markerOf(line: string, language: CodeLanguage): "lock" | "endlock" | null {
+function markerOf(line: string, language: TemplateLanguage): "lock" | "endlock" | null {
   let body = line.trim();
   for (const prefix of LINE_COMMENT[language]) {
     if (body.startsWith(prefix)) {
@@ -68,7 +74,7 @@ function markerOf(line: string, language: CodeLanguage): "lock" | "endlock" | nu
  * Concatenating the segment texts reproduces the template byte for byte.
  * A template with no marker is entirely editable: one region.
  */
-export function splitTemplate(template: string, language: CodeLanguage): TemplateSegment[] {
+export function splitTemplate(template: string, language: TemplateLanguage): TemplateSegment[] {
   const lines = template.split("\n");
   // A template ending with a newline splits into a trailing empty piece; it
   // must not become a phantom editable region.
@@ -102,7 +108,7 @@ export function splitTemplate(template: string, language: CodeLanguage): Templat
  */
 export function assembleSource(
   template: string,
-  language: CodeLanguage,
+  language: TemplateLanguage,
   regions: readonly string[],
 ): string {
   const segments = splitTemplate(template, language);
@@ -123,14 +129,14 @@ export function assembleSource(
 }
 
 /** The editable parts of a template, used to seed a fresh answer. */
-export function emptyRegions(template: string, language: CodeLanguage): string[] {
+export function emptyRegions(template: string, language: TemplateLanguage): string[] {
   return splitTemplate(template, language)
     .filter((s) => s.kind === "editable")
     .map((s) => s.text);
 }
 
 /** Main file name expected by the runner for each language. */
-export function mainFileName(language: CodeLanguage): string {
+export function mainFileName(language: TemplateLanguage): string {
   switch (language) {
     case "c":
       return "main.c";

@@ -6,7 +6,7 @@ import {
   regionCount,
   splitTemplate,
   TemplateRegionMismatch,
-  type CodeLanguage,
+  type TemplateLanguage,
 } from "./lockedTemplate.js";
 
 const C_TEMPLATE = [
@@ -100,7 +100,7 @@ describe("assembleSource", () => {
 
 describe("mainFileName", () => {
   it("names the main file of each language", () => {
-    const languages: CodeLanguage[] = ["c", "cpp", "python", "js", "rust"];
+    const languages: TemplateLanguage[] = ["c", "cpp", "python", "js", "rust"];
     expect(languages.map(mainFileName)).toEqual(["main.c", "main.cpp", "main.py", "main.js", "main.rs"]);
   });
 });

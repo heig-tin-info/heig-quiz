@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { ConfigMigrationError } from "@quiz/core/server";
+import { ConfigMigrationError, RunnerLanguage } from "@quiz/core/server";
 
 import {
   CodeAnswer,
   CodeConfig,
   CODE_CONFIG_VERSION,
+  CODE_LANGUAGES,
   RUNNO_LANGUAGES,
   caseTimeMs,
   emptyCodeCase,
@@ -81,6 +82,10 @@ describe("CodeConfig", () => {
     // Out of the range of a process exit status.
     expect(CodeConfig.safeParse(of({ expectedExitCode: 256 })).success).toBe(false);
     expect(CodeConfig.safeParse(of({ expectedExitCode: -1 })).success).toBe(false);
+  });
+
+  it("offers every runner language but spice, in the runner's order", () => {
+    expect([...CODE_LANGUAGES]).toEqual(RunnerLanguage.options.filter((l) => l !== "spice"));
   });
 
   it("names the languages the browser runtime can serve", () => {

@@ -20,11 +20,10 @@
  * `all_or_nothing`, the same thing an evaluation would default to.
  */
 import type { GradeContext, GradedResult } from "@quiz/core/server";
-import { mcqFraction, truncateSelection } from "@quiz/domain/mcqScore";
+import { DEFAULT_MCQ_SCORE_POLICY, mcqFraction, truncateSelection } from "@quiz/domain/mcqScore";
 import { round2 } from "@quiz/domain/round";
 import {
   correctIndices,
-  MCQ_DEFAULT_POLICY,
   McqDefaultsSchema,
   type McqAnswer,
   type McqConfig,
@@ -44,7 +43,7 @@ export function resolvePolicy(
   if (config.mode === "single") return "all_or_nothing";
   if (config.policy !== "inherit") return config.policy;
   const parsed = McqDefaultsSchema.safeParse(defaults?.["mcq"]);
-  return parsed.success ? parsed.data.policy : MCQ_DEFAULT_POLICY;
+  return parsed.success ? parsed.data.policy : DEFAULT_MCQ_SCORE_POLICY;
 }
 
 export function gradeMcq(

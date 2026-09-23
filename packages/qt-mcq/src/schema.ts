@@ -6,6 +6,7 @@
  * allowed to see (`McqStudent`), what the feedback may reveal (`McqSolution`)
  * and what the grading stores for the teacher (`McqDetails`).
  */
+import { MCQ_SCORE_POLICIES } from "@quiz/domain/mcqScore";
 import { z } from "zod";
 
 /** Bumped when the shape of `McqConfig` changes (stored in `question_versions.config_version`). */
@@ -37,13 +38,7 @@ export const McqModeSchema = z.enum(["single", "multiple"]);
  *                    (random ticking has a zero expectation)
  *   ripkey         : the share of correct ticks, cancelled by any wrong tick
  */
-export const McqPolicySchema = z.enum([
-  "all_or_nothing",
-  "true_false",
-  "discordance",
-  "symmetric",
-  "ripkey",
-]);
+export const McqPolicySchema = z.enum(MCQ_SCORE_POLICIES);
 export type McqPolicy = z.infer<typeof McqPolicySchema>;
 
 /**
@@ -62,9 +57,6 @@ export type McqQuestionPolicy = z.infer<typeof McqQuestionPolicySchema>;
  * (the teacher's Try panel, which has no evaluation).
  */
 export const McqDefaultsSchema = z.object({ policy: McqPolicySchema });
-
-/** The fallback everywhere `inherit` cannot be resolved. */
-export const MCQ_DEFAULT_POLICY: McqPolicy = "all_or_nothing";
 
 /**
  * The refinements encode the rules that a shape alone cannot: a question with
