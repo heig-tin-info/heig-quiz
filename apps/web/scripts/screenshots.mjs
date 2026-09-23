@@ -402,6 +402,24 @@ const scenes = [
   // Settings and administration
   { name: "settings", role: "teacher", path: "/settings" },
   { name: "settings-avatar", role: "teacher", path: "/settings", act: (p) => p.getByRole("button", { name: /change picture/i }).first().click() },
+  { name: "settings-tokens-empty", role: "teacher", path: "/settings?empty=1" },
+  // ADR-023: the consent page an assistant sends the teacher to.
+  { name: "oauth-consent", role: "teacher", path: "/oauth/authorize/0190d3c4-0000-7000-8000-000000000001" },
+  { name: "oauth-consent-loopback", role: "teacher", path: "/oauth/authorize/0190d3c4-0000-7000-8000-000000000001?loopback=1" },
+  { name: "oauth-invalid", role: "teacher", path: "/oauth/authorize/invalid?reason=invalid_redirect_uri" },
+  { name: "settings-token-new", role: "teacher", path: "/settings", fold: true, act: (p) => p.getByRole("button", { name: /new token/i }).first().click() },
+  {
+    name: "settings-token-created",
+    role: "teacher",
+    path: "/settings",
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("button", { name: /new token/i }).first().click();
+      await p.getByRole("dialog").getByRole("textbox").fill("Claude Desktop");
+      await p.getByRole("button", { name: /create token/i }).click();
+      await p.getByRole("dialog", { name: /token created/i }).waitFor();
+    },
+  },
   { name: "admin", role: "admin", path: "/admin" },
   { name: "admin-empty", role: "admin", path: "/admin?empty=1" },
   { name: "admin-error", role: "admin", path: "/admin?fail=1", settle: 2500 },

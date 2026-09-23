@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { BellRing, GraduationCap, School, ShieldCheck, SlidersHorizontal } from "lucide-react";
 
+import { ApiTokensCard, ConnectionsCard } from "./ApiTokensCard";
 import { AvatarEditor } from "./AvatarEditor";
 import { useMePatch } from "./api";
 import { useI18n, LOCALES } from "./i18n";
@@ -204,6 +205,12 @@ export function SettingsPage({ me }: { me: Me }) {
 
       <PreferencesCard me={me} />
       <NotificationsCard />
+      {me.role === "student" ? null : (
+        <>
+          <ConnectionsCard />
+          <ApiTokensCard />
+        </>
+      )}
 
       {editingAvatar ? (
         <AvatarEditor

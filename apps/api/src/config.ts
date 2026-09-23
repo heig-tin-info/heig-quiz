@@ -43,6 +43,15 @@ const EnvSchema = z.object({
   WEB_URL: z.string().default(""),
 
   /**
+   * The hosts whose Client ID Metadata Documents the OAuth server fetches
+   * (ADR-023): an MCP client identified by an `https://` client_id is only
+   * believed when that URL is on one of these hosts, so the server never
+   * fetches an address a stranger chose. Comma-separated host names. Any
+   * other client registers itself instead (RFC 7591).
+   */
+  OAUTH_CIMD_HOSTS: z.string().default("claude.ai,claude.com,chatgpt.com"),
+
+  /**
    * The addresses Caddy reaches the API from — and NOTHING else.
    *
    * `req.ip` is the room restriction of F-EVAL-12 and the address the journal
@@ -212,6 +221,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     ...parsed.data,
     // Empty means "the SPA is served where the API is" (production).
     WEB_URL: (parsed.data.WEB_URL || parsed.data.PUBLIC_URL).replace(/\/+$/, ""),
+    PUBLIC_URL: parsed.data.PUBLIC_URL.replace(/\/+$/, ""),
     // Made absolute at load time, like the PEM path below: the asset store
     // must not follow the process around.
     ASSETS_DIR: resolve(parsed.data.ASSETS_DIR),

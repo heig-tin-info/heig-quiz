@@ -98,7 +98,9 @@ the API, so they change from one seed to the next.
 
 <!-- scenes:start -->
 Last full run: 2026-09-21, commit `828d8d8`, 65 scenes. The `eval-rename`
-scene was added after that run and appears here on the next one.
+scene was added after that run and appears here on the next one; the
+`settings-token-created` and `oauth-consent` ones were taken on their own
+(`--only`).
 
 | Scene | Persona | Path | Phase | Action after load | Viewport |
 | --- | --- | --- | --- | --- | --- |
@@ -150,6 +152,8 @@ scene was added after that run and appears here on the next one.
 | `palette` | teacher | `/` | seeded | Pressed Ctrl+K. | 1440×900 |
 | `palette-query` | teacher | `/` | seeded | Pressed Ctrl+K and typed “grad”. | 1440×900 |
 | `settings` | teacher | `/settings` | seeded | Nothing: the page as it loads. | 1440×900 |
+| `settings-token-created` | teacher | `/settings` | seeded | Clicked “New token”, named it “Claude Desktop”, clicked “Create token”. | 1440×900 |
+| `oauth-consent` | teacher | `/settings` | seeded | Registered a client named “Claude” and opened its authorization URL. | 1440×900 |
 | `admin` | admin | `/admin` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `student-home` | lea | `/` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `student-home-phone` | lea | `/` | seeded | Nothing: the page as it loads. | 390×844 |

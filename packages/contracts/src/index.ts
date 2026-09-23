@@ -10,3 +10,6 @@ export * from "./realtime.js";
 export * from "./api.js";
 export * from "./notifications.js";
 export * from "./poll.js";
+export * from "./tokens.js";
+export * from "./mcp.js";
+export * from "./oauth.js";

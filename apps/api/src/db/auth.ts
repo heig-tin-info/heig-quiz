@@ -67,6 +67,115 @@ export const sessions = pgTable(
   (t) => [index("sessions_expires_idx").on(t.expiresAt)],
 );
 
+/**
+ * Personal API tokens (docs/08 §8.3 "Automate", ADR-022): a bearer credential
+ * a teacher mints in the settings for a script or an MCP client. Like a
+ * session, only the SHA-256 of the secret is stored; `prefix` is the first
+ * characters of the plaintext, shown in the list so the teacher can tell two
+ * tokens apart. Revocation stamps `revoked_at` rather than deleting, so the
+ * list keeps saying what was revoked and when.
+ */
+export const apiTokens = pgTable(
+  "api_tokens",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    tokenHash: char("token_hash", { length: 64 }).notNull().unique(),
+    prefix: text("prefix").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    /**
+     * Set on an OAuth ACCESS token (ADR-023): the grant it was issued under.
+     * Null on a personal token the teacher minted by hand.
+     */
+    grantId: uuid("grant_id").references(() => oauthGrants.id, { onDelete: "cascade" }),
+    /**
+     * The resource an OAuth access token was issued for (RFC 8707): the MCP
+     * endpoint. Such a token is refused everywhere else. Null on a personal
+     * token, which is valid on the whole API.
+     */
+    audience: text("audience"),
+  },
+  (t) => [index("api_tokens_user_idx").on(t.userId), index("api_tokens_grant_idx").on(t.grantId)],
+);
+
+/**
+ * An OAuth client (ADR-023): an MCP host such as claude.ai or ChatGPT. Either
+ * it registered itself (`dcr`, RFC 7591, `id` is ours) or it is identified by
+ * the URL of its Client ID Metadata Document (`cimd`, `id` IS that URL, the
+ * document cached here). Every client is public: PKCE, no secret.
+ */
+export const oauthClients = pgTable("oauth_clients", {
+  id: text("id").primaryKey(),
+  kind: text("kind", { enum: ["dcr", "cimd"] }).notNull(),
+  name: text("name").notNull(),
+  redirectUris: text("redirect_uris").array().notNull(),
+  clientUri: text("client_uri"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  /** A `cimd` document is fetched again once this is a day old. */
+  fetchedAt: timestamp("fetched_at", { withTimezone: true }),
+});
+
+/**
+ * One authorization request, from `/authorize` to the code's redemption.
+ * Pending until the teacher answers on the consent page; then it holds the
+ * code (hashed, 60 seconds, one use).
+ */
+export const oauthRequests = pgTable(
+  "oauth_requests",
+  {
+    id: uuid("id").primaryKey(),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => oauthClients.id, { onDelete: "cascade" }),
+    redirectUri: text("redirect_uri").notNull(),
+    codeChallenge: text("code_challenge").notNull(),
+    scope: text("scope").notNull(),
+    resource: text("resource").notNull(),
+    state: text("state"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    userId: uuid("user_id").references(() => users.id, { onDelete: "cascade" }),
+    codeHash: char("code_hash", { length: 64 }).unique(),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+  },
+  (t) => [index("oauth_requests_expires_idx").on(t.expiresAt)],
+);
+
+/**
+ * What a teacher consented to: one client acting for them. It holds the
+ * current refresh token (hashed, rotated on every use) and the one before it,
+ * so a replayed old refresh token is recognised and refused. Revoking the
+ * grant revokes every access token issued under it.
+ */
+export const oauthGrants = pgTable(
+  "oauth_grants",
+  {
+    id: uuid("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => oauthClients.id, { onDelete: "cascade" }),
+    scope: text("scope").notNull(),
+    resource: text("resource").notNull(),
+    refreshHash: char("refresh_hash", { length: 64 }).notNull().unique(),
+    previousRefreshHash: char("previous_refresh_hash", { length: 64 }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [index("oauth_grants_user_idx").on(t.userId)],
+);
+
 const bytea = customType<{ data: Buffer }>({
   dataType() {
     return "bytea";
