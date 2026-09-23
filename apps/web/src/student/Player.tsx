@@ -38,30 +38,30 @@
  * or from an `attempt.closed` frame, and then this renders `ClosedScreen`.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Home, School, Send } from "lucide-react";
+import { Check } from "lucide-react";
 
 import type { AttemptView } from "@quiz/contracts";
 import type { RunnerOutcome } from "@quiz/core/server";
-import { questionTypeClient } from "@quiz/registry/client";
 
 import { useAttempt } from "../attempt/useAttempt";
-import type { Command } from "../commands";
-import { currentItem, isLocked, neighbour, type PlayerItem, type PlayerState } from "../attempt/playerReducer";
+import { currentItem, isLocked, neighbour, segmentsOf } from "../attempt/playerReducer";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { useShortcuts } from "../shortcuts";
-import { Badge, Button, Card, modKey, useMinWidth, type Segment } from "../ui";
+import { Badge, Button, Card, modKey, useMinWidth } from "../ui";
 import { ClosedScreen } from "./ClosedScreen";
 import { OfflineBanner } from "./OfflineBanner";
 import { PausedOverlay } from "./PausedOverlay";
+import { PlayerActions } from "./PlayerActions";
 import { PlayerShell } from "./PlayerShell";
 import type { CodeAnswer, CodeRunOptions, CodeStudent } from "@quiz/qt-code/client";
 
 import { api, ApiError } from "../api";
 import { runCode } from "../runner/codeRun";
-import { QuestionHost } from "./QuestionHost";
+import { isAnswered, QuestionHost } from "./QuestionHost";
 import { SubmitDialog } from "./SubmitDialog";
+import { usePlayerCommands } from "./usePlayerCommands";
 
 /**
  * The `circuit` player's "Simulate", which has no browser half: only the
@@ -88,29 +88,6 @@ async function simulateCircuit(
     if (error instanceof ApiError && error.status === 429) return "rate_limited";
     throw error;
   }
-}
-
-/** "Has something been written here?" is the question TYPE's call, not ours. */
-function isAnswered(item: PlayerItem, answer: unknown): boolean {
-  try {
-    return questionTypeClient(item.type).isAnswered(answer ?? null);
-  } catch {
-    return answer !== null && answer !== undefined;
-  }
-}
-
-function segmentsOf(state: PlayerState): Segment[] {
-  return state.items.map((item, index) => ({
-    id: item.id,
-    state:
-      index === state.index
-        ? "current"
-        : item.markedDone
-          ? "done"
-          : isAnswered(item, state.answers[item.id] ?? null)
-            ? "answered"
-            : "empty",
-  }));
 }
 
 export function Player({
@@ -148,9 +125,9 @@ export function Player({
   // is — a footer at the bottom of a 900 px window is a trip per question.
   // A hook, so it stays above the early returns below.
   const desktop = useMinWidth(640);
-  const segments = useMemo(() => segmentsOf(state), [state]);
+  const segments = useMemo(() => segmentsOf(state, isAnswered), [state]);
   const unanswered = state.items.filter(
-    (i) => !isAnswered(i, state.answers[i.id] ?? null),
+    (i) => !isAnswered(i.type, state.answers[i.id] ?? null),
   ).length;
 
   const toggleDone = useCallback(async () => {
@@ -210,6 +187,19 @@ export function Player({
     { keys: `${modKey()}+Enter`, label: t("player.markDone") },
   ]);
 
+  const previous = neighbour(state, -1);
+  const next = neighbour(state, 1);
+  // The palette of the exam screen (W15): only what the footer and the bar
+  // already carry.
+  const commands = usePlayerCommands({
+    next,
+    previous,
+    onMove: (delta) => dispatch({ type: "move", delta }),
+    onSubmit: () => setSubmitting(true),
+    onHome,
+    onExitStudentView,
+  });
+
   if (closed !== null) {
     return (
       <ClosedScreen
@@ -223,65 +213,6 @@ export function Player({
     );
   }
 
-  const previous = neighbour(state, -1);
-  const next = neighbour(state, 1);
-  /*
-   * What `Ctrl+K` offers during an attempt (W15). Deliberately short: an exam
-   * is the one screen the rest of the app must stay out of, so there is no
-   * navigation, no theme, no help — only the four moves the footer and the
-   * bar already carry, for a student who reaches for the keyboard first.
-   * Built here rather than in `commands.ts`, which knows nothing of an
-   * attempt and should not learn.
-   */
-  const commands: Command[] = [
-    {
-      id: "player:submit",
-      label: t("player.command.submit"),
-      icon: Send,
-      group: "action",
-      run: () => setSubmitting(true),
-    },
-    ...(next !== null
-      ? [
-          {
-            id: "player:next",
-            label: t("player.command.next"),
-            icon: ChevronRight,
-            group: "action" as const,
-            run: () => dispatch({ type: "move", delta: 1 }),
-          },
-        ]
-      : []),
-    ...(previous !== null
-      ? [
-          {
-            id: "player:prev",
-            label: t("player.command.prev"),
-            icon: ChevronLeft,
-            group: "action" as const,
-            run: () => dispatch({ type: "move", delta: -1 }),
-          },
-        ]
-      : []),
-    {
-      id: "player:home",
-      label: t("player.command.home"),
-      icon: Home,
-      group: "navigate",
-      run: onHome,
-    },
-    ...(onExitStudentView
-      ? [
-          {
-            id: "player:teacher-view",
-            label: t("menu.teacherView"),
-            icon: School,
-            group: "navigate" as const,
-            run: onExitStudentView,
-          },
-        ]
-      : []),
-  ];
   // Only a rule worth reading under the question: a locked question, or an
   // irreversible "done". That answers are saved as one types is said once,
   // in the lobby, and the free player stays bare.
@@ -306,48 +237,22 @@ export function Player({
   // absent rather than disabled, and so is the strip above (F-LIVE-09 draws
   // the questions, and one question is not a progression).
   const manyItems = total > 1;
-  const centre = !done ? (
-    <Button variant="primary" onClick={() => void toggleDone()} disabled={readOnly}>
-      {t("player.markDone")}
-    </Button>
-  ) : canReopen ? (
-    // Secondary, named for what it does, and with no tick: the button that
-    // used to sit here read "Done ✓" in the primary style and un-did the
-    // question when pressed.
-    <Button variant="secondary" onClick={() => void toggleDone()}>
-      {t("player.reopen")}
-    </Button>
-  ) : null;
   // Nothing to show at all — a one-question `forward_only` attempt, once the
   // question is handed over — means no footer bar, not an empty one.
   const actions =
-    !manyItems && centre === null ? null : (
-      <>
-        {manyItems ? (
-          <Button
-            variant="secondary"
-            onClick={() => dispatch({ type: "move", delta: -1 })}
-            disabled={previous === null}
-          >
-            <ChevronLeft className="size-4" aria-hidden />
-            {t("player.prev")}
-          </Button>
-        ) : null}
-        <div className="flex-1" />
-        {centre}
-        <div className="flex-1" />
-        {manyItems ? (
-          <Button
-            variant={nextIsPrimary ? "primary" : "secondary"}
-            onClick={() => dispatch({ type: "move", delta: 1 })}
-            disabled={next === null}
-          >
-            {t("player.next")}
-            <ChevronRight className="size-4" aria-hidden />
-          </Button>
-        ) : null}
-      </>
-    );
+    manyItems || !done || canReopen ? (
+      <PlayerActions
+        manyItems={manyItems}
+        done={done}
+        canReopen={canReopen}
+        readOnly={readOnly}
+        hasPrevious={previous !== null}
+        hasNext={next !== null}
+        nextIsPrimary={nextIsPrimary}
+        onToggleDone={() => void toggleDone()}
+        onMove={(delta) => dispatch({ type: "move", delta })}
+      />
+    ) : null;
 
   return (
     <>

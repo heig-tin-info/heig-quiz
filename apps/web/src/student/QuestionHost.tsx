@@ -48,6 +48,20 @@ interface HostPlayerProps extends PlayerProps<unknown, unknown> {
  */
 const renderMarkdown = (source: string): ReactNode => <MarkdownView source={source} inline />;
 
+/**
+ * "Has something been written here?" is the question TYPE's call, not ours.
+ * It asks only whether SOMETHING was written — never whether it is right —
+ * so it reads the answer and nothing of the key. A type the client registry
+ * does not know falls back to "anything at all".
+ */
+export function isAnswered(type: string, answer: unknown): boolean {
+  try {
+    return questionTypeClient(type).isAnswered(answer ?? null);
+  } catch {
+    return answer !== null && answer !== undefined;
+  }
+}
+
 export function QuestionHost({
   type,
   student,

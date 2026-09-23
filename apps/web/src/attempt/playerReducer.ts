@@ -17,6 +17,8 @@
  */
 import type { AttemptItem, AttemptView, Navigation } from "@quiz/contracts";
 
+import type { Segment } from "../ui";
+
 export interface PlayerItem {
   id: string;
   position: number;
@@ -112,6 +114,29 @@ export function neighbour(state: PlayerState, delta: 1 | -1): number | null {
     if (canReach(state, i)) return i;
   }
   return null;
+}
+
+/**
+ * The progress strip, one segment per question: where the student is, what
+ * they marked done, what holds an answer. Whether an answer holds SOMETHING
+ * is the question type's call, so it comes in as `answered` and this module
+ * stays free of the registry.
+ */
+export function segmentsOf(
+  state: PlayerState,
+  answered: (type: string, answer: unknown) => boolean,
+): Segment[] {
+  return state.items.map((item, index) => ({
+    id: item.id,
+    state:
+      index === state.index
+        ? "current"
+        : item.markedDone
+          ? "done"
+          : answered(item.type, state.answers[item.id] ?? null)
+            ? "answered"
+            : "empty",
+  }));
 }
 
 export function playerReducer(state: PlayerState, action: PlayerAction): PlayerState {
