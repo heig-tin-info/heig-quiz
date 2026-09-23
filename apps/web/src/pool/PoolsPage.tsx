@@ -331,7 +331,7 @@ function PoolCard({
         onClick={() => navigate({ view: "pool", id: pool.id })}
         className="flex w-full flex-1 items-start gap-3 p-4 pr-11 text-left transition-colors hover:bg-surface-2/50"
       >
-        <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-[10px] bg-surface-2 text-fg-muted">
+        <span className="inline-flex size-11 shrink-0 items-center justify-center rounded-field bg-surface-2 text-fg-muted">
           <PoolIcon icon={pool.icon} className="size-6" />
         </span>
         <span className="min-w-0 flex-1">

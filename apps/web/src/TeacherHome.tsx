@@ -281,7 +281,7 @@ function CoursePools({
               <button
                 type="button"
                 onClick={() => navigate({ view: "pool", id: pool.id })}
-                className="flex min-w-0 flex-1 items-center gap-2 rounded-[10px] px-2 py-1 text-left text-[13px] transition-colors hover:bg-surface-2"
+                className="flex min-w-0 flex-1 items-center gap-2 rounded-field px-2 py-1 text-left text-[13px] transition-colors hover:bg-surface-2"
               >
                 <FolderTree className="size-3.5 shrink-0 text-fg-faint" />
                 <span className="min-w-0 flex-1 truncate font-medium">{pool.name}</span>
@@ -445,7 +445,7 @@ function CourseCard({
               key={room.id}
               type="button"
               onClick={() => navigate({ view: "classroom", id: room.id })}
-              className="flex w-full items-center gap-3 rounded-[10px] px-2.5 py-2 text-left transition-colors hover:bg-surface-2"
+              className="flex w-full items-center gap-3 rounded-field px-2.5 py-2 text-left transition-colors hover:bg-surface-2"
             >
               <School className="size-4 shrink-0 text-fg-faint" />
               <span className="min-w-0 flex-1 truncate text-sm font-semibold">{room.name}</span>
@@ -510,7 +510,7 @@ function CourseRow({
                 key={room.id}
                 type="button"
                 onClick={() => navigate({ view: "classroom", id: room.id })}
-                className="rounded-[10px] px-1.5 py-0.5 font-medium transition-colors hover:bg-surface-2 hover:underline"
+                className="rounded-field px-1.5 py-0.5 font-medium transition-colors hover:bg-surface-2 hover:underline"
               >
                 <School className="mr-1 inline size-3.5 text-fg-faint" />
                 {room.name}

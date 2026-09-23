@@ -140,6 +140,21 @@ Two pairs stay below their target, on purpose:
   16 px corner around a 13 px row makes the card louder than its contents.
   The pills are untouched — they mark what you press, and that distinction is
   the point of the scale.
+  In the markup the radii are the tokens `rounded-field`, `rounded-card`,
+  `rounded-sheet`, `rounded-menu` and `rounded-key` (`style.css`), never a
+  bracketed pixel value that happens to equal one. Two values stand outside
+  the scale, on purpose:
+  - **28 px, the pool's floating bulk bar.** It is a pill on one line — the
+    browser clamps a radius to half the height, so 28 px on a 44 px bar IS
+    the pill — but on a phone its four actions wrap to two lines, and
+    `rounded-full` would turn that taller bar into a lens. 28 px keeps it a
+    pill while it fits and a rounded rectangle when it does not.
+  - **14 px, the poll projection's QR tile.** The tile belongs to the
+    projection's own scale (below): it is sized with `clamp()` to the wall,
+    88 to 132 px, like every other size on that screen, and its corner is
+    one step above the card's to stay in proportion with a tile larger than
+    anything the 12–28 px scale was drawn for. It is the only 14 px corner
+    in the product, and it exists only on the projector.
 - Separation language: **1 px hairlines** (`line`), one surface level below
   for recessed panels (`surface-2`). No shadows on anything in the page
   flow. Shadows exist only on floating layers (menu, popover, sheet, dialog,

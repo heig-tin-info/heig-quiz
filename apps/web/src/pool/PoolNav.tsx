@@ -96,7 +96,7 @@ function PoolRow({
       aria-label={drop.over ? t("pool.move.dropInto", { pool: pool.name }) : undefined}
       {...drop.handlers}
       className={cx(
-        "flex w-full items-center gap-2 rounded-[10px] px-2.5 py-1.5 text-left text-[13px] transition-colors",
+        "flex w-full items-center gap-2 rounded-field px-2.5 py-1.5 text-left text-[13px] transition-colors",
         active ? "font-semibold text-fg" : "text-fg-muted hover:bg-surface-2 hover:text-fg",
         drop.over && "bg-accent-soft text-accent outline-2 outline-offset-[-2px] outline-accent",
       )}

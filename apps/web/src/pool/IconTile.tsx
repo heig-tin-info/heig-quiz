@@ -30,7 +30,7 @@ export function IconTile({
         aria-pressed={selected}
         onClick={onPick}
         className={cx(
-          "inline-flex size-11 items-center justify-center rounded-[10px] border transition-colors duration-150 active:scale-97",
+          "inline-flex size-11 items-center justify-center rounded-field border transition-colors duration-150 active:scale-97",
           selected
             ? "border-accent bg-accent-soft text-accent"
             : "border-line-strong bg-surface text-fg-muted hover:border-fg-faint hover:text-fg",

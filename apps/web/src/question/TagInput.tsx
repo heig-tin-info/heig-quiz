@@ -268,7 +268,7 @@ export function TagInput({
                     onMouseDown={(e) => e.preventDefault()}
                     onClick={() => pick(index)}
                     className={cx(
-                      "cursor-pointer rounded-[10px] px-2.5 py-1.5 text-sm",
+                      "cursor-pointer rounded-field px-2.5 py-1.5 text-sm",
                       isActive
                         ? "bg-accent-soft font-semibold text-accent"
                         : "text-fg-muted hover:bg-surface-2 hover:text-fg",
@@ -314,7 +314,7 @@ export function TagInput({
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => pick(suggestions.length)}
                 className={cx(
-                  "flex cursor-pointer items-center gap-2 rounded-[10px] px-2.5 py-1.5 text-sm",
+                  "flex cursor-pointer items-center gap-2 rounded-field px-2.5 py-1.5 text-sm",
                   active === suggestions.length
                     ? "bg-accent-soft font-semibold text-accent"
                     : "text-fg-muted hover:bg-surface-2 hover:text-fg",

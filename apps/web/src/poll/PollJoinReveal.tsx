@@ -55,7 +55,7 @@ export function matchesExpected(text: string, expected: readonly string[]): bool
   return expected.some((e) => foldPollAnswer(e) === folded);
 }
 
-const rowClass = "flex items-start justify-between gap-3 rounded-xl border px-3 py-2.5 text-sm";
+const rowClass = "flex items-start justify-between gap-3 rounded-card border px-3 py-2.5 text-sm";
 const tagClass = "inline-flex shrink-0 items-center gap-1 text-[12px] font-medium [&_svg]:size-3.5";
 
 function McqReveal({
@@ -130,7 +130,7 @@ function ShortReveal({
           <div className="flex flex-wrap items-center gap-2">
             <code
               className={cx(
-                "rounded-lg border px-2 py-1 font-mono text-[13px]",
+                "rounded-field border px-2 py-1 font-mono text-[13px]",
                 matched ? "border-success/40 bg-success-soft" : "border-line bg-surface-2",
               )}
             >
