@@ -1,8 +1,8 @@
 /**
  * The class lists of the canvas, in one place.
  *
- * A package cannot import `apps/web/src/ui.tsx`, so the primitives it would
- * have used are reduced to their class lists here, copied from that file (and
+ * A package cannot import `apps/web/src/ui/`, so the primitives it would
+ * have used are reduced to their class lists here, copied from there (and
  * from the table of `@quiz/ui`, which did the same) so the two stay visually
  * identical. Semantic tokens only — they swap under `html.dark` by
  * themselves, so nothing below carries a `dark:` variant (DESIGN.md).

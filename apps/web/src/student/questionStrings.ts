@@ -5,7 +5,7 @@
  * partial override (`StringOverrides`, deviation W2-3): it cannot import
  * `apps/web`, and `apps/web` owns the translations (N-I18N-01). This module
  * is the one place the two meet — every string a student reads inside a
- * question comes from `i18n.tsx` through here.
+ * question comes from `i18n/` through here.
  */
 import type { TFunction } from "../i18n";
 import { circuitCanvasStrings, playerStrings } from "../questionTypes";

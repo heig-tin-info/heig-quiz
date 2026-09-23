@@ -245,7 +245,7 @@ export function rootIssues(issues: readonly ConfigIssue[]): ConfigIssue[] {
  *
  * Every component ships a complete English dictionary and takes a partial
  * override, so `apps/web` passes the French entries it already holds in
- * `i18n.tsx` (N-I18N-01) without a `qt-*` package ever importing the app. The
+ * `i18n/fr.ts` (N-I18N-01) without a `qt-*` package ever importing the app. The
  * key set is typed, so a renamed key is a compile error on the host side.
  */
 export type StringOverrides<K extends string> = Partial<Readonly<Record<K, string>>>;
@@ -280,7 +280,7 @@ export function resolveStrings<T extends object>(defaults: T, overrides?: Partia
 /**
  * Fills a string template: `fmt("{n} cases", { n: 3 })` is `"3 cases"`.
  *
- * The same `{var}` syntax as the host's `t()` (`apps/web/src/i18n.tsx`), so a
+ * The same `{var}` syntax as the host's `t()` (`apps/web/src/i18n/index.tsx`), so a
  * package's English default and the host's translation of the same key are
  * one shape, and the host hands them over key by key. An unknown placeholder
  * is left as written rather than rendered as `undefined` — and only `vars`'

@@ -3,7 +3,7 @@
  *
  * A component takes a partial override through its `strings` prop
  * (`StringOverrides` in `@quiz/core/client`), so `apps/web` passes the French
- * entries of its own `i18n.tsx` (N-I18N-01) and this package never imports the
+ * entries of its own `i18n/fr.ts` (N-I18N-01) and this package never imports the
  * app. The key set is typed: a renamed key breaks the host at compile time.
  */
 

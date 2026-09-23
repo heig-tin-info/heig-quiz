@@ -9,7 +9,7 @@ import type { ReactNode } from "react";
 import { cx, inputSm, label as labelToken } from "./styles.js";
 
 /**
- * The segmented control of `apps/web/src/ui.tsx`, mirrored class for class:
+ * The segmented control of `apps/web/src/ui/controls.tsx`, mirrored class for class:
  * a pill track on `surface-3`, the selected option lifted onto `surface` with
  * a hairline ring. Its track is 34 px tall, the height of a field, so a
  * segmented control and the fields beside it sit on one baseline.

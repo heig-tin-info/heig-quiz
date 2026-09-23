@@ -1,8 +1,8 @@
 /**
  * The class lists of the question-type surfaces, in one place.
  *
- * A package cannot import `apps/web/src/ui.tsx`, so the primitives it would
- * have used are reduced to their class lists here, copied from that file so
+ * A package cannot import `apps/web/src/ui/`, so the primitives it would
+ * have used are reduced to their class lists here, copied from there so
  * the two stay visually identical. `qt-code` and `qt-circuit` used to carry
  * this table twice, byte for byte (audit P-01a). Semantic tokens only
  * (`bg-surface`, `text-fg-muted`, `border-line`…): they swap under
@@ -78,7 +78,7 @@ export function badge(tone: BadgeTone = "neutral", extra = ""): string {
   );
 }
 
-/** Table classes, aligned on `T` in `apps/web/src/ui.tsx`. */
+/** Table classes, aligned on `T` in `apps/web/src/ui/page.tsx`. */
 export const table = {
   table: "w-full text-[13px]",
   head: "text-left text-xs text-fg-muted",

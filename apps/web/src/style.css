@@ -197,7 +197,7 @@ html.dark {
   animation: toast-out 0.2s ease-in forwards;
 }
 
-/* Tooltips (ui.tsx Tip): quick pop, scaling from the anchor side. */
+/* Tooltips (ui/layers.tsx Tip): quick pop, scaling from the anchor side. */
 @keyframes tip-in {
   from {
     opacity: 0;
@@ -274,7 +274,7 @@ html.dark {
   animation: menu-in 0.16s var(--ease-out-emphasized);
 }
 
-/* Indeterminate progress bar (ui.tsx Progress). */
+/* Indeterminate progress bar (ui/page.tsx Progress). */
 @keyframes progress-slide {
   0% {
     margin-left: -33%;

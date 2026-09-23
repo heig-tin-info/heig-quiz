@@ -231,7 +231,7 @@ export const fr: Record<keyof Dict, string> = {
   "dur.soon": "moins d'une minute",
   "time.now": "à l'instant",
 
-  // --- Live primitives (ui.tsx) ---
+  // --- Live primitives (ui/live.tsx) ---
   "countdown.remaining": "il reste {time}",
   "countdown.announce": "Il reste {time}.",
   "countdown.over": "Le temps est écoulé.",

@@ -56,7 +56,7 @@ and the jobs. The modules live under `src/modules/`, the schema under
 
 The React single-page application ([ADR-008](../adr/ADR-008-frontend-spa-react.md)),
 built with Vite. `src/router.ts` is the route union, `src/api.ts` the typed
-client over the contracts, `src/i18n.tsx` the dictionary, `src/mock/` the
+client over the contracts, `src/i18n/` the dictionaries, `src/mock/` the
 in-browser API used by `pnpm dev:mock`. Feature directories (`pool`,
 `evaluation`, `live`, `grading`, `results`, `student`, `poll`, `question`,
 `realtime`, `runner`, `markdown`) hold the screens and their tests. The
@@ -162,7 +162,7 @@ back by image tag, not by reverse migration (see
 
 ### Internationalisation
 
-Everything a user reads goes through `t()` from `apps/web/src/i18n.tsx`,
+Everything a user reads goes through `t()` from `apps/web/src/i18n/index.tsx`,
 teacher screens included. The dictionary is flat: `en` is the source of
 truth, and `fr` is declared as `Record<keyof Dict, string>`, so a key added
 in English without its French twin fails `pnpm typecheck`. The `qt-*`

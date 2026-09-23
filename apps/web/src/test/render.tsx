@@ -14,7 +14,7 @@ import { ToastProvider } from "../notify";
  * leaves the process.
  */
 
-/** Mirror of the private `STORE_KEY` of i18n.tsx (its provider reads it on init). */
+/** Mirror of the private `STORE_KEY` of i18n/index.tsx (its provider reads it on init). */
 const LOCALE_KEY = "quiz-locale";
 
 /**

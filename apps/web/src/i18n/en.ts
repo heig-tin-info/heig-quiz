@@ -232,7 +232,7 @@ export const en = {
   "dur.soon": "less than a minute",
   "time.now": "just now",
 
-  // --- Live primitives (ui.tsx) ---
+  // --- Live primitives (ui/live.tsx) ---
   "countdown.remaining": "{time} remaining",
   "countdown.announce": "{time} remaining.",
   "countdown.over": "Time is up.",

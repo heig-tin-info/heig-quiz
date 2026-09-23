@@ -162,6 +162,7 @@ dashboard; that edit is not made here, and this section is the record of it.
   `lobby:<id>` and no longer `evaluation:<id>`. An old tab still opening the
   latter keeps working — it simply is not counted present, which is the
   pre-existing behaviour for that subject.
+  *Note 2026-09-23: `attemptStream.ts` was deleted by PR #55; `student/Lobby.tsx` now watches `lobby:<id>` through the shared `useEventStream`.*
 - `enrolledCount` takes the evaluation and not the classroom id: the staff
   half of the count is per evaluation.
 - `DashboardCell` gains `provisional`, the totals gain `provisional`,

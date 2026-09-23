@@ -429,7 +429,7 @@ describe("GradingPanel — the keyboard", () => {
    * `EntryList.tsx` spreads `pressable(() => onSelect(key))` on the row and
    * never adds the `onClick` that `pressable`'s own documentation says to
    * spread it next to ("Spread it next to the element's own `onClick`",
-   * ui.tsx). The row therefore carries `cursor-pointer`, announces itself as
+   * ui/layers.tsx). The row therefore carries `cursor-pointer`, announces itself as
    * a button and answers Enter and Space — and does nothing at all when it
    * is clicked, which is how every teacher will actually use it. When the
    * `onClick` is added, this expectation becomes `toBe(2)` and the name

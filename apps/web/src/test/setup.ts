@@ -25,7 +25,7 @@ configure({ asyncUtilTimeout: 5_000 });
 
 /**
  * jsdom runs no layout, so every element reports `offsetWidth`/`offsetHeight`
- * of 0. `focusableIn` (ui.tsx) filters on exactly those to skip hidden
+ * of 0. `focusableIn` (ui/layers.tsx) filters on exactly those to skip hidden
  * controls, so with the real zeros every panel would look empty and the whole
  * focus contract of Modal, Sheet, the drawers and the confirm dialog would be
  * untestable. Connected elements therefore report 1 px. The cost is that a
