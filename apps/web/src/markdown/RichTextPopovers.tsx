@@ -1,0 +1,237 @@
+import type { Editor } from "@tiptap/core";
+import { Check, Table as TableIcon } from "lucide-react";
+import { useId, useState } from "react";
+import { createPortal } from "react-dom";
+
+import { useT } from "../i18n";
+import { Button, cx, IconButton, inputClass, Menu, Z } from "../ui";
+import { BlankPopover } from "./BlankPopover";
+import type { Formula } from "./FormulaDialog";
+import type { HolePreview, OpenHole } from "./useClozeHole";
+import type { FormulaDialogComponent, FormulaTarget } from "./useFormulaTarget";
+
+/*
+ * What the rich text field opens over or beside itself: the link prompt, the
+ * table menu, the read-only list under a multi-answer hole, and the overlay
+ * that places the blank card and the formula dialog. Those two have files of
+ * their own (BlankPopover.tsx, FormulaDialog.tsx); their state lives in
+ * useClozeHole.ts and useFormulaTarget.ts.
+ */
+
+/**
+ * The link prompt, prefilled with the address under the caret. Applying an
+ * empty address removes the link; either way `onClose` is called and the
+ * caret goes back to the field.
+ */
+export function LinkPrompt({
+  editor,
+  initial,
+  onClose,
+}: {
+  editor: Editor | null;
+  initial: string;
+  onClose: () => void;
+}) {
+  const t = useT();
+
+  /** Applies what the link prompt collected, then gives the caret back. */
+  function applyAsked(text: string) {
+    if (!editor) return;
+    const chain = editor.chain().focus();
+    if (text.trim() === "") chain.unsetLink().run();
+    else chain.extendMarkRange("link").setLink({ href: text.trim() }).run();
+    onClose();
+  }
+
+  return (
+    <AskBar
+      label={t("md.url")}
+      initial={initial}
+      apply={t("common.save")}
+      cancel={t("common.cancel")}
+      onSubmit={applyAsked}
+      onCancel={() => {
+        onClose();
+        editor?.commands.focus();
+      }}
+    />
+  );
+}
+
+/**
+ * The one-field prompt the link button opens, in the flow of the card rather
+ * than in a dialog: it holds a single value — an address, pasted in one
+ * gesture — and a modal for one text input is the heaviest possible answer
+ * (DESIGN.md, §4 of the UI skill). A FORMULA is the opposite case, which is
+ * why it got a dialog of its own: it wants a palette, a preview and a
+ * placement. Escape cancels and gives the caret back, Enter applies.
+ */
+function AskBar({
+  label,
+  initial,
+  apply,
+  cancel,
+  onSubmit,
+  onCancel,
+}: {
+  label: string;
+  initial: string;
+  apply: string;
+  cancel: string;
+  onSubmit: (value: string) => void;
+  onCancel: () => void;
+}) {
+  const [text, setText] = useState(initial);
+  const id = useId();
+  return (
+    <div className="flex flex-wrap items-center gap-2 rounded-field bg-surface-2 px-2 py-1.5">
+      <label htmlFor={id} className="text-xs font-medium text-fg-muted">
+        {label}
+      </label>
+      <input
+        id={id}
+        autoFocus
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            onSubmit(text);
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            onCancel();
+          }
+        }}
+        className={cx(inputClass, "h-7 min-w-0 flex-1 font-mono text-[13px]")}
+      />
+      <Button size="sm" variant="secondary" onClick={() => onSubmit(text)}>
+        {apply}
+      </Button>
+      <Button size="sm" variant="ghost" onClick={onCancel}>
+        {cancel}
+      </Button>
+    </div>
+  );
+}
+
+/*
+ * What can be done to the TABLE the caret is in. A menu and not seven more
+ * icons in the row: they only exist while the caret is in a table, and a
+ * strip that grows by seven buttons under the teacher's hand is the row of
+ * icon buttons DESIGN.md sends to a menu. It is drawn only when there is a
+ * table to act on, so nothing is reserved for it either.
+ */
+export function TableMenu({ editor }: { editor: Editor }) {
+  const t = useT();
+  return (
+    <Menu
+      label={t("md.table.menu")}
+      align="start"
+      trigger={
+        <IconButton size="sm" label={t("md.table.menu")} onMouseDown={(e) => e.preventDefault()}>
+          <TableIcon />
+        </IconButton>
+      }
+      items={[
+        { label: t("md.table.rowBefore"), onSelect: () => editor.chain().focus().addRowBefore().run() },
+        { label: t("md.table.rowAfter"), onSelect: () => editor.chain().focus().addRowAfter().run() },
+        { label: t("md.table.columnBefore"), onSelect: () => editor.chain().focus().addColumnBefore().run() },
+        { label: t("md.table.columnAfter"), onSelect: () => editor.chain().focus().addColumnAfter().run() },
+        { label: t("md.table.deleteRow"), separator: true, danger: true, onSelect: () => editor.chain().focus().deleteRow().run() },
+        { label: t("md.table.deleteColumn"), danger: true, onSelect: () => editor.chain().focus().deleteColumn().run() },
+        { label: t("md.table.deleteTable"), danger: true, onSelect: () => editor.chain().focus().deleteTable().run() },
+      ]}
+    />
+  );
+}
+
+/**
+ * The read-only list of what a multi-answer hole accepts, hung under its
+ * chip. A portal, so that the field's own box does not clip it.
+ */
+export function HolePreviewPopover({ preview }: { preview: HolePreview }) {
+  return createPortal(
+    <div
+      aria-hidden
+      className={cx(
+        "pointer-events-none fixed max-w-64 rounded-menu border border-line bg-surface px-2.5 py-1.5 shadow-popover",
+        Z.popover,
+      )}
+      style={{ top: preview.anchor.bottom + 6, left: preview.anchor.left }}
+    >
+      <ul className="flex flex-col gap-0.5 text-[13px]">
+        {preview.items.map((item, i) => (
+          <li key={i} className="flex items-center gap-1.5">
+            {item.correct === null ? null : (
+              <Check
+                className={cx("size-3.5 shrink-0 text-success", item.correct ? "" : "opacity-0")}
+              />
+            )}
+            <span className={cx("font-mono", item.correct === false ? "text-fg-muted" : "text-fg")}>
+              {item.label}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>,
+    document.body,
+  );
+}
+
+/**
+ * What floats over the field: the blank card on the hole being written, the
+ * read-only list under a multi-answer chip, and the formula dialog once its
+ * chunk has arrived.
+ */
+export function RichTextOverlays({
+  hole,
+  onApplyHole,
+  onCancelHole,
+  hoverPreview,
+  selectionPreview,
+  source,
+  formula,
+  Dialog,
+  allowDisplay,
+  onInsertFormula,
+  onCancelFormula,
+}: {
+  hole: OpenHole | null;
+  onApplyHole: (body: string) => void;
+  onCancelHole: () => void;
+  hoverPreview: HolePreview | null;
+  selectionPreview: HolePreview | null;
+  source: boolean;
+  formula: FormulaTarget | null;
+  Dialog: FormulaDialogComponent | null;
+  allowDisplay: boolean;
+  onInsertFormula: (formula: Formula) => void;
+  onCancelFormula: () => void;
+}) {
+  /** The card wins over the list: they would otherwise sit on top of each other. */
+  const preview = hole !== null || source ? null : (hoverPreview ?? selectionPreview);
+  return (
+    <>
+      {hole ? (
+        <BlankPopover
+          key={`hole-${hole.pos}`}
+          anchor={hole.anchor}
+          body={hole.body}
+          onApply={onApplyHole}
+          onCancel={onCancelHole}
+        />
+      ) : null}
+
+      {preview ? <HolePreviewPopover preview={preview} /> : null}
+
+      {formula && Dialog ? (
+        <Dialog
+          initial={{ latex: formula.latex, display: formula.display }}
+          allowDisplay={allowDisplay}
+          onInsert={onInsertFormula}
+          onCancel={onCancelFormula}
+        />
+      ) : null}
+    </>
+  );
+}

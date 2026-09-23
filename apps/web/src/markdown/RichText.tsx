@@ -1,41 +1,31 @@
 import type { Editor } from "@tiptap/core";
-import { exitCode, newlineInCode, splitBlock } from "@tiptap/pm/commands";
-import { NodeSelection, type EditorState } from "@tiptap/pm/state";
-import { EditorContent, ReactNodeViewRenderer, useEditor, useEditorState } from "@tiptap/react";
-import {
-  Bold,
-  Check,
-  Code,
-  FileCode2,
-  Image as ImageIcon,
-  Italic,
-  Link as LinkIcon,
-  RectangleEllipsis,
-  Sigma,
-  SquareCode,
-  Table as TableIcon,
-} from "lucide-react";
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { EditorContent } from "@tiptap/react";
+import { useId, useMemo, useRef, useState } from "react";
 
 import type { RichTextProps } from "@quiz/core/client";
 
 import { useT } from "../i18n";
-import { useShortcuts, type Shortcut } from "../shortcuts";
-import { Button, cx, IconButton, inputClass, Menu, modKey, Z, type IconType } from "../ui";
-import { BlankPopover } from "./BlankPopover";
-import {
-  clozeHolePossibilities,
-  protectHolePipes,
-  restoreHolePipes,
-  type ClozeHolePossibility,
-} from "./clozeHole";
-import { CodeBlockView } from "./CodeBlockView";
-import type { Formula, FormulaDialog } from "./FormulaDialog";
-import { ImageToolsContext, ImageView } from "./ImageView";
+import { cx, inputClass } from "../ui";
+import { ImageToolsContext } from "./ImageView";
 import "./richtext.css";
-import { SourcePane } from "./SourcePane";
-import { INLINE_INPUT_RULES, openCodeFence, richTextExtensions } from "./tiptap";
+import { LinkPrompt, RichTextOverlays } from "./RichTextPopovers";
+import { RichTextSourcePane, SourceToggle } from "./RichTextSource";
+import {
+  RichTextToolbar,
+  runToolbarAction,
+  toolbarActions,
+  useRichTextMarks,
+  useRichTextShortcuts,
+} from "./RichTextToolbar";
+import { useClozeHole, useHoleSelectionPreview } from "./useClozeHole";
+import { useFormulaTarget } from "./useFormulaTarget";
+import { useImageUpload } from "./useImageUpload";
+import {
+  focusFromChrome,
+  useRichTextEditor,
+  useRichTextSync,
+  type ImageUploader,
+} from "./useRichTextEditor";
 
 /*
  * The WYSIWYG half of the markdown field (docs/spec/05 §5.10, decision
@@ -65,125 +55,6 @@ import { INLINE_INPUT_RULES, openCodeFence, richTextExtensions } from "./tiptap"
 
 export type { RichTextProps };
 
-/**
- * The formula dialog, and with it MathLive, arrive when a teacher asks for a
- * formula — not when a field is drawn. It is the heaviest thing this editor
- * can open and the one a teacher of prose never touches (N-PERF-05).
- *
- * Fetched by hand rather than through `lazy` + `Suspense`, and that is not a
- * style preference: the dialog opens from INSIDE a ProseMirror transaction
- * (typing `$$`), React treats that update as synchronous input, and a
- * component that suspends there makes React throw its subtree away — which,
- * next to a contenteditable whose DOM ProseMirror owns, took the whole editor
- * down with a `removeChild` of a node React no longer had. Awaiting the module
- * first means the dialog only ever mounts already resolved, one microtask
- * after the transaction, and the chunk is still a chunk.
- */
-type FormulaDialogComponent = typeof FormulaDialog;
-let formulaDialog: FormulaDialogComponent | null = null;
-
-/**
- * The editor's document as markdown.
- *
- * Trimmed, and that is the whole of it: StarterKit's `TrailingNode` keeps an
- * empty paragraph after a document that ends in a block node — which is what
- * lets the caret land under a closing code fence — and the serializer writes
- * that paragraph out as two newlines. Emitting them would rewrite the stored
- * prompt of every question whose statement ends with a fence, the first time a
- * teacher opened it. Blank lines at either end carry no markdown meaning.
- */
-function serialize(editor: Editor): string {
-  /*
-   * `restoreHolePipes` LAST, after the table renderer has padded its columns:
-   * a `|` inside a hole travels through the whole serialisation as U+E000 so
-   * that the row it sits in is not split on it (clozeHole.ts says why, and
-   * checks that the shipped table renderer escapes nothing of its own).
-   */
-  return restoreHolePipes(editor.getMarkdown().trim());
-}
-
-/** One toolbar action; `actions` below filters out the ones a mode cannot serve. */
-interface Action {
-  key: string;
-  icon: IconType;
-  labelKey:
-    | "md.bold"
-    | "md.italic"
-    | "md.code"
-    | "md.codeBlock"
-    | "md.math"
-    | "md.image"
-    | "md.link"
-    | "md.table"
-    | "md.blank.insert";
-  shortcut?: string;
-}
-
-/** The two node types a formula can be, as the schema names them. */
-const MATH_TYPES = ["inlineMath", "blockMath"] as const;
-const isMathNode = (name: string): boolean => (MATH_TYPES as readonly string[]).includes(name);
-
-/** Whether the caret sits inside a fenced block, where every key means something else. */
-const inCodeBlock = (state: EditorState): boolean =>
-  state.selection.$from.parent.type.name === "codeBlock";
-
-/** Where the formula dialog will write, and what it starts from. */
-interface FormulaTarget extends Formula {
-  /** Position of the math node being edited, or null for a new one. */
-  node: number | null;
-  /** Text range the formula replaces (the selection the Σ button was pressed on). */
-  range: { from: number; to: number } | null;
-  /** The node was made empty by `$$` a moment ago: cancelling removes it again. */
-  created: boolean;
-}
-
-/** Every empty formula of the document, in document order. */
-function emptyMath(editor: Editor): { pos: number; display: boolean }[] {
-  const found: { pos: number; display: boolean }[] = [];
-  editor.state.doc.descendants((node, pos) => {
-    if (!isMathNode(node.type.name)) return;
-    if (String(node.attrs.latex ?? "").trim() !== "") return;
-    found.push({ pos, display: node.type.name === "blockMath" });
-  });
-  return found;
-}
-
-/**
- * Where the card of a hole hangs: the chip's own rectangle, in viewport
- * coordinates. `coordsAtPos` is the fallback for the frame in which the chip
- * has just been created and has no element yet.
- */
-function holeAnchor(editor: Editor, pos: number): { top: number; bottom: number; left: number } {
-  const dom = editor.view.nodeDOM(pos);
-  if (dom instanceof HTMLElement) {
-    const r = dom.getBoundingClientRect();
-    return { top: r.top, bottom: r.bottom, left: r.left };
-  }
-  try {
-    const c = editor.view.coordsAtPos(pos);
-    return { top: c.top, bottom: c.bottom, left: c.left };
-  } catch {
-    return { top: 0, bottom: 0, left: 0 };
-  }
-}
-
-/** What the read-only popover under a multi-answer chip shows. */
-interface HolePreview {
-  anchor: { top: number; bottom: number; left: number };
-  items: ClozeHolePossibility[];
-}
-
-/** Every hole whose body is still empty, in document order. */
-function emptyClozeHoles(editor: Editor): number[] {
-  const found: number[] = [];
-  editor.state.doc.descendants((node, pos) => {
-    if (node.type.name !== "clozeHole") return;
-    if (node.attrs.body !== "") return;
-    found.push(pos);
-  });
-  return found;
-}
-
 export function RichText({
   value,
   onChange,
@@ -206,470 +77,46 @@ export function RichText({
   const auto = useId();
   const fieldId = id ?? auto;
   const file = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(0);
   /** The markdown source pane, one toolbar button away from the rich one. */
   const [source, setSource] = useState(false);
   /** Whether the caret is in this field: what a `focus` toolbar follows. */
   const [focused, setFocused] = useState(false);
   /** The link address prompt (a formula opens the dialog instead). */
   const [asking, setAsking] = useState<null | { initial: string }>(null);
-  const [formula, setFormula] = useState<FormulaTarget | null>(null);
-  /**
-   * The `{{…}}` hole being written, when there is one. A hole is an atom:
-   * there is nothing to type into the chip, so it is edited in a card anchored
-   * under it (`BlankPopover`), which asks for the SHAPE of the blank instead
-   * of the grammar.
-   */
-  const [hole, setHole] = useState<null | {
-    pos: number;
-    body: string;
-    created: boolean;
-    anchor: { top: number; bottom: number; left: number };
-  }>(null);
-  /** The read-only list under a hovered multi-answer chip, and under a selected one. */
-  const [hoverPreview, setHoverPreview] = useState<HolePreview | null>(null);
-  const [selectionPreview, setSelectionPreview] = useState<HolePreview | null>(null);
-  /** The dialog component, once its chunk has arrived (never `lazy`, above). */
-  // The initializer is a FUNCTION returning the component: `useState(fn)` would
-  // call it as a lazy initializer — and a React component called with no props
-  // takes the page down (it did).
-  const [Dialog, setDialog] = useState<FormulaDialogComponent | null>(() => formulaDialog);
-
-  /** Fetches the dialog if needed, then opens it on `target`. */
-  const openFormula = useCallback(async (target: FormulaTarget) => {
-    if (formulaDialog === null) {
-      formulaDialog = (await import("./FormulaDialog")).FormulaDialog;
-    }
-    setDialog(() => formulaDialog as FormulaDialogComponent);
-    setFormula(target);
-  }, []);
-  const openFormulaRef = useRef(openFormula);
-  openFormulaRef.current = openFormula;
-
-  /*
-   * The callbacks live in refs, and the editor is built once. Passing them to
-   * `useEditor` directly would rebuild the whole ProseMirror view on every
-   * render of the host — which loses the caret, the undo history and the
-   * selection, several times per keystroke in a controlled form.
-   */
-  const onChangeRef = useRef(onChange);
-  const onEnterRef = useRef(onEnter);
-  const onTabRef = useRef(onTab);
-  onChangeRef.current = onChange;
-  onEnterRef.current = onEnter;
-  onTabRef.current = onTab;
-
-  /**
-   * The markdown this component last agreed on with its host: the `value` it
-   * was given, or the value it last emitted. It is what tells an edit made
-   * INSIDE the editor from a `value` that changed outside it (a version
-   * restored into the draft), which is the only case worth reloading for.
-   */
-  const settled = useRef(value);
-
-  const upload = useRef<((files: File[], at?: number) => void) | null>(null);
-  /** How many empty formulas the document held at the previous transaction. */
-  const emptyCount = useRef(0);
-  /** The same, for the empty hole that typing `{{` leaves behind. */
-  const emptyHoles = useRef(0);
-  /**
-   * The editor itself, for the handlers of `editorProps` — they are built
-   * BEFORE it exists, and a pasted markdown fence has to go through the very
-   * parser this editor was configured with.
-   */
+  /** The editor, for what is built BEFORE it exists: `editorProps`, and the openers below. */
   const editorRef = useRef<Editor | null>(null);
+  const { formula, Dialog, openFormula, openMath, applyFormula, cancelFormula } =
+    useFormulaTarget(editorRef);
+  const { hole, openHole, openCreatedHole, applyHole, cancelHole, hoverPreview, hoverHandlers } =
+    useClozeHole(editorRef, holes);
 
-  const editor = useEditor({
-    extensions: richTextExtensions({
-      placeholder: placeholder ?? "",
-      inline,
-      cloze: holes,
-      // The picture's own toolbar (rotate, size, delete) lives in the node
-      // view; `ImageToolsContext` below is how it reaches this field's
-      // uploader, which is what a rotation writes its result through.
-      imageNodeView: () => ReactNodeViewRenderer(ImageView),
-      // The block's own language field, at its top-right corner.
-      codeBlockNodeView: () => ReactNodeViewRenderer(CodeBlockView),
-    }),
-    content: holes ? protectHolePipes(value) : value,
-    contentType: "markdown",
-    editable: !disabled,
-    autofocus: autoFocus,
-    // An inline field types marks and formulas; "- " at the head of a choice
-    // stays the two characters the teacher typed.
-    enableInputRules: inline ? [...INLINE_INPUT_RULES] : true,
-    onFocus: () => setFocused(true),
-    onBlur: () => setFocused(false),
-    editorProps: {
-      attributes: {
-        id: fieldId,
-        // `.md-body` is the student's stylesheet: what the teacher sees while
-        // typing is what the question will look like, down to the code tint
-        // and the KaTeX size. `.rt-surface` adds what ProseMirror needs.
-        //
-        // The MINIMUM HEIGHT belongs to the contenteditable, not to the box
-        // around it: only the element ProseMirror owns turns a click into a
-        // caret, so a field whose chrome was tall and whose surface was one
-        // line high answered on its first line and nowhere else. A block
-        // field needs room to be written in; an inline one is a row of a
-        // list and grows with what it holds.
-        class: cx(
-          "rt-surface md-body focus:outline-none",
-          inline ? "min-h-5 md-sm" : "min-h-32",
-        ),
-        role: "textbox",
-        "aria-multiline": inline ? "false" : "true",
-        ...(ariaLabel === undefined ? {} : { "aria-label": ariaLabel }),
-      },
-      handleKeyDown(view, event) {
-        if (event.key === "Tab" && !event.ctrlKey && !event.metaKey && !event.altKey) {
-          // Inside a fenced block Tab is an INDENT — two spaces, or one level
-          // back on Shift+Tab (`enableTabIndentation` in tiptap.ts). A teacher
-          // writing C there is not asking for another choice.
-          if (inCodeBlock(view.state)) return false;
-          // The host answers first (a list of choices adds a row, or moves on)
-          // and says whether it took the key. Unhandled, Tab leaves the field,
-          // which is what a keyboard user expects of a rich text box.
-          if (onTabRef.current?.(event.shiftKey)) {
-            event.preventDefault();
-            return true;
-          }
-          return false;
-        }
-        if (event.key === "Enter") {
-          // A formula is an atom: there is nothing to type into it, so Enter
-          // on a selected one opens the editor that CAN change it.
-          const { selection } = view.state;
-          if (selection instanceof NodeSelection && isMathNode(selection.node.type.name)) {
-            event.preventDefault();
-            openMath(selection.from, selection.node.attrs.latex, selection.node.type.name);
-            return true;
-          }
-          // A hole is an atom too: Enter on the selected chip edits its body.
-          if (
-            selection instanceof NodeSelection &&
-            selection.node.type.name === "clozeHole" &&
-            selection.node.attrs.body !== null
-          ) {
-            event.preventDefault();
-            openHole(selection.from, String(selection.node.attrs.body ?? ""), false);
-            return true;
-          }
-          /*
-           * A FENCE opens, whichever of the three spellings the teacher used —
-           * plain Enter included, because a line that is nothing but ``` or
-           * ```c is not a choice waiting for the next one (tiptap.ts,
-           * `openCodeFence`, which also closes a fence over what is above it).
-           */
-          if (inline && openCodeFence(view.state, view.dispatch, true)) {
-            event.preventDefault();
-            event.stopPropagation();
-            return true;
-          }
-          /*
-           * The same thing on Ctrl+Enter in a BLOCK field, and here rather
-           * than in the extension's keymap because only this handler has the
-           * EVENT: the question editor answers Ctrl+Enter on `window` with
-           * "Try the question", and a teacher who just opened a fence must not
-           * be carried off to another tab. Plain Enter there is the input
-           * rule's, which needs no such care.
-           */
-          if (
-            !inline &&
-            (event.ctrlKey || event.metaKey) &&
-            openCodeFence(view.state, view.dispatch, false)
-          ) {
-            event.preventDefault();
-            event.stopPropagation();
-            return true;
-          }
-          /*
-           * INSIDE a block, Enter is a line of code and never the next choice.
-           * Ctrl+Enter is the way OUT (a paragraph after the block), plain
-           * Enter falls through to Tiptap — which is what keeps its own
-           * three-empty-lines exit working — and Shift+Enter, which no keymap
-           * binds inside code, is spelled out as the newline it looks like.
-           */
-          if (inline && inCodeBlock(view.state)) {
-            if (event.ctrlKey || event.metaKey) {
-              event.preventDefault();
-              event.stopPropagation();
-              exitCode(view.state, view.dispatch);
-              return true;
-            }
-            if (event.shiftKey) {
-              event.preventDefault();
-              event.stopPropagation();
-              newlineInCode(view.state, view.dispatch);
-              return true;
-            }
-            return false;
-          }
-          /*
-           * A SECOND LINE inside a choice. Plain Enter belongs to the host (it
-           * moves to the next choice), so the modifier is what is left — and
-           * both spellings answer, because a teacher who wants a line break
-           * reaches for Shift+Enter and a developer for Ctrl+Enter.
-           *
-           * It splits the block rather than inserting a hard break: what a
-           * choice is asked to hold is a snippet, and a fence cannot open
-           * inside a paragraph. The new paragraph serializes as a blank line,
-           * which is the markdown for exactly what is on screen.
-           */
-          if (inline && (event.ctrlKey || event.metaKey || event.shiftKey)) {
-            event.preventDefault();
-            // And STOPPED, not merely prevented: the question editor answers
-            // Ctrl+Enter on `window` with "Try the question", and a teacher
-            // who asked a choice for a second line must not be carried off to
-            // another tab. The field publishes its own Ctrl+Enter in the
-            // shortcut strip while it has the caret, so the strip says which
-            // of the two is live.
-            event.stopPropagation();
-            splitBlock(view.state, view.dispatch);
-            return true;
-          }
-          if (inline && onEnterRef.current) {
-            event.preventDefault();
-            onEnterRef.current();
-            return true;
-          }
-        }
-        return false;
-      },
-      handleClickOn(_view, _pos, node, nodePos, _event, direct) {
-        if (!direct) return false;
-        if (isMathNode(node.type.name)) {
-          openMath(nodePos, node.attrs.latex, node.type.name);
-          return true;
-        }
-        // The chip of a `{{…}}` hole. The escaped `\{{` is not editable —
-        // it is two braces, and there is nothing in it to change.
-        if (node.type.name === "clozeHole" && node.attrs.body !== null) {
-          openHole(nodePos, String(node.attrs.body ?? ""), false);
-          return true;
-        }
-        return false;
-      },
-      handlePaste(_view, event) {
-        const files = Array.from(event.clipboardData?.files ?? []);
-        if (files.some((f) => f.type.startsWith("image/"))) {
-          event.preventDefault();
-          upload.current?.(files);
-          return true;
-        }
-        /*
-         * MARKDOWN on the clipboard. A teacher copying a snippet out of a
-         * slide deck, a README or another question pastes ```c and three lines
-         * of C; ProseMirror sees plain text and lays down four paragraphs of
-         * backticks, which is the bug this field was reported for.
-         *
-         * A FENCE is the trigger, and deliberately the only one: every other
-         * markdown shape (a `-` list, a `#` heading) is also something a
-         * teacher may want as the characters they pasted, and a paste that
-         * silently restructures ordinary text is worse than one that does
-         * nothing. Rich clipboard content is left to ProseMirror, which has
-         * the HTML and knows more than we do; so is VS Code's, which the code
-         * block extension handles with the language it came with.
-         *
-         * In an inline field the parser is the same, so a pasted list or
-         * heading does land as one INSIDE the choice — the schema has always
-         * been able to hold them (the head of tiptap.ts says why), and what a
-         * teacher pasted deliberately is not what an input rule builds by
-         * accident.
-         */
-        const clipboard = event.clipboardData;
-        const text = clipboard?.getData("text/plain") ?? "";
-        if (!text.includes("```")) return false;
-        if (clipboard?.getData("text/html")) return false;
-        if (clipboard?.getData("vscode-editor-data")) return false;
-        const target = editorRef.current;
-        if (!target) return false;
-        event.preventDefault();
-        target.commands.insertContent(holes ? protectHolePipes(text) : text, {
-          contentType: "markdown",
-        });
-        return true;
-      },
-      handleDrop(view, event) {
-        const dropped = event instanceof DragEvent ? Array.from(event.dataTransfer?.files ?? []) : [];
-        if (!dropped.some((f) => f.type.startsWith("image/"))) return false;
-        event.preventDefault();
-        /*
-         * WHERE the picture was dropped, not where the caret happened to be.
-         * The upload takes a second, the document may have moved on, and an
-         * image landing in the middle of a paragraph the teacher was not even
-         * looking at is what the first version did.
-         */
-        const at = view.posAtCoords({ left: event.clientX, top: event.clientY });
-        upload.current?.(dropped, at?.pos ?? view.state.doc.content.size);
-        return true;
-      },
-    },
-    onUpdate({ editor: e }) {
-      const markdown = serialize(e);
-      if (markdown !== settled.current) {
-        settled.current = markdown;
-        onChangeRef.current(markdown);
-      }
-      /*
-       * `$$` on an empty line makes an EMPTY formula (tiptap.ts), and an empty
-       * formula renders as nothing at all: the dialog opens on it at once, so
-       * the teacher types the latex where it can be seen. Compared against the
-       * previous count and not against zero, or every later keystroke in a
-       * prompt that happens to hold an empty formula would reopen it.
-       */
-      const empties = emptyMath(e);
-      if (empties.length > emptyCount.current) {
-        const target = empties[empties.length - 1]!;
-        void openFormulaRef.current({
-          latex: "",
-          display: target.display,
-          node: target.pos,
-          range: null,
-          created: true,
-        });
-      }
-      emptyCount.current = empties.length;
-
-      /*
-       * `{{` makes an EMPTY hole (markdown/clozeHole.ts), and an empty hole is
-       * a chip with nothing in it: the body field opens on it at once, exactly
-       * as `$$` opens the formula dialog, and for the same reason — there is
-       * nothing to type into an atom. Compared against the previous count, or
-       * every later keystroke would reopen the one already in the text.
-       */
-      const openHoles = emptyClozeHoles(e);
-      if (openHoles.length > emptyHoles.current) {
-        const at = openHoles[openHoles.length - 1]!;
-        setHole({ pos: at, body: "", created: true, anchor: holeAnchor(e, at) });
-      }
-      emptyHoles.current = openHoles.length;
-    },
+  const upload = useRef<ImageUploader | null>(null);
+  const { editor, settled } = useRichTextEditor({
+    value,
+    onChange,
+    onEnter,
+    onTab,
+    inline,
+    holes,
+    placeholder,
+    ariaLabel,
+    fieldId,
+    disabled,
+    autoFocus,
+    editorRef,
+    upload,
+    onFocusChange: setFocused,
+    openMath,
+    openHole,
+    openFormula,
+    openCreatedHole,
   });
+  const marks = useRichTextMarks(editor);
+  const selectionPreview = useHoleSelectionPreview(editor, holes);
+  useRichTextSync(editor, { value, holes, disabled, settled });
 
-  editorRef.current = editor;
-
-  /** Opens the blank card on the hole at `pos`. */
-  function openHole(pos: number, body: string, created: boolean) {
-    if (!editorRef.current) return;
-    setHoverPreview(null);
-    setHole({ pos, body, created, anchor: holeAnchor(editorRef.current, pos) });
-  }
-
-  /** Opens the dialog on the math node at `pos`. */
-  function openMath(pos: number, latex: unknown, typeName: string) {
-    void openFormulaRef.current({
-      latex: typeof latex === "string" ? latex : "",
-      display: typeName === "blockMath",
-      node: pos,
-      range: null,
-      created: false,
-    });
-  }
-
-  /*
-   * Which marks the caret sits in, for the pressed state of the toolbar.
-   * `useEditorState` and not `shouldRerenderOnTransaction`: the second
-   * re-renders this component on every keystroke, which in a long prompt is
-   * the whole document reconciled per character.
-   */
-  const marks = useEditorState({
-    editor,
-    selector: ({ editor: e }) =>
-      e === null
-        ? {}
-        : {
-            bold: e.isActive("bold"),
-            italic: e.isActive("italic"),
-            code: e.isActive("code"),
-            codeBlock: e.isActive("codeBlock"),
-            math: e.isActive("inlineMath") || e.isActive("blockMath"),
-            link: e.isActive("link"),
-            // Not `table`, which is a toolbar ACTION key: a caret inside a
-            // table must not light the "insert a table" button up.
-            inTable: e.isActive("table"),
-          },
-  }) as Partial<Record<string, boolean>>;
-
-  /**
-   * The chip the caret has SELECTED, as one string so the selector can be
-   * compared by value: `useEditorState` runs on every transaction, and a fresh
-   * object would re-render this component per keystroke.
-   */
-  const selectedHole = useEditorState({
-    editor,
-    selector: ({ editor: e }) => {
-      if (e === null) return null;
-      const { selection } = e.state;
-      if (!(selection instanceof NodeSelection)) return null;
-      if (selection.node.type.name !== "clozeHole" || selection.node.attrs.body === null) return null;
-      return `${selection.from}\u0000${String(selection.node.attrs.body ?? "")}`;
-    },
-  }) as string | null;
-
-  useEffect(() => {
-    if (!editor || !holes || selectedHole === null) {
-      setSelectionPreview(null);
-      return;
-    }
-    const cut = selectedHole.indexOf("\u0000");
-    const pos = Number(selectedHole.slice(0, cut));
-    const items = clozeHolePossibilities(selectedHole.slice(cut + 1));
-    setSelectionPreview(items === null ? null : { anchor: holeAnchor(editor, pos), items });
-  }, [editor, holes, selectedHole]);
-
-  /*
-   * `value` changed underneath us — a restored version, a reset draft — so the
-   * document is rebuilt. An edit this component made itself never lands here:
-   * `settled` already holds it, which is what keeps the caret where the
-   * teacher left it while typing.
-   */
-  useEffect(() => {
-    if (!editor || editor.isDestroyed) return;
-    if (value === settled.current) return;
-    settled.current = value;
-    editor.commands.setContent(holes ? protectHolePipes(value) : value, {
-      contentType: "markdown",
-      emitUpdate: false,
-    });
-  }, [editor, value]);
-
-  useEffect(() => {
-    if (!editor || editor.isDestroyed) return;
-    if (editor.isEditable === !disabled) return;
-    editor.setEditable(!disabled);
-  }, [editor, disabled]);
-
-  const insertImages = useCallback(
-    async (files: File[], at?: number) => {
-      if (!uploadImage || !editor) return;
-      const images = files.filter((f) => f.type.startsWith("image/"));
-      if (images.length === 0) return;
-      setUploading((n) => n + images.length);
-      try {
-        // The drop position is remembered BEFORE the upload and the pictures
-        // are laid down from it, in the order they were dropped.
-        let pos = at;
-        for (const image of images) {
-          const src = await uploadImage(image);
-          const alt = image.name.replace(/\.[^.]+$/, "");
-          const node = { type: "image", attrs: { src, alt } };
-          if (pos === undefined) editor.chain().focus().setImage({ src, alt }).run();
-          else {
-            const size = editor.state.doc.content.size;
-            const where = Math.min(pos, size);
-            editor.chain().focus().insertContentAt(where, node).run();
-            pos = Math.min(editor.state.selection.to, editor.state.doc.content.size);
-          }
-        }
-      } finally {
-        setUploading((n) => Math.max(0, n - images.length));
-      }
-    },
-    [uploadImage, editor],
-  );
+  const { uploading, insertImages } = useImageUpload(editor, uploadImage);
   upload.current = (files, at) => void insertImages(files, at);
-
   const showImage = uploadImage !== undefined;
 
   /** What the image node view reads; see `ImageView.tsx` for why it is a context. */
@@ -678,326 +125,54 @@ export function RichText({
     [uploadImage],
   );
 
-  /** Every action the toolbar can offer, before the mode filters it. */
-  const ACTIONS: Action[] = [
-    { key: "bold", icon: Bold, labelKey: "md.bold", shortcut: `${modKey()}+B` },
-    { key: "italic", icon: Italic, labelKey: "md.italic", shortcut: `${modKey()}+I` },
-    { key: "code", icon: Code, labelKey: "md.code" },
-    { key: "codeBlock", icon: SquareCode, labelKey: "md.codeBlock" },
-    { key: "math", icon: Sigma, labelKey: "md.math" },
-    { key: "image", icon: ImageIcon, labelKey: "md.image" },
-    { key: "table", icon: TableIcon, labelKey: "md.table" },
-    { key: "link", icon: LinkIcon, labelKey: "md.link" },
-    // Only a cloze field has holes, and only there is the button drawn.
-    { key: "blank", icon: RectangleEllipsis, labelKey: "md.blank.insert", shortcut: "{{" },
-  ];
-
-  const actions = ACTIONS.filter(
-    (a) =>
-      (a.key !== "image" || showImage) &&
-      (a.key !== "blank" || holes) &&
-      // A one-paragraph field has nowhere to put a fenced block, and a table
-      // in a row of a list is a shape no one asked a CHOICE for. The schema
-      // still knows both, so a stored one is never dropped (tiptap.ts).
-      ((a.key !== "codeBlock" && a.key !== "table") || !inline),
-  );
-
-  /*
-   * What the app's shortcut strip shows while the caret is in this field: the
-   * two formatting keys every rich field answers to, plus whatever the host
-   * added (a list of choices answers Tab and Enter). Registered on focus, so
-   * the strip follows the caret and not merely the screen.
-   */
-  /*
-   * INSIDE A FENCED BLOCK the strip says something else entirely, and it has
-   * to: Enter is a line of code and not the next choice, Tab is an indent and
-   * not a new row, and a host's "Tab — Add a choice" would be a lie while the
-   * caret is in there. The marks are dropped with them — a code block carries
-   * none, so Ctrl+B does nothing in it.
-   */
-  const live: Shortcut[] = marks.codeBlock
-    ? [
-        ...(inline
-          ? [
-              { keys: "Enter", label: t("md.code.newLine") },
-              { keys: `${modKey()}+Enter`, label: t("md.code.leave") },
-            ]
-          : []),
-        { keys: "Tab", label: t("md.code.indent") },
-      ]
-    : [
-        { keys: `${modKey()}+B`, label: t("md.bold") },
-        { keys: `${modKey()}+I`, label: t("md.italic") },
-        // Only an inline field: a block field splits its paragraph on plain
-        // Enter, and teaching a second key for the same thing is noise.
-        ...(inline ? [{ keys: `${modKey()}+Enter`, label: t("md.newLine") }] : []),
-        ...(holes ? [{ keys: "{{", label: t("md.blank.insert") }] : []),
-        ...shortcuts.map((s) => ({ keys: s.keys, label: s.label })),
-      ];
-  useShortcuts(live, focused && !disabled && !source);
-
-  function run(key: string) {
-    if (!editor) return;
-    switch (key) {
-      case "bold":
-        editor.chain().focus().toggleBold().run();
-        return;
-      case "italic":
-        editor.chain().focus().toggleItalic().run();
-        return;
-      case "code":
-        editor.chain().focus().toggleCode().run();
-        return;
-      case "codeBlock":
-        editor.chain().focus().toggleCodeBlock().run();
-        return;
-      case "image":
-        file.current?.click();
-        return;
-      case "table":
-        // Three by three with a header row: the shape a teacher draws on a
-        // slide, and the one GFM writes with the least ceremony.
-        editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
-        return;
-      case "math": {
-        const { selection } = editor.state;
-        if (selection instanceof NodeSelection && isMathNode(selection.node.type.name)) {
-          openMath(selection.from, selection.node.attrs.latex, selection.node.type.name);
-          return;
-        }
-        // A selected run of text is what the formula starts from: select
-        // `x^2`, press Σ, and it is already in the dialog.
-        const text = editor.state.doc.textBetween(selection.from, selection.to);
-        void openFormula({
-          latex: text,
-          display: false,
-          node: null,
-          range: selection.empty ? null : { from: selection.from, to: selection.to },
-          created: false,
-        });
-        return;
-      }
-      case "blank": {
-        /*
-         * An EMPTY chip, which `onUpdate` opens the card on at once — the very
-         * path typing `{{` takes, so the button and the two braces cannot end
-         * up meaning two different things.
-         */
-        editor.chain().focus().insertContent({ type: "clozeHole", attrs: { body: "" } }).run();
-        return;
-      }
-      case "link": {
-        const href = editor.getAttributes("link").href;
-        setAsking({ initial: typeof href === "string" ? href : "" });
-        return;
-      }
-    }
-  }
-
-  /** Writes what the formula dialog collected, where it was opened from. */
-  function applyFormula({ latex, display }: Formula) {
-    if (!editor || !formula) return;
-    const content = { type: display ? "blockMath" : "inlineMath", attrs: { latex } };
-    const chain = editor.chain().focus();
-    if (formula.node !== null) {
-      const node = editor.state.doc.nodeAt(formula.node);
-      chain.insertContentAt({ from: formula.node, to: formula.node + (node?.nodeSize ?? 1) }, content);
-    } else if (formula.range) chain.insertContentAt(formula.range, content);
-    else chain.insertContent(content);
-    chain.run();
-    setFormula(null);
-  }
-
-  /**
-   * Leaving the dialog. The empty node `$$` had just made goes with it: an
-   * invisible formula in the middle of a prompt is worse than no formula, and
-   * the teacher who cancels meant to be back where they were.
-   */
-  function cancelFormula() {
-    if (editor && formula?.created && formula.node !== null) {
-      const node = editor.state.doc.nodeAt(formula.node);
-      if (node && isMathNode(node.type.name)) {
-        editor
-          .chain()
-          .focus()
-          .deleteRange({ from: formula.node, to: formula.node + node.nodeSize })
-          .run();
-      }
-    }
-    setFormula(null);
-    editor?.commands.focus();
-  }
-
-  /**
-   * Writes the body the blank card collected. An EMPTY body removes the chip:
-   * a hole with nothing in it is `cloze.empty_blank` and would only be an
-   * error the teacher has to come back and delete.
-   */
-  function applyHole(body: string) {
-    if (!editor || !hole) return;
-    const node = editor.state.doc.nodeAt(hole.pos);
-    const size = node?.type.name === "clozeHole" ? node.nodeSize : 1;
-    const range = { from: hole.pos, to: hole.pos + size };
-    const chain = editor.chain().focus();
-    if (body.trim() === "") chain.deleteRange(range).run();
-    else chain.insertContentAt(range, { type: "clozeHole", attrs: { body } }).run();
-    setHole(null);
-  }
-
-  /** Leaving the card. The chip `{{` had just made goes with it. */
-  function cancelHole() {
-    if (editor && hole?.created) {
-      const node = editor.state.doc.nodeAt(hole.pos);
-      if (node?.type.name === "clozeHole") {
-        editor.chain().focus().deleteRange({ from: hole.pos, to: hole.pos + node.nodeSize }).run();
-      }
-    }
-    setHole(null);
-    editor?.commands.focus();
-  }
-
-  /**
-   * A click that lands on the field's CHROME — its padding, the strip beside
-   * the compact toolbar — rather than on the contenteditable itself.
-   *
-   * The whole bordered box is the field, so it must take the caret: the
-   * surface fills the box (`min-h-*` on `.rt-surface` above), and what is
-   * left over is the padding, which ProseMirror never hears about. The caret
-   * goes to the position nearest the pointer, and to the end of the text when
-   * the layout cannot answer — a click under the last line is a click after
-   * the last word. `preventDefault` keeps the field from blurring first.
-   */
-  function focusFromChrome(event: React.MouseEvent) {
-    if (!editor || disabled) return;
-    const target = event.target instanceof Element ? event.target : null;
-    if (target === null) return;
-    // The surface heard it already, and a control inside the box — a toolbar
-    // button, the language field of a code block — owns its own click.
-    if (target.closest(".rt-surface, button, input, select, textarea, a")) return;
-    event.preventDefault();
-    const box = (editor.view.dom as HTMLElement).getBoundingClientRect();
-    const at = editor.view.posAtCoords({
-      left: Math.min(Math.max(event.clientX, box.left + 1), box.right - 1),
-      top: Math.min(Math.max(event.clientY, box.top + 1), box.bottom - 1),
-    });
-    editor.commands.focus(at === null ? "end" : at.pos);
-  }
-
-  /** The chip under the pointer, when it stands for more than one possibility. */
-  function previewAt(target: EventTarget | null): HolePreview | null {
-    const el = target instanceof Element ? target.closest('span[data-type="cloze-hole"]') : null;
-    if (!(el instanceof HTMLElement) || el.getAttribute("data-literal") === "true") return null;
-    const items = clozeHolePossibilities(el.getAttribute("data-body") ?? "");
-    if (items === null) return null;
-    const r = el.getBoundingClientRect();
-    return { anchor: { top: r.top, bottom: r.bottom, left: r.left }, items };
-  }
-
-  /** Applies what the link prompt collected, then gives the caret back. */
-  function applyAsked(text: string) {
-    if (!editor || !asking) return;
-    const chain = editor.chain().focus();
-    if (text.trim() === "") chain.unsetLink().run();
-    else chain.extendMarkRange("link").setLink({ href: text.trim() }).run();
-    setAsking(null);
-  }
-
-  /*
-   * What can be done to the TABLE the caret is in. A menu and not seven more
-   * icons in the row: they only exist while the caret is in a table, and a
-   * strip that grows by seven buttons under the teacher's hand is the row of
-   * icon buttons DESIGN.md sends to a menu. It is drawn only when there is a
-   * table to act on, so nothing is reserved for it either.
-   */
-  const tableMenu =
-    marks.inTable === true && !disabled && editor !== null ? (
-      <Menu
-        label={t("md.table.menu")}
-        align="start"
-        trigger={
-          <IconButton size="sm" label={t("md.table.menu")} onMouseDown={(e) => e.preventDefault()}>
-            <TableIcon />
-          </IconButton>
-        }
-        items={[
-          { label: t("md.table.rowBefore"), onSelect: () => editor.chain().focus().addRowBefore().run() },
-          { label: t("md.table.rowAfter"), onSelect: () => editor.chain().focus().addRowAfter().run() },
-          { label: t("md.table.columnBefore"), onSelect: () => editor.chain().focus().addColumnBefore().run() },
-          { label: t("md.table.columnAfter"), onSelect: () => editor.chain().focus().addColumnAfter().run() },
-          { label: t("md.table.deleteRow"), separator: true, danger: true, onSelect: () => editor.chain().focus().deleteRow().run() },
-          { label: t("md.table.deleteColumn"), danger: true, onSelect: () => editor.chain().focus().deleteColumn().run() },
-          { label: t("md.table.deleteTable"), danger: true, onSelect: () => editor.chain().focus().deleteTable().run() },
-        ]}
-      />
-    ) : null;
-
-  /** The card wins over the list: they would otherwise sit on top of each other. */
-  const preview = hole !== null || source ? null : (hoverPreview ?? selectionPreview);
+  useRichTextShortcuts({
+    inCode: marks.codeBlock === true,
+    inline,
+    holes,
+    shortcuts,
+    focused,
+    disabled,
+    source,
+  });
 
   const sourceButton =
     sourceToggle && toolbar !== "never" ? (
-      <IconButton
-        size="sm"
-        label={t("md.source")}
-        active={source}
-        disabled={disabled}
-        onMouseDown={(e) => e.preventDefault()}
-        onClick={() => setSource((s) => !s)}
-      >
-        <FileCode2 />
-      </IconButton>
+      <SourceToggle source={source} disabled={disabled} onToggle={() => setSource((s) => !s)} />
     ) : null;
 
   /** The row of actions, drawn the same above a block field and inside an inline one. */
   const toolbarRow = (
-    <div
-      role="toolbar"
-      aria-label={t("md.toolbar")}
-      aria-controls={fieldId}
-      className="flex flex-wrap items-center gap-0.5"
-    >
-      {actions.map((a) => (
-        <IconButton
-          key={a.key}
-          size="sm"
-          label={a.shortcut ? `${t(a.labelKey)} (${a.shortcut})` : t(a.labelKey)}
-          // A code block carries no mark and holds no node: bold, a formula
-          // and a picture cannot land in one. The fence toggle stays, since it
-          // is the way back out of the block.
-          disabled={
-            disabled || editor === null || (marks.codeBlock === true && a.key !== "codeBlock")
-          }
-          {...(marks[a.key] === undefined ? {} : { active: marks[a.key] })}
-          // The toolbar of an inline field lives INSIDE it: pressing a button
-          // must format the selection, not take the caret out of the row.
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => run(a.key)}
-        >
-          <a.icon />
-        </IconButton>
-      ))}
-      {tableMenu}
-      {sourceButton}
-      {uploading > 0 ? (
-        <span role="status" className="ml-1 text-xs text-fg-muted">
-          {t("md.uploading")}
-        </span>
-      ) : null}
-    </div>
+    <RichTextToolbar
+      fieldId={fieldId}
+      editor={editor}
+      marks={marks}
+      actions={toolbarActions({ showImage, holes, inline })}
+      disabled={disabled}
+      uploading={uploading}
+      sourceButton={sourceButton}
+      onRun={(key) =>
+        runToolbarAction(editor, key, {
+          pickImage: () => file.current?.click(),
+          openMath,
+          openFormula,
+          askLink: (initial) => setAsking({ initial }),
+        })
+      }
+    />
   );
 
   return (
     <div className={cx("flex flex-col gap-1.5", className)}>
       {source ? (
-        <SourcePane
-          id={fieldId}
+        <RichTextSourcePane
+          fieldId={fieldId}
           value={value}
           onChange={onChange}
-          label={ariaLabel ?? t("md.label")}
-          placeholder={placeholder ?? t("md.placeholder.body")}
+          ariaLabel={ariaLabel}
+          placeholder={placeholder}
           disabled={disabled}
-          rows={inline ? 3 : 8}
-          {...(uploadImage === undefined ? {} : { uploadImage })}
+          inline={inline}
+          uploadImage={uploadImage}
           trailing={sourceButton}
         />
       ) : (
@@ -1005,21 +180,11 @@ export function RichText({
           {toolbar === "always" ? toolbarRow : null}
 
           {asking ? (
-            <AskBar
-              label={t("md.url")}
-              initial={asking.initial}
-              apply={t("common.save")}
-              cancel={t("common.cancel")}
-              onSubmit={applyAsked}
-              onCancel={() => {
-                setAsking(null);
-                editor?.commands.focus();
-              }}
-            />
+            <LinkPrompt editor={editor} initial={asking.initial} onClose={() => setAsking(null)} />
           ) : null}
 
           <div
-            onMouseDown={focusFromChrome}
+            onMouseDown={(e) => focusFromChrome(e, editor, disabled)}
             className={cx(
               inputClass,
               "w-full px-3 py-2",
@@ -1040,74 +205,31 @@ export function RichText({
               <div className="-mx-1 mb-1.5 border-b border-line px-1 pb-1.5">{toolbarRow}</div>
             ) : null}
             <ImageToolsContext.Provider value={imageTools}>
-              <EditorContent
-                editor={editor}
-                // No height here: the room a field needs is on the surface
-                // INSIDE this wrapper (`editorProps.attributes` above), which
-                // is the only element a click can turn into a caret.
-                // A chip shows the FIRST possibility and how many more there
-                // are; the whole list is one hover away, read-only. Delegated
-                // from the field, because the chips are ProseMirror's DOM and
-                // a React node view per hole would rebuild on every keystroke.
-                {...(holes
-                  ? {
-                      onMouseOver: (e: React.MouseEvent) => setHoverPreview(previewAt(e.target)),
-                      onMouseOut: () => setHoverPreview(null),
-                    }
-                  : {})}
-              />
+              {/*
+               * No height here: the room a field needs is on the surface
+               * INSIDE this wrapper (`editorProps.attributes`), which is the
+               * only element a click can turn into a caret. The hover of the
+               * hole chips is delegated from here (useClozeHole.ts).
+               */}
+              <EditorContent editor={editor} {...hoverHandlers} />
             </ImageToolsContext.Provider>
           </div>
         </>
       )}
 
-      {hole ? (
-        <BlankPopover
-          key={`hole-${hole.pos}`}
-          anchor={hole.anchor}
-          body={hole.body}
-          onApply={applyHole}
-          onCancel={cancelHole}
-        />
-      ) : null}
-
-      {preview
-        ? createPortal(
-            <div
-              aria-hidden
-              className={cx(
-                "pointer-events-none fixed max-w-64 rounded-menu border border-line bg-surface px-2.5 py-1.5 shadow-popover",
-                Z.popover,
-              )}
-              style={{ top: preview.anchor.bottom + 6, left: preview.anchor.left }}
-            >
-              <ul className="flex flex-col gap-0.5 text-[13px]">
-                {preview.items.map((item, i) => (
-                  <li key={i} className="flex items-center gap-1.5">
-                    {item.correct === null ? null : (
-                      <Check
-                        className={cx("size-3.5 shrink-0 text-success", item.correct ? "" : "opacity-0")}
-                      />
-                    )}
-                    <span className={cx("font-mono", item.correct === false ? "text-fg-muted" : "text-fg")}>
-                      {item.label}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>,
-            document.body,
-          )
-        : null}
-
-      {formula && Dialog ? (
-        <Dialog
-          initial={{ latex: formula.latex, display: formula.display }}
-          allowDisplay={!inline}
-          onInsert={applyFormula}
-          onCancel={cancelFormula}
-        />
-      ) : null}
+      <RichTextOverlays
+        hole={hole}
+        onApplyHole={applyHole}
+        onCancelHole={cancelHole}
+        hoverPreview={hoverPreview}
+        selectionPreview={selectionPreview}
+        source={source}
+        formula={formula}
+        Dialog={Dialog}
+        allowDisplay={!inline}
+        onInsertFormula={applyFormula}
+        onCancelFormula={cancelFormula}
+      />
 
       {showImage && !source ? (
         <input
@@ -1123,62 +245,6 @@ export function RichText({
           }}
         />
       ) : null}
-    </div>
-  );
-}
-
-/**
- * The one-field prompt the link button opens, in the flow of the card rather
- * than in a dialog: it holds a single value — an address, pasted in one
- * gesture — and a modal for one text input is the heaviest possible answer
- * (DESIGN.md, §4 of the UI skill). A FORMULA is the opposite case, which is
- * why it got a dialog of its own: it wants a palette, a preview and a
- * placement. Escape cancels and gives the caret back, Enter applies.
- */
-function AskBar({
-  label,
-  initial,
-  apply,
-  cancel,
-  onSubmit,
-  onCancel,
-}: {
-  label: string;
-  initial: string;
-  apply: string;
-  cancel: string;
-  onSubmit: (value: string) => void;
-  onCancel: () => void;
-}) {
-  const [text, setText] = useState(initial);
-  const id = useId();
-  return (
-    <div className="flex flex-wrap items-center gap-2 rounded-field bg-surface-2 px-2 py-1.5">
-      <label htmlFor={id} className="text-xs font-medium text-fg-muted">
-        {label}
-      </label>
-      <input
-        id={id}
-        autoFocus
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            onSubmit(text);
-          } else if (e.key === "Escape") {
-            e.preventDefault();
-            onCancel();
-          }
-        }}
-        className={cx(inputClass, "h-7 min-w-0 flex-1 font-mono text-[13px]")}
-      />
-      <Button size="sm" variant="secondary" onClick={() => onSubmit(text)}>
-        {apply}
-      </Button>
-      <Button size="sm" variant="ghost" onClick={onCancel}>
-        {cancel}
-      </Button>
     </div>
   );
 }
