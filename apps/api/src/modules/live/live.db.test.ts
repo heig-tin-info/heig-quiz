@@ -16,7 +16,7 @@ import { registerForTests } from "@quiz/registry/server";
 
 import { TestClock } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { answers, attempts, evaluationItems, evaluations } from "../../db/schema.js";
+import { answers, attemptEvents, attempts, evaluationItems, evaluations } from "../../db/schema.js";
 import { subscribe, type BusMessage } from "../../events.js";
 import { testDb } from "../../test/db.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
@@ -864,6 +864,48 @@ describe("running code (POST /attempts/:id/run)", () => {
         now: clock.now(),
       }),
     ).resolves.toMatchObject({ result: { status: "ok" } });
+  });
+
+  it("journals the run before running it, and publishes the result on the student's topic", async () => {
+    const { evaluation, attempt, itemId } = await codeAttempt();
+    const frames: Record<string, unknown>[] = [];
+    const unsubscribe = subscribe((message: BusMessage) => {
+      if (message.kind !== "data" || message.event.type !== "runner.result") return;
+      frames.push({ ...message.event, audience: message.audience, topics: message.topics });
+    });
+    try {
+      const { requestId, result } = await service.runVisibleCases(db, {
+        runner: recorder().runner,
+        evaluation,
+        attempt,
+        itemId,
+        regions: ["return 0;"],
+        now: clock.now(),
+      });
+      expect(frames).toHaveLength(1);
+      expect(frames[0]).toMatchObject({ requestId, itemId, result });
+      // A runner that is down still costs a run: the journal row comes first.
+      await expect(
+        service.runVisibleCases(db, {
+          runner: new UnavailableRunner("not_configured"),
+          evaluation,
+          attempt,
+          itemId,
+          regions: ["return 0;"],
+          now: clock.now(),
+        }),
+      ).rejects.toMatchObject({ code: "runner_unavailable" });
+      expect(frames).toHaveLength(1);
+      const journal = await db
+        .select()
+        .from(attemptEvents)
+        .where(eq(attemptEvents.attemptId, attempt.id));
+      expect(journal.map((e) => e.kind)).toEqual(["run", "run"]);
+      expect(journal[0]!.details).toEqual({ itemId, requestId });
+      expect(Object.keys(journal[1]!.details as object).sort()).toEqual(["itemId", "requestId"]);
+    } finally {
+      unsubscribe();
+    }
   });
 
   /** A recording runner: it answers nothing useful, it remembers the request. */
