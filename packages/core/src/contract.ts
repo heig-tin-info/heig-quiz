@@ -105,12 +105,17 @@ export interface StudentView {
  * deviation W3-4). Adding a key here makes every list stricter at once: if a
  * type's leak test goes red because of it, that type has a leak.
  *
- * This list only grows.
+ * This list only grows — with one recorded exception. `compare` was a member
+ * (added with the floor, #27) and left it for audit R-06: `code` publishes
+ * its comparison options on purpose, because they say HOW an output is
+ * compared (trailing whitespace, case, a numeric tolerance), never WHAT the
+ * answer is, and without them the player judged a visible case by a
+ * different rule than the grade. The other four types keep `compare`
+ * forbidden in their own leak tests; `code`'s test pins the exact shape.
  */
 export const COMMON_FORBIDDEN_STUDENT_KEYS: readonly string[] = [
   "answers",
   "changeNote",
-  "compare",
   "compileArgs",
   "correct",
   "deprecationNote",

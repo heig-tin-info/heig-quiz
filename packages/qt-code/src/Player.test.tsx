@@ -10,9 +10,10 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { CodePlayer } from "./Player.js";
-import type { CodeAnswer } from "./schema.js";
+import { finalizeRunnerCode } from "./grade.js";
+import { CodeConfig, type CodeAnswer } from "./schema.js";
 import { codeServer } from "./server.js";
-import { codeConfig, outcome } from "./test/fixtures.js";
+import { codeConfig, FINALIZE_CTX, outcome } from "./test/fixtures.js";
 
 const student = codeServer.toStudent(codeConfig(), { seed: 7, itemId: "i", shuffle: false });
 
@@ -210,5 +211,85 @@ describe("CodePlayer", () => {
     setup();
     expect(screen.queryByTestId("md")).toBeNull();
     expect(screen.getByText("Sum the integers read on stdin.")).toBeInTheDocument();
+  });
+});
+
+/**
+ * The fix of audit R-06: a question whose teacher chose non-default
+ * comparison options used to read "Output differs" in the player while the
+ * grade gave full marks (ADR-015 §2). The player and the grade now ask the
+ * same `caseVerdict`, with the same options — asserted here side by side, for
+ * one option of each kind and for the default as a control.
+ */
+describe("the player and the grade agree (audit R-06)", () => {
+  function withCompare(compare: object, cases: Array<{ expected: string }>) {
+    return CodeConfig.parse({
+      ...codeConfig(),
+      tests: {
+        mode: "io",
+        compare,
+        cases: cases.map((c, i) => ({ name: `case ${i + 1}`, stdin: "", ...c, visible: true, points: 1 })),
+      },
+    });
+  }
+
+  const cases = [
+    {
+      name: "ignoreCase",
+      config: withCompare({ ignoreCase: true }, [{ expected: "Hello World\n" }, { expected: "OK\n" }]),
+      stdout: ["hello world\n", "ok\n"],
+    },
+    {
+      name: "a numeric epsilon",
+      config: withCompare({ numeric: { epsilon: 0.001, mode: "abs" } }, [
+        { expected: "3.14159\n" },
+        { expected: "2.71828 1.41421\n" },
+      ]),
+      stdout: ["3.1416\n", "2.7183 1.4142\n"],
+    },
+  ];
+
+  for (const { name, config, stdout } of cases) {
+    it(`passes both in the player and in the grade, with ${name}`, async () => {
+      const run = outcome(stdout.map((s) => ({ stdout: s })));
+      const grade = finalizeRunnerCode(config, { regions: ["a", "b"] }, FINALIZE_CTX, run);
+      expect(grade.details.cases.map((c) => c.ok)).toEqual([true, true]);
+
+      const view = codeServer.toStudent(config, { seed: 1, itemId: "i", shuffle: false });
+      render(
+        <CodePlayer
+          student={view}
+          answer={null}
+          onChange={() => {}}
+          readOnly={false}
+          monaco={false}
+          onRun={async () => run}
+        />,
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Run" }));
+      expect(await screen.findAllByText("Passed")).toHaveLength(2);
+      expect(screen.queryByText("Output differs")).toBeNull();
+    });
+  }
+
+  it("fails both places under the default options (the control)", async () => {
+    const config = withCompare({}, [{ expected: "Hello World\n" }]);
+    const run = outcome([{ stdout: "hello world\n" }]);
+    expect(finalizeRunnerCode(config, { regions: ["a", "b"] }, FINALIZE_CTX, run).details.cases[0]?.ok).toBe(
+      false,
+    );
+    const view = codeServer.toStudent(config, { seed: 1, itemId: "i", shuffle: false });
+    render(
+      <CodePlayer
+        student={view}
+        answer={null}
+        onChange={() => {}}
+        readOnly={false}
+        monaco={false}
+        onRun={async () => run}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    expect(await screen.findByText("Output differs")).toBeInTheDocument();
   });
 });

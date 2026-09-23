@@ -105,6 +105,9 @@ export const codeServer: QuestionTypeServer<
       // Name and size only: a data file may spell the answer out.
       filesPreview: config.files.map((f) => ({ name: f.name, bytes: f.content.length })),
       allOrNothing: config.allOrNothing,
+      // HOW a visible case is judged, never WHAT the answer is: the player
+      // applies the grade's own rule (`caseVerdict`) with it (audit R-06).
+      compare: { ...config.tests.compare },
     };
   },
 
@@ -173,3 +176,15 @@ export { fromCanonical, toCanonical } from "./canonical.js";
  * server-side check of a config reads the same rule.
  */
 export { referenceRegionCount, referenceRegions } from "./reference.js";
+/*
+ * "Did this case pass?" — the one rule (audit R-06). Exported from BOTH entry
+ * points: the grade and the API's run route read it here, the editor and the
+ * player in the browser.
+ */
+export {
+  caseVerdict,
+  type CaseFailure,
+  type CaseRun,
+  type CaseSpec,
+  type CaseVerdict,
+} from "./verdict.js";

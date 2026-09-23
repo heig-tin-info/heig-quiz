@@ -35,6 +35,10 @@ import { loadConfig, typeOf } from "../pool/config.js";
  * expected output of its VISIBLE cases on purpose (docs/04 §4.7, deviation
  * W3-4). What must never travel is the hidden half, and that is covered by
  * the secret-value search of the leak test, which is the check that matters.
+ *
+ * `compare` is absent too, since audit R-06: `code` publishes its comparison
+ * options so the player judges a visible case by the grade's own rule. They
+ * say HOW an output is compared, never WHAT the answer is.
  */
 export const FORBIDDEN_STUDENT_KEYS: readonly string[] = [
   ...COMMON_FORBIDDEN_STUDENT_KEYS,

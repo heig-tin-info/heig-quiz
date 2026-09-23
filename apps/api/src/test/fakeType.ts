@@ -144,6 +144,8 @@ const RunnableConfig = z.object({
       visible: z.boolean(),
     }),
   ),
+  /** The comparison options, published like `qt-code` does since R-06. */
+  compare: z.object({ ignoreCase: z.boolean() }).optional(),
 });
 
 /**
@@ -160,6 +162,7 @@ export const fakeRunnableCode: QuestionTypeServer<
     template: string;
     runsPerMinute: number;
     visibleCases: { name: string; args: string[]; stdin: string; expected: string }[];
+    compare?: { ignoreCase: boolean } | undefined;
   },
   { cases: { name: string; expected: string }[] },
   { passed: number }
@@ -179,6 +182,7 @@ export const fakeRunnableCode: QuestionTypeServer<
         expected: z.string(),
       }),
     ),
+    compare: z.object({ ignoreCase: z.boolean() }).optional(),
   }),
   solutionSchema: z.object({
     cases: z.array(z.object({ name: z.string(), expected: z.string() })),
@@ -202,6 +206,7 @@ export const fakeRunnableCode: QuestionTypeServer<
       visibleCases: config.cases
         .filter((c) => c.visible)
         .map((c) => ({ name: c.name, args: [...c.args], stdin: "", expected: c.expected })),
+      ...(config.compare === undefined ? {} : { compare: { ...config.compare } }),
     };
   },
   toSolution: (config) => ({

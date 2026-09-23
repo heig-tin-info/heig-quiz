@@ -83,6 +83,17 @@ export { CodeIcon };
  * nothing and stays out of the lazy chunks.
  */
 export { referenceRegionCount, referenceRegions } from "./reference.js";
+/*
+ * "Did this case pass?" — the one rule (audit R-06), the same function the
+ * grade applies. Pure, so it too costs the bundle nothing.
+ */
+export {
+  caseVerdict,
+  type CaseFailure,
+  type CaseRun,
+  type CaseSpec,
+  type CaseVerdict,
+} from "./verdict.js";
 export type {
   CodeAnswer,
   CodeCase,

@@ -27,7 +27,9 @@ import {
  * is in neither: a VISIBLE case publishes its expected output on purpose —
  * the player shows "stdin / expected / got" and the student is meant to
  * compare them (docs/spec/04 §4.7). The hidden ones are covered by the value
- * search below, which is the check that actually matters here.
+ * search below, which is the check that actually matters here. `compare` is
+ * out of the floor since audit R-06 and published on purpose (HOW, never
+ * WHAT); its exact shape is pinned by a test of its own below.
  */
 const FORBIDDEN_KEYS = [
   ...COMMON_FORBIDDEN_STUDENT_KEYS,
@@ -123,6 +125,32 @@ describe("codeServer.toStudent", () => {
       expected: "",
     });
     expect(JSON.stringify(view)).not.toContain("ignored");
+  });
+
+  it("publishes HOW outputs are compared, never WHAT they are (audit R-06)", () => {
+    // `compare` left the shared floor for this one type: the player judges a
+    // visible case with the grade's own options, so it must have them. The
+    // shape is pinned — two switches and a tolerance, no string that could
+    // carry an answer — and the secret-value search above still runs on the
+    // whole payload.
+    expect(student.compare).toEqual({ trimTrailing: true, ignoreCase: false, numeric: null });
+    const tolerant = CodeConfig.parse({
+      ...codeConfig(),
+      tests: {
+        ...codeConfig().tests,
+        compare: { trimTrailing: false, ignoreCase: true, numeric: { epsilon: 0.001, mode: "rel" } },
+      },
+    });
+    const published = codeServer.toStudent(tolerant, view);
+    expect(published.compare).toEqual({
+      trimTrailing: false,
+      ignoreCase: true,
+      numeric: { epsilon: 0.001, mode: "rel" },
+    });
+    expect(Object.keys(published.compare).sort()).toEqual(["ignoreCase", "numeric", "trimTrailing"]);
+    for (const secret of SECRET_VALUES) {
+      expect(JSON.stringify(published), secret).not.toContain(secret);
+    }
   });
 
   it("says where the Run button executes, which the key never depends on", () => {

@@ -378,4 +378,11 @@ describe("stripMetadata is the last line of defence", () => {
     const payload = { prompt: "P", choices: [{ id: 0, text: "A" }], visibleCases: [{ expected: "ok" }] };
     expect(stripMetadata(payload)).toEqual(payload);
   });
+
+  it("lets code's comparison options through: HOW, never WHAT (audit R-06)", () => {
+    // The player judges a visible case with the grade's own options; stripping
+    // them here would put the two back out of step.
+    const compare = { trimTrailing: true, ignoreCase: true, numeric: { epsilon: 0.01, mode: "abs" } };
+    expect(stripMetadata({ prompt: "P", compare })).toEqual({ prompt: "P", compare });
+  });
 });

@@ -17,13 +17,13 @@ import { useId, useState } from "react";
 import { fmt, plural, resolveStrings } from "@quiz/core/client";
 import type { MarkdownRenderer, PlayerProps } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
-import { compareOutput } from "@quiz/domain/compareOutput";
 
 import { CodeArea } from "./MonacoHost.js";
 import { initialRegions, stripMarkerLines, trimTrailingNewline } from "./segments.js";
 import type { CodeAnswer, CodeStudent } from "./schema.js";
 import { PLAYER_STRINGS, type CodePlayerStrings } from "./strings.js";
 import { badge, button, card, cx, hint, input, lockedBlock, sectionTitle, table } from "./styles.js";
+import { caseVerdict } from "./verdict.js";
 
 /** Where a run is, for the one line the player shows while it gets there. */
 export type CodeRunStage = "loading" | "compiling" | "running";
@@ -89,26 +89,31 @@ function verdictOf(
   visibleCase: VisibleCase,
   result: CaseResult | undefined,
   compileOk: boolean,
+  compare: CodeStudent["compare"] | undefined,
   s: CodePlayerStrings,
 ): { label: string; ok: boolean | null } {
-  if (!compileOk || result === undefined) return { label: s.notRun, ok: null };
-  if (result.timedOut) return { label: s.timedOut, ok: false };
-  if (result.oom) return { label: s.outOfMemory, ok: false };
-  if (result.exitCode === null) return { label: s.crashed, ok: false };
-  // A payload written before the case shape gained its two checks reads as
-  // "exit 0 and the output matches", which is what it meant.
-  const wantExit =
-    visibleCase.expectedExitCode === undefined ? 0 : visibleCase.expectedExitCode;
-  if (wantExit !== null && result.exitCode !== wantExit) {
-    return { label: fmt(s.exitMismatch, { got: String(result.exitCode), want: wantExit }), ok: false };
+  // The grade's own rule, with the teacher's comparison options (audit R-06);
+  // this function only words its answer.
+  const verdict = caseVerdict(visibleCase, compileOk ? result : undefined, compare);
+  switch (verdict.failure) {
+    case null:
+      return { label: s.passed, ok: true };
+    case "not_run":
+      return { label: s.notRun, ok: null };
+    case "timed_out":
+      return { label: s.timedOut, ok: false };
+    case "oom":
+      return { label: s.outOfMemory, ok: false };
+    case "crashed":
+      return { label: s.crashed, ok: false };
+    case "exit": {
+      // A payload older than the two checks meant "exit 0".
+      const want = visibleCase.expectedExitCode === undefined ? 0 : visibleCase.expectedExitCode;
+      return { label: fmt(s.exitMismatch, { got: String(result!.exitCode), want: want ?? 0 }), ok: false };
+    }
+    case "output":
+      return { label: s.outputMismatch, ok: false };
   }
-  if (
-    visibleCase.compareStdout !== false &&
-    !compareOutput(visibleCase.expected, result.stdout)
-  ) {
-    return { label: s.outputMismatch, ok: false };
-  }
-  return { label: s.passed, ok: true };
 }
 
 export function CodePlayer({
@@ -311,6 +316,7 @@ export function CodePlayer({
                     visibleCase,
                     result,
                     outcome?.compile.ok ?? false,
+                    student.compare,
                     s,
                   );
                   return (
