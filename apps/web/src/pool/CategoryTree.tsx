@@ -4,11 +4,11 @@ import { useState, type ReactNode } from "react";
 
 import type { CategoryNode, PoolDetail } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useMoveQuestions, useQuestionDrop, type QuestionDrag } from "./move";
-import { useToast } from "../notify";
+import { useErrorToast } from "../notify";
 import { useSearchParam } from "../router";
 import { Button, cx, Field, Menu, Modal, Skeleton } from "../ui";
 import { poolKey } from "../queryKeys";
@@ -200,7 +200,7 @@ function CategoryList({
 }) {
   const t = useT();
   const qc = useQueryClient();
-  const toast = useToast();
+  const toastError = useErrorToast();
   const confirm = useConfirm();
   const [form, setForm] = useState<
     { mode: "create"; parentId: string | null } | { mode: "rename"; node: CategoryNode } | null
@@ -208,7 +208,7 @@ function CategoryList({
   const [name, setName] = useState("");
 
   const invalidate = () => qc.invalidateQueries({ queryKey: poolKey(poolId) });
-  const fail = (error: unknown) => toast(apiErrorMessage(error, t("pool.categoryFailed")), "error");
+  const fail = toastError("pool.categoryFailed");
 
   const create = useMutation({
     mutationFn: (body: { name: string; parentId: string | null }) =>

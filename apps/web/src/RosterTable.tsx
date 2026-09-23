@@ -22,32 +22,16 @@ import {
   Badge,
   cx,
   IconButton,
-  Initials,
   inputClass,
   inputSize,
   Menu,
+  PersonAvatar,
   RelativeTime,
   SortHeader,
   T,
   useSortableTable,
 } from "./ui";
 import { classroomKey } from "./queryKeys";
-
-function StudentAvatar({ entry }: { entry: RosterEntry }) {
-  const [failed, setFailed] = useState(false);
-  if (entry.avatarUrl && !failed) {
-    return (
-      <img
-        src={entry.avatarUrl}
-        alt=""
-        referrerPolicy="no-referrer"
-        onError={() => setFailed(true)}
-        className="size-7 shrink-0 rounded-full object-cover"
-      />
-    );
-  }
-  return <Initials name={[entry.prenom, entry.nom]} />;
-}
 
 function Row({ classroomId, entry }: { classroomId: string; entry: RosterEntry }) {
   const t = useT();
@@ -182,7 +166,7 @@ function Row({ classroomId, entry }: { classroomId: string; entry: RosterEntry }
       <tr className={cx(T.row, T.rowHover)}>
         <td className={`${T.td} font-semibold`}>
           <span className="flex items-center gap-2.5">
-            <StudentAvatar entry={entry} />
+            <PersonAvatar name={[entry.prenom, entry.nom]} src={entry.avatarUrl} />
             {entry.nom}
           </span>
         </td>

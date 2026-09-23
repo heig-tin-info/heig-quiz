@@ -9,11 +9,11 @@ import type {
   ResultsView as ResultsPayload,
 } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { gradingLinks } from "../grading";
 import { useT } from "../i18n";
-import { useToast } from "../notify";
+import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
 import { useSearchParam } from "../router";
 import { useScreenCommands } from "../screenCommands";
@@ -22,11 +22,12 @@ import {
   Button,
   Card,
   EmptyState,
-  RelativeTime,
   Menu,
   PageError,
   PageHeader,
+  ParentLink,
   QueryError,
+  RelativeTime,
   SectionHeading,
   Skeleton,
   Tabs,
@@ -58,6 +59,7 @@ export function ResultsView({
 }) {
   const t = useT();
   const toast = useToast();
+  const toastError = useErrorToast();
   const confirm = useConfirm();
   const qc = useQueryClient();
   const [tabParam, setTab] = useSearchParam("tab", "students");
@@ -86,7 +88,7 @@ export function ResultsView({
       void qc.invalidateQueries({ queryKey: evaluationKey(evaluationId) });
       toast(t(on ? "results.release.done" : "results.unrelease.done"), "success");
     },
-    onError: (error) => toast(apiErrorMessage(error, t("results.release.failed")), "error"),
+    onError: toastError("results.release.failed"),
     onSettled: () => setReleasing(false),
   });
 
@@ -162,14 +164,12 @@ export function ResultsView({
       <PageHeader
         eyebrow={
           classroomId ? (
-            <button
-              type="button"
+            <ParentLink
               onClick={() => navigate({ view: "classroom", id: classroomId })}
-              className="hover:text-fg hover:underline"
-              title={t("results.classroom")}
+              tip={t("results.classroom")}
             >
               {view.title}
-            </button>
+            </ParentLink>
           ) : (
             view.title
           )

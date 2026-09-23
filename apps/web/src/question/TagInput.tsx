@@ -4,10 +4,10 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import type { PoolTag } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useT } from "../i18n";
-import { useToast } from "../notify";
-import { Tip, Z, cx, inputClass } from "../ui";
+import { useErrorToast } from "../notify";
+import { cx, inputClass, listboxIndex, Tip, Z } from "../ui";
 import { poolTagsKey } from "../queryKeys";
 
 /**
@@ -47,7 +47,7 @@ export function TagInput({
 }) {
   const t = useT();
   const qc = useQueryClient();
-  const toast = useToast();
+  const toastError = useErrorToast();
   const uid = useId();
   const listId = `${uid}-list`;
   const optionId = (i: number) => `${uid}-option-${i}`;
@@ -75,7 +75,7 @@ export function TagInput({
         body: JSON.stringify({ description: body.description }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: poolTagsKey(poolId) }),
-    onError: (error) => toast(apiErrorMessage(error, t("question.tag.describeFailed")), "error"),
+    onError: toastError("question.tag.describeFailed"),
   });
 
   const typed = normalize(query);
@@ -127,14 +127,11 @@ export function TagInput({
   }, [describing]);
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "ArrowDown") {
+    const next = listboxIndex(e.key, active, rows);
+    if (next !== null) {
       e.preventDefault();
       setOpen(true);
-      if (rows) setActive((i) => (i + 1) % rows);
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setOpen(true);
-      if (rows) setActive((i) => (i - 1 + rows) % rows);
+      setActive(next);
     } else if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
       if (open && rows) pick(active);

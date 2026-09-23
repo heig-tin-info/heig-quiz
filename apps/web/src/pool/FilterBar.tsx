@@ -9,6 +9,7 @@ import {
   Button,
   cx,
   IconButton,
+  listboxIndex,
   SearchInput,
   Segmented,
   Sheet,
@@ -262,12 +263,10 @@ function SearchBox({
             return;
           }
           if (!open) return;
-          if (e.key === "ArrowDown") {
+          const next = listboxIndex(e.key, active, options.length);
+          if (next !== null) {
             e.preventDefault();
-            setActive((i) => (i + 1) % options.length);
-          } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            setActive((i) => (i - 1 + options.length) % options.length);
+            setActive(next);
           } else if (e.key === "Enter" && current) {
             e.preventDefault();
             pick(current);

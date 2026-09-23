@@ -13,9 +13,9 @@ import type {
   GradingState,
 } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useT } from "../i18n";
-import { useToast } from "../notify";
+import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
 import { useScreenCommands } from "../screenCommands";
 import { useShortcuts } from "../shortcuts";
@@ -78,6 +78,7 @@ export function GradingPanel({
 }) {
   const t = useT();
   const toast = useToast();
+  const toastError = useErrorToast();
 
   const [order, setOrder] = useState<"question" | "student">("question");
   const [showNames, setShowNames] = useState(false);
@@ -225,7 +226,7 @@ export function GradingPanel({
     mutationFn: (gradingId: string) =>
       api(`/app/api/gradings/${gradingId}/validate`, { method: "POST", body: "{}" }),
     onSuccess: invalidate,
-    onError: (error) => toast(apiErrorMessage(error, t("grading.validate.failed")), "error"),
+    onError: toastError("grading.validate.failed"),
   });
 
   const run = useMutation({
@@ -235,7 +236,7 @@ export function GradingPanel({
       invalidate();
       toast(t("grading.run.started"), "progress");
     },
-    onError: (error) => toast(apiErrorMessage(error, t("grading.run.failed")), "error"),
+    onError: toastError("grading.run.failed"),
   });
 
   // --- Keyboard (docs/08 §8.5) ------------------------------------------

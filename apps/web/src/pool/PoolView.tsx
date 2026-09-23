@@ -4,10 +4,10 @@ import { useMemo, useState, type DragEvent } from "react";
 
 import type { PoolDetail, QuestionDetail, QuestionPage, QuestionRow } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
-import { useToast } from "../notify";
+import { useErrorToast, useToast } from "../notify";
 import { QUESTION_TYPE_IDS, typeIcon, typeLabel } from "../questionTypes";
 import type { Route } from "../router";
 import { useSearchParam } from "../router";
@@ -18,9 +18,11 @@ import {
   Card,
   EmptyState,
   Field,
-  Modal,
+  FormDialog,
+  FormError,
   PageError,
   PageHeader,
+  ParentLink,
   QueryError,
   Skeleton,
   Spinner,
@@ -161,45 +163,29 @@ function NewQuestionModal({
     onSuccess: onCreated,
   });
   return (
-    <Modal
+    <FormDialog
       title={t("pool.newQuestion")}
       onClose={onClose}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button
-            onClick={() => create.mutate()}
-            loading={create.isPending}
-            disabled={name.trim() === ""}
-          >
-            {t("pool.newQuestionAction")}
-          </Button>
-        </>
-      }
+      onSubmit={() => create.mutate()}
+      submitLabel={t("pool.newQuestionAction")}
+      submitting={create.isPending}
+      canSubmit={name.trim() !== ""}
+      error={<FormError error={create.error} fallback={t("pool.createFailed")} />}
     >
-      <div className="space-y-4">
-        <fieldset>
-          <legend className="mb-2 text-[13px] font-medium">{t("pool.questionType")}</legend>
-          <QuestionTypePicker types={QUESTION_TYPE_IDS} value={type} onChange={setType} />
-        </fieldset>
-        <Field
-          label={t("pool.questionName")}
-          hint={t("pool.questionNameHint")}
-          fullWidth
-          autoFocus
-          placeholder={t("pool.questionNamePlaceholder")}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        {create.isError ? (
-          <p className="text-[13px] text-danger">
-            {apiErrorMessage(create.error, t("pool.createFailed"))}
-          </p>
-        ) : null}
-      </div>
-    </Modal>
+      <fieldset>
+        <legend className="mb-2 text-[13px] font-medium">{t("pool.questionType")}</legend>
+        <QuestionTypePicker types={QUESTION_TYPE_IDS} value={type} onChange={setType} />
+      </fieldset>
+      <Field
+        label={t("pool.questionName")}
+        hint={t("pool.questionNameHint")}
+        fullWidth
+        autoFocus
+        placeholder={t("pool.questionNamePlaceholder")}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+      />
+    </FormDialog>
   );
 }
 
@@ -207,6 +193,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
+  const toastError = useErrorToast();
   const confirm = useConfirm();
   // Everything but the category is local to the screen; the category is the
   // sidebar's selection, and "" means "all questions".
@@ -302,7 +289,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
       toast(t("question.duplicated"), "success");
       await qc.invalidateQueries({ queryKey: poolKey(id) });
     },
-    onError: (error) => toast(apiErrorMessage(error, t("error.save")), "error"),
+    onError: toastError("error.save"),
   });
 
   const remove = useMutation({
@@ -310,7 +297,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: poolKey(id) });
     },
-    onError: (error) => toast(apiErrorMessage(error, t("question.deleteFailed")), "error"),
+    onError: toastError("question.deleteFailed"),
   });
 
   const askDelete = async (row: QuestionRow) => {
@@ -369,13 +356,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
       <PageHeader
         help="pool"
         eyebrow={
-          <button
-            type="button"
-            className="text-fg-muted transition-colors hover:text-fg"
-            onClick={() => navigate({ view: "pools" })}
-          >
-            {t("pools.title")}
-          </button>
+          <ParentLink onClick={() => navigate({ view: "pools" })}>{t("pools.title")}</ParentLink>
         }
         title={detail.pool.name}
         description={

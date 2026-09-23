@@ -31,10 +31,10 @@ import type {
   StudentHome as StudentHomeData,
 } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { feedbackLink } from "../grading";
 import { formatDuration, useT, type TFunction } from "../i18n";
-import { useToast } from "../notify";
+import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
 import {
   Badge,
@@ -118,6 +118,7 @@ function EvaluationRow({
 function JoinCard() {
   const t = useT();
   const toast = useToast();
+  const toastError = useErrorToast();
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -135,7 +136,7 @@ function JoinCard() {
       );
       setCode("");
     } catch (error) {
-      toast(apiErrorMessage(error, t("join.failed")), "error");
+      toastError("join.failed")(error);
     } finally {
       setBusy(false);
     }

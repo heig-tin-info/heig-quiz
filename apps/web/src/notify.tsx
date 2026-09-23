@@ -3,7 +3,8 @@ import { createContext, useCallback, useContext, useRef, useState, type ReactNod
 
 import type { NoticeKind } from "@quiz/contracts";
 
-import { useT } from "./i18n";
+import { apiErrorMessage } from "./api";
+import { useT, type Dict } from "./i18n";
 import { Z } from "./ui";
 
 /**
@@ -94,6 +95,18 @@ export function useNotify() {
 
 export function useToast() {
   return useContext(ToastContext).toast;
+}
+
+/**
+ * The failed-mutation toast: what the server said, or the translated
+ * `fallback`, always in the `error` tone. `onError: toastError("error.save")`
+ * reads as what it does, where the long form repeated the same plumbing at
+ * two dozen sites.
+ */
+export function useErrorToast(): (fallback: keyof Dict) => (error: unknown) => void {
+  const toast = useToast();
+  const t = useT();
+  return (fallback) => (error) => toast(apiErrorMessage(error, t(fallback)), "error");
 }
 
 const AUTO_DISMISS_MS = 6000;

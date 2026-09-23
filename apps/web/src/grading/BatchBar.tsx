@@ -3,10 +3,10 @@ import { Sparkles } from "lucide-react";
 
 import type { BatchValidateBody, BatchValidateResponse, GradingConfidence, GradingSource } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
-import { useToast } from "../notify";
+import { useErrorToast, useToast } from "../notify";
 import { Button } from "../ui";
 import { useGradingInvalidate } from "./useGradingInvalidate";
 
@@ -49,6 +49,7 @@ export function BatchBar({
 }) {
   const t = useT();
   const toast = useToast();
+  const toastError = useErrorToast();
   const confirm = useConfirm();
   const invalidateGrading = useGradingInvalidate(evaluationId);
 
@@ -62,7 +63,7 @@ export function BatchBar({
       invalidateGrading();
       toast(t("grading.batch.done", { n: result.validated }), "success");
     },
-    onError: (error) => toast(apiErrorMessage(error, t("grading.batch.failed")), "error"),
+    onError: toastError("grading.batch.failed"),
   });
 
   const run = async (body: BatchScope, n: number) => {

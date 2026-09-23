@@ -4,10 +4,10 @@ import { useState } from "react";
 import type { Grading, GradingEntry } from "@quiz/contracts";
 import { formatPoints } from "@quiz/domain";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { Alert, Button, Field, Sheet, Textarea } from "../ui";
+import { Button, Field, FormError, Sheet, Textarea } from "../ui";
 import { useGradingInvalidate } from "./useGradingInvalidate";
 
 /**
@@ -124,11 +124,7 @@ export function OverrideSheet({
             <p className="text-[13px] text-danger">{t("grading.override.commentRequired")}</p>
           ) : null}
         </div>
-        {save.isError ? (
-          <Alert tone="danger" title={t("grading.override.failed")}>
-            {apiErrorMessage(save.error, t("error.server"))}
-          </Alert>
-        ) : null}
+        <FormError error={save.error} title={t("grading.override.failed")} />
       </form>
     </Sheet>
   );

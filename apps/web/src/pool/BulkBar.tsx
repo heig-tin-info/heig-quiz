@@ -4,11 +4,11 @@ import { useState } from "react";
 
 import type { Category, CategoryNode, PoolDetail, PoolSummary, QuestionRow } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useMoveQuestions } from "./move";
-import { useToast } from "../notify";
+import { useErrorToast, useToast } from "../notify";
 import { Button, Field, IconButton, Modal, Select, Spinner, Z } from "../ui";
 import { anyPoolKey, poolKey, poolsKey } from "../queryKeys";
 
@@ -59,6 +59,7 @@ export function BulkBar({
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
+  const toastError = useErrorToast();
   const confirm = useConfirm();
   const moveQuestions = useMoveQuestions();
   const [dialog, setDialog] = useState<"tag" | "move" | "pool" | null>(null);
@@ -144,7 +145,7 @@ export function BulkBar({
         target = created.id;
       } catch (error) {
         setBusy(false);
-        toast(apiErrorMessage(error, t("pool.categoryFailed")), "error");
+        toastError("pool.categoryFailed")(error);
         return;
       }
       await qc.invalidateQueries({ queryKey: poolKey(poolId) });

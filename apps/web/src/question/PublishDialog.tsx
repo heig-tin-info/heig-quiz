@@ -4,9 +4,9 @@ import { useState } from "react";
 
 import type { VersionRow, ZodIssueLite } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useT } from "../i18n";
-import { Alert, Button, Modal, Textarea } from "../ui";
+import { Alert, Button, FormError, Modal, Textarea } from "../ui";
 import { issueMessage, issuesOfError } from "./issues";
 
 /**
@@ -76,11 +76,7 @@ export function PublishDialog({
           </Alert>
         ) : null}
 
-        {publish.isError && !blocked ? (
-          <p className="text-[13px] text-danger">
-            {apiErrorMessage(publish.error, t("question.publishFailed"))}
-          </p>
-        ) : null}
+        <FormError error={blocked ? null : publish.error} fallback={t("question.publishFailed")} />
 
         <Textarea
           label={t("question.changeNote")}

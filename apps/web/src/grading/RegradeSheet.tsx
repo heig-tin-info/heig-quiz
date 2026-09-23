@@ -3,10 +3,10 @@ import { useState } from "react";
 
 import type { GradingQueueItem } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { Alert, Button, Field, Sheet, Textarea } from "../ui";
+import { Button, Field, FormError, Sheet, Textarea } from "../ui";
 import { useGradingInvalidate } from "./useGradingInvalidate";
 
 /**
@@ -110,11 +110,7 @@ export function RegradeSheet({
           />
           <p className="text-xs text-fg-muted">{t("grading.regrade.versionHint")}</p>
         </div>
-        {run.isError ? (
-          <Alert tone="danger" title={t("grading.regrade.failed")}>
-            {apiErrorMessage(run.error, t("error.server"))}
-          </Alert>
-        ) : null}
+        <FormError error={run.error} title={t("grading.regrade.failed")} />
       </form>
     </Sheet>
   );

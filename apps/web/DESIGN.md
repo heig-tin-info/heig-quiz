@@ -182,6 +182,16 @@ move and select with wrap, Home/End jump. A `value` matching no item still
 leaves the first tab reachable, so a hand-edited URL cannot take the whole
 strip out of the Tab order.
 
+The index arithmetic behind those keys is written once, in `ui/layers.tsx`:
+`listboxIndex` for a vertical list (the menu, the palette, the tag, teacher
+and filter comboboxes — arrows wrap, and Home/End only where the list owns
+them, since in a text field they move the caret) and `rovingIndex` for a
+horizontal roving strip (`Tabs`, `ProgressSegments`). They return the next
+index or null and nothing else: `preventDefault`, opening the list and
+moving the focus stay at each call site, because that is where the
+components legitimately differ. They exist because five lists and two
+strips each wrote that arithmetic out by hand.
+
 An element made clickable without being a button (a card, a table row) takes
 `pressable()` from `ui.tsx`: `tabIndex={0}` plus Enter and Space, with Space
 prevented from scrolling the page. A row keeps `role="row"`; announcing it as
@@ -222,6 +232,24 @@ with a keyboard-reachable dismiss button.
 - Badge: pill, soft background, 12 px, tones green / amber / red / zinc /
   accent. Status is a badge; a count is plain text.
 - Card: `surface` + hairline + 16 px radius; padding 16–20.
+- PersonAvatar: a person as a round picture, or their two initials on
+  `surface-3` in `fg-muted` when there is no picture OR when it fails to load
+  (an IdP picture URL goes stale, and a broken-image glyph is not a face).
+  The signed-in user's own disc (`Avatar`) takes the `accent` tone. An
+  avatar standing alone — the row of a course's staff — carries the full
+  name as its accessible name and as a `Tip`, never a native `title`; one
+  with the name written beside it (a roster row) carries neither. It exists
+  because three places drew "a picture, or initials", and two of them had no
+  fallback.
+- ParentLink: the way back up, as the `PageHeader` eyebrow — the parent's
+  name (a course, a pool, a classroom) as a plain button. The eyebrow sets
+  the 13 px `fg-muted`; the link adds `fg` AND an underline on hover, with
+  the colour transition every hover has. The underline stays because the
+  resting link is the same grey as the caption it replaced, and colour alone
+  is a weak signal of "this goes somewhere" — the roster's mailto links wear
+  the same pair. A name that does not say where it leads takes a `Tip`
+  (`tip`), never a native `title`. It exists because six pages wrote that
+  button with two different class lists.
 - Logo: the product's wordmark (`src/assets/quiz.svg`), four speech bubbles
   spelling Q U I Z, as an `<img alt="Quiz">`. It is the file, not inline JSX:
   the same mark is delivered elsewhere, and a retyped copy is a second
@@ -240,6 +268,15 @@ with a keyboard-reachable dismiss button.
   a failure reads the same everywhere and there is one place to change it.
   Queries retry once and never on a 4xx (`main.tsx`), so the error state
   arrives in about a second: three retries read as a hang, not as a failure.
+- FormError: QueryError's counterpart for a WRITE that failed, said where
+  the reader acted — nothing while the mutation's `error` is null, otherwise
+  the server's message or the fallback. Without a title it is one 13 px
+  `danger` line, the shape a dialog puts under its fields (`FormDialog`'s
+  `error` slot); with a `title` it is a danger `Alert`, the shape a step, a
+  sheet or a page uses, where a bare red line would be lost. It exists
+  because seventeen sites spelled out `isError ? … apiErrorMessage … : null`
+  by hand. It lives beside QueryError (`queryError.tsx`), for the same
+  reason: `ui/` never imports the HTTP client.
 - Field: label 13 px 500 above, 12 px radius, `line-strong` border, accent
   ring on focus. The `<label>` covers the text only and points at the control
   through `htmlFor`; the help "?" is its sibling, never inside it, or that
@@ -315,6 +352,15 @@ with a keyboard-reachable dismiss button.
   a document the reader walks through, today the whole of one student's
   answers opened from the live grid — and the footer is how they walk to the
   next one, so it must not sit at the bottom of a hundred lines of code.
+- FormDialog (`ui/forms.tsx`): the short form in a dialog — one to three
+  fields, Cancel (`common.cancel`, always) and ONE submit button whose label
+  is the verb ("Create course", "Save"), spinner while `submitting`, disabled
+  until `canSubmit`, and the failure under the fields. It exists because
+  seven dialogs wrote that footer out by hand, each one a chance to drift.
+  It deliberately has no `size`: a fourth field is
+  the sign the form belongs in a `Sheet`, never a reason to widen the
+  dialog. `dense` (12 px between rows instead of 16) is for a body that is a
+  single row.
 - Menu: overflow for tertiary actions; destructive items last, separated. It
   closes on a page scroll, but not on the scroll its own opening click causes
   (200 ms of grace) nor on one inside the panel. Its panel stacks ABOVE the
@@ -327,7 +373,10 @@ with a keyboard-reachable dismiss button.
 - Toast: bottom-right, `surface` + hairline + overlay shadow. Tones
   `success` / `error` / `warning`, plus `progress` (a neutral spinner) for
   "this has started", which is the only report an action taken from a menu
-  can get.
+  can get. A failed mutation reports through `useErrorToast()` (`notify.tsx`):
+  `onError: toastError("error.save")` — the server's message or the
+  translated fallback key, always in the `error` tone, so no call site can
+  pick another one.
 - Empty state: icon in a `surface-2` circle, title, one line, one action.
 - Notification bell (`src/notifications/NotificationBell.tsx`): the account's
   own inbox, beside the account row in the sidebar and beside the avatar in

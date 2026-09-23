@@ -5,7 +5,7 @@ import type { ReactNode, RefObject } from "react";
 import type { DateFormat, Me } from "@quiz/contracts";
 
 import { useI18n, useT } from "../i18n";
-import { cx, HelpIcon, Tip, type IconType, useNow } from "./layers";
+import { cx, HelpIcon, rovingIndex, Tip, type IconType, useNow } from "./layers";
 
 // --- Sortable tables (one motif for every hand-rolled table) ---
 
@@ -119,41 +119,82 @@ export function SortHeader<K extends string>({
 
 // --- Identity ---
 
-/** User avatar: uploaded/IdP picture, or initials on the accent color. */
-export function Avatar({ me, className = "size-16 text-xl" }: { me: Me; className?: string }) {
-  if (me.avatarUrl) {
-    return (
-      <img
-        src={me.avatarUrl}
-        alt=""
-        className={`rounded-full object-cover ${className}`}
-        referrerPolicy="no-referrer"
-      />
-    );
-  }
-  const initials =
-    `${me.givenName.charAt(0)}${me.familyName.charAt(0)}`.toUpperCase() || "?";
+/**
+ * A person: their picture, or their initials when there is none OR when it
+ * fails to load — an IdP picture URL goes stale, and the browser's
+ * broken-image glyph is not a face. `label` is the full name, for an avatar
+ * standing alone (a row of colleagues): it names the picture and shows as a
+ * `Tip`, never as a native `title`. Leave it out when the name is written
+ * beside the avatar, where a bubble would only repeat it.
+ */
+export function PersonAvatar({
+  name,
+  src,
+  label,
+  tone = "muted",
+  className = "size-7 text-xs",
+}: {
+  /** Given name, family name. */
+  name: [string, string];
+  src: string | null | undefined;
+  label?: string;
+  /** `accent` is the signed-in user's own disc; everyone else is `muted`. */
+  tone?: "muted" | "accent";
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(false);
   return (
-    <span
-      className={`inline-flex shrink-0 items-center justify-center rounded-full bg-accent font-semibold text-on-fill ${className}`}
-    >
-      {initials}
-    </span>
+    <Tip label={label}>
+      {src && !failed ? (
+        <img
+          src={src}
+          alt={label ?? ""}
+          referrerPolicy="no-referrer"
+          onError={() => setFailed(true)}
+          className={cx("shrink-0 rounded-full object-cover", className)}
+        />
+      ) : (
+        <Initials name={name} tone={tone} label={label} className={className} />
+      )}
+    </Tip>
   );
 }
 
-/** Initials disc for a roster entry (no account picture, or one that failed). */
+/** The signed-in user's avatar: initials on the accent colour as fallback. */
+export function Avatar({ me, className = "size-16 text-xl" }: { me: Me; className?: string }) {
+  return (
+    <PersonAvatar
+      name={[me.givenName, me.familyName]}
+      src={me.avatarUrl}
+      tone="accent"
+      className={className}
+    />
+  );
+}
+
+/** Initials disc (no account picture, or one that failed). */
 export function Initials({
   name,
+  tone = "muted",
+  label,
   className = "size-7 text-xs",
 }: {
   name: [string, string];
+  tone?: "muted" | "accent";
+  /** The full name, when the disc stands alone and must be announced. */
+  label?: string;
   className?: string;
 }) {
   const initials = `${name[0].charAt(0)}${name[1].charAt(0)}`.toUpperCase() || "?";
+  const colors =
+    tone === "accent"
+      ? "bg-accent font-semibold text-on-fill"
+      : "bg-surface-3 font-semibold text-fg-muted";
   return (
     <span
-      className={`inline-flex shrink-0 items-center justify-center rounded-full bg-surface-3 font-semibold text-fg-muted ${className}`}
+      role={label ? "img" : undefined}
+      aria-label={label}
+      className={`inline-flex shrink-0 items-center justify-center rounded-full ${colors} ${className}`}
     >
       {initials}
     </span>
@@ -505,6 +546,36 @@ export function PageHeader({
 }
 
 /**
+ * The way back up, in a `PageHeader` eyebrow: the parent's name as a quiet
+ * link. The eyebrow already sets the 13 px `fg-muted` text, so the link adds
+ * only what a link needs — `fg` and an underline on hover, reached in the
+ * 120–150 ms colour transition every hover uses. `tip` explains a name that
+ * does not say what it leads to (the results page shows the evaluation's
+ * title and leads to its classroom).
+ */
+export function ParentLink({
+  onClick,
+  tip,
+  children,
+}: {
+  onClick: () => void;
+  tip?: string;
+  children: ReactNode;
+}) {
+  return (
+    <Tip label={tip}>
+      <button
+        type="button"
+        onClick={onClick}
+        className="transition-colors hover:text-fg hover:underline"
+      >
+        {children}
+      </button>
+    </Tip>
+  );
+}
+
+/**
  * A heading that renames itself where it stands.
  *
  * Renaming used to be a line in an overflow menu that opened a modal holding
@@ -779,13 +850,10 @@ export function Tabs<V extends string>({
       ? `linear-gradient(to right, transparent 0, #000 ${edges.left ? TAB_FADE : "0px"}, #000 calc(100% - ${edges.right ? TAB_FADE : "0px"}), transparent 100%)`
       : undefined;
   const onKeyDown = (e: React.KeyboardEvent) => {
-    const keys = ["ArrowRight", "ArrowLeft", "Home", "End"];
-    if (!keys.includes(e.key) || items.length === 0) return;
+    const next = rovingIndex(e.key, roving, items.length);
+    if (next === null) return;
     e.preventDefault();
-    const i = roving;
-    const next =
-      e.key === "ArrowRight" ? i + 1 : e.key === "ArrowLeft" ? i - 1 : e.key === "Home" ? 0 : items.length - 1;
-    const target = items[(next + items.length) % items.length];
+    const target = items[next];
     if (!target) return;
     onChange(target.value);
     refs.current[target.value]?.focus();

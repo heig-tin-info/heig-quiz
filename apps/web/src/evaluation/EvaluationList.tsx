@@ -13,20 +13,20 @@ import { useState } from "react";
 
 import type { EvaluationMode, EvaluationSummary } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { gradingLinks } from "../grading";
 import { useT } from "../i18n";
 import type { Route } from "../router";
 import {
-  Alert,
   Badge,
   Button,
   Card,
   EmptyState,
   Field,
+  FormDialog,
+  FormError,
   Menu,
-  Modal,
   pressable,
   QueryError,
   Segmented,
@@ -76,56 +76,40 @@ function NewEvaluationModal({
     },
   });
   return (
-    <Modal
+    <FormDialog
       title={t("eval.new")}
       onClose={onClose}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button
-            onClick={() => create.mutate()}
-            loading={create.isPending}
-            disabled={title.trim() === ""}
-          >
-            {t("eval.create")}
-          </Button>
-        </>
-      }
+      onSubmit={() => create.mutate()}
+      submitLabel={t("eval.create")}
+      submitting={create.isPending}
+      canSubmit={title.trim() !== ""}
+      error={<FormError error={create.error} title={t("eval.createFailed")} />}
     >
-      <div className="space-y-4">
-        <Field
-          label={t("eval.titleLabel")}
-          placeholder={t("eval.titlePlaceholder")}
-          required
-          fullWidth
-          autoFocus
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-        <div className="space-y-1.5">
-          <span className="text-[13px] font-medium">{t("eval.mode")}</span>
-          <div>
-            <Segmented
-              name="eval-mode"
-              value={mode}
-              onChange={setMode}
-              options={[
-                { value: "exam", label: t("eval.mode.exam") },
-                { value: "exercise", label: t("eval.mode.exercise") },
-              ]}
-            />
-          </div>
-          <p className="text-[13px] text-fg-muted">{t(`eval.mode.desc.${mode}`)}</p>
+      <Field
+        label={t("eval.titleLabel")}
+        placeholder={t("eval.titlePlaceholder")}
+        required
+        fullWidth
+        autoFocus
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+      />
+      <div className="space-y-1.5">
+        <span className="text-[13px] font-medium">{t("eval.mode")}</span>
+        <div>
+          <Segmented
+            name="eval-mode"
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: "exam", label: t("eval.mode.exam") },
+              { value: "exercise", label: t("eval.mode.exercise") },
+            ]}
+          />
         </div>
-        {create.isError ? (
-          <Alert tone="danger" title={t("eval.createFailed")}>
-            {apiErrorMessage(create.error, t("error.server"))}
-          </Alert>
-        ) : null}
+        <p className="text-[13px] text-fg-muted">{t(`eval.mode.desc.${mode}`)}</p>
       </div>
-    </Modal>
+    </FormDialog>
   );
 }
 

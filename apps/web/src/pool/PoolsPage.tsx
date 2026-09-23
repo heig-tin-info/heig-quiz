@@ -17,10 +17,10 @@ import { useState, type ReactNode } from "react";
 
 import type { Me, Pool, PoolSummary } from "@quiz/contracts";
 
-import { api, apiErrorMessage, useMe } from "../api";
+import { api, useMe } from "../api";
 import { useConfirm } from "../confirm";
 import { useT, type TFunction } from "../i18n";
-import { useToast } from "../notify";
+import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
 import {
   Badge,
@@ -29,8 +29,10 @@ import {
   cx,
   EmptyState,
   Field,
+  FormDialog,
+  FormError,
   Menu,
-  Modal,
+  type MenuItem,
   PageHeader,
   pressable,
   QueryError,
@@ -40,7 +42,6 @@ import {
   Spinner,
   T,
   Tip,
-  type MenuItem,
 } from "../ui";
 import { PoolIcon } from "./PoolIcon";
 import { PoolIconPicker } from "./PoolIconPicker";
@@ -139,6 +140,7 @@ function usePoolActions(pool: PoolSummary, me: Me | null | undefined): PoolActio
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
+  const toastError = useErrorToast();
   const confirm = useConfirm();
   const [edit, setEdit] = useState<"form" | "icon" | null>(null);
   const [sharing, setSharing] = useState(false);
@@ -150,7 +152,7 @@ function usePoolActions(pool: PoolSummary, me: Me | null | undefined): PoolActio
   const remove = useMutation({
     mutationFn: () => api(`/app/api/pools/${pool.id}`, { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: poolsKey }),
-    onError: (error) => toast(apiErrorMessage(error, t("error.save")), "error"),
+    onError: toastError("error.save"),
   });
   const leave = useMutation({
     mutationFn: () =>
@@ -159,7 +161,7 @@ function usePoolActions(pool: PoolSummary, me: Me | null | undefined): PoolActio
       await qc.invalidateQueries({ queryKey: poolsKey });
       toast(t("pools.leaveDone", { name: pool.name }), "success");
     },
-    onError: (error) => toast(apiErrorMessage(error, t("error.save")), "error"),
+    onError: toastError("error.save"),
   });
 
   const items: MenuItem[] = [];
@@ -274,58 +276,43 @@ export function PoolFormModal({
   }
 
   return (
-    <Modal
+    <FormDialog
       title={pool ? t("pools.rename") : t("pools.new")}
       onClose={onClose}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button
-            onClick={() => save.mutate()}
-            loading={save.isPending}
-            disabled={name.trim() === ""}
-          >
-            {pool ? t("common.save") : t("pools.newAction")}
-          </Button>
-        </>
-      }
+      onSubmit={() => save.mutate()}
+      submitLabel={pool ? t("common.save") : t("pools.newAction")}
+      submitting={save.isPending}
+      canSubmit={name.trim() !== ""}
+      dense
+      error={<FormError error={save.error} fallback={t("pools.createFailed")} />}
     >
-      <div className="space-y-3">
-        <div className="flex items-end gap-3">
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[13px] font-medium text-fg">{t("pools.icon")}</span>
-            {/* The tile IS the trigger: the icon a pool will wear, and one
-                click from the shelf it comes off. */}
-            <Tip label={t("pools.icon.change")}>
-              <button
-                type="button"
-                onClick={() => setStep("icon")}
-                aria-label={t("pools.icon.change")}
-                className="inline-flex size-8.5 items-center justify-center rounded-field border border-line-strong bg-surface text-fg-muted transition-colors hover:border-fg-faint hover:text-fg"
-              >
-                <PoolIcon icon={icon} className="size-4.5" />
-              </button>
-            </Tip>
-          </div>
-          <Field
-            label={t("pools.name")}
-            className="min-w-0"
-            width="min-w-0 flex-1"
-            autoFocus
-            placeholder={t("pools.namePlaceholder")}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
+      <div className="flex items-end gap-3">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[13px] font-medium text-fg">{t("pools.icon")}</span>
+          {/* The tile IS the trigger: the icon a pool will wear, and one
+              click from the shelf it comes off. */}
+          <Tip label={t("pools.icon.change")}>
+            <button
+              type="button"
+              onClick={() => setStep("icon")}
+              aria-label={t("pools.icon.change")}
+              className="inline-flex size-8.5 items-center justify-center rounded-field border border-line-strong bg-surface text-fg-muted transition-colors hover:border-fg-faint hover:text-fg"
+            >
+              <PoolIcon icon={icon} className="size-4.5" />
+            </button>
+          </Tip>
         </div>
-        {save.isError ? (
-          <p className="text-[13px] text-danger">
-            {apiErrorMessage(save.error, t("pools.createFailed"))}
-          </p>
-        ) : null}
+        <Field
+          label={t("pools.name")}
+          className="min-w-0"
+          width="min-w-0 flex-1"
+          autoFocus
+          placeholder={t("pools.namePlaceholder")}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
       </div>
-    </Modal>
+    </FormDialog>
   );
 }
 

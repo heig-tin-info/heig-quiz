@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 
 import type { EvaluationDetail } from "@quiz/contracts";
 
-import { apiErrorMessage } from "../api";
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
 import {
@@ -12,6 +11,7 @@ import {
   Card,
   cx,
   Field,
+  FormError,
   SectionHeading,
   Segmented,
   SettingRow,
@@ -111,11 +111,7 @@ export function TimingStep({
       />
 
       {locked ? <Alert tone="warning" title={t("eval.locked")} /> : null}
-      {patch.isError ? (
-        <Alert tone="danger" title={t("eval.saveFailed")}>
-          {apiErrorMessage(patch.error, t("error.server"))}
-        </Alert>
-      ) : null}
+      <FormError error={patch.error} title={t("eval.saveFailed")} />
 
       <div className="flex flex-wrap gap-3">
         {(["classroom", "homework"] as const).map((id) => (

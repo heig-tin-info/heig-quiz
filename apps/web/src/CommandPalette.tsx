@@ -11,7 +11,7 @@ import {
   type CommandContext,
 } from "./commands";
 import type { TFunction } from "./i18n";
-import { cx, Kbd, useLayer, useScrollLock, Z } from "./ui";
+import { cx, Kbd, listboxIndex, useLayer, useScrollLock, Z } from "./ui";
 
 /*
  * Ctrl/⌘+K: one field that reaches every page, every classroom, the theme,
@@ -94,21 +94,12 @@ export function CommandPalette(props: CommandPaletteProps) {
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    const n = flat.length;
     // Every branch prevents the default: the arrows must not move the caret
     // inside the field, and Enter must not submit anything.
-    if (e.key === "ArrowDown") {
+    const next = listboxIndex(e.key, active, flat.length, { ends: true });
+    if (next !== null) {
       e.preventDefault();
-      if (n) setActive((i) => (i + 1) % n);
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      if (n) setActive((i) => (i - 1 + n) % n);
-    } else if (e.key === "Home") {
-      e.preventDefault();
-      setActive(0);
-    } else if (e.key === "End") {
-      e.preventDefault();
-      setActive(Math.max(0, n - 1));
+      setActive(next);
     } else if (e.key === "Enter") {
       e.preventDefault();
       const command = flat[active];

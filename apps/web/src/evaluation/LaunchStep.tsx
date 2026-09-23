@@ -3,10 +3,10 @@ import { CalendarClock, MonitorPlay, Rocket } from "lucide-react";
 
 import type { Evaluation, EvaluationDetail } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { formatDuration, useT } from "../i18n";
 import type { Route } from "../router";
-import { Alert, Badge, Button, Card, isoDateTime, SectionHeading, Stat } from "../ui";
+import { Alert, Badge, Button, Card, FormError, isoDateTime, SectionHeading, Stat } from "../ui";
 import { evaluationStateLabel, stateTone } from "./common";
 import { evaluationKey } from "../queryKeys";
 
@@ -80,11 +80,7 @@ export function LaunchStep({
         />
       </div>
 
-      {transition.isError ? (
-        <Alert tone="danger" title={t("eval.saveFailed")}>
-          {apiErrorMessage(transition.error, t("error.server"))}
-        </Alert>
-      ) : null}
+      <FormError error={transition.error} title={t("eval.saveFailed")} />
 
       {empty ? <Alert tone="warning" title={t("eval.launch.needQuestions")} /> : null}
 

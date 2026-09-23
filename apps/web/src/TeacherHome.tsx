@@ -16,21 +16,22 @@ import { useState, type ReactNode } from "react";
 
 import type { CourseDetail, CourseSummary, PoolSummary } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "./api";
+import { api } from "./api";
 import { useConfirm } from "./confirm";
 import { useT } from "./i18n";
-import { useToast } from "./notify";
+import { useErrorToast } from "./notify";
 import type { Route } from "./router";
 import {
   Button,
   Card,
   EmptyState,
   Field,
-  Initials,
+  FormDialog,
+  FormError,
   Menu,
   type MenuItem,
-  Modal,
   PageHeader,
+  PersonAvatar,
   QueryError,
   SectionHeading,
   Segmented,
@@ -84,49 +85,33 @@ function NewCourseModal({ onClose }: { onClose: () => void }) {
     },
   });
   return (
-    <Modal
+    <FormDialog
       title={t("courses.new")}
       onClose={onClose}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button
-            onClick={() => create.mutate()}
-            loading={create.isPending}
-            disabled={form.name.trim() === "" || form.code.trim() === ""}
-          >
-            {t("courses.newAction")}
-          </Button>
-        </>
-      }
+      onSubmit={() => create.mutate()}
+      submitLabel={t("courses.newAction")}
+      submitting={create.isPending}
+      canSubmit={form.name.trim() !== "" && form.code.trim() !== ""}
+      error={<FormError error={create.error} fallback={t("courses.createFailed")} />}
     >
-      <div className="space-y-4">
-        <Field
-          label={t("courses.name")}
-          required
-          fullWidth
-          autoFocus
-          placeholder={t("courses.namePlaceholder")}
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-        />
-        <Field
-          label={t("courses.code")}
-          required
-          fullWidth
-          placeholder={t("courses.codePlaceholder")}
-          value={form.code}
-          onChange={(e) => setForm({ ...form, code: e.target.value })}
-        />
-        {create.isError ? (
-          <p className="text-[13px] text-danger">
-            {apiErrorMessage(create.error, t("courses.createFailed"))}
-          </p>
-        ) : null}
-      </div>
-    </Modal>
+      <Field
+        label={t("courses.name")}
+        required
+        fullWidth
+        autoFocus
+        placeholder={t("courses.namePlaceholder")}
+        value={form.name}
+        onChange={(e) => setForm({ ...form, name: e.target.value })}
+      />
+      <Field
+        label={t("courses.code")}
+        required
+        fullWidth
+        placeholder={t("courses.codePlaceholder")}
+        value={form.code}
+        onChange={(e) => setForm({ ...form, code: e.target.value })}
+      />
+    </FormDialog>
   );
 }
 
@@ -146,48 +131,32 @@ function NewClassroomModal({ course, onClose }: { course: CourseSummary; onClose
     },
   });
   return (
-    <Modal
+    <FormDialog
       title={t("classrooms.new")}
       onClose={onClose}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button
-            onClick={() => create.mutate()}
-            loading={create.isPending}
-            disabled={form.name.trim() === ""}
-          >
-            {t("common.create")}
-          </Button>
-        </>
-      }
+      onSubmit={() => create.mutate()}
+      submitLabel={t("common.create")}
+      submitting={create.isPending}
+      canSubmit={form.name.trim() !== ""}
+      error={<FormError error={create.error} fallback={t("courses.createFailed")} />}
     >
-      <div className="space-y-4">
-        <Field
-          label={t("classrooms.name")}
-          required
-          fullWidth
-          autoFocus
-          placeholder={t("classrooms.namePlaceholder")}
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-        />
-        <Field
-          label={t("classrooms.period")}
-          fullWidth
-          placeholder={t("classrooms.periodPlaceholder")}
-          value={form.period}
-          onChange={(e) => setForm({ ...form, period: e.target.value })}
-        />
-        {create.isError ? (
-          <p className="text-[13px] text-danger">
-            {apiErrorMessage(create.error, t("courses.createFailed"))}
-          </p>
-        ) : null}
-      </div>
-    </Modal>
+      <Field
+        label={t("classrooms.name")}
+        required
+        fullWidth
+        autoFocus
+        placeholder={t("classrooms.namePlaceholder")}
+        value={form.name}
+        onChange={(e) => setForm({ ...form, name: e.target.value })}
+      />
+      <Field
+        label={t("classrooms.period")}
+        fullWidth
+        placeholder={t("classrooms.periodPlaceholder")}
+        value={form.period}
+        onChange={(e) => setForm({ ...form, period: e.target.value })}
+      />
+    </FormDialog>
   );
 }
 
@@ -207,38 +176,27 @@ function AddStaffModal({ course, onClose }: { course: CourseSummary; onClose: ()
     },
   });
   return (
-    <Modal
+    <FormDialog
       title={t("courses.staffAdd")}
       onClose={onClose}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button onClick={() => add.mutate()} loading={add.isPending} disabled={email.trim() === ""}>
-            {t("import.add")}
-          </Button>
-        </>
-      }
+      onSubmit={() => add.mutate()}
+      submitLabel={t("import.add")}
+      submitting={add.isPending}
+      canSubmit={email.trim() !== ""}
+      dense
+      error={<FormError error={add.error} fallback={t("courses.staffUnknown")} />}
     >
-      <div className="space-y-3">
-        <Field
-          label={t("courses.staffEmail")}
-          required
-          type="email"
-          fullWidth
-          autoFocus
-          placeholder="prenom.nom@heig-vd.ch"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        {add.isError ? (
-          <p className="text-[13px] text-danger">
-            {apiErrorMessage(add.error, t("courses.staffUnknown"))}
-          </p>
-        ) : null}
-      </div>
-    </Modal>
+      <Field
+        label={t("courses.staffEmail")}
+        required
+        type="email"
+        fullWidth
+        autoFocus
+        placeholder="prenom.nom@heig-vd.ch"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+    </FormDialog>
   );
 }
 
@@ -258,7 +216,7 @@ function CoursePools({
   const t = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
-  const toast = useToast();
+  const toastError = useErrorToast();
 
   const detail = useQuery<CourseDetail>({
     queryKey: courseKey(course.id),
@@ -283,7 +241,7 @@ function CoursePools({
     },
     // The menu is closed by the time the call answers, so the failure has
     // nowhere to render but a toast (DESIGN.md › Menu).
-    onError: (error) => toast(apiErrorMessage(error, t("pools.linkSaveFailed")), "error"),
+    onError: toastError("pools.linkSaveFailed"),
   });
 
   const unlink = async (pool: { id: string; name: string }) => {
@@ -448,21 +406,15 @@ function useCourseActions(course: CourseSummary): {
 function StaffAvatars({ course }: { course: CourseSummary }) {
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {course.staff.map((s) =>
-        s.avatarUrl ? (
-          <img
-            key={s.userId}
-            src={s.avatarUrl}
-            alt={`${s.givenName} ${s.familyName}`}
-            title={`${s.givenName} ${s.familyName}`}
-            className="size-6 rounded-full object-cover"
-          />
-        ) : (
-          <span key={s.userId} title={`${s.givenName} ${s.familyName}`}>
-            <Initials name={[s.givenName, s.familyName]} className="size-6 text-[10px]" />
-          </span>
-        ),
-      )}
+      {course.staff.map((s) => (
+        <PersonAvatar
+          key={s.userId}
+          name={[s.givenName, s.familyName]}
+          src={s.avatarUrl}
+          label={`${s.givenName} ${s.familyName}`}
+          className="size-6 text-[10px]"
+        />
+      ))}
     </div>
   );
 }

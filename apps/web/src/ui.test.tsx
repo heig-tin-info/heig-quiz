@@ -4,6 +4,7 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "./api";
+import { useErrorToast } from "./notify";
 import { renderWithProviders } from "./test/render";
 import {
   Alert,
@@ -11,9 +12,14 @@ import {
   Countdown,
   EmptyState,
   Field,
+  FormDialog,
+  FormError,
   InlineTitle,
   Menu,
   Modal,
+  PageHeader,
+  ParentLink,
+  PersonAvatar,
   pressable,
   ProgressSegments,
   PageError,
@@ -90,6 +96,50 @@ describe("Button", () => {
   it("lets the caller ask for a submit button", () => {
     renderWithProviders(<Button type="submit">Save</Button>);
     expect(screen.getByRole("button", { name: "Save" })).toHaveAttribute("type", "submit");
+  });
+});
+
+describe("FormDialog", () => {
+  const renderForm = (props: Partial<React.ComponentProps<typeof FormDialog>> = {}) => {
+    const onClose = vi.fn();
+    const onSubmit = vi.fn();
+    renderWithProviders(
+      <FormDialog
+        title="New course"
+        onClose={onClose}
+        onSubmit={onSubmit}
+        submitLabel="Create course"
+        {...props}
+      >
+        <Field label="Name" value="" onChange={() => {}} />
+      </FormDialog>,
+    );
+    return { dialog: screen.getByRole("dialog", { name: "New course" }), onClose, onSubmit };
+  };
+
+  it("owns the Cancel / submit footer and calls back on each", async () => {
+    const { dialog, onClose, onSubmit } = renderForm();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Create course" }));
+    expect(onSubmit).toHaveBeenCalledOnce();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("keeps the submit button disabled until the form can be sent", () => {
+    const { dialog } = renderForm({ canSubmit: false });
+    expect(within(dialog).getByRole("button", { name: "Create course" })).toBeDisabled();
+  });
+
+  it("shows the pending spinner on the submit button and disables it", () => {
+    const { dialog } = renderForm({ submitting: true });
+    expect(within(dialog).getByRole("button", { name: "Create course" })).toBeDisabled();
+  });
+
+  it("places the error after the fields", () => {
+    const { dialog } = renderForm({ error: <p>Code already taken</p> });
+    const field = within(dialog).getByLabelText("Name");
+    const error = within(dialog).getByText("Code already taken");
+    expect(field.compareDocumentPosition(error) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
 
@@ -860,6 +910,52 @@ describe("QueryError", () => {
   });
 });
 
+describe("FormError", () => {
+  it("renders nothing until the write has failed", () => {
+    renderWithProviders(<FormError error={null} fallback="Could not save" title="Failed" />);
+    expect(screen.queryByText("Could not save")).toBeNull();
+    expect(screen.queryByText("Failed")).toBeNull();
+  });
+
+  it("is the one red line under a dialog's fields, with the server's message", () => {
+    renderWithProviders(
+      <FormError error={new ApiError(409, { message: "Code already taken" })} fallback="x" />,
+    );
+    const line = screen.getByText("Code already taken");
+    expect(line.tagName).toBe("P");
+    expect(line).toHaveClass("text-danger");
+  });
+
+  it("becomes a titled alert, falling back to the translated error.server", () => {
+    renderWithProviders(<FormError error={new Error("x")} title="Could not save" />);
+    expect(screen.getByRole("status")).toHaveTextContent("Could not save");
+    expect(screen.getByText("The server did not answer. Try again in a moment.")).toBeVisible();
+  });
+});
+
+describe("useErrorToast", () => {
+  function Failing({ error }: { error: unknown }) {
+    const toastError = useErrorToast();
+    return (
+      <button type="button" onClick={() => toastError("error.save")(error)}>
+        Fail
+      </button>
+    );
+  }
+
+  it("toasts the server's message in the error tone", async () => {
+    renderWithProviders(<Failing error={new ApiError(422, { message: "Name is taken" })} />);
+    await userEvent.click(screen.getByRole("button", { name: "Fail" }));
+    expect(await screen.findByText("Name is taken")).toBeVisible();
+  });
+
+  it("falls back to the translated key when the server said nothing", async () => {
+    renderWithProviders(<Failing error={new Error("network")} />, { locale: "fr" });
+    await userEvent.click(screen.getByRole("button", { name: "Fail" }));
+    expect(await screen.findByText("Impossible d'enregistrer cette modification.")).toBeVisible();
+  });
+});
+
 /*
  * W3: a query that fails and takes the page with it still has to leave the
  * document a heading. `QueryError` returned on its own left a route whose
@@ -914,6 +1010,69 @@ describe("EmptyState", () => {
     const Icon = () => <svg aria-hidden />;
     renderWithProviders(<EmptyState icon={Icon} title="Time is up" titleAs="h1" />);
     expect(screen.getByRole("heading", { level: 1, name: "Time is up" })).toBeVisible();
+  });
+});
+
+describe("ParentLink", () => {
+  it("is a plain button in the eyebrow that goes back up", async () => {
+    const onClick = vi.fn();
+    renderWithProviders(
+      <PageHeader
+        title="PRG1-2026"
+        eyebrow={<ParentLink onClick={onClick}>PRG1 — Programmation 1</ParentLink>}
+      />,
+    );
+    const link = screen.getByRole("button", { name: "PRG1 — Programmation 1" });
+    expect(link).toHaveClass("transition-colors", "hover:text-fg", "hover:underline");
+    expect(link).not.toHaveAttribute("title");
+    await userEvent.click(link);
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
+  it("explains itself with a Tip, not a native title", () => {
+    vi.useFakeTimers();
+    renderWithProviders(
+      <ParentLink onClick={() => {}} tip="Open the classroom">
+        Quiz 3
+      </ParentLink>,
+    );
+    fireEvent.mouseEnter(screen.getByRole("button", { name: "Quiz 3" }).parentElement!);
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(screen.getByText("Open the classroom")).toBeInTheDocument();
+    vi.useRealTimers();
+  });
+});
+
+describe("PersonAvatar", () => {
+  it("shows the picture, and the initials once the picture fails to load", () => {
+    const { container } = renderWithProviders(
+      <PersonAvatar name={["Ada", "Lovelace"]} src="https://idp.example/dead.png" />,
+    );
+    const img = container.querySelector("img")!;
+    expect(img).toHaveAttribute("alt", "");
+    fireEvent.error(img);
+    expect(container.querySelector("img")).toBeNull();
+    expect(screen.getByText("AL")).toBeVisible();
+  });
+
+  it("names a lone avatar and shows the full name as a Tip, never a native title", () => {
+    vi.useFakeTimers();
+    renderWithProviders(<PersonAvatar name={["Ada", "Lovelace"]} src={null} label="Ada Lovelace" />);
+    const disc = screen.getByRole("img", { name: "Ada Lovelace" });
+    expect(disc).not.toHaveAttribute("title");
+    fireEvent.mouseEnter(disc.parentElement!);
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(screen.getByText("Ada Lovelace")).toBeInTheDocument();
+    vi.useRealTimers();
+  });
+
+  it("gives the signed-in user's own disc the accent fill", () => {
+    renderWithProviders(<PersonAvatar name={["Ada", "Lovelace"]} src={null} tone="accent" />);
+    expect(screen.getByText("AL")).toHaveClass("bg-accent", "text-on-fill");
   });
 });
 

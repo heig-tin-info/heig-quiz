@@ -9,25 +9,25 @@ import type {
   QuestionDetail,
 } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { fuzzyFilter } from "../fuzzy";
 import { useT } from "../i18n";
 import { TypeGlyph } from "../pool/QuestionTable";
 import { QuestionTypePicker } from "../pool/QuestionTypePicker";
 import type { Route } from "../router";
 import {
-  Alert,
   Button,
   cx,
   EmptyState,
   Field,
+  FormError,
+  PageHeader,
   pressable,
   QueryError,
   RelativeTime,
   SearchInput,
   Select,
   SettingRow,
-  PageHeader,
   Skeleton,
   Switch,
   Tabs,
@@ -321,11 +321,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
             </ul>
           )}
 
-          {start.isError ? (
-            <Alert tone="danger" title={t("poll.startFailed")}>
-              {apiErrorMessage(start.error, t("error.server"))}
-            </Alert>
-          ) : null}
+          <FormError error={start.error} title={t("poll.startFailed")} />
         </div>
       ) : (
         <div className="mt-5 space-y-4">
@@ -343,11 +339,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
             onChange={(e) => setName(e.target.value)}
           />
           <p className="text-[13px] text-fg-muted">{t("poll.newHint")}</p>
-          {create.isError ? (
-            <Alert tone="danger" title={t("pool.createFailed")}>
-              {apiErrorMessage(create.error, t("error.server"))}
-            </Alert>
-          ) : null}
+          <FormError error={create.error} title={t("pool.createFailed")} />
         </div>
       )}
     </div>
