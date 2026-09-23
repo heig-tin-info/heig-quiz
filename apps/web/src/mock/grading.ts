@@ -3,6 +3,7 @@ import {
   describe,
   histogram,
   parseCloze,
+  round2,
 } from "@quiz/domain";
 import type {
   CircuitStudent,
@@ -723,7 +724,7 @@ function resultsView(e: MockGradingWorld) {
         successRate:
           scores.length === 0
             ? null
-            : Math.round((scores.reduce((s, g) => s + g.points / g.maxPoints, 0) / scores.length) * 100) / 100,
+            : round2(scores.reduce((s, g) => s + g.points / g.maxPoints, 0) / scores.length),
       };
     }),
     rows,

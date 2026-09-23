@@ -57,6 +57,7 @@ import {
   attemptDeadline,
   bonusSeconds,
   gradeFromPoints,
+  round2,
   uniquePseudonyms,
 } from "@quiz/domain";
 import { caseVerdict } from "@quiz/qt-code/server";
@@ -89,6 +90,7 @@ import {
   joinedItems,
   studentEvaluationRows,
   totalPointsByEvaluation,
+  totalPointsOf,
 } from "../evaluation/service.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
@@ -734,7 +736,7 @@ async function viewOf(
       settings,
       feedbackPolicy: feedbackOf(evaluation),
       pausedAt: isoOrNull(evaluation.pausedAt),
-      totalPoints: Math.round(items.reduce((s, i) => s + i.item.points, 0) * 100) / 100,
+      totalPoints: totalPointsOf(items.map((i) => i.item)),
     },
     items: attemptItems(ordered, answered, locked, settings, seed),
   };
@@ -1048,7 +1050,7 @@ function liveGrader(
         defaults,
       });
       if (!isGraded(result)) return null;
-      const points = Math.round(result.points * 100) / 100;
+      const points = round2(result.points);
       const maxPoints = result.maxPoints;
       return {
         verdict: verdictOf({ points, maxPoints, state: "validated" }),
@@ -1911,7 +1913,7 @@ export async function dashboardView(
   const userIds = roster.map((r) => r.userId).filter((id): id is string => id !== null);
   const pseudonyms = uniquePseudonyms(evaluation.id, userIds);
   const online = presence.online(evaluation.id);
-  const maxPoints = Math.round(items.reduce((s, i) => s + i.item.points, 0) * 100) / 100;
+  const maxPoints = totalPointsOf(items.map((i) => i.item));
 
   // One summarizer per QUESTION (see `answerSummarizer`), built only when the
   // teacher actually asked for the answers.
@@ -2030,9 +2032,9 @@ export async function dashboardView(
       const provisional = graded === null && live.length > 0;
       return {
         itemId: item.item.id,
-        completion: started === 0 ? 0 : Math.round((done / started) * 100) / 100,
+        completion: started === 0 ? 0 : round2(done / started),
         successRate: provisional
-          ? Math.round((live.reduce((a, b) => a + b, 0) / live.length) * 100) / 100
+          ? round2(live.reduce((a, b) => a + b, 0) / live.length)
           : graded,
         provisional,
       };
@@ -2054,7 +2056,7 @@ function pointsOf(
     total += grading.points;
     seen += 1;
   }
-  return seen === 0 ? null : Math.round(total * 100) / 100;
+  return seen === 0 ? null : round2(total);
 }
 
 /**
@@ -2075,7 +2077,7 @@ function successRateOf(
     sum += grading.points / grading.maxPoints;
     n += 1;
   }
-  return n === 0 ? null : Math.round((sum / n) * 100) / 100;
+  return n === 0 ? null : round2(sum / n);
 }
 
 /** F-DASH-05: one attempt opened in read mode, key included (teacher only). */

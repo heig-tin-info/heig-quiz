@@ -56,6 +56,7 @@ import {
   staffRosterWithAttempt,
   studentEvaluationRows,
   totalPointsByEvaluation,
+  totalPointsOf,
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
@@ -67,7 +68,7 @@ import {
   type GradingRecord,
   type PairKey,
 } from "../grading/service.js";
-import { solutionView, studentView } from "../live/studentView.js";
+import { solutionView, stripKeys, studentView } from "../live/studentView.js";
 import { typeOf } from "../pool/config.js";
 
 export class ResultsError extends Error {
@@ -105,7 +106,7 @@ async function computeResults(
   evaluation: EvaluationRecord,
 ): Promise<ComputedResults> {
   const items = await joinedItems(db, evaluation.id);
-  const totalPoints = round2(items.reduce((sum, i) => sum + i.item.points, 0));
+  const totalPoints = totalPointsOf(items.map((i) => i.item));
   const scale = scaleOf(evaluation);
 
   const roster = await db
@@ -480,7 +481,7 @@ export async function studentFeedback(
   }
 
   const items = await joinedItems(db, evaluation.id);
-  const totalPoints = round2(items.reduce((sum, i) => sum + i.item.points, 0));
+  const totalPoints = totalPointsOf(items.map((i) => i.item));
   const answerRows = await db.select().from(answers).where(eq(answers.attemptId, attempt.id));
   const byItem = new Map(answerRows.map((a) => [a.itemId, a]));
   const graded = await db
@@ -557,8 +558,16 @@ export async function studentFeedback(
  *
  * `showKey` means the teacher chose to publish the key: the details travel
  * whole, both layers off.
+ *
+ * The list is its OWN, not `FORBIDDEN_STUDENT_KEYS` (`live/studentView.ts`):
+ * what carries a key in a grading breakdown is these five fields, and
+ * `details` may also be a teacher's manual override of any shape, which the
+ * question-payload list would redact for no reason (`explanation`,
+ * `answers`, …). Four of the five are on the common floor of `@quiz/core`;
+ * `expected` is not, because a visible code case publishes it
+ * (`results.db.test.ts` pins both facts).
  */
-const FORBIDDEN_DETAIL_KEYS: readonly string[] = [
+export const FORBIDDEN_DETAIL_KEYS: readonly string[] = [
   "correct",
   "expected",
   "matchers",
@@ -569,27 +578,15 @@ const FORBIDDEN_DETAIL_KEYS: readonly string[] = [
 const forbiddenDetailKeys = new Set(FORBIDDEN_DETAIL_KEYS);
 
 /**
- * The safety net of layer 2, recursive and depth-capped like
- * `stripMetadata`.
- *
- * One exception, and it is the published half of a `code` question: the
- * expected output of a case the teacher marked `visible` is already in the
- * student's own question payload (`toStudent`, deviation W3-4), so removing
- * it here would only blank the comparison the review shows. A hidden case
- * never carries one by the time it gets here — layer 1 removed it.
+ * The one exception of layer 2, and it is the published half of a `code`
+ * question: the expected output of a case the teacher marked `visible` is
+ * already in the student's own question payload (`toStudent`, deviation
+ * W3-4), so removing it here would only blank the comparison the review
+ * shows. A hidden case never carries one by the time it gets here — layer 1
+ * removed it.
  */
-function stripDetailKeys(value: unknown, depth = 0): unknown {
-  if (depth > 12 || value === null || typeof value !== "object") return value;
-  if (Array.isArray(value)) return value.map((v) => stripDetailKeys(v, depth + 1));
-  const entries = value as Record<string, unknown>;
-  const published = entries["visible"] === true;
-  const out: Record<string, unknown> = {};
-  for (const [key, child] of Object.entries(entries)) {
-    if (forbiddenDetailKeys.has(key) && !(published && key === "expected")) continue;
-    out[key] = stripDetailKeys(child, depth + 1);
-  }
-  return out;
-}
+const publishedExpected = (object: Record<string, unknown>, key: string): boolean =>
+  key === "expected" && object["visible"] === true;
 
 export function filterDetails(
   type: string,
@@ -600,7 +597,7 @@ export function filterDetails(
   if (policy.showKey) return details;
   const hook = typeOf(type).studentDetails;
   const shaped = hook ? hook(details, policy) : details;
-  return stripDetailKeys(shaped);
+  return stripKeys(shaped, forbiddenDetailKeys, publishedExpected);
 }
 
 /** `GET /student/results` — one card per released evaluation the student took. */

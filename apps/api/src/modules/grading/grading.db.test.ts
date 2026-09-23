@@ -17,11 +17,12 @@ import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
 import { answers, attempts, gradings } from "../../db/schema.js";
+import { subscribe } from "../../events.js";
 import { testApp, testDb, type TestDb } from "../../test/db.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
 import { seedCodeEvaluation } from "../../test/codeFixture.js";
 import { reload, seedLive } from "../../test/live.js";
-import { applyState, joinedItems } from "../evaluation/service.js";
+import { applyState, byId, joinedItems } from "../evaluation/service.js";
 import * as live from "../live/service.js";
 import { runEvaluationGrading } from "./jobs.js";
 import * as service from "./service.js";
@@ -143,6 +144,174 @@ describe("grading.evaluation (F-GRADE-01, §5.4)", () => {
     // `app` handed over: closing starts the correction (§5.4).
     evaluation = await live.closeEvaluation(db, evaluation, app.clock.now(), "teacher", app);
     expect(await gradingsOf(evaluation.id)).toHaveLength(1);
+  });
+});
+
+describe("progress events of the pass (§5.4)", () => {
+  /** Every `grading.progress` frame published while `run` runs, as `done/total/phase`. */
+  async function progressDuring(evaluationId: string, run: () => Promise<void>) {
+    const frames: string[] = [];
+    const stop = subscribe((message) => {
+      if (message.kind !== "data" || message.event.type !== "grading.progress") return;
+      if (message.event.evaluationId !== evaluationId) return;
+      frames.push(`${message.event.done}/${message.event.total}/${message.event.phase}`);
+    });
+    try {
+      await run();
+    } finally {
+      stop();
+    }
+    return frames;
+  }
+
+  it("ticks every 25 cells, on a skipped cell as on a graded one, then says it is done", async () => {
+    // 13 students x 2 questions = 26 cells: one tick at 25, one final frame.
+    const { app, evaluation } = await closedEvaluation({ students: 13 });
+    const first = await progressDuring(evaluation.id, () =>
+      runEvaluationGrading(app, { evaluationId: evaluation.id }),
+    );
+    expect(first).toEqual(["25/26/auto", "26/26/done"]);
+    // The second pass skips every (validated) cell, and still reports.
+    const second = await progressDuring(evaluation.id, () =>
+      runEvaluationGrading(app, { evaluationId: evaluation.id }),
+    );
+    expect(second).toEqual(["25/26/auto", "26/26/done"]);
+  });
+
+  it("ends in the runner phase when a cell went to the runner", async () => {
+    const restore = registerForTests(fakeRunnableCode);
+    try {
+      const app = await appFor();
+      const fixture = await seedCodeEvaluation(db, app.clock.now());
+      const frames = await progressDuring(fixture.evaluationId, () =>
+        runEvaluationGrading(app, { evaluationId: fixture.evaluationId }),
+      );
+      expect(frames).toEqual(["1/1/runner"]);
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe("the panel queue (F-GRADE-03)", () => {
+  /**
+   * Two students x two questions: question 0 graded (right, wrong), question
+   * 1 with one standing proposal (student 0) and one cell never graded
+   * (student 1). The projection names every cell `s<student>q<question>`.
+   */
+  async function queueFixture() {
+    const fixture = await closedEvaluation();
+    const { app, evaluation, items, attempts: rows } = fixture;
+    await runEvaluationGrading(app, { evaluationId: evaluation.id, itemIds: [items[0]!.item.id] });
+    app.clock.advance(1000);
+    await service.writeGrading(db, {
+      attemptId: rows[0]!.id,
+      itemId: items[1]!.item.id,
+      answerId: null,
+      points: 0,
+      maxPoints: items[1]!.item.points,
+      source: "auto",
+      state: "proposed",
+      details: { reason: "runner_unavailable" },
+      now: app.clock.now(),
+    });
+    const record = (await byId(db, evaluation.id))!;
+    const cell = (entry: { attemptId: string; itemId: string }) =>
+      `s${rows.findIndex((r) => r.id === entry.attemptId)}q${items.findIndex((i) => i.item.id === entry.itemId)}`;
+    const queue = async (query: Partial<Parameters<typeof service.gradingQueue>[2]>) => {
+      const result = await service.gradingQueue(db, record, {
+        by: "question",
+        anonymous: true,
+        ...query,
+      });
+      return {
+        order: result.order,
+        items: result.items.map((i) => i.id),
+        counts: result.counts,
+        entries: result.entries.map(
+          (e) =>
+            `${cell(e)}:${e.grading?.state ?? "none"}:${e.answerId === null ? "no-answer" : "answer"}:${e.history.length}`,
+        ),
+        raw: result.entries,
+      };
+    };
+    return { ...fixture, queue };
+  }
+
+  it("builds the cross product by question or by student, with the counts of the selection", async () => {
+    const { items, attempts: rows, queue } = await queueFixture();
+
+    const byQuestion = await queue({ by: "question" });
+    expect(byQuestion.order).toBe("question");
+    expect(byQuestion.items).toEqual(items.map((i) => i.item.id));
+    expect(byQuestion.entries).toEqual([
+      "s0q0:validated:answer:1",
+      "s1q0:validated:answer:1",
+      "s0q1:proposed:no-answer:1",
+      "s1q1:none:no-answer:0",
+    ]);
+    expect(byQuestion.counts).toEqual({ total: 4, validated: 2, proposed: 1, missing: 1 });
+
+    const byStudent = await queue({ by: "student" });
+    expect(byStudent.entries).toEqual([
+      "s0q0:validated:answer:1",
+      "s0q1:proposed:no-answer:1",
+      "s1q0:validated:answer:1",
+      "s1q1:none:no-answer:0",
+    ]);
+    expect(byStudent.counts).toEqual(byQuestion.counts);
+
+    // A filter on the state drops entries, not the counts of the selection.
+    const proposed = await queue({ state: "proposed" });
+    expect(proposed.entries).toEqual(["s0q1:proposed:no-answer:1"]);
+    expect(proposed.counts).toEqual(byQuestion.counts);
+    expect((await queue({ state: "validated" })).entries).toEqual([
+      "s0q0:validated:answer:1",
+      "s1q0:validated:answer:1",
+    ]);
+
+    // An item or an attempt narrows the selection, and the counts with it.
+    const oneItem = await queue({ itemId: items[1]!.item.id });
+    expect(oneItem.items).toEqual([items[1]!.item.id]);
+    expect(oneItem.entries).toEqual(["s0q1:proposed:no-answer:1", "s1q1:none:no-answer:0"]);
+    expect(oneItem.counts).toEqual({ total: 2, validated: 0, proposed: 1, missing: 1 });
+    const oneAttempt = await queue({ attemptId: rows[1]!.id });
+    expect(oneAttempt.entries).toEqual(["s1q0:validated:answer:1", "s1q1:none:no-answer:0"]);
+    expect(oneAttempt.counts).toEqual({ total: 2, validated: 1, proposed: 0, missing: 1 });
+  });
+
+  it("labels, views and history of every entry", async () => {
+    const { queue } = await queueFixture();
+    const named = (await queue({ anonymous: false })).raw;
+    const anonymous = (await queue({ anonymous: true })).raw;
+    for (const [index, entry] of named.entries()) {
+      expect(entry.label).toBe("Test student");
+      expect(entry.staff).toBe(false);
+      expect(entry.student).not.toBeNull();
+      expect(entry.solution).not.toBeNull();
+      const pseudonym = anonymous[index]!.label;
+      expect(pseudonym).not.toBe("Test student");
+      expect(pseudonym).not.toBe("—");
+    }
+    const [right] = named;
+    expect(right!.answer).toBe("answer-q0");
+    expect(right!.grading).toMatchObject({ state: "validated", source: "auto" });
+    expect(right!.history).toEqual([
+      {
+        id: right!.grading!.id,
+        points: right!.grading!.points,
+        maxPoints: right!.grading!.maxPoints,
+        source: "auto",
+        state: "validated",
+        gradedAt: right!.grading!.gradedAt,
+        comment: null,
+        regradeNote: null,
+      },
+    ]);
+    // The cell route reads the same history, line for line.
+    expect(await service.historyOfCell(db, right!.attemptId, right!.itemId)).toEqual(
+      right!.history,
+    );
   });
 });
 

@@ -15,6 +15,7 @@
  * granularity of the Swiss scale (§7.1).
  */
 import type { ResultsView } from "@quiz/contracts";
+import { round2 } from "@quiz/domain";
 
 /** U+FEFF, which UTF-8 encodes as the three bytes `EF BB BF`. */
 export const BOM = "﻿";
@@ -42,7 +43,7 @@ export function csvField(value: string): string {
 const line = (fields: readonly string[]): string => fields.map(csvField).join(SEPARATOR);
 
 /** Two decimals, `.` separator, no trailing zeroes beyond what is needed. */
-const points = (value: number): string => String(Math.round(value * 100) / 100);
+const points = (value: number): string => String(round2(value));
 
 /** Exactly one decimal: `4` is written `4.0`, because a grade always is. */
 const grade = (value: number): string => value.toFixed(1);

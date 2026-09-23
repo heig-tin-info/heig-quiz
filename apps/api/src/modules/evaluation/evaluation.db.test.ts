@@ -405,3 +405,14 @@ describe("the order of the refusals, over HTTP", () => {
     }
   });
 });
+
+describe("totalPointsOf (audit B-08)", () => {
+  it("sums the items and rounds through round2, half away from zero", () => {
+    expect(service.totalPointsOf([])).toBe(0);
+    // Binary representation error is absorbed: 0.1 + 0.2 is 0.3.
+    expect(service.totalPointsOf([{ points: 0.1 }, { points: 0.2 }])).toBe(0.3);
+    expect(service.totalPointsOf([{ points: 1.25 }, { points: 2.5 }, { points: 0.75 }])).toBe(4.5);
+    // An exact negative half goes away from zero, where Math.round went up.
+    expect(service.totalPointsOf([{ points: -0.125 }])).toBe(-0.13);
+  });
+});

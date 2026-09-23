@@ -10,6 +10,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { COMMON_FORBIDDEN_STUDENT_KEYS } from "@quiz/core/server";
 import type { CodeDetails } from "@quiz/qt-code/server";
 import { registerForTests } from "@quiz/registry/server";
 
@@ -284,6 +285,61 @@ describe("student feedback (F-RES-04, docs/05 §5.7)", () => {
       attempt,
     );
     expect(silent).toMatchObject({ available: false, reason: "no_feedback" });
+  });
+});
+
+/**
+ * Layer 2 of the details filter alone: the fake `short` registered here has
+ * no `studentDetails` hook, which is exactly the type that "gains a
+ * key-bearing field and forgets the hook" the blind strip exists for (H1).
+ */
+describe("the blind strip of `details` (layer 2, H1)", () => {
+  const leaky = {
+    correct: [2],
+    fraction: 0.5,
+    perBlank: [{ index: 0, ok: false, given: "Lyon", expected: "Paris" }],
+    cases: [
+      { name: "shown", visible: true, expected: "shown-output" },
+      { name: "hidden", visible: false, expected: "hidden-output" },
+    ],
+    nested: { deeper: { matchers: ["m"], pattern: "p+", referenceSolution: "int main" } },
+    // Not key-bearing in a grading breakdown: a teacher's manual `details`
+    // may carry any of these, and the strip leaves them alone.
+    explanation: "why",
+    answers: ["a"],
+  };
+  const policy = (showKey: boolean) => ({
+    when: "on_release" as const,
+    showAnswer: true,
+    showKey,
+    showExplanation: false,
+    showHiddenCaseNames: false,
+    showTeacherComment: true,
+  });
+
+  it("removes the forbidden keys at every depth, except the expected output of a visible case", () => {
+    expect(service.filterDetails("short", leaky, policy(false))).toEqual({
+      fraction: 0.5,
+      perBlank: [{ index: 0, ok: false, given: "Lyon" }],
+      cases: [
+        { name: "shown", visible: true, expected: "shown-output" },
+        { name: "hidden", visible: false },
+      ],
+      nested: { deeper: {} },
+      explanation: "why",
+      answers: ["a"],
+    });
+  });
+
+  it("lets the details through whole when the teacher published the key", () => {
+    expect(service.filterDetails("short", leaky, policy(true))).toBe(leaky);
+  });
+
+  it("strips nothing but a breakdown's key fields: its own list, not the question-payload one", () => {
+    // Every entry but `expected` is also a key of the common student floor;
+    // `expected` is not (a visible code case publishes it, deviation W3-4).
+    const common = new Set(COMMON_FORBIDDEN_STUDENT_KEYS);
+    expect(service.FORBIDDEN_DETAIL_KEYS.filter((k) => !common.has(k))).toEqual(["expected"]);
   });
 });
 

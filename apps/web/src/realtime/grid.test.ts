@@ -76,6 +76,15 @@ describe("applyGridEvent — dashboard.cell", () => {
     expect(after.view.totals[1]).toBe(before.view.totals[1]);
   });
 
+  it("rounds the completion with round2, as the server does: 23 of 40 is 0.58", () => {
+    const view = makeDashboard(40, 1);
+    // Rows 1..22 are done; the event makes row 0 the 23rd. In binary
+    // 23/40*100 is 57.49999…, which Math.round turned into 0.57.
+    for (const row of view.rows.slice(1, 23)) row.cells[0] = { ...row.cells[0]!, status: "done" };
+    const after = applyGridEvent(initialGrid(view), cellEvent());
+    expect(after.view.totals[0]!.completion).toBe(0.58);
+  });
+
   it("ignores an event addressed to another evaluation or to an unknown attempt", () => {
     const before = state();
     expect(applyGridEvent(before, cellEvent({ evaluationId: id("evaluation", 9) }))).toBe(before);
