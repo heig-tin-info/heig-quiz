@@ -64,10 +64,13 @@ const ResultsView = lazy(() =>
 );
 const SettingsPage = lazy(() => import("./SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const AdminPage = lazy(() => import("./AdminPanel").then((m) => ({ default: m.AdminPage })));
-// Development only. The chunk is still built in production (Vite has no way
-// to know otherwise), but nothing routes to it: `parsePath` returns the view
-// and its entry in `PAGES` sends it home.
-const DevGallery = lazy(() => import("./DevGallery").then((m) => ({ default: m.DevGallery })));
+// Development only, and absent from the production bundle: behind the
+// `import.meta.env.DEV` constant the dynamic import is dead code, so Rollup
+// emits no DevGallery chunk at all. `parsePath` still returns the view; its
+// entry in `PAGES` renders the teacher home in its place (no redirect).
+const DevGallery = import.meta.env.DEV
+  ? lazy(() => import("./DevGallery").then((m) => ({ default: m.DevGallery })))
+  : () => null;
 
 /*
  * Signed-out page. The four decisions, so the door looks like the house:
