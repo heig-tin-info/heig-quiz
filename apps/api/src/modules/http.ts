@@ -96,6 +96,12 @@ export interface RouteSpec<
  */
 type Order = "body-first" | "scope-first";
 
+/** An error that carries its own 4xx `statusCode`, the way Fastify's and its plugins' do. */
+function isClientError(error: unknown): boolean {
+  const status = (error as { statusCode?: unknown } | null)?.statusCode;
+  return typeof status === "number" && status >= 400 && status < 500;
+}
+
 function wrapper(order: Order) {
   return (app: FastifyInstance, failure: Failure) =>
     <
@@ -150,6 +156,10 @@ function wrapper(order: Order) {
             scope,
           });
         } catch (error) {
+          // A Fastify client error (a multipart limit's 413, …) goes back to
+          // the global error handler, which sends it as it always did; only
+          // the rest is the module's to map.
+          if (isClientError(error)) throw error;
           return failure(reply, error, now);
         }
       };
