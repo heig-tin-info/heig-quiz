@@ -46,6 +46,7 @@ packages/
   registry/   the two static question-type registries (./server, ./client)
   contracts/  zod schemas and payload types shared api <-> web
   domain/     pure business rules: grade scale, deadlines, policies, cloze, roster
+  ui/         the shared primitives of the question-type surfaces (@quiz/ui)
   qt-mcq/     question type: multiple choice (./server, ./client)
   qt-short/   question type: short answer (./server, ./client)
   qt-cloze/   question type: fill in the blanks (./server, ./client)
@@ -64,8 +65,11 @@ and are registered in `packages/registry` in two places (`./server` and
 `./client`). `qt-circuit` (ADR-019) grades a schematic by simulating it with
 ngspice through the runner's `spice` language; its rules are in
 `docs/spec/04-types-de-questions.md` §4.11.
-Packages still to create, in this order (`docs/spec/05-architecture.md`, 5.2
-and `docs/PLAN-MVP.md` §8): `packages/canonical`, `packages/ui`,
+`packages/ui` exists since the refactoring campaign of 2026-09-23 (PR #51): the
+shared primitives of the five question-type surfaces (`@quiz/ui`, React as a
+peer, `@quiz/core` its only dependency; it never imports a `qt-*` package nor
+`apps/web`). Packages still to create, in this order (`docs/spec/05-architecture.md`,
+5.2 and `docs/PLAN-MVP.md` §8): `packages/canonical`,
 `packages/cli`.
 
 `packages/core` is split in two entry points: `@quiz/core/server` (no React,
@@ -89,7 +93,8 @@ Never work around these, not even "temporarily".
 
 1. **English everywhere except UI strings.** Code, identifiers, comments,
    documentation, commit messages, ADRs: English. Only what a user reads is
-   translated, and it goes through `t()` in `apps/web/src/i18n.tsx` with both
+   translated, and it goes through `t()` in `apps/web/src/i18n/` (`en.ts`, `fr.ts`,
+   `index.tsx`) with both
    an `en` and a `fr` entry — teacher surfaces included (N-I18N-01). The `fr`
    dictionary is typed `Record<keyof Dict, string>`, so a missing French key
    is a compile error. Keep it that way.

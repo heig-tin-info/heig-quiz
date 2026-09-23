@@ -323,7 +323,7 @@ screen, and the teacher is on another by the time the quiz is alive.
    is untouched.
 
 3. **Renaming happens on the title.** The "Rename" line of the overflow menu
-   and the one-field modal behind it are replaced by `InlineTitle` (`ui.tsx`):
+   and the one-field modal behind it are replaced by `InlineTitle` (`ui/page.tsx`, formerly `ui.tsx`):
    the `<h1>` is a button that swaps itself for an input of the same size and
    weight, Enter or blur saves through the same `PATCH /evaluations/:id` and
    the same `EvaluationPatch` schema, Escape cancels, an empty title is
