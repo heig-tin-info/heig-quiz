@@ -58,13 +58,22 @@
  */
 import { clamp } from "./round.js";
 
-/** The scoring formulas. `@quiz/qt-mcq` and `@quiz/contracts` carry the same five names. */
-export type McqScorePolicy =
-  | "all_or_nothing"
-  | "true_false"
-  | "discordance"
-  | "symmetric"
-  | "ripkey";
+/**
+ * The scoring formulas: the one list of their names. `@quiz/qt-mcq` derives
+ * its schema from it; `@quiz/contracts` (which depends on no package) spells
+ * the wire enum again, checked equal both ways in `apps/api` at compile time.
+ */
+export const MCQ_SCORE_POLICIES = [
+  "all_or_nothing",
+  "true_false",
+  "discordance",
+  "symmetric",
+  "ripkey",
+] as const;
+export type McqScorePolicy = (typeof MCQ_SCORE_POLICIES)[number];
+
+/** The fallback wherever no policy was expressed; `DEFAULT_MCQ_POLICY` of `@quiz/contracts` is checked equal. */
+export const DEFAULT_MCQ_SCORE_POLICY = "all_or_nothing" satisfies McqScorePolicy;
 
 export interface McqScoreInput {
   /** Canonical indices of the correct choices. */

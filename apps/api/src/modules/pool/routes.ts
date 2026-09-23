@@ -45,6 +45,8 @@ import {
   type MoveConflict,
   type MoveResult,
   issuesOf,
+  DEFAULT_MCQ_POLICY,
+  McqPolicy,
   type QuestionTypeId,
   type TryResult,
 } from "@quiz/contracts";
@@ -56,6 +58,7 @@ import {
   type FinalizeContext,
   type GradeContext,
 } from "@quiz/core/server";
+import { DEFAULT_MCQ_SCORE_POLICY, MCQ_SCORE_POLICIES, type McqScorePolicy } from "@quiz/domain/mcqScore";
 
 import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
@@ -86,6 +89,16 @@ import * as service from "./service.js";
  */
 const _questionTypesAgree: readonly QuestionTypeId[] = QUESTION_TYPE_IDS;
 void _questionTypesAgree;
+
+/**
+ * The same proof for the MCQ policies: the wire enum of `@quiz/contracts` and
+ * the scoring formulas of `@quiz/domain` (their reference list), both ways,
+ * and the same default.
+ */
+const _mcqPoliciesAgree: readonly McqScorePolicy[] = McqPolicy.options;
+const _mcqPoliciesAgreeBack: readonly McqPolicy[] = MCQ_SCORE_POLICIES;
+const _mcqDefaultsAgree: typeof DEFAULT_MCQ_SCORE_POLICY = DEFAULT_MCQ_POLICY;
+void [_mcqPoliciesAgree, _mcqPoliciesAgreeBack, _mcqDefaultsAgree];
 
 /**
  * A failure raised by the question-type layer is a client error, not a 500:

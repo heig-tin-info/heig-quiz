@@ -47,8 +47,10 @@ export type Timing = z.infer<typeof Timing>;
 
 /**
  * How a multiple-answer MCQ is scored (docs/04 §4.4). The five formulas live
- * in `@quiz/domain/mcqScore`, which is their reference; this enum is the WIRE
- * name of the same five — `packages/contracts` depends on no question type.
+ * in `@quiz/domain/mcqScore`, whose `MCQ_SCORE_POLICIES` is the reference
+ * list; this enum is the WIRE name of the same five, spelled again because
+ * `packages/contracts` depends on no package. `apps/api` checks the two equal,
+ * both ways, at compile time (`modules/pool/routes.ts`).
  *
  * It appears at two levels of a three-level hierarchy:
  *   1. the teacher's preference (`Me.mcqPolicy`), which seeds
@@ -67,7 +69,7 @@ export const McqPolicy = z.enum([
 export type McqPolicy = z.infer<typeof McqPolicy>;
 
 /** What an evaluation gets when its creator expressed no preference. */
-export const DEFAULT_MCQ_POLICY: McqPolicy = "all_or_nothing";
+export const DEFAULT_MCQ_POLICY = "all_or_nothing" satisfies McqPolicy;
 
 export const EvaluationSettings = z.object({
   navigation: Navigation.default("free"),
