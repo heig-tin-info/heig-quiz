@@ -58,6 +58,7 @@ import {
 import * as live from "../live/service.js";
 import { solutionView, studentViewOf } from "../live/studentView.js";
 import { loadConfig, typeOf } from "../pool/config.js";
+import { createUnsavedQuestion } from "../pool/service.js";
 import * as events from "./events.js";
 
 // --- Failures -------------------------------------------------------------
@@ -273,6 +274,42 @@ export async function createPoll(
   if (!scope) throw new PollError("internal_error", 500, "poll item vanished after insert");
   events.pollStarted(scope.evaluation, input.now);
   return scope;
+}
+
+/**
+ * A poll on a question written in the launcher and never saved (ADR-014,
+ * addendum 2026-09-23). The `pool` module writes the question — its tables —
+ * as a pool-less question with one published version, validated by the
+ * type's own schema; from there on it is an ordinary poll, frozen on that
+ * version, and "run again" reuses it like any other.
+ */
+export async function createInlinePoll(
+  db: Db,
+  input: {
+    classroomId: string;
+    type: string;
+    config: unknown;
+    anonymous: boolean;
+    createdBy: string;
+    now: Date;
+    drawCode?: () => string;
+  },
+): Promise<PollScope> {
+  if (input.type !== "mcq" && input.type !== "short") throw new PollTypeRefused(input.type);
+  const { questionId } = await createUnsavedQuestion(db, {
+    type: input.type,
+    config: input.config,
+    createdBy: input.createdBy,
+    now: input.now,
+  });
+  return createPoll(db, {
+    classroomId: input.classroomId,
+    questionId,
+    anonymous: input.anonymous,
+    createdBy: input.createdBy,
+    now: input.now,
+    ...(input.drawCode ? { drawCode: input.drawCode } : {}),
+  });
 }
 
 /**

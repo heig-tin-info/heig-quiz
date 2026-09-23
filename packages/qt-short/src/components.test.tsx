@@ -122,6 +122,14 @@ describe("ShortEditor", () => {
     );
   });
 
+  it("drops the prefilters and the points when the host gives no marks (a poll)", () => {
+    render(<ShortEditor config={config()} onChange={() => {}} ungraded />);
+    expect(screen.getByLabelText("Value 1")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Trim")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Points 1")).not.toBeInTheDocument();
+    expect(screen.queryByText("Share of the item awarded by this matcher.")).not.toBeInTheDocument();
+  });
+
   it("takes the host's French strings", () => {
     render(<ShortEditor config={config()} onChange={() => {}} strings={{ prompt: "Énoncé" }} />);
     expect(screen.getByLabelText("Énoncé")).toBeInTheDocument();

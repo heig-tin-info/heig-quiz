@@ -4,9 +4,9 @@ import { Field } from "../ui";
 
 /**
  * The two fields a new question starts from: its type, as the tile grid, and
- * its internal name. The pool's "New question" dialog offers every type; the
- * poll launcher's "Write one" tab offers the types a poll can run, which it
- * passes as `types`.
+ * its internal name. The pool's "New question" dialog passes the types on
+ * offer as `types`. (The poll launcher uses the tile grid alone: its question
+ * is never saved, so it has no name to ask for.)
  *
  * Fields only, as a fragment laid out by the container's own spacing: the
  * submit button and the failure belong to the container, because the two

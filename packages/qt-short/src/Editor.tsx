@@ -393,6 +393,7 @@ export function ShortEditor({
   strings,
   RichText,
   uploadAsset,
+  ungraded = false,
 }: ShortEditorProps) {
   const s = resolveStrings(shortEditorStrings, strings);
   const patch = (next: Partial<ShortConfig>) => onChange({ ...config, ...next });
@@ -484,24 +485,28 @@ export function ShortEditor({
         </div>
       </section>
 
-      <section className={sectionClass}>
-        <h3 className={labelClass}>{s.prefilters}</h3>
-        <p className={helpClass}>{s.prefiltersHint}</p>
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
-          <CheckboxField
-            label={s.prefilterTrim}
-            checked={prefilters.trim}
-            disabled={disabled}
-            onChange={(trim) => patch({ prefilters: { ...prefilters, trim } })}
-          />
-          <CheckboxField
-            label={s.prefilterLowercase}
-            checked={prefilters.lowercase}
-            disabled={disabled}
-            onChange={(lowercase) => patch({ prefilters: { ...prefilters, lowercase } })}
-          />
-        </div>
-      </section>
+      {/* How the comparison is normalised decides a mark, and a poll gives
+          none (`EditorProps.ungraded`): its tally folds spellings by itself. */}
+      {ungraded ? null : (
+        <section className={sectionClass}>
+          <h3 className={labelClass}>{s.prefilters}</h3>
+          <p className={helpClass}>{s.prefiltersHint}</p>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+            <CheckboxField
+              label={s.prefilterTrim}
+              checked={prefilters.trim}
+              disabled={disabled}
+              onChange={(trim) => patch({ prefilters: { ...prefilters, trim } })}
+            />
+            <CheckboxField
+              label={s.prefilterLowercase}
+              checked={prefilters.lowercase}
+              disabled={disabled}
+              onChange={(lowercase) => patch({ prefilters: { ...prefilters, lowercase } })}
+            />
+          </div>
+        </section>
+      )}
 
       <section className={sectionClass}>
         <h3 className={labelClass}>{s.matchers}</h3>
@@ -535,17 +540,19 @@ export function ShortEditor({
                 s={s}
                 onPatch={(next) => replace(index, next)}
               />
-              <input
-                type="number"
-                min={0}
-                max={1}
-                step={0.25}
-                className={cx(inputClass, "w-20 tabular-nums")}
-                aria-label={`${s.points} ${index + 1}`}
-                value={matcher.points}
-                disabled={disabled}
-                onChange={(e) => replace(index, { ...matcher, points: Number(e.target.value) })}
-              />
+              {ungraded ? null : (
+                <input
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.25}
+                  className={cx(inputClass, "w-20 tabular-nums")}
+                  aria-label={`${s.points} ${index + 1}`}
+                  value={matcher.points}
+                  disabled={disabled}
+                  onChange={(e) => replace(index, { ...matcher, points: Number(e.target.value) })}
+                />
+              )}
               <button
                 type="button"
                 className={cx(buttonClass, "ml-auto w-7 px-0 text-fg-muted hover:text-danger")}
@@ -562,7 +569,7 @@ export function ShortEditor({
           ))}
         </ol>
         <IssueList issues={issuesAt(issues, "matchers").filter((i) => i.path.length === 1)} />
-        <p className={helpClass}>{s.pointsHint}</p>
+        {ungraded ? null : <p className={helpClass}>{s.pointsHint}</p>}
         <div>
           <button
             type="button"

@@ -31,6 +31,7 @@ import {
   PollAnswer,
   PollCodeParam,
   PollCreate,
+  PollInlineCreate,
   PollQuestionCreate,
   PollRevealBody,
   type PollTeacherView,
@@ -190,6 +191,53 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
       });
       return reply.code(201).send(await view(scope));
     } catch (error) {
+      return failure(reply, error, now);
+    }
+  });
+
+  /**
+   * F-LIVE-13, the quick path: a question written in the launcher, run at
+   * once and saved nowhere (ADR-014, addendum 2026-09-23). The classroom is
+   * loaded through the staff predicate like `POST /polls`; the content is
+   * validated by the type's own schema in the `pool` service.
+   */
+  app.post("/app/api/polls/inline", { preHandler: requireTeacher }, async (req, reply) => {
+    const now = app.clock.now();
+    const raw = emptyBody(req.body);
+    const body = PollInlineCreate.safeParse(raw);
+    if (!body.success) {
+      // Same answer as `POST /polls/questions` for a type a poll cannot run.
+      if (body.error.issues.some((i) => i.path[0] === "type")) {
+        const refused = new service.PollTypeRefused(String((raw as { type?: unknown }).type));
+        return reply.code(422).send({ error: refused.code, message: refused.message });
+      }
+      return invalid(reply, body.error);
+    }
+    const room = await reachableClassroom(req, body.data.classroomId);
+    if (!room) return notFound(reply);
+    try {
+      const scope = await service.createInlinePoll(app.db, {
+        classroomId: room.id,
+        type: body.data.type,
+        config: body.data.config,
+        anonymous: body.data.anonymous,
+        createdBy: req.user!.id,
+        now,
+      });
+      await trace(req, "poll.create", "evaluation", scope.evaluation.id, {
+        questionId: scope.item.question.id,
+        inline: true,
+        type: body.data.type,
+        anonymous: body.data.anonymous,
+        code: scope.evaluation.accessCode,
+      });
+      return reply.code(201).send(await view(scope));
+    } catch (error) {
+      if (error instanceof poolService.DraftInvalid) {
+        return reply
+          .code(422)
+          .send({ error: "config_invalid", message: "The question is incomplete", details: error.issues });
+      }
       return failure(reply, error, now);
     }
   });

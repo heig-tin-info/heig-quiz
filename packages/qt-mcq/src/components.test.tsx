@@ -166,6 +166,14 @@ describe("McqEditor — the derived mode", () => {
 describe("McqEditor — the scoring policy", () => {
   const policy = () => screen.getByRole("radiogroup", { name: "Scoring policy" });
 
+  it("is not drawn at all when the host gives no marks (a poll)", () => {
+    render(<McqEditor config={multipleConfig()} onChange={() => {}} ungraded />);
+    expect(screen.queryByRole("radiogroup", { name: "Scoring policy" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Scoring")).not.toBeInTheDocument();
+    expect(screen.queryByText("Never shuffle this question")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Statement")).toBeInTheDocument();
+  });
+
   it("offers the six policies, in order, inherit first", () => {
     render(<McqEditor config={multipleConfig({ policy: "inherit" })} onChange={() => {}} />);
     expect(

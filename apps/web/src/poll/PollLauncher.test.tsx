@@ -1,17 +1,29 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import type { CourseSummary, PollQuestionPick } from "@quiz/contracts";
 
-import { mockFetch, ok, renderWithProviders } from "../test/render";
+import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { PollLauncher } from "./PollLauncher";
 
 /*
- * The launcher: one question and one classroom, then the wall. The two tabs
- * do NOT share a primary action — picking ends in "Start poll", writing ends
- * in the editor — and that split is what these tests pin down.
+ * The launcher: one question and one classroom, then the wall. Both tabs end
+ * in "Start the poll": on a picked question, or on one written in the type's
+ * own editor and saved nowhere (ADR-014, addendum 2026-09-23).
  */
+
+/*
+ * jsdom implements `Range` but none of its layout methods, and ProseMirror —
+ * the statement field of the "Ask a new question" tab — calls them. Stubbed
+ * here, as in `QuestionEditor.test.tsx`, never globally.
+ */
+if (typeof Range !== "undefined") {
+  Range.prototype.getClientRects = () =>
+    ({ length: 0, item: () => null, [Symbol.iterator]: function* () {} }) as unknown as DOMRectList;
+  Range.prototype.getBoundingClientRect = () => new DOMRect();
+}
+document.elementFromPoint ??= () => null;
 
 const QUESTIONS = "/app/api/polls/questions";
 const COURSES = "/app/api/courses";
@@ -98,20 +110,78 @@ describe("PollLauncher", () => {
     expect(screen.getByText("binary-search-complexity")).toBeVisible();
   });
 
-  it("sends a new question to the editor and says it will come back", async () => {
-    mockFetch({
+  const started = ok({
+    evaluation: { id: "e2", classroomId: ROOM, title: "t", state: "running", code: "QZ2", createdAt: new Date().toISOString() },
+    joinUrl: "/p/QZ2",
+    settings: { anonymous: true, revealed: false },
+    question: { id: QUESTION, type: "short", student: {}, solution: {} },
+    tally: { joined: 0, answered: 0, choices: [], answers: [] },
+  });
+
+  it("writes a new question in the type's own editor, without marks, and starts it", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch({
       [`GET ${QUESTIONS}`]: ok(picks),
       [`GET ${COURSES}`]: ok(courses),
-      [`POST ${QUESTIONS}`]: ok({ meta: { id: "q-new" }, draft: {}, versions: [] }),
+      "POST /app/api/polls/inline": started,
     });
     const navigate = vi.fn();
     renderWithProviders(<PollLauncher navigate={navigate} />);
 
-    await userEvent.click(await screen.findByRole("tab", { name: /Ask a new question/ }));
-    expect(screen.getByText(/come back here to run it/)).toBeVisible();
-    await userEvent.type(screen.getByLabelText("Internal name"), "warm-up-1");
-    await userEvent.click(screen.getByRole("button", { name: "Create question" }));
+    await user.click(await screen.findByRole("tab", { name: /Ask a new question/ }));
+    // No name to give, nothing to save: the tile grid, then the editor.
+    expect(screen.queryByLabelText("Internal name")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Create question" })).toBeNull();
+    expect(screen.getByText(/Nothing is saved/)).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /Short answer/ }));
+    const prompt = await screen.findByLabelText("Statement");
+    // A poll gives no marks: no points, no prefilters.
+    expect(screen.queryByLabelText("Points 1")).toBeNull();
+    expect(screen.queryByLabelText("Trim")).toBeNull();
 
-    expect(navigate).toHaveBeenCalledWith({ view: "question", id: "q-new" });
-  });
+    // One keystroke: where a caret lands in a fresh contenteditable is jsdom's
+    // business, as in `QuestionEditor.test.tsx`.
+    await user.type(prompt, "?");
+    await user.type(screen.getByLabelText("Value 1"), "C");
+    await user.click(screen.getByRole("button", { name: "Start the poll" }));
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "poll", id: "e2" }));
+    const body = calls.find((c) => c.url === "/app/api/polls/inline")?.body as {
+      type: string;
+      config: { prompt: string; matchers: { value: string }[] };
+      classroomId: string;
+      anonymous: boolean;
+    };
+    expect(body).toMatchObject({ type: "short", classroomId: ROOM, anonymous: true });
+    expect(body.config.prompt).toContain("?");
+    expect(body.config.matchers[0]!.value).toBe("C");
+    // Nothing went through the personal pool.
+    expect(calls.some((c) => c.method === "POST" && c.url === QUESTIONS)).toBe(false);
+  }, 20_000);
+
+  it("places the schema's refusal under the fields, translated", async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      [`GET ${QUESTIONS}`]: ok(picks),
+      [`GET ${COURSES}`]: ok(courses),
+      "POST /app/api/polls/inline": fail(422, {
+        error: "config_invalid",
+        message: "The question is incomplete",
+        details: [{ path: [], code: "custom", message: "mcq.no_correct_choice" }],
+      }),
+    });
+    const navigate = vi.fn();
+    renderWithProviders(<PollLauncher navigate={navigate} />);
+
+    await user.click(await screen.findByRole("tab", { name: /Ask a new question/ }));
+    await screen.findByLabelText("Statement");
+    // The mcq editor, without its scoring card.
+    expect(screen.queryByText("Scoring")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Start the poll" }));
+
+    expect(await screen.findByText("Could not start the poll.")).toBeVisible();
+    expect(screen.getByText(/fields that need attention/)).toBeVisible();
+    expect(screen.getByText("Tick at least one correct choice.")).toBeVisible();
+    expect(navigate).not.toHaveBeenCalled();
+  }, 20_000);
 });

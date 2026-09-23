@@ -6,16 +6,21 @@ import type {
   CourseSummary,
   PollQuestionPick,
   PollTeacherView,
-  QuestionDetail,
+  ZodIssueLite,
 } from "@quiz/contracts";
+import { emptyMcqDraft } from "@quiz/qt-mcq/client";
+import { emptyShortDraft } from "@quiz/qt-short/client";
 
-import { api } from "../api";
+import { api, ApiError } from "../api";
 import { fuzzyFilter } from "../fuzzy";
 import { useT } from "../i18n";
 import { TypeGlyph } from "../pool/QuestionTable";
-import { NewQuestionForm } from "../question/NewQuestionForm";
+import { QuestionTypePicker } from "../pool/QuestionTypePicker";
+import { toConfigIssues } from "../question/issues";
+import { QuestionEditorHost } from "../questionTypes";
 import type { Route } from "../router";
 import {
+  Alert,
   Button,
   cx,
   EmptyState,
@@ -46,29 +51,36 @@ import { coursesKey, pollQuestionsKey } from "../queryKeys";
  * backdrop.
  *
  * Two tabs, because there are exactly two ways to have a question: one you
- * already wrote, or one you are about to. They do NOT share a primary
- * action, and that is the point — picking one ends in "Start poll", writing
- * one ends in the editor.
+ * already wrote, or one you write now. Both end in the same primary action,
+ * "Start the poll", and the classroom and the anonymity above the tabs apply
+ * to either.
  *
- * ### Why writing a question does not come back here by itself
+ * ### Why a new question is not saved
  *
- * The obvious trick would be a `?then=poll` hint on the editor's URL, so
- * that Publish returns to a launcher with the new question selected. It is
- * not done, deliberately: it gives the product's most-used screen a second,
- * invisible mode that depends on where the teacher came from, and it breaks
- * the moment they reload, open the editor in a second tab, or leave the
- * draft for tomorrow — the three things a teacher writing a question
- * actually does.
- *
- * So the flow is the honest one: "Create question" leaves for the editor and
- * says so. The launcher is one click (or one Ctrl+K) away afterwards, and
- * the question is waiting at the top of the list, because the API orders
- * them by `COALESCE(lastUsedAt, updatedAt) DESC` — a question you have never
- * polled but just published IS the most recent thing you did.
+ * "Ask a new question" used to create a question in the teacher's `Polls`
+ * pool and send them to the full editor, to publish it and come back. In the
+ * middle of a lecture that is four screens for one question. So the tab now
+ * holds the type's own editor, stripped of everything that only decides a
+ * mark (`ungraded`: no scoring policy, no points, no prefilters) — a poll
+ * gives none — and "Start the poll" sends the content itself
+ * (`POST /app/api/polls/inline`). The question is kept with its poll only,
+ * in no pool (ADR-014, addendum 2026-09-23); a teacher who wants it for next
+ * year writes it in the `Polls` pool, and it shows up in the other tab.
  */
 
 /** A poll runs these two types; the picker is limited to them. */
 const POLL_TYPES = ["mcq", "short"] as const;
+type PollType = (typeof POLL_TYPES)[number];
+
+/** The blank question of each type: what the editor starts from. */
+const EMPTY: Record<PollType, () => unknown> = { mcq: emptyMcqDraft, short: emptyShortDraft };
+
+/** The schema's issues of a refused content, when that is why it was refused. */
+function refusedIssues(error: unknown): readonly ZodIssueLite[] | null {
+  if (!(error instanceof ApiError) || error.status !== 422) return null;
+  const body = error.body as { error?: string; details?: ZodIssueLite[] } | null;
+  return body?.error === "config_invalid" ? (body.details ?? []) : null;
+}
 
 /** The classroom the last poll was thrown in; a convenience, never state. */
 const ROOM_KEY = "quiz-poll-classroom";
@@ -145,8 +157,10 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
   const [questionId, setQuestionId] = useState<string | null>(null);
   const [anonymous, setAnonymous] = useState(true);
   const [room, setRoom] = usePersistentChoice<string>(ROOM_KEY, anyRoom, "");
-  const [type, setType] = useState<string>(POLL_TYPES[0]);
-  const [name, setName] = useState("");
+  const [type, setType] = useState<PollType>(POLL_TYPES[0]);
+  // One working copy per type, so a switch back and forth loses nothing.
+  const [drafts, setDrafts] = useState<Partial<Record<PollType, unknown>>>({});
+  const config = drafts[type] ?? EMPTY[type]();
 
   const picks = useQuery<PollQuestionPick[]>({
     queryKey: pollQuestionsKey,
@@ -186,19 +200,22 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
     },
   });
 
-  const create = useMutation({
+  const inline = useMutation({
     mutationFn: () =>
-      api<QuestionDetail>("/app/api/polls/questions", {
+      api<PollTeacherView>("/app/api/polls/inline", {
         method: "POST",
-        body: JSON.stringify({ type, internalName: name.trim() }),
+        body: JSON.stringify({ type, config, classroomId, anonymous }),
       }),
-    onSuccess: (question) => {
-      navigate({ view: "question", id: question.meta.id });
+    onSuccess: (view) => {
+      setRoom(view.evaluation.classroomId);
+      navigate({ view: "poll", id: view.evaluation.id });
     },
   });
+  const refused = refusedIssues(inline.error);
+  const issues = useMemo(() => (refused ? toConfigIssues(t, refused) : undefined), [refused, t]);
 
-  // ONE primary action per screen, and it follows the tab: start the poll
-  // from a picked question, or create the question that will be polled.
+  // ONE primary action per screen, whichever tab: start the poll — on the
+  // picked question, or on the one written below.
   const primary =
     tab === "pick" ? (
       <Button
@@ -210,17 +227,41 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
       </Button>
     ) : (
       <Button
-        onClick={() => create.mutate()}
-        loading={create.isPending}
-        disabled={name.trim() === ""}
+        onClick={() => inline.mutate()}
+        loading={inline.isPending}
+        disabled={classroomId === ""}
       >
-        {t("poll.createQuestion")}
+        {t("poll.startAction")}
       </Button>
     );
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">
       <PageHeader title={t("poll.launcher")} description={t("poll.launcherHint")} actions={primary} />
+      <div className="divide-y divide-line border-b border-line pb-1">
+        <SettingRow title={t("poll.classroom")} desc={t("poll.classroomHint")} className="pt-0">
+          {courses.isLoading ? (
+            <Skeleton className="h-9 w-56" />
+          ) : (
+            <Select
+              aria-label={t("poll.classroom")}
+              width="w-56"
+              value={classroomId}
+              onChange={(e) => setRoom(e.currentTarget.value)}
+            >
+              {rooms.length === 0 ? <option value="">{t("poll.noClassroom")}</option> : null}
+              {rooms.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.label}
+                </option>
+              ))}
+            </Select>
+          )}
+        </SettingRow>
+        <SettingRow title={t("poll.anonymous")} desc={t("poll.anonymousHint")}>
+          <Switch checked={anonymous} label={t("poll.anonymous")} onChange={setAnonymous} />
+        </SettingRow>
+      </div>
       <Tabs
         value={tab}
         onChange={setTab}
@@ -233,30 +274,6 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
 
       {tab === "pick" ? (
         <div className="mt-5 space-y-4">
-          <div className="divide-y divide-line border-b border-line pb-1">
-            <SettingRow title={t("poll.classroom")} desc={t("poll.classroomHint")} className="pt-0">
-              {courses.isLoading ? (
-                <Skeleton className="h-9 w-56" />
-              ) : (
-                <Select
-                  aria-label={t("poll.classroom")}
-                  width="w-56"
-                  value={classroomId}
-                  onChange={(e) => setRoom(e.currentTarget.value)}
-                >
-                  {rooms.length === 0 ? <option value="">{t("poll.noClassroom")}</option> : null}
-                  {rooms.map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {r.label}
-                    </option>
-                  ))}
-                </Select>
-              )}
-            </SettingRow>
-            <SettingRow title={t("poll.anonymous")} desc={t("poll.anonymousHint")}>
-              <Switch checked={anonymous} label={t("poll.anonymous")} onChange={setAnonymous} />
-            </SettingRow>
-          </div>
           <SearchInput
             className="w-full"
             aria-label={t("poll.searchLabel")}
@@ -308,16 +325,34 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
           <FormError error={start.error} title={t("poll.startFailed")} />
         </div>
       ) : (
-        <div className="mt-5 space-y-4">
-          <NewQuestionForm
-            types={POLL_TYPES}
-            value={type}
-            onChange={setType}
-            name={name}
-            onName={setName}
+        <div className="mt-5 space-y-6">
+          {refused ? (
+            <Alert tone="danger" title={t("poll.startFailed")}>
+              {t("poll.incomplete")}
+            </Alert>
+          ) : (
+            <FormError error={inline.error} title={t("poll.startFailed")} />
+          )}
+          <fieldset>
+            <legend className="mb-2 text-[13px] font-medium">{t("pool.questionType")}</legend>
+            <QuestionTypePicker
+              types={POLL_TYPES}
+              value={type}
+              onChange={(next) => {
+                setType(next as PollType);
+                inline.reset();
+              }}
+            />
+          </fieldset>
+          <QuestionEditorHost
+            t={t}
+            type={type}
+            config={config}
+            onChange={(next) => setDrafts((all) => ({ ...all, [type]: next }))}
+            ungraded
+            {...(issues === undefined ? {} : { issues })}
           />
-          <p className="text-[13px] text-fg-muted">{t("poll.newHint")}</p>
-          <FormError error={create.error} title={t("pool.createFailed")} />
+          <p className="border-t border-line pt-4 text-[13px] text-fg-muted">{t("poll.newHint")}</p>
         </div>
       )}
     </div>

@@ -207,9 +207,23 @@ const scenes = [
   { name: "notifications", role: "teacher", path: "/", fold: true, act: async (p) => { await p.getByRole("button", { name: /^user menu/i }).first().click(); await p.getByRole("menuitem", { name: /^notifications/i }).click(); } },
   { name: "notifications-many", role: "teacher", path: "/?many=1", fold: true, act: async (p) => { await p.getByRole("button", { name: /^user menu/i }).first().click(); await p.getByRole("menuitem", { name: /^notifications/i }).click(); } },
 
-  // WP: live polls. The launcher is a sheet opened from the navigation; the
-  // projection is a page, and the mock addresses its three polls by name.
-  { name: "poll-launcher", role: "teacher", path: "/", act: (p) => p.getByRole("button", { name: /^(poll|sondage)$/i }).first().click() },
+  // WP: live polls. The launcher is the `/polls` page (the navigation's
+  // "Poll" entry, hidden in the drawer on a phone); the projection is a page,
+  // and the mock addresses its three polls by name.
+  { name: "poll-launcher", role: "teacher", path: "/polls" },
+  // "Ask a new question": the type's own editor, without marks, and saved
+  // nowhere (ADR-014, addendum 2026-09-23). The second scene presses "Start
+  // the poll" on the blank question, which the schema refuses.
+  { name: "poll-launcher-new", role: "teacher", path: "/polls", act: (p) => p.getByRole("tab", { name: /ask a new question|poser une nouvelle question/i }).click() },
+  {
+    name: "poll-launcher-new-refused",
+    role: "teacher",
+    path: "/polls",
+    act: async (p) => {
+      await p.getByRole("tab", { name: /ask a new question|poser une nouvelle question/i }).click();
+      await p.getByRole("button", { name: /start the poll|lancer le sondage/i }).click();
+    },
+  },
   { name: "poll-projection", role: "teacher", path: "/evaluations/poll/poll", fold: true },
   { name: "poll-projection-revealed", role: "teacher", path: "/evaluations/poll/poll?revealed=1", fold: true },
   { name: "poll-ended", role: "teacher", path: "/evaluations/poll-ended/poll", fold: true },

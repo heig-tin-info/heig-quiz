@@ -1038,7 +1038,12 @@ export async function addItems(
   const values: (typeof evaluationItems.$inferInsert)[] = [];
   for (const questionId of questionIds) {
     const question = byQuestion.get(questionId);
-    if (!question || question.deletedAt !== null || !allowed.has(question.poolId)) {
+    if (
+      !question ||
+      question.deletedAt !== null ||
+      question.poolId === null ||
+      !allowed.has(question.poolId)
+    ) {
       throw new QuestionNotInCourse(questionId);
     }
     const version = versions.get(questionId);

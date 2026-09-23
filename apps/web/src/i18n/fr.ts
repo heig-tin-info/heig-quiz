@@ -1805,7 +1805,7 @@ export const fr: Record<keyof Dict, string> = {
   "poll.questionsFailed": "Impossible de charger vos questions.",
   "poll.noQuestions": "Aucune question à sonder pour l'instant",
   "poll.noQuestionsBody":
-    "Un sondage joue un QCM ou une réponse courte. Écrivez-en une et elle apparaîtra ici.",
+    "Un sondage joue un QCM ou une réponse courte. Écrivez-en une dans votre banque Polls et elle apparaîtra ici, ou posez une nouvelle question tout de suite.",
   "poll.noMatch": "Aucune question ne correspond à cette recherche.",
   "poll.neverUsed": "Jamais sondée",
   "poll.usedOnce": "Sondée une fois",
@@ -1816,9 +1816,10 @@ export const fr: Record<keyof Dict, string> = {
   "poll.anonymous": "Toute personne ayant le code répond",
   "poll.anonymousHint": "Sans compte, et aucun nom n'est jamais affiché.",
   "poll.startFailed": "Impossible de lancer le sondage.",
-  "poll.createQuestion": "Créer la question",
   "poll.newHint":
-    "L'éditeur s'ouvre sur la nouvelle question. Publiez-la, puis revenez ici pour la lancer.",
+    "Rien n'est enregistré : la question n'existe qu'avec ce sondage. Pour la garder, écrivez-la dans votre banque Polls.",
+  "poll.incomplete":
+    "La question n'est pas encore complète. Les champs à revoir sont signalés ci-dessous.",
   "poll.openProjection": "Ouvrir la projection",
   "poll.opening": "Ouverture de la projection…",
   "poll.notFound": "Ce sondage n'est pas disponible.",

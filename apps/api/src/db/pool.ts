@@ -145,14 +145,18 @@ export const categories = pgTable(
  * A question: its identity and metadata. The content lives in
  * `question_versions` — never here — so that an evaluation can freeze the
  * exact wording a student saw (F-EVAL-03).
+ *
+ * `pool_id` is null for exactly one kind of question: the one a teacher
+ * writes straight into the poll launcher and never saves (ADR-014,
+ * addendum 2026-09-23). It exists only as the frozen version its poll runs;
+ * no pool lists it, and `findAccessibleQuestion` — which joins `pools` —
+ * never reaches it, so nobody can open it in the editor.
  */
 export const questions = pgTable(
   "questions",
   {
     id: uuid("id").primaryKey(),
-    poolId: uuid("pool_id")
-      .notNull()
-      .references(() => pools.id, { onDelete: "cascade" }),
+    poolId: uuid("pool_id").references(() => pools.id, { onDelete: "cascade" }),
     categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
     /** Registered question-type id (`mcq`, `short`, `cloze`, `code`). */
     type: text("type").notNull(),

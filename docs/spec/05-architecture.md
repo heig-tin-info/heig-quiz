@@ -142,7 +142,7 @@ Common columns omitted: `id uuid pk`, `created_at`, `updated_at`.
 | `pools` | `name`, `visibility` private / shared / public, `owner_id` | |
 | `pool_members` | `pool_id`, `user_id`, `role` reader / contributor / owner | Phase 2 |
 | `categories` | `pool_id`, `parent_id` nullable, `name`, `position` | Tree by parent |
-| `questions` | `pool_id`, `category_id` nullable, `type` text, `internal_name`, `difficulty` smallint 1 to 5, `shuffleable` bool, `randomizable` bool, `origin_question_id` nullable, `deleted_at` | Stable metadata |
+| `questions` | `pool_id` nullable (an unsaved poll question, ADR-014 addendum), `category_id` nullable, `type` text, `internal_name`, `difficulty` smallint 1 to 5, `shuffleable` bool, `randomizable` bool, `origin_question_id` nullable, `deleted_at` | Stable metadata |
 | `question_tags` | `question_id`, `tag` text | composite pk, index on `tag`. No `tags` table: tags are normalised strings, the distinct list comes from a query |
 | `question_versions` | `question_id`, `number` int nullable, `config` jsonb, `config_version` int, `explanation` text, `search` generated tsvector, `published_at`, `published_by`, `change_note`, `deprecated_at`, `deprecation_note` | unique (question_id, number). `number` null = draft, a single one per question thanks to a partial unique index `WHERE number IS NULL` |
 | `assets` | `owner_id`, `pool_id`, `sha256`, `mime`, `bytes`, `width`, `height`, `path` | Deduplicated by hash. Referenced in the markdown by `asset:<id>` |

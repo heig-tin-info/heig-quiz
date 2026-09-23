@@ -176,6 +176,7 @@ export function McqEditor({
   RichText,
   uploadAsset,
   aside,
+  ungraded = false,
 }: McqEditorProps) {
   const s = resolveStrings(mcqEditorStrings, strings);
   const multiple = config.mode === "multiple";
@@ -457,7 +458,7 @@ export function McqEditor({
         </div>
       </section>
 
-      {scoring}
+      {ungraded ? null : scoring}
     </div>
   );
 }
