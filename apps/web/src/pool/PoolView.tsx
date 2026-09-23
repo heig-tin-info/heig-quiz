@@ -26,6 +26,7 @@ import {
   QueryError,
   Skeleton,
   Spinner,
+  usePersistentChoice,
 } from "../ui";
 import { BulkBar } from "./BulkBar";
 import { setQuestionDrag } from "./move";
@@ -82,45 +83,9 @@ import { poolKey, poolQuestionsKey } from "../queryKeys";
  * read — and it is the editor's own business to refuse a save.
  */
 
-type Prefs = { view: ListView; group: GroupBy };
-
 const VIEW_KEY = "quiz-pool-view";
+const VIEWS: readonly ListView[] = ["cards", "list"];
 const GROUP_KEY = "quiz-pool-group";
-
-/** Reading storage may throw (private window, blocked site data): never fatal. */
-function readPref(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function writePref(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // A remembered habit is a convenience; losing it costs one click.
-  }
-}
-
-function usePrefs(): [Prefs, (patch: Partial<Prefs>) => void] {
-  const [prefs, setPrefs] = useState<Prefs>(() => {
-    const group = readPref(GROUP_KEY);
-    return {
-      view: readPref(VIEW_KEY) === "cards" ? "cards" : "list",
-      group: group !== null && isGroupBy(group) ? group : "none",
-    };
-  });
-  return [
-    prefs,
-    (patch) => {
-      if (patch.view) writePref(VIEW_KEY, patch.view);
-      if (patch.group) writePref(GROUP_KEY, patch.group);
-      setPrefs((p) => ({ ...p, ...patch }));
-    },
-  ];
-}
 
 /** "Pointeurs / Arithmétique" for every node, and the tree's own order. */
 function categoryPaths(
@@ -202,7 +167,8 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const categoryId = categoryParam === "" ? null : categoryParam;
   const [checked, setChecked] = useState<ReadonlySet<string>>(new Set());
   const [creating, setCreating] = useState<string | null>(null);
-  const [prefs, setPrefs] = usePrefs();
+  const [view, setView] = usePersistentChoice(VIEW_KEY, VIEWS, "list");
+  const [group, setGroup] = usePersistentChoice<GroupBy>(GROUP_KEY, isGroupBy, "none");
 
   const pool = useQuery<PoolDetail>({
     queryKey: poolKey(id),
@@ -340,7 +306,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   const paths = categoryPaths(detail.categories);
   const groups = groupQuestions(
     rows,
-    prefs.group,
+    group,
     {
       type: (typeId) => typeLabel(t, typeId),
       category: (catId) => paths.find((p) => p.id === catId)?.label ?? catId,
@@ -388,14 +354,14 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
           }}
           tags={detail.tags}
           total={rows.length}
-          view={prefs.view}
-          onView={(view) => setPrefs({ view })}
-          group={prefs.group}
-          onGroup={(group) => setPrefs({ group })}
+          view={view}
+          onView={setView}
+          group={group}
+          onGroup={setGroup}
         />
 
         {questions.isLoading ? (
-          prefs.view === "cards" ? (
+          view === "cards" ? (
             <QuestionCardsSkeleton />
           ) : (
             <Card>
@@ -439,7 +405,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
           </Card>
         ) : (
           <>
-            {prefs.view === "cards" ? (
+            {view === "cards" ? (
               <QuestionCards
                 groups={groups}
                 checked={checked}

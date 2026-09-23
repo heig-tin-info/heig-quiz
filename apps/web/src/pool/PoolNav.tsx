@@ -1,12 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
 
 import type { PoolSummary } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useT } from "../i18n";
 import type { Route } from "../router";
-import { cx, Skeleton } from "../ui";
+import { cx, Skeleton, usePersistentChoice } from "../ui";
 import { SidebarCategories } from "./CategoryTree";
 import { useMoveQuestions, useQuestionDrop, type QuestionDrag } from "./move";
 import { PoolIcon } from "./PoolIcon";
@@ -40,35 +39,13 @@ export type PoolNavState = "collapsed" | "active" | "all";
 const NAV_KEY = "quiz-pools-nav";
 const ORDER: PoolNavState[] = ["collapsed", "active", "all"];
 
-function isState(value: string | null): value is PoolNavState {
-  return value !== null && (ORDER as string[]).includes(value);
-}
-
-/** Reading storage may throw (private window, blocked site data): never fatal. */
-function readState(): PoolNavState {
-  try {
-    const stored = localStorage.getItem(NAV_KEY);
-    return isState(stored) ? stored : "active";
-  } catch {
-    return "active";
-  }
-}
-
 export function usePoolNavState(): {
   state: PoolNavState;
   /** Next state in the cycle. */
   cycle: () => void;
   open: () => void;
 } {
-  const [state, setState] = useState<PoolNavState>(readState);
-  const write = (next: PoolNavState) => {
-    try {
-      localStorage.setItem(NAV_KEY, next);
-    } catch {
-      // A remembered habit is a convenience; losing it costs one click.
-    }
-    setState(next);
-  };
+  const [state, write] = usePersistentChoice(NAV_KEY, ORDER, "active");
   return {
     state,
     cycle: () => write(ORDER[(ORDER.indexOf(state) + 1) % ORDER.length]!),

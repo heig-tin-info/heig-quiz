@@ -31,6 +31,7 @@ import {
   Skeleton,
   Switch,
   Tabs,
+  usePersistentChoice,
 } from "../ui";
 import { coursesKey, pollQuestionsKey } from "../queryKeys";
 
@@ -73,21 +74,8 @@ const POLL_TYPES = ["mcq", "short"] as const;
 /** The classroom the last poll was thrown in; a convenience, never state. */
 const ROOM_KEY = "quiz-poll-classroom";
 
-function readRoom(): string | null {
-  try {
-    return localStorage.getItem(ROOM_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function writeRoom(id: string) {
-  try {
-    localStorage.setItem(ROOM_KEY, id);
-  } catch {
-    // Losing the last classroom costs one pick of a select.
-  }
-}
+/** Any stored id is taken; one that no longer exists falls back below. */
+const anyRoom = (raw: string): raw is string => true;
 
 /** The first line of a prompt, short enough for a row. */
 export function promptLine(prompt: string, max = 120): string {
@@ -157,7 +145,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
   const [query, setQuery] = useState("");
   const [questionId, setQuestionId] = useState<string | null>(null);
   const [anonymous, setAnonymous] = useState(true);
-  const [room, setRoom] = useState<string>(() => readRoom() ?? "");
+  const [room, setRoom] = usePersistentChoice<string>(ROOM_KEY, anyRoom, "");
   const [type, setType] = useState<string>(POLL_TYPES[0]);
   const [name, setName] = useState("");
 
@@ -194,7 +182,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
         body: JSON.stringify({ questionId, classroomId, anonymous }),
       }),
     onSuccess: (view) => {
-      writeRoom(view.evaluation.classroomId);
+      setRoom(view.evaluation.classroomId);
       navigate({ view: "poll", id: view.evaluation.id });
     },
   });
@@ -255,10 +243,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
                   aria-label={t("poll.classroom")}
                   width="w-56"
                   value={classroomId}
-                  onChange={(e) => {
-                    setRoom(e.currentTarget.value);
-                    writeRoom(e.currentTarget.value);
-                  }}
+                  onChange={(e) => setRoom(e.currentTarget.value)}
                 >
                   {rooms.length === 0 ? <option value="">{t("poll.noClassroom")}</option> : null}
                   {rooms.map((r) => (

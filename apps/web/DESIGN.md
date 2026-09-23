@@ -223,6 +223,23 @@ with a keyboard-reachable dismiss button.
   260 ms for sheets. Easing `cubic-bezier(0.2, 0, 0, 1)`. Presses scale to
   0.97. Honors `prefers-reduced-motion`.
 
+## Browser state
+
+The few things a screen reads from the browser rather than from the server
+live in `ui/state.ts`, each written once.
+
+- `usePersistentChoice(key, values, fallback)`: a choice that is a reader's
+  HABIT and not a state of the data — table or cards, the grouping of the
+  pool, the pool tree's cycle, the classroom of the last poll — remembered per
+  browser in `localStorage`, never in the URL or on the server. `values` is
+  the closed list of choices (or a predicate for an open set, an id); anything
+  else stored gives `fallback`. Both accessors are wrapped: a private window
+  or blocked site data makes `localStorage` THROW, and a remembered habit is
+  never worth a crash — the page simply starts on the fallback. It exists
+  because five screens wrote that reader by hand, and two of them crashed in
+  a private window. The storage keys are the ones those screens always used,
+  so nobody loses a remembered view.
+
 ## Components
 
 - Button: `primary` (accent fill, white text, one per screen), `secondary`

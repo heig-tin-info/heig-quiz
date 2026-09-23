@@ -38,6 +38,7 @@ import {
   Skeleton,
   Spinner,
   T,
+  usePersistentChoice,
 } from "./ui";
 import { courseKey, coursesKey, poolsKey } from "./queryKeys";
 
@@ -55,22 +56,8 @@ import { courseKey, coursesKey, poolsKey } from "./queryKeys";
  * the data.
  */
 
-type CoursesView = "cards" | "list";
-
 const VIEW_KEY = "quiz-courses-view";
-
-function useCoursesView(): [CoursesView, (v: CoursesView) => void] {
-  const [view, setView] = useState<CoursesView>(() =>
-    localStorage.getItem(VIEW_KEY) === "list" ? "list" : "cards",
-  );
-  return [
-    view,
-    (v) => {
-      localStorage.setItem(VIEW_KEY, v);
-      setView(v);
-    },
-  ];
-}
+const VIEWS = ["cards", "list"] as const;
 
 function NewCourseModal({ onClose }: { onClose: () => void }) {
   const t = useT();
@@ -550,7 +537,7 @@ function CourseRow({
 export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
   const t = useT();
   const [creating, setCreating] = useState(false);
-  const [view, setView] = useCoursesView();
+  const [view, setView] = usePersistentChoice(VIEW_KEY, VIEWS, "cards");
   const courses = useQuery<CourseSummary[]>({
     queryKey: coursesKey,
     queryFn: () => api("/app/api/courses"),
