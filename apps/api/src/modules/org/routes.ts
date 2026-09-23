@@ -3,7 +3,9 @@
  * pools, classrooms, the roster, the join code (F-ORG-06), and the student's
  * own list of classrooms.
  *
- * Every statement lives in `./service.ts` (audit B-12). The teacher routes
+ * Every database statement lives in `./service.ts` or in the module-local
+ * helpers it re-exports (`./roster.ts`, the shared role and pool helpers) —
+ * never in a handler (audit B-12). The teacher routes
  * that act on one entity run on `teacherRoute`: params (404), then the entity
  * under `staffAccess` (404, invariant 6), then the body — so a caller off the
  * staff learns nothing, not even that their body was malformed.

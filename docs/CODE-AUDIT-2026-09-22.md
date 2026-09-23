@@ -681,3 +681,144 @@ because several of these look like debt to a newcomer:
   `0007`, the tautological `--remote` test.
 - Every LOC figure is an estimate by a reviewer who read the code, not a
   measurement; treat the totals as ±20 %.
+
+## 11. Results (campaign of 2026-09-22 → 2026-09-23)
+
+The plan of section 7 was executed as a campaign of pull requests: one Opus
+implementer per PR in its own worktree, one adversarial Opus reviewer per PR
+with its own worktree and its own mutation experiments, every nit fixed before
+a squash merge on green CI, every merge deployed to production. Forty-four
+pull requests landed (#16 to #59), all listed below.
+
+### What changed, measured
+
+Measured with the same script as the baseline (section 10), on `main` after
+PR #58 (`5b34ef3`); a `tsc`-based count of code-only lines (no comment, no blank line)
+was added because the decompositions moved a lot of prose around.
+
+| Measure | Baseline (`74bda42`) | After the campaign | Change |
+| --- | ---: | ---: | ---: |
+| Source LOC (non-test) | 83 373 | 85 175 | +2.2 % |
+| Code-only lines (no comments, no blanks) | 61 375 | 62 667 | +2.1 % |
+| Comment lines | 14 542 | 16 611 | +14 % |
+| Test LOC | 41 063 | 52 669 | +28 % |
+| Functions over CC 10 | 141 | 115 | −18 % |
+| Functions over CC 20 | 27 | 9 | −67 % |
+| Maximum cyclomatic complexity | 65 (`extractNets`) | 34 (`CodePlayer`) | −48 % |
+| Longest component | 1 019 lines (`SchematicEditor`) | ≈ 340 (`CodePlayer`) | −67 % |
+| Files over 2 000 lines | 5 | 0 | |
+| Tables / columns / indexes | 32 / 254 / 45 | 29 / ≈ 220 / 46 | |
+| Migrations | 8 | 10 (two forward, none squashed) | |
+| Grading pass, 10 × 5 cells | 106 statements, 50 transactions | 8 statements, 1 transaction | |
+| Import cycles in `apps/web/src` | 1 (`ui ↔ help`) | 0 | |
+| Question-type surfaces duplicated | ≈ 21 % | one `packages/ui` | |
+| Public names in `packages/` never imported | ≈ 670 | ≈ 400 | |
+
+**The honest line first: the codebase did not get smaller.** The audit
+estimated −4 000 lines; the campaign added about 1 300 lines of code and
+2 100 lines of comments. Every reviewer flagged the same cause: the
+estimates for the decomposition items (wave 5) assumed a split costs
+nothing, while every extracted hook or component carries a props interface,
+its imports and its doc comment. The deletions of waves 1 and 2 were real
+(−1 400 lines) and `packages/ui` did remove 864 lines from the five
+question types, but the 757 lines of the new package, the 1 200 lines of
+the two `qt-circuit` decompositions and the 400 lines of the screen splits
+ate them. What the campaign bought instead is in the other rows: complexity
+halved at the top, duplication gone at the source, 11 000 lines of new tests
+pinning behaviour that had none, and a schema three tables lighter.
+
+What would still reduce the code is a product decision, not a refactoring:
+the zoom and pan of the circuit canvas (≈ 180 lines, unused by the read-only
+view), the 5 800-line mock layer (development only, now split and
+contract-checked), the dev gallery, and the per-type fixtures.
+
+### The pull requests
+
+| PR | Title |
+| --- | --- |
+| #16 | docs: codebase audit of 2026-09-22 and its refactoring plan |
+| #17 | refactor(contracts): real tests, event lists derived from ServerEvent, response schemas wired |
+| #18 | test(web): a safety net under the five untested feature screens |
+| #19 | refactor(api): delete the dead surface — wave 1 of the audit |
+| #20 | refactor(web): delete the dead code of apps/web (audit wave 1) |
+| #21 | refactor(packages): trim the public surface and take the grader out of the eager chunk |
+| #22 | refactor(runner): the invariants get their tests, and the duplication around them goes |
+| #23 | refactor(api): one HTTP kit and one audit tracer for the route modules |
+| #24 | refactor(web): split the mock by API module and check it against the contracts |
+| #25 | fix(web): one question-type label and one type list |
+| #26 | refactor(domain): one written form for points and grades |
+| #27 | refactor(core): one floor for the forbidden student keys |
+| #28 | refactor(web): one registry for the commands of the mounted screen |
+| #29 | perf(api): query hygiene — returning, one item read, grouped ticks, atomic unrelease, one student join |
+| #30 | refactor(packages): one definition of the language and MCQ policy lists |
+| #31 | refactor(qt-circuit): the netlist, SPICE emitter and router cores below CC 10 |
+| #32 | refactor(api): one implementation of the access predicate (B-07) |
+| #33 | refactor(web): one typed module of query keys; the picker shares the pool's cache |
+| #34 | refactor(web): parameterised strings as templates, translated core labels, one plural |
+| #35 | refactor(api): the live routes on one typed wrapper per audience |
+| #36 | refactor(web): make ui.tsx movable to packages/ui (no cycle, no api, four modules) |
+| #37 | refactor(api): the evaluation routes on teacherRoute, one content-write helper |
+| #38 | refactor(web): RichText decomposed into five units (FC-06) |
+| #39 | refactor(api): the grading routes on teacherRoute, one override body |
+| #40 | refactor(api): the results and poll routes on the wrappers |
+| #41 | refactor(web): first app primitives: FormDialog, FormError + useErrorToast, PersonAvatar, ParentLink, key helpers |
+| #42 | refactor(qt-circuit): SchematicEditor split into its hooks |
+| #43 | refactor(web): usePersistentChoice, isTyping + useFullscreen, NotePanel, PageSkeleton and the radius tokens |
+| #44 | refactor(api): the pool routes on teacherRoute, role checks in the loaders |
+| #45 | refactor(api): live/service.ts internals — one view builder, one gate, one run context |
+| #46 | fix(qt-code): one caseVerdict for the grade, the run route and the player |
+| #47 | refactor(web): feature de-duplication — question actions, new-question form, validated sheet, combobox |
+| #48 | refactor(api): grading and results services — one failed-proposal helper, named steps, one stripper, one history mapper, one totalPointsOf |
+| #49 | refactor(web): the route table written once |
+| #50 | refactor(db): database wave — one forward migration, batched grading writer, owned writes |
+| #51 | refactor(ui): create packages/ui and move the question types' shared shapes onto it (P-01) |
+| #52 | refactor(web): PollProjection, PoolView and QuestionEditor decomposed (FF-09, FF-17, FF-16) |
+| #53 | refactor(web): GradingPanel and student Player below CC 30 (FF-05, FF-24) |
+| #54 | refactor(ui): the code and circuit editors share their sections; one CodePlayer run; parseBlankBody by kind |
+| #55 | refactor(web): one SSE client per page — grading progress, player and lobby join useEventStream (FF-01, FF-04) |
+| #56 | refactor(web): split i18n.tsx into i18n/{en,fr,index} (FC-16) |
+| #57 | refactor(api): live/service.ts split by responsibility; the org module gets its service layer (B-13, B-12) |
+| #58 | refactor: wave-7 decisions (D-06, D-15, FF-22, B-15/P-11, D-12; FC-22 and web tsconfig stopped) |
+| #59 | docs: point comments and prose at the files the campaign moved |
+
+### Defects fixed on the way
+
+Beyond the eleven listed in section 6, the reviewers found and the PRs fixed:
+
+- `RunAccepted` in the contracts described a wire shape the route never sent (#17).
+- The production `Caddyfile` proxied a route the campaign deleted (#19).
+- The API's forbidden-key filter let `compare`, `compileArgs`, `penalty` and `rubric` through (#27).
+- The question picker silently stopped at the server's default of 50 questions (#33).
+- Grading rows ignored the mouse (`pressable` without `onClick`) — pinned by #18, fixed with the primitives.
+- Three access-control paths (a stranger on a question, a poll on an unreachable question, a duplicate into a foreign classroom) had no test; two invariants of the runner (12, 13) were asserted by tautologies (#22, #32).
+- A 413 upload would have become a 500 once the routes were wrapped (#44).
+- The dashboard's completion ratio rounded differently on the API and in the SSE mirror (#48).
+- A subscriber joining an already-open SSE socket was never told it was open (#55).
+- The private-window crash was fixed at the hook and then found unreachable because the theme and locale readers crashed first; both are guarded now (#43).
+
+### Decisions taken during the campaign
+
+- Squash merges, one logical change per PR.
+- No squash of the migration history: production holds real data (22 users, 1 797 questions). Two forward migrations (0008, 0009) instead, verified on production with preflight queries and a `pg_dump` taken before the merge.
+- Every teacher route loads the scope before parsing the body (invariant 6): an off-staff teacher with an invalid body now gets 404 where five routes answered 400.
+- `restoreQuestion` deleted; the "include deleted" filter without a restore is open question 21.
+- `released_grades` becomes the cache the glossary promises (D-06); `audit_log` gets two indexes and stays a `psql` forensics table (D-15); `LobbyView` carries the navigation mode so the lobby copy is finally shown (FF-22); an `aggregate` hook on `QuestionTypeServer` removes the last per-type import from `results` (B-15/P-11).
+- The lazy French dictionary was measured (−23 kB gzip for English readers) and rejected: the audience is French.
+- `live/service.ts` split into six cohesive files; the convention in `CLAUDE.md` amended accordingly (B-13); `org` got a service layer (B-12).
+- The residual ADR-015 gap on per-case time budgets is open question 22; `gradingQueue` pagination is open question 23.
+
+### Stopped, deferred, follow-ups
+
+- FC-22 (`mcq` statistics): the results payload does not carry what `Stats` needs; `StatsProps` must take the new aggregate first. `ByQuestionView` also labels the distribution rows by bare index (a defect to fix with it).
+- `apps/web/tsconfig.json` does not extend the base config: 30 errors (`exactOptionalPropertyTypes` ×22, `verbatimModuleSyntax` ×7); enable the two flags in two separate PRs.
+- `mcq.policy.settingsHint` and `eval.feedback.showTeacherComment` are dead keys that survive the unused-key guard (prefix-covered).
+- The circuit editor never displays issues at `commonGround` / `simulationsPerMinute` (pre-existing).
+- The `load` reducer of the player replaces answers with the server copy on a refetch; a refetch during an offline typing burst could overwrite unacked text (pre-existing).
+- One-line `disabled` tests for the mcq, short and cloze players; `FieldCell`'s default label style.
+- The Drizzle `enum:` lists of `mcq_policy` in `db/evaluation.ts` and `db/auth.ts` could read `McqPolicy.options`.
+
+### Incidents
+
+- The host ran out of memory on the first night: eight agents running vitest and Playwright in parallel. The campaign continued with at most three concurrent agents, capped test workers and no browser unless a review needed one.
+- The deploy of #48 failed on the VM (a layer extraction error); the next deploy succeeded and production never lagged.
+- One agent ran `podman volume prune -f` on the development host while cleaning up; the optional development volumes (`docker-compose.dev.yml`'s `pgdata`) were removed if they existed. Production was not involved. The briefs now forbid every global container command.

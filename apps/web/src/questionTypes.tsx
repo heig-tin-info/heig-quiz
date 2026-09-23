@@ -7,7 +7,7 @@
  * 1. mounts a type's `Editor` / `Player` / `Review` behind `Suspense`, so the
  *    chunk of a type (Monaco included, N-PERF-05) is fetched only by a screen
  *    that shows that type;
- * 2. hands each component the French (or English) strings of `i18n.tsx`
+ * 2. hands each component the French (or English) strings of `i18n/`
  *    through its `strings` prop — a `qt-*` package may not import the app, so
  *    the host translates (N-I18N-01, deviation W2-3);
  * 3. injects the app's sanitised `MarkdownView` as `renderMarkdown` and the
@@ -121,7 +121,7 @@ export function typeHint(t: TFunction, id: string): string {
 
 /**
  * Translates a package's string dictionary key by key: every key `k` of
- * `defaults` is looked up as `<prefix>.<k>` in `i18n.tsx`. Keys whose default
+ * `defaults` is looked up as `<prefix>.<k>` in `i18n/`. Keys whose default
  * is a function are skipped: only the circuit canvas has two (`kind`,
  * `port`), and they are lookups rather than sentences. A parameterised
  * sentence is a `{var}` template on both sides, so it goes through like any
@@ -141,7 +141,7 @@ function translated<T extends object>(t: TFunction, defaults: T, prefix: string)
  * The five MCQ scoring policies and their one-line descriptions, shared with
  * the teacher's preferences (`SettingsPage`) and an evaluation's advanced
  * options (`AdvancedDisclosure`). One wording, one place: they live under
- * `mcq.policy.*` in `i18n.tsx`, and the editor's own string keys are mapped
+ * `mcq.policy.*` in `i18n/`, and the editor's own string keys are mapped
  * onto them here rather than duplicated under `qt.mcq.e`.
  */
 const mcqPolicyStrings = (t: TFunction) => ({

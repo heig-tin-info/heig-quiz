@@ -52,7 +52,7 @@ quiz/
 
 ### API modules
 
-Each module lives in `apps/api/src/modules/<name>/` with at most four files: `routes.ts` the HTTP handlers, `service.ts` the logic and database access, `events.ts` the events it publishes, `jobs.ts` its pg-boss handlers. A module never imports another module's `routes.ts`. It calls the other modules' `service.ts`.
+Each module lives in `apps/api/src/modules/<name>/` with `routes.ts` the HTTP handlers, `service.ts` the logic and database access (a module may split its service into cohesive files under its directory, `service.ts` staying the entry other modules import — `live/` does, since 2026-09-23), `events.ts` the events it publishes, `jobs.ts` its pg-boss handlers. A module never imports another module's `routes.ts`. It calls the other modules' `service.ts`.
 
 | Module | Responsibility | Depends on |
 |---|---|---|

@@ -16,7 +16,8 @@ F-POOL-05 asks for named sharing with three roles, F-POOL-06 for a public pool r
 every teacher. Two facts shape the design:
 
 - **an account is never deleted.** A teacher loses the role when their grant is revoked
-  (`admin.ts`) or when their last course seat goes (`courses.ts`); both recompute
+  (`admin.ts`) or when their last course seat goes (`modules/org/`, formerly
+  `courses.ts` until PR #57 of 2026-09-23); both recompute
   `users.role` through `roles.ts`. There is no delete route to hook a succession into;
 - **the existing access rule is a LOADER, not a check** (invariant 6): an entity is loaded
   if and only if a SQL predicate holds, and a caller who fails it gets a 404. Adding roles
