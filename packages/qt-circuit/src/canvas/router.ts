@@ -114,6 +114,150 @@ export function blockedCells(components: readonly SchematicComponent[]): Set<str
   return blocked;
 }
 
+/** One routed leg, in grid steps, and the direction it arrived in. */
+interface Leg {
+  points: Array<[number, number]>;
+  dir: number;
+}
+
+/** Where a leg must end, and how: `d` is the end pin's direction, `need` the one to arrive from. */
+interface Goal {
+  readonly x: number;
+  readonly y: number;
+  readonly d: number;
+  /** The direction the wire must ARRIVE from to meet the end pin head on; `-1` for any. */
+  readonly need: number;
+}
+
+/**
+ * The grid rectangle one search pass explores, clipped to the box. A search
+ * node is a (cell, arrival direction) pair, flattened to one integer: five
+ * slots per cell, `d + 1`, so that "no direction yet" (−1) has one too.
+ */
+interface SearchWindow {
+  readonly x0: number;
+  readonly y0: number;
+  readonly x1: number;
+  readonly y1: number;
+  readonly W: number;
+  readonly H: number;
+}
+
+function windowAround(ax: number, ay: number, bx: number, by: number, margin: number): SearchWindow {
+  const x0 = Math.max(0, Math.min(ax, bx) - margin);
+  const y0 = Math.max(0, Math.min(ay, by) - margin);
+  const x1 = Math.min(GW, Math.max(ax, bx) + margin);
+  const y1 = Math.min(GH, Math.max(ay, by) + margin);
+  return { x0, y0, x1, y1, W: x1 - x0 + 1, H: y1 - y0 + 1 };
+}
+
+const nodeAt = (w: SearchWindow, x: number, y: number, d: number): number =>
+  ((y - w.y0) * w.W + (x - w.x0)) * 5 + (d + 1);
+
+function cellOf(w: SearchWindow, node: number): [number, number] {
+  const c = (node / 5) | 0;
+  return [(c % w.W) + w.x0, ((c / w.W) | 0) + w.y0];
+}
+
+/** The path that reached `node`, start first, from the parent links. */
+function reconstruct(w: SearchWindow, parent: Int32Array, node: number): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  for (let k = node; k >= 0; k = parent[k] ?? -1) out.push(cellOf(w, k));
+  return out.reverse();
+}
+
+/** The steps out of `(x, y)` when arriving in direction `d`: never doubling back, never leaving the window. */
+function neighbours(w: SearchWindow, x: number, y: number, d: number): Array<[number, number, number]> {
+  const out: Array<[number, number, number]> = [];
+  for (let nd = 0; nd < 4; nd += 1) {
+    const step = DIRECTIONS[nd];
+    if (step === undefined || (d >= 0 && nd === (d + 2) % 4)) continue;
+    const nx = x + step[0];
+    const ny = y + step[1];
+    if (nx >= w.x0 && ny >= w.y0 && nx <= w.x1 && ny <= w.y1) out.push([nd, nx, ny]);
+  }
+  return out;
+}
+
+/** Arriving at the end pin from the wrong side costs more than a detour. */
+function arrivalPenalty(nd: number, goal: Goal): number {
+  if (goal.need < 0 || nd === goal.need) return 0;
+  return nd === goal.d ? TURN * 3 : TURN;
+}
+
+/** Running along a wire already there, in the same orientation. */
+function overlapPenalty(cell: string, nd: number, used: ReadonlyMap<string, number>): number {
+  const u = used.get(cell);
+  return u !== undefined && (u & (nd % 2 ? 2 : 1)) !== 0 ? 2.5 : 0;
+}
+
+/** What the step in direction `nd` onto `(nx, ny)` costs; `null` when the cell is blocked. */
+function stepCost(d: number, nd: number, nx: number, ny: number, goal: Goal, obstacles: Obstacles): number | null {
+  const atGoal = nx === goal.x && ny === goal.y;
+  const cell = key(nx, ny);
+  if (!atGoal && obstacles.blocked.has(cell)) return null;
+  let c = 1 + (d >= 0 && nd !== d ? TURN : 0);
+  if (atGoal) c += arrivalPenalty(nd, goal);
+  return c + overlapPenalty(cell, nd, obstacles.used);
+}
+
+/**
+ * One A* pass inside a window: the leg, or `null` when the goal cannot be
+ * reached within it. The heuristic is the Manhattan distance, and the heap
+ * breaks ties by insertion order, which is what makes a route reproducible.
+ */
+function searchWindow(
+  w: SearchWindow,
+  ax: number,
+  ay: number,
+  ad: number,
+  goal: Goal,
+  obstacles: Obstacles,
+): Leg | null {
+  const n = w.W * w.H * 5;
+  const cost = new Float64Array(n).fill(Infinity);
+  const parent = new Int32Array(n).fill(-1);
+  const done = new Uint8Array(n);
+  const heap = new Heap();
+  const start = nodeAt(w, ax, ay, ad);
+  cost[start] = 0;
+  heap.push(Math.abs(ax - goal.x) + Math.abs(ay - goal.y), start);
+
+  while (heap.size > 0) {
+    const cur = heap.pop();
+    if (done[cur] === 1) continue;
+    done[cur] = 1;
+    const d = (cur % 5) - 1;
+    const [x, y] = cellOf(w, cur);
+    if (x === goal.x && y === goal.y) return { points: reconstruct(w, parent, cur), dir: d };
+    const g = cost[cur] ?? Infinity;
+    for (const [nd, nx, ny] of neighbours(w, x, y, d)) {
+      const c = stepCost(d, nd, nx, ny, goal, obstacles);
+      if (c === null) continue;
+      const ni = nodeAt(w, nx, ny, nd);
+      const g2 = g + c;
+      if (g2 < (cost[ni] ?? Infinity)) {
+        cost[ni] = g2;
+        parent[ni] = cur;
+        heap.push(g2 + Math.abs(nx - goal.x) + Math.abs(ny - goal.y), ni);
+      }
+    }
+  }
+  return null;
+}
+
+/** Nothing got through: the plain L, which is still orthogonal and on grid. */
+function fallbackL(ax: number, ay: number, bx: number, by: number): Leg {
+  return {
+    points: [
+      [ax, ay],
+      [bx, ay],
+      [bx, by],
+    ],
+    dir: by !== ay ? (by > ay ? 1 : 3) : bx > ax ? 0 : 2,
+  };
+}
+
 /**
  * One leg, in grid steps. Two passes: a tight window first, which is what an
  * ordinary wire needs, then the whole box for the ones that have to go around
@@ -127,82 +271,14 @@ function astar(
   by: number,
   bd: number,
   obstacles: Obstacles,
-): { points: Array<[number, number]>; dir: number } {
+): Leg {
   if (ax === bx && ay === by) return { points: [[ax, ay]], dir: ad };
-  /* The direction the wire must ARRIVE from to meet the end pin head on. */
-  const need = bd >= 0 ? (bd + 2) % 4 : -1;
-
+  const goal: Goal = { x: bx, y: by, d: bd, need: bd >= 0 ? (bd + 2) % 4 : -1 };
   for (const margin of [6, GW + GH]) {
-    const x0 = Math.max(0, Math.min(ax, bx) - margin);
-    const y0 = Math.max(0, Math.min(ay, by) - margin);
-    const x1 = Math.min(GW, Math.max(ax, bx) + margin);
-    const y1 = Math.min(GH, Math.max(ay, by) + margin);
-    const W = x1 - x0 + 1;
-    const H = y1 - y0 + 1;
-    const n = W * H * 5;
-    const cost = new Float64Array(n).fill(Infinity);
-    const parent = new Int32Array(n).fill(-1);
-    const done = new Uint8Array(n);
-    const at = (x: number, y: number, d: number): number => ((y - y0) * W + (x - x0)) * 5 + (d + 1);
-
-    const heap = new Heap();
-    const start = at(ax, ay, ad);
-    cost[start] = 0;
-    heap.push(Math.abs(ax - bx) + Math.abs(ay - by), start);
-
-    while (heap.size > 0) {
-      const cur = heap.pop();
-      if (done[cur] === 1) continue;
-      done[cur] = 1;
-      const d = (cur % 5) - 1;
-      const cell = (cur / 5) | 0;
-      const x = (cell % W) + x0;
-      const y = ((cell / W) | 0) + y0;
-      if (x === bx && y === by) {
-        const out: Array<[number, number]> = [];
-        let k = cur;
-        while (k >= 0) {
-          const c = (k / 5) | 0;
-          out.push([(c % W) + x0, ((c / W) | 0) + y0]);
-          k = parent[k] ?? -1;
-        }
-        return { points: out.reverse(), dir: d };
-      }
-      const g = cost[cur] ?? Infinity;
-      for (let nd = 0; nd < 4; nd += 1) {
-        if (d >= 0 && nd === (d + 2) % 4) continue; // never double back
-        const step = DIRECTIONS[nd];
-        if (step === undefined) continue;
-        const nx = x + step[0];
-        const ny = y + step[1];
-        if (nx < x0 || ny < y0 || nx > x1 || ny > y1) continue;
-        const goal = nx === bx && ny === by;
-        const k = key(nx, ny);
-        if (!goal && obstacles.blocked.has(k)) continue;
-        let c = 1 + (d >= 0 && nd !== d ? TURN : 0);
-        /* Arriving from the wrong side of the end pin costs more than a detour. */
-        if (goal && need >= 0 && nd !== need) c += nd === bd ? TURN * 3 : TURN;
-        const u = obstacles.used.get(k);
-        if (u !== undefined && (u & (nd % 2 ? 2 : 1)) !== 0) c += 2.5;
-        const ni = at(nx, ny, nd);
-        const g2 = g + c;
-        if (g2 < (cost[ni] ?? Infinity)) {
-          cost[ni] = g2;
-          parent[ni] = cur;
-          heap.push(g2 + Math.abs(nx - bx) + Math.abs(ny - by), ni);
-        }
-      }
-    }
+    const leg = searchWindow(windowAround(ax, ay, bx, by, margin), ax, ay, ad, goal, obstacles);
+    if (leg !== null) return leg;
   }
-  /* Nothing got through: the plain L, which is still orthogonal and on grid. */
-  return {
-    points: [
-      [ax, ay],
-      [bx, ay],
-      [bx, by],
-    ],
-    dir: by !== ay ? (by > ay ? 1 : 3) : bx > ax ? 0 : 2,
-  };
+  return fallbackL(ax, ay, bx, by);
 }
 
 /** Drops the collinear vertices, so a straight run is two points and not twenty. */
@@ -328,6 +404,50 @@ export function withRoutes(schematic: Schematic): Schematic {
   return { components: schematic.components, wires };
 }
 
+/** Every component pin, as a `key(x, y)` in canvas units. */
+function terminalKeys(components: readonly SchematicComponent[]): Set<string> {
+  const terminals = new Set<string>();
+  for (const c of components) {
+    const pins = LIBRARY[c.kind].pins;
+    for (let i = 0; i < pins.length; i += 1) {
+      const q = pinPosition(c, i);
+      if (q !== null) terminals.add(key(q.x, q.y));
+    }
+  }
+  return terminals;
+}
+
+/** How many wire ends sit on each point. */
+function endCounts(routes: Iterable<ReadonlyArray<readonly [number, number]>>): Map<string, number> {
+  const count = new Map<string, number>();
+  for (const points of routes) {
+    for (const e of [points[0], points[points.length - 1]]) {
+      if (e === undefined) continue;
+      const k = key(e[0], e[1]);
+      count.set(k, (count.get(k) ?? 0) + 1);
+    }
+  }
+  return count;
+}
+
+const endsAt = (points: ReadonlyArray<readonly [number, number]>, x: number, y: number): boolean => {
+  const f = points[0];
+  const l = points[points.length - 1];
+  return (f !== undefined && f[0] === x && f[1] === y) || (l !== undefined && l[0] === x && l[1] === y);
+};
+
+/** Whether `(x, y)` lies on some wire that does NOT end there: the stem of a T. */
+function landsMidWire(
+  routes: Iterable<ReadonlyArray<readonly [number, number]>>,
+  x: number,
+  y: number,
+): boolean {
+  for (const points of routes) {
+    if (!endsAt(points, x, y) && onPolyline(points, x, y, 0)) return true;
+  }
+  return false;
+}
+
 /**
  * The points that carry a junction dot: where three or more branches meet.
  * An endpoint counts once, a pin under it once more, and an endpoint landing
@@ -337,48 +457,13 @@ export function junctionPoints(
   schematic: Schematic,
   routes: ReadonlyMap<string, ReadonlyArray<readonly [number, number]>>,
 ): Array<[number, number]> {
-  const terminals = new Set<string>();
-  for (const c of schematic.components) {
-    const pins = LIBRARY[c.kind].pins;
-    for (let i = 0; i < pins.length; i += 1) {
-      const q = pinPosition(c, i);
-      if (q !== null) terminals.add(key(q.x, q.y));
-    }
-  }
-  const count = new Map<string, number>();
-  for (const points of routes.values()) {
-    for (const e of [points[0], points[points.length - 1]]) {
-      if (e === undefined) continue;
-      const k = key(e[0], e[1]);
-      count.set(k, (count.get(k) ?? 0) + 1);
-    }
-  }
+  const terminals = terminalKeys(schematic.components);
   const dots: Array<[number, number]> = [];
-  for (const [k, n] of count) {
+  for (const [k, n] of endCounts(routes.values())) {
     const parts = k.split(",");
     const x = Number(parts[0]);
     const y = Number(parts[1]);
-    let total = n + (terminals.has(k) ? 1 : 0);
-    outer: for (const points of routes.values()) {
-      const f = points[0];
-      const l = points[points.length - 1];
-      if (f === undefined || l === undefined) continue;
-      if ((f[0] === x && f[1] === y) || (l[0] === x && l[1] === y)) continue;
-      for (let i = 0; i < points.length - 1; i += 1) {
-        const a = points[i];
-        const b = points[i + 1];
-        if (a === undefined || b === undefined) continue;
-        if (
-          x >= Math.min(a[0], b[0]) &&
-          x <= Math.max(a[0], b[0]) &&
-          y >= Math.min(a[1], b[1]) &&
-          y <= Math.max(a[1], b[1])
-        ) {
-          total += 2;
-          break outer;
-        }
-      }
-    }
+    const total = n + (terminals.has(k) ? 1 : 0) + (landsMidWire(routes.values(), x, y) ? 2 : 0);
     if (total >= 3) dots.push([x, y]);
   }
   return dots;
@@ -388,7 +473,13 @@ export function junctionPoints(
 export const pathOf = (points: ReadonlyArray<readonly [number, number]>): string =>
   `M${points.map((p) => `${p[0]} ${p[1]}`).join("L")}`;
 
-/** Whether `(x, y)` lies on one of the polyline's segments, within `slack`. */
+/**
+ * Whether `(x, y)` falls inside the bounding box of one of the polyline's
+ * segments, grown by `slack`: a hit-test. For the orthogonal polylines the
+ * router draws, `slack = 0` is exact; it is NOT the netlist's connectivity
+ * test (`liesOnPolyline` in `netlist.ts`), which is exact collinearity on any
+ * segment and the only one a grade depends on.
+ */
 export function onPolyline(
   points: ReadonlyArray<readonly [number, number]>,
   x: number,
