@@ -17,7 +17,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 
 import type {
   Grading,
@@ -92,7 +92,7 @@ export const pairKey = (attemptId: string, itemId: string): PairKey =>
 
 // --- The single writer ----------------------------------------------------
 
-interface WriteGradingInput {
+export interface WriteGradingInput {
   attemptId: string;
   itemId: string;
   /** Null when the student never answered (F-GRADE-01). */
@@ -110,61 +110,103 @@ interface WriteGradingInput {
 }
 
 /**
- * THE write (§5.4). In one transaction:
- *
- * ```sql
- * UPDATE gradings SET state='superseded' WHERE <cell> AND state <> 'superseded';
- * INSERT INTO gradings (…, supersedes_id = <the one just superseded>) VALUES (…);
- * ```
- *
- * A new `validated` grading supersedes everything still standing. A new
- * `proposed` one only supersedes a previous PROPOSAL: a proposal must never
- * quietly unseat a grade a teacher already validated, and the callers that
- * produce proposals skip a validated cell anyway (idempotency).
+ * THE write (§5.4), for one cell: {@link writeGradings} with a batch of one.
  */
 export async function writeGrading(db: Db, input: WriteGradingInput): Promise<GradingRecord> {
-  const id = randomUUID();
+  const [row] = await writeGradings(db, [input]);
+  return row!;
+}
+
+/** Cells per transaction: well under PostgreSQL's 65 535 bind parameters (16 per row). */
+const WRITE_CHUNK = 500;
+
+/**
+ * THE write (§5.4), for many cells. Per chunk of {@link WRITE_CHUNK}, in one
+ * transaction and two statements:
+ *
+ * ```sql
+ * UPDATE gradings SET state='superseded'
+ *  WHERE state <> 'superseded' AND (attempt_id, item_id) IN (<cells>) …
+ *  RETURNING id, attempt_id, item_id;
+ * INSERT INTO gradings (…, supersedes_id = <what that cell just lost>) VALUES (…), (…);
+ * ```
+ *
+ * A new `validated` grading supersedes everything still standing on its
+ * cell. A new `proposed` one only supersedes a previous PROPOSAL: a proposal
+ * must never quietly unseat a grade a teacher already validated, and the
+ * callers that produce proposals skip a validated cell anyway (idempotency).
+ * A cell appears at most once per batch; `gradings_pair_validated_uq` still
+ * refuses a second validated grading on one cell.
+ *
+ * The rows come back in the order of `inputs`.
+ */
+export async function writeGradings(
+  db: Db,
+  inputs: readonly WriteGradingInput[],
+): Promise<GradingRecord[]> {
+  const out: GradingRecord[] = [];
+  for (let start = 0; start < inputs.length; start += WRITE_CHUNK) {
+    out.push(...(await writeChunk(db, inputs.slice(start, start + WRITE_CHUNK))));
+  }
+  return out;
+}
+
+async function writeChunk(db: Db, inputs: readonly WriteGradingInput[]): Promise<GradingRecord[]> {
+  const cells = (state: WriteGradingInput["state"]) => {
+    const pairs = inputs
+      .filter((i) => i.state === state)
+      .map((i) => sql`(${i.attemptId}::uuid, ${i.itemId}::uuid)`);
+    return pairs.length === 0
+      ? sql`false`
+      : sql`(${gradings.attemptId}, ${gradings.itemId}) in (${sql.join(pairs, sql`, `)})`;
+  };
   return db.transaction(async (tx) => {
-    const target =
-      input.state === "validated"
-        ? ne(gradings.state, "superseded")
-        : eq(gradings.state, "proposed");
     const superseded = await tx
       .update(gradings)
       .set({ state: "superseded" })
       .where(
         and(
-          eq(gradings.attemptId, input.attemptId),
-          eq(gradings.itemId, input.itemId),
-          target,
+          ne(gradings.state, "superseded"),
+          or(cells("validated"), and(cells("proposed"), eq(gradings.state, "proposed"))),
         ),
       )
-      .returning({ id: gradings.id, state: gradings.state });
+      .returning({
+        id: gradings.id,
+        attemptId: gradings.attemptId,
+        itemId: gradings.itemId,
+        gradedAt: gradings.gradedAt,
+      });
     // The chain points at the grading this one REPLACES; when several were
-    // still standing (a proposal next to nothing else), the newest wins.
-    const previous = superseded.at(-1)?.id ?? null;
-    const [row] = await tx
-      .insert(gradings)
-      .values({
-        id,
-        answerId: input.answerId,
-        attemptId: input.attemptId,
-        itemId: input.itemId,
-        points: round2(input.points),
-        maxPoints: round2(input.maxPoints),
-        source: input.source,
-        state: input.state,
-        details: input.details ?? null,
-        confidence: input.confidence ?? null,
-        comment: input.comment ?? null,
-        gradedBy: input.gradedBy ?? null,
-        gradedAt: input.now,
-        supersedesId: previous,
-        regradeNote: input.regradeNote ?? null,
-        createdAt: input.now,
-      })
-      .returning();
-    return row!;
+    // still standing on a cell (a proposal next to nothing else), the newest
+    // wins.
+    const previous = new Map<PairKey, { id: string; gradedAt: Date }>();
+    for (const row of superseded) {
+      const key = pairKey(row.attemptId, row.itemId);
+      const held = previous.get(key);
+      if (!held || row.gradedAt >= held.gradedAt) previous.set(key, row);
+    }
+    const values = inputs.map((input) => ({
+      id: randomUUID(),
+      answerId: input.answerId,
+      attemptId: input.attemptId,
+      itemId: input.itemId,
+      points: round2(input.points),
+      maxPoints: round2(input.maxPoints),
+      source: input.source,
+      state: input.state,
+      details: input.details ?? null,
+      confidence: input.confidence ?? null,
+      comment: input.comment ?? null,
+      gradedBy: input.gradedBy ?? null,
+      gradedAt: input.now,
+      supersedesId: previous.get(pairKey(input.attemptId, input.itemId))?.id ?? null,
+      regradeNote: input.regradeNote ?? null,
+      createdAt: input.now,
+    }));
+    const rows = await tx.insert(gradings).values(values).returning();
+    // RETURNING order is not promised by SQL: put the rows back in input order.
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    return values.map((v) => byId.get(v.id)!);
   });
 }
 

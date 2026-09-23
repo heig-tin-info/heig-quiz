@@ -50,8 +50,10 @@ import {
   pairKey,
   standingGradings,
   writeGrading,
+  writeGradings,
   type GradingRecord,
   type PairKey,
+  type WriteGradingInput,
 } from "./service.js";
 
 /** How often the progress event goes out while a pass is running (§5.4). */
@@ -187,7 +189,8 @@ async function loadPass(
 
 /**
  * The progress events of a pass (§5.4): one every {@link PROGRESS_EVERY}
- * cells, skipped or graded alike, and a final one that says what is left.
+ * cells walked, skipped or graded alike, and a final one, once the batch is
+ * written, that says what is left.
  */
 function progressReporter(evaluation: EvaluationRecord, teacherIds: string[], total: number) {
   let done = 0;
@@ -225,8 +228,8 @@ function readConfig(app: FastifyInstance, item: JoinedItem): unknown {
 }
 
 /**
- * One cell that no teacher has settled yet: written, or handed to the runner.
- * Returns whether it went to the runner.
+ * One cell that no teacher has settled yet: the grading to write, or `null`
+ * when it went to the runner. The pass writes the gradings in one batch.
  */
 async function gradeCell(
   app: FastifyInstance,
@@ -238,9 +241,8 @@ async function gradeCell(
     attempt: AttemptRecord;
     answer: typeof answers.$inferSelect | null;
   },
-): Promise<boolean> {
+): Promise<WriteGradingInput | null> {
   const { evaluation, job, item, config, attempt, answer } = cell;
-  const db = app.db;
   const base = {
     attemptId: attempt.id,
     itemId: item.item.id,
@@ -250,10 +252,7 @@ async function gradeCell(
     ...(job.regradeNote === undefined ? {} : { regradeNote: job.regradeNote }),
   };
 
-  if (config === null) {
-    await writeGrading(db, { ...base, ...failedProposal("config_unreadable") });
-    return false;
-  }
+  if (config === null) return { ...base, ...failedProposal("config_unreadable") };
   if (answer === null) {
     // F-GRADE-01: an absent answer is worth zero, and it is settled.
     //
@@ -262,14 +261,7 @@ async function gradeCell(
     // handed to that type's `Review` further down the line, which is how
     // a feedback page dies on `details.cases.filter`. The record of what
     // happened is `answerId: null` beside the zero.
-    await writeGrading(db, {
-      ...base,
-      points: 0,
-      source: "auto",
-      state: "validated",
-      details: null,
-    });
-    return false;
+    return { ...base, points: 0, source: "auto", state: "validated", details: null };
   }
 
   const outcome = await gradeOne(app, {
@@ -288,10 +280,7 @@ async function gradeCell(
       defaults: gradeDefaults(evaluation),
     },
   });
-  if (outcome.kind === "written") {
-    await writeGrading(db, { ...base, ...outcome.grading });
-    return false;
-  }
+  if (outcome.kind === "written") return { ...base, ...outcome.grading };
   await enqueueRunnerGrading(app, {
     evaluationId: evaluation.id,
     attemptId: attempt.id,
@@ -300,7 +289,7 @@ async function gradeCell(
     request: outcome.request,
     ...(job.regradeNote === undefined ? {} : { regradeNote: job.regradeNote }),
   });
-  return true;
+  return null;
 }
 
 /**
@@ -323,6 +312,10 @@ export async function runEvaluationGrading(
     pass.items.length * pass.attempts.length,
   );
   let queuedRunner = 0;
+  // Every grading of the pass, written at the end by ONE batched writer
+  // (D-01): a transaction per 500 cells instead of one per cell. A pass that
+  // dies half-way writes nothing and is simply run again (idempotency).
+  const writes: WriteGradingInput[] = [];
   for (const item of pass.items) {
     const config = readConfig(app, item);
     for (const attempt of pass.attempts) {
@@ -331,12 +324,14 @@ export async function runEvaluationGrading(
       // touched again, so running the job twice changes nothing.
       if (pass.standing.get(key)?.state !== "validated") {
         const answer = pass.answers.get(key) ?? null;
-        const queued = await gradeCell(app, { evaluation, job, item, config, attempt, answer });
-        if (queued) queuedRunner += 1;
+        const grading = await gradeCell(app, { evaluation, job, item, config, attempt, answer });
+        if (grading) writes.push(grading);
+        else queuedRunner += 1;
       }
       progress.tick();
     }
   }
+  await writeGradings(app.db, writes);
   progress.finish(queuedRunner > 0 ? "runner" : "done");
 }
 
