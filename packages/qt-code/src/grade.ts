@@ -14,7 +14,6 @@ import { createHash } from "node:crypto";
 
 import type { FinalizeContext, GradeContext, GradeResult, GradedResult } from "@quiz/core/server";
 import { RunnerRequest, type RunnerOutcome } from "@quiz/core/server";
-import { compareOutput } from "@quiz/domain/compareOutput";
 import { assembleSource, mainFileName, TemplateRegionMismatch } from "@quiz/domain/lockedTemplate";
 import { round2 } from "@quiz/domain/round";
 
@@ -27,6 +26,7 @@ import {
   type CodeConfig,
   type CodeDetails,
 } from "./schema.js";
+import { caseVerdict } from "./verdict.js";
 
 /** Runner output kept in `gradings.details` is capped: a 64 KB stdout is not a grade. */
 const DETAIL_CHARS = 4000;
@@ -223,29 +223,19 @@ export function finalizeRunnerCode(
         ...(testCase.compareStdout ? { expected: testCase.expected } : {}),
       };
     }
-    // The request carries one global budget, so a case with a tighter budget of
-    // its own is timed out here, on the measured time.
-    const timedOut = run.timedOut || run.ms > caseTimeMs(config, testCase);
-    // A case fails on an accident whatever it checks: the wall clock, the
-    // memory ceiling, or a process with no exit code of its own (killed).
-    // Past that, the two checks are INDEPENDENT and each one is optional —
-    // `expectedExitCode: null` accepts any code, `compareStdout: false`
-    // compares nothing — and the schema refuses a case that enables neither.
-    const crashed = run.exitCode === null;
-    const exitOk =
-      testCase.expectedExitCode === null || run.exitCode === testCase.expectedExitCode;
-    const stdoutOk =
-      !testCase.compareStdout ||
-      compareOutput(testCase.expected, run.stdout, config.tests.compare);
-    const ok = !timedOut && !run.oom && !crashed && exitOk && stdoutOk;
+    // The one rule (`caseVerdict`), with the case's own budget: the request
+    // carries one global budget, so a tighter one is applied here, on the
+    // measured time. `timed_out` is the first check on a run, so it is also
+    // exactly "this case ran out of time".
+    const verdict = caseVerdict(testCase, run, config.tests.compare, caseTimeMs(config, testCase));
     return {
       name: testCase.name,
       visible: testCase.visible,
       points: testCase.points,
-      ok,
+      ok: verdict.ok,
       exitCode: run.exitCode,
       ms: run.ms,
-      timedOut,
+      timedOut: verdict.failure === "timed_out",
       oom: run.oom,
       ...(testCase.compareStdout ? { expected: testCase.expected } : {}),
       actual: truncate(run.stdout),

@@ -56,10 +56,10 @@ import {
   GRACE_MS,
   attemptDeadline,
   bonusSeconds,
-  compareOutput,
   gradeFromPoints,
   uniquePseudonyms,
 } from "@quiz/domain";
+import { caseVerdict } from "@quiz/qt-code/server";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -1329,6 +1329,28 @@ interface RunnableStudentView {
     compareStdout: boolean;
     expectedExitCode: number | null;
   }[];
+  /** How a visible case's output is compared: the grade's own options (R-06). */
+  compare?: CaseCompare;
+}
+
+type CaseCompare = NonNullable<Parameters<typeof caseVerdict>[2]>;
+
+/** The comparison options of a student view, read field by field. */
+function compareOf(raw: unknown): CaseCompare | undefined {
+  if (raw === null || typeof raw !== "object") return undefined;
+  const c = raw as Record<string, unknown>;
+  const out: CaseCompare = {};
+  if (typeof c["trimTrailing"] === "boolean") out.trimTrailing = c["trimTrailing"];
+  if (typeof c["ignoreCase"] === "boolean") out.ignoreCase = c["ignoreCase"];
+  const numeric = c["numeric"];
+  if (numeric === null) out.numeric = null;
+  else if (typeof numeric === "object") {
+    const { epsilon, mode } = numeric as Record<string, unknown>;
+    if (typeof epsilon === "number" && (mode === "abs" || mode === "rel")) {
+      out.numeric = { epsilon, mode };
+    }
+  }
+  return out;
 }
 
 function runnableView(student: unknown): RunnableStudentView {
@@ -1363,10 +1385,15 @@ function runnableView(student: unknown): RunnableStudentView {
         : [];
     });
   }
+  const compare = compareOf(source["compare"]);
+  if (compare !== undefined) out.compare = compare;
   return out;
 }
 
 const DEFAULT_RUNS_PER_MINUTE = 10;
+
+/** The only check a free stdin try can make: the program exits 0. */
+const FREE_TRY = { expected: "", compareStdout: false, expectedExitCode: 0 };
 
 /**
  * The common gate of `POST /attempts/:id/run` and `/simulate`, in this order:
@@ -1512,23 +1539,13 @@ export async function runVisibleCases(
       // Nothing to compare when the case does not compare stdout, and
       // nothing to show either.
       const expected = spec === undefined || !spec.compareStdout ? "" : spec.expected;
-      // The same two independent checks `finalizeRunnerCode` applies, so the
-      // player's verdict and the grade cannot disagree (ADR-015). A free
-      // stdin try has no case behind it: exit 0 is all it can mean.
-      const exitOk =
-        run === undefined
-          ? false
-          : spec === undefined
-            ? run.exitCode === 0
-            : spec.expectedExitCode === null
-              ? run.exitCode !== null
-              : run.exitCode === spec.expectedExitCode;
-      const stdoutOk =
-        run !== undefined &&
-        (spec === undefined || !spec.compareStdout || compareOutput(spec.expected, run.stdout));
+      // The grade's own rule, with the teacher's comparison options, so the
+      // player's verdict and the grade cannot disagree (ADR-015, audit R-06).
+      // A free stdin try has no case behind it: exit 0 is all it can mean.
+      const verdict = caseVerdict(spec ?? FREE_TRY, run, prepared.student.compare);
       return {
         name: c.name,
-        ok: run !== undefined && !run.timedOut && exitOk && stdoutOk,
+        ok: verdict.ok,
         // The facts the player names the failure by ("exit 1 ≠ 0", "Output
         // differs", "Timed out"): the same fields a browser run reports.
         exitCode: run?.exitCode ?? null,

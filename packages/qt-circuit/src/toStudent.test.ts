@@ -30,6 +30,9 @@ import {
  */
 const FORBIDDEN_KEYS = [
   ...COMMON_FORBIDDEN_STUDENT_KEYS,
+  // Out of the floor since R-06 (only `code` publishes it, on purpose); here it
+  // still names nothing this type may publish.
+  "compare",
   "expected",
   "grading",
   "mode",

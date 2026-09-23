@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import type { RunnerOutcome } from "@quiz/core/server";
 import { GRACE_MS } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
@@ -743,6 +744,7 @@ describe("running code (POST /attempts/:id/run)", () => {
       { name: "visible-1", expected: "ok", visible: true },
       { name: "hidden-1", expected: "secret-expected", visible: false },
     ],
+    compare?: { ignoreCase: boolean },
   ) {
     const seed = await seedLive(db, { questions: 0 });
     const row = await applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
@@ -762,6 +764,7 @@ describe("running code (POST /attempts/:id/run)", () => {
         template: "int main(){}",
         runsPerMinute: 2,
         cases,
+        ...(compare === undefined ? {} : { compare }),
       },
     });
     await publishQuestion(db, question!, { userId: seed.teacherId });
@@ -987,6 +990,64 @@ describe("running code (POST /attempts/:id/run)", () => {
       now: clock.now(),
     });
     expect(plain.requests[0]?.cases).toEqual([{ name: "stdin", args: [], stdin: "7\n" }]);
+  });
+
+  /** A runner that answers every case with the same run. */
+  function answering(run: Partial<RunnerOutcome["cases"][number]>): never {
+    return {
+      run: async (req: { cases: unknown[] }) => ({
+        compile: { ok: true, stdout: "", stderr: "", ms: 1 },
+        cases: req.cases.map(() => ({
+          exitCode: 0,
+          stdout: "",
+          stderr: "",
+          ms: 1,
+          timedOut: false,
+          oom: false,
+          truncated: false,
+          ...run,
+        })),
+      }),
+      health: async () => ({ ok: true, languages: ["c"], queued: 0, avgMs: 1 }),
+    } as never;
+  }
+
+  /**
+   * Audit R-06: the run route judges a visible case by the grade's own rule
+   * (`caseVerdict`), with the teacher's comparison options, and a case that
+   * ran out of memory fails even when it printed the right thing.
+   */
+  it("judges a visible case with the teacher's comparison options (R-06)", async () => {
+    const cases = [{ name: "visible-1", expected: "OK", visible: true }];
+    const strict = await codeAttempt(cases);
+    const tolerant = await codeAttempt(cases, { ignoreCase: true });
+    const input = { regions: ["return 0;"], now: clock.now() };
+    const strictRun = await service.runVisibleCases(db, {
+      ...strict,
+      ...input,
+      runner: answering({ stdout: "ok" }),
+    });
+    const tolerantRun = await service.runVisibleCases(db, {
+      ...tolerant,
+      ...input,
+      runner: answering({ stdout: "ok" }),
+    });
+    const okOf = (r: typeof strictRun) => (r.result.status === "ok" ? r.result.cases[0]?.ok : null);
+    expect(okOf(strictRun)).toBe(false);
+    expect(okOf(tolerantRun)).toBe(true);
+  });
+
+  it("fails a case that ran out of memory, whatever it printed (R-06)", async () => {
+    const { evaluation, attempt, itemId } = await codeAttempt();
+    const { result } = await service.runVisibleCases(db, {
+      runner: answering({ stdout: "ok", oom: true }),
+      evaluation,
+      attempt,
+      itemId,
+      regions: ["return 0;"],
+      now: clock.now(),
+    });
+    expect(result.status === "ok" && result.cases[0]).toMatchObject({ ok: false, oom: true });
   });
 });
 

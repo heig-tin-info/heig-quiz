@@ -12,7 +12,6 @@ import { useId, useState } from "react";
 import { fmt, plural, resolveStrings } from "@quiz/core/client";
 import type { EditorProps, MarkdownRenderer } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
-import { compareOutput } from "@quiz/domain/compareOutput";
 
 import { CodeArea } from "./MonacoHost.js";
 import { referenceRegions } from "./reference.js";
@@ -28,6 +27,7 @@ import {
   type CodeRuntime,
 } from "./schema.js";
 import { EDITOR_STRINGS, type CodeEditorStrings } from "./strings.js";
+import { caseVerdict } from "./verdict.js";
 import { badge, button, card, cx, hint, input, inputSm, label, sectionTitle } from "./styles.js";
 
 export interface CodeEditorProps extends EditorProps<CodeConfig> {
@@ -169,19 +169,14 @@ export function CodeEditor({
         setTryState({ status: "failed", reason: "compile" });
         return;
       }
-      const passed = config.tests.cases.reduce((count, testCase, i) => {
-        const run = outcome.cases[i];
-        const ok =
-          run !== undefined &&
-          !run.timedOut &&
-          !run.oom &&
-          (testCase.expectedExitCode === null
-            ? run.exitCode !== null
-            : run.exitCode === (testCase.expectedExitCode ?? 0)) &&
-          (testCase.compareStdout === false ||
-            compareOutput(testCase.expected, run.stdout, config.tests.compare));
-        return ok ? count + 1 : count;
-      }, 0);
+      // The grade's own rule (audit R-06). No per-case budget: this raw path
+      // is the browser runner, whose timing is not evidence (ADR-015) — only
+      // its own `timedOut` counts, as before.
+      const passed = config.tests.cases.reduce(
+        (count, testCase, i) =>
+          caseVerdict(testCase, outcome.cases[i], config.tests.compare).ok ? count + 1 : count,
+        0,
+      );
       setTryState({ status: "done", passed, total: config.tests.cases.length });
     } catch {
       setTryState({ status: "failed", reason: "compile" });

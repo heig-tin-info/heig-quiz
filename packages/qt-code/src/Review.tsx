@@ -13,6 +13,7 @@ import type { MarkdownRenderer, ReviewProps } from "@quiz/core/client";
 import type { CodeAnswer, CodeCaseDetail, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
 import { REVIEW_STRINGS, type CodeReviewStrings } from "./strings.js";
 import { badge, card, cx, hint, lockedBlock, sectionTitle, table } from "./styles.js";
+import { caseVerdict } from "./verdict.js";
 
 interface CodeReviewProps
   extends ReviewProps<CodeStudent, CodeAnswer, CodeSolution, CodeDetails> {
@@ -37,17 +38,39 @@ type CaseSpec = NonNullable<CodeSolution["cases"]>[number];
 function verdictOf(
   detail: CodeCaseDetail,
   spec: CaseSpec | undefined,
+  compare: CodeSolution["compare"] | undefined,
   s: CodeReviewStrings,
 ): string {
   if (detail.timedOut) return s.timedOut;
   if (detail.oom) return s.outOfMemory;
+  // The STORED verdict is the grade's; it is never re-decided here.
   if (detail.ok) return s.passed;
-  if (detail.exitCode === null) return s.crashed;
-  if (spec !== undefined && spec.expectedExitCode !== null && detail.exitCode !== spec.expectedExitCode) {
-    return fmt(s.exitMismatch, { got: String(detail.exitCode), want: spec.expectedExitCode });
+  // Without the key, only the accidents can be named: a spec that checks
+  // nothing leaves `caseVerdict` exactly those (audit R-06).
+  const verdict = caseVerdict(
+    spec ?? { expected: "", compareStdout: false, expectedExitCode: null },
+    {
+      exitCode: detail.exitCode,
+      stdout: detail.actual ?? "",
+      timedOut: detail.timedOut,
+      oom: detail.oom,
+      ms: detail.ms,
+    },
+    compare,
+  );
+  switch (verdict.failure) {
+    case "crashed":
+      return s.crashed;
+    case "exit":
+      return fmt(s.exitMismatch, { got: String(detail.exitCode), want: spec!.expectedExitCode! });
+    case "output":
+      return s.outputMismatch;
+    default:
+      // The grade failed a case whose every other check held, so it is the
+      // output that differed — the stored text may be truncated and cannot
+      // say so itself. With no output compared (or no key), stay blunt.
+      return spec !== undefined && spec.compareStdout ? s.outputMismatch : s.failed;
   }
-  if (spec !== undefined && !spec.compareStdout) return s.failed;
-  return spec === undefined ? s.failed : s.outputMismatch;
 }
 
 export function CodeReview({
@@ -169,7 +192,7 @@ export function CodeReview({
                   </td>
                   <td className={table.td}>
                     <span className={badge(detail.ok ? "success" : "danger")}>
-                      {verdictOf(detail, spec, s)}
+                      {verdictOf(detail, spec, solution?.compare, s)}
                     </span>
                   </td>
                   <td className={cx(table.td, "text-right tabular-nums")}>

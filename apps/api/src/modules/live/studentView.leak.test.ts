@@ -130,8 +130,34 @@ const FILLERS = ["x", "{{x}} x"];
  * `studentView` reads a stored config through `loadConfig`, which parses. So
  * the fixture fills every blank string before anything is sown into it.
  */
+/**
+ * What a type's empty draft lacks for the search to reach its key. `code`'s
+ * draft has one VISIBLE case, whose `expected` and `stdin` are published on
+ * purpose and therefore not sown: without a HIDDEN case the value search
+ * would never test the half that must stay closed (a `toStudent` publishing
+ * a hidden `expected` stayed green here before this fixture).
+ */
+const DRAFT_COMPLETIONS: Record<string, (draft: unknown) => unknown> = {
+  code: (draft) => {
+    const config = draft as { tests: { cases: Record<string, unknown>[] } };
+    const [visible] = config.tests.cases;
+    return {
+      ...config,
+      tests: {
+        ...config.tests,
+        cases: [
+          ...config.tests.cases,
+          { ...visible, name: "", stdin: "", expected: "", args: [], visible: false },
+        ],
+      },
+    };
+  },
+};
+
 function filledDraft(type: AnyQuestionTypeServer): unknown {
-  const draft = type.emptyDraft() as unknown;
+  const complete = DRAFT_COMPLETIONS[type.id];
+  const empty = type.emptyDraft() as unknown;
+  const draft = complete === undefined ? empty : complete(empty);
   const blanks = blankPaths(draft);
   for (const filler of FILLERS) {
     const candidate = structuredClone(draft) as unknown;
@@ -299,6 +325,19 @@ describe("studentView never leaks the key (invariant 4)", () => {
     });
   }
 
+  it("sows a marker into a HIDDEN case of the real `code` type", () => {
+    // The fixture above must put the closed half of `code` under the value
+    // search: a hidden case's `expected` carries a marker, and it is one the
+    // solution (the key) does show.
+    const code = questionType("code");
+    const { config, markers } = sowSecrets(code);
+    const hidden = (config as { tests: { cases: { visible: boolean; expected: string }[] } }).tests.cases.find(
+      (c) => !c.visible,
+    );
+    expect(hidden).toBeDefined();
+    expect(markers.some((m) => hidden!.expected.startsWith(m))).toBe(true);
+  });
+
   it("keeps the key of the fake test type out too", () => {
     const restore = registerForTests(fakeShort);
     try {
@@ -377,5 +416,12 @@ describe("stripMetadata is the last line of defence", () => {
   it("leaves a legitimate payload untouched", () => {
     const payload = { prompt: "P", choices: [{ id: 0, text: "A" }], visibleCases: [{ expected: "ok" }] };
     expect(stripMetadata(payload)).toEqual(payload);
+  });
+
+  it("lets code's comparison options through: HOW, never WHAT (audit R-06)", () => {
+    // The player judges a visible case with the grade's own options; stripping
+    // them here would put the two back out of step.
+    const compare = { trimTrailing: true, ignoreCase: true, numeric: { epsilon: 0.01, mode: "abs" } };
+    expect(stripMetadata({ prompt: "P", compare })).toEqual({ prompt: "P", compare });
   });
 });

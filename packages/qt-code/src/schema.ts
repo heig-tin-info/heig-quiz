@@ -177,8 +177,13 @@ export type CodeSegment = z.infer<typeof CodeSegment>;
 
 /**
  * What a student receives. Everything that could carry the key is gone:
- * hidden `stdin`/`expected`, the comparison options, `compileArgs`, the
- * contents of the extra files and the reference solution (decision D15).
+ * hidden `stdin`/`expected`, `compileArgs`, the contents of the extra files
+ * and the reference solution (decision D15).
+ *
+ * The comparison options DO travel (audit R-06): they say HOW an output is
+ * compared — trailing whitespace, case, a numeric tolerance — never WHAT the
+ * answer is, and without them the player judged a visible case by a
+ * different rule than the grade (ADR-015 §2).
  */
 export const CodeStudent = z.object({
   prompt: z.string(),
@@ -206,6 +211,8 @@ export const CodeStudent = z.object({
   /** Enough to say "data.csv is available", never the bytes themselves. */
   filesPreview: z.array(z.object({ name: z.string(), bytes: z.number().int() })),
   allOrNothing: z.boolean(),
+  /** How a visible case's output is compared — the grade's own options. */
+  compare: CodeCompare,
 });
 export type CodeStudent = z.infer<typeof CodeStudent>;
 
