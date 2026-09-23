@@ -7,8 +7,9 @@ import { formatPoints } from "@quiz/domain";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
-import { Button, Field, FormError, Sheet, Textarea } from "../ui";
+import { Field, FormError, Textarea } from "../ui";
 import { useGradingInvalidate } from "./useGradingInvalidate";
+import { ValidatedSheet } from "./ValidatedSheet";
 
 /**
  * F-GRADE-05: the teacher's own grading, with its MANDATORY comment. The
@@ -38,7 +39,6 @@ export function OverrideSheet({
     entry.grading ? formatPoints(entry.grading.points) : "0",
   );
   const [comment, setComment] = useState(entry.grading?.comment ?? "");
-  const [touched, setTouched] = useState(false);
 
   const value = Number(points.replace(",", "."));
   const pointsInvalid = !Number.isFinite(value) || value < 0 || value > maxPoints;
@@ -63,69 +63,53 @@ export function OverrideSheet({
     },
   });
 
-  const submit = () => {
-    setTouched(true);
-    if (pointsInvalid || commentInvalid || path === null) return;
-    save.mutate();
-  };
-
   return (
-    <Sheet
+    <ValidatedSheet
       title={t("grading.override.title")}
       subtitle={t("grading.override.subtitle")}
       onClose={onClose}
-      footer={
-        <>
-          <Button variant="ghost" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button onClick={submit} loading={save.isPending}>
-            {t("grading.override.save")}
-          </Button>
-        </>
-      }
+      submitLabel={t("grading.override.save")}
+      submitting={save.isPending}
+      invalid={pointsInvalid || commentInvalid || path === null}
+      onSubmit={() => save.mutate()}
+      error={<FormError error={save.error} title={t("grading.override.failed")} />}
     >
-      <form
-        className="space-y-5"
-        onSubmit={(e) => {
-          e.preventDefault();
-          submit();
-        }}
-      >
-        <p className="text-sm text-fg-muted">{entry.label}</p>
-        <Field
-          label={t("grading.override.points")}
-          hint={t("grading.override.max", { max: formatPoints(maxPoints) })}
-          type="number"
-          step="0.5"
-          min={0}
-          max={maxPoints}
-          autoFocus
-          width="w-32"
-          value={points}
-          onChange={(e) => setPoints(e.target.value)}
-          aria-invalid={touched && pointsInvalid}
-        />
-        {touched && pointsInvalid ? (
-          <p className="text-[13px] text-danger">
-            {t("grading.override.pointsInvalid", { max: formatPoints(maxPoints) })}
-          </p>
-        ) : null}
-        <div className="space-y-1.5">
-          <Textarea
-            label={t("grading.override.comment")}
-            placeholder={t("grading.override.commentPlaceholder")}
-            value={comment}
-            required
-            onChange={(e) => setComment(e.target.value)}
-            aria-invalid={touched && commentInvalid}
+      {(touched) => (
+        <>
+          <p className="text-sm text-fg-muted">{entry.label}</p>
+          <Field
+            label={t("grading.override.points")}
+            hint={t("grading.override.max", { max: formatPoints(maxPoints) })}
+            type="number"
+            step="0.5"
+            min={0}
+            max={maxPoints}
+            autoFocus
+            width="w-32"
+            value={points}
+            onChange={(e) => setPoints(e.target.value)}
+            aria-invalid={touched && pointsInvalid}
           />
-          {touched && commentInvalid ? (
-            <p className="text-[13px] text-danger">{t("grading.override.commentRequired")}</p>
+          {touched && pointsInvalid ? (
+            <p className="text-[13px] text-danger">
+              {t("grading.override.pointsInvalid", { max: formatPoints(maxPoints) })}
+            </p>
           ) : null}
-        </div>
-        <FormError error={save.error} title={t("grading.override.failed")} />
-      </form>
-    </Sheet>
+          <div className="space-y-1.5">
+            <Textarea
+              label={t("grading.override.comment")}
+              placeholder={t("grading.override.commentPlaceholder")}
+              value={comment}
+              required
+              onChange={(e) => setComment(e.target.value)}
+              aria-invalid={touched && commentInvalid}
+            />
+            {touched && commentInvalid ? (
+              <p className="text-[13px] text-danger">{t("grading.override.commentRequired")}</p>
+            ) : null}
+          </div>
+        </>
+      )}
+    </ValidatedSheet>
   );
 }
