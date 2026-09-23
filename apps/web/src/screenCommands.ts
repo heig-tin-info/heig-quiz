@@ -8,8 +8,9 @@ import type { Command } from "./commands";
  * by the mounted screens, through a command registry […] the palette knows
  * nothing about the modules").
  *
- * `buildCommands` stays a function of an explicit context — it cannot know
- * that a pool screen is open, or which question the editor holds. So a screen
+ * `buildCommands` takes an explicit context and, beside it, reads the one slot
+ * below — it cannot know from the context alone that a pool screen is open, or
+ * which question the editor holds. So a screen
  * declares its own commands here while it is mounted, and `buildCommands`
  * reads them when the palette opens, which is why a stale closure is not a
  * thing. They come FIRST within their group, before the generic ones: the
