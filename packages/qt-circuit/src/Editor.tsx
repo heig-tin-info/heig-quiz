@@ -37,26 +37,28 @@ import {
   type KindLabels,
 } from "./strings.js";
 import {
+  AdvancedDisclosure,
   AsideSection,
-  card,
   CheckboxField,
   cx,
+  EditorSection,
   FieldCell,
   hint,
   input,
-  inputSm,
   IssueList,
   label,
   NumberField,
   patchAt,
-  PromptField,
-  RemoveRowButton,
+  PromptSection,
   removeAt,
+  RowHead,
   RowList,
   RowListHeader,
   sectionTitle,
   Segmented,
+  setting,
   TryPanel,
+  type TryStatus,
 } from "@quiz/ui";
 
 import { chip, selectSm } from "./styles.js";
@@ -128,9 +130,6 @@ const KIND_GROUPS: ReadonlyArray<{
   { title: "groupTerminals", kinds: ["GND", "VCC", "VEE"] },
 ];
 
-/** A checkbox in a column of settings: no fixed height, the body ink. */
-const SETTING = "flex items-center gap-2 text-[13px] text-fg";
-
 /** A fresh source of each kind, so switching kinds never lands on an invalid one. */
 function defaultSource(kind: Source["kind"]): Source {
   switch (kind) {
@@ -156,6 +155,54 @@ function defaultLoad(kind: Load["kind"]): Load {
   }
 }
 
+/** What the try panel says after a simulation, in one line; nothing before the first. */
+function tryStatusOf(tryState: TryState, s: CircuitEditorStrings): TryStatus | null {
+  switch (tryState.status) {
+    case "unavailable":
+      return { tone: "hint", text: s.tryUnavailable };
+    case "failed":
+      return {
+        tone: "danger",
+        text:
+          tryState.reason === "reference"
+            ? s.tryNeedsReference
+            : tryState.reason === "stimulus"
+              ? s.tryNeedsStimulus
+              : s.tryFailed,
+      };
+    case "done":
+      return {
+        tone: "hint",
+        // The stimuli that produced a WAVEFORM, not the ones
+        // that were sent: a count the plots below do not back
+        // up is a count the teacher has to distrust.
+        text: plural(s, "tryDone", tryState.details.stimuli.filter((d) => d.series !== null).length),
+      };
+    default:
+      return null;
+  }
+}
+
+/** What one simulation of the reference came back with, as a try state. */
+async function simulate(
+  config: CircuitConfig,
+  onTry: (config: CircuitConfig) => Promise<CircuitTryOutcome>,
+): Promise<TryState> {
+  const outcome = await onTry(config);
+  if (outcome === "unavailable") return { status: "unavailable" };
+  return outcome.details.runner === "ok"
+    ? { status: "done", details: outcome.details }
+    : outcome.details.runner === "unavailable" || outcome.details.runner === "none"
+      ? { status: "unavailable" }
+      : { status: "failed", reason: "runner" };
+}
+
+/** The canvas dictionary as an optional prop: absent, the canvas keeps its own. */
+const canvasProps = (canvasStrings: Partial<CanvasStrings> | undefined) =>
+  canvasStrings === undefined ? {} : { strings: canvasStrings };
+
+type Patch = (next: Partial<CircuitConfig>) => void;
+
 export function CircuitEditor({
   config,
   onChange,
@@ -175,7 +222,7 @@ export function CircuitEditor({
   const ids = useId();
   const [tryState, setTryState] = useState<TryState>({ status: "idle" });
 
-  const patch = (next: Partial<CircuitConfig>) => onChange({ ...config, ...next });
+  const patch: Patch = (next) => onChange({ ...config, ...next });
   const patchStimulus = (index: number, next: Partial<Stimulus>) =>
     patch({ stimuli: patchAt(config.stimuli, index, next) });
 
@@ -203,134 +250,29 @@ export function CircuitEditor({
     }
     setTryState({ status: "running" });
     try {
-      const outcome = await onTry(config);
-      if (outcome === "unavailable") {
-        setTryState({ status: "unavailable" });
-        return;
-      }
-      setTryState(
-        outcome.details.runner === "ok"
-          ? { status: "done", details: outcome.details }
-          : outcome.details.runner === "unavailable" || outcome.details.runner === "none"
-            ? { status: "unavailable" }
-            : { status: "failed", reason: "runner" },
-      );
+      setTryState(await simulate(config, onTry));
     } catch {
       setTryState({ status: "failed", reason: "runner" });
     }
   }
 
-  const modeOptions: ReadonlyArray<{ value: GradingMode; label: string }> = [
-    { value: "manual", label: s.modeManual },
-    { value: "simulation", label: s.modeSimulation },
-    { value: "llm", label: s.modeLlm },
-  ];
-
-  /**
-   * How the question is marked — the one block the host may take away.
-   *
-   * It is dressed as a CARD, because that is where it lands: the right column
-   * of the question editor, under "Properties" (`EditorProps.aside`). Without
-   * an aside the very same node renders in the main column, one section among
-   * the others.
-   */
-  const grading = (
-    <AsideSection aside={aside}>
-      {/*
-       * The "?" is a SIBLING of the heading, never inside it (DESIGN.md):
-       * the three modes are the one choice on this screen a teacher cannot
-       * guess from a label, and the long form belongs in the drawer.
-       */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <h3 className={sectionTitle} id={`${ids}-grading`}>
-          {s.grading}
-        </h3>
-        {renderHelp ? renderHelp("circuit-grading") : null}
-      </div>
-      <Segmented
-        name={`${ids}-mode`}
-        labelledBy={`${ids}-grading`}
-        value={config.grading.mode}
-        options={modeOptions}
-        disabled={disabled}
-        onChange={(mode) => patch({ grading: { ...config.grading, mode } })}
-      />
-      <p className={hint}>
-        {config.grading.mode === "manual"
-          ? s.modeManualHint
-          : config.grading.mode === "simulation"
-            ? s.modeSimulationHint
-            : s.modeLlmHint}
-      </p>
-      <IssueList issues={issuesAt(issues, "grading")} />
-
-      {/* The tolerance means nothing outside `simulation`, and the criteria
-          mean nothing inside it: each field exists where it is read. */}
-      {config.grading.mode === "simulation" ? (
-        <>
-          <NumberField
-            id={`${ids}-tolerance`}
-            label={s.tolerance}
-            value={config.grading.tolerance}
-            min={0.001}
-            max={1}
-            step={0.01}
-            disabled={disabled}
-            onChange={(tolerance) => patch({ grading: { ...config.grading, tolerance } })}
-          />
-          <p className={hint}>{s.toleranceHint}</p>
-        </>
-      ) : (
-        <FieldCell label={s.rubric} htmlFor={`${ids}-rubric`}>
-          <textarea
-            id={`${ids}-rubric`}
-            rows={4}
-            className={cx(input, "w-full py-2 leading-relaxed")}
-            disabled={disabled}
-            value={config.grading.rubric}
-            onChange={(e) => patch({ grading: { ...config.grading, rubric: e.target.value } })}
-          />
-          <p className={hint}>{s.rubricHint}</p>
-        </FieldCell>
-      )}
-
-      <CheckboxField
-        className={SETTING}
-        label={s.showExpected}
-        checked={config.showExpected}
-        disabled={disabled || config.reference === null}
-        onChange={(showExpected) => patch({ showExpected })}
-      />
-      <p className={hint}>{s.showExpectedHint}</p>
-      <IssueList issues={issuesAt(issues, "showExpected")} />
-    </AsideSection>
-  );
-
   return (
     <div className="flex flex-col gap-6">
       <IssueList issues={rootIssues(issues)} />
 
-      <section className={cx(card, "flex flex-col gap-4 p-4")}>
-        <h3 className={sectionTitle}>{s.questionSection}</h3>
-        <div className="flex flex-col gap-1.5">
-          <PromptField
-            id={`${ids}-prompt`}
-            label={s.prompt}
-            value={config.prompt}
-            onChange={(prompt) => patch({ prompt })}
-            disabled={disabled}
-            RichText={RichText}
-            uploadImage={uploadAsset}
-            labelClassName={label}
-            textareaClassName={cx(input, "w-full py-2 leading-relaxed")}
-          />
-          <IssueList issues={issuesAt(issues, "prompt")} />
-        </div>
-      </section>
+      <PromptSection
+        title={s.questionSection}
+        id={`${ids}-prompt`}
+        label={s.prompt}
+        value={config.prompt}
+        onChange={(prompt) => patch({ prompt })}
+        disabled={disabled}
+        RichText={RichText}
+        uploadImage={uploadAsset}
+        issues={issuesAt(issues, "prompt")}
+      />
 
-      <section className={cx(card, "flex flex-col gap-3 p-4")}>
-        <h3 className={sectionTitle}>{s.palette}</h3>
-        <p className={hint}>{s.paletteHint}</p>
+      <EditorSection title={s.palette} hint={s.paletteHint}>
         <div className="flex flex-col gap-2.5">
           {KIND_GROUPS.map((group) => (
             // The label is a COLUMN, not the first chip of the row: the six
@@ -384,11 +326,9 @@ export function CircuitEditor({
           />
           <p className={cx(hint, "pb-1.5")}>{s.maxComponentsHint}</p>
         </div>
-      </section>
+      </EditorSection>
 
-      <section className={cx(card, "flex flex-col gap-3 p-4")}>
-        <h3 className={sectionTitle}>{s.supplies}</h3>
-        <p className={hint}>{s.suppliesHint}</p>
+      <EditorSection title={s.supplies} hint={s.suppliesHint}>
         <div className="flex flex-wrap items-end gap-4">
           {/*
            * An empty field IS "no rail": a nullable number has no second
@@ -421,9 +361,9 @@ export function CircuitEditor({
           />
         </div>
         <IssueList issues={issuesAt(issues, "supplies")} />
-      </section>
+      </EditorSection>
 
-      <section className={cx(card, "flex flex-col gap-3 p-4")}>
+      <EditorSection>
         <RowListHeader
           title={s.stimuli}
           count={plural(s, "totalPoints", totalStimulusPoints(config))}
@@ -443,179 +383,22 @@ export function CircuitEditor({
 
         <RowList items={config.stimuli}>
           {(stimulus, i) => (
-            <>
-              <div className="flex flex-wrap items-end gap-3">
-                <FieldCell
-                  label={fmt(s.stimulus, { n: i + 1 })}
-                  htmlFor={`${ids}-sname-${i}`}
-                  className="min-w-40 flex-1"
-                >
-                  <input
-                    id={`${ids}-sname-${i}`}
-                    className={cx(inputSm, "w-full font-medium")}
-                    aria-label={`${s.stimulusName} ${i + 1}`}
-                    disabled={disabled}
-                    value={stimulus.name}
-                    onChange={(e) => patchStimulus(i, { name: e.target.value })}
-                  />
-                </FieldCell>
-                <NumberField
-                  id={`${ids}-spoints-${i}`}
-                  label={s.points}
-                  value={stimulus.points}
-                  min={0}
-                  step={0.5}
-                  width="w-20"
-                  disabled={disabled}
-                  onChange={(points) => patchStimulus(i, { points })}
-                />
-                <CheckboxField
-                  className="flex h-7 items-center gap-2 text-[13px] text-fg-muted"
-                  label={s.hidden}
-                  aria-label={`${s.hidden} ${i + 1}`}
-                  checked={!stimulus.visible}
-                  disabled={disabled}
-                  onChange={(hidden) => patchStimulus(i, { visible: !hidden })}
-                />
-                <RemoveRowButton
-                  label={fmt(s.removeStimulus, { name: stimulus.name })}
-                  disabled={disabled}
-                  onClick={() => patch({ stimuli: removeAt(config.stimuli, i) })}
-                />
-              </div>
-
-              <div className="mt-3 flex flex-col gap-2">
-                <span className={label} id={`${ids}-src-${i}`}>
-                  {s.source}
-                </span>
-                <Segmented
-                  name={`${ids}-srck-${i}`}
-                  labelledBy={`${ids}-src-${i}`}
-                  value={stimulus.source.kind}
-                  disabled={disabled}
-                  options={[
-                    { value: "dc", label: s.sourceDc },
-                    { value: "sine", label: s.sourceSine },
-                    { value: "pulse", label: s.sourcePulse },
-                    { value: "step", label: s.sourceStep },
-                  ]}
-                  onChange={(kind) => patchStimulus(i, { source: defaultSource(kind) })}
-                />
-                <div className="flex flex-wrap items-end gap-3">
-                  <SourceFields
-                    idPrefix={`${ids}-s${i}`}
-                    source={stimulus.source}
-                    strings={s}
-                    disabled={disabled}
-                    onChange={(source) => patchStimulus(i, { source })}
-                  />
-                  <NumberField
-                    id={`${ids}-sohms-${i}`}
-                    label={s.sourceOhms}
-                    value={stimulus.sourceOhms}
-                    min={0}
-                    step="any"
-                    disabled={disabled}
-                    onChange={(sourceOhms) => patchStimulus(i, { sourceOhms })}
-                  />
-                </div>
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-end gap-3">
-                <FieldCell label={s.load} htmlFor={`${ids}-load-${i}`}>
-                  <select
-                    id={`${ids}-load-${i}`}
-                    className={cx(selectSm, "w-32")}
-                    disabled={disabled}
-                    value={stimulus.load.kind}
-                    onChange={(e) =>
-                      patchStimulus(i, { load: defaultLoad(e.target.value as Load["kind"]) })
-                    }
-                  >
-                    <option value="open">{s.loadOpen}</option>
-                    <option value="resistor">{s.loadResistor}</option>
-                    <option value="capacitor">{s.loadCapacitor}</option>
-                  </select>
-                </FieldCell>
-                {stimulus.load.kind === "resistor" ? (
-                  <NumberField
-                    id={`${ids}-lohms-${i}`}
-                    label={s.loadOhms}
-                    value={stimulus.load.ohms}
-                    min={0.001}
-                    step="any"
-                    disabled={disabled}
-                    onChange={(ohms) => patchStimulus(i, { load: { kind: "resistor", ohms } })}
-                  />
-                ) : null}
-                {stimulus.load.kind === "capacitor" ? (
-                  <NumberField
-                    id={`${ids}-lfarads-${i}`}
-                    label={s.loadFarads}
-                    value={stimulus.load.farads}
-                    min={1e-15}
-                    step="any"
-                    disabled={disabled}
-                    onChange={(farads) => patchStimulus(i, { load: { kind: "capacitor", farads } })}
-                  />
-                ) : null}
-              </div>
-
-              {/* A heading over its three fields, like "Source" and "Load"
-                  above: a group label parked on the baseline of the inputs
-                  reads as a fourth field with no box. */}
-              <div className="mt-3 flex flex-col gap-2">
-                <span className={label}>{s.analysis}</span>
-                <div className="flex flex-wrap items-end gap-3">
-                <NumberField
-                  id={`${ids}-stop-${i}`}
-                  label={s.stopMs}
-                  value={stimulus.analysis.stopMs}
-                  min={0.001}
-                  step="any"
-                  width="w-24"
-                  disabled={disabled}
-                  onChange={(stopMs) =>
-                    patchStimulus(i, { analysis: { ...stimulus.analysis, stopMs } })
-                  }
-                />
-                <NumberField
-                  id={`${ids}-skip-${i}`}
-                  label={s.skipMs}
-                  value={stimulus.analysis.skipMs}
-                  min={0}
-                  step="any"
-                  width="w-24"
-                  disabled={disabled}
-                  onChange={(skipMs) =>
-                    patchStimulus(i, { analysis: { ...stimulus.analysis, skipMs } })
-                  }
-                />
-                <NumberField
-                  id={`${ids}-pts-${i}`}
-                  label={s.samples}
-                  value={stimulus.analysis.points}
-                  min={50}
-                  max={2000}
-                  step={50}
-                  width="w-24"
-                  disabled={disabled}
-                  onChange={(points) =>
-                    patchStimulus(i, { analysis: { ...stimulus.analysis, points } })
-                  }
-                />
-                </div>
-              </div>
-              <IssueList issues={issuesAt(issues, "stimuli", i)} />
-            </>
+            <StimulusFields
+              ids={ids}
+              index={i}
+              stimulus={stimulus}
+              s={s}
+              disabled={disabled}
+              patch={(next) => patchStimulus(i, next)}
+              onRemove={() => patch({ stimuli: removeAt(config.stimuli, i) })}
+              issues={issuesAt(issues, "stimuli", i)}
+            />
           )}
         </RowList>
         <IssueList issues={issuesAt(issues, "stimuli").filter((x) => x.path.length === 1)} />
-      </section>
+      </EditorSection>
 
-      <section className={cx(card, "flex flex-col gap-3 p-4")}>
-        <h3 className={sectionTitle}>{s.reference}</h3>
-        <p className={hint}>{s.referenceHint}</p>
+      <EditorSection title={s.reference} hint={s.referenceHint}>
         <SchematicEditor
           id={`${ids}-reference`}
           aria-label={s.reference}
@@ -624,7 +407,7 @@ export function CircuitEditor({
           palette={{ kinds: config.palette.kinds, maxComponents: 40 }}
           supplies={config.supplies}
           readOnly={disabled === true}
-          {...(canvasStrings === undefined ? {} : { strings: canvasStrings })}
+          {...canvasProps(canvasStrings)}
         />
         <IssueList issues={issuesAt(issues, "reference")} />
 
@@ -635,85 +418,340 @@ export function CircuitEditor({
             running={tryState.status === "running"}
             disabled={disabled}
             onTry={() => void simulateReference()}
-            status={
-              tryState.status === "unavailable"
-                ? { tone: "hint", text: s.tryUnavailable }
-                : tryState.status === "failed"
-                  ? {
-                      tone: "danger",
-                      text:
-                        tryState.reason === "reference"
-                          ? s.tryNeedsReference
-                          : tryState.reason === "stimulus"
-                            ? s.tryNeedsStimulus
-                            : s.tryFailed,
-                    }
-                  : tryState.status === "done"
-                    ? {
-                        tone: "hint",
-                        // The stimuli that produced a WAVEFORM, not the ones
-                        // that were sent: a count the plots below do not back
-                        // up is a count the teacher has to distrust.
-                        text: plural(
-                          s,
-                          "tryDone",
-                          tryState.details.stimuli.filter((d) => d.series !== null).length,
-                        ),
-                      }
-                    : null
-            }
+            status={tryStatusOf(tryState, s)}
           />
         )}
         {tryState.status === "done" ? (
-          <div
-            className={cx(
-              "grid gap-3",
-              tryState.details.stimuli.filter((d) => d.series !== null).length > 1 &&
-                "sm:grid-cols-2",
-            )}
-          >
-            {tryState.details.stimuli.map((detail, i) =>
-              detail.series === null ? null : (
-                <Plot
-                  key={i}
-                  title={detail.name}
-                  series={detail.series}
-                  height={160}
-                  {...(canvasStrings === undefined ? {} : { strings: canvasStrings })}
-                />
-              ),
-            )}
-          </div>
+          <TryPlots details={tryState.details} canvasStrings={canvasStrings} />
         ) : null}
-      </section>
+      </EditorSection>
 
-      <details className={cx(card, "p-4")}>
-        <summary className={cx(sectionTitle, "cursor-pointer")}>{s.advanced}</summary>
-        <div className="mt-4 flex flex-col gap-3">
-          <CheckboxField
-            className={SETTING}
-            label={s.commonGround}
-            checked={config.commonGround}
-            disabled={disabled}
-            onChange={(commonGround) => patch({ commonGround })}
-          />
-          <p className={hint}>{s.commonGroundHint}</p>
-          <NumberField
-            id={`${ids}-spm`}
-            label={s.simulationsPerMinute}
-            value={config.simulationsPerMinute}
-            min={1}
-            max={30}
-            width="w-24"
-            disabled={disabled}
-            onChange={(n) => patch({ simulationsPerMinute: n || 1 })}
-          />
-          <p className={hint}>{s.simulationsPerMinuteHint}</p>
-        </div>
-      </details>
+      <AdvancedDisclosure summary={s.advanced} className="flex flex-col gap-3">
+        <CheckboxField
+          className={setting}
+          label={s.commonGround}
+          checked={config.commonGround}
+          disabled={disabled}
+          onChange={(commonGround) => patch({ commonGround })}
+        />
+        <p className={hint}>{s.commonGroundHint}</p>
+        <NumberField
+          id={`${ids}-spm`}
+          label={s.simulationsPerMinute}
+          value={config.simulationsPerMinute}
+          min={1}
+          max={30}
+          width="w-24"
+          disabled={disabled}
+          onChange={(n) => patch({ simulationsPerMinute: n || 1 })}
+        />
+        <p className={hint}>{s.simulationsPerMinuteHint}</p>
+      </AdvancedDisclosure>
 
-      {grading}
+      <GradingSection
+        ids={ids}
+        config={config}
+        s={s}
+        disabled={disabled}
+        patch={patch}
+        issues={issues}
+        renderHelp={renderHelp}
+        aside={aside}
+      />
     </div>
+  );
+}
+
+/** One stimulus's panel: its head line, its source, its load and its analysis window. */
+function StimulusFields({
+  ids,
+  index: i,
+  stimulus,
+  s,
+  disabled,
+  patch,
+  onRemove,
+  issues,
+}: {
+  ids: string;
+  index: number;
+  stimulus: Stimulus;
+  s: CircuitEditorStrings;
+  disabled: boolean | undefined;
+  patch: (next: Partial<Stimulus>) => void;
+  onRemove: () => void;
+  issues: readonly ConfigIssue[];
+}): ReactNode {
+  const patchAnalysis = (next: Partial<Stimulus["analysis"]>) =>
+    patch({ analysis: { ...stimulus.analysis, ...next } });
+  return (
+    <>
+      <RowHead
+        disabled={disabled}
+        nameId={`${ids}-sname-${i}`}
+        nameLabel={fmt(s.stimulus, { n: i + 1 })}
+        nameAriaLabel={`${s.stimulusName} ${i + 1}`}
+        name={stimulus.name}
+        onNameChange={(name) => patch({ name })}
+        pointsId={`${ids}-spoints-${i}`}
+        pointsLabel={s.points}
+        points={stimulus.points}
+        onPointsChange={(points) => patch({ points })}
+        hiddenLabel={s.hidden}
+        hiddenAriaLabel={`${s.hidden} ${i + 1}`}
+        visible={stimulus.visible}
+        onVisibleChange={(visible) => patch({ visible })}
+        removeLabel={fmt(s.removeStimulus, { name: stimulus.name })}
+        removeDisabled={disabled}
+        onRemove={onRemove}
+      />
+
+      <div className="mt-3 flex flex-col gap-2">
+        <span className={label} id={`${ids}-src-${i}`}>
+          {s.source}
+        </span>
+        <Segmented
+          name={`${ids}-srck-${i}`}
+          labelledBy={`${ids}-src-${i}`}
+          value={stimulus.source.kind}
+          disabled={disabled}
+          options={[
+            { value: "dc", label: s.sourceDc },
+            { value: "sine", label: s.sourceSine },
+            { value: "pulse", label: s.sourcePulse },
+            { value: "step", label: s.sourceStep },
+          ]}
+          onChange={(kind) => patch({ source: defaultSource(kind) })}
+        />
+        <div className="flex flex-wrap items-end gap-3">
+          <SourceFields
+            idPrefix={`${ids}-s${i}`}
+            source={stimulus.source}
+            strings={s}
+            disabled={disabled}
+            onChange={(source) => patch({ source })}
+          />
+          <NumberField
+            id={`${ids}-sohms-${i}`}
+            label={s.sourceOhms}
+            value={stimulus.sourceOhms}
+            min={0}
+            step="any"
+            disabled={disabled}
+            onChange={(sourceOhms) => patch({ sourceOhms })}
+          />
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-end gap-3">
+        <FieldCell label={s.load} htmlFor={`${ids}-load-${i}`}>
+          <select
+            id={`${ids}-load-${i}`}
+            className={cx(selectSm, "w-32")}
+            disabled={disabled}
+            value={stimulus.load.kind}
+            onChange={(e) => patch({ load: defaultLoad(e.target.value as Load["kind"]) })}
+          >
+            <option value="open">{s.loadOpen}</option>
+            <option value="resistor">{s.loadResistor}</option>
+            <option value="capacitor">{s.loadCapacitor}</option>
+          </select>
+        </FieldCell>
+        {stimulus.load.kind === "resistor" ? (
+          <NumberField
+            id={`${ids}-lohms-${i}`}
+            label={s.loadOhms}
+            value={stimulus.load.ohms}
+            min={0.001}
+            step="any"
+            disabled={disabled}
+            onChange={(ohms) => patch({ load: { kind: "resistor", ohms } })}
+          />
+        ) : null}
+        {stimulus.load.kind === "capacitor" ? (
+          <NumberField
+            id={`${ids}-lfarads-${i}`}
+            label={s.loadFarads}
+            value={stimulus.load.farads}
+            min={1e-15}
+            step="any"
+            disabled={disabled}
+            onChange={(farads) => patch({ load: { kind: "capacitor", farads } })}
+          />
+        ) : null}
+      </div>
+
+      {/* A heading over its three fields, like "Source" and "Load"
+          above: a group label parked on the baseline of the inputs
+          reads as a fourth field with no box. */}
+      <div className="mt-3 flex flex-col gap-2">
+        <span className={label}>{s.analysis}</span>
+        <div className="flex flex-wrap items-end gap-3">
+        <NumberField
+          id={`${ids}-stop-${i}`}
+          label={s.stopMs}
+          value={stimulus.analysis.stopMs}
+          min={0.001}
+          step="any"
+          width="w-24"
+          disabled={disabled}
+          onChange={(stopMs) => patchAnalysis({ stopMs })}
+        />
+        <NumberField
+          id={`${ids}-skip-${i}`}
+          label={s.skipMs}
+          value={stimulus.analysis.skipMs}
+          min={0}
+          step="any"
+          width="w-24"
+          disabled={disabled}
+          onChange={(skipMs) => patchAnalysis({ skipMs })}
+        />
+        <NumberField
+          id={`${ids}-pts-${i}`}
+          label={s.samples}
+          value={stimulus.analysis.points}
+          min={50}
+          max={2000}
+          step={50}
+          width="w-24"
+          disabled={disabled}
+          onChange={(points) => patchAnalysis({ points })}
+        />
+        </div>
+      </div>
+      <IssueList issues={issues} />
+    </>
+  );
+}
+
+/** One plot per stimulus that produced a waveform, two abreast when there are several. */
+function TryPlots({
+  details,
+  canvasStrings,
+}: {
+  details: CircuitDetails;
+  canvasStrings: Partial<CanvasStrings> | undefined;
+}): ReactNode {
+  return (
+    <div
+      className={cx(
+        "grid gap-3",
+        details.stimuli.filter((d) => d.series !== null).length > 1 && "sm:grid-cols-2",
+      )}
+    >
+      {details.stimuli.map((detail, i) =>
+        detail.series === null ? null : (
+          <Plot
+            key={i}
+            title={detail.name}
+            series={detail.series}
+            height={160}
+            {...canvasProps(canvasStrings)}
+          />
+        ),
+      )}
+    </div>
+  );
+}
+
+/**
+ * How the question is marked — the one block the host may take away.
+ *
+ * It is dressed as a CARD, because that is where it lands: the right column
+ * of the question editor, under "Properties" (`EditorProps.aside`). Without
+ * an aside the very same node renders in the main column, one section among
+ * the others.
+ */
+function GradingSection({
+  ids,
+  config,
+  s,
+  disabled,
+  patch,
+  issues,
+  renderHelp,
+  aside,
+}: {
+  ids: string;
+  config: CircuitConfig;
+  s: CircuitEditorStrings;
+  disabled: boolean | undefined;
+  patch: Patch;
+  issues: readonly ConfigIssue[];
+  renderHelp: CircuitEditorProps["renderHelp"];
+  aside: CircuitEditorProps["aside"];
+}): ReactNode {
+  const modeOptions: ReadonlyArray<{ value: GradingMode; label: string }> = [
+    { value: "manual", label: s.modeManual },
+    { value: "simulation", label: s.modeSimulation },
+    { value: "llm", label: s.modeLlm },
+  ];
+  const modeHint = { manual: s.modeManualHint, simulation: s.modeSimulationHint, llm: s.modeLlmHint };
+  return (
+    <AsideSection aside={aside}>
+      {/*
+       * The "?" is a SIBLING of the heading, never inside it (DESIGN.md):
+       * the three modes are the one choice on this screen a teacher cannot
+       * guess from a label, and the long form belongs in the drawer.
+       */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <h3 className={sectionTitle} id={`${ids}-grading`}>
+          {s.grading}
+        </h3>
+        {renderHelp ? renderHelp("circuit-grading") : null}
+      </div>
+      <Segmented
+        name={`${ids}-mode`}
+        labelledBy={`${ids}-grading`}
+        value={config.grading.mode}
+        options={modeOptions}
+        disabled={disabled}
+        onChange={(mode) => patch({ grading: { ...config.grading, mode } })}
+      />
+      <p className={hint}>{modeHint[config.grading.mode]}</p>
+      <IssueList issues={issuesAt(issues, "grading")} />
+
+      {/* The tolerance means nothing outside `simulation`, and the criteria
+          mean nothing inside it: each field exists where it is read. */}
+      {config.grading.mode === "simulation" ? (
+        <>
+          <NumberField
+            id={`${ids}-tolerance`}
+            label={s.tolerance}
+            value={config.grading.tolerance}
+            min={0.001}
+            max={1}
+            step={0.01}
+            disabled={disabled}
+            onChange={(tolerance) => patch({ grading: { ...config.grading, tolerance } })}
+          />
+          <p className={hint}>{s.toleranceHint}</p>
+        </>
+      ) : (
+        <FieldCell label={s.rubric} htmlFor={`${ids}-rubric`}>
+          <textarea
+            id={`${ids}-rubric`}
+            rows={4}
+            className={cx(input, "w-full py-2 leading-relaxed")}
+            disabled={disabled}
+            value={config.grading.rubric}
+            onChange={(e) => patch({ grading: { ...config.grading, rubric: e.target.value } })}
+          />
+          <p className={hint}>{s.rubricHint}</p>
+        </FieldCell>
+      )}
+
+      <CheckboxField
+        className={setting}
+        label={s.showExpected}
+        checked={config.showExpected}
+        disabled={disabled || config.reference === null}
+        onChange={(showExpected) => patch({ showExpected })}
+      />
+      <p className={hint}>{s.showExpectedHint}</p>
+      <IssueList issues={issuesAt(issues, "showExpected")} />
+    </AsideSection>
   );
 }
 

@@ -5,7 +5,8 @@
  */
 import type { ReactNode } from "react";
 
-import { badge, button, sectionTitle } from "./styles.js";
+import { CheckboxField, FieldCell, NumberField } from "./fields.js";
+import { badge, button, cx, inputSm, sectionTitle } from "./styles.js";
 
 /** The list with the row at `index` merged with `patch`; the others untouched. */
 export function patchAt<T>(list: readonly T[], index: number, patch: Partial<T>): T[] {
@@ -92,5 +93,95 @@ export function RemoveRowButton({
     >
       ×
     </button>
+  );
+}
+
+/**
+ * The first line of a row panel, the same in every list of weighted rows
+ * (audit P-15): the row's name, its points, whatever the type adds beside
+ * them (`children`: a time budget), "Hidden" and the remove button.
+ *
+ * "Hidden" is the inverse of the stored `visible` flag — the word a teacher
+ * ticks is the exception, not the rule — so the component takes `visible`
+ * and hands back `visible`, and no caller writes the negation.
+ */
+export function RowHead({
+  disabled,
+  nameId,
+  nameLabel,
+  nameAriaLabel,
+  name,
+  onNameChange,
+  pointsId,
+  pointsLabel,
+  pointsAriaLabel,
+  points,
+  onPointsChange,
+  hiddenLabel,
+  hiddenAriaLabel,
+  visible,
+  onVisibleChange,
+  removeLabel,
+  removeDisabled,
+  onRemove,
+  children,
+}: {
+  disabled?: boolean | undefined;
+  nameId: string;
+  /** The row's caption ("Case 2"). */
+  nameLabel: string;
+  /** The name field's accessible name ("Name 2"). */
+  nameAriaLabel: string;
+  name: string;
+  onNameChange: (name: string) => void;
+  pointsId: string;
+  pointsLabel: string;
+  pointsAriaLabel?: string | undefined;
+  points: number;
+  onPointsChange: (points: number) => void;
+  hiddenLabel: string;
+  hiddenAriaLabel: string;
+  visible: boolean;
+  onVisibleChange: (visible: boolean) => void;
+  removeLabel: string;
+  removeDisabled?: boolean | undefined;
+  onRemove: () => void;
+  /** Cells of the type's own, between the points and "Hidden". */
+  children?: ReactNode;
+}): ReactNode {
+  return (
+    <div className="flex flex-wrap items-end gap-3">
+      <FieldCell label={nameLabel} htmlFor={nameId} className="min-w-40 flex-1">
+        <input
+          id={nameId}
+          className={cx(inputSm, "w-full font-medium")}
+          aria-label={nameAriaLabel}
+          disabled={disabled}
+          value={name}
+          onChange={(e) => onNameChange(e.target.value)}
+        />
+      </FieldCell>
+      <NumberField
+        id={pointsId}
+        label={pointsLabel}
+        aria-label={pointsAriaLabel}
+        value={points}
+        min={0}
+        step={0.5}
+        width="w-20"
+        disabled={disabled}
+        onChange={onPointsChange}
+      />
+      {children}
+      <CheckboxField
+        className="flex h-7 items-center gap-2 text-[13px] text-fg-muted"
+        label={hiddenLabel}
+        aria-label={hiddenAriaLabel}
+        checked={!visible}
+        disabled={disabled}
+        onChange={(hidden) => onVisibleChange(!hidden)}
+      />
+      <RemoveRowButton label={removeLabel} disabled={removeDisabled} onClick={onRemove} />
+    </div>
   );
 }

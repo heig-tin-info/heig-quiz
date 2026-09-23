@@ -22,6 +22,9 @@ export const label = "flex items-center gap-1 text-[13px] font-medium text-fg";
 
 export const hint = "text-[13px] text-fg-muted";
 
+/** A checkbox in a column of settings (`CheckboxField.className`): no fixed height, the body ink. */
+export const setting = "flex items-center gap-2 text-[13px] text-fg";
+
 export const input =
   "rounded-field border border-line-strong bg-surface px-3 text-sm text-fg transition-colors placeholder:text-fg-faint hover:border-fg-faint focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-50";
 

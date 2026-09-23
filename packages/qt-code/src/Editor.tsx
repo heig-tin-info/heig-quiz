@@ -6,8 +6,12 @@
  * solution sits next to the cases because it exists to check them: pressing
  * "Try" runs it and says how many pass. It is never part of what a student
  * receives (`toStudent` drops it).
+ *
+ * The blocks it shares with the circuit editor — the statement card, the
+ * first line of a row panel, the fold — are `@quiz/ui`'s (audit P-15); what
+ * is written here is what only a code question has.
  */
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 
 import { fmt, issuesAt, plural, resolveStrings, rootIssues } from "@quiz/core/client";
 import type { ConfigIssue, EditorProps, MarkdownRenderer } from "@quiz/core/client";
@@ -29,25 +33,27 @@ import {
 import { EDITOR_STRINGS, type CodeEditorStrings } from "./strings.js";
 import { caseVerdict } from "./verdict.js";
 import {
+  AdvancedDisclosure,
   badge,
-  card,
   CheckboxField,
   cx,
+  EditorSection,
   FieldCell,
   hint,
   input,
   inputSm,
   IssueList,
-  label,
   NumberField,
   patchAt,
-  PromptField,
-  RemoveRowButton,
+  PromptSection,
   removeAt,
+  RowHead,
   RowList,
   RowListHeader,
   sectionTitle,
+  setting,
   TryPanel,
+  type TryStatus,
 } from "@quiz/ui";
 
 export interface CodeEditorProps extends EditorProps<CodeConfig> {
@@ -109,9 +115,6 @@ const NEW_CASE: CodeCase = {
   timeMs: null,
 };
 
-/** A checkbox in the column of settings: no fixed height, the body ink. */
-const SETTING = "flex items-center gap-2 text-[13px] text-fg";
-
 /** The top-level settings "Advanced options" holds, as zod paths. */
 const ADVANCED_PATHS = [
   "action",
@@ -126,6 +129,51 @@ const ADVANCED_PATHS = [
 /** The languages the browser runner can run; anything else is the server's. */
 const browserCapable = (language: CodeLanguage): boolean =>
   (RUNNO_LANGUAGES as readonly string[]).includes(language);
+
+/** What the try panel says after a run, in one line; nothing before the first. */
+function tryStatusOf(tryState: TryState, s: CodeEditorStrings): TryStatus | null {
+  switch (tryState.status) {
+    case "unavailable":
+      return { tone: "hint", text: s.tryUnavailable };
+    case "failed":
+      return {
+        tone: "danger",
+        text: tryState.reason === "regions" ? s.tryRegionsMismatch : s.tryCompileFailed,
+      };
+    case "done":
+      return {
+        tone: "hint",
+        text: fmt(s.tryResult, { passed: tryState.passed, total: tryState.total }),
+      };
+    default:
+      return null;
+  }
+}
+
+/** What one reference run came back with, as the try state it leaves the panel in. */
+async function tryReference(
+  config: CodeConfig,
+  onTry: (config: CodeConfig) => Promise<CodeTryOutcome>,
+): Promise<TryState> {
+  const outcome = await onTry(config);
+  if (outcome === "unavailable") return { status: "unavailable" };
+  if ("graded" in outcome) {
+    // The server judged the cases: its verdict is the answer, and
+    // re-deciding it here from an output we do not have would be a guess.
+    const { compileOk, passed, total } = outcome.graded;
+    return compileOk ? { status: "done", passed, total } : { status: "failed", reason: "compile" };
+  }
+  if (!outcome.compile.ok) return { status: "failed", reason: "compile" };
+  // The grade's own rule (audit R-06). No per-case budget: this raw path
+  // is the browser runner, whose timing is not evidence (ADR-015) — only
+  // its own `timedOut` counts, as before.
+  const passed = config.tests.cases.reduce(
+    (count, testCase, i) =>
+      caseVerdict(testCase, outcome.cases[i], config.tests.compare).ok ? count + 1 : count,
+    0,
+  );
+  return { status: "done", passed, total: config.tests.cases.length };
+}
 
 export function CodeEditor({
   config,
@@ -195,33 +243,7 @@ export function CodeEditor({
     }
     setTryState({ status: "running" });
     try {
-      const outcome = await onTry(config);
-      if (outcome === "unavailable") {
-        setTryState({ status: "unavailable" });
-        return;
-      }
-      if ("graded" in outcome) {
-        // The server judged the cases: its verdict is the answer, and
-        // re-deciding it here from an output we do not have would be a guess.
-        const { compileOk, passed, total } = outcome.graded;
-        setTryState(
-          compileOk ? { status: "done", passed, total } : { status: "failed", reason: "compile" },
-        );
-        return;
-      }
-      if (!outcome.compile.ok) {
-        setTryState({ status: "failed", reason: "compile" });
-        return;
-      }
-      // The grade's own rule (audit R-06). No per-case budget: this raw path
-      // is the browser runner, whose timing is not evidence (ADR-015) — only
-      // its own `timedOut` counts, as before.
-      const passed = config.tests.cases.reduce(
-        (count, testCase, i) =>
-          caseVerdict(testCase, outcome.cases[i], config.tests.compare).ok ? count + 1 : count,
-        0,
-      );
-      setTryState({ status: "done", passed, total: config.tests.cases.length });
+      setTryState(await tryReference(config, onTry));
     } catch {
       setTryState({ status: "failed", reason: "compile" });
     }
@@ -231,23 +253,18 @@ export function CodeEditor({
     <div className="flex flex-col gap-6">
       <IssueList issues={rootIssues(issues)} />
 
-      <section className={cx(card, "flex flex-col gap-4 p-4")}>
-        <h3 className={sectionTitle}>{s.questionSection}</h3>
-        <div className="flex flex-col gap-1.5">
-          <PromptField
-            id={`${ids}-prompt`}
-            label={s.prompt}
-            value={config.prompt}
-            onChange={(prompt) => patch({ prompt })}
-            disabled={disabled}
-            RichText={RichText}
-            uploadImage={uploadAsset}
-            rows={5}
-            labelClassName={label}
-            textareaClassName={cx(input, "w-full py-2 leading-relaxed")}
-          />
-          <IssueList issues={issuesAt(issues, "prompt")} />
-        </div>
+      <PromptSection
+        title={s.questionSection}
+        id={`${ids}-prompt`}
+        label={s.prompt}
+        value={config.prompt}
+        onChange={(prompt) => patch({ prompt })}
+        disabled={disabled}
+        RichText={RichText}
+        uploadImage={uploadAsset}
+        rows={5}
+        issues={issuesAt(issues, "prompt")}
+      >
         <div className="flex flex-wrap items-end gap-4">
           <FieldCell label={s.language} htmlFor={`${ids}-language`}>
             <select
@@ -286,9 +303,9 @@ export function CodeEditor({
         </div>
         {browserCapable(config.language) ? <p className={hint}>{s.runtimeHint}</p> : null}
         <IssueList issues={[...issuesAt(issues, "language"), ...issuesAt(issues, "runtime")]} />
-      </section>
+      </PromptSection>
 
-      <section className={cx(card, "flex flex-col gap-3 p-4")}>
+      <EditorSection>
         <div className="flex flex-wrap items-center gap-2">
           <h3 className={sectionTitle}>
             {s.template}
@@ -324,13 +341,9 @@ export function CodeEditor({
             </li>
           ))}
         </ol>
-      </section>
+      </EditorSection>
 
-      <section className={cx(card, "flex flex-col gap-3 p-4")}>
-        <h3 className={sectionTitle}>
-          {s.referenceSolution}
-        </h3>
-        <p className={hint}>{s.referenceSolutionHint}</p>
+      <EditorSection title={s.referenceSolution} hint={s.referenceSolutionHint}>
         <CodeArea
           label={s.referenceSolution}
           language={config.language}
@@ -347,24 +360,10 @@ export function CodeEditor({
             running={tryState.status === "running"}
             disabled={disabled}
             onTry={() => void runReference()}
-            status={
-              tryState.status === "unavailable"
-                ? { tone: "hint", text: s.tryUnavailable }
-                : tryState.status === "failed"
-                  ? {
-                      tone: "danger",
-                      text: tryState.reason === "regions" ? s.tryRegionsMismatch : s.tryCompileFailed,
-                    }
-                  : tryState.status === "done"
-                    ? {
-                        tone: "hint",
-                        text: fmt(s.tryResult, { passed: tryState.passed, total: tryState.total }),
-                      }
-                    : null
-            }
+            status={tryStatusOf(tryState, s)}
           />
         )}
-      </section>
+      </EditorSection>
 
       {/*
        * One PANEL per case (`RowList`): a case carries ten fields — a name, a
@@ -372,7 +371,7 @@ export function CodeEditor({
        * decide whether it passed, plus its points, its budget and its
        * visibility — and ten columns is not a table.
        */}
-      <section className={cx(card, "flex flex-col gap-3 p-4")}>
+      <EditorSection>
         <RowListHeader
           title={s.cases}
           count={plural(s, "totalPoints", totalCasePoints(config))}
@@ -383,310 +382,371 @@ export function CodeEditor({
 
         <RowList items={config.tests.cases}>
           {(testCase, i) => (
-            <>
-              <div className="flex flex-wrap items-end gap-3">
-                <FieldCell
-                  label={fmt(s.case, { n: i + 1 })}
-                  htmlFor={`${ids}-name-${i}`}
-                  className="min-w-40 flex-1"
-                >
-                  <input
-                    id={`${ids}-name-${i}`}
-                    className={cx(inputSm, "w-full font-medium")}
-                    aria-label={`${s.caseName} ${i + 1}`}
-                    disabled={disabled}
-                    value={testCase.name}
-                    onChange={(e) => patchCase(i, { name: e.target.value })}
-                  />
-                </FieldCell>
-                <NumberField
-                  id={`${ids}-points-${i}`}
-                  label={s.points}
-                  aria-label={`${s.points} ${i + 1}`}
-                  value={testCase.points}
-                  min={0}
-                  step={0.5}
-                  width="w-20"
-                  disabled={disabled}
-                  onChange={(points) => patchCase(i, { points: points || 0 })}
-                />
-                <NumberField
-                  id={`${ids}-time-${i}`}
-                  label={s.timeMs}
-                  aria-label={`${s.timeMs} ${i + 1}`}
-                  value={testCase.timeMs}
-                  min={100}
-                  step={100}
-                  placeholder={String(config.limits.timeMs)}
-                  width="w-24"
-                  disabled={disabled}
-                  onChange={(timeMs) => patchCase(i, { timeMs })}
-                  onClear={() => patchCase(i, { timeMs: null })}
-                />
-                <CheckboxField
-                  className="flex h-7 items-center gap-2 text-[13px] text-fg-muted"
-                  label={s.hidden}
-                  aria-label={`${s.hidden} ${i + 1}`}
-                  checked={!testCase.visible}
-                  disabled={disabled}
-                  onChange={(hidden) => patchCase(i, { visible: !hidden })}
-                />
-                <RemoveRowButton
-                  label={fmt(s.removeCase, { name: testCase.name })}
-                  disabled={disabled || config.tests.cases.length <= 1}
-                  onClick={() => setCases(removeAt(config.tests.cases, i))}
-                />
-              </div>
-
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <FieldCell label={s.args} htmlFor={`${ids}-args-${i}`}>
-                  <textarea
-                    id={`${ids}-args-${i}`}
-                    rows={2}
-                    className={cx(input, "w-full py-1.5 font-mono")}
-                    aria-label={`${s.args} ${i + 1}`}
-                    disabled={disabled}
-                    value={argsDraft[i] ?? (testCase.args ?? []).join("\n")}
-                    onChange={(e) => writeArgs(i, e.target.value)}
-                  />
-                  <p className={hint}>{s.argsHint}</p>
-                </FieldCell>
-                <FieldCell label={s.stdin} htmlFor={`${ids}-stdin-${i}`}>
-                  <textarea
-                    id={`${ids}-stdin-${i}`}
-                    rows={2}
-                    className={cx(input, "w-full py-1.5 font-mono")}
-                    aria-label={`${s.stdin} ${i + 1}`}
-                    disabled={disabled}
-                    value={testCase.stdin}
-                    onChange={(e) => patchCase(i, { stdin: e.target.value })}
-                  />
-                </FieldCell>
-              </div>
-
-              <div className="mt-3 flex flex-wrap items-end gap-3">
-                <CheckboxField
-                  className="flex h-8.5 items-center gap-2 text-[13px] text-fg"
-                  label={s.compareStdout}
-                  aria-label={`${s.compareStdout} ${i + 1}`}
-                  checked={testCase.compareStdout !== false}
-                  disabled={disabled}
-                  onChange={(compareStdout) => patchCase(i, { compareStdout })}
-                />
-                {/* Off, there is no expected output to write: the case checks
-                    the exit code alone, so the field goes away with it. */}
-                {testCase.compareStdout !== false ? (
-                  <FieldCell
-                    label={s.expected}
-                    htmlFor={`${ids}-expected-${i}`}
-                    className="min-w-48 flex-1"
-                  >
-                    <input
-                      id={`${ids}-expected-${i}`}
-                      className={cx(inputSm, "w-full font-mono")}
-                      aria-label={`${s.expected} ${i + 1}`}
-                      disabled={disabled}
-                      value={testCase.expected}
-                      onChange={(e) => patchCase(i, { expected: e.target.value })}
-                    />
-                  </FieldCell>
-                ) : null}
-                <NumberField
-                  id={`${ids}-exit-${i}`}
-                  label={s.exitCode}
-                  aria-label={`${s.exitCode} ${i + 1}`}
-                  value={testCase.expectedExitCode}
-                  min={0}
-                  max={255}
-                  placeholder={s.exitCodeAny}
-                  width="w-24"
-                  disabled={disabled}
-                  onChange={(code) => patchCase(i, { expectedExitCode: code || 0 })}
-                  onClear={() => patchCase(i, { expectedExitCode: null })}
-                />
-              </div>
-              <IssueList issues={issuesAt(issues, "tests", "cases", i)} />
-            </>
+            <CaseFields
+              ids={ids}
+              index={i}
+              testCase={testCase}
+              s={s}
+              disabled={disabled}
+              defaultTimeMs={config.limits.timeMs}
+              argsText={argsDraft[i] ?? (testCase.args ?? []).join("\n")}
+              onArgs={(text) => writeArgs(i, text)}
+              patch={(next) => patchCase(i, next)}
+              removeDisabled={disabled || config.tests.cases.length <= 1}
+              onRemove={() => setCases(removeAt(config.tests.cases, i))}
+              issues={issuesAt(issues, "tests", "cases", i)}
+            />
           )}
         </RowList>
         <IssueList issues={caseIssues} />
         <p className={hint}>{s.timeMsHint}</p>
         <p className={hint}>{s.exitCodeHint}</p>
-      </section>
+      </EditorSection>
 
       <IssueList issues={advancedIssues} />
-      <details className={cx(card, "p-4")}>
-        <summary className={cx(sectionTitle, "cursor-pointer")}>{s.advanced}</summary>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <FieldCell label={s.action} htmlFor={`${ids}-action`}>
-            <select
-              id={`${ids}-action`}
-              disabled={disabled}
-              value={config.action}
-              onChange={(e) => patch({ action: e.target.value === "check" ? "check" : "run" })}
-              className={cx(input, "h-8.5")}
-            >
-              <option value="run">{s.actionRun}</option>
-              <option value="check">{s.actionCheck}</option>
-            </select>
-          </FieldCell>
-          <FieldCell label={s.compileArgs} htmlFor={`${ids}-args`}>
-            <input
-              id={`${ids}-args`}
-              className={cx(input, "h-8.5 font-mono")}
-              disabled={disabled}
-              value={config.compileArgs}
-              onChange={(e) => patch({ compileArgs: e.target.value })}
-            />
-          </FieldCell>
-          <FieldCell label={s.timeLimit} htmlFor={`${ids}-time`}>
-            <input
-              id={`${ids}-time`}
-              type="number"
-              min={100}
-              step={100}
-              className={cx(input, "h-8.5 tabular-nums")}
-              disabled={disabled}
-              value={config.limits.timeMs}
-              onChange={(e) =>
-                patch({
-                  limits: {
-                    ...config.limits,
-                    timeMs: Number(e.target.value) || DEFAULT_LIMITS.timeMs,
-                  },
-                })
-              }
-            />
-          </FieldCell>
-          <FieldCell label={s.memoryLimit} htmlFor={`${ids}-memory`}>
-            <input
-              id={`${ids}-memory`}
-              type="number"
-              min={16}
-              step={16}
-              className={cx(input, "h-8.5 tabular-nums")}
-              disabled={disabled}
-              value={config.limits.memoryMb}
-              onChange={(e) =>
-                patch({
-                  limits: {
-                    ...config.limits,
-                    memoryMb: Number(e.target.value) || DEFAULT_LIMITS.memoryMb,
-                  },
-                })
-              }
-            />
-          </FieldCell>
-          <FieldCell label={s.outputLimit} htmlFor={`${ids}-output`}>
-            <input
-              id={`${ids}-output`}
-              type="number"
-              min={1}
-              step={1}
-              className={cx(input, "h-8.5 tabular-nums")}
-              disabled={disabled}
-              value={config.limits.outputKb}
-              onChange={(e) =>
-                patch({
-                  limits: {
-                    ...config.limits,
-                    outputKb: Number(e.target.value) || DEFAULT_LIMITS.outputKb,
-                  },
-                })
-              }
-            />
-          </FieldCell>
-          <FieldCell label={s.runsPerMinute} htmlFor={`${ids}-rpm`}>
-            <input
-              id={`${ids}-rpm`}
-              type="number"
-              min={1}
-              max={30}
-              className={cx(input, "h-8.5 tabular-nums")}
-              disabled={disabled}
-              value={config.runsPerMinute}
-              onChange={(e) => patch({ runsPerMinute: Number(e.target.value) || 1 })}
-            />
-          </FieldCell>
-          <CheckboxField
-            className="flex items-center gap-2 text-[13px] text-fg"
-            label={s.allOrNothing}
-            checked={config.allOrNothing}
-            disabled={disabled}
-            onChange={(allOrNothing) => patch({ allOrNothing })}
-          />
-          <p className={cx(hint, "sm:col-span-2")}>{s.allOrNothingHint}</p>
+      <AdvancedDisclosure summary={s.advanced} className="grid gap-4 sm:grid-cols-2">
+        <AdvancedFields ids={ids} config={config} s={s} disabled={disabled} patch={patch} patchTests={patchTests} />
+      </AdvancedDisclosure>
+    </div>
+  );
+}
 
-          <h4 className={cx("text-[13px] font-medium text-fg", "sm:col-span-2")}>{s.compare}</h4>
-          <CheckboxField
-            className={SETTING}
-            label={s.trimTrailing}
-            checked={config.tests.compare.trimTrailing}
+type Patch = (next: Partial<CodeConfig>) => void;
+
+/** One case's panel: its head line, its command line and input, and its two checks. */
+function CaseFields({
+  ids,
+  index: i,
+  testCase,
+  s,
+  disabled,
+  defaultTimeMs,
+  argsText,
+  onArgs,
+  patch,
+  removeDisabled,
+  onRemove,
+  issues,
+}: {
+  ids: string;
+  index: number;
+  testCase: CodeCase;
+  s: CodeEditorStrings;
+  disabled: boolean | undefined;
+  /** The question's time limit, the placeholder of an empty per-case budget. */
+  defaultTimeMs: number;
+  argsText: string;
+  onArgs: (text: string) => void;
+  patch: (next: Partial<CodeCase>) => void;
+  removeDisabled: boolean | undefined;
+  onRemove: () => void;
+  issues: readonly ConfigIssue[];
+}): ReactNode {
+  const compareStdout = testCase.compareStdout !== false;
+  return (
+    <>
+      <RowHead
+        disabled={disabled}
+        nameId={`${ids}-name-${i}`}
+        nameLabel={fmt(s.case, { n: i + 1 })}
+        nameAriaLabel={`${s.caseName} ${i + 1}`}
+        name={testCase.name}
+        onNameChange={(name) => patch({ name })}
+        pointsId={`${ids}-points-${i}`}
+        pointsLabel={s.points}
+        pointsAriaLabel={`${s.points} ${i + 1}`}
+        points={testCase.points}
+        onPointsChange={(points) => patch({ points: points || 0 })}
+        hiddenLabel={s.hidden}
+        hiddenAriaLabel={`${s.hidden} ${i + 1}`}
+        visible={testCase.visible}
+        onVisibleChange={(visible) => patch({ visible })}
+        removeLabel={fmt(s.removeCase, { name: testCase.name })}
+        removeDisabled={removeDisabled}
+        onRemove={onRemove}
+      >
+        <NumberField
+          id={`${ids}-time-${i}`}
+          label={s.timeMs}
+          aria-label={`${s.timeMs} ${i + 1}`}
+          value={testCase.timeMs}
+          min={100}
+          step={100}
+          placeholder={String(defaultTimeMs)}
+          width="w-24"
+          disabled={disabled}
+          onChange={(timeMs) => patch({ timeMs })}
+          onClear={() => patch({ timeMs: null })}
+        />
+      </RowHead>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <FieldCell label={s.args} htmlFor={`${ids}-args-${i}`}>
+          <textarea
+            id={`${ids}-args-${i}`}
+            rows={2}
+            className={cx(input, "w-full py-1.5 font-mono")}
+            aria-label={`${s.args} ${i + 1}`}
             disabled={disabled}
-            onChange={(trimTrailing) =>
-              patchTests({ compare: { ...config.tests.compare, trimTrailing } })
+            value={argsText}
+            onChange={(e) => onArgs(e.target.value)}
+          />
+          <p className={hint}>{s.argsHint}</p>
+        </FieldCell>
+        <FieldCell label={s.stdin} htmlFor={`${ids}-stdin-${i}`}>
+          <textarea
+            id={`${ids}-stdin-${i}`}
+            rows={2}
+            className={cx(input, "w-full py-1.5 font-mono")}
+            aria-label={`${s.stdin} ${i + 1}`}
+            disabled={disabled}
+            value={testCase.stdin}
+            onChange={(e) => patch({ stdin: e.target.value })}
+          />
+        </FieldCell>
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-end gap-3">
+        <CheckboxField
+          className="flex h-8.5 items-center gap-2 text-[13px] text-fg"
+          label={s.compareStdout}
+          aria-label={`${s.compareStdout} ${i + 1}`}
+          checked={compareStdout}
+          disabled={disabled}
+          onChange={(next) => patch({ compareStdout: next })}
+        />
+        {/* Off, there is no expected output to write: the case checks
+            the exit code alone, so the field goes away with it. */}
+        {compareStdout ? (
+          <FieldCell
+            label={s.expected}
+            htmlFor={`${ids}-expected-${i}`}
+            className="min-w-48 flex-1"
+          >
+            <input
+              id={`${ids}-expected-${i}`}
+              className={cx(inputSm, "w-full font-mono")}
+              aria-label={`${s.expected} ${i + 1}`}
+              disabled={disabled}
+              value={testCase.expected}
+              onChange={(e) => patch({ expected: e.target.value })}
+            />
+          </FieldCell>
+        ) : null}
+        <NumberField
+          id={`${ids}-exit-${i}`}
+          label={s.exitCode}
+          aria-label={`${s.exitCode} ${i + 1}`}
+          value={testCase.expectedExitCode}
+          min={0}
+          max={255}
+          placeholder={s.exitCodeAny}
+          width="w-24"
+          disabled={disabled}
+          onChange={(code) => patch({ expectedExitCode: code || 0 })}
+          onClear={() => patch({ expectedExitCode: null })}
+        />
+      </div>
+      <IssueList issues={issues} />
+    </>
+  );
+}
+
+/**
+ * A number of the advanced settings: a full-height field, and a value that
+ * falls back to `fallback` when it is cleared or is not a number.
+ */
+function SettingNumber({
+  id,
+  label,
+  min,
+  step,
+  max,
+  value,
+  fallback,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  min: number;
+  step?: number | undefined;
+  max?: number | undefined;
+  value: number;
+  fallback: number;
+  disabled: boolean | undefined;
+  onChange: (value: number) => void;
+}): ReactNode {
+  return (
+    <FieldCell label={label} htmlFor={id}>
+      <input
+        id={id}
+        type="number"
+        min={min}
+        {...(step === undefined ? {} : { step })}
+        {...(max === undefined ? {} : { max })}
+        className={cx(input, "h-8.5 tabular-nums")}
+        disabled={disabled}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value) || fallback)}
+      />
+    </FieldCell>
+  );
+}
+
+/** What "Advanced options" holds: the action, the build, the budgets, the comparison. */
+function AdvancedFields({
+  ids,
+  config,
+  s,
+  disabled,
+  patch,
+  patchTests,
+}: {
+  ids: string;
+  config: CodeConfig;
+  s: CodeEditorStrings;
+  disabled: boolean | undefined;
+  patch: Patch;
+  patchTests: (next: Partial<CodeConfig["tests"]>) => void;
+}): ReactNode {
+  const compare = config.tests.compare;
+  const patchCompare = (next: Partial<CodeConfig["tests"]["compare"]>) =>
+    patchTests({ compare: { ...compare, ...next } });
+  const patchLimits = (next: Partial<CodeConfig["limits"]>) =>
+    patch({ limits: { ...config.limits, ...next } });
+  return (
+    <>
+      <FieldCell label={s.action} htmlFor={`${ids}-action`}>
+        <select
+          id={`${ids}-action`}
+          disabled={disabled}
+          value={config.action}
+          onChange={(e) => patch({ action: e.target.value === "check" ? "check" : "run" })}
+          className={cx(input, "h-8.5")}
+        >
+          <option value="run">{s.actionRun}</option>
+          <option value="check">{s.actionCheck}</option>
+        </select>
+      </FieldCell>
+      <FieldCell label={s.compileArgs} htmlFor={`${ids}-args`}>
+        <input
+          id={`${ids}-args`}
+          className={cx(input, "h-8.5 font-mono")}
+          disabled={disabled}
+          value={config.compileArgs}
+          onChange={(e) => patch({ compileArgs: e.target.value })}
+        />
+      </FieldCell>
+      <SettingNumber
+        id={`${ids}-time`}
+        label={s.timeLimit}
+        min={100}
+        step={100}
+        value={config.limits.timeMs}
+        fallback={DEFAULT_LIMITS.timeMs}
+        disabled={disabled}
+        onChange={(timeMs) => patchLimits({ timeMs })}
+      />
+      <SettingNumber
+        id={`${ids}-memory`}
+        label={s.memoryLimit}
+        min={16}
+        step={16}
+        value={config.limits.memoryMb}
+        fallback={DEFAULT_LIMITS.memoryMb}
+        disabled={disabled}
+        onChange={(memoryMb) => patchLimits({ memoryMb })}
+      />
+      <SettingNumber
+        id={`${ids}-output`}
+        label={s.outputLimit}
+        min={1}
+        step={1}
+        value={config.limits.outputKb}
+        fallback={DEFAULT_LIMITS.outputKb}
+        disabled={disabled}
+        onChange={(outputKb) => patchLimits({ outputKb })}
+      />
+      <SettingNumber
+        id={`${ids}-rpm`}
+        label={s.runsPerMinute}
+        min={1}
+        max={30}
+        value={config.runsPerMinute}
+        fallback={1}
+        disabled={disabled}
+        onChange={(runsPerMinute) => patch({ runsPerMinute })}
+      />
+      <CheckboxField
+        className={setting}
+        label={s.allOrNothing}
+        checked={config.allOrNothing}
+        disabled={disabled}
+        onChange={(allOrNothing) => patch({ allOrNothing })}
+      />
+      <p className={cx(hint, "sm:col-span-2")}>{s.allOrNothingHint}</p>
+
+      <h4 className={cx("text-[13px] font-medium text-fg", "sm:col-span-2")}>{s.compare}</h4>
+      <CheckboxField
+        className={setting}
+        label={s.trimTrailing}
+        checked={compare.trimTrailing}
+        disabled={disabled}
+        onChange={(trimTrailing) => patchCompare({ trimTrailing })}
+      />
+      <CheckboxField
+        className={setting}
+        label={s.ignoreCase}
+        checked={compare.ignoreCase}
+        disabled={disabled}
+        onChange={(ignoreCase) => patchCompare({ ignoreCase })}
+      />
+      <FieldCell label={s.numeric} htmlFor={`${ids}-numeric`}>
+        <select
+          id={`${ids}-numeric`}
+          disabled={disabled}
+          value={compare.numeric === null ? "off" : compare.numeric.mode}
+          onChange={(e) =>
+            patchCompare({
+              numeric:
+                e.target.value === "off"
+                  ? null
+                  : {
+                      epsilon: compare.numeric?.epsilon ?? 1e-6,
+                      mode: e.target.value === "rel" ? "rel" : "abs",
+                    },
+            })
+          }
+          className={cx(input, "h-8.5")}
+        >
+          <option value="off">{s.numericOff}</option>
+          <option value="abs">{s.numericAbs}</option>
+          <option value="rel">{s.numericRel}</option>
+        </select>
+      </FieldCell>
+      {compare.numeric === null ? null : (
+        <FieldCell label={s.epsilon} htmlFor={`${ids}-epsilon`}>
+          <input
+            id={`${ids}-epsilon`}
+            type="number"
+            min={0}
+            step="any"
+            className={cx(input, "h-8.5 tabular-nums")}
+            disabled={disabled}
+            value={compare.numeric.epsilon}
+            onChange={(e) =>
+              patchCompare({
+                numeric: {
+                  epsilon: Number(e.target.value) || 0,
+                  mode: compare.numeric?.mode ?? "abs",
+                },
+              })
             }
           />
-          <CheckboxField
-            className={SETTING}
-            label={s.ignoreCase}
-            checked={config.tests.compare.ignoreCase}
-            disabled={disabled}
-            onChange={(ignoreCase) => patchTests({ compare: { ...config.tests.compare, ignoreCase } })}
-          />
-          <FieldCell label={s.numeric} htmlFor={`${ids}-numeric`}>
-            <select
-              id={`${ids}-numeric`}
-              disabled={disabled}
-              value={config.tests.compare.numeric === null ? "off" : config.tests.compare.numeric.mode}
-              onChange={(e) =>
-                patchTests({
-                  compare: {
-                    ...config.tests.compare,
-                    numeric:
-                      e.target.value === "off"
-                        ? null
-                        : {
-                            epsilon: config.tests.compare.numeric?.epsilon ?? 1e-6,
-                            mode: e.target.value === "rel" ? "rel" : "abs",
-                          },
-                  },
-                })
-              }
-              className={cx(input, "h-8.5")}
-            >
-              <option value="off">{s.numericOff}</option>
-              <option value="abs">{s.numericAbs}</option>
-              <option value="rel">{s.numericRel}</option>
-            </select>
-          </FieldCell>
-          {config.tests.compare.numeric === null ? null : (
-            <FieldCell label={s.epsilon} htmlFor={`${ids}-epsilon`}>
-              <input
-                id={`${ids}-epsilon`}
-                type="number"
-                min={0}
-                step="any"
-                className={cx(input, "h-8.5 tabular-nums")}
-                disabled={disabled}
-                value={config.tests.compare.numeric.epsilon}
-                onChange={(e) =>
-                  patchTests({
-                    compare: {
-                      ...config.tests.compare,
-                      numeric: {
-                        epsilon: Number(e.target.value) || 0,
-                        mode: config.tests.compare.numeric?.mode ?? "abs",
-                      },
-                    },
-                  })
-                }
-              />
-            </FieldCell>
-          )}
-        </div>
-      </details>
-    </div>
+        </FieldCell>
+      )}
+    </>
   );
 }
 
