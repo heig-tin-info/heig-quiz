@@ -22,8 +22,8 @@ import { CheckCheck, Clock, Save, ShieldCheck } from "lucide-react";
 
 import type { LobbyView } from "@quiz/contracts";
 
-import { useAttemptStream } from "../attempt/attemptStream";
 import { useT } from "../i18n";
+import { useEventStream } from "../realtime/useEventStream";
 import { useServerClock } from "../realtime/useServerClock";
 import { Badge, Button, Card, Ring, useNow } from "../ui";
 
@@ -52,12 +52,12 @@ export function Lobby({
   const t = useT();
   const clock = useServerClock();
   const [count, setCount] = useState({ present: view.present, enrolled: view.enrolled });
-  const [connected, setConnected] = useState(false);
   // One second, for the wall clock under the ring: the only place the student
   // sees that the page is alive while nothing else moves.
   const tick = useNow(1_000);
 
-  useAttemptStream(`lobby:${view.evaluation.id}`, {
+  const { connected } = useEventStream({
+    watch: `lobby:${view.evaluation.id}`,
     onEvent: (event) => {
       if (event.type === "clock" || event.type === "snapshot") clock.sample(event.serverNow);
       if (event.type === "lobby.count") {
@@ -68,9 +68,6 @@ export function Lobby({
         if (event.state === "running") onStart();
       }
     },
-    onOpen: () => setConnected(true),
-    onReconnect: () => setConnected(true),
-    onError: () => setConnected(false),
   });
 
   const percent = count.enrolled > 0 ? Math.round((count.present / count.enrolled) * 100) : 0;

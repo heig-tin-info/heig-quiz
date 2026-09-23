@@ -32,8 +32,8 @@ import type {
 import type { RunnerOutcome } from "@quiz/core/server";
 
 import { ApiError, api } from "../api";
+import { useEventStream } from "../realtime/useEventStream";
 import { useServerClock } from "../realtime/useServerClock";
-import { useAttemptStream } from "./attemptStream";
 import { Autosave, type SyncState } from "./autosave";
 import {
   emptyPlayerState,
@@ -195,7 +195,9 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
   );
 
   // --- The stream ----------------------------------------------------------
-  useAttemptStream(preview ? null : `attempt:${attemptId}`, {
+  useEventStream({
+    enabled: !preview,
+    watch: `attempt:${attemptId}`,
     onEvent: (event) => {
       switch (event.type) {
         case "clock":
@@ -236,10 +238,14 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
           }
           break;
         default:
+          // The page's one connection carries every frame of the grammar
+          // (hints, runner results, lobby counts…); none is the player's.
           break;
       }
     },
-    onReconnect: () => {
+    // Not on the first open: only a connection that was lost and came back
+    // has answers to replay and a reconnection to journal (F-EVAL-13).
+    onReopen: () => {
       report("reconnect");
       saver.resume();
       void query.refetch();

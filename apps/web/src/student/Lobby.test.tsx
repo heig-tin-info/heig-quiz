@@ -119,6 +119,19 @@ describe("the lobby", () => {
     expect(onStart).toHaveBeenCalledTimes(1);
   });
 
+  it("ignores a frame of the grammar that is not the lobby's", () => {
+    const { stream, onStart } = render();
+    stream.emit({
+      type: "grading.progress",
+      evaluationId: view.evaluation.id,
+      done: 1,
+      total: 2,
+      phase: "auto",
+    });
+    expect(onStart).not.toHaveBeenCalled();
+    expect(screen.getByRole("img", { name: "18 étudiants présents sur 24" })).toBeInTheDocument();
+  });
+
   it("drops a frame that is not a valid ServerEvent", () => {
     const { stream, onStart } = render();
     for (const fn of stream.listeners.get("evaluation.state") ?? []) {

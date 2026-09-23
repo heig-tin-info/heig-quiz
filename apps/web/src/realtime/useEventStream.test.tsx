@@ -1,9 +1,13 @@
+import { QueryClientProvider } from "@tanstack/react-query";
 import { act, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SERVER_EVENT_NAMES, type ServerEvent } from "@quiz/contracts";
 
+import { useGradingProgress } from "../grading/progress";
+import { gradingProgressKey } from "../queryKeys";
 import { EVALUATION_ID, liveAt } from "../test/live-fixtures";
+import { makeQueryClient, mockFetch, ok } from "../test/render";
 import {
   NAMED_EVENTS,
   resetEventStream,
@@ -26,6 +30,8 @@ class FakeEventSource {
   onerror: (() => void) | null = null;
   onmessage: ((e: MessageEvent) => void) | null = null;
   closed = false;
+  /** 0 connecting, 1 open, as the browser reports it. */
+  readyState = 0;
   private listeners = new Map<string, ((e: MessageEvent) => void)[]>();
 
   constructor(readonly url: string) {
@@ -48,6 +54,7 @@ class FakeEventSource {
   }
 
   open() {
+    this.readyState = 1;
     this.onopen?.();
   }
 
@@ -130,6 +137,65 @@ describe("useEventStream", () => {
     expect(live()[0]!.subscribed()).not.toContain("hint");
   });
 
+  it("delivers grading.progress, the frame the grading panel reads", () => {
+    const onEvent = vi.fn();
+    render(<Probe watch={`evaluation:${EVALUATION_ID}`} onEvent={onEvent} />);
+    act(() =>
+      live()[0]!.send({
+        type: "grading.progress",
+        evaluationId: EVALUATION_ID,
+        done: 3,
+        total: 8,
+        phase: "auto",
+      }),
+    );
+    expect(onEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "grading.progress", done: 3, total: 8 }),
+    );
+  });
+
+  it("the grading progress joins the page's connection and writes the cache", async () => {
+    mockFetch({
+      [`GET /app/api/evaluations/${EVALUATION_ID}/grading/progress`]: ok({
+        done: 0,
+        total: 8,
+        pending: { runner: 1, llm: 0 },
+        failed: 0,
+      }),
+    });
+    const queryClient = makeQueryClient();
+    function Panel() {
+      useGradingProgress(EVALUATION_ID);
+      return null;
+    }
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Probe />
+        <Panel />
+      </QueryClientProvider>,
+    );
+    // The shell's hint stream and the panel share ONE socket (FF-01).
+    expect(live()).toHaveLength(1);
+    await waitFor(() =>
+      expect(queryClient.getQueryData(gradingProgressKey(EVALUATION_ID))).toBeDefined(),
+    );
+    act(() =>
+      live()[0]!.send({
+        type: "grading.progress",
+        evaluationId: EVALUATION_ID,
+        done: 5,
+        total: 8,
+        phase: "auto",
+      }),
+    );
+    expect(queryClient.getQueryData(gradingProgressKey(EVALUATION_ID))).toEqual({
+      done: 5,
+      total: 8,
+      pending: { runner: 1, llm: 0 },
+      failed: 0,
+    });
+  });
+
   it("routes the snapshot, the clock and the unnamed hint to their handlers", () => {
     const onSnapshot = vi.fn();
     const onClock = vi.fn();
@@ -175,6 +241,71 @@ describe("useEventStream", () => {
     act(() => live()[0]!.open());
     await waitFor(() => expect(view.getByTestId("connected").textContent).toBe("true"));
     expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("tells the first open from a reopen (F-EVAL-13)", () => {
+    const onFirstOpen = vi.fn();
+    const onReopen = vi.fn();
+    render(
+      <Probe watch={`attempt:${EVALUATION_ID}`} onFirstOpen={onFirstOpen} onReopen={onReopen} />,
+    );
+    const es = live()[0]!;
+    act(() => es.open());
+    expect(onFirstOpen).toHaveBeenCalledTimes(1);
+    expect(onReopen).not.toHaveBeenCalled();
+    // The browser's own reconnection: an error, then the same socket reopens.
+    act(() => {
+      es.onerror?.();
+      es.open();
+    });
+    expect(onFirstOpen).toHaveBeenCalledTimes(1);
+    expect(onReopen).toHaveBeenCalledTimes(1);
+  });
+
+  it("a subscriber joining an already open socket gets its first open at once", async () => {
+    const watch = `attempt:${EVALUATION_ID}` as const;
+    const view = render(<Probe watch={watch} />);
+    const es = live()[0]!;
+    act(() => es.open());
+    const onFirstOpen = vi.fn();
+    const onReopen = vi.fn();
+    function Late() {
+      const { connected } = useEventStream({ watch, onFirstOpen, onReopen });
+      return <span data-testid="late">{String(connected)}</span>;
+    }
+    view.rerender(
+      <>
+        <Probe watch={watch} />
+        <Late />
+      </>,
+    );
+    // Same subject: the socket is kept, not reopened.
+    expect(FakeEventSource.instances).toHaveLength(1);
+    await waitFor(() => expect(view.getByTestId("late").textContent).toBe("true"));
+    expect(onFirstOpen).toHaveBeenCalledTimes(1);
+    expect(onReopen).not.toHaveBeenCalled();
+    // Its first real reconnection is a reopen (F-EVAL-13), not a first open.
+    act(() => {
+      es.onerror?.();
+      es.open();
+    });
+    expect(onFirstOpen).toHaveBeenCalledTimes(1);
+    expect(onReopen).toHaveBeenCalledTimes(1);
+  });
+
+  it("counts the watchdog's fresh socket as a reopen, not a first open", () => {
+    vi.useFakeTimers();
+    const onFirstOpen = vi.fn();
+    const onReopen = vi.fn();
+    render(
+      <Probe watch={`attempt:${EVALUATION_ID}`} onFirstOpen={onFirstOpen} onReopen={onReopen} />,
+    );
+    act(() => FakeEventSource.instances[0]!.open());
+    act(() => void vi.advanceTimersByTime(SILENCE_MS + 5_000));
+    expect(FakeEventSource.instances).toHaveLength(2);
+    act(() => FakeEventSource.instances[1]!.open());
+    expect(onFirstOpen).toHaveBeenCalledTimes(1);
+    expect(onReopen).toHaveBeenCalledTimes(1);
   });
 
   it("reopens the connection after 30 s without a clock", () => {
