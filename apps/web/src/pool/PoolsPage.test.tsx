@@ -176,4 +176,33 @@ describe("PoolsPage", () => {
     expect(await screen.findByText("No pool yet")).toBeVisible();
     expect(screen.getAllByRole("button", { name: /New pool/ })).toHaveLength(1);
   });
+
+  it("gives an admin a switch that adds the other teachers' pools", async () => {
+    const { calls } = mockFetch({
+      [`GET ${POOLS}`]: ok([makePool()]),
+      [`GET ${POOLS}?scope=all`]: ok([
+        makePool(),
+        makePool({ id: "p9", name: "Prog. C", ownerId: "t9", ownerName: "Pierre Bressy" }),
+      ]),
+    });
+    const queryClient = makeQueryClient();
+    queryClient.setQueryData(["me"], { ...ME, role: "admin" });
+    renderWithProviders(<PoolsPage navigate={vi.fn()} />, { queryClient });
+
+    expect(await screen.findByText("Programmation C")).toBeVisible();
+    expect(screen.queryByText("Prog. C")).toBeNull();
+
+    const toggle = screen.getByRole("switch", { name: "Show other teachers' pools" });
+    expect(toggle).toHaveAttribute("aria-checked", "false");
+    await userEvent.click(toggle);
+    expect(await screen.findByText("Prog. C")).toBeVisible();
+    expect(calls.some((c) => c.url.endsWith("?scope=all"))).toBe(true);
+  });
+
+  it("offers no such switch to a teacher", async () => {
+    mockFetch({ [`GET ${POOLS}`]: ok([makePool()]) });
+    renderWithProviders(<PoolsPage navigate={vi.fn()} />, { queryClient: withMe() });
+    expect(await screen.findByText("Programmation C")).toBeVisible();
+    expect(screen.queryByRole("switch")).toBeNull();
+  });
 });

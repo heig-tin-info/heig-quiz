@@ -749,6 +749,34 @@ describe("pool sharing", () => {
     expect((await writeQuestion(shared, outsider, "intruder")).statusCode).toBe(404);
   });
 
+  it("keeps the admin's shelf to their own pools unless they ask for all", async () => {
+    const list = async (who: Actor, query = "") => {
+      const res = await server.app.inject({
+        method: "GET",
+        url: `/app/api/pools${query}`,
+        headers: who.headers,
+      });
+      expect(res.statusCode).toBe(200);
+      return res.json().map((p: { id: string }) => p.id) as string[];
+    };
+    // Someone else's pool, the admin holding no seat on it: not on the shelf...
+    expect(await list(admin)).not.toContain(shared);
+    expect(await list(admin, "?scope=mine")).not.toContain(shared);
+    // ...unless the admin asks for every pool of the instance.
+    expect(await list(admin, "?scope=all")).toContain(shared);
+    // A teacher asking for all gets their own list, nothing more.
+    expect(await list(outsider, "?scope=all")).not.toContain(shared);
+    // And the pool is still the admin's to open, list or no list.
+    expect((await readPool(shared, admin)).statusCode).toBe(200);
+
+    const bad = await server.app.inject({
+      method: "GET",
+      url: "/app/api/pools?scope=everything",
+      headers: admin.headers,
+    });
+    expect(bad.statusCode).toBe(400);
+  });
+
   it("offers an owner the teachers not yet seated, by name or address", async () => {
     // The outsider holds no seat: offered, found by a piece of the address,
     // whatever the case it is typed in.

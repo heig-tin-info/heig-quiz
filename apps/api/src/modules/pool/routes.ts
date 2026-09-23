@@ -28,6 +28,7 @@ import {
   MoveBody,
   PoolCreate,
   PoolCandidateQuery,
+  PoolListQuery,
   PoolMemberInvite,
   PoolMemberParam,
   PoolMemberPatch,
@@ -182,9 +183,18 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
    * the public ones and the ones their courses draw from — each with the
    * caller's effective role, so the list can say what it offers (F-POOL-05).
    */
-  app.get("/app/api/pools", { preHandler: requireTeacher }, async (req) =>
-    service.listPools(app.db, mine(req), req.user!),
-  );
+  /**
+   * The pools list is filtered by `poolAccess` for EVERYONE, admins included:
+   * an admin who sees every teacher's private pools on their shelf cannot
+   * tell theirs from the others'. `?scope=all` lifts the filter, for an admin
+   * only; a teacher asking for it gets their own list.
+   */
+  app.get("/app/api/pools", { preHandler: requireTeacher }, async (req, reply) => {
+    const query = PoolListQuery.safeParse(req.query);
+    if (!query.success) return invalid(reply, query.error);
+    const everyone = query.data.scope === "all" && req.user!.role === "admin";
+    return service.listPools(app.db, everyone ? undefined : poolAccess(req.user!.id), req.user!);
+  });
 
   app.post("/app/api/pools", { preHandler: requireTeacher }, async (req, reply) => {
     const body = PoolCreate.safeParse(req.body);

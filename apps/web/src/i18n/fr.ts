@@ -1722,6 +1722,7 @@ export const fr: Record<keyof Dict, string> = {
   "pools.visibility.sharedNone": "partagée",
   "pools.visibility.public": "publique",
   "pools.owner": "Propriétaire",
+  "pools.showAll": "Afficher les banques des autres enseignants",
   "pools.role": "Mon rôle",
   "pools.updated": "Mise à jour",
   "pools.updatedColumn": "Mise à jour",
