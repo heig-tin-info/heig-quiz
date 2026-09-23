@@ -30,6 +30,8 @@ class FakeEventSource {
   onerror: (() => void) | null = null;
   onmessage: ((e: MessageEvent) => void) | null = null;
   closed = false;
+  /** 0 connecting, 1 open, as the browser reports it. */
+  readyState = 0;
   private listeners = new Map<string, ((e: MessageEvent) => void)[]>();
 
   constructor(readonly url: string) {
@@ -52,6 +54,7 @@ class FakeEventSource {
   }
 
   open() {
+    this.readyState = 1;
     this.onopen?.();
   }
 
@@ -251,6 +254,37 @@ describe("useEventStream", () => {
     expect(onFirstOpen).toHaveBeenCalledTimes(1);
     expect(onReopen).not.toHaveBeenCalled();
     // The browser's own reconnection: an error, then the same socket reopens.
+    act(() => {
+      es.onerror?.();
+      es.open();
+    });
+    expect(onFirstOpen).toHaveBeenCalledTimes(1);
+    expect(onReopen).toHaveBeenCalledTimes(1);
+  });
+
+  it("a subscriber joining an already open socket gets its first open at once", async () => {
+    const watch = `attempt:${EVALUATION_ID}` as const;
+    const view = render(<Probe watch={watch} />);
+    const es = live()[0]!;
+    act(() => es.open());
+    const onFirstOpen = vi.fn();
+    const onReopen = vi.fn();
+    function Late() {
+      const { connected } = useEventStream({ watch, onFirstOpen, onReopen });
+      return <span data-testid="late">{String(connected)}</span>;
+    }
+    view.rerender(
+      <>
+        <Probe watch={watch} />
+        <Late />
+      </>,
+    );
+    // Same subject: the socket is kept, not reopened.
+    expect(FakeEventSource.instances).toHaveLength(1);
+    await waitFor(() => expect(view.getByTestId("late").textContent).toBe("true"));
+    expect(onFirstOpen).toHaveBeenCalledTimes(1);
+    expect(onReopen).not.toHaveBeenCalled();
+    // Its first real reconnection is a reopen (F-EVAL-13), not a first open.
     act(() => {
       es.onerror?.();
       es.open();

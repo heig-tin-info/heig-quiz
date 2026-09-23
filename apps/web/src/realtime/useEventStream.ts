@@ -240,7 +240,15 @@ export function useEventStream(options: EventStreamOptions = {}): { connected: b
       },
     };
     subscribers.add(subscriber);
+    const kept = source;
     reconcile();
+    // Joining a socket that is already open: its `onopen` has fired for the
+    // others and will not fire again, so this subscriber is told here — or its
+    // first open would only come with the next reconnection.
+    if (kept !== null && source === kept && kept.readyState === 1) {
+      subscriber.connection(true);
+      subscriber.opened();
+    }
     const safety =
       (options.safetyRefetch ?? watch !== null)
         ? setInterval(() => latest.current.onRefresh?.(), SAFETY_REFETCH_MS)
