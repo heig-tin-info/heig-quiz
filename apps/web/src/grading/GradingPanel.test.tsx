@@ -55,7 +55,11 @@ describe("GradingPanel", () => {
 
     expect(await screen.findByRole("heading", { name: "Grading" })).toBeVisible();
     expect(screen.getByText("Question 1 of 2")).toBeVisible();
-    const rows = screen.getAllByRole("button", { name: /Open the answer of/ });
+    // `findAll`, not `getAll`: the heading and the step counter come from the
+    // EVALUATION query, the rows from the separate grading one. On a loaded
+    // runner the second lands a tick later, and a synchronous read here saw
+    // an empty list about one run in thirty.
+    const rows = await screen.findAllByRole("button", { name: /Open the answer of/ });
     // The validated one sits last: proposals are what the teacher came for.
     expect(rows.map((r) => r.getAttribute("aria-label"))).toEqual([
       "Open the answer of Swift Otter",
@@ -82,13 +86,15 @@ describe("GradingPanel", () => {
   it("validates and advances on `v`", async () => {
     const { calls } = mockFetch(routes({ [`POST /app/api/gradings/g1/validate`]: ok(makeGrading()) }));
     renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
-    await screen.findByText("Question 1 of 2");
+    // The rows, not just the step counter: `v` acts on the OPEN entry, and
+    // the entries come from the grading query.
+    await screen.findAllByRole("button", { name: /Open the answer of/ });
 
     await userEvent.keyboard("v");
     await waitFor(() =>
       expect(calls.some((c) => c.url === "/app/api/gradings/g1/validate")).toBe(true),
     );
-    const rows = screen.getAllByRole("button", { name: /Open the answer of/ });
+    const rows = await screen.findAllByRole("button", { name: /Open the answer of/ });
     expect(rows[0]).toHaveAttribute("aria-expanded", "false");
     expect(rows[1]).toHaveAttribute("aria-expanded", "true");
   });
@@ -96,13 +102,14 @@ describe("GradingPanel", () => {
   it("moves between answers with the arrows without grading anything", async () => {
     const { calls } = mockFetch(routes());
     renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
-    await screen.findByText("Question 1 of 2");
+    // The arrows walk the entries, so they must exist before the keystrokes.
+    await screen.findAllByRole("button", { name: /Open the answer of/ });
 
     await userEvent.keyboard("{ArrowRight}{ArrowRight}");
-    let rows = screen.getAllByRole("button", { name: /Open the answer of/ });
+    let rows = await screen.findAllByRole("button", { name: /Open the answer of/ });
     expect(rows[2]).toHaveAttribute("aria-expanded", "true");
     await userEvent.keyboard("{ArrowLeft}");
-    rows = screen.getAllByRole("button", { name: /Open the answer of/ });
+    rows = await screen.findAllByRole("button", { name: /Open the answer of/ });
     expect(rows[1]).toHaveAttribute("aria-expanded", "true");
     expect(calls.every((c) => c.method === "GET")).toBe(true);
   });
@@ -110,7 +117,8 @@ describe("GradingPanel", () => {
   it("opens the adjustment sheet on `o`", async () => {
     mockFetch(routes());
     renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
-    await screen.findByText("Question 1 of 2");
+    // `o` adjusts the OPEN entry, so wait for the entries and not the counter.
+    await screen.findAllByRole("button", { name: /Open the answer of/ });
 
     await userEvent.keyboard("o");
     expect(await screen.findByRole("dialog")).toHaveAccessibleName("Adjust this grading");
