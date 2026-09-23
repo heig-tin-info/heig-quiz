@@ -30,8 +30,8 @@ import {
   type ProgramRunResult,
 } from "../ProgramPlayer.js";
 import { ImagePanel, type ImageLayout, type ImageView } from "./ImagePanel.js";
-import { decodeImage, imageStringIssue, parseImageOutput, warningsOf } from "./pixels.js";
-import type { CodeImageAnswer, CodeImageStudent, ImageWarning } from "./schema.js";
+import { parseImageOutput, warningsOf } from "./pixels.js";
+import { targetPixels, type CodeImageAnswer, type CodeImageStudent, type ImageWarning } from "./schema.js";
 import { CODEIMAGE_PLAYER_DEFAULTS, type CodeImagePlayerStrings } from "./strings.js";
 
 export interface CodeImagePlayerProps extends PlayerProps<CodeImageStudent, CodeImageAnswer> {
@@ -96,13 +96,7 @@ export function CodeImagePlayer({
   const count = spec.width * spec.height;
   const regions = regionsOf(student, answer);
   // A draft previewed before its target was captured has none to show.
-  const target = useMemo(
-    () =>
-      imageStringIssue(student.target, spec) === null
-        ? decodeImage(student.target, spec.palette, count)
-        : null,
-    [student.target, spec, count],
-  );
+  const target = useMemo(() => targetPixels({ target: student.target, image: spec }), [student.target, spec]);
 
   const writeRegion = (index: number, next: string) =>
     onChange({ regions: regions.map((text, i) => (i === index ? next : text)) });

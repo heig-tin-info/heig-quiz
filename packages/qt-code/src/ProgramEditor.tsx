@@ -201,7 +201,9 @@ export function TemplateSection({
               {segment.kind === "locked" ? s.locked : s.editable}
             </span>
             <span className="truncate font-mono text-fg-muted">
-              {segment.display.split("\n")[0] || "—"}
+              {/* The first line that says something: a region usually opens
+                  on the blank line after a marker, which read as "—". */}
+              {segment.display.split("\n").find((line) => line.trim() !== "")?.trim() ?? "—"}
             </span>
           </li>
         ))}

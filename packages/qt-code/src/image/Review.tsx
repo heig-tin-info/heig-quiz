@@ -15,12 +15,13 @@ import { breakdownOf, hint, markdown } from "@quiz/ui";
 
 import { CompileFailure, ReferenceSolutionCard, ScoreLine } from "../ProgramReview.js";
 import { ImagePanel, type ImageLayout, type ImageView } from "./ImagePanel.js";
-import { decodeImage, imageStringIssue } from "./pixels.js";
-import type {
-  CodeImageAnswer,
-  CodeImageDetails,
-  CodeImageSolution,
-  CodeImageStudent,
+import { decodeImage } from "./pixels.js";
+import {
+  targetPixels,
+  type CodeImageAnswer,
+  type CodeImageDetails,
+  type CodeImageSolution,
+  type CodeImageStudent,
 } from "./schema.js";
 import {
   CODEIMAGE_PLAYER_DEFAULTS,
@@ -59,13 +60,7 @@ export function CodeImageReview({
   const spec = student.image;
   const count = spec.width * spec.height;
   const breakdown = breakdownOf(details, "warnings");
-  const target = useMemo(
-    () =>
-      imageStringIssue(student.target, spec) === null
-        ? decodeImage(student.target, spec.palette, count)
-        : null,
-    [student.target, spec, count],
-  );
+  const target = useMemo(() => targetPixels({ target: student.target, image: spec }), [student.target, spec]);
   const computed = useMemo(
     () =>
       breakdown === null || breakdown.image === null

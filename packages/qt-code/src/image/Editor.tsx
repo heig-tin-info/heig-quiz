@@ -40,7 +40,6 @@ import {
   countCorrect,
   decodeImage,
   encodeImage,
-  imageStringIssue,
   INVALID,
   parseImageOutput,
 } from "./pixels.js";
@@ -53,6 +52,7 @@ import {
   type CodeImageDetails,
   type ImageSpec,
   type Palette,
+  targetPixels,
 } from "./schema.js";
 import { CODEIMAGE_EDITOR_DEFAULTS, type CodeImageEditorStrings } from "./strings.js";
 
@@ -138,13 +138,11 @@ export function CodeImageEditor({
 
   const spec = config.image;
   const specOk = sideOk(spec.width) && sideOk(spec.height);
-  const count = spec.width * spec.height;
-  const targetValid =
-    specOk && config.target !== "" && imageStringIssue(config.target, spec) === null;
   const target = useMemo(
-    () => (targetValid ? decodeImage(config.target, spec.palette, count) : null),
-    [targetValid, config.target, spec.palette, count],
+    () => (specOk ? targetPixels(config) : null),
+    [specOk, config.target, spec.width, spec.height, spec.palette],
   );
+  const targetValid = target !== null;
 
   async function runReference() {
     if (onTry === undefined || !specOk) return;

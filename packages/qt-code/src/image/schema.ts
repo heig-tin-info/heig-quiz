@@ -21,7 +21,7 @@ import {
   programFields,
   programStudentFields,
 } from "../schema.js";
-import { imageStringIssue } from "./pixels.js";
+import { decodeImage, imageStringIssue } from "./pixels.js";
 
 /**
  * Bumped when the shape below changes; stored in `question_versions.config_version`.
@@ -70,31 +70,55 @@ export const CodeImageLimits = CodeLimits.extend({
 /** Room for the largest target: two characters per pixel of a 128 × 128 image. */
 const MAX_IMAGE_CHARS = 2 * IMAGE_MAX_SIDE * IMAGE_MAX_SIDE;
 
-export const CodeImageConfig = z
-  .object({
-    configVersion: z.literal(CODEIMAGE_CONFIG_VERSION),
-    ...programFields,
-    limits: CodeImageLimits.default(DEFAULT_IMAGE_LIMITS),
-    image: ImageSpec,
-    /**
-     * The picture the program must draw, captured by the teacher with "Use as
-     * target" from a run of the reference solution — or written by hand in a
-     * canonical file. Empty in a fresh draft (decision D16); publication
-     * refuses it until it holds exactly one valid pixel per cell.
-     */
-    target: z.string().max(MAX_IMAGE_CHARS),
-  })
-  .superRefine((config, ctx) => {
-    if (config.target === "") {
-      ctx.addIssue({ code: "custom", message: "codeimage.target_missing", path: ["target"] });
-      return;
-    }
-    const issue = imageStringIssue(config.target, config.image);
-    if (issue !== null) {
-      ctx.addIssue({ code: "custom", message: `codeimage.${issue}`, path: ["target"] });
-    }
-  });
+/**
+ * The gate of USE: what a config must be to be previewed, tried and graded.
+ * It deliberately says nothing about whether the target fits the image —
+ * see {@link codeimagePublicationIssues}.
+ */
+export const CodeImageConfig = z.object({
+  configVersion: z.literal(CODEIMAGE_CONFIG_VERSION),
+  ...programFields,
+  limits: CodeImageLimits.default(DEFAULT_IMAGE_LIMITS),
+  image: ImageSpec,
+  /**
+   * The picture the program must draw, captured by the teacher with "Use as
+   * target" from a run of the reference solution — or written by hand in a
+   * canonical file. Empty in a fresh draft, and STALE after the teacher
+   * changes the size or the palette: both are usable (the try that captures
+   * a new one needs them to be), and both read as "no target" everywhere a
+   * target is compared. Only publication requires a fitting one.
+   */
+  target: z.string().max(MAX_IMAGE_CHARS),
+});
 export type CodeImageConfig = z.infer<typeof CodeImageConfig>;
+
+/**
+ * What publication requires beyond the schema (`publicationIssues` of the
+ * contract, decision D16): a target with exactly one valid pixel per cell of
+ * the CURRENT image. Not a schema refinement, because the schema also gates
+ * `POST /questions/:id/try` — the one route that lets a teacher capture the
+ * first target, or a new one after a resize.
+ */
+export function codeimagePublicationIssues(
+  config: Pick<CodeImageConfig, "target" | "image">,
+): { path: string[]; message: string }[] {
+  if (config.target === "") return [{ path: ["target"], message: "codeimage.target_missing" }];
+  const issue = imageStringIssue(config.target, config.image);
+  return issue === null ? [] : [{ path: ["target"], message: `codeimage.${issue}` }];
+}
+
+/**
+ * The target as pixels, or `null` when there is none that fits the image —
+ * an empty target, or one left stale by a change of size or palette. The
+ * ONE reading of a stored target: the grader, the player, the review and
+ * the editor all compare against this, so a stale target is never indexed
+ * as if it matched.
+ */
+export function targetPixels(config: Pick<CodeImageConfig, "target" | "image">): Int16Array | null {
+  const { target, image } = config;
+  if (target === "" || imageStringIssue(target, image) !== null) return null;
+  return decodeImage(target, image.palette, image.width * image.height);
+}
 
 /** The student's answer: the editable regions, exactly as `code` stores them. */
 export const CodeImageAnswer = z.object({ regions: CodeAnswer.shape.regions });

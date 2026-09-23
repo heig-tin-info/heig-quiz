@@ -196,6 +196,15 @@ export function tallyKeys(keys: Iterable<string>): [string, number][] {
   return [...counts.entries()];
 }
 
+/**
+ * One problem {@link QuestionTypeServer.publicationIssues} found: a zod-like
+ * path into the config and a translatable message key.
+ */
+export interface PublicationIssue {
+  path: (string | number)[];
+  message: string;
+}
+
 // ---------------------------------------------------------------------------
 // QuestionTypeServer
 // ---------------------------------------------------------------------------
@@ -239,6 +248,24 @@ export interface QuestionTypeServer<
    * when nothing has been written yet.
    */
   emptyDraft(): TConfig;
+
+  /**
+   * What PUBLICATION requires beyond `configSchema` (decision D16).
+   *
+   * `configSchema` is the gate of USE: a config that passes it can be
+   * previewed, tried, graded and rendered. Some requirements only matter to
+   * a question handed to students, and enforcing them in the schema would
+   * forbid the very step that fulfils them — a `codeimage` draft has no
+   * target until its reference is TRIED, and `POST /questions/:id/try`
+   * parses with `configSchema`. Those checks live here: the API runs them
+   * on publication (refusing with the same issues as a failed parse) and
+   * reports them with the draft's own issues, never on a read.
+   *
+   * `config` has passed `configSchema`. An empty list, or no hook, means
+   * "publishable". The message is a key the editor translates
+   * (`codeimage.target_missing`), exactly like a schema message.
+   */
+  publicationIssues?(config: TConfig): PublicationIssue[];
 
   /** Raise an old stored config to `configVersion`. Pure, total, never throws on a config it emitted before. */
   migrate(config: unknown, fromVersion: number): TConfig;

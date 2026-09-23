@@ -12,6 +12,13 @@
  * invalid draft is STORED, not refused, so every entry point comes in two
  * flavours — the throwing one (publication, grading) and the `try…` one
  * (autosave, listing), which hands back `issues[]` instead.
+ *
+ * Two gates, not one. `configSchema` is the gate of USE — preview, try,
+ * grading all parse with it. A type's `publicationIssues` adds what only a
+ * question handed to students needs (a `codeimage` target that fits the
+ * image, ADR-021): {@link publishConfig} and the draft's issues apply it,
+ * no read ever does, so the try that fulfils such a requirement is never
+ * refused for lacking it.
  */
 import { issuesOf, type ZodIssueLite } from "@quiz/contracts";
 import type { AnyQuestionTypeServer } from "@quiz/core/server";
@@ -137,6 +144,48 @@ export function hasKey(type: string, config: unknown): boolean {
 }
 
 /**
+ * What publication requires beyond the schema, as zod-like issues; empty for
+ * a type without the hook. `config` must already have passed the schema.
+ */
+export function publicationIssuesOf(type: string, config: unknown): ZodIssueLite[] {
+  const t = typeOf(type);
+  return (t.publicationIssues?.(config) ?? []).map((issue) => ({
+    path: issue.path.map(String),
+    code: "custom",
+    message: issue.message,
+  }));
+}
+
+/** Thrown by {@link publishConfig}: the zod issues and the publication ones, one shape. */
+export class NotPublishable extends Error {
+  constructor(readonly issues: ZodIssueLite[]) {
+    super("config is not publishable");
+    this.name = "NotPublishable";
+  }
+}
+
+/**
+ * The PUBLICATION write: {@link saveConfig}, then the type's
+ * `publicationIssues`. Throws {@link NotPublishable} with every issue, the
+ * schema's included, so a caller has one refusal to translate.
+ */
+export function publishConfig(
+  type: string,
+  config: unknown,
+  options: { keyOptional?: boolean } = {},
+): ConfigRow {
+  let row: ConfigRow;
+  try {
+    row = saveConfig(type, config, options);
+  } catch (error) {
+    throw new NotPublishable(issuesOf(error));
+  }
+  const issues = publicationIssuesOf(type, row.config);
+  if (issues.length > 0) throw new NotPublishable(issues);
+  return row;
+}
+
+/**
  * The autosave write (decision D16): the config is stored EXACTLY as the
  * editor sent it when it does not parse, and the issues travel back to the
  * client. A valid config still goes through `saveConfig`, so it is
@@ -156,7 +205,10 @@ export function saveDraftConfig(
   // about the field the teacher is actually working on.
   const raised = raise(t, config, declaredVersion(config) ?? t.configVersion);
   try {
-    return { row: saveConfig(type, raised), issues: [] };
+    const row = saveConfig(type, raised);
+    // Usable, and stored normalized; what publication still lacks travels
+    // back with it, so the editor underlines it before the Publish button.
+    return { row, issues: publicationIssuesOf(type, row.config) };
   } catch (error) {
     return { row: { config: raised, configVersion: t.configVersion }, issues: issuesOf(error) };
   }

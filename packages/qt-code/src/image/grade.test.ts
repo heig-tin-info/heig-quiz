@@ -114,6 +114,14 @@ describe("finalizeRunnerCodeImage", () => {
     expect(graded.details.warnings).toEqual([{ code: "missing", count: 12 }]);
   });
 
+  it("scores a stale target (the image was resized) as no target, never mis-indexed", () => {
+    const resized = { ...imageConfig(), image: { width: 5, height: 3, palette: "bw" as const } };
+    const graded = finalizeRunnerCodeImage(resized, answer, FINALIZE_CTX, outcome([{ stdout: CHECKER_STDOUT }]));
+    expect(graded.points).toBe(0);
+    expect(graded.details.matching).toBe(0);
+    expect(graded.details.image).toHaveLength(15);
+  });
+
   it("returns the picture of a draft that has no target yet, at zero", () => {
     const draft = { ...imageConfig(), target: "" };
     const graded = finalizeRunnerCodeImage(draft, answer, FINALIZE_CTX, outcome([{ stdout: CHECKER_STDOUT }]));

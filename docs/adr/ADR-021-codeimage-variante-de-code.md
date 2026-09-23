@@ -68,6 +68,16 @@ the grading details, with `x` for an invalid or missing pixel. Publication
 refuses a target that is missing, of the wrong length, or holds a value
 outside the palette; a draft may lack it (decision D16).
 
+Those checks are NOT in `configSchema`. The schema is the gate of use —
+`POST /questions/:id/try` and `/preview` parse with it — and the try is the
+very step that captures a target, first or after a resize. So the contract
+gained an optional `publicationIssues(config)` hook: the API applies it on
+publication (`publishConfig`, same `config_invalid` refusal) and reports it
+with the draft's issues, and no read ever does. A target that does not fit
+the current image (`targetPixels` returns `null`) reads as "no target"
+everywhere — grading scores 0, the player and the review show no target —
+and is never indexed as if it matched.
+
 ### 3. Stdout is graded whatever the run's exit
 
 The score is `points × matching cells / total cells`, and it is computed from

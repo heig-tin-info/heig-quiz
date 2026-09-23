@@ -22,7 +22,6 @@ import { round2 } from "@quiz/domain/round";
 import { isEmptyAnswer, sha256 } from "../grade.js";
 import {
   countCorrect,
-  decodeImage,
   encodeImage,
   parseImageOutput,
   pixelCountOf,
@@ -30,6 +29,7 @@ import {
 } from "./pixels.js";
 import {
   IMAGE_CASE,
+  targetPixels,
   type CodeImageAnswer,
   type CodeImageConfig,
   type CodeImageDetails,
@@ -160,8 +160,8 @@ export function gradeCodeImage(
  * Second half: the runner has spoken. Pure, total, and the only place a
  * `codeimage` score is decided.
  *
- * A draft with no target yet (the teacher's own "try" before "Use as
- * target") still gets its picture back: the image is in the details, the
+ * A draft with no fitting target (the teacher's own "try" before "Use as
+ * target", or after a resize) still gets its picture back: the image is in the details, the
  * score is simply zero, because no cell can equal a target that is not there.
  */
 export function finalizeRunnerCodeImage(
@@ -207,8 +207,10 @@ export function finalizeRunnerCodeImage(
   const run = outcome.cases[0];
   // No result at all reads as an empty stdout: every pixel is missing.
   const parsed = parseImageOutput(run?.stdout ?? "", config.image);
-  const target = decodeImage(config.target, config.image.palette, pixelCount);
-  const correct = countCorrect(parsed.pixels, target);
+  // No target that fits the image (a draft before "Use as target", or one
+  // left stale by a resize): nothing can match, and nothing is mis-indexed.
+  const target = targetPixels(config);
+  const correct = target === null ? 0 : countCorrect(parsed.pixels, target);
 
   return {
     kind: "graded",

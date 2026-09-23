@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { CodeConfig } from "../schema.js";
 import { codeConfig } from "../test/fixtures.js";
 import { fromCanonicalImage, toCanonicalImage } from "./canonical.js";
-import { CodeImageConfig, emptyCodeImageConfig } from "./schema.js";
+import { CodeImageConfig, emptyCodeImageConfig, targetPixels } from "./schema.js";
 import { codeimageServer } from "./server.js";
 import { imageConfig } from "./test/fixtures.js";
 
@@ -28,15 +28,25 @@ describe("CodeImageConfig", () => {
     });
   });
 
-  it("refuses a draft without a target, by name", () => {
-    expect(issuesOf({ ...imageConfig(), target: "" })).toContain("target:codeimage.target_missing");
+  it("accepts a draft without a target, or with a stale one: both must be tryable (D16)", () => {
+    expect(issuesOf({ ...imageConfig(), target: "" })).toEqual([]);
+    expect(issuesOf({ ...imageConfig(), target: "1010" })).toEqual([]);
   });
 
-  it("refuses a target of the wrong size or with a value out of the palette", () => {
-    expect(issuesOf({ ...imageConfig(), target: "1010" })).toContain("target:codeimage.target_size");
-    expect(issuesOf({ ...imageConfig(), target: "10100101101x" })).toContain(
-      "target:codeimage.target_value",
-    );
+  it("leaves the target to publication: missing, wrong size, value out of the palette", () => {
+    const pub = (target: string) =>
+      codeimageServer.publicationIssues!({ ...imageConfig(), target }).map((i) => i.message);
+    expect(pub("")).toEqual(["codeimage.target_missing"]);
+    expect(pub("1010")).toEqual(["codeimage.target_size"]);
+    expect(pub("10100101101x")).toEqual(["codeimage.target_value"]);
+    expect(codeimageServer.publicationIssues!(imageConfig())).toEqual([]);
+  });
+
+  it("reads a target that no longer fits the image as no target at all", () => {
+    expect(targetPixels(imageConfig())).not.toBeNull();
+    expect(targetPixels({ ...imageConfig(), target: "" })).toBeNull();
+    expect(targetPixels({ ...imageConfig(), image: { width: 5, height: 3, palette: "bw" } })).toBeNull();
+    expect(targetPixels({ ...imageConfig(), image: { width: 4, height: 3, palette: "gray256" } })).toBeNull();
   });
 
   it("bounds the sides to 3..128", () => {
@@ -50,7 +60,7 @@ describe("CodeImageConfig", () => {
     const draft = emptyCodeImageConfig();
     expect(draft.target).toBe("");
     expect(draft.configVersion).toBe(codeimageServer.configVersion);
-    expect(CodeImageConfig.safeParse(draft).success).toBe(false);
+    expect(codeimageServer.publicationIssues!(draft)).not.toEqual([]);
     expect(codeimageServer.migrate(draft, 1)).toBe(draft);
   });
 

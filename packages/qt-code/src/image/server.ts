@@ -20,6 +20,7 @@ import {
   CodeImageDetails,
   CodeImageSolution,
   CodeImageStudent,
+  codeimagePublicationIssues,
   emptyCodeImageConfig,
 } from "./schema.js";
 
@@ -55,6 +56,9 @@ export const codeimageServer: QuestionTypeServer<
   detailsSchema: CodeImageDetails,
 
   emptyDraft: emptyCodeImageConfig,
+
+  /** A target that fits the image: required to publish, never to try (D16). */
+  publicationIssues: codeimagePublicationIssues,
 
   /** `code`'s rule: identity at the current version, a parse for an older one. */
   migrate(config: unknown, fromVersion: number): CodeImageConfig {
