@@ -66,10 +66,7 @@ import {
   answers,
   attemptEvents,
   attempts,
-  classrooms,
-  courses,
   enrollments,
-  evaluationItems,
   evaluations,
   users,
 } from "../../db/schema.js";
@@ -85,7 +82,13 @@ import {
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
-import { gradeDefaults, joinedItem, joinedItems } from "../evaluation/service.js";
+import {
+  gradeDefaults,
+  joinedItem,
+  joinedItems,
+  studentEvaluationRows,
+  totalPointsByEvaluation,
+} from "../evaluation/service.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
 import {
@@ -2106,23 +2109,7 @@ export async function attemptInspect(
 // --- Student home (F-LIVE-01) --------------------------------------------
 
 export async function studentHome(db: Db, userId: string, now: Date): Promise<StudentHome> {
-  const rows = await db
-    .select({
-      evaluation: evaluations,
-      classroomName: classrooms.name,
-      courseCode: courses.code,
-      attempt: attempts,
-    })
-    .from(enrollments)
-    .innerJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
-    .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .innerJoin(evaluations, eq(evaluations.classroomId, classrooms.id))
-    .leftJoin(
-      attempts,
-      and(eq(attempts.evaluationId, evaluations.id), eq(attempts.userId, userId)),
-    )
-    .where(and(eq(enrollments.userId, userId), eq(enrollments.status, "claimed")))
-    .orderBy(desc(evaluations.createdAt));
+  const rows = await studentEvaluationRows(db, userId).orderBy(desc(evaluations.createdAt));
 
   // The grade of a released evaluation (WP6): the sum of the validated
   // gradings of the student's own attempt, converted by the evaluation's
@@ -2131,18 +2118,10 @@ export async function studentHome(db: Db, userId: string, now: Date): Promise<St
     .map((r) => r.attempt?.id)
     .filter((id): id is string => id !== undefined && id !== null);
   const pointsPerAttempt = await pointsByAttempt(db, attemptIds);
-  const totals = new Map<string, number>();
-  for (const row of rows) {
-    if (row.evaluation.releasedAt === null || totals.has(row.evaluation.id)) continue;
-    const items = await db
-      .select({ points: evaluationItems.points })
-      .from(evaluationItems)
-      .where(eq(evaluationItems.evaluationId, row.evaluation.id));
-    totals.set(
-      row.evaluation.id,
-      Math.round(items.reduce((sum, i) => sum + i.points, 0) * 100) / 100,
-    );
-  }
+  const released = rows.filter((r) => r.evaluation.releasedAt !== null);
+  const totals = await totalPointsByEvaluation(db, [
+    ...new Set(released.map((r) => r.evaluation.id)),
+  ]);
 
   const gradeOf = (row: (typeof rows)[number]): number | null => {
     if (row.evaluation.releasedAt === null) return null;

@@ -37,12 +37,15 @@ import {
   type McqPolicy,
 } from "@quiz/contracts";
 
+import { round2 } from "@quiz/domain";
+
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import {
   attempts,
   coursePools,
   classrooms,
+  courses,
   enrollments,
   evaluationItems,
   evaluations,
@@ -288,6 +291,48 @@ export async function joinedItem(
     .where(and(eq(evaluationItems.id, itemId), eq(evaluationItems.evaluationId, evaluationId)))
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * Every evaluation of every classroom the student holds a claimed seat in,
+ * with the student's own attempt when there is one: what the student home
+ * and the results page are both drawn from. Returned unawaited so that a
+ * caller may still order it.
+ */
+export function studentEvaluationRows(db: Db, userId: string) {
+  return db
+    .select({
+      evaluation: evaluations,
+      classroomName: classrooms.name,
+      courseCode: courses.code,
+      attempt: attempts,
+    })
+    .from(enrollments)
+    .innerJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
+    .innerJoin(courses, eq(classrooms.courseId, courses.id))
+    .innerJoin(evaluations, eq(evaluations.classroomId, classrooms.id))
+    .leftJoin(
+      attempts,
+      and(eq(attempts.evaluationId, evaluations.id), eq(attempts.userId, userId)),
+    )
+    .where(and(eq(enrollments.userId, userId), eq(enrollments.status, "claimed")));
+}
+
+/** The total points of each evaluation, in one grouped query. */
+export async function totalPointsByEvaluation(
+  db: Db,
+  evaluationIds: readonly string[],
+): Promise<Map<string, number>> {
+  if (evaluationIds.length === 0) return new Map();
+  const rows = await db
+    .select({
+      evaluationId: evaluationItems.evaluationId,
+      points: sql<string>`sum(${evaluationItems.points})`,
+    })
+    .from(evaluationItems)
+    .where(inArray(evaluationItems.evaluationId, [...evaluationIds]))
+    .groupBy(evaluationItems.evaluationId);
+  return new Map(rows.map((r) => [r.evaluationId, round2(Number(r.points))]));
 }
 
 /** The highest published version number of each question, in one query. */

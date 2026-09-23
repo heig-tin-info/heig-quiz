@@ -8,7 +8,7 @@
  * which `packages/domain` already covers.
  */
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { CodeDetails } from "@quiz/qt-code/server";
 import { registerForTests } from "@quiz/registry/server";
@@ -359,5 +359,69 @@ describe("the details filter for `code` (decision D15, deviation W3-5)", () => {
       service.filterDetails("code", details, policy({ showKey: true })),
     );
     expect(whole).toContain("SECRET-EXPECTED");
+  });
+});
+
+describe("the student's pages read in a fixed number of statements (audit D-05)", () => {
+  it("draws the home and the result cards of three released evaluations in three statements each", async () => {
+    const app = await appFor();
+    let studentId: string | undefined;
+    const expected = new Map<string, { points: number; totalPoints: number; grade: number }>();
+    // Three evaluations of three classrooms, each worth 2 × 5 points; the
+    // student scores 10, 5 and 0 of them.
+    for (const [i, score] of [10, 5, 0].entries()) {
+      const seed = await seedLive(db, {
+        questions: 2,
+        ...(studentId ? { studentIds: [studentId] } : { students: 1 }),
+      });
+      studentId = seed.studentIds[0]!;
+      let evaluation = await applyState(db, await reload(db, seed.evaluationId), "running", app.clock.now());
+      const items = await joinedItems(db, evaluation.id);
+      await db
+        .update(evaluationItems)
+        .set({ points: 5 })
+        .where(eq(evaluationItems.evaluationId, evaluation.id));
+      const participant = (await live.participantOf(db, evaluation, studentId))!;
+      const created = await live.ensureAttempt(db, evaluation, participant, app.clock.now());
+      const attempt = await live.beginAttempt(db, evaluation, created, participant, app.clock.now());
+      evaluation = await live.closeEvaluation(db, evaluation, app.clock.now());
+      for (const [k, item] of items.entries()) {
+        await grading.writeGrading(db, {
+          attemptId: attempt.id,
+          itemId: item.item.id,
+          answerId: null,
+          points: k === 0 ? Math.min(score, 5) : Math.max(score - 5, 0),
+          maxPoints: 5,
+          source: "manual",
+          state: "validated",
+          now: app.clock.now(),
+        });
+      }
+      await service.releaseResults(db, await reload(db, evaluation.id), app.clock.now());
+      expected.set(evaluation.id, { points: score, totalPoints: 10, grade: [6, 3.5, 1][i]! });
+      app.clock.advance(60_000);
+    }
+
+    // Every statement drizzle sends goes through the PGlite client's `query`.
+    const statements = vi.spyOn(raw.$client, "query");
+    try {
+      const cards = await service.studentResultCards(db, studentId!);
+      expect(statements).toHaveBeenCalledTimes(3);
+      expect(cards).toHaveLength(3);
+      for (const card of cards) {
+        expect({ points: card.points, totalPoints: card.totalPoints, grade: card.grade }).toEqual(
+          expected.get(card.evaluationId),
+        );
+      }
+
+      statements.mockClear();
+      const home = await live.studentHome(db, studentId!, app.clock.now());
+      expect(statements).toHaveBeenCalledTimes(3);
+      expect(new Map(home.past.map((c) => [c.id, c.grade]))).toEqual(
+        new Map([...expected].map(([id, e]) => [id, e.grade])),
+      );
+    } finally {
+      statements.mockRestore();
+    }
   });
 });
