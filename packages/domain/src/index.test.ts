@@ -9,6 +9,8 @@ describe("@quiz/domain public surface", () => {
       "attemptDeadline",
       "clozeStudentTemplate",
       "compareOutput",
+      "formatGrade",
+      "formatPoints",
       "gradeCloze",
       "gradeFromPoints",
       "hashSeed",

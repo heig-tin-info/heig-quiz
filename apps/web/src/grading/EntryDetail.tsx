@@ -1,13 +1,14 @@
 import { Check, MessageSquare, PencilLine } from "lucide-react";
 
 import type { GradingEntry, GradingQueueItem } from "@quiz/contracts";
+import { formatPoints } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { QuestionReviewHost } from "../questionTypes";
 import { Badge, Button, Kbd } from "../ui";
 import { HistoryPopover } from "./HistoryPopover";
-import { confidenceLabel, confidenceTone, round2, sourceLabel, sourceTone } from "./labels";
+import { confidenceLabel, confidenceTone, sourceLabel, sourceTone } from "./labels";
 
 /**
  * One answer, open.
@@ -96,8 +97,8 @@ export function EntryDetail({
             <Badge tone={sourceTone(grading.source)}>{sourceLabel(t, grading.source)}</Badge>
             <span className="text-[15px] font-semibold tabular-nums">
               {t("grading.score", {
-                points: round2(grading.points),
-                max: round2(grading.maxPoints),
+                points: formatPoints(grading.points),
+                max: formatPoints(grading.maxPoints),
               })}
             </span>
           </span>

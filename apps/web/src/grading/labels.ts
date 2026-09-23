@@ -59,8 +59,3 @@ export function entryVerdict(entry: Pick<GradingEntry, "answerId" | "answer" | "
   if (grading.maxPoints > 0 && grading.points >= grading.maxPoints) return "correct";
   return grading.points > 0 ? "partial" : "wrong";
 }
-
-/** Two decimals at most, with no trailing zeroes: points are not money. */
-export function round2(n: number): string {
-  return String(Math.round(n * 100) / 100);
-}
