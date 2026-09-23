@@ -7,6 +7,12 @@
  * (N-I18N-01). The defaults below exist so a component is usable, and
  * testable, alone.
  *
+ * A parameterised sentence is a TEMPLATE filled by `fmt` from
+ * `@quiz/core/client` (`"Stimulus {n}"`), never a function: the host's `t()`
+ * uses the same `{var}` syntax, so it translates these entries key by key
+ * like any other. A count-dependent sentence has a `<key>.one` sibling, used
+ * for 1.
+ *
  * Four dictionaries reach the host: the editor's (`qt.circuit.e.*`), the
  * player's (`qt.circuit.p.*`), the review's (`qt.circuit.r.*`) and the
  * canvas's (`qt.circuit.c.*`, owned by `./canvas`). The component KINDS are a
@@ -65,12 +71,13 @@ export interface CircuitEditorStrings {
 
   stimuli: string;
   stimuliHint: string;
-  stimulus: (n: number) => string;
+  stimulus: string;
   stimulusName: string;
   addStimulus: string;
-  removeStimulus: (name: string) => string;
+  removeStimulus: string;
   noStimuli: string;
-  totalPoints: (n: number) => string;
+  totalPoints: string;
+  "totalPoints.one": string;
 
   source: string;
   sourceDc: string;
@@ -111,7 +118,8 @@ export interface CircuitEditorStrings {
   tryFailed: string;
   tryNeedsReference: string;
   tryNeedsStimulus: string;
-  tryDone: (n: number) => string;
+  tryDone: string;
+  "tryDone.one": string;
 
   grading: string;
   modeManual: string;
@@ -158,12 +166,13 @@ export const EDITOR_STRINGS: CircuitEditorStrings = {
   stimuli: "Stimuli",
   stimuliHint:
     "What drives the input and what hangs on the output. A hidden stimulus is graded but never shown, exactly like a hidden test case.",
-  stimulus: (n) => `Stimulus ${n}`,
+  stimulus: "Stimulus {n}",
   stimulusName: "Name",
   addStimulus: "Add a stimulus",
-  removeStimulus: (name) => `Remove the stimulus ${name}`,
+  removeStimulus: "Remove the stimulus {name}",
   noStimuli: "No stimulus yet. Without one the circuit can only be graded by hand.",
-  totalPoints: (n) => (n === 1 ? "1 point in total" : `${n} points in total`),
+  totalPoints: "{n} points in total",
+  "totalPoints.one": "1 point in total",
 
   source: "Source",
   sourceDc: "DC",
@@ -205,7 +214,8 @@ export const EDITOR_STRINGS: CircuitEditorStrings = {
   tryFailed: "The reference circuit could not be simulated. Check its wiring and its values.",
   tryNeedsReference: "Draw the reference circuit first.",
   tryNeedsStimulus: "Add a stimulus first: there is nothing to simulate the circuit with.",
-  tryDone: (n) => (n === 1 ? "1 stimulus simulated." : `${n} stimuli simulated.`),
+  tryDone: "{n} stimuli simulated.",
+  "tryDone.one": "1 stimulus simulated.",
 
   grading: "Grading",
   modeManual: "You",
@@ -237,32 +247,33 @@ export const EDITOR_STRINGS: CircuitEditorStrings = {
 
 export interface CircuitPlayerStrings {
   schematic: string;
-  components: (n: number, max: number) => string;
+  components: string;
   complete: string;
 
   /** The netlist diagnostics, one sentence per `NetlistIssue.code`. */
-  issueFloatingPin: (ref: string) => string;
-  issueUnconnectedPort: (ref: string) => string;
-  issueDanglingWire: (ref: string) => string;
+  issueFloatingPin: string;
+  issueUnconnectedPort: string;
+  issueDanglingWire: string;
   issueNoGround: string;
-  issueMissingValue: (ref: string) => string;
-  issueInvalidValue: (ref: string) => string;
-  issueValueOutOfRange: (ref: string) => string;
-  issueDuplicateName: (ref: string) => string;
+  issueMissingValue: string;
+  issueInvalidValue: string;
+  issueValueOutOfRange: string;
+  issueDuplicateName: string;
   issueTooManyComponents: string;
-  issueKindNotAllowed: (ref: string) => string;
+  issueKindNotAllowed: string;
 
   stimuli: string;
   noStimuli: string;
-  hiddenStimuli: (count: number, points: number) => string;
-  srcDc: (volts: string) => string;
-  srcSine: (amplitude: string, frequency: string) => string;
-  srcPulse: (low: string, high: string, frequency: string) => string;
-  srcStep: (from: string, to: string, atMs: string) => string;
+  hiddenStimuli: string;
+  "hiddenStimuli.one": string;
+  srcDc: string;
+  srcSine: string;
+  srcPulse: string;
+  srcStep: string;
   loadOpen: string;
-  loadResistor: (value: string) => string;
-  loadCapacitor: (value: string) => string;
-  window: (ms: string) => string;
+  loadResistor: string;
+  loadCapacitor: string;
+  window: string;
 
   simulate: string;
   simulating: string;
@@ -272,40 +283,38 @@ export interface CircuitPlayerStrings {
   simulateFailed: string;
   simulateNothing: string;
 
-  plot: (name: string) => string;
+  plot: string;
   noSeries: string;
 }
 
 export const PLAYER_STRINGS: CircuitPlayerStrings = {
   schematic: "Your circuit",
-  components: (n, max) => `${n} / ${max} components`,
+  components: "{n} / {max} components",
   complete: "Everything is connected.",
 
-  issueFloatingPin: (ref) => `${ref} is not connected.`,
-  issueUnconnectedPort: (ref) => `The ${ref} port is not connected.`,
-  issueDanglingWire: (ref) => `A wire ends in the air (${ref}).`,
+  issueFloatingPin: "{ref} is not connected.",
+  issueUnconnectedPort: "The {ref} port is not connected.",
+  issueDanglingWire: "A wire ends in the air ({ref}).",
   issueNoGround: "Nothing is connected to the ground.",
-  issueMissingValue: (ref) => `${ref} has no value.`,
-  issueInvalidValue: (ref) => `${ref}: this value cannot be read.`,
-  issueValueOutOfRange: (ref) => `${ref}: this value is out of range.`,
-  issueDuplicateName: (ref) => `Two components are named ${ref}.`,
+  issueMissingValue: "{ref} has no value.",
+  issueInvalidValue: "{ref}: this value cannot be read.",
+  issueValueOutOfRange: "{ref}: this value is out of range.",
+  issueDuplicateName: "Two components are named {ref}.",
   issueTooManyComponents: "Too many components for this question.",
-  issueKindNotAllowed: (ref) => `${ref} is not in the palette of this question.`,
+  issueKindNotAllowed: "{ref} is not in the palette of this question.",
 
   stimuli: "How your circuit is tested",
   noStimuli: "Your teacher did not publish any stimulus.",
-  hiddenStimuli: (count, points) =>
-    count === 1
-      ? `1 hidden stimulus, worth ${points} point(s).`
-      : `${count} hidden stimuli, worth ${points} point(s) in total.`,
-  srcDc: (volts) => `DC ${volts} V`,
-  srcSine: (amplitude, frequency) => `Sine ${amplitude} V @ ${frequency}`,
-  srcPulse: (low, high, frequency) => `Pulse ${low} → ${high} V @ ${frequency}`,
-  srcStep: (from, to, atMs) => `Step ${from} → ${to} V at ${atMs} ms`,
+  hiddenStimuli: "{count} hidden stimuli, worth {points} point(s) in total.",
+  "hiddenStimuli.one": "1 hidden stimulus, worth {points} point(s).",
+  srcDc: "DC {volts} V",
+  srcSine: "Sine {amplitude} V @ {frequency}",
+  srcPulse: "Pulse {low} → {high} V @ {frequency}",
+  srcStep: "Step {from} → {to} V at {atMs} ms",
   loadOpen: "open output",
-  loadResistor: (value) => `load ${value}Ω`,
-  loadCapacitor: (value) => `load ${value}F`,
-  window: (ms) => `${ms} ms`,
+  loadResistor: "load {value}Ω",
+  loadCapacitor: "load {value}F",
+  window: "{ms} ms",
 
   simulate: "Simulate",
   simulating: "Simulating…",
@@ -316,7 +325,7 @@ export const PLAYER_STRINGS: CircuitPlayerStrings = {
   simulateFailed: "The simulation could not be completed. Your circuit is saved; try again shortly.",
   simulateNothing: "Draw something first: an empty box has nothing to simulate.",
 
-  plot: (name) => `Output — ${name}`,
+  plot: "Output — {name}",
   noSeries: "This stimulus produced no waveform.",
 };
 
@@ -325,14 +334,14 @@ export const PLAYER_STRINGS: CircuitPlayerStrings = {
 // ---------------------------------------------------------------------------
 
 export interface CircuitReviewStrings {
-  score: (points: number, max: number) => string;
+  score: string;
   yourCircuit: string;
   reference: string;
   noAnswer: string;
   noReference: string;
 
   diagnostics: string;
-  netSummary: (components: number, nets: number) => string;
+  netSummary: string;
   noIssues: string;
   /*
    * The netlist diagnostics again, worded for someone reading the answer back
@@ -340,27 +349,27 @@ export interface CircuitReviewStrings {
    * `qt-code` duplicates its verdicts between the player and the review: two
    * audiences, two tenses, and a shared dictionary would have to pick one.
    */
-  issueFloatingPin: (ref: string) => string;
-  issueUnconnectedPort: (ref: string) => string;
-  issueDanglingWire: (ref: string) => string;
+  issueFloatingPin: string;
+  issueUnconnectedPort: string;
+  issueDanglingWire: string;
   issueNoGround: string;
-  issueMissingValue: (ref: string) => string;
-  issueInvalidValue: (ref: string) => string;
-  issueValueOutOfRange: (ref: string) => string;
-  issueDuplicateName: (ref: string) => string;
+  issueMissingValue: string;
+  issueInvalidValue: string;
+  issueValueOutOfRange: string;
+  issueDuplicateName: string;
   issueTooManyComponents: string;
-  issueKindNotAllowed: (ref: string) => string;
+  issueKindNotAllowed: string;
 
   stimuli: string;
   stimulusName: string;
-  hiddenStimulus: (n: number) => string;
+  hiddenStimulus: string;
   points: string;
   verdict: string;
   passed: string;
   failed: string;
   notRun: string;
   error: string;
-  errorPercent: (percent: string) => string;
+  errorPercent: string;
   reason: string;
   reasonNotSimulated: string;
   reasonSpiceFailed: string;
@@ -378,36 +387,36 @@ export interface CircuitReviewStrings {
 }
 
 export const REVIEW_STRINGS: CircuitReviewStrings = {
-  score: (points, max) => `${points} / ${max} points`,
+  score: "{points} / {max} points",
   yourCircuit: "The circuit",
   reference: "Reference circuit",
   noAnswer: "Not answered.",
   noReference: "No reference circuit.",
 
   diagnostics: "What the netlist read",
-  netSummary: (components, nets) => `Components: ${components} · Nets: ${nets}`,
+  netSummary: "Components: {components} · Nets: {nets}",
   noIssues: "No problem found in the wiring.",
-  issueFloatingPin: (ref) => `${ref} was not connected.`,
-  issueUnconnectedPort: (ref) => `The ${ref} port was not connected.`,
-  issueDanglingWire: (ref) => `A wire ended in the air (${ref}).`,
+  issueFloatingPin: "{ref} was not connected.",
+  issueUnconnectedPort: "The {ref} port was not connected.",
+  issueDanglingWire: "A wire ended in the air ({ref}).",
   issueNoGround: "Nothing was connected to the ground.",
-  issueMissingValue: (ref) => `${ref} had no value.`,
-  issueInvalidValue: (ref) => `${ref}: this value could not be read.`,
-  issueValueOutOfRange: (ref) => `${ref}: this value was out of range.`,
-  issueDuplicateName: (ref) => `Two components were named ${ref}.`,
+  issueMissingValue: "{ref} had no value.",
+  issueInvalidValue: "{ref}: this value could not be read.",
+  issueValueOutOfRange: "{ref}: this value was out of range.",
+  issueDuplicateName: "Two components were named {ref}.",
   issueTooManyComponents: "Too many components for this question.",
-  issueKindNotAllowed: (ref) => `${ref} was not in the palette of this question.`,
+  issueKindNotAllowed: "{ref} was not in the palette of this question.",
 
   stimuli: "Stimuli",
   stimulusName: "Stimulus",
-  hiddenStimulus: (n) => `#${n}`,
+  hiddenStimulus: "#{n}",
   points: "Points",
   verdict: "Verdict",
   passed: "Passed",
   failed: "Failed",
   notRun: "Not run",
   error: "Error",
-  errorPercent: (percent) => `${percent} %`,
+  errorPercent: "{percent} %",
   reason: "Reason",
   reasonNotSimulated: "Not simulated",
   reasonSpiceFailed: "The simulator refused this circuit",

@@ -49,7 +49,7 @@ import {
   type WireEnd,
 } from "../schema.js";
 
-import { resolveStrings } from "@quiz/core/client";
+import { fmt, plural, resolveStrings } from "@quiz/core/client";
 import { CANVAS_STRINGS, type CanvasStrings } from "./canvasStrings.js";
 import {
   canvasArea,
@@ -988,13 +988,13 @@ export function SchematicEditor({
   const zoom = zoomPercent(view);
   const hint =
     mode === "place" && placeKind !== null
-      ? s.hintPlace(s.kind(placeKind))
+      ? fmt(s.hintPlace, { kind: s.kind(placeKind) })
       : mode === "wire"
         ? draft !== null
           ? s.hintWireDrawing
           : s.hintWire
         : selection.size > 0
-          ? s.hintSelection(selection.size)
+          ? plural(s, "hintSelection", selection.size)
           : s.hintSelect;
   const modeName = mode === "place" ? s.modePlace : mode === "wire" ? s.modeWire : s.modeSelect;
 
@@ -1067,7 +1067,7 @@ export function SchematicEditor({
           <div className={paletteColumn} style={{ maxHeight: canvasHeight }}>
             <div className={paletteHead}>
               <span className={paletteTitle}>{s.components}</span>
-              <span className={paletteCount}>{s.componentCount(used, palette.maxComponents)}</span>
+              <span className={paletteCount}>{fmt(s.componentCount, { used, max: palette.maxComponents })}</span>
             </div>
             <div className={paletteGrid}>
               {kinds.map((kind) => {
@@ -1097,7 +1097,7 @@ export function SchematicEditor({
                 );
               })}
             </div>
-            {full ? <p className="px-0.5 text-[11px] text-fg-faint">{s.paletteFull(palette.maxComponents)}</p> : null}
+            {full ? <p className="px-0.5 text-[11px] text-fg-faint">{fmt(s.paletteFull, { max: palette.maxComponents })}</p> : null}
           </div>
         )}
 
@@ -1259,7 +1259,7 @@ export function SchematicEditor({
       <div className={statusBar}>
         <span className={statusMode}>{modeName}</span>
         <span className={statusHint}>{hint}</span>
-        <span className={statusCursor}>{s.cursor(cursor.x, cursor.y)}</span>
+        <span className={statusCursor}>{fmt(s.cursor, { x: cursor.x, y: cursor.y })}</span>
       </div>
     </div>
   );

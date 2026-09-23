@@ -137,4 +137,14 @@ describe("useConfirm", () => {
     await userEvent.click(within(dialog).getByRole("button", { name: "Confirm" }));
     await waitFor(() => expect(screen.getByTestId("answer-Second").textContent).toBe("true"));
   });
+
+  it("names its two buttons in the reader's language when the caller does not", async () => {
+    renderWithProviders(<ConfirmHarness options={{ title: "Archiver ?" }} label="Ask" />, {
+      locale: "fr",
+    });
+    await userEvent.click(screen.getByRole("button", { name: "Ask" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "Annuler" })).toBeVisible();
+    expect(within(dialog).getByRole("button", { name: "Confirmer" })).toBeVisible();
+  });
 });

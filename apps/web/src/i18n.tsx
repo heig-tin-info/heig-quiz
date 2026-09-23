@@ -52,6 +52,8 @@ const en = {
 
   "common.cancel": "Cancel",
   "common.close": "Close",
+  "common.confirm": "Confirm",
+  "common.moreActions": "More actions",
   "common.save": "Save",
   "common.create": "Create",
   "common.delete": "Delete",
@@ -1155,6 +1157,9 @@ const en = {
   "dev.ui.sync": "Sync badge",
   "dev.ui.markdown": "Markdown field",
   "dev.ui.markdownView": "Markdown view",
+  "dev.ui.circuitEditor": "Circuit: schematic editor",
+  "dev.ui.circuitView": "Circuit: schematic view and waveforms",
+  "dev.ui.sine": "Sine, 1 kHz",
   "dev.ui.present": "present",
   "dev.ui.lobby": "{present} of {enrolled} students present",
 
@@ -1491,6 +1496,7 @@ const en = {
   "live.grid.noneGradable": "graded at closing",
   "live.grid.afterClose": "after closing",
   "live.grid.students": "{n} students",
+  "live.grid.students.one": "{n} student",
   "live.grid.question": "Question {n}",
   "live.empty.title": "Nobody on the roster",
   "live.empty.body": "Add students to the classroom and they appear here.",
@@ -1907,6 +1913,8 @@ const fr: Record<keyof Dict, string> = {
 
   "common.cancel": "Annuler",
   "common.close": "Fermer",
+  "common.confirm": "Confirmer",
+  "common.moreActions": "Plus d'actions",
   "common.save": "Enregistrer",
   "common.create": "Créer",
   "common.delete": "Supprimer",
@@ -3006,6 +3014,9 @@ const fr: Record<keyof Dict, string> = {
   "dev.ui.sync": "État de synchronisation",
   "dev.ui.markdown": "Champ markdown",
   "dev.ui.markdownView": "Rendu markdown",
+  "dev.ui.circuitEditor": "Circuit : éditeur de schéma",
+  "dev.ui.circuitView": "Circuit : schéma et formes d'onde",
+  "dev.ui.sine": "Sinus, 1 kHz",
   "dev.ui.present": "présents",
   "dev.ui.lobby": "{present} étudiants présents sur {enrolled}",
 
@@ -3337,6 +3348,7 @@ const fr: Record<keyof Dict, string> = {
   "live.grid.noneGradable": "corrigé à la clôture",
   "live.grid.afterClose": "après clôture",
   "live.grid.students": "{n} étudiants",
+  "live.grid.students.one": "{n} étudiant",
   "live.grid.question": "Question {n}",
   "live.empty.title": "Personne dans la classe",
   "live.empty.body": "Ajoutez des étudiants à la classe et ils apparaissent ici.",
@@ -3729,7 +3741,9 @@ export type TFunction = (key: keyof Dict, vars?: Record<string, string | number>
 function translate(locale: Locale, key: string, vars?: Record<string, string | number>): string {
   const raw = DICTS[locale]?.[key] ?? DICTS.en[key] ?? key;
   if (!vars) return raw;
-  return raw.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? `{${k}}`));
+  return raw.replace(/\{(\w+)\}/g, (_, k: string) =>
+    Object.hasOwn(vars, k) ? String(vars[k]) : `{${k}}`,
+  );
 }
 
 interface I18nValue {

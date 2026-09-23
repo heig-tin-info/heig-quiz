@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { fmt, plural } from "@quiz/core/client";
+
 import { mcqEditorStrings, mcqPlayerStrings, mcqReviewStrings, mcqStatsStrings } from "@quiz/qt-mcq/client";
 import { shortEditorStrings, shortPlayerStrings, shortReviewStrings } from "@quiz/qt-short/client";
 import { clozeEditorStrings, clozePlayerStrings, clozeReviewStrings } from "@quiz/qt-cloze/client";
@@ -78,13 +80,30 @@ describe("question type strings", () => {
   it.each(DICTIONARIES)("%s is translated key by key", (prefix, defaults) => {
     for (const [key, value] of Object.entries(defaults)) {
       if (MAPPED_ELSEWHERE[prefix]?.includes(key)) continue;
-      // A parameterized sentence is rebuilt by hand in `questionTypes.tsx`;
-      // its key still has to exist, with or without the `.one` variant.
+      // A function is a lookup, not a sentence (the canvas's `kind` and
+      // `port`), and has no key; every template, `.one` variants included,
+      // must have one.
       const full = `${prefix}.${key}`;
       const exists = (locale: Locale) =>
         DICTS[locale][full] !== undefined || typeof value === "function";
       expect(exists("en"), `${full} (en)`).toBe(true);
       expect(exists("fr"), `${full} (fr)`).toBe(true);
+    }
+  });
+
+  /*
+   * The package fills a template with ITS variable names; a translation that
+   * names them differently ("{n}" where the package passes `count`) would
+   * show the placeholder itself to that locale's readers.
+   */
+  it.each(DICTIONARIES)("%s names the same placeholders as the package, in both languages", (prefix, defaults) => {
+    const names = (text: string) => [...new Set([...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]))].sort();
+    for (const [key, value] of Object.entries(defaults)) {
+      if (typeof value !== "string" || MAPPED_ELSEWHERE[prefix]?.includes(key)) continue;
+      for (const locale of ["en", "fr"] as const) {
+        const entry = DICTS[locale][`${prefix}.${key}`];
+        expect(names(entry ?? ""), `${prefix}.${key} (${locale})`).toEqual(names(value));
+      }
     }
   });
 
@@ -129,30 +148,49 @@ describe("question type strings", () => {
       // The canvas asks for a kind through a function; the host answers it
       // from the dictionary above rather than from the library's English.
       expect(canvas.kind("R")).toBe(kinds.R);
-      expect(canvas.componentCount(3, 10)).toBe("3 / 10");
+      expect(fmt(canvas.componentCount, { used: 3, max: 10 })).toBe("3 / 10");
     }
     expect(circuitKindLabels(makeT("fr")).R).toBe("Résistance");
   });
 
-  it("rebuilds the parameterized sentences of the code type", () => {
+  it("hands the parameterized sentences of the code type over as templates", () => {
     const t = makeT("en");
-    expect(editorStrings.code(t).lockedRegions(1)).toBe("1 locked region");
-    expect(editorStrings.code(t).lockedRegions(3)).toBe("3 locked regions");
-    expect(editorStrings.code(t).tryResult(2, 3)).toBe("2 of 3 cases pass.");
-    expect(editorStrings.code(t).removeCase("stdin")).toBe("Remove the case stdin");
-    expect(playerStrings.code(t).limits(2000, 128)).toBe("2000 ms · 128 MB");
-    expect(playerStrings.code(t).hiddenCases(1, 2)).toBe("1 hidden case, worth 2 points.");
+    const e = editorStrings.code(t);
+    const p = playerStrings.code(t);
+    expect(plural(e, "lockedRegions", 1)).toBe("1 locked region");
+    expect(plural(e, "lockedRegions", 3)).toBe("3 locked regions");
+    expect(fmt(e.tryResult, { passed: 2, total: 3 })).toBe("2 of 3 cases pass.");
+    expect(fmt(e.removeCase, { name: "stdin" })).toBe("Remove the case stdin");
+    expect(fmt(p.limits, { timeMs: 2000, memoryMb: 128 })).toBe("2000 ms · 128 MB");
+    expect(plural(p, "hiddenCases", 1, { count: 1, points: 2 })).toBe("1 hidden case, worth 2 points.");
   });
 
-  it("rebuilds the parameterized sentences of the circuit type", () => {
+  it("hands the parameterized sentences of the circuit type over as templates", () => {
     const t = makeT("en");
-    expect(editorStrings.circuit(t).stimulus(2)).toBe("Stimulus 2");
-    expect(editorStrings.circuit(t).totalPoints(1)).toBe("1 point in total");
-    expect(editorStrings.circuit(t).tryDone(3)).toBe("3 stimuli simulated.");
-    expect(playerStrings.circuit(t).components(3, 10)).toBe("3 / 10 components");
-    expect(playerStrings.circuit(t).issueFloatingPin("R1.2")).toBe("R1.2 is not connected.");
-    expect(playerStrings.circuit(t).hiddenStimuli(1, 2)).toBe("1 hidden stimulus, worth 2 point(s).");
-    expect(reviewStrings.circuit(t).hiddenStimulus(2)).toBe("#2");
-    expect(reviewStrings.circuit(t).netSummary(4, 5)).toBe("Components: 4 · Nets: 5");
+    const e = editorStrings.circuit(t);
+    const p = playerStrings.circuit(t);
+    const r = reviewStrings.circuit(t);
+    expect(fmt(e.stimulus, { n: 2 })).toBe("Stimulus 2");
+    expect(plural(e, "totalPoints", 1)).toBe("1 point in total");
+    expect(plural(e, "tryDone", 3)).toBe("3 stimuli simulated.");
+    expect(fmt(p.components, { n: 3, max: 10 })).toBe("3 / 10 components");
+    expect(fmt(p.issueFloatingPin, { ref: "R1.2" })).toBe("R1.2 is not connected.");
+    expect(plural(p, "hiddenStimuli", 1, { count: 1, points: 2 })).toBe(
+      "1 hidden stimulus, worth 2 point(s).",
+    );
+    expect(fmt(r.hiddenStimulus, { n: 2 })).toBe("#2");
+    expect(fmt(r.netSummary, { components: 4, nets: 5 })).toBe("Components: 4 · Nets: 5");
+  });
+
+  it("renders a formerly rebuilt sentence in French exactly as t() does", () => {
+    const t = makeT("fr");
+    expect(plural(editorStrings.code(t), "lockedRegions", 1)).toBe(t("qt.code.e.lockedRegions.one", { n: 1 }));
+    expect(plural(editorStrings.code(t), "lockedRegions", 4)).toBe(t("qt.code.e.lockedRegions", { n: 4 }));
+    expect(fmt(playerStrings.circuit(t).srcStep, { from: "0", to: "5", atMs: "1" })).toBe(
+      "Échelon 0 → 5 V à 1 ms",
+    );
+    expect(plural(circuitCanvasStrings(t), "hintSelection", 2)).toBe(
+      t("qt.circuit.c.hintSelection", { n: 2 }),
+    );
   });
 });

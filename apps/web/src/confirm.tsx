@@ -1,11 +1,12 @@
 import { createContext, useCallback, useContext, useState, type ReactNode } from "react";
 
+import { useT } from "./i18n";
 import { Button, Modal } from "./ui";
 
 /**
  * Styled replacement for `window.confirm`: `const ok = await confirm({...})`.
- * One dialog at a time, resolved false on Escape or the X. Labels are the
- * caller's (student-facing callers pass translated ones).
+ * One dialog at a time, resolved false on Escape or the X. The buttons say
+ * "Cancel" / "Confirm" in the reader's language unless the caller names them.
  */
 export interface ConfirmOptions {
   title: string;
@@ -21,6 +22,7 @@ type ConfirmFn = (options: ConfirmOptions) => Promise<boolean>;
 const ConfirmContext = createContext<ConfirmFn>(() => Promise.resolve(false));
 
 export function ConfirmProvider({ children }: { children: ReactNode }) {
+  const t = useT();
   const [pending, setPending] = useState<{
     options: ConfirmOptions;
     resolve: (ok: boolean) => void;
@@ -53,14 +55,14 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           footer={
             <>
               <Button variant="ghost" onClick={() => settle(false)}>
-                {pending.options.cancelLabel ?? "Cancel"}
+                {pending.options.cancelLabel ?? t("common.cancel")}
               </Button>
               <Button
                 variant={pending.options.danger ? "danger" : "primary"}
                 autoFocus
                 onClick={() => settle(true)}
               >
-                {pending.options.confirmLabel ?? "Confirm"}
+                {pending.options.confirmLabel ?? t("common.confirm")}
               </Button>
             </>
           }

@@ -236,10 +236,11 @@ export type StringOverrides<K extends string> = Partial<Readonly<Record<K, strin
 /**
  * Merges a component's English defaults with the host's overrides. Total, pure.
  *
- * `T` is the dictionary itself rather than a `Record<K, string>`: the code and
- * circuit dictionaries carry parameterised entries (`lockedRegions: (n) =>
- * string`), and a dictionary is still a dictionary when one of its values
- * takes an argument. `Partial<T>` keeps the keys bound to `keyof T`, so a key
+ * `T` is the dictionary itself rather than a `Record<K, string>`: the circuit
+ * canvas carries two lookups (`kind: (kind) => string`), and a dictionary is
+ * still a dictionary when one of its values takes an argument. A parameterised
+ * SENTENCE is not a function, though: it is a template for `fmt` below.
+ * `Partial<T>` keeps the keys bound to `keyof T`, so a key
  * the defaults do not declare is still a compile error — and it keeps each
  * value's own type, which a `Record<keyof T, string>` would flatten.
  *
@@ -257,4 +258,35 @@ export function resolveStrings<T extends object>(defaults: T, overrides?: Partia
     if (value !== undefined) (out as Record<string, unknown>)[key] = value;
   }
   return out;
+}
+
+/**
+ * Fills a string template: `fmt("{n} cases", { n: 3 })` is `"3 cases"`.
+ *
+ * The same `{var}` syntax as the host's `t()` (`apps/web/src/i18n.tsx`), so a
+ * package's English default and the host's translation of the same key are
+ * one shape, and the host hands them over key by key. An unknown placeholder
+ * is left as written rather than rendered as `undefined` — and only `vars`'
+ * OWN keys count, so `{constructor}` cannot read up the prototype chain.
+ */
+export function fmt(template: string, vars: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_, k: string) =>
+    Object.hasOwn(vars, k) ? String(vars[k]) : `{${k}}`,
+  );
+}
+
+/**
+ * `fmt` for a count: fills the `<key>.one` sibling when `n` is 1 and `key`
+ * itself otherwise — the selection `apps/web` makes with
+ * `t(n === 1 ? "<key>.one" : "<key>", vars)`. `vars` defaults to `{ n }`; a
+ * sentence that names its count otherwise passes its own. A key without a
+ * `.one` sibling is a compile error.
+ */
+export function plural<K extends string>(
+  strings: NoInfer<Record<K | `${K}.one`, string>>,
+  key: K,
+  n: number,
+  vars: Record<string, string | number> = { n },
+): string {
+  return fmt(n === 1 ? strings[`${key}.one`] : strings[key], vars);
 }

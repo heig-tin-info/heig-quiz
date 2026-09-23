@@ -9,7 +9,7 @@
  */
 import { useId, useState } from "react";
 
-import { resolveStrings } from "@quiz/core/client";
+import { fmt, plural, resolveStrings } from "@quiz/core/client";
 import type { EditorProps, MarkdownRenderer } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 import { compareOutput } from "@quiz/domain/compareOutput";
@@ -284,7 +284,7 @@ export function CodeEditor({
             {s.template}
           </h3>
           <span className={badge(lockedCount > 0 ? "accent" : "neutral")}>
-            {s.lockedRegions(lockedCount)}
+            {plural(s, "lockedRegions", lockedCount)}
           </span>
         </div>
         <p className={hint}>{s.templateHint}</p>
@@ -350,7 +350,7 @@ export function CodeEditor({
             ) : null}
             {tryState.status === "done" ? (
               <p role="status" className={hint}>
-                {s.tryResult(tryState.passed, tryState.total)}
+                {fmt(s.tryResult, { passed: tryState.passed, total: tryState.total })}
               </p>
             ) : null}
           </div>
@@ -369,7 +369,7 @@ export function CodeEditor({
       <section className={cx(card, "flex flex-col gap-3 p-4")}>
         <div className="flex flex-wrap items-center gap-2">
           <h3 className={sectionTitle}>{s.cases}</h3>
-          <span className={badge()}>{s.totalPoints(totalCasePoints(config))}</span>
+          <span className={badge()}>{plural(s, "totalPoints", totalCasePoints(config))}</span>
           <button
             type="button"
             className={button("secondary", "sm", "ml-auto")}
@@ -386,7 +386,7 @@ export function CodeEditor({
               <div className="flex flex-wrap items-end gap-3">
                 <div className="flex min-w-40 flex-1 flex-col gap-1.5">
                   <label className={label} htmlFor={`${ids}-name-${i}`}>
-                    {s.case(i + 1)}
+                    {fmt(s.case, { n: i + 1 })}
                   </label>
                   <input
                     id={`${ids}-name-${i}`}
@@ -447,7 +447,7 @@ export function CodeEditor({
                 <button
                   type="button"
                   className={button("ghost", "sm")}
-                  aria-label={s.removeCase(testCase.name)}
+                  aria-label={fmt(s.removeCase, { name: testCase.name })}
                   disabled={disabled || config.tests.cases.length <= 1}
                   onClick={() => setCases(config.tests.cases.filter((_, j) => j !== i))}
                 >

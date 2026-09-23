@@ -9,7 +9,7 @@
  * `studentDetails`; this component renders what it was given and never
  * reconstructs a key.
  */
-import { resolveStrings } from "@quiz/core/client";
+import { fmt, resolveStrings } from "@quiz/core/client";
 import type { MarkdownRenderer, ReviewProps } from "@quiz/core/client";
 
 import { Plot, SchematicView, type CanvasStrings } from "./canvas/index.js";
@@ -43,25 +43,25 @@ function diagnostic(raw: string, s: CircuitReviewStrings): string {
   const ref = colon === -1 ? "" : raw.slice(colon + 1);
   switch (code) {
     case "floating_pin":
-      return s.issueFloatingPin(ref);
+      return fmt(s.issueFloatingPin, { ref });
     case "unconnected_port":
-      return s.issueUnconnectedPort(ref);
+      return fmt(s.issueUnconnectedPort, { ref });
     case "dangling_wire":
-      return s.issueDanglingWire(ref);
+      return fmt(s.issueDanglingWire, { ref });
     case "no_ground":
       return s.issueNoGround;
     case "missing_value":
-      return s.issueMissingValue(ref);
+      return fmt(s.issueMissingValue, { ref });
     case "invalid_value":
-      return s.issueInvalidValue(ref);
+      return fmt(s.issueInvalidValue, { ref });
     case "value_out_of_range":
-      return s.issueValueOutOfRange(ref);
+      return fmt(s.issueValueOutOfRange, { ref });
     case "duplicate_name":
-      return s.issueDuplicateName(ref);
+      return fmt(s.issueDuplicateName, { ref });
     case "too_many_components":
       return s.issueTooManyComponents;
     case "kind_not_allowed":
-      return s.issueKindNotAllowed(ref);
+      return fmt(s.issueKindNotAllowed, { ref });
     default:
       return raw;
   }
@@ -155,7 +155,7 @@ export function CircuitReview({
     (detail) => {
       if (detail.visible) return { detail, label: detail.name };
       hiddenSeen += 1;
-      return { detail, label: teacher ? detail.name : s.hiddenStimulus(hiddenSeen) };
+      return { detail, label: teacher ? detail.name : fmt(s.hiddenStimulus, { n: hiddenSeen }) };
     },
   );
 
@@ -164,7 +164,7 @@ export function CircuitReview({
       {statement}
 
       <div className="flex flex-wrap items-center gap-2">
-        <span className={cx(sectionTitle, "tabular-nums")}>{s.score(points ?? 0, maxPoints)}</span>
+        <span className={cx(sectionTitle, "tabular-nums")}>{fmt(s.score, { points: points ?? 0, max: maxPoints })}</span>
         {breakdown?.mode === "manual" ? <span className={badge()}>{s.manualGrade}</span> : null}
         {breakdown?.mode === "llm" ? <span className={badge()}>{s.llmPending}</span> : null}
         {breakdown?.runner === "unavailable" ? (
@@ -209,7 +209,12 @@ export function CircuitReview({
         <div className="flex flex-col gap-1">
           <p className={hint}>
             <span className="font-medium text-fg">{s.diagnostics}</span>{" "}
-            <span>{s.netSummary(breakdown.netlist.components, breakdown.netlist.nets)}</span>
+            <span>
+              {fmt(s.netSummary, {
+                components: breakdown.netlist.components,
+                nets: breakdown.netlist.nets,
+              })}
+            </span>
           </p>
           {breakdown.netlist.issues.length === 0 ? (
             <p className={hint}>{s.noIssues}</p>
@@ -268,7 +273,7 @@ export function CircuitReview({
                     </span>
                   </td>
                   <td className={cx(table.td, "text-right tabular-nums")}>
-                    {detail.error === null ? "—" : s.errorPercent(errorPercent(detail.error))}
+                    {detail.error === null ? "—" : fmt(s.errorPercent, { percent: errorPercent(detail.error) })}
                   </td>
                   <td className={cx(table.td, "text-fg-muted")}>
                     {detail.reason === undefined ? "—" : reasonText(detail.reason, s)}
