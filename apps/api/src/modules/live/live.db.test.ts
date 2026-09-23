@@ -901,6 +901,39 @@ describe("the teacher preview (§4.3)", () => {
     const again = await service.previewView(db, row, clock.now());
     expect(again.items.map((i) => i.id)).toEqual(view.items.map((i) => i.id));
   });
+
+  it("is the attempt view of a seed-0 attempt with no answer, byte for byte but the header", async () => {
+    const { evaluation, attempt } = await running({
+      questions: 3,
+      settings: { shuffleItems: true, navigation: "forward_only" },
+    });
+    await db.update(attempts).set({ seed: 0 }).where(eq(attempts.id, attempt.id));
+    const zero = { ...attempt, seed: 0 };
+    const student = await service.attemptView(db, evaluation, zero, clock.now());
+    const preview = await service.previewView(db, evaluation, clock.now());
+    expect(JSON.stringify(preview.evaluation)).toBe(JSON.stringify(student.evaluation));
+    expect(JSON.stringify(preview.items)).toBe(JSON.stringify(student.items));
+    expect(student.attempt).toEqual({
+      id: attempt.id,
+      state: "in_progress",
+      startedAt: attempt.startedAt!.toISOString(),
+      deadlineAt: attempt.deadlineAt?.toISOString() ?? null,
+      lastItemId: attempt.lastItemId,
+      serverNow: clock.now().toISOString(),
+      preview: false,
+      readOnly: false,
+    });
+    expect(preview.attempt).toEqual({
+      id: service.PREVIEW_ATTEMPT_ID,
+      state: "in_progress",
+      startedAt: clock.now().toISOString(),
+      deadlineAt: null,
+      lastItemId: null,
+      serverNow: clock.now().toISOString(),
+      preview: true,
+      readOnly: false,
+    });
+  });
 });
 
 describe("settings round trip", () => {

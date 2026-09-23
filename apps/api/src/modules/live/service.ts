@@ -653,13 +653,10 @@ export async function attemptView(
   attempt: AttemptRecord,
   now: Date,
 ): Promise<AttemptView> {
-  const settings = settingsOf(evaluation);
-  const items = await joinedItems(db, evaluation.id);
-  const ordered = orderItems(items, settings, attempt.seed, evaluation.id);
-  const answered = await answersOf(db, attempt.id);
-  const locked = lockedItemIds(settings, ordered, answered);
-  return {
-    attempt: {
+  return viewOf(db, evaluation, {
+    seed: attempt.seed,
+    answered: await answersOf(db, attempt.id),
+    header: {
       id: attempt.id,
       state: attempt.state,
       startedAt: isoOrNull(attempt.startedAt),
@@ -669,18 +666,7 @@ export async function attemptView(
       preview: false,
       readOnly: readOnlyFor(evaluation, attempt),
     },
-    evaluation: {
-      id: evaluation.id,
-      title: evaluation.title,
-      mode: evaluation.mode,
-      state: evaluation.state,
-      settings,
-      feedbackPolicy: feedbackOf(evaluation),
-      pausedAt: isoOrNull(evaluation.pausedAt),
-      totalPoints: Math.round(items.reduce((s, i) => s + i.item.points, 0) * 100) / 100,
-    },
-    items: attemptItems(ordered, answered, locked, settings, attempt.seed),
-  };
+  });
 }
 
 /**
@@ -692,12 +678,10 @@ export async function previewView(
   evaluation: EvaluationRecord,
   now: Date,
 ): Promise<AttemptView> {
-  const settings = settingsOf(evaluation);
-  const items = await joinedItems(db, evaluation.id);
-  const ordered = orderItems(items, settings, 0, evaluation.id);
-  const empty = new Map<string, AnswerRecord>();
-  return {
-    attempt: {
+  return viewOf(db, evaluation, {
+    seed: 0,
+    answered: new Map(),
+    header: {
       id: PREVIEW_ATTEMPT_ID,
       state: "in_progress",
       startedAt: iso(now),
@@ -707,6 +691,31 @@ export async function previewView(
       preview: true,
       readOnly: false,
     },
+  });
+}
+
+/**
+ * The one builder behind {@link attemptView} and {@link previewView}: the two
+ * differ only by the seed, the stored answers and the `attempt` header, so
+ * both go through `attemptItems` -> `studentView` (invariant 4) by
+ * construction.
+ */
+async function viewOf(
+  db: Db,
+  evaluation: EvaluationRecord,
+  input: {
+    seed: number;
+    answered: ReadonlyMap<string, AnswerRecord>;
+    header: AttemptView["attempt"];
+  },
+): Promise<AttemptView> {
+  const { seed, answered } = input;
+  const settings = settingsOf(evaluation);
+  const items = await joinedItems(db, evaluation.id);
+  const ordered = orderItems(items, settings, seed, evaluation.id);
+  const locked = lockedItemIds(settings, ordered, answered);
+  return {
+    attempt: input.header,
     evaluation: {
       id: evaluation.id,
       title: evaluation.title,
@@ -717,7 +726,7 @@ export async function previewView(
       pausedAt: isoOrNull(evaluation.pausedAt),
       totalPoints: Math.round(items.reduce((s, i) => s + i.item.points, 0) * 100) / 100,
     },
-    items: attemptItems(ordered, empty, new Set(), settings, 0),
+    items: attemptItems(ordered, answered, locked, settings, seed),
   };
 }
 
