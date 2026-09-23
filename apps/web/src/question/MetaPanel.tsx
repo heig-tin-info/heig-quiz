@@ -7,6 +7,7 @@ import { api } from "../api";
 import { useT } from "../i18n";
 import { useErrorToast } from "../notify";
 import { Card, Field, SectionHeading, Segmented, Select } from "../ui";
+import { categoryPaths } from "../pool/categories";
 import { TagInput } from "./TagInput";
 import { poolKey, questionKey } from "../queryKeys";
 
@@ -18,13 +19,6 @@ import { poolKey, questionKey } from "../queryKeys";
  * its own, applied when the control is left, and none of them touches the
  * draft the type's editor owns.
  */
-
-function flatten(nodes: CategoryNode[], prefix = ""): { id: string; label: string }[] {
-  return nodes.flatMap((node) => {
-    const label = prefix ? `${prefix} / ${node.name}` : node.name;
-    return [{ id: node.id, label }, ...flatten(node.children, label)];
-  });
-}
 
 export function MetaPanel({
   meta,
@@ -78,7 +72,7 @@ export function MetaPanel({
         onChange={(e) => patch.mutate({ categoryId: e.target.value === "" ? null : e.target.value })}
       >
         <option value="">{t("question.meta.noCategory")}</option>
-        {flatten(categories).map((c) => (
+        {categoryPaths(categories).map((c) => (
           <option key={c.id} value={c.id}>
             {c.label}
           </option>

@@ -7,6 +7,7 @@ import type { Category, CategoryNode, PoolDetail, PoolSummary, QuestionRow } fro
 import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
+import { categoryPaths } from "./categories";
 import { useMoveQuestions } from "./move";
 import { useErrorToast, useToast } from "../notify";
 import { Button, Field, IconButton, Modal, Select, Spinner, Z } from "../ui";
@@ -30,14 +31,6 @@ import { anyPoolKey, poolKey, poolsKey } from "../queryKeys";
  * confirmations for one intention. It is also the keyboard's way to do what
  * the sidebar does with a drag.
  */
-
-/** Flattens the tree into "Parent / Child" labels for the move select. */
-function flatten(nodes: CategoryNode[], prefix = ""): { id: string; label: string }[] {
-  return nodes.flatMap((node) => {
-    const label = prefix ? `${prefix} / ${node.name}` : node.name;
-    return [{ id: node.id, label }, ...flatten(node.children, label)];
-  });
-}
 
 /** The `<option>` value that opens the "name it" field instead of picking. */
 const NEW_CATEGORY = "__new__";
@@ -280,7 +273,7 @@ export function BulkBar({
               onChange={(e) => setCategoryId(e.target.value)}
             >
               <option value="">{t("pool.bulk.root")}</option>
-              {flatten(categories).map((c) => (
+              {categoryPaths(categories).map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.label}
                 </option>
@@ -351,7 +344,7 @@ export function BulkBar({
                 onChange={(e) => setTargetCategoryId(e.target.value)}
               >
                 <option value="">{t("pool.bulk.root")}</option>
-                {flatten(target.data!.categories).map((c) => (
+                {categoryPaths(target.data!.categories).map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.label}
                   </option>
