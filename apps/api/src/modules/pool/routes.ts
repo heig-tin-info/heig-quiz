@@ -44,6 +44,7 @@ import {
   type MoveBlockingCourse,
   type MoveConflict,
   type MoveResult,
+  issuesOf,
   type QuestionTypeId,
   type TryResult,
 } from "@quiz/contracts";
@@ -69,8 +70,9 @@ import {
   teacherGuard,
 } from "../guards.js";
 import { isAllowedMime, pathForHash, readAsset, sha256Of, sniffImage, writeAsset } from "./assets.js";
+import { emptyBody, invalid } from "../http.js";
 import { studentViewOf } from "../live/studentView.js";
-import { issuesOf, loadConfig, tryLoadConfig, typeOf } from "./config.js";
+import { loadConfig, tryLoadConfig, typeOf } from "./config.js";
 import { publish } from "../../events.js";
 import { notify } from "../notifications/service.js";
 import { userTopic } from "../realtime/bus.js";
@@ -84,13 +86,6 @@ import * as service from "./service.js";
  */
 const _questionTypesAgree: readonly QuestionTypeId[] = QUESTION_TYPE_IDS;
 void _questionTypesAgree;
-
-/** The empty-body case: Fastify hands over `undefined` on a bodyless POST. */
-const emptyBody = (body: unknown) => (body === undefined || body === null ? {} : body);
-
-function invalid(reply: FastifyReply, error: z.ZodError) {
-  return reply.code(400).send({ error: "validation", details: issuesOf(error) });
-}
 
 /**
  * A failure raised by the question-type layer is a client error, not a 500:

@@ -11,7 +11,6 @@
  */
 import { and, eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { z } from "zod";
 
 import {
   EvaluationCreate,
@@ -38,22 +37,10 @@ import {
   staffAccess,
   teacherGuard,
 } from "../guards.js";
+import { emptyBody, invalid } from "../http.js";
 import * as live from "../live/service.js";
 import { evaluationChanged } from "./events.js";
 import * as service from "./service.js";
-
-const emptyBody = (body: unknown) => (body === undefined || body === null ? {} : body);
-
-function invalid(reply: FastifyReply, error: z.ZodError) {
-  return reply.code(400).send({
-    error: "validation",
-    details: error.issues.map((i) => ({
-      path: i.path.map(String),
-      code: i.code,
-      message: i.message,
-    })),
-  });
-}
 
 /** Everything this module refuses carries its own status and machine code. */
 function evaluationFailure(reply: FastifyReply, error: unknown): FastifyReply | null {

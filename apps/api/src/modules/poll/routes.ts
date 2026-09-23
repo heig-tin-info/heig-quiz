@@ -25,7 +25,6 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { and, eq } from "drizzle-orm";
-import { z } from "zod";
 
 import {
   IdParam,
@@ -42,27 +41,11 @@ import type { AppConfig } from "../../config.js";
 import { CSRF_COOKIE, CSRF_HEADER } from "../../auth/session.js";
 import { classrooms, courses, pools, questions } from "../../db/schema.js";
 import { staffAccess, poolAccess, teacherGuard } from "../guards.js";
+import { emptyBody, invalid, notFound } from "../http.js";
 import { byId } from "../evaluation/service.js";
 import * as live from "../live/service.js";
 import * as poolService from "../pool/service.js";
 import * as service from "./service.js";
-
-const emptyBody = (body: unknown) => (body === undefined || body === null ? {} : body);
-
-function invalid(reply: FastifyReply, error: z.ZodError) {
-  return reply.code(400).send({
-    error: "validation",
-    details: error.issues.map((i) => ({
-      path: i.path.map(String),
-      code: i.code,
-      message: i.message,
-    })),
-  });
-}
-
-function notFound(reply: FastifyReply) {
-  return reply.code(404).send({ error: "not_found" });
-}
 
 export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;

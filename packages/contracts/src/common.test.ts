@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { BoolFlag, IntList, StringList, pageOf } from "./common.js";
+import { BoolFlag, IntList, StringList, ZodIssueLite, issuesOf, pageOf } from "./common.js";
 
 const Row = z.object({ id: z.string() });
 
@@ -51,5 +51,20 @@ describe("BoolFlag", () => {
     expect(BoolFlag.parse("0")).toBe(false);
     expect(BoolFlag.parse("yes")).toBe(false);
     expect(BoolFlag.parse(false)).toBe(false);
+  });
+});
+
+describe("issuesOf", () => {
+  it("reduces a zod error to what the editor underlines", () => {
+    const error = z.object({ a: z.object({ b: z.string() }) }).safeParse({ a: { b: 1 } }).error!;
+    const issues = issuesOf(error);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]!.path).toEqual(["a", "b"]);
+    expect(z.array(ZodIssueLite).safeParse(issues).success).toBe(true);
+  });
+
+  it("collapses anything that is not a zod error to one pathless issue", () => {
+    expect(issuesOf(new Error("boom"))).toEqual([{ path: [], code: "invalid", message: "boom" }]);
+    expect(issuesOf("boom")).toEqual([{ path: [], code: "invalid", message: "boom" }]);
   });
 });

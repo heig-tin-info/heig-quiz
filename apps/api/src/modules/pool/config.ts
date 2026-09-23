@@ -13,9 +13,7 @@
  * flavours — the throwing one (publication, grading) and the `try…` one
  * (autosave, listing), which hands back `issues[]` instead.
  */
-import { z } from "zod";
-
-import type { ZodIssueLite } from "@quiz/contracts";
+import { issuesOf, type ZodIssueLite } from "@quiz/contracts";
 import type { AnyQuestionTypeServer } from "@quiz/core/server";
 import { questionType } from "@quiz/registry/server";
 
@@ -35,19 +33,6 @@ type ConfigOutcome =
    * written back at the shape it was found in — see {@link tryLoadConfig}.
    */
   | { ok: false; config: unknown; issues: ZodIssueLite[] };
-
-/** A zod error reduced to what the editor can underline. */
-export function issuesOf(error: unknown): ZodIssueLite[] {
-  if (error instanceof z.ZodError) {
-    return error.issues.map((i) => ({
-      path: i.path.map(String),
-      code: i.code,
-      message: i.message,
-    }));
-  }
-  const message = error instanceof Error ? error.message : String(error);
-  return [{ path: [], code: "invalid", message }];
-}
 
 /** The registered type, or `UnknownQuestionType` — never `undefined`. */
 export function typeOf(type: string): AnyQuestionTypeServer {

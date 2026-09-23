@@ -47,6 +47,7 @@ import type {
   VersionRow,
   ZodIssueLite,
 } from "@quiz/contracts";
+import { issuesOf } from "@quiz/contracts";
 import { effectivePoolRole } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
@@ -75,7 +76,6 @@ import { dropPoolNotifications, notify } from "../notifications/service.js";
 import { userTopic } from "../realtime/bus.js";
 import { poolPeopleChanged } from "./events.js";
 import {
-  issuesOf,
   loadConfig,
   saveConfig,
   saveDraftConfig,

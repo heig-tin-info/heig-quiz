@@ -10,7 +10,6 @@
  *     typed SSE event.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { z } from "zod";
 
 import {
   AttemptEventBody,
@@ -43,23 +42,11 @@ import {
   staffAttempt,
   teacherGuard,
 } from "../guards.js";
+import { emptyBody, invalid } from "../http.js";
 import * as evaluationService from "../evaluation/service.js";
 import { presence } from "../realtime/presence.js";
 import * as events from "./events.js";
 import * as service from "./service.js";
-
-const emptyBody = (body: unknown) => (body === undefined || body === null ? {} : body);
-
-function invalid(reply: FastifyReply, error: z.ZodError) {
-  return reply.code(400).send({
-    error: "validation",
-    details: error.issues.map((i) => ({
-      path: i.path.map(String),
-      code: i.code,
-      message: i.message,
-    })),
-  });
-}
 
 /** Rate limit of the journal route (F-EVAL-13): 60 entries a minute. */
 const EVENTS_PER_MINUTE = 60;

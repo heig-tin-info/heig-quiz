@@ -22,6 +22,25 @@ export const ZodIssueLite = z.object({
 });
 export type ZodIssueLite = z.infer<typeof ZodIssueLite>;
 
+/**
+ * A zod error reduced to {@link ZodIssueLite}. It lives beside the schema it
+ * produces so that both sides of invariant 7 agree on the shape: the API
+ * builds its `400 validation` body with it, and the client parses the result
+ * with `ZodIssueLite`. Anything that is not a `ZodError` collapses to a
+ * single issue with an empty path, so a caller never has to branch.
+ */
+export function issuesOf(error: unknown): ZodIssueLite[] {
+  if (error instanceof z.ZodError) {
+    return error.issues.map((i) => ({
+      path: i.path.map(String),
+      code: i.code,
+      message: i.message,
+    }));
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return [{ path: [], code: "invalid", message }];
+}
+
 /** Cursor pagination: `nextCursor === null` means "last page". */
 export function pageOf<T extends z.ZodType>(item: T) {
   return z.object({ items: z.array(item), nextCursor: z.string().nullable() });

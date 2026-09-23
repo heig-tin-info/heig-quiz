@@ -11,31 +11,18 @@
  * route itself contains no policy logic at all.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { z } from "zod";
 
 import { IdParam, ReleaseBody } from "@quiz/contracts";
 
 import { audit, type AuditAction } from "../../audit.js";
 import { iso } from "../../clock.js";
 import { accessibleEvaluation, ownAttempt, teacherGuard } from "../guards.js";
+import { emptyBody, invalid } from "../http.js";
 import { byId } from "../evaluation/service.js";
 import * as gradingEvents from "../grading/events.js";
 import * as bus from "../realtime/bus.js";
 import { csvFilename, resultsCsv } from "./csv.js";
 import * as service from "./service.js";
-
-const emptyBody = (body: unknown) => (body === undefined || body === null ? {} : body);
-
-function invalid(reply: FastifyReply, error: z.ZodError) {
-  return reply.code(400).send({
-    error: "validation",
-    details: error.issues.map((i) => ({
-      path: i.path.map(String),
-      code: i.code,
-      message: i.message,
-    })),
-  });
-}
 
 export async function resultsPlugin(app: FastifyInstance) {
   const requireTeacher = teacherGuard(app);
