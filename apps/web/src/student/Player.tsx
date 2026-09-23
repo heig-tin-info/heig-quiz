@@ -55,25 +55,36 @@ import { OfflineBanner } from "./OfflineBanner";
 import { PausedOverlay } from "./PausedOverlay";
 import { PlayerActions } from "./PlayerActions";
 import { PlayerShell } from "./PlayerShell";
-import type { CodeAnswer, CodeRunOptions, CodeStudent } from "@quiz/qt-code/client";
+import type {
+  CodeAnswer,
+  CodeImageAnswer,
+  CodeImageStudent,
+  CodeRunOptions,
+  CodeRunStage,
+  CodeStudent,
+} from "@quiz/qt-code/client";
 
 import { api, ApiError } from "../api";
-import { runCode } from "../runner/codeRun";
+import { runCode, runCodeImage } from "../runner/codeRun";
 import { isAnswered, QuestionHost } from "./QuestionHost";
 import { SubmitDialog } from "./SubmitDialog";
 import { usePlayerCommands } from "./usePlayerCommands";
 
 /**
- * The `circuit` player's "Simulate", which has no browser half: only the
- * server may turn a schematic into a SPICE netlist (invariant 14), so this is
- * one call and its answer is read here rather than by the package.
+ * `POST /attempts/:id/simulate`: the student's own button of a type that
+ * builds its own request (ADR-019) — the `circuit` player's "Simulate", and
+ * the backend half of a `codeimage` "Run" (ADR-021).
+ *
+ * For a circuit it is the only path: only the server may turn a schematic
+ * into a SPICE netlist (invariant 14), so this is one call and its answer is
+ * read here rather than by the package.
  *
  * Three of the four outcomes are not errors and must not read as one:
  * `503 runner_unavailable` is the default deployment (decision D14),
  * `429` is the per-attempt budget of N-SEC-07, and anything else is a real
  * failure the player shows in red.
  */
-async function simulateCircuit(
+async function simulateAnswer(
   attemptId: string,
   itemId: string,
   answer: unknown,
@@ -333,7 +344,24 @@ export function Player({
                 {...(item.type === "circuit"
                   ? {
                       onSimulate: (answer: unknown) =>
-                        simulateCircuit(initial.attempt.id, item.id, answer),
+                        simulateAnswer(initial.attempt.id, item.id, answer),
+                    }
+                  : {})}
+                {...(item.type === "codeimage"
+                  ? {
+                      // Where it runs is `code`'s rule (ADR-015): the browser
+                      // for `runtime: "runno"`, else the server, which
+                      // rebuilds the program from the stored template
+                      // (invariant 14) behind the generic simulate route.
+                      onRun: (answer: unknown, options?: unknown) =>
+                        runCodeImage({
+                          student: item.student as CodeImageStudent,
+                          answer: answer as CodeImageAnswer,
+                          backend: () => simulateAnswer(initial.attempt.id, item.id, answer),
+                          options: options as
+                            | { onStage?: (stage: CodeRunStage) => void }
+                            | undefined,
+                        }),
                     }
                   : {})}
               />

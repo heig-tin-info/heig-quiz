@@ -23,9 +23,11 @@ export const ANSWER_SUMMARY_MAX = 24;
 /**
  * The four types of the MVP (PLAN-MVP §0), plus `circuit` — the two-port
  * schematic of docs/spec/04 §4.11, brought forward from phase 3 with a
- * simulation path (`packages/qt-circuit`).
+ * simulation path (`packages/qt-circuit`) — and `codeimage`, the variant of
+ * `code` judged by the picture its program prints (§4.9, ADR-021), which
+ * lives inside `packages/qt-code`.
  */
-export const QUESTION_TYPE_IDS = ["mcq", "short", "cloze", "code", "circuit"] as const;
+export const QUESTION_TYPE_IDS = ["mcq", "short", "cloze", "code", "circuit", "codeimage"] as const;
 export type QuestionTypeId = (typeof QUESTION_TYPE_IDS)[number];
 
 export function isQuestionTypeId(id: string): id is QuestionTypeId {
@@ -194,6 +196,15 @@ export function tallyKeys(keys: Iterable<string>): [string, number][] {
   return [...counts.entries()];
 }
 
+/**
+ * One problem {@link QuestionTypeServer.publicationIssues} found: a zod-like
+ * path into the config and a translatable message key.
+ */
+export interface PublicationIssue {
+  path: (string | number)[];
+  message: string;
+}
+
 // ---------------------------------------------------------------------------
 // QuestionTypeServer
 // ---------------------------------------------------------------------------
@@ -237,6 +248,24 @@ export interface QuestionTypeServer<
    * when nothing has been written yet.
    */
   emptyDraft(): TConfig;
+
+  /**
+   * What PUBLICATION requires beyond `configSchema` (decision D16).
+   *
+   * `configSchema` is the gate of USE: a config that passes it can be
+   * previewed, tried, graded and rendered. Some requirements only matter to
+   * a question handed to students, and enforcing them in the schema would
+   * forbid the very step that fulfils them — a `codeimage` draft has no
+   * target until its reference is TRIED, and `POST /questions/:id/try`
+   * parses with `configSchema`. Those checks live here: the API runs them
+   * on publication (refusing with the same issues as a failed parse) and
+   * reports them with the draft's own issues, never on a read.
+   *
+   * `config` has passed `configSchema`. An empty list, or no hook, means
+   * "publishable". The message is a key the editor translates
+   * (`codeimage.target_missing`), exactly like a schema message.
+   */
+  publicationIssues?(config: TConfig): PublicationIssue[];
 
   /** Raise an old stored config to `configVersion`. Pure, total, never throws on a config it emitted before. */
   migrate(config: unknown, fromVersion: number): TConfig;

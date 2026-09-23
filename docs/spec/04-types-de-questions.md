@@ -219,11 +219,45 @@ config:
 
 **Scoring**: `grade` returns `pending: 'llm'`. The LLM service receives the statement, the rubric, the reference, the anonymised answer, and must reply in JSON: points per criterion, short justification per criterion, confidence `low` / `medium` / `high`. The teacher validates in the grading panel. Without a configured provider, grading is manual with the rubric as the form.
 
-## 4.9 CodeImage `codeimage`, phase 3
+## 4.9 Code image `codeimage`
 
-Extension of `code`. The program writes to stdout an image in binary PPM `P6` format, with dimensions imposed by the question, 300 × 300 by default. This protocol is language-independent and fits in ten lines in every language. The question provides the expected image, produced by the teacher's solution run in the runner.
+A variant of `code` (ADR-021): the same program, judged by the **picture it prints** instead of by test cases. It lives inside `packages/qt-code` (`src/image/`), registered as its own type beside `code`. Brought forward from phase 3.
 
-Player: obtained image on the right, toggle to the expected image, difference view as an overlay with a slider, similarity percentage. Scoring: percentage of pixels equal within a per-channel tolerance, configurable point thresholds, e.g. 100 % of the points from 98 % similarity.
+**Configuration**:
+
+```yaml
+config:
+  prompt: markdown
+  language: c            # the languages of `code`
+  runtime: backend       # backend (default) or runno, exactly as `code`
+  template: |            # locked regions with @@lock / @@endlock, as `code`
+    ...
+  referenceSolution: |   # the editable regions, split by @@next, as `code`
+    ...
+  files: []              # as `code`
+  compileArgs: "-Wall"
+  limits: { timeMs: 2000, memoryMb: 128, outputKb: 128 }   # outputKb defaults to 128 here
+  runsPerMinute: 10
+  image: { width: 16, height: 16, palette: bw }   # sides 3..128; bw, color16 or gray256
+  target:                # the picture to draw; null in a fresh draft
+    { width: 16, height: 16, palette: bw, pixels: "0101…" }   # compact encoding below
+```
+
+- **Everything about the program is `code`'s**: languages, template and locked regions, the reference solution split by `@@next`, `runtime`, limits, extra files, compiler flags, the rebuild of the source from the stored template (invariant 14). There are no test cases and no `action`: the program is always compiled and run, once, with an empty stdin and no command line.
+- **The output protocol**: the program prints `width × height` integers on stdout, separated by any whitespace (spaces, tabs, newlines), read row-major from the top left. Line structure does not matter.
+- **Palettes**: `bw` 0..1 (0 black, 1 white), `color16` 0..15 (a **pastel** version of the sixteen classic CGA/VGA colours, in their classic index order, defined once as `PASTEL_16`), `gray256` 0..255 (grey levels, 0 black).
+- **Reading the output** is one pure function (`parseImageOutput`), shared by the grader and the player: the first `width × height` tokens are the pixels; a token that is not an integer, or is outside the palette's range, is an **invalid** pixel; pixels the output never reached are **missing**; tokens after the last pixel are ignored and counted as **extra**. Invalid and missing pixels are always wrong. Each of the three produces a warning shown to the student.
+- **The target** is captured by the teacher: in the editor, "Try the reference solution" runs it — in the browser for `runtime: runno`, else through `POST /questions/:id/try`, whose grading details carry the image — shows the picture it draws, and **"Use as target"** copies it into `config.target`. A canonical file may also write it by hand. The target stores the size and palette it was captured under beside its pixels: the pixel count alone cannot tell a 4 × 3 target from a 3 × 4 one. A draft may lack it (decision D16); publication refuses a missing target (`codeimage.target_missing`), one captured for another size or palette (`codeimage.target_size`) or with a value outside the palette (`codeimage.target_value`). These are publication checks (`publicationIssues`), not schema ones: "try" and "preview" accept a draft without a fitting target, and a target that no longer fits the image (after a resize or a palette change) reads as no target everywhere.
+- **The compact encoding** of an image, used for the target and for the computed image in the grading details: one lowercase hex digit per pixel for `bw` and `color16`, two for `gray256`, row-major; `x` (or `xx`) marks an invalid or missing pixel in a computed image. A 128 × 128 target is 16 KiB of text (32 KiB in grey levels) rather than a 16 384-entry JSON array.
+- **Grading**: `points × matching pixels / total pixels`, rounded to two decimals (`@quiz/domain/round`). The two-phase runner pattern of `code`: `grade` returns `pending: runner` with one run, `finalizeRunner` is pure. **Stdout is graded whatever the run's end** — a non-zero exit, a timeout, a crash or an out-of-memory kill after half the image still earns the matching half. Only a compile failure scores zero by itself; no answer and an unavailable runner are handled as for `code`.
+- **Player**: the code editor of `code` (Monaco, locked regions stacked), a **Run** button — in the browser or on the server, the same rule as `code`; the server path is the generic `POST /attempts/:id/simulate` through the type's `interactiveRequest`, budgeted by `runsPerMinute` — and the image area:
+    - a **view** toggle, Target | Computed | Difference: the difference paints each cell green where the student's pixel equals the target, red otherwise;
+    - a **layout** toggle, Single | Side by side: side by side shows the computed image on the left and, on the right, the target or the difference (the view toggle picks it); the two stack on a narrow screen;
+    - the grid has square cells and a very light line between them while the cells are large enough to carry one; it is drawn on a `<canvas>` (up to 16 384 cells, no element per cell);
+    - "x / y pixels correct (z %)", the warnings, and how the run ended. Before the first run the computed image is an empty placeholder. Every run replaces it.
+- **What `toStudent` strips** (invariant 4): the reference solution, `compileArgs`, the content of the extra files. **The target is published on purpose**: it is the picture to draw, like a visible case of `code`.
+- **Answer**: `{ regions[] }`, as `code`.
+- **Points**: `defaultPoints` proposes 1. The class debrief shows the distribution of pixel accuracy (100 %, 90–99 %, 50–89 %, 1–49 %, 0 %).
 
 ## 4.10 Drawing `drawing`, phase 3
 

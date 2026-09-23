@@ -23,6 +23,7 @@ import {
   RC_STUDENT,
   ngspiceOutcome,
 } from "./pool";
+import { codeimageConfig, codeimageRunOutcome, codeimageStudentView } from "./codeimage";
 
 // --- 4. The student: home, lobby and player (WP9) --------------------------
 //
@@ -205,6 +206,13 @@ const studentPayloads: Record<number, unknown> = {
     showExpected: false,
     simulationsPerMinute: 10,
   },
+  /*
+   * The `codeimage` item (ADR-021): the pool question's student view — the
+   * target travels, the reference solution does not. Its runtime is the
+   * server's, so "Run" goes through `POST /attempts/:id/simulate` below and
+   * draws the mock's own picture of the student's attempt.
+   */
+  6: codeimageStudentView(codeimageConfig()),
 };
 
 /** The attempt's mutable half: what the student typed, and where they are. */
@@ -266,14 +274,24 @@ export const studentAttemptView = (): AttemptView => ({
     pausedAt: scene === "paused" ? iso(-30_000) : null,
     totalPoints: 10,
   },
-  items: (scene === "single" ? [1] : [1, 2, 3, 4, 5]).map((n) => {
+  items: (scene === "single" ? [1] : [1, 2, 3, 4, 5, 6]).map((n) => {
     const stored = studentAnswers.get(studentItem(n));
     return {
       id: studentItem(n),
       position: n,
       points: n === 4 ? 5 : n === 5 ? 3 : n === 3 ? 1 : 2,
       type:
-        n === 1 ? "mcq" : n === 2 ? "cloze" : n === 3 ? "short" : n === 4 ? "code" : "circuit",
+        n === 1
+          ? "mcq"
+          : n === 2
+            ? "cloze"
+            : n === 3
+              ? "short"
+              : n === 4
+                ? "code"
+                : n === 5
+                  ? "circuit"
+                  : "codeimage",
       milestone: n === 3,
       student: studentPayloads[n],
       answer: stored?.payload ?? null,
@@ -429,10 +447,15 @@ on("POST", "/app/api/attempts/:id/events", () => undefined);
  * `?slow=1` already delays every call, which is the running state.
  */
 let simulationsSpent = 0;
-on("POST", "/app/api/attempts/:id/simulate", (): unknown => {
+on("POST", "/app/api/attempts/:id/simulate", (_m, body): unknown => {
   if (flags.fail) throw new MockError(503, "runner_unavailable");
   simulationsSpent += 1;
   if (simulationsSpent > 3) throw new MockError(429, "rate_limited");
+  // The same generic route runs a `codeimage` program (ADR-021): the raw
+  // outcome of one run, whose stdout is the picture.
+  if ((body as { itemId?: string } | undefined)?.itemId === studentItem(6)) {
+    return codeimageRunOutcome();
+  }
   return ngspiceOutcome(1);
 });
 

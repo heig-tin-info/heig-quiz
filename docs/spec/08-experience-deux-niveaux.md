@@ -19,7 +19,7 @@ The platform serves two profiles of teachers with the same interface. The novice
 | Not knowing the question types | "New question" screen with four illustrated cards: choice, short answer, fill in the blanks, code. The advanced types under "More". |
 | Create an MCQ quickly | "Paste an MCQ": the teacher pastes a text with lines `A)`, `B)`, `*C)` or `- [x]`, the platform recognises the statement, the choices and the correct answer. |
 | Get the correct answer and the explanation | **Generate the answer** button in every editor: the LLM ticks the correct choices, fills in the expected answer, or writes the reference solution for a code question, then writes the explanation. The proposals appear highlighted, with accept or reject. |
-| Create test cases without writing a test | For a code question: enter inputs, click "Compute the expected outputs", which runs the reference solution in the runner and fills in the outputs. For `codeimage`, the expected image is produced the same way. |
+| Create test cases without writing a test | For a code question: enter inputs, click "Compute the expected outputs", which runs the reference solution in the runner and fills in the outputs. For `codeimage`, "Try the reference solution" draws the image and "Use as target" makes it the target, no pixel is ever typed. |
 | Check that the question works | "Try" tab in the editor: the teacher answers as a student would and sees the grading. No publication without a successful try, non-blocking reminder. |
 | Configure a quiz without mistakes | Three screens: pick the questions, set the time, start. Named presets: "Graded quiz 20 min", "Exercise of the week", "Poll". Everything else under "Advanced options". |
 | Understand a setting | Every option has a help sentence under its label, not a tooltip. |
@@ -80,7 +80,7 @@ The actions are provided by the mounted screens, through a command registry in `
 - **Generate a quiz**: duration, tags, difficulty, and the platform composes a draft evaluation from the answer-time statistics. Phase 3.
 - **Session code and QR code** to join a poll or a classroom from a phone.
 - **Projection view** without names: presence ring in the waiting room, live distribution for a poll, completion rate during a quiz.
-- **Image difference** for `codeimage`, comparison slider and percentage.
+- **Image difference** for `codeimage`: the target, the student's image and a green / red difference, one grid or two side by side, with the share of correct pixels.
 - **Attempt history** for support: reconstruction of the sequence of revisions of an answer with server timestamps.
 - **Preview of five instantiations** for a question with random values, with a "freeze" button.
 - **Statistics in the pool**: on a question's card, success rate and average time per version, to pick the right question at a glance.

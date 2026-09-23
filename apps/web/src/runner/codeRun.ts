@@ -1,5 +1,6 @@
 /**
- * Turning a `code` question into a `RunnerRequest`, for either runner.
+ * Turning a program question — `code`, or `codeimage` (ADR-021) — into a
+ * `RunnerRequest`, for either runner.
  *
  * The browser runner needs the whole program, and the student's view already
  * carries it: the locked segments are the teacher's text, the editable ones
@@ -20,15 +21,32 @@
  */
 import { assembleSource as assembleFromTemplate } from "@quiz/domain";
 import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
-import type { CodeAnswer, CodeConfig, CodeRunOptions, CodeStudent } from "@quiz/qt-code/client";
+import {
+  IMAGE_CASE,
+  type CodeAnswer,
+  type CodeConfig,
+  type CodeImageAnswer,
+  type CodeImageConfig,
+  type CodeImageStudent,
+  type CodeRunOptions,
+  type CodeRunStage,
+  type CodeStudent,
+  type ProgramConfig,
+  type ProgramStudent,
+} from "@quiz/qt-code/client";
 
 import { browserCanRun, runWithFallback } from "./index";
 import type { BackendRun, ManualInput } from "./types";
 
+type RunCase = RunnerRequest["cases"][number];
+
+/** The one run of a `codeimage` program: empty stdin, no command line. */
+const IMAGE_CASES: RunCase[] = [{ name: IMAGE_CASE, args: [], stdin: "" }];
+
 export type { ManualInput } from "./types";
 
 /** The program as it stands: the teacher's locked text around the student's. */
-export function assembleSource(student: CodeStudent, regions: readonly string[]): string {
+export function assembleSource(student: ProgramStudent, regions: readonly string[]): string {
   return student.segments
     .map((segment) =>
       segment.kind === "locked" ? segment.text : (regions[segment.index ?? 0] ?? segment.text),
@@ -47,26 +65,42 @@ export function canRunManually(student: CodeStudent): boolean {
   return student.runtime === "runno" && browserCanRun(student.language);
 }
 
-export function codeRunRequest(
-  student: CodeStudent,
-  answer: CodeAnswer,
-  manual?: ManualInput | undefined,
+/**
+ * The browser's request for a student's run, from the program half of the
+ * student view that both `code` and `codeimage` publish: the assembled
+ * program, the extra files by name (empty), the toolchain's own flags.
+ */
+export function studentRunRequest(
+  student: ProgramStudent,
+  regions: readonly string[],
+  cases: RunCase[],
 ): RunnerRequest {
   return {
     language: student.language,
     files: [
-      { name: "main", content: assembleSource(student, answer.regions) },
+      { name: "main", content: assembleSource(student, regions) },
       ...student.filesPreview.map((f) => ({ name: f.name, content: "" })),
     ],
     compileArgs: "",
     action: "run",
     limits: student.limits,
-    cases:
-      manual === undefined
-        ? student.visibleCases.map((c) => ({ name: c.name, args: c.args ?? [], stdin: c.stdin }))
-        : [{ name: "manual", args: manual.args, stdin: manual.stdin }],
+    cases,
     priority: "interactive",
   };
+}
+
+export function codeRunRequest(
+  student: CodeStudent,
+  answer: CodeAnswer,
+  manual?: ManualInput | undefined,
+): RunnerRequest {
+  return studentRunRequest(
+    student,
+    answer.regions,
+    manual === undefined
+      ? student.visibleCases.map((c) => ({ name: c.name, args: c.args ?? [], stdin: c.stdin }))
+      : [{ name: "manual", args: manual.args, stdin: manual.stdin }],
+  );
 }
 
 /**
@@ -90,11 +124,55 @@ export async function runCode(args: {
 }): Promise<RunnerOutcome | "unavailable"> {
   const manual = args.options?.manual;
   const request = codeRunRequest(args.student, args.answer, manual);
-  return runWithFallback(request, {
+  return runWithFallback<never>(request, {
     runtime: args.student.runtime,
     backend: () => args.backend(manual),
     hooks: args.options?.onStage === undefined ? undefined : { onStage: args.options.onStage },
   });
+}
+
+/**
+ * A `codeimage` student's "Run", whichever runner serves it — the same rule
+ * as `runCode` (ADR-015). The backend is `POST /attempts/:id/simulate`, which
+ * rebuilds the program from the stored template (invariant 14); it may also
+ * answer `"rate_limited"`, the per-attempt budget, which the player words.
+ */
+export async function runCodeImage(args: {
+  student: CodeImageStudent;
+  answer: CodeImageAnswer;
+  backend: () => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
+  options?: { onStage?: ((stage: CodeRunStage) => void) | undefined } | undefined;
+}): Promise<RunnerOutcome | "unavailable" | "rate_limited"> {
+  return runWithFallback<"rate_limited">(studentRunRequest(args.student, args.answer.regions, IMAGE_CASES), {
+    runtime: args.student.runtime,
+    backend: args.backend,
+    hooks: args.options?.onStage === undefined ? undefined : { onStage: args.options.onStage },
+  });
+}
+
+/**
+ * The teacher's request, from the whole config: the teacher's flags and the
+ * real content of the extra files travel, because the editor holds the
+ * config itself. Shared by both program types' "try" buttons.
+ */
+function teacherRunRequest(
+  config: ProgramConfig,
+  regions: readonly string[],
+  cases: RunCase[],
+  action: "check" | "run",
+): RunnerRequest {
+  return {
+    language: config.language,
+    files: [
+      { name: "main", content: assembleFromTemplate(config.template, config.language, regions) },
+      ...config.files.map((file) => ({ name: file.name, content: file.content })),
+    ],
+    compileArgs: config.compileArgs,
+    action,
+    limits: config.limits,
+    cases,
+    priority: "interactive",
+  };
 }
 
 /**
@@ -119,16 +197,18 @@ export function referenceRunRequest(
   config: CodeConfig,
   regions: readonly string[],
 ): RunnerRequest {
-  return {
-    language: config.language,
-    files: [
-      { name: "main", content: assembleFromTemplate(config.template, config.language, regions) },
-      ...config.files.map((file) => ({ name: file.name, content: file.content })),
-    ],
-    compileArgs: config.compileArgs,
-    action: config.action,
-    limits: config.limits,
-    cases: config.tests.cases.map((c) => ({ name: c.name, args: c.args, stdin: c.stdin })),
-    priority: "interactive",
-  };
+  return teacherRunRequest(
+    config,
+    regions,
+    config.tests.cases.map((c) => ({ name: c.name, args: c.args, stdin: c.stdin })),
+    config.action,
+  );
+}
+
+/** The teacher's try of a `codeimage` reference: one run, always a run (a picture must be drawn). */
+export function imageReferenceRunRequest(
+  config: CodeImageConfig,
+  regions: readonly string[],
+): RunnerRequest {
+  return teacherRunRequest(config, regions, IMAGE_CASES, "run");
 }

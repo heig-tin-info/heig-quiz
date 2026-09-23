@@ -152,6 +152,17 @@ const DRAFT_COMPLETIONS: Record<string, (draft: unknown) => unknown> = {
       },
     };
   },
+  /*
+   * `codeimage`'s draft has no target, which no filler can turn into a
+   * picture (one hex digit per cell, with its own dimensions). The target is PUBLISHED on purpose — it
+   * is what the student must draw — so it is not sown; the reference solution
+   * is, like `code`'s.
+   */
+  codeimage: (draft) => {
+    const config = draft as { image: { width: number; height: number; palette: string } };
+    const { width, height } = config.image;
+    return { ...config, target: { ...config.image, pixels: "0".repeat(width * height) } };
+  },
 };
 
 function filledDraft(type: AnyQuestionTypeServer): unknown {

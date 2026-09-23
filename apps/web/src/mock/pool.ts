@@ -54,6 +54,7 @@ import {
 import {
   me,
 } from "./session";
+import { codeimageConfig, codeimageStudentView, codeimageTryDetails } from "./codeimage";
 
 // --- 2. Pools, categories, questions (WP7) --------------------------------
 //
@@ -78,7 +79,7 @@ interface MockVersion {
 export interface MockQuestion {
   id: string;
   poolId: string;
-  type: "mcq" | "short" | "cloze" | "code" | "circuit";
+  type: "mcq" | "short" | "cloze" | "code" | "circuit" | "codeimage";
   internalName: string;
   categoryId: string | null;
   difficulty: number;
@@ -949,6 +950,25 @@ export const questions: MockQuestion[] = [
     ]),
     explanation: "Chaque ordre ajoute -20 dB/décade ; le second ordre en donne -40.",
   }),
+  /*
+   * The `codeimage` question (ADR-021), unpublished so the evaluations built
+   * from the published questions stay as they are. Its target is set: the
+   * editor shows it, and "Try the reference solution" answers through
+   * `tryAnswer` with the picture the reference draws. Last in the list, so
+   * the ids of the questions above do not move.
+   */
+  makeQuestion({
+    poolId: "p1",
+    type: "codeimage",
+    internalName: "carres-concentriques",
+    categoryId: "k4",
+    difficulty: 2,
+    shuffleable: false,
+    randomizable: false,
+    tags: ["boucles", "image"],
+    config: codeimageConfig(),
+    explanation: "La distance au bord le plus proche est min(x, y, 15 − x, 15 − y).",
+  }),
 ];
 
 /**
@@ -1267,6 +1287,8 @@ export function studentView(q: MockQuestion, config: Record<string, unknown>): u
         simulationsPerMinute: config.simulationsPerMinute ?? 10,
       };
     }
+    case "codeimage":
+      return codeimageStudentView(config);
     case "code": {
       const cases = ((config.tests as { cases?: CodeCaseLike[] })?.cases ?? []) as CodeCaseLike[];
       const visible = cases.filter((c) => c.visible);
@@ -1383,6 +1405,12 @@ export function solutionOf(q: MockQuestion): unknown {
         compare: tests.compare,
       };
     }
+    case "codeimage":
+      return {
+        referenceSolution: String(config.referenceSolution ?? ""),
+        image: config.image,
+        target: config.target,
+      };
     case "circuit":
       return {
         reference: config.reference ?? null,
@@ -1399,6 +1427,22 @@ export function tryAnswer(
   evaluationPolicy: McqScorePolicy | null = null,
 ): unknown {
   if (q.type === "code") return { status: "runner_unavailable", reason: "not_configured" };
+  /*
+   * `codeimage` answers the picture its reference draws — which is what the
+   * editor's "Use as target" needs to be looked at in the mock. A student
+   * answer tried from the preview gets the same picture: the mock has no
+   * compiler to run what was typed.
+   */
+  if (q.type === "codeimage") {
+    const details = codeimageTryDetails(config);
+    return {
+      status: "graded",
+      points: Math.round((details.matching / details.pixelCount) * 100) / 100,
+      maxPoints: 1,
+      details,
+      solution: solutionOf(q),
+    };
+  }
   /*
    * `circuit` does NOT answer `runner_unavailable`: the mock has a real
    * ngspice transient to hand, so the teacher's "Simulate the reference" and
@@ -1843,6 +1887,8 @@ export function emptyConfig(type: MockQuestion["type"]): Record<string, unknown>
           return { configVersion: 2, text: "", caseSensitive: false, shuffleOptions: true };
     case "code":
       return codeConfig("", "", [{ name: "", stdin: "", expected: "", visible: true }]);
+    case "codeimage":
+      return { ...codeimageConfig(), prompt: "", template: "", referenceSolution: "", target: null };
     case "circuit":
       return {
         configVersion: 1,

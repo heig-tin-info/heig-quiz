@@ -207,3 +207,12 @@ export {
   type CaseSpec,
   type CaseVerdict,
 } from "./verdict.js";
+/*
+ * `codeimage` (docs/spec/04 §4.9, ADR-021): a variant of `code` that lives
+ * in this package — the same program half, judged by a picture instead of
+ * cases. The registry wires it beside `codeServer`.
+ */
+export { codeimageServer } from "./image/server.js";
+export { finalizeRunnerCodeImage } from "./image/grade.js";
+export { CodeImageConfig, CodeImageDetails } from "./image/schema.js";
+export { countCorrect, decodeImage, encodeImage, parseImageOutput } from "./image/pixels.js";

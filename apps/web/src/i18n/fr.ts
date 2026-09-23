@@ -596,6 +596,8 @@ export const fr: Record<keyof Dict, string> = {
   "qt.code.hint": "Un programme corrigé par des cas de test.",
   "qt.circuit.label": "Circuit",
   "qt.circuit.hint": "Un quadripôle à câbler depuis une palette.",
+  "qt.codeimage.label": "Code image",
+  "qt.codeimage.hint": "Un programme qui dessine une grille de pixels.",
   "qt.loading": "Chargement de l'éditeur…",
   "qt.unknown": "Ce type de question n'est pas disponible dans cette version.",
 
@@ -869,6 +871,72 @@ export const fr: Record<keyof Dict, string> = {
   "qt.code.r.referenceSolution": "Solution de référence",
   "qt.code.r.yourCode": "Votre code",
 
+  // --- qt-code : codeimage (ADR-021) ---
+  "qt.codeimage.e.referenceSolutionHint":
+    "Votre propre réponse aux parties modifiables, dans l'ordre où elles apparaissent — s'il y en a plusieurs, séparez les morceaux par une ligne de commentaire @@next, exactement comme le modèle utilise @@lock. Le bouton ci-dessous l'exécute et dessine son image, que vous pouvez ensuite utiliser comme cible. Un étudiant ne la voit jamais.",
+  "qt.codeimage.e.imageSection": "Image",
+  "qt.codeimage.e.imageHint":
+    "Le programme écrit largeur × hauteur entiers sur sa sortie standard, séparés par des espaces, des tabulations ou des retours à la ligne, ligne par ligne depuis le coin supérieur gauche. Ce sont les pixels.",
+  "qt.codeimage.e.width": "Largeur",
+  "qt.codeimage.e.height": "Hauteur",
+  "qt.codeimage.e.sizeHint": "De {min} à {max} cellules par côté.",
+  "qt.codeimage.e.palette": "Palette",
+  "qt.codeimage.e.paletteBw": "Noir et blanc (0–1)",
+  "qt.codeimage.e.paletteColor16": "16 couleurs (0–15)",
+  "qt.codeimage.e.paletteGray256": "Niveaux de gris (0–255)",
+  "qt.codeimage.e.target": "Cible",
+  "qt.codeimage.e.targetHint":
+    "Ce que l'étudiant doit dessiner. Elle lui est montrée à côté de sa propre image.",
+  "qt.codeimage.e.targetEmpty":
+    "Pas encore de cible : essayez la solution de référence, puis utilisez son image comme cible.",
+  "qt.codeimage.e.targetInvalid":
+    "La cible ne correspond plus à la taille ou à la palette. Essayez à nouveau la solution de référence et utilisez son image.",
+  "qt.codeimage.e.referenceImage": "L'image de la solution de référence",
+  "qt.codeimage.e.useAsTarget": "Utiliser comme cible",
+  "qt.codeimage.e.targetSet": "Cette image est la cible.",
+  "qt.codeimage.e.tryMatch": "{matching} pixels sur {total} correspondent à la cible actuelle.",
+  "qt.codeimage.e.tryDrawn": "La solution de référence a dessiné son image.",
+  "qt.codeimage.e.tryIncomplete":
+    "L'image a des pixels invalides ou manquants : elle ne peut pas servir de cible. Corrigez la solution de référence et réessayez.",
+  "qt.codeimage.e.tryStale":
+    "La taille ou la palette a changé depuis cette exécution. Essayez à nouveau la solution de référence.",
+  "qt.codeimage.p.imageSection": "Image",
+  "qt.codeimage.p.runHint":
+    "Exécute votre programme une fois et dessine les {count} entiers qu'il écrit, ligne par ligne. Rien n'est noté ici ; le serveur corrige votre code final.",
+  "qt.codeimage.p.view": "Vue",
+  "qt.codeimage.p.viewTarget": "Cible",
+  "qt.codeimage.p.viewComputed": "Calculée",
+  "qt.codeimage.p.viewDiff": "Différence",
+  "qt.codeimage.p.layout": "Disposition",
+  "qt.codeimage.p.layoutSingle": "Seule",
+  "qt.codeimage.p.layoutSplit": "Côte à côte",
+  "qt.codeimage.p.targetImage": "Image cible",
+  "qt.codeimage.p.computedImage": "Votre image",
+  "qt.codeimage.p.diffImage": "Différence avec la cible",
+  "qt.codeimage.p.notRunYet": "Exécutez votre programme pour voir son image.",
+  "qt.codeimage.p.noTarget": "Aucune cible n'a encore été définie pour cette question.",
+  "qt.codeimage.p.pixelScore": "{matching} / {total} pixels corrects ({percent} %)",
+  "qt.codeimage.p.diffOk": "Correct",
+  "qt.codeimage.p.diffWrong": "Faux",
+  "qt.codeimage.p.legend": "Couleurs",
+  "qt.codeimage.p.warningExtra": "{count} valeurs après le dernier pixel ont été ignorées.",
+  "qt.codeimage.p.warningExtra.one": "1 valeur après le dernier pixel a été ignorée.",
+  "qt.codeimage.p.warningMissing": "La sortie s'est arrêtée {count} pixels avant la fin de l'image.",
+  "qt.codeimage.p.warningMissing.one": "La sortie s'est arrêtée 1 pixel avant la fin de l'image.",
+  "qt.codeimage.p.warningInvalid":
+    "{count} valeurs ne sont pas des entiers de la palette ; elles sont hachurées et comptent comme fausses.",
+  "qt.codeimage.p.warningInvalid.one":
+    "1 valeur n'est pas un entier de la palette ; elle est hachurée et compte comme fausse.",
+  "qt.codeimage.p.endTimedOut":
+    "Le programme a dépassé le temps imparti. L'image montre ce qu'il a écrit avant.",
+  "qt.codeimage.p.endOutOfMemory":
+    "Le programme a dépassé la mémoire. L'image montre ce qu'il a écrit avant.",
+  "qt.codeimage.p.endCrashed": "Le programme a planté. L'image montre ce qu'il a écrit avant.",
+  "qt.codeimage.p.endTruncated": "La sortie a été coupée à la limite de taille.",
+  "qt.codeimage.p.rateLimited":
+    "Trop d'exécutions en une minute. Attendez un instant, puis exécutez à nouveau.",
+  "qt.codeimage.r.noImage": "Le programme n'a écrit aucune image.",
+
   // --- qt-circuit ---
   // The component kinds, keyed by `ComponentKind`: the same word labels a
   // palette chip, a symbol on the canvas and a diagnostic in a review.
@@ -1134,6 +1202,11 @@ export const fr: Record<keyof Dict, string> = {
   "issue.short.length_range": "La longueur maximale est inférieure à la longueur minimale.",
   "issue.short.number_range": "Le maximum est inférieur au minimum.",
   "issue.short.date_range": "Le dernier jour précède le premier.",
+  "issue.codeimage.target_missing":
+    "Pas encore de cible : essayez la solution de référence et utilisez son image comme cible.",
+  "issue.codeimage.target_size":
+    "La cible a été capturée pour une autre taille ou une autre palette. Essayez à nouveau la solution de référence et utilisez son image.",
+  "issue.codeimage.target_value": "La cible contient une valeur hors de la palette.",
   // --- Development gallery (/dev/ui) ---
   "dev.ui.title": "Galerie UI",
   "dev.ui.subtitle": "Chaque primitive du direct dans chaque état, pour le contrôle visuel.",

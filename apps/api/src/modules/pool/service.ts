@@ -79,6 +79,9 @@ import { userTopic } from "../realtime/bus.js";
 import { poolPeopleChanged } from "./events.js";
 import {
   loadConfig,
+  NotPublishable,
+  publicationIssuesOf,
+  publishConfig,
   saveConfig,
   saveDraftConfig,
   searchTextOf,
@@ -1266,7 +1269,8 @@ function draftJson(type: string, row: VersionRecord): QuestionDraft {
     explanation: row.explanation,
     configVersion: row.configVersion,
     updatedAt: row.updatedAt.toISOString(),
-    valid: outcome.ok,
+    // "Valid" means publishable, the flag the editor's Publish button reads.
+    valid: outcome.ok && publicationIssuesOf(type, outcome.config).length === 0,
   };
 }
 
@@ -1330,10 +1334,11 @@ export async function createQuestion(
  * It is born PUBLISHED — version 1, no draft — because the only thing that
  * will ever read it is the poll that freezes that version, and a draft is
  * something to come back to. The configuration goes through the type's own
- * schema (`saveConfig`), the same gate as a publication with ONE exception:
- * the key is optional (`keyOptional`, the type's `keylessConfigSchema`), for
- * a poll may ask an opinion. A refusal is `DraftInvalid` with the zod
- * issues, for the launcher to place under its fields.
+ * schema and its publication checks (`publishConfig`), the same gate as a
+ * publication with ONE exception: the key is optional (`keyOptional`, the
+ * type's `keylessConfigSchema`), for a poll may ask an opinion. A refusal is
+ * `DraftInvalid` with the zod issues, for the launcher to place under its
+ * fields.
  *
  * It lives HERE because `questions` and `question_versions` are this
  * module's tables. Nothing reaches it afterwards but its evaluation item: no
@@ -1346,9 +1351,9 @@ export async function createUnsavedQuestion(
   const t = typeOf(input.type);
   let config: ReturnType<typeof saveConfig>;
   try {
-    config = saveConfig(input.type, input.config, { keyOptional: true });
+    config = publishConfig(input.type, input.config, { keyOptional: true });
   } catch (error) {
-    throw new DraftInvalid(issuesOf(error));
+    throw new DraftInvalid(error instanceof NotPublishable ? error.issues : issuesOf(error));
   }
   const internalName = unsavedName(input.type, config.config);
   const questionId = randomUUID();
@@ -1563,9 +1568,9 @@ export async function publishQuestion(
     // validation to.
     let config: unknown;
     try {
-      config = saveConfig(question.type, loadConfig(question.type, draft)).config;
+      config = publishConfig(question.type, loadConfig(question.type, draft)).config;
     } catch (error) {
-      throw new DraftInvalid(issuesOf(error));
+      throw new DraftInvalid(error instanceof NotPublishable ? error.issues : issuesOf(error));
     }
     const configVersion = typeOf(question.type).configVersion;
     const searchText = searchTextOf(question.type, question.internalName, config);

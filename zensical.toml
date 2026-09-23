@@ -62,6 +62,7 @@ nav = [
       { "ADR-014 Live polls" = "adr/ADR-014-sondages-en-direct.md" },
       { "ADR-015 Browser run, server grade" = "adr/ADR-015-execution-navigateur-correction-serveur.md" },
       { "ADR-016 Runner on a separate VM" = "adr/ADR-016-runner-sur-vm-separee.md" },
+      { "ADR-021 Code image, a variant of code" = "adr/ADR-021-codeimage-variante-de-code.md" },
     ] },
     { "MVP plan" = "PLAN-MVP.md" },
     { "API review (2026-09-20)" = "API-REVIEW-2026-09-20.md" },

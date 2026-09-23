@@ -3,10 +3,17 @@ import { AlertTriangle, FlaskConical, Play } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { PreviewResult, TryResult } from "@quiz/contracts";
-import type { CodeAnswer, CodeRunOptions, CodeStudent } from "@quiz/qt-code/client";
+import type {
+  CodeAnswer,
+  CodeImageAnswer,
+  CodeImageStudent,
+  CodeRunOptions,
+  CodeRunStage,
+  CodeStudent,
+} from "@quiz/qt-code/client";
 
 import { api, apiErrorMessage } from "../api";
-import { canRunManually, runCode } from "../runner/codeRun";
+import { canRunManually, runCode, runCodeImage } from "../runner/codeRun";
 import { useT } from "../i18n";
 import { emptyAnswerOf, QuestionPlayerHost, QuestionReviewHost } from "../questionTypes";
 import { Alert, Button, Card, EmptyState, QueryError, SectionHeading, Skeleton } from "../ui";
@@ -119,6 +126,19 @@ export function TryPanel({
                      */
                     backend: async () => "unavailable" as const,
                     options: options as CodeRunOptions | undefined,
+                  }),
+              }
+            : {})}
+          {...(type === "codeimage" && student !== undefined
+            ? {
+                // The same reason as `code`: no route runs a question outside
+                // an attempt, so only the browser runner can draw here.
+                onRun: (value: unknown, options?: unknown) =>
+                  runCodeImage({
+                    student: student as CodeImageStudent,
+                    answer: value as CodeImageAnswer,
+                    backend: async () => "unavailable" as const,
+                    options: options as { onStage?: (stage: CodeRunStage) => void } | undefined,
                   }),
               }
             : {})}

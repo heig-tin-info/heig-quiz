@@ -35,7 +35,7 @@ interface HostPlayerProps extends PlayerProps<unknown, unknown> {
   /** `circuit` only: the canvas ships a dictionary of its own. */
   canvasStrings?: unknown;
   renderMarkdown?: (source: string) => ReactNode;
-  onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable">;
+  onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
   allowManualRun?: boolean;
   onSimulate?: (answer: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
 }
@@ -78,7 +78,7 @@ export function QuestionHost({
   onChange: (next: unknown) => void;
   readOnly: boolean;
   /** Present only for a type that has something to run. */
-  onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable">;
+  onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
   /** `code` only: whether the free stdin box has a runner that will take it. */
   allowManualRun?: boolean;
   /**

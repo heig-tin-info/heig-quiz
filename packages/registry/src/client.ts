@@ -7,7 +7,7 @@
  * Monaco never enters the initial bundle (N-PERF-05).
  */
 import { circuitClient } from "@quiz/qt-circuit/client";
-import { codeClient } from "@quiz/qt-code/client";
+import { codeClient, codeimageClient } from "@quiz/qt-code/client";
 
 import {
   defineClientRegistry,
@@ -29,6 +29,7 @@ export const clientRegistry: Partial<Record<QuestionTypeId, AnyQuestionTypeClien
     cloze: clozeClient,
     code: codeClient,
     circuit: circuitClient,
+    codeimage: codeimageClient,
   });
 
 /** Total lookup; an unregistered id throws `UnknownQuestionType`. */
