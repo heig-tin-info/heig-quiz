@@ -106,7 +106,6 @@ export const attempts = pgTable(
     index("attempts_deadline_idx")
       .on(t.deadlineAt)
       .where(sql`${t.state} = 'in_progress'`),
-    index("attempts_evaluation_idx").on(t.evaluationId),
   ],
 );
 
@@ -130,7 +129,6 @@ export const answers = pgTable(
   },
   (t) => [
     uniqueIndex("answers_attempt_item_uq").on(t.attemptId, t.itemId),
-    index("answers_attempt_idx").on(t.attemptId),
     index("answers_item_idx").on(t.itemId),
   ],
 );
