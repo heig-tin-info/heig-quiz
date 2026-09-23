@@ -416,6 +416,49 @@ describe("AddQuestionsSheet — adding", () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["evaluation", "e1"] });
   });
 
+  /*
+   * The picker is paged since it shares the pool screen's query: a selection
+   * made on page 1 must survive "Load more", and the rows of two pages must
+   * not overlap, or the teacher ticks one question twice.
+   */
+  it("keeps what was ticked on page 1 after loading page 2, and posts both", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    const all = Array.from({ length: 30 }, (_, i) =>
+      row({ id: `q${i + 1}`, internalName: `question-${String(i + 1).padStart(2, "0")}` }),
+    );
+    const { calls } = setup(
+      {
+        ...questions("", ok({ items: all.slice(0, PAGE_SIZE), nextCursor: "c2" })),
+        [`GET /app/api/pools/p1/questions?limit=${PAGE_SIZE}&cursor=c2`]: ok({
+          items: all.slice(PAGE_SIZE),
+          nextCursor: null,
+        }),
+        "POST /app/api/evaluations/e1/items": ok({}),
+      },
+      { onClose },
+    );
+    await screen.findByText("question-01");
+    expect(screen.getAllByRole("listitem")).toHaveLength(PAGE_SIZE);
+
+    await user.click(within(rowOf("question-03")).getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Load more" }));
+    await screen.findByText("question-28");
+    await user.click(within(rowOf("question-28")).getByRole("checkbox"));
+
+    const names = screen.getAllByRole("listitem").map((li) => li.textContent);
+    expect(names).toHaveLength(30);
+    expect(new Set(names).size).toBe(30);
+    expect(within(rowOf("question-03")).getByRole("checkbox")).toBeChecked();
+
+    await user.click(screen.getByRole("button", { name: "Add 2 questions" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(calls.find((c) => c.method === "POST")).toMatchObject({
+      url: "/app/api/evaluations/e1/items",
+      body: { questionIds: ["q3", "q28"] },
+    });
+  });
+
   it("unticks what was ticked", async () => {
     const user = userEvent.setup();
     setup();

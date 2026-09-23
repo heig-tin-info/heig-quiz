@@ -53,7 +53,7 @@ export function AddQuestionsSheet({
   const [poolId, setPoolId] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [type, setType] = useState("");
-  const [difficulty, setDifficulty] = useState("");
+  const [difficulty, setDifficulty] = useState<number | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
 
   const pools = useQuery<PoolSummary[]>({
@@ -71,7 +71,7 @@ export function AddQuestionsSheet({
       ...EMPTY_FILTERS,
       q,
       types: type ? [type] : [],
-      difficulties: difficulty ? [Number(difficulty)] : [],
+      difficulties: difficulty === null ? [] : [difficulty],
     }),
     [q, type, difficulty],
   );
@@ -163,8 +163,8 @@ export function AddQuestionsSheet({
           </Select>
           <Select
             label={t("picker.difficulty")}
-            value={difficulty}
-            onChange={(e) => setDifficulty(e.target.value)}
+            value={difficulty === null ? "" : String(difficulty)}
+            onChange={(e) => setDifficulty(e.target.value === "" ? null : Number(e.target.value))}
             width="w-40"
           >
             <option value="">{t("picker.allDifficulties")}</option>
