@@ -82,6 +82,7 @@ const PAGE: QuestionPage = {
     },
   ],
   nextCursor: null,
+  total: 2,
 };
 
 const moved = (questionIds: string[], targetPoolId: string, linkedCourseIds: string[] = []) =>

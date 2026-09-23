@@ -42,9 +42,9 @@ import type { QuestionSort, SortDir } from "./filters";
  * `useSortableTable`: the list is paginated, and a page sorted in the browser
  * sorts the rows that happen to be loaded — which is the wrong answer written
  * convincingly. The headers therefore only report the click; `PoolView` turns
- * it into a query and restarts the pagination. `type` has no header any more,
- * so it is sorted from the toolbar's Sort control, which is also what the
- * cards use.
+ * it into a query and restarts the pagination. `type` has no header any more
+ * and is not a sort a reader can pick: grouping by type is what orders the
+ * list by it. The cards follow whatever sort the headers set.
  *
  * The last column carries three icon buttons rather than the overflow menu
  * DESIGN.md's "three icon buttons = a menu" rule would ask for: the teacher

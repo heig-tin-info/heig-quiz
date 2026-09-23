@@ -1,4 +1,4 @@
-import { ArrowDownWideNarrow, ArrowUpNarrowWide, LayoutGrid, List, SlidersHorizontal, X } from "lucide-react";
+import { LayoutGrid, List, SlidersHorizontal, X } from "lucide-react";
 import { useMemo, useRef, useState, type ReactNode } from "react";
 
 import { fuzzyFilter } from "../fuzzy";
@@ -9,7 +9,6 @@ import {
   Button,
   ComboboxList,
   ComboboxOption,
-  IconButton,
   SearchInput,
   Segmented,
   Sheet,
@@ -22,7 +21,6 @@ import {
   resolveFilters,
   toggle,
   type QuestionFilters,
-  type QuestionSort,
 } from "./filters";
 import { GROUP_BY, type GroupBy } from "./QuestionGroups";
 import {
@@ -56,21 +54,24 @@ import {
  * carries its own bounds and wraps.
  *
  * The second row is not filtering at all: how the list is DRAWN (cards or
- * table), how it is CUT (group by) and how it is ORDERED. It is one size down,
- * the way the courses page carries its own view switch — those are the
- * reader's habits, not the data's state, and they must not compete with the
- * field above them. The sort control repeats what the table headers do,
- * because the cards have no headers and because `type` lost its column to an
- * icon and has nowhere else to be clicked.
+ * table) and how it is CUT (group by), plus how many questions the search
+ * matches. It is one size down, the way the courses page carries its own view
+ * switch — those are the reader's habits, not the data's state, and they must
+ * not compete with the field above them.
  *
- * All three are `Segmented`, not two selects and a switch. Grouping and
- * sorting are four and five SHORT, known choices: a select hides them behind
- * a click and says nothing until it is opened, while a row of pills shows the
- * whole set and the current one at a glance — which is what a habit control
- * is for. It costs width, so the labels are one word each and the row wraps
- * on a phone; the caption before each track ("Group by", "Sort by") is what
- * keeps two anonymous rows of pills apart, and it is the `aria-label` of the
- * radiogroup as well.
+ * The ORDER has no control here: the table's column headers are what sorts,
+ * and the cards follow the same sort (newest change first until a header is
+ * clicked). A second sort control beside the headers said the same thing
+ * twice, and the teachers asked for it to go.
+ *
+ * The count is the API's `total` — every question the search, the filters
+ * and the category match — and not the rows loaded so far: a list of 25 with
+ * "Load more" under it is still a list of 42.
+ *
+ * Both controls are `Segmented`, not a select and a switch: a row of pills
+ * shows the whole (short, known) set and the current one at a glance, which
+ * is what a habit control is for. The caption before the grouping track is
+ * also the `aria-label` of its radiogroup.
  */
 const DIFFICULTIES = [1, 2, 3, 4, 5];
 
@@ -81,8 +82,6 @@ const TAG_LIMIT = 20;
 const COMPLETION_LIMIT = 8;
 
 export type ListView = "cards" | "list";
-
-const SORT_KEYS: readonly QuestionSort[] = ["updated", "name", "type", "difficulty", "version"];
 
 function Chip({ label, onRemove }: { label: string; onRemove: () => void }) {
   const t = useT();
@@ -284,8 +283,8 @@ export function FilterBar({
   onChange: (next: QuestionFilters) => void;
   /** Every tag used in this pool, as the API reports them. */
   tags: string[];
-  /** How many rows are loaded, for the count beside the chips. */
-  total: number;
+  /** How many questions the search matches (the API's `total`); `null` while unknown. */
+  total: number | null;
   view: ListView;
   onView: (next: ListView) => void;
   group: GroupBy;
@@ -371,28 +370,12 @@ export function FilterBar({
             }))}
           />
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] text-fg-faint">{t("pool.sortBy")}</span>
-          <Segmented
-            name="pool-sort"
-            size="sm"
-            label={t("pool.sortBy")}
-            value={filters.sort}
-            onChange={(sort) => set({ sort })}
-            options={SORT_KEYS.map((key) => ({
-              value: key,
-              label: t(`pool.sort.${key}` as "pool.sort.name"),
-            }))}
-          />
-        </div>
-        <IconButton
-          size="sm"
-          label={t(filters.dir === "asc" ? "pool.sort.asc" : "pool.sort.desc")}
-          onClick={() => set({ dir: filters.dir === "asc" ? "desc" : "asc" })}
-        >
-          {filters.dir === "asc" ? <ArrowUpNarrowWide /> : <ArrowDownWideNarrow />}
-        </IconButton>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-3">
+          {total === null ? null : (
+            <span aria-live="polite" className="text-xs tabular-nums text-fg-faint">
+              {t(total === 1 ? "pool.results.one" : "pool.results", { n: total })}
+            </span>
+          )}
           <Segmented
             name="pool-view"
             size="sm"
@@ -445,9 +428,6 @@ export function FilterBar({
           >
             {t("pool.filter.clear")}
           </button>
-          <span className="ml-auto text-xs tabular-nums text-fg-faint">
-            {t(total === 1 ? "pool.results.one" : "pool.results", { n: total })}
-          </span>
         </div>
       ) : null}
 

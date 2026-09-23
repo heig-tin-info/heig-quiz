@@ -63,7 +63,9 @@ import { poolKey, poolQuestionsKey } from "../queryKeys";
  * 25 rows sorted in the browser sorts the rows that happen to be loaded, and
  * "Load more" would then append a second, differently ordered page under the
  * first. Changing the sort therefore changes the query key, which is what
- * makes TanStack drop the cursor and start again at page one.
+ * makes TanStack drop the cursor and start again at page one. The column
+ * headers of the table are the only sort control; the cards follow the same
+ * sort, which starts on the newest change and lives as long as the screen.
  *
  * A row (and a card) can be DRAGGED onto a pool, or onto a category of the
  * pool being read, in the application sidebar: that MOVES the question there
@@ -271,7 +273,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
             setFilters(next);
           }}
           tags={detail.tags}
-          total={rows.length}
+          total={questions.data?.pages[0]?.total ?? null}
           view={view}
           onView={setView}
           group={group}

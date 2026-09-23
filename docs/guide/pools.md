@@ -62,7 +62,7 @@ Anything else is free text. Several `tag:` words add up, and two `version:` boun
 
 ### Cards, table, grouping and sort
 
-**Group by** splits the list by **Type**, **Tags** or **Category**; a question with three tags appears in each of its three sections. **Sort by** orders it by **Updated**, **Name**, **Type**, **Difficulty** or **Version**, the arrow beside it reverses the order, and a column header does the same for the whole pool. The toggle at the right switches between **Cards** and **List**. These choices are remembered for your next visit.
+**Group by** splits the list by **Type**, **Tags** or **Category**; a question with three tags appears in each of its three sections. Click a column header to sort the whole pool by that column, and click it again to reverse the order; the cards follow the same order, newest change first until you pick another. Beside the toggle that switches between **Cards** and **List**, the count says how many questions your search, filters and category match — all of them, not only those already loaded. The grouping and the view are remembered for your next visit.
 
 ### Row actions and bulk actions
 

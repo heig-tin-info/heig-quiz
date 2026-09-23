@@ -75,9 +75,10 @@ const PAGE: QuestionPage = {
     },
   ],
   nextCursor: null,
+  total: 2,
 };
 
-const EMPTY_PAGE: QuestionPage = { items: [], nextCursor: null };
+const EMPTY_PAGE: QuestionPage = { items: [], nextCursor: null, total: 0 };
 
 function routes(over: Record<string, ReturnType<typeof ok>> = {}) {
   return {
@@ -120,7 +121,53 @@ describe("PoolView", () => {
     mockFetch(routes());
     renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
     await screen.findByText("ptr-arith-01");
-    expect(screen.getByText("2 questions")).toBeInTheDocument();
+    // One in the header (the pool), one above the list (the search).
+    expect(screen.getAllByText("2 questions")).toHaveLength(2);
+  });
+
+  it("counts every question the search matches, not only the loaded page", async () => {
+    mockFetch(
+      routes({
+        "GET /app/api/pools/p1/questions?limit=25": ok({ ...PAGE, nextCursor: "c2", total: 42 }),
+      }),
+    );
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    await screen.findByText("ptr-arith-01");
+    expect(screen.getByText("42 questions")).toBeInTheDocument();
+  });
+
+  it("says one question in the singular", async () => {
+    mockFetch(
+      routes({
+        "GET /app/api/pools/p1/questions?limit=25": ok({
+          items: PAGE.items.slice(0, 1),
+          nextCursor: null,
+          total: 1,
+        }),
+      }),
+    );
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    await screen.findByText("ptr-arith-01");
+    expect(screen.getByText("1 question")).toBeInTheDocument();
+  });
+
+  it("sorts from the column headers only, and the cards keep that sort", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch(
+      routes({ "GET /app/api/pools/p1/questions?sort=name&dir=asc&limit=25": ok(PAGE) }),
+    );
+    renderWithProviders(<PoolView id="p1" navigate={vi.fn()} />);
+    await screen.findByText("ptr-arith-01");
+    expect(screen.queryByRole("radiogroup", { name: "Sort by" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Name" }));
+    await waitFor(() =>
+      expect(calls.some((c) => c.url.endsWith("?sort=name&dir=asc&limit=25"))).toBe(true),
+    );
+    const before = calls.length;
+    await user.click(screen.getByRole("radio", { name: "Cards" }));
+    await screen.findByText("ptr-arith-01");
+    // Switching the view changes the drawing, not the query.
+    expect(calls.slice(before).some((c) => c.url.includes("/questions?limit=25"))).toBe(false);
   });
 
   it("sends the search as a query parameter", async () => {

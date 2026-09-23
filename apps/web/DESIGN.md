@@ -381,7 +381,7 @@ live in `ui/state.ts`, each written once.
 - Segmented: `surface-3` pill track, selected chip raised to `surface`.
   Segmented is ONE choice out of a set small enough to show whole — two or
   three normally, five at most and only with one-word labels (the pool
-  toolbar's "Group by" and "Sort by"); ToggleChip is any number out of many.
+  toolbar's "Group by"); ToggleChip is any number out of many.
   Do not use one for the other's job, and do not reach for a `Select` just
   because there are four options: a select hides the set until it is opened,
   which is the wrong trade for a control the reader sets once and then reads.
