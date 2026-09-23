@@ -1,13 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { PoolTag } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useT } from "../i18n";
 import { useErrorToast } from "../notify";
-import { cx, inputClass, listboxIndex, Tip, Z } from "../ui";
+import { ComboboxList, ComboboxOption, cx, inputClass, Tip, useCombobox } from "../ui";
 import { poolTagsKey } from "../queryKeys";
 
 /**
@@ -48,13 +48,8 @@ export function TagInput({
   const t = useT();
   const qc = useQueryClient();
   const toastError = useErrorToast();
-  const uid = useId();
-  const listId = `${uid}-list`;
-  const optionId = (i: number) => `${uid}-option-${i}`;
 
   const [query, setQuery] = useState("");
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(0);
   /** The tag whose description is being written, under the chips. */
   const [describing, setDescribing] = useState<string | null>(null);
   const [description, setDescription] = useState("");
@@ -90,8 +85,6 @@ export function TagInput({
   const creatable = typed !== "" && !known.some((k) => k.tag === typed) && !tags.includes(typed);
   const rows = suggestions.length + (creatable ? 1 : 0);
 
-  useEffect(() => setActive(0), [typed, open]);
-
   const add = (tag: string, isNew: boolean) => {
     const value = normalize(tag);
     setQuery("");
@@ -111,6 +104,10 @@ export function TagInput({
     else if (creatable) add(typed, true);
   };
 
+  // The list stays open after a pick: a question rarely has only one tag.
+  const combo = useCombobox({ count: rows, onPick: pick, query: typed });
+  const { open, active } = combo;
+
   const saveDescription = () => {
     const tag = describing;
     setDescribing(null);
@@ -126,26 +123,20 @@ export function TagInput({
     if (describing) describeInput.current?.focus();
   }, [describing]);
 
+  // Enter and the comma always ADD, a highlighted row or the typed word, so
+  // they are this field's own keys; the arrows and Escape are the combobox's.
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    const next = listboxIndex(e.key, active, rows);
-    if (next !== null) {
-      e.preventDefault();
-      setOpen(true);
-      setActive(next);
-    } else if (e.key === "Enter" || e.key === ",") {
+    if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
       if (open && rows) pick(active);
       else if (typed) add(typed, !known.some((k) => k.tag === typed));
-    } else if (e.key === "Escape") {
-      if (open) {
-        e.preventDefault();
-        setOpen(false);
-      }
     } else if (e.key === "Backspace" && query === "" && tags.length) {
       // The chip nearest the caret goes first: the field behaves like the
       // text it looks like.
       e.preventDefault();
       onChange(tags.slice(0, -1));
+    } else {
+      combo.inputProps.onKeyDown(e);
     }
   };
 
@@ -158,7 +149,7 @@ export function TagInput({
 
   return (
     <div className="space-y-1.5">
-      <label htmlFor={`${uid}-input`} className="block text-[13px] font-medium text-fg">
+      <label htmlFor={combo.inputId} className="block text-[13px] font-medium text-fg">
         {t("question.meta.tags")}
       </label>
 
@@ -211,14 +202,10 @@ export function TagInput({
 
           <input
             ref={input}
-            id={`${uid}-input`}
+            id={combo.inputId}
             disabled={disabled}
             value={query}
-            role="combobox"
-            aria-expanded={open}
-            aria-controls={listId}
-            aria-activedescendant={open && rows ? optionId(active) : undefined}
-            aria-autocomplete="list"
+            {...combo.inputProps}
             autoComplete="off"
             spellCheck={false}
             // Always shown, chips or not: an empty input with no placeholder
@@ -227,24 +214,15 @@ export function TagInput({
             placeholder={t("question.tag.placeholder")}
             onChange={(e) => {
               setQuery(e.target.value);
-              setOpen(true);
+              combo.setOpen(true);
             }}
-            onFocus={() => setOpen(true)}
-            // A click on an option fires after the blur, so the list is kept
-            // alive long enough for that click to land.
-            onBlur={() => window.setTimeout(() => setOpen(false), 120)}
             onKeyDown={onKeyDown}
             className="h-6 min-w-24 flex-1 bg-transparent text-sm text-fg placeholder:text-fg-faint focus:outline-none"
           />
         </div>
 
         {open && !disabled ? (
-          <div
-            id={listId}
-            role="listbox"
-            aria-label={t("question.tag.suggestions")}
-            className={`absolute left-0 right-0 top-full ${Z.popover} mt-1 max-h-64 overflow-y-auto rounded-menu border border-line bg-surface p-1 shadow-popover`}
-          >
+          <ComboboxList combobox={combo} label={t("question.tag.suggestions")}>
             {vocabulary.isPending ? (
               <p className="px-2.5 py-2 text-[13px] text-fg-faint">{t("common.loading")}</p>
             ) : vocabulary.isError ? (
@@ -260,20 +238,7 @@ export function TagInput({
                 // information that stops a teacher inventing a synonym. The
                 // tooltip carries the rest when it is longer than two lines.
                 <Tip key={suggestion.tag} label={suggestion.description || null} className="block">
-                  <div
-                    id={optionId(index)}
-                    role="option"
-                    aria-selected={isActive}
-                    onMouseMove={() => setActive(index)}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => pick(index)}
-                    className={cx(
-                      "cursor-pointer rounded-field px-2.5 py-1.5 text-sm",
-                      isActive
-                        ? "bg-accent-soft font-semibold text-accent"
-                        : "text-fg-muted hover:bg-surface-2 hover:text-fg",
-                    )}
-                  >
+                  <ComboboxOption combobox={combo} index={index}>
                     <div className="flex items-baseline gap-2">
                       <span className="min-w-0 flex-1 truncate">#{suggestion.tag}</span>
                       <span
@@ -300,28 +265,19 @@ export function TagInput({
                         {suggestion.description}
                       </p>
                     ) : null}
-                  </div>
+                  </ComboboxOption>
                 </Tip>
               );
             })}
 
             {creatable ? (
-              <div
-                id={optionId(suggestions.length)}
-                role="option"
-                aria-selected={active === suggestions.length}
-                onMouseMove={() => setActive(suggestions.length)}
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => pick(suggestions.length)}
-                className={cx(
-                  "flex cursor-pointer items-center gap-2 rounded-field px-2.5 py-1.5 text-sm",
-                  active === suggestions.length
-                    ? "bg-accent-soft font-semibold text-accent"
-                    : "text-fg-muted hover:bg-surface-2 hover:text-fg",
-                )}
+              <ComboboxOption
+                combobox={combo}
+                index={suggestions.length}
+                className="flex items-center gap-2"
               >
                 {t("question.tag.create", { name: typed })}
-              </div>
+              </ComboboxOption>
             ) : null}
 
             {!vocabulary.isPending && !vocabulary.isError && rows === 0 ? (
@@ -329,7 +285,7 @@ export function TagInput({
                 {known.length === 0 ? t("question.tag.none") : t("question.tag.noMatch")}
               </p>
             ) : null}
-          </div>
+          </ComboboxList>
         ) : null}
       </div>
 

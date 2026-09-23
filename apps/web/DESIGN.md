@@ -198,14 +198,15 @@ leaves the first tab reachable, so a hand-edited URL cannot take the whole
 strip out of the Tab order.
 
 The index arithmetic behind those keys is written once, in `ui/layers.tsx`:
-`listboxIndex` for a vertical list (the menu, the palette, the tag, teacher
-and filter comboboxes — arrows wrap, and Home/End only where the list owns
-them, since in a text field they move the caret) and `rovingIndex` for a
-horizontal roving strip (`Tabs`, `ProgressSegments`). They return the next
-index or null and nothing else: `preventDefault`, opening the list and
-moving the focus stay at each call site, because that is where the
-components legitimately differ. They exist because five lists and two
-strips each wrote that arithmetic out by hand.
+`listboxIndex` for a vertical list (the menu, the palette, and the tag,
+teacher and filter comboboxes through `useCombobox` — arrows wrap, and
+Home/End only where the list owns them, since in a text field they move the
+caret) and `rovingIndex` for a horizontal roving strip (`Tabs`,
+`ProgressSegments`). They return the next index or null and nothing else:
+`preventDefault`, opening the list and moving the focus stay with the
+caller (a component, or `useCombobox` for the three comboboxes), because
+that is where the components legitimately differ. They exist because five
+lists and two strips each wrote that arithmetic out by hand.
 
 An element made clickable without being a button (a card, a table row) takes
 `pressable()` from `ui.tsx`: `tabIndex={0}` plus Enter and Space, with Space
@@ -428,6 +429,30 @@ live in `ui/state.ts`, each written once.
   An item's `disabled` describes the state when the menu was opened, never a
   busy state: picking an item closes the menu, so a pending flag there is
   invisible. A toast reports the progress instead.
+- Combobox (`ui/combobox.tsx`): a text field with a list under it — the tag
+  field, the teacher picker, the pool search's `tag:` / `type:` completions.
+  `useCombobox` holds the ARIA combobox with virtual focus: `role="combobox"`,
+  `aria-expanded`, `aria-activedescendant` naming the highlighted option, the
+  caret never leaving the input; ArrowUp/ArrowDown wrap through
+  `listboxIndex`, Home/End stay the caret's, Enter picks a highlighted row
+  and otherwise belongs to the field (a form submits, a tag is added),
+  Escape closes. Two kinds, because they open for different reasons. A
+  **picker** follows the focus: focus or an arrow opens it, its loading and
+  empty rows show, and it outlives the blur by 120 ms so a click on a row
+  lands. A **completion** list (`completion`) follows the text: it shows only
+  while there is something to complete, the focus and the arrows do not
+  bring back a dismissed one, the blur closes it at once, and Escape stops
+  there rather than reaching the page. `ComboboxList` is the panel: `menu`
+  radius, hairline, popover shadow, `Z.popover` (it opens inside sheets),
+  4 px under the field, as wide as the field unless placed otherwise, capped
+  at 288 px — eight 14 px rows, the completion list's limit, fit without a
+  scrollbar. `ComboboxOption` is the row, in the shape of the command
+  palette's and the sidebar's: 14 px, `field` radius, the highlighted row the
+  `accent-soft` chip in semibold `accent`, the others `fg-muted` with a
+  `surface-2` hover; `mousemove` (never `mouseenter`) moves the highlight.
+  What a pick does — close, stay open for another tag — is the call site's.
+  It exists because three comboboxes wrote the pattern out by hand and had
+  started to disagree on the panel and the highlighted row.
 - Toast: bottom-right, `surface` + hairline + overlay shadow. Tones
   `success` / `error` / `warning`, plus `progress` (a neutral spinner) for
   "this has started", which is the only report an action taken from a menu

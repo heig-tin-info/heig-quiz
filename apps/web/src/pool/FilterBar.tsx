@@ -7,15 +7,15 @@ import { typeIcon, typeLabel, QUESTION_TYPE_IDS } from "../questionTypes";
 import {
   Badge,
   Button,
-  cx,
+  ComboboxList,
+  ComboboxOption,
   IconButton,
-  listboxIndex,
   SearchInput,
   Segmented,
   Sheet,
   Switch,
   ToggleChip,
-  Z,
+  useCombobox,
 } from "../ui";
 import {
   activeFilterCount,
@@ -197,11 +197,9 @@ function SearchBox({
   const t = useT();
   const input = useRef<HTMLInputElement>(null);
   const [caret, setCaret] = useState(0);
-  const [dismissed, setDismissed] = useState(false);
-  const [active, setActive] = useState(0);
   const listId = "pool-search-completions";
 
-  const at: Completion | null = dismissed ? null : completionAt(value, caret);
+  const at: Completion | null = completionAt(value, caret);
   const options = useMemo<Suggestion[]>(() => {
     if (!at) return [];
     const all: Suggestion[] =
@@ -217,8 +215,7 @@ function SearchBox({
     if (!at) return;
     const next = applyCompletion(value, at, suggestion.value);
     onChange(next.text);
-    setDismissed(true);
-    setActive(0);
+    combo.setOpen(false);
     // The caret belongs after the value the pick inserted, not at the end of
     // a field the teacher may still be writing the middle of.
     requestAnimationFrame(() => {
@@ -230,8 +227,14 @@ function SearchBox({
     });
   };
 
-  const open = options.length > 0;
-  const current = open ? options[Math.min(active, options.length - 1)] : undefined;
+  const combo = useCombobox({
+    count: options.length,
+    onPick: (index) => pick(options[index]!),
+    query: value,
+    completion: true,
+    listId,
+    optionId: (index) => `${listId}-${options[index]!.value}`,
+  });
 
   return (
     <div className="relative min-w-0 flex-1">
@@ -240,68 +243,28 @@ function SearchBox({
         className="w-full"
         aria-label={t("pool.search")}
         placeholder={t("pool.search")}
-        role="combobox"
-        aria-expanded={open}
-        aria-controls={open ? listId : undefined}
-        aria-activedescendant={open && current ? `${listId}-${current.value}` : undefined}
-        aria-autocomplete="list"
+        {...combo.inputProps}
         value={value}
         onChange={(e) => {
-          setDismissed(false);
-          setActive(0);
+          combo.setOpen(true);
           onChange(e.target.value);
           sync(e.target);
         }}
         onClick={(e) => sync(e.currentTarget)}
         onKeyUp={(e) => sync(e.currentTarget)}
-        onBlur={() => setDismissed(true)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape" && open) {
-            e.preventDefault();
-            e.stopPropagation();
-            setDismissed(true);
-            return;
-          }
-          if (!open) return;
-          const next = listboxIndex(e.key, active, options.length);
-          if (next !== null) {
-            e.preventDefault();
-            setActive(next);
-          } else if (e.key === "Enter" && current) {
-            e.preventDefault();
-            pick(current);
-          }
-        }}
       />
-      {open ? (
-        <ul
-          id={listId}
-          role="listbox"
-          aria-label={t(at?.kind === "type" ? "pool.filter.type" : "pool.filter.tag")}
-          className={cx(
-            "absolute left-0 top-full mt-1.5 max-h-72 w-72 max-w-full overflow-y-auto rounded-menu border border-line bg-surface p-1 shadow-popover",
-            Z.popover,
-          )}
+      {combo.open ? (
+        <ComboboxList
+          combobox={combo}
+          label={t(at?.kind === "type" ? "pool.filter.type" : "pool.filter.tag")}
+          place="left-0 w-72 max-w-full"
         >
           {options.map((option, i) => (
-            <li
-              key={option.value}
-              id={`${listId}-${option.value}`}
-              role="option"
-              aria-selected={i === active}
-              // The pointer must not take the focus off the input before the
-              // click lands, or the blur closes the list under the cursor.
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => pick(option)}
-              className={cx(
-                "cursor-pointer truncate rounded-field px-2.5 py-1.5 text-[13px]",
-                i === active ? "bg-accent-soft text-accent" : "text-fg-muted",
-              )}
-            >
+            <ComboboxOption key={option.value} combobox={combo} index={i} className="truncate">
               {option.label}
-            </li>
+            </ComboboxOption>
           ))}
-        </ul>
+        </ComboboxList>
       ) : null}
     </div>
   );

@@ -7,6 +7,8 @@
 //   page      tables, identity, dates, feedback, surfaces and page structure.
 //   live      the live primitives (PLAN-MVP §6.4).
 //   forms     the short form in a dialog (FormDialog), on layers + controls.
+//   combobox  the ARIA combobox with virtual focus (useCombobox,
+//             ComboboxList, ComboboxOption), on layers.
 //   state     browser state a screen reads: remembered choices
 //             (usePersistentChoice), isTyping, useFullscreen. Imports no
 //             sibling.
@@ -18,5 +20,6 @@ export * from "./controls";
 export * from "./page";
 export * from "./live";
 export * from "./forms";
+export * from "./combobox";
 export * from "./state";
 export { FormError, PageError, QueryError } from "../queryError";
