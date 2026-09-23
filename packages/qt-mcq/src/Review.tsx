@@ -9,7 +9,8 @@ import type { MarkdownRenderer, ReviewProps, StringOverrides } from "@quiz/core/
 import { resolveStrings } from "@quiz/core/client";
 import type { McqAnswer, McqDetails, McqSolution, McqStudent } from "./schema.js";
 import { mcqReviewStrings, type McqReviewStringKey } from "./strings.js";
-import { cx, helpClass } from "./ui.js";
+import { cx } from "@quiz/ui";
+import { helpClass } from "./ui.js";
 
 type McqReviewProps = ReviewProps<McqStudent, McqAnswer, McqSolution, McqDetails> & {
   strings?: StringOverrides<McqReviewStringKey>;

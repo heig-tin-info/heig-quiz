@@ -10,10 +10,6 @@
 import type { ReactNode } from "react";
 import type { ConfigIssue } from "@quiz/core/client";
 
-export function cx(...parts: (string | false | null | undefined)[]): string {
-  return parts.filter(Boolean).join(" ");
-}
-
 /** Field chrome: 12 px radius, `line-strong` hairline, accent ring on focus. */
 export const inputClass =
   "rounded-xl border border-line-strong bg-surface px-3 py-1.5 text-sm text-fg transition-colors placeholder:text-fg-faint hover:border-fg-faint focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-50";

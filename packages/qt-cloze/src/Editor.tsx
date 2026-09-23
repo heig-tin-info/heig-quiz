@@ -19,8 +19,8 @@ import { resolveStrings } from "@quiz/core/client";
 import { describeBlank, parseCloze } from "@quiz/domain/cloze";
 import { type ClozeConfig } from "./schema.js";
 import { clozeEditorStrings, type ClozeEditorStringKey } from "./strings.js";
+import { cx } from "@quiz/ui";
 import {
-  cx,
   helpClass,
   inputClass,
   IssueList,

@@ -37,21 +37,9 @@ import {
   type CircuitEditorStrings,
   type KindLabels,
 } from "./strings.js";
-import {
-  badge,
-  button,
-  card,
-  chip,
-  cx,
-  hint,
-  input,
-  inputSm,
-  label,
-  sectionTitle,
-  segment,
-  segmentTrack,
-  selectSm,
-} from "./styles.js";
+import { badge, button, card, cx, hint, input, inputSm, label, sectionTitle } from "@quiz/ui";
+
+import { chip, segment, segmentTrack, selectSm } from "./styles.js";
 
 /**
  * What the host answers "Simulate the reference" with.

@@ -21,7 +21,7 @@ import type {
   StimulusDetail,
 } from "./schema.js";
 import { REVIEW_STRINGS, type CircuitReviewStrings } from "./strings.js";
-import { badge, card, cx, hint, lockedBlock, sectionTitle, table } from "./styles.js";
+import { badge, card, cx, hint, lockedBlock, sectionTitle, table } from "@quiz/ui";
 
 interface CircuitReviewProps
   extends ReviewProps<CircuitStudent, CircuitAnswer, CircuitSolution, CircuitDetails> {

@@ -3,8 +3,8 @@
  *
  * A package cannot import `apps/web/src/ui.tsx`, so the primitives it would
  * have used are reduced to their class lists here, copied from that file (and
- * from `packages/qt-code/src/styles.ts`, which did the same) so the two stay
- * visually identical. Semantic tokens only — they swap under `html.dark` by
+ * from the table of `@quiz/ui`, which did the same) so the two stay visually
+ * identical. Semantic tokens only — they swap under `html.dark` by
  * themselves, so nothing below carries a `dark:` variant (DESIGN.md).
  *
  * The drawing surface has a character of its own: monochrome ink on paper,
@@ -12,8 +12,9 @@
  * the tool that is armed.
  */
 
-export const cx = (...parts: (string | false | null | undefined)[]): string =>
-  parts.filter(Boolean).join(" ");
+import { cx } from "@quiz/ui";
+
+export { cx };
 
 export const frame = "overflow-hidden rounded-card border border-line bg-surface";
 

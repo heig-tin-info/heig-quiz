@@ -53,12 +53,12 @@ import {
   type McqQuestionPolicy,
 } from "./schema.js";
 import { mcqEditorStrings, type McqEditorStringKey } from "./strings.js";
+import { cx } from "@quiz/ui";
 import {
   buttonClass,
   cardClass,
   cardTitleClass,
   choiceLetter,
-  cx,
   gripClass,
   GripIcon,
   helpClass,

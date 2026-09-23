@@ -11,7 +11,8 @@ import { resolveStrings } from "@quiz/core/client";
 import type { ClozeAnswer, ClozeStudent } from "./schema.js";
 import { clozePlayerStrings, type ClozePlayerStringKey } from "./strings.js";
 import { ClozeFallbackText, type ClozeTextRenderer } from "./text.js";
-import { cx, helpClass, inputClass } from "./ui.js";
+import { cx } from "@quiz/ui";
+import { helpClass, inputClass } from "./ui.js";
 
 type ClozePlayerProps = PlayerProps<ClozeStudent, ClozeAnswer> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */

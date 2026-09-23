@@ -8,7 +8,8 @@ import type { MarkdownRenderer, ReviewProps, StringOverrides } from "@quiz/core/
 import { resolveStrings } from "@quiz/core/client";
 import type { ShortAnswer, ShortDetails, ShortSolution, ShortStudent } from "./schema.js";
 import { shortReviewStrings, type ShortReviewStringKey } from "./strings.js";
-import { cx, helpClass } from "./ui.js";
+import { cx } from "@quiz/ui";
+import { helpClass } from "./ui.js";
 
 type ShortReviewProps = ReviewProps<
   ShortStudent,

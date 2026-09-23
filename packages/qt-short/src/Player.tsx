@@ -22,7 +22,8 @@ import {
   type ShortStudent,
 } from "./schema.js";
 import { shortPlayerStrings, type ShortPlayerStringKey } from "./strings.js";
-import { cx, helpClass, inputClass, labelClass } from "./ui.js";
+import { cx } from "@quiz/ui";
+import { helpClass, inputClass, labelClass } from "./ui.js";
 
 type ShortPlayerProps = PlayerProps<ShortStudent, ShortAnswer> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */

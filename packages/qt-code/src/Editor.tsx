@@ -28,7 +28,7 @@ import {
 } from "./schema.js";
 import { EDITOR_STRINGS, type CodeEditorStrings } from "./strings.js";
 import { caseVerdict } from "./verdict.js";
-import { badge, button, card, cx, hint, input, inputSm, label, sectionTitle } from "./styles.js";
+import { badge, button, card, cx, hint, input, inputSm, label, sectionTitle } from "@quiz/ui";
 
 export interface CodeEditorProps extends EditorProps<CodeConfig> {
   /**

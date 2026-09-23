@@ -12,7 +12,7 @@ import type { MarkdownRenderer, ReviewProps } from "@quiz/core/client";
 
 import type { CodeAnswer, CodeCaseDetail, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
 import { REVIEW_STRINGS, type CodeReviewStrings } from "./strings.js";
-import { badge, card, cx, hint, lockedBlock, sectionTitle, table } from "./styles.js";
+import { badge, card, cx, hint, lockedBlock, sectionTitle, table } from "@quiz/ui";
 import { caseVerdict } from "./verdict.js";
 
 interface CodeReviewProps

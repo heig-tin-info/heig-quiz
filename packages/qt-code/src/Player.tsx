@@ -22,7 +22,7 @@ import { CodeArea } from "./MonacoHost.js";
 import { initialRegions, stripMarkerLines, trimTrailingNewline } from "./segments.js";
 import type { CodeAnswer, CodeStudent } from "./schema.js";
 import { PLAYER_STRINGS, type CodePlayerStrings } from "./strings.js";
-import { badge, button, card, cx, hint, input, lockedBlock, sectionTitle, table } from "./styles.js";
+import { badge, button, card, cx, hint, input, lockedBlock, sectionTitle, table } from "@quiz/ui";
 import { caseVerdict } from "./verdict.js";
 
 /** Where a run is, for the one line the player shows while it gets there. */

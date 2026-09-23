@@ -19,4 +19,18 @@
  *    `apps/web/src/style.css` lists this package in its `@source` so Tailwind
  *    generates the utilities written here.
  */
-export {};
+export {
+  badge,
+  button,
+  card,
+  codeArea,
+  cx,
+  hint,
+  input,
+  inputSm,
+  label,
+  lockedBlock,
+  sectionTitle,
+  table,
+  type BadgeTone,
+} from "./styles.js";

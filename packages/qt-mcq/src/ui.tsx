@@ -9,10 +9,7 @@
  */
 import type { ReactNode } from "react";
 import type { ConfigIssue } from "@quiz/core/client";
-
-export function cx(...parts: (string | false | null | undefined)[]): string {
-  return parts.filter(Boolean).join(" ");
-}
+import { cx } from "@quiz/ui";
 
 /**
  * Field chrome: the `--radius-field` token, `line-strong` hairline, accent

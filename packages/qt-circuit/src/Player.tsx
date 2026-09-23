@@ -27,7 +27,9 @@ import { formatValue, LIBRARY, PORT_IDS, type PortId } from "./library.js";
 import { extractNets, type NetlistIssue } from "./netlist.js";
 import type { CircuitAnswer, CircuitStudent, Load, Source, StudentStimulus } from "./schema.js";
 import { PLAYER_STRINGS, type CircuitPlayerStrings } from "./strings.js";
-import { badge, button, card, cx, hint, sectionTitle, strip } from "./styles.js";
+import { badge, button, card, cx, hint, sectionTitle } from "@quiz/ui";
+
+import { strip } from "./styles.js";
 
 /** What the host answers "Simulate" with; the two words are graceful paths. */
 export type CircuitSimulateOutcome = RunnerOutcome | "unavailable" | "rate_limited";

@@ -10,7 +10,8 @@ import type { MarkdownRenderer, PlayerProps, StringOverrides } from "@quiz/core/
 import { resolveStrings } from "@quiz/core/client";
 import type { McqAnswer, McqStudent } from "./schema.js";
 import { mcqPlayerStrings, type McqPlayerStringKey } from "./strings.js";
-import { choiceLetter, cx, helpClass, Pastille } from "./ui.js";
+import { cx } from "@quiz/ui";
+import { choiceLetter, helpClass, Pastille } from "./ui.js";
 
 type McqPlayerProps = PlayerProps<McqStudent, McqAnswer> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */

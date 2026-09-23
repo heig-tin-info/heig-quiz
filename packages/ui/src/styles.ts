@@ -1,11 +1,13 @@
 /**
- * The class lists this package uses, in one place.
+ * The class lists of the question-type surfaces, in one place.
  *
  * A package cannot import `apps/web/src/ui.tsx`, so the primitives it would
  * have used are reduced to their class lists here, copied from that file so
- * the two stay visually identical. Semantic tokens only (`bg-surface`,
- * `text-fg-muted`, `border-line`…): they swap under `html.dark` by themselves,
- * so no component below carries a `dark:` variant (DESIGN.md).
+ * the two stay visually identical. `qt-code` and `qt-circuit` used to carry
+ * this table twice, byte for byte (audit P-01a). Semantic tokens only
+ * (`bg-surface`, `text-fg-muted`, `border-line`…): they swap under
+ * `html.dark` by themselves, so nothing below carries a `dark:` variant
+ * (DESIGN.md).
  */
 
 /** Joins class names, skipping falsy entries. */

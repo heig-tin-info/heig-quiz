@@ -11,7 +11,8 @@ import { resolveStrings } from "@quiz/core/client";
 import type { ClozeAnswer, ClozeDetails, ClozeSolution, ClozeStudent } from "./schema.js";
 import { clozeReviewStrings, type ClozeReviewStringKey } from "./strings.js";
 import { ClozeFallbackText, type ClozeTextRenderer } from "./text.js";
-import { cx, helpClass } from "./ui.js";
+import { cx } from "@quiz/ui";
+import { helpClass } from "./ui.js";
 
 type ClozeReviewProps = ReviewProps<
   ClozeStudent,

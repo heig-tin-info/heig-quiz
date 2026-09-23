@@ -21,10 +21,10 @@ import {
   type ShortMatcher,
 } from "./schema.js";
 import { shortEditorStrings, type ShortEditorStringKey } from "./strings.js";
+import { cx } from "@quiz/ui";
 import {
   buttonClass,
   CheckboxField,
-  cx,
   FieldCell,
   helpClass,
   inputClass,
