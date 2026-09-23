@@ -41,7 +41,6 @@
  */
 import {
   useCallback,
-  useEffect,
   useId,
   useMemo,
   useRef,
@@ -52,7 +51,6 @@ import {
 } from "react";
 
 import {
-  BOX,
   LIBRARY,
   formatValue,
   valueIssue,
@@ -62,11 +60,9 @@ import {
 import {
   Schematic,
   countedComponents,
-  type Orientation,
   type Palette,
   type SchematicComponent,
   type Supplies,
-  type WireEnd,
 } from "../schema.js";
 
 import { fmt, plural, resolveStrings } from "@quiz/core/client";
@@ -107,10 +103,6 @@ import {
   MIRROR_Y,
   ORIENT_0,
   ROTATE,
-  clampPoint,
-  clampToBox,
-  extentOf,
-  hitRectOf,
   indexOf,
   newComponent,
   pinAt,
@@ -137,13 +129,23 @@ import {
   boxStart,
   editorKey,
   isTerminal,
-  linkedWires,
   pressed,
   useSelection,
-  type BoxDrag,
 } from "./useSelection.js";
+import {
+  ghostAt,
+  moveStart,
+  moveStep,
+  movedBy,
+  secondPress,
+  usePartDragging,
+  viaMoved,
+  viaStart,
+  withoutVia,
+  type Ghost,
+} from "./usePartDragging.js";
 import { useWireDrawing } from "./useWireDrawing.js";
-import { panStart, panned, useViewport, type PanDrag } from "./useViewport.js";
+import { panStart, panned, useViewport } from "./useViewport.js";
 
 export interface SchematicEditorProps {
   value: Schematic;
@@ -169,58 +171,6 @@ export interface SchematicEditorProps {
 
 type Mode = "select" | "wire" | "place";
 
-type Drag =
-  | { kind: "move"; sx: number; sy: number; dx: number; dy: number; moved: boolean; collapse: string | null }
-  | BoxDrag
-  | PanDrag
-  | { kind: "via"; wire: string; index: number; moved: boolean };
-
-/** The move the box allows, out of the one the pointer asked for. */
-function clampDelta(components: readonly SchematicComponent[], dx: number, dy: number): { dx: number; dy: number } {
-  let lowX = -Infinity;
-  let highX = Infinity;
-  let lowY = -Infinity;
-  let highY = Infinity;
-  for (const c of components) {
-    const e = extentOf(c);
-    lowX = Math.max(lowX, -e.x0);
-    highX = Math.min(highX, BOX.width - e.x1);
-    lowY = Math.max(lowY, -e.y0);
-    highY = Math.min(highY, BOX.height - e.y1);
-  }
-  if (components.length === 0) return { dx, dy };
-  return {
-    dx: Math.min(Math.max(dx, lowX), Math.max(lowX, highX)),
-    dy: Math.min(Math.max(dy, lowY), Math.max(lowY, highY)),
-  };
-}
-
-/** The whole selection shifted by (dx, dy): components, waypoints and free ends. */
-function movedBy(schematic: Schematic, selection: ReadonlySet<string>, dx: number, dy: number): Schematic {
-  const picked = schematic.components.filter((c) => selection.has(c.id));
-  const d = clampDelta(picked, dx, dy);
-  if (d.dx === 0 && d.dy === 0) return schematic;
-  const pickedIds = new Set(picked.map((c) => c.id));
-  const wires = new Set(linkedWires(schematic, selection).map((w) => w.id));
-  const shiftEnd = (e: WireEnd): WireEnd =>
-    e.kind === "free" ? { kind: "free", ...clampPoint(e.x + d.dx, e.y + d.dy) } : e;
-  return {
-    components: schematic.components.map((c) =>
-      pickedIds.has(c.id) ? { ...c, ...clampToBox(c.kind, c.m, c.x + d.dx, c.y + d.dy) } : c,
-    ),
-    wires: schematic.wires.map((w) =>
-      wires.has(w.id)
-        ? {
-            ...w,
-            a: shiftEnd(w.a),
-            b: shiftEnd(w.b),
-            via: w.via.map((v) => clampPoint(v.x + d.dx, v.y + d.dy)),
-          }
-        : w,
-    ),
-  };
-}
-
 export function SchematicEditor({
   value,
   onChange,
@@ -245,13 +195,12 @@ export function SchematicEditor({
   const history = useHistory<Schematic>();
   const [mode, setMode] = useState<Mode>("select");
   const [placeKind, setPlaceKind] = useState<ComponentKind | null>(null);
-  const [ghost, setGhost] = useState<{ x: number; y: number; m: Orientation; show: boolean }>({
+  const [ghost, setGhost] = useState<Ghost>({
     x: 200,
     y: 200,
     m: ORIENT_0,
     show: false,
   });
-  const [drag, setDrag] = useState<Drag | null>(null);
   const { view, setView, canvasHeight, toWorld, slack, fit, zoom } = useViewport(svgRef, canvasRef, height);
   const [cursor, setCursor] = useState<{ x: number; y: number; inside: boolean }>({
     x: 0,
@@ -259,19 +208,6 @@ export function SchematicEditor({
     inside: false,
   });
   const [hover, setHover] = useState<PinTarget | null>(null);
-  const [palDrag, setPalDrag] = useState<{ kind: ComponentKind; x: number; y: number; moved: boolean; rearm: boolean } | null>(
-    null,
-  );
-
-  /* The drag mutates on every pointer move; a ref keeps the handler stable and
-     the render cheap, and the state copy above is what the SVG draws from. */
-  const dragRef = useRef<Drag | null>(null);
-  dragRef.current = drag;
-
-  /* A second press on the same waypoint removes it. `dblclick` will not do:
-     the first press already started dragging that waypoint. */
-  const lastVia = useRef<{ wire: string; index: number; at: number } | null>(null);
-
   // --- what the palette offers ------------------------------------------
   const kinds = useMemo(
     () =>
@@ -302,20 +238,6 @@ export function SchematicEditor({
     maxComponents: palette.maxComponents,
   });
 
-  // --- what is drawn right now ------------------------------------------
-  const displayed = useMemo(() => {
-    if (drag?.kind === "move" && drag.moved) return movedBy(value, selection, drag.dx, drag.dy);
-    return value;
-  }, [drag, selection, value]);
-
-  const routes = useMemo(() => computeRoutes(displayed), [displayed]);
-  const obstacles = useMemo(
-    () => ({ blocked: blockedCells(displayed.components), used: new Map<string, number>() }),
-    [displayed],
-  );
-  const connected = useMemo(() => connectedPins(displayed), [displayed]);
-  const byId = useMemo(() => indexOf(displayed.components), [displayed]);
-
   // --- operations --------------------------------------------------------
 
   const place = useCallback(
@@ -328,6 +250,26 @@ export function SchematicEditor({
     },
     [apply, full, ghost.m, placeKind, readOnly, value],
   );
+
+  // --- what is drawn right now ------------------------------------------
+  const { drag, setDrag, dragRef, lastVia, setPalDrag, displayed, componentUnder, viaUnder } = usePartDragging({
+    value,
+    selection,
+    slack,
+    toWorld,
+    place,
+    setGhost,
+    setMode,
+    setPlaceKind,
+  });
+
+  const routes = useMemo(() => computeRoutes(displayed), [displayed]);
+  const obstacles = useMemo(
+    () => ({ blocked: blockedCells(displayed.components), used: new Map<string, number>() }),
+    [displayed],
+  );
+  const connected = useMemo(() => connectedPins(displayed), [displayed]);
+  const byId = useMemo(() => indexOf(displayed.components), [displayed]);
 
   const { draft, setDraft, wireClick, cancelStep, wireUnder, draftPoints } = useWireDrawing({
     value,
@@ -362,35 +304,6 @@ export function SchematicEditor({
 
   // --- the pointer -------------------------------------------------------
 
-  const componentUnder = useCallback(
-    (x: number, y: number): string | null => {
-      for (let i = displayed.components.length - 1; i >= 0; i -= 1) {
-        const c = displayed.components[i];
-        if (c === undefined) continue;
-        const r = hitRectOf(c);
-        if (x >= r.x0 && x <= r.x1 && y >= r.y0 && y <= r.y1) return c.id;
-      }
-      return null;
-    },
-    [displayed],
-  );
-
-  const viaUnder = useCallback(
-    (x: number, y: number): { wire: string; index: number } | null => {
-      const r = slack();
-      for (const w of displayed.wires) {
-        if (!selection.has(w.id)) continue;
-        for (let i = 0; i < w.via.length; i += 1) {
-          const v = w.via[i];
-          if (v === undefined) continue;
-          if (Math.abs(v.x - x) <= r && Math.abs(v.y - y) <= r) return { wire: w.id, index: i };
-        }
-      }
-      return null;
-    },
-    [displayed, selection, slack],
-  );
-
   const onPointerDown = useCallback(
     (e: ReactPointerEvent<SVGSVGElement>) => {
       rootRef.current?.focus({ preventScroll: true });
@@ -419,25 +332,8 @@ export function SchematicEditor({
       if (!readOnly) {
         const via = viaUnder(w.x, w.y);
         if (via !== null && mode === "select") {
-          const now = Date.now();
-          const previous = lastVia.current;
-          if (
-            previous !== null &&
-            previous.wire === via.wire &&
-            previous.index === via.index &&
-            now - previous.at < 380
-          ) {
-            lastVia.current = null;
-            apply({
-              components: value.components,
-              wires: value.wires.map((x) =>
-                x.id === via.wire ? { ...x, via: x.via.filter((_, i) => i !== via.index) } : x,
-              ),
-            });
-            return;
-          }
-          lastVia.current = { wire: via.wire, index: via.index, at: now };
-          setDrag({ kind: "via", wire: via.wire, index: via.index, moved: false });
+          if (secondPress(lastVia, via, Date.now())) apply(withoutVia(value, via));
+          else setDrag(viaStart(via));
           return;
         }
         if (mode === "wire" || (target !== null && !e.shiftKey)) {
@@ -453,15 +349,7 @@ export function SchematicEditor({
         const next = pressed(selection, hitId, e.shiftKey);
         setSelection(next);
         if (next.has(hitId) && !readOnly) {
-          setDrag({
-            kind: "move",
-            sx: w.x,
-            sy: w.y,
-            dx: 0,
-            dy: 0,
-            moved: false,
-            collapse: !e.shiftKey && was ? hitId : null,
-          });
+          setDrag(moveStart(w, !e.shiftKey && was ? hitId : null));
         }
         return;
       }
@@ -492,7 +380,7 @@ export function SchematicEditor({
       const at = { x: snap(w.x), y: snap(w.y) };
       setCursor({ ...at, inside: w.inside });
       if (mode === "place" && placeKind !== null) {
-        setGhost((g) => ({ ...g, ...clampToBox(placeKind, g.m, at.x, at.y), show: w.inside }));
+        setGhost(ghostAt(placeKind, at.x, at.y, w.inside));
       }
 
       const d = dragRef.current;
@@ -507,28 +395,16 @@ export function SchematicEditor({
       if (d.kind === "pan") {
         setView(panned(d, svgRef.current, e.clientX, e.clientY));
       } else if (d.kind === "move") {
-        const dx = snap(w.x - d.sx);
-        const dy = snap(w.y - d.sy);
-        if (dx !== d.dx || dy !== d.dy) setDrag({ ...d, dx, dy, moved: true });
+        const next = moveStep(d, w);
+        if (next !== null) setDrag(next);
       } else if (d.kind === "box") {
         setDrag({ ...d, x1: w.x, y1: w.y });
       } else if (d.kind === "via") {
-        const wire = value.wires.find((x) => x.id === d.wire);
-        const v = wire?.via[d.index];
-        if (wire !== undefined && v !== undefined && (v.x !== at.x || v.y !== at.y)) {
-          const point = clampPoint(at.x, at.y);
+        const next = viaMoved(value, d, at);
+        if (next !== null) {
           if (!d.moved) history.push(value);
           setDrag({ ...d, moved: true });
-          onChange(
-            withRoutes({
-              components: value.components,
-              wires: value.wires.map((x) =>
-                x.id === d.wire
-                  ? { ...x, via: x.via.map((p, i) => (i === d.index ? point : p)) }
-                  : x,
-              ),
-            }),
-          );
+          onChange(withRoutes(next));
         }
       }
     },
@@ -553,37 +429,6 @@ export function SchematicEditor({
     },
     [apply, displayed.components, routes, selection, value],
   );
-
-  /* Dragging a palette tile onto the grid places one piece and stops there. */
-  useEffect(() => {
-    if (palDrag === null) return;
-    const move = (e: PointerEvent): void => {
-      if (Math.hypot(e.clientX - palDrag.x, e.clientY - palDrag.y) > 5) {
-        setPalDrag((p) => (p === null ? p : { ...p, moved: true }));
-        const w = toWorld(e.clientX, e.clientY);
-        setGhost((g) => ({ ...g, ...clampToBox(palDrag.kind, g.m, snap(w.x), snap(w.y)), show: w.inside }));
-      }
-    };
-    const up = (e: PointerEvent): void => {
-      const pd = palDrag;
-      setPalDrag(null);
-      if (pd.moved) {
-        const w = toWorld(e.clientX, e.clientY);
-        if (w.inside) place(snap(w.x), snap(w.y));
-        setMode("select");
-        setPlaceKind(null);
-      } else if (pd.rearm) {
-        setMode("select");
-        setPlaceKind(null);
-      }
-    };
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    return () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-    };
-  }, [palDrag, place, toWorld]);
 
   // --- the keyboard, scoped to this editor -------------------------------
 
