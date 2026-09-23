@@ -49,7 +49,11 @@ export function notFound(reply: FastifyReply) {
 type Schema = z.ZodType;
 type Parsed<S> = S extends Schema ? z.output<S> : undefined;
 
-/** A module's error tail: every failure it knows mapped to a reply, the rest a 500. */
+/**
+ * A module's error tail: every failure it knows mapped to a reply, the rest a
+ * 500. An unexpected error is logged through `reply.log`, the request-scoped
+ * logger, so the line carries the `reqId` the global handler's `req.log` did.
+ */
 export type Failure = (reply: FastifyReply, error: unknown, now: Date) => FastifyReply;
 
 /** What a guarded handler receives: everything the preamble used to compute. */

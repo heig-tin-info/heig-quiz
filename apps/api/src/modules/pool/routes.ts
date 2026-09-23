@@ -129,7 +129,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
   function failure(reply: FastifyReply, error: unknown): FastifyReply {
     const handled = coreFailure(reply, error);
     if (handled) return handled;
-    app.log.error({ err: error, cause: (error as Error)?.cause }, "pool route failed");
+    reply.log.error({ err: error, cause: (error as Error)?.cause }, "pool route failed");
     return reply.code(500).send({ error: "internal_error" });
   }
 
