@@ -83,7 +83,7 @@ export const ORDER_WORDS: Record<
 };
 
 /**
- * Proposals first:they are the only reason the teacher opened the panel.
+ * Proposals first: they are the only reason the teacher opened the panel.
  * Everything else keeps the order the server sent — the index is the
  * tie-breaker, so the rule does not lean on the engine's sort being stable.
  */
