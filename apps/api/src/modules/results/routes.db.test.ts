@@ -178,3 +178,44 @@ describe("results and the export (§4.6)", () => {
     ).toBe(404);
   });
 });
+
+/**
+ * The order of the refusals, which the wrappers of `modules/http.ts` must
+ * keep (audit B-02): session and role (the preHandler) → params (404) →
+ * scope (the loader's 404) → body (400) → the module's error map.
+ */
+describe("the order of the refusals, over HTTP", () => {
+  it("refuses session, params, scope, body, then maps the service error", async () => {
+    const url = `/app/api/evaluations/${built.evaluationId}/release`;
+    expect((await post("/app/api/evaluations/x/release", {}, {})).statusCode).toBe(401);
+    expect((await post("/app/api/evaluations/x/release", student.headers, {})).statusCode).toBe(403);
+    const badParams = await post("/app/api/evaluations/x/release", teacher.headers, { confirm: "no" });
+    expect(badParams.statusCode).toBe(404);
+    expect(badParams.json()).toEqual({ error: "not_found" });
+
+    // Off the staff, the scope's 404 wins over the malformed body.
+    const offStaff = await post(url, other.headers, { confirm: "no" });
+    expect(offStaff.statusCode).toBe(404);
+    expect(offStaff.json()).toEqual({ error: "not_found" });
+
+    const malformed = await post(url, teacher.headers, { confirm: "no" });
+    expect(malformed.statusCode).toBe(400);
+    expect(malformed.json().error).toBe("validation");
+
+    // An evaluation that is not closed cannot be released: `NotReleasable`'s own 409.
+    const open = await seedLive(server.app.db, { teacherId: teacher.id, questions: 1 });
+    const early = await post(`/app/api/evaluations/${open.evaluationId}/release`, teacher.headers, {
+      confirm: true,
+    });
+    expect(early.statusCode).toBe(409);
+    expect(early.json()).toEqual({
+      error: "not_releasable",
+      message: "an evaluation is released once it is closed",
+    });
+
+    // The student route: bad params are a 404 before any attempt is looked up.
+    const feedback = await get("/app/api/attempts/x/feedback", student.headers);
+    expect(feedback.statusCode).toBe(404);
+    expect(feedback.json()).toEqual({ error: "not_found" });
+  });
+});

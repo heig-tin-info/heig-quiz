@@ -424,3 +424,40 @@ describe("the public view of a short poll never carries the answer", () => {
     );
   });
 });
+
+/**
+ * The order of the refusals on the teacher side, which `teacherRoute` in
+ * `modules/http.ts` must keep (audit B-02): session and role → params (404)
+ * → the poll, loaded through the staff predicate (404) → body (400).
+ */
+describe("the order of the refusals on the teacher side", () => {
+  it("refuses session, params, scope, then body", async () => {
+    const running = await post("/app/api/polls", teacher.headers, {
+      classroomId: seed.classroomId,
+      questionId,
+      anonymous: true,
+    });
+    expect(running.statusCode).toBe(201);
+    const id = running.json().evaluation.id as string;
+    const url = `/app/api/evaluations/${id}/poll/reveal`;
+    const badBody = { revealed: "yes" };
+
+    expect((await post("/app/api/evaluations/x/poll/reveal", {}, badBody)).statusCode).toBe(401);
+    expect((await post("/app/api/evaluations/x/poll/reveal", outsider.headers, badBody)).statusCode).toBe(403);
+    const badParams = await post("/app/api/evaluations/x/poll/reveal", teacher.headers, badBody);
+    expect(badParams.statusCode).toBe(404);
+    expect(badParams.json()).toEqual({ error: "not_found" });
+
+    // Off the staff, the scope's 404 wins over the malformed body (invariant 6).
+    const stranger = await server.signIn("teacher");
+    const offStaff = await post(url, stranger.headers, badBody);
+    expect(offStaff.statusCode).toBe(404);
+    expect(offStaff.json()).toEqual({ error: "not_found" });
+
+    const malformed = await post(url, teacher.headers, badBody);
+    expect(malformed.statusCode).toBe(400);
+    expect(malformed.json().error).toBe("validation");
+
+    await post(`/app/api/evaluations/${id}/poll/end`, teacher.headers);
+  });
+});

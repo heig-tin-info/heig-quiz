@@ -16,8 +16,8 @@ import { IdParam, ReleaseBody } from "@quiz/contracts";
 
 import { tracer } from "../../audit.js";
 import { iso } from "../../clock.js";
-import { accessibleEvaluation, ownAttempt, teacherGuard } from "../guards.js";
-import { emptyBody, invalid } from "../http.js";
+import { loadEvaluation, ownAttempt, teacherGuard } from "../guards.js";
+import { studentRoute, teacherRoute } from "../http.js";
 import { byId } from "../evaluation/service.js";
 import * as gradingEvents from "../grading/events.js";
 import * as bus from "../realtime/bus.js";
@@ -29,23 +29,41 @@ export async function resultsPlugin(app: FastifyInstance) {
   const requireSession = (req: FastifyRequest, reply: FastifyReply) =>
     app.requireSession(req, reply);
 
+  /** Maps every failure of the module to its status; the rest is a 500. */
+  function failure(reply: FastifyReply, error: unknown): FastifyReply {
+    if (error instanceof service.ResultsError) {
+      return reply.code(error.status).send({ error: error.code, message: error.message });
+    }
+    app.log.error({ err: error, cause: (error as Error)?.cause }, "results route failed");
+    return reply.code(500).send({ error: "internal_error" });
+  }
+
+  const teacher = teacherRoute(app, failure);
+  const student = studentRoute(app, failure);
+
   const trace = tracer(app);
+
+  // The loaders of invariant 6, each answering its own 404.
+  const staffEvaluation = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
+    loadEvaluation(app, req, reply, p.id);
+  const own = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
+    ownAttempt(app, req, reply, p.id);
 
   // --- Teacher -----------------------------------------------------------
 
-  app.get("/app/api/evaluations/:id/results", { preHandler: requireTeacher }, async (req, reply) => {
-    const scope = await accessibleEvaluation(app, req, reply);
-    if (!scope) return reply;
-    return service.resultsView(app.db, scope.evaluation);
-  });
+  app.get(
+    "/app/api/evaluations/:id/results",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: staffEvaluation }, ({ scope }) =>
+      service.resultsView(app.db, scope.evaluation),
+    ),
+  );
 
   /** F-RES-02. UTF-8 with a BOM and `;`, because Excel is the reader. */
   app.get(
     "/app/api/evaluations/:id/results.csv",
     { preHandler: requireTeacher },
-    async (req, reply) => {
-      const scope = await accessibleEvaluation(app, req, reply);
-      if (!scope) return reply;
+    teacher({ params: IdParam, load: staffEvaluation }, async ({ reply, scope }) => {
       const view = await service.resultsView(app.db, scope.evaluation);
       return reply
         .type("text/csv; charset=utf-8")
@@ -54,18 +72,16 @@ export async function resultsPlugin(app: FastifyInstance) {
           `attachment; filename="${csvFilename(scope.evaluation.title)}"`,
         )
         .send(resultsCsv(view));
-    },
+    }),
   );
 
   /** F-RES-03: the linear walk through the questions for the class debrief. */
   app.get(
     "/app/api/evaluations/:id/results/by-question",
     { preHandler: requireTeacher },
-    async (req, reply) => {
-      const scope = await accessibleEvaluation(app, req, reply);
-      if (!scope) return reply;
-      return service.byQuestion(app.db, scope.evaluation);
-    },
+    teacher({ params: IdParam, load: staffEvaluation }, ({ scope }) =>
+      service.byQuestion(app.db, scope.evaluation),
+    ),
   );
 
   /**
@@ -73,41 +89,32 @@ export async function resultsPlugin(app: FastifyInstance) {
    * state moves to `released`, and every student of the classroom is told to
    * re-read their own results.
    */
-  app.post("/app/api/evaluations/:id/release", { preHandler: requireTeacher }, async (req, reply) => {
-    const now = app.clock.now();
-    const scope = await accessibleEvaluation(app, req, reply);
-    if (!scope) return reply;
-    const body = ReleaseBody.safeParse(emptyBody(req.body));
-    if (!body.success) return invalid(reply, body.error);
-    const again = scope.evaluation.releasedAt !== null;
-    try {
-      const released = await service.releaseResults(app.db, scope.evaluation, now);
-      const action = again ? "results.rerelease" : "results.release";
-      await trace(req, action, "evaluation", scope.evaluation.id, { rows: released.rows });
-      await announce(scope.evaluation.id);
-      return { releasedAt: iso(released.releasedAt), rows: released.rows, released: true };
-    } catch (error) {
-      if (error instanceof service.ResultsError) {
-        return reply.code(error.status).send({ error: error.code, message: error.message });
-      }
-      app.log.error({ err: error }, "release failed");
-      return reply.code(500).send({ error: "internal_error" });
-    }
-  });
+  app.post(
+    "/app/api/evaluations/:id/release",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: ReleaseBody, optionalBody: true, load: staffEvaluation },
+      async ({ req, now, scope }) => {
+        const again = scope.evaluation.releasedAt !== null;
+        const released = await service.releaseResults(app.db, scope.evaluation, now);
+        const action = again ? "results.rerelease" : "results.release";
+        await trace(req, action, "evaluation", scope.evaluation.id, { rows: released.rows });
+        await announce(scope.evaluation.id);
+        return { releasedAt: iso(released.releasedAt), rows: released.rows, released: true };
+      },
+    ),
+  );
 
   /** Withdrawing a release (a wrong key, a question to re-grade first). */
   app.post(
     "/app/api/evaluations/:id/unrelease",
     { preHandler: requireTeacher },
-    async (req, reply) => {
-      const now = app.clock.now();
-      const scope = await accessibleEvaluation(app, req, reply);
-      if (!scope) return reply;
+    teacher({ params: IdParam, load: staffEvaluation }, async ({ req, now, scope }) => {
       await service.unreleaseResults(app.db, scope.evaluation, now);
       await trace(req, "results.unrelease", "evaluation", scope.evaluation.id);
       await announce(scope.evaluation.id);
       return { releasedAt: null, rows: 0, released: false };
-    },
+    }),
   );
 
   // --- Student -----------------------------------------------------------
@@ -122,13 +129,13 @@ export async function resultsPlugin(app: FastifyInstance) {
    * shows nothing — the answer carries a reason and no question content at
    * all (`available: false`).
    */
-  app.get("/app/api/attempts/:id/feedback", { preHandler: requireSession }, async (req, reply) => {
-    const params = IdParam.safeParse(req.params);
-    if (!params.success) return reply.code(404).send({ error: "not_found" });
-    const scope = await ownAttempt(app, req, reply, params.data.id);
-    if (!scope) return reply;
-    return service.studentFeedback(app.db, scope.evaluation, scope.attempt);
-  });
+  app.get(
+    "/app/api/attempts/:id/feedback",
+    { preHandler: requireSession },
+    student({ params: IdParam, load: own }, ({ scope }) =>
+      service.studentFeedback(app.db, scope.evaluation, scope.attempt),
+    ),
+  );
 
   /**
    * The release and its withdrawal are state changes, so they go out as the
