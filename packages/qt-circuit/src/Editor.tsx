@@ -47,6 +47,7 @@ import {
   inputSm,
   IssueList,
   label,
+  PromptField,
   sectionTitle,
 } from "@quiz/ui";
 
@@ -390,39 +391,17 @@ export function CircuitEditor({
       <section className={cx(card, "flex flex-col gap-4 p-4")}>
         <h3 className={sectionTitle}>{s.questionSection}</h3>
         <div className="flex flex-col gap-1.5">
-          {/*
-           * A caption and not a `<label for>` when the host lent its rich
-           * editor: its surface is a contenteditable, which is not a labelable
-           * element — the browser reports such a `for` as matching no control,
-           * and the field takes its name from `aria-label` instead. The
-           * textarea fallback is a real control and keeps its label.
-           */}
-          {RichText ? (
-            <span className={label}>{s.prompt}</span>
-          ) : (
-            <label className={label} htmlFor={`${ids}-prompt`}>
-              {s.prompt}
-            </label>
-          )}
-          {RichText ? (
-            <RichText
-              id={`${ids}-prompt`}
-              aria-label={s.prompt}
-              value={config.prompt}
-              onChange={(prompt) => patch({ prompt })}
-              {...(disabled === undefined ? {} : { disabled })}
-              {...(uploadAsset === undefined ? {} : { uploadImage: uploadAsset })}
-            />
-          ) : (
-            <textarea
-              id={`${ids}-prompt`}
-              rows={4}
-              disabled={disabled}
-              value={config.prompt}
-              onChange={(e) => patch({ prompt: e.target.value })}
-              className={cx(input, "w-full py-2 leading-relaxed")}
-            />
-          )}
+          <PromptField
+            id={`${ids}-prompt`}
+            label={s.prompt}
+            value={config.prompt}
+            onChange={(prompt) => patch({ prompt })}
+            disabled={disabled}
+            RichText={RichText}
+            uploadImage={uploadAsset}
+            labelClassName={label}
+            textareaClassName={cx(input, "w-full py-2 leading-relaxed")}
+          />
           <IssueList issues={issuesAt(issues, "prompt")} />
         </div>
       </section>

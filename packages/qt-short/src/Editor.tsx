@@ -21,7 +21,7 @@ import {
   type ShortMatcher,
 } from "./schema.js";
 import { shortEditorStrings, type ShortEditorStringKey } from "./strings.js";
-import { cx, IssueList } from "@quiz/ui";
+import { cx, IssueList, PromptField } from "@quiz/ui";
 import {
   buttonClass,
   CheckboxField,
@@ -414,45 +414,17 @@ export function ShortEditor({
       <IssueList issues={rootIssues(issues)} />
 
       <section className={sectionClass}>
-        {/*
-         * A caption and not a `<label for>` when the host lent its rich
-         * editor: its surface is a contenteditable, which is not a labelable
-         * element — the browser reports such a `for` as matching no control,
-         * and the field takes its name from `aria-label` instead. The
-         * textarea fallback is a real control and keeps its label.
-         */}
-        {RichText ? (
-          <span className={labelClass}>{s.prompt}</span>
-        ) : (
-          <label className={labelClass} htmlFor="short-prompt">
-            {s.prompt}
-          </label>
-        )}
-        {/*
-         * The host's WYSIWYG editor when it lent one, the textarea otherwise.
-         * There is no preview block under either: with `RichText` the field IS
-         * the preview, and under a textarea a second rendering of the string
-         * the teacher is looking at is noise.
-         */}
-        {RichText ? (
-          <RichText
-            id="short-prompt"
-            aria-label={s.prompt}
-            value={config.prompt}
-            onChange={(prompt) => patch({ prompt })}
-            {...(disabled === undefined ? {} : { disabled })}
-            {...(uploadAsset === undefined ? {} : { uploadImage: uploadAsset })}
-          />
-        ) : (
-          <textarea
-            id="short-prompt"
-            rows={4}
-            className={cx(inputClass, "w-full resize-y font-mono text-[13px]")}
-            value={config.prompt}
-            disabled={disabled}
-            onChange={(e) => patch({ prompt: e.target.value })}
-          />
-        )}
+        <PromptField
+          id="short-prompt"
+          label={s.prompt}
+          value={config.prompt}
+          onChange={(prompt) => patch({ prompt })}
+          disabled={disabled}
+          RichText={RichText}
+          uploadImage={uploadAsset}
+          labelClassName={labelClass}
+          textareaClassName={cx(inputClass, "w-full resize-y font-mono text-[13px]")}
+        />
         <IssueList issues={issuesAt(issues, "prompt")} />
       </section>
 

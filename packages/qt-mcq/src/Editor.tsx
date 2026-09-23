@@ -53,7 +53,7 @@ import {
   type McqQuestionPolicy,
 } from "./schema.js";
 import { mcqEditorStrings, type McqEditorStringKey } from "./strings.js";
-import { cx, IssueList } from "@quiz/ui";
+import { cx, IssueList, PromptField } from "@quiz/ui";
 import {
   buttonClass,
   cardClass,
@@ -258,42 +258,6 @@ export function McqEditor({
     setChoices(choices);
   }
 
-  /*
-   * A caption and not a `<label for>` when the host lent its rich editor: its
-   * surface is a contenteditable, which is not a labelable element — the
-   * browser reports such a `for` as matching no control, and the field takes
-   * its name from `aria-label` instead. The textarea fallback is a real
-   * control and keeps its label.
-   */
-  const promptLabel = RichText ? (
-    <span className={labelClass}>{s.prompt}</span>
-  ) : (
-    <label className={labelClass} htmlFor="mcq-prompt">
-      {s.prompt}
-    </label>
-  );
-
-  const promptField = RichText ? (
-    <RichText
-      id="mcq-prompt"
-      aria-label={s.prompt}
-      value={config.prompt}
-      onChange={(prompt) => patch({ prompt })}
-      {...(disabled === undefined ? {} : { disabled })}
-      {...(uploadAsset === undefined ? {} : { uploadImage: uploadAsset })}
-    />
-  ) : (
-    <textarea
-      id="mcq-prompt"
-      rows={4}
-      className={cx(inputClass, "w-full resize-y font-mono text-[13px]")}
-      aria-label={s.prompt}
-      value={config.prompt}
-      disabled={disabled}
-      onChange={(e) => patch({ prompt: e.target.value })}
-    />
-  );
-
   /**
    * How the question is marked — the one block the host may take away.
    *
@@ -400,16 +364,20 @@ export function McqEditor({
       <IssueList issues={rootIssues(issues)} />
 
       <section className={sectionClass}>
-        {promptLabel}
-        {promptField}
+        {/* `renderMarkdown` is accepted — the player and the review need
+            it — and is used for nothing here: `PromptField` draws no preview. */}
+        <PromptField
+          id="mcq-prompt"
+          label={s.prompt}
+          value={config.prompt}
+          onChange={(prompt) => patch({ prompt })}
+          disabled={disabled}
+          RichText={RichText}
+          uploadImage={uploadAsset}
+          labelClassName={labelClass}
+          textareaClassName={cx(inputClass, "w-full resize-y font-mono text-[13px]")}
+        />
         <IssueList issues={issuesAt(issues, "prompt")} />
-        {/*
-         * No preview block under the statement any more. With `RichText` the
-         * field IS the preview; without it, the textarea shows the source and
-         * a second rendering of the same string is noise. `renderMarkdown` is
-         * still accepted — the player and the review need it — and is used
-         * for nothing here.
-         */}
       </section>
 
       <section className={sectionClass}>

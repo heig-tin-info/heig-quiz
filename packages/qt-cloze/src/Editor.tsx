@@ -19,7 +19,7 @@ import { issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import { describeBlank, parseCloze } from "@quiz/domain/cloze";
 import { type ClozeConfig } from "./schema.js";
 import { clozeEditorStrings, type ClozeEditorStringKey } from "./strings.js";
-import { cx, IssueList } from "@quiz/ui";
+import { cx, IssueList, PromptField } from "@quiz/ui";
 import {
   helpClass,
   inputClass,
@@ -49,51 +49,28 @@ export function ClozeEditor({
   const parse = parseCloze(config.text);
   const patch = (next: Partial<ClozeConfig>) => onChange({ ...config, ...next });
 
-  const textField = RichText ? (
-    <RichText
-      id="cloze-text"
-      aria-label={s.text}
-      value={config.text}
-      onChange={(text) => patch({ text })}
-      // The `{{…}}` holes are OBJECTS in this field: chips the teacher clicks
-      // to edit, written back verbatim. It is what finally replaced the
-      // textarea this editor was stuck with — a plain rich field escaped the
-      // braces, the `|` and the `*` of a weight on the first save.
-      holes
-      {...(disabled === undefined ? {} : { disabled })}
-    />
-  ) : (
-    <textarea
-      id="cloze-text"
-      rows={8}
-      className={cx(inputClass, "w-full resize-y font-mono text-[13px]")}
-      aria-label={s.text}
-      value={config.text}
-      disabled={disabled}
-      onChange={(e) => patch({ text: e.target.value })}
-    />
-  );
-
   return (
     <div className="flex flex-col gap-6">
       <IssueList issues={rootIssues(issues)} />
 
       <section className={sectionClass}>
-        {/*
-         * A caption and not a `<label for>` when the host lent its rich
-         * editor: its surface is a contenteditable, which is not a labelable
-         * element — the browser reports such a `for` as matching no control,
-         * and the field takes its name from `aria-label` instead. The
-         * textarea fallback is a real control and keeps its label.
-         */}
-        {RichText ? (
-          <span className={labelClass}>{s.text}</span>
-        ) : (
-          <label className={labelClass} htmlFor="cloze-text">
-            {s.text}
-          </label>
-        )}
-        {textField}
+        <PromptField
+          id="cloze-text"
+          label={s.text}
+          value={config.text}
+          onChange={(text) => patch({ text })}
+          disabled={disabled}
+          RichText={RichText}
+          // The `{{…}}` holes are OBJECTS in the rich field: chips the teacher
+          // clicks to edit, written back verbatim. It is what finally replaced
+          // the textarea this editor was stuck with — a plain rich field
+          // escaped the braces, the `|` and the `*` of a weight on the first
+          // save.
+          holes
+          rows={8}
+          labelClassName={labelClass}
+          textareaClassName={cx(inputClass, "w-full resize-y font-mono text-[13px]")}
+        />
         <p className={helpClass}>{s.textHint}</p>
         <IssueList issues={issuesAt(issues, "text")} />
         {parse.errors.length > 0 ? (
