@@ -26,6 +26,7 @@ import { gradingLinks } from "./grading";
 import { DOCS_URL, SOURCES_URL } from "./Header";
 import { LOCALES, type Locale, type TFunction } from "./i18n";
 import type { Route } from "./router";
+import { screenCommands } from "./screenCommands";
 import type { Theme, ThemeChoice } from "./theme";
 import type { IconType } from "./ui";
 
@@ -102,7 +103,7 @@ function openExternal(url: string) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
-/** Every command the viewer of `ctx` can run, in group order. */
+/** The mounted screen's own commands first, then every command the viewer of `ctx` can run. */
 export function buildCommands(ctx: CommandContext): Command[] {
   const { t, navigate } = ctx;
   const commands: Command[] = [
@@ -291,8 +292,6 @@ export function buildCommands(ctx: CommandContext): Command[] {
       run: () => openExternal(SOURCES_URL),
     },
   );
-  // WP8: evaluation + dashboard
-  commands.push(...contextualCommands(ctx));
 
   for (const { topic, title } of ctx.helpTopics) {
     commands.push({
@@ -305,34 +304,13 @@ export function buildCommands(ctx: CommandContext): Command[] {
     });
   }
 
-  return commands;
-}
-
-// WP8: evaluation + dashboard
-/**
- * Commands a MOUNTED SCREEN contributes, on top of the ones the context can
- * describe on its own (PLAN-MVP §6.8: "the contextual evaluation actions when
- * the live screen is mounted"). The live dashboard owns the mutations that
- * pause or close a quiz; the Shell, which builds the palette, does not and
- * must not. So the screen registers a source here while it is mounted and
- * `buildCommands` folds it in — the registry is read at the moment the
- * palette opens, so a stale closure is not a thing.
- */
-export type ContextualSource = (ctx: CommandContext) => Command[];
-
-const contextualSources = new Set<ContextualSource>();
-
-/** Registers a source; the returned function removes it (a cleanup effect). */
-export function registerContextualCommands(source: ContextualSource): () => void {
-  contextualSources.add(source);
-  return () => {
-    contextualSources.delete(source);
-  };
-}
-
-/** Every command the currently mounted screens contribute, in registration order. */
-export function contextualCommands(ctx: CommandContext): Command[] {
-  return [...contextualSources].flatMap((source) => source(ctx));
+  // WP8: the commands the MOUNTED SCREEN lends to the palette — the live
+  // dashboard's start / pause / +5 min / close, the editor's "Publish this
+  // question". They come FIRST, and `groupCommands` keeps that order inside
+  // each group: the screen under the palette is what the reader is working
+  // on, so its own actions outrank the generic ones. `screenCommands.ts`
+  // holds the registry and the rule.
+  return [...screenCommands(), ...commands];
 }
 
 /**

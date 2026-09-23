@@ -3,25 +3,29 @@ import { useEffect } from "react";
 import type { Command } from "./commands";
 
 /**
- * The commands a MOUNTED screen adds to the palette
- * (`docs/spec/08-experience-deux-niveaux.md` §8.3: "les actions sont fournies
- * par les écrans montés").
+ * The ONE registry of "the commands of the mounted screen"
+ * (`docs/spec/08-experience-deux-niveaux.md` §8.4: "the actions are provided
+ * by the mounted screens, through a command registry […] the palette knows
+ * nothing about the modules").
  *
- * `buildCommands` stays a pure function of an explicit context — it cannot
- * know that a pool screen is open, or which question the editor holds. So a
- * screen registers its own commands while it is mounted, and the palette,
- * which is opened from the same page, reads them at build time.
+ * `buildCommands` takes an explicit context and, beside it, reads the one slot
+ * below — it cannot know from the context alone that a pool screen is open, or
+ * which question the editor holds. So a screen
+ * declares its own commands here while it is mounted, and `buildCommands`
+ * reads them when the palette opens, which is why a stale closure is not a
+ * thing. They come FIRST within their group, before the generic ones: the
+ * screen under the palette is what the reader is working on.
  *
- * One screen at a time on purpose: two of them would mean two "Publish"
- * entries, and there is only ever one page under the palette.
+ * One slot and not a set of sources: exactly one screen is mounted under the
+ * palette at a time, and two of them would mean two "Publish" entries.
  */
 let current: Command[] = [];
 
 /** Registers `commands` for as long as the calling component is mounted. */
 export function useScreenCommands(commands: Command[]): void {
   // No dependency array: the commands close over the screen's current state
-  // (the selected category, the draft being published), and re-registering
-  // them on every render is one assignment.
+  // (the selected category, the draft being published, the live controls),
+  // and re-registering them on every render is one assignment.
   useEffect(() => {
     current = commands;
     return () => {
@@ -30,7 +34,7 @@ export function useScreenCommands(commands: Command[]): void {
   });
 }
 
-/** What the palette appends to the global list. */
+/** What `buildCommands` folds into the global list. */
 export function screenCommands(): Command[] {
   return current;
 }
