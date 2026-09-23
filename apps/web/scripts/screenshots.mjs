@@ -203,8 +203,8 @@ const scenes = [
     } },
 
   // The bell, and the same bell with more than nine unread ("9+").
-  { name: "notifications", role: "teacher", path: "/", fold: true, act: (p) => p.getByRole("button", { name: /^notifications/i }).first().click() },
-  { name: "notifications-many", role: "teacher", path: "/?many=1", fold: true, act: (p) => p.getByRole("button", { name: /^notifications/i }).first().click() },
+  { name: "notifications", role: "teacher", path: "/", fold: true, act: async (p) => { await p.getByRole("button", { name: /^user menu/i }).first().click(); await p.getByRole("menuitem", { name: /^notifications/i }).click(); } },
+  { name: "notifications-many", role: "teacher", path: "/?many=1", fold: true, act: async (p) => { await p.getByRole("button", { name: /^user menu/i }).first().click(); await p.getByRole("menuitem", { name: /^notifications/i }).click(); } },
 
   // WP: live polls. The launcher is a sheet opened from the navigation; the
   // projection is a page, and the mock addresses its three polls by name.

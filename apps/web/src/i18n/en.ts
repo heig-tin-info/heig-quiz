@@ -17,6 +17,7 @@ export const en = {
   "menu.settings": "Settings",
   "menu.signout": "Sign out",
   "menu.user": "User menu",
+  "menu.userUnread": "User menu ({n} unread notifications)",
   "menu.studentView": "Switch to student view",
   "menu.teacherView": "Back to teacher view",
   "menu.lightTheme": "Light theme",
@@ -1771,7 +1772,7 @@ export const en = {
   "share.role.owner": "Owner",
 
   "notif.title": "Notifications",
-  "notif.titleUnread": "Notifications ({n} unread)",
+  "notif.unreadCount": "{n} unread",
   "notif.markAll": "Mark all as read",
   "notif.unread": "Unread",
   "notif.poolShared": "{byName} shared the pool “{poolName}” with you as {role}.",
