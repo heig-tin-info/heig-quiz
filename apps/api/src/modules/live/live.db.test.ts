@@ -11,6 +11,7 @@ import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import { LobbyView } from "@quiz/contracts";
 import type { RunnerOutcome } from "@quiz/core/server";
 import { GRACE_MS } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
@@ -121,6 +122,19 @@ describe("entering an evaluation (F-LIVE-01)", () => {
     // The row exists but has not started: no clock is running yet.
     expect(result.attempt.state).toBe("not_started");
     expect(result.attempt.deadlineAt).toBeNull();
+  });
+
+  it("carries the evaluation's navigation rule in the lobby (§6.3, F-LIVE-08)", async () => {
+    const seed = await seedLive(db);
+    const draft = await reload(db, seed.evaluationId);
+    await db
+      .update(evaluations)
+      .set({ settings: { ...(draft.settings as object), navigation: "forward_only" } })
+      .where(eq(evaluations.id, seed.evaluationId));
+    const row = await applyState(db, await reload(db, seed.evaluationId), "lobby", clock.now());
+    const participant = (await service.participantOf(db, row, seed.studentIds[0]!))!;
+    const view = await service.lobbyView(db, row, participant, clock.now());
+    expect(LobbyView.parse(view).navigation).toBe("forward_only");
   });
 
   it("refuses a wrong access code and a foreign address (F-EVAL-12)", async () => {

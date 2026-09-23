@@ -167,3 +167,13 @@ describe("the server entry point", () => {
     }
   });
 });
+
+describe("aggregate (F-RES-03, audit B-15)", () => {
+  it("counts the text typed, trimmed, and a legacy bare string alike", () => {
+    const stats = shortServer.aggregate!({
+      answers: [{ text: " Galilee " }, "Galilee", { text: "" }, { selected: [1] }],
+      details: [],
+    });
+    expect(stats).toEqual({ distribution: [["Galilee", 2], ["", 1]] });
+  });
+});

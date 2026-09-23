@@ -10,16 +10,23 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { COMMON_FORBIDDEN_STUDENT_KEYS } from "@quiz/core/server";
+import {
+  COMMON_FORBIDDEN_STUDENT_KEYS,
+  type RunnerOutcome,
+  type RunnerService,
+} from "@quiz/core/server";
+import type { ReleasedGrades } from "@quiz/contracts";
 import type { CodeDetails } from "@quiz/qt-code/server";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
 import { evaluationItems, evaluations } from "../../db/schema.js";
 import { testApp, testDb, type TestDb } from "../../test/db.js";
-import { fakeShort } from "../../test/fakeType.js";
+import { seedCodeEvaluation } from "../../test/codeFixture.js";
+import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { applyState, isLegalTransition, joinedItems } from "../evaluation/service.js";
+import { runEvaluationGrading } from "../grading/jobs.js";
 import * as grading from "../grading/service.js";
 import * as live from "../live/service.js";
 import { BOM, csvField, resultsCsv } from "./csv.js";
@@ -288,6 +295,156 @@ describe("student feedback (F-RES-04, docs/05 §5.7)", () => {
   });
 });
 
+describe("`released_grades` is the cache of the grade (docs/01 §5, audit D-06)", () => {
+  /** The frozen snapshot with the one attempt's grade replaced by `grade`. */
+  async function tamper(evaluationId: string, grade: number) {
+    const stored = await reload(db, evaluationId);
+    const snapshot = stored.releasedGrades as ReleasedGrades;
+    await db
+      .update(evaluations)
+      .set({
+        releasedGrades: {
+          ...snapshot,
+          rows: snapshot.rows.map((r) => (r.attemptId === null ? r : { ...r, grade })),
+        },
+      })
+      .where(eq(evaluations.id, evaluationId));
+  }
+
+  async function studentGrades(built: Awaited<ReturnType<typeof evaluationWorth>>) {
+    const evaluation = await reload(db, built.evaluation.id);
+    const studentId = built.seed.studentIds[0]!;
+    const attempt = (await live.attemptById(db, built.attempt.id))!;
+    const feedback = await service.studentFeedback(db, evaluation, attempt);
+    if (!feedback.available) throw new Error("unreachable");
+    const [card] = await service.studentResultCards(db, studentId);
+    const home = await live.studentHome(db, studentId, built.app.clock.now());
+    return {
+      feedback: feedback.grade,
+      card: card!.grade,
+      home: home.past.find((c) => c.id === built.evaluation.id)!.grade,
+    };
+  }
+
+  it("serves the frozen grade while nothing changed since the release", async () => {
+    const built = await evaluationWorth(20);
+    await award(built.app, built, 10);
+    await service.releaseResults(db, await reload(db, built.evaluation.id), built.app.clock.now());
+    expect(await studentGrades(built)).toEqual({ feedback: 3.5, card: 3.5, home: 3.5 });
+
+    // A snapshot that says something else than the gradings is what the
+    // three student surfaces show: they read it, they do not recompute.
+    await tamper(built.evaluation.id, 5.5);
+    expect(await studentGrades(built)).toEqual({ feedback: 5.5, card: 5.5, home: 5.5 });
+  });
+
+  it("falls through to the gradings once a correction landed after the release", async () => {
+    const built = await evaluationWorth(20);
+    await award(built.app, built, 10);
+    await service.releaseResults(db, await reload(db, built.evaluation.id), built.app.clock.now());
+    await tamper(built.evaluation.id, 5.5);
+
+    // F-GRADE-09: the correction reaches the students at once.
+    await award(built.app, built, 20);
+    await service.markModifiedAfterRelease(
+      db,
+      await reload(db, built.evaluation.id),
+      built.app.clock.now(),
+    );
+    expect(await studentGrades(built)).toEqual({ feedback: 6, card: 6, home: 6 });
+
+    // Re-releasing refreezes the snapshot and the cache serves it again.
+    await service.releaseResults(db, await reload(db, built.evaluation.id), built.app.clock.now());
+    const stored = await reload(db, built.evaluation.id);
+    expect(stored.modifiedAfterRelease).toBe(false);
+    expect(await studentGrades(built)).toEqual({ feedback: 6, card: 6, home: 6 });
+  });
+});
+
+describe("every validated write after the release raises the flag (D-06 review)", () => {
+  it("flips `modified_after_release` from inside `writeGradings`, so the card shows the live grade", async () => {
+    const built = await evaluationWorth(20);
+    await award(built.app, built, 10);
+    await service.releaseResults(db, await reload(db, built.evaluation.id), built.app.clock.now());
+    expect((await reload(db, built.evaluation.id)).modifiedAfterRelease).toBe(false);
+
+    // The batched writer itself, with no `markModifiedAfterRelease` after it:
+    // the grading pass and the runner job call nothing else.
+    await grading.writeGradings(db, [
+      {
+        attemptId: built.attempt.id,
+        itemId: built.itemId,
+        answerId: null,
+        points: 20,
+        maxPoints: 20,
+        source: "auto",
+        state: "validated",
+        now: built.app.clock.now(),
+      },
+    ]);
+    expect((await reload(db, built.evaluation.id)).modifiedAfterRelease).toBe(true);
+    const [card] = await service.studentResultCards(db, built.seed.studentIds[0]!);
+    expect({ points: card!.points, grade: card!.grade }).toEqual({ points: 20, grade: 6 });
+  });
+
+  it("leaves an unreleased evaluation alone and ignores a proposal", async () => {
+    const built = await evaluationWorth(20);
+    await award(built.app, built, 10);
+    expect((await reload(db, built.evaluation.id)).modifiedAfterRelease).toBe(false);
+
+    await service.releaseResults(db, await reload(db, built.evaluation.id), built.app.clock.now());
+    await grading.writeGradings(db, [
+      {
+        attemptId: built.attempt.id,
+        itemId: built.itemId,
+        answerId: null,
+        points: 0,
+        maxPoints: 20,
+        source: "auto",
+        state: "proposed",
+        now: built.app.clock.now(),
+      },
+    ]);
+    // A proposal changes no grade: the frozen snapshot is still the truth.
+    expect((await reload(db, built.evaluation.id)).modifiedAfterRelease).toBe(false);
+  });
+
+  it("flips it when the runner job validates a proposal after the release", async () => {
+    const restore = registerForTests(fakeRunnableCode);
+    try {
+      const app = await appFor();
+      const fixture = await seedCodeEvaluation(db, app.clock.now());
+      // Under the stub the cell ends as a proposal worth zero (D14)…
+      await runEvaluationGrading(app, { evaluationId: fixture.evaluationId });
+      await service.releaseResults(db, await reload(db, fixture.evaluationId), app.clock.now());
+      const [frozen] = await service.studentResultCards(db, fixture.studentId);
+      expect(frozen!.grade).toBe(1);
+
+      // …then a real runner comes back and the job validates it.
+      const outcome: RunnerOutcome = {
+        compile: { ok: true, stdout: "", stderr: "", ms: 1 },
+        cases: [
+          { exitCode: 0, stdout: "ok", stderr: "", ms: 2, timedOut: false, oom: false, truncated: false },
+        ],
+      };
+      const runner: RunnerService = {
+        run: async () => outcome,
+        health: async () => ({ ok: true, languages: ["c"], queued: 0, avgMs: 1 }),
+      };
+      (app as unknown as { runner: RunnerService }).runner = runner;
+      app.clock.advance(60_000);
+      await runEvaluationGrading(app, { evaluationId: fixture.evaluationId });
+
+      expect((await reload(db, fixture.evaluationId)).modifiedAfterRelease).toBe(true);
+      const [card] = await service.studentResultCards(db, fixture.studentId);
+      expect(card!.points).toBeGreaterThan(0);
+      expect(card!.grade).toBeGreaterThan(1);
+    } finally {
+      restore();
+    }
+  });
+});
+
 /**
  * Layer 2 of the details filter alone: the fake `short` registered here has
  * no `studentDetails` hook, which is exactly the type that "gains a
@@ -461,8 +618,10 @@ describe("the student's pages read in a fixed number of statements (audit D-05)"
     // Every statement drizzle sends goes through the PGlite client's `query`.
     const statements = vi.spyOn(raw.$client, "query");
     try {
+      // One: every card is served from `released_grades` (D-06), so the two
+      // grouped queries of the live computation have nothing to read.
       const cards = await service.studentResultCards(db, studentId!);
-      expect(statements).toHaveBeenCalledTimes(3);
+      expect(statements).toHaveBeenCalledTimes(1);
       expect(cards).toHaveLength(3);
       for (const card of cards) {
         expect({ points: card.points, totalPoints: card.totalPoints, grade: card.grade }).toEqual(

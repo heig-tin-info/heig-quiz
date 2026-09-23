@@ -46,3 +46,18 @@ mechanism (NFR-09), revocable sessions (AU-06), a durable job queue and a simple
    more backup and one more failure mode, with no need justified by an NFR (see ADR-004).
 3. **JWT sessions**: AU-06 requires server-side invalidation; a sessions table (hashed token)
    is enough and avoids any token revocation machinery.
+
+## Addendum (2026-09-23): the audit log is read with `psql`
+
+`audit_log` is append-only forensics. No route of the application reads it, and none is
+planned until an admin screen needs one: the maintainer reads it with `psql` on the VM when
+something has to be explained after the fact. Two indexes serve the two questions asked
+there, and nothing else (migration `0009_audit_log_indexes`, audit D-15):
+
+- `audit_log_created_idx (created_at DESC)` — "what happened lately";
+- `audit_log_subject_idx (subject_type, subject_id)` — "what happened to this evaluation,
+  this attempt, this user".
+
+An admin read route, when it comes, is a new decision: it must go through `staffAccess`
+(or an admin check) like every other read and must not widen the §5 privileges of the
+application role.

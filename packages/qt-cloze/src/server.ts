@@ -3,7 +3,7 @@
  *
  * No React in this import graph: the API and the grading worker load it.
  */
-import { ConfigMigrationError, type QuestionTypeServer } from "@quiz/core/server";
+import { ConfigMigrationError, tallyKeys, type QuestionTypeServer } from "@quiz/core/server";
 import { clozeStudentTemplate, describeBlank, parseCloze } from "@quiz/domain/cloze";
 import { fromCanonical, toCanonical } from "./canonical.js";
 import { gradeClozeAnswer } from "./grade.js";
@@ -128,6 +128,21 @@ export const clozeServer: QuestionTypeServer<
         return value.trim();
       })
       .join(" · ");
+  },
+
+  /**
+   * Per blank, by the text the student typed (`"1: Galilee"`), which is what
+   * makes "everybody wrote the same wrong word" visible.
+   */
+  aggregate({ answers }) {
+    const keys: string[] = [];
+    for (const payload of answers) {
+      if (!payload || typeof payload !== "object" || !("blanks" in payload)) continue;
+      const blanks = (payload as { blanks: unknown }).blanks;
+      if (!Array.isArray(blanks)) continue;
+      for (const [index, value] of blanks.entries()) keys.push(`${index}: ${String(value ?? "")}`);
+    }
+    return { distribution: tallyKeys(keys) };
   },
 
   /** The authoring text, blanks included: every answer a cloze holds is in it. */

@@ -64,6 +64,13 @@
       "when": 1790161290729,
       "tag": "0008_schema_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790166394312,
+      "tag": "0009_audit_log_indexes",
+      "breakpoints": true
     }
   ]
 }

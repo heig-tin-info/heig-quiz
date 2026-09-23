@@ -36,7 +36,6 @@ import type {
   StudentResultItem,
 } from "@quiz/contracts";
 import { describe, gradeFromPoints, histogram, round2 } from "@quiz/domain";
-import { CodeDetails } from "@quiz/qt-code/server";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -48,6 +47,7 @@ import {
 } from "../../db/schema.js";
 import {
   applyState,
+  cachedGrade,
   clearRelease,
   feedbackOf,
   joinedItems,
@@ -310,9 +310,9 @@ export async function markModifiedAfterRelease(
   evaluation: EvaluationRecord,
   now: Date,
 ): Promise<boolean> {
-  if (evaluation.releasedAt === null) return false;
-  await setModifiedAfterRelease(db, evaluation.id, now);
-  return true;
+  // Re-read by the UPDATE, not trusted from `evaluation`, which the caller
+  // loaded before its own writes (a release may have committed since).
+  return setModifiedAfterRelease(db, evaluation.id, now);
 }
 
 // --- Per-question view (F-RES-03) ----------------------------------------
@@ -349,6 +349,13 @@ export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<
       (a) => a.itemId === item.item.id && a.payload !== null,
     );
     const itemGradings = [...validated.values()].filter((g) => g.itemId === item.item.id);
+    // The per-type statistics come from the type itself (audit B-15): the
+    // results module knows no answer shape and no details shape.
+    const stats =
+      typeOf(item.question.type).aggregate?.({
+        answers: itemAnswers.map((a) => a.payload),
+        details: itemGradings.map((g) => g.details),
+      }) ?? {};
     return {
       item: views[index]!,
       student: studentView({
@@ -366,8 +373,8 @@ export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<
       }),
       explanation: item.version.explanation === "" ? null : item.version.explanation,
       answered: itemAnswers.length,
-      distribution: distributionOf(item.question.type, itemAnswers.map((a) => a.payload)),
-      casePassRate: casePassRateOf(itemGradings),
+      distribution: distributionOf(stats.distribution ?? []),
+      casePassRate: (stats.casePassRate ?? []).map((c) => ({ ...c })),
       successRate: views[index]!.successRate,
       avgMs: null,
     };
@@ -375,61 +382,16 @@ export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<
 }
 
 /**
- * The answer distribution of §4.6. `mcq` is counted by canonical choice index
- * (decision D3 makes that index meaningless to a student, and exact for the
- * teacher); `short` and `cloze` are counted by the text the student typed,
- * which is what makes "everybody wrote 'Galilee'" visible.
+ * The answer distribution of §4.6, as the debrief shows it: the type's
+ * counts (`aggregate`), most frequent first, the first fifty.
  */
-function distributionOf(type: string, payloads: readonly unknown[]): AnswerDistributionEntry[] {
-  const counts = new Map<string, number>();
-  const add = (key: string) => counts.set(key, (counts.get(key) ?? 0) + 1);
-
-  for (const payload of payloads) {
-    if (type === "mcq" && payload && typeof payload === "object" && "selected" in payload) {
-      const selected = (payload as { selected: unknown }).selected;
-      if (Array.isArray(selected)) for (const index of new Set(selected)) add(String(index));
-      continue;
-    }
-    if (type === "cloze" && payload && typeof payload === "object" && "blanks" in payload) {
-      const blanks = (payload as { blanks: unknown }).blanks;
-      if (Array.isArray(blanks)) {
-        for (const [index, value] of blanks.entries()) add(`${index}: ${String(value ?? "")}`);
-      }
-      continue;
-    }
-    if (typeof payload === "string") {
-      add(payload.trim());
-      continue;
-    }
-    if (payload && typeof payload === "object" && "text" in payload) {
-      add(String((payload as { text: unknown }).text ?? "").trim());
-      continue;
-    }
-    // `code` and anything else: the distribution is meaningless, the case
-    // pass rate is the useful number and it is computed separately.
-  }
-  return [...counts.entries()]
+function distributionOf(
+  counts: ReadonlyArray<readonly [key: string, count: number]>,
+): AnswerDistributionEntry[] {
+  return [...counts]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 50)
     .map(([key, count]) => ({ key, label: key === "" ? "(vide)" : key, count, correct: null }));
-}
-
-/** `code`: how many attempts passed each named test case (F-RES-03). */
-function casePassRateOf(
-  rows: readonly { details: unknown }[],
-): { name: string; passed: number; total: number }[] {
-  const tally = new Map<string, { passed: number; total: number }>();
-  for (const row of rows) {
-    const parsed = CodeDetails.safeParse(row.details);
-    if (!parsed.success) continue;
-    for (const c of parsed.data.cases) {
-      const acc = tally.get(c.name) ?? { passed: 0, total: 0 };
-      acc.total += 1;
-      if (c.ok) acc.passed += 1;
-      tally.set(c.name, acc);
-    }
-  }
-  return [...tally.entries()].map(([name, acc]) => ({ name, ...acc }));
 }
 
 // --- Student feedback (F-RES-04, docs/05 §5.7) ---------------------------
@@ -514,6 +476,10 @@ export async function studentFeedback(
   });
 
   points = round2(points);
+  // The total is the frozen one while it still holds (D-06); the per-item
+  // points above always come from the gradings, which the snapshot mirrors.
+  const hit =
+    attempt.userId === null ? null : cachedGrade(evaluation, attempt.userId, attempt.id);
   return {
     available: true,
     evaluation: {
@@ -522,9 +488,9 @@ export async function studentFeedback(
       releasedAt: isoOrNull(evaluation.releasedAt),
     },
     attemptId: attempt.id,
-    points,
-    totalPoints,
-    grade: gradeFromPoints(points, totalPoints, scaleOf(evaluation)),
+    points: hit ? hit.points : points,
+    totalPoints: hit ? hit.totalPoints : totalPoints,
+    grade: hit ? hit.grade : gradeFromPoints(points, totalPoints, scaleOf(evaluation)),
     items: result,
   };
 }
@@ -593,19 +559,31 @@ export async function studentResultCards(db: Db, userId: string): Promise<Result
   const rows = (await studentEvaluationRows(db, userId)).filter(
     (row) => row.evaluation.releasedAt !== null,
   );
-  // F-GRADE-09 is explicit: a re-correction after the release UPDATES the
-  // grades. They are therefore recomputed from the validated gradings; the
-  // frozen `released_grades` is the record of what was published, and
-  // `modified_after_release` is what tells the teacher the two have drifted.
-  // Two grouped queries for the whole page, not two per card.
-  const totals = await totalPointsByEvaluation(db, [...new Set(rows.map((r) => r.evaluation.id))]);
+  // The grade frozen at release is served as long as it is still true
+  // (`cachedGrade`, D-06). F-GRADE-09 is explicit: a re-correction after the
+  // release UPDATES the grades, so once `modified_after_release` is set they
+  // are recomputed from the validated gradings. Two grouped queries for the
+  // cards that need it, not two per card — and none when every card is cached.
+  const cached = new Map(
+    rows.map((row) => [
+      row,
+      cachedGrade(row.evaluation, userId, row.attempt?.id ?? null),
+    ]),
+  );
+  const live = rows.filter((row) => cached.get(row) === null);
+  const totals = await totalPointsByEvaluation(db, [...new Set(live.map((r) => r.evaluation.id))]);
   const pointsPerAttempt = await pointsByAttempt(
     db,
-    rows.map((r) => r.attempt?.id).filter((id): id is string => typeof id === "string"),
+    live.map((r) => r.attempt?.id).filter((id): id is string => typeof id === "string"),
   );
   return rows.map((row) => {
-    const totalPoints = totals.get(row.evaluation.id) ?? 0;
-    const points = row.attempt ? (pointsPerAttempt.get(row.attempt.id) ?? 0) : 0;
+    const hit = cached.get(row) ?? null;
+    const totalPoints = hit ? hit.totalPoints : (totals.get(row.evaluation.id) ?? 0);
+    const points = hit
+      ? hit.points
+      : row.attempt
+        ? (pointsPerAttempt.get(row.attempt.id) ?? 0)
+        : 0;
     return {
       evaluationId: row.evaluation.id,
       title: row.evaluation.title,
@@ -616,7 +594,7 @@ export async function studentResultCards(db: Db, userId: string): Promise<Result
       releasedAt: isoOrNull(row.evaluation.releasedAt),
       points,
       totalPoints,
-      grade: gradeFromPoints(points, totalPoints, scaleOf(row.evaluation)),
+      grade: hit ? hit.grade : gradeFromPoints(points, totalPoints, scaleOf(row.evaluation)),
     };
   });
 }

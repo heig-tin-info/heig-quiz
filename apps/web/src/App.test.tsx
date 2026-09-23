@@ -36,6 +36,7 @@ const lobby: AttemptOrLobby = {
   kind: "lobby",
   view: {
     evaluation: { id: EVAL, title: "Quiz 3 — Pointers", state: "lobby", announcedDurationS: 1200 },
+    navigation: "free",
     present: 3,
     enrolled: 6,
     timeBonusPercent: 0,

@@ -115,3 +115,19 @@ describe("the server entry point", () => {
     }
   });
 });
+
+describe("aggregate (F-RES-03, audit B-15)", () => {
+  it("counts each blank by its position and the text typed", () => {
+    const stats = clozeServer.aggregate!({
+      answers: [{ blanks: ["a", null] }, { blanks: ["a", "b"] }, { text: "stray" }],
+      details: [],
+    });
+    expect(stats).toEqual({
+      distribution: [
+        ["0: a", 2],
+        ["1: ", 1],
+        ["1: b", 1],
+      ],
+    });
+  });
+});

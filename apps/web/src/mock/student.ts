@@ -291,6 +291,7 @@ export const studentLobbyView = (): LobbyView => ({
     state: "lobby",
     announcedDurationS: 20 * 60,
   },
+  navigation: "free",
   present: 18,
   enrolled: 24,
   timeBonusPercent: 33,

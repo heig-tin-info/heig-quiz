@@ -36,6 +36,7 @@ import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { answers, attempts, gradings, users } from "../../db/schema.js";
 import {
+  flagReleasedEvaluationsOf,
   joinedItems,
   staffAttemptIds,
   type EvaluationRecord,
@@ -214,6 +215,17 @@ async function writeChunk(db: Db, inputs: readonly WriteGradingInput[]): Promise
       createdAt: input.now,
     }));
     const rows = await tx.insert(gradings).values(values).returning();
+    // A validated grading on a released evaluation changes a published
+    // grade: F-GRADE-09's flag goes up here, in the same transaction, for
+    // every caller at once (the panel, the automatic pass, the runner job).
+    const validated = inputs.filter((i) => i.state === "validated");
+    if (validated.length > 0) {
+      await flagReleasedEvaluationsOf(
+        tx,
+        [...new Set(validated.map((i) => i.attemptId))],
+        validated[0]!.now,
+      );
+    }
     // RETURNING order is not promised by SQL: put the rows back in input order.
     const byId = new Map(rows.map((r) => [r.id, r]));
     return values.map((v) => byId.get(v.id)!);

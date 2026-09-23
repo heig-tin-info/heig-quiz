@@ -45,16 +45,17 @@ const view: LobbyView = {
     state: "lobby",
     announcedDurationS: 1200,
   },
+  navigation: "free",
   present: 18,
   enrolled: 24,
   timeBonusPercent: 33,
   serverNow: "2026-09-20T10:00:00.000Z",
 };
 
-function render(onStart = vi.fn(), onLeave = vi.fn()) {
+function render(onStart = vi.fn(), onLeave = vi.fn(), shown: LobbyView = view) {
   vi.stubGlobal("EventSource", FakeStream);
   const result = renderWithProviders(
-    <Lobby view={view} navigation="free" onStart={onStart} onLeave={onLeave} />,
+    <Lobby view={shown} onStart={onStart} onLeave={onLeave} />,
     { locale: "fr" },
   );
   return { ...result, onStart, onLeave, stream: streams.at(-1)! };
@@ -86,11 +87,17 @@ describe("the lobby", () => {
     expect(onLeave).toHaveBeenCalled();
   });
 
-  it("states the three rules, navigation first when it is known", () => {
+  it("states the three rules, the evaluation's navigation first", () => {
     render();
     expect(screen.getByText("Navigation libre")).toBeInTheDocument();
     expect(screen.getByText("Enregistré au fil de la frappe")).toBeInTheDocument();
     expect(screen.getByText("Une seule tentative")).toBeInTheDocument();
+  });
+
+  it("explains the navigation the view carries (F-LIVE-08)", () => {
+    render(undefined, undefined, { ...view, navigation: "forward_only" });
+    expect(screen.queryByText("Navigation libre")).not.toBeInTheDocument();
+    expect(screen.getByText("Sens unique")).toBeInTheDocument();
   });
 
   it("follows the live count", () => {

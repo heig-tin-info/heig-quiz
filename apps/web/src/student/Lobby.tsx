@@ -18,7 +18,7 @@
  * nobody has to reload to begin.
  */
 import { useState } from "react";
-import { CheckCheck, Clock, Save, ShieldCheck } from "lucide-react";
+import { CheckCheck, Save, ShieldCheck } from "lucide-react";
 
 import type { LobbyView } from "@quiz/contracts";
 
@@ -35,17 +35,10 @@ const NAV_COPY = {
 
 export function Lobby({
   view,
-  navigation,
   onStart,
   onLeave,
 }: {
   view: LobbyView;
-  /**
-   * From the evaluation's settings, when the caller knows them. `LobbyView`
-   * does not carry them (§4.4), so the first rule is only shown to a student
-   * whose attempt has already been created once.
-   */
-  navigation?: keyof typeof NAV_COPY | undefined;
   onStart: () => void;
   onLeave: () => void;
 }) {
@@ -75,12 +68,10 @@ export function Lobby({
   const bonusS = durationS === null ? null : Math.round((durationS * view.timeBonusPercent) / 100);
   const time = new Date(clock.synced ? clock.now() : tick);
 
-  // Three fixed lines (§6.3). The navigation rule replaces the generic clock
-  // one as soon as the caller knows which navigation was configured.
+  // Three fixed lines (§6.3), the navigation rule first: `LobbyView` carries
+  // the evaluation's `settings.navigation` for exactly this line.
   const rules = [
-    navigation === undefined
-      ? ({ icon: Clock, title: "lobby.clock.title", body: "lobby.clock.body" } as const)
-      : ({ icon: CheckCheck, ...NAV_COPY[navigation] } as const),
+    { icon: CheckCheck, ...NAV_COPY[view.navigation] } as const,
     { icon: Save, title: "lobby.saving.title", body: "lobby.saving.body" } as const,
     { icon: ShieldCheck, title: "lobby.attempt.title", body: "lobby.attempt.body" } as const,
   ];

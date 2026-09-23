@@ -35,7 +35,7 @@ import {
   type ItemPatch,
   type ItemRow,
   type McqPolicy,
-  type ReleasedGrades,
+  ReleasedGrades,
 } from "@quiz/contracts";
 
 import { round2 } from "@quiz/domain";
@@ -807,12 +807,82 @@ export async function clearRelease(db: DbOrTx, id: string, now: Date): Promise<v
     .where(eq(evaluations.id, id));
 }
 
-/** F-GRADE-09: a correction landed after the release. */
-export async function setModifiedAfterRelease(db: DbOrTx, id: string, now: Date): Promise<void> {
+/** A grade read from the frozen snapshot rather than recomputed. */
+export interface CachedGrade {
+  points: number;
+  totalPoints: number;
+  grade: number;
+}
+
+/**
+ * The grade of `userId`'s attempt as frozen in `released_grades`, while the
+ * snapshot is still what the validated gradings say (docs/01 §5: the grade
+ * "is cached when the results are released"; audit D-06).
+ *
+ * `null` means "compute it live": nothing is released, a correction landed
+ * after the release (`modified_after_release`, F-GRADE-09 — the students see
+ * the NEW grade), or the snapshot has no row for this student and attempt
+ * (a seat that joined after the release, a teacher's own test, ADR-018).
+ */
+export function cachedGrade(
+  evaluation: Pick<EvaluationRecord, "releasedAt" | "releasedGrades" | "modifiedAfterRelease">,
+  userId: string,
+  attemptId: string | null,
+): CachedGrade | null {
+  if (evaluation.releasedAt === null || evaluation.modifiedAfterRelease) return null;
+  const snapshot = ReleasedGrades.safeParse(evaluation.releasedGrades);
+  if (!snapshot.success) return null;
+  const row = snapshot.data.rows.find((r) => r.userId === userId && r.attemptId === attemptId);
+  if (!row) return null;
+  return { points: row.points, totalPoints: snapshot.data.totalPoints, grade: row.grade };
+}
+
+/**
+ * F-GRADE-09: a correction landed after the release. Whether the evaluation
+ * IS released is read by the UPDATE itself, not from a record the caller
+ * loaded earlier: a release or a withdrawal that commits in between is seen
+ * (the row lock makes PostgreSQL re-check the predicate). Returns whether the
+ * evaluation was released, i.e. whether the flag now stands.
+ */
+export async function setModifiedAfterRelease(db: DbOrTx, id: string, now: Date): Promise<boolean> {
+  const rows = await db
+    .update(evaluations)
+    .set({ modifiedAfterRelease: true, updatedAt: now })
+    .where(and(eq(evaluations.id, id), isNotNull(evaluations.releasedAt)))
+    .returning({ id: evaluations.id });
+  return rows.length > 0;
+}
+
+/**
+ * The same flag, raised by the grading writer for every RELEASED evaluation
+ * that owns one of `attemptIds`, in the writer's own transaction (audit D-06
+ * review): a validated grading changes a published grade whoever wrote it —
+ * a teacher, the automatic pass or the runner job — and the frozen
+ * `released_grades` stops being served the moment it does (`cachedGrade`).
+ * One conditional UPDATE: nothing released, nothing written.
+ */
+export async function flagReleasedEvaluationsOf(
+  db: DbOrTx,
+  attemptIds: readonly string[],
+  now: Date,
+): Promise<void> {
+  if (attemptIds.length === 0) return;
   await db
     .update(evaluations)
     .set({ modifiedAfterRelease: true, updatedAt: now })
-    .where(eq(evaluations.id, id));
+    .where(
+      and(
+        isNotNull(evaluations.releasedAt),
+        eq(evaluations.modifiedAfterRelease, false),
+        inArray(
+          evaluations.id,
+          db
+            .select({ id: attempts.evaluationId })
+            .from(attempts)
+            .where(inArray(attempts.id, [...attemptIds])),
+        ),
+      ),
+    );
 }
 
 /**

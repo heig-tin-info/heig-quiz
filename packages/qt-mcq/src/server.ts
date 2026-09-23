@@ -4,7 +4,12 @@
  * NOTHING in this module's import graph may reach React: it is loaded by the
  * API and by the grading worker. The browser half is `./client`.
  */
-import { ConfigMigrationError, type QuestionTypeServer, type StudentView } from "@quiz/core/server";
+import {
+  ConfigMigrationError,
+  tallyKeys,
+  type QuestionTypeServer,
+  type StudentView,
+} from "@quiz/core/server";
 import { seededShuffle, streamSeed } from "@quiz/core/rng";
 import { gradeMcq } from "./grade.js";
 import { fromCanonical, toCanonical } from "./canonical.js";
@@ -153,6 +158,21 @@ export const mcqServer: QuestionTypeServer<
       .filter((index) => index >= 0 && index < config.choices.length)
       .sort((a, b) => a - b);
     return selected.map(choiceLetter).join(", ");
+  },
+
+  /**
+   * The class's answers, counted by CANONICAL choice index (decision D3
+   * makes that index meaningless to a student and exact for the teacher). A
+   * choice ticked twice in one answer counts once.
+   */
+  aggregate({ answers }) {
+    const keys: string[] = [];
+    for (const payload of answers) {
+      if (!payload || typeof payload !== "object" || !("selected" in payload)) continue;
+      const selected = (payload as { selected: unknown }).selected;
+      if (Array.isArray(selected)) for (const index of new Set(selected)) keys.push(String(index));
+    }
+    return { distribution: tallyKeys(keys) };
   },
 
   searchText: (config) => [config.prompt, ...config.choices.map((c) => c.text)].join("\n"),

@@ -201,3 +201,13 @@ describe("the server entry point", () => {
     }
   });
 });
+
+describe("aggregate (F-RES-03, audit B-15)", () => {
+  it("counts canonical indices, once per answer, and skips what it does not recognise", () => {
+    const stats = mcqServer.aggregate!({
+      answers: [{ selected: [2, 0] }, { selected: [0, 0] }, { text: "stray" }, null],
+      details: [],
+    });
+    expect(stats).toEqual({ distribution: [["2", 1], ["0", 2]] });
+  });
+});
