@@ -231,6 +231,15 @@ with a keyboard-reachable dismiss button.
   with the name written beside it (a roster row) carries neither. It exists
   because three places drew "a picture, or initials", and two of them had no
   fallback.
+- ParentLink: the way back up, as the `PageHeader` eyebrow — the parent's
+  name (a course, a pool, a classroom) as a plain button. The eyebrow sets
+  the 13 px `fg-muted`; the link adds `fg` AND an underline on hover, with
+  the colour transition every hover has. The underline stays because the
+  resting link is the same grey as the caption it replaced, and colour alone
+  is a weak signal of "this goes somewhere" — the roster's mailto links wear
+  the same pair. A name that does not say where it leads takes a `Tip`
+  (`tip`), never a native `title`. It exists because six pages wrote that
+  button with two different class lists.
 - Logo: the product's wordmark (`src/assets/quiz.svg`), four speech bubbles
   spelling Q U I Z, as an `<img alt="Quiz">`. It is the file, not inline JSX:
   the same mark is delivered elsewhere, and a retyped copy is a second

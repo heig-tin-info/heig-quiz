@@ -22,6 +22,7 @@ import {
   FormError,
   PageError,
   PageHeader,
+  ParentLink,
   QueryError,
   Skeleton,
   Spinner,
@@ -355,13 +356,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
       <PageHeader
         help="pool"
         eyebrow={
-          <button
-            type="button"
-            className="text-fg-muted transition-colors hover:text-fg"
-            onClick={() => navigate({ view: "pools" })}
-          >
-            {t("pools.title")}
-          </button>
+          <ParentLink onClick={() => navigate({ view: "pools" })}>{t("pools.title")}</ParentLink>
         }
         title={detail.pool.name}
         description={

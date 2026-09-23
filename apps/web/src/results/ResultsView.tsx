@@ -22,11 +22,12 @@ import {
   Button,
   Card,
   EmptyState,
-  RelativeTime,
   Menu,
   PageError,
   PageHeader,
+  ParentLink,
   QueryError,
+  RelativeTime,
   SectionHeading,
   Skeleton,
   Tabs,
@@ -163,14 +164,12 @@ export function ResultsView({
       <PageHeader
         eyebrow={
           classroomId ? (
-            <button
-              type="button"
+            <ParentLink
               onClick={() => navigate({ view: "classroom", id: classroomId })}
-              className="hover:text-fg hover:underline"
-              title={t("results.classroom")}
+              tip={t("results.classroom")}
             >
               {view.title}
-            </button>
+            </ParentLink>
           ) : (
             view.title
           )

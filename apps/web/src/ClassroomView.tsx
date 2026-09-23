@@ -34,6 +34,7 @@ import {
   inputClass,
   Menu,
   PageHeader,
+  ParentLink,
   QueryError,
   Skeleton,
   Tabs,
@@ -290,13 +291,9 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
       <PageHeader
         help="classroom"
         eyebrow={
-          <button
-            type="button"
-            onClick={() => navigate({ view: "home" })}
-            className="hover:text-fg hover:underline"
-          >
+          <ParentLink onClick={() => navigate({ view: "home" })}>
             {data.course.code} — {data.course.name}
-          </button>
+          </ParentLink>
         }
         title={
           <span className="flex flex-wrap items-baseline gap-3">

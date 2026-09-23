@@ -35,6 +35,7 @@ import {
   modKey,
   PageError,
   PageHeader,
+  ParentLink,
   Skeleton,
   Spinner,
   SyncBadge,
@@ -477,13 +478,9 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
       <PageHeader
         help="question-editor"
         eyebrow={
-          <button
-            type="button"
-            className="text-fg-muted transition-colors hover:text-fg"
-            onClick={() => navigate({ view: "pool", id: data.meta.poolId })}
-          >
+          <ParentLink onClick={() => navigate({ view: "pool", id: data.meta.poolId })}>
             {pool.data?.pool.name ?? t("pools.title")}
-          </button>
+          </ParentLink>
         }
         title={<span className="font-mono">{data.meta.internalName}</span>}
         description={

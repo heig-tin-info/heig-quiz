@@ -28,6 +28,7 @@ import {
   Menu,
   PageError,
   PageHeader,
+  ParentLink,
   Skeleton,
   TabPanel,
   Tabs,
@@ -179,15 +180,11 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
       <PageHeader
         eyebrow={
           classroomId ? (
-            <button
-              type="button"
-              onClick={() => navigate({ view: "classroom", id: classroomId })}
-              className="hover:text-fg hover:underline"
-            >
+            <ParentLink onClick={() => navigate({ view: "classroom", id: classroomId })}>
               {classroom.data
                 ? `${classroom.data.course.code} — ${classroom.data.name}`
                 : t("eval.title")}
-            </button>
+            </ParentLink>
           ) : null
         }
         title={

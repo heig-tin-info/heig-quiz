@@ -17,6 +17,7 @@ import {
   EmptyState,
   Kbd,
   PageError,
+  ParentLink,
   Skeleton,
   Switch,
   useNow,
@@ -294,13 +295,9 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
       <LiveHeader
         title={detail.data?.evaluation.title ?? t("live.title")}
         eyebrow={
-          <button
-            type="button"
-            onClick={() => navigate({ view: "evaluation", id })}
-            className="hover:text-fg hover:underline"
-          >
+          <ParentLink onClick={() => navigate({ view: "evaluation", id })}>
             {t("eval.configure")}
-          </button>
+          </ParentLink>
         }
         state={evaluationState}
         closesAt={view.evaluation.closesAt}

@@ -546,6 +546,36 @@ export function PageHeader({
 }
 
 /**
+ * The way back up, in a `PageHeader` eyebrow: the parent's name as a quiet
+ * link. The eyebrow already sets the 13 px `fg-muted` text, so the link adds
+ * only what a link needs — `fg` and an underline on hover, reached in the
+ * 120–150 ms colour transition every hover uses. `tip` explains a name that
+ * does not say what it leads to (the results page shows the evaluation's
+ * title and leads to its classroom).
+ */
+export function ParentLink({
+  onClick,
+  tip,
+  children,
+}: {
+  onClick: () => void;
+  tip?: string;
+  children: ReactNode;
+}) {
+  return (
+    <Tip label={tip}>
+      <button
+        type="button"
+        onClick={onClick}
+        className="transition-colors hover:text-fg hover:underline"
+      >
+        {children}
+      </button>
+    </Tip>
+  );
+}
+
+/**
  * A heading that renames itself where it stands.
  *
  * Renaming used to be a line in an overflow menu that opened a modal holding
