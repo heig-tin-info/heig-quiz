@@ -165,44 +165,37 @@ export function CodePlayer({
     );
   };
 
-  async function runVisibleCases() {
+  /*
+   * One run, written into one of the two slots: the visible cases, or the
+   * student's own input when `manual` is given. The request, the stages and
+   * the three endings are the same; only the slot and that one option differ.
+   */
+  async function runInto(setSlot: (state: RunState) => void, manual?: CodeRunOptions["manual"]) {
     if (onRun === undefined) return;
-    setRun({ status: "running", stage: "loading" });
-    try {
-      const outcome = await onRun(
-        { regions },
-        { onStage: (stage) => setRun({ status: "running", stage }) },
-      );
-      setRun(outcome === "unavailable" ? { status: "unavailable" } : { status: "done", outcome });
-    } catch {
-      setRun({ status: "failed" });
-    }
-  }
-
-  async function runManual() {
-    if (onRun === undefined) return;
-    setManual({ status: "running", stage: "loading" });
+    setSlot({ status: "running", stage: "loading" });
     try {
       const outcome = await onRun(
         { regions },
         {
-          manual: {
-            args: manualArgs
-              .split("\n")
-              .map((line) => line.trim())
-              .filter((line) => line !== ""),
-            stdin: manualStdin,
-          },
-          onStage: (stage) => setManual({ status: "running", stage }),
+          ...(manual === undefined ? {} : { manual }),
+          onStage: (stage) => setSlot({ status: "running", stage }),
         },
       );
-      setManual(
-        outcome === "unavailable" ? { status: "unavailable" } : { status: "done", outcome },
-      );
+      setSlot(outcome === "unavailable" ? { status: "unavailable" } : { status: "done", outcome });
     } catch {
-      setManual({ status: "failed" });
+      setSlot({ status: "failed" });
     }
   }
+
+  const runVisibleCases = () => runInto(setRun);
+  const runManual = () =>
+    runInto(setManual, {
+      args: manualArgs
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line !== ""),
+      stdin: manualStdin,
+    });
 
   const outcome = run.status === "done" ? run.outcome : null;
   const manualResult = manual.status === "done" ? (manual.outcome.cases[0] ?? null) : null;
