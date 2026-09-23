@@ -105,16 +105,13 @@ import {
   crosshair,
 } from "./canvasStyles.js";
 import {
-  FIT_VIEW,
   MIRROR_X,
   MIRROR_Y,
   ORIENT_0,
   ROTATE,
   clampPoint,
   clampToBox,
-  clampView,
   extentOf,
-  fitCanvasHeight,
   hitRectOf,
   indexOf,
   multiply,
@@ -126,15 +123,10 @@ import {
   portPosition,
   resolveEnd,
   sameEnd,
-  screenToWorld,
   snap,
   viewBoxAttr,
-  viewScale,
-  zoomAt,
-  zoomPercent,
   type PinPoint,
   type PinTarget,
-  type ViewBox,
 } from "./geometry.js";
 import { useHistory } from "./history.js";
 import { blockedCells, computeRoutes, onPolyline, pathOf, route, withRoutes } from "./router.js";
@@ -150,6 +142,7 @@ import {
   type FlaggedPin,
 } from "./SchematicView.js";
 import { TOOL_ICONS } from "./symbols.js";
+import { panStart, panned, useViewport, type PanDrag } from "./useViewport.js";
 
 export interface SchematicEditorProps {
   value: Schematic;
@@ -178,16 +171,13 @@ type Mode = "select" | "wire" | "place";
 type Drag =
   | { kind: "move"; sx: number; sy: number; dx: number; dy: number; moved: boolean; collapse: string | null }
   | { kind: "box"; x0: number; y0: number; x1: number; y1: number; base: ReadonlySet<string> }
-  | { kind: "pan"; cx: number; cy: number; view: ViewBox; moved: boolean; button: number }
+  | PanDrag
   | { kind: "via"; wire: string; index: number; moved: boolean };
 
 interface Draft {
   readonly a: WireEnd;
   readonly via: ReadonlyArray<{ x: number; y: number }>;
 }
-
-/** Pixels of slack around a pin, in canvas units at the current zoom. */
-const PIN_SLACK = 9;
 
 const isTerminal = (kind: ComponentKind): boolean => LIBRARY[kind].terminal;
 
@@ -300,7 +290,7 @@ export function SchematicEditor({
   const [selection, setSelection] = useState<ReadonlySet<string>>(new Set());
   const [draft, setDraft] = useState<Draft | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
-  const [view, setView] = useState<ViewBox>(FIT_VIEW);
+  const { view, setView, canvasHeight, toWorld, slack, fit, zoom } = useViewport(svgRef, canvasRef, height);
   const [cursor, setCursor] = useState<{ x: number; y: number; inside: boolean }>({
     x: 0,
     y: 0,
@@ -310,9 +300,6 @@ export function SchematicEditor({
   const [palDrag, setPalDrag] = useState<{ kind: ComponentKind; x: number; y: number; moved: boolean; rearm: boolean } | null>(
     null,
   );
-  /* The drawing area is as tall as the fitted view is, for the width it was
-     given — never taller, or the frame floats in a band of empty canvas. */
-  const [canvasHeight, setCanvasHeight] = useState<number>(height);
 
   /* The drag mutates on every pointer move; a ref keeps the handler stable and
      the render cheap, and the state copy above is what the SVG draws from. */
@@ -573,26 +560,6 @@ export function SchematicEditor({
 
   // --- the pointer -------------------------------------------------------
 
-  const toWorld = useCallback(
-    (clientX: number, clientY: number) => {
-      const rect = svgRef.current?.getBoundingClientRect();
-      if (rect === undefined) return { x: 0, y: 0, inside: false };
-      return {
-        ...screenToWorld(rect, view, clientX, clientY),
-        inside:
-          clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom,
-      };
-    },
-    [view],
-  );
-
-  const slack = useCallback(() => {
-    const rect = svgRef.current?.getBoundingClientRect();
-    if (rect === undefined) return PIN_SLACK;
-    const k = viewScale(rect, view);
-    return Math.max(6, PIN_SLACK / k);
-  }, [view]);
-
   const wireUnder = useCallback(
     (x: number, y: number): string | null => {
       const r = slack();
@@ -645,7 +612,7 @@ export function SchematicEditor({
       }
       if (e.button === 1 || e.button === 2) {
         e.preventDefault();
-        setDrag({ kind: "pan", cx: e.clientX, cy: e.clientY, view, moved: false, button: e.button });
+        setDrag(panStart(e, view));
         return;
       }
       if (e.button !== 0) return;
@@ -760,12 +727,7 @@ export function SchematicEditor({
         return;
       }
       if (d.kind === "pan") {
-        const rect = svgRef.current?.getBoundingClientRect();
-        const k = rect === undefined ? 1 : viewScale(rect, d.view);
-        const dx = (e.clientX - d.cx) / k;
-        const dy = (e.clientY - d.cy) / k;
-        if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
-        setView(clampView({ ...d.view, x: d.view.x - dx, y: d.view.y - dy }));
+        setView(panned(d, svgRef.current, e.clientX, e.clientY));
       } else if (d.kind === "move") {
         const dx = snap(w.x - d.sx);
         const dy = snap(w.y - d.sy);
@@ -827,46 +789,6 @@ export function SchematicEditor({
     },
     [apply, displayed.components, routes, selection, value],
   );
-
-  /* The drawing area takes the SHAPE of the fitted view, so that the frame
-     plus its one-cell margin fills it on both axes instead of sitting in a
-     letterbox. Only the width is read — the height is what this sets — and a
-     `ResizeObserver` is what makes it survive a column that narrows, a
-     sidebar that opens and a page that goes full screen. */
-  useEffect(() => {
-    const el = canvasRef.current;
-    if (el === null) return;
-    const measure = (): void => {
-      setCanvasHeight((current) => {
-        const next = fitCanvasHeight(el.clientWidth, height);
-        return next === current ? current : next;
-      });
-    };
-    measure();
-    /* jsdom has no layout and no observer; the height then stays the cap. */
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    document.addEventListener("fullscreenchange", measure);
-    return () => {
-      observer.disconnect();
-      document.removeEventListener("fullscreenchange", measure);
-    };
-  }, [height]);
-
-  /* Wheel has to be a native listener: React registers `wheel` passively on
-     the root, where `preventDefault` is a no-op and the page scrolls away. */
-  useEffect(() => {
-    const el = svgRef.current;
-    if (el === null) return;
-    const onWheel = (e: WheelEvent): void => {
-      e.preventDefault();
-      const w = toWorld(e.clientX, e.clientY);
-      setView((v) => zoomAt(v, Math.exp(-e.deltaY * 0.0015), w.x, w.y));
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, [toWorld]);
 
   /* Dragging a palette tile onto the grid places one piece and stops there. */
   useEffect(() => {
@@ -1006,8 +928,6 @@ export function SchematicEditor({
 
   // --- render ------------------------------------------------------------
 
-  /* 100 % is the whole frame, port anchors included — the floor of zoom-out. */
-  const zoom = zoomPercent(view);
   const hint =
     mode === "place" && placeKind !== null
       ? fmt(s.hintPlace, { kind: s.kind(placeKind) })
@@ -1080,7 +1000,7 @@ export function SchematicEditor({
         )}
         <div className="ml-auto flex items-center gap-1">
           <span className={cx(statusCursor, "text-[11px] text-fg-faint")}>{zoom} %</span>
-          <IconButton label={s.fit} name="fit" onClick={() => setView(FIT_VIEW)} />
+          <IconButton label={s.fit} name="fit" onClick={fit} />
         </div>
       </div>
 
@@ -1145,7 +1065,7 @@ export function SchematicEditor({
             onDoubleClick={(e) => {
               const w = toWorld(e.clientX, e.clientY);
               if (componentUnder(w.x, w.y) === null && wireUnder(w.x, w.y) === null && draft === null) {
-                setView(FIT_VIEW);
+                fit();
               }
             }}
             onContextMenu={(e) => e.preventDefault()}
