@@ -83,3 +83,31 @@ export const table = {
   td: "px-3 py-2.5 align-middle",
   row: "border-t border-line",
 } as const;
+
+/*
+ * The FORM family: the editors and players of mcq, short and cloze are
+ * plain forms rather than the card-and-table screens of code and circuit,
+ * and they speak in these seven class lists. They used to be copied in the
+ * ui.tsx of each of the three packages — and short and cloze had drifted to
+ * a literal `rounded-xl` (audit P-01, divergence 1).
+ */
+
+/**
+ * Field chrome: the `--radius-field` token, `line-strong` hairline, accent
+ * ring on focus. The RADIUS is a token and not `rounded-xl` on purpose — the
+ * field radius of `apps/web/src/style.css` is a value the design owns, and a
+ * literal here would drift the day it changes.
+ */
+export const inputClass =
+  "rounded-field border border-line-strong bg-surface px-3 py-1.5 text-sm text-fg transition-colors placeholder:text-fg-faint hover:border-fg-faint focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-50";
+
+export const labelClass = "text-[13px] font-medium text-fg";
+export const helpClass = "text-xs text-fg-faint";
+export const sectionClass = "flex flex-col gap-2";
+
+/** The 16 px section title of a card, as `SectionHeading` writes it. */
+export const cardTitleClass = "text-base font-bold tracking-tight text-fg";
+
+/** Secondary button chrome (pill, hairline), for the editor's add/remove actions. */
+export const buttonClass =
+  "inline-flex h-7 shrink-0 select-none items-center justify-center gap-1.5 rounded-full border border-line-strong bg-surface px-3 text-[13px] font-medium text-fg transition-colors hover:bg-surface-2 disabled:opacity-50";

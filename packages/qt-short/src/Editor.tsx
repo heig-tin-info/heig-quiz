@@ -22,21 +22,19 @@ import {
 } from "./schema.js";
 import { shortEditorStrings, type ShortEditorStringKey } from "./strings.js";
 import {
+  buttonClass,
   CheckboxField,
   cx,
   FieldCell,
-  IssueList,
-  PromptField,
-  removeAt,
-  Segmented,
-} from "@quiz/ui";
-import {
-  buttonClass,
   helpClass,
   inputClass,
+  IssueList,
   labelClass,
+  PromptField,
+  removeAt,
   sectionClass,
-} from "./ui.js";
+  Segmented,
+} from "@quiz/ui";
 
 type ShortEditorProps = Omit<EditorProps<ShortConfig>, "uploadAsset"> & {
   uploadAsset?: EditorProps<ShortConfig>["uploadAsset"];

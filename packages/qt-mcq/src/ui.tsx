@@ -1,43 +1,13 @@
 /**
- * The few shared class strings and helpers of this package's components.
+ * The components of this package that no other type has.
  *
- * A `qt-*` package cannot import `apps/web/src/ui.tsx` (packages never depend
- * on an app), and `packages/ui` is a later work package, so the markup here is
- * plain semantic HTML carrying the design tokens of `apps/web/DESIGN.md`:
- * hairlines and surfaces, no shadow in the page flow, no raw colour, no `dark:`
- * variant — the tokens swap by themselves.
+ * What only the choice list of this type draws — the pastille, the tooltip of
+ * its drag handle, two icons. The class lists and the primitives the five
+ * types share live in `@quiz/ui`; this file uses the same design tokens of
+ * `apps/web/DESIGN.md`: no raw colour, no `dark:` variant.
  */
 import type { ReactNode } from "react";
 import { cx } from "@quiz/ui";
-
-/**
- * Field chrome: the `--radius-field` token, `line-strong` hairline, accent
- * ring on focus. The RADIUS is a token and not `rounded-xl` on purpose — the
- * field radius of `apps/web/src/style.css` is a value the design owns, and a
- * literal here would drift the day it changes.
- */
-export const inputClass =
-  "rounded-field border border-line-strong bg-surface px-3 py-1.5 text-sm text-fg transition-colors placeholder:text-fg-faint hover:border-fg-faint focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-50";
-
-export const labelClass = "text-[13px] font-medium text-fg";
-export const helpClass = "text-xs text-fg-faint";
-export const sectionClass = "flex flex-col gap-2";
-
-/**
- * A card, in the little of `apps/web`'s `Card` a leaf package can carry: the
- * card radius, one hairline, the surface — and no shadow, because nothing in
- * the page flow has one. It dresses the block the editor PORTALS into the
- * host's aside (`EditorProps.aside`), so the scoring settings read as a card
- * of the right column beside "Properties" rather than as a stray section.
- */
-export const cardClass = "rounded-card border border-line bg-surface p-4";
-
-/** The 16 px section title of a card, as `SectionHeading` writes it. */
-export const cardTitleClass = "text-base font-bold tracking-tight text-fg";
-
-/** Secondary button chrome (pill, hairline), for the editor's add/remove actions. */
-export const buttonClass =
-  "inline-flex h-7 shrink-0 select-none items-center justify-center gap-1.5 rounded-full border border-line-strong bg-surface px-3 text-[13px] font-medium text-fg transition-colors hover:bg-surface-2 disabled:opacity-50";
 
 /**
  * Letter of a choice, as the editor and the review show it: A, B, C…
@@ -142,7 +112,7 @@ export function Pastille({
  * as its accessible name) and out of the pointer's way.
  *
  * `apps/web`'s `Tip` portals itself and arms on a timer; a package cannot
- * import it (`packages/ui` is a later work package), so what is mirrored here
+ * import it, and only this list uses one, so what is mirrored here
  * are the TOKENS and the two rules that matter — never focusable, never
  * clickable. The absolute position is enough for the one place this is used:
  * a row of a list nothing clips.

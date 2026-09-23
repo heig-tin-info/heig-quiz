@@ -19,13 +19,16 @@ import { issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import { describeBlank, parseCloze } from "@quiz/domain/cloze";
 import { type ClozeConfig } from "./schema.js";
 import { clozeEditorStrings, type ClozeEditorStringKey } from "./strings.js";
-import { CheckboxField, cx, IssueList, PromptField } from "@quiz/ui";
 import {
+  CheckboxField,
+  cx,
   helpClass,
   inputClass,
+  IssueList,
   labelClass,
+  PromptField,
   sectionClass,
-} from "./ui.js";
+} from "@quiz/ui";
 
 type ClozeEditorProps = Omit<EditorProps<ClozeConfig>, "uploadAsset"> & {
   uploadAsset?: EditorProps<ClozeConfig>["uploadAsset"];

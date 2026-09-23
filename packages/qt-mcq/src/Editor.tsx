@@ -54,25 +54,25 @@ import {
 import { mcqEditorStrings, type McqEditorStringKey } from "./strings.js";
 import {
   AsideSection,
+  buttonClass,
+  cardTitleClass,
   cx,
+  helpClass,
+  inputClass,
   IssueList,
+  labelClass,
   patchAt,
   PromptField,
   removeAt,
+  sectionClass,
   Segmented,
 } from "@quiz/ui";
 import {
-  buttonClass,
-  cardTitleClass,
   choiceLetter,
   gripClass,
   GripIcon,
-  helpClass,
   iconButtonClass,
-  inputClass,
-  labelClass,
   Pastille,
-  sectionClass,
   Tip,
   TrashIcon,
 } from "./ui.js";

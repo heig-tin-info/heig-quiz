@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { badge, button, cx, inputSm, input } from "./styles.js";
+import { badge, button, buttonClass, cx, input, inputClass, inputSm } from "./styles.js";
 
 describe("cx", () => {
   it("joins the truthy parts and skips the rest", () => {
@@ -30,7 +30,7 @@ describe("badge", () => {
 
 describe("tokens", () => {
   it("never carries a dark: variant or a raw radius", () => {
-    for (const cls of [input, inputSm, button(), badge()]) {
+    for (const cls of [input, inputSm, button(), badge(), inputClass, buttonClass]) {
       expect(cls).not.toMatch(/\bdark:/);
       expect(cls).not.toMatch(/\brounded-(xl|lg|md)\b/);
     }
