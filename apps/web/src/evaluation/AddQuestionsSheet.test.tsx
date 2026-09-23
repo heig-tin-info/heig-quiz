@@ -18,13 +18,14 @@ import { AddQuestionsSheet } from "./AddQuestionsSheet";
  * The question picker of F-EVAL-01, pinned against what it does TODAY.
  *
  * This file is the safety net the FF-07 / FF-11 clean-up needs: the filters
- * build a query string by hand here (`?type=…&difficulty=…`), the list is
- * cached under its own `["pool-questions", …]` root, and the difficulty is a
- * run of `●` rather than the tested `DifficultyDots`. All three are things
- * the refactoring means to change, so each is asserted where a change is
- * visible — the request that leaves, the cache key that is invalidated, the
- * text that a screen reader would read — rather than through a snapshot that
- * would only say "something moved".
+ * still build a query string by hand here (`?type=…&difficulty=…`) and the
+ * list is still cached under its own `["pool-questions", …]` root — both are
+ * a later pull request's business. The difficulty half of FF-11 is done: the
+ * rows render the tested `DifficultyDots` and the type list comes from
+ * `QUESTION_TYPE_IDS`. Each is asserted where a change is visible — the
+ * request that leaves, the cache key that is invalidated, the text that a
+ * screen reader would read — rather than through a snapshot that would only
+ * say "something moved".
  */
 
 const POOLS: PoolSummary[] = [
@@ -159,14 +160,15 @@ function setup(
 const rowOf = (name: string) => screen.getByText(name).closest("li") as HTMLElement;
 
 /*
- * The filter and every row's bullets answer to the same accessible name
- * today (FF-11: the row reuses `t("picker.difficulty")` as its `aria-label`),
- * so the select has to be asked for by ROLE. Reaching for it by label alone
- * fails with "found multiple elements" — which is exactly the collision a
- * screen-reader user hears, and the reason this helper exists rather than a
- * bare `getByLabelText`.
+ * "Difficulty" now names ONE thing on this screen. Before FF-11 the filter
+ * and every row's bullets answered to it alike — the row borrowed
+ * `t("picker.difficulty")` as its `aria-label` — and a plain `getByLabelText`
+ * failed with "found multiple elements", which is the collision a
+ * screen-reader user heard. `DifficultyDots` says "Difficulty 3 of 5"
+ * instead, so the lookup below is unambiguous again and is what would break
+ * if the clash came back.
  */
-const difficultySelect = () => screen.getByRole("combobox", { name: "Difficulty" });
+const difficultySelect = () => screen.getByLabelText("Difficulty");
 
 describe("AddQuestionsSheet — the pool", () => {
   it("opens on the first pool and lists its questions", async () => {
@@ -267,20 +269,23 @@ describe("AddQuestionsSheet — the filters", () => {
   });
 
   /*
-   * The four MVP type ids the sheet hard-codes today (FF-11: `circuit` is
-   * missing from this list while it is a registered question type). Written
-   * as a subset check so adding the fifth one does not make the safety net
-   * cry wolf — what must not change is that each option's VALUE is the type
-   * id the API filters on.
+   * One option per REGISTERED type (FF-11: the list used to be four ids
+   * written out by hand, so `circuit` was missing). Written as a subset check
+   * so a sixth type does not make the safety net cry wolf — what must not
+   * change is that each option's VALUE is the type id the API filters on.
    */
   it("offers one option per type, valued by the type id the API expects", async () => {
     setup();
     await screen.findByText("ptr-arith-01");
-    const values = within(screen.getByLabelText("Type") as HTMLSelectElement)
-      .getAllByRole("option")
-      .map((o) => (o as HTMLOptionElement).value);
+    const options = within(screen.getByLabelText("Type") as HTMLSelectElement).getAllByRole(
+      "option",
+    ) as HTMLOptionElement[];
+    const values = options.map((o) => o.value);
     expect(values[0]).toBe("");
-    expect(values).toEqual(expect.arrayContaining(["mcq", "short", "cloze", "code"]));
+    expect(values).toEqual(expect.arrayContaining(["mcq", "short", "cloze", "code", "circuit"]));
+    // FC-04: the label is the registry's own, so the type that used to fall
+    // through the hand-written list reads as a word and not as its id.
+    expect(options.find((o) => o.value === "circuit")?.textContent).toBe("Circuit");
   });
 });
 
@@ -310,18 +315,21 @@ describe("AddQuestionsSheet — the rows", () => {
   });
 
   /*
-   * Today the difficulty is `"●".repeat(n)` inside a span that borrows the
-   * filter's label — so every row announces itself as "Difficulty" and a
-   * screen reader reads three bullet characters. FF-11 replaces it with the
-   * tested `DifficultyDots`; this test is what says out loud what the fix
-   * changes.
+   * The difficulty used to be `"●".repeat(n)` inside a span that borrowed the
+   * filter's label, so every row announced itself as "Difficulty" and a
+   * screen reader read three bullet characters. FF-11 puts the pool's tested
+   * `DifficultyDots` here instead: five dots that are `aria-hidden`, and one
+   * sentence that says which of them are filled.
    */
-  it("renders the difficulty as a run of bullets under the filter's own label", async () => {
+  it("renders the difficulty as the pool's dots, named by their value", async () => {
     setup();
     await screen.findByText("ptr-arith-01");
-    const dots = within(rowOf("ptr-arith-01")).getByLabelText("Difficulty");
-    expect(dots).toHaveTextContent("●●●");
-    expect(within(rowOf("array-decay")).getByLabelText("Difficulty")).toHaveTextContent("●●●●●");
+    expect(within(rowOf("ptr-arith-01")).getByText("Difficulty 3 of 5")).toBeInTheDocument();
+    expect(within(rowOf("array-decay")).getByText("Difficulty 5 of 5")).toBeInTheDocument();
+    // The bullet characters are gone, and with them the name the filter
+    // and every row once shared.
+    expect(rowOf("ptr-arith-01").textContent).not.toContain("\u25cf");
+    expect(within(rowOf("ptr-arith-01")).queryByLabelText("Difficulty")).toBeNull();
   });
 });
 
