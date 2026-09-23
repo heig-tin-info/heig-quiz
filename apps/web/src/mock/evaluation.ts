@@ -154,6 +154,12 @@ function answerOf(q: MockQuestion, seedValue: number): unknown {
           .map((s) => s.text),
         lastRun: null,
       };
+    case "codeimage":
+      return {
+        regions: splitTemplate(String(config.template ?? ""), "c")
+          .filter((s) => s.kind === "editable")
+          .map((s) => s.text),
+      };
     // The student's circuit is the reference with its ground wires missing
     // when the seed says "wrong": a floating capacitor is the mistake this
     // type actually produces, and the strip under the canvas names it.
@@ -183,7 +189,8 @@ export function summaryOf(q: MockQuestion, seedValue: number): string {
       return (answer as { blanks: (string | null)[] }).blanks
         .map((b) => (b === null || b === "" ? "—" : b))
         .join(" · ");
-    case "code": {
+    case "code":
+    case "codeimage": {
       const regions = (answer as { regions?: string[] }).regions ?? [];
       return `${regions.reduce((sum, r) => sum + r.split("\n").length, 0)} L`;
     }

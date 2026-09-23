@@ -23,9 +23,11 @@ export const ANSWER_SUMMARY_MAX = 24;
 /**
  * The four types of the MVP (PLAN-MVP §0), plus `circuit` — the two-port
  * schematic of docs/spec/04 §4.11, brought forward from phase 3 with a
- * simulation path (`packages/qt-circuit`).
+ * simulation path (`packages/qt-circuit`) — and `codeimage`, the variant of
+ * `code` judged by the picture its program prints (§4.9, ADR-021), which
+ * lives inside `packages/qt-code`.
  */
-export const QUESTION_TYPE_IDS = ["mcq", "short", "cloze", "code", "circuit"] as const;
+export const QUESTION_TYPE_IDS = ["mcq", "short", "cloze", "code", "circuit", "codeimage"] as const;
 export type QuestionTypeId = (typeof QUESTION_TYPE_IDS)[number];
 
 export function isQuestionTypeId(id: string): id is QuestionTypeId {

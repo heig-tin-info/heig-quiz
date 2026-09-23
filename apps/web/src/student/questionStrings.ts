@@ -73,6 +73,10 @@ export function playerStringsFor(type: string, t: TFunction): unknown {
       return codePlayerStrings(t);
     case "circuit":
       return circuitPlayerStrings(t);
+    // `code`'s program sentences with the picture's on top, built once in
+    // `questionTypes.tsx` for the same reason as the two above.
+    case "codeimage":
+      return playerStrings.codeimage(t);
     default:
       return undefined;
   }

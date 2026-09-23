@@ -612,6 +612,8 @@ export const en = {
   "qt.code.hint": "A program graded by test cases.",
   "qt.circuit.label": "Circuit",
   "qt.circuit.hint": "A two-port box to wire from a palette.",
+  "qt.codeimage.label": "Code image",
+  "qt.codeimage.hint": "A program that draws a pixel grid.",
   "qt.loading": "Loading the editor…",
   "qt.unknown": "This question type is not available in this version.",
 
@@ -881,6 +883,72 @@ export const en = {
   "qt.code.r.referenceSolution": "Reference solution",
   "qt.code.r.yourCode": "Your code",
 
+  // --- qt-code: codeimage (ADR-021) — only what a picture adds; the program
+  // half reads the qt.code.* sentences above ---
+  "qt.codeimage.e.referenceSolutionHint":
+    "Your own answer to the editable parts, in the order they appear — with several of them, separate the pieces with a @@next comment line, exactly as the template uses @@lock. The button below runs it and draws its image, which you can then use as the target. A student never sees it.",
+  "qt.codeimage.e.imageSection": "Image",
+  "qt.codeimage.e.imageHint":
+    "The program prints width × height integers on its standard output, separated by spaces, tabs or newlines, row by row from the top left. They are the pixels.",
+  "qt.codeimage.e.width": "Width",
+  "qt.codeimage.e.height": "Height",
+  "qt.codeimage.e.sizeHint": "From {min} to {max} cells per side.",
+  "qt.codeimage.e.palette": "Palette",
+  "qt.codeimage.e.paletteBw": "Black and white (0–1)",
+  "qt.codeimage.e.paletteColor16": "16 colours (0–15)",
+  "qt.codeimage.e.paletteGray256": "Grey levels (0–255)",
+  "qt.codeimage.e.target": "Target",
+  "qt.codeimage.e.targetHint":
+    "What the student must draw. It is shown to the student beside their own image.",
+  "qt.codeimage.e.targetEmpty":
+    "No target yet: try the reference solution, then use its image as the target.",
+  "qt.codeimage.e.targetInvalid":
+    "The target no longer fits the size or the palette. Try the reference solution again and use its image.",
+  "qt.codeimage.e.referenceImage": "The reference solution's image",
+  "qt.codeimage.e.useAsTarget": "Use as target",
+  "qt.codeimage.e.targetSet": "This image is the target.",
+  "qt.codeimage.e.tryMatch": "{matching} of {total} pixels match the current target.",
+  "qt.codeimage.e.tryDrawn": "The reference solution drew its image.",
+  "qt.codeimage.e.tryIncomplete":
+    "The image has invalid or missing pixels, so it cannot be the target. Fix the reference solution and try again.",
+  "qt.codeimage.e.tryStale":
+    "The size or the palette changed since this run. Try the reference solution again.",
+  "qt.codeimage.p.imageSection": "Image",
+  "qt.codeimage.p.runHint":
+    "Runs your program once and draws the {count} integers it prints, row by row. Nothing here is graded; the server grades your final code.",
+  "qt.codeimage.p.view": "View",
+  "qt.codeimage.p.viewTarget": "Target",
+  "qt.codeimage.p.viewComputed": "Computed",
+  "qt.codeimage.p.viewDiff": "Difference",
+  "qt.codeimage.p.layout": "Layout",
+  "qt.codeimage.p.layoutSingle": "Single",
+  "qt.codeimage.p.layoutSplit": "Side by side",
+  "qt.codeimage.p.targetImage": "Target image",
+  "qt.codeimage.p.computedImage": "Your image",
+  "qt.codeimage.p.diffImage": "Difference with the target",
+  "qt.codeimage.p.notRunYet": "Run your program to see its image.",
+  "qt.codeimage.p.noTarget": "No target has been set for this question yet.",
+  "qt.codeimage.p.pixelScore": "{matching} / {total} pixels correct ({percent} %)",
+  "qt.codeimage.p.diffOk": "Correct",
+  "qt.codeimage.p.diffWrong": "Wrong",
+  "qt.codeimage.p.legend": "Colours",
+  "qt.codeimage.p.warningExtra": "{count} values after the last pixel were ignored.",
+  "qt.codeimage.p.warningExtra.one": "1 value after the last pixel was ignored.",
+  "qt.codeimage.p.warningMissing": "The output stopped {count} pixels short of the image.",
+  "qt.codeimage.p.warningMissing.one": "The output stopped 1 pixel short of the image.",
+  "qt.codeimage.p.warningInvalid":
+    "{count} values are not integers of the palette's range; they are drawn hatched and count as wrong.",
+  "qt.codeimage.p.warningInvalid.one":
+    "1 value is not an integer of the palette's range; it is drawn hatched and counts as wrong.",
+  "qt.codeimage.p.endTimedOut":
+    "The program ran out of time. The image shows what it printed before.",
+  "qt.codeimage.p.endOutOfMemory":
+    "The program ran out of memory. The image shows what it printed before.",
+  "qt.codeimage.p.endCrashed": "The program crashed. The image shows what it printed before.",
+  "qt.codeimage.p.endTruncated": "The output was cut at the size limit.",
+  "qt.codeimage.p.rateLimited": "Too many runs in a minute. Wait a moment, then run again.",
+  "qt.codeimage.r.noImage": "The program printed no image.",
+
   // --- qt-circuit ---
   // The component kinds, keyed by `ComponentKind`: the same word labels a
   // palette chip, a symbol on the canvas and a diagnostic in a review.
@@ -1141,6 +1209,10 @@ export const en = {
   "issue.short.length_range": "The maximum length is below the minimum length.",
   "issue.short.number_range": "The maximum is below the minimum.",
   "issue.short.date_range": "The last day is before the first one.",
+  "issue.codeimage.target_missing":
+    "No target yet: try the reference solution and use its image as the target.",
+  "issue.codeimage.target_size": "The target does not have one pixel per cell of the image.",
+  "issue.codeimage.target_value": "The target holds a value outside the palette.",
   // --- Development gallery (/dev/ui) ---
   "dev.ui.title": "UI gallery",
   "dev.ui.subtitle": "Every live primitive in every state, for the visual check.",

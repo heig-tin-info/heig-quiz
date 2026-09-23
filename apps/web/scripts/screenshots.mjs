@@ -151,6 +151,12 @@ const scenes = [
   // of a browser fetches ~53 MB of runtime, hence the wait.
   { name: "player-run", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 4); await p.getByRole("button", { name: /^(run|exécuter)$/i }).click(); await p.getByText(/^(Compiled|Compilé)$/).waitFor({ timeout: 60000 }); await p.waitForTimeout(500); } },
   { name: "player-run-manual", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 4); await p.getByLabel(/^(Arguments)$/).fill("220\n470"); await p.getByRole("button", { name: /^(run once|exécuter une fois)$/i }).click(); await p.getByLabel(/^(Output|Sortie)$/).waitFor({ timeout: 60000 }); await p.waitForTimeout(300); } },
+  // `codeimage` (ADR-021): question 6. Its runtime is the server's, so Run
+  // goes through the mock's `POST /attempts/:id/simulate`.
+  { name: "player-codeimage", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 6) },
+  { name: "player-codeimage-run", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 6); await p.getByRole("button", { name: /^(run|exécuter)$/i }).click(); await p.getByText(/pixels (correct|corrects)/).waitFor(); } },
+  { name: "player-codeimage-diff", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 6); await p.getByRole("button", { name: /^(run|exécuter)$/i }).click(); await p.getByText(/pixels (correct|corrects)/).waitFor(); await p.getByRole("radio", { name: /^(difference|différence)$/i }).check({ force: true }); } },
+  { name: "player-codeimage-single", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 6); await p.getByRole("button", { name: /^(run|exécuter)$/i }).click(); await p.getByText(/pixels (correct|corrects)/).waitFor(); await p.getByRole("radio", { name: /^(single|seule)$/i }).check({ force: true }); await p.getByRole("radio", { name: /^(difference|différence)$/i }).check({ force: true }); } },
   { name: "player-submit", role: "student", path: `${TAKE}?scene=running`, fold: true, act: (p) => p.getByRole("button", { name: /hand in/i }).first().click() },
   // A ONE-question evaluation: no progress strip and no previous / next,
   // and, once the question is marked done, "Hand in" takes the accent while
@@ -314,6 +320,10 @@ const scenes = [
   { name: "editor-code", role: "teacher", path: "/questions/q1", settle: 5000 },
   { name: "editor-short", role: "teacher", path: "/questions/q3" },
   { name: "editor-cloze", role: "teacher", path: "/questions/q4" },
+  // `codeimage` (ADR-021): the last question of the mock pool. The try runs
+  // through the mock's `POST /try`, whose details carry the reference image.
+  { name: "editor-codeimage", role: "teacher", path: "/questions/q16", settle: 5000 },
+  { name: "editor-codeimage-try", role: "teacher", path: "/questions/q16", settle: 5000, act: async (p) => { await p.getByRole("button", { name: /try the reference solution|essayer la solution de référence/i }).click(); await p.getByRole("button", { name: /use as target|utiliser comme cible/i }).waitFor(); await p.getByRole("button", { name: /use as target|utiliser comme cible/i }).scrollIntoViewIfNeeded(); } },
   // "Student preview": a page of its own, opened by the editor in a new tab.
   { name: "question-preview", role: "teacher", path: "/questions/q2/preview", settle: 3000 },
   { name: "question-preview-code", role: "teacher", path: "/questions/q1/preview", settle: 8000 },

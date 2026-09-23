@@ -23,11 +23,14 @@
  */
 import { splitTemplate } from "@quiz/domain/lockedTemplate";
 
-import type { CodeConfig } from "./schema.js";
+import type { ProgramConfig } from "./schema.js";
+
+/** What the cut reads: the template, its language and the reference itself. */
+type ReferenceSource = Pick<ProgramConfig, "template" | "language" | "referenceSolution">;
 import { editableSegments, isNextMarkerLine, trimTrailingNewline } from "./segments.js";
 
 /** How many regions this template expects — the count the player fills. */
-export function referenceRegionCount(config: CodeConfig): number {
+export function referenceRegionCount(config: ReferenceSource): number {
   return editableSegments(splitTemplate(config.template, config.language)).length;
 }
 
@@ -36,7 +39,7 @@ export function referenceRegionCount(config: CodeConfig): number {
  * when the cut does not fit the template (the editor turns that into a
  * sentence rather than running a source assembled from the wrong pieces).
  */
-export function referenceRegions(config: CodeConfig): string[] | null {
+export function referenceRegions(config: ReferenceSource): string[] | null {
   const expected = referenceRegionCount(config);
   const reference = config.referenceSolution;
 

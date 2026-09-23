@@ -21,7 +21,7 @@
 import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
 import { RUNNO_LANGUAGES, type CodeRuntime } from "@quiz/qt-code/client";
 
-import { BrowserRunnerUnavailable, type BackendRun, type BrowserRunner, type RunHooks } from "./types";
+import { BrowserRunnerUnavailable, type BrowserRunner, type RunHooks } from "./types";
 
 export type { BackendRun, BrowserRunner, ManualInput, RunHooks, RunStage } from "./types";
 export { BrowserRunnerUnavailable } from "./types";
@@ -60,14 +60,20 @@ export async function runnerFor(
   return runtime === "runno" ? browserRunner(language) : null;
 }
 
-export interface RunOptions {
+/**
+ * `B` is what the backend may answer beyond a run and `"unavailable"`: the
+ * `codeimage` route tells its per-attempt budget apart (`"rate_limited"`),
+ * which is handed back untouched — the browser does not stand in for a
+ * budget the server refused.
+ */
+export interface RunOptions<B extends string = never> {
   runtime: CodeRuntime;
   /**
    * The backend path, exactly the API call it already was. It is called with
    * no argument here: the free input, when there is one, is closed over by the
    * caller that knows about it (`runCode`).
    */
-  backend: BackendRun;
+  backend: () => Promise<RunnerOutcome | "unavailable" | B>;
   hooks?: RunHooks | undefined;
   /**
    * Overrides the lookup above. The tests pass a fake runner here; nothing in
@@ -82,10 +88,10 @@ export interface RunOptions {
  * `"unavailable"` means neither runner could: the player says so in one line,
  * the answer is still saved and still graded.
  */
-export async function runWithFallback(
+export async function runWithFallback<B extends string = never>(
   request: RunnerRequest,
-  options: RunOptions,
-): Promise<RunnerOutcome | "unavailable"> {
+  options: RunOptions<B>,
+): Promise<RunnerOutcome | "unavailable" | B> {
   const language = request.language;
   const browser =
     options.browser !== undefined ? options.browser : await browserRunner(language);

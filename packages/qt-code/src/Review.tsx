@@ -11,21 +11,9 @@ import { fmt, resolveStrings } from "@quiz/core/client";
 import type { MarkdownRenderer, ReviewProps } from "@quiz/core/client";
 
 import type { CodeAnswer, CodeCaseDetail, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
+import { CompileFailure, ReferenceSolutionCard, ScoreLine } from "./ProgramReview.js";
 import { REVIEW_STRINGS, type CodeReviewStrings } from "./strings.js";
-import {
-  badge,
-  breakdownOf,
-  card,
-  cx,
-  hint,
-  lockedBlock,
-  markdown,
-  pointsOrDash,
-  sectionTitle,
-  table,
-  Verdict,
-  verdictTone,
-} from "@quiz/ui";
+import { badge, breakdownOf, cx, hint, markdown, table, Verdict, verdictTone } from "@quiz/ui";
 import { caseVerdict } from "./verdict.js";
 
 interface CodeReviewProps
@@ -130,27 +118,9 @@ export function CodeReview({
     <div className="flex flex-col gap-4">
       {statement}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={cx(sectionTitle, "tabular-nums")}>
-          {fmt(s.score, { points: pointsOrDash(points), max: maxPoints })}
-        </span>
-        {breakdown.runner === "unavailable" ? (
-          <span className={badge("warning")}>{s.runnerUnavailable}</span>
-        ) : null}
-        {breakdown.runner === "busy" ? <span className={badge("warning")}>{s.runnerBusy}</span> : null}
-        {breakdown.runner === "error" ? <span className={badge("danger")}>{s.runnerError}</span> : null}
-      </div>
+      <ScoreLine points={points} maxPoints={maxPoints} runner={breakdown.runner} s={s} />
 
-      {breakdown.compile !== null && !breakdown.compile.ok ? (
-        <section className={cx(card, "flex flex-col gap-2 p-4")}>
-          <h3 className={cx(sectionTitle, "text-danger")}>{s.compileFailed}</h3>
-          {breakdown.compile.stderr === "" ? null : (
-            <pre className={lockedBlock} aria-label={s.compilerOutput}>
-              <code>{breakdown.compile.stderr}</code>
-            </pre>
-          )}
-        </section>
-      ) : null}
+      <CompileFailure compile={breakdown.compile} s={s} />
 
       {shown.length === 0 ? null : (
         <div className="overflow-x-auto">
@@ -220,14 +190,7 @@ export function CodeReview({
         <p className={hint}>{fmt(s.hiddenSummary, { passed: hiddenPassed, count: hidden.length })}</p>
       ) : null}
 
-      {solution !== null && solution.referenceSolution !== "" ? (
-        <section className={cx(card, "flex flex-col gap-2 p-4")}>
-          <h3 className={sectionTitle}>{s.referenceSolution}</h3>
-          <pre className={lockedBlock}>
-            <code>{solution.referenceSolution}</code>
-          </pre>
-        </section>
-      ) : null}
+      <ReferenceSolutionCard solution={solution} s={s} />
     </div>
   );
 }

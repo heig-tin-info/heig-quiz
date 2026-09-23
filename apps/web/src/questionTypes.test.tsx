@@ -5,7 +5,14 @@ import { fmt, plural } from "@quiz/core/client";
 import { mcqEditorStrings, mcqPlayerStrings, mcqReviewStrings, mcqStatsStrings } from "@quiz/qt-mcq/client";
 import { shortEditorStrings, shortPlayerStrings, shortReviewStrings } from "@quiz/qt-short/client";
 import { clozeEditorStrings, clozePlayerStrings, clozeReviewStrings } from "@quiz/qt-cloze/client";
-import { EDITOR_STRINGS, PLAYER_STRINGS, REVIEW_STRINGS } from "@quiz/qt-code/client";
+import {
+  EDITOR_STRINGS,
+  IMAGE_EDITOR_STRINGS,
+  IMAGE_PLAYER_STRINGS,
+  IMAGE_REVIEW_STRINGS,
+  PLAYER_STRINGS,
+  REVIEW_STRINGS,
+} from "@quiz/qt-code/client";
 import {
   CANVAS_STRINGS,
   EDITOR_STRINGS as CIRCUIT_EDITOR_STRINGS,
@@ -57,6 +64,10 @@ const DICTIONARIES: [string, object][] = [
   ["qt.code.e", EDITOR_STRINGS],
   ["qt.code.p", PLAYER_STRINGS],
   ["qt.code.r", REVIEW_STRINGS],
+  // `codeimage` reads `code`'s program sentences and adds only its own.
+  ["qt.codeimage.e", IMAGE_EDITOR_STRINGS],
+  ["qt.codeimage.p", IMAGE_PLAYER_STRINGS],
+  ["qt.codeimage.r", IMAGE_REVIEW_STRINGS],
   ["qt.circuit.e", CIRCUIT_EDITOR_STRINGS],
   ["qt.circuit.p", CIRCUIT_PLAYER_STRINGS],
   ["qt.circuit.r", CIRCUIT_REVIEW_STRINGS],
@@ -135,6 +146,24 @@ describe("question type strings", () => {
     expect(editorStrings.cloze(t).text).toBe("Texte à trous");
     expect(editorStrings.code(t).template).toBe("Code de départ");
     expect(editorStrings.circuit(t).reference).toBe("Circuit de référence");
+    expect(editorStrings.codeimage(t).useAsTarget).toBe("Utiliser comme cible");
+  });
+
+  it("gives codeimage code's program sentences, with its own on top", () => {
+    const t = makeT("fr");
+    const e = editorStrings.codeimage(t);
+    expect(e.template).toBe(editorStrings.code(t).template);
+    expect(e.referenceSolutionHint).toBe(t("qt.codeimage.e.referenceSolutionHint"));
+    const p = playerStrings.codeimage(t);
+    expect(p.run).toBe(playerStrings.code(t).run);
+    expect(p.runHint).toBe(t("qt.codeimage.p.runHint", { count: "{count}" }));
+    const r = reviewStrings.codeimage(t);
+    // The review shows the player's panel, and keeps its own score line.
+    expect(r.viewDiff).toBe("Différence");
+    expect(r.score).toBe(t("qt.code.r.score", { points: "{points}", max: "{max}" }));
+    expect(plural(p, "warningMissing", 1, { count: 1 })).toBe(
+      "La sortie s'est arrêtée 1 pixel avant la fin de l'image.",
+    );
   });
 
   it("translates the circuit canvas and the component kinds", () => {

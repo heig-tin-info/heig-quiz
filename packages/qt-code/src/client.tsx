@@ -121,3 +121,34 @@ export {
   type CodePlayerStrings,
   type CodeReviewStrings,
 } from "./strings.js";
+/** The program half both player views share: what a browser request is built from. */
+export type { ProgramConfig, ProgramStudent } from "./schema.js";
+
+/*
+ * `codeimage` (docs/spec/04 §4.9, ADR-021): the variant of `code` judged by a
+ * picture. Its client entry, its dictionaries (only what a picture adds — the
+ * program half reads `code`'s), the one case of its run and the pure pixel
+ * rules the host and the mocks read.
+ */
+export { codeimageClient, CodeImageIcon } from "./image/client.js";
+export { IMAGE_CASE } from "./image/schema.js";
+export type {
+  CodeImageAnswer,
+  CodeImageConfig,
+  CodeImageDetails,
+  CodeImageSolution,
+  CodeImageStudent,
+  ImageSpec,
+  Palette,
+} from "./image/schema.js";
+export { encodeImage, parseImageOutput, PASTEL_16 } from "./image/pixels.js";
+export type { CodeImageEditorProps, CodeImageTryOutcome } from "./image/Editor.js";
+export type { CodeImagePlayerProps } from "./image/Player.js";
+export {
+  IMAGE_EDITOR_STRINGS,
+  IMAGE_PLAYER_STRINGS,
+  IMAGE_REVIEW_STRINGS,
+  type CodeImageEditorStrings,
+  type CodeImagePlayerStrings,
+  type CodeImageReviewStrings,
+} from "./image/strings.js";

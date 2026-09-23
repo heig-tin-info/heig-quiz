@@ -50,7 +50,8 @@ packages/
   qt-mcq/     question type: multiple choice (./server, ./client)
   qt-short/   question type: short answer (./server, ./client)
   qt-cloze/   question type: fill in the blanks (./server, ./client)
-  qt-code/    question type: code graded by the runner (./server, ./client)
+  qt-code/    question types: code graded by the runner, and its variant
+              codeimage graded pixel by pixel (./server, ./client)
   qt-circuit/ question type: two-port schematic, graded by ngspice simulation
               (./server, ./client, ./canvas)
 docs/
@@ -64,9 +65,12 @@ infra/        Keycloak development realm
 and are registered in `packages/registry` in two places (`./server` and
 `./client`). `qt-circuit` (ADR-019) grades a schematic by simulating it with
 ngspice through the runner's `spice` language; its rules are in
-`docs/spec/04-types-de-questions.md` §4.11.
+`docs/spec/04-types-de-questions.md` §4.11. `qt-code` also carries a second
+type, `codeimage` (ADR-021, §4.9): the same program half (`src/Program*.tsx`,
+`programFields`), judged by the picture its stdout draws (`src/image/`),
+exported as `codeimageServer` / `codeimageClient` and registered beside `code`.
 `packages/ui` exists since the refactoring campaign of 2026-09-23 (PR #51): the
-shared primitives of the five question-type surfaces (`@quiz/ui`, React as a
+shared primitives of the question-type surfaces (`@quiz/ui`, React as a
 peer, `@quiz/core` its only dependency; it never imports a `qt-*` package nor
 `apps/web`). Packages still to create, in this order (`docs/spec/05-architecture.md`,
 5.2 and `docs/PLAN-MVP.md` §8): `packages/canonical`,
@@ -184,7 +188,7 @@ delete it to start over. It is single-process: stop the API before `pnpm seed`.
 `pnpm seed` (`apps/api/src/seed.ts`, content in `apps/api/src/seed/`) is
 idempotent and builds everything through the ORDINARY SERVICES, never by raw
 inserts: course PRG1, classroom PRG1-2026, six students, two pools with
-fourteen published questions of all four types, and four evaluations — one
+sixteen published questions of all six types, and four evaluations — one
 `draft`, one `scheduled`, one exercise in `lobby`, and `Test 0 — bases du C`
 closed, answered by five of the six students, graded by the real grading pass
 and left UNRELEASED so the panel has proposals to validate. Keyed on internal

@@ -11,7 +11,7 @@
  * looks them up before it writes, so running it twice changes nothing.
  */
 
-type QuestionTypeName = "mcq" | "short" | "cloze" | "code" | "circuit";
+type QuestionTypeName = "mcq" | "short" | "cloze" | "code" | "circuit" | "codeimage";
 
 export interface QuestionSpec {
   /** Unique inside its pool, and the key the seed is idempotent on. */
@@ -117,6 +117,22 @@ void inverser(char *s) {
     }
 }
 `;
+
+const CHECKERBOARD_SOLUTION = `
+int case_noire(int x, int y) {
+    return (x + y) % 2 == 0;
+}
+`;
+
+/**
+ * The target of the checkerboard, in the compact encoding of a `codeimage`
+ * config (one hex digit per `bw` pixel, row-major): what "Use as target"
+ * stores after running the reference above. 1 is white, 0 black, and the
+ * top-left cell is black.
+ */
+const CHECKERBOARD_TARGET = Array.from({ length: 16 * 16 }, (_, i) =>
+  ((i % 16) + Math.floor(i / 16)) % 2 === 0 ? "0" : "1",
+).join("");
 
 // ---------------------------------------------------------------------------
 // Pool 1 — Programmation C (attached to PRG1)
@@ -388,6 +404,34 @@ const C_POOL: PoolSpec = {
             { name: "chaîne vide", stdin: "\n", expected: "\n", visible: false, points: 2 },
           ],
         },
+      },
+    },
+    {
+      internalName: "prg1-image-damier",
+      type: "codeimage",
+      category: TYPES,
+      difficulty: 2,
+      tags: ["boucles", "image"],
+      explanation:
+        "Une case est noire quand la somme de ses coordonnées est paire : " +
+        "`(x + y) % 2 == 0`. Le `main` écrit 1 pour une case blanche, 0 pour une noire.",
+      config: {
+        configVersion: 1,
+        language: "c",
+        prompt:
+          "Complétez `case_noire` pour que le programme dessine un **damier** de 16 × 16 cases, " +
+          "la case en haut à gauche étant noire. Le `main` écrit un entier par case, " +
+          "ligne par ligne : 0 pour noir, 1 pour blanc.",
+        template:
+          "// @@lock\n#include <stdio.h>\n\nint case_noire(int x, int y);\n\n" +
+          "int main(void) {\n    for (int y = 0; y < 16; y++) {\n" +
+          "        for (int x = 0; x < 16; x++) {\n" +
+          "            printf(\"%d \", case_noire(x, y) ? 0 : 1);\n        }\n" +
+          "        printf(\"\\n\");\n    }\n    return 0;\n}\n// @@endlock\n" +
+          "\nint case_noire(int x, int y) {\n    // votre code ici\n    return 0;\n}\n",
+        referenceSolution: CHECKERBOARD_SOLUTION,
+        image: { width: 16, height: 16, palette: "bw" },
+        target: CHECKERBOARD_TARGET,
       },
     },
   ],

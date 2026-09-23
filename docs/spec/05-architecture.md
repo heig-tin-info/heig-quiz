@@ -278,7 +278,7 @@ POST /run
 - Compilation then execution of the cases in the same container, sequentially, each with its own limit.
 - Two queues: `interactive` for student runs during an evaluation, `grading` for the final grading, lower priority. Configurable concurrency, 4 by default. Beyond a depth limit, 429 and the client retries.
 - The source code is rebuilt on the API side from the template and the editable regions, never taken as-is.
-- A reference image per `codeimage` question is produced by running the teacher's solution in the runner at publication time.
+- A `codeimage` question stores its target image IN ITS CONFIG (compact hex encoding, docs/04 §4.9): the teacher runs the reference solution from the editor ("Try the reference solution") and presses "Use as target". Nothing runs at publication; publication only checks that the target fits the image's size and palette (ADR-021).
 
 Alternative evaluated: Piston, a free multi-language runner, isolation by Unix users and cgroups. Kept as a fallback if Podman causes trouble on the VM.
 

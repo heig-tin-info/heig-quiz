@@ -285,7 +285,7 @@ describe("AddQuestionsSheet — the filters", () => {
     ) as HTMLOptionElement[];
     const values = options.map((o) => o.value);
     expect(values[0]).toBe("");
-    expect(values).toEqual(expect.arrayContaining(["mcq", "short", "cloze", "code", "circuit"]));
+    expect(values).toEqual(expect.arrayContaining(["mcq", "short", "cloze", "code", "circuit", "codeimage"]));
     // FC-04: the label is the registry's own, so the type that used to fall
     // through the hand-written list reads as a word and not as its id.
     expect(options.find((o) => o.value === "circuit")?.textContent).toBe("Circuit");

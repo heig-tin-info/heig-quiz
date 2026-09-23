@@ -123,8 +123,15 @@ export const CodeFile = z.object({
 });
 export type CodeFile = z.infer<typeof CodeFile>;
 
-export const CodeConfig = z.object({
-  configVersion: z.literal(CODE_CONFIG_VERSION),
+/**
+ * The fields of a PROGRAM question: what the student writes, in what, and
+ * how it is built and bounded. `code` and `codeimage` share them field for
+ * field (ADR-021) and differ only in how the program is judged — test cases
+ * for one, a pixel grid for the other — so the list is written once and each
+ * config spreads it. Every field keeps the default it always had: a `code`
+ * config stored before the split parses to exactly the same object.
+ */
+export const programFields = {
   prompt: z.string().min(1).max(20_000),
   language: CodeLanguage,
   runtime: CodeRuntime.default("backend"),
@@ -136,13 +143,25 @@ export const CodeConfig = z.object({
   compileArgs: z.string().max(400).default(""),
   limits: CodeLimits.default(DEFAULT_LIMITS),
   runsPerMinute: z.number().int().min(1).max(30).default(10),
-  allOrNothing: z.boolean().default(false),
   /**
    * The teacher's own solution. It exists for ONE purpose: the "try" button of
-   * the editor, which runs it against the cases to check that they pass. It is
-   * never sent to a student, in any view.
+   * the editor, which runs it to check the question. It is never sent to a
+   * student, in any view.
    */
   referenceSolution: z.string().max(40_000).default(""),
+};
+
+/**
+ * The program part of any config that carries one — what the shared editor
+ * section, the reference cut and the request builders read. Structural, so a
+ * `CodeConfig` and a `CodeImageConfig` both satisfy it.
+ */
+export type ProgramConfig = z.infer<z.ZodObject<typeof programFields>>;
+
+export const CodeConfig = z.object({
+  configVersion: z.literal(CODE_CONFIG_VERSION),
+  ...programFields,
+  allOrNothing: z.boolean().default(false),
   tests: z.object({
     mode: z.literal("io"), // "tap" is phase 3
     compare: CodeCompare.default(DEFAULT_COMPARE),
@@ -185,7 +204,13 @@ export type CodeSegment = z.infer<typeof CodeSegment>;
  * answer is, and without them the player judged a visible case by a
  * different rule than the grade (ADR-015 §2).
  */
-export const CodeStudent = z.object({
+/**
+ * The program half of a student view, shared by `code` and `codeimage`: the
+ * statement, the template split into segments, where "Run" executes and how
+ * much it may do. Everything that could carry the key — `compileArgs`, the
+ * extra files' bytes, the reference solution — is absent by construction.
+ */
+export const programStudentFields = {
   prompt: z.string(),
   language: CodeLanguage,
   /** Where "Run" executes; the key never depends on it. */
@@ -193,6 +218,15 @@ export const CodeStudent = z.object({
   segments: z.array(CodeSegment),
   limits: CodeLimits,
   runsPerMinute: z.number().int(),
+  /** Enough to say "data.csv is available", never the bytes themselves. */
+  filesPreview: z.array(z.object({ name: z.string(), bytes: z.number().int() })),
+};
+
+/** The program half of a student view; both types' views satisfy it. */
+export type ProgramStudent = z.infer<z.ZodObject<typeof programStudentFields>>;
+
+export const CodeStudent = z.object({
+  ...programStudentFields,
   visibleCases: z.array(
     z.object({
       name: z.string(),
@@ -208,8 +242,6 @@ export const CodeStudent = z.object({
   /** Hidden cases exist but stay opaque during the attempt (docs/06 Q8). */
   hiddenCount: z.number().int(),
   hiddenPoints: z.number(),
-  /** Enough to say "data.csv is available", never the bytes themselves. */
-  filesPreview: z.array(z.object({ name: z.string(), bytes: z.number().int() })),
   allOrNothing: z.boolean(),
   /** How a visible case's output is compared — the grade's own options. */
   compare: CodeCompare,

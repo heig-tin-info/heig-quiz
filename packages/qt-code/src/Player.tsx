@@ -18,8 +18,15 @@ import { fmt, plural, resolveStrings } from "@quiz/core/client";
 import type { MarkdownRenderer, PlayerProps } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 
-import { CodeArea } from "./MonacoHost.js";
-import { initialRegions, stripMarkerLines, trimTrailingNewline } from "./segments.js";
+import {
+  ProgramRegions,
+  ProgramStatement,
+  regionsOf,
+  RunButton,
+  RunStatus,
+  useRunSlot,
+  type CodeRunStage,
+} from "./ProgramPlayer.js";
 import type { CodeAnswer, CodeStudent } from "./schema.js";
 import { PLAYER_STRINGS, type CodePlayerStrings } from "./strings.js";
 import {
@@ -31,7 +38,6 @@ import {
   input,
   isLocked,
   lockedBlock,
-  markdown,
   sectionTitle,
   table,
   Verdict,
@@ -39,8 +45,7 @@ import {
 } from "@quiz/ui";
 import { caseVerdict } from "./verdict.js";
 
-/** Where a run is, for the one line the player shows while it gets there. */
-export type CodeRunStage = "loading" | "compiling" | "running";
+export type { CodeRunStage } from "./ProgramPlayer.js";
 
 export interface CodeRunOptions {
   /**
@@ -82,13 +87,6 @@ interface CodePlayerProps extends PlayerProps<CodeStudent, CodeAnswer> {
   /** Forces the Monaco path on or off (tests use the textarea). */
   monaco?: boolean | undefined;
 }
-
-type RunState =
-  | { status: "idle" }
-  | { status: "running"; stage: CodeRunStage }
-  | { status: "unavailable" }
-  | { status: "failed" }
-  | { status: "done"; outcome: RunnerOutcome };
 
 type VisibleCase = CodeStudent["visibleCases"][number];
 type CaseResult = RunnerOutcome["cases"][number];
@@ -147,14 +145,13 @@ export function CodePlayer({
   const s = resolveStrings(PLAYER_STRINGS, strings);
   const locked = isLocked(readOnly, disabled);
   const ids = useId();
-  const [run, setRun] = useState<RunState>({ status: "idle" });
+  const [run, runVisibleInto] = useRunSlot();
   /** The free input of §4.7: one argument per line, and a stdin of your own. */
   const [manualArgs, setManualArgs] = useState("");
   const [manualStdin, setManualStdin] = useState("");
-  const [manual, setManual] = useState<RunState>({ status: "idle" });
+  const [manual, runManualInto] = useRunSlot();
 
-  const seeded = initialRegions(student.segments);
-  const regions = seeded.map((text, i) => answer?.regions[i] ?? text);
+  const regions = regionsOf(student, answer);
 
   const writeRegion = (index: number, next: string) => {
     const updated = regions.map((text, i) => (i === index ? next : text));
@@ -170,26 +167,19 @@ export function CodePlayer({
    * student's own input when `manual` is given. The request, the stages and
    * the three endings are the same; only the slot and that one option differ.
    */
-  async function runInto(setSlot: (state: RunState) => void, manual?: CodeRunOptions["manual"]) {
+  async function runInto(
+    slot: typeof runVisibleInto,
+    manual?: CodeRunOptions["manual"],
+  ) {
     if (onRun === undefined) return;
-    setSlot({ status: "running", stage: "loading" });
-    try {
-      const outcome = await onRun(
-        { regions },
-        {
-          ...(manual === undefined ? {} : { manual }),
-          onStage: (stage) => setSlot({ status: "running", stage }),
-        },
-      );
-      setSlot(outcome === "unavailable" ? { status: "unavailable" } : { status: "done", outcome });
-    } catch {
-      setSlot({ status: "failed" });
-    }
+    await slot((onStage) =>
+      onRun({ regions }, { ...(manual === undefined ? {} : { manual }), onStage }),
+    );
   }
 
-  const runVisibleCases = () => runInto(setRun);
+  const runVisibleCases = () => runInto(runVisibleInto);
   const runManual = () =>
-    runInto(setManual, {
+    runInto(runManualInto, {
       args: manualArgs
         .split("\n")
         .map((line) => line.trim())
@@ -203,98 +193,38 @@ export function CodePlayer({
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="whitespace-pre-wrap text-sm text-fg">
-        {markdown(renderMarkdown, student.prompt)}
-      </div>
+      <ProgramStatement
+        student={student}
+        s={s}
+        renderMarkdown={renderMarkdown}
+        badges={
+          student.allOrNothing ? <span className={badge("warning")}>{s.allOrNothing}</span> : null
+        }
+      />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={badge()}>{student.language}</span>
-        <span className={badge()}>
-          {fmt(s.limits, { timeMs: student.limits.timeMs, memoryMb: student.limits.memoryMb })}
-        </span>
-        {student.allOrNothing ? <span className={badge("warning")}>{s.allOrNothing}</span> : null}
-      </div>
-
-      {student.filesPreview.length > 0 ? (
-        <p className={hint}>
-          {s.files}{" "}
-          {student.filesPreview.map((f) => `${f.name} (${f.bytes} B)`).join(", ")}
-        </p>
-      ) : null}
-
-      <div className="flex flex-col gap-1.5">
-        {student.segments.map((segment, i) => {
-          if (segment.kind === "locked") {
-            const text = trimTrailingNewline(stripMarkerLines(segment.text));
-            if (text === "") return null;
-            return (
-              <pre key={i} className={lockedBlock} aria-label={s.locked} title={s.locked}>
-                <code>{text}</code>
-              </pre>
-            );
-          }
-          const index = segment.index ?? 0;
-          return (
-            <CodeArea
-              key={i}
-              label={fmt(s.editableRegion, { n: index + 1 })}
-              language={student.language}
-              value={regions[index] ?? ""}
-              onChange={locked ? undefined : (next) => writeRegion(index, next)}
-              readOnly={locked}
-              minLines={4}
-              monaco={monaco}
-            />
-          );
-        })}
-      </div>
+      <ProgramRegions
+        student={student}
+        regions={regions}
+        locked={locked}
+        onWrite={writeRegion}
+        s={s}
+        monaco={monaco}
+      />
 
       <section className={cx(card, "flex flex-col gap-3 p-4")}>
         <div className="flex flex-wrap items-center gap-3">
           <h3 className={sectionTitle}>{s.visibleCases}</h3>
           {onRun === undefined ? null : (
-            <button
-              type="button"
-              className={button("primary", "sm", "ml-auto")}
+            <RunButton
+              state={run}
               disabled={locked || busy}
               onClick={() => void runVisibleCases()}
-            >
-              {run.status === "running" ? s.running : s.run}
-            </button>
+              s={s}
+            />
           )}
         </div>
         <p className={hint}>{s.runHint}</p>
-        {/* One quiet line: where the program runs is a fact a student is owed,
-            and it answers the question the button raises (ADR-015). */}
-        {onRun !== undefined && student.runtime === "runno" ? (
-          <p className={hint}>{s.inBrowser}</p>
-        ) : null}
-        {run.status === "running" && run.stage === "loading" ? (
-          <p role="status" className={hint}>
-            {s.loadingRuntime}
-          </p>
-        ) : null}
-
-        {run.status === "unavailable" ? (
-          <p role="status" className="rounded-field bg-warning-soft px-3 py-2 text-[13px] text-warning">
-            {s.runUnavailable}
-          </p>
-        ) : null}
-        {run.status === "failed" ? (
-          <p role="status" className="rounded-field bg-danger-soft px-3 py-2 text-[13px] text-danger">
-            {s.runFailed}
-          </p>
-        ) : null}
-        {outcome !== null ? (
-          <p role="status" className={hint}>
-            {outcome.compile.ok ? s.compileOk : s.compileFailed}
-            {outcome.compile.ok || outcome.compile.stderr === "" ? null : (
-              <code className="mt-1 block whitespace-pre-wrap font-mono text-[13px] text-danger">
-                {outcome.compile.stderr}
-              </code>
-            )}
-          </p>
-        ) : null}
+        <RunStatus state={run} runtime={student.runtime} canRun={onRun !== undefined} s={s} />
 
         {student.visibleCases.length === 0 ? (
           <p className={hint}>{s.noVisibleCases}</p>

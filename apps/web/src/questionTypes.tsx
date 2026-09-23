@@ -50,12 +50,18 @@ import {
 } from "@quiz/qt-cloze/client";
 import {
   EDITOR_STRINGS,
+  IMAGE_EDITOR_STRINGS,
+  IMAGE_PLAYER_STRINGS,
+  IMAGE_REVIEW_STRINGS,
   PLAYER_STRINGS,
   referenceRegions,
   REVIEW_STRINGS,
   type CodeConfig,
   type CodeDetails,
   type CodeEditorProps,
+  type CodeImageConfig,
+  type CodeImageDetails,
+  type CodeImageEditorProps,
 } from "@quiz/qt-code/client";
 import {
   CANVAS_STRINGS,
@@ -75,7 +81,7 @@ import { HelpIcon } from "./help";
 import type { Dict, TFunction } from "./i18n";
 import { MarkdownView } from "./markdown/MarkdownView";
 import { BrowserRunnerUnavailable, runnerFor } from "./runner";
-import { referenceRunRequest } from "./runner/codeRun";
+import { imageReferenceRunRequest, referenceRunRequest } from "./runner/codeRun";
 import { ScrollableCode, Skeleton, type IconType } from "./ui";
 
 /**
@@ -186,6 +192,15 @@ export const editorStrings = {
   cloze: (t: TFunction) => translated(t, clozeEditorStrings, "qt.cloze.e"),
   code: (t: TFunction) => translated(t, EDITOR_STRINGS, "qt.code.e"),
   circuit: (t: TFunction) => translated(t, CIRCUIT_EDITOR_STRINGS, "qt.circuit.e"),
+  /*
+   * `codeimage` is `code`'s program half plus a picture (ADR-021): `code`'s
+   * sentences, translated once under `qt.code.*`, with the image's own on
+   * top — including the sentence it deliberately re-words.
+   */
+  codeimage: (t: TFunction) => ({
+    ...translated(t, EDITOR_STRINGS, "qt.code.e"),
+    ...translated(t, IMAGE_EDITOR_STRINGS, "qt.codeimage.e"),
+  }),
 };
 
 /**
@@ -216,6 +231,10 @@ export const playerStrings = {
   cloze: (t: TFunction) => translated(t, clozePlayerStrings, "qt.cloze.p"),
   code: (t: TFunction) => translated(t, PLAYER_STRINGS, "qt.code.p"),
   circuit: (t: TFunction) => translated(t, CIRCUIT_PLAYER_STRINGS, "qt.circuit.p"),
+  codeimage: (t: TFunction) => ({
+    ...translated(t, PLAYER_STRINGS, "qt.code.p"),
+    ...translated(t, IMAGE_PLAYER_STRINGS, "qt.codeimage.p"),
+  }),
 };
 
 export const reviewStrings = {
@@ -224,6 +243,12 @@ export const reviewStrings = {
   cloze: (t: TFunction) => translated(t, clozeReviewStrings, "qt.cloze.r"),
   code: (t: TFunction) => translated(t, REVIEW_STRINGS, "qt.code.r"),
   circuit: (t: TFunction) => translated(t, CIRCUIT_REVIEW_STRINGS, "qt.circuit.r"),
+  // The review shows the player's image panel, so it reads the player's words too.
+  codeimage: (t: TFunction) => ({
+    ...playerStrings.codeimage(t),
+    ...translated(t, REVIEW_STRINGS, "qt.code.r"),
+    ...translated(t, IMAGE_REVIEW_STRINGS, "qt.codeimage.r"),
+  }),
 };
 
 /** `mcq` answer distribution (WP10 results screens). */
@@ -256,7 +281,8 @@ function EditorSkeleton({ label }: { label: string }) {
  */
 export type TryOutcome =
   | Awaited<ReturnType<NonNullable<CodeEditorProps["onTry"]>>>
-  | Awaited<ReturnType<NonNullable<CircuitEditorProps["onTry"]>>>;
+  | Awaited<ReturnType<NonNullable<CircuitEditorProps["onTry"]>>>
+  | Awaited<ReturnType<NonNullable<CodeImageEditorProps["onTry"]>>>;
 
 /** What a "try" adapter needs from the editor screen that mounts it. */
 export interface TryContext {
@@ -356,6 +382,43 @@ function trySimulateReference({ id, flush }: TryContext): TryAdapter {
 }
 
 /**
+ * "Try the reference solution" (`CodeImageEditor`): the same two runners as
+ * `code`'s, and the answer is the PICTURE the reference draws, which the
+ * editor offers to "Use as target".
+ *
+ *  - `runtime: "runno"`: the browser runs the program assembled from the
+ *    draft's template and the reference's regions, one run with an empty
+ *    stdin, and the editor parses its stdout with the grader's own rule.
+ *  - otherwise `POST /questions/:id/try` grades the reference as an answer:
+ *    the grading's `details.image` IS the picture, already parsed on the
+ *    server — the same field a student's review reads.
+ */
+function tryDrawReference({ id, flush }: TryContext): TryAdapter {
+  return async (raw) => {
+    const config = raw as CodeImageConfig;
+    const regions = referenceRegions(config);
+    if (regions === null) throw new Error("reference solution does not fit the template");
+
+    const browser = await runnerFor(config.runtime, config.language);
+    if (browser !== null) {
+      try {
+        return await browser.run(imageReferenceRunRequest(config, regions));
+      } catch (error) {
+        if (!(error instanceof BrowserRunnerUnavailable)) throw error;
+      }
+    }
+
+    flush();
+    const result = await api<TryResult>(`/app/api/questions/${id}/try`, {
+      method: "POST",
+      body: JSON.stringify({ source: "draft", answer: { regions } }),
+    });
+    if (result.status !== "graded") return "unavailable";
+    return { details: result.details as CodeImageDetails };
+  };
+}
+
+/**
  * The editor's "try it yourself" for a type, or `undefined` for a type that
  * has no such button. One adapter per type that gains one, keyed here so the
  * editor screen never branches on a type id.
@@ -367,6 +430,7 @@ function trySimulateReference({ id, flush }: TryContext): TryAdapter {
 export function tryAdapterFor(type: string, context: TryContext): TryAdapter | undefined {
   if (type === "code") return tryReference(context);
   if (type === "circuit") return trySimulateReference(context);
+  if (type === "codeimage") return tryDrawReference(context);
   return undefined;
 }
 
@@ -492,7 +556,7 @@ interface PlayerHostProps {
   strings?: unknown;
   canvasStrings?: unknown;
   renderMarkdown?: (source: string) => ReactNode;
-  onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable">;
+  onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
   allowManualRun?: boolean;
   onSimulate?: (answer: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
 }
@@ -515,7 +579,7 @@ export function QuestionPlayerHost({
   onChange: (next: unknown) => void;
   readOnly: boolean;
   /** `code` only: the run the type's player offers, from `src/runner/`. */
-  onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable">;
+  onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
   allowManualRun?: boolean;
   /**
    * `circuit` only: the simulation its player offers. It has no browser half
