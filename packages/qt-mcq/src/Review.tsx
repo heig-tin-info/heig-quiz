@@ -9,7 +9,7 @@ import type { MarkdownRenderer, ReviewProps, StringOverrides } from "@quiz/core/
 import { resolveStrings } from "@quiz/core/client";
 import type { McqAnswer, McqDetails, McqSolution, McqStudent } from "./schema.js";
 import { mcqReviewStrings, type McqReviewStringKey } from "./strings.js";
-import { cx, ScoreHeader, Verdict, type BadgeTone } from "@quiz/ui";
+import { type BadgeTone, cx, markdown, ScoreHeader, Verdict } from "@quiz/ui";
 import { helpClass } from "./ui.js";
 
 type McqReviewProps = ReviewProps<McqStudent, McqAnswer, McqSolution, McqDetails> & {
@@ -34,7 +34,7 @@ export function McqReview({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-fg">
-        {renderMarkdown ? renderMarkdown(student.prompt) : student.prompt}
+        {markdown(renderMarkdown, student.prompt)}
       </p>
 
       <ul className="flex flex-col gap-1.5">
@@ -62,7 +62,7 @@ export function McqReview({
               )}
             >
               <span className="min-w-0">
-                {renderMarkdown ? renderMarkdown(choice.text) : choice.text}
+                {markdown(renderMarkdown, choice.text)}
               </span>
               {verdict ? <Verdict tone={verdict.tone}>{verdict.label}</Verdict> : null}
             </li>

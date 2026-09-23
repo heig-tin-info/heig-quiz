@@ -11,7 +11,7 @@ import { resolveStrings } from "@quiz/core/client";
 import type { ClozeAnswer, ClozeDetails, ClozeSolution, ClozeStudent } from "./schema.js";
 import { clozeReviewStrings, type ClozeReviewStringKey } from "./strings.js";
 import { ClozeFallbackText, type ClozeTextRenderer } from "./text.js";
-import { cx, ScoreHeader, Verdict, verdictTone } from "@quiz/ui";
+import { breakdownOf, cx, ScoreHeader, Verdict, verdictTone } from "@quiz/ui";
 import { helpClass } from "./ui.js";
 
 type ClozeReviewProps = ReviewProps<
@@ -44,14 +44,8 @@ export function ClozeReview({
 }: ClozeReviewProps) {
   const s = resolveStrings(clozeReviewStrings, strings);
   const given = answer?.blanks ?? [];
-  /*
-   * `details` comes off the wire as whatever `gradings.details` holds, which
-   * is this type's breakdown OR a grading-level marker (an unreadable
-   * configuration, a grader that threw). A marker has no `perBlank`, and
-   * reading it as one is a crash on a page whose whole job is to reassure.
-   * Without verdicts the blanks simply read neutral, which is honest.
-   */
-  const perBlank = Array.isArray(details?.perBlank) ? details.perBlank : [];
+  // Without a breakdown the blanks simply read neutral, which is honest.
+  const perBlank = breakdownOf(details, "perBlank")?.perBlank ?? [];
   const verdicts = new Map(perBlank.map((blank) => [blank.index, blank]));
   const expected = new Map(solution?.blanks.map((blank) => [blank.index, blank.expected]) ?? []);
   const Text = renderText ?? ClozeFallbackText;

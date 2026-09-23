@@ -22,7 +22,7 @@ import {
   type ShortStudent,
 } from "./schema.js";
 import { shortPlayerStrings, type ShortPlayerStringKey } from "./strings.js";
-import { cx } from "@quiz/ui";
+import { cx, markdown } from "@quiz/ui";
 import { helpClass, inputClass, labelClass } from "./ui.js";
 
 type ShortPlayerProps = PlayerProps<ShortStudent, ShortAnswer> & {
@@ -101,7 +101,7 @@ export function ShortPlayer({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-lg leading-relaxed text-fg">
-        {renderMarkdown ? renderMarkdown(student.prompt) : student.prompt}
+        {markdown(renderMarkdown, student.prompt)}
       </p>
       <div className="flex flex-col gap-1.5">
         <label className={labelClass} htmlFor="short-answer">

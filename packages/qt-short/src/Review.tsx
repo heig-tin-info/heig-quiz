@@ -8,7 +8,7 @@ import type { MarkdownRenderer, ReviewProps, StringOverrides } from "@quiz/core/
 import { resolveStrings } from "@quiz/core/client";
 import type { ShortAnswer, ShortDetails, ShortSolution, ShortStudent } from "./schema.js";
 import { shortReviewStrings, type ShortReviewStringKey } from "./strings.js";
-import { ScoreHeader, Verdict, type BadgeTone } from "@quiz/ui";
+import { type BadgeTone, markdown, ScoreHeader, Verdict } from "@quiz/ui";
 import { helpClass } from "./ui.js";
 
 type ShortReviewProps = ReviewProps<
@@ -46,7 +46,7 @@ export function ShortReview({
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-fg">
-        {renderMarkdown ? renderMarkdown(student.prompt) : student.prompt}
+        {markdown(renderMarkdown, student.prompt)}
       </p>
 
       <div className="flex flex-wrap items-center gap-2">

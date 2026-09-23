@@ -27,7 +27,7 @@ import { formatValue, LIBRARY, PORT_IDS, type PortId } from "./library.js";
 import { extractNets, type NetlistIssue } from "./netlist.js";
 import type { CircuitAnswer, CircuitStudent, Load, Source, StudentStimulus } from "./schema.js";
 import { PLAYER_STRINGS, type CircuitPlayerStrings } from "./strings.js";
-import { badge, button, card, cx, hint, sectionTitle } from "@quiz/ui";
+import { badge, button, card, cx, hint, markdown, sectionTitle } from "@quiz/ui";
 
 import { strip } from "./styles.js";
 
@@ -218,7 +218,7 @@ export function CircuitPlayer({
   return (
     <div className="flex flex-col gap-5">
       <div className="whitespace-pre-wrap text-sm text-fg">
-        {renderMarkdown ? renderMarkdown(student.prompt) : student.prompt}
+        {markdown(renderMarkdown, student.prompt)}
       </div>
 
       <div className="flex flex-col gap-2">

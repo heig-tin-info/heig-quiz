@@ -34,6 +34,7 @@ export {
   table,
   type BadgeTone,
 } from "./styles.js";
+export { breakdownOf, markdown } from "./content.js";
 export { CheckboxField, FieldCell, NumberField, Segmented } from "./fields.js";
 export { IssueList } from "./issues.js";
 export { AsideSection, TryPanel, type TryStatus } from "./panels.js";

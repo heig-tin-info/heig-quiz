@@ -23,10 +23,12 @@ import type {
 import { REVIEW_STRINGS, type CircuitReviewStrings } from "./strings.js";
 import {
   badge,
+  breakdownOf,
   card,
   cx,
   hint,
   lockedBlock,
+  markdown,
   pointsOrDash,
   sectionTitle,
   table,
@@ -134,19 +136,13 @@ export function CircuitReview({
   /* The statement, so a verdict is never read without the question it judges. */
   const statement = (
     <div className="whitespace-pre-wrap text-sm text-fg">
-      {renderMarkdown ? renderMarkdown(student.prompt) : student.prompt}
+      {markdown(renderMarkdown, student.prompt)}
     </div>
   );
 
   const canvas = canvasStrings === undefined ? {} : { strings: canvasStrings };
 
-  /*
-   * `details` is whatever `gradings.details` holds: this type's breakdown, or
-   * a grading-level marker with no `stimuli` at all — an absent answer, an
-   * unreadable configuration, a grader that threw. Reading a marker as a
-   * breakdown is a blank page, so the two are told apart here.
-   */
-  const breakdown = details !== null && Array.isArray(details.stimuli) ? details : null;
+  const breakdown = breakdownOf(details, "stimuli");
 
   /*
    * An answer stored before this type had its shape — or by anything but the

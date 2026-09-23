@@ -30,6 +30,7 @@ import {
   hint,
   input,
   lockedBlock,
+  markdown,
   sectionTitle,
   table,
   Verdict,
@@ -205,7 +206,7 @@ export function CodePlayer({
   return (
     <div className="flex flex-col gap-5">
       <div className="whitespace-pre-wrap text-sm text-fg">
-        {renderMarkdown ? renderMarkdown(student.prompt) : student.prompt}
+        {markdown(renderMarkdown, student.prompt)}
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
