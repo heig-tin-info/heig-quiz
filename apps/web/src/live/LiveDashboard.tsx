@@ -15,11 +15,11 @@ import {
   Card,
   cx,
   EmptyState,
+  isTyping,
   Kbd,
   PageError,
+  PageSkeleton,
   ParentLink,
-  Skeleton,
-  isTyping,
   Switch,
   useFullscreen,
   useNow,
@@ -241,13 +241,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
     return <p className="py-12 text-center text-sm text-fg-muted">{t("poll.opening")}</p>;
   }
   if (query.isLoading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-80" />
-        <Skeleton className="h-9 w-64" />
-        <Skeleton className="h-80 w-full" />
-      </div>
-    );
+    return <PageSkeleton header="title-and-bar" />;
   }
   if (query.isError || !state) {
     return (

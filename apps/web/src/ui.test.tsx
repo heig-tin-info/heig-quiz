@@ -19,6 +19,7 @@ import {
   Modal,
   NotePanel,
   PageHeader,
+  PageSkeleton,
   ParentLink,
   PersonAvatar,
   pressable,
@@ -1011,6 +1012,33 @@ describe("EmptyState", () => {
     const Icon = () => <svg aria-hidden />;
     renderWithProviders(<EmptyState icon={Icon} title="Time is up" titleAs="h1" />);
     expect(screen.getByRole("heading", { level: 1, name: "Time is up" })).toBeVisible();
+  });
+});
+
+describe("PageSkeleton", () => {
+  const blocks = (container: HTMLElement) =>
+    [...container.firstElementChild!.children].map((el) => el.className);
+
+  it("is a title and a block by default, hidden from assistive technology", () => {
+    const { container } = renderWithProviders(<PageSkeleton />);
+    const rows = blocks(container);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toContain("h-8");
+    expect(rows[1]).toContain("h-64");
+    for (const el of container.firstElementChild!.children) {
+      expect(el).toHaveAttribute("aria-hidden");
+    }
+  });
+
+  it("adds the bar under the title and the summary over the block on request", () => {
+    const { container } = renderWithProviders(
+      <PageSkeleton header="title-and-bar" body="summary-and-block" className="max-w-180" />,
+    );
+    expect(container.firstElementChild).toHaveClass("space-y-6", "max-w-180");
+    const rows = blocks(container);
+    expect(rows).toHaveLength(4);
+    expect(rows[1]).toContain("h-9");
+    expect(rows[2]).toContain("h-24");
   });
 });
 

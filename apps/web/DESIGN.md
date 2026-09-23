@@ -418,6 +418,17 @@ live in `ui/state.ts`, each written once.
   translated fallback key, always in the `error` tone, so no call site can
   pick another one.
 - Empty state: icon in a `surface-2` circle, title, one line, one action.
+- PageSkeleton: the loading state of a whole page, in ONE shape — a 32 px
+  title bar, optionally the 36 px tabs/toolbar row under it, then a 256 px
+  block, optionally under a 96 px summary strip for a page that opens on
+  figures (results, the student's feedback); 24 px between the rows, the
+  header-to-body gap above. The widths mean nothing and are the same on every
+  page: a skeleton says "a page is coming", and six pages each guessing their
+  own proportions said nothing more. The skeletons that DO mirror their
+  content keep their own shape — the pool's table and cards
+  (`QuestionTableSkeleton`, `QuestionCardsSkeleton`), the grading list
+  (`ListSkeleton`) and the projection's stage — because there the rows are
+  the promise.
 - Notification bell (`src/notifications/NotificationBell.tsx`): the account's
   own inbox, beside the account row in the sidebar and beside the avatar in
   the phone top bar — the two things that are about the PERSON and not about

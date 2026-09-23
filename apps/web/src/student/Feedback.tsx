@@ -13,9 +13,9 @@ import {
   Card,
   EmptyState,
   NotePanel,
+  PageSkeleton,
   QueryError,
   RelativeTime,
-  Skeleton,
   Stat,
 } from "../ui";
 import { attemptFeedbackKey } from "../queryKeys";
@@ -54,13 +54,7 @@ export function Feedback({ attemptId }: { attemptId: string }) {
   });
 
   if (feedback.isLoading) {
-    return (
-      <div className="mx-auto max-w-180 space-y-4">
-        <Skeleton className="h-8 w-56" />
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-40 w-full" />
-      </div>
-    );
+    return <PageSkeleton body="summary-and-block" className="mx-auto max-w-180" />;
   }
   if (feedback.isError || !feedback.data) {
     return (

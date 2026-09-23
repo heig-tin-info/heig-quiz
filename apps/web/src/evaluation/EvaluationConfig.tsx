@@ -28,8 +28,8 @@ import {
   Menu,
   PageError,
   PageHeader,
+  PageSkeleton,
   ParentLink,
-  Skeleton,
   TabPanel,
   Tabs,
 } from "../ui";
@@ -133,13 +133,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
   });
 
   if (detail.isLoading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-72" />
-        <Skeleton className="h-9 w-80" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
+    return <PageSkeleton header="title-and-bar" />;
   }
   if (detail.isError || !detail.data) {
     return (

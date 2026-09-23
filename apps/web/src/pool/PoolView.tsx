@@ -22,9 +22,9 @@ import {
   FormError,
   PageError,
   PageHeader,
+  PageSkeleton,
   ParentLink,
   QueryError,
-  Skeleton,
   Spinner,
   usePersistentChoice,
 } from "../ui";
@@ -278,12 +278,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
   };
 
   if (pool.isLoading) {
-    return (
-      <div className="space-y-4">
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-64 w-full" />
-      </div>
-    );
+    return <PageSkeleton />;
   }
   if (pool.isError) {
     return (
