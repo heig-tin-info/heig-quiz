@@ -15,18 +15,15 @@ import type {
   RichTextComponent,
   StringOverrides,
 } from "@quiz/core/client";
-import { resolveStrings } from "@quiz/core/client";
+import { issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import { describeBlank, parseCloze } from "@quiz/domain/cloze";
 import { type ClozeConfig } from "./schema.js";
 import { clozeEditorStrings, type ClozeEditorStringKey } from "./strings.js";
-import { cx } from "@quiz/ui";
+import { cx, IssueList } from "@quiz/ui";
 import {
   helpClass,
   inputClass,
-  IssueList,
-  issuesAt,
   labelClass,
-  rootIssues,
   sectionClass,
 } from "./ui.js";
 

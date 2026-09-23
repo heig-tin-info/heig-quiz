@@ -44,7 +44,7 @@ import type {
   RichTextComponent,
   StringOverrides,
 } from "@quiz/core/client";
-import { resolveStrings } from "@quiz/core/client";
+import { issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import {
   MCQ_MAX_CHOICES,
   MCQ_MIN_CHOICES,
@@ -53,7 +53,7 @@ import {
   type McqQuestionPolicy,
 } from "./schema.js";
 import { mcqEditorStrings, type McqEditorStringKey } from "./strings.js";
-import { cx } from "@quiz/ui";
+import { cx, IssueList } from "@quiz/ui";
 import {
   buttonClass,
   cardClass,
@@ -64,11 +64,8 @@ import {
   helpClass,
   iconButtonClass,
   inputClass,
-  IssueList,
-  issuesAt,
   labelClass,
   Pastille,
-  rootIssues,
   sectionClass,
   Segmented,
   Tip,

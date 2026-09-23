@@ -15,7 +15,7 @@
 import { useId, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { fmt, plural, resolveStrings } from "@quiz/core/client";
+import { fmt, issuesAt, plural, resolveStrings, rootIssues } from "@quiz/core/client";
 import type { ConfigIssue, EditorProps, MarkdownRenderer } from "@quiz/core/client";
 
 import { Plot, SchematicEditor, type CanvasStrings } from "./canvas/index.js";
@@ -37,7 +37,18 @@ import {
   type CircuitEditorStrings,
   type KindLabels,
 } from "./strings.js";
-import { badge, button, card, cx, hint, input, inputSm, label, sectionTitle } from "@quiz/ui";
+import {
+  badge,
+  button,
+  card,
+  cx,
+  hint,
+  input,
+  inputSm,
+  IssueList,
+  label,
+  sectionTitle,
+} from "@quiz/ui";
 
 import { chip, segment, segmentTrack, selectSm } from "./styles.js";
 
@@ -84,30 +95,6 @@ type TryState =
   | { status: "unavailable" }
   | { status: "failed"; reason: "runner" | "reference" | "stimulus" }
   | { status: "done"; details: CircuitDetails };
-
-/** The issues whose path starts with `path` (decision D16 reporting). */
-function issuesAt(issues: readonly ConfigIssue[], ...path: (string | number)[]): ConfigIssue[] {
-  return issues.filter((issue) => path.every((part, i) => issue.path[i] === part));
-}
-
-function rootIssues(issues: readonly ConfigIssue[]): ConfigIssue[] {
-  return issues.filter((issue) => issue.path.length === 0);
-}
-
-/**
- * Validation feedback under a field. The message is shown verbatim: a `qt-*`
- * package emits i18n keys, the host decides how to present them.
- */
-function IssueList({ issues }: { issues: readonly ConfigIssue[] }): ReactNode {
-  if (issues.length === 0) return null;
-  return (
-    <ul className="flex flex-col gap-0.5 text-xs text-danger">
-      {issues.map((issue, i) => (
-        <li key={`${issue.path.join(".")}-${i}`}>{issue.message}</li>
-      ))}
-    </ul>
-  );
-}
 
 /**
  * The palette, grouped the way a teacher thinks about it rather than in the

@@ -9,7 +9,7 @@
  * the list is reorderable and numbered.
  */
 import type { ConfigIssue, EditorProps, MarkdownRenderer, StringOverrides } from "@quiz/core/client";
-import { resolveStrings } from "@quiz/core/client";
+import { issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import {
   defaultShortConstraints,
   defaultShortPrefilters,
@@ -21,17 +21,14 @@ import {
   type ShortMatcher,
 } from "./schema.js";
 import { shortEditorStrings, type ShortEditorStringKey } from "./strings.js";
-import { cx } from "@quiz/ui";
+import { cx, IssueList } from "@quiz/ui";
 import {
   buttonClass,
   CheckboxField,
   FieldCell,
   helpClass,
   inputClass,
-  IssueList,
-  issuesAt,
   labelClass,
-  rootIssues,
   sectionClass,
   Segmented,
 } from "./ui.js";

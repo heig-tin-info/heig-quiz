@@ -9,8 +9,8 @@
  */
 import { useId, useState } from "react";
 
-import { fmt, plural, resolveStrings } from "@quiz/core/client";
-import type { EditorProps, MarkdownRenderer } from "@quiz/core/client";
+import { fmt, issuesAt, plural, resolveStrings, rootIssues } from "@quiz/core/client";
+import type { ConfigIssue, EditorProps, MarkdownRenderer } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 
 import { CodeArea } from "./MonacoHost.js";
@@ -28,7 +28,18 @@ import {
 } from "./schema.js";
 import { EDITOR_STRINGS, type CodeEditorStrings } from "./strings.js";
 import { caseVerdict } from "./verdict.js";
-import { badge, button, card, cx, hint, input, inputSm, label, sectionTitle } from "@quiz/ui";
+import {
+  badge,
+  button,
+  card,
+  cx,
+  hint,
+  input,
+  inputSm,
+  IssueList,
+  label,
+  sectionTitle,
+} from "@quiz/ui";
 
 export interface CodeEditorProps extends EditorProps<CodeConfig> {
   /**
@@ -46,6 +57,8 @@ export interface CodeEditorProps extends EditorProps<CodeConfig> {
    * error (`RUNNER_MODE=stub` is the default).
    */
   onTry?: ((config: CodeConfig) => Promise<CodeTryOutcome>) | undefined;
+  /** Validation problems of the stored draft (decision D16), placed by field. */
+  issues?: readonly ConfigIssue[] | undefined;
   strings?: Partial<CodeEditorStrings> | undefined;
   /**
    * The host's sanitised markdown view, used to preview the statement under
@@ -87,6 +100,17 @@ const NEW_CASE: CodeCase = {
   timeMs: null,
 };
 
+/** The top-level settings "Advanced options" holds, as zod paths. */
+const ADVANCED_PATHS = [
+  "action",
+  "compileArgs",
+  "limits",
+  "runsPerMinute",
+  "allOrNothing",
+  "files",
+  "configVersion",
+] as const;
+
 /** The languages the browser runner can run; anything else is the server's. */
 const browserCapable = (language: CodeLanguage): boolean =>
   (RUNNO_LANGUAGES as readonly string[]).includes(language);
@@ -95,6 +119,7 @@ export function CodeEditor({
   config,
   onChange,
   disabled,
+  issues = [],
   onTry,
   strings,
   RichText,
@@ -133,6 +158,15 @@ export function CodeEditor({
         .filter((line) => line !== ""),
     });
   };
+
+  /*
+   * The settings folded into "Advanced options" report ABOVE the fold: an
+   * issue inside a closed <details> is an issue nobody reads.
+   */
+  const advancedIssues = ADVANCED_PATHS.flatMap((key) => issuesAt(issues, key));
+  const caseIssues = issuesAt(issues, "tests").filter(
+    (issue) => !(issue.path[1] === "cases" && typeof issue.path[2] === "number"),
+  );
 
   const segments = splitForDisplay(config.template, config.language);
   const lockedCount = segments.filter((seg) => seg.kind === "locked").length;
@@ -185,6 +219,8 @@ export function CodeEditor({
 
   return (
     <div className="flex flex-col gap-6">
+      <IssueList issues={rootIssues(issues)} />
+
       <section className={cx(card, "flex flex-col gap-4 p-4")}>
         <h3 className={sectionTitle}>{s.questionSection}</h3>
         <div className="flex flex-col gap-1.5">
@@ -227,6 +263,7 @@ export function CodeEditor({
               className={cx(input, "w-full py-2 leading-relaxed")}
             />
           )}
+          <IssueList issues={issuesAt(issues, "prompt")} />
         </div>
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1.5">
@@ -271,6 +308,7 @@ export function CodeEditor({
           ) : null}
         </div>
         {browserCapable(config.language) ? <p className={hint}>{s.runtimeHint}</p> : null}
+        <IssueList issues={[...issuesAt(issues, "language"), ...issuesAt(issues, "runtime")]} />
       </section>
 
       <section className={cx(card, "flex flex-col gap-3 p-4")}>
@@ -291,6 +329,7 @@ export function CodeEditor({
           minLines={10}
           monaco={monaco}
         />
+        <IssueList issues={issuesAt(issues, "template")} />
         <h4 className="text-[13px] font-medium text-fg-muted">{s.studentPreview}</h4>
         <ol className="flex flex-col gap-1">
           {segments.map((segment, i) => (
@@ -323,6 +362,7 @@ export function CodeEditor({
           minLines={6}
           monaco={monaco}
         />
+        <IssueList issues={issuesAt(issues, "referenceSolution")} />
         {onTry === undefined ? null : (
           <div className="flex flex-wrap items-center gap-3">
             <button
@@ -533,13 +573,16 @@ export function CodeEditor({
                   />
                 </div>
               </div>
+              <IssueList issues={issuesAt(issues, "tests", "cases", i)} />
             </li>
           ))}
         </ol>
+        <IssueList issues={caseIssues} />
         <p className={hint}>{s.timeMsHint}</p>
         <p className={hint}>{s.exitCodeHint}</p>
       </section>
 
+      <IssueList issues={advancedIssues} />
       <details className={cx(card, "p-4")}>
         <summary className={cx(sectionTitle, "cursor-pointer")}>{s.advanced}</summary>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">

@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { fmt, plural, resolveStrings } from "./client.js";
+import { fmt, issuesAt, plural, resolveStrings, rootIssues } from "./client.js";
 
 const DEFAULTS = { title: "Answer", hint: "Pick one", count: (n: number) => `${n} left` };
 
@@ -59,5 +59,24 @@ describe("plural", () => {
   it("takes the variables of a sentence that names its count otherwise", () => {
     expect(plural(strings, "worth", 1, { count: 1, points: 2 })).toBe("1 case, 2 pts");
     expect(plural(strings, "worth", 3, { count: 3, points: 2 })).toBe("3 cases, 2 pts");
+  });
+});
+
+describe("issuesAt / rootIssues", () => {
+  const issues = [
+    { path: [], message: "root" },
+    { path: ["choices"], message: "list" },
+    { path: ["choices", 2, "text"], message: "row" },
+    { path: ["prompt"], message: "prompt" },
+  ];
+
+  it("keeps the issues under a path prefix", () => {
+    expect(issuesAt(issues, "choices").map((i) => i.message)).toEqual(["list", "row"]);
+    expect(issuesAt(issues, "choices", 2).map((i) => i.message)).toEqual(["row"]);
+    expect(issuesAt(issues, "choices", 1)).toEqual([]);
+  });
+
+  it("keeps the issues of the config as a whole", () => {
+    expect(rootIssues(issues).map((i) => i.message)).toEqual(["root"]);
   });
 });

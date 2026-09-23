@@ -52,6 +52,24 @@ describe("CodeEditor", () => {
     expect(screen.getByLabelText("Starting code")).toHaveValue(config.template);
   });
 
+  it("shows the issues the host reported, under the field they name", () => {
+    setup({
+      issues: [
+        { path: [], message: "code.root_issue" },
+        { path: ["prompt"], message: "code.prompt_empty" },
+        { path: ["tests", "cases", 1, "name"], message: "code.case_name" },
+        { path: ["limits", "timeMs"], message: "code.time_limit" },
+      ],
+    });
+    for (const message of ["code.root_issue", "code.prompt_empty", "code.case_name", "code.time_limit"]) {
+      expect(screen.getByText(message)).toBeInTheDocument();
+    }
+    // The case's issue sits inside that case's panel, not under the list.
+    expect(screen.getByText("code.case_name").closest("ol > li")).toContainElement(
+      screen.getByLabelText("Name 2"),
+    );
+  });
+
   it("counts the locked regions of the template", () => {
     setup();
     expect(screen.getByText("2 locked regions")).toBeInTheDocument();
