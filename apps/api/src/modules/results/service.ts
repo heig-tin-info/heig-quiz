@@ -42,8 +42,6 @@ import type { Db } from "../../db/client.js";
 import {
   answers,
   attempts,
-  classrooms,
-  courses,
   enrollments,
   evaluations,
   gradings,
@@ -56,10 +54,19 @@ import {
   settingsOf,
   staffAttemptIds,
   staffRosterWithAttempt,
+  studentEvaluationRows,
+  totalPointsByEvaluation,
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
-import { pairKey, validatedGradings, verdictOf, type GradingRecord, type PairKey } from "../grading/service.js";
+import {
+  pairKey,
+  pointsByAttempt,
+  validatedGradings,
+  verdictOf,
+  type GradingRecord,
+  type PairKey,
+} from "../grading/service.js";
 import { solutionView, studentView } from "../live/studentView.js";
 import { typeOf } from "../pool/config.js";
 
@@ -263,18 +270,16 @@ export async function releaseResults(
         perItem: r.perItem,
       })),
   };
-  await db.transaction(async (tx) => {
-    await tx
-      .update(evaluations)
-      .set({
-        releasedAt,
-        releasedGrades: snapshot,
-        modifiedAfterRelease: false,
-        state: "released",
-        updatedAt: now,
-      })
-      .where(eq(evaluations.id, evaluation.id));
-  });
+  await db
+    .update(evaluations)
+    .set({
+      releasedAt,
+      releasedGrades: snapshot,
+      modifiedAfterRelease: false,
+      state: "released",
+      updatedAt: now,
+    })
+    .where(eq(evaluations.id, evaluation.id));
   return { releasedAt, rows: snapshot.rows.length };
 }
 
@@ -292,11 +297,15 @@ export async function unreleaseResults(
   evaluation: EvaluationRecord,
   now: Date,
 ): Promise<void> {
-  await db
-    .update(evaluations)
-    .set({ releasedAt: null, releasedGrades: null, modifiedAfterRelease: false, updatedAt: now })
-    .where(eq(evaluations.id, evaluation.id));
-  await applyState(db, evaluation, "closed", now);
+  // Both or neither: a cleared `released_at` on a row still `released`
+  // would leave the two readings of "released" disagreeing.
+  await db.transaction(async (tx) => {
+    await tx
+      .update(evaluations)
+      .set({ releasedAt: null, releasedGrades: null, modifiedAfterRelease: false, updatedAt: now })
+      .where(eq(evaluations.id, evaluation.id));
+    await applyState(tx, evaluation, "closed", now);
+  });
 }
 
 /**
@@ -596,28 +605,23 @@ export function filterDetails(
 
 /** `GET /student/results` — one card per released evaluation the student took. */
 export async function studentResultCards(db: Db, userId: string): Promise<ResultCard[]> {
-  const rows = await db
-    .select({
-      evaluation: evaluations,
-      classroomName: classrooms.name,
-      courseCode: courses.code,
-      attempt: attempts,
-    })
-    .from(enrollments)
-    .innerJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
-    .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .innerJoin(evaluations, eq(evaluations.classroomId, classrooms.id))
-    .leftJoin(
-      attempts,
-      and(eq(attempts.evaluationId, evaluations.id), eq(attempts.userId, userId)),
-    )
-    .where(and(eq(enrollments.userId, userId), eq(enrollments.status, "claimed")));
-
-  const cards: ResultCard[] = [];
-  for (const row of rows) {
-    if (row.evaluation.releasedAt === null) continue;
-    const grade = await gradeOfAttempt(db, row.evaluation, row.attempt?.id ?? null);
-    cards.push({
+  const rows = (await studentEvaluationRows(db, userId)).filter(
+    (row) => row.evaluation.releasedAt !== null,
+  );
+  // F-GRADE-09 is explicit: a re-correction after the release UPDATES the
+  // grades. They are therefore recomputed from the validated gradings; the
+  // frozen `released_grades` is the record of what was published, and
+  // `modified_after_release` is what tells the teacher the two have drifted.
+  // Two grouped queries for the whole page, not two per card.
+  const totals = await totalPointsByEvaluation(db, [...new Set(rows.map((r) => r.evaluation.id))]);
+  const pointsPerAttempt = await pointsByAttempt(
+    db,
+    rows.map((r) => r.attempt?.id).filter((id): id is string => typeof id === "string"),
+  );
+  return rows.map((row) => {
+    const totalPoints = totals.get(row.evaluation.id) ?? 0;
+    const points = row.attempt ? (pointsPerAttempt.get(row.attempt.id) ?? 0) : 0;
+    return {
       evaluationId: row.evaluation.id,
       title: row.evaluation.title,
       classroomId: row.evaluation.classroomId,
@@ -625,34 +629,9 @@ export async function studentResultCards(db: Db, userId: string): Promise<Result
       courseCode: row.courseCode,
       attemptId: row.attempt?.id ?? null,
       releasedAt: isoOrNull(row.evaluation.releasedAt),
-      ...grade,
-    });
-  }
-  return cards;
-}
-
-/**
- * The grade of one attempt, recomputed from the validated gradings.
- *
- * F-GRADE-09 is explicit: a re-correction after the release UPDATES the
- * grades. The frozen `released_grades` is therefore the record of what was
- * published, not the number the student is shown — and `modified_after_release`
- * is what tells the teacher the two have drifted apart.
- */
-async function gradeOfAttempt(
-  db: Db,
-  evaluation: EvaluationRecord,
-  attemptId: string | null,
-): Promise<{ points: number; totalPoints: number; grade: number }> {
-  const items = await joinedItems(db, evaluation.id);
-  const totalPoints = round2(items.reduce((sum, i) => sum + i.item.points, 0));
-  if (attemptId === null) {
-    return { points: 0, totalPoints, grade: gradeFromPoints(0, totalPoints, scaleOf(evaluation)) };
-  }
-  const rows = await db
-    .select({ points: gradings.points })
-    .from(gradings)
-    .where(and(eq(gradings.attemptId, attemptId), eq(gradings.state, "validated")));
-  const points = round2(rows.reduce((sum, r) => sum + r.points, 0));
-  return { points, totalPoints, grade: gradeFromPoints(points, totalPoints, scaleOf(evaluation)) };
+      points,
+      totalPoints,
+      grade: gradeFromPoints(points, totalPoints, scaleOf(row.evaluation)),
+    };
+  });
 }

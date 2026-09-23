@@ -143,25 +143,27 @@ export async function writeGrading(db: Db, input: WriteGradingInput): Promise<Gr
     // The chain points at the grading this one REPLACES; when several were
     // still standing (a proposal next to nothing else), the newest wins.
     const previous = superseded.at(-1)?.id ?? null;
-    await tx.insert(gradings).values({
-      id,
-      answerId: input.answerId,
-      attemptId: input.attemptId,
-      itemId: input.itemId,
-      points: round2(input.points),
-      maxPoints: round2(input.maxPoints),
-      source: input.source,
-      state: input.state,
-      details: input.details ?? null,
-      confidence: input.confidence ?? null,
-      comment: input.comment ?? null,
-      gradedBy: input.gradedBy ?? null,
-      gradedAt: input.now,
-      supersedesId: previous,
-      regradeNote: input.regradeNote ?? null,
-      createdAt: input.now,
-    });
-    const [row] = await tx.select().from(gradings).where(eq(gradings.id, id)).limit(1);
+    const [row] = await tx
+      .insert(gradings)
+      .values({
+        id,
+        answerId: input.answerId,
+        attemptId: input.attemptId,
+        itemId: input.itemId,
+        points: round2(input.points),
+        maxPoints: round2(input.maxPoints),
+        source: input.source,
+        state: input.state,
+        details: input.details ?? null,
+        confidence: input.confidence ?? null,
+        comment: input.comment ?? null,
+        gradedBy: input.gradedBy ?? null,
+        gradedAt: input.now,
+        supersedesId: previous,
+        regradeNote: input.regradeNote ?? null,
+        createdAt: input.now,
+      })
+      .returning();
     return row!;
   });
 }

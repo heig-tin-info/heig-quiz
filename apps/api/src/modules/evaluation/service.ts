@@ -37,12 +37,15 @@ import {
   type McqPolicy,
 } from "@quiz/contracts";
 
+import { round2 } from "@quiz/domain";
+
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import {
   attempts,
   coursePools,
   classrooms,
+  courses,
   enrollments,
   evaluationItems,
   evaluations,
@@ -265,15 +268,71 @@ export interface JoinedItem {
   question: typeof questions.$inferSelect;
 }
 
-export async function joinedItems(db: Db, evaluationId: string): Promise<JoinedItem[]> {
-  const rows = await db
+const selectJoinedItems = (db: Db) =>
+  db
     .select({ item: evaluationItems, version: questionVersions, question: questions })
     .from(evaluationItems)
     .innerJoin(questionVersions, eq(evaluationItems.questionVersionId, questionVersions.id))
-    .innerJoin(questions, eq(questionVersions.questionId, questions.id))
+    .innerJoin(questions, eq(questionVersions.questionId, questions.id));
+
+export async function joinedItems(db: Db, evaluationId: string): Promise<JoinedItem[]> {
+  return selectJoinedItems(db)
     .where(eq(evaluationItems.evaluationId, evaluationId))
     .orderBy(asc(evaluationItems.position));
-  return rows;
+}
+
+/** One item of one evaluation, by primary key — not the whole list filtered. */
+export async function joinedItem(
+  db: Db,
+  evaluationId: string,
+  itemId: string,
+): Promise<JoinedItem | null> {
+  const [row] = await selectJoinedItems(db)
+    .where(and(eq(evaluationItems.id, itemId), eq(evaluationItems.evaluationId, evaluationId)))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * Every evaluation of every classroom the student holds a claimed seat in,
+ * with the student's own attempt when there is one: what the student home
+ * and the results page are both drawn from. Returned unawaited so that a
+ * caller may still order it.
+ */
+export function studentEvaluationRows(db: Db, userId: string) {
+  return db
+    .select({
+      evaluation: evaluations,
+      classroomName: classrooms.name,
+      courseCode: courses.code,
+      attempt: attempts,
+    })
+    .from(enrollments)
+    .innerJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
+    .innerJoin(courses, eq(classrooms.courseId, courses.id))
+    .innerJoin(evaluations, eq(evaluations.classroomId, classrooms.id))
+    .leftJoin(
+      attempts,
+      and(eq(attempts.evaluationId, evaluations.id), eq(attempts.userId, userId)),
+    )
+    .where(and(eq(enrollments.userId, userId), eq(enrollments.status, "claimed")));
+}
+
+/** The total points of each evaluation, in one grouped query. */
+export async function totalPointsByEvaluation(
+  db: Db,
+  evaluationIds: readonly string[],
+): Promise<Map<string, number>> {
+  if (evaluationIds.length === 0) return new Map();
+  const rows = await db
+    .select({
+      evaluationId: evaluationItems.evaluationId,
+      points: sql<string>`sum(${evaluationItems.points})`,
+    })
+    .from(evaluationItems)
+    .where(inArray(evaluationItems.evaluationId, [...evaluationIds]))
+    .groupBy(evaluationItems.evaluationId);
+  return new Map(rows.map((r) => [r.evaluationId, round2(Number(r.points))]));
 }
 
 /** The highest published version number of each question, in one query. */
@@ -620,7 +679,13 @@ export async function createPollEvaluation(
   return { evaluation: (await byId(db, id))!, item: item! };
 }
 
-export async function byId(db: Db, id: string): Promise<EvaluationRecord | null> {
+/**
+ * A handle or an open transaction: the state change below is also the second
+ * half of a withdrawal that must not land alone (`unreleaseResults`).
+ */
+export type DbOrTx = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+export async function byId(db: DbOrTx, id: string): Promise<EvaluationRecord | null> {
   const [row] = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
   return row ?? null;
 }
@@ -689,7 +754,7 @@ export async function deleteEvaluation(db: Db, row: EvaluationRecord): Promise<v
  * expiring them) belong to `modules/live/service.ts`, which calls this.
  */
 export async function tryApplyState(
-  db: Db,
+  db: DbOrTx,
   row: EvaluationRecord,
   to: EvaluationState,
   now: Date,
@@ -723,7 +788,7 @@ export async function tryApplyState(
  * row as it stands, moved or already moved by somebody else.
  */
 export async function applyState(
-  db: Db,
+  db: DbOrTx,
   row: EvaluationRecord,
   to: EvaluationState,
   now: Date,

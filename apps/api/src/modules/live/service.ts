@@ -19,7 +19,7 @@ import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
 
-import { and, asc, count, desc, eq, gte, inArray, isNotNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, lte, max, or, sql } from "drizzle-orm";
 
 import {
   EvaluationSettings,
@@ -66,10 +66,7 @@ import {
   answers,
   attemptEvents,
   attempts,
-  classrooms,
-  courses,
   enrollments,
-  evaluationItems,
   evaluations,
   users,
 } from "../../db/schema.js";
@@ -85,7 +82,13 @@ import {
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
-import { gradeDefaults, joinedItems } from "../evaluation/service.js";
+import {
+  gradeDefaults,
+  joinedItem,
+  joinedItems,
+  studentEvaluationRows,
+  totalPointsByEvaluation,
+} from "../evaluation/service.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
 import {
@@ -340,21 +343,43 @@ export async function resetOwnStaffAttempt(
  * nowhere, exactly as before.
  */
 export async function enrolledCount(db: Db, evaluation: EvaluationRecord): Promise<number> {
-  const [klass] = await db
-    .select({ n: count() })
+  return (await enrolledCounts(db, [evaluation])).get(evaluation.id) ?? 0;
+}
+
+/**
+ * {@link enrolledCount} for several evaluations in two grouped statements,
+ * whatever their number: the class seats per classroom, the staff seats that
+ * took an attempt per evaluation.
+ */
+async function enrolledCounts(
+  db: Db,
+  rows: readonly EvaluationRecord[],
+): Promise<Map<string, number>> {
+  if (rows.length === 0) return new Map();
+  const classroomIds = [...new Set(rows.map((r) => r.classroomId))];
+  const klass = await db
+    .select({ classroomId: enrollments.classroomId, n: count() })
     .from(enrollments)
-    .where(
-      and(eq(enrollments.classroomId, evaluation.classroomId), eq(enrollments.staff, false)),
-    );
-  const [staff] = await db
-    .select({ n: count() })
+    .where(and(inArray(enrollments.classroomId, classroomIds), eq(enrollments.staff, false)))
+    .groupBy(enrollments.classroomId);
+  const staff = await db
+    .select({ evaluationId: attempts.evaluationId, n: count() })
     .from(enrollments)
     .innerJoin(
       attempts,
-      and(eq(attempts.userId, enrollments.userId), eq(attempts.evaluationId, evaluation.id)),
+      and(
+        eq(attempts.userId, enrollments.userId),
+        inArray(attempts.evaluationId, rows.map((r) => r.id)),
+      ),
     )
-    .where(and(eq(enrollments.classroomId, evaluation.classroomId), eq(enrollments.staff, true)));
-  return (klass?.n ?? 0) + (staff?.n ?? 0);
+    .innerJoin(evaluations, eq(evaluations.id, attempts.evaluationId))
+    .where(and(eq(enrollments.classroomId, evaluations.classroomId), eq(enrollments.staff, true)))
+    .groupBy(attempts.evaluationId);
+  const byClassroom = new Map(klass.map((k) => [k.classroomId, k.n]));
+  const byEvaluation = new Map(staff.map((s) => [s.evaluationId, s.n]));
+  return new Map(
+    rows.map((r) => [r.id, (byClassroom.get(r.classroomId) ?? 0) + (byEvaluation.get(r.id) ?? 0)]),
+  );
 }
 
 /** F-EVAL-12: a prefix list, matched literally against the request address. */
@@ -837,8 +862,7 @@ async function itemOf(
   evaluationId: string,
   itemId: string,
 ): Promise<JoinedItem | null> {
-  const items = await joinedItems(db, evaluationId);
-  return items.find((i) => i.item.id === itemId) ?? null;
+  return joinedItem(db, evaluationId, itemId);
 }
 
 /** One line, and never wider than a cell (`ANSWER_SUMMARY_MAX`). */
@@ -1051,20 +1075,20 @@ export async function saveAnswer(
   const { evaluation, attempt, itemId, revision, now } = input;
   assertWritable(evaluation, attempt, now);
 
-  const joined = await itemOf(db, evaluation.id, itemId);
+  // Free navigation needs this one item only. A locking mode needs the whole
+  // ordered list anyway, so the item is taken from it rather than read twice.
+  const settings = settingsOf(evaluation);
+  const ordered =
+    settings.navigation === "free"
+      ? null
+      : orderItems(await joinedItems(db, evaluation.id), settings, attempt.seed, evaluation.id);
+  const joined = ordered
+    ? (ordered.find((o) => o.item.id === itemId) ?? null)
+    : await itemOf(db, evaluation.id, itemId);
   if (!joined) throw new LiveError("not_found", 404);
 
-  const settings = settingsOf(evaluation);
   const stored = await answersOf(db, attempt.id);
-  if (settings.navigation !== "free") {
-    const ordered = orderItems(
-      await joinedItems(db, evaluation.id),
-      settings,
-      attempt.seed,
-      evaluation.id,
-    );
-    if (lockedItemIds(settings, ordered, stored).has(itemId)) throw new ItemLocked();
-  }
+  if (ordered && lockedItemIds(settings, ordered, stored).has(itemId)) throw new ItemLocked();
 
   // Never persist garbage: the type's own schema is the gate (§4.7 step 6).
   const type = typeOf(joined.question.type);
@@ -2085,23 +2109,7 @@ export async function attemptInspect(
 // --- Student home (F-LIVE-01) --------------------------------------------
 
 export async function studentHome(db: Db, userId: string, now: Date): Promise<StudentHome> {
-  const rows = await db
-    .select({
-      evaluation: evaluations,
-      classroomName: classrooms.name,
-      courseCode: courses.code,
-      attempt: attempts,
-    })
-    .from(enrollments)
-    .innerJoin(classrooms, eq(enrollments.classroomId, classrooms.id))
-    .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .innerJoin(evaluations, eq(evaluations.classroomId, classrooms.id))
-    .leftJoin(
-      attempts,
-      and(eq(attempts.evaluationId, evaluations.id), eq(attempts.userId, userId)),
-    )
-    .where(and(eq(enrollments.userId, userId), eq(enrollments.status, "claimed")))
-    .orderBy(desc(evaluations.createdAt));
+  const rows = await studentEvaluationRows(db, userId).orderBy(desc(evaluations.createdAt));
 
   // The grade of a released evaluation (WP6): the sum of the validated
   // gradings of the student's own attempt, converted by the evaluation's
@@ -2110,18 +2118,10 @@ export async function studentHome(db: Db, userId: string, now: Date): Promise<St
     .map((r) => r.attempt?.id)
     .filter((id): id is string => id !== undefined && id !== null);
   const pointsPerAttempt = await pointsByAttempt(db, attemptIds);
-  const totals = new Map<string, number>();
-  for (const row of rows) {
-    if (row.evaluation.releasedAt === null || totals.has(row.evaluation.id)) continue;
-    const items = await db
-      .select({ points: evaluationItems.points })
-      .from(evaluationItems)
-      .where(eq(evaluationItems.evaluationId, row.evaluation.id));
-    totals.set(
-      row.evaluation.id,
-      Math.round(items.reduce((sum, i) => sum + i.points, 0) * 100) / 100,
-    );
-  }
+  const released = rows.filter((r) => r.evaluation.releasedAt !== null);
+  const totals = await totalPointsByEvaluation(db, [
+    ...new Set(released.map((r) => r.evaluation.id)),
+  ]);
 
   const gradeOf = (row: (typeof rows)[number]): number | null => {
     if (row.evaluation.releasedAt === null) return null;
@@ -2220,11 +2220,18 @@ export async function autoOpenScheduled(db: Db, now: Date): Promise<EvaluationRe
 
 /** Step 3: `lobby` + `lobby: auto` + everybody present → `running`. */
 export async function autoStartFullLobbies(db: Db, now: Date): Promise<EvaluationRecord[]> {
-  const rows = await db.select().from(evaluations).where(eq(evaluations.state, "lobby"));
+  // `lobby` absent from the jsonb means its default, "manual": the SQL
+  // predicate and `settingsOf(row).lobby === "auto"` select the same rows.
+  const rows = await db
+    .select()
+    .from(evaluations)
+    .where(and(eq(evaluations.state, "lobby"), sql`${evaluations.settings} ->> 'lobby' = 'auto'`));
+  // An empty room never starts, so only an occupied lobby is worth counting.
+  const occupied = rows.filter((row) => presence.count(row.id) > 0);
+  const enrolledOf = await enrolledCounts(db, occupied);
   const moved: EvaluationRecord[] = [];
-  for (const row of rows) {
-    if (settingsOf(row).lobby !== "auto") continue;
-    const enrolled = await enrolledCount(db, row);
+  for (const row of occupied) {
+    const enrolled = enrolledOf.get(row.id) ?? 0;
     if (enrolled === 0 || presence.count(row.id) < enrolled) continue;
     moved.push(await startEvaluation(db, row, now));
   }
@@ -2261,23 +2268,25 @@ export async function autoCloseDue(
         lte(evaluations.closesAt, now),
       ),
     );
+  if (due.length === 0) return [];
+  // Step 1 expired everything whose own deadline has passed, so what is
+  // still `in_progress` here is a student who genuinely has time left.
+  const latest = await db
+    .select({ evaluationId: attempts.evaluationId, deadlineAt: max(attempts.deadlineAt) })
+    .from(attempts)
+    .where(
+      and(
+        inArray(attempts.evaluationId, due.map((row) => row.id)),
+        eq(attempts.state, "in_progress"),
+        isNotNull(attempts.deadlineAt),
+      ),
+    )
+    .groupBy(attempts.evaluationId);
+  const latestOf = new Map(latest.map((l) => [l.evaluationId, l.deadlineAt]));
   const moved: EvaluationRecord[] = [];
   for (const row of due) {
-    // Step 1 expired everything whose own deadline has passed, so what is
-    // still `in_progress` here is a student who genuinely has time left.
-    const [latest] = await db
-      .select({ deadlineAt: attempts.deadlineAt })
-      .from(attempts)
-      .where(
-        and(
-          eq(attempts.evaluationId, row.id),
-          eq(attempts.state, "in_progress"),
-          isNotNull(attempts.deadlineAt),
-        ),
-      )
-      .orderBy(desc(attempts.deadlineAt))
-      .limit(1);
-    if (autoCloseAt(row.closesAt!, latest?.deadlineAt ?? null).getTime() > now.getTime()) continue;
+    const last = latestOf.get(row.id) ?? null;
+    if (autoCloseAt(row.closesAt!, last).getTime() > now.getTime()) continue;
     moved.push(await closeEvaluation(db, row, now, "server", app));
   }
   return moved;
