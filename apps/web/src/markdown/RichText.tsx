@@ -1,26 +1,19 @@
 import type { Editor } from "@tiptap/core";
-import { NodeSelection } from "@tiptap/pm/state";
-import { EditorContent, ReactNodeViewRenderer, useEditor, useEditorState } from "@tiptap/react";
-import { Check, FileCode2 } from "lucide-react";
+import { EditorContent, ReactNodeViewRenderer, useEditor } from "@tiptap/react";
+import { FileCode2 } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 
 import type { RichTextProps } from "@quiz/core/client";
 
 import { useT } from "../i18n";
-import { Button, cx, IconButton, inputClass, Z } from "../ui";
+import { cx, IconButton, inputClass } from "../ui";
 import { BlankPopover } from "./BlankPopover";
-import {
-  clozeHolePossibilities,
-  protectHolePipes,
-  restoreHolePipes,
-  type ClozeHolePossibility,
-} from "./clozeHole";
+import { protectHolePipes, restoreHolePipes } from "./clozeHole";
 import { CodeBlockView } from "./CodeBlockView";
-import type { Formula, FormulaDialog } from "./FormulaDialog";
 import { ImageToolsContext, ImageView } from "./ImageView";
 import "./richtext.css";
 import { handleRichTextKeyDown, isMathNode } from "./richTextKeys";
+import { HolePreviewPopover, LinkPrompt } from "./RichTextPopovers";
 import {
   RichTextToolbar,
   runToolbarAction,
@@ -30,6 +23,8 @@ import {
 } from "./RichTextToolbar";
 import { SourcePane } from "./SourcePane";
 import { INLINE_INPUT_RULES, richTextExtensions } from "./tiptap";
+import { emptyClozeHoles, previewAt, useClozeHole, useHoleSelectionPreview } from "./useClozeHole";
+import { emptyMath, useFormulaTarget } from "./useFormulaTarget";
 
 /*
  * The WYSIWYG half of the markdown field (docs/spec/05 §5.10, decision
@@ -60,23 +55,6 @@ import { INLINE_INPUT_RULES, richTextExtensions } from "./tiptap";
 export type { RichTextProps };
 
 /**
- * The formula dialog, and with it MathLive, arrive when a teacher asks for a
- * formula — not when a field is drawn. It is the heaviest thing this editor
- * can open and the one a teacher of prose never touches (N-PERF-05).
- *
- * Fetched by hand rather than through `lazy` + `Suspense`, and that is not a
- * style preference: the dialog opens from INSIDE a ProseMirror transaction
- * (typing `$$`), React treats that update as synchronous input, and a
- * component that suspends there makes React throw its subtree away — which,
- * next to a contenteditable whose DOM ProseMirror owns, took the whole editor
- * down with a `removeChild` of a node React no longer had. Awaiting the module
- * first means the dialog only ever mounts already resolved, one microtask
- * after the transaction, and the chunk is still a chunk.
- */
-type FormulaDialogComponent = typeof FormulaDialog;
-let formulaDialog: FormulaDialogComponent | null = null;
-
-/**
  * The editor's document as markdown.
  *
  * Trimmed, and that is the whole of it: StarterKit's `TrailingNode` keeps an
@@ -94,63 +72,6 @@ function serialize(editor: Editor): string {
    * checks that the shipped table renderer escapes nothing of its own).
    */
   return restoreHolePipes(editor.getMarkdown().trim());
-}
-
-/** Where the formula dialog will write, and what it starts from. */
-export interface FormulaTarget extends Formula {
-  /** Position of the math node being edited, or null for a new one. */
-  node: number | null;
-  /** Text range the formula replaces (the selection the Σ button was pressed on). */
-  range: { from: number; to: number } | null;
-  /** The node was made empty by `$$` a moment ago: cancelling removes it again. */
-  created: boolean;
-}
-
-/** Every empty formula of the document, in document order. */
-function emptyMath(editor: Editor): { pos: number; display: boolean }[] {
-  const found: { pos: number; display: boolean }[] = [];
-  editor.state.doc.descendants((node, pos) => {
-    if (!isMathNode(node.type.name)) return;
-    if (String(node.attrs.latex ?? "").trim() !== "") return;
-    found.push({ pos, display: node.type.name === "blockMath" });
-  });
-  return found;
-}
-
-/**
- * Where the card of a hole hangs: the chip's own rectangle, in viewport
- * coordinates. `coordsAtPos` is the fallback for the frame in which the chip
- * has just been created and has no element yet.
- */
-function holeAnchor(editor: Editor, pos: number): { top: number; bottom: number; left: number } {
-  const dom = editor.view.nodeDOM(pos);
-  if (dom instanceof HTMLElement) {
-    const r = dom.getBoundingClientRect();
-    return { top: r.top, bottom: r.bottom, left: r.left };
-  }
-  try {
-    const c = editor.view.coordsAtPos(pos);
-    return { top: c.top, bottom: c.bottom, left: c.left };
-  } catch {
-    return { top: 0, bottom: 0, left: 0 };
-  }
-}
-
-/** What the read-only popover under a multi-answer chip shows. */
-interface HolePreview {
-  anchor: { top: number; bottom: number; left: number };
-  items: ClozeHolePossibility[];
-}
-
-/** Every hole whose body is still empty, in document order. */
-function emptyClozeHoles(editor: Editor): number[] {
-  const found: number[] = [];
-  editor.state.doc.descendants((node, pos) => {
-    if (node.type.name !== "clozeHole") return;
-    if (node.attrs.body !== "") return;
-    found.push(pos);
-  });
-  return found;
 }
 
 export function RichText({
@@ -182,38 +103,16 @@ export function RichText({
   const [focused, setFocused] = useState(false);
   /** The link address prompt (a formula opens the dialog instead). */
   const [asking, setAsking] = useState<null | { initial: string }>(null);
-  const [formula, setFormula] = useState<FormulaTarget | null>(null);
   /**
-   * The `{{…}}` hole being written, when there is one. A hole is an atom:
-   * there is nothing to type into the chip, so it is edited in a card anchored
-   * under it (`BlankPopover`), which asks for the SHAPE of the blank instead
-   * of the grammar.
+   * The editor itself, for the handlers of `editorProps` — they are built
+   * BEFORE it exists, and a pasted markdown fence has to go through the very
+   * parser this editor was configured with.
    */
-  const [hole, setHole] = useState<null | {
-    pos: number;
-    body: string;
-    created: boolean;
-    anchor: { top: number; bottom: number; left: number };
-  }>(null);
-  /** The read-only list under a hovered multi-answer chip, and under a selected one. */
-  const [hoverPreview, setHoverPreview] = useState<HolePreview | null>(null);
-  const [selectionPreview, setSelectionPreview] = useState<HolePreview | null>(null);
-  /** The dialog component, once its chunk has arrived (never `lazy`, above). */
-  // The initializer is a FUNCTION returning the component: `useState(fn)` would
-  // call it as a lazy initializer — and a React component called with no props
-  // takes the page down (it did).
-  const [Dialog, setDialog] = useState<FormulaDialogComponent | null>(() => formulaDialog);
-
-  /** Fetches the dialog if needed, then opens it on `target`. */
-  const openFormula = useCallback(async (target: FormulaTarget) => {
-    if (formulaDialog === null) {
-      formulaDialog = (await import("./FormulaDialog")).FormulaDialog;
-    }
-    setDialog(() => formulaDialog as FormulaDialogComponent);
-    setFormula(target);
-  }, []);
-  const openFormulaRef = useRef(openFormula);
-  openFormulaRef.current = openFormula;
+  const editorRef = useRef<Editor | null>(null);
+  const { formula, Dialog, openFormula, openMath, applyFormula, cancelFormula } =
+    useFormulaTarget(editorRef);
+  const { hole, openHole, openCreatedHole, applyHole, cancelHole, hoverPreview, setHoverPreview } =
+    useClozeHole(editorRef);
 
   /*
    * The callbacks live in refs, and the editor is built once. Passing them to
@@ -241,13 +140,6 @@ export function RichText({
   const emptyCount = useRef(0);
   /** The same, for the empty hole that typing `{{` leaves behind. */
   const emptyHoles = useRef(0);
-  /**
-   * The editor itself, for the handlers of `editorProps` — they are built
-   * BEFORE it exists, and a pasted markdown fence has to go through the very
-   * parser this editor was configured with.
-   */
-  const editorRef = useRef<Editor | null>(null);
-
   const editor = useEditor({
     extensions: richTextExtensions({
       placeholder: placeholder ?? "",
@@ -384,7 +276,7 @@ export function RichText({
       const empties = emptyMath(e);
       if (empties.length > emptyCount.current) {
         const target = empties[empties.length - 1]!;
-        void openFormulaRef.current({
+        void openFormula({
           latex: "",
           display: target.display,
           node: target.pos,
@@ -404,7 +296,7 @@ export function RichText({
       const openHoles = emptyClozeHoles(e);
       if (openHoles.length > emptyHoles.current) {
         const at = openHoles[openHoles.length - 1]!;
-        setHole({ pos: at, body: "", created: true, anchor: holeAnchor(e, at) });
+        openCreatedHole(e, at);
       }
       emptyHoles.current = openHoles.length;
     },
@@ -412,52 +304,9 @@ export function RichText({
 
   editorRef.current = editor;
 
-  /** Opens the blank card on the hole at `pos`. */
-  function openHole(pos: number, body: string, created: boolean) {
-    if (!editorRef.current) return;
-    setHoverPreview(null);
-    setHole({ pos, body, created, anchor: holeAnchor(editorRef.current, pos) });
-  }
-
-  /** Opens the dialog on the math node at `pos`. */
-  function openMath(pos: number, latex: unknown, typeName: string) {
-    void openFormulaRef.current({
-      latex: typeof latex === "string" ? latex : "",
-      display: typeName === "blockMath",
-      node: pos,
-      range: null,
-      created: false,
-    });
-  }
-
   const marks = useRichTextMarks(editor);
 
-  /**
-   * The chip the caret has SELECTED, as one string so the selector can be
-   * compared by value: `useEditorState` runs on every transaction, and a fresh
-   * object would re-render this component per keystroke.
-   */
-  const selectedHole = useEditorState({
-    editor,
-    selector: ({ editor: e }) => {
-      if (e === null) return null;
-      const { selection } = e.state;
-      if (!(selection instanceof NodeSelection)) return null;
-      if (selection.node.type.name !== "clozeHole" || selection.node.attrs.body === null) return null;
-      return `${selection.from}\u0000${String(selection.node.attrs.body ?? "")}`;
-    },
-  }) as string | null;
-
-  useEffect(() => {
-    if (!editor || !holes || selectedHole === null) {
-      setSelectionPreview(null);
-      return;
-    }
-    const cut = selectedHole.indexOf("\u0000");
-    const pos = Number(selectedHole.slice(0, cut));
-    const items = clozeHolePossibilities(selectedHole.slice(cut + 1));
-    setSelectionPreview(items === null ? null : { anchor: holeAnchor(editor, pos), items });
-  }, [editor, holes, selectedHole]);
+  const selectionPreview = useHoleSelectionPreview(editor, holes);
 
   /*
    * `value` changed underneath us — a restored version, a reset draft — so the
@@ -527,68 +376,6 @@ export function RichText({
     enabled: focused && !disabled && !source,
   });
 
-  /** Writes what the formula dialog collected, where it was opened from. */
-  function applyFormula({ latex, display }: Formula) {
-    if (!editor || !formula) return;
-    const content = { type: display ? "blockMath" : "inlineMath", attrs: { latex } };
-    const chain = editor.chain().focus();
-    if (formula.node !== null) {
-      const node = editor.state.doc.nodeAt(formula.node);
-      chain.insertContentAt({ from: formula.node, to: formula.node + (node?.nodeSize ?? 1) }, content);
-    } else if (formula.range) chain.insertContentAt(formula.range, content);
-    else chain.insertContent(content);
-    chain.run();
-    setFormula(null);
-  }
-
-  /**
-   * Leaving the dialog. The empty node `$$` had just made goes with it: an
-   * invisible formula in the middle of a prompt is worse than no formula, and
-   * the teacher who cancels meant to be back where they were.
-   */
-  function cancelFormula() {
-    if (editor && formula?.created && formula.node !== null) {
-      const node = editor.state.doc.nodeAt(formula.node);
-      if (node && isMathNode(node.type.name)) {
-        editor
-          .chain()
-          .focus()
-          .deleteRange({ from: formula.node, to: formula.node + node.nodeSize })
-          .run();
-      }
-    }
-    setFormula(null);
-    editor?.commands.focus();
-  }
-
-  /**
-   * Writes the body the blank card collected. An EMPTY body removes the chip:
-   * a hole with nothing in it is `cloze.empty_blank` and would only be an
-   * error the teacher has to come back and delete.
-   */
-  function applyHole(body: string) {
-    if (!editor || !hole) return;
-    const node = editor.state.doc.nodeAt(hole.pos);
-    const size = node?.type.name === "clozeHole" ? node.nodeSize : 1;
-    const range = { from: hole.pos, to: hole.pos + size };
-    const chain = editor.chain().focus();
-    if (body.trim() === "") chain.deleteRange(range).run();
-    else chain.insertContentAt(range, { type: "clozeHole", attrs: { body } }).run();
-    setHole(null);
-  }
-
-  /** Leaving the card. The chip `{{` had just made goes with it. */
-  function cancelHole() {
-    if (editor && hole?.created) {
-      const node = editor.state.doc.nodeAt(hole.pos);
-      if (node?.type.name === "clozeHole") {
-        editor.chain().focus().deleteRange({ from: hole.pos, to: hole.pos + node.nodeSize }).run();
-      }
-    }
-    setHole(null);
-    editor?.commands.focus();
-  }
-
   /**
    * A click that lands on the field's CHROME — its padding, the strip beside
    * the compact toolbar — rather than on the contenteditable itself.
@@ -614,25 +401,6 @@ export function RichText({
       top: Math.min(Math.max(event.clientY, box.top + 1), box.bottom - 1),
     });
     editor.commands.focus(at === null ? "end" : at.pos);
-  }
-
-  /** The chip under the pointer, when it stands for more than one possibility. */
-  function previewAt(target: EventTarget | null): HolePreview | null {
-    const el = target instanceof Element ? target.closest('span[data-type="cloze-hole"]') : null;
-    if (!(el instanceof HTMLElement) || el.getAttribute("data-literal") === "true") return null;
-    const items = clozeHolePossibilities(el.getAttribute("data-body") ?? "");
-    if (items === null) return null;
-    const r = el.getBoundingClientRect();
-    return { anchor: { top: r.top, bottom: r.bottom, left: r.left }, items };
-  }
-
-  /** Applies what the link prompt collected, then gives the caret back. */
-  function applyAsked(text: string) {
-    if (!editor || !asking) return;
-    const chain = editor.chain().focus();
-    if (text.trim() === "") chain.unsetLink().run();
-    else chain.extendMarkRange("link").setLink({ href: text.trim() }).run();
-    setAsking(null);
   }
 
   /** The card wins over the list: they would otherwise sit on top of each other. */
@@ -692,17 +460,7 @@ export function RichText({
           {toolbar === "always" ? toolbarRow : null}
 
           {asking ? (
-            <AskBar
-              label={t("md.url")}
-              initial={asking.initial}
-              apply={t("common.save")}
-              cancel={t("common.cancel")}
-              onSubmit={applyAsked}
-              onCancel={() => {
-                setAsking(null);
-                editor?.commands.focus();
-              }}
-            />
+            <LinkPrompt editor={editor} initial={asking.initial} onClose={() => setAsking(null)} />
           ) : null}
 
           <div
@@ -758,34 +516,7 @@ export function RichText({
         />
       ) : null}
 
-      {preview
-        ? createPortal(
-            <div
-              aria-hidden
-              className={cx(
-                "pointer-events-none fixed max-w-64 rounded-menu border border-line bg-surface px-2.5 py-1.5 shadow-popover",
-                Z.popover,
-              )}
-              style={{ top: preview.anchor.bottom + 6, left: preview.anchor.left }}
-            >
-              <ul className="flex flex-col gap-0.5 text-[13px]">
-                {preview.items.map((item, i) => (
-                  <li key={i} className="flex items-center gap-1.5">
-                    {item.correct === null ? null : (
-                      <Check
-                        className={cx("size-3.5 shrink-0 text-success", item.correct ? "" : "opacity-0")}
-                      />
-                    )}
-                    <span className={cx("font-mono", item.correct === false ? "text-fg-muted" : "text-fg")}>
-                      {item.label}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>,
-            document.body,
-          )
-        : null}
+      {preview ? <HolePreviewPopover preview={preview} /> : null}
 
       {formula && Dialog ? (
         <Dialog
@@ -810,62 +541,6 @@ export function RichText({
           }}
         />
       ) : null}
-    </div>
-  );
-}
-
-/**
- * The one-field prompt the link button opens, in the flow of the card rather
- * than in a dialog: it holds a single value — an address, pasted in one
- * gesture — and a modal for one text input is the heaviest possible answer
- * (DESIGN.md, §4 of the UI skill). A FORMULA is the opposite case, which is
- * why it got a dialog of its own: it wants a palette, a preview and a
- * placement. Escape cancels and gives the caret back, Enter applies.
- */
-function AskBar({
-  label,
-  initial,
-  apply,
-  cancel,
-  onSubmit,
-  onCancel,
-}: {
-  label: string;
-  initial: string;
-  apply: string;
-  cancel: string;
-  onSubmit: (value: string) => void;
-  onCancel: () => void;
-}) {
-  const [text, setText] = useState(initial);
-  const id = useId();
-  return (
-    <div className="flex flex-wrap items-center gap-2 rounded-field bg-surface-2 px-2 py-1.5">
-      <label htmlFor={id} className="text-xs font-medium text-fg-muted">
-        {label}
-      </label>
-      <input
-        id={id}
-        autoFocus
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            onSubmit(text);
-          } else if (e.key === "Escape") {
-            e.preventDefault();
-            onCancel();
-          }
-        }}
-        className={cx(inputClass, "h-7 min-w-0 flex-1 font-mono text-[13px]")}
-      />
-      <Button size="sm" variant="secondary" onClick={() => onSubmit(text)}>
-        {apply}
-      </Button>
-      <Button size="sm" variant="ghost" onClick={onCancel}>
-        {cancel}
-      </Button>
     </div>
   );
 }

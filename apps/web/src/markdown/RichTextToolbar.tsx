@@ -18,9 +18,10 @@ import type { RichTextShortcut } from "@quiz/core/client";
 
 import { useT } from "../i18n";
 import { useShortcuts, type Shortcut } from "../shortcuts";
-import { IconButton, Menu, modKey, type IconType } from "../ui";
-import type { FormulaTarget } from "./RichText";
+import { IconButton, modKey, type IconType } from "../ui";
 import { isMathNode } from "./richTextKeys";
+import { TableMenu } from "./RichTextPopovers";
+import type { FormulaTarget } from "./useFormulaTarget";
 
 /*
  * The toolbar of the rich text field: which actions a mode offers, what they
@@ -252,34 +253,9 @@ export function RichTextToolbar({
 }) {
   const t = useT();
 
-  /*
-   * What can be done to the TABLE the caret is in. A menu and not seven more
-   * icons in the row: they only exist while the caret is in a table, and a
-   * strip that grows by seven buttons under the teacher's hand is the row of
-   * icon buttons DESIGN.md sends to a menu. It is drawn only when there is a
-   * table to act on, so nothing is reserved for it either.
-   */
+  /** The table menu, drawn only while the caret is in a table (RichTextPopovers.tsx). */
   const tableMenu =
-    marks.inTable === true && !disabled && editor !== null ? (
-      <Menu
-        label={t("md.table.menu")}
-        align="start"
-        trigger={
-          <IconButton size="sm" label={t("md.table.menu")} onMouseDown={(e) => e.preventDefault()}>
-            <TableIcon />
-          </IconButton>
-        }
-        items={[
-          { label: t("md.table.rowBefore"), onSelect: () => editor.chain().focus().addRowBefore().run() },
-          { label: t("md.table.rowAfter"), onSelect: () => editor.chain().focus().addRowAfter().run() },
-          { label: t("md.table.columnBefore"), onSelect: () => editor.chain().focus().addColumnBefore().run() },
-          { label: t("md.table.columnAfter"), onSelect: () => editor.chain().focus().addColumnAfter().run() },
-          { label: t("md.table.deleteRow"), separator: true, danger: true, onSelect: () => editor.chain().focus().deleteRow().run() },
-          { label: t("md.table.deleteColumn"), danger: true, onSelect: () => editor.chain().focus().deleteColumn().run() },
-          { label: t("md.table.deleteTable"), danger: true, onSelect: () => editor.chain().focus().deleteTable().run() },
-        ]}
-      />
-    ) : null;
+    marks.inTable === true && !disabled && editor !== null ? <TableMenu editor={editor} /> : null;
 
   return (
     <div
