@@ -123,9 +123,9 @@ export type Trace = (
  * has to say is what happened and to what.
  *
  * `action` stays an {@link AuditAction}, so a typo at a trigger site is a
- * compile error (invariant 9). The public poll routes have no session, and
- * `actorUserId` is then null — the row is written all the same, which is the
- * point of an append-only log.
+ * compile error (invariant 9). Every audited route today runs behind a
+ * session, so the actor is never null; the `?? null` is defensive only, for
+ * the column is nullable and a public route could one day be audited.
  */
 export function tracer(app: FastifyInstance): Trace {
   return (req, action, subjectType, subjectId, payload) =>
