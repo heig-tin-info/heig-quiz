@@ -4,10 +4,10 @@
 
 Tant qu'une banque est ouverte, ses catégories apparaissent dans la barre
 latérale gauche, sous **Banques de questions** : **Toutes les questions**,
-**Non classées**, puis l'arborescence. En choisir une restreint le tableau.
-L'arborescence sert aussi à créer une catégorie ou une sous-catégorie, à la
-renommer, à la déplacer parmi ses voisines et à la supprimer : ses questions
-repassent alors à la racine, aucune n'est supprimée.
+**Catégories**, puis l'arborescence. En choisir une restreint le tableau ; un
+nom trop long pour la barre latérale s'affiche en entier au survol.
+**Catégories** ouvre la page où l'arborescence se modifie : créer, renommer,
+déplacer, réordonner et supprimer.
 
 ## Recherche et filtres
 

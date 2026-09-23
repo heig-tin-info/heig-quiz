@@ -40,6 +40,7 @@ import {
   PollSummary,
   PollTeacherView,
   PoolCandidates,
+  PoolCategories,
   PoolDetail,
   PoolMembers,
   PoolSummary,
@@ -171,6 +172,7 @@ const CHECKED: Case[] = [
   each("/app/api/pools", "/app/api/pools", PoolSummary),
   ...pools.flatMap((p) => [
     one("/app/api/pools/:id", `/app/api/pools/${p.id}`, PoolDetail),
+    one("/app/api/pools/:id/categories", `/app/api/pools/${p.id}/categories`, PoolCategories),
     one("/app/api/pools/:id/members", `/app/api/pools/${p.id}/members`, PoolMembers),
     one("/app/api/pools/:id/candidates", `/app/api/pools/${p.id}/candidates?q=a`, PoolCandidates),
     one("/app/api/pools/:id/questions", `/app/api/pools/${p.id}/questions`, QuestionPage),

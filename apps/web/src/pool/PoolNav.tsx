@@ -125,7 +125,7 @@ export function PoolNavTree({
   navigate: (r: Route) => void;
 }) {
   const t = useT();
-  const currentPool = route.view === "pool" ? route.id : null;
+  const currentPool = route.view === "pool" || route.view === "poolCategories" ? route.id : null;
   // The same key the pool screens and the palette use: react-query serves all
   // three from one request.
   const pools = useQuery<PoolSummary[]>({
@@ -136,7 +136,9 @@ export function PoolNavTree({
 
   if (state === "collapsed") return null;
   if (state === "active") {
-    return currentPool ? <SidebarCategories poolId={currentPool} /> : null;
+    return currentPool ? (
+      <SidebarCategories poolId={currentPool} route={route} navigate={navigate} />
+    ) : null;
   }
 
   return (
@@ -162,7 +164,12 @@ export function PoolNavTree({
               {/* The pool being read keeps its folders: "all pools" widens the
                   list, it does not take the current tree away. */}
               {pool.id === currentPool ? (
-                <SidebarCategories poolId={pool.id} heading={false} />
+                <SidebarCategories
+                  poolId={pool.id}
+                  route={route}
+                  navigate={navigate}
+                  heading={false}
+                />
               ) : null}
             </li>
           ))}

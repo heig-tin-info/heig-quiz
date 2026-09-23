@@ -261,6 +261,21 @@ const scenes = [
       await sheet.getByLabel(/^(Category|Catégorie)$/).selectOption("__new__");
       await sheet.getByLabel(/^(Category name|Nom de la catégorie)$/).fill("Tableaux");
     } },
+  // The categories page of a pool: the tree, its counts, the row menu and a
+  // name being renamed in place; and the sidebar's tooltip on a cut name.
+  { name: "pool-categories", role: "teacher", path: "/pools/p1/categories" },
+  { name: "pool-categories-error", role: "teacher", path: "/pools/p1/categories?fail=1", settle: 2500 },
+  { name: "pool-categories-menu", role: "teacher", path: "/pools/p1/categories", fold: true, act: (p) => p.getByRole("button", { name: /^(Actions for|Actions pour) Tableaux$/ }).first().click() },
+  { name: "pool-categories-rename", role: "teacher", path: "/pools/p1/categories", fold: true, act: (p) => p.getByRole("button", { name: /^(Rename|Renommer) Tableaux$/ }).first().click() },
+  { name: "pool-categories-move", role: "teacher", path: "/pools/p1/categories", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^(Actions for|Actions pour) Fichiers$/ }).first().click();
+      await p.getByRole("menuitem", { name: /^(Move to…|Déplacer vers…)$/ }).click();
+    } },
+  { name: "pool-categories-tip", role: "teacher", path: "/pools/p1", fold: true, act: async (p) => {
+      // The sidebar is a drawer on a phone, and a phone has no hover.
+      if ((p.viewportSize()?.width ?? 1440) < 1024) return;
+      await p.getByRole("button", { name: /^Numération et codage des entiers$/ }).first().hover();
+    } },
   // ADR-017: the sidebar showing EVERY pool (the third state of the
   // "Question pools" row), which is what a question is dragged onto.
   { name: "pool-nav-all", role: "teacher", path: "/pools/p1", ls: { "quiz-pools-nav": "all" } },

@@ -30,9 +30,11 @@ import {
 
 import type {
   Category,
+  CategoryCountNode,
   CategoryNode,
   Pool,
   PoolCandidates,
+  PoolCategories,
   PoolMember,
   PoolMembers,
   PoolRole,
@@ -806,6 +808,30 @@ export async function categoryTree(db: Db, poolId: string): Promise<CategoryNode
   return roots;
 }
 
+/**
+ * `GET /pools/:id/categories`: the tree of the categories page, each folder
+ * with the live questions filed directly in it, and the root's own count.
+ * One grouped count, not one per folder.
+ */
+export async function categoriesWithCounts(db: Db, poolId: string): Promise<PoolCategories> {
+  const [tree, counted] = await Promise.all([
+    categoryTree(db, poolId),
+    db
+      .select({ categoryId: questions.categoryId, n: sql<number>`count(*)::int` })
+      .from(questions)
+      .where(and(eq(questions.poolId, poolId), isNull(questions.deletedAt)))
+      .groupBy(questions.categoryId),
+  ]);
+  const counts = new Map(counted.map((r) => [r.categoryId, r.n]));
+  const withCounts = (nodes: CategoryNode[]): CategoryCountNode[] =>
+    nodes.map((node) => ({
+      ...node,
+      questionCount: counts.get(node.id) ?? 0,
+      children: withCounts(node.children),
+    }));
+  return { categories: withCounts(tree), rootQuestionCount: counts.get(null) ?? 0 };
+}
+
 export async function createCategory(
   db: Db,
   poolId: string,
@@ -876,6 +902,38 @@ export async function updateCategory(
     .where(eq(categories.id, categoryId))
     .returning();
   return categoryJson(row!);
+}
+
+/**
+ * Is this new layout of the tree a tree of THIS pool? Every folder moved and
+ * every parent named must belong to the pool (a crafted payload must not hang
+ * a folder under another pool's), and the layout the payload produces —
+ * the moves applied TOGETHER, not one by one against the old tree — must
+ * have no cycle: "A under B" and "B under A" are each fine alone.
+ */
+export async function checkCategoryLayout(
+  db: Db,
+  poolId: string,
+  items: readonly { id: string; parentId: string | null }[],
+): Promise<"not_found" | "cycle" | null> {
+  const rows = await db
+    .select({ id: categories.id, parentId: categories.parentId })
+    .from(categories)
+    .where(eq(categories.poolId, poolId));
+  const parentOf = new Map(rows.map((r) => [r.id, r.parentId]));
+  for (const item of items) {
+    if (!parentOf.has(item.id)) return "not_found";
+    if (item.parentId !== null && !parentOf.has(item.parentId)) return "not_found";
+  }
+  for (const item of items) parentOf.set(item.id, item.parentId);
+  for (const item of items) {
+    let cursor = parentOf.get(item.id) ?? null;
+    for (let hops = 0; cursor !== null; hops += 1) {
+      if (cursor === item.id || hops > parentOf.size) return "cycle";
+      cursor = parentOf.get(cursor) ?? null;
+    }
+  }
+  return null;
 }
 
 /**

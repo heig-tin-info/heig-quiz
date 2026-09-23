@@ -433,6 +433,18 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
 
   // --- Categories --------------------------------------------------------
 
+  /**
+   * The categories page: the tree with each folder's question count. Any
+   * seat reads it — a reader sees the tree, and simply cannot change it.
+   */
+  app.get(
+    "/app/api/pools/:id/categories",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: inPool() }, async ({ scope: pool }) =>
+      service.categoriesWithCounts(app.db, pool.id),
+    ),
+  );
+
   app.post(
     "/app/api/pools/:id/categories",
     { preHandler: requireTeacher },
@@ -493,12 +505,12 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     teacher(
       { params: IdParam, body: CategoryOrder, load: inPool("contributor") },
       async ({ req, reply, body, scope: pool }) => {
-        for (const item of body.items) {
-          if (item.parentId && (await service.wouldCycle(app.db, item.id, item.parentId))) {
-            return reply
-              .code(409)
-              .send({ error: "cycle", message: "A folder cannot be moved inside itself" });
-          }
+        const refused = await service.checkCategoryLayout(app.db, pool.id, body.items);
+        if (refused === "not_found") return reply.code(404).send({ error: "not_found" });
+        if (refused === "cycle") {
+          return reply
+            .code(409)
+            .send({ error: "cycle", message: "A folder cannot be moved inside itself" });
         }
         const tree = await service.reorderCategories(app.db, pool.id, body.items);
         await trace(req, "category.reorder", "pool", pool.id, { count: body.items.length });

@@ -254,7 +254,9 @@ describe("Shell pool categories", () => {
     );
     expect(nav.getByRole("button", { name: "Arrays" })).toBeInTheDocument();
     expect(nav.getByRole("button", { name: "Strings" })).toBeInTheDocument();
-    expect(nav.getByRole("button", { name: /New category/ })).toBeInTheDocument();
+    // Creating is the categories page's job; the sidebar only navigates.
+    expect(nav.queryByRole("button", { name: /New category/ })).toBeNull();
+    expect(nav.getByRole("button", { name: "Categories" })).not.toHaveAttribute("aria-current");
   });
 
   it("writes the picked category to the URL the pool page reads", async () => {
@@ -278,15 +280,76 @@ describe("Shell pool categories", () => {
     expect(nav.getByRole("button", { name: "All questions" })).not.toHaveAttribute("aria-current");
   });
 
-  it("keeps every edit of a category in its overflow menu", async () => {
+  it("carries no per-category menu: every edit lives on the categories page", async () => {
+    const { navigate } = renderShell({
+      route: { view: "pool", id: "p1" },
+      pool: POOL,
+      path: "/pools/p1",
+    });
+    const nav = within(sidebar());
+    expect(nav.queryByRole("button", { name: "Actions" })).toBeNull();
+    await userEvent.click(nav.getByRole("button", { name: "Categories" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "poolCategories", id: "p1" });
+  });
+
+  it("marks Categories on its page, and a pick there goes back to the list", async () => {
+    const { navigate } = renderShell({
+      route: { view: "poolCategories", id: "p1" },
+      pool: POOL,
+      path: "/pools/p1/categories",
+    });
+    const nav = within(sidebar());
+    expect(nav.getByRole("button", { name: "Categories" })).toHaveAttribute("aria-current", "true");
+    expect(nav.getByRole("button", { name: "All questions" })).not.toHaveAttribute("aria-current");
+    await userEvent.click(nav.getByRole("button", { name: "Structs" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "pool", id: "p1" });
+    expect(new URLSearchParams(window.location.search).get("category")).toBe("k3");
+  });
+});
+
+/*
+ * A category name the sidebar cuts reads in full on hover and on focus, and
+ * only when it IS cut — the rule of the classroom names above.
+ */
+describe("Shell sidebar category names", () => {
+  const measures = (scrollWidth: number, clientWidth: number) => {
+    vi.spyOn(HTMLElement.prototype, "scrollWidth", "get").mockReturnValue(scrollWidth);
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(clientWidth);
+  };
+  const open = () =>
     renderShell({ route: { view: "pool", id: "p1" }, pool: POOL, path: "/pools/p1" });
-    await userEvent.click(within(sidebar()).getAllByRole("button", { name: "Actions" })[0]!);
-    const menu = within(screen.getByRole("menu"));
-    expect(menu.getByRole("menuitem", { name: "Rename category" })).toBeVisible();
-    expect(menu.getByRole("menuitem", { name: "New subcategory" })).toBeVisible();
-    expect(menu.getByRole("menuitem", { name: "Move up" })).toBeVisible();
-    expect(menu.getByRole("menuitem", { name: "Move down" })).toBeVisible();
-    expect(menu.getByRole("menuitem", { name: "Delete category" })).toBeVisible();
+  afterEach(() => vi.restoreAllMocks());
+
+  it("shows the whole name on hover and on keyboard focus when it is cut", () => {
+    measures(240, 120);
+    vi.useFakeTimers();
+    open();
+    const row = within(sidebar()).getByRole("button", { name: "Structs" });
+    const copies = screen.getAllByText("Structs").length;
+    fireEvent.mouseEnter(row.closest("span")!);
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(screen.getAllByText("Structs")).toHaveLength(copies + 1);
+    fireEvent.mouseLeave(row.closest("span")!);
+    act(() => row.focus());
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(screen.getAllByText("Structs")).toHaveLength(copies + 1);
+  });
+
+  it("says nothing when the name fits", () => {
+    measures(120, 120);
+    vi.useFakeTimers();
+    open();
+    const row = within(sidebar()).getByRole("button", { name: "Structs" });
+    const copies = screen.getAllByText("Structs").length;
+    act(() => row.focus());
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(screen.getAllByText("Structs")).toHaveLength(copies);
   });
 });
 
