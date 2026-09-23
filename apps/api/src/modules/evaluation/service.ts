@@ -634,7 +634,13 @@ export async function createPollEvaluation(
   return { evaluation: (await byId(db, id))!, item: item! };
 }
 
-export async function byId(db: Db, id: string): Promise<EvaluationRecord | null> {
+/**
+ * A handle or an open transaction: the state change below is also the second
+ * half of a withdrawal that must not land alone (`unreleaseResults`).
+ */
+export type DbOrTx = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+export async function byId(db: DbOrTx, id: string): Promise<EvaluationRecord | null> {
   const [row] = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
   return row ?? null;
 }
@@ -703,7 +709,7 @@ export async function deleteEvaluation(db: Db, row: EvaluationRecord): Promise<v
  * expiring them) belong to `modules/live/service.ts`, which calls this.
  */
 export async function tryApplyState(
-  db: Db,
+  db: DbOrTx,
   row: EvaluationRecord,
   to: EvaluationState,
   now: Date,
@@ -737,7 +743,7 @@ export async function tryApplyState(
  * row as it stands, moved or already moved by somebody else.
  */
 export async function applyState(
-  db: Db,
+  db: DbOrTx,
   row: EvaluationRecord,
   to: EvaluationState,
   now: Date,

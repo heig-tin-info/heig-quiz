@@ -263,18 +263,16 @@ export async function releaseResults(
         perItem: r.perItem,
       })),
   };
-  await db.transaction(async (tx) => {
-    await tx
-      .update(evaluations)
-      .set({
-        releasedAt,
-        releasedGrades: snapshot,
-        modifiedAfterRelease: false,
-        state: "released",
-        updatedAt: now,
-      })
-      .where(eq(evaluations.id, evaluation.id));
-  });
+  await db
+    .update(evaluations)
+    .set({
+      releasedAt,
+      releasedGrades: snapshot,
+      modifiedAfterRelease: false,
+      state: "released",
+      updatedAt: now,
+    })
+    .where(eq(evaluations.id, evaluation.id));
   return { releasedAt, rows: snapshot.rows.length };
 }
 
@@ -292,11 +290,15 @@ export async function unreleaseResults(
   evaluation: EvaluationRecord,
   now: Date,
 ): Promise<void> {
-  await db
-    .update(evaluations)
-    .set({ releasedAt: null, releasedGrades: null, modifiedAfterRelease: false, updatedAt: now })
-    .where(eq(evaluations.id, evaluation.id));
-  await applyState(db, evaluation, "closed", now);
+  // Both or neither: a cleared `released_at` on a row still `released`
+  // would leave the two readings of "released" disagreeing.
+  await db.transaction(async (tx) => {
+    await tx
+      .update(evaluations)
+      .set({ releasedAt: null, releasedGrades: null, modifiedAfterRelease: false, updatedAt: now })
+      .where(eq(evaluations.id, evaluation.id));
+    await applyState(tx, evaluation, "closed", now);
+  });
 }
 
 /**
