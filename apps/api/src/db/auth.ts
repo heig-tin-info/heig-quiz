@@ -155,14 +155,25 @@ export const teacherGrants = pgTable("teacher_grants", {
  * Append-only audit log (NFR-05, AU-42), platform-wide: it belongs to no
  * single module, and `src/audit.ts` is the only writer. In production the
  * application SQL role has neither UPDATE nor DELETE on it.
+ *
+ * No route reads it: it is forensics, read with `psql` (ADR-003, addendum
+ * 2026-09-23). The two indexes serve the two questions asked there — "what
+ * happened lately" and "what happened to this entity" (audit D-15).
  */
-export const auditLog = pgTable("audit_log", {
-  id: bigserial("id", { mode: "number" }).primaryKey(),
-  actorUserId: uuid("actor_user_id"),
-  actorType: text("actor_type", { enum: ["user", "system", "api_key"] }).notNull(),
-  action: text("action").notNull(),
-  subjectType: text("subject_type").notNull(),
-  subjectId: text("subject_id").notNull(),
-  payload: jsonb("payload"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    actorUserId: uuid("actor_user_id"),
+    actorType: text("actor_type", { enum: ["user", "system", "api_key"] }).notNull(),
+    action: text("action").notNull(),
+    subjectType: text("subject_type").notNull(),
+    subjectId: text("subject_id").notNull(),
+    payload: jsonb("payload"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("audit_log_created_idx").on(t.createdAt.desc()),
+    index("audit_log_subject_idx").on(t.subjectType, t.subjectId),
+  ],
+);

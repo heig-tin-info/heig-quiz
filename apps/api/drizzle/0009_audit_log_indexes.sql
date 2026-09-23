@@ -1,0 +1,2 @@
+CREATE INDEX "audit_log_created_idx" ON "audit_log" USING btree ("created_at" DESC NULLS LAST);--> statement-breakpoint
+CREATE INDEX "audit_log_subject_idx" ON "audit_log" USING btree ("subject_type","subject_id");
