@@ -125,8 +125,8 @@ int case_noire(int x, int y) {
 `;
 
 /**
- * The target of the checkerboard, in the compact encoding of a `codeimage`
- * config (one hex digit per `bw` pixel, row-major): what "Use as target"
+ * The pixels of the checkerboard's target, in the compact encoding of a
+ * `codeimage` config (one hex digit per `bw` pixel, row-major): what "Use as target"
  * stores after running the reference above. 1 is white, 0 black, and the
  * top-left cell is black.
  */
@@ -431,7 +431,7 @@ const C_POOL: PoolSpec = {
           "\nint case_noire(int x, int y) {\n    // votre code ici\n    return 0;\n}\n",
         referenceSolution: CHECKERBOARD_SOLUTION,
         image: { width: 16, height: 16, palette: "bw" },
-        target: CHECKERBOARD_TARGET,
+        target: { width: 16, height: 16, palette: "bw", pixels: CHECKERBOARD_TARGET },
       },
     },
   ],

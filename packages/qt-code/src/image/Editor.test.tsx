@@ -18,7 +18,7 @@ function setup(
   return { onChange, view };
 }
 
-const draft = (): CodeImageConfig => ({ ...imageConfig(), target: "" });
+const draft = (): CodeImageConfig => ({ ...imageConfig(), target: null });
 
 describe("CodeImageEditor", () => {
   it("shows the program half and the picture settings", () => {
@@ -70,7 +70,9 @@ describe("CodeImageEditor", () => {
     expect(await screen.findByText("The reference solution drew its image.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Use as target" }));
     expect(onChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({ target: "101001011010" }),
+      expect.objectContaining({
+        target: { width: 4, height: 3, palette: "bw", pixels: "101001011010" },
+      }),
     );
   });
 
@@ -88,7 +90,11 @@ describe("CodeImageEditor", () => {
     const { onChange } = setup(draft(), async () => ({ details }));
     fireEvent.click(screen.getByRole("button", { name: "Try the reference solution" }));
     fireEvent.click(await screen.findByRole("button", { name: "Use as target" }));
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ target: "111100001111" }));
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        target: { width: 4, height: 3, palette: "bw", pixels: "111100001111" },
+      }),
+    );
   });
 
   it("compares a new run with the current target, and says when it already is the target", async () => {

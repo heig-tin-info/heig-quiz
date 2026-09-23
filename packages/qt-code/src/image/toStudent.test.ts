@@ -53,7 +53,7 @@ describe("codeimageServer.toStudent", () => {
   });
 
   it("publishes the target, the size and the palette on purpose", () => {
-    expect(student.target).toBe(config.target);
+    expect(student.target).toEqual(config.target);
     expect(student.image).toEqual({ width: 4, height: 3, palette: "bw" });
   });
 

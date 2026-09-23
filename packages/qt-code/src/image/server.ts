@@ -109,7 +109,7 @@ export const codeimageServer: QuestionTypeServer<
       runsPerMinute: config.runsPerMinute,
       filesPreview: config.files.map((f) => ({ name: f.name, bytes: f.content.length })),
       image: { ...config.image },
-      target: config.target,
+      target: config.target === null ? null : { ...config.target },
     };
   },
 
@@ -117,7 +117,7 @@ export const codeimageServer: QuestionTypeServer<
     return {
       referenceSolution: config.referenceSolution,
       image: { ...config.image },
-      target: config.target,
+      target: config.target === null ? null : { ...config.target },
     };
   },
 

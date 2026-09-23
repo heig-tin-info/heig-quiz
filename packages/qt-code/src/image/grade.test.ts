@@ -122,8 +122,15 @@ describe("finalizeRunnerCodeImage", () => {
     expect(graded.details.image).toHaveLength(15);
   });
 
+  it("scores a 4 × 3 target on a 3 × 4 image as no target: same count, other cells", () => {
+    const turned = { ...imageConfig(), image: { width: 3, height: 4, palette: "bw" as const } };
+    const graded = finalizeRunnerCodeImage(turned, answer, FINALIZE_CTX, outcome([{ stdout: CHECKER_STDOUT }]));
+    expect(graded.points).toBe(0);
+    expect(graded.details.matching).toBe(0);
+  });
+
   it("returns the picture of a draft that has no target yet, at zero", () => {
-    const draft = { ...imageConfig(), target: "" };
+    const draft = { ...imageConfig(), target: null };
     const graded = finalizeRunnerCodeImage(draft, answer, FINALIZE_CTX, outcome([{ stdout: CHECKER_STDOUT }]));
     expect(graded.points).toBe(0);
     expect(graded.details.image).toBe("101001011010");

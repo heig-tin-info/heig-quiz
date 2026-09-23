@@ -21,7 +21,7 @@ export function toCanonicalImage(config: CodeImageConfig): Record<string, unknow
     template: config.template,
     runsPerMinute: config.runsPerMinute,
     image: { ...config.image },
-    target: config.target,
+    target: config.target === null ? null : { ...config.target },
   };
   if (config.runtime !== "backend") out.runtime = config.runtime;
   if (config.files.length > 0) out.files = config.files.map((f) => ({ ...f }));

@@ -1888,7 +1888,7 @@ export function emptyConfig(type: MockQuestion["type"]): Record<string, unknown>
     case "code":
       return codeConfig("", "", [{ name: "", stdin: "", expected: "", visible: true }]);
     case "codeimage":
-      return { ...codeimageConfig(), prompt: "", template: "", referenceSolution: "", target: "" };
+      return { ...codeimageConfig(), prompt: "", template: "", referenceSolution: "", target: null };
     case "circuit":
       return {
         configVersion: 1,

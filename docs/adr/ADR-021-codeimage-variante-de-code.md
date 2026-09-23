@@ -60,13 +60,17 @@ by the teacher ("Try the reference solution", then "Use as target"), stored in
 purpose — drawing it is the exercise. Nothing runs at publication, so
 publishing never depends on a runner being up (decision D14).
 
-It is a string, one lowercase hex digit per pixel for `bw` and `color16`, two
-for `gray256`: a 128 × 128 grey target is 32 KiB of text instead of a
-16 384-entry JSON array several times that size, and it diffs as one line in
-a canonical file. The same encoding carries the student's computed image in
+It is `{ width, height, palette, pixels }`: the size and palette it was
+captured under, and the pixels as a string, one lowercase hex digit per
+pixel for `bw` and `color16`, two for `gray256`. The dimensions travel with
+the pixels because the count alone cannot tell a 4 × 3 target from a 3 × 4
+one; a target whose dimensions differ from the image's is stale. As a
+string, a 128 × 128 grey target is 32 KiB of text instead of a 16 384-entry
+JSON array several times that size, and it diffs as one line in a canonical
+file. The same encoding carries the student's computed image in
 the grading details, with `x` for an invalid or missing pixel. Publication
-refuses a target that is missing, of the wrong length, or holds a value
-outside the palette; a draft may lack it (decision D16).
+refuses a target that is missing, captured for another size or palette, or
+holds a value outside the palette; a draft may lack it (decision D16).
 
 Those checks are NOT in `configSchema`. The schema is the gate of use —
 `POST /questions/:id/try` and `/preview` parse with it — and the try is the
@@ -74,7 +78,8 @@ very step that captures a target, first or after a resize. So the contract
 gained an optional `publicationIssues(config)` hook: the API applies it on
 publication (`publishConfig`, same `config_invalid` refusal) and reports it
 with the draft's issues, and no read ever does. A target that does not fit
-the current image (`targetPixels` returns `null`) reads as "no target"
+the current image — other dimensions or palette, or a wrong length
+(`targetPixels` returns `null`) reads as "no target"
 everywhere — grading scores 0, the player and the review show no target —
 and is never indexed as if it matched.
 

@@ -1211,7 +1211,8 @@ export const en = {
   "issue.short.date_range": "The last day is before the first one.",
   "issue.codeimage.target_missing":
     "No target yet: try the reference solution and use its image as the target.",
-  "issue.codeimage.target_size": "The target does not have one pixel per cell of the image.",
+  "issue.codeimage.target_size":
+    "The target was captured for another size or palette. Try the reference solution again and use its image.",
   "issue.codeimage.target_value": "The target holds a value outside the palette.",
   // --- Development gallery (/dev/ui) ---
   "dev.ui.title": "UI gallery",

@@ -1204,7 +1204,8 @@ export const fr: Record<keyof Dict, string> = {
   "issue.short.date_range": "Le dernier jour précède le premier.",
   "issue.codeimage.target_missing":
     "Pas encore de cible : essayez la solution de référence et utilisez son image comme cible.",
-  "issue.codeimage.target_size": "La cible n'a pas un pixel par cellule de l'image.",
+  "issue.codeimage.target_size":
+    "La cible a été capturée pour une autre taille ou une autre palette. Essayez à nouveau la solution de référence et utilisez son image.",
   "issue.codeimage.target_value": "La cible contient une valeur hors de la palette.",
   // --- Development gallery (/dev/ui) ---
   "dev.ui.title": "Galerie UI",

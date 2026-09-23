@@ -33,7 +33,7 @@ export function imageConfig(overrides: Record<string, unknown> = {}): CodeImageC
     compileArgs: IMG_SECRET_COMPILE_ARGS,
     referenceSolution: IMG_SECRET_REFERENCE,
     image: { width: 4, height: 3, palette: "bw" },
-    target: encodeImage(CHECKER, "bw"),
+    target: { width: 4, height: 3, palette: "bw", pixels: encodeImage(CHECKER, "bw") },
     ...overrides,
   });
 }

@@ -51,7 +51,10 @@ import {
   type CodeImageConfig,
   type CodeImageDetails,
   type ImageSpec,
+  type ImageTarget,
   type Palette,
+  makeTarget,
+  targetFits,
   targetPixels,
 } from "./schema.js";
 import { CODEIMAGE_EDITOR_DEFAULTS, type CodeImageEditorStrings } from "./strings.js";
@@ -218,7 +221,7 @@ export function CodeImageEditor({
 
         <h4 className="mt-2 text-[13px] font-medium text-fg">{s.target}</h4>
         <p className={hint}>
-          {targetValid ? s.targetHint : config.target === "" ? s.targetEmpty : s.targetInvalid}
+          {targetValid ? s.targetHint : config.target === null ? s.targetEmpty : s.targetInvalid}
         </p>
         {specOk ? (
           <div className="max-w-80">
@@ -228,7 +231,7 @@ export function CodeImageEditor({
               palette={spec.palette}
               pixels={target}
               label={s.target}
-              emptyLabel={config.target === "" ? s.targetEmpty : s.targetInvalid}
+              emptyLabel={config.target === null ? s.targetEmpty : s.targetInvalid}
             />
           </div>
         ) : null}
@@ -269,7 +272,7 @@ export function CodeImageEditor({
                 target={target}
                 s={s}
                 disabled={disabled}
-                onUse={(encoded) => patch({ target: encoded })}
+                onUse={(target) => patch({ target })}
               />
             ) : null}
           </>
@@ -347,12 +350,16 @@ function ReferenceImage({
   target: Int16Array | null;
   s: CodeImageEditorStrings;
   disabled: boolean | undefined;
-  onUse: (encoded: string) => void;
+  onUse: (target: ImageTarget) => void;
 }): ReactNode {
   const stale = !sameSpec(state.spec, config.image);
   const complete = !state.pixels.includes(INVALID);
   const encoded = complete ? encodeImage(state.pixels, state.spec.palette) : null;
-  const isTarget = encoded !== null && encoded === config.target;
+  const isTarget =
+    encoded !== null &&
+    config.target !== null &&
+    config.target.pixels === encoded &&
+    targetFits(config.target, state.spec);
   const total = state.spec.width * state.spec.height;
   const note = stale
     ? s.tryStale
@@ -382,7 +389,8 @@ function ReferenceImage({
           className={button("secondary", "sm")}
           disabled={disabled || stale || encoded === null || isTarget}
           onClick={() => {
-            if (encoded !== null) onUse(encoded);
+            // The dimensions travel with the pixels (ADR-021).
+            if (encoded !== null) onUse(makeTarget(state.spec, encoded));
           }}
         >
           {s.useAsTarget}

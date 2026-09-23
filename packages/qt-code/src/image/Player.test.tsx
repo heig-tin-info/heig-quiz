@@ -119,7 +119,10 @@ describe("CodeImagePlayer", () => {
 
   it("shows the sixteen colours for a color16 question", () => {
     const colorStudent = codeimageServer.toStudent(
-      imageConfig({ image: { width: 4, height: 3, palette: "color16" }, target: "0123456789ab" }),
+      imageConfig({
+        image: { width: 4, height: 3, palette: "color16" },
+        target: { width: 4, height: 3, palette: "color16", pixels: "0123456789ab" },
+      }),
       { seed: 0, itemId: "i", shuffle: false },
     );
     setup({ student: colorStudent });

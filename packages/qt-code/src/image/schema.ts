@@ -71,6 +71,27 @@ export const CodeImageLimits = CodeLimits.extend({
 const MAX_IMAGE_CHARS = 2 * IMAGE_MAX_SIDE * IMAGE_MAX_SIDE;
 
 /**
+ * A captured picture: the compact pixels AND the size and palette they were
+ * captured under. The dimensions travel with the pixels because the pixel
+ * COUNT alone cannot tell a 4 × 3 target from a 3 × 4 one — both are twelve
+ * characters — and reading one as the other would compare the wrong cells.
+ */
+export const ImageTarget = ImageSpec.extend({ pixels: z.string().max(MAX_IMAGE_CHARS) });
+export type ImageTarget = z.infer<typeof ImageTarget>;
+
+/** A target from a spec and its encoded pixels, the shape "Use as target" writes. */
+export const makeTarget = (spec: ImageSpec, pixels: string): ImageTarget => ({
+  width: spec.width,
+  height: spec.height,
+  palette: spec.palette,
+  pixels,
+});
+
+/** Whether a target was captured under exactly this image's size and palette. */
+export const targetFits = (target: ImageTarget, image: ImageSpec): boolean =>
+  target.width === image.width && target.height === image.height && target.palette === image.palette;
+
+/**
  * The gate of USE: what a config must be to be previewed, tried and graded.
  * It deliberately says nothing about whether the target fits the image —
  * see {@link codeimagePublicationIssues}.
@@ -83,12 +104,13 @@ export const CodeImageConfig = z.object({
   /**
    * The picture the program must draw, captured by the teacher with "Use as
    * target" from a run of the reference solution — or written by hand in a
-   * canonical file. Empty in a fresh draft, and STALE after the teacher
-   * changes the size or the palette: both are usable (the try that captures
-   * a new one needs them to be), and both read as "no target" everywhere a
-   * target is compared. Only publication requires a fitting one.
+   * canonical file. `null` in a fresh draft, and STALE once the teacher
+   * changes the size or the palette (its own dimensions no longer match
+   * `image`): both are usable (the try that captures a new one needs them to
+   * be), and both read as "no target" everywhere a target is compared. Only
+   * publication requires a fitting one.
    */
-  target: z.string().max(MAX_IMAGE_CHARS),
+  target: ImageTarget.nullable().default(null),
 });
 export type CodeImageConfig = z.infer<typeof CodeImageConfig>;
 
@@ -102,8 +124,10 @@ export type CodeImageConfig = z.infer<typeof CodeImageConfig>;
 export function codeimagePublicationIssues(
   config: Pick<CodeImageConfig, "target" | "image">,
 ): { path: string[]; message: string }[] {
-  if (config.target === "") return [{ path: ["target"], message: "codeimage.target_missing" }];
-  const issue = imageStringIssue(config.target, config.image);
+  const { target, image } = config;
+  if (target === null) return [{ path: ["target"], message: "codeimage.target_missing" }];
+  if (!targetFits(target, image)) return [{ path: ["target"], message: "codeimage.target_size" }];
+  const issue = imageStringIssue(target.pixels, image);
   return issue === null ? [] : [{ path: ["target"], message: `codeimage.${issue}` }];
 }
 
@@ -116,8 +140,9 @@ export function codeimagePublicationIssues(
  */
 export function targetPixels(config: Pick<CodeImageConfig, "target" | "image">): Int16Array | null {
   const { target, image } = config;
-  if (target === "" || imageStringIssue(target, image) !== null) return null;
-  return decodeImage(target, image.palette, image.width * image.height);
+  if (target === null || !targetFits(target, image)) return null;
+  if (imageStringIssue(target.pixels, image) !== null) return null;
+  return decodeImage(target.pixels, image.palette, image.width * image.height);
 }
 
 /** The student's answer: the editable regions, exactly as `code` stores them. */
@@ -133,14 +158,14 @@ export type CodeImageAnswer = z.infer<typeof CodeImageAnswer>;
 export const CodeImageStudent = z.object({
   ...programStudentFields,
   image: ImageSpec,
-  target: z.string(),
+  target: ImageTarget.nullable(),
 });
 export type CodeImageStudent = z.infer<typeof CodeImageStudent>;
 
 export const CodeImageSolution = z.object({
   referenceSolution: z.string(),
   image: ImageSpec,
-  target: z.string(),
+  target: ImageTarget.nullable(),
 });
 export type CodeImageSolution = z.infer<typeof CodeImageSolution>;
 
@@ -212,7 +237,7 @@ export function emptyCodeImageConfig(): CodeImageConfig {
     runsPerMinute: 10,
     referenceSolution: "",
     image: DEFAULT_IMAGE,
-    target: "",
+    target: null,
   };
 }
 

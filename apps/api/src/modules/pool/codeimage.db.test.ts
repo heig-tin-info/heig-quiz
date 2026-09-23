@@ -32,7 +32,14 @@ const OUTCOME: RunnerOutcome = {
 const TEMPLATE =
   "// @@lock\n#include <stdio.h>\nint main(void) {\n// @@endlock\n    puts(\"1\");\n// @@lock\n    return 0;\n}\n// @@endlock\n";
 
-function config(target: string, image = { width: 4, height: 3, palette: "bw" }) {
+const BW43 = { width: 4, height: 3, palette: "bw" };
+
+/** `target` null = none yet; otherwise the pixels, captured under `captured` (4 × 3 by default). */
+function config(
+  target: string | null,
+  image = BW43,
+  captured: { width: number; height: number; palette: string } = BW43,
+) {
   return {
     configVersion: 1,
     prompt: "Draw a checkerboard.",
@@ -40,7 +47,7 @@ function config(target: string, image = { width: 4, height: 3, palette: "bw" }) 
     template: TEMPLATE,
     referenceSolution: "    puts(\"1 0 1 0\");\n",
     image,
-    target,
+    target: target === null ? null : { ...captured, pixels: target },
   };
 }
 
@@ -103,7 +110,7 @@ afterAll(async () => {
 
 describe("codeimage: the target is required to publish, never to try (D16)", () => {
   it("tries a draft with an EMPTY target and hands back the picture to capture", async () => {
-    const id = await draftQuestion("no target yet", config(""));
+    const id = await draftQuestion("no target yet", config(null));
     const res = await tryReference(id);
     expect(res.statusCode).toBe(200);
     const body = res.json();
@@ -130,7 +137,7 @@ describe("codeimage: the target is required to publish, never to try (D16)", () 
   });
 
   it("previews a draft without a target", async () => {
-    const id = await draftQuestion("preview without target", config(""));
+    const id = await draftQuestion("preview without target", config(null));
     const res = await server.app.inject({
       method: "POST",
       url: `/app/api/questions/${id}/preview`,
@@ -138,12 +145,12 @@ describe("codeimage: the target is required to publish, never to try (D16)", () 
       payload: { source: "draft" },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().student.target).toBe("");
+    expect(res.json().student.target).toBeNull();
     expect(JSON.stringify(res.json().student)).not.toContain("referenceSolution");
   });
 
   it("reports the missing target with the draft, and refuses to publish it", async () => {
-    const id = await draftQuestion("unpublishable empty", config(""));
+    const id = await draftQuestion("unpublishable empty", config(null));
     const detail = await server.app.inject({
       method: "GET",
       url: `/app/api/questions/${id}`,
@@ -154,7 +161,7 @@ describe("codeimage: the target is required to publish, never to try (D16)", () 
       method: "PUT",
       url: `/app/api/questions/${id}/draft`,
       headers: owner.headers,
-      payload: { config: config(""), explanation: "" },
+      payload: { config: config(null), explanation: "" },
     });
     expect(saved.json().valid).toBe(false);
     expect(saved.json().issues).toEqual([
@@ -185,6 +192,25 @@ describe("codeimage: the target is required to publish, never to try (D16)", () 
     });
     expect(refused.statusCode).toBe(422);
     expect(refused.json().details[0].message).toBe("codeimage.target_size");
+  });
+
+  it("refuses a 4 × 3 target on a 3 × 4 image, and grades it as no target", async () => {
+    // Twelve pixels either way: only the dimensions stored with the target
+    // say it was captured for another shape.
+    const id = await draftQuestion(
+      "turned image",
+      config(CHECKER, { width: 3, height: 4, palette: "bw" }),
+    );
+    const refused = await server.app.inject({
+      method: "POST",
+      url: `/app/api/questions/${id}/publish`,
+      headers: owner.headers,
+      payload: {},
+    });
+    expect(refused.statusCode).toBe(422);
+    expect(refused.json().details[0].message).toBe("codeimage.target_size");
+    const res = await tryReference(id);
+    expect(res.json()).toMatchObject({ status: "graded", points: 0, details: { matching: 0 } });
   });
 
   it("publishes once the captured target fits, and grades against it", async () => {

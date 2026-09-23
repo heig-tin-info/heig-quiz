@@ -95,7 +95,7 @@ export function codeimageConfig(): Record<string, unknown> {
     runsPerMinute: 10,
     referenceSolution: IMAGE_REFERENCE,
     image: SPEC,
-    target: encodeImage(concentric(SPEC), SPEC.palette),
+    target: { ...SPEC, pixels: encodeImage(concentric(SPEC), SPEC.palette) },
   };
 }
 
@@ -110,7 +110,7 @@ export function codeimageStudentView(config: Record<string, unknown>): CodeImage
     runsPerMinute: Number(config.runsPerMinute ?? 10),
     filesPreview: [],
     image: config.image as ImageSpec,
-    target: String(config.target ?? ""),
+    target: (config.target ?? null) as CodeImageStudent["target"],
   };
 }
 
@@ -139,7 +139,14 @@ export function codeimageRunOutcome(spec: ImageSpec = SPEC): RunnerOutcome {
 export function codeimageTryDetails(config: Record<string, unknown>): CodeImageDetails {
   const spec = config.image as ImageSpec;
   const pixels = concentric(spec);
-  const target = String(config.target ?? "");
+  // A target captured for another size or palette is no target (ADR-021).
+  const stored = config.target as (ImageSpec & { pixels: string }) | null | undefined;
+  const fits =
+    stored != null &&
+    stored.width === spec.width &&
+    stored.height === spec.height &&
+    stored.palette === spec.palette;
+  const target = fits ? stored.pixels : "";
   const image = encodeImage(pixels, spec.palette);
   const width = spec.palette === "gray256" ? 2 : 1;
   let matching = 0;

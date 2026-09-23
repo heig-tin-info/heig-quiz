@@ -29,22 +29,33 @@ describe("CodeImageConfig", () => {
   });
 
   it("accepts a draft without a target, or with a stale one: both must be tryable (D16)", () => {
-    expect(issuesOf({ ...imageConfig(), target: "" })).toEqual([]);
-    expect(issuesOf({ ...imageConfig(), target: "1010" })).toEqual([]);
+    expect(issuesOf({ ...imageConfig(), target: null })).toEqual([]);
+    expect(issuesOf({ ...imageConfig(), image: { width: 5, height: 3, palette: "bw" } })).toEqual([]);
   });
 
   it("leaves the target to publication: missing, wrong size, value out of the palette", () => {
-    const pub = (target: string) =>
-      codeimageServer.publicationIssues!({ ...imageConfig(), target }).map((i) => i.message);
-    expect(pub("")).toEqual(["codeimage.target_missing"]);
-    expect(pub("1010")).toEqual(["codeimage.target_size"]);
-    expect(pub("10100101101x")).toEqual(["codeimage.target_value"]);
+    const pub = (target: unknown) =>
+      codeimageServer
+        .publicationIssues!({ ...imageConfig(), target } as never)
+        .map((i) => i.message);
+    const bw43 = { width: 4, height: 3, palette: "bw" };
+    expect(pub(null)).toEqual(["codeimage.target_missing"]);
+    expect(pub({ ...bw43, pixels: "1010" })).toEqual(["codeimage.target_size"]);
+    expect(pub({ ...bw43, pixels: "10100101101x" })).toEqual(["codeimage.target_value"]);
+    // Twelve pixels either way: only the stored dimensions tell them apart.
+    expect(pub({ width: 3, height: 4, palette: "bw", pixels: "101001011010" })).toEqual([
+      "codeimage.target_size",
+    ]);
+    expect(pub({ ...bw43, palette: "color16", pixels: "101001011010" })).toEqual([
+      "codeimage.target_size",
+    ]);
     expect(codeimageServer.publicationIssues!(imageConfig())).toEqual([]);
   });
 
   it("reads a target that no longer fits the image as no target at all", () => {
     expect(targetPixels(imageConfig())).not.toBeNull();
-    expect(targetPixels({ ...imageConfig(), target: "" })).toBeNull();
+    expect(targetPixels({ ...imageConfig(), target: null })).toBeNull();
+    expect(targetPixels({ ...imageConfig(), image: { width: 3, height: 4, palette: "bw" } })).toBeNull();
     expect(targetPixels({ ...imageConfig(), image: { width: 5, height: 3, palette: "bw" } })).toBeNull();
     expect(targetPixels({ ...imageConfig(), image: { width: 4, height: 3, palette: "gray256" } })).toBeNull();
   });
@@ -58,7 +69,7 @@ describe("CodeImageConfig", () => {
 
   it("starts a draft empty, with the version it will be stored under", () => {
     const draft = emptyCodeImageConfig();
-    expect(draft.target).toBe("");
+    expect(draft.target).toBeNull();
     expect(draft.configVersion).toBe(codeimageServer.configVersion);
     expect(codeimageServer.publicationIssues!(draft)).not.toEqual([]);
     expect(codeimageServer.migrate(draft, 1)).toBe(draft);
@@ -106,6 +117,9 @@ describe("canonical form", () => {
     expect(out).not.toHaveProperty("configVersion");
     expect(out).not.toHaveProperty("limits");
     expect(out).not.toHaveProperty("runtime");
-    expect(out).toMatchObject({ image: { width: 4, height: 3, palette: "bw" }, target: "101001011010" });
+    expect(out).toMatchObject({
+      image: { width: 4, height: 3, palette: "bw" },
+      target: { width: 4, height: 3, palette: "bw", pixels: "101001011010" },
+    });
   });
 });
