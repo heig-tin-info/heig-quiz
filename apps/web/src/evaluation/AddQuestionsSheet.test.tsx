@@ -100,7 +100,7 @@ function questions(filters: string, reply: ReturnType<typeof ok>, pool = "p1") {
 
 function routes(over: Record<string, ReturnType<typeof ok>> = {}) {
   return {
-    "GET /app/api/pools": ok(POOLS),
+    "GET /app/api/evaluations/e1/pools": ok(POOLS),
     ...questions("", ok(PAGE)),
     ...over,
   };
@@ -192,8 +192,8 @@ describe("AddQuestionsSheet — the pool", () => {
   });
 
   it("says so, once and without an error, when the teacher has no pool at all", async () => {
-    setup({ "GET /app/api/pools": ok([]) });
-    expect(await screen.findByText("No pool yet")).toBeVisible();
+    setup({ "GET /app/api/evaluations/e1/pools": ok([]) });
+    expect(await screen.findByText("No pool linked to this course")).toBeVisible();
   });
 });
 

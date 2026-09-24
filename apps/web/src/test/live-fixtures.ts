@@ -64,6 +64,7 @@ const PSEUDONYMS = [
 export function makeRow(index: number, itemIds: string[], overrides: Partial<DashboardRow> = {}): DashboardRow {
   return {
     attemptId: id("attempt", index),
+    seatId: id("seat", index),
     userId: id("user", index),
     // A NAME, not "Student 0": with the names hidden the grid shows
     // "Student <n>" itself, and a fixture that already said that would make

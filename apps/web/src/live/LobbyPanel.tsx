@@ -27,7 +27,7 @@ export function LobbyPanel({ state }: { state: GridState }) {
     <ul className="flex flex-wrap gap-1.5">
       {rows.map((row) => (
         <li
-          key={row.userId}
+          key={row.seatId}
           className={cx(
             "inline-flex items-center gap-1.5 rounded-full border border-line px-2.5 py-1 text-[13px]",
             muted ? "text-fg-muted" : "text-fg",

@@ -209,6 +209,11 @@ const CHECKED: Case[] = [
   ...evaluations.map((e) =>
     one("/app/api/evaluations/:id", `/app/api/evaluations/${e.id}`, EvaluationDetail),
   ),
+  each(
+    "/app/api/evaluations/:id/pools",
+    `/app/api/evaluations/${runningId}/pools`,
+    PoolSummary,
+  ),
   one(
     "/app/api/evaluations/:id/dashboard",
     `/app/api/evaluations/${runningId}/dashboard`,

@@ -38,7 +38,7 @@ function routes(
   return {
     [`GET /app/api/evaluations/${EVALUATION_ID}`]: ok(detail),
     [`GET /app/api/classrooms/${CLASSROOM}`]: ok(makeClassroomDetail({ id: CLASSROOM })),
-    "GET /app/api/pools": ok([
+    [`GET /app/api/evaluations/${EVALUATION_ID}/pools`]: ok([
       { id: id("pool", 1), name: "PRG1", visibility: "private", ownerId: "u", isPersonal: false, createdAt: detail.evaluation.createdAt, questionCount: 1 },
     ]),
     // The picker asks with the pool screen's own query string (FF-11).

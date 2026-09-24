@@ -64,6 +64,9 @@ function presenceOf(
   row: DashboardRow,
   t: ReturnType<typeof useT>,
 ): { tone: string; label: string; line: boolean; warn: boolean } {
+  if (row.userId === null) {
+    return { tone: "bg-line-strong", label: t("live.row.unclaimed"), line: true, warn: false };
+  }
   if (row.state === "not_started") {
     return { tone: "bg-line-strong", label: t("live.row.never"), line: true, warn: false };
   }
@@ -180,7 +183,7 @@ export function StudentGrid({
             const stick = active ? "bg-accent-soft" : "bg-surface group-hover:bg-surface-2/70";
             return (
               <tr
-                key={row.userId}
+                key={row.seatId}
                 className={cx(T.row, "group", active ? "bg-accent-soft" : T.rowHover)}
               >
                 <th scope="row" className={cx(T.td, "sticky left-0 z-10 text-left font-normal", stick)}>

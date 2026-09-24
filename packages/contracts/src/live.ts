@@ -297,7 +297,14 @@ export type DashboardCell = z.infer<typeof DashboardCell>;
 
 export const DashboardRow = z.object({
   attemptId: z.uuid().nullable(),
-  userId: z.uuid(),
+  /** The roster entry behind the row: the one key every row has. */
+  seatId: z.uuid(),
+  /**
+   * `null` for a roster entry nobody has claimed yet — a student imported
+   * from a list who has never signed in. The row is shown all the same: the
+   * class is who is on the roster, not who happens to have an account.
+   */
+  userId: z.uuid().nullable(),
   displayName: z.string(),
   /**
    * The row belongs to a STAFF seat: a teacher walking their own quiz as a

@@ -251,6 +251,7 @@ interface MockItem {
 
 interface MockRowState {
   attemptId: string | null;
+  seatId: string;
   userId: string;
   displayName: string;
   /** A teacher walking their own quiz (ADR-018): badged, counted nowhere. */
@@ -360,6 +361,7 @@ export function makeRows(e: MockEvaluation, started: boolean): MockRowState[] {
     const hasAttempt = started && progress > 0;
     return {
       attemptId: hasAttempt ? uuid() : null,
+      seatId: uuid(),
       userId: uuid(),
       displayName: `${student.nom}, ${student.prenom}`,
       staff: false,
@@ -555,6 +557,7 @@ function staffRow(e: MockEvaluation): MockRowState {
   const maxPoints = e.items.reduce((sum, i) => sum + i.points, 0);
   return {
     attemptId: uuid(),
+    seatId: uuid(),
     userId: ME_TEACHER.userId,
     displayName: `${ME_TEACHER.familyName}, ${ME_TEACHER.givenName}`,
     staff: true,
@@ -791,6 +794,13 @@ on("POST", "/app/api/classrooms/:id/evaluations", (m, body) => {
   return toEvaluation(e);
 });
 on("GET", "/app/api/evaluations/:id", (m) => evaluationDetail(evaluationOr404(m.groups!.id!)));
+// The picker's pools: the course's own, like the server (F-EVAL-01).
+on("GET", "/app/api/evaluations/:id/pools", (m) => {
+  const room = roomOr404(evaluationOr404(m.groups!.id!).classroomId);
+  return (coursePools[room.courseId] ?? [])
+    .map((id) => poolSummary(poolOr404(id)))
+    .sort((a, b) => a.name.localeCompare(b.name));
+});
 on("PATCH", "/app/api/evaluations/:id", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);
   const settings = body.settings as { lobby?: LobbyName } | undefined;

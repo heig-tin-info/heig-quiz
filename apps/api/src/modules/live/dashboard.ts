@@ -41,6 +41,7 @@ export async function dashboardView(
   const items = await joinedItems(db, evaluation.id);
   const roster = await db
     .select({
+      seatId: enrollments.id,
       userId: enrollments.userId,
       nom: enrollments.nom,
       prenom: enrollments.prenom,
@@ -91,8 +92,12 @@ export async function dashboardView(
   // query. A proposal shows as `pending`, a validated one as its verdict.
   const standing: ReadonlyMap<PairKey, GradingRecord> = await standingGradings(db, evaluation.id);
 
-  const userIds = roster.map((r) => r.userId).filter((id): id is string => id !== null);
-  const pseudonyms = uniquePseudonyms(evaluation.id, userIds);
+  // A claimed seat is named after its account, as it always was; an unclaimed
+  // one after its roster entry, until the student signs in.
+  const pseudonyms = uniquePseudonyms(
+    evaluation.id,
+    roster.map((r) => r.userId ?? r.seatId),
+  );
   const online = presence.online(evaluation.id);
   const maxPoints = totalPointsOf(items.map((i) => i.item));
 
@@ -119,22 +124,31 @@ export async function dashboardView(
   /** The live rate of each item, over the CLASS rows only (ADR-018). */
   const liveRates = new Map<string, number[]>();
 
+  /*
+   * EVERY seat is a row, claimed or not. A roster imported from a list is a
+   * class of unclaimed entries until each student signs in once; leaving them
+   * out read "Nobody on the roster" in front of twenty students who simply
+   * had not logged in yet.
+   */
   const rows: DashboardView["rows"] = await Promise.all(
-    seats
-    .filter((r) => r.userId !== null)
-    .map(async (entry) => {
-      const userId = entry.userId!;
-      const attempt = byUser.get(userId) ?? null;
+    seats.map(async (entry) => {
+      const userId = entry.userId;
+      const attempt = userId === null ? null : (byUser.get(userId) ?? null);
       const answered = attempt ? (byAttempt.get(attempt.id) ?? new Map()) : new Map();
       return {
         attemptId: attempt?.id ?? null,
+        seatId: entry.seatId,
         userId,
         staff: entry.staff,
         displayName: `${entry.prenom} ${entry.nom}`.trim() || entry.email,
-        pseudonym: pseudonyms.get(userId) ?? "—",
+        pseudonym: pseudonyms.get(userId ?? entry.seatId) ?? "—",
         state: (attempt?.state ?? "not_started") as AttemptState,
-        online: online.has(userId),
-        lastSeenAt: isoOrNull(presence.lastSeenAt(evaluation.id, userId) ?? attempt?.presentAt ?? null),
+        online: userId !== null && online.has(userId),
+        lastSeenAt: isoOrNull(
+          (userId === null ? null : presence.lastSeenAt(evaluation.id, userId)) ??
+            attempt?.presentAt ??
+            null,
+        ),
         deadlineAt: isoOrNull(attempt?.deadlineAt ?? null),
         timeBonusPercent: entry.timeBonusPercent,
         points: attempt ? pointsOf(standing, attempt.id, items) : null,

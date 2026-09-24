@@ -246,6 +246,15 @@ describe("items (F-EVAL-02, F-EVAL-03)", () => {
     ).rejects.toMatchObject({ code: "question_not_in_course", status: 422 });
   });
 
+  it("offers the picker the course's pools and no other (F-EVAL-01)", async () => {
+    const seed = await seedLive(db, { questions: 1 });
+    const other = await seedLive(db, { questions: 1 });
+    const viewer = { id: seed.teacherId, role: "teacher" };
+    const offered = await service.listCoursePools(db, seed.evaluationId, viewer);
+    expect(offered.map((p) => p.id)).toEqual([seed.poolId]);
+    expect(offered.map((p) => p.id)).not.toContain(other.poolId);
+  });
+
   it("reorders in one transaction, without colliding with its own unique index", async () => {
     const seed = await seedLive(db, { questions: 3 });
     const before = await service.itemRows(db, seed.evaluationId);

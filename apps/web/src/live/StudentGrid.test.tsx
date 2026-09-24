@@ -139,6 +139,22 @@ describe("StudentGrid — the rows", () => {
     expect(within(rowOf("Nadia Roux 1")).getAllByText("never connected").length).toBeGreaterThan(0);
   });
 
+  it("says a student on the roster has not signed in yet, rather than leaving them out", () => {
+    const view = viewIn("running", 2, 2);
+    view.rows[1] = {
+      ...view.rows[1]!,
+      userId: null,
+      attemptId: null,
+      state: "not_started",
+      online: false,
+    };
+    setup(view);
+    expect(
+      within(rowOf("Nadia Roux 1")).getAllByText("has not signed in to Quiz yet").length,
+    ).toBeGreaterThan(0);
+    expect(within(rowOf("Nadia Roux 1")).queryByText("never connected")).toBeNull();
+  });
+
   it("gives every cell an accessible name that says whose and which question", () => {
     setup(viewIn("running", 2, 3));
     expect(

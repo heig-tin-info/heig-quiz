@@ -79,5 +79,5 @@ export function completionOf(row: DashboardRow): { done: number; total: number; 
  */
 export function anonymousNumbers(rows: readonly DashboardRow[]): Map<string, number> {
   const order = [...rows].sort((a, b) => a.pseudonym.localeCompare(b.pseudonym, "en"));
-  return new Map(order.map((row, index) => [row.userId, index + 1]));
+  return new Map(order.map((row, index) => [row.seatId, index + 1]));
 }
