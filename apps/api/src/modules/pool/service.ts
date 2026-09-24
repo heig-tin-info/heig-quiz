@@ -11,6 +11,7 @@
  *     indexes (see `db/pool.ts`).
  */
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 
 import {
   and,
@@ -1643,6 +1644,19 @@ export async function putDraft(
   const draft = await draftOf(db, question.id);
   const { row, issues } = saveDraftConfig(question.type, body.config);
   const explanation = body.explanation ?? draft.explanation;
+  // Writing back what is already stored is not a change (F-QST-03: "the
+  // draft stays equal to the published version until the next change"). The
+  // stamp stays where it was, or a no-op save right after a publication
+  // would put the draft ahead of it and the question would read
+  // "unpublished changes" with nothing unpublished (#72, #74).
+  if (
+    draft.configVersion === row.configVersion &&
+    draft.explanation === explanation &&
+    // Through JSON, as jsonb stores it: an `undefined` key is no difference.
+    isDeepStrictEqual(draft.config, JSON.parse(JSON.stringify(row.config ?? null)))
+  ) {
+    return { updatedAt: draft.updatedAt.toISOString(), valid: issues.length === 0, issues };
+  }
   const now = new Date();
   await db.transaction(async (tx) => {
     await tx

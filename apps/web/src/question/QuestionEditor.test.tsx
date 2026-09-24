@@ -276,7 +276,57 @@ describe("QuestionEditor — mcq", () => {
     await waitFor(() =>
       expect(screen.getByLabelText("Statement")).toHaveTextContent("Restored from v1"),
     );
-    expect(calls.filter((c) => c.method === "PUT").length).toBeLessThanOrEqual(1);
+    // Shown, not written back: the server already holds it.
+    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DELAY_MS * 3));
+    expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
+  }, 20_000);
+
+  /*
+   * #72, #74: publishing reopens the draft with a fresh stamp, the refetch
+   * brought it home as a FOREIGN draft (newer than the editor's own save),
+   * and the editor saved it straight back — which put the draft after the
+   * publication, so the header and the pool list both read "unpublished
+   * changes" about a question that had none.
+   */
+  it("after publishing, writes nothing back and shows no unpublished changes", async () => {
+    const user = userEvent.setup();
+    const PUBLISHED_AT = "2026-09-20T10:00:05.000Z";
+    const version = {
+      number: 1,
+      publishedAt: PUBLISHED_AT,
+      publishedBy: "u-me",
+      changeNote: null,
+      deprecatedAt: null,
+      deprecationNote: null,
+    };
+    let served = mcqDetail();
+    const { calls } = mockFetch({
+      ...routes(mcqDetail()),
+      "GET /app/api/questions/q1": () => ok(served),
+      "POST /app/api/questions/q1/publish": () => {
+        const sent = calls.find((c) => c.method === "PUT")!.body as { config: unknown };
+        const base = mcqDetail();
+        served = mcqDetail({
+          draft: { ...base.draft, config: sent.config, updatedAt: PUBLISHED_AT },
+          versions: [version],
+          latestPublished: version,
+        });
+        return ok(version);
+      },
+    });
+    renderWithProviders(<QuestionEditor id="q1" navigate={vi.fn()} />);
+    await user.type(await screen.findByLabelText("Statement"), "!");
+    await waitFor(() => expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1));
+
+    await user.click(screen.getByRole("button", { name: "Publish" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Publish" }));
+    expect(await screen.findByText("published v1")).toBeInTheDocument();
+
+    // Long enough for a debounced save of the refetched draft to have left.
+    await new Promise((resolve) => setTimeout(resolve, AUTOSAVE_DELAY_MS * 3));
+    expect(calls.filter((c) => c.method === "PUT")).toHaveLength(1);
+    expect(screen.queryByText("unpublished changes")).not.toBeInTheDocument();
   }, 20_000);
 
   it("opens a blank, invalid draft without complaining about it", async () => {
