@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_MCQ_POLICY,
+  EvaluationPatch,
   EvaluationSettings,
   FeedbackPolicy,
   GradingScale,
@@ -69,5 +70,30 @@ describe("DEFAULT_MCQ_POLICY", () => {
   it("is a member of the wire enum", () => {
     expect(() => EvaluationSettings.parse({})).not.toThrow();
     expect(DEFAULT_MCQ_POLICY).toBe("all_or_nothing");
+  });
+});
+
+/*
+ * #71: a patch carries what the caller sent and nothing else. Under zod 4 a
+ * `.partial()` of a defaulted schema re-applies every default, and the
+ * service's merge then reset the timing and the waiting room of a take-home
+ * exercise the moment a teacher ticked "shuffle the questions".
+ */
+describe("EvaluationPatch", () => {
+  it("keeps a settings patch to the fields it names", () => {
+    expect(EvaluationPatch.parse({ settings: { shuffleItems: true } })).toEqual({
+      settings: { shuffleItems: true },
+    });
+  });
+
+  it("keeps a feedback patch to the fields it names", () => {
+    expect(EvaluationPatch.parse({ feedbackPolicy: { showKey: true } })).toEqual({
+      feedbackPolicy: { showKey: true },
+    });
+  });
+
+  it("still validates each field it carries", () => {
+    expect(EvaluationPatch.safeParse({ settings: { timing: "whenever" } }).success).toBe(false);
+    expect(EvaluationPatch.safeParse({ feedbackPolicy: { when: "later" } }).success).toBe(false);
   });
 });

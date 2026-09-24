@@ -233,12 +233,49 @@ export const EvaluationCreate = z.object({
 });
 export type EvaluationCreate = z.infer<typeof EvaluationCreate>;
 
+/*
+ * The two PARTIAL bodies of a patch, spelled out field by field and WITHOUT
+ * a single `.default()`. `EvaluationSettings.partial()` is not one: under
+ * zod 4 a field that is optional AND defaulted still receives its default
+ * when absent, so `{ shuffleItems: true }` parsed into the whole settings
+ * object with every other field at its default — and the service's merge
+ * then wrote `timing: "duration"` and `lobby: "manual"` over what the
+ * teacher had chosen (#71). A patch carries what the caller sent, nothing
+ * else; the defaults belong to creation only.
+ */
+
+/** `PATCH` of the settings: only the fields sent, merged over the stored ones. */
+export const EvaluationSettingsPatch = z.object({
+  navigation: Navigation.optional(),
+  presentation: Presentation.optional(),
+  lobby: LobbyMode.optional(),
+  shuffleItems: z.boolean().optional(),
+  shuffleChoices: z.boolean().optional(),
+  timing: Timing.optional(),
+  showProgressBar: z.boolean().optional(),
+  logVisibility: z.boolean().optional(),
+  requireFullscreen: z.boolean().optional(),
+  poll: EvaluationSettings.shape.poll,
+});
+export type EvaluationSettingsPatch = z.infer<typeof EvaluationSettingsPatch>;
+
+/** `PATCH` of the feedback policy: only the fields sent. */
+export const FeedbackPolicyPatch = z.object({
+  when: FeedbackPolicy.shape.when.unwrap().optional(),
+  showAnswer: z.boolean().optional(),
+  showKey: z.boolean().optional(),
+  showExplanation: z.boolean().optional(),
+  showHiddenCaseNames: z.boolean().optional(),
+  showTeacherComment: z.boolean().optional(),
+});
+export type FeedbackPolicyPatch = z.infer<typeof FeedbackPolicyPatch>;
+
 export const EvaluationPatch = z
   .object({
     title: z.string().trim().min(1).max(200).optional(),
-    settings: EvaluationSettings.partial().optional(),
+    settings: EvaluationSettingsPatch.optional(),
     gradingScale: GradingScale.optional(),
-    feedbackPolicy: FeedbackPolicy.partial().optional(),
+    feedbackPolicy: FeedbackPolicyPatch.optional(),
     mcqPolicy: McqPolicy.optional(),
     opensAt: z.iso.datetime().nullable().optional(),
     closesAt: z.iso.datetime().nullable().optional(),

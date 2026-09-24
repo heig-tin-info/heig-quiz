@@ -362,6 +362,47 @@ describe("patch and duplicate", () => {
     expect(service.feedbackOf(row).when).toBe("on_release");
   });
 
+  /*
+   * #71, through the real route and its schema: the bug was never in the
+   * service's merge but in what the body parsed into — every setting the
+   * patch did not name came back at its default and overwrote the stored one.
+   */
+  it("a patch changes the fields it names and nothing else (#71)", async () => {
+    const server = await testServer();
+    try {
+      const teacher = await server.signIn("teacher");
+      const seed = await seedLive(server.app.db, { teacherId: teacher.id, mode: "exercise" });
+      const url = `/app/api/evaluations/${seed.evaluationId}`;
+      const send = (payload: unknown) =>
+        server.app.inject({ method: "PATCH", url, headers: teacher.headers, payload });
+
+      // The take-home preset: a common end, no waiting room, feedback right away.
+      const homework = await send({
+        settings: { timing: "deadline", lobby: "skip", presentation: "continuous" },
+        feedbackPolicy: { when: "immediate", showKey: true },
+      });
+      expect(homework.statusCode).toBe(200);
+
+      const shuffled = await send({ settings: { shuffleItems: true } });
+      expect(shuffled.statusCode).toBe(200);
+      expect(shuffled.json().evaluation.settings).toMatchObject({
+        shuffleItems: true,
+        timing: "deadline",
+        lobby: "skip",
+        presentation: "continuous",
+      });
+
+      const keyless = await send({ feedbackPolicy: { showExplanation: true } });
+      expect(keyless.json().evaluation.feedbackPolicy).toMatchObject({
+        when: "immediate",
+        showKey: true,
+        showExplanation: true,
+      });
+    } finally {
+      await server.close();
+    }
+  });
+
   it("duplicates the items on the SAME frozen versions (F-EVAL-14)", async () => {
     const seed = await seedLive(db, { questions: 2 });
     const source = await reload(db, seed.evaluationId);
