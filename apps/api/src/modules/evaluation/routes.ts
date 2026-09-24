@@ -130,6 +130,15 @@ export async function evaluationPlugin(app: FastifyInstance) {
     ),
   );
 
+  /** The pools the question picker offers: the course's own (F-EVAL-01). */
+  app.get(
+    "/app/api/evaluations/:id/pools",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: staffEvaluation }, ({ req, scope }) =>
+      service.listCoursePools(app.db, scope.evaluation.id, req.user!),
+    ),
+  );
+
   app.patch(
     "/app/api/evaluations/:id",
     { preHandler: requireTeacher },

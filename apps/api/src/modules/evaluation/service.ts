@@ -39,6 +39,7 @@ import {
   type ItemPatch,
   type ItemRow,
   type McqPolicy,
+  type PoolSummary,
   ReleasedGrades,
 } from "@quiz/contracts";
 
@@ -61,10 +62,12 @@ import {
   enrollments,
   evaluationItems,
   evaluations,
+  pools,
   questionVersions,
   questions,
   users,
 } from "../../db/schema.js";
+import { listPools } from "../pool/service.js";
 
 export type EvaluationRecord = typeof evaluations.$inferSelect;
 
@@ -509,10 +512,18 @@ export async function staffRosterWithAttempt(
   db: Db,
   evaluation: EvaluationRecord,
 ): Promise<
-  { userId: string; nom: string; prenom: string; email: string; timeBonusPercent: number }[]
+  {
+    seatId: string;
+    userId: string;
+    nom: string;
+    prenom: string;
+    email: string;
+    timeBonusPercent: number;
+  }[]
 > {
   return db
     .select({
+      seatId: enrollments.id,
       userId: sql<string>`${enrollments.userId}`,
       nom: enrollments.nom,
       prenom: enrollments.prenom,
@@ -1069,6 +1080,22 @@ async function coursePoolIds(db: Db, evaluationId: string): Promise<Set<string>>
     .innerJoin(coursePools, eq(coursePools.courseId, classrooms.courseId))
     .where(eq(evaluations.id, evaluationId));
   return new Set(rows.map((r) => r.poolId));
+}
+
+/**
+ * The pools the question picker offers (F-EVAL-01): exactly the ones linked
+ * to the evaluation's course, the same set `addItems` enforces — a pool the
+ * teacher reaches but the course does not draw from would only end in
+ * `422 question_not_in_course`.
+ */
+export async function listCoursePools(
+  db: Db,
+  evaluationId: string,
+  viewer: { id: string; role: string },
+): Promise<PoolSummary[]> {
+  const ids = await coursePoolIds(db, evaluationId);
+  if (ids.size === 0) return [];
+  return listPools(db, inArray(pools.id, [...ids]), viewer);
 }
 
 /** The latest PUBLISHED version of each question, or null when there is none. */

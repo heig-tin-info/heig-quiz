@@ -1282,6 +1282,35 @@ describe("dashboard read model (F-DASH-01..04)", () => {
       .cells.find((c) => c.itemId === items[0]!.id)!;
     expect(cell.summary).toContain("typed");
   });
+
+  it("lists a roster entry nobody has claimed yet, as a row that never started", async () => {
+    const { evaluation } = await running({ students: 1, questions: 1 });
+    // Imported from a list, the student has never signed in: no account.
+    const seatId = randomUUID();
+    await db.insert(enrollments).values({
+      id: seatId,
+      classroomId: evaluation.classroomId,
+      nom: "Zwick",
+      prenom: "Arnaud",
+      email: `arnaud-${seatId.slice(0, 6)}@heig.test`,
+    });
+
+    const view = await service.dashboardView(db, evaluation, {
+      now: clock.now(),
+      includeAnswers: false,
+      includeResults: false,
+    });
+    expect(view.rows).toHaveLength(2);
+    const pending = view.rows.find((r) => r.seatId === seatId)!;
+    expect(pending.userId).toBeNull();
+    expect(pending.attemptId).toBeNull();
+    expect(pending.state).toBe("not_started");
+    expect(pending.online).toBe(false);
+    expect(pending.displayName).toBe("Arnaud Zwick");
+    expect(pending.pseudonym).toMatch(/^\w+ \w+/);
+    // Every row has its own key, claimed or not.
+    expect(new Set(view.rows.map((r) => r.seatId)).size).toBe(2);
+  });
 });
 
 describe("the teacher preview (§4.3)", () => {

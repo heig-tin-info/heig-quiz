@@ -73,7 +73,7 @@ export function InspectModal({
   });
 
   const rowsWithAttempt = view.rows.filter((r) => r.attemptId !== null);
-  const rowIndex = rowsWithAttempt.findIndex((r) => r.userId === row.userId);
+  const rowIndex = rowsWithAttempt.findIndex((r) => r.seatId === row.seatId);
   const goRow = (delta: number) => {
     const next = rowsWithAttempt[rowIndex + delta];
     if (next) onSelect(next, itemId);

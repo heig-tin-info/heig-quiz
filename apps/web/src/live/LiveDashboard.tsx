@@ -65,7 +65,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   const toastError = useErrorToast();
   const [toggles, setToggles] = useState<Toggles>({ names: true, answers: true, results: true });
   const [fullscreen, toggleFullscreen] = useFullscreen();
-  const [selected, setSelected] = useState<{ attemptId: string; userId: string; itemId: string } | null>(
+  const [selected, setSelected] = useState<{ attemptId: string; seatId: string; itemId: string } | null>(
     null,
   );
 
@@ -168,7 +168,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
     (row: DashboardRow) =>
       toggles.names
         ? row.displayName
-        : t("live.row.anonymous", { n: numbers.get(row.userId) ?? 0 }),
+        : t("live.row.anonymous", { n: numbers.get(row.seatId) ?? 0 }),
     [toggles.names, numbers, t],
   );
 
@@ -197,7 +197,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
 
   const selectCell = useCallback((row: DashboardRow, itemId: string) => {
     if (row.attemptId === null) return;
-    setSelected({ attemptId: row.attemptId, userId: row.userId, itemId });
+    setSelected({ attemptId: row.attemptId, seatId: row.seatId, itemId });
   }, []);
 
   useLiveCommands({ t, state: evaluationState, controls, navigate, id });
@@ -268,7 +268,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   const { view } = state;
   const counts = presence(state);
   const selectedRow =
-    selected === null ? null : (view.rows.find((r) => r.userId === selected.userId) ?? null);
+    selected === null ? null : (view.rows.find((r) => r.seatId === selected.seatId) ?? null);
   const lobby = evaluationState === "lobby" || evaluationState === "scheduled";
 
   const body = (
