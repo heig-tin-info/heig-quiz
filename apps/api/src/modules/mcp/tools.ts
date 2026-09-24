@@ -390,8 +390,9 @@ export const TOOLS: Tool[] = [
     name: "add_questions_to_evaluation",
     title: "Add questions to an evaluation",
     description:
-      "Appends published questions to an evaluation that nobody has started yet. Each question must come " +
-      "from a pool linked to the evaluation's course.",
+      "Appends published questions to an evaluation still in `draft` or `scheduled`: once it is opened to " +
+      "students (lobby or later) its questions are frozen. Each question must come from a pool linked to " +
+      "the evaluation's course.",
     input: z.object({ evaluationId: Id, questionIds: z.array(Id).min(1).max(200) }),
     annotations: WRITE,
     run: (api, a) => api.post(`/evaluations/${a.evaluationId}/items`, { questionIds: a.questionIds }),

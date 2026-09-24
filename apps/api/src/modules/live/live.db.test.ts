@@ -893,7 +893,7 @@ describe("running code (POST /attempts/:id/run)", () => {
     compare?: { ignoreCase: boolean },
   ) {
     const seed = await seedLive(db, { questions: 0 });
-    const row = await applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
+    const draft = await reload(db, seed.evaluationId);
     const { createQuestion, putDraft, publishQuestion } = await import("../pool/service.js");
     const questionId = await createQuestion(db, {
       poolId: seed.poolId,
@@ -916,9 +916,11 @@ describe("running code (POST /attempts/:id/run)", () => {
     await publishQuestion(db, question!, { userId: seed.teacherId });
     const { addItems } = await import("../evaluation/service.js");
     const { loadConfig, typeOf } = await import("../pool/config.js");
+    // The item goes in while the evaluation is a draft: an opened one has a
+    // frozen list (issue #79).
     await addItems(
       db,
-      row,
+      draft,
       [questionId],
       (type, version) =>
         typeOf(type).defaultPoints(
@@ -926,6 +928,7 @@ describe("running code (POST /attempts/:id/run)", () => {
         ),
       { attemptCount: 0 },
     );
+    const row = await applyState(db, draft, "running", clock.now());
     const participant = (await service.participantOf(db, row, seed.studentIds[0]!))!;
     const created = await service.ensureAttempt(db, row, participant, clock.now());
     const attempt = await service.beginAttempt(db, row, created, participant, clock.now());

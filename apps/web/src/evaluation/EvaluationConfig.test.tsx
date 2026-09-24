@@ -228,6 +228,20 @@ describe("EvaluationConfig", () => {
     expect(screen.getByRole("button", { name: /add questions/i })).toBeDisabled();
   });
 
+  it("freezes the question list once the evaluation is opened, nobody entered yet (#79)", async () => {
+    const base = makeEvaluationDetail();
+    mockFetch(routes({ ...base, evaluation: { ...base.evaluation, state: "running" } }));
+    renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+      route: "/evaluations/x?step=questions",
+    });
+    expect(await screen.findByText(/its questions are frozen/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /add questions/i })).toBeDisabled();
+    for (const remove of screen.getAllByRole("button", { name: /^remove/i })) {
+      expect(remove).toBeDisabled();
+    }
+    for (const points of screen.getAllByRole("spinbutton")) expect(points).toBeDisabled();
+  });
+
   it("renders the failed state of its own query", async () => {
     mockFetch({});
     renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />);

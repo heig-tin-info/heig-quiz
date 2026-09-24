@@ -1470,6 +1470,9 @@ export const en = {
   "eval.resetAttempt.failed": "Could not delete your test attempt.",
   "eval.saveFailed": "Could not save this setting.",
   "eval.locked": "A student has already started: the structure is frozen.",
+  "eval.questions.frozen": "This evaluation has been opened to students: its questions are frozen.",
+  "eval.questions.frozen.body":
+    "Everyone who enters gets exactly this list, so questions can no longer be added, removed, reordered or re-weighted.",
   "eval.step.questions": "Questions",
   "eval.step.timing": "Time and mode",
   "eval.step.launch": "Launch",
@@ -1492,7 +1495,6 @@ export const en = {
   "eval.questions.pointsShort": "pts",
   "eval.step.timing.desc": "When the class takes it, and the rules they play by.",
   "eval.questions.updateAll": "Update {n} questions",
-  "eval.questions.remove": "Remove from the evaluation",
   "eval.questions.removeItem": "Remove {name} from the evaluation",
   "eval.questions.updateItem": "Use the latest version of {name}",
   "eval.questions.reorder": "Reorder {name}",

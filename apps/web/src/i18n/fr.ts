@@ -1458,6 +1458,9 @@ export const fr: Record<keyof Dict, string> = {
   "eval.resetAttempt.failed": "Votre tentative de test n'a pas pu être supprimée.",
   "eval.saveFailed": "Ce réglage n'a pas pu être enregistré.",
   "eval.locked": "Un étudiant a déjà commencé : la structure est figée.",
+  "eval.questions.frozen": "Cette évaluation a été ouverte aux étudiants : ses questions sont figées.",
+  "eval.questions.frozen.body":
+    "Chaque personne qui y entre reçoit exactement cette liste : on ne peut plus ajouter, retirer, réordonner ni repondérer de questions.",
   "eval.step.questions": "Questions",
   "eval.step.timing": "Temps et mode",
   "eval.step.launch": "Démarrage",
@@ -1480,7 +1483,6 @@ export const fr: Record<keyof Dict, string> = {
   "eval.questions.pointsShort": "pts",
   "eval.step.timing.desc": "Quand la classe la passe, et selon quelles règles.",
   "eval.questions.updateAll": "Mettre à jour {n} questions",
-  "eval.questions.remove": "Retirer de l'évaluation",
   "eval.questions.removeItem": "Retirer {name} de l'évaluation",
   "eval.questions.updateItem": "Passer {name} à la dernière version",
   "eval.questions.reorder": "Déplacer {name}",

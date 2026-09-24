@@ -93,6 +93,10 @@ const scenes = [
   // state as well as by its id, so these URLs are stable across reloads.
   { name: "eval-list", role: "teacher", path: "/classrooms/r1" },
   { name: "eval-config-questions", role: "teacher", path: "/evaluations/draft?step=questions" },
+  // Issue #79: once opened, the list is frozen — in the lobby nobody has
+  // entered yet, while running somebody has an attempt; two messages.
+  { name: "eval-config-questions-opened", role: "teacher", path: "/evaluations/lobby?step=questions" },
+  { name: "eval-config-questions-locked", role: "teacher", path: "/evaluations/running?step=questions" },
   { name: "eval-config-picker", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { name: /add questions/i }).first().click() },
   { name: "eval-config-milestone-gap", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { name: /^reorder /i }).first().hover() },
   { name: "eval-config-timing", role: "teacher", path: "/evaluations/draft?step=timing" },

@@ -129,10 +129,11 @@ beforeAll(async () => {
   });
   await publishQuestion(db, question!, { userId: teacher.id });
 
-  const running = await applyState(db, await reload(db, seed.evaluationId), "running", server.clock.now());
+  // The item goes in while the evaluation is a draft: an opened one has a
+  // frozen list (issue #79).
   await addItems(
     db,
-    running,
+    await reload(db, seed.evaluationId),
     [questionId],
     (type, version) =>
       typeOf(type).defaultPoints(
@@ -140,6 +141,7 @@ beforeAll(async () => {
       ),
     { attemptCount: 0 },
   );
+  const running = await applyState(db, await reload(db, seed.evaluationId), "running", server.clock.now());
   const items = await itemRows(db, running.id);
   circuitItemId = items.find((i) => i.id !== shortItemId)!.id;
 
