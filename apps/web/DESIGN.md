@@ -239,6 +239,38 @@ with a keyboard-reachable dismiss button.
   260 ms for sheets. Easing `cubic-bezier(0.2, 0, 0, 1)`. Presses scale to
   0.97. Honors `prefers-reduced-motion`.
 
+## Coach marks
+
+The speech bubbles that introduce a screen to a newcomer (`src/coach/`). They
+are the one surface allowed to break the motion and finish rules above,
+because they are not the page: they talk ABOUT it, and must read as a voice
+over it, not as one more card in it.
+
+- What: a TOUR per screen (two to five bubbles, in order, frame first) played
+  the first time the screen is reached, and one NUDGE per screen offered to
+  someone who looks stuck (pointer wandering, controls brushed past, the page
+  scrolled back and forth, nothing clicked for 20 s). The text and the
+  targets are data (`coach/catalog.ts`); a target is `[data-coach="…"]` on
+  the element, or a tab's id. A step whose target is missing is skipped and
+  stays unread, so it shows the day the control does.
+- Memory: what was read is on the ACCOUNT (`Me.coach.seen`), not in the
+  browser, so a teacher is not taught the same screen on a second device.
+  Settings has the switch and "Show them again"; every lone bubble has "No
+  more tips", which turns them all off.
+- Never: on a full-screen view (an exam, a projection, a join page), over a
+  dialog (the layer hides while one is open), or blocking — no backdrop, no
+  focus taken. Escape skips; clicking the control pointed at counts as read.
+- Shape: 320 px, 20 px radius, a 2 px rim in a slowly turning conic gradient
+  from `accent` to `info` (the colours of the logo's bubbles), a tail filled
+  with the same gradient, the overlay shadow plus a faint accent halo. The
+  target wears a 2 px accent ring 6 px out, with two ripples. `Z.coach` sits
+  over the page and its sticky bars, under every dialog.
+- Motion: pops out of its own tail (scale 0.35 → 1.06 → 1, a degree of
+  rotation, 620 ms), floats (4 px, 3.2 s), glides to the next target with an
+  overshooting ease (500 ms) while its content cross-fades, and ends a walk
+  with a burst of sparks. Under `prefers-reduced-motion` all of it is off:
+  the bubble simply appears where it belongs.
+
 ## Browser state
 
 The few things a screen reads from the browser rather than from the server

@@ -242,6 +242,7 @@ function SearchBox({
         className="w-full"
         aria-label={t("pool.search")}
         placeholder={t("pool.search")}
+        data-coach="pool.search"
         {...combo.inputProps}
         value={value}
         onChange={(e) => {

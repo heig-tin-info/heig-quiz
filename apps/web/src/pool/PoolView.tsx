@@ -258,7 +258,7 @@ export function PoolView({ id, navigate }: { id: string; navigate: (r: Route) =>
               {t("pool.readOnly")}
             </Badge>
           ) : (
-            <Button onClick={() => setCreating(QUESTION_TYPE_IDS[0]!)}>
+            <Button data-coach="pool.new-question" onClick={() => setCreating(QUESTION_TYPE_IDS[0]!)}>
               <Plus /> {t("pool.newQuestion")}
             </Button>
           )

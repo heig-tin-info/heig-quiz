@@ -314,6 +314,7 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
             <Tip label={seat ? t("roster.joined") : null}>
               <Button
                 variant="secondary"
+                data-coach="classroom.join"
                 disabled={seat != null}
                 loading={join.isPending}
                 onClick={() => join.mutate()}
@@ -325,7 +326,7 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
                 list carries its own, and two accent fills would make the
                 squint test ambiguous. */}
             {tab === "roster" ? (
-              <Button onClick={() => setImporting(true)}>
+              <Button data-coach="classroom.add" onClick={() => setImporting(true)}>
                 <UserPlus /> {t("roster.add")}
               </Button>
             ) : null}
@@ -388,6 +389,7 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
               // means "not known yet" is worse than no count at all.
               count: evaluations.data?.length,
               icon: ClipboardList,
+              coach: "classroom.tab.evaluations",
             },
           ]}
         />

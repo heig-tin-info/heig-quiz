@@ -7,6 +7,7 @@ import { api, useMe } from "./api";
 import { Logo } from "./Header";
 import { useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
+import { CoachLayer } from "./coach/CoachLayer";
 import { useRoute, type Route, type RouteOf } from "./router";
 import { Shell } from "./Shell";
 import {
@@ -311,6 +312,7 @@ export default function App() {
   if (FULL_SCREEN.has(shown.view)) return page;
 
   return (
+    <>
     <Shell
       me={me.data}
       route={route}
@@ -323,5 +325,9 @@ export default function App() {
     >
       {page}
     </Shell>
+    {/* Inside the frame only: a full-screen view (an exam, a projection)
+        returned above and never gets a bubble. */}
+    <CoachLayer me={me.data} view={shown.view} teacherUi={teacherUi} />
+    </>
   );
 }

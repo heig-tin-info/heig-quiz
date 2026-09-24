@@ -702,7 +702,7 @@ export function PageHeader({
           <span className="min-w-0">{title}</span>
           {/* `HelpIcon` carries its own `shrink-0` and its own placement on
               the line: a title says WHICH topic, never where the "?" goes. */}
-          {help ? <HelpIcon topic={help} /> : null}
+          {help ? <HelpIcon topic={help} coach="page.help" /> : null}
         </h1>
         {description ? <div className="mt-1.5 text-sm text-fg-muted">{description}</div> : null}
       </div>
@@ -971,7 +971,8 @@ export function Tabs<V extends string>({
 }: {
   value: V;
   onChange: (v: V) => void;
-  items: { value: V; label: string; count?: number; icon?: IconType }[];
+  /** `coach` names the tab as a coach mark's anchor (`coach/catalog.ts`). */
+  items: { value: V; label: string; count?: number; icon?: IconType; coach?: string }[];
   className?: string;
   idPrefix?: string;
   /** Accessible name of the tablist when the surrounding heading is not enough. */
@@ -1057,6 +1058,7 @@ export function Tabs<V extends string>({
               // would name ids no element carries (W2).
               aria-controls={idPrefix && active ? `${idPrefix}-panel-${it.value}` : undefined}
               aria-selected={active}
+              data-coach={it.coach}
               tabIndex={i === roving ? 0 : -1}
               onClick={() => onChange(it.value)}
               className={cx(

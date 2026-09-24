@@ -506,7 +506,7 @@ export function PoolsPage({ navigate }: { navigate: (r: Route) => void }) {
           // Not while the list is empty: the empty state below carries the
           // same action, and two accent fills of one action is noise.
           rows.length > 0 ? (
-            <Button onClick={() => setCreating(true)}>
+            <Button data-coach="pools.new" onClick={() => setCreating(true)}>
               <Plus /> {t("pools.new")}
             </Button>
           ) : undefined

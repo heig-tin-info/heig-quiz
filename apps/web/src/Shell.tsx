@@ -52,6 +52,7 @@ function NavItem({
   onClick,
   trailing,
   expanded,
+  coach,
 }: {
   icon?: IconType;
   label: ReactNode;
@@ -60,10 +61,13 @@ function NavItem({
   trailing?: ReactNode;
   /** Set on a row that also discloses something under itself. */
   expanded?: boolean;
+  /** A coach mark's anchor (`coach/catalog.ts`). */
+  coach?: string;
 }) {
   return (
     <button
       type="button"
+      data-coach={coach}
       onClick={onClick}
       aria-current={active ? "page" : undefined}
       aria-expanded={expanded}
@@ -201,6 +205,7 @@ function Nav({
           // not the list of classrooms it used to be.
           label={teacherUi ? t("nav.courses") : t("shome.title")}
           active={section === "home"}
+          coach="nav.home"
           onClick={() => go({ view: "home" })}
         />
         {teacherUi ? (
@@ -211,6 +216,7 @@ function Nav({
               // The three pool routes are one place as far as navigation goes:
               // a question is read inside its pool, not beside it.
               active={section === "pools"}
+              coach="nav.pools"
               expanded={poolNav.state !== "collapsed"}
               // One row, two jobs, and they never collide: from outside the
               // section the click NAVIGATES (and unfolds a collapsed tree);
@@ -235,6 +241,7 @@ function Nav({
               icon={Vote}
               label={t("poll.nav")}
               active={section === "polls"}
+              coach="nav.polls"
               onClick={() => go({ view: "polls" })}
             />
           </>
@@ -301,7 +308,7 @@ function ShortcutStrip() {
   const shortcuts = useActiveShortcuts().slice(0, SHORTCUT_STRIP_CAP);
   if (shortcuts.length === 0) return null;
   return (
-    <div className="border-t border-line px-3 py-2.5">
+    <div className="border-t border-line px-3 py-2.5" data-coach="shell.shortcuts">
       <p className="mb-1.5 px-0.5 text-[11px] font-semibold uppercase tracking-wider text-fg-faint">
         {t("shortcuts.title")}
       </p>
@@ -462,7 +469,11 @@ export function Shell({
             column where the eye leaves the navigation. */}
         <div className="border-t border-line p-2">
           {onToggleStudentView ? (
-            <div className="mb-2 flex justify-center">{viewToggle(false)}</div>
+            <div className="mb-2 flex justify-center">
+              <span className="inline-flex rounded-full" data-coach="shell.view-toggle">
+                {viewToggle(false)}
+              </span>
+            </div>
           ) : null}
           {userMenu(false)}
         </div>
