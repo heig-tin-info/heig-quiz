@@ -21,9 +21,9 @@ import { Flag, GripVertical, ListOrdered, Plus, RefreshCw, Trash2, X } from "luc
 import { useEffect, useMemo, useState } from "react";
 
 import type { EvaluationDetail, ItemRow } from "@quiz/contracts";
+import { itemListLock } from "@quiz/domain";
 
 import { api } from "../api";
-import { useConfirm } from "../confirm";
 import { useT, type TFunction } from "../i18n";
 import { useToast } from "../notify";
 import { typeLabel } from "../questionTypes";
@@ -289,11 +289,14 @@ function ItemCard({
 export function ItemsStep({ detail }: { detail: EvaluationDetail }) {
   const t = useT();
   const qc = useQueryClient();
-  const confirm = useConfirm();
   const toast = useToast();
   const [adding, setAdding] = useState(false);
   const id = detail.evaluation.id;
-  const locked = !detail.editable;
+  // The same rule the server applies (issue #79): the list is frozen once a
+  // student has an attempt OR once the evaluation has been opened, so every
+  // control below is disabled instead of failing with a 409.
+  const lock = itemListLock(detail.evaluation.state, detail.attemptCount);
+  const locked = lock !== null;
   const stale = new Set(detail.staleItems);
 
   /**
@@ -372,23 +375,10 @@ export function ItemsStep({ detail }: { detail: EvaluationDetail }) {
     reorder.mutate(next);
   }
 
-  const removeItem = async (item: ItemRow) => {
-    // Removing an item takes nothing away from the pool — the question stays
-    // where it was written. It is worth a dialog only once somebody has an
-    // attempt on this evaluation, where it is no longer an edit but a change
-    // to what a class has already seen.
-    if (detail.attemptCount > 0) {
-      const confirmed = await confirm({
-        title: t("eval.questions.remove"),
-        message: item.internalName,
-        confirmLabel: t("common.delete"),
-        cancelLabel: t("common.cancel"),
-        danger: true,
-      });
-      if (!confirmed) return;
-    }
-    remove.mutate(item.id);
-  };
+  // Removing an item takes nothing away from the pool — the question stays
+  // where it was written — and it is only possible while nobody can have
+  // seen the list, so it is an edit and not worth a dialog.
+  const removeItem = (item: ItemRow) => remove.mutate(item.id);
 
   const addButton = (
     <Button onClick={() => setAdding(true)} disabled={locked}>
@@ -407,7 +397,12 @@ export function ItemsStep({ detail }: { detail: EvaluationDetail }) {
         actions={items.length > 0 ? addButton : undefined}
       />
 
-      {locked ? <Alert tone="warning" title={t("eval.locked")} /> : null}
+      {lock === "attempts" ? <Alert tone="warning" title={t("eval.locked")} /> : null}
+      {lock === "opened" ? (
+        <Alert tone="warning" title={t("eval.questions.frozen")}>
+          {t("eval.questions.frozen.body")}
+        </Alert>
+      ) : null}
 
       {stale.size > 0 && !locked ? (
         <Alert
@@ -469,7 +464,7 @@ export function ItemsStep({ detail }: { detail: EvaluationDetail }) {
                         patch.mutate({ itemId: item.id, body: { milestone } })
                       }
                       onUpdate={() => updateVersions.mutate([item.id])}
-                      onRemove={() => void removeItem(item)}
+                      onRemove={() => removeItem(item)}
                     />
                   ))}
                 </ul>

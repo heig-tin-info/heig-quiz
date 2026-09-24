@@ -243,6 +243,102 @@ describe("items (F-EVAL-02, F-EVAL-03)", () => {
   });
 });
 
+describe("the item list freezes once the evaluation is opened (issue #79)", () => {
+  /** An evaluation moved straight to `state`, with nobody having entered. */
+  async function opened(state: service.EvaluationRecord["state"], questions = 2) {
+    const seed = await seedLive(db, { questions });
+    await db.update(evaluations).set({ state }).where(eq(evaluations.id, seed.evaluationId));
+    return { seed, row: await reload(db, seed.evaluationId) };
+  }
+
+  it("refuses every write to the list from the lobby on, with no attempt at all", async () => {
+    for (const state of ["lobby", "running", "paused", "closed", "grading", "released"] as const) {
+      const { seed, row } = await opened(state);
+      const ctx = { attemptCount: 0 };
+      const items = await service.itemRows(db, seed.evaluationId);
+      const frozen = { code: "items_frozen", status: 409 };
+      await expect(
+        service.addItems(db, row, seed.questionIds.slice(0, 1), points, ctx),
+        state,
+      ).rejects.toMatchObject(frozen);
+      await expect(service.deleteItem(db, row, items[0]!.id, ctx), state).rejects.toMatchObject(
+        frozen,
+      );
+      await expect(
+        service.patchItem(db, row, items[0]!.id, { points: 9 }, ctx),
+        state,
+      ).rejects.toMatchObject(frozen);
+      await expect(
+        service.patchItem(db, row, items[0]!.id, { milestone: true }, ctx),
+        state,
+      ).rejects.toMatchObject(frozen);
+      await expect(
+        service.reorderItems(db, row, [...items].reverse().map((i) => i.id), ctx),
+        state,
+      ).rejects.toMatchObject(frozen);
+      await expect(service.updateVersions(db, row, undefined, ctx), state).rejects.toMatchObject(
+        frozen,
+      );
+      // Nothing moved.
+      expect(await service.itemRows(db, seed.evaluationId), state).toEqual(items);
+    }
+  });
+
+  it("keeps the list editable while scheduled", async () => {
+    const { seed, row } = await opened("scheduled", 3);
+    const items = await service.itemRows(db, seed.evaluationId);
+    const after = await service.deleteItem(db, row, items[0]!.id, { attemptCount: 0 });
+    expect(after).toHaveLength(2);
+  });
+
+  it("thaws when an opened evaluation nobody entered goes back to draft", async () => {
+    const { seed, row } = await opened("lobby", 2);
+    const draft = await service.transition(db, row, "draft", clock.now());
+    const items = await service.itemRows(db, seed.evaluationId);
+    const after = await service.deleteItem(db, draft, items[0]!.id, { attemptCount: 0 });
+    expect(after).toHaveLength(1);
+  });
+
+  it("answers 409 items_frozen on every item route of a running evaluation", async () => {
+    const server = await testServer();
+    try {
+      const teacher = await server.signIn("teacher");
+      const mine = await seedLive(server.app.db, { teacherId: teacher.id, questions: 2 });
+      await server.app.db
+        .update(evaluations)
+        .set({ state: "running", startedAt: server.clock.now() })
+        .where(eq(evaluations.id, mine.evaluationId));
+      const base = `/app/api/evaluations/${mine.evaluationId}`;
+      const itemUrl = `${base}/items/${mine.itemIds[0]}`;
+      const frozen = {
+        error: "items_frozen",
+        message: "the evaluation has been opened: its questions are frozen",
+      };
+      const writes: [string, "POST" | "PATCH" | "PUT" | "DELETE", string, unknown][] = [
+        ["add items", "POST", `${base}/items`, { questionIds: mine.questionIds.slice(0, 1) }],
+        ["patch item", "PATCH", itemUrl, { points: 3 }],
+        ["reorder", "PUT", `${base}/items/order`, { itemIds: [...mine.itemIds].reverse() }],
+        ["delete item", "DELETE", itemUrl, undefined],
+        ["update versions", "POST", `${base}/items/update-versions`, {}],
+      ];
+      for (const [name, method, url, payload] of writes) {
+        const res = await server.app.inject({
+          method,
+          url,
+          headers: teacher.headers,
+          ...(payload === undefined ? {} : { payload }),
+        });
+        expect(res.statusCode, name).toBe(409);
+        expect(res.json(), name).toEqual(frozen);
+      }
+      const detail = await server.app.inject({ method: "GET", url: base, headers: teacher.headers });
+      expect(detail.json().items).toHaveLength(2);
+    } finally {
+      await server.close();
+    }
+  });
+});
+
 describe("patch and duplicate", () => {
   it("accepts a title but refuses a structural change once an attempt exists", async () => {
     const seed = await seedLive(db);

@@ -5,6 +5,10 @@
  *   - an item freezes ONE published question version at the moment it is
  *     added (F-EVAL-03); the only way to move it is `updateVersions`, and
  *     that door closes as soon as an attempt exists;
+ *   - the item list itself (add, remove, reorder, points, milestones,
+ *     versions) is editable only in `draft` and `scheduled` with no attempt,
+ *     the rule `@quiz/domain/itemList` owns and {@link assertItemListEditable}
+ *     applies (issue #79);
  *   - the state machine is a table, not a pile of `if`s: {@link TRANSITIONS}
  *     says what is legal and {@link guardTransition} says why an otherwise
  *     legal move is refused. The operational half (start, pause, close) is in
@@ -38,7 +42,12 @@ import {
   ReleasedGrades,
 } from "@quiz/contracts";
 
-import { round2 } from "@quiz/domain";
+import {
+  EVALUATION_STATES,
+  itemListLock,
+  round2,
+  type EvaluationStateName,
+} from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import { isUniqueViolation, type Db } from "../../db/client.js";
@@ -56,6 +65,14 @@ import {
 } from "../../db/schema.js";
 
 export type EvaluationRecord = typeof evaluations.$inferSelect;
+
+/**
+ * `@quiz/domain` spells the state union again (it depends on no contract);
+ * the two must stay the same set, both ways, at compile time.
+ */
+const _statesAgree: readonly EvaluationState[] = EVALUATION_STATES;
+const _statesAgreeBack: readonly EvaluationStateName[] = [] as EvaluationState[];
+void [_statesAgree, _statesAgreeBack];
 type ItemRecord = typeof evaluationItems.$inferSelect;
 
 // --- Failures -------------------------------------------------------------
@@ -92,6 +109,32 @@ class AttemptsExist extends EvaluationError {
   constructor() {
     super("attempts_exist", 409, "versions cannot be updated once an attempt exists");
   }
+}
+
+/**
+ * The evaluation has been opened to students (`lobby` or later): its list of
+ * questions is frozen even while nobody has entered yet (issue #79).
+ */
+export class ItemsFrozen extends EvaluationError {
+  constructor() {
+    super("items_frozen", 409, "the evaluation has been opened: its questions are frozen");
+  }
+}
+
+/**
+ * THE gate of every write to the item list — add, remove, reorder, points,
+ * milestone, version — as `@quiz/domain/itemList` decides it. An attempt
+ * keeps the code it always had (`locked`, or `attempts_exist` for a version
+ * update); an opened evaluation nobody has entered answers `items_frozen`.
+ */
+function assertItemListEditable(
+  row: EvaluationRecord,
+  ctx: { attemptCount: number },
+  onAttempts: () => EvaluationError = () => new Locked(),
+): void {
+  const lock = itemListLock(row.state, ctx.attemptCount);
+  if (lock === "attempts") throw onAttempts();
+  if (lock === "opened") throw new ItemsFrozen();
 }
 
 class NoPublishedVersion extends EvaluationError {
@@ -1042,7 +1085,7 @@ export async function addItems(
   ctx: { attemptCount: number },
   keyed: (type: string, version: typeof questionVersions.$inferSelect) => boolean = () => true,
 ): Promise<ItemRow[]> {
-  if (ctx.attemptCount > 0) throw new Locked();
+  assertItemListEditable(row, ctx);
   const allowed = await coursePoolIds(db, row.id);
   const found = await db.select().from(questions).where(inArray(questions.id, questionIds));
   const byQuestion = new Map(found.map((q) => [q.id, q]));
@@ -1083,7 +1126,7 @@ export async function patchItem(
   patch: ItemPatch,
   ctx: { attemptCount: number },
 ): Promise<ItemRow[]> {
-  if (ctx.attemptCount > 0) throw new Locked();
+  assertItemListEditable(row, ctx);
   const next: Partial<typeof evaluationItems.$inferInsert> = {};
   if (patch.points !== undefined) next.points = patch.points;
   if (patch.milestone !== undefined) next.milestone = patch.milestone;
@@ -1100,7 +1143,7 @@ export async function deleteItem(
   itemId: string,
   ctx: { attemptCount: number },
 ): Promise<ItemRow[]> {
-  if (ctx.attemptCount > 0) throw new Locked();
+  assertItemListEditable(row, ctx);
   await db
     .delete(evaluationItems)
     .where(and(eq(evaluationItems.id, itemId), eq(evaluationItems.evaluationId, row.id)));
@@ -1145,7 +1188,7 @@ export async function reorderItems(
   itemIds: string[],
   ctx: { attemptCount: number },
 ): Promise<ItemRow[]> {
-  if (ctx.attemptCount > 0) throw new Locked();
+  assertItemListEditable(row, ctx);
   const existing = await db
     .select({ id: evaluationItems.id })
     .from(evaluationItems)
@@ -1161,8 +1204,8 @@ export async function reorderItems(
 
 /**
  * The one-click "update to the latest version" of F-EVAL-03. Refused as soon
- * as an attempt exists: a student who already answered would silently be
- * answering another question.
+ * as an attempt exists — a student who already answered would silently be
+ * answering another question — and once the evaluation is opened (#79).
  */
 export async function updateVersions(
   db: Db,
@@ -1170,7 +1213,7 @@ export async function updateVersions(
   itemIds: string[] | undefined,
   ctx: { attemptCount: number },
 ): Promise<ItemRow[]> {
-  if (ctx.attemptCount > 0) throw new AttemptsExist();
+  assertItemListEditable(row, ctx, () => new AttemptsExist());
   const joined = await joinedItems(db, row.id);
   const targets = itemIds === undefined ? joined : joined.filter((j) => itemIds.includes(j.item.id));
   const versions = await latestPublished(db, [...new Set(targets.map((j) => j.question.id))]);

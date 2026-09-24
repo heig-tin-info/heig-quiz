@@ -1031,14 +1031,16 @@ Reuses `packages/domain/src/roster.ts` verbatim + a `timeBonusPercent` column in
 | GET | `/evaluations/:id` | T | — | `EvaluationDetail { evaluation, items: ItemRow[], totalPoints, staleItems: uuid[], attemptCount }` |
 | PATCH | `/evaluations/:id` | T | `{ title?, settings?, gradingScale?, feedbackPolicy?, opensAt?, closesAt?, durationS?, accessCode?, ipAllowlist? }` | `EvaluationDetail` — `409 locked` if any attempt exists and the field is structural |
 | DELETE | `/evaluations/:id` | T | `{ confirmTitle }` | `204` |
-| POST | `/evaluations/:id/items` | T | `{ questionIds: uuid[] }` | `ItemRow[]` — freezes each question's current published version; `422 no_published_version` |
-| PATCH | `/evaluations/:id/items/:itemId` | T | `{ points?, milestone? }` | `ItemRow` |
-| PUT | `/evaluations/:id/items/order` | T | `{ itemIds: uuid[] }` | `ItemRow[]` |
-| DELETE | `/evaluations/:id/items/:itemId` | T | — | `204` |
-| POST | `/evaluations/:id/items/update-versions` | T | `{ itemIds?: uuid[] }` (omit = all) | `ItemRow[]` — `409 attempts_exist` (F-EVAL-03) |
+| POST | `/evaluations/:id/items` | T | `{ questionIds: uuid[] }` | `ItemRow[]` — freezes each question's current published version; `422 no_published_version`; `409 locked` / `409 items_frozen` (below) |
+| PATCH | `/evaluations/:id/items/:itemId` | T | `{ points?, milestone? }` | `ItemRow` — `409 locked` / `409 items_frozen` |
+| PUT | `/evaluations/:id/items/order` | T | `{ itemIds: uuid[] }` | `ItemRow[]` — `409 locked` / `409 items_frozen` |
+| DELETE | `/evaluations/:id/items/:itemId` | T | — | `204` — `409 locked` / `409 items_frozen` |
+| POST | `/evaluations/:id/items/update-versions` | T | `{ itemIds?: uuid[] }` (omit = all) | `ItemRow[]` — `409 attempts_exist` (F-EVAL-03) / `409 items_frozen` |
 | POST | `/evaluations/:id/duplicate` | T | `{ classroomId?, title }` | `Evaluation` |
 | POST | `/evaluations/:id/preview` | T | — | `AttemptView` with fake attempt (`seed: 0`, read-only) |
 | POST | `/evaluations/:id/state` | T | `{ to: "draft"\|"scheduled"\|"lobby" }` | `Evaluation` — the *operational* transitions are in `live` below |
+
+The item list (the five `/items` routes) is editable only in `draft` and `scheduled` with no attempt (`@quiz/domain` `itemListLock`, issue #79): an attempt answers `409 locked` (`attempts_exist` for update-versions), and an evaluation opened to students (`lobby` and later) that nobody has entered yet answers `409 items_frozen`.
 
 `ItemRow` = `{ id, position, points, milestone, questionId, type, internalName, versionNumber, latestVersionNumber, deprecated }`.
 

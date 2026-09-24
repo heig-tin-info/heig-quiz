@@ -4,10 +4,12 @@
  * course, classroom, pool, three questions of three types, an exercise —
  * through the ordinary routes, with the real question types.
  */
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { ApiTokenCreated } from "@quiz/contracts";
 
+import { evaluations } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { checkConfig, describeQuestionType } from "./questionTypes.js";
 import { TOOLS } from "./tools.js";
@@ -165,6 +167,33 @@ describe("an authoring session", () => {
     expect(evaluation.evaluation).toMatchObject({ mode: "exercise", state: "draft" });
     expect(evaluation.items).toHaveLength(3);
     expect(evaluation.url).toContain(`/evaluations/${evaluation.evaluation.id}`);
+  });
+
+  it("cannot add questions to an evaluation once it is opened (issue #79)", async () => {
+    const course = await ok("create_course", { name: "Gelé", code: "FROZEN-MCP" });
+    const room = await ok("create_classroom", { courseId: course.id, name: "Gelé 2026" });
+    const pool = await ok("create_pool", { name: "Gelé" });
+    await ok("link_pool_to_course", { courseId: course.id, poolId: pool.id });
+    const example = (describeQuestionType("mcq") as { example: unknown }).example;
+    const first = await ok("create_question", { poolId: pool.id, type: "mcq", internalName: "frozen-1", config: example });
+    const second = await ok("create_question", { poolId: pool.id, type: "mcq", internalName: "frozen-2", config: example });
+    const created = await ok("create_evaluation", {
+      classroomId: room.id,
+      title: "Déjà lancée",
+      questionIds: [first.questionId],
+    });
+    await server.app.db
+      .update(evaluations)
+      .set({ state: "running" })
+      .where(eq(evaluations.id, created.evaluation.id));
+
+    const { isError, data } = await call("add_questions_to_evaluation", {
+      evaluationId: created.evaluation.id,
+      questionIds: [second.questionId],
+    });
+    expect(isError).toBe(true);
+    expect(data).toMatchObject({ status: 409, body: { error: "items_frozen" } });
+    expect((await ok("get_evaluation", { evaluationId: created.evaluation.id })).items).toHaveLength(1);
   });
 
   it("refuses an invalid config with its issues, and creates nothing", async () => {

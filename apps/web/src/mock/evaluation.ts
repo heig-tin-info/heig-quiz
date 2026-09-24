@@ -1,5 +1,6 @@
 /** Section 3 of the mock — see `index.ts` for the layout. */
 import {
+  itemListLock,
   parseCloze,
   round2,
   splitTemplate,
@@ -817,8 +818,35 @@ on("POST", "/app/api/evaluations/:id/duplicate", (m, body) => {
   evaluations.push(copy);
   return toEvaluation(copy);
 });
+/**
+ * The item-list gate of the API (issue #79), with the same codes: the screen
+ * disables its controls, and a stale tab that still tries is refused here
+ * exactly as it would be for real.
+ */
+const ATTEMPTS_REFUSAL = {
+  locked: "an attempt exists: the structure is frozen",
+  attempts_exist: "versions cannot be updated once an attempt exists",
+} as const;
+
+function assertItemListEditable(
+  e: MockEvaluation,
+  onAttempts: keyof typeof ATTEMPTS_REFUSAL = "locked",
+): void {
+  const lock = itemListLock(e.state, attemptCountOf(e));
+  if (lock === "attempts") {
+    throw new MockPayload(409, { error: onAttempts, message: ATTEMPTS_REFUSAL[onAttempts] });
+  }
+  if (lock === "opened") {
+    throw new MockPayload(409, {
+      error: "items_frozen",
+      message: "the evaluation has been opened: its questions are frozen",
+    });
+  }
+}
+
 on("POST", "/app/api/evaluations/:id/items/update-versions", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);
+  assertItemListEditable(e, "attempts_exist");
   const ids = (body.itemIds as string[] | undefined) ?? null;
   for (const item of e.items) {
     if (ids !== null && !ids.includes(item.id)) continue;
@@ -828,6 +856,7 @@ on("POST", "/app/api/evaluations/:id/items/update-versions", (m, body) => {
 });
 on("POST", "/app/api/evaluations/:id/items", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);
+  assertItemListEditable(e);
   for (const questionId of (body.questionIds as string[] | undefined) ?? []) {
     const q = questions.find((x) => x.id === questionId);
     const latest = q?.versions.at(-1);
@@ -859,6 +888,7 @@ on("POST", "/app/api/evaluations/:id/items", (m, body) => {
 });
 on("PATCH", "/app/api/evaluations/:id/items/:itemId", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);
+  assertItemListEditable(e);
   const item = e.items.find((i) => i.id === m.groups!.itemId);
   if (!item) throw new MockError(404, "Item not found");
   if (typeof body.points === "number") item.points = body.points;
@@ -867,6 +897,7 @@ on("PATCH", "/app/api/evaluations/:id/items/:itemId", (m, body) => {
 });
 on("PUT", "/app/api/evaluations/:id/items/order", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);
+  assertItemListEditable(e);
   const order = (body.itemIds as string[]) ?? [];
   e.items.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
   e.items.forEach((i, index) => (i.position = index + 1));
@@ -874,6 +905,7 @@ on("PUT", "/app/api/evaluations/:id/items/order", (m, body) => {
 });
 on("DELETE", "/app/api/evaluations/:id/items/:itemId", (m) => {
   const e = evaluationOr404(m.groups!.id!);
+  assertItemListEditable(e);
   e.items = e.items.filter((i) => i.id !== m.groups!.itemId);
   e.items.forEach((i, index) => (i.position = index + 1));
   return undefined;
