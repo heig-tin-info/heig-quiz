@@ -45,6 +45,8 @@ import {
 import {
   EVALUATION_STATES,
   itemListLock,
+  isFeedbackAllowed,
+  missingTimingFields,
   round2,
   type EvaluationStateName,
 } from "@quiz/domain";
@@ -77,12 +79,17 @@ type ItemRecord = typeof evaluationItems.$inferSelect;
 
 // --- Failures -------------------------------------------------------------
 
-/** Base of everything this module refuses; the routes map `code` to a status. */
+/**
+ * Base of everything this module refuses; the routes map `code` to a status.
+ * `details` travels in the body beside `error` and `message`: the machine
+ * half of a refusal the screen translates rather than prints (#76).
+ */
 export class EvaluationError extends Error {
   constructor(
     readonly code: string,
     readonly status: number,
     message?: string,
+    readonly details?: Readonly<Record<string, unknown>>,
   ) {
     super(message ?? code);
     this.name = "EvaluationError";
@@ -94,14 +101,29 @@ export class IllegalTransition extends EvaluationError {
     readonly from: EvaluationState,
     readonly to: EvaluationState,
     reason?: string,
+    details?: Readonly<Record<string, unknown>>,
   ) {
-    super("illegal_transition", 409, reason ?? `${from} -> ${to} is not a legal transition`);
+    super("illegal_transition", 409, reason ?? `${from} -> ${to} is not a legal transition`, details);
   }
 }
 
 export class Locked extends EvaluationError {
   constructor(message = "an attempt exists: the structure is frozen") {
     super("locked", 409, message);
+  }
+}
+
+/**
+ * F-EVAL-11 (#78): `immediate` feedback in an exam, or in an exercise given a
+ * waiting room — both sat in class (`isInClass` in `@quiz/domain`).
+ */
+class FeedbackNotAllowed extends EvaluationError {
+  constructor(when: string) {
+    super(
+      "feedback_not_allowed",
+      422,
+      `feedback "${when}" is not allowed for an evaluation sat in class (F-EVAL-11)`,
+    );
   }
 }
 
@@ -201,26 +223,6 @@ export function isLegalTransition(from: EvaluationState, to: EvaluationState): b
   return TRANSITIONS[from].includes(to);
 }
 
-/** F-EVAL-04: an `exam` must announce when it ends, one way or the other. */
-function timingIsValid(row: {
-  mode: EvaluationMode;
-  settings: EvaluationSettings;
-  durationS: number | null;
-  opensAt: Date | null;
-  closesAt: Date | null;
-}): boolean {
-  switch (row.settings.timing) {
-    case "duration":
-      return row.durationS !== null && row.durationS > 0;
-    case "deadline":
-      // `opensAt` is required too: it is the base of the accommodation
-      // window in this timing (decision D8).
-      return row.closesAt !== null && row.opensAt !== null;
-    case "manual":
-      return row.mode !== "exam";
-  }
-}
-
 interface TransitionContext {
   itemCount: number;
   attemptCount: number;
@@ -240,10 +242,27 @@ export function guardTransition(
 
   if (to === "scheduled" || to === "lobby" || to === "running") {
     if (ctx.itemCount === 0) {
-      throw new IllegalTransition(from, to, "an evaluation needs at least one question");
+      throw new IllegalTransition(from, to, "an evaluation needs at least one question", {
+        reason: "no_items",
+      });
     }
-    if (!timingIsValid({ ...row, settings: settingsOf(row) })) {
-      throw new IllegalTransition(from, to, "the timing settings are incomplete (F-EVAL-04)");
+    // F-EVAL-04 and decision D8, the same rule the configuration screen
+    // applies before it lets the teacher reach the launch step (#76). This
+    // check stays as the defence: the screen is not the only client.
+    const missing = missingTimingFields({
+      mode: row.mode,
+      timing: settingsOf(row).timing,
+      durationS: row.durationS,
+      opensAt: row.opensAt,
+      closesAt: row.closesAt,
+    });
+    if (missing.length > 0) {
+      throw new IllegalTransition(
+        from,
+        to,
+        `the timing settings are incomplete (F-EVAL-04): ${missing.join(", ")}`,
+        { reason: "timing_incomplete", missing },
+      );
     }
   }
   if (to === "paused" && row.mode !== "exam") {
@@ -799,12 +818,20 @@ export async function patchEvaluation(
   if (patch.accessCode !== undefined) next.accessCode = patch.accessCode;
   if (patch.ipAllowlist !== undefined) next.ipAllowlist = patch.ipAllowlist;
 
-  // `immediate` feedback during an exam would hand the key out mid-exam
-  // (F-EVAL-11): the policy is silently clamped, never accepted as written.
-  const feedback = (next.feedbackPolicy ?? feedbackOf(row)) as FeedbackPolicy;
-  const mode = row.mode;
-  if (mode === "exam" && feedback.when === "immediate") {
-    next.feedbackPolicy = { ...feedback, when: "on_release" };
+  // `immediate` feedback in class would hand the answers to the first
+  // students while the others are still working (F-EVAL-11, #78). The pair
+  // the patch LEAVES behind is checked, whichever half it moved: adding a
+  // waiting room under `immediate` is refused like asking for `immediate`
+  // under a waiting room. The screen sends the fallback with the change
+  // (`feedbackWhenFor`), so only an inconsistent client meets this 422. A
+  // patch that touches neither half passes, so a row stored before the rule
+  // can still be renamed.
+  if (patch.feedbackPolicy?.when !== undefined || patch.settings?.lobby !== undefined) {
+    const when = ((next.feedbackPolicy ?? feedbackOf(row)) as FeedbackPolicy).when;
+    const lobby = ((next.settings ?? settingsOf(row)) as EvaluationSettings).lobby;
+    if (!isFeedbackAllowed({ mode: row.mode, lobby }, when)) {
+      throw new FeedbackNotAllowed(when);
+    }
   }
 
   await db.update(evaluations).set(next).where(eq(evaluations.id, row.id));

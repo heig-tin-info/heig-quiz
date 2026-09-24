@@ -116,9 +116,12 @@ describe("EvaluationConfig", () => {
 
   it("a preset writes the settings it names", async () => {
     const user = userEvent.setup();
+    const exercise = makeEvaluationDetail({
+      evaluation: { ...makeEvaluationDetail().evaluation, mode: "exercise" },
+    });
     const { calls } = mockFetch(
-      routes(makeEvaluationDetail(), {
-        [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(makeEvaluationDetail()),
+      routes(exercise, {
+        [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(exercise),
       }),
     );
     renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
@@ -133,6 +136,9 @@ describe("EvaluationConfig", () => {
         durationS: null,
         feedbackPolicy: { when: "immediate" },
       });
+      // A common end needs its opening time (#76): the preset writes both.
+      expect(patch?.body).toHaveProperty("opensAt", expect.any(String));
+      expect(patch?.body).toHaveProperty("closesAt", expect.any(String));
     });
   });
 
@@ -163,6 +169,102 @@ describe("EvaluationConfig", () => {
     await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
     expect(await screen.findByRole("radio", { name: /^on release$/i })).toBeInTheDocument();
     expect(screen.queryByRole("radio", { name: /^right away$/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/not offered in class/i)).toBeInTheDocument();
+  });
+
+  it("the take-home preset asks an exam for feedback on release, never right away (#78)", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch(
+      routes(makeEvaluationDetail(), {
+        [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(makeEvaluationDetail()),
+      }),
+    );
+    renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+      route: "/evaluations/x?step=timing",
+    });
+    await user.click(await screen.findByRole("button", { name: /homework exercise/i }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PATCH")?.body).toMatchObject({
+        feedbackPolicy: { when: "on_release" },
+      }),
+    );
+  });
+
+  /*
+   * #78: "in class" is not only the exam mode. An exercise given a waiting
+   * room starts everybody together, and immediate feedback would reach the
+   * first students while the others are still working.
+   */
+  describe("immediate feedback in class (#78)", () => {
+    const exercise = (lobby: "skip" | "manual", when: "on_release" | "immediate") =>
+      makeEvaluationDetail({
+        evaluation: {
+          ...makeEvaluationDetail().evaluation,
+          mode: "exercise",
+          settings: { ...makeEvaluationDetail().evaluation.settings, lobby },
+          feedbackPolicy: { ...makeEvaluationDetail().evaluation.feedbackPolicy, when },
+        },
+      });
+
+    it("offers it to a take-home exercise", async () => {
+      const user = userEvent.setup();
+      mockFetch(routes(exercise("skip", "immediate")));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
+      expect(await screen.findByRole("radio", { name: /^right away$/i })).toBeChecked();
+      expect(screen.queryByText(/not offered in class/i)).toBeNull();
+    });
+
+    it("hides it, and says why, for an exercise with a waiting room", async () => {
+      const user = userEvent.setup();
+      mockFetch(routes(exercise("manual", "on_release")));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
+      expect(await screen.findByRole("radio", { name: /^on release$/i })).toBeChecked();
+      expect(screen.queryByRole("radio", { name: /^right away$/i })).toBeNull();
+      expect(screen.getByText(/not offered in class/i)).toBeInTheDocument();
+    });
+
+    it("brings the policy back to 'on release' in the same patch that adds a waiting room", async () => {
+      const user = userEvent.setup();
+      const detail = exercise("skip", "immediate");
+      const { calls } = mockFetch(
+        routes(detail, { [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(detail) }),
+      );
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
+      await user.click(await screen.findByRole("radio", { name: /^you start$/i }));
+      await waitFor(() =>
+        expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({
+          settings: { lobby: "manual" },
+          feedbackPolicy: { when: "on_release" },
+        }),
+      );
+    });
+
+    it("leaves the policy alone when the waiting room changes nothing about it", async () => {
+      const user = userEvent.setup();
+      const detail = exercise("skip", "on_release");
+      const { calls } = mockFetch(
+        routes(detail, { [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(detail) }),
+      );
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
+      await user.click(await screen.findByRole("radio", { name: /^you start$/i }));
+      await waitFor(() =>
+        expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({
+          settings: { lobby: "manual" },
+        }),
+      );
+    });
   });
 
   /*
@@ -217,6 +319,87 @@ describe("EvaluationConfig", () => {
     });
     expect(await screen.findByText(/add at least one question/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeDisabled();
+  });
+
+  /*
+   * #76: a common end with no opening time used to reach the launch step,
+   * where "Open the waiting room" failed with the server's English message.
+   */
+  describe("an incomplete timing (#76)", () => {
+    const takeHome = () =>
+      makeEvaluationDetail({
+        evaluation: {
+          ...makeEvaluationDetail().evaluation,
+          mode: "exercise",
+          settings: { ...makeEvaluationDetail().evaluation.settings, timing: "deadline", lobby: "skip" },
+          durationS: null,
+          opensAt: null,
+          closesAt: "2026-10-01T10:00:00.000Z",
+        },
+      });
+
+    it("keeps 'Go to launch' on the step, and points at the missing field", async () => {
+      const user = userEvent.setup();
+      mockFetch(routes(takeHome()));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+
+      const opensAt = await screen.findByLabelText(/^opens at$/i);
+      expect(opensAt).not.toHaveAttribute("aria-invalid");
+      await user.click(screen.getByRole("button", { name: /^go to launch$/i }));
+
+      expect(screen.queryByRole("button", { name: /open the waiting room/i })).toBeNull();
+      expect(opensAt).toHaveAttribute("aria-invalid", "true");
+      expect(opensAt).toHaveAccessibleDescription(/enter the opening time/i);
+      expect(opensAt).toHaveFocus();
+      // The closing time is set: only the missing field is marked.
+      expect(screen.getByLabelText(/^closes at$/i)).not.toHaveAttribute("aria-invalid");
+    });
+
+    it("goes to the launch step once the timing is complete", async () => {
+      const user = userEvent.setup();
+      const complete = takeHome();
+      complete.evaluation.opensAt = "2026-09-24T08:00:00.000Z";
+      mockFetch(routes(complete));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      await user.click(await screen.findByRole("button", { name: /^go to launch$/i }));
+      expect(await screen.findByRole("button", { name: /open the waiting room/i })).toBeEnabled();
+    });
+
+    it("says what is missing on the launch step reached by its tab, and offers no launch", async () => {
+      mockFetch(routes(takeHome()));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=launch",
+      });
+      expect(await screen.findByText(/finish the timing in time and mode/i)).toBeInTheDocument();
+      expect(screen.getByText(/enter the opening time/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /schedule it/i })).toBeDisabled();
+    });
+
+    it("translates the server's refusal instead of printing it", async () => {
+      const user = userEvent.setup();
+      mockFetch(
+        routes(makeEvaluationDetail(), {
+          [`POST /app/api/evaluations/${EVALUATION_ID}/state`]: fail(409, {
+            error: "illegal_transition",
+            message: "the timing settings are incomplete (F-EVAL-04): opensAt",
+            reason: "timing_incomplete",
+            missing: ["opensAt"],
+          }),
+        }),
+      );
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=launch",
+      });
+      await user.click(await screen.findByRole("button", { name: /open the waiting room/i }));
+      expect(await screen.findByText(/did not change state/i)).toBeInTheDocument();
+      expect(screen.getByText(/enter the opening time/i)).toBeInTheDocument();
+      expect(screen.queryByText(/F-EVAL-04/)).toBeNull();
+    });
   });
 
   it("freezes the structure once a student has started", async () => {

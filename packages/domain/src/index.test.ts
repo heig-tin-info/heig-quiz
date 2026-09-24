@@ -5,6 +5,7 @@ describe("@quiz/domain public surface", () => {
   it("exports every rule the plan names, plus the seeded shuffle from @quiz/core", () => {
     const expected = [
       "GRACE_MS",
+      "allowedFeedbackWhen",
       "assembleSource",
       "attemptDeadline",
       "clozeStudentTemplate",
@@ -15,6 +16,7 @@ describe("@quiz/domain public surface", () => {
       "gradeFromPoints",
       "hashSeed",
       "mcqFraction",
+      "missingTimingFields",
       "matchShortAnswer",
       "parseCloze",
       "parseRosterCsv",

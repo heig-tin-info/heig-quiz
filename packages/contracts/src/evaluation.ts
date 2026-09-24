@@ -233,12 +233,56 @@ export const EvaluationCreate = z.object({
 });
 export type EvaluationCreate = z.infer<typeof EvaluationCreate>;
 
+/*
+ * The two PARTIAL bodies of a patch, spelled out field by field and WITHOUT
+ * a single `.default()`. `EvaluationSettings.partial()` is not one: under
+ * zod 4 a field that is optional AND defaulted still receives its default
+ * when absent, so `{ shuffleItems: true }` parsed into the whole settings
+ * object with every other field at its default — and the service's merge
+ * then wrote `timing: "duration"` and `lobby: "manual"` over what the
+ * teacher had chosen (#71). A patch carries what the caller sent, nothing
+ * else; the defaults belong to creation only.
+ */
+
+/** `PATCH` of the settings: only the fields sent, merged over the stored ones. */
+export const EvaluationSettingsPatch = z.object({
+  navigation: Navigation.optional(),
+  presentation: Presentation.optional(),
+  lobby: LobbyMode.optional(),
+  shuffleItems: z.boolean().optional(),
+  shuffleChoices: z.boolean().optional(),
+  timing: Timing.optional(),
+  showProgressBar: z.boolean().optional(),
+  logVisibility: z.boolean().optional(),
+  requireFullscreen: z.boolean().optional(),
+  poll: EvaluationSettings.shape.poll,
+});
+export type EvaluationSettingsPatch = z.infer<typeof EvaluationSettingsPatch>;
+
+/** `PATCH` of the feedback policy: only the fields sent. */
+export const FeedbackPolicyPatch = z.object({
+  when: FeedbackPolicy.shape.when.unwrap().optional(),
+  showAnswer: z.boolean().optional(),
+  showKey: z.boolean().optional(),
+  showExplanation: z.boolean().optional(),
+  showHiddenCaseNames: z.boolean().optional(),
+  showTeacherComment: z.boolean().optional(),
+});
+export type FeedbackPolicyPatch = z.infer<typeof FeedbackPolicyPatch>;
+
+// A field added to the full body and forgotten here would be silently
+// stripped from every patch: the two key sets must stay equal, both ways.
+type SameKeys<A, B> = [keyof A] extends [keyof B] ? ([keyof B] extends [keyof A] ? true : false) : false;
+const _settingsPatchKeys: SameKeys<EvaluationSettings, Required<EvaluationSettingsPatch>> = true;
+const _feedbackPatchKeys: SameKeys<FeedbackPolicy, Required<FeedbackPolicyPatch>> = true;
+void [_settingsPatchKeys, _feedbackPatchKeys];
+
 export const EvaluationPatch = z
   .object({
     title: z.string().trim().min(1).max(200).optional(),
-    settings: EvaluationSettings.partial().optional(),
+    settings: EvaluationSettingsPatch.optional(),
     gradingScale: GradingScale.optional(),
-    feedbackPolicy: FeedbackPolicy.partial().optional(),
+    feedbackPolicy: FeedbackPolicyPatch.optional(),
     mcqPolicy: McqPolicy.optional(),
     opensAt: z.iso.datetime().nullable().optional(),
     closesAt: z.iso.datetime().nullable().optional(),
@@ -282,6 +326,21 @@ export const EvaluationStateBody = z.object({
   to: z.enum(["draft", "scheduled", "lobby"]),
 });
 export type EvaluationStateBody = z.infer<typeof EvaluationStateBody>;
+
+/**
+ * The body of a `409 illegal_transition` on `POST /evaluations/:id/state`
+ * (and on the live `start`). `reason` is set when the move is legal but the
+ * evaluation is not ready for it, and `missing` then names the timing fields
+ * to fill (F-EVAL-04, decision D8) — the screen translates these rather than
+ * printing `message`, which is for logs and API clients (#76).
+ */
+export const TransitionRefusal = z.object({
+  error: z.literal("illegal_transition"),
+  message: z.string(),
+  reason: z.enum(["no_items", "timing_incomplete"]).optional(),
+  missing: z.array(z.enum(["durationS", "opensAt", "closesAt", "timing"])).optional(),
+});
+export type TransitionRefusal = z.infer<typeof TransitionRefusal>;
 
 /** `/evaluations/:id/items/:itemId` */
 export const ItemParam = z.object({ id: z.uuid(), itemId: z.uuid() });

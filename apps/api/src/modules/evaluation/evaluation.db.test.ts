@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { TransitionRefusal } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
 import { TestClock } from "../../clock.js";
@@ -102,6 +103,52 @@ describe("state machine (§5.1)", () => {
       .where(eq(evaluations.id, row.id));
     const fixed = await reload(db, seed.evaluationId);
     expect((await service.transition(db, fixed, "scheduled", clock.now())).state).toBe("scheduled");
+  });
+
+  /*
+   * #76: the take-home preset writes a common end but no opening time, and
+   * the opening time is the base of the extra time in that timing (D8). The
+   * refusal names the field, so the screen can say which one to fill.
+   */
+  it("refuses to open a common-end evaluation without its opening time, and says which field (#76)", async () => {
+    const server = await testServer();
+    try {
+      const teacher = await server.signIn("teacher");
+      const seed = await seedLive(server.app.db, {
+        teacherId: teacher.id,
+        mode: "exercise",
+        durationS: null,
+        settings: { timing: "deadline", lobby: "skip" },
+        closesAt: new Date(clock.now().getTime() + 7 * 24 * 3_600_000),
+      });
+      const url = `/app/api/evaluations/${seed.evaluationId}`;
+      const open = () =>
+        server.app.inject({
+          method: "POST",
+          url: `${url}/state`,
+          headers: teacher.headers,
+          payload: { to: "lobby" },
+        });
+
+      const refused = await open();
+      expect(refused.statusCode).toBe(409);
+      expect(TransitionRefusal.parse(refused.json())).toMatchObject({
+        error: "illegal_transition",
+        reason: "timing_incomplete",
+        missing: ["opensAt"],
+      });
+
+      const patched = await server.app.inject({
+        method: "PATCH",
+        url,
+        headers: teacher.headers,
+        payload: { opensAt: clock.now().toISOString() },
+      });
+      expect(patched.statusCode).toBe(200);
+      expect((await open()).statusCode).toBe(200);
+    } finally {
+      await server.close();
+    }
   });
 
   it("refuses to pause anything but an exam", async () => {
@@ -351,15 +398,103 @@ describe("patch and duplicate", () => {
     ).rejects.toMatchObject({ code: "locked", status: 409 });
   });
 
-  it("never lets an exam give immediate feedback (F-EVAL-11)", async () => {
+  it("refuses immediate feedback to an exam (F-EVAL-11)", async () => {
     const seed = await seedLive(db);
-    const row = await service.patchEvaluation(
+    const row = await reload(db, seed.evaluationId);
+    await expect(
+      service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, { attemptCount: 0 }),
+    ).rejects.toMatchObject({ code: "feedback_not_allowed", status: 422 });
+    // Nothing was written: the refusal is not a clamp.
+    expect(service.feedbackOf(await reload(db, seed.evaluationId)).when).toBe("on_release");
+  });
+
+  /*
+   * #78: an exercise sat in class — a waiting room makes everybody start
+   * together — must not hand out the answers while the others still work.
+   * The pair is checked whichever half the patch moves.
+   */
+  it("refuses immediate feedback to an exercise with a waiting room, from either side (#78)", async () => {
+    const seed = await seedLive(db, { mode: "exercise", settings: { lobby: "skip" } });
+    let row = await reload(db, seed.evaluationId);
+    // Take-home: allowed.
+    row = await service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, {
+      attemptCount: 0,
+    });
+    expect(service.feedbackOf(row).when).toBe("immediate");
+
+    // Adding a waiting room under `immediate` is refused…
+    await expect(
+      service.patchEvaluation(db, row, { settings: { lobby: "manual" } }, { attemptCount: 0 }),
+    ).rejects.toMatchObject({ code: "feedback_not_allowed", status: 422 });
+    // …and accepted when the same patch brings the policy back, as the screen does.
+    row = await service.patchEvaluation(
       db,
-      await reload(db, seed.evaluationId),
-      { feedbackPolicy: { when: "immediate" } },
+      row,
+      { settings: { lobby: "manual" }, feedbackPolicy: { when: "on_release" } },
       { attemptCount: 0 },
     );
-    expect(service.feedbackOf(row).when).toBe("on_release");
+    expect(service.settingsOf(row).lobby).toBe("manual");
+
+    // Asking for `immediate` under a waiting room is refused too.
+    await expect(
+      service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, { attemptCount: 0 }),
+    ).rejects.toMatchObject({ code: "feedback_not_allowed" });
+  });
+
+  it("still renames an evaluation stored with a pair the rule now refuses (#78)", async () => {
+    const seed = await seedLive(db, { mode: "exercise", settings: { lobby: "manual" } });
+    await db
+      .update(evaluations)
+      .set({ feedbackPolicy: { ...service.feedbackOf(await reload(db, seed.evaluationId)), when: "immediate" } })
+      .where(eq(evaluations.id, seed.evaluationId));
+    const renamed = await service.patchEvaluation(
+      db,
+      await reload(db, seed.evaluationId),
+      { title: "Renamed", feedbackPolicy: { showKey: true } },
+      { attemptCount: 0 },
+    );
+    expect(renamed.title).toBe("Renamed");
+  });
+
+  /*
+   * #71, through the real route and its schema: the bug was never in the
+   * service's merge but in what the body parsed into — every setting the
+   * patch did not name came back at its default and overwrote the stored one.
+   */
+  it("a patch changes the fields it names and nothing else (#71)", async () => {
+    const server = await testServer();
+    try {
+      const teacher = await server.signIn("teacher");
+      const seed = await seedLive(server.app.db, { teacherId: teacher.id, mode: "exercise" });
+      const url = `/app/api/evaluations/${seed.evaluationId}`;
+      const send = (payload: unknown) =>
+        server.app.inject({ method: "PATCH", url, headers: teacher.headers, payload });
+
+      // The take-home preset: a common end, no waiting room, feedback right away.
+      const homework = await send({
+        settings: { timing: "deadline", lobby: "skip", presentation: "continuous" },
+        feedbackPolicy: { when: "immediate", showKey: true },
+      });
+      expect(homework.statusCode).toBe(200);
+
+      const shuffled = await send({ settings: { shuffleItems: true } });
+      expect(shuffled.statusCode).toBe(200);
+      expect(shuffled.json().evaluation.settings).toMatchObject({
+        shuffleItems: true,
+        timing: "deadline",
+        lobby: "skip",
+        presentation: "continuous",
+      });
+
+      const keyless = await send({ feedbackPolicy: { showExplanation: true } });
+      expect(keyless.json().evaluation.feedbackPolicy).toMatchObject({
+        when: "immediate",
+        showKey: true,
+        showExplanation: true,
+      });
+    } finally {
+      await server.close();
+    }
   });
 
   it("duplicates the items on the SAME frozen versions (F-EVAL-14)", async () => {

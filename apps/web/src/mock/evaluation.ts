@@ -1,11 +1,16 @@
 /** Section 3 of the mock — see `index.ts` for the layout. */
 import {
+  isFeedbackAllowed,
   itemListLock,
+  missingTimingFields,
   parseCloze,
   round2,
   splitTemplate,
 } from "@quiz/domain";
 import type {
+  EvaluationTiming,
+  FeedbackWhen,
+  LobbyName,
   McqScorePolicy,
 } from "@quiz/domain";
 import {
@@ -788,14 +793,24 @@ on("POST", "/app/api/classrooms/:id/evaluations", (m, body) => {
 on("GET", "/app/api/evaluations/:id", (m) => evaluationDetail(evaluationOr404(m.groups!.id!)));
 on("PATCH", "/app/api/evaluations/:id", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);
+  const settings = body.settings as { lobby?: LobbyName } | undefined;
+  const feedback = body.feedbackPolicy as { when?: FeedbackWhen } | undefined;
+  // F-EVAL-11, #78: the server refuses `immediate` in class, whichever half
+  // of the pair the patch moves, and writes nothing.
+  if (feedback?.when !== undefined || settings?.lobby !== undefined) {
+    const lobby = settings?.lobby ?? (e.settings as { lobby: LobbyName }).lobby;
+    const when = feedback?.when ?? (e.feedbackPolicy as { when: FeedbackWhen }).when;
+    if (!isFeedbackAllowed({ mode: e.mode, lobby }, when)) {
+      throw new MockPayload(422, {
+        error: "feedback_not_allowed",
+        message: `feedback "${when}" is not allowed for an evaluation sat in class (F-EVAL-11)`,
+      });
+    }
+  }
   if (typeof body.title === "string") e.title = body.title;
   if (body.settings) e.settings = { ...e.settings, ...(body.settings as object) };
   if (body.feedbackPolicy) {
     e.feedbackPolicy = { ...e.feedbackPolicy, ...(body.feedbackPolicy as object) };
-    // W5-18: an exam never stores `immediate`.
-    if (e.mode === "exam" && (e.feedbackPolicy as { when: string }).when === "immediate") {
-      (e.feedbackPolicy as { when: string }).when = "on_release";
-    }
   }
   if (body.gradingScale) e.gradingScale = body.gradingScale as Record<string, unknown>;
   if (body.mcqPolicy) e.mcqPolicy = body.mcqPolicy as McqScorePolicy;
@@ -912,6 +927,32 @@ on("DELETE", "/app/api/evaluations/:id/items/:itemId", (m) => {
 });
 on("POST", "/app/api/evaluations/:id/state", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);
+  // The server's two readiness refusals (`guardTransition`), with the same
+  // body, so the launch step's translated messages can be seen here (#76).
+  if (body.to !== "draft") {
+    if (e.items.length === 0) {
+      throw new MockPayload(409, {
+        error: "illegal_transition",
+        message: "an evaluation needs at least one question",
+        reason: "no_items",
+      });
+    }
+    const missing = missingTimingFields({
+      mode: e.mode,
+      timing: (e.settings as { timing: EvaluationTiming }).timing,
+      durationS: e.durationS,
+      opensAt: e.opensAt,
+      closesAt: e.closesAt,
+    });
+    if (missing.length > 0) {
+      throw new MockPayload(409, {
+        error: "illegal_transition",
+        message: `the timing settings are incomplete (F-EVAL-04): ${missing.join(", ")}`,
+        reason: "timing_incomplete",
+        missing,
+      });
+    }
+  }
   e.state = body.to as MockEvaluation["state"];
   return toEvaluation(e);
 });

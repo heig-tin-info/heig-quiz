@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { McqPolicy, type EvaluationDetail, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
+import { allowedFeedbackWhen, feedbackWhenFor, isInClass } from "@quiz/domain";
 
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
@@ -32,6 +33,7 @@ export function AdvancedDisclosure({
 
   const set = (next: Partial<EvaluationSettings>) => patch.mutate({ settings: next });
   const feedback = (next: Partial<FeedbackPolicy>) => patch.mutate({ feedbackPolicy: next });
+  const inClass = isInClass({ mode, lobby: settings.lobby });
 
   if (!open) {
     return (
@@ -94,7 +96,16 @@ export function AdvancedDisclosure({
             name="lobby"
             value={settings.lobby}
             disabled={disabled}
-            onChange={(lobby) => set({ lobby })}
+            onChange={(lobby) => {
+              // A waiting room makes the evaluation sat in class, where
+              // `immediate` is not allowed (#78): the policy falls back in
+              // the SAME patch, since the server refuses the pair otherwise.
+              const when = feedbackWhenFor({ mode, lobby }, feedbackPolicy.when);
+              patch.mutate({
+                settings: { lobby },
+                ...(when === feedbackPolicy.when ? {} : { feedbackPolicy: { when } }),
+              });
+            }}
             options={[
               { value: "skip", label: t("eval.lobby.skip") },
               { value: "auto", label: t("eval.lobby.auto") },
@@ -144,22 +155,29 @@ export function AdvancedDisclosure({
           />
         </SettingRow>
 
+        {/* F-EVAL-11 and #78: `immediate` is hidden, not disabled, for an
+            evaluation sat in class (an exam, or an exercise with a waiting
+            room) — the same treatment as `student_choice` above. The row
+            then says why, so the missing choice is not a mystery. */}
         <SettingRow
           title={t("eval.feedback")}
-          desc={t(`eval.feedback.desc.${feedbackPolicy.when}` as keyof Dict)}
+          desc={
+            <>
+              {t(`eval.feedback.desc.${feedbackPolicy.when}` as keyof Dict)}
+              {inClass ? (
+                <span className="mt-0.5 block text-fg-faint">{t("eval.feedback.inClassHint")}</span>
+              ) : null}
+            </>
+          }
         >
           <Segmented
             name="feedback"
             value={feedbackPolicy.when}
             onChange={(when) => feedback({ when })}
-            options={[
-              { value: "none", label: t("eval.feedback.none") },
-              { value: "on_release", label: t("eval.feedback.on_release") },
-              // F-EVAL-11: immediate feedback is for exercises and polls.
-              ...(mode === "exam"
-                ? []
-                : [{ value: "immediate" as const, label: t("eval.feedback.immediate") }]),
-            ]}
+            options={allowedFeedbackWhen({ mode, lobby: settings.lobby }).map((when) => ({
+              value: when,
+              label: t(`eval.feedback.${when}` as keyof Dict),
+            }))}
           />
         </SettingRow>
         <SettingRow title={t("eval.feedback.showKey")}>

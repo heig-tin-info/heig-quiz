@@ -40,7 +40,9 @@ export async function evaluationPlugin(app: FastifyInstance) {
   /** Everything this module refuses carries its own status and machine code; the rest is a 500. */
   function failure(reply: FastifyReply, error: unknown): FastifyReply {
     if (error instanceof service.EvaluationError) {
-      return reply.code(error.status).send({ error: error.code, message: error.message });
+      return reply
+        .code(error.status)
+        .send({ error: error.code, message: error.message, ...error.details });
     }
     reply.log.error({ err: error, cause: (error as Error)?.cause }, "evaluation route failed");
     return reply.code(500).send({ error: "internal_error" });

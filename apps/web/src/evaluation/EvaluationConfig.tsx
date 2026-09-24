@@ -9,6 +9,7 @@ import {
   RotateCcw,
   Trash2,
 } from "lucide-react";
+import { useState } from "react";
 
 import { EvaluationPatch, type ClassroomDetail, type EvaluationDetail } from "@quiz/contracts";
 
@@ -40,6 +41,7 @@ import {
 } from "./common";
 import { ItemsStep } from "./ItemsStep";
 import { LaunchStep } from "./LaunchStep";
+import { missingTiming, TIMING_FIELD_ID } from "./timing";
 import { TimingStep } from "./TimingStep";
 import { useEvaluationPatch } from "./usePatch";
 import { classroomKey, evaluationKey, evaluationsKey } from "../queryKeys";
@@ -82,6 +84,8 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
   const toastError = useErrorToast();
   const [rawStep, setStep] = useSearchParam("step", "questions");
   const step: Step = isStep(rawStep) ? rawStep : "questions";
+  /** The teacher tried "Go to launch" with the timing incomplete (#76). */
+  const [timingChecked, setTimingChecked] = useState(false);
 
   const detail = useQuery<EvaluationDetail>({
     queryKey: evaluationKey(id),
@@ -160,6 +164,33 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
    * student has started (SAFE_FIELDS), so the affordance stays on a frozen
    * evaluation: what is frozen there is the structure, not its name.
    */
+  /*
+   * "Go to launch" is where an incomplete timing is caught (#76), not the
+   * launch button two screens later: the teacher stays on the step that
+   * holds the missing field, every such field is marked with what to enter,
+   * and the focus lands on the first one. The server applies the same rule
+   * (`missingTimingFields`) when it refuses to open the waiting room.
+   */
+  const goToLaunch = () => {
+    // Only an evaluation still to be opened has something to fix here; a
+    // live or closed one goes to its launch step, which then leads to the
+    // dashboard.
+    const opening = evaluation.state === "draft" || evaluation.state === "scheduled";
+    const missing = opening ? missingTiming(evaluation) : [];
+    if (missing.length === 0) {
+      setStep("launch");
+      return;
+    }
+    setTimingChecked(true);
+    const target = document.getElementById(TIMING_FIELD_ID[missing[0]!]);
+    // The timing row is a radio group: the focus goes to the choice in force.
+    const control =
+      target instanceof HTMLInputElement
+        ? target
+        : target?.querySelector<HTMLInputElement>("input:checked");
+    control?.focus();
+  };
+
   const rename = (title: string) => {
     const parsed = EvaluationPatch.safeParse({ title });
     if (!parsed.success) return;
@@ -298,7 +329,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
         {step === "questions" ? (
           <ItemsStep detail={data} />
         ) : step === "timing" ? (
-          <TimingStep detail={data} patch={patch} />
+          <TimingStep detail={data} patch={patch} showMissing={timingChecked} />
         ) : (
           <LaunchStep detail={data} navigate={navigate} />
         )}
@@ -323,7 +354,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
           </Button>
         )}
         {step === "launch" ? null : (
-          <Button onClick={() => setStep(step === "questions" ? "timing" : "launch")}>
+          <Button onClick={() => (step === "questions" ? setStep("timing") : goToLaunch())}>
             {step === "questions" ? t("eval.goTo.timing") : t("eval.goTo.launch")}
             <ArrowRight />
           </Button>

@@ -1,14 +1,34 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, MonitorPlay, Rocket } from "lucide-react";
 
-import type { Evaluation, EvaluationDetail } from "@quiz/contracts";
+import { TransitionRefusal, type Evaluation, type EvaluationDetail } from "@quiz/contracts";
 
-import { api } from "../api";
-import { formatDuration, useT } from "../i18n";
+import { ApiError, api } from "../api";
+import { formatDuration, useT, type TFunction } from "../i18n";
 import type { Route } from "../router";
-import { Alert, Badge, Button, Card, FormError, isoDateTime, SectionHeading, Stat } from "../ui";
+import { Alert, Badge, Button, Card, isoDateTime, SectionHeading, Stat } from "../ui";
 import { evaluationStateLabel, stateTone } from "./common";
+import { missingTiming, missingTimingKey } from "./timing";
 import { evaluationKey } from "../queryKeys";
+
+/**
+ * What a refused state change says, in the teacher's language (#76). The
+ * server's `message` is English for logs and API clients; the screen reads
+ * the machine half of the refusal instead: a missing question, the timing
+ * fields still to fill, or a move the evaluation no longer allows because it
+ * changed elsewhere. Anything else is the ordinary "server did not answer".
+ */
+export function transitionErrorMessage(error: unknown, t: TFunction): string {
+  if (!(error instanceof ApiError)) return t("error.server");
+  const refusal = TransitionRefusal.safeParse(error.body);
+  if (!refusal.success) return t("error.server");
+  const { reason, missing } = refusal.data;
+  if (reason === "no_items") return t("eval.launch.needQuestions");
+  if (reason === "timing_incomplete" && missing && missing.length > 0) {
+    return missing.map((field) => t(missingTimingKey(field))).join(" ");
+  }
+  return t("eval.launch.stale");
+}
 
 /**
  * Step 3: the last look, and the ONE action that turns a configuration into
@@ -33,6 +53,10 @@ export function LaunchStep({
   const { evaluation, items, totalPoints } = detail;
   const id = evaluation.id;
   const empty = items.length === 0;
+  // The same rule the server applies before it opens the waiting room: a
+  // tab click can bring the teacher here past the "Go to launch" check (#76).
+  const missing = missingTiming(evaluation);
+  const blocked = empty || missing.length > 0;
 
   const transition = useMutation({
     mutationFn: (to: "draft" | "scheduled" | "lobby") =>
@@ -80,9 +104,18 @@ export function LaunchStep({
         />
       </div>
 
-      <FormError error={transition.error} title={t("eval.saveFailed")} />
+      {transition.error ? (
+        <Alert tone="danger" title={t("eval.launch.failed")}>
+          {transitionErrorMessage(transition.error, t)}
+        </Alert>
+      ) : null}
 
       {empty ? <Alert tone="warning" title={t("eval.launch.needQuestions")} /> : null}
+      {!live && !finished && missing.length > 0 ? (
+        <Alert tone="warning" title={t("eval.launch.needTiming")}>
+          {missing.map((field) => t(missingTimingKey(field))).join(" ")}
+        </Alert>
+      ) : null}
 
       {live ? (
         <Card className="flex flex-wrap items-center justify-between gap-4 px-4 py-4">
@@ -104,7 +137,7 @@ export function LaunchStep({
       ) : (
         <div className="flex flex-wrap items-center gap-2">
           <Button
-            disabled={empty}
+            disabled={blocked}
             loading={transition.isPending && transition.variables === "lobby"}
             onClick={() => transition.mutate("lobby")}
           >
@@ -117,7 +150,7 @@ export function LaunchStep({
           ) : (
             <Button
               variant="secondary"
-              disabled={empty}
+              disabled={blocked}
               onClick={() => transition.mutate("scheduled")}
             >
               <CalendarClock /> {t("eval.launch.schedule")}
