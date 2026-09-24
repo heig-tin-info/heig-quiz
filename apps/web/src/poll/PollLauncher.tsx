@@ -236,6 +236,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
   const primary =
     tab === "pick" ? (
       <Button
+        data-coach="polls.launch"
         onClick={() => start.mutate()}
         loading={start.isPending}
         disabled={questionId === null || classroomId === ""}
@@ -244,6 +245,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
       </Button>
     ) : (
       <Button
+        data-coach="polls.launch"
         onClick={() => inline.mutate()}
         loading={inline.isPending}
         disabled={classroomId === ""}

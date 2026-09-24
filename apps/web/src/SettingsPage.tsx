@@ -1,10 +1,11 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { BellRing, GraduationCap, School, ShieldCheck, SlidersHorizontal } from "lucide-react";
 
 import { ApiTokensCard, ConnectionsCard } from "./ApiTokensCard";
 import { AvatarEditor } from "./AvatarEditor";
-import { useMePatch } from "./api";
-import { useI18n, LOCALES } from "./i18n";
+import { api, useMePatch } from "./api";
+import { useI18n, useT, LOCALES } from "./i18n";
 import {
   DATE_FORMATS,
   McqPolicy,
@@ -13,11 +14,13 @@ import {
   type NoticeKind,
 } from "@quiz/contracts";
 
-import { NOTICE_KINDS, notifyPrefs, setNotifyPref } from "./notify";
+import { NOTICE_KINDS, notifyPrefs, setNotifyPref, useToast } from "./notify";
+import { meKey } from "./queryKeys";
 import { setThemeChoice, useThemeChoice } from "./theme";
 import {
   Avatar,
   Badge,
+  Button,
   Card,
   formatDateTimeAs,
   FormError,
@@ -66,6 +69,46 @@ function McqPolicyRow({ me }: { me: Me }) {
           </option>
         ))}
       </Select>
+    </SettingRow>
+  );
+}
+
+/**
+ * The coach marks (`coach/`): on or off, and "show them again", which forgets
+ * every bubble read so far — the screen on display plays its tour at once.
+ */
+function CoachRow({ me }: { me: Me }) {
+  const t = useT();
+  const toast = useToast();
+  const qc = useQueryClient();
+  const save = useMePatch();
+  const on = me.coach?.enabled !== false;
+  const replay = useMutation({
+    mutationFn: () =>
+      api<{ seen: string[] }>("/app/api/me/coach", {
+        method: "POST",
+        body: JSON.stringify({ reset: true }),
+      }),
+    onSuccess: () => {
+      toast(t("settings.coachReplayed"), "success");
+      void qc.invalidateQueries({ queryKey: meKey });
+    },
+  });
+  return (
+    <SettingRow title={t("settings.coach")} desc={t("settings.coachHint")}>
+      <div className="flex items-center gap-3">
+        {on ? (
+          <Button variant="secondary" size="sm" loading={replay.isPending} onClick={() => replay.mutate()}>
+            {t("settings.coachReplay")}
+          </Button>
+        ) : null}
+        <Switch
+          checked={on}
+          disabled={save.isPending}
+          onChange={(next) => save.mutate({ coachEnabled: next })}
+          label={t("settings.coach")}
+        />
+      </div>
     </SettingRow>
   );
 }
@@ -123,6 +166,7 @@ function PreferencesCard({ me }: { me: Me }) {
           </Select>
         </SettingRow>
         {me.role === "student" ? null : <McqPolicyRow me={me} />}
+        <CoachRow me={me} />
       </Card>
       <FormError error={saveDate.error} fallback={t("error.save")} />
     </section>

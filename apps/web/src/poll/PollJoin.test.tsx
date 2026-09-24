@@ -23,6 +23,7 @@ const me = {
   locale: null,
   dateFormat: null,
   mcqPolicy: null,
+  coach: { enabled: false, seen: [] },
 };
 
 const mcqStudent = {

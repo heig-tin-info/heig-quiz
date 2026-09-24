@@ -43,7 +43,28 @@ export interface Me {
    * changing it never moves an evaluation that already exists.
    */
   mcqPolicy: McqPolicy | null;
+  /**
+   * The coach marks: whether they are shown (null means yes) and the ids of
+   * those already read or dismissed. Kept on the account, not in the
+   * browser, so a teacher who met a screen on their laptop is not taught it
+   * again on the classroom's PC.
+   */
+  coach: { enabled: boolean | null; seen: string[] };
 }
+
+/** A coach mark's id: `<screen>.<step>`, lower case (`pool.new-question`). */
+export const CoachId = z.string().regex(/^[a-z0-9-]+(\.[a-z0-9-]+)*$/).max(64);
+
+/**
+ * `POST /app/api/me/coach` — coach marks marked as seen (merged into the set,
+ * never replacing it: two tabs each reporting their own must not lose the
+ * other's), or the whole set forgotten (`reset`, "Show the tips again").
+ */
+export const CoachSeenPatch = z.union([
+  z.object({ seen: z.array(CoachId).min(1).max(50) }).strict(),
+  z.object({ reset: z.literal(true) }).strict(),
+]);
+export type CoachSeenPatch = z.infer<typeof CoachSeenPatch>;
 
 /**
  * `PATCH /app/api/me` — the account preferences, persisted server-side so
@@ -58,6 +79,7 @@ export const MePatch = z
     locale: z.enum(["en", "fr"]).nullable().optional(),
     dateFormat: z.enum(DATE_FORMATS).nullable().optional(),
     mcqPolicy: McqPolicy.nullable().optional(),
+    coachEnabled: z.boolean().nullable().optional(),
   })
   .refine((b) => Object.keys(b).length > 0, { message: "Nothing to update" });
 export type MePatch = z.infer<typeof MePatch>;

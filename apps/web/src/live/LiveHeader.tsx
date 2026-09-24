@@ -89,7 +89,7 @@ export function LiveHeader({
             </Button>
           ) : null}
           {lobby ? (
-            <Button onClick={controls.start} loading={controls.busy}>
+            <Button data-coach="live.start" onClick={controls.start} loading={controls.busy}>
               <Play /> {t("live.start")}
             </Button>
           ) : null}

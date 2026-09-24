@@ -35,6 +35,7 @@ export let me: Me | null = {
   locale: null,
   dateFormat: null,
   mcqPolicy: null,
+  coach: { enabled: null, seen: [] },
 };
 
 /**
@@ -53,8 +54,18 @@ on("GET", "/app/api/me", () => {
   return me;
 });
 on("PATCH", "/app/api/me", (_m, body) => {
-  if (me) me = { ...me, ...(body as Partial<Me>) };
+  const { coachEnabled, ...rest } = body as Partial<Me> & { coachEnabled?: boolean | null };
+  if (me) me = { ...me, ...rest };
+  if (me && coachEnabled !== undefined) me = { ...me, coach: { ...me.coach, enabled: coachEnabled } };
   return me;
+});
+// The coach marks read so far: merged, or forgotten (`reset`).
+on("POST", "/app/api/me/coach", (_m, body) => {
+  const b = body as { seen?: string[]; reset?: true };
+  if (!me) throw new MockError(401, "Signed out");
+  const seen = b.reset ? [] : [...new Set([...me.coach.seen, ...(b.seen ?? [])])].sort();
+  me = { ...me, coach: { ...me.coach, seen } };
+  return { seen };
 });
 on("PUT", "/app/api/me/avatar", () => undefined);
 on("DELETE", "/app/api/me/avatar", () => undefined);

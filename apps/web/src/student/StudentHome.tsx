@@ -153,6 +153,7 @@ function JoinCard() {
       >
         <div className="min-w-0 flex-1 basis-60 sm:max-w-80">
           <Field
+            data-coach="student.join"
             label={t("join.label")}
             placeholder={t("join.placeholder")}
             fullWidth

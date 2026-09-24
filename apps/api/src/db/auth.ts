@@ -47,6 +47,18 @@ export const users = pgTable(
     mcqPolicy: text("mcq_policy", {
       enum: ["all_or_nothing", "true_false", "discordance", "symmetric", "ripkey"],
     }),
+    /**
+     * The coach marks (the bubbles that introduce a screen to a newcomer,
+     * `apps/web/src/coach/`) are shown; null means yes. Turned off from the
+     * settings page.
+     */
+    coachEnabled: boolean("coach_enabled"),
+    /**
+     * The coach marks this user has read or dismissed, by id. One in this set
+     * is never shown again; one shipped later is, so a new feature introduces
+     * itself to the people who already know the rest.
+     */
+    coachSeen: jsonb("coach_seen").$type<string[]>().notNull().default([]),
     anonymizedAt: timestamp("anonymized_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -81,6 +81,7 @@ export function QuestionHeader({
               offers none of them. `noopener` on both halves. */}
           <LinkButton
             variant="secondary"
+            data-coach="question.preview"
             href={routeToPath({ view: "questionPreview", id })}
             target="_blank"
             rel="noopener"
@@ -97,7 +98,9 @@ export function QuestionHeader({
            */}
           {readOnly ? null : (
             <>
-              <Button onClick={onPublish}>{t("question.publish")}</Button>
+              <Button data-coach="question.publish" onClick={onPublish}>
+                {t("question.publish")}
+              </Button>
               <Menu
                 label={t("common.actions")}
                 items={[

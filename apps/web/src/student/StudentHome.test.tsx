@@ -19,6 +19,7 @@ const me: Me = {
   locale: "fr",
   dateFormat: null,
   mcqPolicy: null,
+  coach: { enabled: false, seen: [] },
 };
 
 const card = (over: Partial<EvaluationCard>): EvaluationCard => ({

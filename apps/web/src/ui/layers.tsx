@@ -41,6 +41,8 @@ export type IconType = ComponentType<{ className?: string }>;
  * below `overlay`, which greys out everything on purpose.
  */
 export const Z = {
+  /** Coach marks: over the page and its sticky bars, under every dialog. */
+  coach: "z-45",
   popover: "z-55",
   modal: "z-50",
   toast: "z-50",
@@ -394,7 +396,16 @@ export const HelpContext = createContext<{ open: (key: string) => void }>({ open
  *    error it corrects is a fraction of the font size, so the one value holds
  *    at 13 px and at 28 px and no call site has to re-tune it.
  */
-export function HelpIcon({ topic, className = "" }: { topic: string; className?: string }) {
+export function HelpIcon({
+  topic,
+  className = "",
+  coach,
+}: {
+  topic: string;
+  className?: string;
+  /** A coach mark's anchor (`coach/catalog.ts`). */
+  coach?: string;
+}) {
   const { t } = useI18n();
   const { open } = useContext(HelpContext);
   return (
@@ -405,6 +416,7 @@ export function HelpIcon({ topic, className = "" }: { topic: string; className?:
       <button
         type="button"
         aria-label={t("help.title")}
+        data-coach={coach}
         onClick={(e) => {
           e.stopPropagation();
           open(topic);

@@ -2,13 +2,13 @@ import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { audit } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import { avatars, users } from "../db/schema.js";
 import { publish } from "../events.js";
-import { MePatch, type PublicConfig } from "@quiz/contracts";
+import { CoachSeenPatch, MePatch, type PublicConfig } from "@quiz/contracts";
 
 import { claimEnrollments } from "../modules/org/service.js";
 import { roleForIdentity } from "../roles.js";
@@ -336,6 +336,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
         locale: u.locale,
         dateFormat: u.dateFormat,
         mcqPolicy: u.mcqPolicy,
+        coach: { enabled: u.coachEnabled, seen: u.coachSeen },
       };
     },
   );
@@ -367,6 +368,37 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
         dateFormat: patch.dateFormat === undefined ? before.dateFormat : patch.dateFormat,
         mcqPolicy: patch.mcqPolicy === undefined ? before.mcqPolicy : patch.mcqPolicy,
       };
+    },
+  );
+
+  // The coach marks a user has read. A merge in SQL rather than a
+  // read-modify-write: two tabs reporting at once must both be kept.
+  app.post(
+    "/app/api/me/coach",
+    { preHandler: (req, reply) => app.requireSession(req, reply) },
+    async (req, reply) => {
+      const parsed = CoachSeenPatch.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return reply
+          .code(400)
+          .send({ error: "validation", message: "Invalid coach marks", details: parsed.error.issues });
+      }
+      const body = parsed.data;
+      const [row] = await app.db
+        .update(users)
+        .set({
+          coachSeen:
+            "reset" in body
+              ? []
+              : // `x(v)` and not a bare alias: a bare `id` resolves to
+                // `users.id` and lifts the aggregate into the UPDATE itself.
+                sql`(select coalesce(jsonb_agg(distinct x.v order by x.v), '[]'::jsonb)
+                       from jsonb_array_elements_text(${users.coachSeen} || ${JSON.stringify(body.seen)}::jsonb) as x(v))`,
+        })
+        .where(eq(users.id, req.user!.id))
+        .returning({ seen: users.coachSeen });
+      publish("mutation", [`user:${req.user!.id}`]);
+      return { seen: row?.seen ?? [] };
     },
   );
 }

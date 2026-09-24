@@ -425,3 +425,143 @@ html.dark {
 }
 .md-inline > :first-child { margin-top: 0; }
 .md-inline > :last-child { margin-bottom: 0; }
+
+/* --- Coach marks (coach/CoachLayer.tsx, DESIGN.md "Coach marks") ---
+   The one surface allowed to be playful: it is not the page, it talks ABOUT
+   the page. A speech bubble with a slowly turning accent-to-info rim (the two
+   colours of the logo's bubbles), popping out of its own tail, bobbing while
+   it waits, and a ring around the control it points at. */
+@property --coach-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+.coach-bubble {
+  border: 2px solid transparent;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    conic-gradient(from var(--coach-angle), var(--accent), var(--info), var(--accent)) border-box;
+  box-shadow:
+    var(--shadow-overlay),
+    0 0 0 6px color-mix(in srgb, var(--accent) 7%, transparent);
+  transform-origin: var(--coach-origin, 50% 0);
+  animation:
+    coach-pop 0.62s cubic-bezier(0.2, 0, 0, 1) both,
+    coach-spin 7s linear infinite;
+}
+.coach-bubble[data-leaving] {
+  animation: coach-out 0.2s cubic-bezier(0.4, 0, 1, 1) both;
+}
+/* The tail: a square turned 45°, filled with the rim's gradient, tucked half
+   under the bubble so only its point shows. */
+.coach-tail {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: linear-gradient(135deg, var(--accent), var(--info));
+  rotate: 45deg;
+  animation: coach-content 0.3s 0.25s both;
+  transition: left 0.45s cubic-bezier(0.34, 1.4, 0.64, 1), top 0.45s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+/* Waiting: a slow float, on `translate` so it composes with the pop's
+   `transform` instead of fighting it. */
+.coach-float {
+  animation: coach-bob 3.2s ease-in-out 0.7s infinite;
+}
+/* The bubble glides from one target to the next rather than blinking. */
+.coach-anchor {
+  transition: transform 0.5s cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+.coach-anchor[data-instant] {
+  transition: none;
+}
+.coach-content {
+  animation: coach-content 0.28s cubic-bezier(0.2, 0, 0, 1) both;
+}
+.coach-icon {
+  animation: coach-wiggle 0.9s ease-in-out 0.35s both;
+}
+.coach-ring {
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 24px color-mix(in srgb, var(--accent) 35%, transparent);
+  transition:
+    transform 0.5s cubic-bezier(0.34, 1.3, 0.64, 1),
+    width 0.5s cubic-bezier(0.34, 1.3, 0.64, 1),
+    height 0.5s cubic-bezier(0.34, 1.3, 0.64, 1),
+    opacity 0.2s;
+  animation: coach-ring-in 0.45s cubic-bezier(0.2, 0, 0, 1) both;
+}
+.coach-ring::before,
+.coach-ring::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  animation: coach-ripple 2.4s cubic-bezier(0.2, 0, 0, 1) infinite;
+}
+.coach-ring::after {
+  animation-delay: 1.2s;
+}
+.coach-spark {
+  position: fixed;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  pointer-events: none;
+  animation: coach-spark 0.9s cubic-bezier(0.2, 0.6, 0.3, 1) forwards;
+}
+
+@keyframes coach-pop {
+  0% { opacity: 0; transform: scale(0.35) rotate(-5deg); }
+  45% { opacity: 1; transform: scale(1.06) rotate(1.2deg); }
+  70% { transform: scale(0.985) rotate(-0.4deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+@keyframes coach-out {
+  to { opacity: 0; transform: scale(0.7) rotate(-3deg); }
+}
+@keyframes coach-spin {
+  to { --coach-angle: 360deg; }
+}
+@keyframes coach-bob {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 -4px; }
+}
+@keyframes coach-content {
+  from { opacity: 0; transform: translateY(6px); }
+}
+@keyframes coach-wiggle {
+  0%, 100% { rotate: 0deg; scale: 1; }
+  20% { rotate: -16deg; scale: 1.15; }
+  40% { rotate: 12deg; }
+  60% { rotate: -7deg; }
+  80% { rotate: 3deg; }
+}
+@keyframes coach-ring-in {
+  from { opacity: 0; scale: 1.25; }
+}
+@keyframes coach-ripple {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+  100% { box-shadow: 0 0 0 16px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+@keyframes coach-spark {
+  0% { opacity: 1; transform: translate(0, 0) rotate(0) scale(1); }
+  100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(0.3); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coach-bubble,
+  .coach-bubble[data-leaving],
+  .coach-content,
+  .coach-float,
+  .coach-icon,
+  .coach-ring,
+  .coach-ring::before,
+  .coach-ring::after {
+    animation: none;
+  }
+  .coach-spark {
+    display: none;
+  }
+}

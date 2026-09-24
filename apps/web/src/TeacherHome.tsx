@@ -597,7 +597,7 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
           // screen is noise, not emphasis (W19). One button, in the place
           // the reader is already looking.
           rows.length > 0 ? (
-            <Button onClick={() => setCreating(true)}>
+            <Button data-coach="home.new-course" onClick={() => setCreating(true)}>
               <Plus /> {t("courses.new")}
             </Button>
           ) : undefined
@@ -638,7 +638,7 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
           icon={Library}
           title={t("courses.empty.title")}
           action={
-            <Button onClick={() => setCreating(true)}>
+            <Button data-coach="home.new-course" onClick={() => setCreating(true)}>
               <Plus /> {t("courses.new")}
             </Button>
           }
