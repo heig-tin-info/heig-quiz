@@ -95,8 +95,18 @@ export async function resumeEvaluation(
   const pausedFor = evaluation.pausedAt === null ? 0 : now.getTime() - evaluation.pausedAt.getTime();
   // Compare-and-set: a double-clicked resume (or a second ticker process)
   // must not add the pause to every deadline twice.
-  const next = await tryApplyState(db, evaluation, "running", now);
+  let next = await tryApplyState(db, evaluation, "running", now);
   if (next === null) return (await evaluationById(db, evaluation.id))!;
+  // In `deadline` timing the common end moves with the pause, exactly as a
+  // `+N min` for everybody moves it (`extendTime`): the ticker closes on it,
+  // the teacher's countdown reads it, and a student who arrives after the
+  // resume gets "until the common end" (F-LIVE-12) — none of them may lose
+  // the time the evaluation stood still (#77).
+  if (pausedFor > 0 && settingsOf(next).timing === "deadline" && next.closesAt) {
+    const closesAt = new Date(next.closesAt.getTime() + pausedFor);
+    await setClosesAt(db, next.id, closesAt, now);
+    next = { ...next, closesAt };
+  }
   if (pausedFor > 0) {
     await db
       .update(attempts)

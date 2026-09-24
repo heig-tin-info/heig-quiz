@@ -42,14 +42,16 @@ export function useLiveCommands(input: {
     });
   }
   if (state === "running" || state === "paused") {
-    commands.push(
-      {
+    if (controls.canPause || state === "paused") {
+      commands.push({
         id: "live:pause",
         label: state === "paused" ? t("live.resume") : t("live.pause"),
         icon: state === "paused" ? Play : Pause,
         group: "action",
         run: state === "paused" ? controls.resume : controls.pause,
-      },
+      });
+    }
+    commands.push(
       {
         id: "live:extend",
         label: t("live.extendMinutes", { n: 5 }),

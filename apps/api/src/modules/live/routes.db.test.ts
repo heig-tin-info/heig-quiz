@@ -340,7 +340,19 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
     });
     expect(blocked.statusCode).toBe(410);
     expect(blocked.json().reason).toBe("paused");
+    const dashboard = await get(`/app/api/evaluations/${seed.evaluationId}/dashboard`, teacher.headers);
+    expect(dashboard.json().evaluation.state).toBe("paused");
+
     expect((await post(`/app/api/evaluations/${seed.evaluationId}/resume`, teacher.headers)).statusCode).toBe(200);
+    // Issue #77: once resumed, the same student writes again.
+    const accepted = await server.app.inject({
+      method: "PUT",
+      url: `/app/api/attempts/${attemptId}/answers/${itemId}`,
+      headers: student.headers,
+      payload: { payload: "after the pause", revision: 51, clientTs: server.clock.now().toISOString() },
+    });
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json().accepted).toBe(true);
   });
 
   it("submits, and then refuses everything with reason `submitted`", async () => {
@@ -517,5 +529,28 @@ describe("the lobby hands out no question content (C1)", () => {
     expect(closed.json().kind).toBe("attempt");
     expect(closed.json().view.attempt.readOnly).toBe(true);
     expect(closed.payload).not.toContain("answer-q0");
+  });
+});
+
+describe("pausing an exercise (#77)", () => {
+  /**
+   * The glossary: "the `exercise` mode skips `lobby` and `paused`". The
+   * refusal is a 409 the dashboard must SHOW — it used to swallow it, and
+   * the button looked like it did nothing.
+   */
+  it("is refused with 409 illegal_transition, and the exercise keeps running", async () => {
+    const own = await seedLive(server.app.db, {
+      teacherId: teacher.id,
+      studentIds: [student.id],
+      mode: "exercise",
+    });
+    const started = await post(`/app/api/evaluations/${own.evaluationId}/start`, teacher.headers, {
+      confirm: true,
+    });
+    expect(started.statusCode).toBe(200);
+    const paused = await post(`/app/api/evaluations/${own.evaluationId}/pause`, teacher.headers);
+    expect(paused.statusCode).toBe(409);
+    expect(paused.json().error).toBe("illegal_transition");
+    expect((await reload(server.app.db, own.evaluationId)).state).toBe("running");
   });
 });

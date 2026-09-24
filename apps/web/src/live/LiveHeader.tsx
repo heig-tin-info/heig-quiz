@@ -27,6 +27,13 @@ export interface LiveControls {
   close: () => void;
   extend: (minutes: 1 | 5 | 10) => void;
   busy: boolean;
+  /**
+   * Whether this evaluation may be paused at all: only an exam can
+   * (glossary, §1: "the exercise mode skips lobby and paused"; the server
+   * refuses the move with 409). Offering a button the server always refuses
+   * is what made the pause look inert (#77).
+   */
+  canPause: boolean;
 }
 
 export function LiveHeader({
@@ -95,9 +102,15 @@ export function LiveHeader({
           ) : null}
           {live ? (
             <>
-              <Button variant="secondary" onClick={paused ? controls.resume : controls.pause}>
-                {paused ? <Play /> : <Pause />} {paused ? t("live.resume") : t("live.pause")}
-              </Button>
+              {controls.canPause || paused ? (
+                <Button
+                  variant="secondary"
+                  onClick={paused ? controls.resume : controls.pause}
+                  loading={controls.busy}
+                >
+                  {paused ? <Play /> : <Pause />} {paused ? t("live.resume") : t("live.pause")}
+                </Button>
+              ) : null}
               <Menu
                 label={t("live.extend")}
                 trigger={

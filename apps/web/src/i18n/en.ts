@@ -1599,6 +1599,7 @@ export const en = {
   "live.notFound": "Dashboard unavailable",
   "live.start": "Start now",
   "live.pause": "Pause",
+  "live.controlFailed": "The action failed. Try again.",
   "live.resume": "Resume",
   "live.extend": "Extend",
   "live.extendAll": "Extend for the whole class",

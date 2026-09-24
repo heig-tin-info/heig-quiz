@@ -20,7 +20,7 @@ import {
   makeDashboard,
   makeEvaluationDetail,
 } from "../test/live-fixtures";
-import { makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
+import { fail, makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
 import { LiveDashboard } from "./LiveDashboard";
 import { dashboardKey } from "../queryKeys";
 
@@ -159,9 +159,42 @@ describe("LiveDashboard — keyboard", () => {
     const { calls } = setup(makeDashboard(2, 2), {
       [`POST /app/api/evaluations/${EVALUATION_ID}/pause`]: ok({}),
     });
-    await screen.findByText("Nadia Roux 0");
+    // Pausing waits for the detail: only an exam pauses (#77).
+    await screen.findByRole("button", { name: /^pause$/i });
     await user.keyboard(" ");
     await waitFor(() => expect(calls.some((c) => c.url.endsWith("/pause"))).toBe(true));
+  });
+
+  /*
+   * Issue #77: an exercise cannot be paused (glossary: "the exercise mode
+   * skips lobby and paused"), and the button used to be there anyway, its
+   * 409 swallowed — a pause that "had no effect".
+   */
+  it("offers no pause on an exercise, neither the button nor Space", async () => {
+    const user = userEvent.setup();
+    const detail = makeEvaluationDetail();
+    detail.evaluation.mode = "exercise";
+    const { calls } = setup(makeDashboard(2, 2), {
+      [`GET /app/api/evaluations/${EVALUATION_ID}`]: ok(detail),
+    });
+    // The title is the detail's: once it shows, the mode is known.
+    await screen.findByRole("heading", { name: /quiz 3 — pointers/i });
+    expect(screen.getByRole("button", { name: /^extend$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^pause$/i })).not.toBeInTheDocument();
+    await user.keyboard(" ");
+    expect(calls.some((c) => c.url.endsWith("/pause"))).toBe(false);
+  });
+
+  it("says so when the server refuses the pause", async () => {
+    const user = userEvent.setup();
+    setup(makeDashboard(2, 2), {
+      [`POST /app/api/evaluations/${EVALUATION_ID}/pause`]: fail(409, {
+        error: "illegal_transition",
+        message: "only an exam can be paused",
+      }),
+    });
+    await user.click(await screen.findByRole("button", { name: /^pause$/i }));
+    expect(await screen.findByText(/only an exam can be paused/i)).toBeInTheDocument();
   });
 
   it("does not fire a shortcut typed into a field", async () => {
@@ -311,7 +344,7 @@ describe("LiveDashboard — command palette", () => {
 
   it("offers pause, +5 min, close and configure while the quiz runs", async () => {
     setup(makeDashboard(2, 2));
-    await screen.findByText("Nadia Roux 0");
+    await screen.findByRole("button", { name: /^pause$/i });
     expect(paletteIds()).toEqual([
       "live:configure",
       "nav:home",
