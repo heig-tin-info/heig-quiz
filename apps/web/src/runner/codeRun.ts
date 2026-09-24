@@ -89,11 +89,20 @@ export function studentRunRequest(
   };
 }
 
+/**
+ * The browser's request for a student's run. `compileOnly` is the Compile
+ * button: `action: "check"` and no case at all, which both runners read as
+ * "build it, run nothing" (for Python, a syntax check: see `runno/engine.ts`).
+ */
 export function codeRunRequest(
   student: CodeStudent,
   answer: CodeAnswer,
   manual?: ManualInput | undefined,
+  compileOnly = false,
 ): RunnerRequest {
+  if (compileOnly) {
+    return { ...studentRunRequest(student, answer.regions, []), action: "check" };
+  }
   return studentRunRequest(
     student,
     answer.regions,
@@ -117,16 +126,19 @@ export async function runCode(args: {
    * The API call the caller already had. It receives the free input and
    * NOTHING else: `POST /attempts/:id/run` builds the program and the visible
    * cases server-side, and takes a `stdin` / `args` pair for the free try —
-   * the one thing a client is allowed to choose (invariant 14).
+   * the one thing a client is allowed to choose (invariant 14) — or
+   * `compileOnly` for the Compile button, in which case there is no input.
    */
   backend: BackendRun;
   options?: CodeRunOptions | undefined;
 }): Promise<RunnerOutcome | "unavailable"> {
-  const manual = args.options?.manual;
-  const request = codeRunRequest(args.student, args.answer, manual);
+  const compileOnly = args.options?.compileOnly === true;
+  // A compilation has no input: a free one would only be dropped server-side.
+  const manual = compileOnly ? undefined : args.options?.manual;
+  const request = codeRunRequest(args.student, args.answer, manual, compileOnly);
   return runWithFallback<never>(request, {
     runtime: args.student.runtime,
-    backend: () => args.backend(manual),
+    backend: () => (compileOnly ? args.backend(undefined, { compileOnly }) : args.backend(manual)),
     hooks: args.options?.onStage === undefined ? undefined : { onStage: args.options.onStage },
   });
 }

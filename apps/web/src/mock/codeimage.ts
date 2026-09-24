@@ -105,6 +105,7 @@ export function codeimageStudentView(config: Record<string, unknown>): CodeImage
     prompt: String(config.prompt ?? ""),
     language: "c",
     runtime: config.runtime === "runno" ? "runno" : "backend",
+    cooldown: config.cooldown === "progressive" ? "progressive" : "fixed",
     segments: splitTemplate(String(config.template ?? ""), "c"),
     limits: config.limits as CodeImageStudent["limits"],
     runsPerMinute: Number(config.runsPerMinute ?? 10),

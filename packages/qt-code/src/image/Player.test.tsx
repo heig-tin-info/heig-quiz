@@ -2,7 +2,7 @@
  * `CodeImagePlayer` on the textarea fallback (jsdom has no canvas: the grids
  * render their frame and label, which is what these tests read).
  */
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { outcome } from "../test/fixtures.js";
@@ -100,11 +100,33 @@ describe("CodeImagePlayer", () => {
       .fn<() => Promise<"unavailable" | "rate_limited">>()
       .mockResolvedValueOnce("unavailable")
       .mockResolvedValueOnce("rate_limited");
-    setup({ onRun });
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
-    expect(await screen.findByText(/Running is unavailable right now/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
-    expect(await screen.findByText(/Too many runs in a minute/)).toBeInTheDocument();
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      setup({ onRun });
+      fireEvent.click(screen.getByRole("button", { name: "Run" }));
+      expect(await screen.findByText(/Running is unavailable right now/)).toBeInTheDocument();
+      // The button refills first (the server budget floors it at 6.5 s); an
+      // unavailable runner answered nothing, so the same code may run again.
+      expect(screen.getByRole("button", { name: /^Run/ })).toBeDisabled();
+      await act(() => void vi.advanceTimersByTime(7000));
+      fireEvent.click(screen.getByRole("button", { name: "Run" }));
+      expect(await screen.findByText(/Too many runs in a minute/)).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("rests while the code is what it last drew", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      setup({ onRun: async () => outcome([{ stdout: CHECKER_STDOUT }]) });
+      fireEvent.click(screen.getByRole("button", { name: "Run" }));
+      expect(await screen.findByText("Change your code to run it again.")).toBeInTheDocument();
+      await act(() => void vi.advanceTimersByTime(7000));
+      expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("offers no Run button without a runner, and a disabled one when read-only", () => {

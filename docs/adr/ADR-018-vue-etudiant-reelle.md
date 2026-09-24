@@ -339,3 +339,14 @@ After this, the header holds a breadcrumb, the editable title, the state
 badge, the help "?" and the overflow menu (Live dashboard, Duplicate,
 Delete, and Reset my test attempt when there is one) — plus "Grading" once
 the evaluation is closed.
+
+## Addendum (2026-09-24, third) — the way back from the attempt itself
+
+The switch of the first addendum lives in the frame, and `/take/:id` is drawn
+without one (`FULL_SCREEN`: an exam is where the rest of the app goes away).
+A teacher walking their own quiz therefore had no way back but "Hand in",
+which ends the very attempt they may want to resume. The student-view banner
+of the frame (`StudentViewBanner`, `Shell.tsx`) is now also drawn by `App`
+above the attempt, for a teacher in student view only: "Back to teacher view"
+returns to the page the walk started from and leaves the attempt open. A
+student never sees it.

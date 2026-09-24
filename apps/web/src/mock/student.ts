@@ -460,7 +460,14 @@ on("POST", "/app/api/attempts/:id/simulate", (_m, body): unknown => {
 });
 
 on("POST", "/app/api/attempts/:id/run", (m, body): unknown => {
-  const free = body as { stdin?: string; args?: string[] } | undefined;
+  const free = body as { stdin?: string; args?: string[]; compileOnly?: boolean } | undefined;
+  // The Compile button: a build and no case, like the real route.
+  if (free?.compileOnly === true) {
+    return {
+      requestId: "33333333-3333-4333-8333-333333333335",
+      result: { status: "ok", compile: { ok: true, stderr: "" }, cases: [] },
+    };
+  }
   if (free?.stdin !== undefined) {
     return {
       requestId: "33333333-3333-4333-8333-333333333334",

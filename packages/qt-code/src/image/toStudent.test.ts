@@ -57,6 +57,12 @@ describe("codeimageServer.toStudent", () => {
     expect(student.image).toEqual({ width: 4, height: 3, palette: "bw" });
   });
 
+  it("passes the cooldown rule through, a UI pace and nothing of the key", () => {
+    expect(student.cooldown).toBe("fixed");
+    const progressive = imageConfig({ cooldown: "progressive" });
+    expect(codeimageServer.toStudent(progressive, view).cooldown).toBe("progressive");
+  });
+
   it("names the extra files without their bytes", () => {
     expect(student.filesPreview).toEqual([{ name: "seed.csv", bytes: IMG_SECRET_FILE.length }]);
   });

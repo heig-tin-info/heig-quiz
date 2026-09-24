@@ -40,9 +40,9 @@ void _templateLanguagesAgree;
 /**
  * Bumped when the shape below changes; stored in `question_versions.config_version`.
  *
- * It stays at 1 although `args`, `compareStdout`, `expectedExitCode` and
- * `runtime` were added after the first questions were stored: every one of
- * them has a DEFAULT, so a config written before them parses unchanged and
+ * It stays at 1 although `args`, `compareStdout`, `expectedExitCode`,
+ * `runtime` and `cooldown` were added after the first questions were stored:
+ * every one of them has a DEFAULT, so a config written before them parses unchanged and
  * means exactly what it meant. A version bump is for a shape a stored config
  * can no longer satisfy (ADR-015).
  */
@@ -114,6 +114,20 @@ export type CodeCase = z.infer<typeof CodeCase>;
 export const CodeRuntime = z.enum(["backend", "runno"]);
 export type CodeRuntime = z.infer<typeof CodeRuntime>;
 
+/**
+ * How long the student's run buttons take to refill after a use
+ * (`@quiz/domain/cooldown`): `fixed` is 3 s every time; `progressive` is
+ * 3 s, then 30 % longer per recent use, up to 30 s, and it decays back when
+ * the student stops clicking. A server run never refills faster than its
+ * `runsPerMinute` budget allows, whatever this says.
+ */
+export const CodeCooldown = z
+  .enum(["fixed", "progressive"])
+  .describe(
+    "Cooldown of the student's run buttons: fixed (3 s) or progressive (3 s, +30 % per recent use, up to 30 s).",
+  );
+export type CodeCooldown = z.infer<typeof CodeCooldown>;
+
 /** The languages the browser runner can run (docs/04 §4.7). */
 export const RUNNO_LANGUAGES = ["c", "python"] as const satisfies readonly CodeLanguage[];
 
@@ -135,6 +149,11 @@ export const programFields = {
   prompt: z.string().min(1).max(20_000),
   language: CodeLanguage,
   runtime: CodeRuntime.default("backend"),
+  /**
+   * The refill rule of the student's run buttons. A default, like `runtime`:
+   * a config stored before it parses to `fixed`, the 3 s wait every run had.
+   */
+  cooldown: CodeCooldown.default("fixed"),
   /** Starting code, with the locked regions marked by `@@lock` / `@@endlock`. */
   template: z.string().max(40_000).default(""),
   /** Extra files the program reads; injected server-side, never by the client. */
@@ -215,6 +234,11 @@ export const programStudentFields = {
   language: CodeLanguage,
   /** Where "Run" executes; the key never depends on it. */
   runtime: CodeRuntime,
+  /**
+   * How the run buttons refill. Defaulted so that a student view built before
+   * the field existed (a payload cached by the host) still parses.
+   */
+  cooldown: CodeCooldown.default("fixed"),
   segments: z.array(CodeSegment),
   limits: CodeLimits,
   runsPerMinute: z.number().int(),
@@ -342,7 +366,11 @@ export function emptyCodeConfig(): CodeConfig {
     configVersion: CODE_CONFIG_VERSION,
     prompt: "",
     language: "c",
-    runtime: "backend",
+    // A NEW question runs the student's trials in the browser — instant, and
+    // free for the server. Only here: a stored config without the field keeps
+    // the zod default, "backend", and so keeps its meaning.
+    runtime: "runno",
+    cooldown: "fixed",
     template: "",
     files: [],
     action: "run",

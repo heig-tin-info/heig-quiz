@@ -615,6 +615,8 @@ export const en = {
   "question.try.title": "Try the question",
   "question.try.hint": "Answer as a student would; nothing is recorded.",
   "question.try.grade": "Grade my answer",
+  "question.try.runTests": "Run all the tests",
+  "question.try.runTestsHint": "Visible and hidden cases alike, graded as a student's answer: you see the score.",
   "question.try.again": "Try again",
   "question.try.score": "{points} of {max} points",
   "question.try.empty.title": "Not tried yet",
@@ -809,24 +811,35 @@ export const en = {
   "qt.code.e.prompt": "Statement",
   "qt.code.e.language": "Language",
   "qt.code.e.template": "Starting code",
-  "qt.code.e.templateHint":
-    "What the student receives. Lines between @@lock and @@endlock are read-only: the server rebuilds the file from this template, never from the text the browser sends.",
+  "qt.code.e.templateHint": "Select lines, then lock them: the student cannot edit a locked line.",
   "qt.code.e.lockedRegions": "{n} locked regions",
   "qt.code.e.lockedRegions.one": "1 locked region",
-  "qt.code.e.studentPreview": "What the student can edit",
-  "qt.code.e.locked": "Locked",
-  "qt.code.e.editable": "Editable",
+  "qt.code.e.lock": "Lock",
+  "qt.code.e.unlock": "Unlock",
+  "qt.code.e.lockLines": "Lock these lines — the student cannot edit them",
+  "qt.code.e.unlockLines": "Unlock these lines",
+  "qt.code.e.markerUnknown": "Line {line}: unknown marker {marker} — use @@lock and @@endlock.",
+  "qt.code.e.markerUnopened": "Line {line}: {marker} closes no locked region.",
+  "qt.code.e.markerNested": "Line {line}: {marker} inside a region that is already locked.",
   "qt.code.e.referenceSolution": "Reference solution",
   "qt.code.e.referenceSolutionHint":
-    "Your own answer to the editable parts, in the order they appear — with several of them, separate the pieces with a @@next comment line, exactly as the template uses @@lock. Used only by the button below, to check that the cases pass. A student never sees it.",
+    "Your own answer, in the student's editor. Used only by the button below, to check that the cases pass. Never shown to a student.",
+  "qt.code.e.referenceRegion": "Reference solution, region {n}",
+  "qt.code.e.referenceLocked": "Locked — part of the starting code",
+  "qt.code.e.referenceExtraPieces":
+    "The saved solution has more pieces than the starting code has editable regions. The extra ones are dropped at your next edit.",
   "qt.code.e.tryReference": "Try the reference solution",
   "qt.code.e.trying": "Running…",
   "qt.code.e.tryUnavailable":
     "The runner is unavailable, so the reference solution cannot be tried right now.",
   "qt.code.e.tryCompileFailed": "The reference solution does not compile.",
   "qt.code.e.tryRegionsMismatch":
-    "The reference solution does not match the starting code: it must hold one piece per editable region, separated by a @@next comment line.",
+    "The reference solution does not fit the editable regions of the starting code. Edit it once in the editor above to realign it.",
   "qt.code.e.tryResult": "{passed} of {total} cases pass.",
+  "qt.code.e.tryDiverged":
+    "The browser and the server disagree on {n} cases — students' trials may mislead them. Consider \"Same as grading\".",
+  "qt.code.e.tryDiverged.one":
+    "The browser and the server disagree on 1 case — students' trials may mislead them. Consider \"Same as grading\".",
   "qt.code.e.cases": "Test cases",
   "qt.code.e.caseName": "Name",
   "qt.code.e.stdin": "stdin",
@@ -840,17 +853,25 @@ export const en = {
   "qt.code.e.advanced": "Advanced options",
   "qt.code.e.case": "Case {n}",
   "qt.code.e.args": "Arguments",
-  "qt.code.e.argsHint": "One argument per line. Blank lines are ignored.",
+  "qt.code.e.argument": "Argument {n}",
+  "qt.code.e.addArgument": "Add an argument",
+  "qt.code.e.removeArgument": "Remove argument {n}",
+  "qt.code.e.commandLine": "Command line",
   "qt.code.e.compareStdout": "Compare the output",
   "qt.code.e.exitCode": "Exit code",
   "qt.code.e.exitCodeAny": "any",
   "qt.code.e.exitCodeHint":
     "Empty: any exit code is accepted. A crash still fails the case.",
-  "qt.code.e.runtime": "Run in",
-  "qt.code.e.runtimeBackend": "The server",
-  "qt.code.e.runtimeBrowser": "The browser",
-  "qt.code.e.runtimeHint":
-    "The browser runs the student's trials; the server always grades.",
+  "qt.code.e.runtime": "Student's runs",
+  "qt.code.e.runtimeBackend": "Same as grading",
+  "qt.code.e.runtimeBrowser": "Instant",
+  "qt.code.e.runtimeBackendHint": "On the server, exactly like the grading.",
+  "qt.code.e.runtimeBrowserHint": "In the student's browser: no waiting, no load on the server.",
+  "qt.code.e.cooldown": "Between runs",
+  "qt.code.e.cooldownFixed": "Fixed",
+  "qt.code.e.cooldownProgressive": "Progressive",
+  "qt.code.e.cooldownFixedHint": "3 s between runs.",
+  "qt.code.e.cooldownProgressiveHint": "3 s, then 30 % longer each time, up to 30 s.",
   "qt.code.e.action": "Action",
   "qt.code.e.actionCheck": "Compile only",
   "qt.code.e.actionRun": "Compile and run",
@@ -874,9 +895,18 @@ export const en = {
 
   // --- qt-code player strings ---
   "qt.code.p.locked": "Locked — provided by your teacher",
+  "qt.code.p.program": "Your program",
   "qt.code.p.editableRegion": "Your code, region {n}",
   "qt.code.p.run": "Run",
   "qt.code.p.running": "Running…",
+  "qt.code.p.compile": "Compile",
+  "qt.code.p.compiling": "Compiling…",
+  "qt.code.p.runTests": "Run the tests",
+  "qt.code.p.freeTry": "Free try",
+  "qt.code.p.availableIn": "Available in {seconds} s",
+  "qt.code.p.unchangedTests": "Change your code to run the tests again.",
+  "qt.code.p.unchangedRun": "Change your code to run it again.",
+  "qt.code.p.unchangedManual": "Change your code or the input to run it again.",
   "qt.code.p.runUnavailable":
     "Running is unavailable right now. Your answer is saved and will be graded by your teacher.",
   "qt.code.p.runFailed":
@@ -903,7 +933,6 @@ export const en = {
   "qt.code.p.allOrNothing": "All cases must pass to score.",
   "qt.code.p.limits": "{timeMs} ms · {memoryMb} MB",
   "qt.code.p.loadingRuntime": "Loading the language runtime… this happens once.",
-  "qt.code.p.inBrowser": "Runs in your browser — the server grades.",
   "qt.code.p.noStdin": "No input",
   "qt.code.p.command": "$ program {args}",
   "qt.code.p.expectedAnyOutput": "Any output",
@@ -913,9 +942,11 @@ export const en = {
   "qt.code.p.exitCode": "exit {code}",
   "qt.code.p.outputMismatch": "Output differs",
   "qt.code.p.manual": "Try it yourself",
-  "qt.code.p.manualHint":
-    "Run your program once on an input of your own. One argument per line; nothing here is graded.",
   "qt.code.p.manualArgs": "Arguments",
+  "qt.code.p.argument": "Argument {n}",
+  "qt.code.p.addArgument": "Add an argument",
+  "qt.code.p.removeArgument": "Remove argument {n}",
+  "qt.code.p.commandLine": "Command line",
   "qt.code.p.manualRun": "Run once",
   "qt.code.p.manualOutput": "Output",
 
@@ -952,7 +983,7 @@ export const en = {
   // --- qt-code: codeimage (ADR-021) — only what a picture adds; the program
   // half reads the qt.code.* sentences above ---
   "qt.codeimage.e.referenceSolutionHint":
-    "Your own answer to the editable parts, in the order they appear — with several of them, separate the pieces with a @@next comment line, exactly as the template uses @@lock. The button below runs it and draws its image, which you can then use as the target. A student never sees it.",
+    "Your own answer, in the student's editor. The button below runs it and draws its image, which you can then use as the target. Never shown to a student.",
   "qt.codeimage.e.imageSection": "Image",
   "qt.codeimage.e.imageHint":
     "The program prints width × height integers on its standard output, separated by spaces, tabs or newlines, row by row from the top left. They are the pixels.",

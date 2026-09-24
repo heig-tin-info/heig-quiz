@@ -511,10 +511,11 @@ describe("QuestionEditor — code", () => {
 
     await user.click(screen.getByRole("button", { name: "Try the reference solution" }));
     expect(await screen.findByText("1 of 1 cases pass.")).toBeInTheDocument();
-    // The template is one editable region, so the whole reference is it.
+    // The template is one editable region and the reference was never
+    // written, so "try" runs what the reference editor shows: the template.
     expect(calls.find((c) => c.url === "/app/api/questions/q2/try")?.body).toEqual({
       source: "draft",
-      answer: { regions: [""] },
+      answer: { regions: ["int somme(void) {\n    return 0;\n}\n"] },
     });
   });
 

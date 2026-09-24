@@ -69,6 +69,8 @@ export interface UseAttempt {
     regions: string[],
     /** The free try of §4.7; absent, the server runs the VISIBLE cases. */
     manual?: { args: string[]; stdin: string },
+    /** `compileOnly`: the Compile button — build, run nothing, no input. */
+    options?: { compileOnly?: boolean | undefined },
   ) => Promise<RunnerOutcome | "unavailable">;
   /** F-EVAL-13: the journal. Never blocks, never surfaces an error. */
   report: (kind: AttemptEventKind, details?: unknown) => void;
@@ -335,6 +337,7 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
       itemId: string,
       regions: string[],
       manual?: { args: string[]; stdin: string },
+      options?: { compileOnly?: boolean | undefined },
     ): Promise<RunnerOutcome | "unavailable"> => {
       try {
         const response = await api<RunAccepted>(
@@ -342,11 +345,14 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
           {
             method: "POST",
             // A `stdin` — even an empty one — is what tells the server this is
-            // the free try rather than the visible cases (`RunBody`).
+            // the free try rather than the visible cases (`RunBody`);
+            // `compileOnly` is the Compile button, which takes no input.
             body: JSON.stringify(
-              manual === undefined
-                ? { itemId, regions }
-                : { itemId, regions, stdin: manual.stdin, args: manual.args },
+              options?.compileOnly === true
+                ? { itemId, regions, compileOnly: true }
+                : manual === undefined
+                  ? { itemId, regions }
+                  : { itemId, regions, stdin: manual.stdin, args: manual.args },
             ),
           },
         );

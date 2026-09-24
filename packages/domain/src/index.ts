@@ -6,6 +6,7 @@
  */
 export * from "./cloze.js";
 export * from "./compareOutput.js";
+export * from "./cooldown.js";
 export * from "./deadline.js";
 export * from "./evaluationConfig.js";
 export * from "./format.js";

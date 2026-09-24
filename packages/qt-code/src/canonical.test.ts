@@ -60,6 +60,13 @@ describe("the canonical mapping", () => {
     expect(canonical).not.toHaveProperty("runtime");
   });
 
+  it("writes the cooldown only when it is not the default", () => {
+    expect(toCanonical(codeConfig())).toMatchObject({ cooldown: "progressive" });
+    const fixed = CodeConfig.parse({ ...codeConfig(), cooldown: "fixed" });
+    expect(toCanonical(fixed)).not.toHaveProperty("cooldown");
+    expect(fromCanonical(toCanonical(codeConfig()))).toEqual(codeConfig());
+  });
+
   it("round-trips a command line, the two checks and the browser runtime", () => {
     const config = CodeConfig.parse({
       ...codeConfig(),
@@ -108,6 +115,7 @@ describe("the canonical mapping", () => {
     // A file written before ADR-015 means exactly what it meant: no command
     // line, compare stdout, require exit 0, run on the backend.
     expect(config.runtime).toBe("backend");
+    expect(config.cooldown).toBe("fixed");
     expect(config.tests.cases[0]).toMatchObject({
       args: [],
       compareStdout: true,

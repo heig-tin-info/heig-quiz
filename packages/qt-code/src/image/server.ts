@@ -104,6 +104,7 @@ export const codeimageServer: QuestionTypeServer<
       prompt: config.prompt,
       language: config.language,
       runtime: config.runtime,
+      cooldown: config.cooldown,
       segments: splitTemplate(config.template, config.language),
       limits: { ...config.limits },
       runsPerMinute: config.runsPerMinute,

@@ -221,6 +221,12 @@ export async function runVisibleCases(
     stdin?: string | undefined;
     /** The command line of the free-stdin try; a visible case keeps the teacher's. */
     args?: string[] | undefined;
+    /**
+     * The Compile button: the runner builds the program (`action: "check"`)
+     * and runs no case at all. It spends the same budget as a run — a
+     * compilation is most of a run's cost — and journals `compileOnly: true`.
+     */
+    compileOnly?: boolean | undefined;
     now: Date;
   },
 ): Promise<{ requestId: string; result: RunnerResultEvent["result"] }> {
@@ -245,13 +251,27 @@ export async function runVisibleCases(
   // cases. The hidden half never leaves the grading worker. A visible case
   // keeps the `args` the TYPE put in the request (invariant 14); only the
   // free-stdin try takes a command line from the browser.
-  const cases =
-    input.stdin === undefined
+  // A compile-only request carries NO case: the runner stops after the build
+  // whatever the list holds, but an empty one also keeps its container TTL
+  // (and the journal) honest about what was asked.
+  const compileOnly = input.compileOnly === true;
+  const cases = compileOnly
+    ? []
+    : input.stdin === undefined
       ? first.request.cases.filter((c) => visibleNames.has(c.name))
       : [{ name: "stdin", args: input.args ?? [], stdin: input.stdin }];
-  const request = { ...first.request, cases, priority: "interactive" as const };
+  const request: RunnerRequest = {
+    ...first.request,
+    ...(compileOnly ? { action: "check" as const } : {}),
+    cases,
+    priority: "interactive",
+  };
 
-  const { requestId, outcome } = await runForStudent(db, { ...input, request }, { itemId });
+  const { requestId, outcome } = await runForStudent(
+    db,
+    { ...input, request },
+    compileOnly ? { itemId, compileOnly: true } : { itemId },
+  );
   const result: RunnerResultEvent["result"] = {
     status: "ok",
     compile: { ok: outcome.compile.ok, stderr: outcome.compile.stderr },

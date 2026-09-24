@@ -45,6 +45,7 @@ export function toCanonical(config: CodeConfig): Record<string, unknown> {
     },
   };
   if (config.runtime !== "backend") out.runtime = config.runtime;
+  if (config.cooldown !== "fixed") out.cooldown = config.cooldown;
   if (config.files.length > 0) out.files = config.files.map((f) => ({ ...f }));
   if (config.compileArgs !== "") out.compileArgs = config.compileArgs;
   if (!isSameLimits(config.limits)) out.limits = { ...config.limits };

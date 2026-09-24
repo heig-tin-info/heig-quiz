@@ -1141,6 +1141,43 @@ describe("running code (POST /attempts/:id/run)", () => {
     expect(plain.requests[0]?.cases).toEqual([{ name: "stdin", args: [], stdin: "7\n" }]);
   });
 
+  it("compiles without running anything when the body asks for compileOnly", async () => {
+    const { evaluation, attempt, itemId } = await codeAttempt();
+    const seen: { action: string; cases: unknown[] }[] = [];
+    const runner = {
+      run: async (req: { action: string; cases: unknown[] }) => {
+        seen.push({ action: req.action, cases: req.cases });
+        return { compile: { ok: false, stdout: "", stderr: "main.c:1: error", ms: 1 }, cases: [] };
+      },
+      health: async () => ({ ok: true, languages: ["c"], queued: 0, avgMs: 1 }),
+    } as never;
+    const base = { runner, evaluation, attempt, itemId, regions: ["return 0;"] };
+    const { requestId, result } = await service.runVisibleCases(db, {
+      ...base,
+      // Ignored: a compilation has no case to feed.
+      stdin: "7\n",
+      compileOnly: true,
+      now: clock.now(),
+    });
+    expect(seen).toEqual([{ action: "check", cases: [] }]);
+    expect(result).toEqual({
+      status: "ok",
+      compile: { ok: false, stderr: "main.c:1: error" },
+      cases: [],
+    });
+    // Same journal, same budget: a compilation is a `run` event…
+    const journal = await db
+      .select()
+      .from(attemptEvents)
+      .where(eq(attemptEvents.attemptId, attempt.id));
+    expect(journal.map((e) => e.details)).toEqual([{ itemId, requestId, compileOnly: true }]);
+    // …so with `runsPerMinute: 2`, one more and the next run is refused.
+    await service.runVisibleCases(db, { ...base, compileOnly: true, now: clock.now() });
+    await expect(
+      service.runVisibleCases(db, { ...base, now: clock.now() }),
+    ).rejects.toMatchObject({ code: "rate_limited" });
+  });
+
   /** A runner that answers every case with the same run. */
   function answering(run: Partial<RunnerOutcome["cases"][number]>): never {
     return {

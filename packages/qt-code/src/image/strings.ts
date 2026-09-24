@@ -48,7 +48,7 @@ export interface ImageEditorStrings {
 
 export const IMAGE_EDITOR_STRINGS: ImageEditorStrings = {
   referenceSolutionHint:
-    "Your own answer to the editable parts, in the order they appear — with several of them, separate the pieces with a @@next comment line, exactly as the template uses @@lock. The button below runs it and draws its image, which you can then use as the target. A student never sees it.",
+    "Your own answer, in the student's editor. The button below runs it and draws its image, which you can then use as the target. Never shown to a student.",
   imageSection: "Image",
   imageHint:
     "The program prints width × height integers on its standard output, separated by spaces, tabs or newlines, row by row from the top left. They are the pixels.",

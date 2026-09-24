@@ -6,8 +6,9 @@
  * when the runner is unavailable — which is the DEFAULT configuration of the
  * platform (decision D14), not an edge case.
  */
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CodePlayer } from "./Player.js";
 import { finalizeRunnerCode } from "./grade.js";
@@ -16,6 +17,9 @@ import { codeServer } from "./server.js";
 import { codeConfig, FINALIZE_CTX, outcome } from "./test/fixtures.js";
 
 const student = codeServer.toStudent(codeConfig(), { seed: 7, itemId: "i", shuffle: false });
+
+/** The primary button; while it cools down its name also says when it is back. */
+const RUN_TESTS = /^Run the tests/;
 
 function setup(overrides: Partial<React.ComponentProps<typeof CodePlayer>> = {}) {
   const onChange = vi.fn<(next: CodeAnswer) => void>();
@@ -69,18 +73,18 @@ describe("CodePlayer", () => {
   it("is read-only once the attempt is submitted", () => {
     setup({ readOnly: true, onRun: async () => outcome([]) });
     expect(screen.getByLabelText("Your code, region 1")).toHaveAttribute("readonly");
-    expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: RUN_TESTS })).toBeDisabled();
   });
 
   it("honours `disabled` exactly as `readOnly`, like every other player", () => {
     setup({ disabled: true, onRun: async () => outcome([]) });
     expect(screen.getByLabelText("Your code, region 1")).toHaveAttribute("readonly");
-    expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: RUN_TESTS })).toBeDisabled();
   });
 
   it("hides the Run button entirely when the host wires no runner", () => {
     setup();
-    expect(screen.queryByRole("button", { name: "Run" })).toBeNull();
+    expect(screen.queryByRole("button", { name: RUN_TESTS })).toBeNull();
     expect(screen.getByText("Visible cases")).toBeInTheDocument();
   });
 
@@ -88,7 +92,7 @@ describe("CodePlayer", () => {
     setup({
       onRun: async () => outcome([{ stdout: "6\n" }, { stdout: "1" }]),
     });
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    fireEvent.click(screen.getByRole("button", { name: RUN_TESTS }));
 
     expect(await screen.findByText("Compiled")).toBeInTheDocument();
     expect(screen.getByText("Passed")).toBeInTheDocument();
@@ -102,14 +106,14 @@ describe("CodePlayer", () => {
     setup({
       onRun: async () => outcome([{ timedOut: true }, { oom: true }]),
     });
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    fireEvent.click(screen.getByRole("button", { name: RUN_TESTS }));
     expect(await screen.findByText("Timed out")).toBeInTheDocument();
     expect(screen.getByText("Out of memory")).toBeInTheDocument();
   });
 
   it("says the answer is safe when the runner is unavailable", async () => {
     setup({ onRun: async () => "unavailable" });
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    fireEvent.click(screen.getByRole("button", { name: RUN_TESTS }));
     expect(
       await screen.findByText(
         "Running is unavailable right now. Your answer is saved and will be graded by your teacher.",
@@ -119,7 +123,7 @@ describe("CodePlayer", () => {
 
   it("survives a rejected run without losing the answer", async () => {
     setup({ onRun: async () => Promise.reject(new Error("network")) });
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    fireEvent.click(screen.getByRole("button", { name: RUN_TESTS }));
     expect(
       await screen.findByText(
         "The run could not be completed. Your answer is saved; try again in a moment.",
@@ -132,7 +136,7 @@ describe("CodePlayer", () => {
     // Case 1 was killed (no exit code of its own); the runner sent nothing back
     // for case 2 — both labels come from `caseVerdict`'s failure.
     setup({ onRun: async () => outcome([{ exitCode: null, stdout: "6\n" }]) });
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    fireEvent.click(screen.getByRole("button", { name: RUN_TESTS }));
     expect(await screen.findByText("Crashed")).toBeInTheDocument();
     expect(screen.getByText("Not run")).toBeInTheDocument();
   });
@@ -141,14 +145,14 @@ describe("CodePlayer", () => {
     setup({
       onRun: async () => outcome([{ stdout: "6\n" }, { stdout: "0\n" }], { ok: false, stderr: "err" }),
     });
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    fireEvent.click(screen.getByRole("button", { name: RUN_TESTS }));
     expect(await screen.findAllByText("Not run")).toHaveLength(2);
     expect(screen.queryByText("Passed")).toBeNull();
   });
 
   it("names the check that failed rather than saying only 'Failed'", async () => {
     setup({ onRun: async () => outcome([{ exitCode: 1, stdout: "6\n" }, { stdout: "0\n" }]) });
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    fireEvent.click(screen.getByRole("button", { name: RUN_TESTS }));
     // Case 1 prints the right thing but leaves with 1, and the case wants 0.
     expect(await screen.findByText("exit 1 ≠ 0")).toBeInTheDocument();
     expect(screen.getByText("Passed")).toBeInTheDocument();
@@ -167,18 +171,13 @@ describe("CodePlayer", () => {
 
   it("flags a run whose output was cut at the limit", async () => {
     setup({ onRun: async () => outcome([{ stdout: "6\n", truncated: true }, { stdout: "0\n" }]) });
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    fireEvent.click(screen.getByRole("button", { name: RUN_TESTS }));
     expect(await screen.findByText("Output truncated")).toBeInTheDocument();
   });
 
-  it("says where the program runs when the browser is the one running it", () => {
+  it("does not say where the program runs: a student does nothing different about it", () => {
     setup({ student: { ...student, runtime: "runno" }, onRun: async () => outcome([]) });
-    expect(screen.getByText("Runs in your browser — the server grades.")).toBeInTheDocument();
-  });
-
-  it("keeps quiet about the browser when the server is the one running it", () => {
-    setup({ onRun: async () => outcome([]) });
-    expect(screen.queryByText("Runs in your browser — the server grades.")).toBeNull();
+    expect(screen.queryByText(/browser/i)).toBeNull();
   });
 
   it("announces the runtime download, which only happens once", async () => {
@@ -193,7 +192,7 @@ describe("CodePlayer", () => {
         return outcome([]);
       },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    fireEvent.click(screen.getByRole("button", { name: RUN_TESTS }));
     expect(
       await screen.findByText("Loading the language runtime… this happens once."),
     ).toBeInTheDocument();
@@ -209,21 +208,35 @@ describe("CodePlayer", () => {
         return outcome([{ stdout: "42\n", exitCode: 0 }]);
       },
     });
-    fireEvent.change(screen.getByLabelText("Arguments"), { target: { value: "-v\n7" } });
+    const toggle = screen.getByRole("button", { name: "Free try" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+    fireEvent.click(screen.getByRole("button", { name: "Add an argument" }));
+    fireEvent.change(screen.getByLabelText("Argument 1"), { target: { value: "hello world" } });
+    fireEvent.keyDown(screen.getByLabelText("Argument 1"), { key: "Enter" });
+    fireEvent.change(screen.getByLabelText("Argument 2"), { target: { value: "7" } });
+    expect(screen.getByLabelText("Command line")).toHaveTextContent("./prog 'hello world' 7");
     fireEvent.change(screen.getByLabelText("stdin"), { target: { value: "1 2\n" } });
     fireEvent.click(screen.getByRole("button", { name: "Run once" }));
     expect(await screen.findByLabelText("Output")).toHaveTextContent("42");
-    expect(seen).toEqual([{ args: ["-v", "7"], stdin: "1 2\n" }]);
+    // A space is part of an argument: one row, one argv entry.
+    expect(seen).toEqual([{ args: ["hello world", "7"], stdin: "1 2\n" }]);
+
+    fireEvent.click(toggle);
+    expect(screen.queryByRole("button", { name: /^Run once/ })).toBeNull();
   });
 
   it("hides the free input when the host cannot take one", () => {
     setup({ onRun: async () => outcome([]) });
-    expect(screen.queryByRole("button", { name: "Run once" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Free try" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Run once/ })).toBeNull();
   });
 
   it("takes its strings from the host", () => {
-    setup({ strings: { run: "Exécuter" }, onRun: async () => outcome([]) });
-    expect(screen.getByRole("button", { name: "Exécuter" })).toBeInTheDocument();
+    setup({ strings: { runTests: "Lancer les tests" }, onRun: async () => outcome([]) });
+    expect(screen.getByRole("button", { name: "Lancer les tests" })).toBeInTheDocument();
   });
 
   it("renders the prompt through the host's markdown renderer", () => {
@@ -235,6 +248,115 @@ describe("CodePlayer", () => {
     setup();
     expect(screen.queryByTestId("md")).toBeNull();
     expect(screen.getByText("Sum the integers read on stdin.")).toBeInTheDocument();
+  });
+});
+
+describe("the student's tools", () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Lets the whole cooldown of a server run go by (10 runs a minute: 6.5 s). */
+  const waitOutCooldown = () => act(() => void vi.advanceTimersByTime(31_000));
+
+  it("compiles without running, and shows the compiler's words", async () => {
+    const seen: unknown[] = [];
+    setup({
+      onRun: async (_answer, options) => {
+        seen.push(options?.compileOnly);
+        return outcome([], { ok: false, stderr: "main.c:3: error: expected ';'" });
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Compile" }));
+    expect(await screen.findByText("main.c:3: error: expected ';'")).toBeInTheDocument();
+    expect(screen.getByText("Compilation failed")).toBeInTheDocument();
+    expect(seen).toEqual([true]);
+  });
+
+  it("refills after a run, and says when the buttons are back", async () => {
+    setup({ onRun: async () => outcome([{ stdout: "6\n" }, { stdout: "0\n" }]) });
+    fireEvent.click(screen.getByRole("button", { name: RUN_TESTS }));
+    await screen.findByText("Compiled");
+    // The server budget of 10 runs a minute floors the wait at 6.5 s, and one
+    // counter holds all three tools back.
+    const compile = screen.getByRole("button", { name: /^Compile/ });
+    expect(compile).toBeDisabled();
+    expect(compile).toHaveAccessibleName("Compile. Available in 7 s");
+    expect(screen.getAllByTestId("cooldown-fill").length).toBeGreaterThan(0);
+    await waitOutCooldown();
+    expect(screen.queryByTestId("cooldown-fill")).toBeNull();
+  });
+
+  it("has no server floor in the browser: 3 s", async () => {
+    setup({
+      student: { ...student, runtime: "runno" },
+      onRun: async () => outcome([{ stdout: "6\n" }, { stdout: "0\n" }]),
+    });
+    fireEvent.click(screen.getByRole("button", { name: RUN_TESTS }));
+    await screen.findByText("Compiled");
+    expect(screen.getByRole("button", { name: RUN_TESTS })).toHaveAccessibleName(
+      "Run the tests. Available in 3 s",
+    );
+    await act(() => void vi.advanceTimersByTime(3100));
+    expect(screen.queryByTestId("cooldown-fill")).toBeNull();
+  });
+
+  it("rests while the code is what the last test run ran, keeping its results", async () => {
+    // A host that echoes each change back as the answer, like the real one.
+    function Host() {
+      const [answer, setAnswer] = useState<CodeAnswer | null>(null);
+      return (
+        <CodePlayer
+          student={student}
+          answer={answer}
+          onChange={setAnswer}
+          readOnly={false}
+          monaco={false}
+          onRun={async () => outcome([{ stdout: "6\n" }, { stdout: "0\n" }])}
+        />
+      );
+    }
+    render(<Host />);
+    fireEvent.click(screen.getByRole("button", { name: RUN_TESTS }));
+    expect(await screen.findAllByText("Passed")).toHaveLength(2);
+    await waitOutCooldown();
+
+    expect(screen.getByRole("button", { name: RUN_TESTS })).toBeDisabled();
+    // A test run compiles too: Compile has nothing new to say either.
+    expect(screen.getByRole("button", { name: "Compile" })).toBeDisabled();
+    expect(screen.getByText("Change your code to run the tests again.")).toBeInTheDocument();
+    expect(screen.getAllByText("Passed")).toHaveLength(2);
+
+    fireEvent.change(screen.getByLabelText("Your code, region 2"), {
+      target: { value: "    return 6;\n" },
+    });
+    expect(screen.getByRole("button", { name: RUN_TESTS })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Compile" })).toBeEnabled();
+    expect(screen.queryByText("Change your code to run the tests again.")).toBeNull();
+  });
+
+  it("does not rest after a run that answered nothing", async () => {
+    setup({ onRun: async () => "unavailable" });
+    fireEvent.click(screen.getByRole("button", { name: RUN_TESTS }));
+    await screen.findByText(/Running is unavailable right now/);
+    await waitOutCooldown();
+    expect(screen.getByRole("button", { name: RUN_TESTS })).toBeEnabled();
+    expect(screen.queryByText("Change your code to run the tests again.")).toBeNull();
+  });
+
+  it("lets the free try run again once its input changed", async () => {
+    setup({ allowManualRun: true, onRun: async () => outcome([{ stdout: "1\n" }]) });
+    fireEvent.click(screen.getByRole("button", { name: "Free try" }));
+    fireEvent.click(screen.getByRole("button", { name: "Run once" }));
+    await screen.findByLabelText("Output");
+    await waitOutCooldown();
+    expect(screen.getByRole("button", { name: "Run once" })).toBeDisabled();
+    expect(screen.getByText("Change your code or the input to run it again.")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("stdin"), { target: { value: "2\n" } });
+    expect(screen.getByRole("button", { name: "Run once" })).toBeEnabled();
   });
 });
 
@@ -290,7 +412,7 @@ describe("the player and the grade agree (audit R-06)", () => {
           onRun={async () => run}
         />,
       );
-      fireEvent.click(screen.getByRole("button", { name: "Run" }));
+      fireEvent.click(screen.getByRole("button", { name: RUN_TESTS }));
       expect(await screen.findAllByText("Passed")).toHaveLength(2);
       expect(screen.queryByText("Output differs")).toBeNull();
     });
@@ -313,7 +435,7 @@ describe("the player and the grade agree (audit R-06)", () => {
         onRun={async () => run}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Run" }));
+    fireEvent.click(screen.getByRole("button", { name: RUN_TESTS }));
     expect(await screen.findByText("Output differs")).toBeInTheDocument();
   });
 });

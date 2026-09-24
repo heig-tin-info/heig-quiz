@@ -295,27 +295,25 @@ export interface TryContext {
 type TryAdapter = (config: unknown) => Promise<TryOutcome>;
 
 /**
- * "Try the reference solution" (`CodeEditor`), on whichever runner the
- * question asks for — the same choice a STUDENT'S "Run" goes through
- * (`src/runner/`, ADR-015), so a teacher rehearses on the engine their
- * class will meet.
+ * "Try the reference solution" (`CodeEditor`): the SERVER first, because it
+ * is the grader and the reference is checked against the grade.
  *
  * The reference solution is read as one piece per editable region
  * (`referenceRegions`, `@@next` between them). The editor refuses a
  * mismatch before it ever calls this, which is why `null` below is a bug
  * and not a state: it throws rather than inventing a verdict.
  *
- *  - `runtime: "runno"`: the browser runner runs the program assembled
- *    here from the DRAFT's template and those regions, with the teacher's
- *    compiler flags and the real content of the extra files — the editor
- *    holds the whole config, so nothing has to be withheld the way
- *    `toStudent` withholds it from a student. It answers a raw
- *    `RunnerOutcome` and the editor judges the cases itself.
- *  - `runtime: "backend"`, or a browser runtime that would not load:
- *    `POST /questions/:id/try` grades the reference solution as an ANSWER.
+ *  - `POST /questions/:id/try` grades the reference solution as an ANSWER.
  *    It returns a grading, not a run (`TryResult` carries no per-case
  *    runner outcome), so what comes back is the server's own verdict —
- *    `{ graded }` — and the editor shows it instead of re-deciding it.
+ *    `{ graded }`, with each case's pass/fail — and the editor shows it
+ *    instead of re-deciding it. On a `runno` question the editor then runs
+ *    the same program in the browser (`tryReferenceInBrowser`) and warns
+ *    when the two disagree.
+ *  - the server has no runner (`RUNNER_MODE=stub`, decision D14) and the
+ *    question runs in the browser: the browser answers alone, a raw
+ *    `RunnerOutcome` the editor judges itself — the engine the students'
+ *    trials will meet, which is better than nothing.
  */
 function tryReference({ id, flush }: TryContext): TryAdapter {
   return async (raw) => {
@@ -323,35 +321,50 @@ function tryReference({ id, flush }: TryContext): TryAdapter {
     const regions = referenceRegions(config);
     if (regions === null) throw new Error("reference solution does not fit the template");
 
-    const browser = await runnerFor(config.runtime, config.language);
-    if (browser !== null) {
-      try {
-        return await browser.run(referenceRunRequest(config, regions));
-      } catch (error) {
-        // The runtime did not load on this deployment: the server answers
-        // the same question, exactly as it does for a student.
-        if (!(error instanceof BrowserRunnerUnavailable)) throw error;
-      }
-    }
-
     // The route grades what the server HOLDS, so the draft goes first.
     flush();
     const result = await api<TryResult>(`/app/api/questions/${id}/try`, {
       method: "POST",
       body: JSON.stringify({ source: "draft", answer: { regions } }),
     });
-    if (result.status !== "graded") return "unavailable";
-    const details = result.details as CodeDetails;
-    if (details.runner !== "ok") return "unavailable";
+    const details = result.status === "graded" ? (result.details as CodeDetails) : null;
+    if (details === null || details.runner !== "ok") {
+      if (config.runtime !== "runno") return "unavailable";
+      return tryReferenceInBrowser(config);
+    }
     return {
       graded: {
         // `null` is a language with no compile step, not a failure.
         compileOk: details.compile?.ok ?? true,
         passed: details.cases.filter((c) => c.ok).length,
         total: details.cases.length,
+        cases: details.cases.map((c) => c.ok),
       },
     };
   };
+}
+
+/**
+ * The reference, run by the BROWSER runner (`CodeEditor.onTryInBrowser`):
+ * the program assembled here from the draft's template and the reference's
+ * regions, with the teacher's compiler flags and the real content of the
+ * extra files — the editor holds the whole config, so nothing has to be
+ * withheld the way `toStudent` withholds it from a student. `"unavailable"`
+ * when this browser cannot run the language or its runtime will not load.
+ */
+export async function tryReferenceInBrowser(
+  config: CodeConfig,
+): Promise<RunnerOutcome | "unavailable"> {
+  const regions = referenceRegions(config);
+  if (regions === null) return "unavailable";
+  const browser = await runnerFor("runno", config.language);
+  if (browser === null) return "unavailable";
+  try {
+    return await browser.run(referenceRunRequest(config, regions));
+  } catch (error) {
+    if (!(error instanceof BrowserRunnerUnavailable)) throw error;
+    return "unavailable";
+  }
 }
 
 /**
@@ -460,6 +473,8 @@ interface EditorHostProps {
   aside?: HTMLElement | null;
   ungraded?: boolean;
   onTry?: (config: unknown) => Promise<TryOutcome>;
+  /** `code` only: `CodeEditorProps.onTryInBrowser`. */
+  onTryInBrowser?: (config: CodeConfig) => Promise<RunnerOutcome | "unavailable">;
 }
 
 /**
@@ -543,6 +558,9 @@ export function QuestionEditorHost({
         {...(aside === undefined ? {} : { aside })}
         {...(ungraded === undefined ? {} : { ungraded })}
         {...(onTry === undefined ? {} : { onTry })}
+        {...(onTry !== undefined && client.id === "code"
+          ? { onTryInBrowser: tryReferenceInBrowser }
+          : {})}
       />
     </Suspense>
   );
@@ -558,6 +576,7 @@ interface PlayerHostProps {
   renderMarkdown?: (source: string) => ReactNode;
   onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
   allowManualRun?: boolean;
+  testsPrimary?: boolean;
   onSimulate?: (answer: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
 }
 
@@ -570,6 +589,7 @@ export function QuestionPlayerHost({
   readOnly,
   onRun,
   allowManualRun,
+  testsPrimary,
   onSimulate,
 }: {
   t: TFunction;
@@ -581,6 +601,8 @@ export function QuestionPlayerHost({
   /** `code` only: the run the type's player offers, from `src/runner/`. */
   onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
   allowManualRun?: boolean;
+  /** `code` only: false where the host has its own primary action (the try panel). */
+  testsPrimary?: boolean;
   /**
    * `circuit` only: the simulation its player offers. It has no browser half
    * — a netlist is assembled server-side (invariant 14) — so it is one call,
@@ -607,6 +629,7 @@ export function QuestionPlayerHost({
           renderMarkdown={renderInline}
           {...(onRun === undefined ? {} : { onRun })}
           {...(allowManualRun === undefined ? {} : { allowManualRun })}
+          {...(testsPrimary === undefined ? {} : { testsPrimary })}
           {...(onSimulate === undefined ? {} : { onSimulate })}
         />
       </Suspense>

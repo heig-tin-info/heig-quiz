@@ -354,7 +354,8 @@ const scenes = [
       await p.waitForTimeout(1200);
     } },
   { name: "try-code-runner", role: "teacher", path: "/questions/q1?tab=try", settle: 5000, act: async (p) => {
-      await p.getByRole("button", { name: /corriger|grade/i }).first().click();
+      // For `code`, grading is running every test: the button says so.
+      await p.getByRole("button", { name: /lancer tous les tests|run all the tests/i }).first().click();
       await p.waitForTimeout(1200);
     } },
   { name: "palette-pool", role: "teacher", path: "/pools/p1", fold: true, act: (p) => p.keyboard.press("Control+k") },

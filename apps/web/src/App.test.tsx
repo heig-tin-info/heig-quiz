@@ -81,6 +81,11 @@ describe("the frame's view switch", () => {
     );
     expect(window.location.pathname).toBe(`/take/${EVAL}`);
     expect(await screen.findByText("Quiz 3 — Pointers")).toBeVisible();
+
+    // The attempt has no frame, so the banner carries the way back — without
+    // handing the attempt in first.
+    await userEvent.click(screen.getByRole("button", { name: "Back to teacher view" }));
+    await waitFor(() => expect(window.location.pathname).toBe(`/evaluations/${EVAL}/live`));
   });
 
   it("lands on the student home from a page with no student twin, and comes back to it", async () => {

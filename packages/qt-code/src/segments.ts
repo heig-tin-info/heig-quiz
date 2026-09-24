@@ -7,29 +7,26 @@
  * source, so they stay in the stored template — but showing `// @@lock` to a
  * student is noise, so the player hides them (PLAN-MVP §2.4).
  */
-import { splitTemplate } from "@quiz/domain/lockedTemplate";
+import { markerOf as domainMarkerOf, splitTemplate, type TemplateMarker } from "@quiz/domain/lockedTemplate";
 
 import type { CodeLanguage, CodeSegment } from "./schema.js";
 
 /**
- * A marker line in any of the MVP comment syntaxes. Deliberately
- * language-agnostic: this is a cosmetic filter, and a `#` line inside a C
- * template that reads exactly `# @@lock` is not a case worth a second lookup.
- *
- * THE matcher of this package: `@@lock` and `@@endlock` delimit the locked
- * regions of a template, `@@next` separates the pieces of a reference
- * solution (`./reference.ts`). One regex, so the three markers are spelled
- * the same way in every language and a second, drifting one is never written.
+ * `@@lock` and `@@endlock` (or its synonym `@@unlock`) delimit the locked
+ * regions of a template; `@@next` separates the pieces of a reference
+ * solution (`./reference.ts`). All of them are recognised by THE matcher,
+ * `markerOf` in `@quiz/domain/lockedTemplate` — this package never writes a
+ * second regex that could drift from the one the server splits with.
  */
-const MARKER_LINE = /^\s*(?:\/\/|\/\*|#)\s*@@(lock|endlock|next)\s*(?:\*\/)?\s*$/;
+export type Marker = TemplateMarker;
 
-export type Marker = "lock" | "endlock" | "next";
-
-/** The marker this line carries, or null when it is ordinary code. */
-export function markerOf(line: string): Marker | null {
-  const found = MARKER_LINE.exec(line);
-  return found === null ? null : (found[1] as Marker);
-}
+/**
+ * The marker this line carries, or null when it is ordinary code.
+ * Deliberately language-agnostic (the domain's matcher without a language):
+ * this is a cosmetic filter, and a `#` line inside a C template that reads
+ * exactly `# @@lock` is not a case worth a second lookup.
+ */
+export const markerOf = (line: string): Marker | null => domainMarkerOf(line);
 
 /**
  * A template marker line. `@@next` is NOT one: it never appears in a

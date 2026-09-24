@@ -114,6 +114,7 @@ export function TryPanel({
           {...(type === "code" && student !== undefined
             ? {
                 allowManualRun: canRunManually(student as CodeStudent),
+                testsPrimary: false,
                 onRun: (value: unknown, options?: unknown) =>
                   runCode({
                     student: student as CodeStudent,
@@ -144,8 +145,22 @@ export function TryPanel({
             : {})}
         />
         <div className="flex flex-wrap items-center gap-2 border-t border-line pt-4">
+          {/*
+           * For `code`, grading IS running the tests — every case, the hidden
+           * ones included — so the one primary action says so. The player's
+           * own buttons above stay a student's: visible cases, compile, free
+           * try. Every other type keeps "Grade my answer".
+           */}
           <Button onClick={() => grade.mutate()} loading={grade.isPending}>
-            <Play /> {t("question.try.grade")}
+            {type === "code" ? (
+              <>
+                <FlaskConical /> {t("question.try.runTests")}
+              </>
+            ) : (
+              <>
+                <Play /> {t("question.try.grade")}
+              </>
+            )}
           </Button>
           {result ? (
             <Button
@@ -157,6 +172,9 @@ export function TryPanel({
             >
               {t("question.try.again")}
             </Button>
+          ) : null}
+          {type === "code" ? (
+            <span className="text-[13px] text-fg-muted">{t("question.try.runTestsHint")}</span>
           ) : null}
         </div>
       </Card>

@@ -26,6 +26,7 @@ const student = (over: Partial<CodeStudent> = {}): CodeStudent =>
     ],
     limits: { timeMs: 2000, memoryMb: 128, outputKb: 64 },
     runsPerMinute: 10,
+    cooldown: "fixed",
     visibleCases: [
       {
         name: "one",
@@ -69,6 +70,12 @@ describe("codeRunRequest", () => {
     const request = codeRunRequest(student(), { regions: [] }, { args: ["-v"], stdin: "7\n" });
     expect(request.cases).toEqual([{ name: "manual", args: ["-v"], stdin: "7\n" }]);
   });
+
+  it("asks for a build and no case at all on a compile-only run", () => {
+    const request = codeRunRequest(student(), { regions: [] }, undefined, true);
+    expect(request.action).toBe("check");
+    expect(request.cases).toEqual([]);
+  });
 });
 
 describe("canRunManually", () => {
@@ -106,6 +113,22 @@ describe("runCode", () => {
     });
     expect(seen).toEqual([undefined]);
   });
+
+  it("tells the backend a compile-only run, with no input", async () => {
+    const seen: unknown[] = [];
+    const outcome = await runCode({
+      student: student({ runtime: "backend" }),
+      answer: { regions: [] },
+      backend: async (manual, options) => {
+        seen.push([manual, options]);
+        return { compile: { ok: false, stdout: "", stderr: "error", ms: 0 }, cases: [] };
+      },
+      // A free input left over in the options is dropped: a build takes none.
+      options: { compileOnly: true, manual: { args: ["-v"], stdin: "7\n" } },
+    });
+    expect(seen).toEqual([[undefined, { compileOnly: true }]]);
+    expect(outcome).toMatchObject({ compile: { ok: false }, cases: [] });
+  });
 });
 
 /*
@@ -129,6 +152,7 @@ describe("referenceRunRequest", () => {
     compileArgs: "-Wall -DSECRET=42",
     limits: { timeMs: 2000, memoryMb: 128, outputKb: 64 },
     runsPerMinute: 10,
+    cooldown: "fixed",
     allOrNothing: false,
     referenceSolution: "  return 6;\n",
     tests: {

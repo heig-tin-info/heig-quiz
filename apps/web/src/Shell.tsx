@@ -535,19 +535,7 @@ export function Shell({
           {userMenu(true)}
         </div>
 
-        {studentView ? (
-          <div className="border-b border-accent/20 bg-accent-soft px-4 py-2 text-[13px] text-accent">
-            <div className="mx-auto flex max-w-280 items-center gap-2 sm:px-2">
-              <Eye className="size-4" />
-              <span className="flex-1">{t("menu.studentViewBanner")}</span>
-              {onToggleStudentView ? (
-                <Button size="sm" variant="secondary" onClick={onToggleStudentView}>
-                  {t("menu.teacherView")}
-                </Button>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
+        {studentView ? <StudentViewBanner onLeave={onToggleStudentView} /> : null}
 
         <main className="mx-auto w-full max-w-280 px-4 py-6 sm:px-8 lg:py-8">{children}</main>
       </div>
@@ -581,6 +569,29 @@ export function Shell({
         />
       ) : null}
 
+    </div>
+  );
+}
+
+/**
+ * The strip that says a teacher is looking through a student's eyes, with the
+ * way back. Drawn by the frame, and by `App` above the full-screen attempt:
+ * an exam has no sidebar, and without it the only way out of the student
+ * view was to hand the attempt in.
+ */
+export function StudentViewBanner({ onLeave }: { onLeave?: (() => void) | undefined }) {
+  const t = useT();
+  return (
+    <div className="border-b border-accent/20 bg-accent-soft px-4 py-2 text-[13px] text-accent">
+      <div className="mx-auto flex max-w-280 items-center gap-2 sm:px-2">
+        <Eye className="size-4" />
+        <span className="flex-1">{t("menu.studentViewBanner")}</span>
+        {onLeave ? (
+          <Button size="sm" variant="secondary" onClick={onLeave}>
+            {t("menu.teacherView")}
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -18,6 +18,8 @@ describe("CodeImageConfig", () => {
     const config = imageConfig();
     expect(config.limits).toEqual({ timeMs: 2000, memoryMb: 128, outputKb: 128 });
     expect(config.runtime).toBe("backend");
+    // A config stored before the cooldown existed keeps the 3 s it had.
+    expect(config.cooldown).toBe("fixed");
   });
 
   it("keeps an explicit output budget, and defaults only the missing one", () => {
@@ -70,6 +72,7 @@ describe("CodeImageConfig", () => {
   it("starts a draft empty, with the version it will be stored under", () => {
     const draft = emptyCodeImageConfig();
     expect(draft.target).toBeNull();
+    expect(draft.runtime).toBe("runno");
     expect(draft.configVersion).toBe(codeimageServer.configVersion);
     expect(codeimageServer.publicationIssues!(draft)).not.toEqual([]);
     expect(codeimageServer.migrate(draft, 1)).toBe(draft);
@@ -99,6 +102,7 @@ describe("the shared program fields", () => {
         "referenceSolution",
         "runsPerMinute",
         "runtime",
+        "cooldown",
         "template",
         "tests",
       ].sort(),
@@ -108,7 +112,7 @@ describe("the shared program fields", () => {
 
 describe("canonical form", () => {
   it("round-trips exactly", () => {
-    const config = imageConfig({ runtime: "runno", limits: { timeMs: 500, memoryMb: 64, outputKb: 200 } });
+    const config = imageConfig({ runtime: "runno", cooldown: "progressive", limits: { timeMs: 500, memoryMb: 64, outputKb: 200 } });
     expect(fromCanonicalImage(toCanonicalImage(config))).toStrictEqual(config);
   });
 
@@ -117,6 +121,7 @@ describe("canonical form", () => {
     expect(out).not.toHaveProperty("configVersion");
     expect(out).not.toHaveProperty("limits");
     expect(out).not.toHaveProperty("runtime");
+    expect(out).not.toHaveProperty("cooldown");
     expect(out).toMatchObject({
       image: { width: 4, height: 3, palette: "bw" },
       target: { width: 4, height: 3, palette: "bw", pixels: "101001011010" },
