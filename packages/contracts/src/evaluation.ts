@@ -270,6 +270,13 @@ export const FeedbackPolicyPatch = z.object({
 });
 export type FeedbackPolicyPatch = z.infer<typeof FeedbackPolicyPatch>;
 
+// A field added to the full body and forgotten here would be silently
+// stripped from every patch: the two key sets must stay equal, both ways.
+type SameKeys<A, B> = [keyof A] extends [keyof B] ? ([keyof B] extends [keyof A] ? true : false) : false;
+const _settingsPatchKeys: SameKeys<EvaluationSettings, Required<EvaluationSettingsPatch>> = true;
+const _feedbackPatchKeys: SameKeys<FeedbackPolicy, Required<FeedbackPolicyPatch>> = true;
+void [_settingsPatchKeys, _feedbackPatchKeys];
+
 export const EvaluationPatch = z
   .object({
     title: z.string().trim().min(1).max(200).optional(),
