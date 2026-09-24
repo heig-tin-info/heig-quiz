@@ -1587,6 +1587,7 @@ export const fr: Record<keyof Dict, string> = {
   "live.notFound": "Tableau de bord indisponible",
   "live.start": "Démarrer",
   "live.pause": "Pause",
+  "live.controlFailed": "L’action a échoué. Réessayez.",
   "live.resume": "Reprendre",
   "live.extend": "Prolonger",
   "live.extendAll": "Prolonger pour toute la classe",

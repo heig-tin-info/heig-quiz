@@ -4,6 +4,7 @@
  */
 import {
   iso,
+  MockError,
   on,
 } from "./runtime";
 import {
@@ -29,6 +30,8 @@ on("POST", "/app/api/evaluations/:id/start", (m) => {
 });
 on("POST", "/app/api/evaluations/:id/pause", (m) => {
   const e = evaluationOr404(m.groups!.id!);
+  // As the server: only an exam pauses (glossary; #77).
+  if (e.mode !== "exam") throw new MockError(409, "only an exam can be paused");
   e.state = "paused";
   e.pausedAt = iso(0);
   return toEvaluation(e);

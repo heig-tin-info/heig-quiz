@@ -5,7 +5,7 @@
  */
 import type { FastifyInstance } from "fastify";
 
-import { and, eq, inArray, isNotNull, lte, max, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, lte, max, notInArray, sql } from "drizzle-orm";
 import { GRACE_MS } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
@@ -22,6 +22,12 @@ import { startEvaluation, closeEvaluation } from "./control.js";
  * Step 1: expire everything past `deadline + GRACE_MS`. One conditional
  * UPDATE, so re-running a tick is free and catching up after an outage is
  * free (`RETURNING` tells us exactly what changed, and nothing else moved).
+ *
+ * An attempt of a PAUSED evaluation is never expired: its countdown is
+ * frozen, and the resume pushes its deadline forward by the whole pause
+ * (`resumeEvaluation`). Expiring it here would let a deadline that only
+ * looks past — because the pause has not been added yet — take the exam
+ * away from a student who still has time (#77).
  */
 export async function expireDueAttempts(
   db: Db,
@@ -36,6 +42,10 @@ export async function expireDueAttempts(
         eq(attempts.state, "in_progress"),
         isNotNull(attempts.deadlineAt),
         lte(attempts.deadlineAt, cutoff),
+        notInArray(
+          attempts.evaluationId,
+          db.select({ id: evaluations.id }).from(evaluations).where(eq(evaluations.state, "paused")),
+        ),
       ),
     )
     .returning({ id: attempts.id, evaluationId: attempts.evaluationId });
@@ -109,7 +119,14 @@ function autoCloseAt(closesAt: Date, latestAttemptDeadline: Date | null): Date {
   return new Date(last.getTime() + GRACE_MS);
 }
 
-/** Step 4: `running|paused` past `closes_at` → `closed` (+ enqueue grading). */
+/**
+ * Step 4: `running` past `closes_at` → `closed` (+ enqueue grading).
+ *
+ * A `paused` evaluation is left alone: time stands still while it is
+ * paused, and the resume moves `closes_at` (in `deadline` timing) and every
+ * open deadline forward by the pause. Only the teacher closes a paused
+ * evaluation (#77).
+ */
 export async function autoCloseDue(
   db: Db,
   now: Date,
@@ -120,7 +137,7 @@ export async function autoCloseDue(
     .from(evaluations)
     .where(
       and(
-        inArray(evaluations.state, ["running", "paused"]),
+        eq(evaluations.state, "running"),
         isNotNull(evaluations.closesAt),
         lte(evaluations.closesAt, now),
       ),

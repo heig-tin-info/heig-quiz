@@ -8,6 +8,7 @@ import { api } from "../api";
 import { useConfirm } from "../confirm";
 import { gradingLinks } from "../grading";
 import { useT } from "../i18n";
+import { useErrorToast } from "../notify";
 import { presence } from "../realtime/grid";
 import type { Route } from "../router";
 import { useShortcuts } from "../shortcuts";
@@ -61,6 +62,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   const t = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const toastError = useErrorToast();
   const [toggles, setToggles] = useState<Toggles>({ names: true, answers: true, results: true });
   const [fullscreen, toggleFullscreen] = useFullscreen();
   const [selected, setSelected] = useState<{ attemptId: string; userId: string; itemId: string } | null>(
@@ -104,6 +106,9 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
         body: JSON.stringify(v.body ?? {}),
       }),
     onSuccess: refresh,
+    // A refused control (a 409 illegal transition, a lost session) must say
+    // so: a silent failure is a button that "has no effect" (#77).
+    onError: toastError("live.controlFailed"),
   });
   const attemptControl = useMutation({
     mutationFn: (v: { attemptId: string; action: "close" | "reopen" }) =>
@@ -112,6 +117,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
         body: JSON.stringify({}),
       }),
     onSuccess: refresh,
+    onError: toastError("live.controlFailed"),
   });
 
   /**
@@ -146,6 +152,9 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   const state = query.data ?? null;
   const evaluationState = state?.view.evaluation.state ?? "draft";
   const live = evaluationState === "running" || evaluationState === "paused";
+  // Only an exam pauses (§1 glossary); unknown until the detail has loaded.
+  const canPause = detail.data?.evaluation.mode === "exam";
+  const pausable = live && (canPause || evaluationState === "paused");
 
   /**
    * What a row is called, once (F-DASH-02). With the names off it is
@@ -165,6 +174,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
 
   const controls: LiveControls = {
     busy: control.isPending,
+    canPause,
     start: () => control.mutate({ path: "start", body: { confirm: true } }),
     pause: () => control.mutate({ path: "pause" }),
     resume: () => control.mutate({ path: "resume" }),
@@ -196,7 +206,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
       if (e.key === " " || e.key === "Spacebar") {
-        if (!live) return;
+        if (!pausable) return;
         e.preventDefault();
         if (evaluationState === "paused") controls.resume();
         else controls.pause();
@@ -222,7 +232,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
     // `controls` is rebuilt on every render; the handler reads the state it
     // needs through the closure, which is refreshed by the same render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [live, evaluationState, selected, toggleFullscreen]);
+  }, [pausable, evaluationState, selected, toggleFullscreen]);
 
   // The same keys in the sidebar strip. Reactive to the state: Space only
   // means something while the quiz runs, and Escape only while a cell is open.
@@ -230,7 +240,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
     { keys: "N", label: t("live.toggle.names") },
     { keys: "R", label: t("live.toggle.answers") },
     { keys: "S", label: t("live.toggle.results") },
-    ...(live
+    ...(pausable
       ? [{ keys: "Space", label: evaluationState === "paused" ? t("live.resume") : t("live.pause") }]
       : []),
     { keys: "F", label: t("live.fullscreen") },
@@ -363,9 +373,11 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
           <span className="inline-flex items-center gap-1">
             <Kbd>S</Kbd> {t("live.toggle.results")}
           </span>
-          <span className="inline-flex items-center gap-1">
-            <Kbd>Space</Kbd> {t("live.pause")}
-          </span>
+          {pausable ? (
+            <span className="inline-flex items-center gap-1">
+              <Kbd>Space</Kbd> {t("live.pause")}
+            </span>
+          ) : null}
           <span className="inline-flex items-center gap-1">
             <Kbd>F</Kbd> {t("live.fullscreen")}
           </span>

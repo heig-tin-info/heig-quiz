@@ -656,6 +656,99 @@ describe("teacher controls (F-LIVE-11, F-LIVE-12)", () => {
     expect(after.extraS).toBe(120);
   });
 
+  /**
+   * Issue #77: a pause must stop the exam — writes refused while it lasts —
+   * and freeze its clock, so that a deadline which only LOOKS past (the pause
+   * has not been added to it yet) is not taken away by the ticker.
+   */
+  it("pause refuses writes and freezes the ticker; resume shifts the deadline and accepts writes (#77)", async () => {
+    const { evaluation, attempt, items } = await running({ durationS: 600 });
+    const before = attempt.deadlineAt!;
+    // The attempt is re-read for every write, as the route's loader does.
+    const write = async (row: EvaluationRecord, revision: number) =>
+      service.saveAnswer(db, {
+        evaluation: row,
+        attempt: (await service.attemptById(db, attempt.id))!,
+        itemId: items[0]!.id,
+        payload: `r${revision}`,
+        revision,
+        now: clock.now(),
+      });
+
+    await write(evaluation, 1);
+    const paused = await service.pauseEvaluation(db, evaluation, clock.now());
+    expect(paused.state).toBe("paused");
+    await expect(write(paused, 2)).rejects.toMatchObject({ status: 410, reason: "paused" });
+
+    // The pause outlasts the whole ten minutes the student had left.
+    clock.set(new Date(before.getTime() + GRACE_MS + 60_000));
+    const pausedFor = clock.now().getTime() - paused.pausedAt!.getTime();
+    expect(await service.expireDueAttempts(db, clock.now())).not.toContainEqual(
+      expect.objectContaining({ id: attempt.id }),
+    );
+    expect((await service.attemptById(db, attempt.id))!.state).toBe("in_progress");
+    await expect(write(paused, 3)).rejects.toMatchObject({ reason: "paused" });
+
+    const resumed = await service.resumeEvaluation(db, paused, clock.now());
+    const after = (await service.attemptById(db, attempt.id))!;
+    expect(after.deadlineAt!.getTime()).toBe(before.getTime() + pausedFor);
+    // The ten minutes are intact: exactly what was left when the pause began.
+    expect(after.deadlineAt!.getTime() - clock.now().getTime()).toBe(
+      before.getTime() - paused.pausedAt!.getTime(),
+    );
+    await expect(write(resumed, 4)).resolves.toMatchObject({ accepted: true });
+
+    // Running again, the ticker closes it at the SHIFTED deadline, not before.
+    clock.set(new Date(after.deadlineAt!.getTime() + GRACE_MS - 1));
+    await service.expireDueAttempts(db, clock.now());
+    expect((await service.attemptById(db, attempt.id))!.state).toBe("in_progress");
+    clock.advance(1);
+    await service.expireDueAttempts(db, clock.now());
+    expect((await service.attemptById(db, attempt.id))!.state).toBe("expired");
+  });
+
+  it("a paused evaluation past closes_at is not auto-closed; the resume moves closes_at (#77)", async () => {
+    const opensAt = clock.now();
+    const closesAt = new Date(opensAt.getTime() + 3_600_000);
+    const { evaluation, attempt } = await running({
+      settings: { timing: "deadline" },
+      durationS: null,
+      opensAt,
+      closesAt,
+    });
+    expect(attempt.deadlineAt!.getTime()).toBe(closesAt.getTime());
+
+    clock.advance(30 * 60_000);
+    const paused = await service.pauseEvaluation(db, evaluation, clock.now());
+    // Paused for longer than the half hour that was left.
+    clock.set(new Date(closesAt.getTime() + GRACE_MS + 10 * 60_000));
+    const pausedFor = clock.now().getTime() - paused.pausedAt!.getTime();
+    await service.expireDueAttempts(db, clock.now());
+    expect(await service.autoCloseDue(db, clock.now())).not.toContainEqual(
+      expect.objectContaining({ id: evaluation.id }),
+    );
+    expect((await reload(db, evaluation.id)).state).toBe("paused");
+    expect((await service.attemptById(db, attempt.id))!.state).toBe("in_progress");
+
+    const resumed = await service.resumeEvaluation(db, paused, clock.now());
+    expect(resumed.closesAt!.getTime()).toBe(closesAt.getTime() + pausedFor);
+    expect((await reload(db, evaluation.id)).closesAt!.getTime()).toBe(closesAt.getTime() + pausedFor);
+    const after = (await service.attemptById(db, attempt.id))!;
+    expect(after.deadlineAt!.getTime()).toBe(closesAt.getTime() + pausedFor);
+
+    // Still running a minute later; closed once the shifted end has passed.
+    clock.advance(60_000);
+    await service.expireDueAttempts(db, clock.now());
+    expect(await service.autoCloseDue(db, clock.now())).not.toContainEqual(
+      expect.objectContaining({ id: evaluation.id }),
+    );
+    clock.set(new Date(after.deadlineAt!.getTime() + GRACE_MS + 1));
+    await service.expireDueAttempts(db, clock.now());
+    expect(await service.autoCloseDue(db, clock.now())).toContainEqual(
+      expect.objectContaining({ id: evaluation.id }),
+    );
+  });
+
   it("extends every attempt, or exactly one (+1/+5/+10)", async () => {
     const seed = await seedLive(db, { students: 2 });
     const row = await applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
