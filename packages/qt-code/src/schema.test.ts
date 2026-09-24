@@ -43,6 +43,7 @@ describe("CodeConfig", () => {
     // The fields added with ADR-015, every one of them with a default — which
     // is why `CODE_CONFIG_VERSION` did not move.
     expect(config.runtime).toBe("backend");
+    expect(config.cooldown).toBe("fixed");
     expect(config.tests.cases[0]).toMatchObject({
       args: [],
       compareStdout: true,
@@ -173,7 +174,10 @@ describe("the draft and the migration", () => {
     expect(draft.prompt).toBe("");
     expect(draft.template).toBe("");
     expect(draft.language).toBe("c");
-    expect(draft.runtime).toBe("backend");
+    // A NEW question runs the student's trials in the browser; a stored
+    // config without the field still parses to "backend" (below).
+    expect(draft.runtime).toBe("runno");
+    expect(draft.cooldown).toBe("fixed");
     expect(CodeConfig.safeParse(draft).success).toBe(false);
     expect(codeServer.emptyDraft()).toEqual(draft);
   });

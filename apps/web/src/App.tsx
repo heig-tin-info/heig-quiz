@@ -9,7 +9,7 @@ import { useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
 import { CoachLayer } from "./coach/CoachLayer";
 import { useRoute, type Route, type RouteOf } from "./router";
-import { Shell } from "./Shell";
+import { Shell, StudentViewBanner } from "./Shell";
 import {
   enterStudentView,
   leaveStudentView,
@@ -309,7 +309,21 @@ export default function App() {
       {renderPage(shown, { me: me.data, navigate, teacherUi })}
     </Suspense>
   );
-  if (FULL_SCREEN.has(shown.view)) return page;
+  const toggleView = teacher
+    ? () => toggleStudentView(inStudentView, route, navigate)
+    : undefined;
+  if (FULL_SCREEN.has(shown.view)) {
+    // The attempt has no frame, and so no Teacher | Student switch: the
+    // banner carries the way back, which leaves the attempt open (ADR-018).
+    return inStudentView && shown.view === "attempt" ? (
+      <>
+        <StudentViewBanner onLeave={toggleView} />
+        {page}
+      </>
+    ) : (
+      page
+    );
+  }
 
   return (
     <>
@@ -319,9 +333,7 @@ export default function App() {
       navigate={navigate}
       teacherUi={teacherUi}
       studentView={inStudentView}
-      onToggleStudentView={
-        teacher ? () => toggleStudentView(inStudentView, route, navigate) : undefined
-      }
+      onToggleStudentView={toggleView}
     >
       {page}
     </Shell>

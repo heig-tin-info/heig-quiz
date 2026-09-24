@@ -208,6 +208,12 @@ export const RunBody = z.object({
    * arguments the teacher wrote, which the client never gets to change.
    */
   args: z.array(z.string().max(200)).max(32).optional(),
+  /**
+   * The Compile button: build the program and run NOTHING. The runner is
+   * asked for `action: "check"` with no case, so the result carries the
+   * compiler's verdict and an empty case list. Same budget as a run.
+   */
+  compileOnly: z.boolean().optional(),
 });
 export type RunBody = z.infer<typeof RunBody>;
 

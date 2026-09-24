@@ -45,7 +45,18 @@ export interface ManualInput {
  * thing a client is allowed to choose is the free input, and that is what
  * travels.
  */
-export type BackendRun = (manual?: ManualInput) => Promise<RunnerOutcome | "unavailable">;
+export type BackendRun = (
+  manual?: ManualInput,
+  options?: BackendRunOptions,
+) => Promise<RunnerOutcome | "unavailable">;
+
+export interface BackendRunOptions {
+  /**
+   * The Compile button: `RunBody.compileOnly`. The server builds the program
+   * and runs no case; the outcome has an empty case list.
+   */
+  compileOnly?: boolean | undefined;
+}
 
 /** The browser runner could not even start (no runtime files, no worker). */
 export class BrowserRunnerUnavailable extends Error {

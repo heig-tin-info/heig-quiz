@@ -24,6 +24,7 @@ import {
   ReferenceSection,
   TemplateSection,
 } from "./ProgramEditor.js";
+import { ArgsInput } from "./ArgsInput.js";
 import { referenceRegions } from "./reference.js";
 import { DEFAULT_LIMITS, totalCasePoints, type CodeCase, type CodeConfig } from "./schema.js";
 import { EDITOR_STRINGS, type CodeEditorStrings } from "./strings.js";
@@ -38,6 +39,7 @@ import {
   input,
   inputSm,
   IssueList,
+  label as labelToken,
   NumberField,
   patchAt,
   removeAt,
@@ -65,6 +67,16 @@ export interface CodeEditorProps extends EditorProps<CodeConfig> {
    * error (`RUNNER_MODE=stub` is the default).
    */
   onTry?: ((config: CodeConfig) => Promise<CodeTryOutcome>) | undefined;
+  /**
+   * Runs the reference in the BROWSER runner, whatever `onTry` did. Called
+   * only when the question's runtime is `runno` and the server has just
+   * judged the reference (`{ graded }` with its per-case verdicts): the two
+   * verdicts are compared case by case, and a disagreement is worth a
+   * warning — the browser is what the students' trials run on, the server is
+   * what grades them (ADR-015), so a case that passes in one and fails in the
+   * other is a trial that lies. `"unavailable"`, or a throw, says nothing.
+   */
+  onTryInBrowser?: ((config: CodeConfig) => Promise<RunnerOutcome | "unavailable">) | undefined;
   /** Validation problems of the stored draft (decision D16), placed by field. */
   issues?: readonly ConfigIssue[] | undefined;
   strings?: Partial<CodeEditorStrings> | undefined;
@@ -82,7 +94,19 @@ export interface CodeEditorProps extends EditorProps<CodeConfig> {
 export type CodeTryOutcome =
   | RunnerOutcome
   | "unavailable"
-  | { graded: { compileOk: boolean; passed: number; total: number } };
+  | {
+      graded: {
+        compileOk: boolean;
+        passed: number;
+        total: number;
+        /**
+         * The server's verdict of each case, in the config's order — what the
+         * browser run is compared against (`onTryInBrowser`). Absent, no
+         * comparison is made.
+         */
+        cases?: readonly boolean[] | undefined;
+      };
+    };
 
 type TryState =
   | { status: "idle" }
@@ -94,7 +118,8 @@ type TryState =
    * them in different places, so they never share a sentence.
    */
   | { status: "failed"; reason: "compile" | "regions" }
-  | { status: "done"; passed: number; total: number };
+  /** `diverged`: cases on which the browser runner disagreed with the server. */
+  | { status: "done"; passed: number; total: number; diverged?: number };
 
 const NEW_CASE: CodeCase = {
   name: "",
@@ -131,18 +156,54 @@ function tryStatusOf(tryState: TryState, s: CodeEditorStrings): TryStatus | null
   }
 }
 
+/**
+ * How many cases the browser runner judges differently from the server, or
+ * `null` when the two cannot be compared (the browser could not run it, or
+ * the lists do not line up — an `action: "check"` question has no case).
+ *
+ * A browser build failure is a disagreement on every case the server passed:
+ * that is exactly what a student would meet — "does not compile" on a
+ * program the grader accepts.
+ */
+export function browserDivergence(
+  config: CodeConfig,
+  server: readonly boolean[],
+  browser: RunnerOutcome | "unavailable",
+): number | null {
+  if (browser === "unavailable") return null;
+  const cases = config.tests.cases;
+  if (server.length !== cases.length || cases.length === 0) return null;
+  let differ = 0;
+  cases.forEach((testCase, i) => {
+    // The grade's own rule, as the student's player applies it (audit R-06).
+    const ok =
+      browser.compile.ok && caseVerdict(testCase, browser.cases[i], config.tests.compare).ok;
+    if (ok !== server[i]) differ += 1;
+  });
+  return differ;
+}
+
 /** What one reference run came back with, as the try state it leaves the panel in. */
 async function tryReference(
   config: CodeConfig,
   onTry: (config: CodeConfig) => Promise<CodeTryOutcome>,
+  onTryInBrowser?: ((config: CodeConfig) => Promise<RunnerOutcome | "unavailable">) | undefined,
 ): Promise<TryState> {
   const outcome = await onTry(config);
   if (outcome === "unavailable") return { status: "unavailable" };
   if ("graded" in outcome) {
     // The server judged the cases: its verdict is the answer, and
     // re-deciding it here from an output we do not have would be a guess.
-    const { compileOk, passed, total } = outcome.graded;
-    return compileOk ? { status: "done", passed, total } : { status: "failed", reason: "compile" };
+    const { compileOk, passed, total, cases } = outcome.graded;
+    if (!compileOk) return { status: "failed", reason: "compile" };
+    // The students' trials run in the browser: check it agrees with the
+    // grader on the reference, which is the one program known to be right.
+    if (config.runtime === "runno" && onTryInBrowser !== undefined && cases !== undefined) {
+      const browser = await onTryInBrowser(config).catch(() => "unavailable" as const);
+      const diverged = browserDivergence(config, cases, browser);
+      if (diverged !== null && diverged > 0) return { status: "done", passed, total, diverged };
+    }
+    return { status: "done", passed, total };
   }
   if (!outcome.compile.ok) return { status: "failed", reason: "compile" };
   // The grade's own rule (audit R-06). No per-case budget: this raw path
@@ -162,6 +223,7 @@ export function CodeEditor({
   disabled,
   issues = [],
   onTry,
+  onTryInBrowser,
   strings,
   RichText,
   uploadAsset,
@@ -170,33 +232,13 @@ export function CodeEditor({
   const s = resolveStrings(EDITOR_STRINGS, strings);
   const ids = useId();
   const [tryState, setTryState] = useState<TryState>({ status: "idle" });
-  /*
-   * One argument per LINE, and the textarea keeps its own text while it is
-   * being typed: `args.join("\n")` would swallow the newline the teacher just
-   * pressed (an empty last line is not an argument) and move the caret.
-   */
-  const [argsDraft, setArgsDraft] = useState<Record<number, string>>({});
 
   const patch = (next: Partial<CodeConfig>) => onChange({ ...config, ...next });
   const patchTests = (next: Partial<CodeConfig["tests"]>) =>
     patch({ tests: { ...config.tests, ...next } });
   const patchCase = (index: number, next: Partial<CodeCase>) =>
     patchTests({ cases: patchAt(config.tests.cases, index, next) });
-  const setCases = (cases: CodeCase[]) => {
-    // The drafts are keyed by position, so a removal would shift them onto the
-    // wrong case. Dropping them re-reads every row from the config.
-    setArgsDraft({});
-    patchTests({ cases });
-  };
-  const writeArgs = (index: number, text: string) => {
-    setArgsDraft((draft) => ({ ...draft, [index]: text }));
-    patchCase(index, {
-      args: text
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line !== ""),
-    });
-  };
+  const setCases = (cases: CodeCase[]) => patchTests({ cases });
 
   /*
    * The settings folded into "Advanced options" report ABOVE the fold: an
@@ -221,7 +263,7 @@ export function CodeEditor({
     }
     setTryState({ status: "running" });
     try {
-      setTryState(await tryReference(config, onTry));
+      setTryState(await tryReference(config, onTry, onTryInBrowser));
     } catch {
       setTryState({ status: "failed", reason: "compile" });
     }
@@ -269,6 +311,11 @@ export function CodeEditor({
             status={tryStatusOf(tryState, s)}
           />
         )}
+        {tryState.status === "done" && tryState.diverged !== undefined ? (
+          <p role="note" className="text-[13px] text-warning">
+            {plural(s, "tryDiverged", tryState.diverged)}
+          </p>
+        ) : null}
       </ReferenceSection>
 
       {/*
@@ -295,8 +342,7 @@ export function CodeEditor({
               s={s}
               disabled={disabled}
               defaultTimeMs={config.limits.timeMs}
-              argsText={argsDraft[i] ?? (testCase.args ?? []).join("\n")}
-              onArgs={(text) => writeArgs(i, text)}
+              language={config.language}
               patch={(next) => patchCase(i, next)}
               removeDisabled={disabled || config.tests.cases.length <= 1}
               onRemove={() => setCases(removeAt(config.tests.cases, i))}
@@ -327,8 +373,7 @@ function CaseFields({
   s,
   disabled,
   defaultTimeMs,
-  argsText,
-  onArgs,
+  language,
   patch,
   removeDisabled,
   onRemove,
@@ -341,8 +386,8 @@ function CaseFields({
   disabled: boolean | undefined;
   /** The question's time limit, the placeholder of an empty per-case budget. */
   defaultTimeMs: number;
-  argsText: string;
-  onArgs: (text: string) => void;
+  /** Names `argv[0]` in the command-line preview. */
+  language: CodeConfig["language"];
   patch: (next: Partial<CodeCase>) => void;
   removeDisabled: boolean | undefined;
   onRemove: () => void;
@@ -387,18 +432,21 @@ function CaseFields({
       </RowHead>
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <FieldCell label={s.args} htmlFor={`${ids}-args-${i}`}>
-          <textarea
-            id={`${ids}-args-${i}`}
-            rows={2}
-            className={cx(input, "w-full py-1.5 font-mono")}
-            aria-label={`${s.args} ${i + 1}`}
+        {/* One row per argv entry: an argument holding a space is one
+            argument, which a line-per-argument textarea left to a hint. */}
+        <div className="flex flex-col gap-1.5">
+          <span id={`${ids}-args-${i}`} className={labelToken}>
+            {s.args}
+          </span>
+          <ArgsInput
+            value={testCase.args ?? []}
+            onChange={(args) => patch({ args })}
+            language={language}
+            s={s}
             disabled={disabled}
-            value={argsText}
-            onChange={(e) => onArgs(e.target.value)}
+            labelledBy={`${ids}-args-${i}`}
           />
-          <p className={hint}>{s.argsHint}</p>
-        </FieldCell>
+        </div>
         <FieldCell label={s.stdin} htmlFor={`${ids}-stdin-${i}`}>
           <textarea
             id={`${ids}-stdin-${i}`}

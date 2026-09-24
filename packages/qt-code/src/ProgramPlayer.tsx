@@ -1,24 +1,27 @@
 /**
  * The PROGRAM half of a student's player, shared by `code` and `codeimage`
- * (ADR-021): the statement with its badges, the template as a stack of
- * locked blocks and editable regions, and the Run button with the lines that
+ * (ADR-021): the statement with its badges, the program in one editor whose
+ * locked lines are read-only, and the Run button with the lines that
  * say where a run is and how it ended.
  *
  * What differs between the two types is what a run is judged against — a
  * table of visible cases, a picture — and each player renders that part
  * itself, around these pieces. Nothing here decides a verdict.
  */
-import { useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { fmt } from "@quiz/core/client";
+import { decayedUses, effectiveCooldownMs, type CooldownMode } from "@quiz/domain/cooldown";
+import { mainFileName } from "@quiz/domain/lockedTemplate";
 import type { MarkdownRenderer } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 
-import { CodeArea } from "./MonacoHost.js";
-import { initialRegions, stripMarkerLines, trimTrailingNewline } from "./segments.js";
+import { parseDiagnostics } from "./diagnostics.js";
+import { LockedEditor } from "./LockedEditor.js";
+import { initialRegions } from "./segments.js";
 import type { ProgramStudent } from "./schema.js";
 import type { CodePlayerStrings } from "./strings.js";
-import { badge, button, hint, lockedBlock, markdown } from "@quiz/ui";
+import { badge, button, cx, hint, markdown } from "@quiz/ui";
 
 /** Where a run is, for the one line the player shows while it gets there. */
 export type CodeRunStage = "loading" | "compiling" | "running";
@@ -27,11 +30,13 @@ export type CodeRunStage = "loading" | "compiling" | "running";
 export type ProgramPlayerStrings = Pick<
   CodePlayerStrings,
   | "locked"
+  | "program"
   | "editableRegion"
   | "run"
   | "running"
+  | "availableIn"
+  | "unchangedRun"
   | "loadingRuntime"
-  | "inBrowser"
   | "runUnavailable"
   | "runFailed"
   | "files"
@@ -57,31 +62,146 @@ export type RunState =
 export type ProgramRunResult = RunnerOutcome | "unavailable" | "rate_limited";
 
 /**
- * One run slot: its state, and the function that fills it. The request, the
- * stages and the endings are the same for every run a player offers; only
- * what the host's function does differs.
+ * One run slot: its state, the function that fills it, and the KEY of the
+ * last run that completed. The request, the stages and the endings are the
+ * same for every run a player offers; only what the host's function does
+ * differs.
+ *
+ * The key is whatever the caller says the run was made of (the regions, and
+ * for a free try the input too). A button whose current key equals it would
+ * run the very same thing again and get the very same answer, so the player
+ * disables it — the unchanged-code rule. Only a run that ended `done`
+ * records its key: an unavailable runner, a refused budget or a failure
+ * answered nothing, and pressing again is the right move.
  */
 export function useRunSlot(): [
   RunState,
-  (start: (onStage: (stage: CodeRunStage) => void) => Promise<ProgramRunResult>) => Promise<void>,
+  (
+    start: (onStage: (stage: CodeRunStage) => void) => Promise<ProgramRunResult>,
+    key?: string,
+  ) => Promise<void>,
+  string | null,
 ] {
   const [state, setState] = useState<RunState>({ status: "idle" });
+  const [doneKey, setDoneKey] = useState<string | null>(null);
   async function runInto(
     start: (onStage: (stage: CodeRunStage) => void) => Promise<ProgramRunResult>,
+    key?: string,
   ) {
     setState({ status: "running", stage: "loading" });
+    setDoneKey(null);
     try {
       const outcome = await start((stage) => setState({ status: "running", stage }));
-      setState(
-        outcome === "unavailable" || outcome === "rate_limited"
-          ? { status: outcome }
-          : { status: "done", outcome },
-      );
+      if (outcome === "unavailable" || outcome === "rate_limited") {
+        setState({ status: outcome });
+      } else {
+        setState({ status: "done", outcome });
+        setDoneKey(key ?? null);
+      }
     } catch {
       setState({ status: "failed" });
     }
   }
-  return [state, runInto];
+  return [state, runInto, doneKey];
+}
+
+/** What a player's code is, as a run key: equal keys mean the same program. */
+export const regionsKey = (regions: readonly string[]): string => JSON.stringify(regions);
+
+/** Where a cooldown stands; `start` is called at the moment of a click. */
+export interface Cooldown {
+  cooling: boolean;
+  /** The length of the current wait, 0 when there is none. */
+  totalMs: number;
+  remainingMs: number;
+  /** When the current wait began (`Date.now()`); keys the fill animation. */
+  startedAt: number;
+  start: () => void;
+}
+
+/**
+ * The refill of the run buttons after a use (`@quiz/domain/cooldown`).
+ *
+ * ONE counter per player, shared by every run it offers (Compile, Run the
+ * tests, the free try): on the server the three spend one budget
+ * (`runsPerMinute`, N-SEC-07), so they must wait on one clock, and in the
+ * browser the same single rule keeps the toolbar predictable — a student
+ * never has to work out which of three buttons is ready. The floor applies
+ * when the question runs on the server; a `runno` question whose host falls
+ * back to the server can still meet the budget, which the player reports as
+ * `rate_limited` like before.
+ */
+export function useCooldown(
+  mode: CooldownMode | undefined,
+  runtime: ProgramStudent["runtime"],
+  runsPerMinute: number,
+): Cooldown {
+  const uses = useRef(0);
+  const lastUse = useRef<number | null>(null);
+  const [wait, setWait] = useState<{ startedAt: number; totalMs: number } | null>(null);
+  const [now, setNow] = useState(0);
+
+  useEffect(() => {
+    if (wait === null) return;
+    const end = wait.startedAt + wait.totalMs;
+    // The end is a timeout of its own; the interval only refreshes the
+    // "Available in N s" words, which change once a second.
+    const done = setTimeout(() => setWait(null), Math.max(0, end - Date.now()));
+    const tick = setInterval(() => setNow(Date.now()), 250);
+    return () => {
+      clearTimeout(done);
+      clearInterval(tick);
+    };
+  }, [wait]);
+
+  const start = useCallback(() => {
+    const t = Date.now();
+    const recent = lastUse.current === null ? 0 : decayedUses(uses.current, t - lastUse.current);
+    const totalMs = effectiveCooldownMs({
+      mode: mode ?? "fixed",
+      uses: recent,
+      onServer: runtime !== "runno",
+      runsPerMinute,
+    });
+    uses.current = recent + 1;
+    lastUse.current = t;
+    setNow(t);
+    setWait({ startedAt: t, totalMs });
+  }, [mode, runtime, runsPerMinute]);
+
+  if (wait === null) return { cooling: false, totalMs: 0, remainingMs: 0, startedAt: 0, start };
+  const remainingMs = Math.max(0, wait.startedAt + wait.totalMs - Math.max(now, wait.startedAt));
+  return { cooling: true, totalMs: wait.totalMs, remainingMs, startedAt: wait.startedAt, start };
+}
+
+/**
+ * The bar that fills the inside of a cooling button, left to right, over the
+ * whole wait: one CSS width transition started a frame after mount. Under
+ * `prefers-reduced-motion` it is not drawn at all (`motion-reduce:hidden`)
+ * and the button shows the remaining seconds instead.
+ */
+function CooldownFill({ totalMs, primary }: { totalMs: number; primary: boolean }): ReactNode {
+  const [filled, setFilled] = useState(false);
+  useEffect(() => {
+    // Two states a frame apart, or the browser never sees the 0 % width.
+    if (typeof requestAnimationFrame === "function") {
+      const id = requestAnimationFrame(() => setFilled(true));
+      return () => cancelAnimationFrame(id);
+    }
+    const id = setTimeout(() => setFilled(true), 16);
+    return () => clearTimeout(id);
+  }, []);
+  return (
+    <span
+      aria-hidden="true"
+      data-testid="cooldown-fill"
+      className={cx(
+        "pointer-events-none absolute inset-y-0 left-0 motion-reduce:hidden",
+        primary ? "bg-on-fill/25" : "bg-accent/15",
+      )}
+      style={{ width: filled ? "100%" : "0%", transition: `width ${totalMs}ms linear` }}
+    />
+  );
 }
 
 /** The regions as the student sees them: the answer's, else the template's own text. */
@@ -126,96 +246,138 @@ export function ProgramStatement({
 }
 
 /**
- * The template as a STACK: one read-only block per locked segment, one editor
- * per editable region. A locked line is therefore never inside an editable
- * buffer; the server rebuilds the file from the stored template anyway
- * (invariant 14), and the stack is what makes that visible.
+ * The program: the whole file in one editor, the locked lines greyed and
+ * read-only, with the compiler's complaints of the last run drawn on their
+ * lines (`./LockedEditor.tsx`; a stack of blocks and textareas where Monaco
+ * does not load). Only the regions come out of it; the server rebuilds the
+ * file from the stored template anyway (invariant 14).
  */
 export function ProgramRegions({
   student,
   regions,
   locked,
   onWrite,
+  onWriteRegions,
   s,
   monaco,
+  compileStderr,
 }: {
   student: ProgramStudent;
   regions: readonly string[];
   locked: boolean;
   onWrite: (index: number, next: string) => void;
+  /**
+   * All the regions at once, preferred over `onWrite` when given: one edit
+   * with several cursors may touch two regions, and two `onWrite` calls in
+   * the same tick would each start from the same stale list.
+   */
+  onWriteRegions?: ((regions: string[]) => void) | undefined;
   s: ProgramPlayerStrings;
   monaco: boolean | undefined;
+  /** The `compile.stderr` of the last run, read as diagnostics on the student's lines. */
+  compileStderr?: string | undefined;
 }): ReactNode {
+  const diagnostics = useMemo(
+    () => (compileStderr ? parseDiagnostics(compileStderr, mainFileName(student.language)) : []),
+    [compileStderr, student.language],
+  );
+  const write = (next: string[]) => {
+    if (onWriteRegions !== undefined) {
+      onWriteRegions(next);
+      return;
+    }
+    next.forEach((text, i) => {
+      if (text !== regions[i]) onWrite(i, text);
+    });
+  };
   return (
-    <div className="flex flex-col gap-1.5">
-      {student.segments.map((segment, i) => {
-        if (segment.kind === "locked") {
-          const text = trimTrailingNewline(stripMarkerLines(segment.text));
-          if (text === "") return null;
-          return (
-            <pre key={i} className={lockedBlock} aria-label={s.locked} title={s.locked}>
-              <code>{text}</code>
-            </pre>
-          );
-        }
-        const index = segment.index ?? 0;
-        return (
-          <CodeArea
-            key={i}
-            label={fmt(s.editableRegion, { n: index + 1 })}
-            language={student.language}
-            value={regions[index] ?? ""}
-            onChange={locked ? undefined : (next) => onWrite(index, next)}
-            readOnly={locked}
-            minLines={4}
-            monaco={monaco}
-          />
-        );
-      })}
-    </div>
+    <LockedEditor
+      segments={student.segments}
+      regions={regions}
+      onChange={locked ? undefined : write}
+      language={student.language}
+      label={s.program}
+      regionLabel={s.editableRegion}
+      lockedLabel={s.locked}
+      diagnostics={diagnostics}
+      monaco={monaco}
+    />
   );
 }
 
-/** The Run button: the primary action of a program question's run panel. */
+/**
+ * A run button: Run, Compile, Run the tests, a free try's Run once. While its
+ * slot runs it says so; while the player's cooldown lasts it is disabled and
+ * refills (see {@link CooldownFill}), with "Available in N s" for a screen
+ * reader and, under reduced motion, the seconds in plain sight.
+ */
 export function RunButton({
   state,
   disabled,
   onClick,
   s,
+  label,
+  busyLabel,
+  icon,
+  variant = "primary",
+  cooldown,
+  className = "ml-auto",
 }: {
   state: RunState;
   disabled: boolean;
   onClick: () => void;
   s: ProgramPlayerStrings;
+  /** The word of the button; "Run" when absent. */
+  label?: string | undefined;
+  /** What it says while its slot runs; "Running…" when absent. */
+  busyLabel?: string | undefined;
+  icon?: ReactNode;
+  variant?: "primary" | "secondary";
+  cooldown?: Cooldown | undefined;
+  className?: string;
 }): ReactNode {
+  const cooling = cooldown?.cooling === true && state.status !== "running";
+  const seconds = cooling ? Math.max(1, Math.ceil(cooldown.remainingMs / 1000)) : 0;
   return (
     <button
       type="button"
-      className={button("primary", "sm", "ml-auto")}
-      disabled={disabled}
+      className={button(variant, "sm", cx("relative overflow-hidden", className))}
+      disabled={disabled || cooling}
       onClick={onClick}
     >
-      {state.status === "running" ? s.running : s.run}
+      {cooling ? (
+        <CooldownFill key={cooldown.startedAt} totalMs={cooldown.totalMs} primary={variant === "primary"} />
+      ) : null}
+      <span className="relative inline-flex items-center gap-1.5">
+        {icon}
+        {state.status === "running" ? (busyLabel ?? s.running) : (label ?? s.run)}
+        {cooling ? (
+          <>
+            <span aria-hidden="true" className="hidden tabular-nums motion-reduce:inline">
+              {seconds} s
+            </span>
+            <span className="sr-only">{`. ${fmt(s.availableIn, { seconds })}`}</span>
+          </>
+        ) : null}
+      </span>
     </button>
   );
 }
 
 /**
- * The lines under the Run button: where the program runs, the one-time
- * runtime download, and how the last run ended — unavailable, refused by
- * the budget, failed, or compiled (with the compiler's words when it did
- * not).
+ * The lines under the run buttons: the one-time runtime download, and how
+ * the last run ended — unavailable, refused by the budget, failed, or
+ * compiled (with the compiler's words when it did not).
+ *
+ * WHERE the program runs is not said: it does not change what a student
+ * does, and the one moment it shows — the first download — has its line.
  */
 export function RunStatus({
   state,
-  runtime,
-  canRun,
   s,
   rateLimited,
 }: {
   state: RunState;
-  runtime: ProgramStudent["runtime"];
-  canRun: boolean;
   s: ProgramPlayerStrings;
   /** The sentence for `rate_limited`; a host that never reports it passes none. */
   rateLimited?: string | undefined;
@@ -223,9 +385,6 @@ export function RunStatus({
   const outcome = state.status === "done" ? state.outcome : null;
   return (
     <>
-      {/* One quiet line: where the program runs is a fact a student is owed,
-          and it answers the question the button raises (ADR-015). */}
-      {canRun && runtime === "runno" ? <p className={hint}>{s.inBrowser}</p> : null}
       {state.status === "running" && state.stage === "loading" ? (
         <p role="status" className={hint}>
           {s.loadingRuntime}

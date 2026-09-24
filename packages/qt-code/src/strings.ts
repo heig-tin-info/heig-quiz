@@ -20,22 +20,34 @@ export interface CodeEditorStrings {
   templateHint: string;
   lockedRegions: string;
   "lockedRegions.one": string;
-  studentPreview: string;
-  locked: string;
-  editable: string;
+  lock: string;
+  unlock: string;
+  lockLines: string;
+  unlockLines: string;
+  markerUnknown: string;
+  markerUnopened: string;
+  markerNested: string;
   referenceSolution: string;
   referenceSolutionHint: string;
+  referenceRegion: string;
+  referenceLocked: string;
+  referenceExtraPieces: string;
   tryReference: string;
   trying: string;
   tryUnavailable: string;
   tryCompileFailed: string;
   tryRegionsMismatch: string;
   tryResult: string;
+  tryDiverged: string;
+  "tryDiverged.one": string;
   cases: string;
   case: string;
   caseName: string;
   args: string;
-  argsHint: string;
+  argument: string;
+  addArgument: string;
+  removeArgument: string;
+  commandLine: string;
   stdin: string;
   expected: string;
   compareStdout: string;
@@ -51,7 +63,13 @@ export interface CodeEditorStrings {
   runtime: string;
   runtimeBackend: string;
   runtimeBrowser: string;
-  runtimeHint: string;
+  runtimeBackendHint: string;
+  runtimeBrowserHint: string;
+  cooldown: string;
+  cooldownFixed: string;
+  cooldownProgressive: string;
+  cooldownFixedHint: string;
+  cooldownProgressiveHint: string;
   advanced: string;
   action: string;
   actionCheck: string;
@@ -80,28 +98,42 @@ export const EDITOR_STRINGS: CodeEditorStrings = {
   prompt: "Statement",
   language: "Language",
   template: "Starting code",
-  templateHint:
-    "What the student receives. Lines between @@lock and @@endlock are read-only: the server rebuilds the file from this template, never from the text the browser sends.",
+  templateHint: "Select lines, then lock them: the student cannot edit a locked line.",
   lockedRegions: "{n} locked regions",
   "lockedRegions.one": "1 locked region",
-  studentPreview: "What the student can edit",
-  locked: "Locked",
-  editable: "Editable",
+  lock: "Lock",
+  unlock: "Unlock",
+  lockLines: "Lock these lines — the student cannot edit them",
+  unlockLines: "Unlock these lines",
+  markerUnknown: "Line {line}: unknown marker {marker} — use @@lock and @@endlock.",
+  markerUnopened: "Line {line}: {marker} closes no locked region.",
+  markerNested: "Line {line}: {marker} inside a region that is already locked.",
   referenceSolution: "Reference solution",
   referenceSolutionHint:
-    "Your own answer to the editable parts, in the order they appear — with several of them, separate the pieces with a @@next comment line, exactly as the template uses @@lock. Used only by the button below, to check that the cases pass. A student never sees it.",
+    "Your own answer, in the student's editor. Used only by the button below, to check that the cases pass. Never shown to a student.",
+  referenceRegion: "Reference solution, region {n}",
+  referenceLocked: "Locked — part of the starting code",
+  referenceExtraPieces:
+    "The saved solution has more pieces than the starting code has editable regions. The extra ones are dropped at your next edit.",
   tryReference: "Try the reference solution",
   trying: "Running…",
   tryUnavailable: "The runner is unavailable, so the reference solution cannot be tried right now.",
   tryCompileFailed: "The reference solution does not compile.",
   tryRegionsMismatch:
-    "The reference solution does not match the starting code: it must hold one piece per editable region, separated by a @@next comment line.",
+    "The reference solution does not fit the editable regions of the starting code. Edit it once in the editor above to realign it.",
   tryResult: "{passed} of {total} cases pass.",
+  tryDiverged:
+    "The browser and the server disagree on {n} cases — students' trials may mislead them. Consider \"Same as grading\".",
+  "tryDiverged.one":
+    "The browser and the server disagree on 1 case — students' trials may mislead them. Consider \"Same as grading\".",
   cases: "Test cases",
   case: "Case {n}",
   caseName: "Name",
   args: "Arguments",
-  argsHint: "One argument per line. Blank lines are ignored.",
+  argument: "Argument {n}",
+  addArgument: "Add an argument",
+  removeArgument: "Remove argument {n}",
+  commandLine: "Command line",
   stdin: "stdin",
   expected: "Expected output",
   compareStdout: "Compare the output",
@@ -114,10 +146,16 @@ export const EDITOR_STRINGS: CodeEditorStrings = {
   timeMsHint: "Empty: use the question limit.",
   addCase: "Add a case",
   removeCase: "Remove the case {name}",
-  runtime: "Run in",
-  runtimeBackend: "The server",
-  runtimeBrowser: "The browser",
-  runtimeHint: "The browser runs the student's trials; the server always grades.",
+  runtime: "Student's runs",
+  runtimeBackend: "Same as grading",
+  runtimeBrowser: "Instant",
+  runtimeBackendHint: "On the server, exactly like the grading.",
+  runtimeBrowserHint: "In the student's browser: no waiting, no load on the server.",
+  cooldown: "Between runs",
+  cooldownFixed: "Fixed",
+  cooldownProgressive: "Progressive",
+  cooldownFixedHint: "3 s between runs.",
+  cooldownProgressiveHint: "3 s, then 30 % longer each time, up to 30 s.",
   advanced: "Advanced options",
   action: "Action",
   actionCheck: "Compile only",
@@ -143,11 +181,19 @@ export const EDITOR_STRINGS: CodeEditorStrings = {
 
 export interface CodePlayerStrings {
   locked: string;
+  program: string;
   editableRegion: string;
   run: string;
   running: string;
+  compile: string;
+  compiling: string;
+  runTests: string;
+  freeTry: string;
+  availableIn: string;
+  unchangedTests: string;
+  unchangedRun: string;
+  unchangedManual: string;
   loadingRuntime: string;
-  inBrowser: string;
   runUnavailable: string;
   runFailed: string;
   runHint: string;
@@ -178,8 +224,11 @@ export interface CodePlayerStrings {
   allOrNothing: string;
   limits: string;
   manual: string;
-  manualHint: string;
   manualArgs: string;
+  argument: string;
+  addArgument: string;
+  removeArgument: string;
+  commandLine: string;
   manualRun: string;
   manualOutput: string;
   exitCode: string;
@@ -187,11 +236,19 @@ export interface CodePlayerStrings {
 
 export const PLAYER_STRINGS: CodePlayerStrings = {
   locked: "Locked — provided by your teacher",
+  program: "Your program",
   editableRegion: "Your code, region {n}",
   run: "Run",
   running: "Running…",
+  compile: "Compile",
+  compiling: "Compiling…",
+  runTests: "Run the tests",
+  freeTry: "Free try",
+  availableIn: "Available in {seconds} s",
+  unchangedTests: "Change your code to run the tests again.",
+  unchangedRun: "Change your code to run it again.",
+  unchangedManual: "Change your code or the input to run it again.",
   loadingRuntime: "Loading the language runtime… this happens once.",
-  inBrowser: "Runs in your browser — the server grades.",
   runUnavailable:
     "Running is unavailable right now. Your answer is saved and will be graded by your teacher.",
   runFailed: "The run could not be completed. Your answer is saved; try again in a moment.",
@@ -223,9 +280,11 @@ export const PLAYER_STRINGS: CodePlayerStrings = {
   allOrNothing: "All cases must pass to score.",
   limits: "{timeMs} ms · {memoryMb} MB",
   manual: "Try it yourself",
-  manualHint:
-    "Run your program once on an input of your own. One argument per line; nothing here is graded.",
   manualArgs: "Arguments",
+  argument: "Argument {n}",
+  addArgument: "Add an argument",
+  removeArgument: "Remove argument {n}",
+  commandLine: "Command line",
   manualRun: "Run once",
   manualOutput: "Output",
   exitCode: "exit {code}",

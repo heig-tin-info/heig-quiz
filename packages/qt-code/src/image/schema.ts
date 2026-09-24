@@ -228,7 +228,10 @@ export function emptyCodeImageConfig(): CodeImageConfig {
     configVersion: CODEIMAGE_CONFIG_VERSION,
     prompt: "",
     language: "c",
-    runtime: "backend",
+    // A new question runs the student's trials in the browser, as for `code`
+    // (`emptyCodeConfig`); a stored config keeps the zod default.
+    runtime: "runno",
+    cooldown: "fixed",
     template: "",
     files: [],
     action: "run",

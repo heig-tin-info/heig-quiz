@@ -299,7 +299,11 @@ class RunnoRunner implements BrowserRunner {
     const files = [{ name: ENTRY_FILE[language], content: entry.content }, ...extra];
 
     const caseMs = request.limits.timeMs || DEFAULT_CASE_MS;
-    const all = request.cases.map((c, index) => ({ index, args: c.args, stdin: c.stdin }));
+    // `check` is the Compile button: build, run nothing, whatever the list says.
+    const check = request.action === "check";
+    const all = check
+      ? []
+      : request.cases.map((c, index) => ({ index, args: c.args, stdin: c.stdin }));
     const results: (CaseResult | null)[] = all.map(() => null);
     let compile: CompileResult = { ok: true, stdout: "", stderr: "", ms: 0 };
     let program: ArrayBuffer | null = null;
@@ -308,7 +312,9 @@ class RunnoRunner implements BrowserRunner {
     // there can never be more of those than there are cases.
     for (let pass = 0; pass <= all.length; pass += 1) {
       const pending = all.filter((c) => results[c.index] === null);
-      if (pending.length === 0) break;
+      // The first pass always happens: it is the build, and a request with no
+      // case (a `check`) is nothing BUT the build.
+      if (pending.length === 0 && pass > 0) break;
       const job: RunnoJob = {
         language,
         files,
@@ -316,6 +322,7 @@ class RunnoRunner implements BrowserRunner {
         limits: request.limits,
         assets,
         program,
+        check,
       };
       const outcome = await runPass(job, caseMs, hooks);
       if (outcome.compile !== null) compile = outcome.compile;

@@ -120,10 +120,22 @@ describe("CodeEditor", () => {
     expect(onChange.mock.calls[0]?.[0]?.tests.cases[0]?.timeMs).toBeNull();
   });
 
-  it("writes one argument per line, ignoring the blanks", () => {
+  it("writes a case's command line one argv entry per row", () => {
     const { onChange } = setup();
-    fireEvent.change(screen.getByLabelText("Arguments 1"), { target: { value: "-v\n\n7\n" } });
-    expect(onChange.mock.calls[0]?.[0]?.tests.cases[0]?.args).toEqual(["-v", "7"]);
+    // The first case has no argument: one button adds the first row.
+    fireEvent.click(screen.getAllByRole("button", { name: "Add an argument" })[0]!);
+    expect(onChange.mock.calls[0]?.[0]?.tests.cases[0]?.args).toEqual([""]);
+  });
+
+  it("keeps a space inside one argument", () => {
+    const withArgs = CodeConfig.parse({
+      ...codeConfig(),
+      tests: { mode: "io", cases: [{ name: "argv", args: ["-v"], expected: "", visible: true, points: 1 }] },
+    });
+    const { onChange } = setup({ config: withArgs });
+    fireEvent.change(screen.getByLabelText("Argument 1"), { target: { value: "hello world" } });
+    expect(onChange.mock.calls[0]?.[0]?.tests.cases[0]?.args).toEqual(["hello world"]);
+    expect(screen.getByLabelText("Command line")).toHaveTextContent("./prog -v");
   });
 
   it("hides the expected output when the case does not compare it", () => {
@@ -145,13 +157,25 @@ describe("CodeEditor", () => {
 
   it("offers the browser only for a language the browser can run", () => {
     const { onChange } = setup();
-    fireEvent.change(screen.getByLabelText("Run in"), { target: { value: "runno" } });
+    const group = screen.getByRole("radiogroup", { name: "Student's runs" });
+    expect(group).toBeInTheDocument();
+    expect(screen.getByText("On the server, exactly like the grading.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: "Instant" }));
     expect(onChange.mock.calls[0]?.[0]?.runtime).toBe("runno");
   });
 
   it("does not offer a runtime choice a language cannot honour", () => {
     setup({ config: { ...codeConfig(), language: "rust" } });
-    expect(screen.queryByLabelText("Run in")).toBeNull();
+    expect(screen.queryByRole("radiogroup", { name: "Student's runs" })).toBeNull();
+  });
+
+  it("sets the cooldown of the student's runs, and says what it does", () => {
+    const { onChange } = setup();
+    expect(screen.getByRole("radiogroup", { name: "Between runs" })).toBeInTheDocument();
+    // The fixture chose progressive.
+    expect(screen.getByText("3 s, then 30 % longer each time, up to 30 s.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("radio", { name: "Fixed" }));
+    expect(onChange.mock.calls[0]?.[0]?.cooldown).toBe("fixed");
   });
 
   it("keeps the advanced options out of the primary path but reachable", () => {
@@ -208,7 +232,7 @@ describe("CodeEditor", () => {
     fireEvent.click(screen.getByRole("button", { name: "Try the reference solution" }));
     expect(
       await screen.findByText(
-        "The reference solution does not match the starting code: it must hold one piece per editable region, separated by a @@next comment line.",
+        "The reference solution does not fit the editable regions of the starting code. Edit it once in the editor above to realign it.",
       ),
     ).toBeInTheDocument();
     expect(onTry).not.toHaveBeenCalled();

@@ -37,6 +37,8 @@ export function codeConfig(): CodeConfig {
     configVersion: 1,
     prompt: "Sum the integers read on stdin.",
     language: "c",
+    runtime: "backend",
+    cooldown: "progressive",
     template: C_TEMPLATE,
     files: [{ name: "data.csv", content: SECRET_FILE_CONTENT }],
     action: "run",

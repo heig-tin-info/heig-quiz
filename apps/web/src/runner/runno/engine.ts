@@ -283,12 +283,17 @@ const describe = (error: unknown): string =>
 
 // --- The job ----------------------------------------------------------------
 
+/** `python -c` source of the browser's syntax check: parse, never run. */
+export const PYTHON_SYNTAX_CHECK =
+  "import sys; p = sys.argv[1]; compile(open(p).read(), p, 'exec')";
+
 export interface EngineEvents {
   emit(message: WorkerMessage): void;
 }
 
 /**
- * Compiles (C only) and then runs each case, reporting as it goes.
+ * Compiles (C only) and then runs each case, reporting as it goes. A
+ * `check` job stops after the build (a syntax check for Python).
  *
  * Nothing here enforces the wall clock: a WebAssembly instance runs to
  * completion on the thread that started it. The deadline is the caller's, and
@@ -313,6 +318,32 @@ export async function runJob(job: RunnoJob, events: EngineEvents): Promise<void>
     if (python === undefined) throw new Error("missing python module");
     program = python;
     memoryCapped["python"] = memoryImportOf(python) !== null;
+    if (job.check === true) {
+      // The Compile button on a language with no build: CPython's own
+      // `compile()` of the entry file, which is the parse `py_compile` does on
+      // the backend runner, without writing a `.pyc` anywhere. A syntax error
+      // exits 1 with its traceback on stderr, and is reported as a build
+      // failure.
+      const checked = await runProcess({
+        module: python,
+        args: ["python", "-c", PYTHON_SYNTAX_CHECK, `/${ENTRY_FILE.python}`],
+        fs,
+        stdin: "",
+        memoryMb: job.limits.memoryMb,
+        outputBytes,
+      });
+      events.emit({
+        type: "compile",
+        ok: checked.exitCode === 0,
+        stdout: checked.stdout,
+        stderr: checked.stderr,
+        ms: Date.now() - started,
+        program: null,
+        memoryCapped,
+      });
+      events.emit({ type: "done" });
+      return;
+    }
     // Python has no compile step; the message still fires so the player can
     // leave its "loading the runtime" state on the same signal for both.
     events.emit({

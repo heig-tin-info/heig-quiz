@@ -23,7 +23,14 @@ import { RUNNO_LANGUAGES, type CodeRuntime } from "@quiz/qt-code/client";
 
 import { BrowserRunnerUnavailable, type BrowserRunner, type RunHooks } from "./types";
 
-export type { BackendRun, BrowserRunner, ManualInput, RunHooks, RunStage } from "./types";
+export type {
+  BackendRun,
+  BackendRunOptions,
+  BrowserRunner,
+  ManualInput,
+  RunHooks,
+  RunStage,
+} from "./types";
 export { BrowserRunnerUnavailable } from "./types";
 
 /** Cheap enough to answer before loading anything: the list is two entries long. */
@@ -50,8 +57,7 @@ export async function browserRunner(language: string): Promise<BrowserRunner | n
 /**
  * The runner to TRY FIRST, or `null` for "the backend".
  *
- * Exported because the player asks the same question to decide whether to
- * print "Runs in your browser — the server grades" under the button.
+ * Exported so a host can ask the same question the player's run does.
  */
 export async function runnerFor(
   runtime: CodeRuntime,

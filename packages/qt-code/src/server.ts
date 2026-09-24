@@ -86,6 +86,8 @@ export const codeServer: QuestionTypeServer<
       // Where the Run button executes. It says nothing about the key: the
       // grade is the backend's whatever this holds (ADR-015).
       runtime: config.runtime,
+      // How the run buttons refill; a UI pace, nothing about the key.
+      cooldown: config.cooldown,
       segments: splitTemplate(config.template, config.language),
       limits: { ...config.limits },
       runsPerMinute: config.runsPerMinute,

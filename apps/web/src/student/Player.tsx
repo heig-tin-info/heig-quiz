@@ -333,10 +333,15 @@ export function Player({
                           answer: answer as CodeAnswer,
                           // The backend path is the API call it always was. It
                           // sends the regions and, if there is one, the free
-                          // input: the program itself is rebuilt server-side
-                          // (invariant 14).
-                          backend: (manual) =>
-                            run(item.id, (answer as { regions?: string[] }).regions ?? [], manual),
+                          // input or the compile-only flag: the program itself
+                          // is rebuilt server-side (invariant 14).
+                          backend: (manual, backendOptions) =>
+                            run(
+                              item.id,
+                              (answer as { regions?: string[] }).regions ?? [],
+                              manual,
+                              backendOptions,
+                            ),
                           options: options as CodeRunOptions | undefined,
                         }),
                     }

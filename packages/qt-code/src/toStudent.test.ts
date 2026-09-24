@@ -153,6 +153,12 @@ describe("codeServer.toStudent", () => {
     }
   });
 
+  it("passes the cooldown rule through, a UI pace and nothing of the key", () => {
+    expect(student.cooldown).toBe("progressive");
+    const fixed = CodeConfig.parse({ ...codeConfig(), cooldown: "fixed" });
+    expect(codeServer.toStudent(fixed, view).cooldown).toBe("fixed");
+  });
+
   it("says where the Run button executes, which the key never depends on", () => {
     expect(student.runtime).toBe("backend");
     const runno = CodeConfig.parse({ ...codeConfig(), runtime: "runno" });

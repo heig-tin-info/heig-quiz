@@ -11,23 +11,27 @@
  *    `onChange`. A student whose network blocks the CDN keeps a usable editor
  *    and loses only the syntax colours.
  *
- * 2. **Locked regions are enforced by SPLITTING, not by decorating.** The
- *    player stacks one read-only block per locked segment and one editor per
- *    editable region, so a locked line is not in any editable buffer at all.
- *    Read-only ranges inside a single Monaco model would be a rendering trick
- *    a devtools console can undo; here there is nothing to undo, and the
- *    fallback keeps the same guarantee with no extra code. The server rebuilds
- *    the file from the template either way (invariant 14) — this is about what
- *    the student sees, not about what is trusted.
+ * 2. **Locked regions are DISPLAY, not a guarantee.** A template with locked
+ *    regions is not edited here but in `./LockedEditor.tsx`: one Monaco model
+ *    holding the whole program, its locked lines greyed and refused to the
+ *    keyboard, so the student reads one file with its real line numbers and
+ *    the compiler's errors land on the right line. That refusal is a
+ *    rendering convenience a devtools console can undo, and it does not need
+ *    to be more: only the editable regions ever leave the browser, and the
+ *    server rebuilds the file from the STORED template and those regions
+ *    (invariant 14). Where Monaco does not load, the locked editor falls back
+ *    to a stack of read-only blocks and one textarea per region, built from
+ *    this component.
  */
-import { Component, lazy, Suspense } from "react";
+import { Component, lazy, Suspense, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
+import type { OnMount } from "@monaco-editor/react";
 
 import type { CodeLanguage } from "./schema.js";
 import { codeArea, cx } from "@quiz/ui";
 
 /** The Monaco language ids, which differ from ours for JavaScript. */
-const MONACO_LANGUAGE: Record<CodeLanguage, string> = {
+export const MONACO_LANGUAGE: Record<CodeLanguage, string> = {
   c: "c",
   cpp: "cpp",
   python: "python",
@@ -35,7 +39,7 @@ const MONACO_LANGUAGE: Record<CodeLanguage, string> = {
   rust: "rust",
 };
 
-const LazyMonaco = lazy(async () => {
+export const LazyMonaco = lazy(async () => {
   // The named export, not the default one: `@monaco-editor/react` ships both
   // and only the named one is typed as a component under NodeNext resolution.
   const { Editor } = await import("@monaco-editor/react");
@@ -53,7 +57,7 @@ export function monacoAvailable(): boolean {
 }
 
 /** A failed dynamic import throws while rendering; the textarea takes over. */
-class MonacoBoundary extends Component<
+export class MonacoBoundary extends Component<
   { fallback: ReactNode; children: ReactNode },
   { failed: boolean }
 > {
@@ -82,7 +86,33 @@ interface CodeAreaProps {
   monaco?: boolean | undefined;
   id?: string | undefined;
   className?: string | undefined;
+  /**
+   * Called once Monaco is mounted, with the editor and the `monaco` namespace
+   * — for a caller that listens to the selection or adds its own widgets.
+   * Never called on the textarea path.
+   */
+  onMount?: OnMount | undefined;
+  /** Whole-line decorations, Monaco path only (the textarea cannot draw them). */
+  decorations?: readonly CodeLineDecoration[] | undefined;
+  /**
+   * The textarea's selection, as offsets, whenever it may have changed — the
+   * fallback's counterpart of listening to Monaco's selection in `onMount`.
+   */
+  onTextareaSelect?: ((start: number, end: number) => void) | undefined;
 }
+
+/** A run of whole lines drawn with a class, 1-based and inclusive. */
+export interface CodeLineDecoration {
+  fromLine: number;
+  toLine: number;
+  /** On the line's background layer. */
+  className: string;
+  /** On the line's text. */
+  inlineClassName?: string | undefined;
+}
+
+type MonacoEditor = Parameters<OnMount>[0];
+type MonacoApi = Parameters<OnMount>[1];
 
 const LINE_PX = 20;
 const MAX_LINES = 30;
@@ -101,8 +131,42 @@ export function CodeArea({
   monaco,
   id,
   className = "",
+  onMount,
+  decorations,
+  onTextareaSelect,
 }: CodeAreaProps) {
   const lines = heightLines(value, minLines);
+  const mounted = useRef<{
+    editor: MonacoEditor;
+    monaco: MonacoApi;
+    collection: ReturnType<MonacoEditor["createDecorationsCollection"]>;
+  } | null>(null);
+
+  const draw = (host: NonNullable<typeof mounted.current>) =>
+    host.collection.set(
+      (decorations ?? []).map((d) => ({
+        range: new host.monaco.Range(d.fromLine, 1, d.toLine, 1),
+        options: {
+          isWholeLine: true,
+          className: d.className,
+          ...(d.inlineClassName === undefined ? {} : { inlineClassName: d.inlineClassName }),
+        },
+      })),
+    );
+
+  useEffect(() => {
+    if (mounted.current !== null) draw(mounted.current);
+    // `draw` reads nothing but `decorations`.
+  }, [decorations]);
+
+  const handleMount: OnMount = (editor, monacoApi) => {
+    mounted.current = { editor, monaco: monacoApi, collection: editor.createDecorationsCollection() };
+    // The first decorations were passed before the editor existed.
+    draw(mounted.current);
+    onMount?.(editor, monacoApi);
+  };
+  const select = (target: HTMLTextAreaElement) =>
+    onTextareaSelect?.(target.selectionStart, target.selectionEnd);
 
   const fallback = (
     <textarea
@@ -113,6 +177,9 @@ export function CodeArea({
       spellCheck={false}
       rows={lines}
       onChange={(e) => onChange?.(e.target.value)}
+      onSelect={(e) => select(e.currentTarget)}
+      onKeyUp={(e) => select(e.currentTarget)}
+      onMouseUp={(e) => select(e.currentTarget)}
       className={cx(codeArea, readOnly && "bg-surface-2 text-fg-muted", className)}
     />
   );
@@ -135,6 +202,7 @@ export function CodeArea({
             theme={dark ? "vs-dark" : "light"}
             value={value}
             onChange={(next) => onChange?.(next ?? "")}
+            onMount={handleMount}
             options={{
               readOnly: readOnly || onChange === undefined,
               domReadOnly: readOnly || onChange === undefined,

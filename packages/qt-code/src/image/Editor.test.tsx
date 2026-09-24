@@ -31,15 +31,6 @@ describe("CodeImageEditor", () => {
     expect(screen.getByRole("img", { name: "Target" })).toBeInTheDocument();
   });
 
-  it("previews each region by its first line that says something, not by a blank one", () => {
-    setup({
-      ...imageConfig(),
-      template: "// @@lock\n#include <stdio.h>\n// @@endlock\n\nint couleur(int x, int y) {\n    return 0;\n}\n",
-    });
-    const editable = document.querySelector('li[data-kind="editable"]');
-    expect(editable?.textContent).toContain("int couleur(int x, int y) {");
-  });
-
   it("offers no action choice: a picture question always runs", () => {
     setup(imageConfig());
     expect(screen.queryByLabelText("Action")).toBeNull();

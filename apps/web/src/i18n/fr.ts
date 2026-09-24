@@ -610,6 +610,8 @@ export const fr: Record<keyof Dict, string> = {
   "question.try.title": "Essayer la question",
   "question.try.hint": "Répondez comme un étudiant ; rien n'est enregistré.",
   "question.try.grade": "Corriger ma réponse",
+  "question.try.runTests": "Lancer tous les tests",
+  "question.try.runTestsHint": "Cas visibles et cachés, corrigés comme la réponse d'un étudiant : vous voyez la note.",
   "question.try.again": "Recommencer",
   "question.try.score": "{points} points sur {max}",
   "question.try.empty.title": "Pas encore essayée",
@@ -795,23 +797,35 @@ export const fr: Record<keyof Dict, string> = {
   "qt.code.e.language": "Langage",
   "qt.code.e.template": "Code de départ",
   "qt.code.e.templateHint":
-    "Ce que reçoit l'étudiant. Les lignes entre @@lock et @@endlock sont en lecture seule : le serveur reconstruit le fichier à partir de ce modèle, jamais du texte envoyé par le navigateur.",
+    "Sélectionnez des lignes, puis verrouillez-les : l'étudiant ne peut pas modifier une ligne verrouillée.",
   "qt.code.e.lockedRegions": "{n} régions verrouillées",
   "qt.code.e.lockedRegions.one": "1 région verrouillée",
-  "qt.code.e.studentPreview": "Ce que l'étudiant peut modifier",
-  "qt.code.e.locked": "Verrouillé",
-  "qt.code.e.editable": "Modifiable",
+  "qt.code.e.lock": "Verrouiller",
+  "qt.code.e.unlock": "Déverrouiller",
+  "qt.code.e.lockLines": "Verrouiller ces lignes — l'étudiant ne pourra pas les modifier",
+  "qt.code.e.unlockLines": "Déverrouiller ces lignes",
+  "qt.code.e.markerUnknown": "Ligne {line} : marqueur inconnu {marker} — utilisez @@lock et @@endlock.",
+  "qt.code.e.markerUnopened": "Ligne {line} : {marker} ne ferme aucune région verrouillée.",
+  "qt.code.e.markerNested": "Ligne {line} : {marker} dans une région déjà verrouillée.",
   "qt.code.e.referenceSolution": "Solution de référence",
   "qt.code.e.referenceSolutionHint":
-    "Votre propre réponse aux parties modifiables, dans l'ordre où elles apparaissent — s'il y en a plusieurs, séparez les morceaux par une ligne de commentaire @@next, exactement comme le modèle utilise @@lock. Utilisée seulement par le bouton ci-dessous, pour vérifier que les cas passent. Un étudiant ne la voit jamais.",
+    "Votre propre réponse, dans l'éditeur de l'étudiant. Utilisée seulement par le bouton ci-dessous, pour vérifier que les cas passent. Jamais montrée à un étudiant.",
+  "qt.code.e.referenceRegion": "Solution de référence, région {n}",
+  "qt.code.e.referenceLocked": "Verrouillé — fait partie du code de départ",
+  "qt.code.e.referenceExtraPieces":
+    "La solution enregistrée compte plus de morceaux que le code de départ n'a de régions modifiables. Les morceaux en trop seront supprimés à votre prochaine modification.",
   "qt.code.e.tryReference": "Essayer la solution de référence",
   "qt.code.e.trying": "Exécution…",
   "qt.code.e.tryUnavailable":
     "L'exécuteur est indisponible : la solution de référence ne peut pas être essayée maintenant.",
   "qt.code.e.tryCompileFailed": "La solution de référence ne compile pas.",
   "qt.code.e.tryRegionsMismatch":
-    "La solution de référence ne correspond pas au code de départ : elle doit contenir un morceau par région modifiable, séparés par une ligne de commentaire @@next.",
+    "La solution de référence ne correspond pas aux régions modifiables du code de départ. Modifiez-la une fois dans l'éditeur ci-dessus pour la réaligner.",
   "qt.code.e.tryResult": "{passed} cas sur {total} passent.",
+  "qt.code.e.tryDiverged":
+    "Le navigateur et le serveur ne sont pas d'accord sur {n} cas — les essais des étudiants risquent de les induire en erreur. Envisagez « Identique à la correction ».",
+  "qt.code.e.tryDiverged.one":
+    "Le navigateur et le serveur ne sont pas d'accord sur 1 cas — les essais des étudiants risquent de les induire en erreur. Envisagez « Identique à la correction ».",
   "qt.code.e.cases": "Cas de test",
   "qt.code.e.caseName": "Nom",
   "qt.code.e.stdin": "stdin",
@@ -825,17 +839,26 @@ export const fr: Record<keyof Dict, string> = {
   "qt.code.e.advanced": "Options avancées",
   "qt.code.e.case": "Cas {n}",
   "qt.code.e.args": "Arguments",
-  "qt.code.e.argsHint": "Un argument par ligne. Les lignes vides sont ignorées.",
+  "qt.code.e.argument": "Argument {n}",
+  "qt.code.e.addArgument": "Ajouter un argument",
+  "qt.code.e.removeArgument": "Supprimer l'argument {n}",
+  "qt.code.e.commandLine": "Ligne de commande",
   "qt.code.e.compareStdout": "Comparer la sortie",
   "qt.code.e.exitCode": "Code de retour",
   "qt.code.e.exitCodeAny": "indifférent",
   "qt.code.e.exitCodeHint":
     "Vide : n'importe quel code de retour convient. Un plantage échoue quand même.",
-  "qt.code.e.runtime": "Exécuter dans",
-  "qt.code.e.runtimeBackend": "Le serveur",
-  "qt.code.e.runtimeBrowser": "Le navigateur",
-  "qt.code.e.runtimeHint":
-    "Le navigateur exécute les essais de l'étudiant ; le serveur corrige toujours.",
+  "qt.code.e.runtime": "Essais de l'étudiant",
+  "qt.code.e.runtimeBackend": "Identique à la correction",
+  "qt.code.e.runtimeBrowser": "Instantané",
+  "qt.code.e.runtimeBackendHint": "Sur le serveur, exactement comme la correction.",
+  "qt.code.e.runtimeBrowserHint":
+    "Dans le navigateur de l'étudiant : aucune attente, aucune charge pour le serveur.",
+  "qt.code.e.cooldown": "Entre deux exécutions",
+  "qt.code.e.cooldownFixed": "Fixe",
+  "qt.code.e.cooldownProgressive": "Progressif",
+  "qt.code.e.cooldownFixedHint": "3 s entre deux exécutions.",
+  "qt.code.e.cooldownProgressiveHint": "3 s, puis 30 % de plus à chaque fois, jusqu'à 30 s.",
   "qt.code.e.action": "Action",
   "qt.code.e.actionCheck": "Compiler seulement",
   "qt.code.e.actionRun": "Compiler et exécuter",
@@ -859,9 +882,18 @@ export const fr: Record<keyof Dict, string> = {
 
   // --- qt-code player strings ---
   "qt.code.p.locked": "Verrouillé — fourni par votre enseignant",
+  "qt.code.p.program": "Votre programme",
   "qt.code.p.editableRegion": "Votre code, région {n}",
   "qt.code.p.run": "Exécuter",
   "qt.code.p.running": "Exécution…",
+  "qt.code.p.compile": "Compiler",
+  "qt.code.p.compiling": "Compilation…",
+  "qt.code.p.runTests": "Lancer les tests",
+  "qt.code.p.freeTry": "Essai libre",
+  "qt.code.p.availableIn": "Disponible dans {seconds} s",
+  "qt.code.p.unchangedTests": "Modifiez votre code pour relancer les tests.",
+  "qt.code.p.unchangedRun": "Modifiez votre code pour le relancer.",
+  "qt.code.p.unchangedManual": "Modifiez votre code ou l'entrée pour relancer l'essai.",
   "qt.code.p.runUnavailable":
     "L'exécution est indisponible. Votre réponse est enregistrée et sera corrigée par votre enseignant.",
   "qt.code.p.runFailed":
@@ -889,8 +921,6 @@ export const fr: Record<keyof Dict, string> = {
   "qt.code.p.limits": "{timeMs} ms · {memoryMb} Mo",
   "qt.code.p.loadingRuntime":
     "Chargement de l'environnement d'exécution… cela n'arrive qu'une fois.",
-  "qt.code.p.inBrowser":
-    "S'exécute dans votre navigateur — la correction reste celle du serveur.",
   "qt.code.p.noStdin": "Aucune entrée",
   "qt.code.p.command": "$ program {args}",
   "qt.code.p.expectedAnyOutput": "Sortie libre",
@@ -900,9 +930,11 @@ export const fr: Record<keyof Dict, string> = {
   "qt.code.p.exitCode": "code {code}",
   "qt.code.p.outputMismatch": "Sortie différente",
   "qt.code.p.manual": "Essayez vous-même",
-  "qt.code.p.manualHint":
-    "Exécutez votre programme une fois sur une entrée de votre choix. Un argument par ligne ; rien ici n'est noté.",
   "qt.code.p.manualArgs": "Arguments",
+  "qt.code.p.argument": "Argument {n}",
+  "qt.code.p.addArgument": "Ajouter un argument",
+  "qt.code.p.removeArgument": "Supprimer l'argument {n}",
+  "qt.code.p.commandLine": "Ligne de commande",
   "qt.code.p.manualRun": "Exécuter une fois",
   "qt.code.p.manualOutput": "Sortie",
 
@@ -939,7 +971,7 @@ export const fr: Record<keyof Dict, string> = {
 
   // --- qt-code : codeimage (ADR-021) ---
   "qt.codeimage.e.referenceSolutionHint":
-    "Votre propre réponse aux parties modifiables, dans l'ordre où elles apparaissent — s'il y en a plusieurs, séparez les morceaux par une ligne de commentaire @@next, exactement comme le modèle utilise @@lock. Le bouton ci-dessous l'exécute et dessine son image, que vous pouvez ensuite utiliser comme cible. Un étudiant ne la voit jamais.",
+    "Votre propre réponse, dans l'éditeur de l'étudiant. Le bouton ci-dessous l'exécute et dessine son image, que vous pouvez ensuite utiliser comme cible. Jamais montrée à un étudiant.",
   "qt.codeimage.e.imageSection": "Image",
   "qt.codeimage.e.imageHint":
     "Le programme écrit largeur × hauteur entiers sur sa sortie standard, séparés par des espaces, des tabulations ou des retours à la ligne, ligne par ligne depuis le coin supérieur gauche. Ce sont les pixels.",

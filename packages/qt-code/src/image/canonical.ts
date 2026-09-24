@@ -24,6 +24,7 @@ export function toCanonicalImage(config: CodeImageConfig): Record<string, unknow
     target: config.target === null ? null : { ...config.target },
   };
   if (config.runtime !== "backend") out.runtime = config.runtime;
+  if (config.cooldown !== "fixed") out.cooldown = config.cooldown;
   if (config.files.length > 0) out.files = config.files.map((f) => ({ ...f }));
   if (config.compileArgs !== "") out.compileArgs = config.compileArgs;
   if (!isDefaultLimits(config.limits)) out.limits = { ...config.limits };

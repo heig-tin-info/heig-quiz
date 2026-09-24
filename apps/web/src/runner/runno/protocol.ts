@@ -32,6 +32,13 @@ export interface RunnoJob {
    * a case's wall clock: the compile step is not paid twice.
    */
   program: ArrayBuffer | null;
+  /**
+   * `action: "check"`: build and stop. C compiles and links as usual (with
+   * no case to run); Python, which has no build, gets a syntax check instead
+   * — CPython's own `compile()` of the entry file — so the Compile button
+   * means the same thing in both languages.
+   */
+  check?: boolean | undefined;
 }
 
 export type WorkerMessage =
