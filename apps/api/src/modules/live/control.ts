@@ -94,35 +94,41 @@ export async function resumeEvaluation(
 ): Promise<EvaluationRecord> {
   const pausedFor = evaluation.pausedAt === null ? 0 : now.getTime() - evaluation.pausedAt.getTime();
   // Compare-and-set: a double-clicked resume (or a second ticker process)
-  // must not add the pause to every deadline twice.
-  let next = await tryApplyState(db, evaluation, "running", now);
+  // must not add the pause to every deadline twice. One transaction: a tick
+  // that saw the evaluation `running` before its deadlines moved would expire
+  // attempts, or close it, on a clock that still counts the pause.
+  const next = await db.transaction(async (tx) => {
+    let next = await tryApplyState(tx, evaluation, "running", now);
+    if (next === null) return null;
+    // In `deadline` timing the common end moves with the pause, exactly as a
+    // `+N min` for everybody moves it (`extendTime`): the ticker closes on it,
+    // the teacher's countdown reads it, and a student who arrives after the
+    // resume gets "until the common end" (F-LIVE-12) — none of them may lose
+    // the time the evaluation stood still (#77).
+    if (pausedFor > 0 && settingsOf(next).timing === "deadline" && next.closesAt) {
+      const closesAt = new Date(next.closesAt.getTime() + pausedFor);
+      await setClosesAt(tx, next.id, closesAt, now);
+      next = { ...next, closesAt };
+    }
+    if (pausedFor > 0) {
+      await tx
+        .update(attempts)
+        .set({
+          deadlineAt: sql`${attempts.deadlineAt} + make_interval(secs => ${pausedFor / 1000})`,
+          extraS: sql`${attempts.extraS} + ${Math.round(pausedFor / 1000)}`,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(attempts.evaluationId, next.id),
+            eq(attempts.state, "in_progress"),
+            isNotNull(attempts.deadlineAt),
+          ),
+        );
+    }
+    return next;
+  });
   if (next === null) return (await evaluationById(db, evaluation.id))!;
-  // In `deadline` timing the common end moves with the pause, exactly as a
-  // `+N min` for everybody moves it (`extendTime`): the ticker closes on it,
-  // the teacher's countdown reads it, and a student who arrives after the
-  // resume gets "until the common end" (F-LIVE-12) — none of them may lose
-  // the time the evaluation stood still (#77).
-  if (pausedFor > 0 && settingsOf(next).timing === "deadline" && next.closesAt) {
-    const closesAt = new Date(next.closesAt.getTime() + pausedFor);
-    await setClosesAt(db, next.id, closesAt, now);
-    next = { ...next, closesAt };
-  }
-  if (pausedFor > 0) {
-    await db
-      .update(attempts)
-      .set({
-        deadlineAt: sql`${attempts.deadlineAt} + make_interval(secs => ${pausedFor / 1000})`,
-        extraS: sql`${attempts.extraS} + ${Math.round(pausedFor / 1000)}`,
-        updatedAt: now,
-      })
-      .where(
-        and(
-          eq(attempts.evaluationId, next.id),
-          eq(attempts.state, "in_progress"),
-          isNotNull(attempts.deadlineAt),
-        ),
-      );
-  }
   for (const attempt of await attemptsWithBonus(db, next)) {
     if (attempt.state !== "in_progress") continue;
     await logAttemptEvent(db, attempt.id, "resumed", { pausedMs: pausedFor }, now);
