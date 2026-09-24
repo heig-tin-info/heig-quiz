@@ -123,6 +123,41 @@ describe("publication (F-QST-03)", () => {
     expect(detail.draft.config).toEqual({ statement: "Capital of Italy?", answer: "Roma" });
   });
 
+  /*
+   * #72, #74: the editor wrote the draft the publication had just reopened
+   * straight back, the write moved the draft's stamp past `published_at`, and
+   * both the editor and the pool list said "unpublished changes" about a
+   * question with nothing unpublished. Writing back what is stored is not a
+   * change; writing something else still is.
+   */
+  it("an autosave of the unchanged draft right after publishing leaves it published", async () => {
+    const id = await seedQuestion("republished");
+    await writeDraft(id, { statement: "Capital of Spain?", answer: "Madrid" });
+    await service.publishQuestion(db, await questionRow(id), { userId: ownerId });
+    await writeDraft(id, { statement: "Capital of Spain?", answer: "Madrid!" });
+    const version = await service.publishQuestion(db, await questionRow(id), { userId: ownerId });
+
+    const stateInList = async () => {
+      const page = await service.listQuestions(db, poolId, search({ q: "republished" }));
+      const row = page.items.find((r) => r.id === id)!;
+      return { latestNumber: row.latestNumber, hasDraftChanges: row.hasDraftChanges };
+    };
+    expect(await stateInList()).toEqual({ latestNumber: 2, hasDraftChanges: false });
+
+    // What the editor sends back once the refetched draft lands on screen.
+    const detail = await service.questionDetail(db, await questionRow(id));
+    const echo = await service.putDraft(db, await questionRow(id), {
+      config: detail.draft.config,
+      explanation: detail.draft.explanation,
+    });
+    expect(echo.updatedAt).toBe(version.publishedAt);
+    expect(await stateInList()).toEqual({ latestNumber: 2, hasDraftChanges: false });
+
+    // A real edit afterwards is still a change.
+    await writeDraft(id, { statement: "Capital of Spain?", answer: "Madrid" });
+    expect(await stateInList()).toEqual({ latestNumber: 2, hasDraftChanges: true });
+  });
+
   it("two simultaneous publications produce two distinct numbers and one draft", async () => {
     // NOTE: PGlite is single-connection, so the two transactions are
     // serialized rather than truly concurrent — what this asserts is the

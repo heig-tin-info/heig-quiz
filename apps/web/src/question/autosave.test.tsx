@@ -87,6 +87,30 @@ describe("useAutosave", () => {
     expect(save).toHaveBeenLastCalledWith("d");
   });
 
+  it("does not save a value adopted from the server, and still saves the next edit", async () => {
+    vi.useFakeTimers();
+    const save = vi.fn(() => Promise.resolve());
+    const { rerender, result } = renderHook(({ v }) => useAutosave({ value: v, save }), {
+      initialProps: { v: { text: "a" } },
+    });
+    const fromServer = { text: "published" };
+    result.current.adopt(fromServer);
+    rerender({ v: fromServer });
+    await act(async () => {
+      vi.advanceTimersByTime(AUTOSAVE_DELAY_MS * 4);
+    });
+    expect(save).not.toHaveBeenCalled();
+    expect(result.current.dirty).toBe(false);
+    expect(result.current.state).toBe("saved");
+
+    rerender({ v: { text: "edited" } });
+    await act(async () => {
+      vi.advanceTimersByTime(AUTOSAVE_DELAY_MS);
+    });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(save).toHaveBeenCalledWith({ text: "edited" });
+  });
+
   it("Ctrl+S does not wait for the delay", async () => {
     vi.useFakeTimers();
     const save = vi.fn(() => Promise.resolve());

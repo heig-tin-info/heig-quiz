@@ -96,12 +96,17 @@ export function useQuestionDraft(id: string) {
    */
   const serverDraft = detail.data?.draft;
   const serverStamp = serverDraft?.updatedAt;
-  const { dirty } = autosave;
+  const { dirty, adopt } = autosave;
   useEffect(() => {
     if (!serverDraft || !serverStamp) return;
     if (dirty) return;
     if (ownStamp.current !== null && new Date(serverStamp) <= new Date(ownStamp.current)) return;
-    setLocalDraft({ config: serverDraft.config, explanation: serverDraft.explanation });
+    const next = { config: serverDraft.config, explanation: serverDraft.explanation };
+    // Shown, never saved back: it is already what the server holds. Saving
+    // it would stamp the draft AFTER the publication that just produced it,
+    // and the question would read "unpublished changes" forever (#72, #74).
+    adopt(next);
+    setLocalDraft(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the stamp is the identity of a draft
   }, [serverStamp]);
 

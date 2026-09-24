@@ -28,6 +28,18 @@ export interface Autosave {
   dirty: boolean;
 }
 
+/** What the owner of the watched value gets on top of what the header shows. */
+export interface AutosaveControl<T> extends Autosave {
+  /**
+   * "This value came FROM the server": call it with the very reference about
+   * to be handed back as `value`, and that change is not saved. A draft the
+   * server sent is already stored; writing it back is not an edit — it only
+   * moves the draft's `updatedAt` past the publication and makes a question
+   * published a second ago show "unpublished changes" (#72, #74).
+   */
+  adopt: (value: T) => void;
+}
+
 export function useAutosave<T>({
   value,
   save,
@@ -40,7 +52,7 @@ export function useAutosave<T>({
   delay?: number;
   /** False while the question is still loading, or read-only. */
   enabled?: boolean;
-}): Autosave {
+}): AutosaveControl<T> {
   const [state, setState] = useState<SyncState>("saved");
   const [dirty, setDirty] = useState(false);
   const latest = useRef(value);
@@ -77,6 +89,12 @@ export function useAutosave<T>({
     );
   }, []);
 
+  // The last value the server handed over (`adopt`): matched by reference.
+  const adopted = useRef<{ value: T } | null>(null);
+  const adopt = useCallback((next: T) => {
+    adopted.current = { value: next };
+  }, []);
+
   const first = useRef(true);
   useEffect(() => {
     // Nothing is watched until the editor has a draft to watch: the values
@@ -86,6 +104,10 @@ export function useAutosave<T>({
     if (!enabled) return;
     if (first.current) {
       first.current = false;
+      return;
+    }
+    if (adopted.current !== null && adopted.current.value === value) {
+      adopted.current = null;
       return;
     }
     pending.current = true;
@@ -109,5 +131,5 @@ export function useAutosave<T>({
     run();
   }, [run]);
 
-  return { state, flush, dirty };
+  return { state, flush, dirty, adopt };
 }
