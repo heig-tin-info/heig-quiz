@@ -45,6 +45,7 @@ import {
 import {
   EVALUATION_STATES,
   itemListLock,
+  isFeedbackAllowed,
   missingTimingFields,
   round2,
   type EvaluationStateName,
@@ -109,6 +110,20 @@ export class IllegalTransition extends EvaluationError {
 export class Locked extends EvaluationError {
   constructor(message = "an attempt exists: the structure is frozen") {
     super("locked", 409, message);
+  }
+}
+
+/**
+ * F-EVAL-11 (#78): `immediate` feedback in an exam, or in an exercise given a
+ * waiting room — both sat in class (`isInClass` in `@quiz/domain`).
+ */
+class FeedbackNotAllowed extends EvaluationError {
+  constructor(when: string) {
+    super(
+      "feedback_not_allowed",
+      422,
+      `feedback "${when}" is not allowed for an evaluation sat in class (F-EVAL-11)`,
+    );
   }
 }
 
@@ -803,12 +818,20 @@ export async function patchEvaluation(
   if (patch.accessCode !== undefined) next.accessCode = patch.accessCode;
   if (patch.ipAllowlist !== undefined) next.ipAllowlist = patch.ipAllowlist;
 
-  // `immediate` feedback during an exam would hand the key out mid-exam
-  // (F-EVAL-11): the policy is silently clamped, never accepted as written.
-  const feedback = (next.feedbackPolicy ?? feedbackOf(row)) as FeedbackPolicy;
-  const mode = row.mode;
-  if (mode === "exam" && feedback.when === "immediate") {
-    next.feedbackPolicy = { ...feedback, when: "on_release" };
+  // `immediate` feedback in class would hand the answers to the first
+  // students while the others are still working (F-EVAL-11, #78). The pair
+  // the patch LEAVES behind is checked, whichever half it moved: adding a
+  // waiting room under `immediate` is refused like asking for `immediate`
+  // under a waiting room. The screen sends the fallback with the change
+  // (`feedbackWhenFor`), so only an inconsistent client meets this 422. A
+  // patch that touches neither half passes, so a row stored before the rule
+  // can still be renamed.
+  if (patch.feedbackPolicy?.when !== undefined || patch.settings?.lobby !== undefined) {
+    const when = ((next.feedbackPolicy ?? feedbackOf(row)) as FeedbackPolicy).when;
+    const lobby = ((next.settings ?? settingsOf(row)) as EvaluationSettings).lobby;
+    if (!isFeedbackAllowed({ mode: row.mode, lobby }, when)) {
+      throw new FeedbackNotAllowed(when);
+    }
   }
 
   await db.update(evaluations).set(next).where(eq(evaluations.id, row.id));

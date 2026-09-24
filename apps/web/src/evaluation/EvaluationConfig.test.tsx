@@ -116,9 +116,12 @@ describe("EvaluationConfig", () => {
 
   it("a preset writes the settings it names", async () => {
     const user = userEvent.setup();
+    const exercise = makeEvaluationDetail({
+      evaluation: { ...makeEvaluationDetail().evaluation, mode: "exercise" },
+    });
     const { calls } = mockFetch(
-      routes(makeEvaluationDetail(), {
-        [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(makeEvaluationDetail()),
+      routes(exercise, {
+        [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(exercise),
       }),
     );
     renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
@@ -166,6 +169,102 @@ describe("EvaluationConfig", () => {
     await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
     expect(await screen.findByRole("radio", { name: /^on release$/i })).toBeInTheDocument();
     expect(screen.queryByRole("radio", { name: /^right away$/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/not offered in class/i)).toBeInTheDocument();
+  });
+
+  it("the take-home preset asks an exam for feedback on release, never right away (#78)", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch(
+      routes(makeEvaluationDetail(), {
+        [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(makeEvaluationDetail()),
+      }),
+    );
+    renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+      route: "/evaluations/x?step=timing",
+    });
+    await user.click(await screen.findByRole("button", { name: /homework exercise/i }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.method === "PATCH")?.body).toMatchObject({
+        feedbackPolicy: { when: "on_release" },
+      }),
+    );
+  });
+
+  /*
+   * #78: "in class" is not only the exam mode. An exercise given a waiting
+   * room starts everybody together, and immediate feedback would reach the
+   * first students while the others are still working.
+   */
+  describe("immediate feedback in class (#78)", () => {
+    const exercise = (lobby: "skip" | "manual", when: "on_release" | "immediate") =>
+      makeEvaluationDetail({
+        evaluation: {
+          ...makeEvaluationDetail().evaluation,
+          mode: "exercise",
+          settings: { ...makeEvaluationDetail().evaluation.settings, lobby },
+          feedbackPolicy: { ...makeEvaluationDetail().evaluation.feedbackPolicy, when },
+        },
+      });
+
+    it("offers it to a take-home exercise", async () => {
+      const user = userEvent.setup();
+      mockFetch(routes(exercise("skip", "immediate")));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
+      expect(await screen.findByRole("radio", { name: /^right away$/i })).toBeChecked();
+      expect(screen.queryByText(/not offered in class/i)).toBeNull();
+    });
+
+    it("hides it, and says why, for an exercise with a waiting room", async () => {
+      const user = userEvent.setup();
+      mockFetch(routes(exercise("manual", "on_release")));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
+      expect(await screen.findByRole("radio", { name: /^on release$/i })).toBeChecked();
+      expect(screen.queryByRole("radio", { name: /^right away$/i })).toBeNull();
+      expect(screen.getByText(/not offered in class/i)).toBeInTheDocument();
+    });
+
+    it("brings the policy back to 'on release' in the same patch that adds a waiting room", async () => {
+      const user = userEvent.setup();
+      const detail = exercise("skip", "immediate");
+      const { calls } = mockFetch(
+        routes(detail, { [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(detail) }),
+      );
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
+      await user.click(await screen.findByRole("radio", { name: /^you start$/i }));
+      await waitFor(() =>
+        expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({
+          settings: { lobby: "manual" },
+          feedbackPolicy: { when: "on_release" },
+        }),
+      );
+    });
+
+    it("leaves the policy alone when the waiting room changes nothing about it", async () => {
+      const user = userEvent.setup();
+      const detail = exercise("skip", "on_release");
+      const { calls } = mockFetch(
+        routes(detail, { [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: ok(detail) }),
+      );
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      await user.click(await screen.findByRole("button", { name: /^advanced options$/i }));
+      await user.click(await screen.findByRole("radio", { name: /^you start$/i }));
+      await waitFor(() =>
+        expect(calls.find((c) => c.method === "PATCH")?.body).toEqual({
+          settings: { lobby: "manual" },
+        }),
+      );
+    });
   });
 
   /*

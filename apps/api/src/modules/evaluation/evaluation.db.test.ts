@@ -398,15 +398,62 @@ describe("patch and duplicate", () => {
     ).rejects.toMatchObject({ code: "locked", status: 409 });
   });
 
-  it("never lets an exam give immediate feedback (F-EVAL-11)", async () => {
+  it("refuses immediate feedback to an exam (F-EVAL-11)", async () => {
     const seed = await seedLive(db);
-    const row = await service.patchEvaluation(
+    const row = await reload(db, seed.evaluationId);
+    await expect(
+      service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, { attemptCount: 0 }),
+    ).rejects.toMatchObject({ code: "feedback_not_allowed", status: 422 });
+    // Nothing was written: the refusal is not a clamp.
+    expect(service.feedbackOf(await reload(db, seed.evaluationId)).when).toBe("on_release");
+  });
+
+  /*
+   * #78: an exercise sat in class — a waiting room makes everybody start
+   * together — must not hand out the answers while the others still work.
+   * The pair is checked whichever half the patch moves.
+   */
+  it("refuses immediate feedback to an exercise with a waiting room, from either side (#78)", async () => {
+    const seed = await seedLive(db, { mode: "exercise", settings: { lobby: "skip" } });
+    let row = await reload(db, seed.evaluationId);
+    // Take-home: allowed.
+    row = await service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, {
+      attemptCount: 0,
+    });
+    expect(service.feedbackOf(row).when).toBe("immediate");
+
+    // Adding a waiting room under `immediate` is refused…
+    await expect(
+      service.patchEvaluation(db, row, { settings: { lobby: "manual" } }, { attemptCount: 0 }),
+    ).rejects.toMatchObject({ code: "feedback_not_allowed", status: 422 });
+    // …and accepted when the same patch brings the policy back, as the screen does.
+    row = await service.patchEvaluation(
       db,
-      await reload(db, seed.evaluationId),
-      { feedbackPolicy: { when: "immediate" } },
+      row,
+      { settings: { lobby: "manual" }, feedbackPolicy: { when: "on_release" } },
       { attemptCount: 0 },
     );
-    expect(service.feedbackOf(row).when).toBe("on_release");
+    expect(service.settingsOf(row).lobby).toBe("manual");
+
+    // Asking for `immediate` under a waiting room is refused too.
+    await expect(
+      service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, { attemptCount: 0 }),
+    ).rejects.toMatchObject({ code: "feedback_not_allowed" });
+  });
+
+  it("still renames an evaluation stored with a pair the rule now refuses (#78)", async () => {
+    const seed = await seedLive(db, { mode: "exercise", settings: { lobby: "manual" } });
+    await db
+      .update(evaluations)
+      .set({ feedbackPolicy: { ...service.feedbackOf(await reload(db, seed.evaluationId)), when: "immediate" } })
+      .where(eq(evaluations.id, seed.evaluationId));
+    const renamed = await service.patchEvaluation(
+      db,
+      await reload(db, seed.evaluationId),
+      { title: "Renamed", feedbackPolicy: { showKey: true } },
+      { attemptCount: 0 },
+    );
+    expect(renamed.title).toBe("Renamed");
   });
 
   /*

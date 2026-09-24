@@ -53,3 +53,59 @@ export function missingTimingFields(input: TimingInput): TimingField[] {
       return input.mode === "exam" ? ["timing"] : [];
   }
 }
+
+// --- Feedback policy (F-EVAL-11, #78) --------------------------------------
+
+/** When the student sees the correction, as on the wire (`FeedbackPolicy.when`). */
+export type FeedbackWhen = "none" | "on_release" | "immediate";
+
+/** The waiting room setting of F-EVAL-06. */
+export type LobbyName = "skip" | "auto" | "manual";
+
+export interface FeedbackContext {
+  mode: EvaluationModeName;
+  lobby: LobbyName;
+}
+
+/** Every policy, in the order the screen offers them. */
+export const FEEDBACK_WHEN: readonly FeedbackWhen[] = ["none", "on_release", "immediate"];
+
+/** What an evaluation falls back to when its context stops allowing `immediate`. */
+export const IN_CLASS_FEEDBACK: FeedbackWhen = "on_release";
+
+/**
+ * Whether the class answers TOGETHER, in the room: an `exam`, or an
+ * `exercise` given a waiting room. `immediate` feedback there hands the
+ * answers to the students who validated first while the others are still
+ * working (F-EVAL-11: "reserved to the exercise and poll modes"; #78).
+ *
+ * The waiting room is the mark of an in-class sitting because it is what
+ * makes everybody start together; the glossary's `exercise` skips it
+ * (docs/spec/01 §5), and the take-home preset sets it to `skip`. A `poll` is
+ * live too, but its feedback is the teacher's reveal (F-LIVE-13), which the
+ * spec allows explicitly.
+ */
+export function isInClass(ctx: FeedbackContext): boolean {
+  if (ctx.mode === "exam") return true;
+  if (ctx.mode === "poll") return false;
+  return ctx.lobby !== "skip";
+}
+
+/** The feedback policies an evaluation may use, in screen order. */
+export function allowedFeedbackWhen(ctx: FeedbackContext): readonly FeedbackWhen[] {
+  return isInClass(ctx) ? FEEDBACK_WHEN.filter((w) => w !== "immediate") : FEEDBACK_WHEN;
+}
+
+export function isFeedbackAllowed(ctx: FeedbackContext, when: FeedbackWhen): boolean {
+  return allowedFeedbackWhen(ctx).includes(when);
+}
+
+/**
+ * `wanted` when the context allows it, otherwise {@link IN_CLASS_FEEDBACK}.
+ * What the screen sends with a change that makes the current policy illegal
+ * (a waiting room added, the in-class preset picked), so that the pair it
+ * writes is one the server accepts.
+ */
+export function feedbackWhenFor(ctx: FeedbackContext, wanted: FeedbackWhen): FeedbackWhen {
+  return isFeedbackAllowed(ctx, wanted) ? wanted : IN_CLASS_FEEDBACK;
+}

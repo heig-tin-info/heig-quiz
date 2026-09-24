@@ -8,7 +8,8 @@
  * and reading back "which preset is this?" is a comparison, never a flag that
  * could drift from the settings it claims to describe.
  */
-import type { EvaluationDetail, EvaluationPatch } from "@quiz/contracts";
+import type { EvaluationDetail, EvaluationMode, EvaluationPatch } from "@quiz/contracts";
+import { feedbackWhenFor } from "@quiz/domain";
 
 export type PresetId = "classroom" | "homework";
 
@@ -18,7 +19,11 @@ const CLASSROOM_DURATION_S = 45 * 60;
 /** A week, which is what "exercise of the week" means. */
 const HOMEWORK_WINDOW_MS = 7 * 24 * 3600 * 1000;
 
-export function presetPatch(id: PresetId, now = Date.now()): EvaluationPatch {
+export function presetPatch(
+  id: PresetId,
+  mode: EvaluationMode,
+  now = Date.now(),
+): EvaluationPatch {
   if (id === "classroom") {
     return {
       settings: {
@@ -51,9 +56,13 @@ export function presetPatch(id: PresetId, now = Date.now()): EvaluationPatch {
     // The window the preset promises starts now.
     opensAt: new Date(now).toISOString(),
     closesAt: new Date(now + HOMEWORK_WINDOW_MS).toISOString(),
-    // An `exam` never stores `immediate`; the server clamps it back to
-    // `on_release` (WP5 deviation W5-18), so sending it is safe either way.
-    feedbackPolicy: { when: "immediate", showKey: true, showExplanation: true },
+    // Right away, where the rule allows it: an exam never gives immediate
+    // feedback, and the server refuses the pair rather than fixing it (#78).
+    feedbackPolicy: {
+      when: feedbackWhenFor({ mode, lobby: "skip" }, "immediate"),
+      showKey: true,
+      showExplanation: true,
+    },
   };
 }
 

@@ -153,7 +153,7 @@ export function TimingStep({
             id={id}
             active={preset === id}
             disabled={locked}
-            onPick={() => patch.mutate(presetPatch(id))}
+            onPick={() => patch.mutate(presetPatch(id, mode))}
           />
         ))}
       </div>

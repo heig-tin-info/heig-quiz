@@ -1,6 +1,49 @@
 import { describe, expect, it } from "vitest";
 
-import { missingTimingFields, type TimingInput } from "./evaluationConfig.js";
+import {
+  allowedFeedbackWhen,
+  feedbackWhenFor,
+  isFeedbackAllowed,
+  isInClass,
+  missingTimingFields,
+  type TimingInput,
+} from "./evaluationConfig.js";
+
+describe("the feedback policies an evaluation may use (F-EVAL-11, #78)", () => {
+  it("never offers `immediate` to an exam, whatever its waiting room", () => {
+    for (const lobby of ["skip", "auto", "manual"] as const) {
+      expect(allowedFeedbackWhen({ mode: "exam", lobby })).toEqual(["none", "on_release"]);
+    }
+  });
+
+  it("offers all three to a take-home exercise, which has no waiting room", () => {
+    expect(allowedFeedbackWhen({ mode: "exercise", lobby: "skip" })).toEqual([
+      "none",
+      "on_release",
+      "immediate",
+    ]);
+    expect(isInClass({ mode: "exercise", lobby: "skip" })).toBe(false);
+  });
+
+  it("treats an exercise with a waiting room as sat in class", () => {
+    for (const lobby of ["auto", "manual"] as const) {
+      expect(isInClass({ mode: "exercise", lobby })).toBe(true);
+      expect(isFeedbackAllowed({ mode: "exercise", lobby }, "immediate")).toBe(false);
+      expect(isFeedbackAllowed({ mode: "exercise", lobby }, "on_release")).toBe(true);
+    }
+  });
+
+  it("keeps `immediate` for a poll, whose feedback is the teacher's reveal (F-LIVE-13)", () => {
+    expect(isFeedbackAllowed({ mode: "poll", lobby: "manual" }, "immediate")).toBe(true);
+  });
+
+  it("falls back to `on_release` only when the wanted policy is not allowed", () => {
+    expect(feedbackWhenFor({ mode: "exam", lobby: "skip" }, "immediate")).toBe("on_release");
+    expect(feedbackWhenFor({ mode: "exercise", lobby: "manual" }, "immediate")).toBe("on_release");
+    expect(feedbackWhenFor({ mode: "exercise", lobby: "manual" }, "none")).toBe("none");
+    expect(feedbackWhenFor({ mode: "exercise", lobby: "skip" }, "immediate")).toBe("immediate");
+  });
+});
 
 const base: TimingInput = {
   mode: "exam",
