@@ -123,6 +123,7 @@ describe("ROUTES", () => {
     questionPreview: { view: "questionPreview", id: "q-1" },
     attempt: { view: "attempt", evaluationId: "e-1" },
     join: { view: "join", code: "ABC123" },
+    oauthConsent: { view: "oauthConsent", id: "0190d3c4-0000-7000-8000-000000000001" },
     feedback: { view: "feedback", attemptId: "a-1" },
     live: { view: "live", id: "e-1" },
     poll: { view: "poll", id: "e-1" },
@@ -143,12 +144,13 @@ describe("ROUTES", () => {
     }
   });
 
-  it("marks the five views a student has a screen for, and only them", () => {
+  it("marks the six views a student has a screen for, and only them", () => {
     expect(ROUTE_VIEWS.filter((v) => ROUTES[v].studentSafe).sort()).toEqual([
       "attempt",
       "feedback",
       "home",
       "join",
+      "oauthConsent",
       "settings",
     ]);
   });
@@ -177,6 +179,7 @@ describe("ROUTES", () => {
         "grading",
         "join",
         "live",
+        "oauthConsent",
         "questionPreview",
         "results",
         "settings",

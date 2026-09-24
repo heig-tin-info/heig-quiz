@@ -135,6 +135,7 @@ const PollProjection = lazy(() =>
   import("./poll/PollProjection").then((m) => ({ default: m.PollProjection })),
 );
 const PollJoin = lazy(() => import("./poll/PollJoin").then((m) => ({ default: m.PollJoin })));
+const OAuthConsent = lazy(() => import("./oauth/OAuthConsent").then((m) => ({ default: m.OAuthConsent })));
 const PollLauncher = lazy(() =>
   import("./poll/PollLauncher").then((m) => ({ default: m.PollLauncher })),
 );
@@ -173,6 +174,7 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   // WP9: student player — the attempt takes the whole screen (`FULL_SCREEN`).
   attempt: (r, c) => <AttemptPage evaluationId={r.evaluationId} navigate={c.navigate} />,
   join: (r, c) => <PollJoin code={r.code} me={c.me} navigate={c.navigate} />,
+  oauthConsent: (r, c) => <OAuthConsent id={r.id} me={c.me} />,
   // Invariant 3: the gallery exists in development only. The
   // route parses in every build; this is what refuses to render it.
   devUi: (_, c) => (import.meta.env.DEV ? <DevGallery /> : <TeacherHome navigate={c.navigate} />),
@@ -214,22 +216,32 @@ const FULL_SCREEN: ReadonlySet<Route["view"]> = new Set([
   "questionPreview",
   "poll",
   "join",
+  "oauthConsent",
 ]);
 
 /**
  * No session. The participant of a poll may have no account
- * (`settings.poll.anonymous`), and the page itself sends to login otherwise:
- * the ONE route that renders with no session at all. Everything else is the
- * landing page.
+ * (`settings.poll.anonymous`), and the page itself sends to login otherwise.
+ * The OAuth consent page is the other one: it offers the sign-in with a
+ * `next` back to itself. Everything else is the landing page.
  */
 function SignedOut({ route, navigate }: { route: Route; navigate: (r: Route) => void }) {
-  return route.view === "join" ? (
-    <Suspense fallback={<Spinner className="py-24" />}>
-      <PollJoin code={route.code} me={null} navigate={navigate} />
-    </Suspense>
-  ) : (
-    <Landing />
-  );
+  if (route.view === "join") {
+    return (
+      <Suspense fallback={<Spinner className="py-24" />}>
+        <PollJoin code={route.code} me={null} navigate={navigate} />
+      </Suspense>
+    );
+  }
+  // An assistant's sign-in (ADR-023) must come back to its consent page.
+  if (route.view === "oauthConsent") {
+    return (
+      <Suspense fallback={<Spinner className="py-24" />}>
+        <OAuthConsent id={route.id} me={null} />
+      </Suspense>
+    );
+  }
+  return <Landing />;
 }
 
 /**

@@ -35,6 +35,9 @@ import {
   GradingProgress,
   GradingQueue,
   NotificationList,
+  ApiToken,
+  OAuthConnection,
+  OAuthRequestView,
   PollPublicView,
   PollQuestionPick,
   PollSummary,
@@ -194,6 +197,13 @@ const CHECKED: Case[] = [
     VersionDetail,
   ),
   one("/app/api/notifications", "/app/api/notifications", NotificationList),
+  each("/app/api/me/tokens", "/app/api/me/tokens", ApiToken),
+  each("/app/api/me/connections", "/app/api/me/connections", OAuthConnection),
+  one(
+    "/app/api/oauth/requests/:id",
+    "/app/api/oauth/requests/0190d3c4-0000-7000-8000-000000000001",
+    OAuthRequestView,
+  ),
   // Every state: a `draft` has no item and a `closed` no live row, and the
   // detail of each is a different half of the same schema.
   ...evaluations.map((e) =>

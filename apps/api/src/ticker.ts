@@ -15,6 +15,7 @@
 import type { FastifyInstance } from "fastify";
 
 import type { AppConfig } from "./config.js";
+import { purgeOAuth } from "./auth/oauth/service.js";
 import { purgeExpiredSessions } from "./auth/session.js";
 import { LIVE_TASKS } from "./modules/live/jobs.js";
 
@@ -40,6 +41,15 @@ export const CORE_TASKS: TickTask[] = [
     everyMs: 10 * 60_000,
     run: async (app) => {
       await purgeExpiredSessions(app.db);
+    },
+  },
+  {
+    // ADR-023: spent requests and hourly access tokens, dead grants, and
+    // self-registered clients that never got as far as a grant.
+    name: "oauth.purge",
+    everyMs: 60 * 60_000,
+    run: async (app) => {
+      await purgeOAuth(app.db, app.clock.now());
     },
   },
   ...LIVE_TASKS,

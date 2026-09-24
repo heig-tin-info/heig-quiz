@@ -8,6 +8,8 @@ import { auditLog } from "./db/schema.js";
  * error, and this union is the reference for querying the log.
  */
 export type AuditAction =
+  | "api_token.create"
+  | "api_token.revoke"
   | "auth.dev_login"
   | "auth.login"
   | "auth.logout"
@@ -48,6 +50,8 @@ export type AuditAction =
   | "grading.regrade"
   | "grading.run"
   | "grading.validate"
+  | "oauth.grant"
+  | "oauth.revoke"
   | "poll.create"
   | "poll.end"
   | "poll.keep"
@@ -120,19 +124,21 @@ export type Trace = (
 /**
  * The audit entry of a route, with the four constant fields already filled:
  * the actor is the caller, and the actor type is `user` because an HTTP route
- * is by definition something a person asked for. Everything a call site still
- * has to say is what happened and to what.
+ * is by definition something a person asked for — or `api_key` when that
+ * person asked through a personal API token (ADR-022), an MCP client
+ * included. Everything a call site still has to say is what happened and to
+ * what.
  *
  * `action` stays an {@link AuditAction}, so a typo at a trigger site is a
  * compile error (invariant 9). Every audited route today runs behind a
- * session, so the actor is never null; the `?? null` is defensive only, for
+ * session or a token, so the actor is never null; the `?? null` is defensive only, for
  * the column is nullable and a public route could one day be audited.
  */
 export function tracer(app: FastifyInstance): Trace {
   return (req, action, subjectType, subjectId, payload) =>
     audit(app.db, {
       actorUserId: req.user?.id ?? null,
-      actorType: "user",
+      actorType: req.authVia === "token" ? "api_key" : "user",
       action,
       subjectType,
       subjectId,

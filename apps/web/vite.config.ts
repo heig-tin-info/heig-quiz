@@ -15,6 +15,9 @@ export default defineConfig({
     proxy: {
       "/app": "http://localhost:3000",
       "/healthz": "http://localhost:3000",
+      // OAuth discovery for MCP clients (ADR-023): the issuer is PUBLIC_URL,
+      // which is this origin in development.
+      "/.well-known": "http://localhost:3000",
     },
   },
   test: {

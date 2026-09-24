@@ -63,6 +63,7 @@ An exercise skips the waiting room and closes by itself at its deadline. A poll 
 - **Courses**, the first entry of the sidebar, is the home page: your courses, their classrooms, their staff and their pools. [Courses and classrooms](classrooms.md).
 - **Question pools** lists your pools and opens their questions. [Question pools](pools.md).
 - **Poll** starts a one-question poll on the projector. [Live polls](polls.md).
+- **Settings › API tokens** connects an AI assistant (Claude, ChatGPT) that writes questions and evaluations for you. [AI assistants (MCP)](assistants.md).
 - The **Classrooms** section of the sidebar lists your classrooms, one row each. A classroom holds the roster and the evaluations; from an evaluation row you reach its setup, its dashboard, its grading and its results. [Courses and classrooms](classrooms.md), [Evaluations](evaluations.md).
 - **Administration** appears only for the administrator. [Administration](admin.md).
 - The account row at the bottom of the sidebar opens **Settings** and the theme, and lets a teacher switch to the student view. [Getting started](getting-started.md).

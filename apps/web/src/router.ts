@@ -36,6 +36,12 @@ export type Route =
   | { view: "poll"; id: string }
   /** A participant joining a poll by its session code — with or without an account. */
   | { view: "join"; code: string }
+  /**
+   * The OAuth consent page (ADR-023): an MCP client such as claude.ai asks to
+   * act for the teacher. `id` is the pending request, or `invalid` when the
+   * server refused the request before it could be trusted (`?reason=`).
+   */
+  | { view: "oauthConsent"; id: string }
   // WP10: grading + results
   /** The teacher's grading panel for one evaluation. */
   | { view: "grading"; evaluationId: string }
@@ -181,6 +187,14 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     path: (r) => `/p/${r.code}`,
     match: ([head, code]) =>
       head === "p" && code ? { view: "join", code: code.toUpperCase() } : null,
+    studentSafe: true,
+  },
+  // ADR-023: reached from `/app/oauth/authorize`, signed in or not; a student
+  // lands on it too and is told it is a teacher's page.
+  oauthConsent: {
+    path: (r) => `/oauth/authorize/${r.id}`,
+    match: ([head, tail, id]) =>
+      head === "oauth" && tail === "authorize" && id ? { view: "oauthConsent", id } : null,
     studentSafe: true,
   },
   // WP10: the student's feedback on one attempt — the ONE student results page.

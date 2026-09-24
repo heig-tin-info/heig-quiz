@@ -611,6 +611,48 @@ const scenes = [
     state: "As seeded.",
   },
   {
+    name: "settings-token-created",
+    caption: "A new API token, shown once, with the address an MCP client connects to.",
+    persona: "teacher",
+    path: "/settings",
+    act: async (p) => {
+      await p.getByRole("button", { name: /new token/i }).first().click();
+      await p.getByRole("dialog").getByRole("textbox").fill("Claude Desktop");
+      await p.getByRole("button", { name: /create token/i }).click();
+      await p.getByRole("dialog", { name: /token created/i }).waitFor();
+    },
+    action: "Clicked “New token”, named it “Claude Desktop”, clicked “Create token”.",
+    state: "As seeded; the token is a throwaway of the screenshot instance.",
+  },
+  {
+    name: "oauth-consent",
+    caption: "The consent page an assistant sends the teacher to.",
+    persona: "teacher",
+    path: "/settings",
+    // A real request, the way claude.ai makes one: register (RFC 7591), then
+    // authorize, which lands on the consent page.
+    act: async (p) => {
+      const redirect = "https://claude.ai/api/mcp/auth_callback";
+      const reg = await p.request.post(`${BASE}/app/oauth/register`, {
+        data: { redirect_uris: [redirect], client_name: "Claude" },
+      });
+      const { client_id } = await reg.json();
+      const query = new URLSearchParams({
+        response_type: "code",
+        client_id,
+        redirect_uri: redirect,
+        code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+        code_challenge_method: "S256",
+        state: "docs",
+        resource: `${BASE}/app/api/mcp`,
+      });
+      await p.goto(`${BASE}/app/oauth/authorize?${query}`);
+      await p.getByRole("button", { name: /^allow$/i }).waitFor();
+    },
+    action: "Registered a client named “Claude” and opened its authorization URL.",
+    state: "As seeded.",
+  },
+  {
     name: "admin",
     caption: "The administration screen: who is a teacher.",
     persona: "admin",

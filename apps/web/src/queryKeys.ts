@@ -22,6 +22,12 @@ export const configKey = ["config"] as const;
 export const meKey = ["me"] as const;
 export const notificationsKey = ["notifications"] as const;
 export const adminTeachersKey = ["admin-teachers"] as const;
+/** The caller's personal API tokens (settings). */
+export const apiTokensKey = ["api-tokens"] as const;
+/** The assistants connected through OAuth (settings, ADR-023). */
+export const connectionsKey = ["oauth-connections"] as const;
+/** One pending OAuth request, on the consent page. */
+export const oauthRequestKey = (id: string) => ["oauth-request", id] as const;
 
 // --- Courses and classrooms --------------------------------------------------
 

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
@@ -16,6 +16,10 @@ import { addressesOf, affiliationsOf, recordIdpClaims, syncUserEmails } from "./
 import { devLoginRoutes } from "./dev.js";
 import { OidcProvider, type OidcClaims } from "./oidc.js";
 import { returnToOf, safeReturnTo } from "./returnTo.js";
+import { MCP_PATH } from "./oauth/service.js";
+import { oauthRoutes } from "./oauth/routes.js";
+import { apiTokenRoutes } from "./tokenRoutes.js";
+import { findTokenUser, isApiToken } from "./tokens.js";
 import {
   CSRF_COOKIE,
   CSRF_HEADER,
@@ -32,8 +36,23 @@ export type SessionUser = typeof users.$inferSelect;
 declare module "fastify" {
   interface FastifyRequest {
     user: SessionUser | null;
+    /**
+     * How `user` was resolved: a browser session cookie, or a personal API
+     * token in `Authorization: Bearer` (ADR-022). Null when anonymous.
+     */
+    authVia: "session" | "token" | null;
   }
 }
+
+const BEARER = /^Bearer\s+(\S+)$/i;
+
+/**
+ * Carried by the in-process calls of the MCP tools (`app.inject`), with a
+ * secret drawn at boot. An OAuth access token is bound to the MCP endpoint
+ * (RFC 8707, ADR-023); this header is how the routes a tool forwards to
+ * accept it, and nothing outside the process can produce it.
+ */
+export const INTERNAL_CALL_HEADER = "x-quiz-internal-call";
 
 /**
  * User upsert at login (key: oidc_sub). The role is recomputed on every
@@ -91,7 +110,35 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
 
   // --- Session resolution on every request ---
   app.decorateRequest("user", null);
+  app.decorateRequest("authVia", null);
+  const internalSecret = randomBytes(32).toString("base64url");
+  app.decorate("internalCallSecret", internalSecret);
+  const isInternalCall = (req: FastifyRequest) => {
+    const raw = req.headers[INTERNAL_CALL_HEADER];
+    if (typeof raw !== "string" || raw.length !== internalSecret.length) return false;
+    return timingSafeEqual(Buffer.from(raw), Buffer.from(internalSecret));
+  };
   app.addHook("preHandler", async (req, reply) => {
+    // A bearer token is only ever read on the JSON API (ADR-022). When the
+    // header is there it is the WHOLE credential: a bad token is anonymous,
+    // it never falls back to a cookie that happens to ride along.
+    const bearer = req.url.startsWith("/app/api/")
+      ? BEARER.exec(req.headers.authorization ?? "")?.[1]
+      : undefined;
+    if (bearer !== undefined) {
+      if (!isApiToken(bearer)) return;
+      const found = await findTokenUser(app.db, bearer, app.clock.now());
+      if (!found) return;
+      // An OAuth token is good for the resource it was issued for, and for
+      // the tool calls made on its behalf — nowhere else.
+      if (found.audience !== null) {
+        const path = req.url.split("?")[0];
+        if (path !== MCP_PATH && !isInternalCall(req)) return;
+      }
+      req.user = found.user;
+      req.authVia = "token";
+      return;
+    }
     const token = req.cookies[SESSION_COOKIE];
     if (!token) return;
     // A database failure here propagates on purpose: a lookup that cannot run
@@ -102,6 +149,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     });
     if (!found) return;
     req.user = found.user;
+    req.authVia = "session";
     // Mirror the sliding renewal on the cookies, else the browser drops them
     // while the server-side session is still alive.
     if (found.renewedTo) {
@@ -121,8 +169,9 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   // --- Reusable guards ---
   app.decorate("requireSession", async (req: FastifyRequest, reply: FastifyReply) => {
     if (!req.user) return reply.code(401).send({ error: "unauthenticated" });
-    // Double-submit anti-CSRF on every mutation.
-    if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+    // Double-submit anti-CSRF on every mutation. A bearer token is exempt:
+    // a browser never attaches one on its own, which is the whole attack.
+    if (req.authVia === "session" && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
       const cookie = req.cookies[CSRF_COOKIE];
       const header = req.headers[CSRF_HEADER];
       if (!cookie || cookie !== header) {
@@ -232,6 +281,9 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     return reply.redirect(safeReturnTo(stash.returnTo), 303);
   });
 
+  await apiTokenRoutes(app);
+  await oauthRoutes(app, config);
+
   // Development persona picker. Registered only when explicitly enabled, and
   // config.ts refuses the flag under NODE_ENV=production.
   if (config.AUTH_DEV_LOGIN && config.NODE_ENV !== "production") {
@@ -327,6 +379,8 @@ declare module "fastify" {
     ) => Promise<FastifyReply | undefined>;
     /** Mints the session cookies for `user` (the single sign-in path). */
     openSession: (reply: FastifyReply, user: SessionUser) => Promise<void>;
+    /** The value of {@link INTERNAL_CALL_HEADER} for this process. */
+    internalCallSecret: string;
   }
 }
 
