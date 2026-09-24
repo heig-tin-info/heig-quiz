@@ -45,6 +45,7 @@ import {
 import {
   EVALUATION_STATES,
   itemListLock,
+  missingTimingFields,
   round2,
   type EvaluationStateName,
 } from "@quiz/domain";
@@ -77,12 +78,17 @@ type ItemRecord = typeof evaluationItems.$inferSelect;
 
 // --- Failures -------------------------------------------------------------
 
-/** Base of everything this module refuses; the routes map `code` to a status. */
+/**
+ * Base of everything this module refuses; the routes map `code` to a status.
+ * `details` travels in the body beside `error` and `message`: the machine
+ * half of a refusal the screen translates rather than prints (#76).
+ */
 export class EvaluationError extends Error {
   constructor(
     readonly code: string,
     readonly status: number,
     message?: string,
+    readonly details?: Readonly<Record<string, unknown>>,
   ) {
     super(message ?? code);
     this.name = "EvaluationError";
@@ -94,8 +100,9 @@ export class IllegalTransition extends EvaluationError {
     readonly from: EvaluationState,
     readonly to: EvaluationState,
     reason?: string,
+    details?: Readonly<Record<string, unknown>>,
   ) {
-    super("illegal_transition", 409, reason ?? `${from} -> ${to} is not a legal transition`);
+    super("illegal_transition", 409, reason ?? `${from} -> ${to} is not a legal transition`, details);
   }
 }
 
@@ -201,26 +208,6 @@ export function isLegalTransition(from: EvaluationState, to: EvaluationState): b
   return TRANSITIONS[from].includes(to);
 }
 
-/** F-EVAL-04: an `exam` must announce when it ends, one way or the other. */
-function timingIsValid(row: {
-  mode: EvaluationMode;
-  settings: EvaluationSettings;
-  durationS: number | null;
-  opensAt: Date | null;
-  closesAt: Date | null;
-}): boolean {
-  switch (row.settings.timing) {
-    case "duration":
-      return row.durationS !== null && row.durationS > 0;
-    case "deadline":
-      // `opensAt` is required too: it is the base of the accommodation
-      // window in this timing (decision D8).
-      return row.closesAt !== null && row.opensAt !== null;
-    case "manual":
-      return row.mode !== "exam";
-  }
-}
-
 interface TransitionContext {
   itemCount: number;
   attemptCount: number;
@@ -240,10 +227,27 @@ export function guardTransition(
 
   if (to === "scheduled" || to === "lobby" || to === "running") {
     if (ctx.itemCount === 0) {
-      throw new IllegalTransition(from, to, "an evaluation needs at least one question");
+      throw new IllegalTransition(from, to, "an evaluation needs at least one question", {
+        reason: "no_items",
+      });
     }
-    if (!timingIsValid({ ...row, settings: settingsOf(row) })) {
-      throw new IllegalTransition(from, to, "the timing settings are incomplete (F-EVAL-04)");
+    // F-EVAL-04 and decision D8, the same rule the configuration screen
+    // applies before it lets the teacher reach the launch step (#76). This
+    // check stays as the defence: the screen is not the only client.
+    const missing = missingTimingFields({
+      mode: row.mode,
+      timing: settingsOf(row).timing,
+      durationS: row.durationS,
+      opensAt: row.opensAt,
+      closesAt: row.closesAt,
+    });
+    if (missing.length > 0) {
+      throw new IllegalTransition(
+        from,
+        to,
+        `the timing settings are incomplete (F-EVAL-04): ${missing.join(", ")}`,
+        { reason: "timing_incomplete", missing },
+      );
     }
   }
   if (to === "paused" && row.mode !== "exam") {

@@ -80,7 +80,9 @@ export async function livePlugin(app: FastifyInstance) {
       return reply.code(error.status).send({ error: error.code, message: error.message });
     }
     if (error instanceof evaluationService.EvaluationError) {
-      return reply.code(error.status).send({ error: error.code, message: error.message });
+      return reply
+        .code(error.status)
+        .send({ error: error.code, message: error.message, ...error.details });
     }
     reply.log.error({ err: error, cause: (error as Error)?.cause }, "live route failed");
     return reply.code(500).send({ error: "internal_error" });

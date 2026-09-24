@@ -18,6 +18,7 @@ import {
 } from "../ui";
 import { AdvancedDisclosure } from "./AdvancedDisclosure";
 import { matchPreset, presetPatch, type PresetId } from "./presets";
+import { missingTiming, missingTimingKey, TIMING_FIELD_ID, type TimingField } from "./timing";
 import type { useEvaluationPatch } from "./usePatch";
 
 /**
@@ -84,22 +85,54 @@ function PresetCard({
   );
 }
 
+/**
+ * The line under a field the launch needs (#76): quiet until the teacher has
+ * tried to go on to the launch step, then one sentence that says what to
+ * enter, tied to the control by `aria-describedby`.
+ */
+function MissingNote({ field }: { field: TimingField }) {
+  const t = useT();
+  return (
+    <p id={`${TIMING_FIELD_ID[field]}-missing`} className="max-w-52 text-[13px] text-danger">
+      {t(missingTimingKey(field))}
+    </p>
+  );
+}
+
 export function TimingStep({
   detail,
   patch,
+  showMissing = false,
 }: {
   detail: EvaluationDetail;
   patch: ReturnType<typeof useEvaluationPatch>;
+  /**
+   * The teacher asked for the launch step with the timing incomplete: every
+   * field the server would refuse the waiting room for is marked, until it is
+   * filled. Off until then — an empty form is not an error on arrival.
+   */
+  showMissing?: boolean;
 }) {
   const t = useT();
   const { settings, durationS, opensAt, closesAt, mode } = detail.evaluation;
   // Structural settings freeze once somebody has started (W5-17).
   const locked = !detail.editable;
   const preset = matchPreset(detail);
-  const [minutes, setMinutes] = useState(String(Math.round((durationS ?? 45 * 60) / 60)));
+  // Empty while nothing is stored: a "45" the server does not have was a
+  // duration the teacher believed set, and the waiting room then refused to
+  // open for want of it (#76). The 45 stays, as a placeholder.
+  const [minutes, setMinutes] = useState(
+    durationS === null ? "" : String(Math.round(durationS / 60)),
+  );
   useEffect(() => {
     if (durationS !== null) setMinutes(String(Math.round(durationS / 60)));
   }, [durationS]);
+  const missing = new Set(showMissing ? missingTiming(detail.evaluation) : []);
+  /** `aria-invalid` and the note's id, for a control whose field is missing. */
+  const invalid = (field: TimingField) =>
+    missing.has(field)
+      ? { "aria-invalid": true, "aria-describedby": `${TIMING_FIELD_ID[field]}-missing` }
+      : {};
 
   return (
     <div className="space-y-5">
@@ -128,19 +161,30 @@ export function TimingStep({
       <Card className="divide-y divide-line px-4">
         <SettingRow
           title={t("eval.timing")}
-          desc={t(`eval.timing.desc.${settings.timing}` as keyof Dict)}
+          desc={
+            <>
+              {t(`eval.timing.desc.${settings.timing}` as keyof Dict)}
+              {missing.has("timing") ? (
+                <span id={`${TIMING_FIELD_ID.timing}-missing`} className="mt-0.5 block text-danger">
+                  {t(missingTimingKey("timing"))}
+                </span>
+              ) : null}
+            </>
+          }
         >
-          <Segmented
-            name="timing"
-            value={settings.timing}
-            disabled={locked}
-            onChange={(timing) => patch.mutate({ settings: { timing } })}
-            options={[
-              { value: "duration", label: t("eval.timing.duration") },
-              { value: "deadline", label: t("eval.timing.deadline") },
-              { value: "manual", label: t("eval.timing.manual") },
-            ]}
-          />
+          <div id={TIMING_FIELD_ID.timing}>
+            <Segmented
+              name="timing"
+              value={settings.timing}
+              disabled={locked}
+              onChange={(timing) => patch.mutate({ settings: { timing } })}
+              options={[
+                { value: "duration", label: t("eval.timing.duration") },
+                { value: "deadline", label: t("eval.timing.deadline") },
+                { value: "manual", label: t("eval.timing.manual") },
+              ]}
+            />
+          </div>
         </SettingRow>
 
         {/* The three dates and the duration share one labelled row: inside a
@@ -148,44 +192,60 @@ export function TimingStep({
             segmented control plus a field do not fit a phone's width. */}
         <div className="flex flex-wrap gap-4 py-3">
           {settings.timing === "duration" ? (
-            <Field
-              label={t("eval.duration")}
-              type="number"
-              min={1}
-              max={480}
-              size="sm"
-              width="w-24"
-              disabled={locked}
-              value={minutes}
-              onChange={(e) => setMinutes(e.target.value)}
-              onBlur={() => {
-                const n = Number(minutes);
-                if (!Number.isFinite(n) || n < 1) return;
-                const next = Math.round(n) * 60;
-                if (next !== durationS) patch.mutate({ durationS: next });
-              }}
-              className="text-right tabular-nums"
-            />
+            <div className="flex flex-col gap-1">
+              <Field
+                id={TIMING_FIELD_ID.durationS}
+                {...invalid("durationS")}
+                placeholder="45"
+                label={t("eval.duration")}
+                type="number"
+                min={1}
+                max={480}
+                size="sm"
+                width="w-24"
+                disabled={locked}
+                value={minutes}
+                onChange={(e) => setMinutes(e.target.value)}
+                onBlur={() => {
+                  const n = Number(minutes);
+                  if (!Number.isFinite(n) || n < 1) return;
+                  const next = Math.round(n) * 60;
+                  if (next !== durationS) patch.mutate({ durationS: next });
+                }}
+                className="text-right tabular-nums"
+              />
+              {missing.has("durationS") ? <MissingNote field="durationS" /> : null}
+            </div>
           ) : null}
-          <Field
-            label={t("eval.opensAt")}
-            type="datetime-local"
-            size="sm"
-            width="w-52"
-            disabled={locked}
-            value={toLocalInput(opensAt)}
-            onChange={(e) => patch.mutate({ opensAt: fromLocalInput(e.target.value) })}
-          />
-          {settings.timing !== "manual" ? (
+          <div className="flex flex-col gap-1">
             <Field
-              label={t("eval.closesAt")}
+              id={TIMING_FIELD_ID.opensAt}
+              {...invalid("opensAt")}
+              label={t("eval.opensAt")}
               type="datetime-local"
               size="sm"
               width="w-52"
               disabled={locked}
-              value={toLocalInput(closesAt)}
-              onChange={(e) => patch.mutate({ closesAt: fromLocalInput(e.target.value) })}
+              value={toLocalInput(opensAt)}
+              onChange={(e) => patch.mutate({ opensAt: fromLocalInput(e.target.value) })}
             />
+            {missing.has("opensAt") ? <MissingNote field="opensAt" /> : null}
+          </div>
+          {settings.timing !== "manual" ? (
+            <div className="flex flex-col gap-1">
+              <Field
+                id={TIMING_FIELD_ID.closesAt}
+                {...invalid("closesAt")}
+                label={t("eval.closesAt")}
+                type="datetime-local"
+                size="sm"
+                width="w-52"
+                disabled={locked}
+                value={toLocalInput(closesAt)}
+                onChange={(e) => patch.mutate({ closesAt: fromLocalInput(e.target.value) })}
+              />
+              {missing.has("closesAt") ? <MissingNote field="closesAt" /> : null}
+            </div>
           ) : null}
         </div>
       </Card>

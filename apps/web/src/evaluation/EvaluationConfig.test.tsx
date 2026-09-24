@@ -133,6 +133,9 @@ describe("EvaluationConfig", () => {
         durationS: null,
         feedbackPolicy: { when: "immediate" },
       });
+      // A common end needs its opening time (#76): the preset writes both.
+      expect(patch?.body).toHaveProperty("opensAt", expect.any(String));
+      expect(patch?.body).toHaveProperty("closesAt", expect.any(String));
     });
   });
 
@@ -217,6 +220,87 @@ describe("EvaluationConfig", () => {
     });
     expect(await screen.findByText(/add at least one question/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeDisabled();
+  });
+
+  /*
+   * #76: a common end with no opening time used to reach the launch step,
+   * where "Open the waiting room" failed with the server's English message.
+   */
+  describe("an incomplete timing (#76)", () => {
+    const takeHome = () =>
+      makeEvaluationDetail({
+        evaluation: {
+          ...makeEvaluationDetail().evaluation,
+          mode: "exercise",
+          settings: { ...makeEvaluationDetail().evaluation.settings, timing: "deadline", lobby: "skip" },
+          durationS: null,
+          opensAt: null,
+          closesAt: "2026-10-01T10:00:00.000Z",
+        },
+      });
+
+    it("keeps 'Go to launch' on the step, and points at the missing field", async () => {
+      const user = userEvent.setup();
+      mockFetch(routes(takeHome()));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+
+      const opensAt = await screen.findByLabelText(/^opens at$/i);
+      expect(opensAt).not.toHaveAttribute("aria-invalid");
+      await user.click(screen.getByRole("button", { name: /^go to launch$/i }));
+
+      expect(screen.queryByRole("button", { name: /open the waiting room/i })).toBeNull();
+      expect(opensAt).toHaveAttribute("aria-invalid", "true");
+      expect(opensAt).toHaveAccessibleDescription(/enter the opening time/i);
+      expect(opensAt).toHaveFocus();
+      // The closing time is set: only the missing field is marked.
+      expect(screen.getByLabelText(/^closes at$/i)).not.toHaveAttribute("aria-invalid");
+    });
+
+    it("goes to the launch step once the timing is complete", async () => {
+      const user = userEvent.setup();
+      const complete = takeHome();
+      complete.evaluation.opensAt = "2026-09-24T08:00:00.000Z";
+      mockFetch(routes(complete));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      await user.click(await screen.findByRole("button", { name: /^go to launch$/i }));
+      expect(await screen.findByRole("button", { name: /open the waiting room/i })).toBeEnabled();
+    });
+
+    it("says what is missing on the launch step reached by its tab, and offers no launch", async () => {
+      mockFetch(routes(takeHome()));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=launch",
+      });
+      expect(await screen.findByText(/finish the timing in time and mode/i)).toBeInTheDocument();
+      expect(screen.getByText(/enter the opening time/i)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /schedule it/i })).toBeDisabled();
+    });
+
+    it("translates the server's refusal instead of printing it", async () => {
+      const user = userEvent.setup();
+      mockFetch(
+        routes(makeEvaluationDetail(), {
+          [`POST /app/api/evaluations/${EVALUATION_ID}/state`]: fail(409, {
+            error: "illegal_transition",
+            message: "the timing settings are incomplete (F-EVAL-04): opensAt",
+            reason: "timing_incomplete",
+            missing: ["opensAt"],
+          }),
+        }),
+      );
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=launch",
+      });
+      await user.click(await screen.findByRole("button", { name: /open the waiting room/i }));
+      expect(await screen.findByText(/did not change state/i)).toBeInTheDocument();
+      expect(screen.getByText(/enter the opening time/i)).toBeInTheDocument();
+      expect(screen.queryByText(/F-EVAL-04/)).toBeNull();
+    });
   });
 
   it("freezes the structure once a student has started", async () => {

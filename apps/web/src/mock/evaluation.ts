@@ -1,11 +1,13 @@
 /** Section 3 of the mock — see `index.ts` for the layout. */
 import {
   itemListLock,
+  missingTimingFields,
   parseCloze,
   round2,
   splitTemplate,
 } from "@quiz/domain";
 import type {
+  EvaluationTiming,
   McqScorePolicy,
 } from "@quiz/domain";
 import {
@@ -912,6 +914,32 @@ on("DELETE", "/app/api/evaluations/:id/items/:itemId", (m) => {
 });
 on("POST", "/app/api/evaluations/:id/state", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);
+  // The server's two readiness refusals (`guardTransition`), with the same
+  // body, so the launch step's translated messages can be seen here (#76).
+  if (body.to !== "draft") {
+    if (e.items.length === 0) {
+      throw new MockPayload(409, {
+        error: "illegal_transition",
+        message: "an evaluation needs at least one question",
+        reason: "no_items",
+      });
+    }
+    const missing = missingTimingFields({
+      mode: e.mode,
+      timing: (e.settings as { timing: EvaluationTiming }).timing,
+      durationS: e.durationS,
+      opensAt: e.opensAt,
+      closesAt: e.closesAt,
+    });
+    if (missing.length > 0) {
+      throw new MockPayload(409, {
+        error: "illegal_transition",
+        message: `the timing settings are incomplete (F-EVAL-04): ${missing.join(", ")}`,
+        reason: "timing_incomplete",
+        missing,
+      });
+    }
+  }
   e.state = body.to as MockEvaluation["state"];
   return toEvaluation(e);
 });

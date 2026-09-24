@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { TransitionRefusal } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
 import { TestClock } from "../../clock.js";
@@ -102,6 +103,52 @@ describe("state machine (§5.1)", () => {
       .where(eq(evaluations.id, row.id));
     const fixed = await reload(db, seed.evaluationId);
     expect((await service.transition(db, fixed, "scheduled", clock.now())).state).toBe("scheduled");
+  });
+
+  /*
+   * #76: the take-home preset writes a common end but no opening time, and
+   * the opening time is the base of the extra time in that timing (D8). The
+   * refusal names the field, so the screen can say which one to fill.
+   */
+  it("refuses to open a common-end evaluation without its opening time, and says which field (#76)", async () => {
+    const server = await testServer();
+    try {
+      const teacher = await server.signIn("teacher");
+      const seed = await seedLive(server.app.db, {
+        teacherId: teacher.id,
+        mode: "exercise",
+        durationS: null,
+        settings: { timing: "deadline", lobby: "skip" },
+        closesAt: new Date(clock.now().getTime() + 7 * 24 * 3_600_000),
+      });
+      const url = `/app/api/evaluations/${seed.evaluationId}`;
+      const open = () =>
+        server.app.inject({
+          method: "POST",
+          url: `${url}/state`,
+          headers: teacher.headers,
+          payload: { to: "lobby" },
+        });
+
+      const refused = await open();
+      expect(refused.statusCode).toBe(409);
+      expect(TransitionRefusal.parse(refused.json())).toMatchObject({
+        error: "illegal_transition",
+        reason: "timing_incomplete",
+        missing: ["opensAt"],
+      });
+
+      const patched = await server.app.inject({
+        method: "PATCH",
+        url,
+        headers: teacher.headers,
+        payload: { opensAt: clock.now().toISOString() },
+      });
+      expect(patched.statusCode).toBe(200);
+      expect((await open()).statusCode).toBe(200);
+    } finally {
+      await server.close();
+    }
   });
 
   it("refuses to pause anything but an exam", async () => {

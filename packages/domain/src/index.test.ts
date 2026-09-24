@@ -15,6 +15,7 @@ describe("@quiz/domain public surface", () => {
       "gradeFromPoints",
       "hashSeed",
       "mcqFraction",
+      "missingTimingFields",
       "matchShortAnswer",
       "parseCloze",
       "parseRosterCsv",

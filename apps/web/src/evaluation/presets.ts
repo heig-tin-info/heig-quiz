@@ -46,6 +46,10 @@ export function presetPatch(id: PresetId, now = Date.now()): EvaluationPatch {
       showProgressBar: true,
     },
     durationS: null,
+    // A common end needs its opening time: it is the base of the extra time
+    // (decision D8), and the waiting room refuses to open without it (#76).
+    // The window the preset promises starts now.
+    opensAt: new Date(now).toISOString(),
     closesAt: new Date(now + HOMEWORK_WINDOW_MS).toISOString(),
     // An `exam` never stores `immediate`; the server clamps it back to
     // `on_release` (WP5 deviation W5-18), so sending it is safe either way.

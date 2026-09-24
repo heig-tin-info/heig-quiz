@@ -320,6 +320,21 @@ export const EvaluationStateBody = z.object({
 });
 export type EvaluationStateBody = z.infer<typeof EvaluationStateBody>;
 
+/**
+ * The body of a `409 illegal_transition` on `POST /evaluations/:id/state`
+ * (and on the live `start`). `reason` is set when the move is legal but the
+ * evaluation is not ready for it, and `missing` then names the timing fields
+ * to fill (F-EVAL-04, decision D8) — the screen translates these rather than
+ * printing `message`, which is for logs and API clients (#76).
+ */
+export const TransitionRefusal = z.object({
+  error: z.literal("illegal_transition"),
+  message: z.string(),
+  reason: z.enum(["no_items", "timing_incomplete"]).optional(),
+  missing: z.array(z.enum(["durationS", "opensAt", "closesAt", "timing"])).optional(),
+});
+export type TransitionRefusal = z.infer<typeof TransitionRefusal>;
+
 /** `/evaluations/:id/items/:itemId` */
 export const ItemParam = z.object({ id: z.uuid(), itemId: z.uuid() });
 export type ItemParam = z.infer<typeof ItemParam>;
