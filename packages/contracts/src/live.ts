@@ -147,9 +147,19 @@ export type AttemptStartBody = z.infer<typeof AttemptStartBody>;
  * `retakeRefusal`'s in `@quiz/domain`, spelled again here because contracts
  * depend on no package. A success answers {@link AttemptOrLobby}.
  */
+export const RetakeRefusalReason = z.enum([
+  "not_allowed",
+  "not_open",
+  "closed",
+  "no_attempt",
+  "unfinished",
+  "max_attempts",
+]);
+export type RetakeRefusalReason = z.infer<typeof RetakeRefusalReason>;
+
 export const RetakeRefused = z.object({
   error: z.literal("retake_refused"),
-  reason: z.enum(["not_allowed", "not_open", "closed", "no_attempt", "unfinished", "max_attempts"]),
+  reason: RetakeRefusalReason,
   message: z.string().optional(),
 });
 export type RetakeRefused = z.infer<typeof RetakeRefused>;

@@ -32,10 +32,11 @@ import type {
   ResultRow,
   ResultsItem,
   ResultsView,
+  RetakeStatus,
   StudentFeedback,
   StudentResultItem,
 } from "@quiz/contracts";
-import { describe, gradeFromPoints, histogram, round2 } from "@quiz/domain";
+import { describe, gradeFromPoints, histogram, retakeRefusal, round2 } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -51,6 +52,7 @@ import {
   clearRelease,
   feedbackOf,
   joinedItems,
+  retakePolicyOf,
   retakesEnabled,
   scaleOf,
   setModifiedAfterRelease,
@@ -464,6 +466,36 @@ function feedbackAvailable(
 }
 
 /**
+ * Whether this student may start another attempt now, and why not: the
+ * server's own rule (`retakeRefusal`), the one `POST /evaluations/:id/retake`
+ * applies, so the results page offers exactly what the route would accept
+ * (issues #120, #121).
+ */
+async function retakeStatus(
+  db: Db,
+  evaluation: EvaluationRecord,
+  userId: string,
+  now: Date,
+): Promise<RetakeStatus> {
+  const policy = retakePolicyOf(evaluation);
+  const mine = (await studentAttempts(db, userId, [evaluation])).get(evaluation.id)?.all ?? [];
+  return {
+    evaluationId: evaluation.id,
+    keep: policy.keep,
+    maxAttempts: policy.maxAttempts,
+    attemptCount: mine.length,
+    refusal: retakeRefusal({
+      mode: evaluation.mode,
+      retakes: policy,
+      evaluationState: evaluation.state,
+      closesAt: evaluation.closesAt,
+      now,
+      attempts: mine,
+    }),
+  };
+}
+
+/**
  * THE application of the feedback policy. Nothing else in the API builds a
  * result payload for a student, exactly as nothing else builds a question
  * payload for one (invariant 4).
@@ -472,6 +504,7 @@ export async function studentFeedback(
   db: Db,
   evaluation: EvaluationRecord,
   attempt: typeof attempts.$inferSelect,
+  now: Date,
 ): Promise<StudentFeedback> {
   const policy = feedbackOf(evaluation);
   const gate = feedbackAvailable(policy, evaluation, attempt.state);
@@ -489,6 +522,9 @@ export async function studentFeedback(
     return {
       ...pending,
       score: scoreOf(tally, items.length, totalPointsOf(items.map((i) => i.item))),
+      ...(attempt.userId === null
+        ? {}
+        : { retake: await retakeStatus(db, evaluation, attempt.userId, now) }),
     };
   }
 

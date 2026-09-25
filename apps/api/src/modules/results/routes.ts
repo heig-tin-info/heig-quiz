@@ -132,8 +132,8 @@ export async function resultsPlugin(app: FastifyInstance) {
   app.get(
     "/app/api/attempts/:id/feedback",
     { preHandler: requireSession },
-    student({ params: IdParam, load: own }, ({ scope }) =>
-      service.studentFeedback(app.db, scope.evaluation, scope.attempt),
+    student({ params: IdParam, load: own }, ({ scope, now }) =>
+      service.studentFeedback(app.db, scope.evaluation, scope.attempt, now),
     ),
   );
 

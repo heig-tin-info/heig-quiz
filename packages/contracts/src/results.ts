@@ -11,8 +11,8 @@
  */
 import { z } from "zod";
 
-import { GradingScale } from "./evaluation.js";
-import { AttemptScore, AttemptState } from "./live.js";
+import { GradingScale, RetakeKeep } from "./evaluation.js";
+import { AttemptScore, AttemptState, RetakeRefusalReason } from "./live.js";
 import { Verdict } from "./grading.js";
 
 /** A student with no attempt at all still gets a row, and a 1.0 (F-RES-02). */
@@ -177,6 +177,22 @@ export const StudentResults = z.object({
 export type StudentResults = z.infer<typeof StudentResults>;
 
 /**
+ * The student's retake standing on an exercise that allows several attempts
+ * (F-EVAL-15, ADR-025), as the results page offers it. `refusal` is the
+ * server's rule (`retakeRefusal`) evaluated now: `null` means a retake may
+ * start, so the page never recomputes what the server would refuse.
+ */
+export const RetakeStatus = z.object({
+  evaluationId: z.uuid(),
+  keep: RetakeKeep,
+  maxAttempts: z.number().int().nullable(),
+  /** Attempts taken so far, the first included. */
+  attemptCount: z.number().int(),
+  refusal: RetakeRefusalReason.nullable(),
+});
+export type RetakeStatus = z.infer<typeof RetakeStatus>;
+
+/**
  * Before the release — or under `feedbackPolicy.when = "none"` — the student
  * sees a reason and nothing else. No points, no answer, no key: the payload
  * carries no question content at all.
@@ -193,6 +209,8 @@ export const FeedbackPending = z.object({
   evaluation: z.object({ id: z.uuid(), title: z.string() }),
   /** Only with `retakes_open`: the points of this attempt, and nothing else. */
   score: AttemptScore.optional(),
+  /** Only with `retakes_open`: whether another attempt may start now, and why not. */
+  retake: RetakeStatus.optional(),
 });
 export type FeedbackPending = z.infer<typeof FeedbackPending>;
 
