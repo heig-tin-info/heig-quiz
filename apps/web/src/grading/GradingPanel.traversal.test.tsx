@@ -248,7 +248,7 @@ describe("GradingPanel — the filters", () => {
     await screen.findByText("Question 1 of 2");
     const before = calls.length;
 
-    await user.selectOptions(screen.getByLabelText("Source"), "auto");
+    await user.selectOptions(screen.getByLabelText("Graded by"), "auto");
     await waitFor(() => expect(labels()).toEqual(["Wise Otter", "Calm Heron"]));
     expect(calls).toHaveLength(before);
   });
@@ -260,7 +260,7 @@ describe("GradingPanel — the filters", () => {
 
     await user.selectOptions(screen.getByLabelText("Confidence"), "high");
     await waitFor(() => expect(labels()).toEqual(["Wise Otter", "Calm Heron"]));
-    await user.selectOptions(screen.getByLabelText("Source"), "llm");
+    await user.selectOptions(screen.getByLabelText("Graded by"), "llm");
     // Nothing is both `llm` and `high`.
     expect(await screen.findByText("Nothing left to grade")).toBeVisible();
   });
@@ -270,7 +270,7 @@ describe("GradingPanel — the filters", () => {
     const { calls } = setup({ [`POST ${EVAL}/grading/validate-batch`]: ok({ validated: 1 }) });
     await screen.findByText("Question 1 of 2");
 
-    await user.selectOptions(screen.getByLabelText("Source"), "llm");
+    await user.selectOptions(screen.getByLabelText("Graded by"), "llm");
     await user.click(await screen.findByRole("button", { name: /Validate 1 proposal/ }));
     await waitFor(() => {
       const call = calls.find((c) => c.url === `${EVAL}/grading/validate-batch`);
@@ -306,7 +306,7 @@ describe("GradingPanel — proposals first", () => {
     await openRow(user, 2); // Amber Lynx, a validated one
     await waitFor(() => expect(openIndex()).toBe(2));
     // A filter that keeps it must not move the selection off it.
-    await user.selectOptions(screen.getByLabelText("Source"), "manual");
+    await user.selectOptions(screen.getByLabelText("Graded by"), "manual");
     await waitFor(() => expect(labels()).toEqual(["Amber Lynx"]));
     expect(openIndex()).toBe(0);
   });
@@ -317,7 +317,7 @@ describe("GradingPanel — proposals first", () => {
     await screen.findByText("Question 1 of 2");
     await waitFor(() => expect(labels()[0]).toBe("Bold Raven"));
 
-    await user.selectOptions(screen.getByLabelText("Source"), "auto");
+    await user.selectOptions(screen.getByLabelText("Graded by"), "auto");
     await waitFor(() => expect(labels()).toEqual(["Wise Otter", "Calm Heron"]));
     expect(openIndex()).toBe(0);
   });

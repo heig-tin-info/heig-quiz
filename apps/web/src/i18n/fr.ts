@@ -1766,8 +1766,28 @@ export const fr: Record<keyof Dict, string> = {
   "grading.filter.all": "Toutes",
   "grading.filter.proposed": "À valider",
   "grading.filter.validated": "Validées",
-  "grading.filter.source": "Source",
+  "grading.filter.source": "Corrigé par",
   "grading.filter.confidence": "Confiance",
+  "grading.filter.any": "Indifférent",
+  "grading.filter.source.auto": "Automatique (règles)",
+  "grading.filter.source.llm": "Modèle d'IA",
+  "grading.filter.source.manual": "Enseignant",
+  "grading.filter.source.help.any":
+    "Corrigé par : qui a proposé la note — les règles de la question, un modèle d'IA ou un enseignant.",
+  "grading.filter.source.help.auto":
+    "Automatique (règles) : corrigé par les règles de la question — les bons choix, les valeurs attendues, les tests du code.",
+  "grading.filter.source.help.llm":
+    "Modèle d'IA : proposé par un modèle de langage à partir des critères et de la réponse de référence ; relisez-le avant de valider.",
+  "grading.filter.source.help.manual": "Enseignant : points fixés à la main par un enseignant.",
+  "grading.filter.confidence.low": "Basse",
+  "grading.filter.confidence.medium": "Moyenne",
+  "grading.filter.confidence.high": "Haute",
+  "grading.filter.confidence.help.any":
+    "Confiance : à quel point le correcteur s'est dit sûr de sa proposition.",
+  "grading.filter.confidence.help.low": "Confiance basse : le correcteur a hésité ; à regarder en premier.",
+  "grading.filter.confidence.help.medium": "Confiance moyenne : plausible, à vérifier.",
+  "grading.filter.confidence.help.high":
+    "Confiance haute : le correcteur était sûr ; celles qu'on valide d'ordinaire en lot.",
   "grading.source.auto": "automatique",
   "grading.source.llm": "modèle",
   "grading.source.manual": "manuelle",
