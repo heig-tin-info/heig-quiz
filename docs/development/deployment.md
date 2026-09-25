@@ -18,27 +18,33 @@ at ADR-016.
 
 ## The two machines
 
-| | `classroom.chevallier.io` | `code.chevallier.io` |
+| | `portal.heig.chevallier.io` | `code.chevallier.io` |
 | --- | --- | --- |
-| Size | DigitalOcean, 1 CPU, 956 MiB | Hetzner, 2 CPU, 4 GB |
+| Size | Hetzner CPX12, 1 vCPU, 2 GB + 2 GB swap | Hetzner, 2 CPU, 4 GB |
 | Already runs | heig-classroom on `:3000`, evaluation-tb on `:3001`, a native Caddy | heig-codespace, rootful Podman 5.7, a native Caddy |
-| Gets | `/opt/quiz`: the compose stack `app`, `postgres`, `backup` | `/opt/quiz-runner`: the runner as a Podman quadlet |
+| Gets | `/srv/quiz`: the compose stack `app`, `postgres`, `backup`, on the `srv` account's rootless Docker | `/opt/quiz-runner`: the runner as a Podman quadlet |
 | Listens on | `app` published on `127.0.0.1:3002` | the runner bound to `127.0.0.1:3200` |
 | Vhost | `/etc/caddy/conf.d/quiz.caddy`, `quiz.chevallier.io` | `/etc/caddy/conf.d/quiz-runner.caddy`, `code.chevallier.io:8443` |
-| Deploys through | `/opt/quiz/deploy.sh`, forced command | `/opt/quiz-runner/apps/runner/deploy/deploy.sh`, forced command |
+| Deploys through | `/srv/quiz/deploy.sh`, forced command, user `srv` | `/opt/quiz-runner/apps/runner/deploy/deploy.sh`, forced command |
 
-Why two: the classroom VM has no Podman and no room for student
+Until 2026-09-25 the application VM was a DigitalOcean droplet (root,
+rootful Docker, `/opt/quiz`); the three services moved to the Hetzner VM
+together, and the directory basenames (hence the compose project and volume
+names) did not change.
+
+Why two: the application VM has no Podman and no room for student
 compilations next to two PostgreSQL servers and three Node processes,
 while the codespace VM already runs the rootful Podman the runner was
-written against. The neighbours are not touched. The classroom VM's Caddy
-already imported one fragment per service from `/etc/caddy/conf.d/`; the
+written against. The neighbours are not touched. The application VM's Caddy
+imports one fragment per service from `/etc/caddy/conf.d/`; the
 code VM's `/etc/caddy/Caddyfile`, owned by heig-codespace, gained that one
 `import /etc/caddy/conf.d/*.caddy` line and nothing else.
 
-One DNS record, `quiz.chevallier.io`, points at the classroom VM. The
-runner is reached through the code VM's existing name on port 8443, so no
-record and no certificate are added; `deploy.md` §1 asks for that port to
-be open in the Hetzner firewall for the classroom VM's address only.
+One DNS record, `quiz.chevallier.io`, a CNAME to
+`portal.heig.chevallier.io`. The runner is reached through the code VM's
+existing name on port 8443, so no record and no certificate are added;
+`deploy.md` §1 asks for that port to be open in the Hetzner firewall for the
+application VM's address only.
 
 ## The application VM
 
@@ -57,7 +63,8 @@ shares the classroom's public JWK.
 
 The `postgres` service carries the same low-memory tuning as the
 classroom's (`shared_buffers=32MB`, `max_connections=40`, no parallel
-query): the VM has one CPU and already runs another PostgreSQL.
+query): the VM has one vCPU and 2 GB, shared by three services and two
+PostgreSQL instances.
 
 The Caddy fragment does two things beyond proxying to `localhost:3002`: it
 sets the security headers (HSTS, `nosniff`, referrer policy) and it proxies
@@ -65,10 +72,13 @@ sets the security headers (HSTS, `nosniff`, referrer policy) and it proxies
 ([ADR-005](../adr/ADR-005-sse-sans-websocket.md)) is never buffered. Port
 3002 because 3000 and 3001 belong to the neighbours.
 
-The one-time setup is `deploy.md` §2: clone into `/opt/quiz`, create
-`secrets/`, `backups/` and `assets/` owned by uid 1000 (the `node` user of
-the image), copy the classroom's edu-ID private key, fill `.env.prod` from
-`.env.prod.example`, install the Caddy fragment and reload Caddy.
+The one-time setup is `deploy.md` §2, as `srv`: clone into `/srv/quiz`,
+create `secrets/`, `backups/` and `assets/`, copy the classroom's edu-ID
+private key, give them to uid 1000 (the `node` user of the image) through a
+container — in rootless Docker that uid is host uid 100999, so a host-side
+`chown 1000:1000` is wrong — fill `.env.prod` from `.env.prod.example`,
+install the Caddy fragment, and validate and reload Caddy with the two
+`sudo` commands `srv` is allowed.
 
 ## The runner VM
 
@@ -100,9 +110,9 @@ service's startup check sees the file the server will use.
 
 The Caddy site block `https://code.chevallier.io:8443` reuses the
 certificate Caddy already holds for that name, sets HSTS and `nosniff`,
-and proxies to `127.0.0.1:3200` for one source address, the classroom
-VM's; every other address gets a 403. The runner then requires
-`Authorization: Bearer <RUNNER_TOKEN>` on `POST /run` and on `GET /health`,
+and proxies to `127.0.0.1:3200` for one source address, the application
+VM's (`128.140.71.35`); every other address gets a 403. The runner then
+requires `Authorization: Bearer <RUNNER_TOKEN>` on `POST /run` and on `GET /health`,
 compared in constant time, and answers 401 otherwise. Two gates, either one
 enough on its own. `/health` is guarded on purpose: a token the API got
 wrong shows up as a runner `down` in `/healthz`, not as one that says `up`
@@ -159,11 +169,13 @@ VM's Podman means bumping the pin.
    `DEPLOY_RUNNER_HOST` is missing, only the application is deployed. A
    concurrency group serialises the deploys.
 
-On each VM the same CI key is pinned to that VM's script in
-`/root/.ssh/authorized_keys`, with a forced command and `restrict`:
+On each VM the same CI key is pinned to that VM's script, with a forced
+command and `restrict`: in `/home/srv/.ssh/authorized_keys` on the
+application VM (the workflow connects as `${{ vars.DEPLOY_USER || 'root' }}`,
+and `DEPLOY_USER` is `srv`), in `/root/.ssh/authorized_keys` on the runner VM:
 
 ```
-command="/opt/quiz/deploy.sh",restrict ssh-ed25519 AAAA… ci-deploy@quiz
+command="/srv/quiz/deploy.sh",restrict ssh-ed25519 AAAA… ci-deploy@quiz
 command="/opt/quiz-runner/apps/runner/deploy/deploy.sh",restrict ssh-ed25519 AAAA… ci-deploy@quiz
 ```
 
@@ -172,7 +184,10 @@ instead, so the key can only deploy and never open a shell, even if it
 leaks. The token the workflow sent arrives in `$SSH_ORIGINAL_COMMAND` and
 is piped straight to `docker login` or `podman login` with
 `--password-stdin`, never evaluated. The token expires with the workflow
-run; no registry credential is stored on either VM. On the runner VM,
+run; no registry credential is stored on either VM. On the application VM
+the login goes to a throwaway `DOCKER_CONFIG`, removed on exit, because
+heig-classroom deploys on the same `srv` account and two concurrent logins
+in the shared `~/.docker/config.json` overwrote each other. On the runner VM,
 root's Podman auth file lives under `/run`, so nothing survives a reboot.
 
 The two scripts share one more step. `git pull --ff-only` rewrites the
@@ -205,8 +220,8 @@ builds the image and publishes it as a workflow artifact to
 
 !!! warning "Never build on the application VM"
 
-    The classroom VM is small. A local build makes the host swap and
-    starves PostgreSQL, and fills the disk with builder cache; `deploy.md`
+    The application VM is small (1 vCPU, 2 GB). A local build makes the host
+    swap and starves PostgreSQL, and fills the disk with builder cache; `deploy.md`
     records the incident that made this a rule. `deploy.sh` only pulls. The
     runner VM does build the small Alpine language images, on purpose; the
     runner image itself still comes from CI, so that both VMs run the commit
@@ -261,7 +276,7 @@ validated at startup by `apps/runner/src/config.ts`.
 
 | Variable | Production value | Notes |
 | --- | --- | --- |
-| `RUNNER_TOKEN` | the value of the application VM | required under `NODE_ENV=production`: the service refuses to start without it; the only secret the runner holds, never passed into a sandbox container |
+| `RUNNER_TOKEN` | the value in `/srv/quiz/.env.prod` on the application VM | required under `NODE_ENV=production`: the service refuses to start without it; the only secret the runner holds, never passed into a sandbox container |
 | `NODE_ENV`, `HOST`, `PORT` | `production`, `127.0.0.1`, `3200`, set by the quadlet | host networking, loopback only |
 | `RUNNER_SECCOMP` | `/etc/quiz-runner/seccomp.json`, set by the quadlet | the host path the Podman server opens; a missing file stops the service |
 | `PODMAN_SOCKET` | `/run/podman/podman.sock` | the rootful socket, mounted into the service |
@@ -295,7 +310,7 @@ After a deploy, `deploy.md` §5 checks three things:
 
 ```bash
 curl -s https://quiz.chevallier.io/healthz | jq .              # database, jobs, runner: "up"
-ssh root@classroom.chevallier.io 'cd /opt/quiz && docker compose -f compose.prod.yml --env-file .env.prod logs --tail 50 app'
+ssh srv@portal.heig.chevallier.io 'cd /srv/quiz && docker compose -f compose.prod.yml --env-file .env.prod logs --tail 50 app'
 ssh root@code.chevallier.io 'journalctl -u quiz-runner -n 30'
 ```
 
@@ -309,8 +324,9 @@ app` on one VM and `journalctl -u quiz-runner -f` on the other.
 
 Two layers, detailed in `deploy.md` §6 (RPO 24 h, RTO 4 h):
 
-- a daily snapshot of the whole application VM by the hosting provider,
-  taken off the machine, which covers losing the machine outright;
+- a daily backup of the whole application VM by the hosting provider
+  (Hetzner Backups, to be enabled in the console), taken off the machine,
+  which covers losing the machine outright;
 - a daily logical dump by the `backup` service: `pg_dump -Fc` into
   `./backups/quiz-<date>.dump`, 30 days kept, restorable table by table.
   It lives on the VM it protects; the off-VM copy (`rclone` to an object
@@ -318,6 +334,8 @@ Two layers, detailed in `deploy.md` §6 (RPO 24 h, RTO 4 h):
 
 Before any migration, take a fresh dump by hand rather than trusting the
 daily one; the command and the `pg_restore` recipe are in `deploy.md` §6.
+A full dump is restored into a freshly recreated database: `pg_restore
+--clean` into the existing one fails on pg-boss's partitioned tables.
 
 What to back up besides PostgreSQL: `./assets` (the uploaded images,
 content-addressed, a plain copy suffices) and `./secrets` (through the

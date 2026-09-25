@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Deploy target for the CI's forced-command SSH key. The VM's authorized_keys
 # pins this key to this script:
-#   command="/opt/quiz/deploy.sh",restrict ssh-ed25519 AAAA… ci-deploy
+#   command="/srv/quiz/deploy.sh",restrict ssh-ed25519 AAAA… ci-deploy
 # so the runner can ONLY deploy — never open a shell, even if the key leaks.
 #
 # The runner passes its ephemeral GHCR token as the SSH "command"; it lands in
@@ -13,8 +13,9 @@
 # the same way on ITS VM by apps/runner/deploy/deploy.sh (ADR-016).
 set -euo pipefail
 
-# The script's own checkout: /opt/quiz on the DigitalOcean VM (root, rootful
-# Docker), /srv/quiz on the Hetzner VM (the `srv` account, rootless Docker).
+# The script's own checkout: /srv/quiz on the Hetzner VM, run as the `srv`
+# account with rootless Docker. No path is hard-coded, so a root checkout
+# with rootful Docker works the same.
 cd "$(dirname "$(readlink -f "$0")")"
 
 # Rootless Docker listens on a per-user socket; a forced-command SSH session
@@ -28,11 +29,15 @@ fi
 # concurrent deploy's login (a token scoped to ITS package) overwrote ours
 # between login and pull -- "denied" on 2026-09-25. The re-exec below keeps
 # the directory (inherited through DOCKER_CONFIG) and removes it on exit.
+# A re-exec by an OLDER deploy.sh inherits no DOCKER_CONFIG: that script
+# already logged in to ~/.docker and cleared the token, so the pulled copy
+# pulls with that login and logs in nowhere -- the trap must not trip
+# `set -u` over the unset variable ("unbound variable" after a good deploy).
 if [ -z "${QUIZ_DEPLOY_REEXEC:-}" ]; then
   DOCKER_CONFIG="$(mktemp -d)"
   export DOCKER_CONFIG
 fi
-trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+trap '[ -z "${DOCKER_CONFIG:-}" ] || rm -rf "$DOCKER_CONFIG"' EXIT
 
 # Optional GHCR login (private package): the token comes in over SSH, is piped
 # straight to docker login's stdin (never eval'd), and is discarded after.
