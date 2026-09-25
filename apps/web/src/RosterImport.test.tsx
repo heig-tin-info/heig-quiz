@@ -2,7 +2,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { RosterImport } from "./RosterImport";
+import { RosterImport, spreadsheetRows } from "./RosterImport";
 import { fail, mockFetch, ok, renderWithProviders } from "./test/render";
 
 /*
@@ -57,5 +57,42 @@ describe("RosterImport rejected lines", () => {
     openSheet(ok({ imported: 1 }));
     await pasteAndImport();
     await waitFor(() => expect(screen.getByText("Import done")).toBeVisible());
+  });
+});
+
+describe("spreadsheetRows", () => {
+  // The dropped file is read in the browser; what reaches the API is these
+  // rows, so the reader's quirks have to be settled here.
+  const roster = async (format: "xlsx" | "ods") => {
+    const { write } = await import("hucre");
+    const bytes = await write({
+      sheets: [
+        {
+          name: "Liste",
+          rows: [
+            ["Nom", "Prénom", "E-mail", "Temps sup."],
+            ["Dupont", "Marie", "marie@heig-vd.ch", 1.5],
+            ["Rochat", "Léa", "lea@heig-vd.ch", 0.25],
+            ["Muller", "Jean", null, 25],
+          ],
+          cells: new Map([
+            ["1,3", { style: { numFmt: "0%" } }],
+            ["2,3", { style: { numFmt: "0%" } }],
+          ]),
+        },
+      ],
+      format,
+    });
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  };
+
+  it.each(["xlsx", "ods"] as const)("reads a %s roster as the teacher sees it", async (format) => {
+    expect(await spreadsheetRows(await roster(format))).toEqual([
+      ["Nom", "Prénom", "E-mail", "Temps sup."],
+      // "150 %" is stored as 1.5, which the roster would read as 1.5 %.
+      ["Dupont", "Marie", "marie@heig-vd.ch", 150],
+      ["Rochat", "Léa", "lea@heig-vd.ch", 25],
+      ["Muller", "Jean", null, 25],
+    ]);
   });
 });

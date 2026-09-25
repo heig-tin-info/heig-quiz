@@ -23,8 +23,8 @@
     "@quiz/contracts": "workspace:*",
     "@quiz/core": "workspace:*",
     "@quiz/domain": "workspace:*",
-    "@quiz/qt-cloze": "workspace:*",
     "@quiz/qt-circuit": "workspace:*",
+    "@quiz/qt-cloze": "workspace:*",
     "@quiz/qt-code": "workspace:*",
     "@quiz/qt-mcq": "workspace:*",
     "@quiz/qt-short": "workspace:*",
@@ -42,14 +42,14 @@
     "@tiptap/react": "3.31.3",
     "@tiptap/starter-kit": "3.31.3",
     "dompurify": "^3.4.15",
+    "hucre": "^1.1.0",
     "katex": "^0.18.7",
     "lucide-react": "^1.23.0",
     "marked": "^18.0.13",
     "mathlive": "^0.110.0",
     "qrcode": "^1.5.4",
     "react": "^19.2.7",
-    "react-dom": "^19.2.7",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.2",

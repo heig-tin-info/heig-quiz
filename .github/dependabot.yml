@@ -3,14 +3,13 @@
 # Until this file existed, the repository had no configuration at all, which
 # means only *security* updates ran (they come from the repository's security
 # settings, not from here) and each one opened its own pull request. Every one
-# of them arrived red, always for the same reason: regenerating the pnpm
-# lockfile drops the `integrity` of the `xlsx` entry, which resolves to the
-# SheetJS CDN rather than the npm registry, and pnpm then refuses to install an
-# unverified tarball. See docs/development/dependencies.md for the cause and the
-# repair.
+# of them used to arrive red: `xlsx` (SheetJS) was installed by URL from the
+# vendor's CDN, and regenerating the lockfile dropped the `integrity` of that
+# entry, which pnpm then refused to install. The roster import now reads
+# spreadsheets with `hucre`, from the npm registry, so that repair is gone;
+# never add a dependency by tarball URL again.
 #
-# That repair is manual, so the thing worth optimizing is the NUMBER of pull
-# requests that need it, not their existence.
+# The settings below still keep the number of npm pull requests low.
 
 version: 2
 updates:
