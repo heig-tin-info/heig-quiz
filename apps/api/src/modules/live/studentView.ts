@@ -96,6 +96,12 @@ interface StudentViewInput {
   itemId: string;
   /** `settings.shuffleChoices` AND the question's own `shuffleable` flag. */
   shuffle: boolean;
+  /**
+   * The evaluation's per-type settings (`gradeDefaults`), for a view built
+   * for one: a type publishes from it only what a student must know before
+   * answering — `mcq`'s negative marking (ADR-026).
+   */
+  defaults?: Readonly<Record<string, unknown>>;
 }
 
 /**
@@ -115,6 +121,7 @@ export function studentView(input: StudentViewInput): unknown {
     seed: input.seed,
     itemId: input.itemId,
     shuffle: input.shuffle,
+    ...(input.defaults === undefined ? {} : { defaults: input.defaults }),
   });
 }
 

@@ -39,6 +39,8 @@ import type { Db } from "../../db/client.js";
 import { answers, attempts, enrollments, evaluations, guestParticipants } from "../../db/schema.js";
 import {
   feedbackOf,
+  gradeDefaults,
+  negativeMarkingEnabled,
   settingsOf,
   type EvaluationRecord,
   type JoinedItem,
@@ -801,6 +803,7 @@ function attemptItems(
   locked: ReadonlySet<string>,
   settings: EvaluationSettings,
   seed: number,
+  defaults: Readonly<Record<string, unknown>>,
 ): AttemptItem[] {
   return ordered.map((entry) => {
     const answer = answered.get(entry.item.id) ?? null;
@@ -821,6 +824,9 @@ function attemptItems(
           settings.shuffleChoices &&
           entry.question.shuffleable &&
           isShuffleable(entry.question.type, version),
+        // What the student must know before answering: `mcq`'s negative
+        // marking (ADR-026).
+        defaults,
       }),
       answer: answer?.payload ?? null,
       revision: answer?.revision ?? 0,
@@ -958,7 +964,7 @@ async function viewOf(
       pausedAt: isoOrNull(evaluation.pausedAt),
       totalPoints: totalPointsOf(items.map((i) => i.item)),
     },
-    items: attemptItems(ordered, answered, locked, settings, seed),
+    items: attemptItems(ordered, answered, locked, settings, seed, gradeDefaults(evaluation)),
   };
 }
 
@@ -976,6 +982,7 @@ export async function lobbyView(
       announcedDurationS: evaluation.durationS,
     },
     navigation: settingsOf(evaluation).navigation,
+    negativeMarking: negativeMarkingEnabled(evaluation),
     present: presence.count(evaluation.id),
     enrolled: await enrolledCount(db, evaluation),
     timeBonusPercent: participant.timeBonusPercent,

@@ -40,13 +40,25 @@ export function csvField(value: string): string {
   return /[";\r\n]/.test(safe) ? `"${safe.replaceAll('"', '""')}"` : safe;
 }
 
-const line = (fields: readonly string[]): string => fields.map(csvField).join(SEPARATOR);
+/**
+ * A number this module wrote itself, from a `number`: it cannot be a formula,
+ * so it skips the prefix of {@link csvField}. Without that, a negative point
+ * count (negative marking, ADR-026) would reach the spreadsheet as the TEXT
+ * `'-1`, which no sum adds up. Text from outside — a name, an email — always
+ * goes through {@link csvField}, even when it looks like a number.
+ */
+interface NumericField {
+  numeric: string;
+}
+
+const line = (fields: readonly (string | NumericField)[]): string =>
+  fields.map((f) => (typeof f === "string" ? csvField(f) : f.numeric)).join(SEPARATOR);
 
 /** Two decimals, `.` separator, no trailing zeroes beyond what is needed. */
-const points = (value: number): string => String(round2(value));
+const points = (value: number): NumericField => ({ numeric: String(round2(value) + 0) });
 
 /** Exactly one decimal: `4` is written `4.0`, because a grade always is. */
-const grade = (value: number): string => value.toFixed(1);
+const grade = (value: number): NumericField => ({ numeric: value.toFixed(1) });
 
 /**
  * `email;last_name;first_name;q1;…;total;grade`, one row per STUDENT — the

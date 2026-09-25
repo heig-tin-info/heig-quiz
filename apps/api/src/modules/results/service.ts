@@ -36,7 +36,14 @@ import type {
   StudentFeedback,
   StudentResultItem,
 } from "@quiz/contracts";
-import { describe, gradeFromPoints, histogram, retakeRefusal, round2 } from "@quiz/domain";
+import {
+  attemptTotal,
+  describe,
+  gradeFromPoints,
+  histogram,
+  retakeRefusal,
+  round2,
+} from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -51,6 +58,7 @@ import {
   cachedGrade,
   clearRelease,
   feedbackOf,
+  gradeDefaults,
   joinedItems,
   retakePolicyOf,
   retakesEnabled,
@@ -154,16 +162,16 @@ async function computeResults(
     if (entry.userId === null) continue;
     const attempt = byUser.get(entry.userId) ?? null;
     const perItem: Record<string, number> = {};
-    let points = 0;
     if (attempt) {
       for (const item of items) {
         const grading = validated.get(pairKey(attempt.id, item.item.id));
         if (!grading) continue;
         perItem[item.item.id] = grading.points;
-        points += grading.points;
       }
     }
-    points = round2(points);
+    // Per item, the points as graded — negative ones included (ADR-026);
+    // the total is `attemptTotal`'s, floored at 0, and the grade comes from it.
+    const points = attemptTotal(Object.values(perItem));
     rows.push({
       userId: entry.userId,
       displayName: `${entry.prenom} ${entry.nom}`.trim() || entry.email,
@@ -539,10 +547,8 @@ export async function studentFeedback(
   const gradingByItem = new Map(graded.map((g) => [g.itemId, g]));
   const settings = settingsOf(evaluation);
 
-  let points = 0;
   const result: StudentResultItem[] = items.map((item) => {
     const grading = gradingByItem.get(item.item.id) ?? null;
-    if (grading) points += grading.points;
     const answer = byItem.get(item.item.id) ?? null;
     const version = { config: item.version.config, configVersion: item.version.configVersion };
     const view = {
@@ -561,6 +567,7 @@ export async function studentFeedback(
       student: studentView({
         ...view,
         shuffle: settings.shuffleChoices && item.question.shuffleable,
+        defaults: gradeDefaults(evaluation),
       }),
       answer: policy.showAnswer ? (answer?.payload ?? null) : null,
       solution: policy.showKey ? solutionView(view) : null,
@@ -573,7 +580,9 @@ export async function studentFeedback(
     };
   });
 
-  points = round2(points);
+  // The same total as the grade table (`attemptTotal`, floored at 0 under
+  // negative marking, ADR-026), over the same validated gradings.
+  const points = attemptTotal(result.flatMap((r) => (r.points === null ? [] : [r.points])));
   // The total is the frozen one while it still holds (D-06); the per-item
   // points above always come from the gradings, which the snapshot mirrors.
   const hit =

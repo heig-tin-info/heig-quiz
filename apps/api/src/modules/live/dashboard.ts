@@ -12,6 +12,7 @@ import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { answers, attemptEvents, attempts, enrollments, users } from "../../db/schema.js";
 import {
+  gradeDefaults,
   retakesEnabled,
   settingsOf,
   staffRosterWithAttempt,
@@ -358,6 +359,7 @@ export async function attemptInspect(
           seed: attempt.seed,
           itemId: entry.item.id,
           shuffle: settingsOf(evaluation).shuffleChoices && entry.question.shuffleable,
+          defaults: gradeDefaults(evaluation),
         }),
         answer: answer?.payload ?? null,
         revision: answer?.revision ?? 0,
