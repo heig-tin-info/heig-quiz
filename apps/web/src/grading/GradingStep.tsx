@@ -1,6 +1,5 @@
 import type { UseQueryResult } from "@tanstack/react-query";
 import { CheckCheck, ChevronLeft, ChevronRight, GraduationCap, RefreshCcw } from "lucide-react";
-import { useLayoutEffect, useRef } from "react";
 
 import type { GradingEntry, GradingQueue, GradingQueueItem } from "@quiz/contracts";
 
@@ -127,11 +126,12 @@ export function StepList({
 /**
  * The detail column: the open answer, and nothing that moves.
  *
- * Its header — whose answer, which of how many, Previous / Next — stays where
- * it is while the body under it is swapped, so a teacher going through thirty
- * answers keeps their eyes on one spot. On a wide screen the body scrolls on
- * its own and goes back to its top on every change: the next answer is read
- * from its beginning, not from wherever the last one was left.
+ * Its header — whose answer, which of how many, Previous / Next — sticks
+ * under the step header while the body under it is swapped, so a teacher
+ * going through thirty answers keeps their eyes on one spot. The body is in
+ * the page's flow (a wheel over it scrolls the page, never a pane of its
+ * own), and at least a window tall, so the panel can always bring its top
+ * back under the header when another answer opens (`GradingPanel`).
  */
 export function StepAnswers({
   order,
@@ -139,6 +139,7 @@ export function StepAnswers({
   entries,
   items,
   selected,
+  current,
   onSelect,
   onMove,
   explanations,
@@ -146,6 +147,8 @@ export function StepAnswers({
   onValidate,
   onOverride,
 }: StepProps & {
+  /** The open answer and its place, as `useGradingTraversal` resolved it. */
+  current: { entry: GradingEntry; index: number } | null;
   /** One answer back (-1) or forward (+1): the same move as the arrow keys. */
   onMove: (delta: number) => void;
   explanations: Map<string, string>;
@@ -154,16 +157,9 @@ export function StepAnswers({
   onOverride: (key: string) => void;
 }) {
   const t = useT();
-  const body = useRef<HTMLDivElement>(null);
-
-  const at = entries.findIndex((e) => entryKey(e) === selected);
-  const entry = at < 0 ? undefined : entries[at];
+  const at = current?.index ?? -1;
+  const entry = current?.entry;
   const item = entry ? items.get(entry.itemId) : undefined;
-  const openKey = entry ? entryKey(entry) : null;
-
-  useLayoutEffect(() => {
-    if (body.current) body.current.scrollTop = 0;
-  }, [openKey]);
 
   if (queue.isLoading) return <ListSkeleton />;
   if (queue.isError) {
@@ -200,9 +196,11 @@ export function StepAnswers({
       />
       <section
         aria-label={t("grading.detail.label")}
-        className="flex flex-col overflow-hidden rounded-card border border-line bg-surface lg:min-h-0 lg:flex-1"
+        // `overflow-clip`, not `hidden`: a hidden overflow is a scroll
+        // container, and the sticky header inside would stick to nothing.
+        className="flex min-h-[calc(100dvh-5rem)] flex-col overflow-clip rounded-card border border-line bg-surface lg:min-h-[calc(100dvh-var(--grading-sticky)-1rem)]"
       >
-        <header className="flex items-center gap-3 border-b border-line px-4 py-3 sm:px-5">
+        <header className="sticky top-16 z-10 flex items-center gap-3 rounded-t-card border-b border-line bg-surface px-4 py-3 sm:px-5 lg:top-(--grading-sticky)">
           {entry ? (
             <span className="w-10 shrink-0">
               <VerdictCell state={entryVerdict(entry)} />
@@ -236,10 +234,10 @@ export function StepAnswers({
             <ChevronRight />
           </IconButton>
         </header>
-        <div ref={body} className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+        <div>
           {entry && item ? (
             <EntryDetail
-              key={openKey}
+              key={entryKey(entry)}
               entry={entry}
               item={item}
               explanation={explanations.get(entry.itemId) ?? null}

@@ -5,7 +5,7 @@
 //   pnpm --filter @quiz/web dev:mock          # in one terminal
 //   pnpm --filter @quiz/web screenshots       # in another
 //
-// Flags: --dark, --width=390|768|1440 (repeatable), --only=<substring>,
+// Flags: --dark, --width=390|768|1440 (repeatable), --height=<px>, --only=<substring>,
 //        --fold (viewport only, instead of the full page), --list.
 // Environment: BASE (default http://localhost:5173), OUT (default
 // apps/web/screenshots).
@@ -29,6 +29,8 @@ const dark = flag("dark");
 const fullPage = !flag("fold");
 const only = opt("only").concat(argv.filter((a) => !a.startsWith("--")));
 const widths = opt("width").map(Number).filter(Boolean);
+/** --height=768: a laptop screen instead of the default 900 (844 on a phone). */
+const heightOpt = opt("height").map(Number).find(Boolean);
 
 // --- Scenes, as data ---------------------------------------------------
 //
@@ -419,8 +421,20 @@ const scenes = [
       await p.getByRole("button", { name: /^(Next answer|Réponse suivante)$/ }).first().click();
       await p.waitForTimeout(300);
     } },
-  { name: "grading-step-picker", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: (p) => p.getByRole("button", { name: /^(Question|Question) 1 (of|sur) / }).first().click() },
+  // Three answers further: the answer's top sits under the sticky step header.
+  { name: "grading-walk", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await skipCoach(p);
+      for (let i = 0; i < 3; i += 1) {
+        await p.getByRole("button", { name: /^(Next answer|Réponse suivante)$/ }).first().click();
+        await p.waitForTimeout(250);
+      }
+    } },
+  { name: "grading-step-picker", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("button", { name: /^Question 1 (of|sur) / }).first().click();
+    } },
   { name: "grading-step-picker-student", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await skipCoach(p);
       await p.locator("label").filter({ hasText: /^(By student|Par étudiant)$/ }).first().click();
       await p.waitForTimeout(500);
       await p.getByRole("button", { name: /^(Student 1 of|Étudiant 1 sur) / }).first().click();
@@ -508,6 +522,19 @@ async function openRowMenu(page, triggerName, item) {
 }
 
 /**
+ * Dismisses the first-visit coach mark when it is up: on a laptop-height
+ * window it sits over the grading header's step picker.
+ */
+async function skipCoach(page) {
+  const skip = page.getByRole("button", { name: /^(Skip|Passer)$/ }).locator("visible=true").first();
+  // It shows a moment after the page settles, or not at all.
+  if (await skip.waitFor({ timeout: 3000 }).then(() => true, () => false)) {
+    await skip.click({ timeout: 3000, force: true }).catch(() => {});
+    await page.waitForTimeout(300);
+  }
+}
+
+/**
  * Walks the grading panel forward `n` questions. The traversal is the
  * screen's own "next question" control, so the scene exercises the same path
  * a teacher does.
@@ -538,7 +565,7 @@ let failures = 0;
 
 for (const width of widths.length ? widths : [1440]) {
   const ctx = await browser.newContext({
-    viewport: { width, height: width < 700 ? 844 : 900 },
+    viewport: { width, height: heightOpt ?? (width < 700 ? 844 : 900) },
     deviceScaleFactor: 1,
     colorScheme: dark ? "dark" : "light",
   });

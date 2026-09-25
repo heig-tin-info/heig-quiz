@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { BarChart3, CheckCheck, RefreshCcw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 
 import type { GradingConfidence, GradingSource } from "@quiz/contracts";
 
@@ -9,7 +9,7 @@ import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
 import { useScreenCommands } from "../screenCommands";
-import { Button, Card, EmptyState, PageError, PageHeader } from "../ui";
+import { Button, Card, EmptyState, PageError, PageHeader, useMinWidth } from "../ui";
 import { BatchBar, type BatchScope } from "./BatchBar";
 import { ListSkeleton } from "./ListSkeleton";
 import { entryKey } from "./EntryList";
@@ -56,6 +56,9 @@ import {
  * component holds the choices and lays the screen out.
  */
 
+/** The phone's sticky top bar (`h-14` in `Shell`) plus a little air. */
+const PHONE_BAR = 64;
+
 export function GradingPanel({
   evaluationId,
   navigate,
@@ -77,7 +80,18 @@ export function GradingPanel({
   const [overrideKey, setOverrideKey] = useState<string | null>(null);
   const [regrading, setRegrading] = useState(false);
 
-  const { evaluation, itemsById, steps, step, queue, entries, counts, progress, explanations } =
+  const {
+    evaluation,
+    itemsById,
+    steps,
+    step,
+    queue,
+    entries,
+    counts,
+    progress,
+    explanations,
+    current,
+  } =
     useGradingTraversal(evaluationId, {
       order,
       index,
@@ -103,6 +117,44 @@ export function GradingPanel({
   }, [entries]);
 
   const overrideEntry = entries.find((e) => entryKey(e) === overrideKey) ?? null;
+
+  // --- Keeping the answer in one place -----------------------------------
+
+  const wide = useMinWidth(1024);
+  const stickyRef = useRef<HTMLDivElement>(null);
+  const answersRef = useRef<HTMLElement>(null);
+  const [stickyHeight, setStickyHeight] = useState(0);
+
+  // The height of the sticky step header, as a CSS variable the list column
+  // and the detail's header stick under.
+  useLayoutEffect(() => {
+    const el = stickyRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const measure = () => setStickyHeight(wide ? el.offsetHeight : 0);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [wide, steps.length]);
+
+  /*
+   * Another answer opened: its top goes right under whatever sticks at the
+   * top of the window (the step header from `lg`, the phone's top bar
+   * below), wherever the teacher had scrolled to in the previous one — the
+   * next step's first answer included. The answer the panel opens on is
+   * not a move, and does not scroll.
+   */
+  const previous = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    const was = previous.current;
+    previous.current = selected;
+    const el = answersRef.current;
+    if (!el || was === null || selected === null || was === selected) return;
+    const rect = el.getBoundingClientRect();
+    if (rect.height === 0) return; // no layout (a test): nothing to align
+    const target = wide ? stickyHeight : PHONE_BAR;
+    if (Math.abs(rect.top - target) > 1) window.scrollBy({ top: rect.top - target });
+  }, [selected, wide, stickyHeight]);
 
   /** One answer back or forward: the detail's buttons, the same as `←` / `→`. */
   const move = (delta: number) => {
@@ -204,7 +256,10 @@ export function GradingPanel({
   };
 
   return (
-    <div className="space-y-6">
+    <div
+      className="space-y-6"
+      style={{ "--grading-sticky": `${stickyHeight}px` } as CSSProperties}
+    >
       <PageHeader
         eyebrow={title}
         title={t("grading.title")}
@@ -225,6 +280,13 @@ export function GradingPanel({
         </Card>
       ) : (
         <>
+          {/* The step header sticks to the top from `lg`, on a strip of canvas
+              that hides what scrolls under it; its height, measured, is where
+              the list column and the detail's own header stick below it. */}
+          <div
+            ref={stickyRef}
+            className="lg:sticky lg:top-0 lg:z-20 lg:-mt-4 lg:bg-canvas lg:pb-3 lg:pt-4"
+          >
           <GradingHeader
             order={order}
             steps={steps}
@@ -241,6 +303,7 @@ export function GradingPanel({
             running={run.isPending}
             runPrimary={runPrimary}
           />
+          </div>
 
           <GradingFilters
             order={order}
@@ -258,7 +321,10 @@ export function GradingPanel({
             onShowNames={setShowNames}
           />
 
-          {order === "question" && proposedCount > 0 ? (
+          {/* Always there by question, even at zero: the banner going away
+              when the last proposal is validated would lift everything under
+              it by its own height, the answer being read included. */}
+          {order === "question" ? (
             <BatchBar
               evaluationId={evaluationId}
               scope={scope}
@@ -268,17 +334,19 @@ export function GradingPanel({
             />
           ) : null}
 
-          {/* Master and detail from `lg`, at the height of the window (the
-              page's own vertical padding taken off) and never taller or
-              shorter, whatever the answer holds: the next answer then changes
-              neither the height of the page nor its scroll. Both columns
-              scroll inside themselves. Below `lg` the columns stack, the list
-              becomes a select above the answer, and the page scrolls as any
-              page does. */}
-          <div className="flex flex-col gap-6 lg:h-[calc(100dvh-4rem)] lg:min-h-120 lg:flex-row">
+          {/* Master and detail from `lg`: the list column sticks under the
+              step header and scrolls inside itself; the answer is in the
+              page's flow, at least a window tall, its own header sticking
+              under the step header. Moving to another answer brings the
+              answer's top back under that header (see `answersRef`), so the
+              teacher never scrolls to find it and it is always read from the
+              same spot. Below `lg` the columns stack, the list becomes a
+              select above the answer, and the same alignment happens under
+              the phone's top bar. */}
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
             <aside
               aria-label={t("aside.gradingItem")}
-              className="flex w-full shrink-0 flex-col gap-4 lg:min-h-0 lg:w-75"
+              className="flex w-full shrink-0 flex-col gap-4 lg:sticky lg:top-(--grading-sticky) lg:max-h-[calc(100dvh-var(--grading-sticky)-1rem)] lg:w-75"
             >
               <StepCard
                 order={order}
@@ -299,7 +367,8 @@ export function GradingPanel({
             </aside>
 
             <section
-              className="flex w-full min-w-0 flex-1 flex-col gap-3 lg:min-h-0"
+              ref={answersRef}
+              className="flex w-full min-w-0 flex-1 flex-col gap-3"
               aria-label={t("grading.title")}
             >
               <StepAnswers
@@ -308,6 +377,7 @@ export function GradingPanel({
                 entries={entries}
                 items={itemsById}
                 selected={selected}
+                current={current}
                 onSelect={setSelected}
                 onMove={move}
                 explanations={explanations}

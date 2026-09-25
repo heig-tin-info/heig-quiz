@@ -1862,6 +1862,7 @@ export const en = {
   "grading.explanation": "Explanation",
   "grading.batch.title": "Validate the {n} proposals of this question",
   "grading.batch.titleFiltered": "Validate the {n} proposals of this selection",
+  "grading.batch.none": "No proposal left to validate here",
   "grading.batch.body": "Each grading stays editable after validation.",
   "grading.batch.action": "Validate {n} proposals",
   "grading.batch.confirm.title": "Validate {n} proposals?",

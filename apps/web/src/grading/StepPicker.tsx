@@ -176,7 +176,10 @@ export function StepPicker({
                   </span>
                   <span className="min-w-0 flex-1 truncate">{step.label}</span>
                   {step.staff ? (
-                    <GraduationCap className="size-3.5 shrink-0 text-fg-faint" aria-hidden />
+                    <>
+                      <GraduationCap className="size-3.5 shrink-0 text-fg-faint" aria-hidden />
+                      <span className="sr-only">{t("roster.status.staff")}</span>
+                    </>
                   ) : null}
                   <StepBadge step={step} />
                 </ComboboxOption>

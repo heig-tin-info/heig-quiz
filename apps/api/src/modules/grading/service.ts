@@ -567,13 +567,26 @@ export async function gradingSteps(
     .from(attempts)
     .where(eq(attempts.evaluationId, evaluation.id))
     .orderBy(asc(attempts.createdAt));
-  const standing = await standingGradings(db, evaluation.id);
+  // The state of each standing cell and nothing else — not the details, the
+  // comment or the history `standingGradings` carries for the queue. Same
+  // rule: superseded ones are history, and a validated grading outranks a
+  // proposal on the same cell.
+  const rows = await db
+    .select({ attemptId: gradings.attemptId, itemId: gradings.itemId, state: gradings.state })
+    .from(gradings)
+    .innerJoin(attempts, eq(gradings.attemptId, attempts.id))
+    .where(and(eq(attempts.evaluationId, evaluation.id), ne(gradings.state, "superseded")));
+  const standing = new Map<PairKey, "validated" | "proposed">();
+  for (const row of rows) {
+    const key = pairKey(row.attemptId, row.itemId);
+    if (standing.get(key) !== "validated") standing.set(key, row.state as "validated" | "proposed");
+  }
 
   const tally = (cells: PairKey[]) => {
     let validated = 0;
     let proposed = 0;
     for (const key of cells) {
-      const state = standing.get(key)?.state;
+      const state = standing.get(key);
       if (state === "validated") validated += 1;
       else if (state === "proposed") proposed += 1;
     }

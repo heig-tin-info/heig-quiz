@@ -88,6 +88,13 @@ export function EntryList({ entries, items, selectedKey, onSelect, rowLabel, cla
     const inner = row.getBoundingClientRect();
     if (inner.top < outer.top) box.scrollTop -= outer.top - inner.top;
     else if (inner.bottom > outer.bottom) box.scrollTop += inner.bottom - outer.bottom;
+    // The focus follows the selection when it was in the list: after `v`
+    // or an arrow, Enter must act on the row now open, not on the one the
+    // teacher clicked three answers ago.
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && focused !== row && box.contains(focused)) {
+      row.focus({ preventScroll: true });
+    }
   }, [selectedKey, entries]);
 
   return (
@@ -101,6 +108,7 @@ export function EntryList({ entries, items, selectedKey, onSelect, rowLabel, cla
         const current = key === selectedKey;
         const name = rowLabel(entry, items.get(entry.itemId));
         const state = entryStateLabel(t, entry);
+        const spoken = entry.staff ? `${name} (${t("roster.status.staff")})` : name;
         const score = entryScore(t, entry);
         return (
           <li key={key}>
@@ -109,7 +117,7 @@ export function EntryList({ entries, items, selectedKey, onSelect, rowLabel, cla
               type="button"
               onClick={() => onSelect(key)}
               aria-current={current ? "true" : undefined}
-              aria-label={t("grading.entry.row", { label: name, state, score })}
+              aria-label={t("grading.entry.row", { label: spoken, state, score })}
               className={cx(
                 "flex w-full items-center gap-2.5 rounded-field px-2 py-1.5 text-left transition-colors",
                 current ? "bg-accent-soft" : "hover:bg-surface-2",
@@ -165,7 +173,9 @@ export function EntryPicker({ entries, items, selectedKey, onSelect, rowLabel, c
           return (
             <option key={key} value={key}>
               {t("grading.entry.row", {
-                label: rowLabel(entry, items.get(entry.itemId)),
+                label: entry.staff
+                  ? `${rowLabel(entry, items.get(entry.itemId))} (${t("roster.status.staff")})`
+                  : rowLabel(entry, items.get(entry.itemId)),
                 state: entryStateLabel(t, entry),
                 score: entryScore(t, entry),
               })}

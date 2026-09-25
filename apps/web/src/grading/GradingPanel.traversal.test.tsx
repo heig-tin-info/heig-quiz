@@ -622,3 +622,38 @@ describe("GradingPanel — the step picker's button", () => {
     expect(button).toHaveAttribute("aria-expanded", "false");
   });
 });
+
+describe("GradingPanel — focus and the staff row", () => {
+  it("moves the focus with the selection when it was in the list", async () => {
+    const user = userEvent.setup();
+    setup();
+    await screen.findByText("Question 1 of 2");
+    await waitFor(() => expect(openIndex()).toBe(0));
+    await user.click(rows()[1]!);
+    expect(rows()[1]).toHaveFocus();
+    await user.keyboard("{ArrowRight}");
+    expect(openIndex()).toBe(2);
+    expect(rows()[2]).toHaveFocus();
+    // Enter now acts on the open row, not on the one clicked before.
+    await user.keyboard("{Enter}");
+    expect(openIndex()).toBe(2);
+  });
+
+  it("says a teacher's own attempt out loud, not only with an icon", async () => {
+    setup({
+      [`GET ${BY_QUESTION("i1")}`]: ok(
+        makeQueue([makeEntry({ attemptId: "a9", label: "Prof Démo", staff: true })]),
+      ),
+    });
+    await screen.findByText("Question 1 of 2");
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    expect(rows()[0]!.getAttribute("aria-label")).toMatch(/^Prof Démo \(.+\), /);
+  });
+
+  it("keeps the batch banner, quiet, once nothing is left to validate", async () => {
+    setup({ [`GET ${BY_QUESTION("i1")}`]: ok(makeQueue([ENTRIES[0]!, ENTRIES[2]!])) });
+    await screen.findByText("Question 1 of 2");
+    expect(await screen.findByText(DICTS.en["grading.batch.none"]!)).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Validate \d+ proposal/ })).toBeNull();
+  });
+});

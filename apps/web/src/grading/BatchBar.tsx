@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { Sparkles } from "lucide-react";
+import { CheckCheck, Sparkles } from "lucide-react";
 
 import type { BatchValidateBody, BatchValidateResponse, GradingConfidence, GradingSource } from "@quiz/contracts";
 
@@ -79,7 +79,22 @@ export function BatchBar({
     validate.mutate(body);
   };
 
-  if (count === 0) return null;
+  // Nothing left to validate: the same box, quiet and without a button,
+  // rather than no box at all — the panel keeps its place for it so the
+  // answer under it does not jump up when the last proposal goes.
+  if (count === 0) {
+    return (
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-card border border-line bg-surface px-5 py-4">
+        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-fg-muted">
+          <CheckCheck className="size-4.5" aria-hidden />
+        </span>
+        <div className="min-w-55 flex-1">
+          <p className="text-[15px] font-semibold tracking-tight">{t("grading.batch.none")}</p>
+          <p className="mt-0.5 text-[13px] text-fg-muted">{t("grading.batch.body")}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-card border border-line bg-surface px-5 py-4">

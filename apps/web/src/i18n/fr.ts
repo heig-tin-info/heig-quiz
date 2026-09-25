@@ -1851,6 +1851,7 @@ export const fr: Record<keyof Dict, string> = {
   "grading.explanation": "Explication",
   "grading.batch.title": "Valider les {n} propositions de cette question",
   "grading.batch.titleFiltered": "Valider les {n} propositions de cette sélection",
+  "grading.batch.none": "Plus aucune proposition à valider ici",
   "grading.batch.body": "Chaque note reste modifiable après validation.",
   "grading.batch.action": "Valider {n} propositions",
   "grading.batch.confirm.title": "Valider {n} propositions ?",

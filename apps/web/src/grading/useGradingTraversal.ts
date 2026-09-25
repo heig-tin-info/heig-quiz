@@ -226,6 +226,5 @@ export function useGradingTraversal(evaluationId: string, choices: TraversalChoi
     explanations,
     /** The open answer and its place in `entries`; null before one is open. */
     current,
-    summary,
   };
 }
