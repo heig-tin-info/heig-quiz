@@ -252,7 +252,7 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
     expect(item.revision).toBe(4);
   });
 
-  it("journals an attempt event and marks a question done", async () => {
+  it("journals an attempt event, and has nothing to validate in free navigation", async () => {
     expect(
       (await post(`/app/api/attempts/${attemptId}/events`, student.headers, { kind: "visibility" }))
         .statusCode,
@@ -262,9 +262,9 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
       student.headers,
       { done: true },
     );
-    expect(done.statusCode).toBe(200);
-    expect(done.json()).toMatchObject({ done: true });
-    expect(done.json().nextItemId).not.toBeNull();
+    // Issue #89: validation is the step of the locking navigations only.
+    expect(done.statusCode).toBe(409);
+    expect(done.json().error).toBe("not_validatable");
   });
 
   it("shows the grid with the cell the student just filled", async () => {
@@ -275,7 +275,7 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
     expect(dashboard.statusCode).toBe(200);
     const row = dashboard.json().rows.find((r: { userId: string }) => r.userId === student.id);
     expect(row.state).toBe("in_progress");
-    expect(row.cells[0].status).toBe("done");
+    expect(row.cells[0].status).toBe("in_progress");
     expect(row.cells[0].summary).toContain("Rome");
   });
 

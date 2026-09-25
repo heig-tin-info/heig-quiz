@@ -54,7 +54,9 @@ async function doneAnswer(navigation: "free" | "forward_only" | "milestones"): P
   const itemId = (await itemRows(db, evaluation.id))[0]!.id;
   const now = clock.now();
   await service.saveAnswer(db, { evaluation, attempt, itemId, payload: "x", revision: 1, now });
-  await service.markDone(db, { evaluation, attempt, itemId, done: true, now });
+  // Written directly: the old "Mark as done" of a free paper is exactly what
+  // the service no longer accepts.
+  await db.update(answers).set({ markedDone: true }).where(eq(answers.itemId, itemId));
   const [row] = await db.select().from(answers).where(eq(answers.itemId, itemId));
   expect(row!.markedDone).toBe(true);
   return row!.id;

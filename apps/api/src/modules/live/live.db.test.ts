@@ -541,15 +541,17 @@ describe("navigation enforced server-side (F-EVAL-07, F-LIVE-08)", () => {
     expect(view.items.find((i) => i.id === items[2]!.id)!.locked).toBe(false);
   });
 
-  it("free navigation locks nothing", async () => {
+  it("free navigation locks nothing, and has nothing to validate (issue #89)", async () => {
     const { evaluation, attempt, items } = await running();
-    await service.markDone(db, {
-      evaluation,
-      attempt,
-      itemId: items[0]!.id,
-      done: true,
-      now: clock.now(),
-    });
+    await expect(
+      service.markDone(db, {
+        evaluation,
+        attempt,
+        itemId: items[0]!.id,
+        done: true,
+        now: clock.now(),
+      }),
+    ).rejects.toMatchObject({ code: "not_validatable", status: 409 });
     const view = await service.attemptView(db, evaluation, attempt, clock.now());
     expect(view.items.every((i) => !i.locked)).toBe(true);
   });
@@ -1239,7 +1241,11 @@ describe("running code (POST /attempts/:id/run)", () => {
 
 describe("dashboard read model (F-DASH-01..04)", () => {
   it("is a grid of attempts by items, with pseudonyms and cell status", async () => {
-    const { evaluation, attempt, items, seed } = await running({ students: 2, questions: 2 });
+    const { evaluation, attempt, items, seed } = await running({
+      students: 2,
+      questions: 2,
+      settings: { navigation: "forward_only" },
+    });
     await service.saveAnswer(db, {
       evaluation,
       attempt,

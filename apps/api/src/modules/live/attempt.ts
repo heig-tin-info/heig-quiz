@@ -135,7 +135,7 @@ export class AnswerInvalid extends LiveError {
 }
 
 export class Irreversible extends LiveError {
-  constructor(message = "forward_only: marking a question done cannot be undone") {
+  constructor(message = "a validated question cannot be re-opened") {
     super("irreversible", 409, message);
   }
 }
@@ -148,6 +148,16 @@ export class Irreversible extends LiveError {
 export class AlreadyAnswered extends LiveError {
   constructor() {
     super("answered", 409, "this question holds an answer");
+  }
+}
+
+/**
+ * `done: true` where there is nothing to validate: a `free` evaluation, or a
+ * question that is not a checkpoint in `milestones` (issue #89).
+ */
+export class NotValidatable extends LiveError {
+  constructor() {
+    super("not_validatable", 409, "this question has no validation step");
   }
 }
 

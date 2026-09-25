@@ -10,7 +10,7 @@ import { and, count, eq, gte, sql } from "drizzle-orm";
 
 import type { AutosaveResponse, CellStatus, Verdict } from "@quiz/contracts";
 import { ANSWER_SUMMARY_MAX, isGraded, type AnyQuestionTypeServer } from "@quiz/core/server";
-import { progressStatus, round2 } from "@quiz/domain";
+import { mayValidate, progressStatus, round2 } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -29,6 +29,7 @@ import {
   AlreadyAnswered,
   Irreversible,
   ItemLocked,
+  NotValidatable,
   orderItems,
   lockedItemIds,
   answersOf,
@@ -389,12 +390,6 @@ export async function markDone(
   const settings = settingsOf(evaluation);
   const stored = await answersOf(db, attempt.id);
   const current = stored.get(itemId) ?? null;
-  if (settings.navigation === "forward_only" && current?.markedDone && !input.done) {
-    throw new Irreversible();
-  }
-
-  const row = await writeState(db, attempt, itemId, current, { markedDone: input.done }, now);
-
   const ordered = orderItems(
     await joinedItems(db, evaluation.id),
     settings,
@@ -402,7 +397,27 @@ export async function markDone(
     evaluation.id,
   );
   const ownItem = ordered.find((o) => o.item.id === itemId) ?? null;
-  const rank = ownItem?.rank ?? -1;
+  if (!ownItem) throw new LiveError("not_found", 404);
+  const locked = lockedItemIds(settings, ordered, stored).has(itemId);
+  if (input.done) {
+    // Validation exists only where the navigation locks: every question in
+    // `forward_only`, a checkpoint in `milestones` (issue #89). Anywhere else
+    // a `true` would read "Validated" for a question nothing closed.
+    if (!mayValidate(settings.navigation, { milestone: ownItem.item.milestone })) {
+      throw new NotValidatable();
+    }
+    // Behind a crossed checkpoint, a question is closed for every write.
+    if (locked && !current?.markedDone) throw new ItemLocked();
+  } else if (settings.navigation !== "free") {
+    // Irreversible in every locking mode: un-validating a crossed checkpoint
+    // would re-open every question before it.
+    if (current?.markedDone) throw new Irreversible();
+    if (locked) throw new ItemLocked();
+  }
+
+  const row = await writeState(db, attempt, itemId, current, { markedDone: input.done }, now);
+
+  const rank = ownItem.rank;
   const next = ordered.find((o) => o.rank === rank + 1)?.item.id ?? null;
   if (next !== null) await db.update(attempts).set({ lastItemId: next, updatedAt: now }).where(eq(attempts.id, attempt.id));
 

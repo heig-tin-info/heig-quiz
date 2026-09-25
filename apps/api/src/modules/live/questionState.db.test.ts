@@ -12,6 +12,7 @@
  *   - the flag reaches the staff's grid, live and on a read, and no other
  *     student's payload.
  */
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { GRACE_MS } from "@quiz/domain";
@@ -19,6 +20,7 @@ import { registerForTests } from "@quiz/registry/server";
 
 import { TestClock } from "../../clock.js";
 import type { Db } from "../../db/client.js";
+import { evaluationItems } from "../../db/schema.js";
 import { subscribe, type BusMessage } from "../../events.js";
 import { testDb } from "../../test/db.js";
 import { fakeShort } from "../../test/fakeType.js";
@@ -279,5 +281,39 @@ describe("validate and continue in forward_only (F-LIVE-08, issue #89)", () => {
     const view = await service.attemptView(db, evaluation, attempt, now);
     expect(view.items[0]).toMatchObject({ markedDone: true, skipped: true, locked: true });
     expect(view.items[1]!.locked).toBe(false);
+  });
+});
+
+describe("validation is one-way and only where it exists (issue #89)", () => {
+  it("refuses validating in free, and on a question that is not a checkpoint", async () => {
+    const free = await running({ questions: 2 });
+    const now = clock.now();
+    expect(
+      await outcome(() =>
+        service.markDone(db, { ...free, itemId: free.items[0]!.id, done: true, now }),
+      ),
+    ).toBe("not_validatable");
+
+    const ms = await running({ questions: 3, settings: { navigation: "milestones", shuffleItems: false } });
+    await db.update(evaluationItems).set({ milestone: true }).where(eq(evaluationItems.id, ms.items[1]!.id));
+    expect(
+      await outcome(() => service.markDone(db, { ...ms, itemId: ms.items[0]!.id, done: true, now })),
+    ).toBe("not_validatable");
+  });
+
+  it("never re-opens a crossed checkpoint, nor anything behind it", async () => {
+    const ms = await running({ questions: 3, settings: { navigation: "milestones", shuffleItems: false } });
+    await db.update(evaluationItems).set({ milestone: true }).where(eq(evaluationItems.id, ms.items[1]!.id));
+    const now = clock.now();
+    const at = (i: number, done: boolean) =>
+      outcome(() => service.markDone(db, { ...ms, itemId: ms.items[i]!.id, done, now }));
+
+    expect(await at(1, true)).toBe("ok");
+    // The crafted `done: false` that used to re-open the whole section.
+    expect(await at(1, false)).toBe("irreversible");
+    expect(await at(0, false)).toBe("item_locked");
+    const view = await service.attemptView(db, ms.evaluation, ms.attempt, now);
+    expect(view.items.find((i) => i.id === ms.items[0]!.id)!.locked).toBe(true);
+    expect(view.items.find((i) => i.id === ms.items[1]!.id)!.markedDone).toBe(true);
   });
 });
