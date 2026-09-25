@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
 import { clozeStudentTemplate, parseCloze } from "@quiz/domain/cloze";
@@ -53,6 +53,28 @@ describe("cloze text through the app's markdown pipeline", () => {
     expect(container.querySelector("pre")?.textContent).not.toMatch(/[⸢⸣]/);
   });
 
+  it("still offers a blank the markdown gave no text to sit in, after the text", async () => {
+    const { container } = renderCloze(
+      "Voir [le site]({{https://heig-vd.ch}}), ![{{alt}}](asset:abc) <!-- {{c}} --> et {{d}}.",
+    );
+    // All four blanks can be answered: the grader marks all four.
+    await waitFor(() => expect(screen.getAllByRole("textbox")).toHaveLength(4));
+    const orphans = container.querySelector("[data-cloze-orphans]") as HTMLElement;
+    expect(orphans).not.toBeNull();
+    expect(within(orphans).getAllByRole("textbox")).toHaveLength(3);
+    expect(within(orphans).queryByRole("textbox", { name: /4/ })).toBeNull();
+  });
+
+  it("takes a blank out of the link it was written in, keeping the link's text", async () => {
+    const { container } = renderCloze("Lisez [la page {{a}} du cours](https://heig-vd.ch).");
+    const blank = await screen.findByRole("textbox");
+    // A field inside `<a target=_blank>` opens a tab when clicked, and a tab
+    // switch is an integrity event logged against the student.
+    expect(blank.closest("a")).toBeNull();
+    expect(container.querySelector(".md-body a")).toBeNull();
+    expect(container.querySelector(".md-body")?.textContent).toContain("la page");
+  });
+
   it("keeps a dropdown blank inside a table cell", async () => {
     renderCloze("| Grandeur | Unité |\n| --- | --- |\n| Tension | {{=volts|ohms}} |");
     const select = await screen.findByRole("combobox");
@@ -70,6 +92,14 @@ describe("renderMarkdown — holes", () => {
   it("never lets the document write a hole of its own", () => {
     const forged = renderMarkdown('<span data-cloze-hole="0">x</span>', "Code", { holes: true });
     expect(forged).not.toContain("data-cloze-hole");
+    // Private-use characters spelled as entities do not forge one either: a
+    // run carries a per-render nonce, and only the parser's indices count.
+    const template = studentOf("a {{x}} b").template;
+    const entities = renderMarkdown(`${template} &#xE000;&#xE010;&#xE001;`, "Code", { holes: true });
+    expect(entities.match(/data-cloze-hole/g)).toHaveLength(1);
+    expect(entities).not.toMatch(/[\uE000-\uE1FF]/);
+    const alone = renderMarkdown("&#xE000;&#xE010;&#xE001; x", "Code", { holes: true });
+    expect(alone).not.toContain("data-cloze-hole");
     // Without `holes`, a sentinel is text like any other.
     expect(renderMarkdown("a ⸢0⸣ b")).toContain("⸢0⸣");
   });

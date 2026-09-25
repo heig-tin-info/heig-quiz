@@ -333,11 +333,14 @@ html.dark {
    from the user agent. The editing surface wears `.md-body` too, and
    ProseMirror needs its `pre-wrap`: it is left alone. */
 .md-body:not(.ProseMirror) { white-space: normal; }
-/* A cloze text holds fields in its lines: the size and, in prose, the line
-   height of a field (h-8) plus air, as the package's own fallback renderer
-   had them (`text-base leading-9`). */
+/* A cloze text holds fields in its lines: the size, and the line height of a
+   field (h-8) plus air, as the package's own fallback renderer had them
+   (`text-base leading-9`) — in a paragraph, a tight list item and a table
+   cell alike, so two fields on consecutive lines never touch. */
 .md-body.md-cloze { font-size: 1rem; }
-.md-body.md-cloze p { line-height: 2.25rem; }
+.md-body.md-cloze p,
+.md-body.md-cloze li,
+.md-body.md-cloze td { line-height: 2.25rem; }
 .md-body > :first-child { margin-top: 0; }
 .md-body > :last-child { margin-bottom: 0; }
 .md-body p,

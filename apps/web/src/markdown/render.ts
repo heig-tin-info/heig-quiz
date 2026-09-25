@@ -198,59 +198,94 @@ function renderMathIn(node: Text, doc: Document): boolean {
  * Private-use and not the sentinel itself, because the sentinel's digits are
  * a number to the code highlighter (`⸢<span class="tok-num">3</span>⸣`),
  * and a hole split over three nodes is a hole nobody finds.
+ *
+ * A run carries a per-render NONCE and only the indices the parser emitted
+ * are placed, each once: the document can spell private-use characters as
+ * entities (`&#xE000;`), and a forged run must not become a field.
  */
-const HOLE_OPEN = "";
-const HOLE_CLOSE = "";
+const HOLE_OPEN = "\uE000";
+const HOLE_CLOSE = "\uE001";
 const HOLE_DIGIT = 0xe010;
-const HOLE_CHARS = /[-]/g;
-const HOLE_RUN = /([-]+)/g;
+const HOLE_NONCE = 0xe100;
+/** Every private-use character this encoding uses, stripped wherever it is not ours. */
+const HOLE_CHARS = /[\uE000-\uE1FF]/g;
 /** The attribute of a hole's element. Ours only: `ALLOW_DATA_ATTR` is off. */
 export const HOLE_ATTR = "data-cloze-hole";
 
-function encodeHoles(source: string): string {
-  return source
+interface EncodedHoles {
+  text: string;
+  /** The run of each hole: open, nonce, digits, close. */
+  run: RegExp;
+  /** The indices the parser emitted, as written in the sentinels. */
+  indices: Set<string>;
+}
+
+function encodeHoles(source: string): EncodedHoles {
+  const random = new Uint8Array(8);
+  crypto.getRandomValues(random);
+  const nonce = Array.from(random, (b) => String.fromCharCode(HOLE_NONCE + (b % 16))).join("");
+  const indices = new Set<string>();
+  const text = source
     .replace(HOLE_CHARS, "")
     .replace(new RegExp(CLOZE_SENTINEL_PATTERN, "g"), (_, index: string) => {
+      indices.add(index);
       const digits = Array.from(index, (d) => String.fromCharCode(HOLE_DIGIT + Number(d)));
-      return HOLE_OPEN + digits.join("") + HOLE_CLOSE;
+      return HOLE_OPEN + nonce + digits.join("") + HOLE_CLOSE;
     });
+  const run = new RegExp(`${HOLE_OPEN}${nonce}([\\uE010-\\uE019]+)${HOLE_CLOSE}`, "g");
+  return { text, run, indices };
 }
 
 /**
  * Every encoded sentinel becomes `<span data-cloze-hole="N">`. It runs over
  * EVERY text node, code included — a hole in a fenced block is a hole — and
  * before the maths, so a hole written between two `$` keeps its field
- * rather than vanishing into a formula.
+ * rather than vanishing into a formula. A blank the markdown put where no
+ * text node is (a link URL, an alt text, a comment) is not found here; the
+ * host shows it after the text (`ClozeMarkdownText.tsx`).
  */
-function placeHoles(root: HTMLElement) {
+function placeHoles(root: HTMLElement, holes: EncodedHoles) {
   const doc = root.ownerDocument;
   const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   const texts: Text[] = [];
   for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-    if (n.nodeValue?.includes(HOLE_OPEN)) texts.push(n as Text);
+    HOLE_CHARS.lastIndex = 0;
+    if (HOLE_CHARS.test(n.nodeValue ?? "")) texts.push(n as Text);
   }
+  const placed = new Set<string>();
+  const plain = (s: string) => doc.createTextNode(s.replace(HOLE_CHARS, ""));
   for (const node of texts) {
     const text = node.data;
     const frag = doc.createDocumentFragment();
     let last = 0;
-    HOLE_RUN.lastIndex = 0;
-    for (let m = HOLE_RUN.exec(text); m; m = HOLE_RUN.exec(text)) {
-      if (m.index > last) frag.append(doc.createTextNode(text.slice(last, m.index)));
+    holes.run.lastIndex = 0;
+    for (let m = holes.run.exec(text); m; m = holes.run.exec(text)) {
+      if (m.index > last) frag.append(plain(text.slice(last, m.index)));
       const index = Array.from(m[1]!, (c) => c.charCodeAt(0) - HOLE_DIGIT).join("");
-      const hole = doc.createElement("span");
-      hole.setAttribute(HOLE_ATTR, index);
-      frag.append(hole);
+      if (holes.indices.has(index) && !placed.has(index)) {
+        placed.add(index);
+        const hole = doc.createElement("span");
+        hole.setAttribute(HOLE_ATTR, index);
+        frag.append(hole);
+      }
       last = m.index + m[0].length;
     }
-    if (last < text.length) frag.append(doc.createTextNode(text.slice(last)));
+    if (last < text.length) frag.append(plain(text.slice(last)));
     node.replaceWith(frag);
+  }
+  // A field inside a link is a field that opens a tab when clicked — and a
+  // tab switch is an integrity event logged against the student. The link
+  // goes; its text stays.
+  for (const hole of Array.from(root.querySelectorAll(`[${HOLE_ATTR}]`))) {
+    const link = hole.closest("a");
+    if (link && root.contains(link)) link.replaceWith(...Array.from(link.childNodes));
   }
 }
 
 /** Walks the sanitised tree and applies steps 3 and 4 above. */
-function postProcess(root: HTMLElement, codeBlockLabel: string, holes: boolean) {
+function postProcess(root: HTMLElement, codeBlockLabel: string, holes: EncodedHoles | null) {
   const doc = root.ownerDocument;
-  if (holes) placeHoles(root);
+  if (holes) placeHoles(root, holes);
 
   // A fenced block scrolls sideways on a phone, and a scroll container with
   // nothing focusable inside it cannot be reached with a keyboard at all: a
@@ -339,8 +374,8 @@ export function renderMarkdown(
   } = {},
 ): string {
   if (!source.trim()) return "";
-  const holes = options.holes === true;
-  const html = marked.parse(holes ? encodeHoles(source) : source, { async: false });
+  const holes = options.holes === true ? encodeHoles(source) : null;
+  const html = marked.parse(holes ? holes.text : source, { async: false });
   const body = DOMPurify.sanitize(html, {
     ALLOWED_TAGS,
     ALLOWED_ATTR,
