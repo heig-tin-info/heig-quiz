@@ -25,6 +25,16 @@ de lui — commencez par les confiances basses.
 Les noms sont masqués tant que vous ne les demandez pas ; un pseudonyme
 garde votre attention sur la réponse.
 
+**Afficher** choisit ce qui entoure chaque réponse : le nom de la question
+au-dessus, l'énoncé, l'explication, la réponse attendue ou la solution, le commentaire
+de correction. La réponse de l'étudiant est toujours là — c'est ce que vous
+corrigez — et masquer le commentaire ne vous empêche jamais d'en écrire un
+avec **Modifier**.
+
+Ce navigateur retient l'ordre, les filtres et ce que garde **Afficher**,
+d'une visite à l'autre et d'une évaluation à l'autre. Il ne retient jamais
+les noms : ils sont de nouveau masqués à chaque ouverture de la page.
+
 ## Agir sur une réponse
 
 **Valider** prend la proposition telle quelle. **Modifier** récrit les
@@ -35,9 +45,10 @@ La barre au-dessus de la liste valide en un clic toutes les propositions de
 la question courante — ou de toute la sélection filtrée. Chacune reste
 modifiable ensuite.
 
-**Re-corriger cette question** relance la correction automatique sur toutes
-les tentatives, contre la version figée ou une version publiée plus
-récente. Une note est obligatoire et accompagne chaque nouvelle correction.
+**Re-corriger**, à côté du titre de la question sur chaque réponse, relance
+la correction automatique de cette question sur toutes les tentatives,
+contre la version figée ou une version publiée plus récente — par question
+comme par étudiant. Une note est obligatoire et accompagne chaque nouvelle correction.
 
 ## Raccourcis
 

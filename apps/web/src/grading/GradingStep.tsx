@@ -1,13 +1,11 @@
 import type { UseQueryResult } from "@tanstack/react-query";
-import { CheckCheck, ChevronLeft, ChevronRight, GraduationCap, RefreshCcw } from "lucide-react";
+import { CheckCheck, ChevronLeft, ChevronRight, GraduationCap } from "lucide-react";
 
 import type { GradingEntry, GradingQueue, GradingQueueItem } from "@quiz/contracts";
 
 import { useT } from "../i18n";
-import { typeLabel } from "../questionTypes";
 import {
   Badge,
-  Button,
   Card,
   cx,
   EmptyState,
@@ -19,12 +17,14 @@ import {
 import { EntryDetail } from "./EntryDetail";
 import { EntryList, EntryPicker, entryKey, type RowLabel } from "./EntryList";
 import { ListSkeleton } from "./ListSkeleton";
-import { entryVerdict, ORDER_WORDS, type GradingOrder } from "./labels";
+import type { ShownParts } from "./parts";
+import { entryVerdict, type GradingOrder } from "./labels";
 
 /**
- * The parts of one step of the grading traversal: the card that names the
- * step (and, on a question, offers to re-grade it), the compact list of its
+ * The parts of one step of the grading traversal: the compact list of its
  * answers, and the detail that shows ONE of them at a fixed place (#102).
+ * What names the step — its badges — is the step header's (#108), and the
+ * re-grade action is on each answer, beside the question it re-grades.
  */
 
 /** What names an answer: the student by question, the question by student. */
@@ -35,45 +35,6 @@ export function rowLabelFor(order: GradingOrder): RowLabel {
       : item
         ? `${item.position + 1}. ${item.internalName}`
         : entry.label;
-}
-
-export function StepCard({
-  order,
-  label,
-  item,
-  total,
-  onRegrade,
-}: {
-  order: GradingOrder;
-  label: string | undefined;
-  /** The question of the step, traversing by question; absent by student. */
-  item: GradingQueueItem | undefined;
-  total: number;
-  onRegrade: () => void;
-}) {
-  const t = useT();
-  return (
-    <Card className="space-y-3 p-5">
-      <p className="text-xs font-semibold uppercase tracking-wide text-fg-faint">
-        {t(ORDER_WORDS[order].heading)}
-      </p>
-      <p className="text-base font-semibold tracking-tight">{label}</p>
-      {item ? (
-        <div className="flex flex-wrap gap-1.5">
-          <Badge tone="zinc">{typeLabel(t, item.type)}</Badge>
-          <Badge tone="zinc">{t("grading.points", { n: item.points })}</Badge>
-          <Badge tone="zinc">{t("grading.answers", { n: total })}</Badge>
-        </div>
-      ) : (
-        <Badge tone="zinc">{t("grading.answers", { n: total })}</Badge>
-      )}
-      {item ? (
-        <Button variant="ghost" size="sm" onClick={onRegrade}>
-          <RefreshCcw /> {t("grading.regrade")}
-        </Button>
-      ) : null}
-    </Card>
-  );
 }
 
 interface StepProps {
@@ -146,6 +107,8 @@ export function StepAnswers({
   validating,
   onValidate,
   onOverride,
+  onRegrade,
+  parts,
 }: StepProps & {
   /** The open answer and its place, as `useGradingTraversal` resolved it. */
   current: { entry: GradingEntry; index: number } | null;
@@ -155,6 +118,10 @@ export function StepAnswers({
   validating: boolean;
   onValidate: (gradingId: string) => void;
   onOverride: (key: string) => void;
+  /** Re-grade the question of the open answer, for every student (F-GRADE-06). */
+  onRegrade: (item: GradingQueueItem) => void;
+  /** Which parts of the open answer are drawn (#109). */
+  parts: ShownParts;
 }) {
   const t = useT();
   const at = current?.index ?? -1;
@@ -240,6 +207,9 @@ export function StepAnswers({
               key={entryKey(entry)}
               entry={entry}
               item={item}
+              order={order}
+              parts={parts}
+              onRegrade={() => onRegrade(item)}
               explanation={explanations.get(entry.itemId) ?? null}
               validating={validating}
               onValidate={() => {

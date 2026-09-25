@@ -5,9 +5,13 @@
  * then a table gives the verdict and — when the feedback policy allows it — the
  * expected answer. `details.expected` is teacher-facing: the results endpoint
  * strips it for a student unless the key is revealed.
+ *
+ * `sections` (#109): the text is the prompt, and hiding it leaves the table,
+ * which still gives every blank's answer and verdict; hiding the solution
+ * drops the expected column.
  */
 import type { ReviewProps, StringOverrides } from "@quiz/core/client";
-import { resolveStrings } from "@quiz/core/client";
+import { resolveStrings, showsSection } from "@quiz/core/client";
 import type { ClozeAnswer, ClozeDetails, ClozeSolution, ClozeStudent } from "./schema.js";
 import { clozeReviewStrings, type ClozeReviewStringKey } from "./strings.js";
 import { ClozeFallbackText, type ClozeTextRenderer } from "./text.js";
@@ -38,6 +42,7 @@ export function ClozeReview({
   details,
   points,
   maxPoints,
+  sections,
   strings,
   renderText,
 }: ClozeReviewProps) {
@@ -46,32 +51,38 @@ export function ClozeReview({
   // Without a breakdown the blanks simply read neutral, which is honest.
   const perBlank = breakdownOf(details, "perBlank")?.perBlank ?? [];
   const verdicts = new Map(perBlank.map((blank) => [blank.index, blank]));
-  const expected = new Map(solution?.blanks.map((blank) => [blank.index, blank.expected]) ?? []);
+  const expected = new Map(
+    showsSection(sections, "solution")
+      ? (solution?.blanks.map((blank) => [blank.index, blank.expected]) ?? [])
+      : [],
+  );
   const Text = renderText ?? ClozeFallbackText;
 
   return (
     <div className="flex flex-col gap-4">
-      <Text
-        template={student.template}
-        renderBlank={(index) => {
-          const label = givenLabel(student, index, given[index] ?? null);
-          const ok = verdicts.get(index)?.ok;
-          return (
-            <span
-              className={cx(
-                "mx-0.5 rounded px-1.5 py-0.5 font-mono text-[0.9em]",
-                ok === undefined
-                  ? "bg-surface-3 text-fg"
-                  : ok
-                    ? "bg-success-soft text-success"
-                    : "bg-danger-soft text-danger",
-              )}
-            >
-              {label ?? "…"}
-            </span>
-          );
-        }}
-      />
+      {showsSection(sections, "prompt") ? (
+        <Text
+          template={student.template}
+          renderBlank={(index) => {
+            const label = givenLabel(student, index, given[index] ?? null);
+            const ok = verdicts.get(index)?.ok;
+            return (
+              <span
+                className={cx(
+                  "mx-0.5 rounded px-1.5 py-0.5 font-mono text-[0.9em]",
+                  ok === undefined
+                    ? "bg-surface-3 text-fg"
+                    : ok
+                      ? "bg-success-soft text-success"
+                      : "bg-danger-soft text-danger",
+                )}
+              >
+                {label ?? "…"}
+              </span>
+            );
+          }}
+        />
+      ) : null}
 
       <table className="w-full text-left text-[13px]">
         <thead className="text-fg-faint">

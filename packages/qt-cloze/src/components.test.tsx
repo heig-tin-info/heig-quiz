@@ -232,4 +232,26 @@ describe("ClozeReview", () => {
     );
     expect(screen.queryByText("Expected")).not.toBeInTheDocument();
   });
+
+  it("hides the text and the expected column on request (#109), keeping every answer", () => {
+    const { container } = render(
+      <ClozeReview
+        student={student}
+        answer={{ blanks: ["Newton", "9", null, "0", "n", "0"] }}
+        solution={{ blanks: details.perBlank.map((b) => ({ index: b.index, expected: b.expected })) }}
+        details={details}
+        points={2}
+        maxPoints={6}
+        audience="teacher"
+        sections={{ prompt: false, solution: false }}
+      />,
+    );
+    expect(screen.queryByText("Expected")).not.toBeInTheDocument();
+    expect(screen.queryByText("10")).not.toBeInTheDocument();
+    // The text is gone: only the table is left, one row per blank.
+    expect(container.querySelectorAll("tbody tr")).toHaveLength(student.blanks.length);
+    expect(container.firstElementChild?.firstElementChild?.tagName).toBe("TABLE");
+    expect(screen.getByText("Newton")).toBeInTheDocument();
+    expect(screen.getAllByText("Correct")).toHaveLength(3);
+  });
 });

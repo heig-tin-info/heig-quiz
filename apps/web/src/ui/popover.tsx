@@ -85,17 +85,22 @@ export function Popover({
     if (restoreFocus) anchor.current?.querySelector<HTMLElement>("button, a")?.focus();
   }, []);
 
-  const show = (withTrap: boolean) => {
+  /** Where the panel goes for the trigger as it is NOW; null without one. */
+  const place = useCallback((): MenuPlacement | null => {
     const rect = anchor.current?.getBoundingClientRect();
-    if (!rect) return;
-    setPos(
-      menuPosition(
-        rect,
-        { width: window.innerWidth, height: window.innerHeight },
-        align,
-        PANEL_MAX_HEIGHT,
-      ),
+    if (!rect) return null;
+    return menuPosition(
+      rect,
+      { width: window.innerWidth, height: window.innerHeight },
+      align,
+      PANEL_MAX_HEIGHT,
     );
+  }, [align]);
+
+  const show = (withTrap: boolean) => {
+    const placement = place();
+    if (!placement) return;
+    setPos(placement);
     setTrap(withTrap);
     setOpen(true);
   };
@@ -104,9 +109,13 @@ export function Popover({
 
   useEffect(() => () => clearTimer(), []);
 
-  // Outside click, page scroll and resize, exactly as `Menu` reads them: the
-  // panel is `position: fixed` on coordinates measured once, so anything that
-  // moves the trigger leaves it pointing at nothing.
+  // Outside click, page scroll and resize. The panel is `position: fixed` on
+  // measured coordinates, so a scroll that moves the trigger would leave it
+  // pointing at nothing — but not every scroll is the reader leaving: acting
+  // IN the card can change the page under it (a checkbox that hides part of
+  // the page shortens it, the browser clamps the scroll and fires the event).
+  // So a scroll follows the trigger while it is on screen, and closes the
+  // card only once the trigger has left the window.
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
@@ -115,8 +124,15 @@ export function Popover({
       close(false);
     };
     const onScroll = (e: Event) => {
-      if (panel.current?.contains(e.target as Node)) return;
-      close(false);
+      // `window` is not a Node, and `contains` throws on one.
+      if (e.target instanceof Node && panel.current?.contains(e.target)) return;
+      const rect = anchor.current?.getBoundingClientRect();
+      if (!rect || rect.bottom <= 0 || rect.top >= window.innerHeight) {
+        close(false);
+        return;
+      }
+      const placement = place();
+      if (placement) setPos(placement);
     };
     const onResize = () => close(false);
     document.addEventListener("mousedown", onDown);
@@ -127,7 +143,7 @@ export function Popover({
       window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onResize);
     };
-  }, [open, close]);
+  }, [open, close, place]);
 
   /*
    * `menuPosition` anchors the panel on the trigger and knows nothing of its

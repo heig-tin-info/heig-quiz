@@ -98,3 +98,39 @@ describe("Popover — hover", () => {
     expect(screen.getByRole("dialog", { name: CARD })).toBeVisible();
   });
 });
+
+describe("Popover — page scroll", () => {
+  /** The trigger's box, as the layout would report it after a scroll. */
+  function placeTrigger(trigger: HTMLElement, top: number) {
+    const anchor = trigger.parentElement!;
+    anchor.getBoundingClientRect = () =>
+      ({ top, bottom: top + 30, left: 100, right: 200, width: 100, height: 30, x: 100, y: top }) as DOMRect;
+  }
+
+  it("stays open and follows its trigger while the trigger is on screen", async () => {
+    const trigger = renderPopover();
+    placeTrigger(trigger, 100);
+    await userEvent.click(trigger);
+    const dialog = screen.getByRole("dialog", { name: CARD });
+    // A scroll the reader did not make: acting in the card shortened the
+    // page and the browser clamped it. The trigger moved, but is still there.
+    // (A page scroll targets the document, as a browser's does.)
+    placeTrigger(trigger, 60);
+    act(() => {
+      document.dispatchEvent(new Event("scroll"));
+    });
+    expect(screen.getByRole("dialog", { name: CARD })).toBe(dialog);
+    expect(dialog.style.top).toBe("96px");
+  });
+
+  it("closes once the scroll has taken the trigger off screen", async () => {
+    const trigger = renderPopover();
+    placeTrigger(trigger, 100);
+    await userEvent.click(trigger);
+    placeTrigger(trigger, -80);
+    act(() => {
+      document.dispatchEvent(new Event("scroll"));
+    });
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});

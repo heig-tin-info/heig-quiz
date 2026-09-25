@@ -349,4 +349,24 @@ describe("ShortReview", () => {
     );
     expect(screen.getByText("No answer")).toBeInTheDocument();
   });
+
+  it("hides the prompt and the accepted answers on request (#109), never the answer", () => {
+    render(
+      <ShortReview
+        student={student}
+        answer={{ text: "4 bytes" }}
+        solution={{ expected: ["4 ± 0.5 bytes"] }}
+        details={{ matchedIndex: 2, matchedKind: "number", normalized: "4 bytes", fraction: 1 }}
+        points={2}
+        maxPoints={2}
+        audience="teacher"
+        sections={{ prompt: false, solution: false }}
+        renderMarkdown={(source: string) => <span data-testid="md">{source}</span>}
+      />,
+    );
+    expect(screen.queryByTestId("md")).toBeNull();
+    expect(screen.queryByText("4 ± 0.5 bytes")).toBeNull();
+    expect(screen.getByText("4 bytes")).toBeInTheDocument();
+    expect(screen.getByText("Accepted")).toBeInTheDocument();
+  });
 });

@@ -466,7 +466,36 @@ const scenes = [
     } },
   // The filter row with a source chosen: the help line under it explains the choice (#98).
   { name: "grading-filtered", role: "teacher", path: "/evaluations/closed/grading", act: (p) => p.getByLabel(/^(Graded by|Corrigé par)$/).selectOption("llm") },
-  { name: "grading-regrade", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: (p) => p.getByRole("button", { name: /re-grade this question|re-corriger cette question/i }).first().click() },
+  // #108: re-grading is on the answer, beside the question's title — by
+  // question, and by student on the open answer's question.
+  { name: "grading-regrade", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("button", { name: /^(Re-grade|Re-corriger)$/ }).first().click();
+    } },
+  { name: "grading-regrade-tip", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("button", { name: /^(Re-grade|Re-corriger)$/ }).first().hover();
+      await p.waitForTimeout(400);
+    } },
+  // #109: the "Show" menu open, then the answers alone (everything unticked).
+  { name: "grading-parts-menu", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("button", { name: /^(Show|Afficher)/ }).first().click();
+    } },
+  { name: "grading-parts-answer-only", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("button", { name: /^(Show|Afficher)/ }).first().click();
+      for (const name of [/^(Question name|Nom de la question)/, /^(Prompt|Énoncé)$/, /^(Explanation|Explication)$/, /^(Expected answer|Réponse attendue)/, /^(Grading comment|Commentaire de correction)$/]) {
+        await p.getByRole("checkbox", { name }).click();
+      }
+      await p.keyboard.press("Escape");
+      await p.waitForTimeout(200);
+    } },
+  { name: "grading-by-student-fold", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.locator("label").filter({ hasText: /^(By student|Par étudiant)$/ }).first().click();
+      await p.waitForTimeout(500);
+    } },
   { name: "grading-empty", role: "teacher", path: "/evaluations/closed/grading?empty=1", settle: 800 },
   { name: "grading-error", role: "teacher", path: "/evaluations/closed/grading?fail=1", settle: 2500 },
   { name: "grading-loading", role: "teacher", path: "/evaluations/closed/grading?slow=1", settle: 300 },

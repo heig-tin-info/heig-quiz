@@ -25,7 +25,7 @@
 import { lazy, Suspense, type ComponentType, type ReactNode } from "react";
 
 import type { TryResult } from "@quiz/contracts";
-import type { ConfigIssue, RichTextComponent } from "@quiz/core/client";
+import type { ConfigIssue, ReviewSections, RichTextComponent } from "@quiz/core/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 import {
   clientRegistry,
@@ -650,6 +650,7 @@ interface ReviewHostProps {
   points: number | null;
   maxPoints: number;
   audience: "teacher" | "student";
+  sections?: ReviewSections;
   strings?: unknown;
   canvasStrings?: unknown;
   renderMarkdown?: (source: string) => ReactNode;
@@ -667,6 +668,7 @@ export function QuestionReviewHost({
   points,
   maxPoints,
   audience = "teacher",
+  sections,
 }: {
   t: TFunction;
   type: string;
@@ -677,6 +679,8 @@ export function QuestionReviewHost({
   points: number | null;
   maxPoints: number;
   audience?: "teacher" | "student";
+  /** The type's own parts to hide (#109); absent, everything is drawn. */
+  sections?: ReviewSections;
 }) {
   const client = questionType(type);
   if (!client) return <Unknown>{t("qt.unknown")}</Unknown>;
@@ -695,6 +699,7 @@ export function QuestionReviewHost({
           points={points}
           maxPoints={maxPoints}
           audience={audience}
+          {...(sections === undefined ? {} : { sections })}
           strings={reviewStrings[client.id](t)}
           {...(client.id === "circuit" ? { canvasStrings: circuitCanvasStrings(t) } : {})}
           renderMarkdown={renderInline}

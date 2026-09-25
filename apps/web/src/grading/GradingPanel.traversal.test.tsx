@@ -154,7 +154,7 @@ describe("GradingPanel — the order of the traversal", () => {
   it("starts by question, with one step per item, numbered from one", async () => {
     setup();
     expect(await screen.findByText("Question 1 of 2")).toBeVisible();
-    expect(screen.getByText("1. sizeof-ptr")).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "1. sizeof-ptr" })).toBeVisible();
     expect(screen.getByRole("radio", { name: "By question" })).toBeChecked();
   });
 
@@ -220,18 +220,6 @@ describe("GradingPanel — the order of the traversal", () => {
     await screen.findByText("Student 1 of 4");
     // Thirty rows all reading "Amber Lynx" would name nothing.
     await waitFor(() => expect(labels()).toEqual(["1. sizeof-ptr", "2. array-decay"]));
-  });
-
-  it("offers the re-grade action only while the step is a question", async () => {
-    const user = userEvent.setup();
-    setup({ [`GET ${BY_STUDENT("a1")}`]: ok(makeQueue([ENTRIES[0]!])) });
-    await screen.findByText("Question 1 of 2");
-    expect(screen.getByRole("button", { name: /Re-grade/ })).toBeVisible();
-
-    await user.click(screen.getByRole("radio", { name: "By student" }));
-    await screen.findByText("Student 1 of 4");
-    // Re-grading is per question (F-GRADE-06); there is no question here.
-    expect(screen.queryByRole("button", { name: /Re-grade/ })).toBeNull();
   });
 });
 

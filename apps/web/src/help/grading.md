@@ -23,6 +23,15 @@ sure the grader said it was — start with the low ones.
 Names are hidden until you ask for them; a pseudonym keeps your attention
 on the answer.
 
+**Show** chooses what is drawn around each answer: the question's name
+above it, the prompt, the explanation, the expected answer or solution, the grading
+comment. The student's answer is always there — it is what you grade — and
+hiding the comment never stops you from writing one with **Adjust**.
+
+This browser remembers the order, the filters and what **Show** keeps, from
+one visit to the next and across evaluations. It never remembers the names:
+they are hidden again each time you open the page.
+
 ## Acting on an answer
 
 **Validate** takes the proposal as it stands. **Adjust** rewrites the points
@@ -33,8 +42,9 @@ The bar above the list validates every proposal of the current question — or
 of the whole filtered selection — in one click. Each one stays editable
 afterwards.
 
-**Re-grade this question** runs the automatic grading again on every
-attempt, against the frozen version or a newer published one. A note is
+**Re-grade**, beside the question's title on every answer, runs the
+automatic grading of that question again on every attempt, against the
+frozen version or a newer published one — by question or by student alike. A note is
 mandatory and is carried by each new grading.
 
 ## Shortcuts

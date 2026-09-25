@@ -96,4 +96,23 @@ describe("CodeImageReview", () => {
     );
     expect(screen.getByText("Not answered.")).toBeInTheDocument();
   });
+
+  it("hides the statement and the reference solution on request (#109)", () => {
+    const g = graded("1");
+    render(
+      <CodeImageReview
+        student={student}
+        answer={answer}
+        solution={codeimageServer.toSolution(config, view)}
+        details={g.details}
+        points={g.points}
+        maxPoints={10}
+        audience="teacher"
+        sections={{ prompt: false, solution: false }}
+        renderMarkdown={(source: string) => <span data-testid="md">{source}</span>}
+      />,
+    );
+    expect(screen.queryByTestId("md")).toBeNull();
+    expect(screen.queryByText(IMG_SECRET_REFERENCE.trim(), { exact: false })).toBeNull();
+  });
 });
