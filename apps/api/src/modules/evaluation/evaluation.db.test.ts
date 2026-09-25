@@ -395,6 +395,113 @@ describe("the item list freezes once the evaluation is opened (issue #79)", () =
   });
 });
 
+describe("the configuration locks while the evaluation runs (#86)", () => {
+  async function inState(state: service.EvaluationRecord["state"]) {
+    const seed = await seedLive(db);
+    await db.update(evaluations).set({ state }).where(eq(evaluations.id, seed.evaluationId));
+    return { seed, row: await reload(db, seed.evaluationId) };
+  }
+
+  it("refuses every structural field and the feedback policy, with nobody entered yet", async () => {
+    for (const state of ["running", "paused"] as const) {
+      const { seed, row } = await inState(state);
+      const ctx = { attemptCount: 0 };
+      const refused = [
+        { durationS: 60 },
+        { settings: { navigation: "forward_only" as const } },
+        { opensAt: null },
+        { closesAt: null },
+        { mcqPolicy: "all_or_nothing" as const },
+        { gradingScale: { kind: "linear" as const, rounding: "nearest" as const } },
+        { feedbackPolicy: { when: "none" as const } },
+        // One forbidden field sinks a patch that also carries allowed ones.
+        { title: "Mixed", feedbackPolicy: { showKey: false } },
+      ];
+      for (const patch of refused) {
+        await expect(
+          service.patchEvaluation(db, row, patch, ctx),
+          `${state} ${JSON.stringify(patch)}`,
+        ).rejects.toMatchObject({ code: "running_locked", status: 409 });
+      }
+      // Nothing was written.
+      expect(await reload(db, seed.evaluationId), state).toEqual(row);
+    }
+  });
+
+  it("keeps the title and the access control writable mid-exam", async () => {
+    const { row } = await inState("running");
+    const next = await service.patchEvaluation(
+      db,
+      row,
+      { title: "Renamed", accessCode: "open-sesame", ipAllowlist: ["10.0.0.0/8"] },
+      { attemptCount: 3 },
+    );
+    expect(next.title).toBe("Renamed");
+    expect(next.accessCode).toBe("open-sesame");
+    expect(next.ipAllowlist).toEqual(["10.0.0.0/8"]);
+  });
+
+  it("leaves the configuration open in the lobby, and the feedback policy open once closed", async () => {
+    const { row: lobby } = await inState("lobby");
+    const moved = await service.patchEvaluation(db, lobby, { durationS: 600 }, { attemptCount: 0 });
+    expect(moved.durationS).toBe(600);
+
+    const { row: closed } = await inState("closed");
+    const released = await service.patchEvaluation(
+      db,
+      closed,
+      { feedbackPolicy: { when: "none" } },
+      { attemptCount: 2 },
+    );
+    expect(service.feedbackOf(released).when).toBe("none");
+    await expect(
+      service.patchEvaluation(db, released, { durationS: 60 }, { attemptCount: 2 }),
+    ).rejects.toMatchObject({ code: "locked", status: 409 });
+  });
+
+  it("says so in the detail and answers 409 running_locked over HTTP", async () => {
+    const server = await testServer();
+    try {
+      const teacher = await server.signIn("teacher");
+      const mine = await seedLive(server.app.db, { teacherId: teacher.id });
+      const base = `/app/api/evaluations/${mine.evaluationId}`;
+      const before = await server.app.inject({ method: "GET", url: base, headers: teacher.headers });
+      expect(before.json().editable).toBe(true);
+
+      await server.app.db
+        .update(evaluations)
+        .set({ state: "running", startedAt: server.clock.now() })
+        .where(eq(evaluations.id, mine.evaluationId));
+      const during = await server.app.inject({ method: "GET", url: base, headers: teacher.headers });
+      expect(during.json().editable).toBe(false);
+      expect(during.json().attemptCount).toBe(0);
+
+      const res = await server.app.inject({
+        method: "PATCH",
+        url: base,
+        headers: teacher.headers,
+        payload: { feedbackPolicy: { when: "none" } },
+      });
+      expect(res.statusCode).toBe(409);
+      expect(res.json()).toEqual({
+        error: "running_locked",
+        message: "the evaluation is running: its configuration is locked until it closes",
+      });
+
+      const renamed = await server.app.inject({
+        method: "PATCH",
+        url: base,
+        headers: teacher.headers,
+        payload: { accessCode: "letmein" },
+      });
+      expect(renamed.statusCode).toBe(200);
+      expect(renamed.json().evaluation.accessCode).toBe("letmein");
+    } finally {
+      await server.close();
+    }
+  });
+});
+
 describe("patch and duplicate", () => {
   it("accepts a title but refuses a structural change once an attempt exists", async () => {
     const seed = await seedLive(db);

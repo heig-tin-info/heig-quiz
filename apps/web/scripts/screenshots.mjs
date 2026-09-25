@@ -101,6 +101,9 @@ const scenes = [
   { name: "eval-config-milestone-gap", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { name: /^reorder /i }).first().hover() },
   { name: "eval-config-timing", role: "teacher", path: "/evaluations/draft?step=timing" },
   { name: "eval-config-advanced", role: "teacher", path: "/evaluations/draft?step=timing", act: (p) => p.getByRole("button", { name: /^advanced options$/i }).first().click() },
+  // Issue #86: running, the configuration is locked but for the access code.
+  { name: "eval-config-timing-running", role: "teacher", path: "/evaluations/running?step=timing" },
+  { name: "eval-config-advanced-running", role: "teacher", path: "/evaluations/running?step=timing", act: (p) => p.getByRole("button", { name: /^advanced options$/i }).first().click() },
   { name: "eval-config-launch", role: "teacher", path: "/evaluations/draft?step=launch" },
   { name: "eval-config-loading", role: "teacher", path: "/evaluations/draft?slow=1", settle: 300 },
   { name: "eval-config-error", role: "teacher", path: "/evaluations/draft?fail=1", settle: 2500 },

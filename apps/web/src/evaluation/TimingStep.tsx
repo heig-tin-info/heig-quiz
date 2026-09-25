@@ -1,13 +1,15 @@
-import { Check, Timer } from "lucide-react";
+import { Check, Lock, MonitorPlay, Timer } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { EvaluationDetail } from "@quiz/contracts";
+import { configLock, isConfigFieldWritable } from "@quiz/domain";
 
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
 import {
   Alert,
   Badge,
+  Button,
   Card,
   cx,
   Field,
@@ -103,9 +105,12 @@ export function TimingStep({
   detail,
   patch,
   showMissing = false,
+  onOpenDashboard,
 }: {
   detail: EvaluationDetail;
   patch: ReturnType<typeof useEvaluationPatch>;
+  /** Where time is added while the evaluation runs (#86). */
+  onOpenDashboard?: () => void;
   /**
    * The teacher asked for the launch step with the timing incomplete: every
    * field the server would refuse the waiting room for is marked, until it is
@@ -114,9 +119,12 @@ export function TimingStep({
   showMissing?: boolean;
 }) {
   const t = useT();
-  const { settings, durationS, opensAt, closesAt, mode } = detail.evaluation;
-  // Structural settings freeze once somebody has started (W5-17).
+  const { settings, durationS, opensAt, closesAt, mode, state } = detail.evaluation;
+  // Structural settings freeze once somebody has started (W5-17), and the
+  // whole configuration while the evaluation runs (#86) — the server says so
+  // in `editable`, the domain says which fields stay writable.
   const locked = !detail.editable;
+  const lock = configLock(state, detail.attemptCount);
   const preset = matchPreset(detail);
   // Empty while nothing is stored: a "45" the server does not have was a
   // duration the teacher believed set, and the waiting room then refused to
@@ -143,7 +151,24 @@ export function TimingStep({
         actions={<Badge tone="zinc">{t(`eval.mode.${mode}`)}</Badge>}
       />
 
-      {locked ? <Alert tone="warning" title={t("eval.locked")} /> : null}
+      {lock === "running" ? (
+        <Alert
+          tone="warning"
+          icon={Lock}
+          title={t("eval.lockedRunning")}
+          action={
+            onOpenDashboard ? (
+              <Button size="sm" variant="secondary" onClick={onOpenDashboard}>
+                <MonitorPlay /> {t("eval.dashboard")}
+              </Button>
+            ) : null
+          }
+        >
+          {t("eval.lockedRunning.body")}
+        </Alert>
+      ) : locked ? (
+        <Alert tone="warning" title={t("eval.locked")} />
+      ) : null}
       <FormError error={patch.error} title={t("eval.saveFailed")} />
 
       <div className="flex flex-wrap gap-3">
@@ -250,7 +275,12 @@ export function TimingStep({
         </div>
       </Card>
 
-      <AdvancedDisclosure detail={detail} patch={patch} disabled={locked} />
+      <AdvancedDisclosure
+        detail={detail}
+        patch={patch}
+        disabled={locked}
+        feedbackDisabled={!isConfigFieldWritable(lock, "feedbackPolicy")}
+      />
     </div>
   );
 }

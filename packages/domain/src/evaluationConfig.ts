@@ -8,6 +8,7 @@
  * never let a teacher reach a button the server will then refuse (#76).
  */
 import type { EvaluationTiming } from "./deadline.js";
+import type { EvaluationStateName } from "./itemList.js";
 
 /** The evaluation modes of F-EVAL-01, spelled as on the wire. */
 export type EvaluationModeName = "exam" | "exercise" | "poll";
@@ -108,4 +109,54 @@ export function isFeedbackAllowed(ctx: FeedbackContext, when: FeedbackWhen): boo
  */
 export function feedbackWhenFor(ctx: FeedbackContext, wanted: FeedbackWhen): FeedbackWhen {
   return isFeedbackAllowed(ctx, wanted) ? wanted : IN_CLASS_FEEDBACK;
+}
+
+// --- Configuration lock (F-EVAL-03, #86) -----------------------------------
+
+/**
+ * Why the configuration of an evaluation (timing, rules, scale, feedback) is
+ * locked, or null when every field may change:
+ *
+ * - `running`: the evaluation is `running` or `paused`. Students are sitting
+ *   it, whether or not one of them has entered yet: nothing that decides what
+ *   they see, how long they have or what they learn afterwards may move under
+ *   them. Time is added from the live dashboard (`live.extendTime`), never
+ *   here. Only the access control stays open — a student locked out by a
+ *   mistyped code or allowlist must be let in mid-exam — and the title.
+ * - `attempts`: at least one attempt exists and the evaluation is not running
+ *   (a closed one waiting for its release, typically). The feedback policy is
+ *   still the teacher's to choose until the results are released.
+ *
+ * Read twice, like the item-list rule: by the `evaluation` service, which
+ * refuses the write, and by the configuration screen, which disables the
+ * controls instead of letting them fail.
+ */
+export type ConfigLock = "running" | "attempts";
+
+/** The states in which students are sitting the evaluation. */
+export const CONFIG_LIVE_STATES: readonly EvaluationStateName[] = ["running", "paused"];
+
+/** The fields of `EvaluationPatch` each lock leaves writable. */
+const WRITABLE_UNDER: Record<ConfigLock, readonly string[]> = {
+  running: ["title", "accessCode", "ipAllowlist"],
+  attempts: ["title", "accessCode", "ipAllowlist", "feedbackPolicy"],
+};
+
+export function configLock(state: EvaluationStateName, attemptCount: number): ConfigLock | null {
+  if (CONFIG_LIVE_STATES.includes(state)) return "running";
+  if (attemptCount > 0) return "attempts";
+  return null;
+}
+
+/** Whether `field` (a key of `EvaluationPatch`) may be written under `lock`. */
+export function isConfigFieldWritable(lock: ConfigLock | null, field: string): boolean {
+  return lock === null || WRITABLE_UNDER[lock].includes(field);
+}
+
+/**
+ * Whether the configuration is fully editable: what `EvaluationDetail.editable`
+ * says, and what disables the timing and the rules on the screen.
+ */
+export function isConfigEditable(state: EvaluationStateName, attemptCount: number): boolean {
+  return configLock(state, attemptCount) === null;
 }

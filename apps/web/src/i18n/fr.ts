@@ -1486,6 +1486,9 @@ export const fr: Record<keyof Dict, string> = {
   "eval.resetAttempt.failed": "Votre tentative de test n'a pas pu être supprimée.",
   "eval.saveFailed": "Ce réglage n'a pas pu être enregistré.",
   "eval.locked": "Un étudiant a déjà commencé : la structure est figée.",
+  "eval.lockedRunning": "L'évaluation est en cours : sa configuration est verrouillée jusqu'à sa clôture.",
+  "eval.lockedRunning.body":
+    "Seuls le titre et le code d'accès peuvent encore changer. Pour donner du temps supplémentaire, passez par le tableau de bord.",
   "eval.questions.frozen": "Cette évaluation a été ouverte aux étudiants : ses questions sont figées.",
   "eval.questions.frozen.body":
     "Chaque personne qui y entre reçoit exactement cette liste : on ne peut plus ajouter, retirer, réordonner ni repondérer de questions.",

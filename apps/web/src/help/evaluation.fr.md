@@ -40,6 +40,13 @@ le retour à l'étudiant. Le reste vit sous **Options avancées** : navigation,
 présentation, mélange, barre de progression, code d'accès, barème. Le temps
 supplémentaire de la liste s'ajoute à la durée.
 
+Pendant que l'évaluation est en cours ou en pause, cette étape est
+verrouillée jusqu'à la clôture : seuls le titre et le code d'accès changent
+encore — le code, pour laisser entrer un étudiant resté dehors. Du temps
+supplémentaire pour tous se donne depuis le tableau de bord. Une fois
+l'évaluation clôturée, le retour à l'étudiant se modifie à nouveau jusqu'à
+la publication des résultats.
+
 ## Démarrage
 
 Un récapitulatif, puis une seule action : ouvrir la salle d'attente, ou

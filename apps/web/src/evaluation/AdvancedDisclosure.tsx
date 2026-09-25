@@ -21,10 +21,18 @@ export function AdvancedDisclosure({
   detail,
   patch,
   disabled,
+  feedbackDisabled,
 }: {
   detail: EvaluationDetail;
   patch: ReturnType<typeof useEvaluationPatch>;
+  /** The structural settings: frozen by an attempt, or by the run (#86). */
   disabled: boolean;
+  /**
+   * The feedback policy: it outlives an attempt (it may change until the
+   * release) but not the run (#86). The access code is never disabled — a
+   * student locked out mid-exam must be let back in.
+   */
+  feedbackDisabled: boolean;
 }) {
   const t = useT();
   const [open, setOpen] = useState(false);
@@ -173,6 +181,7 @@ export function AdvancedDisclosure({
           <Segmented
             name="feedback"
             value={feedbackPolicy.when}
+            disabled={feedbackDisabled}
             onChange={(when) => feedback({ when })}
             options={allowedFeedbackWhen({ mode, lobby: settings.lobby }).map((when) => ({
               value: when,
@@ -183,6 +192,7 @@ export function AdvancedDisclosure({
         <SettingRow title={t("eval.feedback.showKey")}>
           <Switch
             checked={feedbackPolicy.showKey}
+            disabled={feedbackDisabled}
             label={t("eval.feedback.showKey")}
             onChange={(showKey) => feedback({ showKey })}
           />
@@ -190,6 +200,7 @@ export function AdvancedDisclosure({
         <SettingRow title={t("eval.feedback.showExplanation")}>
           <Switch
             checked={feedbackPolicy.showExplanation}
+            disabled={feedbackDisabled}
             label={t("eval.feedback.showExplanation")}
             onChange={(showExplanation) => feedback({ showExplanation })}
           />

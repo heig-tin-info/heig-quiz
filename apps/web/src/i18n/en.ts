@@ -1497,6 +1497,9 @@ export const en = {
   "eval.resetAttempt.failed": "Could not delete your test attempt.",
   "eval.saveFailed": "Could not save this setting.",
   "eval.locked": "A student has already started: the structure is frozen.",
+  "eval.lockedRunning": "The evaluation is running: its configuration is locked until it closes.",
+  "eval.lockedRunning.body":
+    "Only the title and the access code can still change. To give more time, use the live dashboard.",
   "eval.questions.frozen": "This evaluation has been opened to students: its questions are frozen.",
   "eval.questions.frozen.body":
     "Everyone who enters gets exactly this list, so questions can no longer be added, removed, reordered or re-weighted.",
