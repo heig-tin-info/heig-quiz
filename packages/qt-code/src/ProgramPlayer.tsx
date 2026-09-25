@@ -35,7 +35,6 @@ export type ProgramPlayerStrings = Pick<
   | "run"
   | "running"
   | "availableIn"
-  | "unchangedRun"
   | "loadingRuntime"
   | "runUnavailable"
   | "runFailed"
@@ -43,12 +42,12 @@ export type ProgramPlayerStrings = Pick<
   | "compileFailed"
   | "compileOk"
   | "limits"
+  | "rateLimited"
 >;
 
 /**
- * Where a run stands. `rate_limited` is the per-attempt budget of N-SEC-07,
- * which only a host that tells it apart reports; `code`'s host folds it into
- * `unavailable`.
+ * Where a run stands. `rate_limited` is the per-attempt budget of N-SEC-07
+ * (the test runs', or the compilations' own, ADR-024 addendum).
  */
 export type RunState =
   | { status: "idle" }
@@ -62,51 +61,36 @@ export type RunState =
 export type ProgramRunResult = RunnerOutcome | "unavailable" | "rate_limited";
 
 /**
- * One run slot: its state, the function that fills it, and the KEY of the
- * last run that completed. The request, the stages and the endings are the
- * same for every run a player offers; only what the host's function does
- * differs.
+ * One run slot: its state and the function that fills it. The request, the
+ * stages and the endings are the same for every run a player offers; only
+ * what the host's function does differs.
  *
- * The key is whatever the caller says the run was made of (the regions, and
- * for a free try the input too). A button whose current key equals it would
- * run the very same thing again and get the very same answer, so the player
- * disables it — the unchanged-code rule. Only a run that ended `done`
- * records its key: an unavailable runner, a refused budget or a failure
- * answered nothing, and pressing again is the right move.
+ * A slot keeps the answer of its last run on screen until the next one
+ * starts. Running the same code again is allowed (ADR-024, addendum of
+ * 2026-09-25, #129): a button is ready again as soon as its cooldown ends.
  */
 export function useRunSlot(): [
   RunState,
-  (
-    start: (onStage: (stage: CodeRunStage) => void) => Promise<ProgramRunResult>,
-    key?: string,
-  ) => Promise<void>,
-  string | null,
+  (start: (onStage: (stage: CodeRunStage) => void) => Promise<ProgramRunResult>) => Promise<void>,
 ] {
   const [state, setState] = useState<RunState>({ status: "idle" });
-  const [doneKey, setDoneKey] = useState<string | null>(null);
   async function runInto(
     start: (onStage: (stage: CodeRunStage) => void) => Promise<ProgramRunResult>,
-    key?: string,
   ) {
     setState({ status: "running", stage: "loading" });
-    setDoneKey(null);
     try {
       const outcome = await start((stage) => setState({ status: "running", stage }));
-      if (outcome === "unavailable" || outcome === "rate_limited") {
-        setState({ status: outcome });
-      } else {
-        setState({ status: "done", outcome });
-        setDoneKey(key ?? null);
-      }
+      setState(
+        outcome === "unavailable" || outcome === "rate_limited"
+          ? { status: outcome }
+          : { status: "done", outcome },
+      );
     } catch {
       setState({ status: "failed" });
     }
   }
-  return [state, runInto, doneKey];
+  return [state, runInto];
 }
-
-/** What a player's code is, as a run key: equal keys mean the same program. */
-export const regionsKey = (regions: readonly string[]): string => JSON.stringify(regions);
 
 /** Where a cooldown stands; `start` is called at the moment of a click. */
 export interface Cooldown {
@@ -122,11 +106,12 @@ export interface Cooldown {
 /**
  * The refill of the run buttons after a use (`@quiz/domain/cooldown`).
  *
- * ONE counter per player, shared by every run it offers (Compile, Run the
- * tests, the free try): on the server the three spend one budget
- * (`runsPerMinute`, N-SEC-07), so they must wait on one clock, and in the
- * browser the same single rule keeps the toolbar predictable — a student
- * never has to work out which of three buttons is ready. The floor applies
+ * ONE counter per player, shared by the runs that spend the test budget
+ * (Run the tests, the free try; `codeimage`'s Run): on the server they spend
+ * one budget (`runsPerMinute`, N-SEC-07), so they wait on one clock. Compile
+ * has no cooldown at all (ADR-024, addendum of 2026-09-25): it spends a
+ * budget of its own, larger (`compilesPerMinute`), and is only ever one at a
+ * time. The floor applies
  * when the question runs on the server; a `runno` question whose host falls
  * back to the server can still meet the budget, which the player reports as
  * `rate_limited` like before.
@@ -375,12 +360,9 @@ export function RunButton({
 export function RunStatus({
   state,
   s,
-  rateLimited,
 }: {
   state: RunState;
   s: ProgramPlayerStrings;
-  /** The sentence for `rate_limited`; a host that never reports it passes none. */
-  rateLimited?: string | undefined;
 }): ReactNode {
   const outcome = state.status === "done" ? state.outcome : null;
   return (
@@ -396,9 +378,9 @@ export function RunStatus({
           {s.runUnavailable}
         </p>
       ) : null}
-      {state.status === "rate_limited" && rateLimited !== undefined ? (
+      {state.status === "rate_limited" ? (
         <p role="status" className="rounded-field bg-warning-soft px-3 py-2 text-[13px] text-warning">
-          {rateLimited}
+          {s.rateLimited}
         </p>
       ) : null}
       {state.status === "failed" ? (

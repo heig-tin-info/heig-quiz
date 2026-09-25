@@ -87,3 +87,34 @@ export function effectiveCooldownMs(options: {
   const own = cooldownMs(options.mode, options.uses);
   return options.onServer ? Math.max(own, serverFloorMs(options.runsPerMinute)) : own;
 }
+
+/** A compile-only budget is at least this many a minute, whatever the run budget. */
+export const COMPILE_BUDGET_FLOOR = 20;
+/** How many compilations one test run is worth, in the per-minute budgets. */
+export const COMPILE_BUDGET_FACTOR = 3;
+/** The most compilations a minute any question grants: still a guard of the runner. */
+export const COMPILE_BUDGET_CAP = 60;
+
+/**
+ * The per-minute budget of the Compile button (ADR-024, addendum of
+ * 2026-09-25, issue #129), separate from `runsPerMinute`: compiling never
+ * spends a test run, and running the tests never spends a compilation.
+ *
+ * Compile has no visible cooldown, only "one at a time", so a student who
+ * compiles after every edit is bounded by the compiler's own latency (about a
+ * second on the runner). `3 × runsPerMinute` with a floor of 20 — one
+ * compilation every 2 s sustained for the default 10 runs a minute gives 30 —
+ * is above what a person working on their code does, and below what a
+ * held-down key or a script would reach; the cap keeps the most generous
+ * question at one a second. A value that is not a positive number reads as
+ * the floor.
+ */
+export function compilesPerMinute(runsPerMinute: number): number {
+  if (!Number.isFinite(runsPerMinute) || runsPerMinute <= 0) {
+    return COMPILE_BUDGET_FLOOR;
+  }
+  return Math.min(
+    COMPILE_BUDGET_CAP,
+    Math.max(COMPILE_BUDGET_FLOOR, Math.ceil(COMPILE_BUDGET_FACTOR * runsPerMinute)),
+  );
+}

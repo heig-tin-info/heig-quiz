@@ -16,6 +16,7 @@ import {
   type RunnerService,
 } from "@quiz/core/server";
 import { shuffle } from "@quiz/core/rng";
+import { compilesPerMinute } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { loadConfig, typeOf } from "../pool/config.js";
@@ -64,6 +65,12 @@ async function attemptRunContext<T>(
     capability: (type: AnyQuestionTypeServer) => T | undefined;
     /** The per-minute budget the type publishes in its student view. */
     budget: (student: RunnableStudentView) => number | undefined;
+    /**
+     * The Compile button's run: it spends its own, larger budget
+     * (`compilesPerMinute`), never the test runs' (ADR-024, addendum of
+     * 2026-09-25). Every other run leaves the compilations out of its count.
+     */
+    compileOnly?: boolean | undefined;
     answer: unknown;
   },
 ) {
@@ -87,9 +94,15 @@ async function attemptRunContext<T>(
 
   // N-SEC-07: the budget is the question's own, counted from the journal
   // rather than from a table of its own. Both buttons count `run` events, so
-  // a student cannot double their budget by using both on one attempt.
-  const limit = input.budget(student) ?? DEFAULT_RUNS_PER_MINUTE;
-  const used = await countRecentEvents(db, attempt.id, "run", new Date(now.getTime() - 60_000));
+  // a student cannot double their budget by using both on one attempt. A
+  // compilation is counted apart, against its own budget: compiling never
+  // costs a test run, and a spent test budget still lets the student compile.
+  const compileOnly = input.compileOnly === true;
+  const runs = input.budget(student) ?? DEFAULT_RUNS_PER_MINUTE;
+  const limit = compileOnly ? compilesPerMinute(runs) : runs;
+  const used = await countRecentEvents(db, attempt.id, "run", new Date(now.getTime() - 60_000), {
+    compileOnly,
+  });
   if (used >= limit) throw new RateLimited(60);
 
   const answer = type.answerSchema.safeParse(input.answer);
@@ -152,8 +165,9 @@ export async function runVisibleCases(
     args?: string[] | undefined;
     /**
      * The Compile button: the runner builds the program (`action: "check"`)
-     * and runs no case at all. It spends the same budget as a run — a
-     * compilation is most of a run's cost — and journals `compileOnly: true`.
+     * and runs no case at all. It spends its own budget, `compilesPerMinute`,
+     * never a test run's (ADR-024, addendum of 2026-09-25), and journals
+     * `compileOnly: true`, which is how the two budgets are told apart.
      */
     compileOnly?: boolean | undefined;
     now: Date;
@@ -165,6 +179,7 @@ export async function runVisibleCases(
     // A type with no second half has nothing a runner could finish.
     capability: (type) => type.finalizeRunner,
     budget: (student) => student.runsPerMinute,
+    compileOnly: input.compileOnly,
     answer: { regions: input.regions },
   });
   const { type, config, answer, ctx } = prepared;

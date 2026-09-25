@@ -2,7 +2,7 @@
  * `CodeImagePlayer` on the textarea fallback (jsdom has no canvas: the grids
  * render their frame and label, which is what these tests read).
  */
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { outcome } from "../test/fixtures.js";
@@ -116,14 +116,18 @@ describe("CodeImagePlayer", () => {
     }
   });
 
-  it("rests while the code is what it last drew", async () => {
+  it("runs the same code again once the cooldown ends (#129)", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     try {
-      setup({ onRun: async () => outcome([{ stdout: CHECKER_STDOUT }]) });
+      const onRun = vi.fn(async () => outcome([{ stdout: CHECKER_STDOUT }]));
+      setup({ onRun });
       fireEvent.click(screen.getByRole("button", { name: "Run" }));
-      expect(await screen.findByText("Change your code to run it again.")).toBeInTheDocument();
+      await waitFor(() => expect(onRun).toHaveBeenCalledTimes(1));
+      expect(screen.getByRole("button", { name: /^Run/ })).toBeDisabled();
       await act(() => void vi.advanceTimersByTime(7000));
-      expect(screen.getByRole("button", { name: "Run" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Run" })).toBeEnabled();
+      fireEvent.click(screen.getByRole("button", { name: "Run" }));
+      await waitFor(() => expect(onRun).toHaveBeenCalledTimes(2));
     } finally {
       vi.useRealTimers();
     }

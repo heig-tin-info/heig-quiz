@@ -919,13 +919,11 @@ export const en = {
   "qt.code.p.runTests": "Run the tests",
   "qt.code.p.freeTry": "Free try",
   "qt.code.p.availableIn": "Available in {seconds} s",
-  "qt.code.p.unchangedTests": "Change your code to run the tests again.",
-  "qt.code.p.unchangedRun": "Change your code to run it again.",
-  "qt.code.p.unchangedManual": "Change your code or the input to run it again.",
   "qt.code.p.runUnavailable":
     "Running is unavailable right now. Your answer is saved and will be graded by your teacher.",
   "qt.code.p.runFailed":
     "The run could not be completed. Your answer is saved; try again in a moment.",
+  "qt.code.p.rateLimited": "Too many runs in a minute. Wait a moment, then run again.",
   "qt.code.p.visibleCases": "Visible cases",
   "qt.code.p.noVisibleCases": "Your teacher did not publish any visible case.",
   "qt.code.p.hiddenCases": "{count} hidden cases, worth {points} points in total.",
@@ -1054,7 +1052,6 @@ export const en = {
     "The program ran out of memory. The image shows what it printed before.",
   "qt.codeimage.p.endCrashed": "The program crashed. The image shows what it printed before.",
   "qt.codeimage.p.endTruncated": "The output was cut at the size limit.",
-  "qt.codeimage.p.rateLimited": "Too many runs in a minute. Wait a moment, then run again.",
   "qt.codeimage.r.noImage": "The program printed no image.",
 
   // --- qt-circuit ---

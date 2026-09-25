@@ -22,6 +22,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { EvaluationPreview, PreviewCorrection, RunAccepted } from "@quiz/contracts";
 import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
 import { RunnerUnavailable } from "@quiz/core/server";
+import { compilesPerMinute } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
@@ -440,6 +441,41 @@ describe("the Run button of a preview", () => {
     const limited = await run();
     expect(limited.statusCode).toBe(429);
     expect(limited.headers["retry-after"]).toBe("60");
+  });
+
+  it("gives Compile a budget of its own (#129)", async () => {
+    const w = await world();
+    setRunner(recorder().runner);
+    const run = (compileOnly?: boolean) =>
+      post(`${w.url}/run`, teacher.headers, {
+        seed: 7,
+        itemId: w.codeItemId,
+        regions: [],
+        ...(compileOnly ? { compileOnly } : {}),
+      });
+    // The three test runs spent: a fourth is refused, a compilation is not.
+    for (let i = 0; i < 3; i++) expect((await run()).statusCode).toBe(200);
+    expect((await run()).statusCode).toBe(429);
+    const limit = compilesPerMinute(3);
+    for (let i = 0; i < limit; i++) expect((await run(true)).statusCode).toBe(200);
+    // Past its own budget, Compile answers 429 in turn.
+    const limited = await run(true);
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json().error).toBe("rate_limited");
+  });
+
+  it("leaves the test runs untouched by compilations (#129)", async () => {
+    const w = await world();
+    setRunner(recorder().runner);
+    const run = (compileOnly?: boolean) =>
+      post(`${w.url}/run`, teacher.headers, {
+        seed: 7,
+        itemId: w.codeItemId,
+        regions: [],
+        ...(compileOnly ? { compileOnly } : {}),
+      });
+    for (let i = 0; i < 5; i++) expect((await run(true)).statusCode).toBe(200);
+    for (let i = 0; i < 3; i++) expect((await run()).statusCode).toBe(200);
   });
 });
 

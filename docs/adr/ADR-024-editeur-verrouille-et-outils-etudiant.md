@@ -3,7 +3,8 @@
 ## Status
 
 Accepted (2026-09-24, with `packages/qt-code/src/LockedEditor.tsx`,
-`ArgsInput.tsx`, `lockEdit.ts` and `@quiz/domain/cooldown`).
+`ArgsInput.tsx`, `lockEdit.ts` and `@quiz/domain/cooldown`). Amended
+2026-09-25 by the addendum at the end (issue #129).
 
 ## Context
 
@@ -68,6 +69,8 @@ default, so stored configs parse unchanged and the config version stays.
 
 A compile-only run (`RunBody.compileOnly`) goes through the same route, the
 same budget and the same journal, with `action: "check"` and no case.
+(Reversed on 2026-09-25: no "unchanged" rule, no cooldown on Compile, and a
+budget of its own for it — see the addendum.)
 
 ### 5. Runtime by outcome, new C/Python questions in the browser
 
@@ -93,3 +96,56 @@ point".
   and still answers `rate_limited`.
 - `docs/spec/04-types-de-questions.md` §4.7 describes the new buttons, the
   markers and the reference editor.
+
+## Addendum — 2026-09-25: no "unchanged" rule, and Compile without a cooldown
+
+Source: issue #129, from a teacher walking the student player.
+
+### What changed
+
+1. **The "unchanged" rule of §4 is dropped.** A button used to stay disabled
+   while the code (and, for the free try, its input) was what it last ran.
+   In practice the button looked dead once its cooldown ended, and the hint
+   under it ("Change your code to run the tests again") went unnoticed. A
+   button is now ready again as soon as its cooldown ends, whatever the code;
+   the last result of each tool still stays on screen until the next run.
+   Re-running the same program is harmless, and the cooldown already bounds
+   the load. The three
+   hints (`qt.code.p.unchangedTests`, `unchangedRun`, `unchangedManual`) are
+   gone.
+2. **Compile has no visible cooldown.** It is the quick look a student takes
+   after every edit, and holding it back with the tests' clock made it the
+   slow tool. It is still one at a time (disabled while any run is in
+   flight). Run the tests and Free try keep their shared cooldown, and so
+   does `codeimage`'s Run.
+3. **Compile spends a budget of its own on the server.** §4 said a
+   compile-only run spent "the same budget" as a run. It now counts against
+   `compilesPerMinute(runsPerMinute) = min(60, max(20, 3 × runsPerMinute))`
+   (`@quiz/domain/cooldown`), and the test runs count without it: compiling
+   never consumes a test run, and a spent test budget still lets the student
+   compile. The journal is unchanged — a compilation is a `run` event with
+   `compileOnly: true` — and that flag is what splits the two counts
+   (`countRecentEvents`). The teacher's preview keeps the same rule under two
+   in-memory keys. The runner priority of a compilation stays `interactive`.
+
+### Why these numbers
+
+Without a visible cooldown a student's compilations are bounded by the
+compiler's own latency, about a second on the runner. Three compilations per
+test run — one every 2 s sustained at the default 10 runs a minute — is above
+what a person editing code does and well below a held-down key or a script.
+The floor of 20 keeps a question with a tight run budget (1 or 2 a minute)
+compilable; the cap of 60 keeps the most generous question at one compilation
+a second per student, so the budget still guards the runner. It is derived,
+not configured: no new config field, no config version, nothing for the
+author to tune.
+
+### Consequences
+
+- A host now reports a 429 of `POST /attempts/:id/run` (and of the preview's
+  `/run`) as `rate_limited` instead of folding it into `unavailable`, and the
+  `code` player words it ("Too many runs in a minute…", `qt.code.p.rateLimited`,
+  formerly `qt.codeimage.p.rateLimited`). With Compile uncapped in the UI,
+  its budget is the one a student can actually meet.
+- The cooldown floor `60 s / runsPerMinute` still holds for the test runs, so
+  the test budget is never what a student runs into by clicking.

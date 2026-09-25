@@ -140,9 +140,8 @@ export function usePreviewSession({
         return toOutcome(response.result);
       } catch (error) {
         // No runner, or its budget spent: the player says so in one line.
-        if (error instanceof ApiError && (error.status === 503 || error.status === 429)) {
-          return "unavailable";
-        }
+        if (error instanceof ApiError && error.status === 503) return "unavailable";
+        if (error instanceof ApiError && error.status === 429) return "rate_limited";
         throw error;
       }
     },

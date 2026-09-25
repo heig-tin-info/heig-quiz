@@ -6,7 +6,7 @@
  * when the runner is unavailable — which is the DEFAULT configuration of the
  * platform (decision D14), not an edge case.
  */
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -280,14 +280,36 @@ describe("the student's tools", () => {
     setup({ onRun: async () => outcome([{ stdout: "6\n" }, { stdout: "0\n" }]) });
     fireEvent.click(screen.getByRole("button", { name: RUN_TESTS }));
     await screen.findByText("Compiled");
-    // The server budget of 10 runs a minute floors the wait at 6.5 s, and one
-    // counter holds all three tools back.
-    const compile = screen.getByRole("button", { name: /^Compile/ });
-    expect(compile).toBeDisabled();
-    expect(compile).toHaveAccessibleName("Compile. Available in 7 s");
+    // The server budget of 10 runs a minute floors the wait at 6.5 s.
+    const tests = screen.getByRole("button", { name: /^Run the tests/ });
+    expect(tests).toBeDisabled();
+    expect(tests).toHaveAccessibleName("Run the tests. Available in 7 s");
     expect(screen.getAllByTestId("cooldown-fill").length).toBeGreaterThan(0);
+    // Compile is not held back: its budget is its own (#129).
+    expect(screen.getByRole("button", { name: "Compile" })).toBeEnabled();
     await waitOutCooldown();
     expect(screen.queryByTestId("cooldown-fill")).toBeNull();
+  });
+
+  it("gives Compile no cooldown, and starts none for the other tools (#129)", async () => {
+    const seen: unknown[] = [];
+    setup({
+      allowManualRun: true,
+      onRun: async (_answer, options) => {
+        seen.push(options?.compileOnly === true);
+        return outcome([], { ok: true, stderr: "" });
+      },
+    });
+    const compile = screen.getByRole("button", { name: "Compile" });
+    fireEvent.click(compile);
+    await screen.findByText("Compiled");
+    // Ready at once, with the same code, and nothing refilling anywhere.
+    expect(compile).toBeEnabled();
+    expect(compile).toHaveAccessibleName("Compile");
+    expect(screen.queryByTestId("cooldown-fill")).toBeNull();
+    expect(screen.getByRole("button", { name: RUN_TESTS })).toBeEnabled();
+    fireEvent.click(compile);
+    await waitFor(() => expect(seen).toEqual([true, true]));
   });
 
   it("has no server floor in the browser: 3 s", async () => {
@@ -304,7 +326,7 @@ describe("the student's tools", () => {
     expect(screen.queryByTestId("cooldown-fill")).toBeNull();
   });
 
-  it("rests while the code is what the last test run ran, keeping its results", async () => {
+  it("runs the same code again once the cooldown ends, keeping its results (#129)", async () => {
     // A host that echoes each change back as the answer, like the real one.
     function Host() {
       const [answer, setAnswer] = useState<CodeAnswer | null>(null);
@@ -322,20 +344,18 @@ describe("the student's tools", () => {
     render(<Host />);
     fireEvent.click(screen.getByRole("button", { name: RUN_TESTS }));
     expect(await screen.findAllByText("Passed")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: /^Run the tests/ })).toBeDisabled();
     await waitOutCooldown();
 
-    expect(screen.getByRole("button", { name: RUN_TESTS })).toBeDisabled();
-    // A test run compiles too: Compile has nothing new to say either.
-    expect(screen.getByRole("button", { name: "Compile" })).toBeDisabled();
-    expect(screen.getByText("Change your code to run the tests again.")).toBeInTheDocument();
-    expect(screen.getAllByText("Passed")).toHaveLength(2);
-
-    fireEvent.change(screen.getByLabelText("Your code, region 2"), {
-      target: { value: "    return 6;\n" },
-    });
+    // The code did not change, and the button is back all the same.
     expect(screen.getByRole("button", { name: RUN_TESTS })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Compile" })).toBeEnabled();
-    expect(screen.queryByText("Change your code to run the tests again.")).toBeNull();
+    expect(screen.getAllByText("Passed")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: RUN_TESTS }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /^Run the tests/ })).toBeDisabled(),
+    );
+    expect(await screen.findAllByText("Passed")).toHaveLength(2);
   });
 
   it("does not rest after a run that answered nothing", async () => {
@@ -344,19 +364,26 @@ describe("the student's tools", () => {
     await screen.findByText(/Running is unavailable right now/);
     await waitOutCooldown();
     expect(screen.getByRole("button", { name: RUN_TESTS })).toBeEnabled();
-    expect(screen.queryByText("Change your code to run the tests again.")).toBeNull();
   });
 
-  it("lets the free try run again once its input changed", async () => {
+  it("says to wait when the budget refuses a run", async () => {
+    setup({ onRun: async () => "rate_limited" });
+    fireEvent.click(screen.getByRole("button", { name: "Compile" }));
+    expect(await screen.findByText(/Too many runs in a minute/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Compile" })).toBeEnabled();
+  });
+
+  it("holds the free try for its cooldown, then lets the same input run again", async () => {
     setup({ allowManualRun: true, onRun: async () => outcome([{ stdout: "1\n" }]) });
     fireEvent.click(screen.getByRole("button", { name: "Free try" }));
     fireEvent.click(screen.getByRole("button", { name: "Run once" }));
     await screen.findByLabelText("Output");
+    expect(screen.getByRole("button", { name: /^Run once/ })).toBeDisabled();
+    // It shares the tests' clock: both spend the same server budget.
+    expect(screen.getByRole("button", { name: /^Run the tests/ })).toBeDisabled();
     await waitOutCooldown();
-    expect(screen.getByRole("button", { name: "Run once" })).toBeDisabled();
-    expect(screen.getByText("Change your code or the input to run it again.")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("stdin"), { target: { value: "2\n" } });
     expect(screen.getByRole("button", { name: "Run once" })).toBeEnabled();
+    expect(screen.getByLabelText("Output")).toBeInTheDocument();
   });
 });
 

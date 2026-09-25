@@ -102,7 +102,6 @@ export interface ImagePlayerStrings {
   endOutOfMemory: string;
   endCrashed: string;
   endTruncated: string;
-  rateLimited: string;
 }
 
 export const IMAGE_PLAYER_STRINGS: ImagePlayerStrings = {
@@ -135,7 +134,6 @@ export const IMAGE_PLAYER_STRINGS: ImagePlayerStrings = {
   endOutOfMemory: "The program ran out of memory. The image shows what it printed before.",
   endCrashed: "The program crashed. The image shows what it printed before.",
   endTruncated: "The output was cut at the size limit.",
-  rateLimited: "Too many runs in a minute. Wait a moment, then run again.",
 };
 
 export interface ImageReviewStrings {

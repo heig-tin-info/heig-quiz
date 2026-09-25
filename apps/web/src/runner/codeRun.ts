@@ -131,12 +131,14 @@ export async function runCode(args: {
    */
   backend: BackendRun;
   options?: CodeRunOptions | undefined;
-}): Promise<RunnerOutcome | "unavailable"> {
+}): Promise<RunnerOutcome | "unavailable" | "rate_limited"> {
   const compileOnly = args.options?.compileOnly === true;
   // A compilation has no input: a free one would only be dropped server-side.
   const manual = compileOnly ? undefined : args.options?.manual;
   const request = codeRunRequest(args.student, args.answer, manual, compileOnly);
-  return runWithFallback<never>(request, {
+  // A refused budget comes back as `"rate_limited"`, untouched: the browser
+  // does not stand in for a budget the server refused.
+  return runWithFallback<"rate_limited">(request, {
     runtime: args.student.runtime,
     backend: () => (compileOnly ? args.backend(undefined, { compileOnly }) : args.backend(manual)),
     hooks: args.options?.onStage === undefined ? undefined : { onStage: args.options.onStage },
