@@ -74,7 +74,7 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 | F-EVAL-12 | An evaluation may require an access code entered by the student, and restrict IP addresses to a list of prefixes. | P1 | S |
 | F-EVAL-13 | An evaluation may enable the recommended full-screen mode and the logging of tab visibility changes. Nothing is blocking, everything is visible to the teacher. | P2 | S |
 | F-EVAL-14 | An evaluation can be duplicated to the same classroom or to another one. | P1 | S |
-| F-EVAL-15 | An `exercise` evaluation may allow several attempts, keeping the best or the last one. | P2 | C |
+| F-EVAL-15 | An `exercise` evaluation may allow several attempts, keeping the best or the last one (the teacher's choice), with an optional maximum. A retake starts blank, with a new question order, once the previous attempt is handed in and while the evaluation is open; the student sees the score of each attempt, not the correction, until the evaluation closes. Results, grade, CSV and statistics use the kept attempt. An exam keeps one attempt (ADR-025). | P2 | C |
 
 ## F-LIVE Live run
 
