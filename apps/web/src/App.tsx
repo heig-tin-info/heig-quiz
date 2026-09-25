@@ -228,6 +228,14 @@ const FULL_SCREEN: ReadonlySet<Route["view"]> = new Set([
 ]);
 
 /**
+ * The views drawn inside the frame but WITHOUT the reading-width cap of the
+ * shell. The live dashboard only: its grid is a matrix that grows with the
+ * number of questions, and at 70 rem it scrolled sideways between two empty
+ * margins (#93). Every other page keeps the cap.
+ */
+const WIDE: ReadonlySet<Route["view"]> = new Set(["live"]);
+
+/**
  * No session. The participant of a poll may have no account
  * (`settings.poll.anonymous`), and the page itself sends to login otherwise.
  * The OAuth consent page is the other one: it offers the sign-in with a
@@ -341,6 +349,7 @@ export default function App() {
       teacherUi={teacherUi}
       studentView={inStudentView}
       onToggleStudentView={toggleView}
+      wide={WIDE.has(shown.view)}
     >
       {page}
     </Shell>
