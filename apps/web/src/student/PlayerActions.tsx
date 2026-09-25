@@ -8,42 +8,32 @@ import { Button } from "../ui";
  * the same in the phone footer and under the question on a desktop. Who
  * wears the accent is decided by `Player` (its header comment); this only
  * draws the decision.
+ *
+ * The centre is "Validate and continue", and only where the navigation asks
+ * for it (`forward_only`, a checkpoint in `milestones`): in `free` there is
+ * nothing irreversible to validate, and a question counts as answered as soon
+ * as it holds an answer (issue #89). When it is there, it is THE primary
+ * action of the screen.
  */
 export function PlayerActions({
   manyItems,
-  done,
-  canReopen,
-  readOnly,
+  canValidate,
   hasPrevious,
   hasNext,
   nextIsPrimary,
-  onToggleDone,
+  onValidate,
   onMove,
 }: {
   /** One question has no neighbours: both arrows are absent, not disabled. */
   manyItems: boolean;
-  done: boolean;
-  canReopen: boolean;
-  readOnly: boolean;
+  canValidate: boolean;
   hasPrevious: boolean;
   hasNext: boolean;
   nextIsPrimary: boolean;
-  onToggleDone: () => void;
+  onValidate: () => void;
   onMove: (delta: 1 | -1) => void;
 }) {
   const t = useT();
-  const centre = !done ? (
-    <Button variant="primary" onClick={onToggleDone} disabled={readOnly}>
-      {t("player.markDone")}
-    </Button>
-  ) : canReopen ? (
-    // Secondary, named for what it does, and with no tick: the button that
-    // used to sit here read "Done ✓" in the primary style and un-did the
-    // question when pressed.
-    <Button variant="secondary" onClick={onToggleDone}>
-      {t("player.reopen")}
-    </Button>
-  ) : null;
   return (
     <>
       {manyItems ? (
@@ -53,7 +43,11 @@ export function PlayerActions({
         </Button>
       ) : null}
       <div className="flex-1" />
-      {centre}
+      {canValidate ? (
+        <Button variant="primary" onClick={onValidate}>
+          {t("player.validate")}
+        </Button>
+      ) : null}
       <div className="flex-1" />
       {manyItems ? (
         <Button

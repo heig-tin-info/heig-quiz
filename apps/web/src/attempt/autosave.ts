@@ -116,6 +116,8 @@ export class Autosave {
   private stopped = false;
   /** The attempt is over for good: no `start()` ever undoes this. */
   private final = false;
+  /** {@link settle} callers, per item, released once the item is quiet. */
+  private readonly waiters = new Map<string, (() => void)[]>();
 
   constructor(options: AutosaveOptions) {
     this.options = options;
@@ -176,6 +178,31 @@ export class Autosave {
   }
 
   /**
+   * Resolves once this item has nothing left to send — its debounce skipped,
+   * the latest payload acknowledged — or once sending it failed.
+   *
+   * What a write that DEPENDS on the answer waits for (issue #89): "I won't
+   * answer" right after emptying a field must reach the server after the
+   * empty payload, never before it, or the server would see an answer that
+   * is no longer there. It never rejects: a failure here is the autosave's
+   * business, and the caller's own request meets the same network.
+   */
+  settle(itemId: string): Promise<void> {
+    const item = this.items.get(itemId);
+    if (!item || this.final || (!item.hasPending && !item.inFlight)) return Promise.resolve();
+    if (item.debounce !== null) {
+      clearTimeout(item.debounce);
+      item.debounce = null;
+      this.flush(itemId);
+    }
+    return new Promise((resolve) => {
+      const list = this.waiters.get(itemId) ?? [];
+      list.push(resolve);
+      this.waiters.set(itemId, list);
+    });
+  }
+
+  /**
    * Sends everything pending at once: the reconnection path (N-RES-02) and
    * the resume after a pause (D17). Resets the backoff — the reason to retry
    * now is new information, not another tick of the same failure.
@@ -210,6 +237,7 @@ export class Autosave {
     if (this.offlineTimer !== null) clearTimeout(this.offlineTimer);
     this.offlineTimer = null;
     this.stopped = true;
+    for (const itemId of [...this.waiters.keys()]) this.release(itemId);
     if (final) {
       this.final = true;
       this.state = "closed";
@@ -277,12 +305,21 @@ export class Autosave {
     this.clearOfflineIfSettled();
     this.publish();
     if (item.hasPending) this.flush(itemId);
+    if (!item.hasPending && !item.inFlight) this.release(itemId);
+  }
+
+  private release(itemId: string): void {
+    const list = this.waiters.get(itemId);
+    if (!list) return;
+    this.waiters.delete(itemId);
+    for (const resolve of list) resolve();
   }
 
   private failed(itemId: string, error: unknown): void {
     const item = this.items.get(itemId);
     if (!item || this.final) return;
     item.inFlight = false;
+    this.release(itemId);
     const { closed, info } = closedBody(error);
     if (closed) {
       // D17: a pause keeps everything and sends it again on `running`; the

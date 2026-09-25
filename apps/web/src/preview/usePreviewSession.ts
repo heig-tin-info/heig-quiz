@@ -105,12 +105,22 @@ export function usePreviewSession({
     });
   }, [deadlineAt, now, submit]);
 
-  const setAnswer = useCallback((itemId: string, payload: unknown) => {
-    dispatch({ type: "answer", itemId, payload });
+  const setAnswer = useCallback((itemId: string, payload: unknown, answered?: boolean) => {
+    dispatch({ type: "answer", itemId, payload, ...(answered === undefined ? {} : { answered }) });
   }, []);
 
   const markDone = useCallback(async (itemId: string, done: boolean) => {
     dispatch({ type: "done", itemId, done });
+  }, []);
+
+  // Issue #89: the preview keeps the skip and the flag in the browser, like
+  // its answers — the teacher sees the same list states the student will.
+  const skip = useCallback(async (itemId: string, skipped: boolean) => {
+    dispatch({ type: "skip", itemId, skipped });
+  }, []);
+
+  const flag = useCallback(async (itemId: string, flagged: boolean) => {
+    dispatch({ type: "flag", itemId, flagged });
   }, []);
 
   const run = useCallback<PlayerSession["run"]>(
@@ -166,10 +176,12 @@ export function usePreviewSession({
       paused: false,
       setAnswer,
       markDone,
+      skip,
+      flag,
       submit,
       run,
       simulate,
     }),
-    [state, now, deadlineAt, setAnswer, markDone, submit, run, simulate],
+    [state, now, deadlineAt, setAnswer, markDone, skip, flag, submit, run, simulate],
   );
 }

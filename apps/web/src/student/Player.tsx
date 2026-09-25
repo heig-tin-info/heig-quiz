@@ -1,46 +1,51 @@
 /**
  * The "zen" player: one question per screen (F-EVAL-08, mockup 07).
  *
- * ONE primary action, and it MOVES with the state of the question, because
- * the single thing to do on this screen is not the same before and after
- * F-LIVE-08's "done":
+ * A question is ANSWERED as soon as it holds an answer — the type says what
+ * an empty one is (`isAnswered`) — with no click (issue #89, F-LIVE-08). What
+ * the student can set by hand is what the answer alone cannot say:
  *
- *   - the question is not done yet    -> "Mark as done", in the footer;
- *   - it is done and another question is reachable -> "Next";
- *   - it is done and nothing follows (the last question, or the only one)
- *     -> "Hand in", the button that was already in the bar, which simply
- *        lights up rather than moving: a second "Hand in" in the footer would
- *        put the same label twice on one screen, and this shell's own header
- *        comment already names "Hand in" as the accent of the page.
+ *   - "I won't answer this question", on an EMPTY question: settled on
+ *     purpose, left blank. Writing an answer takes it back, and so does the
+ *     secondary "Answer it after all";
+ *   - the review FLAG, a toggle beside the points: a note to self, shown in
+ *     the question list and on the teacher's grid, no effect on the grade;
+ *   - "Clear", for MULTIPLE CHOICE only (the other types are emptied by
+ *     hand): with negative points, withdrawing a selection must be possible.
  *
- * Marking done is a STATE, not an action to press twice. Once it is set, the
- * screen says so with the "Done" badge beside the counter, and the footer
- * offers a named, secondary way back — "Reopen the question" — instead of a
- * primary-looking "Done ✓" whose click silently un-did it. Where the server
- * refuses to un-do (`forward_only`, a crossed milestone, a closed attempt)
- * nothing is offered at all: the hint line under the question is what says
- * why.
+ * Those three are one line of quiet buttons under the question — tools, not
+ * the page's action. ONE primary action, and it moves with the question:
+ *
+ *   - where the navigation asks for it — every question in `forward_only`, a
+ *     checkpoint in `milestones` — "Validate and continue", the one
+ *     irreversible thing on the screen, behind a confirmation;
+ *   - otherwise, once the question is settled (answered or skipped), "Next",
+ *     or "Hand in" on the last one — the button that is already in the bar,
+ *     which lights up rather than being drawn twice;
+ *   - on an unsettled question in `free`, none: the answer field IS the
+ *     action, and an accent on "Next" would push past it.
  *
  * A one-question evaluation has no navigation to draw: no progress strip
  * (the strip is a map of a paper that has one page) and no previous / next
  * buttons — absent, not disabled. Two dead controls are worse than none.
  *
  * What this component owns, beyond the layout:
- *   - the keyboard: `Alt + ←/→` moves, `Ctrl + Enter` marks the question as
- *     done. Alt and Ctrl, not bare arrows: every question type has a field,
- *     and a player that steals the arrow keys cannot be used to write;
- *   - the navigation rules, mirrored from the server (`playerReducer`), so a
- *     student is never offered a move the API would refuse with `409`;
- *   - the milestone confirmation of F-LIVE-08, which is the only
- *     irreversible thing on the screen.
+ *   - the keyboard: `Alt + ←/→` moves, `Ctrl + Enter` validates where
+ *     validating exists. Alt and Ctrl, not bare arrows: every question type
+ *     has a field, and a player that steals the arrow keys cannot be used to
+ *     write;
+ *   - the navigation rules, mirrored from the server (`playerReducer`, and
+ *     the shared `@quiz/domain` rules), so a student is never offered a move
+ *     the API would refuse with `409`.
  *
  * It never decides that the attempt is over: `useAttempt` does, from a `410`
  * or from an `attempt.closed` frame, and then this renders `ClosedScreen`.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Check } from "lucide-react";
+import { Check, Flag, Lock, Minus } from "lucide-react";
 
 import type { AttemptView } from "@quiz/contracts";
+import { answerMark, mayValidate, maySkip } from "@quiz/domain";
 import type { RunnerOutcome } from "@quiz/core/server";
 
 import { useAttempt, type UseAttempt } from "../attempt/useAttempt";
@@ -49,7 +54,7 @@ import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { useShortcuts } from "../shortcuts";
-import { Badge, Button, Card, modKey, useMinWidth } from "../ui";
+import { Badge, Button, Card, cx, modKey, useMinWidth } from "../ui";
 import { ClosedScreen } from "./ClosedScreen";
 import { OfflineBanner } from "./OfflineBanner";
 import { PausedOverlay } from "./PausedOverlay";
@@ -66,7 +71,7 @@ import type {
 
 import { api, ApiError } from "../api";
 import { runCode, runCodeImage } from "../runner/codeRun";
-import { isAnswered, QuestionHost } from "./QuestionHost";
+import { emptyAnswerOf, isAnswered, QuestionHost } from "./QuestionHost";
 import { SubmitDialog } from "./SubmitDialog";
 import { usePlayerCommands } from "./usePlayerCommands";
 
@@ -119,6 +124,8 @@ export type PlayerSession = Pick<
   | "paused"
   | "setAnswer"
   | "markDone"
+  | "skip"
+  | "flag"
   | "submit"
   | "run"
 > & {
@@ -187,8 +194,21 @@ export function PlayerView({
   const t = useT();
   const toast = useToast();
   const confirm = useConfirm();
-  const { state, dispatch, sync, now, deadlineAt, closed, paused, setAnswer, markDone, submit, run } =
-    session;
+  const {
+    state,
+    dispatch,
+    sync,
+    now,
+    deadlineAt,
+    closed,
+    paused,
+    setAnswer,
+    markDone,
+    skip,
+    flag,
+    submit,
+    run,
+  } = session;
   const [submitting, setSubmitting] = useState(false);
   const item = currentItem(state);
   const total = state.items.length;
@@ -204,28 +224,53 @@ export function PlayerView({
     (i) => !isAnswered(i.type, state.answers[i.id] ?? null),
   ).length;
 
-  const toggleDone = useCallback(async () => {
+  const answered = item ? isAnswered(item.type, state.answers[item.id] ?? null) : false;
+  const mark = answerMark({ answered, skipped: item?.skipped ?? false });
+  const validated = item?.markedDone === true;
+  // "Validate and continue" exists where the navigation locks (F-LIVE-08),
+  // and is offered while it can still be pressed.
+  const canValidate =
+    item !== undefined && !readOnly && !validated && mayValidate(state.navigation, item);
+
+  const validate = useCallback(async () => {
     // The same condition as the button, so `Ctrl+Enter` can never ask for
-    // what the screen does not offer: un-marking in `forward_only` answers
-    // `409 irreversible`, and the student would read it as a failure.
-    if (!item || readOnly) return;
-    const next = !item.markedDone;
-    // F-LIVE-08: crossing a milestone closes everything behind it, so it is
-    // the one move that asks first.
-    if (next && state.navigation === "milestones" && item.milestone) {
-      const ok = await confirm({
-        title: t("player.markDone"),
-        message: t("lobby.nav.milestones.body"),
-        confirmLabel: t("player.markDone"),
-      });
-      if (!ok) return;
-    }
+    // what the screen does not offer.
+    if (!item || !canValidate) return;
+    // Irreversible, so it asks first: in `forward_only` the question closes
+    // for good, at a checkpoint everything before it does too.
+    const ok = await confirm({
+      title: t("player.validate.title"),
+      message:
+        state.navigation === "milestones"
+          ? t("lobby.nav.milestones.body")
+          : t("player.validate.body"),
+      confirmLabel: t("player.validate"),
+    });
+    if (!ok) return;
     try {
-      await markDone(item.id, next);
+      await markDone(item.id, true);
     } catch {
-      toast(t("player.doneFailed"), "error");
+      toast(t("player.validateFailed"), "error");
     }
-  }, [item, readOnly, state.navigation, confirm, t, markDone, toast]);
+  }, [item, canValidate, state.navigation, confirm, t, markDone, toast]);
+
+  const toggleSkip = useCallback(async () => {
+    if (!item || readOnly) return;
+    try {
+      await skip(item.id, !item.skipped);
+    } catch {
+      toast(t("player.saveFailed"), "error");
+    }
+  }, [item, readOnly, skip, toast, t]);
+
+  const toggleFlag = useCallback(async () => {
+    if (!item || readOnly) return;
+    try {
+      await flag(item.id, !item.flagged);
+    } catch {
+      toast(t("player.saveFailed"), "error");
+    }
+  }, [item, readOnly, flag, toast, t]);
 
   // The two shortcuts of the DoD. `Alt` and `Ctrl` are held on purpose: the
   // bare keys belong to whatever field the student is typing in.
@@ -239,12 +284,12 @@ export function PlayerView({
       }
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         e.preventDefault();
-        void toggleDone();
+        void validate();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [dispatch, toggleDone, submitting]);
+  }, [dispatch, validate, submitting]);
 
   // The same three, for the sidebar strip. The zen player runs outside the
   // Shell and therefore shows no strip of its own; registering them anyway
@@ -258,7 +303,11 @@ export function PlayerView({
           { keys: "Alt+→", label: t("player.command.next") },
         ]
       : []),
-    { keys: `${modKey()}+Enter`, label: t("player.markDone") },
+    // Only where there is something to validate: a shortcut that does
+    // nothing on this paper is one the student learns for nothing.
+    ...(state.navigation === "free"
+      ? []
+      : [{ keys: `${modKey()}+Enter`, label: t("player.validate") }]),
   ]);
 
   const previous = neighbour(state, -1);
@@ -290,45 +339,62 @@ export function PlayerView({
   }
 
   // Only a rule worth reading under the question: a locked question, or an
-  // irreversible "done". That answers are saved as one types is said once,
-  // in the lobby, and the free player stays bare.
+  // irreversible validation ahead. That answers are saved as one types is
+  // said once, in the lobby, and the free player stays bare.
   const hint = locked
     ? t("player.hint.locked")
-    : state.navigation === "free"
-      ? null
-      : t("player.hint.forward");
+    : canValidate
+      ? state.navigation === "milestones"
+        ? t("player.hint.milestone")
+        : t("player.hint.forward")
+      : null;
   /*
-   * Who wears the accent, and therefore what the other two tiers are. The
-   * order matters: as long as the question is open, the thing to do is to
-   * close it; once it is closed, the thing to do is to leave it, and there is
-   * only one way out of the last question.
+   * Who wears the accent, and therefore what the other two tiers are. Where
+   * the navigation asks for a validation, that is the thing to do; once the
+   * question is settled, the thing to do is to leave it, and there is only
+   * one way out of the last question.
    */
-  const done = item?.markedDone === true;
-  const handInIsPrimary = done && next === null;
-  const nextIsPrimary = done && next !== null;
-  // Un-marking is offered exactly where the server accepts it (`free`, and a
-  // milestone not yet crossed). In `forward_only` there is nothing to press.
-  const canReopen = done && !readOnly;
+  const settled = mark !== "unanswered" || validated;
+  const handInIsPrimary = !canValidate && settled && next === null;
+  const nextIsPrimary = !canValidate && settled && next !== null;
   // A single question has no neighbours to walk to: the two buttons are
   // absent rather than disabled, and so is the strip above (F-LIVE-09 draws
   // the questions, and one question is not a progression).
   const manyItems = total > 1;
-  // Nothing to show at all — a one-question `forward_only` attempt, once the
-  // question is handed over — means no footer bar, not an empty one.
+  // Nothing to show at all — one question, nothing to validate — means no
+  // footer bar, not an empty one.
   const actions =
-    manyItems || !done || canReopen ? (
+    manyItems || canValidate ? (
       <PlayerActions
         manyItems={manyItems}
-        done={done}
-        canReopen={canReopen}
-        readOnly={readOnly}
+        canValidate={canValidate}
         hasPrevious={previous !== null}
         hasNext={next !== null}
         nextIsPrimary={nextIsPrimary}
-        onToggleDone={() => void toggleDone()}
+        onValidate={() => void validate()}
         onMove={(delta) => dispatch({ type: "move", delta })}
       />
     ) : null;
+  // The one tool of the answer, beside the flag: exactly one of the three
+  // can apply at a time, because they read the same two facts.
+  const clearable = item?.type === "mcq" && answered && !readOnly;
+  const skippable = item !== undefined && !readOnly && maySkip({ answered });
+  const tool = clearable ? (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={() => {
+        if (!item) return;
+        setAnswer(item.id, emptyAnswerOf(item.type, item.student), false);
+      }}
+    >
+      {t("player.clear")}
+    </Button>
+  ) : skippable ? (
+    <Button variant="ghost" size="sm" onClick={() => void toggleSkip()}>
+      {item?.skipped ? t("player.unskip") : t("player.skip")}
+    </Button>
+  ) : null;
 
   return (
     <>
@@ -374,14 +440,44 @@ export function PlayerView({
                     and one question per page needs no second counter. */}
                 {t("player.question", { n: state.index + 1 })}
               </p>
-              {item.markedDone ? (
-                <Badge tone="green" icon={Check}>
-                  {t("player.markedDone")}
+              {/* The state of the question in a word AND a symbol, the
+                  same symbols as the list above. Nothing for "not answered
+                  yet": that is what a question is until it is not. */}
+              {validated ? (
+                <Badge tone="zinc" icon={Lock}>
+                  {t("player.validated")}
+                </Badge>
+              ) : mark === "answered" ? (
+                <Badge tone="zinc" icon={Check}>
+                  {t("player.answered")}
+                </Badge>
+              ) : mark === "skipped" ? (
+                <Badge tone="zinc" icon={Minus}>
+                  {t("player.skipped")}
                 </Badge>
               ) : null}
               <span className="ml-auto text-[13px] text-fg-muted">
                 {item.points === 1 ? t("player.point") : t("player.points", { n: item.points })}
               </span>
+              {readOnly && !item.flagged ? null : (
+                // The word hides on a phone, where it would take a line of
+                // its own; the name stays, and so does the pressed state.
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-pressed={item.flagged}
+                  aria-label={item.flagged ? t("player.flagged") : t("player.flag")}
+                  title={item.flagged ? t("player.flagged") : t("player.flag")}
+                  disabled={readOnly}
+                  onClick={() => void toggleFlag()}
+                  className={cx("-mr-2", item.flagged && "!text-warning")}
+                >
+                  <Flag className={cx("size-3.5", item.flagged && "fill-current")} aria-hidden />
+                  <span className="hidden sm:inline">
+                    {item.flagged ? t("player.flagged") : t("player.flag")}
+                  </span>
+                </Button>
+              )}
             </div>
             <Card className="p-5 sm:p-6">
               <QuestionHost
@@ -389,7 +485,9 @@ export function PlayerView({
                 type={item.type}
                 student={item.student}
                 answer={state.answers[item.id] ?? null}
-                onChange={(payload) => setAnswer(item.id, payload)}
+                onChange={(payload) =>
+                  setAnswer(item.id, payload, isAnswered(item.type, payload))
+                }
                 readOnly={readOnly}
                 {...(item.type === "code"
                   ? {
@@ -440,6 +538,9 @@ export function PlayerView({
                   : {})}
               />
             </Card>
+            {/* `-ml-3`: the ghost button's own padding, so its word lines
+                up with the card's edge rather than floating off it. */}
+            {tool ? <div className="-ml-3 mt-2 flex items-center">{tool}</div> : null}
             {desktop && actions ? (
               <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>
             ) : null}

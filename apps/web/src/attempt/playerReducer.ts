@@ -5,9 +5,9 @@
  * still write to, which question the arrows reach — is a function of the
  * `AttemptView` the server sent and of what happened since. Keeping it pure
  * is what makes the navigation rules testable without a browser, and it is
- * the only way the client rule and the server rule can be compared line by
- * line: `lockedIds` below is `lockedItemIds` of
- * `apps/api/src/modules/live/service.ts`, rewritten in the same order.
+ * the only way the client rule and the server rule can agree: `lockedIds`
+ * below and `lockedItemIds` of `apps/api/src/modules/live/attempt.ts` are the
+ * SAME function, `@quiz/domain#lockedItems`.
  *
  * The server enforces the same rules on every write (deviation W5-15 also
  * sends `items[].locked`, which is why `load` adopts it). The client enforces
@@ -16,6 +16,7 @@
  * F-LIVE-09 ("permet d'y aller si la navigation l'autorise").
  */
 import type { AttemptItem, AttemptView, Navigation } from "@quiz/contracts";
+import { answerMark, lockedItems } from "@quiz/domain";
 
 import type { Segment } from "../ui";
 
@@ -25,7 +26,15 @@ export interface PlayerItem {
   points: number;
   type: string;
   milestone: boolean;
+  /**
+   * VALIDATED: "Validate and continue" in `forward_only`, a crossed
+   * checkpoint in `milestones` (F-LIVE-08, issue #89).
+   */
   markedDone: boolean;
+  /** "I won't answer this question" (issue #89). */
+  skipped: boolean;
+  /** The student's review flag (issue #89). */
+  flagged: boolean;
   /** What `toStudent` published. Opaque here; only the type's Player reads it. */
   student: unknown;
   /** The server's own verdict when the view was built. */
@@ -45,9 +54,15 @@ export type PlayerAction =
   | { type: "load"; view: AttemptView }
   | { type: "goto"; itemId: string }
   | { type: "move"; delta: 1 | -1 }
-  | { type: "answer"; itemId: string; payload: unknown }
+  /**
+   * `answered`: the payload holds something (the type's `isAnswered`), which
+   * takes back an "I won't answer" — the server does the same on its side.
+   */
+  | { type: "answer"; itemId: string; payload: unknown; answered?: boolean }
   | { type: "adopt"; itemId: string; payload: unknown }
-  | { type: "done"; itemId: string; done: boolean };
+  | { type: "done"; itemId: string; done: boolean }
+  | { type: "skip"; itemId: string; skipped: boolean }
+  | { type: "flag"; itemId: string; flagged: boolean };
 
 export const emptyPlayerState: PlayerState = {
   items: [],
@@ -63,6 +78,8 @@ const toItem = (item: AttemptItem): PlayerItem => ({
   type: item.type,
   milestone: item.milestone,
   markedDone: item.markedDone,
+  skipped: item.skipped,
+  flagged: item.flagged,
   student: item.student,
   serverLocked: item.locked,
 });
@@ -70,25 +87,19 @@ const toItem = (item: AttemptItem): PlayerItem => ({
 /**
  * Which items are closed to writing, and therefore to navigation.
  *
- * `free`: none. `forward_only`: every question already marked done.
- * `milestones`: everything up to and including the furthest validated
- * milestone. Identical to the server's rule, on purpose.
+ * `free`: none. `forward_only`: every validated question. `milestones`:
+ * everything up to and including the furthest validated checkpoint. The
+ * server's rule, from the same function.
  */
 export function lockedIds(state: PlayerState): Set<string> {
-  const locked = new Set<string>();
-  if (state.navigation === "free") return locked;
-  if (state.navigation === "forward_only") {
-    for (const item of state.items) if (item.markedDone) locked.add(item.id);
-    return locked;
-  }
-  let furthest = -1;
-  state.items.forEach((item, rank) => {
-    if (item.milestone && item.markedDone) furthest = rank;
-  });
-  state.items.forEach((item, rank) => {
-    if (rank <= furthest) locked.add(item.id);
-  });
-  return locked;
+  return lockedItems(
+    state.navigation,
+    state.items.map((item) => ({
+      id: item.id,
+      milestone: item.milestone,
+      validated: item.markedDone,
+    })),
+  );
 }
 
 export function isLocked(state: PlayerState, itemId: string): boolean {
@@ -117,26 +128,40 @@ export function neighbour(state: PlayerState, delta: 1 | -1): number | null {
 }
 
 /**
- * The progress strip, one segment per question: where the student is, what
- * they marked done, what holds an answer. Whether an answer holds SOMETHING
- * is the question type's call, so it comes in as `answered` and this module
- * stays free of the registry.
+ * The question list (F-LIVE-09, issue #89), one segment per question: its
+ * mark — answered, "won't answer", or nothing yet — whether it is flagged,
+ * whether it is closed, and where the student is. Whether an answer holds
+ * SOMETHING is the question type's call, so it comes in as `answered` and
+ * this module stays free of the registry.
  */
 export function segmentsOf(
   state: PlayerState,
   answered: (type: string, answer: unknown) => boolean,
 ): Segment[] {
+  const locked = lockedIds(state);
   return state.items.map((item, index) => ({
     id: item.id,
-    state:
-      index === state.index
-        ? "current"
-        : item.markedDone
-          ? "done"
-          : answered(item.type, state.answers[item.id] ?? null)
-            ? "answered"
-            : "empty",
+    mark: answerMark({
+      answered: answered(item.type, state.answers[item.id] ?? null),
+      skipped: item.skipped,
+    }),
+    current: index === state.index,
+    flagged: item.flagged,
+    locked: item.serverLocked || locked.has(item.id),
   }));
+}
+
+/** One item's own fields, replaced; the SAME state when nothing moved. */
+function patchItem(state: PlayerState, itemId: string, patch: Partial<PlayerItem>): PlayerState {
+  let changed = false;
+  const items = state.items.map((item) => {
+    if (item.id !== itemId) return item;
+    const next = { ...item, ...patch };
+    if ((Object.keys(patch) as (keyof PlayerItem)[]).every((k) => next[k] === item[k])) return item;
+    changed = true;
+    return next;
+  });
+  return changed ? { ...state, items } : state;
 }
 
 export function playerReducer(state: PlayerState, action: PlayerAction): PlayerState {
@@ -167,16 +192,26 @@ export function playerReducer(state: PlayerState, action: PlayerAction): PlayerS
       return index === null ? state : { ...state, index };
     }
     case "answer":
-    case "adopt":
+    case "adopt": {
       if (action.type === "answer" && isLocked(state, action.itemId)) return state;
-      return { ...state, answers: { ...state.answers, [action.itemId]: action.payload } };
+      const next = { ...state, answers: { ...state.answers, [action.itemId]: action.payload } };
+      return action.type === "answer" && action.answered === true
+        ? patchItem(next, action.itemId, { skipped: false })
+        : next;
+    }
+    case "skip":
+      if (isLocked(state, action.itemId)) return state;
+      return patchItem(state, action.itemId, { skipped: action.skipped });
+    case "flag":
+      if (isLocked(state, action.itemId)) return state;
+      return patchItem(state, action.itemId, { flagged: action.flagged });
     case "done": {
       const items = state.items.map((item) =>
         item.id === action.itemId ? { ...item, markedDone: action.done } : item,
       );
       const next = { ...state, items };
-      // F-LIVE-08: in `forward_only` marking done is irreversible AND moves
-      // on — the question the student just closed is no longer reachable, so
+      // F-LIVE-08: "Validate and continue" is irreversible AND moves on —
+      // the question the student just closed is no longer reachable, so
       // staying on it would be a dead end.
       if (action.done && state.navigation !== "free" && action.itemId === currentItem(state)?.id) {
         const forward = neighbour(next, 1);

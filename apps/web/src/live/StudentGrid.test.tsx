@@ -110,6 +110,53 @@ describe("StudentGrid — the rows", () => {
     expect(within(rowOf("Nadia Roux 0")).getByText("2/4 · 50 %")).toBeVisible();
   });
 
+  it("counts a skipped question as progress (issue #89)", () => {
+    const view = viewIn("running", 1, 2);
+    const itemIds = view.items.map((i) => i.id);
+    view.rows[0] = {
+      ...view.rows[0]!,
+      cells: [
+        makeCell({ itemId: itemIds[0]!, status: "skipped" }),
+        makeCell({ itemId: itemIds[1]!, status: "seen" }),
+      ],
+    };
+    setup(view);
+    expect(within(rowOf("Nadia Roux 0")).getByText("1/2 · 50 %")).toBeVisible();
+    expect(within(rowOf("Nadia Roux 0")).getByRole("button", { name: /Question 1/ })).toBeInTheDocument();
+  });
+
+  it("marks a flagged cell and counts the class's flags in the column header (issue #89)", () => {
+    const view = viewIn("running", 3, 2);
+    const itemIds = view.items.map((i) => i.id);
+    const flag = (rowIndex: number) => {
+      const row = view.rows[rowIndex]!;
+      view.rows[rowIndex] = {
+        ...row,
+        cells: row.cells.map((c) => (c.itemId === itemIds[0] ? { ...c, status: "in_progress", flagged: true } : c)),
+      };
+    };
+    flag(0);
+    flag(1);
+    // A teacher's own test walk flags nothing about the paper's clarity.
+    view.rows[2] = { ...view.rows[2]!, staff: true };
+    flag(2);
+    setup(view);
+
+    const headers = screen.getAllByRole("columnheader");
+    const q1 = headers.find((h) => h.textContent?.startsWith("Q1"))!;
+    expect(q1).toHaveTextContent(/^Q1mcq2/);
+    expect(within(q1).getByText("2 students flagged this question for review")).toBeInTheDocument();
+    const q2 = headers.find((h) => h.textContent?.startsWith("Q2"))!;
+    expect(q2).toHaveTextContent(/^Q2short$/);
+
+    expect(
+      within(rowOf("Nadia Roux 0")).getByRole("button", { name: /Question 1 · flagged for review/ }),
+    ).toBeInTheDocument();
+    expect(
+      within(rowOf("Nadia Roux 0")).getByRole("button", { name: /Question 2$/ }),
+    ).toBeInTheDocument();
+  });
+
   it("badges a student who handed in, and one who ran out of time", () => {
     const view = viewIn("closed", 2, 2);
     view.rows[0] = { ...view.rows[0]!, state: "submitted" };

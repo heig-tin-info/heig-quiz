@@ -5,9 +5,11 @@ import {
   CircleCheck,
   Clock,
   Ellipsis,
+  Flag,
   Hourglass,
   Loader2,
   Lock,
+  Minus,
   Pause,
   PenLine,
   WifiOff,
@@ -230,26 +232,55 @@ export function Ring({
   );
 }
 
-export type SegmentState = "empty" | "answered" | "done" | "current";
+/**
+ * What the student has done with a question (issue #89): holding an answer,
+ * left blank on purpose ("I won't answer"), or nothing yet. Where the student
+ * IS, whether the question is flagged for review and whether it is closed are
+ * separate facts of the {@link Segment}, not further marks: a question can be
+ * answered AND flagged AND the current one.
+ */
+export type SegmentMark = "unanswered" | "answered" | "skipped";
 
-const SEGMENT_BAR: Record<SegmentState, string> = {
-  empty: "h-1.5 bg-surface-3",
-  answered: "h-1.5 bg-line-strong",
-  done: "h-1.5 bg-fg",
-  current: "h-2 bg-accent",
+/**
+ * Each mark is a SHAPE before it is a tint, so the three read apart in grey,
+ * to a colour-blind student and on a washed-out projector: a hollow outline
+ * (nothing yet), a solid bar carrying a check (answered), a dashed outline on
+ * a recessed fill carrying a dash (won't answer). The hollow one draws in
+ * `fg-faint` and not `line-strong`: a 1.5 px outline is a graphic object and
+ * needs 3:1 against the bar behind it, which `line-strong` does not reach in
+ * dark mode.
+ */
+const SEGMENT_BAR: Record<SegmentMark, string> = {
+  unanswered: "border-[1.5px] border-fg-faint bg-surface",
+  answered: "border-[1.5px] border-fg bg-fg text-surface",
+  skipped: "border-[1.5px] border-dashed border-fg-muted bg-surface-3 text-fg-muted",
 };
 
-const SEGMENT_LABEL: Record<SegmentState, "segments.empty" | "segments.answered" | "segments.done" | "segments.current"> = {
-  empty: "segments.empty",
+const SEGMENT_GLYPH: Record<SegmentMark, IconType | null> = {
+  unanswered: null,
+  answered: Check,
+  skipped: Minus,
+};
+
+const SEGMENT_LABEL: Record<
+  SegmentMark,
+  "segments.unanswered" | "segments.answered" | "segments.skipped"
+> = {
+  unanswered: "segments.unanswered",
   answered: "segments.answered",
-  done: "segments.done",
-  current: "segments.current",
+  skipped: "segments.skipped",
 };
 
 export interface Segment {
   /** Stable key, and what the caller gets back from `onSelect`. */
   id: string;
-  state: SegmentState;
+  mark: SegmentMark;
+  /** Where the student is: the accent outline and the bold accent number. */
+  current?: boolean;
+  /** Flagged for review by the student (issue #89): a flag over the number. */
+  flagged?: boolean;
+  /** Closed by the navigation (validated in `forward_only`, behind a checkpoint). */
+  locked?: boolean;
 }
 
 /** The `gap-1` between two bars, in px: part of what the numbers compete for. */
@@ -269,10 +300,11 @@ function segmentLabelStep(width: number, count: number): 1 | 5 | 10 {
 }
 
 /**
- * One bar per question in the zen player (mockup 07): where the student is,
- * what is done, what was opened and left, what was never opened. Four states
- * and not five, because "seen but empty" and "answered" are the same decision
- * for the reader: there is something left to do there.
+ * One bar per question in the zen player (mockup 07, issue #89): what the
+ * student did with it (a {@link SegmentMark}), whether they flagged it for
+ * review, whether it is closed, and where they are. "Opened and left" is not
+ * a state of its own: for the reader it is the same decision as "never
+ * opened" — there is something left to do there.
  *
  * Roving tabindex like `Tabs`: twenty questions must not be twenty stops on
  * the way to the answer field. Arrows move with wrap, Home and End jump, and
@@ -314,7 +346,7 @@ export function ProgressSegments({
 }) {
   const t = useT();
   const strip = useRef<HTMLElement>(null);
-  const current = Math.max(0, segments.findIndex((s) => s.state === "current"));
+  const current = Math.max(0, segments.findIndex((s) => s.current === true));
   // The strip's own width, not the viewport's: it sits in a 760 px column on
   // a laptop and in a 358 px one on a phone, and only its own width says how
   // much room a number has.
@@ -330,6 +362,10 @@ export function ProgressSegments({
     return () => observer.disconnect();
   }, []);
   const step = segmentLabelStep(width, segments.length);
+  // The glyph inside a bar (the check, the dash) needs the room a number
+  // needs; compressed, the bars drop to a thin line and the SHAPE — solid,
+  // hollow, dashed — is what is left to tell the marks apart.
+  const roomy = step === 1;
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     const buttons = Array.from(strip.current?.querySelectorAll("button") ?? []);
@@ -356,7 +392,13 @@ export function ProgressSegments({
       )}
     >
       {segments.map((segment, i) => {
-        const name = t("segments.item", { n: i + 1, state: t(SEGMENT_LABEL[segment.state]) });
+        const facts = [
+          t(SEGMENT_LABEL[segment.mark]),
+          ...(segment.flagged ? [t("segments.flagged")] : []),
+          ...(segment.locked ? [t("segments.locked")] : []),
+          ...(segment.current ? [t("segments.current")] : []),
+        ];
+        const name = t("segments.item", { n: i + 1, state: facts.join(", ") });
         const last = segments.length - 1;
         const numbered =
           step === 1 ||
@@ -364,6 +406,7 @@ export function ProgressSegments({
           i === last ||
           i === current ||
           ((i + 1) % step === 0 && last - i >= 2);
+        const Glyph = roomy ? SEGMENT_GLYPH[segment.mark] : null;
         return (
           <button
             key={segment.id}
@@ -371,24 +414,38 @@ export function ProgressSegments({
             disabled={!onSelect}
             tabIndex={i === current ? 0 : -1}
             aria-label={name}
-            aria-current={segment.state === "current" ? "true" : undefined}
+            title={name}
+            aria-current={segment.current ? "true" : undefined}
             onClick={() => onSelect?.(segment.id, i)}
             className="min-w-0.5 flex-1 basis-0 rounded-full px-0 py-1.5 disabled:cursor-default"
           >
-            <span className={cx("block rounded-full transition-colors duration-150", SEGMENT_BAR[segment.state])} />
-            {/* The row keeps its height whether or not it holds a number, so
-                the bars stay on one line. The number overflows its own bar
-                when compressed — its neighbours are empty, so there is room. */}
             <span
               className={cx(
-                "mt-0.5 block h-2.75 overflow-visible whitespace-nowrap text-center text-[11px] leading-none tabular-nums",
-                segment.state === "current"
-                  ? "font-semibold text-accent"
-                  : "font-medium text-fg-faint",
+                "flex items-center justify-center rounded-full transition-colors duration-150",
+                roomy ? "h-3.5" : "h-2",
+                SEGMENT_BAR[segment.mark],
+                segment.locked && !segment.current && "opacity-45",
+                segment.current && "outline-2 outline-offset-1 outline-accent",
+              )}
+            >
+              {Glyph ? <Glyph className="size-2.5 stroke-3" aria-hidden /> : null}
+            </span>
+            {/* The row keeps its height whether or not it holds a number, so
+                the bars stay on one line. The number overflows its own bar
+                when compressed — its neighbours are empty, so there is room.
+                The flag is never thinned out: it is the one mark the student
+                set to find the question again. */}
+            <span
+              className={cx(
+                "mt-0.5 flex h-2.75 items-center justify-center gap-0.5 overflow-visible whitespace-nowrap text-[11px] leading-none tabular-nums",
+                segment.current ? "font-semibold text-accent" : "font-medium text-fg-faint",
               )}
               aria-hidden
             >
               {numbered ? i + 1 : null}
+              {segment.flagged ? (
+                <Flag className="size-2.5 shrink-0 fill-current text-warning" aria-hidden />
+              ) : null}
             </span>
           </button>
         );
@@ -401,6 +458,7 @@ export type VerdictState =
   | "blank"
   | "inProgress"
   | "answered"
+  | "skipped"
   | "done"
   | "correct"
   | "partial"
@@ -411,6 +469,7 @@ type VerdictKey =
   | "verdict.blank"
   | "verdict.inProgress"
   | "verdict.answered"
+  | "live.verdict.skipped"
   | "live.verdict.done"
   | "verdict.correct"
   | "verdict.partial"
@@ -423,17 +482,28 @@ type VerdictKey =
  * green / amber / red, so a teacher scanning a grid never mistakes "they
  * wrote something" for "it is right". The two blues are the same hue at two
  * strengths — `info-soft` for an answer that is still being written,
- * `info` filled for one the student has marked done — because the progression
+ * `info` filled for one the student has validated — because the progression
  * is a progression: a column darkening from left to right is a class moving
  * through the quiz, readable at squinting distance and on a projector.
  *
- * `done` is the one state the grading list cannot show, which is why its word
- * lives with the live dictionary and not with the six shared `verdict.*` ones.
+ * `done` is the VALIDATED question of the locking navigations ("Validate and
+ * continue", a crossed checkpoint). It and `skipped` — "I won't answer this
+ * question" (issue #89) — are the states the grading list cannot show, which
+ * is why their words live with the live dictionary and not with the shared
+ * `verdict.*` ones. `skipped` is not blue: it is not progress through the
+ * answer, it is a decision to leave it, so it wears the neutral recessed
+ * fill with a DASHED edge and a dash — the student's own list draws it the
+ * same way.
  */
 const VERDICTS: Record<VerdictState, { icon: IconType; tint: string; key: VerdictKey }> = {
   blank: { icon: Circle, tint: "text-line-strong", key: "verdict.blank" },
   inProgress: { icon: Ellipsis, tint: "bg-surface-2 text-fg-faint", key: "verdict.inProgress" },
   answered: { icon: PenLine, tint: "bg-info-soft text-info", key: "verdict.answered" },
+  skipped: {
+    icon: Minus,
+    tint: "border border-dashed border-fg-faint bg-surface-2 text-fg-muted",
+    key: "live.verdict.skipped",
+  },
   done: { icon: CircleCheck, tint: "bg-info text-on-fill", key: "live.verdict.done" },
   correct: { icon: Check, tint: "bg-success-soft text-success", key: "verdict.correct" },
   partial: { icon: ChartPie, tint: "bg-warning-soft text-warning", key: "verdict.partial" },
@@ -455,6 +525,7 @@ export function VerdictCell({
   onClick,
   label,
   describedBy,
+  flagged = false,
   className = "",
 }: {
   state: VerdictState;
@@ -465,11 +536,18 @@ export function VerdictCell({
   label?: string;
   /** Id of a tooltip that describes the cell while it is shown (`aria-describedby`). */
   describedBy?: string;
+  /**
+   * The student flagged the question for review (issue #89): a small solid
+   * flag in the top-right corner, amber on the grid's own surface. A corner
+   * mark rather than a tint, because the tint already says the progress or
+   * the verdict, and the flag is a third fact on top of them.
+   */
+  flagged?: boolean;
   className?: string;
 }) {
   const t = useT();
   const { icon: Icon, tint, key } = VERDICTS[state];
-  const name = label ?? t(key);
+  const name = `${label ?? t(key)}${flagged ? ` · ${t("live.verdict.flagged")}` : ""}`;
   // The answer carries no colour of its own: it INHERITS the state's ink,
   // which is the only way it stays legible on every tint. `text-fg` on the
   // filled `done` blue measured 2.9:1, under half of what a teacher three
@@ -480,10 +558,18 @@ export function VerdictCell({
       {value != null && value !== "" ? (
         <span className="max-w-11.5 truncate text-xs font-medium">{value}</span>
       ) : null}
+      {flagged ? (
+        <span
+          className="absolute -right-1 -top-1 flex size-3.5 items-center justify-center rounded-full bg-surface ring-1 ring-line"
+          aria-hidden
+        >
+          <Flag className="size-2.25 fill-current text-warning" />
+        </span>
+      ) : null}
     </>
   );
   const chrome = cx(
-    "inline-flex h-7 w-full items-center justify-center gap-1 rounded-[7px] px-1",
+    "relative inline-flex h-7 w-full items-center justify-center gap-1 rounded-[7px] px-1",
     tint,
     className,
   );

@@ -88,6 +88,8 @@ const attemptView: AttemptView = {
       answer: null,
       revision: 0,
       markedDone: false,
+      skipped: false,
+      flagged: false,
       locked: false,
     },
   ],

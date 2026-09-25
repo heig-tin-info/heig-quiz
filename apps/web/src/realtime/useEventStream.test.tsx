@@ -111,6 +111,7 @@ describe("useEventStream", () => {
     act(() =>
       live()[0]!.send({
         type: "dashboard.cell",
+        flagged: false,
         evaluationId: EVALUATION_ID,
         attemptId: EVALUATION_ID,
         itemId: EVALUATION_ID,

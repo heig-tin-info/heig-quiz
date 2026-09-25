@@ -32,8 +32,13 @@ import { codeimageConfig, codeimageRunOutcome, codeimageStudentView } from "./co
 // closure. `?scene=` (read in section 0) picks which one the fake backend
 // serves:
 //
-//   ?scene=lobby | running | paused | closed | extend | single
+//   ?scene=lobby | running | paused | closed | extend | single | marks | forward
 //                                                     (running by default)
+//
+// `marks` is the question list of issue #89 with every state at once:
+// answered, "won't answer", flagged, and nothing yet. `forward` is the same
+// paper in `forward_only`, its first question validated and closed, so the
+// "Validate and continue" step is on screen.
 //
 // `single` serves the SAME attempt cut down to its first question: the
 // one-question evaluation the player draws without a progress strip and
@@ -223,7 +228,14 @@ const studentPayloads: Record<number, unknown> = {
 };
 
 /** The attempt's mutable half: what the student typed, and where they are. */
-const studentAnswers = new Map<string, { payload: unknown; revision: number; done: boolean }>();
+interface StoredAnswer {
+  payload: unknown;
+  revision: number;
+  done: boolean;
+  skipped?: boolean;
+  flagged?: boolean;
+}
+const studentAnswers = new Map<string, StoredAnswer>();
 /*
  * The circuit item opens with something already on the canvas — the RC with
  * its ground wires missing. An empty box would show the empty state and
@@ -231,6 +243,28 @@ const studentAnswers = new Map<string, { payload: unknown; revision: number; don
  */
 studentAnswers.set(studentItem(5), { payload: { schematic: RC_STUDENT }, revision: 1, done: false });
 let studentPosition: string | null = studentItem(1);
+if (scene === "marks" || scene === "forward") {
+  // Q1 answered, Q2 left on purpose, Q3 flagged and still empty (where the
+  // student is), Q4 flagged with an answer; Q5 answered, Q6 untouched.
+  studentAnswers.set(studentItem(1), {
+    payload: { selected: [1] },
+    revision: 2,
+    done: scene === "forward",
+  });
+  studentAnswers.set(studentItem(2), { payload: null, revision: 0, done: false, skipped: true });
+  studentAnswers.set(studentItem(3), { payload: null, revision: 0, done: false, flagged: true });
+  studentAnswers.set(studentItem(4), {
+    payload: {
+      regions: [
+        "double r_parallele(double r1, double r2)\n{\n    if (r1 == 0 || r2 == 0)\n        return 0;\n    return r1 * r2 / (r1 + r2);\n}\n",
+      ],
+    },
+    revision: 3,
+    done: false,
+    flagged: true,
+  });
+  studentPosition = studentItem(scene === "forward" ? 2 : 3);
+}
 export const BASE_DEADLINE = now + 14 * 60_000 + 32_000;
 export let studentDeadline = BASE_DEADLINE;
 /**
@@ -260,7 +294,7 @@ export const studentAttemptView = (): AttemptView => ({
     mode: "exam",
     state: studentEvaluationState(),
     settings: {
-      navigation: "free",
+      navigation: scene === "forward" ? "forward_only" : "free",
       presentation: "zen",
       lobby: "manual",
       shuffleItems: false,
@@ -304,7 +338,10 @@ export const studentAttemptView = (): AttemptView => ({
       answer: stored?.payload ?? null,
       revision: stored?.revision ?? 0,
       markedDone: stored?.done ?? false,
-      locked: false,
+      skipped: stored?.skipped ?? false,
+      flagged: stored?.flagged ?? false,
+      // `forward_only` closes a validated question (F-LIVE-08).
+      locked: scene === "forward" && stored?.done === true,
     };
   }),
 });
@@ -408,7 +445,21 @@ on("PUT", "/app/api/attempts/:id/answers/:itemId", (m, body): AutosaveResponse =
       serverNow: new Date().toISOString(),
     };
   }
-  studentAnswers.set(itemId, { payload: body.payload, revision, done: stored?.done ?? false });
+  // The server's rule (issue #89): an answer that holds something takes back
+  // an "I won't answer". The mock cannot ask the type, so anything non-null
+  // counts, which is right for every payload the player sends but an empty
+  // mcq selection.
+  const empty =
+    body.payload === null ||
+    (typeof body.payload === "object" &&
+      Array.isArray((body.payload as { selected?: unknown }).selected) &&
+      (body.payload as { selected: unknown[] }).selected.length === 0);
+  studentAnswers.set(itemId, {
+    ...(stored ?? { done: false }),
+    payload: body.payload,
+    revision,
+    skipped: empty ? (stored?.skipped ?? false) : false,
+  });
   return { revision, accepted: true, serverNow: new Date().toISOString() };
 });
 
@@ -418,6 +469,22 @@ on("POST", "/app/api/attempts/:id/answers/:itemId/done", (m, body) => {
   const done = body.done === true;
   studentAnswers.set(itemId, { ...stored, done });
   return { done, nextItemId: null, serverNow: new Date().toISOString() };
+});
+
+on("POST", "/app/api/attempts/:id/answers/:itemId/skip", (m, body) => {
+  const itemId = m.groups!.itemId!;
+  const stored = studentAnswers.get(itemId) ?? { payload: null, revision: 0, done: false };
+  const skipped = body.skipped === true;
+  studentAnswers.set(itemId, { ...stored, skipped });
+  return { skipped, serverNow: new Date().toISOString() };
+});
+
+on("POST", "/app/api/attempts/:id/answers/:itemId/flag", (m, body) => {
+  const itemId = m.groups!.itemId!;
+  const stored = studentAnswers.get(itemId) ?? { payload: null, revision: 0, done: false };
+  const flagged = body.flagged === true;
+  studentAnswers.set(itemId, { ...stored, flagged });
+  return { flagged, serverNow: new Date().toISOString() };
 });
 
 on("POST", "/app/api/attempts/:id/position", (_m, body) => {

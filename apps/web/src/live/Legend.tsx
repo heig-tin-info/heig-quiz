@@ -3,7 +3,8 @@ import { useT } from "../i18n";
 import { VerdictCell, type VerdictState } from "../ui";
 
 /**
- * The seven states a cell can wear, named. A tint alone is not a legend, and a
+ * The eight states a cell can wear, named, and the flag a student can put
+ * on any of them (issue #89). A tint alone is not a legend, and a
  * dashboard on a lecture-hall wall has lost half of its saturation anyway.
  *
  * They are listed in the order a cell goes through them: the three progress
@@ -21,6 +22,7 @@ const SHOWN = [
   ["blank", "verdict.blank"],
   ["inProgress", "verdict.inProgress"],
   ["answered", "verdict.answered"],
+  ["skipped", "live.verdict.skipped"],
   ["done", "live.verdict.done"],
   ["correct", "verdict.correct"],
   ["partial", "verdict.partial"],
@@ -43,6 +45,12 @@ export function Legend({ showResults = false }: { showResults?: boolean }) {
             {t(key)}
           </li>
         ))}
+        <li className="flex items-center gap-1.5">
+          <span className="w-8">
+            <VerdictCell state="blank" flagged />
+          </span>
+          {t("live.legend.flag")}
+        </li>
       </ul>
       <span className="text-fg-faint">
         {showResults ? t("live.legend.live") : t("live.legend.off")}

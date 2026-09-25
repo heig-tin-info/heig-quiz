@@ -277,3 +277,50 @@ describe("Autosave", () => {
     expect(save.unsaved).toEqual([]);
   });
 });
+
+describe("settle (issue #89)", () => {
+  it("resolves at once when nothing is pending", async () => {
+    const { save } = make();
+    await expect(save.settle("i1")).resolves.toBeUndefined();
+  });
+
+  it("skips the debounce and resolves once the latest payload is acknowledged", async () => {
+    const { save, sent } = make();
+    save.change("i1", "x");
+    let settled = false;
+    void save.settle("i1").then(() => {
+      settled = true;
+    });
+    // Sent without waiting for the 300 ms debounce.
+    expect(sent).toHaveLength(1);
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    sent[0]!.resolve(accepted(1));
+    await vi.waitFor(() => expect(settled).toBe(true));
+  });
+
+  it("waits for a change typed while the first request was in flight", async () => {
+    const { save, sent } = make();
+    save.change("i1", "x");
+    vi.advanceTimersByTime(300);
+    save.change("i1", "");
+    let settled = false;
+    void save.settle("i1").then(() => {
+      settled = true;
+    });
+    sent[0]!.resolve(accepted(1));
+    await vi.waitFor(() => expect(sent).toHaveLength(2));
+    expect(settled).toBe(false);
+    expect(sent[1]!.body.payload).toBe("");
+    sent[1]!.resolve(accepted(2));
+    await vi.waitFor(() => expect(settled).toBe(true));
+  });
+
+  it("never rejects: a failed write releases it too", async () => {
+    const { save, sent } = make();
+    save.change("i1", "x");
+    const settled = save.settle("i1");
+    sent[0]!.reject(new Error("network"));
+    await expect(settled).resolves.toBeUndefined();
+  });
+});

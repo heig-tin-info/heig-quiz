@@ -21,7 +21,7 @@ import {
   VerdictCell,
   useNow,
   type Person,
-  type SegmentState,
+  type SegmentMark,
   type SyncState,
   type VerdictState,
 } from "./ui";
@@ -62,6 +62,7 @@ const VERDICT_STATES: VerdictState[] = [
   "blank",
   "inProgress",
   "answered",
+  "skipped",
   "done",
   "correct",
   "partial",
@@ -71,15 +72,16 @@ const VERDICT_STATES: VerdictState[] = [
 
 const SYNC_STATES: SyncState[] = ["saved", "saving", "offline", "closed"];
 
-const SEGMENT_DEMO: SegmentState[] = [
-  "done",
-  "done",
-  "answered",
-  "current",
-  "empty",
-  "answered",
-  "empty",
-  "empty",
+/** The four facts of issue #89 side by side: answered, skipped, empty, flagged. */
+const SEGMENT_DEMO: { mark: SegmentMark; flagged?: boolean }[] = [
+  { mark: "answered" },
+  { mark: "answered", flagged: true },
+  { mark: "skipped" },
+  { mark: "answered" },
+  { mark: "unanswered", flagged: true },
+  { mark: "skipped", flagged: true },
+  { mark: "unanswered" },
+  { mark: "unanswered" },
 ];
 
 const SAMPLE = `## Arithmétique des pointeurs
@@ -206,9 +208,10 @@ export function DevGallery() {
   const [source, setSource] = useState(SAMPLE);
   const [current, setCurrent] = useState(3);
 
-  const segments = SEGMENT_DEMO.map((state, i) => ({
+  const segments = SEGMENT_DEMO.map((demo, i) => ({
     id: `q${i + 1}`,
-    state: i === current ? ("current" as const) : state === "current" ? ("empty" as const) : state,
+    ...demo,
+    current: i === current,
   }));
 
   return (
@@ -318,7 +321,9 @@ export function DevGallery() {
           <ProgressSegments
             segments={Array.from({ length: 20 }, (_, i) => ({
               id: `n${i}`,
-              state: (i < 7 ? "done" : i === 7 ? "current" : i % 3 === 0 ? "answered" : "empty") as SegmentState,
+              mark: (i < 7 || i % 3 === 0 ? "answered" : i % 4 === 0 ? "skipped" : "unanswered") as SegmentMark,
+              current: i === 7,
+              flagged: i === 4 || i === 12,
             }))}
             label="Progress: question 8 of 20, at 360 px"
           />

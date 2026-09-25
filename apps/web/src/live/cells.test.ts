@@ -53,6 +53,7 @@ describe("dashboard.cell carries the live verdict forward", () => {
   const event = (verdict: "correct" | "wrong" | null, revision = 2) =>
     ({
       type: "dashboard.cell",
+      flagged: false,
       evaluationId: EVALUATION_ID,
       attemptId: id("attempt", 0),
       itemId: id("item", 0),

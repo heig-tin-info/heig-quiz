@@ -44,7 +44,15 @@ for (const name of FLAG_NAMES) {
  * fake backend serves on ONE evaluation (section 4) and changes nothing
  * anywhere else.
  */
-export type Scene = "lobby" | "running" | "paused" | "closed" | "extend" | "single";
+export type Scene =
+  | "lobby"
+  | "running"
+  | "paused"
+  | "closed"
+  | "extend"
+  | "single"
+  | "marks"
+  | "forward";
 const SCENE_KEY = "quiz-mock-scene";
 const sceneParam = params.get("scene");
 if (sceneParam !== null) {

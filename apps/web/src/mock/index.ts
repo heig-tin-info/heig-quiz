@@ -26,7 +26,7 @@
  *    and the results. Without it the teacher holds no seat, which is the
  *    path that asks for a confirmation first;
  *  - `scene` — the student player's state, and only that one screen's:
- *    `?scene=lobby|running|paused|closed|extend|single` (`running` by default).
+ *    `?scene=lobby|running|paused|closed|extend|single|marks|forward` (`running` by default).
  *
  * ONE dataset, in one file per module of `apps/api/src/modules`, each
  * registering its own routes when it is imported:
@@ -388,17 +388,17 @@ class MockEventSource {
       );
       const row = candidates[Math.floor(rand() * candidates.length)];
       if (!row) return;
-      const index = row.cells.findIndex((c) => c.status !== "done");
+      const index = row.cells.findIndex((c) => c.status === "empty" || c.status === "seen");
       const cell = row.cells[index];
       const item = evaluation.items[index];
       if (!cell || !item) return;
       const question = itemQuestion(item);
-      cell.status = cell.status === "empty" ? "in_progress" : "done";
+      cell.status = cell.status === "empty" ? "seen" : "in_progress";
       cell.revision += 1;
-      cell.verdict = mockVerdict(index * 7 + cell.revision * 3);
-      cell.provisional = true;
+      cell.verdict = cell.status === "in_progress" ? mockVerdict(index * 7 + cell.revision * 3) : null;
+      cell.provisional = cell.verdict !== null;
       cell.summary =
-        cell.status === "done" && question !== null
+        cell.status === "in_progress" && question !== null
           ? summaryOf(question, index + cell.revision)
           : null;
       this.emit({
@@ -410,6 +410,7 @@ class MockEventSource {
         revision: cell.revision,
         points: null,
         summary: cell.summary,
+        flagged: cell.flagged,
         verdict: cell.verdict,
       });
     });
@@ -435,7 +436,7 @@ const active = FLAG_NAMES.filter((f) => flags[f]);
 console.info(
   `[mock] persona: ${role} — switch with ?as=teacher|student|admin` +
     `\n[mock] scene flags: ${active.length ? active.join(", ") : "none"} — ?empty=1 ?fail=1 ?slow=1 ?many=1 (append =0 to clear)` +
-    `\n[mock] student scene: ${scene} — ?scene=lobby|running|paused|closed|extend|single` +
+    `\n[mock] student scene: ${scene} — ?scene=lobby|running|paused|closed|extend|single|marks|forward` +
     `\n[mock] polls: /evaluations/poll/poll · /evaluations/poll-short/poll · /evaluations/poll-ended/poll — ?revealed=1`,
 );
 

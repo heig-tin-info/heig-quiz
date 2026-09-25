@@ -23,7 +23,7 @@
  *     lower revision is the stale one, always.
  */
 import type { DashboardCell, DashboardRow, DashboardView, ServerEvent } from "@quiz/contracts";
-import { round2 } from "@quiz/domain";
+import { countsAsCompleted, round2 } from "@quiz/domain";
 
 /** The lobby figures, which live outside `DashboardView` (F-LIVE-02). */
 export interface LobbyCount {
@@ -85,9 +85,11 @@ function recomputeTotals(view: DashboardView, itemId: string | null): DashboardV
   let changed = false;
   const totals = view.totals.map((total) => {
     if (itemId !== null && total.itemId !== itemId) return total;
-    const done = view.rows.filter(
-      (r) => r.cells.find((c) => c.itemId === total.itemId)?.status === "done",
-    ).length;
+    // The server's rule (`dashboardView`): answered, skipped or validated.
+    const done = view.rows.filter((r) => {
+      const status = r.cells.find((c) => c.itemId === total.itemId)?.status;
+      return status !== undefined && countsAsCompleted(status);
+    }).length;
     const completion = started === 0 ? 0 : round2(done / started);
     if (completion === total.completion) return total;
     changed = true;
@@ -137,6 +139,8 @@ function applyCell(state: GridState, event: Extract<ServerEvent, { type: "dashbo
     // `summary` only travels when the teacher asked for the answers; keeping
     // the previous one on a null would show an answer the toggle just hid.
     summary: event.summary,
+    // Every frame carries the WHOLE cell, the flag included (issue #89).
+    flagged: event.flagged,
   };
   if (
     next.status === cell.status &&
@@ -144,7 +148,8 @@ function applyCell(state: GridState, event: Extract<ServerEvent, { type: "dashbo
     next.points === cell.points &&
     next.verdict === cell.verdict &&
     next.provisional === cell.provisional &&
-    next.summary === cell.summary
+    next.summary === cell.summary &&
+    next.flagged === cell.flagged
   ) {
     return state;
   }

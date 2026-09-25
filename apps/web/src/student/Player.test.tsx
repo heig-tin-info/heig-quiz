@@ -79,6 +79,8 @@ const attemptView = (over: Partial<AttemptView["attempt"]> = {}): AttemptView =>
       answer: { selected: [1] },
       revision: 3,
       markedDone: false,
+      skipped: false,
+      flagged: false,
       locked: false,
     },
     {
@@ -95,6 +97,8 @@ const attemptView = (over: Partial<AttemptView["attempt"]> = {}): AttemptView =>
       answer: { text: "4" },
       revision: 2,
       markedDone: false,
+      skipped: false,
+      flagged: false,
       locked: false,
     },
     {
@@ -111,6 +115,8 @@ const attemptView = (over: Partial<AttemptView["attempt"]> = {}): AttemptView =>
       answer: null,
       revision: 0,
       markedDone: false,
+      skipped: false,
+      flagged: false,
       locked: false,
     },
   ],
@@ -143,8 +149,20 @@ const doneEcho = (call: { body: unknown }) =>
     serverNow: "2026-09-20T10:00:01.000Z",
   });
 
+const skipEcho = (call: { body: unknown }) =>
+  ok({ skipped: (call.body as { skipped: boolean }).skipped, serverNow: "2026-09-20T10:00:01.000Z" });
+const flagEcho = (call: { body: unknown }) =>
+  ok({ flagged: (call.body as { flagged: boolean }).flagged, serverNow: "2026-09-20T10:00:01.000Z" });
+
 function stubs(view: AttemptView) {
   return mockFetch({
+    ...Object.fromEntries(
+      ["i1", "i2", "i3"].flatMap((i) => [
+        [`POST /app/api/attempts/${ATTEMPT}/answers/${i}/skip`, skipEcho],
+        [`POST /app/api/attempts/${ATTEMPT}/answers/${i}/flag`, flagEcho],
+        [`PUT /app/api/attempts/${ATTEMPT}/answers/${i}`, ok({ accepted: true, revision: 9, serverNow: "2026-09-20T10:00:01.000Z" })],
+      ]),
+    ),
     [`POST /app/api/evaluations/${EVAL}/attempt`]: ok(entry(view)),
     [`GET /app/api/attempts/${ATTEMPT}`]: ok(entry(view)),
     [`POST /app/api/attempts/${ATTEMPT}/position`]: noContent(),
@@ -192,10 +210,10 @@ describe("the zen player", () => {
     );
   });
 
-  it("moves with Alt + arrows and marks as done with Ctrl + Enter", async () => {
+  it("moves with Alt + arrows; Ctrl + Enter validates in forward_only only (issue #89)", async () => {
     const view = attemptView();
     const { calls } = stubs(view);
-    render(view);
+    const { unmount } = render(view);
     await screen.findByText("Question 2");
 
     await userEvent.keyboard("{Alt>}{ArrowRight}{/Alt}");
@@ -203,9 +221,22 @@ describe("the zen player", () => {
     await userEvent.keyboard("{Alt>}{ArrowLeft}{/Alt}");
     expect(await screen.findByText("Question 2")).toBeInTheDocument();
 
+    // `free` has nothing to validate: the shortcut asks for nothing.
     await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(calls.some((c) => c.url.endsWith("/done"))).toBe(false);
+    unmount();
+
+    const forward = withNavigation(attemptView(), "forward_only");
+    const second = stubs(forward);
+    render(forward);
+    await screen.findByText("Question 2");
+    await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    // The same confirmation as the button: it is irreversible.
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Valider et continuer" }));
     await waitFor(() =>
-      expect(calls.some((c) => c.url.endsWith("/answers/i2/done"))).toBe(true),
+      expect(second.calls.some((c) => c.url.endsWith("/answers/i2/done"))).toBe(true),
     );
   });
 
@@ -288,9 +319,11 @@ describe("the zen player", () => {
       name: "Progression : question 2 sur 3",
     });
     expect(within(strip).getAllByRole("button")).toHaveLength(3);
+    // Answered with no click: the answer is there, so the list says so.
     expect(
-      within(strip).getByRole("button", { name: "Question 2, en cours" }),
+      within(strip).getByRole("button", { name: "Question 2, répondue, en cours" }),
     ).toBeInTheDocument();
+    expect(within(strip).getByRole("button", { name: "Question 3, sans réponse" })).toBeInTheDocument();
   });
 
   /*
@@ -368,7 +401,7 @@ describe("the zen player", () => {
    * nothing, and nothing may be a control that quietly does the opposite of
    * what it says.
    */
-  describe("navigation and the done state", () => {
+  describe("navigation and the question states (issue #89)", () => {
     it("draws no strip and no previous / next for a single question", async () => {
       const view = oneItemView();
       stubs(view);
@@ -378,9 +411,9 @@ describe("the zen player", () => {
       expect(screen.queryByRole("navigation")).toBeNull();
       expect(screen.queryByRole("button", { name: "Précédent" })).toBeNull();
       expect(screen.queryByRole("button", { name: "Suivant" })).toBeNull();
-      // The rest of the frame is untouched.
+      // The rest of the frame is untouched, and `free` validates nothing.
       expect(screen.getByRole("button", { name: "Rendre" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Marquer comme faite" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Valider et continuer" })).toBeNull();
       // And the two arrows are harmless rather than broken.
       await userEvent.keyboard("{Alt>}{ArrowRight}{/Alt}");
       expect(screen.getByText("Question 1")).toBeInTheDocument();
@@ -399,80 +432,153 @@ describe("the zen player", () => {
       expect(screen.getByRole("button", { name: "Suivant" })).toBeEnabled();
     });
 
-    it("offers a named way back, not a primary 'Done', once marked in free mode", async () => {
+    it("counts a question as answered with no click, and hands the accent to 'Suivant'", async () => {
       const view = attemptView();
       stubs(view);
       render(view);
       await screen.findByText("Question 2");
 
-      const mark = screen.getByRole("button", { name: "Marquer comme faite" });
-      expect(isPrimary(mark)).toBe(true);
-      await userEvent.click(mark);
-
-      const reopen = await screen.findByRole("button", { name: "Rouvrir la question" });
-      expect(isPrimary(reopen)).toBe(false);
-      expect(screen.queryByRole("button", { name: "Faite" })).toBeNull();
-      expect(screen.queryByRole("button", { name: "Marquer comme faite" })).toBeNull();
-      // "Done" is still SAID — as the status badge beside the counter.
-      expect(screen.getByText("Faite")).toBeInTheDocument();
-      // The accent moved to the only thing left to do here: the next question.
+      expect(screen.getByText("Répondue")).toBeInTheDocument();
       expect(isPrimary(screen.getByRole("button", { name: "Suivant" }))).toBe(true);
-
-      // And it really re-opens, rather than being a second confirmation.
-      await userEvent.click(reopen);
-      expect(
-        await screen.findByRole("button", { name: "Marquer comme faite" }),
-      ).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Marquer comme faite" })).toBeNull();
+      // An answered question is not skippable: that would erase the answer.
+      expect(screen.queryByRole("button", { name: "Je ne répondrai pas à cette question" })).toBeNull();
     });
 
-    it("offers no way back in forward_only (F-LIVE-08)", async () => {
+    it("leaves the accent off an empty question in free mode: the field is the action", async () => {
+      const view = attemptView({ lastItemId: "i3" });
+      stubs(view);
+      render(view);
+      await screen.findByText("Question 3");
+      for (const button of screen.getAllByRole("button")) expect(isPrimary(button)).toBe(false);
+    });
+
+    it("settles an empty question with 'I won't answer', and an answer takes it back", async () => {
+      const view = attemptView({ lastItemId: "i3" });
+      const { calls } = stubs(view);
+      render(view);
+      await screen.findByText("Question 3");
+
+      await userEvent.click(
+        screen.getByRole("button", { name: "Je ne répondrai pas à cette question" }),
+      );
+      await waitFor(() =>
+        expect(
+          calls.some(
+            (c) =>
+              c.url.endsWith("/answers/i3/skip") && (c.body as { skipped: boolean }).skipped,
+          ),
+        ).toBe(true),
+      );
+      expect(await screen.findByText("Sans réponse")).toBeInTheDocument();
+      const strip = screen.getByRole("navigation", { name: "Progression : question 3 sur 3" });
+      expect(
+        within(strip).getByRole("button", { name: "Question 3, vous n'y répondrez pas, en cours" }),
+      ).toBeInTheDocument();
+      // Settled: the accent goes to the way out of the last question.
+      expect(isPrimary(screen.getByRole("button", { name: "Rendre" }))).toBe(true);
+      // And it can be taken back by hand…
+      expect(screen.getByRole("button", { name: "Finalement, y répondre" })).toBeInTheDocument();
+
+      // …or by answering, which the list reads at once.
+      await userEvent.type(await screen.findByLabelText("Votre réponse"), "1");
+      expect(await screen.findByText("Répondue")).toBeInTheDocument();
+      expect(screen.queryByText("Sans réponse")).toBeNull();
+      expect(screen.queryByRole("button", { name: "Finalement, y répondre" })).toBeNull();
+    });
+
+    it("toggles the review flag, stored on the server and shown in the list", async () => {
+      const view = attemptView();
+      const { calls } = stubs(view);
+      render(view);
+      await screen.findByText("Question 2");
+
+      const flag = screen.getByRole("button", { name: "Marquer à revoir" });
+      expect(flag).toHaveAttribute("aria-pressed", "false");
+      await userEvent.click(flag);
+      const pressed = await screen.findByRole("button", { name: "Marquée à revoir" });
+      expect(pressed).toHaveAttribute("aria-pressed", "true");
+      expect(isPrimary(pressed)).toBe(false);
+      await waitFor(() =>
+        expect(
+          calls.some(
+            (c) =>
+              c.url.endsWith("/answers/i2/flag") && (c.body as { flagged: boolean }).flagged,
+          ),
+        ).toBe(true),
+      );
+      const strip = screen.getByRole("navigation", { name: "Progression : question 2 sur 3" });
+      expect(
+        within(strip).getByRole("button", {
+          name: "Question 2, répondue, marquée à revoir, en cours",
+        }),
+      ).toBeInTheDocument();
+
+      await userEvent.click(pressed);
+      expect(await screen.findByRole("button", { name: "Marquer à revoir" })).toBeInTheDocument();
+    });
+
+    it("offers 'Clear' on a multiple choice only, and it puts the question back to unanswered", async () => {
+      const view = attemptView({ lastItemId: "i1" });
+      stubs(view);
+      render(view);
+      await screen.findByText("Question 1");
+      expect(await screen.findByRole("radio", { name: "*x" })).toBeChecked();
+
+      await userEvent.click(screen.getByRole("button", { name: "Effacer ma sélection" }));
+      expect(screen.getByRole("radio", { name: "*x" })).not.toBeChecked();
+      expect(screen.queryByText("Répondue")).toBeNull();
+      expect(
+        screen.getByRole("button", { name: "Je ne répondrai pas à cette question" }),
+      ).toBeInTheDocument();
+
+      // A short answer holds a text the student empties by hand: no Clear.
+      await userEvent.keyboard("{Alt>}{ArrowRight}{/Alt}");
+      await screen.findByText("Question 2");
+      expect(screen.queryByRole("button", { name: "Effacer ma sélection" })).toBeNull();
+    });
+
+    it("forward_only: 'Valider et continuer' is the primary, asks first, and closes the question", async () => {
       const view = withNavigation(attemptView({ lastItemId: "i3" }), "forward_only");
       const { calls } = stubs(view);
       render(view);
       await screen.findByText("Question 3");
 
-      await userEvent.click(screen.getByRole("button", { name: "Marquer comme faite" }));
-      await screen.findByText("Faite");
-      expect(screen.queryByRole("button", { name: "Rouvrir la question" })).toBeNull();
-      expect(screen.queryByRole("button", { name: "Faite" })).toBeNull();
-      expect(screen.queryByRole("button", { name: "Marquer comme faite" })).toBeNull();
-      // Ctrl+Enter must not ask for it either: the server answers 409.
+      const validate = screen.getByRole("button", { name: "Valider et continuer" });
+      expect(isPrimary(validate)).toBe(true);
+      // Cancelling the confirmation sends nothing.
+      await userEvent.click(validate);
+      let dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByText("Valider cette question ?")).toBeInTheDocument();
+      await userEvent.click(within(dialog).getByRole("button", { name: "Annuler" }));
+      expect(calls.some((c) => c.url.endsWith("/done"))).toBe(false);
+
+      await userEvent.click(screen.getByRole("button", { name: "Valider et continuer" }));
+      dialog = await screen.findByRole("dialog");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Valider et continuer" }));
+      expect(await screen.findByText("Validée")).toBeInTheDocument();
+      // No way back, by button or by shortcut: the server answers 409.
+      expect(screen.queryByRole("button", { name: "Valider et continuer" })).toBeNull();
       const before = calls.filter((c) => c.url.endsWith("/done")).length;
       await userEvent.keyboard("{Control>}{Enter}{/Control}");
       expect(calls.filter((c) => c.url.endsWith("/done"))).toHaveLength(before);
-    });
-
-    it("hands the accent to 'Rendre' once the last question is done", async () => {
-      const view = attemptView({ lastItemId: "i3" });
-      stubs(view);
-      render(view);
-      await screen.findByText("Question 3");
-      expect(isPrimary(screen.getByRole("button", { name: "Rendre" }))).toBe(false);
-
-      await userEvent.click(screen.getByRole("button", { name: "Marquer comme faite" }));
-      await screen.findByRole("button", { name: "Rouvrir la question" });
+      // The last question validated: handing in is what is left.
       await waitFor(() =>
         expect(isPrimary(screen.getByRole("button", { name: "Rendre" }))).toBe(true),
       );
-      // Still exactly one accent on the screen.
-      expect(isPrimary(screen.getByRole("button", { name: "Suivant" }))).toBe(false);
-      // And handing in still goes through its confirmation (F-LIVE-10).
-      await userEvent.click(screen.getByRole("button", { name: "Rendre" }));
-      expect(await screen.findByText("Rendre vos réponses ?")).toBeInTheDocument();
     });
 
-    it("makes 'Rendre' the accent on a one-question attempt once it is done", async () => {
+    it("makes 'Rendre' the accent on a one-question attempt that holds an answer", async () => {
       const view = oneItemView();
       stubs(view);
       render(view);
       await screen.findByText("Question 1");
-
-      await userEvent.click(screen.getByRole("button", { name: "Marquer comme faite" }));
-      const reopen = await screen.findByRole("button", { name: "Rouvrir la question" });
-      expect(isPrimary(reopen)).toBe(false);
       await waitFor(() =>
         expect(isPrimary(screen.getByRole("button", { name: "Rendre" }))).toBe(true),
       );
+      // And handing in still goes through its confirmation (F-LIVE-10).
+      await userEvent.click(screen.getByRole("button", { name: "Rendre" }));
+      expect(await screen.findByText("Rendre vos réponses ?")).toBeInTheDocument();
     });
   });
 
