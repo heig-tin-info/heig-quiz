@@ -184,6 +184,15 @@ export function Player({
   // Stay focused: leaving may lose them. The attempt stays in progress.
   const [leaving, setLeaving] = useState(false);
   const leavingRef = useRef(false);
+  // Home, then the browser's Back within the wait: the player is gone, and
+  // the app-level confirmation must not open on whatever page came next.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
   const leave = useCallback(async () => {
     // The end screen has nothing left to save, and says so itself.
     if (closed !== null) return onHome();
@@ -199,6 +208,7 @@ export function Player({
         }),
       ]);
       clearTimeout(timer);
+      if (!mounted.current) return;
       if (result === "saved") return onHome();
       const ok = await confirm({
         title: t("player.leave.title"),
@@ -216,7 +226,7 @@ export function Player({
       if (ok) onHome();
     } finally {
       leavingRef.current = false;
-      setLeaving(false);
+      if (mounted.current) setLeaving(false);
     }
   }, [closed, flush, onHome, confirm, t]);
   const session = useMemo<PlayerSession>(

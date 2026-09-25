@@ -88,7 +88,7 @@ export function PlayerShell({
    * exercise only; absent in an exam and in the teacher's preview.
    */
   onHome?: () => void;
-  /** Leaving is under way: the button is disabled, so it cannot fire twice. */
+  /** Leaving is under way: the button reads as disabled (the player ignores a second press). */
   homeBusy?: boolean;
   /** What `Ctrl+K` offers here. Empty means no palette at all. */
   commands?: Command[];
@@ -139,9 +139,12 @@ export function PlayerShell({
               <IconButton
                 label={t("player.command.home")}
                 onClick={onHome}
-                disabled={homeBusy}
-                aria-busy={homeBusy}
-                className="-ml-1.5 -mr-1"
+                // `aria-disabled`, not `disabled`: the keyboard focus stays on
+                // Home while the answers are sent, and is still there after
+                // "Stay". The player's own guard ignores a second press.
+                aria-disabled={homeBusy || undefined}
+                aria-busy={homeBusy || undefined}
+                className="-ml-1.5 -mr-1 aria-disabled:opacity-40"
               >
                 <Home />
               </IconButton>

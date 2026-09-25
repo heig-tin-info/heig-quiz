@@ -1,7 +1,7 @@
 import axe from "axe-core";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { StrictMode } from "react";
+import { StrictMode, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AttemptOrLobby, AttemptView } from "@quiz/contracts";
@@ -760,22 +760,59 @@ describe("the zen player", () => {
       expect(within(dialog).getByText(/Cette tentative est fermée/)).toBeInTheDocument();
     });
 
-    it("stops waiting for a hung save after a few seconds, and never fires twice", { timeout: 20_000 }, async () => {
-      const { fetchMock } = stubs(exercise());
+    /** Every autosave hangs: the request leaves and never answers. */
+    const hangSaves = (fetchMock: ReturnType<typeof stubs>["fetchMock"]) => {
       const base = fetchMock.getMockImplementation()!;
       fetchMock.mockImplementation((input: RequestInfo | URL, init: RequestInit = {}) =>
         init.method === "PUT" ? new Promise<Response>(() => {}) : base(input, init),
       );
+    };
+
+    it("stops waiting for a hung save after a few seconds, and never fires twice", { timeout: 20_000 }, async () => {
+      const { fetchMock } = stubs(exercise());
+      hangSaves(fetchMock);
       const navigate = vi.fn();
       renderWith(navigate);
       await typeThenHome();
       const home = screen.getByRole("button", { name: "Revenir à mes quiz" });
-      // Leaving is under way: a second press cannot navigate twice.
-      await waitFor(() => expect(home).toBeDisabled());
+      // Leaving is under way: Home reads as disabled but keeps the focus,
+      // and a second press asks nothing more.
+      await waitFor(() => expect(home).toHaveAttribute("aria-disabled", "true"));
+      expect(home).toHaveFocus();
+      await userEvent.click(home);
       // The bound is 6 s: the question is asked, not a dead button.
       const dialog = await screen.findByRole("dialog", {}, { timeout: 8_000 });
+      expect(screen.getAllByRole("dialog")).toHaveLength(1);
       expect(within(dialog).getByText(/risquent d'être perdues/)).toBeInTheDocument();
+      await userEvent.click(within(dialog).getByRole("button", { name: "Rester" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      // Back where the student was: on Home, enabled again.
+      await waitFor(() => expect(home).toHaveFocus());
+      expect(home).not.toHaveAttribute("aria-disabled");
       expect(navigate).not.toHaveBeenCalledWith({ view: "home" });
+    });
+
+    it("asks nothing once the player is gone (Home, then Back)", { timeout: 20_000 }, async () => {
+      const { fetchMock } = stubs(exercise());
+      hangSaves(fetchMock);
+      function Away() {
+        const [on, setOn] = useState(true);
+        return (
+          <>
+            {on ? <AttemptPage evaluationId={EVAL} navigate={() => {}} /> : null}
+            <button type="button" onClick={() => setOn(false)}>
+              back
+            </button>
+          </>
+        );
+      }
+      renderWithProviders(<Away />, { locale: "fr", route: `/take/${EVAL}` });
+      await typeThenHome();
+      await userEvent.click(screen.getByRole("button", { name: "back" }));
+      expect(screen.queryByText("Question 2")).toBeNull();
+      // Past the 6 s bound: the confirmation stays shut on the next page.
+      await new Promise((resolve) => setTimeout(resolve, 6_500));
+      expect(screen.queryByRole("dialog")).toBeNull();
     });
   });
 
