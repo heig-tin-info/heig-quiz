@@ -208,6 +208,16 @@ html.dark {
     transform: scale(1);
   }
 }
+/*
+ * A sticky table cell that must wear its row's tint while staying opaque
+ * (the live grid's name and action columns, which cells scroll under). The
+ * tint (`--tint`, translucent or not) is a layer over the surface, so the
+ * cell reads exactly as the row beside it in both themes.
+ */
+.sticky-tint {
+  background: linear-gradient(var(--tint, transparent), var(--tint, transparent)), var(--surface);
+}
+
 .tip-bubble {
   animation: tip-in 0.12s var(--ease-out-emphasized);
 }

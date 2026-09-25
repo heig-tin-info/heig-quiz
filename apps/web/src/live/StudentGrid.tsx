@@ -186,7 +186,17 @@ export function StudentGrid({
             const progress = completionOf(row);
             const running = row.state === "in_progress";
             const finished = row.state === "submitted" || row.state === "expired";
-            const stick = active ? "bg-accent-soft" : "bg-surface group-hover:bg-surface-2/70";
+            // The sticky cells must be OPAQUE: questions scroll under them.
+            // The row's tints are translucent (`surface-2/70` on hover, and
+            // `accent-soft` in dark mode), so they are painted here as a
+            // layer over the card's surface (`.sticky-tint`, style.css) —
+            // the exact colour of the row, with nothing showing through.
+            const stick = cx(
+              "sticky-tint",
+              active
+                ? "[--tint:var(--accent-soft)]"
+                : "group-hover:[--tint:color-mix(in_srgb,var(--surface-2)_70%,transparent)]",
+            );
             return (
               <tr
                 key={row.seatId}
