@@ -35,6 +35,7 @@ import {
   GradingProgress,
   GradingQueue,
   GradingSteps,
+  ItemPreview,
   ItemVersions,
   NotificationList,
   ApiToken,
@@ -129,6 +130,9 @@ const runningId = byState("running");
 /** The two grading worlds: one still being graded, one released. */
 const gradedIds = [byState("closed"), byState("released")];
 
+const runningItems = (
+  (await get(`/app/api/evaluations/${runningId}`)) as { items: Ref[] }
+).items.map((i) => i.id);
 const dashboard = (await get(`/app/api/evaluations/${runningId}/dashboard`)) as {
   rows: { attemptId: string | null }[];
 };
@@ -216,6 +220,14 @@ const CHECKED: Case[] = [
     "/app/api/evaluations/:id/pools",
     `/app/api/evaluations/${runningId}/pools`,
     PoolSummary,
+  ),
+  // Issue #127: one item at its frozen version, each type of the running one.
+  ...runningItems.map((itemId) =>
+    one(
+      "/app/api/evaluations/:id/preview/items/:itemId",
+      `/app/api/evaluations/${runningId}/preview/items/${itemId}`,
+      ItemPreview,
+    ),
   ),
   one(
     "/app/api/evaluations/:id/dashboard",

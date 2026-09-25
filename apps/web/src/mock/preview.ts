@@ -14,6 +14,7 @@
 import type {
   AttemptView,
   EvaluationPreview,
+  ItemPreview,
   PreviewCorrection,
   PreviewCorrectionItem,
   PreviewItemStatus,
@@ -97,6 +98,25 @@ on("POST", "/app/api/evaluations/:id/preview", (m): EvaluationPreview => {
   const e = evaluationOr404(m.groups!.id!);
   seeds += 7;
   return { seed: seeds, durationS: durationOf(e), view: viewOf(e, seeds) };
+});
+
+/**
+ * One item at the version its evaluation froze (issue #127): that version's
+ * config when the question still has it, through the same `studentView`.
+ */
+on("GET", "/app/api/evaluations/:id/preview/items/:itemId", (m): ItemPreview => {
+  const e = evaluationOr404(m.groups!.id!);
+  const item = e.items.find((i) => i.id === m.groups!.itemId);
+  const q = item ? itemQuestion(item) : null;
+  if (!item || !q) throw new MockError(404, "not_found");
+  const frozen = q.versions.find((v) => v.number === item.versionNumber)?.config ?? frozenConfig(q);
+  return {
+    itemId: item.id,
+    type: item.type,
+    versionNumber: item.versionNumber,
+    points: item.points,
+    student: studentView(q, frozen),
+  };
 });
 
 on("POST", "/app/api/evaluations/:id/preview/run", () => {

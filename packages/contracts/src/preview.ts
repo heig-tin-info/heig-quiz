@@ -46,6 +46,24 @@ export const EvaluationPreview = z.object({
 });
 export type EvaluationPreview = z.infer<typeof EvaluationPreview>;
 
+/**
+ * `GET /evaluations/:id/preview/items/:itemId` — ONE item of the evaluation as
+ * a student will see it (issue #127), at the version the evaluation froze,
+ * not the question's latest draft. Seed 0 and no shuffle, like the question
+ * editor's own preview (decision D19): the view is stable between two opens.
+ */
+export const ItemPreview = z.object({
+  itemId: z.uuid(),
+  /** Which `Player` to mount. */
+  type: z.string(),
+  /** The frozen version shown: the version column of the item's row. */
+  versionNumber: z.number().int(),
+  points: z.number(),
+  /** Built by `studentView`, the one student exit (invariant 4). */
+  student: z.unknown(),
+});
+export type ItemPreview = z.infer<typeof ItemPreview>;
+
 /** `POST /evaluations/:id/preview/run` — the student's Run, under a seed. */
 export const PreviewRunBody = RunBody.extend({ seed: PreviewSeed });
 export type PreviewRunBody = z.infer<typeof PreviewRunBody>;

@@ -55,7 +55,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
   const detail = (
     req: FastifyRequest,
     row: service.EvaluationRecord,
-  ): Promise<EvaluationDetail> => service.evaluationDetail(app.db, row, req.user!.id);
+  ): Promise<EvaluationDetail> => service.evaluationDetail(app.db, row, req.user!);
 
   // The loaders of invariant 6, each answering its own 404.
   const staffClassroom = async (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => {

@@ -99,6 +99,10 @@ const scenes = [
   // entered yet, while running somebody has an attempt; two messages.
   { name: "eval-config-questions-opened", role: "teacher", path: "/evaluations/lobby?step=questions" },
   { name: "eval-config-questions-locked", role: "teacher", path: "/evaluations/running?step=questions" },
+  // Issue #127: one item as the student sees it, at its frozen version, and
+  // the editor opened from a row with its way back to the evaluation.
+  { name: "eval-config-item-preview", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: (p) => p.getByRole("button", { name: /^preview /i }).first().click() },
+  { name: "eval-config-item-edit", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: (p) => p.getByRole("button", { name: /^edit /i }).first().click() },
   { name: "eval-config-picker", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { name: /add questions/i }).first().click() },
   { name: "eval-config-milestone-gap", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { name: /^reorder /i }).first().hover() },
   { name: "eval-config-timing", role: "teacher", path: "/evaluations/draft?step=timing" },

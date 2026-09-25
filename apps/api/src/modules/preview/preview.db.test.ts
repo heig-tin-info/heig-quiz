@@ -16,10 +16,16 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { count, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
-import type { EvaluationPreview, PreviewCorrection, RunAccepted } from "@quiz/contracts";
+import type {
+  EvaluationDetail,
+  EvaluationPreview,
+  ItemPreview,
+  PreviewCorrection,
+  RunAccepted,
+} from "@quiz/contracts";
 import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
 import { RunnerUnavailable } from "@quiz/core/server";
 import { compilesPerMinute } from "@quiz/domain";
@@ -32,6 +38,7 @@ import {
   attempts,
   auditLog,
   classrooms,
+  coursePools,
   courseStaff,
   evaluations,
   gradings,
@@ -610,5 +617,108 @@ describe("a preview writes nothing", () => {
     expect(graded.statusCode).toBe(200);
     expect(await footprint(w.evaluationId)).toEqual(before);
     expect(before.attempts).toBe(1);
+  });
+});
+
+// --- One item (issue #127) ----------------------------------------------------------
+
+describe("previewing one item", () => {
+  const get = (url: string, headers: Record<string, string>) =>
+    server.app.inject({ method: "GET", url, headers });
+  const itemUrl = (w: { url: string }, itemId: string) => `${w.url}/items/${itemId}`;
+
+  it("serves the item at the version the evaluation froze, not the latest one", async () => {
+    const w = await world();
+    const question = (await evaluationService.joinedItem(db, w.evaluationId, w.mcqItemId))!.question;
+    // A second published version, with another prompt: the item stays on v1.
+    await poolService.putDraft(db, question, {
+      config: { ...mcqConfig, prompt: "A NEWER PROMPT" },
+      explanation: "",
+    });
+    await poolService.publishQuestion(db, question, { userId: teacher.id });
+
+    const res = await get(itemUrl(w, w.mcqItemId), teacher.headers);
+    expect(res.statusCode).toBe(200);
+    const preview = res.json() as ItemPreview;
+    expect(preview).toMatchObject({ itemId: w.mcqItemId, type: "mcq", versionNumber: 1 });
+    expect(res.body).toContain("Which are prime?");
+    expect(res.body).not.toContain("A NEWER PROMPT");
+    // Seed 0, no shuffle: the same view on every open.
+    expect((await get(itemUrl(w, w.mcqItemId), teacher.headers)).body).toBe(res.body);
+  });
+
+  it("goes through toStudent: no key value and no forbidden key", async () => {
+    const w = await world();
+    for (const itemId of [...w.shortItemIds, w.mcqItemId, w.codeItemId]) {
+      const res = await get(itemUrl(w, itemId), teacher.headers);
+      expect(res.statusCode).toBe(200);
+      for (const marker of [
+        ...Object.values(SECRETS),
+        shortAnswer(0),
+        shortAnswer(1),
+        '"correct"',
+        '"policy"',
+      ]) {
+        expect(res.body, marker).not.toContain(marker);
+      }
+      const keys = new Set<string>();
+      const walk = (value: unknown) => {
+        if (Array.isArray(value)) value.forEach(walk);
+        else if (value !== null && typeof value === "object") {
+          for (const [key, child] of Object.entries(value)) {
+            keys.add(key);
+            walk(child);
+          }
+        }
+      };
+      walk((res.json() as ItemPreview).student);
+      for (const key of FORBIDDEN_STUDENT_KEYS) expect(keys.has(key), key).toBe(false);
+    }
+  });
+
+  it("answers 404 off the staff, for an item of another evaluation, and 403 to a student", async () => {
+    const w = await world();
+    const other = await world();
+    const off = await get(itemUrl(w, w.mcqItemId), stranger.headers);
+    expect(off.statusCode).toBe(404);
+    expect(off.json()).toEqual({ error: "not_found" });
+    expect((await get(itemUrl(w, other.mcqItemId), teacher.headers)).statusCode).toBe(404);
+    expect((await get(itemUrl(w, randomUUID()), teacher.headers)).statusCode).toBe(404);
+    expect((await get(itemUrl(w, w.mcqItemId), student.headers)).statusCode).toBe(403);
+  });
+
+  it("lets a colleague of the course preview a pool they cannot edit, and says so", async () => {
+    const w = await world();
+    const colleague = await server.signIn("teacher");
+    await db.insert(courseStaff).values({ courseId: w.courseId, userId: colleague.id });
+
+    // Linked to the course: the colleague is a contributor of the pool.
+    const linked = (
+      await get(`/app/api/evaluations/${w.evaluationId}`, colleague.headers)
+    ).json() as EvaluationDetail;
+    expect(linked.editableQuestionIds).toHaveLength(4);
+
+    // Unlinked since (the pool is private and not theirs): they may no longer
+    // edit its questions — but the evaluation is still theirs to preview.
+    await db
+      .delete(coursePools)
+      .where(and(eq(coursePools.courseId, w.courseId), eq(coursePools.poolId, w.poolId)));
+    const unlinked = (
+      await get(`/app/api/evaluations/${w.evaluationId}`, colleague.headers)
+    ).json() as EvaluationDetail;
+    expect(unlinked.editableQuestionIds).toEqual([]);
+    expect((await get(itemUrl(w, w.mcqItemId), colleague.headers)).statusCode).toBe(200);
+
+    // The owner of the pool keeps editing every question.
+    const owner = (
+      await get(`/app/api/evaluations/${w.evaluationId}`, teacher.headers)
+    ).json() as EvaluationDetail;
+    expect(owner.editableQuestionIds).toHaveLength(4);
+  });
+
+  it("stays open once the item list is frozen", async () => {
+    const w = await world();
+    await evaluationService.applyState(db, await reload(db, w.evaluationId), "running", server.clock.now());
+    expect((await get(itemUrl(w, w.codeItemId), teacher.headers)).statusCode).toBe(200);
   });
 });

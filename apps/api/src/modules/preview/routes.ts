@@ -1,6 +1,7 @@
 /**
  * HTTP surface of the teacher's stateless evaluation preview (issue #75,
- * ADR-018 fourth addendum). Four POSTs under `/app/api/evaluations/:id/preview`.
+ * ADR-018 fourth addendum). Four POSTs under `/app/api/evaluations/:id/preview`,
+ * and one GET for a single item (issue #127).
  *
  * Every one of them is a teacher route: the evaluation is LOADED through
  * `loadEvaluation`, so a caller off the course's staff gets the same 404 as a
@@ -19,10 +20,12 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import {
   IdParam,
+  ItemParam,
   PreviewGradeBody,
   PreviewRunBody,
   PreviewSimulateBody,
   type EvaluationPreview,
+  type ItemPreview,
   type PreviewCorrection,
   type RunAccepted,
 } from "@quiz/contracts";
@@ -58,6 +61,22 @@ export async function previewPlugin(app: FastifyInstance) {
       { params: IdParam, load: staffEvaluation },
       ({ now, scope }): Promise<EvaluationPreview> =>
         service.startPreview(app.db, scope.evaluation, now, service.drawPreviewSeed()),
+    ),
+  );
+
+  /**
+   * One item as the student will see it, at its frozen version (issue #127):
+   * the Preview button of a row of the question list. Loaded through the
+   * EVALUATION's staff guard, never the pool's: a colleague on the course's
+   * staff previews every item, whoever owns the pool it was drawn from.
+   */
+  app.get(
+    "/app/api/evaluations/:id/preview/items/:itemId",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: ItemParam, load: staffEvaluation },
+      ({ params, scope }): Promise<ItemPreview> =>
+        service.itemPreview(app.db, scope.evaluation, params.itemId),
     ),
   );
 

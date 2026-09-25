@@ -46,6 +46,11 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ],
     ["evaluationsKey", keys.evaluationsKey("r1"), ["evaluations", "r1"]],
     ["evaluationKey", keys.evaluationKey("e1"), ["evaluation", "e1"]],
+    [
+      "itemPreviewKey",
+      keys.itemPreviewKey("e1", "i1", "v1"),
+      ["evaluation", "e1", "item-preview", "i1", "v1"],
+    ],
     ["dashboardKey", keys.dashboardKey("e1", true), ["dashboard", "e1", true, false]],
     [
       "dashboardKey (results)",
@@ -135,6 +140,11 @@ describe("queryKeys — the prefixes invalidations rely on", () => {
       "questionKey ⊂ questionPreviewKey",
       keys.questionKey("q1"),
       keys.questionPreviewKey("q1", "draft"),
+    ],
+    [
+      "evaluationKey ⊂ itemPreviewKey",
+      keys.evaluationKey("e1"),
+      keys.itemPreviewKey("e1", "i1", "v1"),
     ],
     [
       "gradingKey ⊂ gradingQueueKey",
