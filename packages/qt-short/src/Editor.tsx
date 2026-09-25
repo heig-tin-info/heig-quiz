@@ -8,6 +8,7 @@
  * The order of the matchers is the grading order — the first match wins — so
  * the list is reorderable and numbered.
  */
+import { useId, type ReactNode } from "react";
 import type { ConfigIssue, EditorProps, MarkdownRenderer, StringOverrides } from "@quiz/core/client";
 import { issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import {
@@ -20,6 +21,7 @@ import {
   type ShortKind,
   type ShortMatcher,
 } from "./schema.js";
+import { explainMatcher } from "./explain.js";
 import { shortEditorStrings, type ShortEditorStringKey } from "./strings.js";
 import {
   buttonClass,
@@ -79,21 +81,67 @@ const MATCHER_LABEL: Record<ShortMatcher["kind"], ShortEditorStringKey> = {
   llm: "matcherLlm",
 };
 
+/**
+ * The label of a field of an accepted answer. The word is visible; the row
+ * number is for a screen reader only, so that "Value" of row 2 is announced
+ * "Value 2" and never confused with the one of row 1.
+ */
+const cellLabelClass = "text-xs font-medium text-fg-muted";
+
+function Cell({
+  id,
+  label,
+  index,
+  className,
+  children,
+}: {
+  id: string;
+  label: string;
+  index: number;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={cx("flex min-w-0 flex-col gap-1", className)}>
+      <label className={cellLabelClass} htmlFor={id}>
+        {label}
+        <span className="sr-only"> {index + 1}</span>
+      </label>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * A relative tolerance is stored as a FRACTION (0.01, as `@quiz/domain`
+ * compares it) but typed in percent, as the mode's label promises: the field
+ * shows `tolerance × 100` and stores what it reads divided by 100.
+ */
+const toPercent = (fraction: number) => Number((fraction * 100).toPrecision(12));
+const fromPercent = (percent: number) => Number((percent / 100).toPrecision(12));
+
+/**
+ * The fields of one accepted answer, as the cells of the row's labelled
+ * grid: two columns on a phone, one wrapping line from `sm` up.
+ */
 function MatcherFields({
   matcher,
   index,
+  idBase,
   disabled,
   s,
   onPatch,
 }: {
   matcher: ShortMatcher;
   index: number;
+  idBase: string;
   disabled: boolean | undefined;
   s: Strings;
   onPatch: (next: ShortMatcher) => void;
 }) {
-  const at = (label: string) => `${label} ${index + 1}`;
-  const field = cx(inputClass, "w-full");
+  const id = (name: string) => `${idBase}-${name}`;
+  const wide = "col-span-2 sm:min-w-48 sm:flex-1";
+  const narrow = cx(inputClass, "w-full tabular-nums sm:w-28");
 
   switch (matcher.kind) {
     /*
@@ -102,148 +150,184 @@ function MatcherFields({
      */
     case "exact":
       return (
-        <input
-          type="text"
-          className={field}
-          aria-label={at(s.value)}
-          value={matcher.value}
-          disabled={disabled}
-          onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
-        />
-      );
-    case "regex":
-      return (
-        <>
+        <Cell id={id("value")} label={s.value} index={index} className={wide}>
           <input
+            id={id("value")}
             type="text"
-            className={cx(field, "font-mono text-[13px]")}
-            aria-label={at(s.pattern)}
-            value={matcher.pattern}
-            disabled={disabled}
-            onChange={(e) => onPatch({ ...matcher, pattern: e.target.value })}
-          />
-          <input
-            type="text"
-            className={cx(inputClass, "w-20 font-mono text-[13px]")}
-            aria-label={at(s.flags)}
-            value={matcher.flags}
-            disabled={disabled}
-            onChange={(e) => onPatch({ ...matcher, flags: e.target.value })}
-          />
-        </>
-      );
-    case "number":
-      return (
-        <>
-          <input
-            type="number"
-            className={cx(inputClass, "w-28 tabular-nums")}
-            aria-label={at(s.value)}
-            value={matcher.value}
-            disabled={disabled}
-            onChange={(e) => onPatch({ ...matcher, value: Number(e.target.value) })}
-          />
-          <input
-            type="number"
-            min={0}
-            step="any"
-            className={cx(inputClass, "w-24 tabular-nums")}
-            aria-label={at(s.tolerance)}
-            value={matcher.tolerance}
-            disabled={disabled}
-            onChange={(e) => onPatch({ ...matcher, tolerance: Number(e.target.value) })}
-          />
-          <select
-            className={cx(inputClass, "w-32")}
-            aria-label={at(s.tolerance)}
-            value={matcher.toleranceMode}
-            disabled={disabled}
-            onChange={(e) =>
-              onPatch({ ...matcher, toleranceMode: e.target.value === "rel" ? "rel" : "abs" })
-            }
-          >
-            <option value="abs">{s.toleranceAbs}</option>
-            <option value="rel">{s.toleranceRel}</option>
-          </select>
-          <input
-            type="text"
-            className={cx(inputClass, "w-24")}
-            aria-label={at(s.unit)}
-            value={matcher.unit ?? ""}
-            disabled={disabled}
-            onChange={(e) => {
-              const next = { ...matcher };
-              if (e.target.value === "") delete next.unit;
-              else next.unit = e.target.value;
-              onPatch(next);
-            }}
-          />
-          <CheckboxField
-            className="inline-flex items-center gap-1.5 text-[13px] text-fg-muted"
-            label={s.unitRequired}
-            checked={matcher.unitRequired}
-            disabled={disabled}
-            onChange={(unitRequired) => onPatch({ ...matcher, unitRequired })}
-          />
-        </>
-      );
-    case "date":
-      return (
-        <>
-          <input
-            type="date"
-            className={cx(inputClass, "w-40")}
-            aria-label={at(s.value)}
+            className={cx(inputClass, "w-full")}
             value={matcher.value}
             disabled={disabled}
             onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
           />
-          <input
-            type="number"
-            min={0}
-            className={cx(inputClass, "w-24 tabular-nums")}
-            aria-label={at(s.toleranceDays)}
-            value={matcher.toleranceDays}
-            disabled={disabled}
-            onChange={(e) => onPatch({ ...matcher, toleranceDays: Number(e.target.value) })}
-          />
+        </Cell>
+      );
+    case "regex":
+      return (
+        <>
+          <Cell id={id("pattern")} label={s.pattern} index={index} className={wide}>
+            <input
+              id={id("pattern")}
+              type="text"
+              className={cx(inputClass, "w-full font-mono text-[13px]")}
+              value={matcher.pattern}
+              disabled={disabled}
+              onChange={(e) => onPatch({ ...matcher, pattern: e.target.value })}
+            />
+          </Cell>
+          <Cell id={id("flags")} label={s.flags} index={index}>
+            <input
+              id={id("flags")}
+              type="text"
+              className={cx(inputClass, "w-full font-mono text-[13px] sm:w-20")}
+              value={matcher.flags}
+              disabled={disabled}
+              onChange={(e) => onPatch({ ...matcher, flags: e.target.value })}
+            />
+          </Cell>
+        </>
+      );
+    case "number": {
+      const relative = matcher.toleranceMode === "rel";
+      return (
+        <>
+          <Cell id={id("value")} label={s.value} index={index}>
+            <input
+              id={id("value")}
+              type="number"
+              step="any"
+              className={narrow}
+              value={matcher.value}
+              disabled={disabled}
+              onChange={(e) => onPatch({ ...matcher, value: Number(e.target.value) })}
+            />
+          </Cell>
+          <Cell
+            id={id("tolerance")}
+            label={relative ? s.tolerancePercent : s.tolerance}
+            index={index}
+          >
+            <input
+              id={id("tolerance")}
+              type="number"
+              min={0}
+              step="any"
+              className={narrow}
+              value={relative ? toPercent(matcher.tolerance) : matcher.tolerance}
+              disabled={disabled}
+              onChange={(e) => {
+                const typed = Number(e.target.value);
+                onPatch({ ...matcher, tolerance: relative ? fromPercent(typed) : typed });
+              }}
+            />
+          </Cell>
+          <Cell id={id("mode")} label={s.toleranceMode} index={index}>
+            <select
+              id={id("mode")}
+              className={cx(inputClass, "w-full sm:w-36")}
+              value={matcher.toleranceMode}
+              disabled={disabled}
+              onChange={(e) =>
+                onPatch({ ...matcher, toleranceMode: e.target.value === "rel" ? "rel" : "abs" })
+              }
+            >
+              <option value="abs">{s.toleranceAbs}</option>
+              <option value="rel">{s.toleranceRel}</option>
+            </select>
+          </Cell>
+          <Cell id={id("unit")} label={s.unit} index={index}>
+            <input
+              id={id("unit")}
+              type="text"
+              className={cx(inputClass, "w-full sm:w-24")}
+              value={matcher.unit ?? ""}
+              disabled={disabled}
+              onChange={(e) => {
+                const next = { ...matcher };
+                if (e.target.value === "") delete next.unit;
+                else next.unit = e.target.value;
+                onPatch(next);
+              }}
+            />
+          </Cell>
+          <div className="col-span-2 flex items-end sm:col-span-1">
+            <CheckboxField
+              label={s.unitRequired}
+              aria-label={`${s.unitRequired} ${index + 1}`}
+              checked={matcher.unitRequired}
+              disabled={disabled}
+              onChange={(unitRequired) => onPatch({ ...matcher, unitRequired })}
+            />
+          </div>
+        </>
+      );
+    }
+    case "date":
+      return (
+        <>
+          <Cell id={id("value")} label={s.value} index={index} className="col-span-2 sm:col-span-1">
+            <input
+              id={id("value")}
+              type="date"
+              className={cx(inputClass, "w-full sm:w-40")}
+              value={matcher.value}
+              disabled={disabled}
+              onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
+            />
+          </Cell>
+          <Cell id={id("tolerance")} label={s.toleranceDays} index={index}>
+            <input
+              id={id("tolerance")}
+              type="number"
+              min={0}
+              step={1}
+              className={narrow}
+              value={matcher.toleranceDays}
+              disabled={disabled}
+              onChange={(e) => onPatch({ ...matcher, toleranceDays: Number(e.target.value) })}
+            />
+          </Cell>
         </>
       );
     case "time":
       return (
         <>
-          <input
-            type="time"
-            className={cx(inputClass, "w-32")}
-            aria-label={at(s.value)}
-            value={matcher.value}
-            disabled={disabled}
-            onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
-          />
-          <input
-            type="number"
-            min={0}
-            className={cx(inputClass, "w-24 tabular-nums")}
-            aria-label={at(s.toleranceMinutes)}
-            value={matcher.toleranceMinutes}
-            disabled={disabled}
-            onChange={(e) => onPatch({ ...matcher, toleranceMinutes: Number(e.target.value) })}
-          />
+          <Cell id={id("value")} label={s.value} index={index} className="col-span-2 sm:col-span-1">
+            <input
+              id={id("value")}
+              type="time"
+              className={cx(inputClass, "w-full sm:w-32")}
+              value={matcher.value}
+              disabled={disabled}
+              onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
+            />
+          </Cell>
+          <Cell id={id("tolerance")} label={s.toleranceMinutes} index={index}>
+            <input
+              id={id("tolerance")}
+              type="number"
+              min={0}
+              step={1}
+              className={narrow}
+              value={matcher.toleranceMinutes}
+              disabled={disabled}
+              onChange={(e) => onPatch({ ...matcher, toleranceMinutes: Number(e.target.value) })}
+            />
+          </Cell>
         </>
       );
     case "llm":
       return (
-        <>
+        <Cell id={id("rubric")} label={s.rubric} index={index} className={wide}>
           <textarea
+            id={id("rubric")}
             rows={2}
-            className={cx(field, "resize-y")}
-            aria-label={at(s.rubric)}
+            className={cx(inputClass, "w-full resize-y")}
             value={matcher.rubric}
             disabled={disabled}
             onChange={(e) => onPatch({ ...matcher, rubric: e.target.value })}
           />
           <span className="text-xs text-warning">{s.llmWarning}</span>
-        </>
+        </Cell>
       );
   }
 }
@@ -396,6 +480,7 @@ export function ShortEditor({
   ungraded = false,
 }: ShortEditorProps) {
   const s = resolveStrings(shortEditorStrings, strings);
+  const idBase = useId();
   const patch = (next: Partial<ShortConfig>) => onChange({ ...config, ...next });
   /*
    * A draft is stored exactly as it was typed (D16) and a config written by
@@ -512,66 +597,100 @@ export function ShortEditor({
         <h3 className={labelClass}>{s.matchers}</h3>
         <p className={helpClass}>{s.matchersHint}</p>
         <ol className="flex flex-col gap-2">
-          {config.matchers.map((matcher, index) => (
-            <li
-              key={index}
-              className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface-2 px-3 py-2"
-            >
-              <span className="w-4 shrink-0 text-center text-[13px] tabular-nums text-fg-faint">
-                {index + 1}
-              </span>
-              <select
-                className={cx(inputClass, "w-44")}
-                aria-label={`${s.matcherKind} ${index + 1}`}
-                value={matcher.kind}
-                disabled={disabled}
-                onChange={(e) => replace(index, blankMatcher(e.target.value as ShortMatcher["kind"]))}
+          {config.matchers.map((matcher, index) => {
+            const rowId = `${idBase}-m${index}`;
+            const explanation = explainMatcher(matcher, s);
+            return (
+              <li
+                key={index}
+                className="flex gap-2 rounded-card border border-line bg-surface-2 px-3 py-2.5"
               >
-                {(Object.keys(MATCHER_LABEL) as ShortMatcher["kind"][]).map((kind) => (
-                  <option key={kind} value={kind}>
-                    {s[MATCHER_LABEL[kind]]}
-                  </option>
-                ))}
-              </select>
-              <MatcherFields
-                matcher={matcher}
-                index={index}
-                disabled={disabled}
-                s={s}
-                onPatch={(next) => replace(index, next)}
-              />
-              {ungraded ? null : (
-                <input
-                  type="number"
-                  min={0}
-                  max={1}
-                  step={0.25}
-                  className={cx(inputClass, "w-20 tabular-nums")}
-                  aria-label={`${s.points} ${index + 1}`}
-                  value={matcher.points}
-                  disabled={disabled}
-                  onChange={(e) => replace(index, { ...matcher, points: Number(e.target.value) })}
-                />
-              )}
-              <button
-                type="button"
-                className={cx(buttonClass, "ml-auto w-7 px-0 text-fg-muted hover:text-danger")}
-                aria-label={`${s.removeMatcher} ${index + 1}`}
-                // A graded question keeps one accepted answer; a poll may
-                // have none (an opinion poll, `keylessConfigSchema`).
-                disabled={disabled || config.matchers.length <= (ungraded ? 0 : 1)}
-                onClick={() => setMatchers(removeAt(config.matchers, index))}
-              >
-                ×
-              </button>
-              <div className="w-full">
-                <IssueList issues={issuesAt(issues, "matchers", index)} />
-              </div>
-            </li>
-          ))}
+                {/* On the baseline of the first line of fields, under its labels. */}
+                <span className="mt-5 flex h-8.5 w-4 shrink-0 items-center justify-center text-[13px] tabular-nums text-fg-faint">
+                  {index + 1}
+                </span>
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:flex sm:flex-wrap sm:items-end">
+                    <Cell
+                      id={`${rowId}-kind`}
+                      label={s.matcherKind}
+                      index={index}
+                      className="col-span-2 sm:col-span-1"
+                    >
+                      <select
+                        id={`${rowId}-kind`}
+                        className={cx(inputClass, "w-full sm:w-44")}
+                        value={matcher.kind}
+                        disabled={disabled}
+                        onChange={(e) =>
+                          replace(index, blankMatcher(e.target.value as ShortMatcher["kind"]))
+                        }
+                      >
+                        {(Object.keys(MATCHER_LABEL) as ShortMatcher["kind"][]).map((kind) => (
+                          <option key={kind} value={kind}>
+                            {s[MATCHER_LABEL[kind]]}
+                          </option>
+                        ))}
+                      </select>
+                    </Cell>
+                    <MatcherFields
+                      matcher={matcher}
+                      index={index}
+                      idBase={rowId}
+                      disabled={disabled}
+                      s={s}
+                      onPatch={(next) => replace(index, next)}
+                    />
+                    {ungraded ? null : (
+                      <Cell
+                        id={`${rowId}-points`}
+                        label={s.points}
+                        index={index}
+                        className="col-span-2 sm:col-span-1"
+                      >
+                        <div className="flex items-center gap-2">
+                          <input
+                            id={`${rowId}-points`}
+                            type="number"
+                            min={0}
+                            max={1}
+                            step={0.25}
+                            className={cx(inputClass, "w-20 tabular-nums")}
+                            aria-describedby={`${rowId}-points-hint`}
+                            value={matcher.points}
+                            disabled={disabled}
+                            onChange={(e) =>
+                              replace(index, { ...matcher, points: Number(e.target.value) })
+                            }
+                          />
+                          <span id={`${rowId}-points-hint`} className={helpClass}>
+                            {s.pointsHint}
+                          </span>
+                        </div>
+                      </Cell>
+                    )}
+                  </div>
+                  {explanation === null ? null : (
+                    <p className="text-[13px] tabular-nums text-fg-muted">{explanation}</p>
+                  )}
+                  <IssueList issues={issuesAt(issues, "matchers", index)} />
+                </div>
+                <button
+                  type="button"
+                  className={cx(buttonClass, "mt-6 w-7 px-0 text-fg-muted hover:text-danger")}
+                  aria-label={`${s.removeMatcher} ${index + 1}`}
+                  // A graded question keeps one accepted answer; a poll may
+                  // have none (an opinion poll, `keylessConfigSchema`).
+                  disabled={disabled || config.matchers.length <= (ungraded ? 0 : 1)}
+                  onClick={() => setMatchers(removeAt(config.matchers, index))}
+                >
+                  ×
+                </button>
+              </li>
+            );
+          })}
         </ol>
         <IssueList issues={issuesAt(issues, "matchers").filter((i) => i.path.length === 1)} />
-        {ungraded ? null : <p className={helpClass}>{s.pointsHint}</p>}
         <div>
           <button
             type="button"

@@ -354,6 +354,23 @@ const scenes = [
   { name: "editor-mcq", role: "teacher", path: "/questions/q2" },
   { name: "editor-code", role: "teacher", path: "/questions/q1", settle: 5000 },
   { name: "editor-short", role: "teacher", path: "/questions/q3" },
+  // Issue #97: every field of an accepted answer labelled, and the sentence
+  // saying what it accepts — a number with a tolerance, a date and a time.
+  { name: "editor-short-matchers", role: "teacher", path: "/questions/q3", act: async (p) => {
+      await p.getByLabel(/^(tolerance|tolérance) 1$/i).fill("0.5");
+      await p.getByLabel(/^(unit required|unité obligatoire) 1$/i).check();
+      const add = p.getByRole("button", { name: /add an accepted answer|ajouter une réponse acceptée/i });
+      await add.click();
+      await p.getByLabel(/^(matcher|critère) 2$/i).selectOption("date");
+      await p.getByLabel(/^(value|valeur) 2$/i).fill("2026-09-20");
+      await p.getByLabel(/^(tolerance|tolérance) \((days|jours)\) 2$/i).fill("2");
+      await p.getByLabel(/^points 2$/i).fill("0.5");
+      await add.click();
+      await p.getByLabel(/^(matcher|critère) 3$/i).selectOption("time");
+      await p.getByLabel(/^(value|valeur) 3$/i).fill("14:05");
+      await p.getByLabel(/^(tolerance|tolérance) \(minutes\) 3$/i).fill("10");
+      await p.getByLabel(/^(matcher|critère) 1$/i).scrollIntoViewIfNeeded();
+    } },
   { name: "editor-cloze", role: "teacher", path: "/questions/q4" },
   // `codeimage` (ADR-021): the last question of the mock pool. The try runs
   // through the mock's `POST /try`, whose details carry the reference image.
