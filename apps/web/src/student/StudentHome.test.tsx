@@ -200,6 +200,48 @@ describe("the student home", () => {
       expect(navigate).toHaveBeenCalledWith({ view: "feedback", attemptId: "a8" });
     });
 
+    it("asks first when the LAST attempt counts, and retakes only on confirm", async () => {
+      const { calls } = mockFetch({
+        "GET /app/api/student/home": ok({ ...home, open: [retaking({ keep: "last" })] }),
+        "GET /app/api/student/classrooms": ok([]),
+        "POST /app/api/evaluations/e9/retake": ok({ kind: "attempt", view: {} }),
+      });
+      const { navigate } = render();
+      await userEvent.click(await screen.findByRole("button", { name: "Recommencer" }));
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByText("C'est votre dernière tentative qui compte")).toBeInTheDocument();
+      await userEvent.click(within(dialog).getByRole("button", { name: "Annuler" }));
+      expect(calls.some((c) => c.url.endsWith("/retake"))).toBe(false);
+
+      await userEvent.click(screen.getByRole("button", { name: "Recommencer" }));
+      await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Recommencer" }));
+      await vi.waitFor(() =>
+        expect(navigate).toHaveBeenCalledWith({ view: "attempt", evaluationId: "e9" }),
+      );
+    });
+
+    it("prints no score the feedback policy hides", async () => {
+      mockFetch({
+        "GET /app/api/student/home": ok({
+          ...home,
+          open: [],
+          past: [
+            {
+              ...retaking({
+                canRetake: false,
+                kept: { attemptId: "a8", attemptNumber: 1, score: null },
+              }),
+              state: "closed",
+            },
+          ],
+        }),
+        "GET /app/api/student/classrooms": ok([]),
+      });
+      render();
+      expect(await screen.findByText("tentatives : 2 sur 3")).toBeInTheDocument();
+      expect(screen.queryByText(/score/)).toBeNull();
+    });
+
     it("resumes an attempt in progress like any other", async () => {
       mockFetch({
         "GET /app/api/student/home": ok({
