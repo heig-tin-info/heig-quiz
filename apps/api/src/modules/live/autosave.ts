@@ -574,13 +574,21 @@ export async function logAttemptEvent(
   });
 }
 
-/** Rate limit of a journalled kind, counted in the database (no extra table). */
+/**
+ * Rate limit of a journalled kind, counted in the database (no extra table).
+ *
+ * `compileOnly` splits the `run` events in two (ADR-024, addendum of
+ * 2026-09-25): `true` counts only the Compile button's runs (journalled
+ * `compileOnly: true`), `false` every other run; absent, all of them.
+ */
 export async function countRecentEvents(
   db: Db,
   attemptId: string,
   kind: typeof attemptEvents.$inferInsert["kind"],
   since: Date,
+  options: { compileOnly?: boolean | undefined } = {},
 ): Promise<number> {
+  const compiled = sql`coalesce(${attemptEvents.details}->>'compileOnly', 'false') = 'true'`;
   const [row] = await db
     .select({ n: count() })
     .from(attemptEvents)
@@ -589,6 +597,11 @@ export async function countRecentEvents(
         eq(attemptEvents.attemptId, attemptId),
         eq(attemptEvents.kind, kind),
         gte(attemptEvents.at, since),
+        options.compileOnly === undefined
+          ? undefined
+          : options.compileOnly
+            ? compiled
+            : sql`not (${compiled})`,
       ),
     );
   return row?.n ?? 0;

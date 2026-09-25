@@ -43,7 +43,7 @@ import {
   type RunnerOutcome,
   type RunnerService,
 } from "@quiz/core/server";
-import { gradeFromPoints, previewDurationS, round2 } from "@quiz/domain";
+import { compilesPerMinute, gradeFromPoints, previewDurationS, round2 } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import {
@@ -94,7 +94,8 @@ function runnerDown(error: unknown): PreviewError | null {
  * The per-minute budgets of a preview, in memory. An attempt counts its runs
  * in its journal (N-SEC-07); a preview has no journal and must not grow one,
  * so the window lives here: runs keyed by teacher AND evaluation (one budget
- * for all the items, like an attempt's), gradings by teacher. It is per process and lost on
+ * for all the items, like an attempt's), compilations likewise under a key
+ * of their own, gradings by teacher. It is per process and lost on
  * restart, which is the right weight for a budget that protects the runner
  * from a held-down button, not from a determined colleague.
  */
@@ -220,11 +221,14 @@ export async function runPreview(
   const { evaluation, now } = input;
   const { joined, type, config, student } = await previewItem(db, evaluation, input.itemId, input.seed);
   if (!type.finalizeRunner) throw notRunnable();
-  budget.spend(
-    `run:${input.userId}:${evaluation.id}`,
-    student.runsPerMinute ?? DEFAULT_RUNS_PER_MINUTE,
-    now,
-  );
+  // A compilation spends its own, larger budget, never a test run's
+  // (ADR-024, addendum of 2026-09-25) — the attempt's rule, keyed apart.
+  const runs = student.runsPerMinute ?? DEFAULT_RUNS_PER_MINUTE;
+  if (input.compileOnly === true) {
+    budget.spend(`compile:${input.userId}:${evaluation.id}`, compilesPerMinute(runs), now);
+  } else {
+    budget.spend(`run:${input.userId}:${evaluation.id}`, runs, now);
+  }
   const answer = type.answerSchema.safeParse({ regions: input.regions });
   if (!answer.success) {
     throw new PreviewError("answer_invalid", 422, { details: answer.error.issues });

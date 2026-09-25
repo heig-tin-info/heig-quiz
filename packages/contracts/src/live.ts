@@ -271,7 +271,8 @@ export const RunBody = z.object({
   /**
    * The Compile button: build the program and run NOTHING. The runner is
    * asked for `action: "check"` with no case, so the result carries the
-   * compiler's verdict and an empty case list. Same budget as a run.
+   * compiler's verdict and an empty case list. It spends a budget of its
+   * own, larger than the test runs' (`compilesPerMinute`, ADR-024 addendum).
    */
   compileOnly: z.boolean().optional(),
 });

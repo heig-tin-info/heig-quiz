@@ -13,9 +13,10 @@
  *
  * Under the code, three tools: Compile (the compiler's words, nothing run),
  * Run the tests (the visible cases — the primary action) and Free try (a
- * panel with a command line and a stdin of the student's own). They share
- * one cooldown (`useCooldown`) and each rests while what it would run is
- * what it last ran.
+ * panel with a command line and a stdin of the student's own). The tests
+ * and the free try share one cooldown (`useCooldown`); Compile has none, and
+ * any of them runs the same code again once ready (ADR-024, addendum of
+ * 2026-09-25, #129). The last result of each stays on screen.
  */
 import { useId, useState } from "react";
 
@@ -28,13 +29,13 @@ import { HammerIcon, ListChecksIcon, TerminalIcon } from "./icons.js";
 import {
   ProgramRegions,
   ProgramStatement,
-  regionsKey,
   regionsOf,
   RunButton,
   RunStatus,
   useCooldown,
   useRunSlot,
   type CodeRunStage,
+  type ProgramRunResult,
 } from "./ProgramPlayer.js";
 import type { CodeAnswer, CodeStudent } from "./schema.js";
 import { PLAYER_STRINGS, type CodePlayerStrings } from "./strings.js";
@@ -81,11 +82,11 @@ interface CodePlayerProps extends PlayerProps<CodeStudent, CodeAnswer> {
    * Runs the VISIBLE cases and resolves with the runner's outcome, whose
    * `cases` are those visible cases in order. The host posts to
    * `POST /attempts/:id/run`, which assembles the request server-side.
-   * `"unavailable"` is the graceful path, not a failure.
+   * `"unavailable"` and `"rate_limited"` (the per-attempt budget of
+   * N-SEC-07, the tests' or the compilations') are graceful paths, not
+   * failures.
    */
-  onRun?:
-    | ((answer: CodeAnswer, options?: CodeRunOptions) => Promise<RunnerOutcome | "unavailable">)
-    | undefined;
+  onRun?: ((answer: CodeAnswer, options?: CodeRunOptions) => Promise<ProgramRunResult>) | undefined;
   /**
    * Whether the host can honour `CodeRunOptions.manual`. The student's player
    * can (both `POST /attempts/:id/run` and the browser runner take a free
@@ -166,9 +167,9 @@ export function CodePlayer({
   const s = resolveStrings(PLAYER_STRINGS, strings);
   const locked = isLocked(readOnly, disabled);
   const ids = useId();
-  const [compile, compileInto, compiledKey] = useRunSlot();
-  const [run, runVisibleInto, testedKey] = useRunSlot();
-  const [manual, runManualInto, triedKey] = useRunSlot();
+  const [compile, compileInto] = useRunSlot();
+  const [run, runVisibleInto] = useRunSlot();
+  const [manual, runManualInto] = useRunSlot();
   /** The free input of §4.7: a command line and a stdin of the student's own. */
   const [manualArgs, setManualArgs] = useState<string[]>([]);
   const [manualStdin, setManualStdin] = useState("");
@@ -178,8 +179,6 @@ export function CodePlayer({
   const cooldown = useCooldown(student.cooldown, student.runtime, student.runsPerMinute);
 
   const regions = regionsOf(student, answer);
-  const codeKey = regionsKey(regions);
-  const manualKey = JSON.stringify([regions, manualArgs, manualStdin]);
 
   const writeRegions = (updated: string[]) =>
     onChange(
@@ -194,35 +193,22 @@ export function CodePlayer({
 
   /*
    * One run, written into one of the three slots: the compiler alone, the
-   * visible cases, or the student's own input. The request, the stages, the
-   * endings and the cooldown are the same; only the slot and its options
-   * differ.
+   * visible cases, or the student's own input. The request, the stages and
+   * the endings are the same; only the slot and its options differ, and a
+   * compilation starts no cooldown (it spends a budget of its own).
    */
-  async function runInto(
-    slot: typeof runVisibleInto,
-    key: string,
-    options: Omit<CodeRunOptions, "onStage">,
-  ) {
+  async function runInto(slot: typeof runVisibleInto, options: Omit<CodeRunOptions, "onStage">) {
     if (onRun === undefined) return;
-    cooldown.start();
+    if (options.compileOnly !== true) cooldown.start();
     await slot(async (onStage) => {
       const result = await onRun({ regions }, { ...options, onStage });
       if (typeof result === "object") setCompileStderr(result.compile.ok ? "" : result.compile.stderr);
       return result;
-    }, key);
+    });
   }
 
   const busy =
     compile.status === "running" || run.status === "running" || manual.status === "running";
-  /*
-   * The unchanged-code rule: a button whose last COMPLETED run was made of
-   * exactly what is on screen now would answer the same thing again, so it
-   * rests, and the answer it gave stays shown. A test run compiles too, so
-   * it answers Compile as well.
-   */
-  const testsUnchanged = testedKey === codeKey;
-  const compileUnchanged = compiledKey === codeKey || testsUnchanged;
-  const manualUnchanged = triedKey === manualKey;
 
   const outcome = run.status === "done" ? run.outcome : null;
   const manualResult = manual.status === "done" ? (manual.outcome.cases[0] ?? null) : null;
@@ -268,11 +254,10 @@ export function CodePlayer({
               icon={<HammerIcon />}
               label={s.compile}
               busyLabel={s.compiling}
-              disabled={locked || busy || compileUnchanged}
-              cooldown={cooldown}
+              disabled={locked || busy}
               onClick={() => {
                 setLastAction("compile");
-                void runInto(compileInto, codeKey, { compileOnly: true });
+                void runInto(compileInto, { compileOnly: true });
               }}
               s={s}
             />
@@ -282,11 +267,11 @@ export function CodePlayer({
               icon={<ListChecksIcon />}
               label={s.runTests}
               variant={testsPrimary ? "primary" : "secondary"}
-              disabled={locked || busy || testsUnchanged}
+              disabled={locked || busy}
               cooldown={cooldown}
               onClick={() => {
                 setLastAction("tests");
-                void runInto(runVisibleInto, codeKey, {});
+                void runInto(runVisibleInto, {});
               }}
               s={s}
             />
@@ -303,9 +288,6 @@ export function CodePlayer({
               </button>
             ) : null}
           </div>
-        ) : null}
-        {canRun && testsUnchanged && !busy && !locked ? (
-          <p className={hint}>{s.unchangedTests}</p>
         ) : null}
         <RunStatus state={status} s={s} />
       </div>
@@ -324,10 +306,10 @@ export function CodePlayer({
               state={manual}
               variant="secondary"
               label={s.manualRun}
-              disabled={locked || busy || manualUnchanged}
+              disabled={locked || busy}
               cooldown={cooldown}
               onClick={() =>
-                void runInto(runManualInto, manualKey, {
+                void runInto(runManualInto, {
                   manual: { args: manualArgs, stdin: manualStdin },
                 })
               }
@@ -366,9 +348,6 @@ export function CodePlayer({
               />
             </div>
           </div>
-          {manualUnchanged && !busy && !locked ? (
-            <p className={hint}>{s.unchangedManual}</p>
-          ) : null}
           <RunStatus state={manual} s={s} />
           {manualResult === null ? null : (
             <div className="flex flex-col gap-1.5">

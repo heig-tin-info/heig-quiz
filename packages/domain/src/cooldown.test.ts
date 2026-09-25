@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  COMPILE_BUDGET_CAP,
+  COMPILE_BUDGET_FLOOR,
+  compilesPerMinute,
   COOLDOWN_BASE_MS,
   COOLDOWN_MAX_MS,
   COOLDOWN_SERVER_SLACK_MS,
@@ -73,5 +76,28 @@ describe("effectiveCooldownMs", () => {
     expect(
       effectiveCooldownMs({ mode: "progressive", uses: 9, runsPerMinute: 10, onServer: true }),
     ).toBe(COOLDOWN_MAX_MS);
+  });
+});
+
+describe("compilesPerMinute", () => {
+  it("is three times the run budget", () => {
+    expect(compilesPerMinute(10)).toBe(30);
+    expect(compilesPerMinute(15)).toBe(45);
+  });
+
+  it("never falls below the floor", () => {
+    expect(compilesPerMinute(1)).toBe(COMPILE_BUDGET_FLOOR);
+    expect(compilesPerMinute(2)).toBe(COMPILE_BUDGET_FLOOR);
+    expect(compilesPerMinute(0)).toBe(COMPILE_BUDGET_FLOOR);
+    expect(compilesPerMinute(Number.NaN)).toBe(COMPILE_BUDGET_FLOOR);
+  });
+
+  it("never exceeds the cap", () => {
+    expect(compilesPerMinute(30)).toBe(COMPILE_BUDGET_CAP);
+    expect(compilesPerMinute(1000)).toBe(COMPILE_BUDGET_CAP);
+  });
+
+  it("is always at least the run budget", () => {
+    for (let rpm = 1; rpm <= 30; rpm++) expect(compilesPerMinute(rpm)).toBeGreaterThanOrEqual(rpm);
   });
 });

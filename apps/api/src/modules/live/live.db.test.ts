@@ -13,7 +13,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 
 import { LobbyView } from "@quiz/contracts";
 import type { RunnerOutcome } from "@quiz/core/server";
-import { GRACE_MS } from "@quiz/domain";
+import { COMPILE_BUDGET_FLOOR, compilesPerMinute, GRACE_MS } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
 import { TestClock } from "../../clock.js";
@@ -1167,17 +1167,55 @@ describe("running code (POST /attempts/:id/run)", () => {
       compile: { ok: false, stderr: "main.c:1: error" },
       cases: [],
     });
-    // Same journal, same budget: a compilation is a `run` event…
+    // Same journal: a compilation is a `run` event, marked `compileOnly`…
     const journal = await db
       .select()
       .from(attemptEvents)
       .where(eq(attemptEvents.attemptId, attempt.id));
     expect(journal.map((e) => e.details)).toEqual([{ itemId, requestId, compileOnly: true }]);
-    // …so with `runsPerMinute: 2`, one more and the next run is refused.
+    // …but its own budget (ADR-024 addendum, #129): with `runsPerMinute: 2`,
+    // more compilations than that still leave both test runs untouched.
     await service.runVisibleCases(db, { ...base, compileOnly: true, now: clock.now() });
+    await service.runVisibleCases(db, { ...base, compileOnly: true, now: clock.now() });
+    await service.runVisibleCases(db, { ...base, now: clock.now() });
+    await service.runVisibleCases(db, { ...base, now: clock.now() });
     await expect(
       service.runVisibleCases(db, { ...base, now: clock.now() }),
     ).rejects.toMatchObject({ code: "rate_limited" });
+  });
+
+  it("keeps compiling when the test runs are spent (#129)", async () => {
+    const { evaluation, attempt, itemId } = await codeAttempt();
+    const base = { runner: answering({}), evaluation, attempt, itemId, regions: ["return 0;"] };
+    // `runsPerMinute: 2`: both test runs spent, the third refused.
+    await service.runVisibleCases(db, { ...base, now: clock.now() });
+    await service.runVisibleCases(db, { ...base, now: clock.now() });
+    await expect(
+      service.runVisibleCases(db, { ...base, now: clock.now() }),
+    ).rejects.toMatchObject({ code: "rate_limited", status: 429 });
+    // Compile still answers: its budget is apart.
+    const compiled = await service.runVisibleCases(db, { ...base, compileOnly: true, now: clock.now() });
+    expect(compiled.result.status).toBe("ok");
+  });
+
+  it("refuses a compilation past its own budget, and only a compilation (#129)", async () => {
+    const { evaluation, attempt, itemId } = await codeAttempt();
+    const base = { runner: answering({}), evaluation, attempt, itemId, regions: ["return 0;"] };
+    // `runsPerMinute: 2` gives the floor, `compilesPerMinute(2)`.
+    const limit = compilesPerMinute(2);
+    expect(limit).toBe(COMPILE_BUDGET_FLOOR);
+    for (let i = 0; i < limit; i++) {
+      await service.runVisibleCases(db, { ...base, compileOnly: true, now: clock.now() });
+    }
+    await expect(
+      service.runVisibleCases(db, { ...base, compileOnly: true, now: clock.now() }),
+    ).rejects.toMatchObject({ code: "rate_limited", status: 429 });
+    // The test runs are all still there.
+    const tested = await service.runVisibleCases(db, { ...base, now: clock.now() });
+    expect(tested.result.status).toBe("ok");
+    // And the compile window slides like the other one.
+    clock.advance(61_000);
+    await service.runVisibleCases(db, { ...base, compileOnly: true, now: clock.now() });
   });
 
   /** A runner that answers every case with the same run. */

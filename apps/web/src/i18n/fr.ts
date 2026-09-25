@@ -906,13 +906,12 @@ export const fr: Record<keyof Dict, string> = {
   "qt.code.p.runTests": "Lancer les tests",
   "qt.code.p.freeTry": "Essai libre",
   "qt.code.p.availableIn": "Disponible dans {seconds} s",
-  "qt.code.p.unchangedTests": "Modifiez votre code pour relancer les tests.",
-  "qt.code.p.unchangedRun": "Modifiez votre code pour le relancer.",
-  "qt.code.p.unchangedManual": "Modifiez votre code ou l'entrée pour relancer l'essai.",
   "qt.code.p.runUnavailable":
     "L'exécution est indisponible. Votre réponse est enregistrée et sera corrigée par votre enseignant.",
   "qt.code.p.runFailed":
     "L'exécution n'a pas abouti. Votre réponse est enregistrée ; réessayez dans un instant.",
+  "qt.code.p.rateLimited":
+    "Trop d'exécutions en une minute. Attendez un instant, puis exécutez à nouveau.",
   "qt.code.p.visibleCases": "Cas visibles",
   "qt.code.p.noVisibleCases": "Votre enseignant n'a publié aucun cas visible.",
   "qt.code.p.hiddenCases": "{count} cas cachés, valant {points} points au total.",
@@ -1042,8 +1041,6 @@ export const fr: Record<keyof Dict, string> = {
     "Le programme a dépassé la mémoire. L'image montre ce qu'il a écrit avant.",
   "qt.codeimage.p.endCrashed": "Le programme a planté. L'image montre ce qu'il a écrit avant.",
   "qt.codeimage.p.endTruncated": "La sortie a été coupée à la limite de taille.",
-  "qt.codeimage.p.rateLimited":
-    "Trop d'exécutions en une minute. Attendez un instant, puis exécutez à nouveau.",
   "qt.codeimage.r.noImage": "Le programme n'a écrit aucune image.",
 
   // --- qt-circuit ---

@@ -186,8 +186,11 @@ const scenes = [
   // so this clicks Run and waits for clang.wasm to compile the program and
   // for the three cases to execute in a Web Worker (ADR-015). The first run
   // of a browser fetches ~53 MB of runtime, hence the wait.
-  { name: "player-run", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 4); await p.getByRole("button", { name: /^(run|exécuter)$/i }).click(); await p.getByText(/^(Compiled|Compilé)$/).waitFor({ timeout: 60000 }); await p.waitForTimeout(500); } },
-  { name: "player-run-manual", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 4); await p.getByLabel(/^(Arguments)$/).fill("220\n470"); await p.getByRole("button", { name: /^(run once|exécuter une fois)$/i }).click(); await p.getByLabel(/^(Output|Sortie)$/).waitFor({ timeout: 60000 }); await p.waitForTimeout(300); } },
+  { name: "player-run", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 4); await p.getByRole("button", { name: /^(run the tests|lancer les tests)$/i }).click(); await p.getByText(/^(Compiled|Compilé)$/).waitFor({ timeout: 60000 }); await p.waitForTimeout(500); } },
+  // Issue #129: Compile has no cooldown, so the toolbar right after it is
+  // all ready; after the tests, only Run the tests (and Free try) refill.
+  { name: "player-compile", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 4); await p.getByRole("button", { name: /^(compile|compiler)$/i }).click(); await p.getByText(/^(Compiled|Compilé|Compilation failed|Compilation échouée)$/).waitFor({ timeout: 60000 }); await p.waitForTimeout(500); } },
+  { name: "player-run-manual", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 4); await p.getByRole("button", { name: /^(free try|essai libre)$/i }).click(); await p.getByRole("button", { name: /^(run once|exécuter une fois)$/i }).click(); await p.getByLabel(/^(Output|Sortie)$/).waitFor({ timeout: 60000 }); await p.waitForTimeout(300); } },
   // `codeimage` (ADR-021): question 6. Its runtime is the server's, so Run
   // goes through the mock's `POST /attempts/:id/simulate`.
   { name: "player-codeimage", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 6) },

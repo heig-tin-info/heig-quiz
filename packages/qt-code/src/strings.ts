@@ -190,12 +190,10 @@ export interface CodePlayerStrings {
   runTests: string;
   freeTry: string;
   availableIn: string;
-  unchangedTests: string;
-  unchangedRun: string;
-  unchangedManual: string;
   loadingRuntime: string;
   runUnavailable: string;
   runFailed: string;
+  rateLimited: string;
   visibleCases: string;
   noVisibleCases: string;
   hiddenCases: string;
@@ -244,13 +242,11 @@ export const PLAYER_STRINGS: CodePlayerStrings = {
   runTests: "Run the tests",
   freeTry: "Free try",
   availableIn: "Available in {seconds} s",
-  unchangedTests: "Change your code to run the tests again.",
-  unchangedRun: "Change your code to run it again.",
-  unchangedManual: "Change your code or the input to run it again.",
   loadingRuntime: "Loading the language runtime… this happens once.",
   runUnavailable:
     "Running is unavailable right now. Your answer is saved and will be graded by your teacher.",
   runFailed: "The run could not be completed. Your answer is saved; try again in a moment.",
+  rateLimited: "Too many runs in a minute. Wait a moment, then run again.",
   visibleCases: "Visible cases",
   noVisibleCases: "Your teacher did not publish any visible case.",
   hiddenCases: "{count} hidden cases, worth {points} point(s) in total.",

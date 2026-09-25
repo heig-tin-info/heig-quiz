@@ -17,12 +17,11 @@ import { useMemo, useState } from "react";
 
 import { plural, resolveStrings } from "@quiz/core/client";
 import type { MarkdownRenderer, PlayerProps } from "@quiz/core/client";
-import { badge, card, cx, hint, isLocked, sectionTitle } from "@quiz/ui";
+import { badge, card, cx, isLocked, sectionTitle } from "@quiz/ui";
 
 import {
   ProgramRegions,
   ProgramStatement,
-  regionsKey,
   regionsOf,
   RunButton,
   RunStatus,
@@ -89,8 +88,8 @@ export function CodeImagePlayer({
 }: CodeImagePlayerProps) {
   const s = resolveStrings(CODEIMAGE_PLAYER_DEFAULTS, strings);
   const locked = isLocked(readOnly, disabled);
-  const [run, runInto, ranKey] = useRunSlot();
-  // The same cooldown rule as `code` (one counter: there is one button).
+  const [run, runInto] = useRunSlot();
+  // The same cooldown rule as `code`'s test runs (one counter: there is one button).
   const cooldown = useCooldown(student.cooldown, student.runtime, student.runsPerMinute);
   const [computed, setComputed] = useState<Computed | null>(null);
   const [view, setView] = useState<ImageView>("target");
@@ -98,10 +97,6 @@ export function CodeImagePlayer({
 
   const spec = student.image;
   const regions = regionsOf(student, answer);
-  const codeKey = regionsKey(regions);
-  // The unchanged-code rule: the same code draws the same picture, which is
-  // already on screen.
-  const unchanged = ranKey === codeKey;
   // A draft previewed before its target was captured has none to show.
   const target = useMemo(() => targetPixels({ target: student.target, image: spec }), [student.target, spec]);
 
@@ -144,7 +139,7 @@ export function CodeImagePlayer({
         if (layout === "single" && view === "target") setView("computed");
       }
       return outcome;
-    }, codeKey);
+    });
   }
 
   return (
@@ -177,17 +172,14 @@ export function CodeImagePlayer({
           {onRun === undefined ? null : (
             <RunButton
               state={run}
-              disabled={locked || run.status === "running" || unchanged}
+              disabled={locked || run.status === "running"}
               cooldown={cooldown}
               onClick={() => void runProgram()}
               s={s}
             />
           )}
         </div>
-        {onRun !== undefined && unchanged && !locked ? (
-          <p className={hint}>{s.unchangedRun}</p>
-        ) : null}
-        <RunStatus state={run} s={s} rateLimited={s.rateLimited} />
+        <RunStatus state={run} s={s} />
 
         {computed === null ? null : <RunNotes computed={computed} s={s} />}
 

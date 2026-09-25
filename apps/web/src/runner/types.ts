@@ -48,7 +48,7 @@ export interface ManualInput {
 export type BackendRun = (
   manual?: ManualInput,
   options?: BackendRunOptions,
-) => Promise<RunnerOutcome | "unavailable">;
+) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
 
 export interface BackendRunOptions {
   /**

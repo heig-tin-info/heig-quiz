@@ -96,7 +96,7 @@ export interface UseAttempt {
     manual?: { args: string[]; stdin: string },
     /** `compileOnly`: the Compile button — build, run nothing, no input. */
     options?: { compileOnly?: boolean | undefined },
-  ) => Promise<RunnerOutcome | "unavailable">;
+  ) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
   /** F-EVAL-13: the journal. Never blocks, never surfaces an error. */
   report: (kind: AttemptEventKind, details?: unknown) => void;
 }
@@ -444,7 +444,7 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
       regions: string[],
       manual?: { args: string[]; stdin: string },
       options?: { compileOnly?: boolean | undefined },
-    ): Promise<RunnerOutcome | "unavailable"> => {
+    ): Promise<RunnerOutcome | "unavailable" | "rate_limited"> => {
       try {
         const response = await api<RunAccepted>(
           `/app/api/attempts/${attemptId}/run`,
@@ -466,9 +466,10 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
       } catch (error) {
         // 503 is a configuration, not a failure (decision D14): the player
         // says so in one line and the answer is still saved and still graded.
-        if (error instanceof ApiError && (error.status === 503 || error.status === 429)) {
-          return "unavailable";
-        }
+        if (error instanceof ApiError && error.status === 503) return "unavailable";
+        // 429 is the per-attempt budget (N-SEC-07) — the tests', or the
+        // compilations' own: the player says to wait, not that running is off.
+        if (error instanceof ApiError && error.status === 429) return "rate_limited";
         throw error;
       }
     },
