@@ -25,8 +25,8 @@ de lui — commencez par les confiances basses.
 Les noms sont masqués tant que vous ne les demandez pas ; un pseudonyme
 garde votre attention sur la réponse.
 
-**Afficher** choisit ce qui entoure chaque réponse : le nom interne,
-l'énoncé, l'explication, la réponse attendue ou la solution, le commentaire
+**Afficher** choisit ce qui entoure chaque réponse : le nom de la question
+au-dessus, l'énoncé, l'explication, la réponse attendue ou la solution, le commentaire
 de correction. La réponse de l'étudiant est toujours là — c'est ce que vous
 corrigez — et masquer le commentaire ne vous empêche jamais d'en écrire un
 avec **Modifier**.

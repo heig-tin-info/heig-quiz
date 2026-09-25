@@ -48,7 +48,7 @@ const COPY: GradingEntry[] = [
   }),
 ];
 
-function setup() {
+function setup(over: Record<string, ReturnType<typeof ok>> = {}) {
   const stubs = mockFetch({
     [`GET ${EVAL}`]: ok(makeEvaluationDetail()),
     [`GET ${BY_QUESTION("i1")}`]: ok(makeQueue(ENTRIES)),
@@ -68,6 +68,7 @@ function setup() {
     [`GET ${EVAL}/results/by-question`]: ok([]),
     [`GET ${EVAL}/items/i1/versions`]: ok({ frozenNumber: 1, versions: [] }),
     [`GET ${EVAL}/items/i2/versions`]: ok({ frozenNumber: 1, versions: [] }),
+    ...over,
   });
   renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
   return stubs;
@@ -108,8 +109,9 @@ describe("GradingPanel — the step header carries the step (#108)", () => {
     await screen.findByText("Question 1 of 2");
     await user.click(screen.getByRole("radio", { name: "By student" }));
     await screen.findByText("Student 1 of 1");
-    await waitFor(() => expect(within(header()).getByText("Total 3 / 5 pts")).toBeVisible());
+    await waitFor(() => expect(within(header()).getByText("Total 3 / 5 pts (provisional)")).toBeVisible());
     expect(within(header()).getByText("2 answers")).toBeVisible();
+    // Proposals are in it: it says it is not the grade yet.
     // A question's points mean nothing across a whole copy.
     expect(within(header()).queryByText("2 pts")).toBeNull();
   });
@@ -119,9 +121,22 @@ describe("GradingPanel — the step header carries the step (#108)", () => {
     setup();
     await screen.findByText("Question 1 of 2");
     await user.click(screen.getByRole("radio", { name: "By student" }));
-    await waitFor(() => expect(within(header()).getByText("Total 3 / 5 pts")).toBeVisible());
+    await waitFor(() => expect(within(header()).getByText("Total 3 / 5 pts (provisional)")).toBeVisible());
     await user.click(screen.getByRole("radio", { name: en["grading.filter.proposed"] }));
     await waitFor(() => expect(within(header()).queryByText(/^Total/)).toBeNull());
+  });
+});
+
+describe("GradingPanel — the student's total once settled (#108)", () => {
+  it("drops the provisional mark when every answer of the copy is validated", async () => {
+    const user = userEvent.setup();
+    const validated = COPY.map((e) =>
+      makeEntry({ ...e, grading: { ...e.grading!, state: "validated" } }),
+    );
+    setup({ [`GET ${BY_STUDENT("a1")}`]: ok(makeQueue(validated)) });
+    await screen.findByText("Question 1 of 2");
+    await user.click(screen.getByRole("radio", { name: "By student" }));
+    await waitFor(() => expect(within(header()).getByText("Total 3 / 5 pts")).toBeVisible());
   });
 });
 

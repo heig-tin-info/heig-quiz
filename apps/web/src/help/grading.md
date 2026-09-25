@@ -23,8 +23,8 @@ sure the grader said it was — start with the low ones.
 Names are hidden until you ask for them; a pseudonym keeps your attention
 on the answer.
 
-**Show** chooses what is drawn around each answer: the internal name, the
-prompt, the explanation, the expected answer or solution, the grading
+**Show** chooses what is drawn around each answer: the question's name
+above it, the prompt, the explanation, the expected answer or solution, the grading
 comment. The student's answer is always there — it is what you grade — and
 hiding the comment never stops you from writing one with **Adjust**.
 

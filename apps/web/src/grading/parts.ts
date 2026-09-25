@@ -7,8 +7,11 @@ import type { Dict } from "../i18n";
  * to read the students' answers and little else. The student's answer is
  * not one of them: it is what is being graded, and it is always drawn.
  *
- * Three are drawn by the grading page itself (the internal name, the
- * explanation, the grading comment) and simply not rendered. The prompt and
+ * Three are drawn by the grading page itself (the question's internal name
+ * on the line above the answer, the explanation, the grading comment) and
+ * simply not rendered. The name is hidden on THAT line only: by student it
+ * is also what names the list rows, the detail header and the step picker,
+ * which is why the checkbox says "above the answer". The prompt and
  * the solution are drawn by the question type's own review, which receives
  * them as `sections` (`@quiz/core/client`) and honours them. Hiding the
  * comment hides its display only: Adjust still asks for one.

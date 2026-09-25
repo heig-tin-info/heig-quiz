@@ -269,8 +269,11 @@ export function GradingPanel({
           (sum, e) => ({
             points: sum.points + (e.grading?.points ?? 0),
             max: sum.max + (e.grading?.maxPoints ?? itemsById.get(e.itemId)?.points ?? 0),
+            // A proposal not validated yet, or an answer not graded at all
+            // (counted 0), makes the sum a forecast, not the grade.
+            provisional: sum.provisional || !e.grading || e.grading.state !== "validated",
           }),
-          { points: 0, max: 0 },
+          { points: 0, max: 0, provisional: false },
         )
       : null;
   const badges = (
@@ -284,10 +287,10 @@ export function GradingPanel({
       <Badge tone="zinc">{t("grading.answers", { n: counts.total })}</Badge>
       {studentTotal ? (
         <Badge tone="zinc">
-          {t("grading.studentTotal", {
-            points: formatPoints(studentTotal.points),
-            max: formatPoints(studentTotal.max),
-          })}
+          {t(
+            studentTotal.provisional ? "grading.studentTotal.provisional" : "grading.studentTotal",
+            { points: formatPoints(studentTotal.points), max: formatPoints(studentTotal.max) },
+          )}
         </Badge>
       ) : null}
     </>

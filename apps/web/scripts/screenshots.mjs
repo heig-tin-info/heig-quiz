@@ -485,7 +485,7 @@ const scenes = [
   { name: "grading-parts-answer-only", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
       await skipCoach(p);
       await p.getByRole("button", { name: /^(Show|Afficher)/ }).first().click();
-      for (const name of [/^(Internal name|Nom interne)$/, /^(Prompt|Énoncé)$/, /^(Explanation|Explication)$/, /^(Expected answer|Réponse attendue)/, /^(Grading comment|Commentaire de correction)$/]) {
+      for (const name of [/^(Question name|Nom de la question)/, /^(Prompt|Énoncé)$/, /^(Explanation|Explication)$/, /^(Expected answer|Réponse attendue)/, /^(Grading comment|Commentaire de correction)$/]) {
         await p.getByRole("checkbox", { name }).click();
       }
       await p.keyboard.press("Escape");
