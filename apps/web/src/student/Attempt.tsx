@@ -20,7 +20,7 @@ import type { AttemptOrLobby } from "@quiz/contracts";
 import { ApiError, api, useMe } from "../api";
 import { feedbackLink } from "../grading";
 import { useT } from "../i18n";
-import type { Route } from "../router";
+import type { Navigate } from "../router";
 import { leaveStudentView, studentViewOn } from "../studentView";
 import { Button, Card, EmptyState, Field, QueryError, Spinner } from "../ui";
 import { Lobby } from "./Lobby";
@@ -35,7 +35,7 @@ export function AttemptPage({
   navigate,
 }: {
   evaluationId: string;
-  navigate: (r: Route) => void;
+  navigate: Navigate;
 }) {
   const t = useT();
   // Only to decide whether the refusal below may say the word "seat": a
@@ -179,9 +179,14 @@ export function AttemptPage({
   }
   return (
     <Player
+      // One player per attempt: `useAttempt` binds its state, its autosave
+      // and its stream topic to the attempt it mounted with. A retake answers
+      // this route with ANOTHER attempt (F-EVAL-15), and it must get a fresh
+      // player, not the closed screen of the previous one (issue #120).
+      key={data.view.attempt.id}
       initial={data.view}
       onHome={home}
-      onResults={(attemptId) => navigate(feedbackLink(attemptId).route)}
+      onResults={(attemptId, options) => navigate(feedbackLink(attemptId).route, options)}
       {...(exitStudentView ? { onExitStudentView: exitStudentView } : {})}
     />
   );
