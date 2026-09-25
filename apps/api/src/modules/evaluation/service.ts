@@ -16,7 +16,8 @@
  *   - a structural change is refused once an attempt exists, because the
  *     wording, the order and the scale a student saw can never move under
  *     them; and while the evaluation runs, the whole configuration is locked
- *     but for the title and the access control (#86, `configLock`).
+ *     but for the title, the access control and the feedback policy (#86,
+ *     `configLock`).
  */
 import { randomUUID } from "node:crypto";
 
@@ -122,8 +123,9 @@ export class Locked extends EvaluationError {
 
 /**
  * The evaluation is `running` or `paused` (#86): its configuration is locked
- * until it closes, whether or not anybody has entered. Time is added from the
- * live dashboard, not through a patch.
+ * until it closes, whether or not anybody has entered — all but the title,
+ * the access control and the feedback policy. Time is added from the live
+ * dashboard, not through a patch.
  */
 export class RunningLocked extends EvaluationError {
   constructor() {
@@ -141,6 +143,23 @@ class FeedbackNotAllowed extends EvaluationError {
       "feedback_not_allowed",
       422,
       `feedback "${when}" is not allowed for an evaluation sat in class (F-EVAL-11)`,
+    );
+  }
+}
+
+/**
+ * A poll keeps its reveal in two places, moved together by the poll's own
+ * reveal route (`poll.setRevealed`, F-LIVE-13): `settings.poll.revealed`,
+ * which the projection reads, and `feedbackPolicy.showKey`/`showExplanation`,
+ * which the feedback route obeys. A generic patch of the second half would
+ * publish the key while the projection still says "not revealed" (#86).
+ */
+class PollFeedbackLocked extends EvaluationError {
+  constructor() {
+    super(
+      "poll_feedback_locked",
+      409,
+      "a poll's feedback follows its reveal: use the poll's reveal route",
     );
   }
 }
@@ -811,9 +830,11 @@ export async function byId(db: DbOrTx, id: string): Promise<EvaluationRecord | n
 /**
  * What a patch may still touch is `configLock`'s to say (`@quiz/domain`):
  * everything while nothing locks the configuration; the title, the access
- * control and the feedback policy once an attempt exists (F-EVAL-03); only
- * the title and the access control while the evaluation runs (#86) — access
- * must stay fixable mid-exam, for a student the allowlist locks out.
+ * control and the feedback policy once an attempt exists (F-EVAL-03), and
+ * while the evaluation runs (#86) — access must stay fixable mid-exam, for a
+ * student the allowlist locks out, and a forgotten answer key hideable. The
+ * in-class rule on `immediate` (#78) below applies in every state. A poll's
+ * feedback is never patched: it moves with the reveal (`PollFeedbackLocked`).
  */
 export async function patchEvaluation(
   db: Db,
@@ -825,6 +846,7 @@ export async function patchEvaluation(
   if (Object.keys(patch).some((k) => !isConfigFieldWritable(lock, k))) {
     throw lock === "running" ? new RunningLocked() : new Locked();
   }
+  if (row.mode === "poll" && patch.feedbackPolicy !== undefined) throw new PollFeedbackLocked();
   const next: Partial<typeof evaluations.$inferInsert> = { updatedAt: new Date() };
   if (patch.title !== undefined) next.title = patch.title;
   if (patch.settings !== undefined) {

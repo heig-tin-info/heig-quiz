@@ -825,6 +825,13 @@ on("PATCH", "/app/api/evaluations/:id", (m, body) => {
         : { error: "locked", message: "an attempt exists: the structure is frozen" },
     );
   }
+  // A poll's feedback moves with its reveal, through the poll route only (#86).
+  if (e.mode === "poll" && body.feedbackPolicy !== undefined) {
+    throw new MockPayload(409, {
+      error: "poll_feedback_locked",
+      message: "a poll's feedback follows its reveal: use the poll's reveal route",
+    });
+  }
   const settings = body.settings as { lobby?: LobbyName } | undefined;
   const feedback = body.feedbackPolicy as { when?: FeedbackWhen } | undefined;
   // F-EVAL-11, #78: the server refuses `immediate` in class, whichever half

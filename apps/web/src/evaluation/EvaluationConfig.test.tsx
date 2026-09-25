@@ -457,7 +457,7 @@ describe("EvaluationConfig", () => {
       };
     };
 
-    it("disables everything but the access code, nobody entered yet, and says where time is added", async () => {
+    it("disables everything but the access code and the feedback, nobody entered yet, and says where time is added", async () => {
       const user = userEvent.setup();
       navigate.mockClear();
       mockFetch(routes(inState("running", 0)));
@@ -472,8 +472,11 @@ describe("EvaluationConfig", () => {
       expect(screen.getByLabelText(/^minutes$/i)).toBeDisabled();
 
       await user.click(screen.getByRole("button", { name: /^advanced options$/i }));
-      expect(await screen.findByRole("radio", { name: /^on release$/i })).toBeDisabled();
-      expect(screen.getByRole("switch", { name: /show the expected answer/i })).toBeDisabled();
+      // A forgotten answer key must be hideable mid-run (#86); the rest stays frozen.
+      expect(await screen.findByRole("radio", { name: /^on release$/i })).toBeEnabled();
+      expect(screen.getByRole("switch", { name: /show the expected answer/i })).toBeEnabled();
+      expect(screen.getByRole("switch", { name: /progress bar/i })).toBeDisabled();
+      expect(screen.getByText(/feedback policy can still change/i)).toBeInTheDocument();
       expect(screen.getByRole("textbox", { name: /access code/i })).toBeEnabled();
 
       await user.click(screen.getByRole("button", { name: /^live dashboard$/i }));

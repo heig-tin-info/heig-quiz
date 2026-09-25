@@ -41,11 +41,13 @@ présentation, mélange, barre de progression, code d'accès, barème. Le temps
 supplémentaire de la liste s'ajoute à la durée.
 
 Pendant que l'évaluation est en cours ou en pause, cette étape est
-verrouillée jusqu'à la clôture : seuls le titre et le code d'accès changent
-encore — le code, pour laisser entrer un étudiant resté dehors. Du temps
-supplémentaire pour tous se donne depuis le tableau de bord. Une fois
-l'évaluation clôturée, le retour à l'étudiant se modifie à nouveau jusqu'à
-la publication des résultats.
+verrouillée jusqu'à la clôture : seuls le titre, le code d'accès et le retour
+à l'étudiant changent encore — le code, pour laisser entrer un étudiant resté
+dehors, le retour, pour masquer tout de suite un corrigé oublié. Une
+évaluation avec salle d'attente ne peut toujours pas passer au retour
+immédiat. Du temps supplémentaire pour tous se donne depuis le tableau de
+bord. Le retour à l'étudiant reste modifiable après la clôture, jusqu'à la
+publication des résultats.
 
 ## Démarrage
 

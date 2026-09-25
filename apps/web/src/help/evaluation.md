@@ -40,10 +40,12 @@ progress bar, access code, grading scale. Extra time from the roster applies
 on top of the duration.
 
 While the evaluation is running or paused, this step is locked until it
-closes: only the title and the access code still change — the code so that a
-student shut out can be let in. Extra time for everybody is given from the
-live dashboard. Once it is closed, the feedback policy can change again until
-the results are released.
+closes: only the title, the access code and the feedback still change — the
+code so that a student shut out can be let in, the feedback so that an answer
+key you forgot to hide can be hidden at once. An evaluation with a waiting
+room still cannot switch to immediate feedback. Extra time for everybody is
+given from the live dashboard. The feedback can still change after the close,
+until the results are released.
 
 ## Launch
 

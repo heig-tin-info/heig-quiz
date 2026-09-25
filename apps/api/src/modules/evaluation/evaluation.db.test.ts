@@ -21,6 +21,7 @@ import { testServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { loadConfig, typeOf } from "../pool/config.js";
+import * as pollService from "../poll/service.js";
 import * as poolService from "../pool/service.js";
 import * as service from "./service.js";
 
@@ -402,7 +403,7 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
     return { seed, row: await reload(db, seed.evaluationId) };
   }
 
-  it("refuses every structural field and the feedback policy, with nobody entered yet", async () => {
+  it("refuses every structural field, with nobody entered yet", async () => {
     for (const state of ["running", "paused"] as const) {
       const { seed, row } = await inState(state);
       const ctx = { attemptCount: 0 };
@@ -413,9 +414,8 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
         { closesAt: null },
         { mcqPolicy: "all_or_nothing" as const },
         { gradingScale: { kind: "linear" as const, rounding: "nearest" as const } },
-        { feedbackPolicy: { when: "none" as const } },
         // One forbidden field sinks a patch that also carries allowed ones.
-        { title: "Mixed", feedbackPolicy: { showKey: false } },
+        { title: "Mixed", feedbackPolicy: { showKey: false }, durationS: 60 },
       ];
       for (const patch of refused) {
         await expect(
@@ -439,6 +439,71 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
     expect(next.title).toBe("Renamed");
     expect(next.accessCode).toBe("open-sesame");
     expect(next.ipAllowlist).toEqual(["10.0.0.0/8"]);
+  });
+
+  it("keeps the feedback policy writable mid-run, so a forgotten answer key can be hidden", async () => {
+    for (const state of ["running", "paused"] as const) {
+      const { row } = await inState(state);
+      const next = await service.patchEvaluation(
+        db,
+        row,
+        { feedbackPolicy: { when: "none", showKey: false } },
+        { attemptCount: 3 },
+      );
+      expect(service.feedbackOf(next), state).toMatchObject({ when: "none", showKey: false });
+    }
+  });
+
+  it("still refuses immediate feedback mid-run to an exercise with a waiting room (#78)", async () => {
+    for (const state of ["running", "paused"] as const) {
+      const seed = await seedLive(db, { mode: "exercise" });
+      await db
+        .update(evaluations)
+        .set({
+          state,
+          settings: { ...service.settingsOf(await reload(db, seed.evaluationId)), lobby: "manual" },
+          feedbackPolicy: {
+            ...service.feedbackOf(await reload(db, seed.evaluationId)),
+            when: "on_release",
+            showKey: true,
+          },
+        })
+        .where(eq(evaluations.id, seed.evaluationId));
+      const row = await reload(db, seed.evaluationId);
+      await expect(
+        service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, { attemptCount: 2 }),
+      ).rejects.toMatchObject({ code: "feedback_not_allowed", status: 422 });
+      expect(service.feedbackOf(await reload(db, seed.evaluationId)).when).toBe("on_release");
+
+      const hidden = await service.patchEvaluation(
+        db,
+        row,
+        { feedbackPolicy: { showKey: false } },
+        { attemptCount: 2 },
+      );
+      expect(service.feedbackOf(hidden), state).toMatchObject({ when: "on_release", showKey: false });
+    }
+  });
+
+  it("never patches a poll's feedback, which moves with its reveal", async () => {
+    for (const state of ["draft", "running"] as const) {
+      const seed = await seedLive(db, { mode: "exercise" });
+      await db
+        .update(evaluations)
+        .set({ mode: "poll", state })
+        .where(eq(evaluations.id, seed.evaluationId));
+      const row = await reload(db, seed.evaluationId);
+      await expect(
+        service.patchEvaluation(db, row, { feedbackPolicy: { showKey: true } }, { attemptCount: 1 }),
+        state,
+      ).rejects.toMatchObject({ code: "poll_feedback_locked", status: 409 });
+      expect(await reload(db, seed.evaluationId), state).toEqual(row);
+
+      // The reveal route still moves both halves together.
+      const revealed = await pollService.setRevealed(db, row, true, new Date());
+      expect(service.feedbackOf(revealed), state).toMatchObject({ showKey: true, showExplanation: true });
+      expect(pollService.pollSettingsOf(revealed).revealed, state).toBe(true);
+    }
   });
 
   it("leaves the configuration open in the lobby, and the feedback policy open once closed", async () => {
@@ -480,7 +545,7 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
         method: "PATCH",
         url: base,
         headers: teacher.headers,
-        payload: { feedbackPolicy: { when: "none" } },
+        payload: { durationS: 60 },
       });
       expect(res.statusCode).toBe(409);
       expect(res.json()).toEqual({
@@ -496,6 +561,15 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
       });
       expect(renamed.statusCode).toBe(200);
       expect(renamed.json().evaluation.accessCode).toBe("letmein");
+
+      const keyless = await server.app.inject({
+        method: "PATCH",
+        url: base,
+        headers: teacher.headers,
+        payload: { feedbackPolicy: { showKey: false } },
+      });
+      expect(keyless.statusCode).toBe(200);
+      expect(keyless.json().evaluation.feedbackPolicy.showKey).toBe(false);
     } finally {
       await server.close();
     }

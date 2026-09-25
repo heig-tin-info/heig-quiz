@@ -404,7 +404,9 @@ export const TOOLS: Tool[] = [
     description:
       "Changes an evaluation's title, settings, feedback policy, grading scale or schedule (`opensAt`, " +
       "`closesAt` as ISO date-times, `durationS` in seconds). Does not start it. While it is running or " +
-      "paused, only the title, the access code and the IP allowlist may change.",
+      "paused, only the title, the access code, the IP allowlist and the feedback policy may change " +
+        "(an evaluation with a waiting room never takes `immediate` feedback). A poll's feedback policy " +
+        "is never patched: it follows the poll's reveal.",
     input: z.object({ evaluationId: Id, ...EvaluationPatch.shape }),
     annotations: { ...WRITE, idempotentHint: true },
     run: (api, { evaluationId, ...body }) => api.patch(`/evaluations/${evaluationId}`, body),
