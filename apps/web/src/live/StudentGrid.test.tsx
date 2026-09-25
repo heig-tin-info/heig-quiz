@@ -269,6 +269,18 @@ describe("StudentGrid — the row actions per state", () => {
     }
   });
 
+  // F-EVAL-15 (ADR-025): the student starts a new attempt instead.
+  it("offers no reopen on an exercise with retakes, and counts the attempts", () => {
+    const view = viewIn("running", 2, 2);
+    view.evaluation.retakes = true;
+    view.rows[0] = { ...view.rows[0]!, state: "submitted", attemptCount: 3 };
+    setup(view);
+    expect(actionsOf("Nadia Roux 0")).toEqual(["Open the answers"]);
+    expect(within(rowOf("Nadia Roux 0")).getByText("attempt 3")).toBeInTheDocument();
+    // One attempt: no badge.
+    expect(within(rowOf("Nadia Roux 1")).queryByText(/attempt \d/)).toBeNull();
+  });
+
   it("offers reopen on a finished attempt only while the evaluation runs or is paused", () => {
     for (const state of ["running", "paused"] as const) {
       const view = viewIn(state, 1, 2);

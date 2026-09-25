@@ -19,11 +19,13 @@
  * Every list renders its five states (loading, error, empty, partial, ready),
  * which is why the sections are one component taking a render function.
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { CalendarClock, CheckCircle2, GraduationCap, School } from "lucide-react";
 
+import { formatPoints } from "@quiz/domain";
 import type {
+  AttemptOrLobby,
   EvaluationCard as EvaluationCardData,
   JoinResult,
   Me,
@@ -78,6 +80,36 @@ function timingLine(card: EvaluationCardData, now: number, t: TFunction): string
   return null;
 }
 
+/** A finished attempt: handed in, or closed by time or by the teacher. */
+const finished = (card: EvaluationCardData): boolean =>
+  card.attemptState === "submitted" || card.attemptState === "expired";
+
+/**
+ * F-EVAL-15: the line of an exercise with retakes once an attempt is done —
+ * the score that counts (best or last) and how many attempts were taken.
+ * The score is all the student reads between two attempts (ADR-025).
+ */
+function retakeLine(card: EvaluationCardData, t: TFunction): string | null {
+  const r = card.retakes;
+  if (r === null) return null;
+  const parts: string[] = [];
+  if (r.kept !== null) {
+    parts.push(
+      t(r.keep === "best" ? "shome.kept.best" : "shome.kept.last", {
+        points: formatPoints(r.kept.score.points),
+        total: formatPoints(r.kept.score.totalPoints),
+      }),
+    );
+  }
+  parts.push(
+    r.maxAttempts === null
+      ? t("shome.attempts", { n: r.attemptCount })
+      : t("shome.attemptsOf", { n: r.attemptCount, max: r.maxAttempts }),
+  );
+  if (r.kept?.score.pending) parts.push(t("shome.kept.pending"));
+  return parts.join(" · ");
+}
+
 function upcomingLine(card: EvaluationCardData, now: number, t: TFunction): string {
   if (card.opensAt === null) return t("shome.upcoming.empty");
   const wait = Date.parse(card.opensAt) - now;
@@ -93,7 +125,7 @@ function EvaluationRow({
 }: {
   card: EvaluationCardData;
   line: string | null;
-  action?: { label: string; onClick: () => void; primary?: boolean };
+  action?: { label: string; onClick: () => void; primary?: boolean; loading?: boolean };
 }) {
   const t = useT();
   return (
@@ -107,7 +139,11 @@ function EvaluationRow({
       </div>
       <Badge tone={card.mode === "exam" ? "accent" : "zinc"}>{t(MODE_KEY[card.mode])}</Badge>
       {action ? (
-        <Button variant={action.primary ? "primary" : "secondary"} onClick={action.onClick}>
+        <Button
+          variant={action.primary ? "primary" : "secondary"}
+          onClick={action.onClick}
+          loading={action.loading ?? false}
+        >
           {action.label}
         </Button>
       ) : null}
@@ -183,6 +219,52 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
     queryFn: () => api("/app/api/student/classrooms"),
   });
 
+  // F-EVAL-15: another attempt. The server decides (`retake_refused` with a
+  // reason otherwise); on success the player opens on the new attempt, which
+  // is the student's current one from now on.
+  const qc = useQueryClient();
+  const toastError = useErrorToast();
+  const retake = useMutation({
+    mutationFn: (evaluationId: string) =>
+      api<AttemptOrLobby>(`/app/api/evaluations/${evaluationId}/retake`, { method: "POST" }),
+    onSuccess: (_view, evaluationId) => {
+      void qc.invalidateQueries({ queryKey: studentHomeKey });
+      navigate({ view: "attempt", evaluationId });
+    },
+    onError: (error) => {
+      toastError("shome.retakeFailed")(error);
+      void qc.invalidateQueries({ queryKey: studentHomeKey });
+    },
+  });
+
+  /** The one button of an open card. */
+  const openAction = (card: EvaluationCardData) => {
+    const r = card.retakes;
+    if (r !== null && finished(card)) {
+      if (r.canRetake) {
+        return {
+          label: t("shome.retake"),
+          primary: true,
+          loading: retake.isPending && retake.variables === card.id,
+          onClick: () => retake.mutate(card.id),
+        };
+      }
+      // No attempt left: what remains to do is to read the score.
+      const reviewed = r.kept?.attemptId ?? card.attemptId;
+      if (reviewed) {
+        return {
+          label: t("shome.review"),
+          onClick: () => navigate(feedbackLink(reviewed).route),
+        };
+      }
+    }
+    return {
+      label: primaryAction(card, t),
+      primary: true,
+      onClick: () => navigate({ view: "attempt", evaluationId: card.id }),
+    };
+  };
+
   const open = home.data?.open ?? [];
   const upcoming = home.data?.upcoming ?? [];
   const past = home.data?.past ?? [];
@@ -222,12 +304,12 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
                 <EvaluationRow
                   key={card.id}
                   card={card}
-                  line={timingLine(card, now, t)}
-                  action={{
-                    label: primaryAction(card, t),
-                    primary: true,
-                    onClick: () => navigate({ view: "attempt", evaluationId: card.id }),
-                  }}
+                  line={
+                    card.retakes !== null && finished(card)
+                      ? retakeLine(card, t)
+                      : timingLine(card, now, t)
+                  }
+                  action={openAction(card)}
                 />
               ))
             )}
@@ -254,7 +336,9 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
                   key={card.id}
                   card={card}
                   line={
-                    card.attemptState === "submitted"
+                    card.retakes !== null && card.attemptId !== null
+                      ? retakeLine(card, t)
+                      : card.attemptState === "submitted"
                       ? t("shome.state.submitted")
                       : card.attemptState === "expired"
                         ? t("shome.state.expired")
@@ -267,7 +351,11 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
                           // WP10: the ONE student results page. The API says
                           // `available: false` while the grades are not out,
                           // and the page renders that on its own.
-                          onClick: () => navigate(feedbackLink(card.attemptId!).route),
+                          // With retakes, the attempt that counts (F-EVAL-15).
+                          onClick: () =>
+                            navigate(
+                              feedbackLink(card.retakes?.kept?.attemptId ?? card.attemptId!).route,
+                            ),
                         },
                       }
                     : {})}

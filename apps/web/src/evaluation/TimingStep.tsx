@@ -20,6 +20,7 @@ import {
   SettingRow,
 } from "../ui";
 import { AdvancedDisclosure } from "./AdvancedDisclosure";
+import { RetakesSetting } from "./RetakesSetting";
 import { matchPreset, presetPatch, type PresetId } from "./presets";
 import { presetSummary } from "./presetSummary";
 import { missingTiming, missingTimingKey, TIMING_FIELD_ID, type TimingField } from "./timing";
@@ -284,6 +285,9 @@ export function TimingStep({
           ) : null}
         </div>
       </Card>
+
+      {/* F-EVAL-15: an exercise only; an exam is one sitting. */}
+      {mode === "exercise" ? <RetakesSetting detail={detail} patch={patch} disabled={locked} /> : null}
 
       <AdvancedDisclosure
         detail={detail}

@@ -37,6 +37,7 @@ const card = (over: Partial<EvaluationCard>): EvaluationCard => ({
   attemptState: null,
   grade: null,
   deadlineAt: null,
+  retakes: null,
   ...over,
 });
 
@@ -141,5 +142,74 @@ describe("the student home", () => {
       true,
     );
     expect(await screen.findByText("Vous avez rejoint PRG1-2026.")).toBeInTheDocument();
+  });
+
+  describe("an exercise with retakes (F-EVAL-15)", () => {
+    const retaking = (over: Partial<EvaluationCard["retakes"] & object> = {}) =>
+      card({
+        id: "e9",
+        title: "Série 3 — Entraînement",
+        mode: "exercise",
+        attemptId: "a9",
+        attemptState: "submitted",
+        retakes: {
+          keep: "best",
+          maxAttempts: 3,
+          attemptCount: 2,
+          canRetake: true,
+          kept: { attemptId: "a8", attemptNumber: 1, score: { points: 7.5, totalPoints: 10, pending: false } },
+          ...over,
+        },
+      });
+
+    it("shows the kept score and the count, and retakes in one click", async () => {
+      const { calls } = mockFetch({
+        "GET /app/api/student/home": ok({ ...home, open: [retaking()] }),
+        "GET /app/api/student/classrooms": ok([]),
+        "POST /app/api/evaluations/e9/retake": ok({ kind: "attempt", view: {} }),
+      });
+      const { navigate } = render();
+      expect(
+        await screen.findByText("Meilleur score 7.5 / 10 · tentatives : 2 sur 3"),
+      ).toBeInTheDocument();
+      const row = screen.getByText("Série 3 — Entraînement").closest("div.rounded-card")!;
+      const buttons = within(row as HTMLElement).getAllByRole("button");
+      expect(buttons).toHaveLength(1);
+      await userEvent.click(within(row as HTMLElement).getByRole("button", { name: "Recommencer" }));
+      expect(calls.some((c) => c.url === "/app/api/evaluations/e9/retake" && c.method === "POST")).toBe(true);
+      await vi.waitFor(() =>
+        expect(navigate).toHaveBeenCalledWith({ view: "attempt", evaluationId: "e9" }),
+      );
+    });
+
+    it("offers the kept attempt's score once no attempt is left", async () => {
+      mockFetch({
+        "GET /app/api/student/home": ok({
+          ...home,
+          open: [retaking({ canRetake: false, attemptCount: 3, keep: "last" })],
+        }),
+        "GET /app/api/student/classrooms": ok([]),
+      });
+      const { navigate } = render();
+      expect(
+        await screen.findByText("Dernier score 7.5 / 10 · tentatives : 3 sur 3"),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Recommencer" })).toBeNull();
+      const row = screen.getByText("Série 3 — Entraînement").closest("div.rounded-card")!;
+      await userEvent.click(within(row as HTMLElement).getByRole("button", { name: "Voir" }));
+      expect(navigate).toHaveBeenCalledWith({ view: "feedback", attemptId: "a8" });
+    });
+
+    it("resumes an attempt in progress like any other", async () => {
+      mockFetch({
+        "GET /app/api/student/home": ok({
+          ...home,
+          open: [{ ...retaking({ canRetake: false }), attemptState: "in_progress" }],
+        }),
+        "GET /app/api/student/classrooms": ok([]),
+      });
+      render();
+      expect(await screen.findByRole("button", { name: "Continuer" })).toBeInTheDocument();
+    });
   });
 });

@@ -38,12 +38,14 @@ const PENDING_TITLE: Record<FeedbackPending["reason"], keyof Dict> = {
   results_pending: "feedback.pending.results_pending.title",
   no_feedback: "feedback.pending.no_feedback.title",
   attempt_open: "feedback.pending.attempt_open.title",
+  retakes_open: "feedback.pending.retakes_open.title",
 };
 
 const PENDING_BODY: Record<FeedbackPending["reason"], keyof Dict> = {
   results_pending: "feedback.pending.results_pending.body",
   no_feedback: "feedback.pending.no_feedback.body",
   attempt_open: "feedback.pending.attempt_open.body",
+  retakes_open: "feedback.pending.retakes_open.body",
 };
 
 export function Feedback({ attemptId }: { attemptId: string }) {
@@ -93,6 +95,19 @@ export function Feedback({ attemptId }: { attemptId: string }) {
     return (
       <div className="mx-auto max-w-180 space-y-8">
         {header(null)}
+        {/* F-EVAL-15: between two attempts, the score and nothing else
+            (ADR-025); the correction follows once the exercise closes. */}
+        {data.score ? (
+          <div className="space-y-1.5">
+            <Stat
+              label={t("feedback.score")}
+              value={`${formatPoints(data.score.points)} / ${formatPoints(data.score.totalPoints)}`}
+            />
+            {data.score.pending ? (
+              <p className="text-[13px] text-fg-muted">{t("feedback.scorePending")}</p>
+            ) : null}
+          </div>
+        ) : null}
         <Card>
           <EmptyState icon={Hourglass} title={t(PENDING_TITLE[data.reason])}>
             {t(PENDING_BODY[data.reason], { title: data.evaluation.title })}

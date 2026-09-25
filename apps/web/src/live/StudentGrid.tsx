@@ -138,7 +138,8 @@ export function StudentGrid({
   //   - `reopenAttempt` only while the evaluation is running or paused, the
   //     only states in which a reopened student can write anything, and it
   //     returns an `in_progress` attempt untouched, so it is offered for a
-  //     finished one only.
+  //     finished one only — and never on an exercise with retakes, where the
+  //     student starts a new attempt instead (ADR-025).
   const evaluationState: EvaluationState = view.evaluation.state;
   const live = evaluationState === "running" || evaluationState === "paused";
 
@@ -261,6 +262,11 @@ export function StudentGrid({
                           <Badge tone="green">{t("live.row.submitted")}</Badge>
                         ) : row.state === "expired" ? (
                           <Badge tone="zinc">{t("live.row.expired")}</Badge>
+                        ) : null}
+                        {/* F-EVAL-15: the row is the LATEST attempt; the
+                            earlier ones are in the grading panel. */}
+                        {row.attemptCount > 1 ? (
+                          <Badge tone="zinc">{t("live.row.attempt", { n: row.attemptCount })}</Badge>
                         ) : null}
                         {row.timeBonusPercent > 0 ? (
                           <Badge tone="accent">
@@ -407,7 +413,7 @@ export function StudentGrid({
                         <DoorOpen />
                       </IconButton>
                     ) : null}
-                    {finished && live ? (
+                    {finished && live && !view.evaluation.retakes ? (
                       <IconButton
                         size="sm"
                         danger

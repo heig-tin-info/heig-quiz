@@ -68,6 +68,7 @@ if (typeof window.fetch !== "function") {
 
 await import("./index");
 const { routes } = await import("./runtime");
+const { STUDENT_RETAKE_ATTEMPT } = await import("./student");
 
 interface Issue {
   code: string;
@@ -282,6 +283,12 @@ const CHECKED: Case[] = [
     .map((p) => one("/app/api/p/:code", `/app/api/p/${p.code}`, PollPublicView)),
   one("/app/api/attempts/:id", `/app/api/attempts/${attemptId}`, AttemptOrLobby),
   one("/app/api/student/home", "/app/api/student/home", StudentHome),
+  // F-EVAL-15: the score-only feedback between two attempts of an exercise.
+  one(
+    `/app/api/attempts/${STUDENT_RETAKE_ATTEMPT}/feedback`,
+    `/app/api/attempts/${STUDENT_RETAKE_ATTEMPT}/feedback`,
+    StudentFeedback,
+  ),
 ];
 
 /**

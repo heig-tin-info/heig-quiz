@@ -81,6 +81,7 @@ export function makeRow(index: number, itemIds: string[], overrides: Partial<Das
     lastSeenAt: liveAt(-2000),
     deadlineAt: liveAt(10 * 60_000),
     timeBonusPercent: 0,
+    attemptCount: 1,
     points: null,
     maxPoints: itemIds.length,
     cells: itemIds.map((itemId) => makeCell({ itemId })),
@@ -99,6 +100,7 @@ export function makeDashboard(rows = 3, items = 4): DashboardView {
       pausedAt: null,
       closesAt: liveAt(20 * 60_000),
       serverNow: liveAt(0),
+      retakes: false,
     },
     items: itemIds.map((itemId, i) => ({
       id: itemId,

@@ -105,6 +105,10 @@ const scenes = [
   { name: "eval-config-advanced", role: "teacher", path: "/evaluations/draft?step=timing", act: (p) => p.getByRole("button", { name: /^advanced options$/i }).first().click() },
   // Issue #86: running, the configuration is locked but for the access code.
   { name: "eval-config-timing-running", role: "teacher", path: "/evaluations/running?step=timing" },
+  // F-EVAL-15: the retake rule of an exercise, editable (a draft) and frozen
+  // (the paused exercise, which students are sitting).
+  { name: "eval-config-retakes", role: "teacher", path: "/evaluations/eeeeeeee-0000-4000-8000-000000000015?step=timing" },
+  { name: "eval-config-retakes-locked", role: "teacher", path: "/evaluations/paused?step=timing" },
   { name: "eval-config-advanced-running", role: "teacher", path: "/evaluations/running?step=timing", act: (p) => p.getByRole("button", { name: /^advanced options$/i }).first().click() },
   { name: "eval-config-launch", role: "teacher", path: "/evaluations/draft?step=launch" },
   { name: "eval-config-loading", role: "teacher", path: "/evaluations/draft?slow=1", settle: 300 },
@@ -156,6 +160,8 @@ const scenes = [
   { name: "live-empty", role: "teacher", path: "/evaluations/running/live?empty=1", settle: 900 },
   { name: "live-loading", role: "teacher", path: "/evaluations/running/live?slow=1", settle: 300 },
   { name: "live-error", role: "teacher", path: "/evaluations/running/live?fail=1", settle: 2500 },
+  // F-EVAL-15: an exercise with retakes — attempt badges, no Reopen.
+  { name: "live-retakes", role: "teacher", path: "/evaluations/paused/live" },
 
   // Student
   { name: "student-home", role: "student", path: "/" },
@@ -163,6 +169,10 @@ const scenes = [
   { name: "student-error", role: "student", path: "/?fail=1", settle: 2500 },
   { name: "student-loading", role: "student", path: "/?slow=1", settle: 300 },
   { name: "student-settings", role: "student", path: "/settings" },
+  // F-EVAL-15: the exercise card with its kept score and the Retake button,
+  // and the score-only feedback between two attempts.
+  { name: "student-home-retake", role: "student", path: "/" },
+  { name: "student-feedback-retake", role: "student", path: "/attempts/22222222-2222-4222-8222-222222222224/feedback" },
 
   // WP9: student player. `TAKE` is the mock's evaluation; `?scene=` picks the
   // state the fake backend serves (see the WP9 block of src/mock/student.ts).
