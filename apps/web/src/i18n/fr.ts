@@ -898,8 +898,6 @@ export const fr: Record<keyof Dict, string> = {
     "L'exécution est indisponible. Votre réponse est enregistrée et sera corrigée par votre enseignant.",
   "qt.code.p.runFailed":
     "L'exécution n'a pas abouti. Votre réponse est enregistrée ; réessayez dans un instant.",
-  "qt.code.p.runHint":
-    "Exécute les cas visibles. Les cas cachés ne sont exécutés qu'à la correction.",
   "qt.code.p.visibleCases": "Cas visibles",
   "qt.code.p.noVisibleCases": "Votre enseignant n'a publié aucun cas visible.",
   "qt.code.p.hiddenCases": "{count} cas cachés, valant {points} points au total.",
@@ -999,8 +997,6 @@ export const fr: Record<keyof Dict, string> = {
   "qt.codeimage.e.tryStale":
     "La taille ou la palette a changé depuis cette exécution. Essayez à nouveau la solution de référence.",
   "qt.codeimage.p.imageSection": "Image",
-  "qt.codeimage.p.runHint":
-    "Exécute votre programme une fois et dessine les {count} entiers qu'il écrit, ligne par ligne. Rien n'est noté ici ; le serveur corrige votre code final.",
   "qt.codeimage.p.view": "Vue",
   "qt.codeimage.p.viewTarget": "Cible",
   "qt.codeimage.p.viewComputed": "Calculée",

@@ -14,7 +14,7 @@ const shared = (a: object, b: object): string[] =>
 describe("the codeimage dictionaries", () => {
   it("replace a code sentence only where they mean to", () => {
     expect(shared(IMAGE_EDITOR_STRINGS, EDITOR_STRINGS)).toEqual(["referenceSolutionHint"]);
-    expect(shared(IMAGE_PLAYER_STRINGS, PLAYER_STRINGS)).toEqual(["runHint"]);
+    expect(shared(IMAGE_PLAYER_STRINGS, PLAYER_STRINGS)).toEqual([]);
     expect(shared(IMAGE_REVIEW_STRINGS, REVIEW_STRINGS)).toEqual([]);
   });
 

@@ -911,8 +911,6 @@ export const en = {
     "Running is unavailable right now. Your answer is saved and will be graded by your teacher.",
   "qt.code.p.runFailed":
     "The run could not be completed. Your answer is saved; try again in a moment.",
-  "qt.code.p.runHint":
-    "Runs the visible cases. Hidden cases are only run when the question is graded.",
   "qt.code.p.visibleCases": "Visible cases",
   "qt.code.p.noVisibleCases": "Your teacher did not publish any visible case.",
   "qt.code.p.hiddenCases": "{count} hidden cases, worth {points} points in total.",
@@ -1011,8 +1009,6 @@ export const en = {
   "qt.codeimage.e.tryStale":
     "The size or the palette changed since this run. Try the reference solution again.",
   "qt.codeimage.p.imageSection": "Image",
-  "qt.codeimage.p.runHint":
-    "Runs your program once and draws the {count} integers it prints, row by row. Nothing here is graded; the server grades your final code.",
   "qt.codeimage.p.view": "View",
   "qt.codeimage.p.viewTarget": "Target",
   "qt.codeimage.p.viewComputed": "Computed",
