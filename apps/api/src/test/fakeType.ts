@@ -46,6 +46,7 @@ export const fakeShort: QuestionTypeServer<
   configVersion: 2,
   configSchema: FakeConfig,
   answerSchema: z.string(),
+  isAnswered: (answer) => answer.trim() !== "",
   studentSchema: FakeStudent,
   solutionSchema: FakeSolution,
   detailsSchema: FakeDetails,
@@ -112,6 +113,7 @@ export const fakeRunnerType: QuestionTypeServer<
   configVersion: 1,
   configSchema: RunnerConfig,
   answerSchema: z.string(),
+  isAnswered: (answer) => answer.trim() !== "",
   studentSchema: z.object({ source: z.string() }),
   solutionSchema: z.object({ source: z.string() }),
   detailsSchema: z.object({ ok: z.boolean() }),
@@ -181,6 +183,7 @@ export const fakeRunnableCode: QuestionTypeServer<
   configVersion: 1,
   configSchema: RunnableConfig,
   answerSchema: z.object({ regions: z.array(z.string()) }),
+  isAnswered: (answer) => answer.regions.some((r) => r.trim() !== ""),
   studentSchema: z.object({
     template: z.string(),
     runsPerMinute: z.number().int(),
@@ -283,6 +286,7 @@ export const fakeSimulatable: QuestionTypeServer<
   configVersion: 1,
   configSchema: SimulatableConfig,
   answerSchema: z.object({ schematic: z.string() }),
+  isAnswered: (answer) => answer.schematic !== "",
   studentSchema: z.object({
     prompt: z.string(),
     simulationsPerMinute: z.number().int(),

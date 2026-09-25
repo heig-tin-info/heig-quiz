@@ -108,6 +108,15 @@ export const McqAnswerSchema = z.object({
 export type McqAnswer = z.infer<typeof McqAnswerSchema>;
 
 /**
+ * Whether the answer holds something (issue #89): the ONE predicate behind
+ * both `isAnswered` hooks, server and client, so the student's list and the
+ * teacher's grid can never disagree about it.
+ */
+export function isMcqAnswered(answer: McqAnswer): boolean {
+  return answer.selected.length > 0;
+}
+
+/**
  * Letter of a choice, as the editor, the review and the live grid show it:
  * A, B, C… It lives with the schemas rather than in `ui.tsx` because both
  * halves of the package need it and the server half may not touch React.

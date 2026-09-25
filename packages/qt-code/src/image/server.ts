@@ -23,6 +23,7 @@ import {
   codeimagePublicationIssues,
   emptyCodeImageConfig,
 } from "./schema.js";
+import { isCodeImageAnswered } from "./schema.js";
 
 /**
  * The bucket a pixel accuracy falls in, for the class debrief. Language-free
@@ -51,6 +52,7 @@ export const codeimageServer: QuestionTypeServer<
 
   configSchema: CodeImageConfig,
   answerSchema: CodeImageAnswer,
+  isAnswered: isCodeImageAnswered,
   studentSchema: CodeImageStudent,
   solutionSchema: CodeImageSolution,
   detailsSchema: CodeImageDetails,

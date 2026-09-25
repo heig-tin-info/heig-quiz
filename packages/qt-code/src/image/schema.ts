@@ -150,6 +150,15 @@ export const CodeImageAnswer = z.object({ regions: CodeAnswer.shape.regions });
 export type CodeImageAnswer = z.infer<typeof CodeImageAnswer>;
 
 /**
+ * Whether the answer holds something (issue #89): the ONE predicate behind
+ * both `isAnswered` hooks, server and client, so the student's list and the
+ * teacher's grid can never disagree about it.
+ */
+export function isCodeImageAnswered(answer: CodeImageAnswer): boolean {
+  return answer.regions.some((region) => region.trim() !== "");
+}
+
+/**
  * What a student receives: the program half every program question shares,
  * the image's dimensions and palette, and the TARGET — which is published on
  * purpose, like a visible case: drawing it is the exercise. The reference

@@ -31,6 +31,7 @@ import {
   type McqSolution,
   type McqStudent,
 } from "./schema.js";
+import { isMcqAnswered } from "./schema.js";
 
 /** v1 policies, as they were stored before `MCQ_CONFIG_VERSION` became 2. */
 const V1_POLICY: Record<string, McqQuestionPolicy> = {
@@ -80,6 +81,7 @@ export const mcqServer: QuestionTypeServer<
   configSchema: McqConfigSchema,
   keylessConfigSchema: McqKeylessConfigSchema,
   answerSchema: McqAnswerSchema,
+  isAnswered: isMcqAnswered,
   studentSchema: McqStudentSchema,
   solutionSchema: McqSolutionSchema,
   detailsSchema: McqDetailsSchema,

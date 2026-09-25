@@ -187,6 +187,15 @@ export const ShortAnswerSchema = z.object({ text: z.string().max(SHORT_MAX_ANSWE
 export type ShortAnswer = z.infer<typeof ShortAnswerSchema>;
 
 /**
+ * Whether the answer holds something (issue #89): the ONE predicate behind
+ * both `isAnswered` hooks, server and client, so the student's list and the
+ * teacher's grid can never disagree about it.
+ */
+export function isShortAnswered(answer: ShortAnswer): boolean {
+  return answer.text.trim() !== "";
+}
+
+/**
  * Everything a student may see: the matchers are dropped WHOLE. The
  * constraints stay — they are what the field allows, not what it expects.
  */

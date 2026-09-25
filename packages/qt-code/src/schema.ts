@@ -206,6 +206,15 @@ export const CodeAnswer = z.object({
 });
 export type CodeAnswer = z.infer<typeof CodeAnswer>;
 
+/**
+ * Whether the answer holds something (issue #89): the ONE predicate behind
+ * both `isAnswered` hooks, server and client, so the student's list and the
+ * teacher's grid can never disagree about it.
+ */
+export function isCodeAnswered(answer: CodeAnswer): boolean {
+  return answer.regions.some((region) => region.trim() !== "");
+}
+
 export const CodeSegment = z.object({
   kind: z.enum(["locked", "editable"]),
   index: z.number().int().nullable(),

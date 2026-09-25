@@ -6,6 +6,7 @@
 import { lazy } from "react";
 
 import type { QuestionTypeClient } from "@quiz/core/client";
+import { isCodeImageAnswered } from "./schema.js";
 
 import { editableSegments } from "../segments.js";
 import type {
@@ -57,9 +58,7 @@ export const codeimageClient: QuestionTypeClient<
     return { regions: [] };
   },
 
-  isAnswered(answer) {
-    return answer !== null && answer.regions.some((r) => r.trim() !== "");
-  },
+  isAnswered: (answer) => answer !== null && isCodeImageAnswered(answer),
 
   summarize(answer, student) {
     if (answer === null) return "—";

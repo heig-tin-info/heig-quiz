@@ -61,6 +61,15 @@ export const ClozeAnswerSchema = z.object({
 export type ClozeAnswer = z.infer<typeof ClozeAnswerSchema>;
 
 /**
+ * Whether the answer holds something (issue #89): the ONE predicate behind
+ * both `isAnswered` hooks, server and client, so the student's list and the
+ * teacher's grid can never disagree about it.
+ */
+export function isClozeAnswered(answer: ClozeAnswer): boolean {
+  return answer.blanks.some((blank) => blank !== null && blank.trim() !== "");
+}
+
+/**
  * `text`, `number` and `regex` blanks all collapse to `kind: "input"`
  * (`numeric` only drives `inputmode="decimal"`), so a student cannot tell a
  * regex blank from a plain one and no pattern, tolerance or answer leaks.

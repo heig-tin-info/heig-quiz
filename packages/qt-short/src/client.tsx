@@ -6,6 +6,7 @@
  */
 import { lazy } from "react";
 import type { QuestionTypeClient } from "@quiz/core/client";
+import { isShortAnswered } from "./schema.js";
 import type {
   ShortAnswer,
   ShortConfig,
@@ -51,7 +52,7 @@ export const shortClient: ShortClient = {
   Review: lazy(async () => ({ default: (await import("./Review.js")).ShortReview })),
 
   emptyAnswer: () => ({ text: "" }),
-  isAnswered: (answer) => answer !== null && answer.text.trim() !== "",
+  isAnswered: (answer) => answer !== null && isShortAnswered(answer),
   summarize: (answer) => {
     const text = answer?.text.trim() ?? "";
     return text === "" ? "—" : text.length > 40 ? `${text.slice(0, 39)}…` : text;

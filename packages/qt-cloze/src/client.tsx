@@ -6,6 +6,7 @@
  */
 import { lazy } from "react";
 import type { QuestionTypeClient } from "@quiz/core/client";
+import { isClozeAnswered } from "./schema.js";
 import type {
   ClozeAnswer,
   ClozeConfig,
@@ -52,8 +53,7 @@ export const clozeClient: ClozeClient = {
   Review: lazy(async () => ({ default: (await import("./Review.js")).ClozeReview })),
 
   emptyAnswer: (student) => ({ blanks: student.blanks.map(() => null) }),
-  isAnswered: (answer) =>
-    answer !== null && answer.blanks.some((blank) => blank !== null && blank.trim() !== ""),
+  isAnswered: (answer) => answer !== null && isClozeAnswered(answer),
 
   /** One line for the dashboard cell: how many blanks carry something. */
   summarize: (answer, student) => {

@@ -24,6 +24,7 @@ import {
   type ShortSolution,
   type ShortStudent,
 } from "./schema.js";
+import { isShortAnswered } from "./schema.js";
 
 /** The key as a teacher reads it: one line per matcher, in evaluation order. */
 export function expectedAnswers(config: ShortConfig): string[] {
@@ -95,6 +96,7 @@ export const shortServer: QuestionTypeServer<
   configSchema: ShortConfigSchema,
   keylessConfigSchema: ShortKeylessConfigSchema,
   answerSchema: ShortAnswerSchema,
+  isAnswered: isShortAnswered,
   studentSchema: ShortStudentSchema,
   solutionSchema: ShortSolutionSchema,
   detailsSchema: ShortDetailsSchema,
