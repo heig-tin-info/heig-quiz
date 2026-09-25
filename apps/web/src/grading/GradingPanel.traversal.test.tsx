@@ -154,7 +154,8 @@ describe("GradingPanel — the order of the traversal", () => {
   it("starts by question, with one step per item, numbered from one", async () => {
     setup();
     expect(await screen.findByText("Question 1 of 2")).toBeVisible();
-    expect(await screen.findByRole("heading", { name: "1. sizeof-ptr" })).toBeVisible();
+    const detail = await screen.findByRole("region", { name: DICTS.en["grading.detail.label"] });
+    expect(await within(detail).findByText("1. sizeof-ptr")).toBeVisible();
     expect(screen.getByRole("radio", { name: "By question" })).toBeChecked();
   });
 

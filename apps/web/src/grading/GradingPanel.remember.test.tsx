@@ -86,7 +86,7 @@ describe("GradingPanel — remembered across visits (#110)", () => {
     expect(screen.getByRole("radio", { name: en["grading.filter.proposed"] })).toBeChecked();
     expect(screen.getByLabelText("Graded by")).toHaveValue("llm");
     expect(screen.getByLabelText("Confidence")).toHaveValue("low");
-    expect(screen.getByRole("button", { name: "Show 4/5" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show 3/4" })).toBeInTheDocument();
   });
 
   it("opens on the defaults when the stored value is malformed", async () => {

@@ -27,14 +27,14 @@ import { entryVerdict, type GradingOrder } from "./labels";
  * re-grade action is on each answer, beside the question it re-grades.
  */
 
+/** A question as every screen of this app names it: "5. its-name", numbered from 1. */
+export const questionLabel = (item: Pick<GradingQueueItem, "position" | "internalName">) =>
+  `${item.position + 1}. ${item.internalName}`;
+
 /** What names an answer: the student by question, the question by student. */
 export function rowLabelFor(order: GradingOrder): RowLabel {
   return (entry, item) =>
-    order === "question"
-      ? entry.label
-      : item
-        ? `${item.position + 1}. ${item.internalName}`
-        : entry.label;
+    order === "question" ? entry.label : item ? questionLabel(item) : entry.label;
 }
 
 interface StepProps {
@@ -151,6 +151,11 @@ export function StepAnswers({
   }
 
   const rowLabel = rowLabelFor(order);
+  const staffBadge = (
+    <Badge tone="zinc" icon={GraduationCap}>
+      {t("roster.status.staff")}
+    </Badge>
+  );
   return (
     <>
       <EntryPicker
@@ -174,16 +179,29 @@ export function StepAnswers({
             </span>
           ) : null}
           <div className="min-w-0 flex-1">
+            {/* Whose answer to which question, in both orders (#119): what
+                changes from one answer to the next on top, the other under
+                it with the position. The student is the server's label — a
+                name when names are shown, the pseudonym otherwise. */}
             <p className="flex items-center gap-2 text-[15px] font-semibold tracking-tight">
               <span className="truncate">{entry ? rowLabel(entry, item) : "—"}</span>
-              {entry?.staff ? (
-                <Badge tone="zinc" icon={GraduationCap}>
-                  {t("roster.status.staff")}
-                </Badge>
-              ) : null}
+              {entry?.staff && order === "question" ? staffBadge : null}
             </p>
-            <p className="text-xs tabular-nums text-fg-faint">
-              {t("grading.detail.position", { n: at + 1, total: entries.length })}
+            <p className="flex min-w-0 items-center gap-1.5 text-xs text-fg-muted">
+              {entry ? (
+                <>
+                  <span className="min-w-0 truncate font-medium">
+                    {order === "question" ? (item ? questionLabel(item) : "—") : entry.label}
+                  </span>
+                  {entry.staff && order === "student" ? staffBadge : null}
+                  <span className="text-fg-faint" aria-hidden>
+                    ·
+                  </span>
+                </>
+              ) : null}
+              <span className="shrink-0 tabular-nums text-fg-faint">
+                {t("grading.detail.position", { n: at + 1, total: entries.length })}
+              </span>
             </p>
           </div>
           <IconButton

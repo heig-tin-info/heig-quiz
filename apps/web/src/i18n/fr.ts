@@ -1913,7 +1913,6 @@ export const fr: Record<keyof Dict, string> = {
   "grading.parts.openSome": "Afficher {n}/{total}",
   "grading.parts.label": "Parties d'une réponse à afficher",
   "grading.parts.answer": "Réponse de l'étudiant (toujours)",
-  "grading.parts.internalName": "Nom de la question au-dessus de la réponse",
   "grading.parts.prompt": "Énoncé",
   "grading.parts.explanation": "Explication",
   "grading.parts.solution": "Réponse attendue / solution",

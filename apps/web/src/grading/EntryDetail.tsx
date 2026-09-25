@@ -28,11 +28,12 @@ import { ALL_PARTS_SHOWN, reviewSections, type ShownParts } from "./parts";
  * score: "3 / 6" tells a teacher nothing about which half was wrong, and the
  * type is the only thing that knows how to say it (F-GRADE-04, WP10 DoD).
  *
- * It opens on the question's title, and beside it the way to re-grade that
- * question for everyone (#108): on the answer, where a teacher notices the
- * key was wrong, whichever way they are walking the evaluation. By student
- * the title also carries the question's type and points, which the step
- * header — naming a student — cannot.
+ * It opens on the way to re-grade the question for everyone (#108): on the
+ * answer, where a teacher notices the key was wrong, whichever way they are
+ * walking the evaluation. By student the question's type and points come
+ * first, which the step header — naming a student — cannot say. Which
+ * question and whose answer this is are the detail header's (#119): its
+ * title used to be repeated here, and it read twice.
  */
 export function EntryDetail({
   entry,
@@ -65,12 +66,9 @@ export function EntryDetail({
   return (
     <div className="space-y-4 px-4 py-4 sm:px-5">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-        {/* 0-based on the wire; every screen numbers questions from 1. */}
-        {parts.internalName ? (
-          <h3 className="min-w-0 truncate text-sm font-semibold text-fg">
-            {item.position + 1}. {item.internalName}
-          </h3>
-        ) : null}
+        {/* The question's number and title are the detail's header (#119),
+            in both orders; by student its type and points are said here,
+            which the step header — naming a student — cannot. */}
         {order === "student" ? (
           <span className="flex items-center gap-1.5">
             <Badge tone="zinc">{typeLabel(t, item.type)}</Badge>
@@ -82,7 +80,7 @@ export function EntryDetail({
             variant="ghost"
             size="sm"
             // Alone on its line, its icon lines up with the answer's left edge.
-            className={parts.internalName ? "" : "-ml-3"}
+            className={order === "student" ? "" : "-ml-3"}
             onClick={onRegrade}
             aria-describedby={tipId}
           >

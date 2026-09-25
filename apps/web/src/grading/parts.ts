@@ -7,22 +7,20 @@ import type { Dict } from "../i18n";
  * to read the students' answers and little else. The student's answer is
  * not one of them: it is what is being graded, and it is always drawn.
  *
- * Three are drawn by the grading page itself (the question's internal name
- * on the line above the answer, the explanation, the grading comment) and
- * simply not rendered. The name is hidden on THAT line only: by student it
- * is also what names the list rows, the detail header and the step picker,
- * which is why the checkbox says "above the answer". The prompt and
+ * Two are drawn by the grading page itself (the explanation, the grading
+ * comment) and simply not rendered. The question's number and title are
+ * not a part: they head the open answer in both orders (#119), and a
+ * teacher must always see which question they are grading. The prompt and
  * the solution are drawn by the question type's own review, which receives
  * them as `sections` (`@quiz/core/client`) and honours them. Hiding the
  * comment hides its display only: Adjust still asks for one.
  */
-export const ANSWER_PARTS = ["internalName", "prompt", "explanation", "solution", "comment"] as const;
+export const ANSWER_PARTS = ["prompt", "explanation", "solution", "comment"] as const;
 export type AnswerPart = (typeof ANSWER_PARTS)[number];
 export type ShownParts = Record<AnswerPart, boolean>;
 
 /** Everything shown: a teacher who never opens the menu sees the whole answer. */
 export const ALL_PARTS_SHOWN: Readonly<ShownParts> = Object.freeze({
-  internalName: true,
   prompt: true,
   explanation: true,
   solution: true,
@@ -30,7 +28,6 @@ export const ALL_PARTS_SHOWN: Readonly<ShownParts> = Object.freeze({
 });
 
 export const PART_LABELS: Record<AnswerPart, keyof Dict> = {
-  internalName: "grading.parts.internalName",
   prompt: "grading.parts.prompt",
   explanation: "grading.parts.explanation",
   solution: "grading.parts.solution",

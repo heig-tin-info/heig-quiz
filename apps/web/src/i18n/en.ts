@@ -1924,7 +1924,6 @@ export const en = {
   "grading.parts.openSome": "Show {n}/{total}",
   "grading.parts.label": "Parts of an answer to show",
   "grading.parts.answer": "Student's answer (always)",
-  "grading.parts.internalName": "Question name above the answer",
   "grading.parts.prompt": "Prompt",
   "grading.parts.explanation": "Explanation",
   "grading.parts.solution": "Expected answer / solution",

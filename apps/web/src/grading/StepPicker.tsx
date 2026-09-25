@@ -38,6 +38,7 @@ export function StepPicker({
   steps,
   index,
   title,
+  subject,
   onJump,
 }: {
   order: GradingOrder;
@@ -45,6 +46,12 @@ export function StepPicker({
   index: number;
   /** "Question 5 of 8", the button's own text. */
   title: string;
+  /**
+   * Who the step is, after the counter: by student, the student's name when
+   * names are shown and their pseudonym otherwise (#119) — the server's
+   * label, the one the list and the picker read.
+   */
+  subject?: string;
   onJump: (index: number) => void;
 }) {
   const t = useT();
@@ -93,7 +100,7 @@ export function StepPicker({
     // Anchored on the button from `sm`; on a phone on the header card (which
     // is `relative`), full width, because a 320 px panel hung from a button
     // 80 px in runs off a 390 px screen.
-    <div className="sm:relative">
+    <div className="min-w-0 max-w-full shrink-0 sm:relative">
       <button
         ref={button}
         type="button"
@@ -105,9 +112,20 @@ export function StepPicker({
           if (open) e.preventDefault();
         }}
         onClick={() => (open ? close(true) : setOpen(true))}
-        className="-mx-2 inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-base font-bold tabular-nums tracking-tight transition-colors hover:bg-surface-2"
+        // `-mx-2` bleeds 1rem out of the wrapper, which is as wide as the
+        // button's margin box: the cap gives it back, or a name that fits
+        // would be cut 16 px short.
+        className="-mx-2 inline-flex min-w-0 max-w-[calc(100%+1rem)] items-center gap-1.5 rounded-full px-2 py-1 text-base font-bold tabular-nums tracking-tight transition-colors hover:bg-surface-2"
       >
-        <span>{title}</span>
+        <span className="shrink-0">{title}</span>
+        {subject ? (
+          <>
+            <span className="text-fg-faint" aria-hidden>
+              ·
+            </span>
+            <span className="min-w-0 truncate">{subject}</span>
+          </>
+        ) : null}
         <ChevronDown className="size-4 text-fg-faint" aria-hidden />
       </button>
 

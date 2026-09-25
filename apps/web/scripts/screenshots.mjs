@@ -485,7 +485,7 @@ const scenes = [
   { name: "grading-parts-answer-only", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
       await skipCoach(p);
       await p.getByRole("button", { name: /^(Show|Afficher)/ }).first().click();
-      for (const name of [/^(Question name|Nom de la question)/, /^(Prompt|Énoncé)$/, /^(Explanation|Explication)$/, /^(Expected answer|Réponse attendue)/, /^(Grading comment|Commentaire de correction)$/]) {
+      for (const name of [/^(Prompt|Énoncé)$/, /^(Explanation|Explication)$/, /^(Expected answer|Réponse attendue)/, /^(Grading comment|Commentaire de correction)$/]) {
         await p.getByRole("checkbox", { name }).click();
       }
       await p.keyboard.press("Escape");
@@ -494,6 +494,18 @@ const scenes = [
   { name: "grading-by-student-fold", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
       await skipCoach(p);
       await p.locator("label").filter({ hasText: /^(By student|Par étudiant)$/ }).first().click();
+      await p.waitForTimeout(500);
+    } },
+  // #119: the names shown — in the list, the step line and the answer's header.
+  { name: "grading-names", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("switch", { name: /^(Show names|Afficher les noms)$/ }).click();
+      await p.waitForTimeout(500);
+    } },
+  { name: "grading-by-student-names", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.locator("label").filter({ hasText: /^(By student|Par étudiant)$/ }).first().click();
+      await p.getByRole("switch", { name: /^(Show names|Afficher les noms)$/ }).click();
       await p.waitForTimeout(500);
     } },
   { name: "grading-empty", role: "teacher", path: "/evaluations/closed/grading?empty=1", settle: 800 },
