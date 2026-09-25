@@ -6,10 +6,12 @@ import { useT } from "../i18n";
 import { useShortcuts } from "../shortcuts";
 import { isTyping } from "../ui";
 import { entryKey } from "./EntryList";
+import { neighbour } from "./useGradingTraversal";
 
 /**
  * The grading panel's keyboard (docs/08 §8.5): `←` / `→` walk the answers of
- * the step, `V` validates the open proposal and moves on, `O` opens the
+ * the step — the same move as the detail's Previous / Next buttons, through
+ * the same `neighbour` — `V` validates the open proposal and moves on, `O` opens the
  * adjustment sheet of the open answer. Bare keys, because nothing on this
  * screen is typed into — except a sheet, a dialog or a field, which own the
  * keyboard while they are up.
@@ -32,10 +34,8 @@ export function useGradingKeys({
 
   const move = useCallback(
     (delta: number) => {
-      if (entries.length === 0) return;
-      const at = entries.findIndex((e) => entryKey(e) === selected);
-      const next = entries[Math.min(entries.length - 1, Math.max(0, at + delta))];
-      if (next) onSelect(entryKey(next));
+      const next = neighbour(entries, selected, delta);
+      if (next) onSelect(next);
     },
     [entries, selected, onSelect],
   );

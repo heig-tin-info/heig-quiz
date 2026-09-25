@@ -1,21 +1,42 @@
 import type { UseQueryResult } from "@tanstack/react-query";
-import { CheckCheck, RefreshCcw } from "lucide-react";
+import { CheckCheck, ChevronLeft, ChevronRight, GraduationCap, RefreshCcw } from "lucide-react";
+import { useLayoutEffect, useRef } from "react";
 
 import type { GradingEntry, GradingQueue, GradingQueueItem } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { typeLabel } from "../questionTypes";
-import { Badge, Button, Card, EmptyState, QueryError } from "../ui";
+import {
+  Badge,
+  Button,
+  Card,
+  cx,
+  EmptyState,
+  IconButton,
+  QueryError,
+  Skeleton,
+  VerdictCell,
+} from "../ui";
 import { EntryDetail } from "./EntryDetail";
-import { EntryList, entryKey } from "./EntryList";
+import { EntryList, EntryPicker, entryKey, type RowLabel } from "./EntryList";
 import { ListSkeleton } from "./ListSkeleton";
-import { ORDER_WORDS, type GradingOrder } from "./labels";
+import { entryVerdict, ORDER_WORDS, type GradingOrder } from "./labels";
 
 /**
- * The two halves of one step of the grading traversal: the card that names
- * the step (and, on a question, offers to re-grade it), and the answers of
- * the step in each of the states their read can be in.
+ * The parts of one step of the grading traversal: the card that names the
+ * step (and, on a question, offers to re-grade it), the compact list of its
+ * answers, and the detail that shows ONE of them at a fixed place (#102).
  */
+
+/** What names an answer: the student by question, the question by student. */
+export function rowLabelFor(order: GradingOrder): RowLabel {
+  return (entry, item) =>
+    order === "question"
+      ? entry.label
+      : item
+        ? `${item.position + 1}. ${item.internalName}`
+        : entry.label;
+}
 
 export function StepCard({
   order,
@@ -56,6 +77,62 @@ export function StepCard({
   );
 }
 
+interface StepProps {
+  order: GradingOrder;
+  queue: UseQueryResult<GradingQueue>;
+  entries: GradingEntry[];
+  items: Map<string, GradingQueueItem>;
+  selected: string | null;
+  onSelect: (key: string) => void;
+}
+
+/**
+ * The list column: the answers of the step, one line each. It only exists
+ * once there is something to list — the error and empty states are the
+ * detail's to say, once, rather than twice side by side.
+ */
+export function StepList({
+  order,
+  queue,
+  entries,
+  items,
+  selected,
+  onSelect,
+  className,
+}: StepProps & { className?: string }) {
+  if (queue.isLoading) {
+    return (
+      <Card className={cx("flex-col gap-2 p-3", className)}>
+        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-9 w-full" />
+        <Skeleton className="h-9 w-full" />
+      </Card>
+    );
+  }
+  if (queue.isError || entries.length === 0) return null;
+  return (
+    <Card className={cx("flex-col overflow-hidden", className)}>
+      <EntryList
+        className="min-h-0 flex-1"
+        entries={entries}
+        items={items}
+        selectedKey={selected}
+        onSelect={onSelect}
+        rowLabel={rowLabelFor(order)}
+      />
+    </Card>
+  );
+}
+
+/**
+ * The detail column: the open answer, and nothing that moves.
+ *
+ * Its header — whose answer, which of how many, Previous / Next — stays where
+ * it is while the body under it is swapped, so a teacher going through thirty
+ * answers keeps their eyes on one spot. On a wide screen the body scrolls on
+ * its own and goes back to its top on every change: the next answer is read
+ * from its beginning, not from wherever the last one was left.
+ */
 export function StepAnswers({
   order,
   queue,
@@ -63,23 +140,31 @@ export function StepAnswers({
   items,
   selected,
   onSelect,
+  onMove,
   explanations,
   validating,
   onValidate,
   onOverride,
-}: {
-  order: GradingOrder;
-  queue: UseQueryResult<GradingQueue>;
-  entries: GradingEntry[];
-  items: Map<string, GradingQueueItem>;
-  selected: string | null;
-  onSelect: (key: string) => void;
+}: StepProps & {
+  /** One answer back (-1) or forward (+1): the same move as the arrow keys. */
+  onMove: (delta: number) => void;
   explanations: Map<string, string>;
   validating: boolean;
   onValidate: (gradingId: string) => void;
   onOverride: (key: string) => void;
 }) {
   const t = useT();
+  const body = useRef<HTMLDivElement>(null);
+
+  const at = entries.findIndex((e) => entryKey(e) === selected);
+  const entry = at < 0 ? undefined : entries[at];
+  const item = entry ? items.get(entry.itemId) : undefined;
+  const openKey = entry ? entryKey(entry) : null;
+
+  useLayoutEffect(() => {
+    if (body.current) body.current.scrollTop = 0;
+  }, [openKey]);
+
   if (queue.isLoading) return <ListSkeleton />;
   if (queue.isError) {
     return (
@@ -101,31 +186,72 @@ export function StepAnswers({
       </Card>
     );
   }
+
+  const rowLabel = rowLabelFor(order);
   return (
-    <EntryList
-      entries={entries}
-      items={items}
-      selectedKey={selected}
-      onSelect={onSelect}
-      rowLabel={(entry, item) =>
-        order === "question"
-          ? entry.label
-          : item
-            ? `${item.position + 1}. ${item.internalName}`
-            : entry.label
-      }
-      renderDetail={(entry, item) => (
-        <EntryDetail
-          entry={entry}
-          item={item}
-          explanation={explanations.get(entry.itemId) ?? null}
-          validating={validating}
-          onValidate={() => {
-            if (entry.grading) onValidate(entry.grading.id);
-          }}
-          onOverride={() => onOverride(entryKey(entry))}
-        />
-      )}
-    />
+    <>
+      <EntryPicker
+        className="lg:hidden"
+        entries={entries}
+        items={items}
+        selectedKey={selected}
+        onSelect={onSelect}
+        rowLabel={rowLabel}
+      />
+      <section
+        aria-label={t("grading.detail.label")}
+        className="flex flex-col overflow-hidden rounded-card border border-line bg-surface lg:min-h-0 lg:flex-1"
+      >
+        <header className="flex items-center gap-3 border-b border-line px-4 py-3 sm:px-5">
+          {entry ? (
+            <span className="w-10 shrink-0">
+              <VerdictCell state={entryVerdict(entry)} />
+            </span>
+          ) : null}
+          <div className="min-w-0 flex-1">
+            <p className="flex items-center gap-2 text-[15px] font-semibold tracking-tight">
+              <span className="truncate">{entry ? rowLabel(entry, item) : "—"}</span>
+              {entry?.staff ? (
+                <Badge tone="zinc" icon={GraduationCap}>
+                  {t("roster.status.staff")}
+                </Badge>
+              ) : null}
+            </p>
+            <p className="text-xs tabular-nums text-fg-faint">
+              {t("grading.detail.position", { n: at + 1, total: entries.length })}
+            </p>
+          </div>
+          <IconButton
+            label={t("grading.detail.prev")}
+            onClick={() => onMove(-1)}
+            disabled={at <= 0}
+          >
+            <ChevronLeft />
+          </IconButton>
+          <IconButton
+            label={t("grading.detail.next")}
+            onClick={() => onMove(1)}
+            disabled={at < 0 || at >= entries.length - 1}
+          >
+            <ChevronRight />
+          </IconButton>
+        </header>
+        <div ref={body} className="lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+          {entry && item ? (
+            <EntryDetail
+              key={openKey}
+              entry={entry}
+              item={item}
+              explanation={explanations.get(entry.itemId) ?? null}
+              validating={validating}
+              onValidate={() => {
+                if (entry.grading) onValidate(entry.grading.id);
+              }}
+              onOverride={() => onOverride(entryKey(entry))}
+            />
+          ) : null}
+        </div>
+      </section>
+    </>
   );
 }

@@ -5,10 +5,22 @@ import { describe, expect, it } from "vitest";
 
 import type { GradingEntry } from "@quiz/contracts";
 
-import { makeEntry, makeEvaluationDetail, makeGrading, makeQueue } from "../test/grading-fixtures";
+import {
+  makeEntry,
+  makeEvaluationDetail,
+  makeGrading,
+  makeQueue,
+  makeSteps,
+} from "../test/grading-fixtures";
 import { makeQueryClient, mockFetch, ok } from "../test/render";
 import { proposalsFirst } from "./labels";
-import { ANY, useGradingTraversal, type TraversalChoices } from "./useGradingTraversal";
+import {
+  ANY,
+  neighbour,
+  stepStatus,
+  useGradingTraversal,
+  type TraversalChoices,
+} from "./useGradingTraversal";
 
 /*
  * The hook half of FF-05: which requests a set of choices produces, and what
@@ -40,6 +52,17 @@ const ENTRIES: GradingEntry[] = [
 const BASE: Record<string, ReturnType<typeof ok>> = {
   [`GET ${EVAL}`]: ok(makeEvaluationDetail()),
   [`GET ${BY_QUESTION("i1")}`]: ok(makeQueue(ENTRIES)),
+  [`GET ${EVAL}/grading/steps?by=question&anonymous=1`]: ok(
+    makeSteps("question", [{ key: "i1", validated: 2, proposed: 2 }, { key: "i2", total: 4 }]),
+  ),
+  [`GET ${EVAL}/grading/steps?by=student&anonymous=1`]: ok(
+    makeSteps("student", [
+      { key: "a1", label: "Amber Lynx" },
+      { key: "a2", label: "Bold Raven", proposed: 1 },
+      { key: "a3", label: "Calm Heron" },
+      { key: "a4", label: "Wise Otter", staff: true },
+    ]),
+  ),
   [`GET ${EVAL}/grading/progress`]: ok({ done: 4, total: 4, pending: { runner: 0, llm: 0 }, failed: 0 }),
   [`GET ${EVAL}/results/by-question`]: ok([
     { item: { id: "i1" }, explanation: "Pointers are 8 bytes." },
@@ -75,11 +98,14 @@ describe("useGradingTraversal", () => {
   it("by question: one step per item, numbered from 1, and the queue of the first", async () => {
     const { result } = setup();
     await waitFor(() => expect(result.current.entries).toHaveLength(4));
-    expect(result.current.steps).toEqual([
-      { key: "i1", label: "1. sizeof-ptr" },
-      { key: "i2", label: "2. array-decay" },
-    ]);
-    expect(result.current.step).toEqual({ key: "i1", label: "1. sizeof-ptr" });
+    expect(result.current.step?.label).toBe("1. sizeof-ptr");
+    // The labels are the items'; the state joins them once the summary lands.
+    await waitFor(() =>
+      expect(result.current.steps).toEqual([
+        { key: "i1", label: "1. sizeof-ptr", state: { total: 4, validated: 2, proposed: 2 } },
+        { key: "i2", label: "2. array-decay", state: { total: 4, validated: 0, proposed: 0 } },
+      ]),
+    );
     expect(result.current.itemsById.get("i2")?.points).toBe(3);
   });
 
@@ -107,14 +133,16 @@ describe("useGradingTraversal", () => {
     expect(calls.map((c) => c.url)).toContain(BY_QUESTION("i1", "1", "&state=proposed"));
   });
 
-  it("by student: the steps are the roster of the first question, and the queue is per attempt", async () => {
+  it("by student: the steps come from the step summary, and the queue is per attempt", async () => {
     const { result, calls } = setup(
       { order: "student", index: 1 },
       { [`GET ${BY_STUDENT("a2")}`]: ok(makeQueue([ENTRIES[1]!], { order: "student" })) },
     );
     await waitFor(() => expect(result.current.entries).toHaveLength(1));
     expect(result.current.steps.map((s) => s.key)).toEqual(["a1", "a2", "a3", "a4"]);
-    expect(result.current.step).toEqual({ key: "a2", label: "Bold Raven" });
+    expect(result.current.step).toMatchObject({ key: "a2", label: "Bold Raven", staff: false });
+    expect(result.current.steps[3]).toMatchObject({ label: "Wise Otter", staff: true });
+    expect(calls.map((c) => c.url)).toContain(`${EVAL}/grading/steps?by=student&anonymous=1`);
     expect(calls.map((c) => c.url)).toContain(BY_STUDENT("a2"));
   });
 
@@ -140,6 +168,35 @@ describe("useGradingTraversal", () => {
       { [`GET ${BY_QUESTION("i2")}`]: ok(makeQueue([])) },
     );
     await waitFor(() => expect(result.current.step?.key).toBe("i2"));
+  });
+});
+
+describe("the position", () => {
+  it("resolves the open answer and its place among the sorted entries", async () => {
+    const { result } = setup({ selected: "a4:i1" });
+    await waitFor(() => expect(result.current.current?.index).toBe(1));
+    expect(result.current.current?.entry.label).toBe("Wise Otter");
+  });
+
+  it("is null while nothing is open", async () => {
+    const { result } = setup({ selected: null });
+    await waitFor(() => expect(result.current.entries).toHaveLength(4));
+    expect(result.current.current).toBeNull();
+  });
+
+  it("neighbour clamps at both ends and starts from the top when nothing is open", () => {
+    const sorted = proposalsFirst(ENTRIES);
+    expect(neighbour(sorted, "a2:i1", -1)).toBe("a2:i1");
+    expect(neighbour(sorted, "a2:i1", 1)).toBe("a4:i1");
+    expect(neighbour(sorted, "a3:i1", 1)).toBe("a3:i1");
+    expect(neighbour(sorted, null, 1)).toBe("a2:i1");
+    expect(neighbour([], "a2:i1", 1)).toBeNull();
+  });
+
+  it("stepStatus: proposals first, then all validated, else ungraded", () => {
+    expect(stepStatus({ total: 4, validated: 3, proposed: 1 })).toBe("toValidate");
+    expect(stepStatus({ total: 4, validated: 4, proposed: 0 })).toBe("done");
+    expect(stepStatus({ total: 4, validated: 2, proposed: 0 })).toBe("ungraded");
   });
 });
 

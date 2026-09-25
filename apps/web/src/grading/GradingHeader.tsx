@@ -4,21 +4,28 @@ import type { GradingProgress, GradingQueue } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { Button, cx, IconButton } from "../ui";
+import type { GradingOrder } from "./labels";
+import { StepPicker } from "./StepPicker";
+import type { Step } from "./useGradingTraversal";
 
 /**
  * Where the correction stands: a path of N steps (one per question, or one
  * per student), the current one in ink, and a neutral bar for the answers
- * already validated.
+ * already validated. The step counter is the step PICKER (#107): the
+ * chevrons walk one step, the counter opens every step to jump to one; the
+ * strip of bars under them stays a picture of the path, not a control.
  *
  * Never red. Red on this screen means "the thing to press", and an
  * advancement bar is not an action — mockup `04-correction.html` makes the
  * same point in its own comment.
  */
 export function GradingHeader({
+  order,
   steps,
   index,
   onPrev,
   onNext,
+  onJump,
   prevLabel,
   nextLabel,
   title,
@@ -28,10 +35,12 @@ export function GradingHeader({
   running,
   runPrimary,
 }: {
-  steps: { key: string; label: string }[];
+  order: GradingOrder;
+  steps: Step[];
   index: number;
   onPrev: () => void;
   onNext: () => void;
+  onJump: (index: number) => void;
   prevLabel: string;
   nextLabel: string;
   /** "Question 5 of 8". */
@@ -50,13 +59,13 @@ export function GradingHeader({
   return (
     <section
       aria-label={t("grading.progress.title")}
-      className="rounded-card border border-line bg-surface px-4 py-3.5 sm:px-5"
+      className="relative rounded-card border border-line bg-surface px-4 py-3.5 sm:px-5"
     >
       <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5">
         <IconButton label={prevLabel} onClick={onPrev} disabled={steps.length < 2}>
           <ChevronLeft />
         </IconButton>
-        <span className="text-base font-bold tabular-nums tracking-tight">{title}</span>
+        <StepPicker order={order} steps={steps} index={index} title={title} onJump={onJump} />
         <span className="text-[13px] text-fg-muted">
           {t(counts.proposed === 1 ? "grading.remaining.one" : "grading.remaining", {
             n: counts.proposed,

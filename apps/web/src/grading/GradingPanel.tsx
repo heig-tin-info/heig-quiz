@@ -15,20 +15,32 @@ import { ListSkeleton } from "./ListSkeleton";
 import { entryKey } from "./EntryList";
 import { GradingFilters } from "./GradingFilters";
 import { GradingHeader } from "./GradingHeader";
-import { StepAnswers, StepCard } from "./GradingStep";
+import { StepAnswers, StepCard, StepList } from "./GradingStep";
 import { gradingLinks } from "./index";
 import { ORDER_WORDS, type GradingOrder } from "./labels";
 import { RegradeSheet } from "./RegradeSheet";
 import { OverrideSheet } from "./OverrideSheet";
 import { useGradingInvalidate } from "./useGradingInvalidate";
 import { useGradingKeys } from "./useGradingKeys";
-import { ANY, useGradingTraversal, type Any, type StateFilter } from "./useGradingTraversal";
+import {
+  ANY,
+  neighbour,
+  useGradingTraversal,
+  type Any,
+  type StateFilter,
+} from "./useGradingTraversal";
 
 /**
  * The grading panel (F-GRADE-03 to 06, mockup `04-correction.html`).
  *
- * The whole screen is one traversal: a path of steps at the top, the answers
- * of the current step below, one of them open. The traversal runs BY
+ * The whole screen is one traversal: a path of steps at the top — walked with
+ * the chevrons or jumped through with the step picker (#107) — and under it
+ * the answers of the current step as master and detail (#102): a compact
+ * list on the side, and ONE answer at a fixed place beside it, swapped in
+ * place by Previous / Next, a click in the list or the arrow keys. On a wide
+ * screen that area has the height of the window, whatever the answer holds,
+ * so going to the next answer changes neither the page's height nor its
+ * scroll: nothing moves under the teacher's eyes. The traversal runs BY
  * QUESTION by default — grading the same question across thirty students is
  * the only way to grade it consistently — and by student on demand.
  *
@@ -66,7 +78,15 @@ export function GradingPanel({
   const [regrading, setRegrading] = useState(false);
 
   const { evaluation, itemsById, steps, step, queue, entries, counts, progress, explanations } =
-    useGradingTraversal(evaluationId, { order, index, stateFilter, source, confidence, showNames });
+    useGradingTraversal(evaluationId, {
+      order,
+      index,
+      selected,
+      stateFilter,
+      source,
+      confidence,
+      showNames,
+    });
 
   const proposedCount = entries.filter((e) => e.grading?.state === "proposed").length;
 
@@ -83,6 +103,12 @@ export function GradingPanel({
   }, [entries]);
 
   const overrideEntry = entries.find((e) => entryKey(e) === overrideKey) ?? null;
+
+  /** One answer back or forward: the detail's buttons, the same as `←` / `→`. */
+  const move = (delta: number) => {
+    const next = neighbour(entries, selected, delta);
+    if (next) setSelected(next);
+  };
 
   // --- Mutations ---------------------------------------------------------
 
@@ -200,10 +226,12 @@ export function GradingPanel({
       ) : (
         <>
           <GradingHeader
+            order={order}
             steps={steps}
             index={index}
             onPrev={() => setIndex((i) => (i - 1 + steps.length) % steps.length)}
             onNext={() => setIndex((i) => (i + 1) % steps.length)}
+            onJump={setIndex}
             prevLabel={t(words.prev)}
             nextLabel={t(words.next)}
             title={t(words.position, { n: index + 1, total: steps.length })}
@@ -240,14 +268,17 @@ export function GradingPanel({
             />
           ) : null}
 
-          {/* `items-start` only from `lg`: on a phone the column stacks, and
-              stretching is what keeps the two children at the page width —
-              `items-start` there sizes them to their content and pushes the
-              whole document sideways. */}
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+          {/* Master and detail from `lg`, at the height of the window (the
+              page's own vertical padding taken off) and never taller or
+              shorter, whatever the answer holds: the next answer then changes
+              neither the height of the page nor its scroll. Both columns
+              scroll inside themselves. Below `lg` the columns stack, the list
+              becomes a select above the answer, and the page scrolls as any
+              page does. */}
+          <div className="flex flex-col gap-6 lg:h-[calc(100dvh-4rem)] lg:min-h-120 lg:flex-row">
             <aside
               aria-label={t("aside.gradingItem")}
-              className="w-full shrink-0 lg:sticky lg:top-6 lg:w-75"
+              className="flex w-full shrink-0 flex-col gap-4 lg:min-h-0 lg:w-75"
             >
               <StepCard
                 order={order}
@@ -256,9 +287,21 @@ export function GradingPanel({
                 total={counts.total}
                 onRegrade={() => setRegrading(true)}
               />
+              <StepList
+                className="hidden lg:flex lg:min-h-0 lg:flex-1"
+                order={order}
+                queue={queue}
+                entries={entries}
+                items={itemsById}
+                selected={selected}
+                onSelect={setSelected}
+              />
             </aside>
 
-            <section className="w-full min-w-0 flex-1 space-y-4" aria-label={t("grading.title")}>
+            <section
+              className="flex w-full min-w-0 flex-1 flex-col gap-3 lg:min-h-0"
+              aria-label={t("grading.title")}
+            >
               <StepAnswers
                 order={order}
                 queue={queue}
@@ -266,6 +309,7 @@ export function GradingPanel({
                 items={itemsById}
                 selected={selected}
                 onSelect={setSelected}
+                onMove={move}
                 explanations={explanations}
                 validating={validate.isPending}
                 onValidate={validate.mutate}

@@ -661,6 +661,17 @@ live in `ui/state.ts`, each written once.
   the answer in a glyph or two ("A, C", "NULL", "12 L") beside the icon, and
   INHERITS the state's ink rather than carrying `fg` — that is what keeps it
   readable on the filled `done` blue, where `fg` measured 2.9:1.
+- Master and detail (the grading panel, #102): from `lg`, a compact list
+  column (300 px) beside ONE detail, both inside a region exactly as tall as
+  the window less the page's vertical padding (`h-[calc(100dvh-4rem)]`,
+  never under `min-h-120`, 480 px). The height is fixed on purpose: the next
+  record then changes neither the page's height nor its scroll, and the eye
+  stays on one spot. Each column scrolls inside itself; the list keeps the
+  current row in view by scrolling itself (never `scrollIntoView`, which
+  scrolls the page too), the detail returns to its top on every change. The
+  current row is the sidebar's: `accent-soft` with its name in `accent`.
+  Below `lg` the list becomes a `Select` above the detail and the page
+  scrolls normally.
 - SyncBadge: whether the student's work is safe — `saved`, `saving`,
   `offline`, `closed` — icon plus word, in a polite live region, since it is
   the answer to "did that save?". The word hides under `sm` where the zen bar

@@ -413,6 +413,19 @@ const scenes = [
   { name: "grading-cloze", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 2) },
   { name: "grading-code", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 3) },
   { name: "grading-by-student", role: "teacher", path: "/evaluations/closed/grading", act: (p) => p.locator("label").filter({ hasText: /^(By student|Par étudiant)$/ }).first().click() },
+  // #102 / #107: one answer at a fixed place, walked in place, and the step
+  // picker open — by question, and by student with its filter typed in.
+  { name: "grading-next-answer", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^(Next answer|Réponse suivante)$/ }).first().click();
+      await p.waitForTimeout(300);
+    } },
+  { name: "grading-step-picker", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: (p) => p.getByRole("button", { name: /^(Question|Question) 1 (of|sur) / }).first().click() },
+  { name: "grading-step-picker-student", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await p.locator("label").filter({ hasText: /^(By student|Par étudiant)$/ }).first().click();
+      await p.waitForTimeout(500);
+      await p.getByRole("button", { name: /^(Student 1 of|Étudiant 1 sur) / }).first().click();
+      await p.keyboard.type("a");
+    } },
   { name: "grading-override", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: (p) => p.getByRole("button", { name: /^(Adjust|Modifier)$/ }).first().click() },
   { name: "grading-batch-confirm", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
       await nextQuestion(p, 3);

@@ -11,7 +11,8 @@ import { HistoryPopover } from "./HistoryPopover";
 import { confidenceLabel, confidenceTone, sourceLabel, sourceTone } from "./labels";
 
 /**
- * One answer, open.
+ * One answer, open: the body of the detail area (`StepAnswers`), which holds
+ * one of these at a time and swaps it in place.
  *
  * The verdict is rendered by the question type's own `Review`, handed the
  * grading's `details` — per choice, per matcher, per blank, per test case.
@@ -40,7 +41,7 @@ export function EntryDetail({
   const absent = entry.answerId === null && entry.answer === null;
 
   return (
-    <div className="space-y-4 border-t border-line px-4 py-4 sm:px-5">
+    <div className="space-y-4 px-4 py-4 sm:px-5">
       {absent ? <p className="text-sm italic text-fg-faint">{t("grading.noAnswer")}</p> : null}
 
       <QuestionReviewHost
