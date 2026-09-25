@@ -453,6 +453,7 @@ export function GradingPanel({
           maxPoints={
             overrideEntry.grading?.maxPoints ?? itemsById.get(overrideEntry.itemId)?.points ?? 0
           }
+          minPoints={itemsById.get(overrideEntry.itemId)?.minPoints ?? 0}
           onClose={() => setOverrideKey(null)}
         />
       ) : null}

@@ -1,9 +1,12 @@
 /** Section 5 of the mock — see `index.ts` for the layout. */
 import {
+  attemptTotal,
   describe,
   histogram,
+  negativeMarkingOn,
   parseCloze,
   round2,
+  scoresNegatively,
 } from "@quiz/domain";
 import type {
   CircuitStudent,
@@ -313,7 +316,7 @@ function buildGradingWorld(
         points = halfPoints(built.fraction * item.points);
         details = built.details;
       } else {
-        const graded = tryAnswer(q, config, answer, evaluation.mcqPolicy) as {
+        const graded = tryAnswer(q, config, answer, evaluation.mcqPolicy, negativeOf(evaluation)) as {
           points: number;
           details: unknown;
         };
@@ -428,15 +431,20 @@ function gradeOf(points: number, total: number): number {
 
 function attemptPoints(e: MockGradingWorld, attemptId: string): { points: number; perItem: Record<string, number> } {
   const perItem: Record<string, number> = {};
-  let points = 0;
   for (const item of e.items) {
     const g = standingGrading(e, attemptId, item.id);
-    if (g && g.state === "validated") {
-      perItem[item.id] = g.points;
-      points += g.points;
-    }
+    if (g && g.state === "validated") perItem[item.id] = g.points;
   }
-  return { points: Math.round(points * 100) / 100, perItem };
+  // The server's one total: floored at 0 under negative marking (ADR-026).
+  return { points: attemptTotal(Object.values(perItem)), perItem };
+}
+
+/** ADR-026: the evaluation scores its choice questions negatively (never a poll). */
+function negativeOf(evaluation: MockEvaluation): boolean {
+  return negativeMarkingOn(
+    evaluation.mode,
+    (evaluation.settings as { negativeMarking?: boolean }).negativeMarking,
+  );
 }
 
 function gradingEntry(e: MockGradingWorld, attempt: MockAttempt, item: MockEvalItem, anonymous: boolean) {
@@ -449,7 +457,7 @@ function gradingEntry(e: MockGradingWorld, attempt: MockAttempt, item: MockEvalI
   const solution =
     q.type === "code"
       ? mockCodeDetails(config, 1).solution
-      : (tryAnswer(q, config, answer, e.evaluation.mcqPolicy) as { solution?: unknown }).solution ??
+      : (tryAnswer(q, config, answer, e.evaluation.mcqPolicy, negativeOf(e.evaluation)) as { solution?: unknown }).solution ??
         null;
   return {
     answerId: answer === null ? null : `${key}-ans`,
@@ -509,6 +517,7 @@ on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
       internalName: i.internalName,
       type: i.type,
       points: i.points,
+      minPoints: scoresNegatively(i.type, negativeOf(e.evaluation)) ? -i.points : 0,
     })),
     entries,
     counts: {
@@ -894,7 +903,7 @@ on("GET", "/app/api/attempts/:id/feedback", (m) => {
       const solution =
         q.type === "code"
           ? mockCodeDetails(config, 1).solution
-          : (tryAnswer(q, config, answer, e.evaluation.mcqPolicy) as { solution?: unknown }).solution ?? null;
+          : (tryAnswer(q, config, answer, e.evaluation.mcqPolicy, negativeOf(e.evaluation)) as { solution?: unknown }).solution ?? null;
       return {
         itemId: item.id,
         position: item.position,

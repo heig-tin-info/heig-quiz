@@ -13,6 +13,9 @@ import type {
   GradingSteps,
 } from "@quiz/contracts";
 
+import { negativeMarkingOf } from "@quiz/contracts";
+import { negativeMarkingOn, overridePointsRange, scoresNegatively } from "@quiz/domain";
+
 import { api } from "../api";
 import {
   evaluationKey,
@@ -106,17 +109,22 @@ export function useGradingTraversal(evaluationId: string, choices: TraversalChoi
     queryFn: () => api(`/app/api/evaluations/${evaluationId}`),
   });
 
-  const items = useMemo<GradingQueueItem[]>(
-    () =>
-      (evaluation.data?.items ?? []).map((i) => ({
-        id: i.id,
-        position: i.position,
-        internalName: i.internalName,
-        type: i.type,
-        points: i.points,
-      })),
-    [evaluation.data],
-  );
+  const items = useMemo<GradingQueueItem[]>(() => {
+    const detail = evaluation.data;
+    // ADR-026: a correction may go below 0 on a choice question of an
+    // evaluation with negative marking — the server's own rule.
+    const negative =
+      detail !== undefined &&
+      negativeMarkingOn(detail.evaluation.mode, negativeMarkingOf(detail.evaluation.settings));
+    return (detail?.items ?? []).map((i) => ({
+      id: i.id,
+      position: i.position,
+      internalName: i.internalName,
+      type: i.type,
+      points: i.points,
+      minPoints: overridePointsRange(i.points, scoresNegatively(i.type, negative)).min,
+    }));
+  }, [evaluation.data]);
   const anonymous = showNames ? "0" : "1";
 
   /**

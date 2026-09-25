@@ -24,7 +24,8 @@ if (asParam === "teacher" || asParam === "student" || asParam === "admin") {
 export const role: Role = (localStorage.getItem(ROLE_KEY) as Role | null) ?? "teacher";
 
 /** Scene flags: read from the URL, then remembered like the persona. */
-export const FLAG_NAMES = ["empty", "fail", "slow", "many", "mytest"] as const;
+/** `negative`: every evaluation of the mock scores its choice questions negatively (ADR-026). */
+export const FLAG_NAMES = ["empty", "fail", "slow", "many", "mytest", "negative"] as const;
 type FlagName = (typeof FLAG_NAMES)[number];
 export const flags = {} as Record<FlagName, boolean>;
 for (const name of FLAG_NAMES) {

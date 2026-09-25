@@ -309,6 +309,7 @@ export const studentAttemptView = (): AttemptView => ({
       showProgressBar: true,
       logVisibility: true,
       requireFullscreen: false,
+      ...(flags.negative ? { negativeMarking: true } : {}),
     },
     feedbackPolicy: {
       when: "on_release",
@@ -340,7 +341,11 @@ export const studentAttemptView = (): AttemptView => ({
                   ? "circuit"
                   : "codeimage",
       milestone: n === 3,
-      student: studentPayloads[n],
+      // ADR-026: what `toStudent` adds to a choice question under negative marking.
+      student:
+        n === 1 && flags.negative
+          ? { ...(studentPayloads[n] as object), negativeMarking: true }
+          : studentPayloads[n],
       answer: stored?.payload ?? null,
       revision: stored?.revision ?? 0,
       markedDone: stored?.done ?? false,
@@ -360,6 +365,7 @@ export const studentLobbyView = (): LobbyView => ({
     announcedDurationS: 20 * 60,
   },
   navigation: "free",
+  negativeMarking: flags.negative,
   present: 18,
   enrolled: 24,
   timeBonusPercent: 33,
