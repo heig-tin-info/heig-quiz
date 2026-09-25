@@ -67,6 +67,14 @@ student); the network allowlist is, like on every entry.
 A retake is a new row with a new seed: a new item order and newly shuffled
 choices on the same frozen question versions, blank, started at once.
 
+The rule is read again inside a transaction that holds the evaluation row
+`FOR SHARE`, and the attempt is inserted already `in_progress` in that same
+transaction; `closeEvaluation` flips the state to `closed` BEFORE it expires
+the open attempts. The flip needs the row lock, so a retake racing the
+teacher's Close either commits first and is expired with the others, or
+reads `closed` and is refused — never a blank attempt left open on a closed
+evaluation, graded 0 at the close and then kept as the "last".
+
 ### 3. The CURRENT attempt is the latest; the attempt that COUNTS is the kept one
 
 Everything that serves a student or shows a live row reads the latest
@@ -113,6 +121,19 @@ retakes instead, and a reopened attempt that was already graded would keep
 its first grades. The staff attempt of ADR-018 is unchanged: its reset
 deletes every attempt of the teacher's own seat.
 
+Closing ONE attempt from the grid (F-LIVE-11) stays available, and on such
+an exercise the student may then start a retake of their own. This is
+intended: closing a single attempt ends that attempt, not the student's
+right to retake — the teacher who wants a student to stop closes the
+evaluation, or sets a maximum.
+
+The student home offers **Try again** as the card's one action; under
+`keep: "last"` it asks first ("your last attempt counts, even if lower"),
+because a retake can lower the result. The kept score on the card follows
+the same visibility as the feedback page: shown while the exercise takes
+retakes, and after its close only when the feedback policy lets the results
+through (`scoreVisible`).
+
 ## Consequences
 
 - Readers that join `attempts` for one row per student now say which one:
@@ -127,6 +148,24 @@ deletes every attempt of the teacher's own seat.
   (settings are frozen). Acceptable for exercises; revisit if asked.
 - The home card, not the end-of-attempt screen, carries the Retake action:
   the player (`Player.tsx`, `ClosedScreen.tsx`) is unchanged.
+- Reopening an attempt is refused on an exercise with retakes
+  (`409 retakes_enabled`), and the grid does not offer it.
+- The evaluation list counts STUDENTS who took the evaluation
+  (`count(distinct owner)`), not attempt rows.
+
+### Rollback
+
+Migration `0014` is not reversible by reverting the code alone. Reverting
+the application after it ran needs a DOWN migration that drops
+`attempts_evaluation_user_open_uq` and `attempts_evaluation_user_number_uq`,
+recreates `attempts_evaluation_user_uq (evaluation_id, user_id)` and drops
+`attempt_number`. Recreating the one-attempt index FAILS as soon as one
+retake exists: the extra attempts must be deleted (or moved aside) first,
+keeping the kept attempt of each student, which is a decision about
+students' results and not a mechanical step. The old code does not run on
+the new schema at all: its `ON CONFLICT (evaluation_id, user_id)` target has
+no matching unique index, so every first entry into an evaluation would fail.
+A rollback is therefore a migration, never a plain redeploy.
 
 ## Alternatives considered
 
