@@ -75,3 +75,31 @@ export function remainingSeconds(deadline: Date | null, now: Date): number | nul
   if (deadline === null) return null;
   return Math.max(0, (deadline.getTime() - now.getTime()) / 1000);
 }
+
+/**
+ * How long a teacher's stateless preview of an evaluation lasts, in seconds
+ * (issue #75, ADR-018 fourth addendum). `null` means no countdown.
+ *
+ * The preview starts when the teacher presses the button, so a `duration`
+ * evaluation gives its duration and a `deadline` one gives its announced
+ * window `closesAt - opensAt` — the time a student who starts at the opening
+ * has (decision D8's base). A `manual` evaluation has no clock to rehearse,
+ * and neither has a timing whose reference instants are missing or reversed.
+ * No accommodation applies: the teacher has none.
+ */
+export function previewDurationS(input: {
+  timing: EvaluationTiming;
+  durationS: number | null;
+  opensAt: Date | null;
+  closesAt: Date | null;
+}): number | null {
+  if (input.timing === "duration") {
+    return input.durationS !== null && input.durationS > 0 ? input.durationS : null;
+  }
+  if (input.timing === "deadline") {
+    if (input.opensAt === null || input.closesAt === null) return null;
+    const windowS = Math.round((input.closesAt.getTime() - input.opensAt.getTime()) / 1000);
+    return windowS > 0 ? windowS : null;
+  }
+  return null;
+}

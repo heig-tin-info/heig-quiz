@@ -21,6 +21,7 @@ describe("@quiz/domain public surface", () => {
       "matchShortAnswer",
       "parseCloze",
       "parseRosterCsv",
+      "previewDurationS",
       "pseudonym",
       "round2",
       "seededShuffle",
