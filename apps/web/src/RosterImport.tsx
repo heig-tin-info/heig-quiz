@@ -10,22 +10,29 @@ import { classroomKey } from "./queryKeys";
 
 type Cell = string | number | null;
 
-/** Dropped file to tabular rows. Excel/ODS via SheetJS, otherwise text CSV. */
+/** Dropped file to tabular rows. Excel/ODS via hucre, otherwise text CSV. */
 async function fileToPayload(
   file: File,
 ): Promise<{ csv: string } | { rows: Cell[][] }> {
   if (/\.(xlsx|xls|ods)$/i.test(file.name)) {
-    // SheetJS weighs ~430 kB minified: load it only when a spreadsheet is
-    // actually dropped, never in the initial bundle.
-    const XLSX = await import("xlsx");
-    const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
-    const sheet = wb.Sheets[wb.SheetNames[0]!];
+    // Load the spreadsheet reader only when a spreadsheet is actually
+    // dropped, never in the initial bundle. `read` tells .xlsx, legacy .xls
+    // and .ods apart by their bytes.
+    const { read } = await import("hucre");
+    const wb = await read(await file.arrayBuffer(), { sheets: [0] });
+    const sheet = wb.sheets[0];
     if (!sheet) throw new Error("Empty workbook");
-    const rows = XLSX.utils.sheet_to_json<Cell[]>(sheet, {
-      header: 1,
-      defval: null,
-      raw: false, // formatted e-mails stay as text
-    });
+    // The API takes strings, numbers and blanks; a stray boolean or date
+    // cell travels as text.
+    const rows = sheet.rows.map((row) =>
+      row.map((v): Cell =>
+        v === null || typeof v === "string" || typeof v === "number"
+          ? v
+          : v instanceof Date
+            ? v.toISOString().slice(0, 10)
+            : String(v),
+      ),
+    );
     return { rows };
   }
   return { csv: await file.text() };
