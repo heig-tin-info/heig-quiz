@@ -345,6 +345,9 @@ export function GradingPanel({
             prevLabel={t(words.prev)}
             nextLabel={t(words.next)}
             title={t(words.position, { n: index + 1, total: steps.length })}
+            // By student the counter names who it counts (#119); by question
+            // the badges beside it and the answer's header name the question.
+            subject={order === "student" ? step?.label : undefined}
             counts={counts}
             progress={progress.data}
             onRun={() => run.mutate()}

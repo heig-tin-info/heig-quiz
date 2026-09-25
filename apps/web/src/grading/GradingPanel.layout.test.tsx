@@ -141,12 +141,12 @@ describe("GradingPanel — the student's total once settled (#108)", () => {
 });
 
 describe("GradingPanel — re-grading from the answer (#108)", () => {
-  it("offers it beside the question's title, with a tooltip that says what it does", async () => {
+  it("offers it on the answer, under the header that names the question, with a tooltip", async () => {
     setup();
     await within(await findDetail()).findByText("Amber Lynx");
-    const title = within(detail()).getByRole("heading", { name: "1. sizeof-ptr" });
+    const title = within(detail()).getByText("1. sizeof-ptr");
     const button = within(detail()).getByRole("button", { name: en["grading.regrade.open"] });
-    expect(title.parentElement).toContainElement(button);
+    expect(title.closest("header")).not.toBeNull();
     expect(button).toHaveAccessibleDescription(en["grading.regrade.tip"]!);
   });
 
@@ -167,8 +167,8 @@ describe("GradingPanel — re-grading from the answer (#108)", () => {
     await screen.findByText("Student 1 of 1");
     // Open the second question of the copy, then re-grade it.
     await user.click(await screen.findByRole("button", { name: /^2\. array-decay, / }));
-    await within(detail()).findByRole("heading", { name: "2. array-decay" });
-    // By student the title also says what the question is.
+    await within(detail()).findByText("2. array-decay");
+    // By student the answer also says what the question is.
     expect(within(detail()).getByText("3 pts")).toBeVisible();
     await user.click(within(detail()).getByRole("button", { name: en["grading.regrade.open"] }));
     const sheet = await screen.findByRole("dialog", { name: en["grading.regrade.title"] });

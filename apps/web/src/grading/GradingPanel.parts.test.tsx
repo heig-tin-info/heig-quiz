@@ -15,9 +15,10 @@ import {
 
 /*
  * Issue #109: the "Show" menu of the filter row puts parts of the open
- * answer away — the internal name, the prompt, the explanation, the
- * solution, the grading comment — one by one. The student's answer is never
- * one of them, and hiding the comment never takes Adjust away.
+ * answer away — the prompt, the explanation, the solution, the grading
+ * comment — one by one. The student's answer is never one of them, nor is
+ * which question it answers (#119: the detail header names it in both
+ * orders), and hiding the comment never takes Adjust away.
  */
 
 const EVAL = "/app/api/evaluations/e1";
@@ -82,13 +83,13 @@ describe("GradingPanel — the parts of an answer shown (#109)", () => {
   it("shows every part by default", async () => {
     setup();
     const d = await ready();
-    expect(within(d).getByRole("heading", { name: "1. sizeof-ptr" })).toBeVisible();
+    expect(within(d).getByText("1. sizeof-ptr")).toBeVisible();
     expect(within(d).getByText(/on LP64\?/)).toBeInTheDocument();
     expect(within(d).getByText("Think of LP64.")).toBeVisible();
     expectAnswer();
   });
 
-  it("lists the five parts, and the student's answer ticked for good", async () => {
+  it("lists the four parts, and the student's answer ticked for good", async () => {
     const user = userEvent.setup();
     setup();
     await ready();
@@ -97,7 +98,6 @@ describe("GradingPanel — the parts of an answer shown (#109)", () => {
     expect(answer).toBeChecked();
     expect(answer).toBeDisabled();
     for (const key of [
-      "grading.parts.internalName",
       "grading.parts.prompt",
       "grading.parts.explanation",
       "grading.parts.solution",
@@ -108,7 +108,6 @@ describe("GradingPanel — the parts of an answer shown (#109)", () => {
   });
 
   it.each([
-    ["grading.parts.internalName", () => within(detail()).queryByRole("heading", { name: "1. sizeof-ptr" })],
     ["grading.parts.prompt", () => within(detail()).queryByText(/on LP64\?/)],
     ["grading.parts.explanation", () => within(detail()).queryByText("Pointers are 8 bytes on LP64.")],
     ["grading.parts.solution", () => within(detail()).queryByText("Missed")],
@@ -123,7 +122,7 @@ describe("GradingPanel — the parts of an answer shown (#109)", () => {
     await waitFor(() => expect(find()).toBeNull());
     expectAnswer();
     // The trigger says something is put away.
-    expect(screen.getByRole("button", { name: "Show 4/5" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Show 3/4" })).toBeInTheDocument();
   });
 
   it("keeps the answer and Adjust when every part is hidden", async () => {
@@ -139,5 +138,8 @@ describe("GradingPanel — the parts of an answer shown (#109)", () => {
     // Hiding the comment hides its display, never the way to write one.
     expect(within(detail()).getByRole("button", { name: en["grading.override"] })).toBeVisible();
     expect(within(detail()).getByRole("button", { name: en["grading.regrade.open"] })).toBeVisible();
+    // Nor which question and whose answer it is (#119).
+    expect(within(detail()).getByText("1. sizeof-ptr")).toBeVisible();
+    expect(within(detail()).getByText("Amber Lynx")).toBeVisible();
   });
 });

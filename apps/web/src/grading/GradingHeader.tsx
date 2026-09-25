@@ -32,6 +32,7 @@ export function GradingHeader({
   prevLabel,
   nextLabel,
   title,
+  subject,
   counts,
   progress,
   onRun,
@@ -49,6 +50,8 @@ export function GradingHeader({
   nextLabel: string;
   /** "Question 5 of 8". */
   title: string;
+  /** Who the step is, by student: a name or a pseudonym (#119). */
+  subject?: string;
   counts: GradingQueue["counts"];
   progress: GradingProgress | undefined;
   onRun: () => void;
@@ -71,7 +74,14 @@ export function GradingHeader({
         <IconButton label={prevLabel} onClick={onPrev} disabled={steps.length < 2}>
           <ChevronLeft />
         </IconButton>
-        <StepPicker order={order} steps={steps} index={index} title={title} onJump={onJump} />
+        <StepPicker
+          order={order}
+          steps={steps}
+          index={index}
+          title={title}
+          subject={subject}
+          onJump={onJump}
+        />
         {badges ? <span className="flex flex-wrap items-center gap-1.5">{badges}</span> : null}
         <span className="text-[13px] text-fg-muted">
           {t(counts.proposed === 1 ? "grading.remaining.one" : "grading.remaining", {
@@ -85,7 +95,7 @@ export function GradingHeader({
             validated: counts.validated,
             total: counts.total,
           })}
-          className="h-1.5 w-44 overflow-hidden rounded-full bg-surface-3"
+          className="h-1.5 w-44 min-w-12 overflow-hidden rounded-full bg-surface-3"
         >
           <div className="h-full rounded-full bg-fg" style={{ width: `${done}%` }} />
         </div>
