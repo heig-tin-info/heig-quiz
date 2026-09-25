@@ -462,6 +462,14 @@ on("GET", `/app/api/attempts/${STUDENT_RETAKE_ATTEMPT}/feedback`, () => ({
   reason: "retakes_open",
   evaluation: { id: STUDENT_EVAL_RETAKE, title: "Série 3 — Pointeurs, entraînement" },
   score: { points: 7.5, totalPoints: 10, pending: false },
+  // Two of three attempts taken: the page offers the third (issues #120, #121).
+  retake: {
+    evaluationId: STUDENT_EVAL_RETAKE,
+    keep: "best",
+    maxAttempts: 3,
+    attemptCount: 2,
+    refusal: null,
+  },
 }));
 
 on("POST", "/app/api/evaluations/:id/attempt", () =>

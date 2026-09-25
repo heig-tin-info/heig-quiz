@@ -22,7 +22,7 @@ describe("student feedback", () => {
         evaluation: { id: "e1", title: "Quiz 3" },
       }),
     });
-    renderWithProviders(<Feedback attemptId="a1" />);
+    renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
 
     expect(await screen.findByText("Results not published yet")).toBeVisible();
     // Named twice on purpose: the page header and the sentence that explains
@@ -41,7 +41,7 @@ describe("student feedback", () => {
         evaluation: { id: "e1", title: "Quiz 3" },
       }),
     });
-    renderWithProviders(<Feedback attemptId="a1" />);
+    renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
     expect(await screen.findByText("No feedback for this evaluation")).toBeVisible();
   });
 
@@ -55,7 +55,7 @@ describe("student feedback", () => {
         score: { points: 3, totalPoints: 5, pending: true },
       }),
     });
-    renderWithProviders(<Feedback attemptId="a1" />);
+    renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
     expect(await screen.findByText("Attempt handed in")).toBeVisible();
     expect(screen.getByText("Score of this attempt").nextSibling).toHaveTextContent("3 / 5");
     expect(screen.getByText(/still to be graded/)).toBeVisible();
@@ -65,7 +65,7 @@ describe("student feedback", () => {
 
   it("shows the grade, the points and the per-question review once published", async () => {
     mockFetch({ [`GET ${URL}`]: ok(makeFeedback()) });
-    renderWithProviders(<Feedback attemptId="a1" />);
+    renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
 
     expect(await screen.findByRole("heading", { name: "Your results" })).toBeVisible();
     expect(screen.getByText("Grade").nextSibling).toHaveTextContent("5.0");
@@ -81,7 +81,7 @@ describe("student feedback", () => {
     const payload = makeFeedback();
     expect(payload.items[0]!.position).toBe(0);
     mockFetch({ [`GET ${URL}`]: ok(payload) });
-    renderWithProviders(<Feedback attemptId="a1" />);
+    renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
     expect(await screen.findByRole("heading", { name: "Question 1" })).toBeVisible();
     expect(screen.queryByRole("heading", { name: "Question 0" })).toBeNull();
   });
@@ -94,7 +94,7 @@ describe("student feedback", () => {
         items: [{ ...payload.items[0]!, explanation: null, comment: null, solution: null }],
       }),
     });
-    renderWithProviders(<Feedback attemptId="a1" />);
+    renderWithProviders(<Feedback attemptId="a1" navigate={() => {}} />);
     expect(await screen.findByRole("heading", { name: "Question 1" })).toBeVisible();
     expect(screen.queryByText("Explanation")).toBeNull();
     expect(screen.queryByText("Your teacher's comment")).toBeNull();

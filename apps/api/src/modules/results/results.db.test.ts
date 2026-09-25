@@ -224,6 +224,7 @@ describe("student feedback (F-RES-04, docs/05 §5.7)", () => {
       db,
       await reload(db, built.evaluation.id),
       attempt,
+      built.app.clock.now(),
     );
     expect(before).toEqual({
       available: false,
@@ -245,6 +246,7 @@ describe("student feedback (F-RES-04, docs/05 §5.7)", () => {
       db,
       await reload(db, built.evaluation.id),
       attempt,
+      built.app.clock.now(),
     );
     expect(closed.available).toBe(true);
     if (!closed.available) throw new Error("unreachable");
@@ -268,7 +270,7 @@ describe("student feedback (F-RES-04, docs/05 §5.7)", () => {
         },
       })
       .where(eq(evaluations.id, built.evaluation.id));
-    const open = await service.studentFeedback(db, await reload(db, built.evaluation.id), attempt);
+    const open = await service.studentFeedback(db, await reload(db, built.evaluation.id), attempt, built.app.clock.now());
     if (!open.available) throw new Error("unreachable");
     expect(open.items[0]!.solution).toMatchObject({ answer: "answer-q0" });
     expect(open.items[0]!.comment).toBeNull();
@@ -290,6 +292,7 @@ describe("student feedback (F-RES-04, docs/05 §5.7)", () => {
       db,
       await reload(db, built.evaluation.id),
       attempt,
+      built.app.clock.now(),
     );
     expect(silent).toMatchObject({ available: false, reason: "no_feedback" });
   });
@@ -315,7 +318,7 @@ describe("`released_grades` is the cache of the grade (docs/01 §5, audit D-06)"
     const evaluation = await reload(db, built.evaluation.id);
     const studentId = built.seed.studentIds[0]!;
     const attempt = (await live.attemptById(db, built.attempt.id))!;
-    const feedback = await service.studentFeedback(db, evaluation, attempt);
+    const feedback = await service.studentFeedback(db, evaluation, attempt, built.app.clock.now());
     if (!feedback.available) throw new Error("unreachable");
     const [card] = await service.studentResultCards(db, studentId);
     const home = await live.studentHome(db, studentId, built.app.clock.now());

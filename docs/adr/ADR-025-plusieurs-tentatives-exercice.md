@@ -147,11 +147,37 @@ through (`scoreVisible`).
   cannot be reopened on such an exercise; the teacher raises nothing today
   (settings are frozen). Acceptable for exercises; revisit if asked.
 - The home card, not the end-of-attempt screen, carries the Retake action:
-  the player (`Player.tsx`, `ClosedScreen.tsx`) is unchanged.
+  the player (`Player.tsx`, `ClosedScreen.tsx`) is unchanged. *Superseded
+  by the addendum below (issues #120, #121).*
 - Reopening an attempt is refused on an exercise with retakes
   (`409 retakes_enabled`), and the grid does not offer it.
 - The evaluation list counts STUDENTS who took the evaluation
   (`count(distinct owner)`), not attempt rows.
+
+### Addendum (2026-09-25, issues #120, #121): the score page carries the retake
+
+On such an exercise, the end of an attempt — handed in, or its time up —
+no longer shows the hand-in screen ("your answers are with your teacher",
+wrong in this mode): the player forwards to the student's results page,
+which shows the score and offers **Try again** as its one action, or says in
+a line why no other attempt may start (maximum reached, the common end
+passed, the exercise paused) — or offers to resume the attempt already open.
+A teacher's close keeps the hand-in screen: no retake follows it. Exams and
+exercises without retakes are unchanged.
+
+The results page does not recompute the rule: `FeedbackPending` carries
+`retake` (`RetakeStatus`) next to the score while the reason is
+`retakes_open`, with `refusal` evaluated by `retakeRefusal` exactly as
+`POST /evaluations/:id/retake` does. The home card and the results page
+share one client implementation (`apps/web/src/student/retake.ts`): the
+confirmation under `keep: "last"`, the call, and the hand-over to the
+attempt route. That hand-over is the fix of #120: `/take/:id` reads its
+attempt through a query cached per evaluation, so the entry of the attempt
+just handed in was rendered first, and the player — bound to that attempt's
+id — never moved to the new one. The retake now drops every cached entry of
+the evaluation and seeds the retake's own answer in its place, and the
+player is keyed by the attempt id, so a new attempt always mounts a new
+player (state, autosave and stream topic).
 
 ### Rollback
 

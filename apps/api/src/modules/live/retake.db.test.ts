@@ -362,18 +362,26 @@ describe("grading and results with several attempts", () => {
     expect(graded).toHaveLength(2);
 
     // `immediate` feedback with the key: still the score only, while open.
-    const feedback = await results.studentFeedback(db, await reload(db, evaluation.id), first);
+    const feedback = await results.studentFeedback(db, await reload(db, evaluation.id), first, app.clock.now());
     expect(feedback).toEqual({
       available: false,
       reason: "retakes_open",
       evaluation: { id: evaluation.id, title: evaluation.title },
       score: { points: 1, totalPoints: 2, pending: false },
+      // The results page offers the retake the route would accept (#120, #121).
+      retake: {
+        evaluationId: evaluation.id,
+        keep: "best",
+        maxAttempts: null,
+        attemptCount: 1,
+        refusal: null,
+      },
     });
     expect(JSON.stringify(feedback)).not.toContain("answer-q");
 
     // Closed: the policy applies again, `immediate` with the key.
     const closed = await live.closeEvaluation(db, await reload(db, evaluation.id), app.clock.now(), "teacher", app);
-    const after = await results.studentFeedback(db, closed, first);
+    const after = await results.studentFeedback(db, closed, first, app.clock.now());
     expect(after.available).toBe(true);
   });
 
@@ -663,11 +671,26 @@ describe("POST /evaluations/:id/retake", () => {
         url: `/app/api/attempts/${firstId}/feedback`,
         headers: student.headers,
       });
-      expect(feedback.json()).toMatchObject({ available: false, reason: "retakes_open", score: { totalPoints: 1 } });
+      expect(feedback.json()).toMatchObject({
+        available: false,
+        reason: "retakes_open",
+        score: { totalPoints: 1 },
+        retake: { attemptCount: 2, maxAttempts: 2, refusal: "unfinished" },
+      });
 
       await post(`/app/api/attempts/${secondId}/submit`, student.headers, { confirm: true });
       const max = await post(`/app/api/evaluations/${seed.evaluationId}/retake`, student.headers);
       expect(max.json()).toMatchObject({ error: "retake_refused", reason: "max_attempts" });
+      // The results page says the same thing the route just did.
+      const last = await server.app.inject({
+        method: "GET",
+        url: `/app/api/attempts/${secondId}/feedback`,
+        headers: student.headers,
+      });
+      expect(last.json()).toMatchObject({
+        reason: "retakes_open",
+        retake: { attemptCount: 2, refusal: "max_attempts" },
+      });
 
       const denied = await post(`/app/api/evaluations/${seed.evaluationId}/retake`, stranger.headers);
       expect(denied.statusCode).toBe(404);

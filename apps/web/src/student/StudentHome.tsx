@@ -19,13 +19,12 @@
  * Every list renders its five states (loading, error, empty, partial, ready),
  * which is why the sections are one component taking a render function.
  */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { CalendarClock, CheckCircle2, GraduationCap, School } from "lucide-react";
 
 import { formatPoints } from "@quiz/domain";
 import type {
-  AttemptOrLobby,
   EvaluationCard as EvaluationCardData,
   JoinResult,
   Me,
@@ -34,7 +33,6 @@ import type {
 } from "@quiz/contracts";
 
 import { api } from "../api";
-import { useConfirm } from "../confirm";
 import { feedbackLink } from "../grading";
 import { formatDuration, useT, type TFunction } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
@@ -53,6 +51,7 @@ import {
   useNow,
 } from "../ui";
 import { studentClassroomsKey, studentHomeKey } from "../queryKeys";
+import { useRetake } from "./retake";
 
 const MODE_KEY = {
   exam: "shome.mode.exam",
@@ -222,24 +221,10 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
     queryFn: () => api("/app/api/student/classrooms"),
   });
 
-  // F-EVAL-15: another attempt. The server decides (`retake_refused` with a
-  // reason otherwise); on success the player opens on the new attempt, which
-  // is the student's current one from now on.
-  const qc = useQueryClient();
-  const toastError = useErrorToast();
-  const confirm = useConfirm();
-  const retake = useMutation({
-    mutationFn: (evaluationId: string) =>
-      api<AttemptOrLobby>(`/app/api/evaluations/${evaluationId}/retake`, { method: "POST" }),
-    onSuccess: (_view, evaluationId) => {
-      void qc.invalidateQueries({ queryKey: studentHomeKey });
-      navigate({ view: "attempt", evaluationId });
-    },
-    onError: (error) => {
-      toastError("shome.retakeFailed")(error);
-      void qc.invalidateQueries({ queryKey: studentHomeKey });
-    },
-  });
+  // F-EVAL-15: another attempt, the same one the results page offers
+  // (`retake.ts`). The server decides (`canRetake`, and `retake_refused` on
+  // the route); on success the player opens on the new attempt.
+  const retake = useRetake(navigate);
 
   /** The one button of an open card. */
   const openAction = (card: EvaluationCardData) => {
@@ -249,22 +234,8 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
         return {
           label: t("shome.retake"),
           primary: true,
-          loading: retake.isPending && retake.variables === card.id,
-          onClick: async () => {
-            // Under "last", a retake can LOWER the result: the student is told
-            // before starting, not after (review of #116).
-            if (
-              r.keep === "last" &&
-              !(await confirm({
-                title: t("shome.retakeLast.title"),
-                message: t("shome.retakeLast.body"),
-                confirmLabel: t("shome.retake"),
-              }))
-            ) {
-              return;
-            }
-            retake.mutate(card.id);
-          },
+          loading: retake.pendingFor === card.id,
+          onClick: () => retake.start(card.id, r.keep),
         };
       }
       // No attempt left: what remains to do is to read the score.

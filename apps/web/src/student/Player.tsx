@@ -39,13 +39,15 @@
  *     the API would refuse with `409`.
  *
  * It never decides that the attempt is over: `useAttempt` does, from a `410`
- * or from an `attempt.closed` frame, and then this renders `ClosedScreen`.
+ * or from an `attempt.closed` frame, and then this renders `ClosedScreen` —
+ * or, on an exercise that takes retakes, forwards to the score, where the
+ * student decides to try again (ADR-025 addendum, issue #121).
  */
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Check, Flag, Lock, Minus } from "lucide-react";
 
-import type { AttemptView } from "@quiz/contracts";
-import { answerMark, mayValidate, maySkip } from "@quiz/domain";
+import { retakesOf, type AttemptView } from "@quiz/contracts";
+import { answerMark, mayValidate, maySkip, retakesOn } from "@quiz/domain";
 import type { RunnerOutcome } from "@quiz/core/server";
 
 import { UnsavedAnswer, useAttempt, type UseAttempt } from "../attempt/useAttempt";
@@ -54,7 +56,7 @@ import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { useShortcuts } from "../shortcuts";
-import { Badge, Button, Card, cx, modKey, useMinWidth } from "../ui";
+import { Badge, Button, Card, cx, modKey, Spinner, useMinWidth } from "../ui";
 import { ClosedScreen } from "./ClosedScreen";
 import { OfflineBanner } from "./OfflineBanner";
 import { PausedOverlay } from "./PausedOverlay";
@@ -134,6 +136,13 @@ export type PlayerSession = Pick<
   simulate: (itemId: string, answer: unknown) => ReturnType<typeof simulateAnswer>;
 };
 
+/**
+ * Opens the student's feedback on an attempt. `replace` when the player sends
+ * the student there by itself, so Back does not land on a player that would
+ * only forward again.
+ */
+export type OnResults = (attemptId: string, options?: { replace?: boolean }) => void;
+
 export function Player({
   initial,
   onHome,
@@ -143,7 +152,7 @@ export function Player({
   initial: AttemptView;
   onHome: () => void;
   /** WP10: opens the student's own feedback on this attempt. */
-  onResults: (attemptId: string) => void;
+  onResults: OnResults;
   /**
    * Given only to a TEACHER walking their own test attempt (ADR-018
    * addendum): the exam screen carries no teacher chrome — that is the point
@@ -186,7 +195,7 @@ export function PlayerView({
   session: PlayerSession;
   onHome: () => void;
   /** Absent where there is no feedback page to open (the preview). */
-  onResults?: (attemptId: string) => void;
+  onResults?: OnResults;
   onExitStudentView?: () => void;
   /** Above the question, before the offline alert: the preview's own banner. */
   banner?: ReactNode;
@@ -319,6 +328,28 @@ export function PlayerView({
   const next = neighbour(state, 1);
   // The palette of the exam screen (W15): only what the footer and the bar
   // already carry.
+  /*
+   * F-EVAL-15 (issues #121, ADR-025): on an exercise that takes retakes, the
+   * end of an attempt — handed in, or its time up — opens the score at once.
+   * The hand-in screen's "your answers are with your teacher" is wrong there:
+   * the student reads the score now and decides whether to try again, and
+   * that page carries the Retake. A teacher's close is not such an end (no
+   * retake follows it), and an exam keeps its hand-in screen.
+   */
+  const retakes =
+    !initial.attempt.preview &&
+    retakesOn(initial.evaluation.mode, retakesOf(initial.evaluation.settings));
+  const toResults =
+    retakes &&
+    onResults !== undefined &&
+    (closed?.reason === "submitted" || closed?.reason === "deadline");
+  const forwarded = useRef(false);
+  useEffect(() => {
+    if (!toResults || forwarded.current) return;
+    forwarded.current = true;
+    onResults(initial.attempt.id, { replace: true });
+  }, [toResults, onResults, initial.attempt.id]);
+
   const commands = usePlayerCommands({
     next,
     previous,
@@ -329,6 +360,7 @@ export function PlayerView({
   });
 
   if (closed !== null) {
+    if (toResults) return <Spinner label={t("player.loading")} className="py-24" />;
     return (
       <ClosedScreen
         reason={closed.reason}

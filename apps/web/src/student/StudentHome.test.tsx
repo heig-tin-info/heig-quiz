@@ -166,7 +166,7 @@ describe("the student home", () => {
       const { calls } = mockFetch({
         "GET /app/api/student/home": ok({ ...home, open: [retaking()] }),
         "GET /app/api/student/classrooms": ok([]),
-        "POST /app/api/evaluations/e9/retake": ok({ kind: "attempt", view: {} }),
+        "POST /app/api/evaluations/e9/retake": ok({ kind: "attempt", view: { attempt: { id: "a10" } } }),
       });
       const { navigate } = render();
       expect(
@@ -204,7 +204,7 @@ describe("the student home", () => {
       const { calls } = mockFetch({
         "GET /app/api/student/home": ok({ ...home, open: [retaking({ keep: "last" })] }),
         "GET /app/api/student/classrooms": ok([]),
-        "POST /app/api/evaluations/e9/retake": ok({ kind: "attempt", view: {} }),
+        "POST /app/api/evaluations/e9/retake": ok({ kind: "attempt", view: { attempt: { id: "a10" } } }),
       });
       const { navigate } = render();
       await userEvent.click(await screen.findByRole("button", { name: "Recommencer" }));

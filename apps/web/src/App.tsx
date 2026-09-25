@@ -8,7 +8,7 @@ import { Logo } from "./Header";
 import { useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
 import { CoachLayer } from "./coach/CoachLayer";
-import { useRoute, type Route, type RouteOf } from "./router";
+import { useRoute, type Navigate, type Route, type RouteOf } from "./router";
 import { Shell, StudentViewBanner } from "./Shell";
 import {
   enterStudentView,
@@ -147,7 +147,7 @@ const PollLauncher = lazy(() =>
 /** What every page of the table may need beside its own route. */
 interface PageContext {
   me: Me;
-  navigate: (r: Route) => void;
+  navigate: Navigate;
   /** The teacher UI is on: a teacher or an admin, not in student view. */
   teacherUi: boolean;
 }
@@ -174,7 +174,7 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   // WP10: the student's own feedback page, reachable in either UI — a teacher
   // checking the student view opens the same page a student does. It is the
   // ONE student results page: WP9's `/results/:id` is gone.
-  feedback: (r) => <Feedback attemptId={r.attemptId} />,
+  feedback: (r, c) => <Feedback attemptId={r.attemptId} navigate={c.navigate} />,
   // WP9: student player — the attempt takes the whole screen (`FULL_SCREEN`).
   attempt: (r, c) => <AttemptPage evaluationId={r.evaluationId} navigate={c.navigate} />,
   join: (r, c) => <PollJoin code={r.code} me={c.me} navigate={c.navigate} />,

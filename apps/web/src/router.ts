@@ -278,17 +278,26 @@ export function parsePath(path: string): Route {
   return { view: "home" };
 }
 
-export function useRoute(): [Route, (r: Route) => void] {
+/**
+ * How a screen moves the app. `replace` swaps the current history entry
+ * instead of pushing one: a page that only ever forwards (the player of a
+ * finished retake attempt, which goes to the score) must not be a Back
+ * target that bounces the student forward again.
+ */
+export type Navigate = (r: Route, options?: { replace?: boolean }) => void;
+
+export function useRoute(): [Route, Navigate] {
   const [route, setRoute] = useState<Route>(() => parsePath(window.location.pathname));
   useEffect(() => {
     const onPop = () => setRoute(parsePath(window.location.pathname));
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
-  const navigate = useCallback((r: Route) => {
+  const navigate = useCallback<Navigate>((r, options) => {
     const path = routeToPath(r);
     if (path !== window.location.pathname) {
-      window.history.pushState(null, "", path);
+      if (options?.replace) window.history.replaceState(null, "", path);
+      else window.history.pushState(null, "", path);
     }
     setRoute(r);
   }, []);
