@@ -1429,6 +1429,7 @@ export const en = {
   "player.submitting": "Handing in…",
   "player.submitFailed": "Handing in failed. Try again.",
   "player.validateFailed": "This question could not be validated. Try again.",
+  "player.validateUnsaved": "Your latest answer is not saved yet. The question stays open: try again in a moment.",
   "player.saveFailed": "This could not be saved. Try again.",
   "player.progress": "Progress: question {n} of {total}",
   "player.shortcuts": "to move between questions",

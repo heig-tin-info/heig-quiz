@@ -154,7 +154,7 @@ const skipEcho = (call: { body: unknown }) =>
 const flagEcho = (call: { body: unknown }) =>
   ok({ flagged: (call.body as { flagged: boolean }).flagged, serverNow: "2026-09-20T10:00:01.000Z" });
 
-function stubs(view: AttemptView) {
+function stubs(view: AttemptView, overrides: Parameters<typeof mockFetch>[0] = {}) {
   return mockFetch({
     ...Object.fromEntries(
       ["i1", "i2", "i3"].flatMap((i) => [
@@ -170,6 +170,7 @@ function stubs(view: AttemptView) {
     [`POST /app/api/attempts/${ATTEMPT}/answers/i1/done`]: doneEcho,
     [`POST /app/api/attempts/${ATTEMPT}/answers/i2/done`]: doneEcho,
     [`POST /app/api/attempts/${ATTEMPT}/answers/i3/done`]: doneEcho,
+    ...overrides,
   });
 }
 
@@ -232,8 +233,16 @@ describe("the zen player", () => {
     render(forward);
     await screen.findByText("Question 2");
     await userEvent.keyboard("{Control>}{Enter}{/Control}");
-    // The same confirmation as the button: it is irreversible.
-    const dialog = await screen.findByRole("dialog");
+    // The same confirmation as the button: it is irreversible, so the focus
+    // lands on Cancel and a habitual Enter does NOT validate.
+    let dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("button", { name: "Annuler" })).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(second.calls.some((c) => c.url.endsWith("/done"))).toBe(false);
+
+    await userEvent.keyboard("{Control>}{Enter}{/Control}");
+    dialog = await screen.findByRole("dialog");
     await userEvent.click(within(dialog).getByRole("button", { name: "Valider et continuer" }));
     await waitFor(() =>
       expect(second.calls.some((c) => c.url.endsWith("/answers/i2/done"))).toBe(true),
@@ -470,7 +479,7 @@ describe("the zen player", () => {
           ),
         ).toBe(true),
       );
-      expect(await screen.findByText("Sans réponse")).toBeInTheDocument();
+      expect(await screen.findByText("Je n'y réponds pas")).toBeInTheDocument();
       const strip = screen.getByRole("navigation", { name: "Progression : question 3 sur 3" });
       expect(
         within(strip).getByRole("button", { name: "Question 3, vous n'y répondrez pas, en cours" }),
@@ -483,7 +492,7 @@ describe("the zen player", () => {
       // …or by answering, which the list reads at once.
       await userEvent.type(await screen.findByLabelText("Votre réponse"), "1");
       expect(await screen.findByText("Répondue")).toBeInTheDocument();
-      expect(screen.queryByText("Sans réponse")).toBeNull();
+      expect(screen.queryByText("Je n'y réponds pas")).toBeNull();
       expect(screen.queryByRole("button", { name: "Finalement, y répondre" })).toBeNull();
     });
 
@@ -566,6 +575,29 @@ describe("the zen player", () => {
       await waitFor(() =>
         expect(isPrimary(screen.getByRole("button", { name: "Rendre" }))).toBe(true),
       );
+    });
+
+    it("keeps the question open when the latest answer failed to save (5xx, then validate)", async () => {
+      const view = withNavigation(attemptView({ lastItemId: "i3" }), "forward_only");
+      const { calls } = stubs(view, {
+        [`PUT /app/api/attempts/${ATTEMPT}/answers/i3`]: fail(500, { error: "boom" }),
+      });
+      render(view);
+      await screen.findByText("Question 3");
+      await userEvent.type(await screen.findByLabelText("Votre réponse"), "7");
+      await waitFor(() => expect(calls.some((c) => c.method === "PUT")).toBe(true));
+
+      await userEvent.click(screen.getByRole("button", { name: "Valider et continuer" }));
+      const dialog = await screen.findByRole("dialog");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Valider et continuer" }));
+
+      expect(
+        await screen.findByText(/Votre dernière réponse n'est pas encore enregistrée/),
+      ).toBeInTheDocument();
+      // Nothing was validated: the older answer is not locked for good.
+      expect(calls.some((c) => c.url.endsWith("/done"))).toBe(false);
+      expect(screen.getByRole("button", { name: "Valider et continuer" })).toBeInTheDocument();
+      expect(screen.queryByText("Validée")).toBeNull();
     });
 
     it("makes 'Rendre' the accent on a one-question attempt that holds an answer", async () => {

@@ -48,7 +48,7 @@ import type { AttemptView } from "@quiz/contracts";
 import { answerMark, mayValidate, maySkip } from "@quiz/domain";
 import type { RunnerOutcome } from "@quiz/core/server";
 
-import { useAttempt, type UseAttempt } from "../attempt/useAttempt";
+import { UnsavedAnswer, useAttempt, type UseAttempt } from "../attempt/useAttempt";
 import { currentItem, isLocked, neighbour, segmentsOf } from "../attempt/playerReducer";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
@@ -245,12 +245,17 @@ export function PlayerView({
           ? t("lobby.nav.milestones.body")
           : t("player.validate.body"),
       confirmLabel: t("player.validate"),
+      // Irreversible: Enter right after Ctrl+Enter must not validate for good.
+      focusCancel: true,
     });
     if (!ok) return;
     try {
       await markDone(item.id, true);
-    } catch {
-      toast(t("player.validateFailed"), "error");
+    } catch (error) {
+      toast(
+        t(error instanceof UnsavedAnswer ? "player.validateUnsaved" : "player.validateFailed"),
+        "error",
+      );
     }
   }, [item, canValidate, state.navigation, confirm, t, markDone, toast]);
 

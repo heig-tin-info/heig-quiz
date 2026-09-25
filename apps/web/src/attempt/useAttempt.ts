@@ -48,6 +48,17 @@ import {
 } from "./playerReducer";
 import { attemptKey } from "../queryKeys";
 
+/**
+ * A write that depends on the answer (a validation, a skip) was not sent:
+ * the latest answer is not on the server yet. The player says so and keeps
+ * the question open (issue #89).
+ */
+export class UnsavedAnswer extends Error {
+  constructor() {
+    super("the latest answer is not saved yet");
+  }
+}
+
 /** Why the attempt stopped accepting writes. `null` while it is running. */
 interface ClosedInfo {
   reason: AttemptClosed["reason"];
@@ -340,8 +351,10 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
         return;
       }
       // Validation locks the question: what the student typed last must be
-      // on the server before it closes.
-      await saver.settle(itemId);
+      // on the server before it closes. If it is not — a failed write whose
+      // retry is still pending — the question stays open and the caller says
+      // so, rather than locking an older answer for good.
+      if (!(await saver.settle(itemId))) throw new UnsavedAnswer();
       const response = await gate(() =>
         api<MarkDoneResponse>(`/app/api/attempts/${attemptId}/answers/${itemId}/done`, {
           method: "POST",
@@ -363,7 +376,7 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
       }
       // The empty payload that made the question skippable must land BEFORE
       // the skip, or the server still sees the answer it held and refuses.
-      await saver.settle(itemId);
+      if (!(await saver.settle(itemId))) throw new UnsavedAnswer();
       const response = SkipResponse.parse(
         await gate(() =>
           api(`/app/api/attempts/${attemptId}/answers/${itemId}/skip`, {
