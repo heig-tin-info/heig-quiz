@@ -25,8 +25,13 @@ export type AttemptState = z.infer<typeof AttemptState>;
 export const ClosedBy = z.enum(["server", "student", "teacher"]);
 export type ClosedBy = z.infer<typeof ClosedBy>;
 
-/** What a cell of the dashboard grid shows before correction (F-DASH-01). */
-export const CellStatus = z.enum(["empty", "seen", "in_progress", "done"]);
+/**
+ * What a cell of the dashboard grid shows before correction (F-DASH-01):
+ * never opened, opened and empty, holding an answer (`in_progress`), left on
+ * purpose ("I won't answer", issue #89), validated (`forward_only`, a
+ * crossed checkpoint). Derived by `@quiz/domain#progressStatus`.
+ */
+export const CellStatus = z.enum(["empty", "seen", "in_progress", "skipped", "done"]);
 export type CellStatus = z.infer<typeof CellStatus>;
 
 export const AttemptEventKind = z.enum([
@@ -56,7 +61,16 @@ export const AttemptItem = z.object({
   student: z.unknown(),
   answer: z.unknown().nullable(),
   revision: z.number().int(),
+  /**
+   * VALIDATED: "Validate and continue" in `forward_only`, a crossed
+   * checkpoint in `milestones` (F-LIVE-08). The name is the column's, which
+   * held the "Mark as done" this replaced (issue #89).
+   */
   markedDone: z.boolean(),
+  /** "I won't answer this question": settled on purpose, left blank (issue #89). */
+  skipped: z.boolean(),
+  /** The student's own review flag. No effect on grading (issue #89). */
+  flagged: z.boolean(),
   /** Navigation already forbids writing to this item (forward_only, milestones). */
   locked: z.boolean(),
 });
@@ -163,6 +177,11 @@ export const AttemptClosed = z.object({
 });
 export type AttemptClosed = z.infer<typeof AttemptClosed>;
 
+/**
+ * `POST /attempts/:id/answers/:itemId/done`: VALIDATE the question
+ * (F-LIVE-08) — "Validate and continue" in `forward_only`, crossing a
+ * checkpoint in `milestones`. Irreversible where it locks.
+ */
 export const MarkDoneBody = z.object({ done: z.boolean() });
 export type MarkDoneBody = z.infer<typeof MarkDoneBody>;
 
@@ -172,6 +191,24 @@ export const MarkDoneResponse = z.object({
   serverNow: z.iso.datetime(),
 });
 export type MarkDoneResponse = z.infer<typeof MarkDoneResponse>;
+
+/**
+ * `POST /attempts/:id/answers/:itemId/skip` (issue #89): "I won't answer this
+ * question", or taking it back. Refused with `409 answered` on a question
+ * that holds an answer: skipping is not a way to throw one away.
+ */
+export const SkipBody = z.object({ skipped: z.boolean() });
+export type SkipBody = z.infer<typeof SkipBody>;
+
+export const SkipResponse = z.object({ skipped: z.boolean(), serverNow: z.iso.datetime() });
+export type SkipResponse = z.infer<typeof SkipResponse>;
+
+/** `POST /attempts/:id/answers/:itemId/flag` (issue #89): the review flag. */
+export const FlagBody = z.object({ flagged: z.boolean() });
+export type FlagBody = z.infer<typeof FlagBody>;
+
+export const FlagResponse = z.object({ flagged: z.boolean(), serverNow: z.iso.datetime() });
+export type FlagResponse = z.infer<typeof FlagResponse>;
 
 export const PositionBody = z.object({ itemId: z.uuid() });
 export type PositionBody = z.infer<typeof PositionBody>;
@@ -292,6 +329,11 @@ export const DashboardCell = z.object({
   revision: z.number().int(),
   /** Only when `?includeAnswers=1` (F-DASH-02). */
   summary: z.string().nullable(),
+  /**
+   * The student flagged the question for review (issue #89). Staff only, like
+   * the whole grid: a question many students flag may be unclear.
+   */
+  flagged: z.boolean(),
 });
 export type DashboardCell = z.infer<typeof DashboardCell>;
 
@@ -444,6 +486,8 @@ export const AttemptInspect = z.object({
       answer: z.unknown().nullable(),
       revision: z.number().int(),
       markedDone: z.boolean(),
+      skipped: z.boolean(),
+      flagged: z.boolean(),
       solution: z.unknown(),
     }),
   ),

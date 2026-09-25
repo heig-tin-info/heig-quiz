@@ -123,7 +123,24 @@ export const answers = pgTable(
     payload: jsonb("payload").notNull(),
     /** Client-local monotonic counter; the upsert keeps the highest one. */
     revision: integer("revision").notNull().default(0),
+    /**
+     * VALIDATED (F-LIVE-08, issue #89): "Validate and continue" in
+     * `forward_only`, a crossed checkpoint in `milestones` — what the lock
+     * rules read (`@quiz/domain#lockedItems`). The column kept the name of the
+     * "Mark as done" it replaced.
+     */
     markedDone: boolean("marked_done").notNull().default(false),
+    /**
+     * "I won't answer this question" (issue #89): a blank left on purpose.
+     * An accepted write of an answer that holds something clears it.
+     * Grading ignores it — an empty answer scores 0 either way.
+     */
+    skipped: boolean("skipped").notNull().default(false),
+    /**
+     * The student's review flag (issue #89). No effect on grading; shown to
+     * the staff on the live grid, never to another student.
+     */
+    flagged: boolean("flagged").notNull().default(false),
     firstSeenAt: timestamp("first_seen_at", { withTimezone: true }),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

@@ -362,6 +362,8 @@ describe("what a student is allowed to receive (§4.8)", () => {
       revision: 3,
       points: null,
       summary: "typed something",
+      flagged: true,
+      verdict: null,
     });
     bus.flushCoalescers();
     await settle();

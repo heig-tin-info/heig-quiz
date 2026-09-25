@@ -63,6 +63,8 @@ export {
   summarizeAnswer,
   saveAnswer,
   markDone,
+  setSkipped,
+  setFlagged,
   setPosition,
   logAttemptEvent,
   countRecentEvents,

@@ -290,7 +290,6 @@ async function playClosedEvaluation(
         revision: 1,
         now: at,
       });
-      await live.markDone(db, { evaluation, attempt, itemId, done: true, now: at });
     }
     if (paper.submits) {
       await live.submitAttempt(db, evaluation, attempt, new Date(at.getTime() + MINUTE));

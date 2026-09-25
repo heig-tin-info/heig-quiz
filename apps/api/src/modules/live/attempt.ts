@@ -22,7 +22,7 @@ import {
   type StudentHome,
 } from "@quiz/contracts";
 import { shuffle, streamSeed } from "@quiz/core/rng";
-import { GRACE_MS, attemptDeadline, bonusSeconds, gradeFromPoints } from "@quiz/domain";
+import { GRACE_MS, attemptDeadline, bonusSeconds, gradeFromPoints, lockedItems } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -137,6 +137,17 @@ export class AnswerInvalid extends LiveError {
 export class Irreversible extends LiveError {
   constructor(message = "forward_only: marking a question done cannot be undone") {
     super("irreversible", 409, message);
+  }
+}
+
+/**
+ * "I won't answer" on a question that holds an answer (issue #89). Skipping is
+ * not a way to throw an answer away: the player only offers it on an empty
+ * question, and flushes the autosave before asking.
+ */
+export class AlreadyAnswered extends LiveError {
+  constructor() {
+    super("answered", 409, "this question holds an answer");
   }
 }
 
@@ -573,29 +584,24 @@ export function orderItems(
 /**
  * Which items the server refuses a write to (F-EVAL-07, F-LIVE-08).
  *
- * `forward_only`: a question marked done is done. `milestones`: everything up
- * to and including the furthest milestone the student validated is closed.
- * Enforced HERE, on the server, and not only greyed out in the player.
+ * `forward_only`: a validated question is closed. `milestones`: everything up
+ * to and including the furthest checkpoint the student validated is closed.
+ * Enforced HERE, on the server, and not only greyed out in the player — with
+ * the SAME rule the player reads (`@quiz/domain#lockedItems`).
  */
 export function lockedItemIds(
   settings: EvaluationSettings,
   ordered: readonly OrderedItem[],
   answered: ReadonlyMap<string, AnswerRecord>,
 ): Set<string> {
-  const locked = new Set<string>();
-  if (settings.navigation === "free") return locked;
-  if (settings.navigation === "forward_only") {
-    for (const item of ordered) {
-      if (answered.get(item.item.id)?.markedDone) locked.add(item.item.id);
-    }
-    return locked;
-  }
-  let furthest = -1;
-  for (const item of ordered) {
-    if (item.item.milestone && answered.get(item.item.id)?.markedDone) furthest = item.rank;
-  }
-  for (const item of ordered) if (item.rank <= furthest) locked.add(item.item.id);
-  return locked;
+  return lockedItems(
+    settings.navigation,
+    ordered.map((o) => ({
+      id: o.item.id,
+      milestone: o.item.milestone,
+      validated: answered.get(o.item.id)?.markedDone ?? false,
+    })),
+  );
 }
 
 export async function answersOf(db: Db, attemptId: string): Promise<Map<string, AnswerRecord>> {
@@ -635,6 +641,8 @@ function attemptItems(
       answer: answer?.payload ?? null,
       revision: answer?.revision ?? 0,
       markedDone: answer?.markedDone ?? false,
+      skipped: answer?.skipped ?? false,
+      flagged: answer?.flagged ?? false,
       locked: locked.has(entry.item.id),
     };
   });

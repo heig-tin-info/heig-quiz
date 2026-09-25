@@ -6,7 +6,7 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import type { AttemptInspect, AttemptState, DashboardView, Verdict } from "@quiz/contracts";
 import { shuffle } from "@quiz/core/rng";
-import { round2, uniquePseudonyms } from "@quiz/domain";
+import { countsAsCompleted, round2, uniquePseudonyms } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -29,7 +29,7 @@ import {
 import { presence } from "../realtime/presence.js";
 import { solutionView, studentView } from "./studentView.js";
 import { type AttemptRecord, type AnswerRecord, answersOf } from "./attempt.js";
-import { answerSummarizer, liveGrader, cellStatus } from "./autosave.js";
+import { answerSummarizer, answeredBy, liveGrader, cellStatus } from "./autosave.js";
 
 // --- Dashboard read model (F-DASH-01..04) ---------------------------------
 
@@ -106,6 +106,8 @@ export async function dashboardView(
   const summarize = new Map<string, (payload: unknown) => string>(
     input.includeAnswers ? items.map((item) => [item.item.id, answerSummarizer(item)]) : [],
   );
+  // "Does it hold an answer?", once per QUESTION too (issue #89).
+  const holds = new Map(items.map((item) => [item.item.id, answeredBy(item)]));
 
   /*
    * One live grader per QUESTION (ADR-020), built only when the teacher asked
@@ -177,13 +179,17 @@ export async function dashboardView(
             }
             return {
               itemId: item.item.id,
-              status: cellStatus(answer),
+              status: cellStatus(
+                answer,
+                answer !== null && (holds.get(item.item.id)?.(answer.payload) ?? false),
+              ),
               verdict,
               provisional,
               points: grading && grading.state === "validated" ? grading.points : null,
               revision: answer?.revision ?? 0,
               summary:
                 answer ? (summarize.get(item.item.id)?.(answer.payload) ?? null) : null,
+              flagged: answer?.flagged ?? false,
             };
           }),
         ),
@@ -217,9 +223,13 @@ export async function dashboardView(
     })),
     rows,
     totals: items.map((item) => {
-      const done = classRows.filter(
-        (r) => r.cells.find((c) => c.itemId === item.item.id)?.status === "done",
-      ).length;
+      // Completion counts the questions the student has DEALT with —
+      // answered, skipped on purpose or validated (issue #89) — by the rule
+      // the grid applies to its own frames (`@quiz/domain`).
+      const done = classRows.filter((r) => {
+        const status = r.cells.find((c) => c.itemId === item.item.id)?.status;
+        return status !== undefined && countsAsCompleted(status);
+      }).length;
       const graded = successRateOf(standing, item.item.id, staffAttempts);
       // Before anything is graded, the live rate of the answers that CAN be
       // graded now (ADR-020) — flagged, so the footer says which it is.
@@ -338,6 +348,8 @@ export async function attemptInspect(
         answer: answer?.payload ?? null,
         revision: answer?.revision ?? 0,
         markedDone: answer?.markedDone ?? false,
+        skipped: answer?.skipped ?? false,
+        flagged: answer?.flagged ?? false,
         solution: solutionView({
           type: entry.question.type,
           version,
