@@ -12,6 +12,7 @@ import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { answers, attemptEvents, attempts, enrollments, users } from "../../db/schema.js";
 import {
+  retakesEnabled,
   settingsOf,
   staffRosterWithAttempt,
   type EvaluationRecord,
@@ -65,19 +66,27 @@ export async function dashboardView(
     ...staffRoster.map((entry) => ({ ...entry, staff: true })),
   ];
 
+  // First attempt first, so the map below ends on each student's LATEST
+  // attempt: the one the grid shows (F-EVAL-15). The earlier attempts of an
+  // exercise are counted, and reached from the grading panel.
   const attemptRows = await db
     .select()
     .from(attempts)
-    .where(eq(attempts.evaluationId, evaluation.id));
+    .where(eq(attempts.evaluationId, evaluation.id))
+    .orderBy(asc(attempts.attemptNumber));
   const byUser = new Map(attemptRows.map((a) => [a.userId, a]));
+  const attemptCounts = new Map<string | null, number>();
+  for (const a of attemptRows) attemptCounts.set(a.userId, (attemptCounts.get(a.userId) ?? 0) + 1);
+  const shown = new Set([...byUser.values()].map((a) => a.id));
+  const earlier = new Set(attemptRows.filter((a) => !shown.has(a.id)).map((a) => a.id));
 
   const answerRows =
-    attemptRows.length === 0
+    shown.size === 0
       ? []
       : await db
           .select()
           .from(answers)
-          .where(inArray(answers.attemptId, attemptRows.map((a) => a.id)));
+          .where(inArray(answers.attemptId, [...shown]));
   const byAttempt = new Map<string, Map<string, AnswerRecord>>();
   for (const row of answerRows) {
     let map = byAttempt.get(row.attemptId);
@@ -153,6 +162,7 @@ export async function dashboardView(
         ),
         deadlineAt: isoOrNull(attempt?.deadlineAt ?? null),
         timeBonusPercent: entry.timeBonusPercent,
+        attemptCount: userId === null ? 0 : (attemptCounts.get(userId) ?? 0),
         points: attempt ? pointsOf(standing, attempt.id, items) : null,
         maxPoints,
         cells: await Promise.all(
@@ -201,9 +211,12 @@ export async function dashboardView(
   // must not move the completion of a question or its success rate.
   const classRows = rows.filter((r) => !r.staff);
   const started = classRows.filter((r) => r.attemptId !== null).length;
-  const staffAttempts = new Set(
-    rows.filter((r) => r.staff && r.attemptId !== null).map((r) => r.attemptId!),
-  );
+  // The rates are those of the grid: the staff tests (ADR-018) and the
+  // earlier attempts of a retaking student (F-EVAL-15) count in none.
+  const staffAttempts = new Set([
+    ...rows.filter((r) => r.staff && r.attemptId !== null).map((r) => r.attemptId!),
+    ...earlier,
+  ]);
   return {
     evaluation: {
       id: evaluation.id,
@@ -212,6 +225,7 @@ export async function dashboardView(
       pausedAt: isoOrNull(evaluation.pausedAt),
       closesAt: isoOrNull(evaluation.closesAt),
       serverNow: iso(input.now),
+      retakes: retakesEnabled(evaluation),
     },
     items: items.map((i) => ({
       id: i.item.id,

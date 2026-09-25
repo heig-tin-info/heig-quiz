@@ -23,8 +23,8 @@
  *   - a student payload is only ever produced by `./studentView.ts`
  *     (invariant 4);
  *   - creating an attempt is idempotent: `INSERT … ON CONFLICT DO NOTHING`
- *     on `(evaluation_id, user_id)`, so two tabs share one seed and one
- *     deadline;
+ *     on `(evaluation_id, user_id, attempt_number)`, so two tabs share one
+ *     seed and one deadline, and two retake clicks one new attempt (ADR-025);
  *   - autosave is ONE statement, never a read-modify-write: the conditional
  *     upsert of §4.7 settles the revision race in the database.
  */
@@ -36,6 +36,8 @@ export {
   AnswerInvalid,
   RateLimited,
   RunnerDown,
+  RetakeRefused,
+  RetakesEnabled,
   participantOf,
   resetOwnStaffAttempt,
   enrolledCount,
@@ -43,7 +45,10 @@ export {
   ensureGuest,
   attemptById,
   attemptOf,
+  attemptsOfUser,
   ensureAttempt,
+  retakeAttempt,
+  gradeFinishedRetakes,
   beginAttempt,
   markPresent,
   lockedItemIds,
