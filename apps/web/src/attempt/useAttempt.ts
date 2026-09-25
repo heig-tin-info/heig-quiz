@@ -100,12 +100,16 @@ export interface UseAttempt {
   /** F-EVAL-13: the journal. Never blocks, never surfaces an error. */
   report: (kind: AttemptEventKind, details?: unknown) => void;
   /**
-   * Issue #125: sends every pending answer now and resolves `true` once the
-   * server holds them all, `false` if one could not be sent. What leaving
-   * the player waits for; it never rejects.
+   * Issue #125: sends every pending answer now. `saved` once the server
+   * holds them all; otherwise why not — `unsaved` (a failed write: the
+   * network, the server), `paused` (the teacher paused: kept until the
+   * resume), `closed` (the attempt ended: they never will be). What leaving
+   * the player waits for; it never rejects, and it does not bound the wait.
    */
-  flush: () => Promise<boolean>;
+  flush: () => Promise<FlushResult>;
 }
+
+export type FlushResult = "saved" | "unsaved" | "paused" | "closed";
 
 /** The SSE result shape is not the runner's; the player speaks the latter. */
 function toOutcome(result: RunnerResultEvent["result"]): RunnerOutcome | "unavailable" {
@@ -482,7 +486,11 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
     [attemptId],
   );
 
-  const flush = useCallback(() => saver.settleAll(), [saver]);
+  const flush = useCallback(async (): Promise<FlushResult> => {
+    if (await saver.settleAll()) return "saved";
+    const condition = saver.condition;
+    return condition === "open" ? "unsaved" : condition;
+  }, [saver]);
 
   return useMemo(
     () => ({

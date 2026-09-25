@@ -144,6 +144,13 @@ export type PlayerSession = Pick<
  * the student there by itself, so Back does not land on a player that would
  * only forward again.
  */
+/**
+ * How long Home waits for the pending answers (issue #125) before asking the
+ * student whether to leave anyway: two autosave backoffs, and short enough
+ * that a hung request never reads as a dead button.
+ */
+const LEAVE_FLUSH_TIMEOUT_MS = 6_000;
+
 export type OnResults = (attemptId: string, options?: { replace?: boolean }) => void;
 
 export function Player({
@@ -168,16 +175,50 @@ export function Player({
   const attempt = useAttempt(initial.attempt.id, initial);
   const attemptId = initial.attempt.id;
   const t = useT();
-  const toast = useToast();
-  const { flush } = attempt;
+  const confirm = useConfirm();
+  const { flush, closed } = attempt;
   // Issue #125: leaving unmounts the player, and its autosave with it. An
   // answer still waiting for its debounce — or on its way — must reach the
-  // server first; if it cannot, the student stays, told why, rather than
-  // leaving an answer behind. The attempt itself stays in progress.
+  // server first. The wait is bounded (a request may never answer), and
+  // when the answers are not all saved the student is ASKED, told why, with
+  // Stay focused: leaving may lose them. The attempt stays in progress.
+  const [leaving, setLeaving] = useState(false);
+  const leavingRef = useRef(false);
   const leave = useCallback(async () => {
-    if (await flush()) onHome();
-    else toast(t("player.leaveUnsaved"), "error");
-  }, [flush, onHome, toast, t]);
+    // The end screen has nothing left to save, and says so itself.
+    if (closed !== null) return onHome();
+    if (leavingRef.current) return;
+    leavingRef.current = true;
+    setLeaving(true);
+    try {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const result = await Promise.race([
+        flush(),
+        new Promise<"timeout">((resolve) => {
+          timer = setTimeout(() => resolve("timeout"), LEAVE_FLUSH_TIMEOUT_MS);
+        }),
+      ]);
+      clearTimeout(timer);
+      if (result === "saved") return onHome();
+      const ok = await confirm({
+        title: t("player.leave.title"),
+        message: t(
+          result === "paused"
+            ? "player.leave.paused"
+            : result === "closed"
+              ? "player.leave.closed"
+              : "player.leave.unsaved",
+        ),
+        confirmLabel: t("player.leave.confirm"),
+        cancelLabel: t("player.leave.stay"),
+        focusCancel: true,
+      });
+      if (ok) onHome();
+    } finally {
+      leavingRef.current = false;
+      setLeaving(false);
+    }
+  }, [closed, flush, onHome, confirm, t]);
   const session = useMemo<PlayerSession>(
     () => ({
       ...attempt,
@@ -190,6 +231,7 @@ export function Player({
       initial={initial}
       session={session}
       onHome={() => void leave()}
+      homeBusy={leaving}
       onResults={onResults}
       {...(onExitStudentView ? { onExitStudentView } : {})}
     />
@@ -204,10 +246,13 @@ export function PlayerView({
   onResults,
   onExitStudentView,
   banner,
+  homeBusy = false,
 }: {
   initial: AttemptView;
   session: PlayerSession;
   onHome: () => void;
+  /** Leaving is under way (the answers are being sent): Home is disabled. */
+  homeBusy?: boolean;
   /** Absent where there is no feedback page to open (the preview). */
   onResults?: OnResults;
   onExitStudentView?: () => void;
@@ -445,12 +490,15 @@ export function PlayerView({
           <ToggleChip
             tone="neutral"
             icon={Flag}
-            label={item.flagged ? t("player.flagged") : t("player.flag")}
+            // One label, on or off: `aria-pressed` carries the state, and a
+            // label that changed with it would be read twice.
+            label={t("player.flag")}
             pressed={item.flagged}
             disabled={readOnly}
             onToggle={() => void toggleFlag()}
-            // The flag's own colour, the one the list above uses for it.
-            className={cx(item.flagged && "[&_svg]:fill-current [&_svg]:text-warning")}
+            // Filled when on, in the chip's own text colour: `warning` on
+            // the pressed fill falls under 3:1 in the dark theme.
+            className={cx(item.flagged && "[&_svg]:fill-current")}
           />
         ) : null}
         {clearable ? (
@@ -489,7 +537,7 @@ export function PlayerView({
         // Issue #125: an exercise may be left and continued later; an exam
         // may not look like it can. The preview is a tab of its own.
         {...(initial.evaluation.mode === "exercise" && !initial.attempt.preview
-          ? { onHome }
+          ? { onHome, homeBusy }
           : {})}
         headerAction={
           <Button

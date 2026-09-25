@@ -58,6 +58,7 @@ export function PlayerShell({
   progressLabel,
   headerAction,
   onHome,
+  homeBusy = false,
   commands,
   banner,
   footer,
@@ -87,6 +88,8 @@ export function PlayerShell({
    * exercise only; absent in an exam and in the teacher's preview.
    */
   onHome?: () => void;
+  /** Leaving is under way: the button is disabled, so it cannot fire twice. */
+  homeBusy?: boolean;
   /** What `Ctrl+K` offers here. Empty means no palette at all. */
   commands?: Command[];
   /** The offline alert, in the flow under the bar. */
@@ -133,7 +136,13 @@ export function PlayerShell({
             {onHome ? (
               // `-ml-1.5`: the round button's own padding, so the house
               // lines up with the question column below it.
-              <IconButton label={t("player.command.home")} onClick={onHome} className="-ml-1.5 -mr-1">
+              <IconButton
+                label={t("player.command.home")}
+                onClick={onHome}
+                disabled={homeBusy}
+                aria-busy={homeBusy}
+                className="-ml-1.5 -mr-1"
+              >
                 <Home />
               </IconButton>
             ) : null}

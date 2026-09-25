@@ -367,11 +367,30 @@ describe("settleAll (issue #125)", () => {
     await expect(settled).resolves.toBe(false);
   });
 
-  it("answers at once: true with nothing pending, and after a final stop", async () => {
-    const { save } = make();
-    await expect(save.settleAll()).resolves.toBe(true);
+  it("answers false at once when one item fails, without waiting on a hung one", async () => {
+    const { save, sent } = make();
     save.change("i1", "x");
-    save.stop();
+    save.change("i2", "y");
+    let settled: boolean | null = null;
+    void save.settleAll().then((saved) => {
+      settled = saved;
+    });
+    // i1 never answers; i2 fails.
+    sent[1]!.reject(new ApiError(503, { error: "unavailable" }));
+    await vi.waitFor(() => expect(settled).toBe(false));
+  });
+
+  it("answers at once when nothing can leave, and says why", async () => {
+    const { save, sent } = make();
     await expect(save.settleAll()).resolves.toBe(true);
+    expect(save.condition).toBe("open");
+    save.change("i1", "x");
+    vi.advanceTimersByTime(300);
+    sent[0]!.reject(new ApiError(410, { error: "attempt_closed", reason: "paused", deadlineAt: null, serverNow: serverNow() }));
+    await vi.waitFor(() => expect(save.condition).toBe("paused"));
+    await expect(save.settleAll()).resolves.toBe(false);
+    save.stop();
+    expect(save.condition).toBe("closed");
+    await expect(save.settleAll()).resolves.toBe(false);
   });
 });
