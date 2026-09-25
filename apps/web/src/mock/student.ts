@@ -70,7 +70,14 @@ const studentPayloads: Record<number, unknown> = {
   // can now write into one (markdown/tiptap.ts): a lead line and a snippet,
   // rendered by `MarkdownView` inside the label of the choice.
   1: {
-    prompt: "Quel extrait affiche **l'adresse** de la variable `x` ?",
+    // A bulleted list and a numbered one, nested: the lists a teacher writes
+    // in the editor have to reach the player as lists (issue #100).
+    prompt:
+      "Quel extrait affiche **l'adresse** de la variable `x` ?\n\n" +
+      "- `x` est un `int` local ;\n" +
+      "- l'adresse s'affiche avec `%p` :\n" +
+      "  1. convertie en `void *`,\n" +
+      "  2. sans autre calcul.",
     mode: "single",
     choices: [
       { id: 0, text: 'Avec l\'opérateur d\'adresse :\n\n```c\nprintf("%p\\n", (void *)&x);\n```' },
@@ -87,7 +94,7 @@ const studentPayloads: Record<number, unknown> = {
    */
   2: clozeStudentTemplate(
     parseCloze(
-      "Complétez la phrase. L'orthographe des noms propres n'est pas notée.\n\n" +
+      "Complétez la phrase.\n\n- L'orthographe des noms propres n'est pas notée ;\n- les unités s'écrivent au pluriel.\n\n" +
         "La loi d'{{Ohm|ohm}} relie la tension et le courant : pour un conducteur ohmique, " +
         "U = {{R|la résistance}} × I, où la tension U s'exprime en {{=volts|ampères|ohms|watts}}.\n\n" +
         "| Grandeur | Unité |\n" +
@@ -101,7 +108,7 @@ const studentPayloads: Record<number, unknown> = {
   ),
   3: {
     prompt:
-      "Sur une machine 64 bits compilant en LP64, combien d'octets occupe un `int` en C ?",
+      "Sur une machine 64 bits compilant en LP64 :\n\n- un `long` occupe 8 octets ;\n- un pointeur aussi.\n\nCombien d'octets occupe un `int` en C ?",
     kind: "number",
     placeholder: "4",
   },
@@ -118,9 +125,9 @@ const studentPayloads: Record<number, unknown> = {
    */
   4: {
     prompt:
-      // Plain text: the `code` player renders its prompt as written (its
-      // props carry no markdown renderer), so no backtick survives as syntax.
-      "Corrigez r_parallele pour qu'elle renvoie la résistance équivalente de deux résistances en parallèle, en ohms. Les deux valeurs arrivent sur la ligne de commande. Le cas d'un court-circuit doit renvoyer 0, et un appel sans les deux arguments doit sortir avec le code 2.",
+      // A list under a `whitespace-pre-wrap` host: the blank lines marked
+      // writes between blocks must not show (issue #100).
+      "Corrigez r_parallele pour qu'elle renvoie la résistance équivalente de deux résistances en parallèle, en ohms. Les deux valeurs arrivent sur la ligne de commande.\n\n- Un court-circuit doit renvoyer 0 ;\n- un appel sans les deux arguments doit sortir avec le code 2.",
     language: "c",
     runtime: "runno",
     segments: [

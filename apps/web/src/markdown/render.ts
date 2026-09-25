@@ -2,6 +2,8 @@ import DOMPurify from "dompurify";
 import katex from "katex";
 import { Marked, type Tokens } from "marked";
 
+import { CLOZE_SENTINEL_PATTERN } from "@quiz/domain/cloze";
+
 import { escapeHtml, highlight } from "./highlight";
 
 /*
@@ -184,9 +186,71 @@ function renderMathIn(node: Text, doc: Document): boolean {
   return true;
 }
 
-/** Walks the sanitised tree and applies steps 3 and 4 above. */
-function postProcess(root: HTMLElement, codeBlockLabel: string) {
+/*
+ * The blanks of a `cloze` text (decision D5). The parser leaves `⸢<index>⸣`
+ * where each `{{…}}` was; the host has to put a field there, and a field is a
+ * React element this pipeline never produces. So, with `holes`, a sentinel
+ * travels through marked, DOMPurify and the highlighter as a run of
+ * private-use characters — no digit, no letter, nothing a tokenizer colours
+ * or a markdown rule reads — and comes out as an EMPTY element carrying its
+ * index, which the host fills with a portal (`ClozeMarkdownText.tsx`).
+ *
+ * Private-use and not the sentinel itself, because the sentinel's digits are
+ * a number to the code highlighter (`⸢<span class="tok-num">3</span>⸣`),
+ * and a hole split over three nodes is a hole nobody finds.
+ */
+const HOLE_OPEN = "";
+const HOLE_CLOSE = "";
+const HOLE_DIGIT = 0xe010;
+const HOLE_CHARS = /[-]/g;
+const HOLE_RUN = /([-]+)/g;
+/** The attribute of a hole's element. Ours only: `ALLOW_DATA_ATTR` is off. */
+export const HOLE_ATTR = "data-cloze-hole";
+
+function encodeHoles(source: string): string {
+  return source
+    .replace(HOLE_CHARS, "")
+    .replace(new RegExp(CLOZE_SENTINEL_PATTERN, "g"), (_, index: string) => {
+      const digits = Array.from(index, (d) => String.fromCharCode(HOLE_DIGIT + Number(d)));
+      return HOLE_OPEN + digits.join("") + HOLE_CLOSE;
+    });
+}
+
+/**
+ * Every encoded sentinel becomes `<span data-cloze-hole="N">`. It runs over
+ * EVERY text node, code included — a hole in a fenced block is a hole — and
+ * before the maths, so a hole written between two `$` keeps its field
+ * rather than vanishing into a formula.
+ */
+function placeHoles(root: HTMLElement) {
   const doc = root.ownerDocument;
+  const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const texts: Text[] = [];
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (n.nodeValue?.includes(HOLE_OPEN)) texts.push(n as Text);
+  }
+  for (const node of texts) {
+    const text = node.data;
+    const frag = doc.createDocumentFragment();
+    let last = 0;
+    HOLE_RUN.lastIndex = 0;
+    for (let m = HOLE_RUN.exec(text); m; m = HOLE_RUN.exec(text)) {
+      if (m.index > last) frag.append(doc.createTextNode(text.slice(last, m.index)));
+      const index = Array.from(m[1]!, (c) => c.charCodeAt(0) - HOLE_DIGIT).join("");
+      const hole = doc.createElement("span");
+      hole.setAttribute(HOLE_ATTR, index);
+      frag.append(hole);
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) frag.append(doc.createTextNode(text.slice(last)));
+    node.replaceWith(frag);
+  }
+}
+
+/** Walks the sanitised tree and applies steps 3 and 4 above. */
+function postProcess(root: HTMLElement, codeBlockLabel: string, holes: boolean) {
+  const doc = root.ownerDocument;
+  if (holes) placeHoles(root);
 
   // A fenced block scrolls sideways on a phone, and a scroll container with
   // nothing focusable inside it cannot be reached with a keyboard at all: a
@@ -263,15 +327,29 @@ function postProcess(root: HTMLElement, codeBlockLabel: string) {
  * is a focusable scroll region (W10). It is passed in rather than read from
  * `t()` here: this module is pure, and its tests read the HTML, not a locale.
  */
-export function renderMarkdown(source: string, codeBlockLabel = "Code block"): string {
+export function renderMarkdown(
+  source: string,
+  codeBlockLabel = "Code block",
+  options: {
+    /**
+     * A `cloze` template: each `⸢<index>⸣` becomes an empty
+     * `<span data-cloze-hole="<index>">` for the host to fill.
+     */
+    holes?: boolean;
+  } = {},
+): string {
   if (!source.trim()) return "";
-  const html = marked.parse(source, { async: false });
+  const holes = options.holes === true;
+  const html = marked.parse(holes ? encodeHoles(source) : source, { async: false });
   const body = DOMPurify.sanitize(html, {
     ALLOWED_TAGS,
     ALLOWED_ATTR,
     ALLOWED_URI_REGEXP,
+    // An allow-list names every attribute it admits, `data-*` included — and
+    // it keeps `data-cloze-hole` an attribute only `placeHoles` writes.
+    ALLOW_DATA_ATTR: false,
     RETURN_DOM: true,
   }) as unknown as HTMLElement;
-  postProcess(body, codeBlockLabel);
+  postProcess(body, codeBlockLabel, holes);
   return body.innerHTML;
 }

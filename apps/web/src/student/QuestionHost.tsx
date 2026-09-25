@@ -21,10 +21,12 @@ import { Suspense, type ComponentType, type ReactNode } from "react";
 import { AlertTriangle } from "lucide-react";
 
 import type { PlayerProps } from "@quiz/core/client";
+import type { ClozeTextRenderer } from "@quiz/qt-cloze/client";
 import type { RunnerOutcome } from "@quiz/core/server";
 import { questionTypeClient } from "@quiz/registry/client";
 
 import { useT } from "../i18n";
+import { ClozeMarkdownText } from "../markdown/ClozeMarkdownText";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { Alert, ScrollableCode, Spinner } from "../ui";
 import { circuitCanvasStringsFor, playerStringsFor } from "./questionStrings";
@@ -35,6 +37,8 @@ interface HostPlayerProps extends PlayerProps<unknown, unknown> {
   /** `circuit` only: the canvas ships a dictionary of its own. */
   canvasStrings?: unknown;
   renderMarkdown?: (source: string) => ReactNode;
+  /** `cloze` only: its text with the blanks in place, through the app's pipeline. */
+  renderText?: ClozeTextRenderer;
   onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
   allowManualRun?: boolean;
   onSimulate?: (answer: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
@@ -115,6 +119,7 @@ export function QuestionHost({
           strings={playerStringsFor(type, t)}
           {...(type === "circuit" ? { canvasStrings: circuitCanvasStringsFor(t) } : {})}
           renderMarkdown={renderMarkdown}
+          {...(type === "cloze" ? { renderText: ClozeMarkdownText } : {})}
           {...(onRun ? { onRun } : {})}
           {...(allowManualRun === undefined ? {} : { allowManualRun })}
           {...(onSimulate ? { onSimulate } : {})}
