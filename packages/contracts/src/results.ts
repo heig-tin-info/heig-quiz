@@ -186,8 +186,8 @@ export const FeedbackPending = z.object({
   /**
    * `retakes_open`: an exercise that allows several attempts is still open
    * (F-EVAL-15, ADR-025). The student reads the score of this attempt and
-   * nothing else, whatever the policy says about the correction, which
-   * follows once the evaluation is closed.
+   * nothing else, whatever the policy says about the correction. Once the
+   * evaluation is closed, the feedback policy decides what is shown.
    */
   reason: z.enum(["results_pending", "no_feedback", "attempt_open", "retakes_open"]),
   evaluation: z.object({ id: z.uuid(), title: z.string() }),

@@ -327,9 +327,8 @@ export async function livePlugin(app: FastifyInstance) {
     "/app/api/attempts/:id/submit",
     { preHandler: requireSession },
     student({ params: IdParam, body: SubmitBody, load: own }, async ({ now, scope }) => {
-      const row = await service.submitAttempt(app.db, scope.evaluation, scope.attempt, now);
-      // An exercise with retakes: the score of this attempt, graded now.
-      await service.gradeFinishedRetakes(app, scope.evaluation, [row.id]);
+      // An exercise with retakes grades the attempt this request finished.
+      const row = await service.submitAttempt(app.db, scope.evaluation, scope.attempt, now, app);
       return {
         state: row.state,
         submittedAt: iso(row.submittedAt ?? now),

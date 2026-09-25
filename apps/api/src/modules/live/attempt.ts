@@ -59,6 +59,7 @@ import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
 import { pointsByAttempt, scoreOf, studentAttempts, tallyByAttempt } from "../grading/service.js";
 import { presence } from "../realtime/presence.js";
+import { scoreVisible } from "../results/service.js";
 import { isShuffleable, studentView } from "./studentView.js";
 
 export type AttemptRecord = typeof attempts.$inferSelect;
@@ -603,8 +604,18 @@ export async function ensureAttempt(
  * network allowlist is, like every entry.
  *
  * Two clicks racing: both compute n + 1, the unique index lets one row in,
- * and the loser enters the attempt the winner opened. The partial index on
- * the unfinished attempt says the same thing a second time, in the schema.
+ * and the loser enters the attempt the winner opened (or, if it read after
+ * the winner committed, is told `unfinished`). The partial index on the
+ * unfinished attempt says the same thing a second time, in the schema.
+ *
+ * A retake racing the teacher's Close (review of #116): the rule is read
+ * again INSIDE a transaction that holds the evaluation row `FOR SHARE`, and
+ * the attempt is inserted already started in that same transaction.
+ * `closeEvaluation` flips the state to `closed` BEFORE it expires the open
+ * attempts, and that UPDATE needs the row lock: either it waits for the
+ * retake to commit and then expires the new attempt with the others, or the
+ * retake waits for the flip and reads `closed`. A blank attempt can never
+ * be left open on a closed evaluation, graded 0, and kept as the "last".
  */
 export async function retakeAttempt(
   db: Db,
@@ -615,45 +626,74 @@ export async function retakeAttempt(
     now: Date;
   },
 ): Promise<AttemptRecord> {
-  const { evaluation, participant, now } = input;
+  const { participant, now } = input;
   if (participant.userId === null) throw new RetakeRefused("not_allowed");
-  if (!ipAllowed(evaluation.ipAllowlist, input.ip)) throw new IpNotAllowed();
-  const previous = await attemptsOfUser(db, evaluation.id, participant.userId);
-  const refusal = retakeRefusal({
-    mode: evaluation.mode,
-    retakes: retakePolicyOf(evaluation),
-    evaluationState: evaluation.state,
-    closesAt: evaluation.closesAt,
-    now,
-    attempts: previous,
-  });
-  if (refusal !== null) throw new RetakeRefused(refusal);
+  if (!ipAllowed(input.evaluation.ipAllowlist, input.ip)) throw new IpNotAllowed();
+  const userId = participant.userId;
 
-  const created = await db
-    .insert(attempts)
-    .values({
-      id: randomUUID(),
-      evaluationId: evaluation.id,
-      ...ownerOf(participant),
-      attemptNumber: (latestAttempt(previous)?.attemptNumber ?? 0) + 1,
-      state: "not_started",
-      seed: drawSeed(),
-      presentAt: now,
-      createdAt: now,
-      updatedAt: now,
-    })
-    .onConflictDoNothing()
-    .returning({ id: attempts.id });
-  const row =
-    created.length > 0 ? await attemptById(db, created[0]!.id) : await attemptOf(db, evaluation.id, participant);
-  // Lost the race to an attempt that is already finished again: the rule,
-  // re-read, is what the student is told.
-  if (!row || isFinishedAttempt(row.state)) throw new RetakeRefused("unfinished");
-  const started = await beginAttempt(db, evaluation, row, participant, now);
+  const outcome = await db.transaction(async (tx) => {
+    // The evaluation as it is NOW, locked against a concurrent state change;
+    // the record the route loaded at the start of the request may be stale.
+    const [evaluation] = await tx
+      .select()
+      .from(evaluations)
+      .where(eq(evaluations.id, input.evaluation.id))
+      .for("share");
+    if (!evaluation) throw new RetakeRefused("not_open");
+    const previous = await tx
+      .select()
+      .from(attempts)
+      .where(and(eq(attempts.evaluationId, evaluation.id), eq(attempts.userId, userId)))
+      .orderBy(asc(attempts.attemptNumber));
+    const refusal = retakeRefusal({
+      mode: evaluation.mode,
+      retakes: retakePolicyOf(evaluation),
+      evaluationState: evaluation.state,
+      closesAt: evaluation.closesAt,
+      now,
+      attempts: previous,
+    });
+    if (refusal !== null) throw new RetakeRefused(refusal);
+
+    // Started at once: `running` is the only state the rule allows, so there
+    // is no lobby to wait in, and no `not_started` row a close would miss.
+    const { deadlineAt, bonusS } = deadlineFor(evaluation, {
+      startedAt: now,
+      timeBonusPercent: participant.timeBonusPercent,
+      extraS: 0,
+    });
+    const created = await tx
+      .insert(attempts)
+      .values({
+        id: randomUUID(),
+        evaluationId: evaluation.id,
+        ...ownerOf(participant),
+        attemptNumber: (latestAttempt(previous)?.attemptNumber ?? 0) + 1,
+        state: "in_progress",
+        seed: drawSeed(),
+        startedAt: now,
+        deadlineAt,
+        bonusS,
+        presentAt: now,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing()
+      .returning();
+    return { evaluation, row: created[0] ?? null };
+  });
+
+  if (outcome.row === null) {
+    // Lost the race: enter the attempt the winner opened, if it is still open.
+    const row = await attemptOf(db, outcome.evaluation.id, participant);
+    if (!row || isFinishedAttempt(row.state)) throw new RetakeRefused("unfinished");
+    return row;
+  }
+  events.attemptStarted(outcome.evaluation, outcome.row, now);
   // The grid shows each student's latest attempt: the row now stands on
   // another attempt, with blank cells. No typed frame moves a whole row.
-  if (created.length > 0) events.rosterChanged(evaluation.id);
-  return started;
+  events.rosterChanged(outcome.evaluation.id);
+  return outcome.row;
 }
 
 /**
@@ -1080,15 +1120,22 @@ export async function itemOf(
   return joinedItem(db, evaluationId, itemId);
 }
 
-/** F-LIVE-10. Terminal and irreversible for the student. */
+/**
+ * F-LIVE-10. Terminal and irreversible for the student.
+ *
+ * With `app`, an exercise with retakes grades the attempt now (ADR-025) —
+ * only when THIS call is the one that finished it: a repeated or concurrent
+ * submit of the same attempt updates nothing and enqueues nothing.
+ */
 export async function submitAttempt(
   db: Db,
   evaluation: EvaluationRecord,
   attempt: AttemptRecord,
   now: Date,
+  app?: FastifyInstance,
 ): Promise<AttemptRecord> {
   assertGate(evaluation, attempt, now, "submit");
-  await db
+  const finished = await db
     .update(attempts)
     .set({
       state: "submitted",
@@ -1097,9 +1144,11 @@ export async function submitAttempt(
       closedBy: "student",
       updatedAt: now,
     })
-    .where(and(eq(attempts.id, attempt.id), eq(attempts.state, "in_progress")));
+    .where(and(eq(attempts.id, attempt.id), eq(attempts.state, "in_progress")))
+    .returning({ id: attempts.id });
   const row = (await attemptById(db, attempt.id))!;
   events.attemptClosed(evaluation.id, row, "student", now);
+  if (app && finished.length > 0) await gradeFinishedRetakes(app, evaluation, [row.id]);
   return row;
 }
 
@@ -1248,11 +1297,14 @@ export async function studentHome(db: Db, userId: string, now: Date): Promise<St
           : {
               attemptId: kept.id,
               attemptNumber: kept.attemptNumber,
-              score: scoreOf(
-                keptTallies.get(kept.id),
-                itemCounts.get(row.evaluation.id) ?? 0,
-                totals.get(row.evaluation.id) ?? 0,
-              ),
+              // What the feedback page would show, and no more.
+              score: scoreVisible(row.evaluation, kept.state)
+                ? scoreOf(
+                    keptTallies.get(kept.id),
+                    itemCounts.get(row.evaluation.id) ?? 0,
+                    totals.get(row.evaluation.id) ?? 0,
+                  )
+                : null,
             },
     };
   };

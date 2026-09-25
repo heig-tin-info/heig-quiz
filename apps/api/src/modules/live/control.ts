@@ -159,15 +159,17 @@ export async function closeEvaluation(
   closedBy: ClosedBy = "teacher",
   app?: FastifyInstance,
 ): Promise<EvaluationRecord> {
+  // The state FIRST, the attempts after (ADR-025): the flip takes the
+  // evaluation row's lock, which a retake holds `FOR SHARE` while it checks
+  // `running` and inserts. Whichever goes first, no attempt opened by a
+  // retake is left `in_progress` on a closed evaluation — either the retake
+  // commits first and is expired below, or it reads `closed` and refuses.
+  const next = await applyState(db, evaluation, "closed", now);
   const open = await db
-    .select()
-    .from(attempts)
-    .where(and(eq(attempts.evaluationId, evaluation.id), eq(attempts.state, "in_progress")));
-  await db
     .update(attempts)
     .set({ state: "expired", closedAt: now, closedBy, updatedAt: now })
-    .where(and(eq(attempts.evaluationId, evaluation.id), eq(attempts.state, "in_progress")));
-  const next = await applyState(db, evaluation, "closed", now);
+    .where(and(eq(attempts.evaluationId, evaluation.id), eq(attempts.state, "in_progress")))
+    .returning({ id: attempts.id });
   for (const attempt of open) events.attemptClosed(next.id, attempt, closedBy, now);
   events.stateChanged(next, now);
   if (app) await enqueueEvaluationGrading(app, { evaluationId: next.id });

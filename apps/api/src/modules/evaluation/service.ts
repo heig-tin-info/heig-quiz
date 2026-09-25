@@ -703,8 +703,12 @@ export async function listEvaluations(
     .from(evaluationItems)
     .where(inArray(evaluationItems.evaluationId, ids))
     .groupBy(evaluationItems.evaluationId);
+  // Students, not attempt rows: a retake (F-EVAL-15) is not a second student.
   const attemptStats = await db
-    .select({ evaluationId: attempts.evaluationId, n: count() })
+    .select({
+      evaluationId: attempts.evaluationId,
+      n: sql<number>`count(distinct coalesce(${attempts.userId}, ${attempts.guestId}))`.mapWith(Number),
+    })
     .from(attempts)
     .where(inArray(attempts.evaluationId, ids))
     .groupBy(attempts.evaluationId);

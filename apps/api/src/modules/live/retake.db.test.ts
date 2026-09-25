@@ -14,7 +14,7 @@ import type { RetakeSettings } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
-import { attempts, gradings } from "../../db/schema.js";
+import { attempts, evaluations, gradings } from "../../db/schema.js";
 import { testApp, testDb, type TestDb } from "../../test/db.js";
 import { testServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
@@ -22,6 +22,7 @@ import { reload, seedLive } from "../../test/live.js";
 import {
   applyState,
   joinedItems,
+  listEvaluations,
   patchEvaluation,
   type EvaluationRecord,
 } from "../evaluation/service.js";
@@ -225,14 +226,71 @@ describe("a retake (F-EVAL-15)", () => {
     const { app, seed, evaluation, items } = await exercise();
     const student = seed.studentIds[0]!;
     await sit(app, evaluation, items, student, [true, true]);
-    const [a, b] = await Promise.all([
+    const outcomes = await Promise.allSettled([
       retake(app, evaluation, student),
       retake(app, evaluation, student),
     ]);
-    expect(a.id).toBe(b.id);
+    // Either both land on the same new attempt, or the one that read after
+    // the other committed is told `unfinished`; never two attempts.
+    const opened = outcomes.flatMap((o) => (o.status === "fulfilled" ? [o.value.id] : []));
+    expect(opened.length).toBeGreaterThan(0);
+    expect(new Set(opened).size).toBe(1);
+    for (const o of outcomes) {
+      if (o.status === "rejected") expect((o.reason as live.RetakeRefused).reason).toBe("unfinished");
+    }
     const rows = await attemptsOf(evaluation.id, student);
     expect(rows).toHaveLength(2);
     expect(rows.filter((r) => r.state === "in_progress")).toHaveLength(1);
+  });
+
+  it("re-reads the evaluation: a retake on a record loaded before a Close is refused", async () => {
+    const { app, seed, evaluation, items } = await exercise({ keep: "last" });
+    const student = seed.studentIds[0]!;
+    await sit(app, evaluation, items, student, [true, true]);
+    // The route loaded the evaluation while it was running; the teacher's
+    // Close commits before the retake runs.
+    const stale = await reload(db, evaluation.id);
+    await live.closeEvaluation(db, stale, app.clock.now(), "teacher", app);
+    expect(
+      await refusal(
+        live.retakeAttempt(db, {
+          evaluation: stale,
+          participant: await participant(evaluation, student),
+          now: app.clock.now(),
+        }),
+      ),
+    ).toBe("not_open");
+    expect(await attemptsOf(evaluation.id, student)).toHaveLength(1);
+  });
+
+  it("expires with the others an attempt a retake opened just before the Close", async () => {
+    const { app, seed, evaluation, items } = await exercise();
+    const student = seed.studentIds[0]!;
+    await sit(app, evaluation, items, student, [true, true]);
+    const second = await retake(app, evaluation, student);
+    await live.closeEvaluation(db, await reload(db, evaluation.id), app.clock.now(), "teacher", app);
+    const [row] = await db.select().from(attempts).where(eq(attempts.id, second.id));
+    expect(row!.state).toBe("expired");
+  });
+
+  it("grades an attempt once, on the submit that finished it", async () => {
+    const { app, seed, evaluation, items } = await exercise();
+    const student = seed.studentIds[0]!;
+    const entered = await live.enterEvaluation(db, {
+      evaluation,
+      participant: await participant(evaluation, student),
+      now: app.clock.now(),
+    });
+    const sent: unknown[] = [];
+    const queued = Object.assign(Object.create(app), {
+      boss: { send: async (_q: string, data: unknown) => void sent.push(data) },
+    }) as typeof app;
+    await live.submitAttempt(db, evaluation, entered.attempt, app.clock.now(), queued);
+    expect(sent).toHaveLength(1);
+    // A second submit carrying the same (now stale) record changes nothing.
+    await live.submitAttempt(db, evaluation, entered.attempt, app.clock.now(), queued);
+    expect(sent).toHaveLength(1);
+    void items;
   });
 
   it("keeps at most one unfinished attempt per student in the schema itself", async () => {
@@ -445,6 +503,37 @@ describe("the screens with several attempts", () => {
     await applyState(db, await reload(db, examSeed.evaluationId), "running", app.clock.now());
     home = await live.studentHome(db, student, app.clock.now());
     expect(home.open.find((c) => c.id === examSeed.evaluationId)!.retakes).toBeNull();
+  });
+
+  it("hides the kept score on the card once closed under on_release, until the release", async () => {
+    const { app, seed, evaluation, items } = await exercise();
+    const student = seed.studentIds[0]!;
+    await db
+      .update(evaluations)
+      .set({ feedbackPolicy: { ...(evaluation.feedbackPolicy as object), when: "on_release" } })
+      .where(eq(evaluations.id, evaluation.id));
+    const running = await reload(db, evaluation.id);
+    await sit(app, running, items, student, [true, false]);
+    let card = (await live.studentHome(db, student, app.clock.now())).open.find((c) => c.id === evaluation.id)!;
+    // Open: score only, whatever the policy.
+    expect(card.retakes!.kept!.score).toMatchObject({ points: 1 });
+
+    const closed = await live.closeEvaluation(db, running, app.clock.now(), "teacher", app);
+    card = (await live.studentHome(db, student, app.clock.now())).past.find((c) => c.id === evaluation.id)!;
+    expect(card.retakes!.kept!.score).toBeNull();
+
+    await results.releaseResults(db, closed, app.clock.now());
+    card = (await live.studentHome(db, student, app.clock.now())).past.find((c) => c.id === evaluation.id)!;
+    expect(card.retakes!.kept!.score).toMatchObject({ points: 1 });
+  });
+
+  it("counts students, not attempts, in the evaluation list", async () => {
+    const { app, seed, evaluation, items } = await exercise();
+    const student = seed.studentIds[0]!;
+    await sit(app, evaluation, items, student, [true, true]);
+    await sit(app, evaluation, items, student, [true, true], await retake(app, evaluation, student));
+    const list = await listEvaluations(db, seed.classroomId);
+    expect(list.find((e) => e.id === evaluation.id)!.attemptCount).toBe(1);
   });
 
   it("shows the latest attempt in the live grid, with the count", async () => {

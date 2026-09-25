@@ -313,9 +313,18 @@ export const CardRetakes = z.object({
   attemptCount: z.number().int(),
   /** The server's rule (`retakeRefusal`), evaluated now: the Retake button. */
   canRetake: z.boolean(),
-  /** The attempt that counts (best or last) and its score; `null` before any. */
+  /**
+   * The attempt that counts (best or last); `null` before any is finished.
+   * `score` is `null` whenever the student may not read it: once the
+   * exercise is closed, the feedback policy decides, exactly as on the
+   * feedback page (`on_release` waits for the release, `none` never).
+   */
   kept: z
-    .object({ attemptId: z.uuid(), attemptNumber: z.number().int(), score: AttemptScore })
+    .object({
+      attemptId: z.uuid(),
+      attemptNumber: z.number().int(),
+      score: AttemptScore.nullable(),
+    })
     .nullable(),
 });
 export type CardRetakes = z.infer<typeof CardRetakes>;

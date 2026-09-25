@@ -422,8 +422,9 @@ function distributionOf(
  * An exercise that allows retakes, while it still takes them (ADR-025): the
  * student reads the SCORE of a finished attempt and nothing else, whatever
  * the policy says — the correction of attempt 1 would be the key of
- * attempt 2. The policy applies unchanged once the evaluation is closed:
- * `immediate` then shows the correction, `on_release` waits for the release.
+ * attempt 2. Once the evaluation is closed the teacher's feedback policy
+ * decides, unchanged: `immediate` shows the correction, `on_release` waits
+ * for the release, `none` shows nothing — the score included.
  * The score is shown under `none` too: a retake without it has no point, and
  * enabling retakes is the teacher's consent to it.
  */
@@ -432,6 +433,18 @@ function scoreOnly(evaluation: EvaluationRecord): boolean {
     retakesEnabled(evaluation) &&
     (evaluation.state === "lobby" || evaluation.state === "running" || evaluation.state === "paused")
   );
+}
+
+/**
+ * Whether a student may read the SCORE of this attempt right now: while the
+ * exercise still takes retakes (score only, ADR-025), or whenever the
+ * feedback policy lets the results through. The student home asks this
+ * before it prints a kept score, so the card never says more than the
+ * feedback page would.
+ */
+export function scoreVisible(evaluation: EvaluationRecord, attemptState: string): boolean {
+  return feedbackAvailable(feedbackOf(evaluation), evaluation, attemptState).ok
+    || (scoreOnly(evaluation) && attemptState !== "in_progress" && attemptState !== "not_started");
 }
 
 /** Whether a student may see anything at all right now. */
