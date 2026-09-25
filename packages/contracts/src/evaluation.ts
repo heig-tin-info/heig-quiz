@@ -253,6 +253,13 @@ export const EvaluationDetail = z.object({
   editable: z.boolean(),
   /** The reader's own seat and test attempt (ADR-018). */
   self: EvaluationSelf,
+  /**
+   * The questions of the items the reader may open in the question editor
+   * (issue #127): those whose pool they hold at least `contributor` in. A
+   * colleague on the course's staff always PREVIEWS every item; editing is
+   * the pool's decision, and a question left out here offers no Edit.
+   */
+  editableQuestionIds: z.array(z.uuid()),
 });
 export type EvaluationDetail = z.infer<typeof EvaluationDetail>;
 

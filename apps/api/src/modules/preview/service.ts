@@ -30,6 +30,7 @@ import { randomInt } from "node:crypto";
 
 import type {
   EvaluationPreview,
+  ItemPreview,
   PreviewCorrection,
   PreviewCorrectionItem,
   PreviewItemStatus,
@@ -159,6 +160,32 @@ export async function startPreview(
       closesAt: evaluation.closesAt,
     }),
     view,
+  };
+}
+
+/**
+ * `GET /evaluations/:id/preview/items/:itemId`: one item, at the version the
+ * evaluation froze, as a student will see it (issue #127). Seed 0 and no
+ * shuffle, like the question editor's preview (decision D19), and through
+ * `studentView` — the one student exit (invariant 4). The item is looked up
+ * INSIDE the evaluation the guard loaded, so an item of another evaluation
+ * is a 404 like a missing one (invariant 6), whoever owns its pool.
+ */
+export async function itemPreview(
+  db: Db,
+  evaluation: EvaluationRecord,
+  itemId: string,
+): Promise<ItemPreview> {
+  const joined = await joinedItem(db, evaluation.id, itemId);
+  if (!joined) throw notFound();
+  const type = joined.question.type;
+  const version = { config: joined.version.config, configVersion: joined.version.configVersion };
+  return {
+    itemId: joined.item.id,
+    type,
+    versionNumber: joined.version.number ?? 0,
+    points: joined.item.points,
+    student: studentView({ type, version, seed: 0, itemId: joined.item.id, shuffle: false }),
   };
 }
 

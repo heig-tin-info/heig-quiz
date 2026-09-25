@@ -346,7 +346,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
 
       <TabPanel idPrefix="eval-step" value={step}>
         {step === "questions" ? (
-          <ItemsStep detail={data} />
+          <ItemsStep detail={data} navigate={navigate} />
         ) : step === "timing" ? (
           <TimingStep
             detail={data}

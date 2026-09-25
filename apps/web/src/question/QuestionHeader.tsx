@@ -1,4 +1,4 @@
-import { Copy, Eye, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, Eye, Save, Trash2 } from "lucide-react";
 
 import type { QuestionDetail } from "@quiz/contracts";
 
@@ -18,6 +18,7 @@ export function QuestionHeader({
   id,
   data,
   poolName,
+  origin,
   readOnly,
   autosave,
   onBack,
@@ -29,6 +30,11 @@ export function QuestionHeader({
   data: QuestionDetail;
   /** `undefined` while the pool is loading. */
   poolName: string | undefined;
+  /**
+   * The title of the evaluation the editor was opened from (issue #127): the
+   * way back then leads there instead of to the pool.
+   */
+  origin?: string | undefined;
   readOnly: boolean;
   autosave: Autosave;
   onBack: () => void;
@@ -49,7 +55,16 @@ export function QuestionHeader({
     <PageHeader
       help="question-editor"
       eyebrow={
-        <ParentLink onClick={onBack}>{poolName ?? t("pools.title")}</ParentLink>
+        origin !== undefined ? (
+          <ParentLink onClick={onBack}>
+            <span className="inline-flex items-center gap-1">
+              <ArrowLeft aria-hidden className="size-3.5" />
+              {t("question.backToEvaluation", { title: origin })}
+            </span>
+          </ParentLink>
+        ) : (
+          <ParentLink onClick={onBack}>{poolName ?? t("pools.title")}</ParentLink>
+        )
       }
       title={<span className="font-mono">{data.meta.internalName}</span>}
       description={

@@ -82,6 +82,12 @@ export const questionPreviewKey = (id: string, source: "draft" | number | undefi
 export const evaluationsKey = (classroomId: string) => ["evaluations", classroomId] as const;
 export const evaluationKey = (id: string) => ["evaluation", id] as const;
 /**
+ * One item at its frozen version (issue #127). The version is in the key, so
+ * an "Update" on the row is a new preview and not a stale cached one.
+ */
+export const itemPreviewKey = (evaluationId: string, itemId: string, versionId: string) =>
+  ["evaluation", evaluationId, "item-preview", itemId, versionId] as const;
+/**
  * Both toggles are in the key because both are in the REQUEST: the answers
  * travel only with `?includeAnswers=1`, and the live verdicts of ADR-020 are
  * computed only with `?results=1`. A cached variant of one is not the other.

@@ -1,6 +1,9 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import type { EvaluationDetail } from "@quiz/contracts";
+
+import { api } from "../api";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { tryAdapterFor } from "../questionTypes";
@@ -14,7 +17,29 @@ import { useEditorShortcuts } from "./useEditorShortcuts";
 import { useQuestionActions } from "./useQuestionActions";
 import { useQuestionDraft } from "./useQuestionDraft";
 import { VersionHistory } from "./VersionHistory";
-import { poolKey, questionKey } from "../queryKeys";
+import { evaluationKey, poolKey, questionKey } from "../queryKeys";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * The evaluation the editor was opened from (`?from=`, issue #127), and its
+ * title for the way back. The query is the evaluation page's own, so coming
+ * from there costs no request; after a reload it costs one. Anything that is
+ * not an evaluation id this reader reaches is ignored, and the header falls
+ * back to the pool.
+ */
+function useOrigin(): { id: string; title: string } | null {
+  const [from] = useSearchParam("from", "");
+  const valid = UUID.test(from);
+  const origin = useQuery<EvaluationDetail>({
+    queryKey: evaluationKey(from),
+    enabled: valid,
+    queryFn: () => api(`/app/api/evaluations/${from}`),
+    retry: false,
+  });
+  if (!valid || !origin.data) return null;
+  return { id: from, title: origin.data.evaluation.title };
+}
 
 /**
  * The question editor (mockups `01-editeur-qcm.html`, `02-editeur-code.html`).
@@ -48,6 +73,7 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
   const { detail, pool, poolId, readOnly, draft, setDraft, autosave, issues, edited } =
     useQuestionDraft(id);
   const [publishing, setPublishing] = useState(false);
+  const origin = useOrigin();
   // The tab panel, so `Ctrl+Enter` can put the reader inside what it opened.
   const panelRef = useRef<HTMLDivElement>(null);
   const followToPanel = useRef(false);
@@ -127,7 +153,14 @@ export function QuestionEditor({ id, navigate }: { id: string; navigate: (r: Rou
         poolName={pool.data?.pool.name}
         readOnly={readOnly}
         autosave={autosave}
-        onBack={() => navigate({ view: "pool", id: data.meta.poolId })}
+        origin={origin?.title}
+        onBack={() =>
+          navigate(
+            origin
+              ? { view: "evaluation", id: origin.id }
+              : { view: "pool", id: data.meta.poolId },
+          )
+        }
         onPublish={startPublish}
         onDuplicate={() => duplicate(data.meta)}
         onDelete={() => void askDelete(data.meta)}

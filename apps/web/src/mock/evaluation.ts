@@ -732,6 +732,11 @@ const evaluationDetail = (e: MockEvaluation) => ({
   attemptCount: attemptCountOf(e),
   editable: isConfigEditable(e.state, attemptCountOf(e)),
   self: selfOf(e),
+  // Like the server: the questions whose pool this reader may write (#127).
+  editableQuestionIds: e.items.flatMap((i) => {
+    const q = itemQuestion(i);
+    return q && q.poolId && poolSummary(poolOr404(q.poolId)).role !== "reader" ? [q.id] : [];
+  }),
 });
 
 export const dashboardView = (e: MockEvaluation, includeAnswers: boolean) => {

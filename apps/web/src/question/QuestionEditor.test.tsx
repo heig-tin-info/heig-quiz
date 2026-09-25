@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { PoolDetail, QuestionDetail } from "@quiz/contracts";
 
+import { makeEvaluationDetail } from "../test/live-fixtures";
 import { labelIssues } from "../test/labels";
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { AUTOSAVE_DELAY_MS } from "./autosave";
@@ -688,4 +689,38 @@ describe("QuestionEditor — shared as reader", () => {
     await user.click(screen.getByRole("tab", { name: "Try" }));
     expect(await screen.findByRole("heading", { name: "Try the question" })).toBeInTheDocument();
   }, 20_000);
+});
+
+describe("QuestionEditor — opened from an evaluation (#127)", () => {
+  const EVAL = "0f0e0d0c-0b0a-4908-8706-050403020100";
+
+  it("leads back to the evaluation it was opened from, by name", async () => {
+    const user = userEvent.setup();
+    const base = makeEvaluationDetail();
+    mockFetch(
+      routes(mcqDetail(), {
+        [`GET /app/api/evaluations/${EVAL}`]: ok({
+          ...base,
+          evaluation: { ...base.evaluation, id: EVAL, title: "Test 0 — bases du C" },
+        }),
+      }),
+    );
+    const navigate = vi.fn();
+    renderWithProviders(<QuestionEditor id="q1" navigate={navigate} />, {
+      route: `/questions/q1?from=${EVAL}`,
+    });
+
+    await user.click(await screen.findByRole("button", { name: /back to test 0 — bases du c/i }));
+    expect(navigate).toHaveBeenCalledWith({ view: "evaluation", id: EVAL });
+  });
+
+  it("leads back to the pool without one", async () => {
+    const user = userEvent.setup();
+    mockFetch(routes(mcqDetail()));
+    const navigate = vi.fn();
+    renderWithProviders(<QuestionEditor id="q1" navigate={navigate} />);
+
+    await user.click(await screen.findByRole("button", { name: "Programmation C" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "pool", id: "p1" });
+  });
 });

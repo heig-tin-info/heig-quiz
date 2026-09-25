@@ -186,6 +186,7 @@ export function makeEvaluationDetail(overrides: Partial<EvaluationDetail> = {}):
     attemptCount: 0,
     editable: true,
     self: { seat: false, staffSeat: false, attemptId: null },
+    editableQuestionIds: items.map((i) => i.questionId),
     ...overrides,
   };
 }

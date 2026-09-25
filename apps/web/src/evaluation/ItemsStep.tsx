@@ -17,13 +17,24 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Flag, GripVertical, ListOrdered, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import {
+  Eye,
+  Flag,
+  GripVertical,
+  ListOrdered,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import type { EvaluationDetail, ItemRow } from "@quiz/contracts";
 import { itemListLock } from "@quiz/domain";
 
 import { api } from "../api";
+import type { Route } from "../router";
 import { useT, type TFunction } from "../i18n";
 import { useToast } from "../notify";
 import { typeLabel } from "../questionTypes";
@@ -42,6 +53,7 @@ import {
   Tip,
 } from "../ui";
 import { AddQuestionsSheet } from "./AddQuestionsSheet";
+import { ItemPreviewSheet } from "./ItemPreviewSheet";
 import { evaluationKey } from "../queryKeys";
 
 /**
@@ -208,28 +220,69 @@ function VersionCell({ item, stale, t }: { item: ItemRow; stale: boolean; t: TFu
   );
 }
 
+/**
+ * Edit, or why not (issue #127). A reader of the question's pool gets the
+ * button greyed out with the reason as its name and tooltip: `aria-disabled`
+ * and not `disabled`, so the keyboard still reaches it and hears why — a
+ * missing button would leave the teacher hunting for it.
+ */
+function EditButton({
+  item,
+  canEdit,
+  onEdit,
+  t,
+}: {
+  item: ItemRow;
+  canEdit: boolean;
+  onEdit: () => void;
+  t: TFunction;
+}) {
+  if (canEdit) {
+    return (
+      <IconButton label={t("eval.questions.editItem", { name: item.internalName })} onClick={onEdit}>
+        <Pencil />
+      </IconButton>
+    );
+  }
+  return (
+    <IconButton
+      label={t("eval.questions.editItem.denied", { name: item.internalName })}
+      aria-disabled
+      className="cursor-not-allowed opacity-40 hover:bg-transparent hover:text-fg-faint"
+    >
+      <Pencil />
+    </IconButton>
+  );
+}
+
 function ItemCard({
   item,
   index,
   stale,
   locked,
   last,
+  canEdit,
   t,
   onPoints,
   onMilestone,
   onUpdate,
   onRemove,
+  onPreview,
+  onEdit,
 }: {
   item: ItemRow;
   index: number;
   stale: boolean;
   locked: boolean;
   last: boolean;
+  canEdit: boolean;
   t: TFunction;
   onPoints: (points: number) => void;
   onMilestone: (milestone: boolean) => void;
   onUpdate: () => void;
   onRemove: () => void;
+  onPreview: () => void;
+  onEdit: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: item.id,
@@ -273,6 +326,19 @@ function ItemCard({
         </span>
         <VersionCell item={item} stale={stale} t={t} />
         <PointsField item={item} disabled={locked} onCommit={onPoints} />
+        {/* Looking at the question and opening it (#127). Neither changes the
+            evaluation — an edit becomes a new version that only "Update"
+            brings in — so both stay once the list is frozen. On a phone the
+            wrapped line starts with them, at the row's left edge. */}
+        <span className="flex shrink-0 items-center gap-0.5 max-sm:ml-auto">
+          <IconButton
+            label={t("eval.questions.previewItem", { name: item.internalName })}
+            onClick={onPreview}
+          >
+            <Eye />
+          </IconButton>
+          <EditButton item={item} canEdit={canEdit} onEdit={onEdit} t={t} />
+        </span>
         {/* A fixed, right-aligned slot: the refresh button appears on some
             rows only, and without it the points fields of the rows would not
             line up — a column of numbers that wanders is unreadable. */}
@@ -312,11 +378,20 @@ function ItemCard({
   );
 }
 
-export function ItemsStep({ detail }: { detail: EvaluationDetail }) {
+export function ItemsStep({
+  detail,
+  navigate,
+}: {
+  detail: EvaluationDetail;
+  navigate: (r: Route) => void;
+}) {
   const t = useT();
   const qc = useQueryClient();
   const toast = useToast();
   const [adding, setAdding] = useState(false);
+  /** The row whose Preview sheet is open (#127). */
+  const [previewing, setPreviewing] = useState<string | null>(null);
+  const editable = new Set(detail.editableQuestionIds);
   const id = detail.evaluation.id;
   // The same rule the server applies (issue #79): the list is frozen once a
   // student has an attempt OR once the evaluation has been opened, so every
@@ -413,6 +488,8 @@ export function ItemsStep({ detail }: { detail: EvaluationDetail }) {
   );
 
   const failed = patch.error ?? remove.error ?? updateVersions.error;
+  // Read off the live list: a row removed meanwhile closes its sheet.
+  const previewed = items.find((i) => i.id === previewing) ?? null;
 
   return (
     <div className="space-y-4">
@@ -491,6 +568,9 @@ export function ItemsStep({ detail }: { detail: EvaluationDetail }) {
                       }
                       onUpdate={() => updateVersions.mutate([item.id])}
                       onRemove={() => removeItem(item)}
+                      canEdit={editable.has(item.questionId)}
+                      onPreview={() => setPreviewing(item.id)}
+                      onEdit={() => navigate({ view: "question", id: item.questionId, from: id })}
                     />
                   ))}
                 </ul>
@@ -505,6 +585,14 @@ export function ItemsStep({ detail }: { detail: EvaluationDetail }) {
           </p>
         </>
       )}
+
+      {previewed ? (
+        <ItemPreviewSheet
+          evaluationId={id}
+          item={previewed}
+          onClose={() => setPreviewing(null)}
+        />
+      ) : null}
 
       {adding ? (
         <AddQuestionsSheet

@@ -15,7 +15,12 @@ export type Route =
   | { view: "pool"; id: string }
   /** The categories of one pool, as a tree to rename, move and reorder. */
   | { view: "poolCategories"; id: string }
-  | { view: "question"; id: string }
+  /**
+   * `from`: the evaluation the editor was opened from (issue #127), carried
+   * in `?from=` so the way back survives a reload. The editor reads it off
+   * the query string (`useSearchParam`); `parsePath` never sees it.
+   */
+  | { view: "question"; id: string; from?: string }
   /**
    * What a student would see for ONE question, in a page of its own
    * (docs/spec/08 §8.2, "See what the student sees"). The editor opens it in
@@ -167,7 +172,8 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   // `/questions/:id/preview` is the student preview; every other tail is the
   // editor itself (its tab lives in the query string, not in the path).
   question: {
-    path: (r) => `/questions/${r.id}`,
+    path: (r) =>
+      `/questions/${r.id}${r.from ? `?${new URLSearchParams({ from: r.from }).toString()}` : ""}`,
     match: ([head, id, tail]) =>
       head === "questions" && id && tail !== "preview" ? { view: "question", id } : null,
     studentSafe: false,

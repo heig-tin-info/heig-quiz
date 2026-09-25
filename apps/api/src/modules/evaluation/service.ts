@@ -54,6 +54,7 @@ import {
   isConfigFieldWritable,
   itemListLock,
   isFeedbackAllowed,
+  poolRoleAllows,
   missingTimingFields,
   retakesAllowedFor,
   retakesOn,
@@ -665,10 +666,38 @@ async function selfOf(
   };
 }
 
+/**
+ * The questions of this evaluation the viewer may open in the editor (issue
+ * #127): those whose pool they hold at least `contributor` in — the role
+ * every write route of a question asks for. The role is the pool list's own
+ * resolution (`listPools`), so this cannot drift from what the editor then
+ * allows. A pool the viewer does not reach at all resolves to `reader`, and
+ * its questions are simply not in the list.
+ */
+async function editableQuestionIdsOf(
+  db: Db,
+  items: readonly ItemRow[],
+  viewer: { id: string; role: string },
+): Promise<string[]> {
+  if (items.length === 0) return [];
+  const rows = await db
+    .select({ id: questions.id, poolId: questions.poolId })
+    .from(questions)
+    .where(inArray(questions.id, [...new Set(items.map((i) => i.questionId))]));
+  const poolIds = [...new Set(rows.flatMap((r) => (r.poolId === null ? [] : [r.poolId])))];
+  if (poolIds.length === 0) return [];
+  const writable = new Set(
+    (await listPools(db, inArray(pools.id, poolIds), viewer))
+      .filter((p) => poolRoleAllows(p.role, "contributor"))
+      .map((p) => p.id),
+  );
+  return rows.filter((r) => r.poolId !== null && writable.has(r.poolId)).map((r) => r.id);
+}
+
 export async function evaluationDetail(
   db: Db,
   row: EvaluationRecord,
-  viewerId: string,
+  viewer: { id: string; role: string },
 ): Promise<EvaluationDetail> {
   const items = await itemRows(db, row.id);
   const attemptsSoFar = await attemptCount(db, row.id);
@@ -679,7 +708,8 @@ export async function evaluationDetail(
     staleItems: staleOf(items),
     attemptCount: attemptsSoFar,
     editable: isConfigEditable(row.state, attemptsSoFar),
-    self: await selfOf(db, row, viewerId),
+    self: await selfOf(db, row, viewer.id),
+    editableQuestionIds: await editableQuestionIdsOf(db, items, viewer),
   };
 }
 
