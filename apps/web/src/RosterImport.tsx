@@ -10,30 +10,39 @@ import { classroomKey } from "./queryKeys";
 
 type Cell = string | number | null;
 
+/**
+ * First sheet of an .xlsx, legacy .xls or .ods file, as the rows the API
+ * takes: strings, numbers and blanks. The reader is loaded only when a
+ * spreadsheet is actually dropped, never in the initial bundle; `read`
+ * tells the three formats apart by their bytes.
+ */
+export async function spreadsheetRows(data: ArrayBuffer): Promise<Cell[][]> {
+  const { read } = await import("hucre");
+  const wb = await read(data, { sheets: [0], readStyles: true });
+  const sheet = wb.sheets[0];
+  if (!sheet) throw new Error("Empty workbook");
+  return sheet.rows.map((row, r) =>
+    row.map((v, c): Cell => {
+      if (typeof v === "number") {
+        // A cell shown as "150 %" holds 1.5, and the roster reads a bare
+        // number below 1 as a fraction: send what the teacher sees. (A
+        // legacy .xls comes back without its formats, so not there.)
+        const fmt = sheet.cells?.get(`${r},${c}`)?.style?.numFmt;
+        return fmt?.includes("%") ? Math.round(v * 1e6) / 1e4 : v;
+      }
+      if (v === null || typeof v === "string") return v;
+      // A stray boolean or date cell travels as text.
+      return v instanceof Date ? v.toISOString().slice(0, 10) : String(v);
+    }),
+  );
+}
+
 /** Dropped file to tabular rows. Excel/ODS via hucre, otherwise text CSV. */
 async function fileToPayload(
   file: File,
 ): Promise<{ csv: string } | { rows: Cell[][] }> {
   if (/\.(xlsx|xls|ods)$/i.test(file.name)) {
-    // Load the spreadsheet reader only when a spreadsheet is actually
-    // dropped, never in the initial bundle. `read` tells .xlsx, legacy .xls
-    // and .ods apart by their bytes.
-    const { read } = await import("hucre");
-    const wb = await read(await file.arrayBuffer(), { sheets: [0] });
-    const sheet = wb.sheets[0];
-    if (!sheet) throw new Error("Empty workbook");
-    // The API takes strings, numbers and blanks; a stray boolean or date
-    // cell travels as text.
-    const rows = sheet.rows.map((row) =>
-      row.map((v): Cell =>
-        v === null || typeof v === "string" || typeof v === "number"
-          ? v
-          : v instanceof Date
-            ? v.toISOString().slice(0, 10)
-            : String(v),
-      ),
-    );
-    return { rows };
+    return { rows: await spreadsheetRows(await file.arrayBuffer()) };
   }
   return { csv: await file.text() };
 }
