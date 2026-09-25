@@ -5,6 +5,7 @@ import type { DashboardRow, EvaluationState } from "@quiz/contracts";
 import { useT } from "../i18n";
 import type { GridState } from "../realtime/grid";
 import { Badge, Countdown, cx, IconButton, T, VerdictCell } from "../ui";
+import { AnswerTip } from "./AnswerTip";
 import { cellState, cellValue, completionOf } from "./cells";
 
 /**
@@ -36,8 +37,10 @@ import { cellState, cellValue, completionOf } from "./cells";
  * between them. So on a phone the actions sit at the end of the row, where
  * scrolling right through the questions lands anyway.
  *
- * Every cell is a plain `VerdictCell`; none of them fetches anything. The
- * whole grid is a pure function of the state `useDashboard` walks forward.
+ * Every cell is a plain `VerdictCell`; none of them fetches anything by
+ * itself. The whole grid is a pure function of the state `useDashboard`
+ * walks forward — the one exception being the tooltip of a cell (#94), which
+ * reads the student's paper only once a teacher has hovered or focused it.
  */
 
 /** Fixed width of a question column: two glyphs and the icon, and no more. */
@@ -289,6 +292,26 @@ export function StudentGrid({
                     <td key={item.id} className={cx(T.td, COL, "px-1 text-center")}>
                       {cell === undefined ? (
                         <span className="text-fg-faint">—</span>
+                      ) : showAnswers && cell.summary && row.attemptId !== null ? (
+                        // The complete answer on hover or focus (#94), read
+                        // on demand: only while the answers are shown, and
+                        // only on a cell that has one.
+                        <AnswerTip
+                          evaluationId={view.evaluation.id}
+                          attemptId={row.attemptId}
+                          itemId={item.id}
+                          fallback={cell.summary}
+                        >
+                          {(describedBy) => (
+                            <VerdictCell
+                              state={cellState(cell, showResults)}
+                              value={cellValue(cell, showAnswers)}
+                              label={label}
+                              describedBy={describedBy}
+                              onClick={() => onInspect(row, item.id)}
+                            />
+                          )}
+                        </AnswerTip>
                       ) : (
                         <VerdictCell
                           state={cellState(cell, showResults)}

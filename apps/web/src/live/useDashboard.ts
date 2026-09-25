@@ -7,7 +7,7 @@ import { api } from "../api";
 import { applyGridEvent, initialGrid, type GridState } from "../realtime/grid";
 import { useEventStream } from "../realtime/useEventStream";
 import { useServerClock, type ServerClock } from "../realtime/useServerClock";
-import { dashboardKey } from "../queryKeys";
+import { attemptInspectKey, attemptInspectPrefix, dashboardKey } from "../queryKeys";
 
 /**
  * The live dashboard as one hook: the read model, the stream that moves it,
@@ -62,6 +62,10 @@ export function useDashboard(
 
   const refresh = useCallback(() => {
     void qc.invalidateQueries({ queryKey: key });
+    // A re-read of the grid (a reconnect, a snapshot, a hint) may follow
+    // frames this tab never received, so every paper cached for a tooltip or
+    // the inspection modal is suspect too.
+    void qc.invalidateQueries({ queryKey: attemptInspectPrefix(id) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qc, id, includeAnswers, includeResults]);
 
@@ -84,6 +88,13 @@ export function useDashboard(
     },
     onEvent: (event) => {
       qc.setQueryData<GridState>(key, (prev) => (prev ? applyGridEvent(prev, event) : prev));
+      // The student wrote something: the paper cached for that attempt (the
+      // cell tooltip's, the modal's) is now behind the grid. Marked stale,
+      // and refetched at once only if something on screen is reading it —
+      // so a tooltip never shows an answer older than its own cell (#94).
+      if (event.type === "dashboard.cell" && event.evaluationId === id) {
+        void qc.invalidateQueries({ queryKey: attemptInspectKey(id, event.attemptId) });
+      }
     },
     /*
      * A hint on the `evaluations` family means the grid gained or lost a ROW

@@ -454,6 +454,7 @@ export function VerdictCell({
   value,
   onClick,
   label,
+  describedBy,
   className = "",
 }: {
   state: VerdictState;
@@ -462,6 +463,8 @@ export function VerdictCell({
   onClick?: () => void;
   /** Overrides the accessible name (to add the student and the question). */
   label?: string;
+  /** Id of a tooltip that describes the cell while it is shown (`aria-describedby`). */
+  describedBy?: string;
   className?: string;
 }) {
   const t = useT();
@@ -493,7 +496,13 @@ export function VerdictCell({
     );
   }
   return (
-    <button type="button" onClick={onClick} aria-label={name} className={cx(chrome, "transition-opacity hover:opacity-80")}>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={name}
+      aria-describedby={describedBy}
+      className={cx(chrome, "transition-opacity hover:opacity-80")}
+    >
       {content}
     </button>
   );

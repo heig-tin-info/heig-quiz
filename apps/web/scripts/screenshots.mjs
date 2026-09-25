@@ -145,6 +145,10 @@ const scenes = [
   { name: "live-lobby", role: "teacher", path: "/evaluations/lobby/live" },
   { name: "live-closed", role: "teacher", path: "/evaluations/closed/live" },
   { name: "live-inspect", role: "teacher", path: "/evaluations/running/live", act: (p) => p.getByRole("button", { name: /· Question 1$/ }).first().click() },
+  // #94: the complete answer of one cell, on hover (fetched on demand).
+  { name: "live-tip-code", role: "teacher", path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^Rochat, Louis · Question 1$/ }).hover() },
+  { name: "live-tip-cloze", role: "teacher", path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^Favre, Ethan · Question 5$/ }).hover() },
+  { name: "live-tip-mcq", role: "teacher", path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^Gauthier, Samuel · Question 6$/ }).hover() },
   { name: "live-extend-menu", role: "teacher", path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^extend$/i }).first().click() },
   { name: "live-fullscreen", role: "teacher", path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^full screen$/i }).first().click() },
   { name: "live-empty", role: "teacher", path: "/evaluations/running/live?empty=1", settle: 900 },

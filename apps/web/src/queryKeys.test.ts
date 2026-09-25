@@ -53,6 +53,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
       ["dashboard", "e1", false, true],
     ],
     ["attemptInspectKey", keys.attemptInspectKey("e1", "a1"), ["attempt-inspect", "e1", "a1"]],
+    ["attemptInspectPrefix", keys.attemptInspectPrefix("e1"), ["attempt-inspect", "e1"]],
     ["gradingKey", keys.gradingKey("e1"), ["grading", "e1"]],
     [
       "gradingRosterKey",

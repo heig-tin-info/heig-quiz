@@ -1,10 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, FileQuestion } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef } from "react";
 
-import type { AttemptInspect, DashboardRow } from "@quiz/contracts";
+import type { DashboardRow } from "@quiz/contracts";
 
-import { api } from "../api";
 import { useT } from "../i18n";
 import { QuestionReviewHost, typeLabel } from "../questionTypes";
 import type { GridState } from "../realtime/grid";
@@ -20,7 +18,7 @@ import {
   VerdictCell,
 } from "../ui";
 import { cellState } from "./cells";
-import { attemptInspectKey } from "../queryKeys";
+import { useAttemptInspect } from "./useAttemptInspect";
 
 /**
  * F-DASH-05: one student's whole paper, read from the grid.
@@ -66,11 +64,7 @@ export function InspectModal({
 }) {
   const t = useT();
   const { view } = state;
-  const inspect = useQuery<AttemptInspect>({
-    queryKey: attemptInspectKey(evaluationId, row.attemptId),
-    enabled: row.attemptId !== null,
-    queryFn: () => api(`/app/api/evaluations/${evaluationId}/attempts/${row.attemptId}`),
-  });
+  const inspect = useAttemptInspect(evaluationId, row.attemptId);
 
   const rowsWithAttempt = view.rows.filter((r) => r.attemptId !== null);
   const rowIndex = rowsWithAttempt.findIndex((r) => r.seatId === row.seatId);
