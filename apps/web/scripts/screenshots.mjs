@@ -107,6 +107,20 @@ const scenes = [
   { name: "eval-config-launch", role: "teacher", path: "/evaluations/draft?step=launch" },
   { name: "eval-config-loading", role: "teacher", path: "/evaluations/draft?slow=1", settle: 300 },
   { name: "eval-config-error", role: "teacher", path: "/evaluations/draft?fail=1", settle: 2500 },
+  // Issue #75: the stateless preview of the whole evaluation — the player
+  // under its banner, then the full correction after "Hand in".
+  { name: "eval-preview", role: "teacher", path: "/evaluations/draft/preview" },
+  {
+    name: "eval-preview-correction",
+    role: "teacher",
+    path: "/evaluations/draft/preview",
+    act: async (p) => {
+      await p.getByRole("radio").first().click({ timeout: 2000 }).catch(() => {});
+      await p.getByRole("button", { name: /^(hand in|rendre)$/i }).first().click();
+      await p.getByRole("dialog").getByRole("button", { name: /^(hand in|rendre)$/i }).click();
+      await p.getByRole("heading", { name: /preview correction|correction de l'aperçu/i }).waitFor();
+    },
+  },
   // The heading renames itself in place: closed, then open on the input.
   { name: "eval-rename", role: "teacher", path: "/evaluations/draft?step=questions", fold: true },
   { name: "eval-rename-editing", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: (p) => p.getByRole("button", { name: /^(rename evaluation|renommer l'évaluation)/i }).first().click() },

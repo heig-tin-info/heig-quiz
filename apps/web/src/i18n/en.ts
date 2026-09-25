@@ -1479,6 +1479,7 @@ export const en = {
   "eval.state.released": "released",
   "eval.dashboard": "Live dashboard",
   "eval.grading": "Grading",
+  "eval.preview": "Preview",
   "eval.results": "Results",
   "eval.configure": "Configure",
   // The heading renames itself: the accessible name of that control names
@@ -1885,6 +1886,35 @@ export const en = {
   "results.byQuestion.key": "Question and answer key",
   "results.byQuestion.reference": "Reference solution",
 
+  // Issue #75: the teacher's stateless preview of a whole evaluation.
+  "preview.starting": "Preparing the preview…",
+  "preview.startFailed": "The preview could not be started.",
+  "preview.notFound": "This evaluation is not available to you",
+  "preview.banner": "Preview — nothing is saved",
+  "preview.bannerBody":
+    "You see exactly what a student gets, in a random order. Your answers stay in this tab; hand in to see the full correction.",
+  "preview.restart": "Restart",
+  "preview.restart.title": "Restart the preview?",
+  "preview.restart.message":
+    "Your answers are thrown away and a new random order is drawn.",
+  "preview.gradeFailed": "The grading failed",
+  "preview.gradeFailedBody": "Your answers are still here. Try handing in again.",
+  "preview.empty.title": "This evaluation has no questions yet",
+  "preview.empty.body": "Add questions to the evaluation, then restart the preview.",
+  "preview.grading.title": "Grading your answers…",
+  "preview.grading.body": "Code questions run with all their test cases, which can take a few seconds.",
+  "preview.correction.title": "Preview correction",
+  "preview.correction.banner":
+    "The full correction, whatever feedback the students will get. Nothing was saved.",
+  "preview.backToEvaluation": "Back to the evaluation",
+  "preview.ungraded.title": "Some questions could not be graded",
+  "preview.ungraded.bodyOne": "One question has no points here: the grade will move once it is graded.",
+  "preview.ungraded.body": "{n} questions have no points here: the grade will move once they are graded.",
+  "preview.status.runner_unavailable": "No code runner",
+  "preview.status.llm_unavailable": "Needs an AI grader",
+  "preview.status.answer_invalid": "Answer unreadable",
+  "preview.status.grader_error": "Grading error",
+  "preview.status.no_key": "No key",
   "feedback.title": "Your results",
   "feedback.loadFailed": "Could not load your results.",
   "feedback.pending.results_pending.title": "Results not published yet",

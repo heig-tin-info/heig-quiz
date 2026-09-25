@@ -45,6 +45,9 @@ const QuestionEditor = lazy(() =>
 );
 // "See what the student sees" for one question (docs/spec/08 §8.2). Its own
 // chunk and its own full-screen page, like the attempt: it IS the player.
+const EvaluationPreviewPage = lazy(() =>
+  import("./preview/EvaluationPreviewPage").then((m) => ({ default: m.EvaluationPreviewPage })),
+);
 const StudentPreviewPage = lazy(() =>
   import("./question/StudentPreviewPage").then((m) => ({ default: m.StudentPreviewPage })),
 );
@@ -195,6 +198,9 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   // WP8: evaluation + dashboard
   evaluation: (r, c) => <EvaluationConfig id={r.id} navigate={c.navigate} />,
   live: (r, c) => <LiveDashboard id={r.id} navigate={c.navigate} />,
+  // The whole evaluation as a student gets it, statelessly (issue #75): the
+  // player, and therefore the whole screen, like the question preview.
+  evaluationPreview: (r, c) => <EvaluationPreviewPage id={r.id} navigate={c.navigate} />,
   // WP10: grading + results
   grading: (r, c) => <GradingPanel evaluationId={r.evaluationId} navigate={c.navigate} />,
   results: (r, c) => <ResultsView evaluationId={r.evaluationId} navigate={c.navigate} />,
@@ -208,13 +214,14 @@ function renderPage(route: Route, ctx: PageContext): ReactNode {
 /**
  * The views drawn on the whole screen, with no sidebar. The attempt: a zen
  * player beside a navigation sidebar is not a zen player, and an exam is the
- * one place the rest of the app must go away. The question preview, for the
- * same reason. The poll projection, for a beamer. And the join page, which a
+ * one place the rest of the app must go away. The question and evaluation previews,
+ * for the same reason. The poll projection, for a beamer. And the join page, which a
  * guest with no account reaches as well.
  */
 const FULL_SCREEN: ReadonlySet<Route["view"]> = new Set([
   "attempt",
   "questionPreview",
+  "evaluationPreview",
   "poll",
   "join",
   "oauthConsent",

@@ -37,13 +37,13 @@
  * It never decides that the attempt is over: `useAttempt` does, from a `410`
  * or from an `attempt.closed` frame, and then this renders `ClosedScreen`.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Check } from "lucide-react";
 
 import type { AttemptView } from "@quiz/contracts";
 import type { RunnerOutcome } from "@quiz/core/server";
 
-import { useAttempt } from "../attempt/useAttempt";
+import { useAttempt, type UseAttempt } from "../attempt/useAttempt";
 import { currentItem, isLocked, neighbour, segmentsOf } from "../attempt/playerReducer";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
@@ -101,6 +101,32 @@ async function simulateAnswer(
   }
 }
 
+/**
+ * What the player drives: the attempt hook's state and actions, plus the one
+ * button that is not an attempt call in every context (Simulate). `useAttempt`
+ * is the real one; the teacher's stateless preview of an evaluation
+ * (`preview/usePreviewSession.ts`, issue #75) is the other, which keeps its
+ * answers in the browser and grades them in one call — so the SAME screen
+ * renders both, and a preview cannot look different from the exam.
+ */
+export type PlayerSession = Pick<
+  UseAttempt,
+  | "state"
+  | "dispatch"
+  | "now"
+  | "deadlineAt"
+  | "closed"
+  | "paused"
+  | "setAnswer"
+  | "markDone"
+  | "submit"
+  | "run"
+> & {
+  /** Absent when nothing is saved as one types (the preview): no badge at all. */
+  sync?: UseAttempt["sync"];
+  simulate: (itemId: string, answer: unknown) => ReturnType<typeof simulateAnswer>;
+};
+
 export function Player({
   initial,
   onHome,
@@ -120,12 +146,49 @@ export function Player({
    */
   onExitStudentView?: () => void;
 }) {
+  const attempt = useAttempt(initial.attempt.id, initial);
+  const attemptId = initial.attempt.id;
+  const session = useMemo<PlayerSession>(
+    () => ({
+      ...attempt,
+      simulate: (itemId: string, answer: unknown) => simulateAnswer(attemptId, itemId, answer),
+    }),
+    [attempt, attemptId],
+  );
+  return (
+    <PlayerView
+      initial={initial}
+      session={session}
+      onHome={onHome}
+      onResults={onResults}
+      {...(onExitStudentView ? { onExitStudentView } : {})}
+    />
+  );
+}
+
+/** The screen itself, for whichever {@link PlayerSession} drives it. */
+export function PlayerView({
+  initial,
+  session,
+  onHome,
+  onResults,
+  onExitStudentView,
+  banner,
+}: {
+  initial: AttemptView;
+  session: PlayerSession;
+  onHome: () => void;
+  /** Absent where there is no feedback page to open (the preview). */
+  onResults?: (attemptId: string) => void;
+  onExitStudentView?: () => void;
+  /** Above the question, before the offline alert: the preview's own banner. */
+  banner?: ReactNode;
+}) {
   const t = useT();
   const toast = useToast();
   const confirm = useConfirm();
-  const attempt = useAttempt(initial.attempt.id, initial);
   const { state, dispatch, sync, now, deadlineAt, closed, paused, setAnswer, markDone, submit, run } =
-    attempt;
+    session;
   const [submitting, setSubmitting] = useState(false);
   const item = currentItem(state);
   const total = state.items.length;
@@ -219,7 +282,9 @@ export function Player({
         onHome={onHome}
         // A teacher preview has no attempt of its own, so there is nothing
         // to show them; every real attempt has a feedback page (WP10).
-        {...(initial.attempt.preview ? {} : { onResults: () => onResults(initial.attempt.id) })}
+        {...(initial.attempt.preview || !onResults
+          ? {}
+          : { onResults: () => onResults(initial.attempt.id) })}
       />
     );
   }
@@ -272,7 +337,7 @@ export function Player({
         deadlineAt={deadlineAt}
         now={now}
         paused={paused}
-        sync={sync}
+        {...(sync === undefined ? {} : { sync })}
         segments={manyItems ? segments : []}
         onSelectSegment={(itemId) => dispatch({ type: "goto", itemId })}
         progressLabel={t("player.progress", { n: state.index + 1, total })}
@@ -286,7 +351,12 @@ export function Player({
             {t("player.finish")}
           </Button>
         }
-        banner={<OfflineBanner show={sync === "offline"} />}
+        banner={
+          <>
+            {banner}
+            <OfflineBanner show={sync === "offline"} />
+          </>
+        }
         {...(desktop ? {} : { footer: actions })}
       >
         {item ? (
@@ -348,8 +418,7 @@ export function Player({
                   : {})}
                 {...(item.type === "circuit"
                   ? {
-                      onSimulate: (answer: unknown) =>
-                        simulateAnswer(initial.attempt.id, item.id, answer),
+                      onSimulate: (answer: unknown) => session.simulate(item.id, answer),
                     }
                   : {})}
                 {...(item.type === "codeimage"
@@ -362,7 +431,7 @@ export function Player({
                         runCodeImage({
                           student: item.student as CodeImageStudent,
                           answer: answer as CodeImageAnswer,
-                          backend: () => simulateAnswer(initial.attempt.id, item.id, answer),
+                          backend: () => session.simulate(item.id, answer),
                           options: options as
                             | { onStage?: (stage: CodeRunStage) => void }
                             | undefined,
