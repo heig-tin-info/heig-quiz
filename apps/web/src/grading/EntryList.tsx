@@ -98,10 +98,14 @@ export function EntryList({ entries, items, selectedKey, onSelect, rowLabel, cla
   }, [selectedKey, entries]);
 
   return (
+    // `relative`: the rows' `sr-only` names are `position: absolute`, and
+    // without a positioned ancestor here their containing block is the
+    // sticky aside, so the rows this list scrolls past still stretch the
+    // page into a blank tail under the panel.
     <ul
       ref={list}
       aria-label={t("grading.list.label")}
-      className={cx("space-y-0.5 overflow-y-auto p-1.5", className)}
+      className={cx("relative space-y-0.5 overflow-y-auto p-1.5", className)}
     >
       {entries.map((entry) => {
         const key = entryKey(entry);
