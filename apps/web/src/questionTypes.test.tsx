@@ -156,7 +156,7 @@ describe("question type strings", () => {
     expect(e.referenceSolutionHint).toBe(t("qt.codeimage.e.referenceSolutionHint"));
     const p = playerStrings.codeimage(t);
     expect(p.run).toBe(playerStrings.code(t).run);
-    expect(p.runHint).toBe(t("qt.codeimage.p.runHint", { count: "{count}" }));
+    expect(p.imageSection).toBe(t("qt.codeimage.p.imageSection"));
     const r = reviewStrings.codeimage(t);
     // The review shows the player's panel, and keeps its own score line.
     expect(r.viewDiff).toBe("Différence");

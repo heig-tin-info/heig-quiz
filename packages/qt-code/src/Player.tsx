@@ -394,7 +394,6 @@ export function CodePlayer({
 
       <section className={cx(card, "flex flex-col gap-3 p-4")}>
         <h3 className={sectionTitle}>{s.visibleCases}</h3>
-        <p className={hint}>{s.runHint}</p>
 
         {student.visibleCases.length === 0 ? (
           <p className={hint}>{s.noVisibleCases}</p>

@@ -15,7 +15,7 @@
  */
 import { useMemo, useState } from "react";
 
-import { fmt, plural, resolveStrings } from "@quiz/core/client";
+import { plural, resolveStrings } from "@quiz/core/client";
 import type { MarkdownRenderer, PlayerProps } from "@quiz/core/client";
 import { badge, card, cx, hint, isLocked, sectionTitle } from "@quiz/ui";
 
@@ -97,7 +97,6 @@ export function CodeImagePlayer({
   const [layout, setLayout] = useState<ImageLayout>("split");
 
   const spec = student.image;
-  const count = spec.width * spec.height;
   const regions = regionsOf(student, answer);
   const codeKey = regionsKey(regions);
   // The unchanged-code rule: the same code draws the same picture, which is
@@ -185,7 +184,6 @@ export function CodeImagePlayer({
             />
           )}
         </div>
-        <p className={hint}>{fmt(s.runHint, { count })}</p>
         {onRun !== undefined && unchanged && !locked ? (
           <p className={hint}>{s.unchangedRun}</p>
         ) : null}

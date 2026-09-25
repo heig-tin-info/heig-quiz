@@ -76,7 +76,6 @@ export const IMAGE_EDITOR_STRINGS: ImageEditorStrings = {
 
 export interface ImagePlayerStrings {
   imageSection: string;
-  runHint: string;
   view: string;
   viewTarget: string;
   viewComputed: string;
@@ -108,8 +107,6 @@ export interface ImagePlayerStrings {
 
 export const IMAGE_PLAYER_STRINGS: ImagePlayerStrings = {
   imageSection: "Image",
-  runHint:
-    "Runs your program once and draws the {count} integers it prints, row by row. Nothing here is graded; the server grades your final code.",
   view: "View",
   viewTarget: "Target",
   viewComputed: "Computed",

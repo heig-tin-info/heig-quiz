@@ -196,7 +196,6 @@ export interface CodePlayerStrings {
   loadingRuntime: string;
   runUnavailable: string;
   runFailed: string;
-  runHint: string;
   visibleCases: string;
   noVisibleCases: string;
   hiddenCases: string;
@@ -252,7 +251,6 @@ export const PLAYER_STRINGS: CodePlayerStrings = {
   runUnavailable:
     "Running is unavailable right now. Your answer is saved and will be graded by your teacher.",
   runFailed: "The run could not be completed. Your answer is saved; try again in a moment.",
-  runHint: "Runs the visible cases. Hidden cases are only run when the question is graded.",
   visibleCases: "Visible cases",
   noVisibleCases: "Your teacher did not publish any visible case.",
   hiddenCases: "{count} hidden cases, worth {points} point(s) in total.",
