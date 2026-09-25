@@ -15,6 +15,7 @@ import {
   GradingIdParam,
   GradingQuery,
   GradingRunBody,
+  GradingStepsQuery,
   IdParam,
   ItemParam,
   type ItemVersions,
@@ -101,6 +102,15 @@ export async function gradingPlugin(app: FastifyInstance) {
   );
 
   // --- The panel ---------------------------------------------------------
+
+  /** The steps of a traversal and their state, for the step picker (#107). */
+  app.get(
+    "/app/api/evaluations/:id/grading/steps",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, query: GradingStepsQuery, load: staffEvaluation }, ({ query, scope }) =>
+      service.gradingSteps(app.db, scope.evaluation, query),
+    ),
+  );
 
   app.get(
     "/app/api/evaluations/:id/grading",

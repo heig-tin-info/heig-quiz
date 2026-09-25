@@ -10,25 +10,31 @@ import type {
   GradingQueueItem,
   GradingSource,
   GradingState,
+  GradingSteps,
 } from "@quiz/contracts";
 
 import { api } from "../api";
 import {
   evaluationKey,
   gradingQueueKey,
-  gradingRosterKey,
+  gradingStepsKey,
   resultsByQuestionKey,
 } from "../queryKeys";
+import { entryKey } from "./EntryList";
 import { proposalsFirst, type GradingOrder } from "./labels";
 import { useGradingProgress } from "./progress";
 
 /**
  * Everything the grading panel reads, and what it derives from it: the path
- * of steps (questions, or students), the step the teacher is on, and the
- * filtered, proposals-first list of that step's answers.
+ * of steps (questions, or students) with the state of each, the step the
+ * teacher is on, the filtered, proposals-first list of that step's answers,
+ * and the answer open among them.
  *
- * The panel owns the choices — order, step, filters, names — and this hook
- * turns them into requests. Names in particular are a REQUEST parameter
+ * The panel owns the choices — order, step, open answer, filters, names —
+ * and this hook turns them into requests and into a POSITION: which step,
+ * which answer, and what lies either side. The step picker, the answer list,
+ * the detail's Previous / Next and the keyboard all read that one position,
+ * so none of them keeps a copy that could drift from the others. Names in particular are a REQUEST parameter
  * (`?anonymous=0`), never a client-side unmasking (F-GRADE-03, decision D20).
  */
 
@@ -41,23 +47,58 @@ export type Any = typeof ANY;
 export interface TraversalChoices {
   order: GradingOrder;
   index: number;
+  /** The open answer (`entryKey`), when there is one. */
+  selected?: string | null;
   stateFilter: StateFilter;
   source: GradingSource | Any;
   confidence: GradingConfidence | Any;
   showNames: boolean;
 }
 
+/** The cells of one step, counted on the server (#107). */
+export interface StepState {
+  total: number;
+  validated: number;
+  proposed: number;
+}
+
 export interface Step {
   key: string;
   label: string;
+  /** A teacher's own test walk (ADR-018), traversing by student. */
+  staff?: boolean;
+  /** Absent until the step summary lands, or when it could not be read. */
+  state?: StepState;
+}
+
+/** What a step still asks for, in the one word the picker shows. */
+export type StepStatus = "toValidate" | "done" | "ungraded";
+
+export function stepStatus(state: StepState): StepStatus {
+  if (state.proposed > 0) return "toValidate";
+  return state.validated >= state.total ? "done" : "ungraded";
+}
+
+/**
+ * The answer `delta` places away from `selected`, clamped at both ends: the
+ * steps wrap (the chevrons go round), the answers of a step do not — past
+ * the last one the teacher has finished the step, not started it over.
+ */
+export function neighbour(
+  entries: readonly GradingEntry[],
+  selected: string | null,
+  delta: number,
+): string | null {
+  if (entries.length === 0) return null;
+  const at = entries.findIndex((e) => entryKey(e) === selected);
+  const next = entries[Math.min(entries.length - 1, Math.max(0, at + delta))];
+  return next ? entryKey(next) : null;
 }
 
 const NO_COUNTS: GradingQueue["counts"] = { total: 0, validated: 0, proposed: 0, missing: 0 };
 
-export function useGradingTraversal(
-  evaluationId: string,
-  { order, index, stateFilter, source, confidence, showNames }: TraversalChoices,
-) {
+export function useGradingTraversal(evaluationId: string, choices: TraversalChoices) {
+  const { order, index, stateFilter, source, confidence, showNames } = choices;
   // --- The evaluation and its items -------------------------------------
 
   const evaluation = useQuery<EvaluationDetail>({
@@ -79,33 +120,37 @@ export function useGradingTraversal(
   const anonymous = showNames ? "0" : "1";
 
   /**
-   * The students, read from the queue of the FIRST question: one entry per
-   * attempt, already carrying the label the server decided to show. It saves
-   * an endpoint, and the pseudonyms cannot drift from the ones the list
-   * below prints, because they come from the same place.
+   * The steps and their state (`GET …/grading/steps`): three counters per
+   * step, never an answer. By student it is also the roster — the step
+   * labels are the server's, by the same rule as the entries' labels, so a
+   * pseudonym in the picker is the pseudonym in the list. By question the
+   * labels come from the items and only the counters are read here, so the
+   * path is drawn before the summary lands, and without it if it fails.
    */
-  const roster = useQuery<GradingQueue>({
-    queryKey: gradingRosterKey(evaluationId, items[0]?.id ?? "", anonymous),
-    enabled: order === "student" && items.length > 0,
+  const summary = useQuery<GradingSteps>({
+    queryKey: gradingStepsKey(evaluationId, order, anonymous),
+    enabled: items.length > 0,
     queryFn: () =>
-      api(
-        `/app/api/evaluations/${evaluationId}/grading?by=question&itemId=${items[0]!.id}&anonymous=${anonymous}`,
-      ),
+      api(`/app/api/evaluations/${evaluationId}/grading/steps?by=${order}&anonymous=${anonymous}`),
   });
-  const students = useMemo(
-    () => (roster.data?.entries ?? []).map((e) => ({ key: e.attemptId, label: e.label })),
-    [roster.data],
-  );
 
-  const steps = useMemo<Step[]>(
-    () =>
-      order === "question"
-        ? // `position` is 0-based on the wire; every screen of this app numbers
-          // questions from 1, and the step counter above this list does too.
-          items.map((i) => ({ key: i.id, label: `${i.position + 1}. ${i.internalName}` }))
-        : students,
-    [order, items, students],
-  );
+  const steps = useMemo<Step[]>(() => {
+    const summaries = summary.data?.order === order ? summary.data.steps : [];
+    const stateOf = (s: GradingSteps["steps"][number]): StepState => ({
+      total: s.total,
+      validated: s.validated,
+      proposed: s.proposed,
+    });
+    const byKey = new Map(summaries.map((s) => [s.key, stateOf(s)]));
+    return order === "question"
+      ? // `position` is 0-based on the wire; every screen of this app numbers
+        // questions from 1, and the step counter above this list does too.
+        items.map((i) => {
+          const state = byKey.get(i.id);
+          return { key: i.id, label: `${i.position + 1}. ${i.internalName}`, ...(state ? { state } : {}) };
+        })
+      : summaries.map((s) => ({ key: s.key, label: s.label, staff: s.staff, state: stateOf(s) }));
+  }, [order, items, summary.data]);
   const step: Step | undefined = steps[Math.min(index, Math.max(0, steps.length - 1))];
 
   // --- The queue of the current step -------------------------------------
@@ -162,6 +207,12 @@ export function useGradingTraversal(
     [queue.data, matches],
   );
 
+  // --- The position -----------------------------------------------------
+
+  const selected = choices.selected ?? null;
+  const at = entries.findIndex((e) => entryKey(e) === selected);
+  const current = at < 0 ? null : { entry: entries[at]!, index: at };
+
   return {
     evaluation,
     items,
@@ -173,5 +224,7 @@ export function useGradingTraversal(
     counts: queue.data?.counts ?? NO_COUNTS,
     progress,
     explanations,
+    /** The open answer and its place in `entries`; null before one is open. */
+    current,
   };
 }

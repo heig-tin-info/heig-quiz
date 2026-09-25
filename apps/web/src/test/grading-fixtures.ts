@@ -3,6 +3,7 @@ import type {
   Grading,
   GradingEntry,
   GradingQueue,
+  GradingSteps,
   ResultsView,
   StudentFeedback,
 } from "@quiz/contracts";
@@ -89,6 +90,32 @@ export function makeQueue(entries: GradingEntry[], over: Partial<GradingQueue> =
       missing: entries.length - validated - proposed,
     },
     ...over,
+  };
+}
+
+/**
+ * `GET …/grading/steps`: one step per key, each with its three counters.
+ * Labels default to the key; `total` defaults to what is validated plus
+ * proposed, so a step reads "all validated" unless it says otherwise.
+ */
+export function makeSteps(
+  order: GradingSteps["order"],
+  steps: (Partial<GradingSteps["steps"][number]> & { key: string })[],
+): GradingSteps {
+  return {
+    order,
+    steps: steps.map((s) => {
+      const validated = s.validated ?? 0;
+      const proposed = s.proposed ?? 0;
+      return {
+        label: s.key,
+        staff: false,
+        ...s,
+        validated,
+        proposed,
+        total: s.total ?? validated + proposed,
+      };
+    }),
   };
 }
 

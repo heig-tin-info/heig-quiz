@@ -280,6 +280,38 @@ describe("the panel queue (F-GRADE-03)", () => {
     expect(oneAttempt.counts).toEqual({ total: 2, validated: 1, proposed: 0, missing: 1 });
   });
 
+  it("summarises the steps of both orders with the queue's own counts (#107)", async () => {
+    const { evaluation, items, attempts: rows, queue } = await queueFixture();
+    const record = (await byId(db, evaluation.id))!;
+
+    const byQuestion = await service.gradingSteps(db, record, { by: "question", anonymous: true });
+    expect(byQuestion.order).toBe("question");
+    expect(byQuestion.steps.map((s) => [s.key, s.total, s.validated, s.proposed, s.staff])).toEqual([
+      [items[0]!.item.id, 2, 2, 0, false],
+      [items[1]!.item.id, 2, 0, 1, false],
+    ]);
+    // Each step counts what its queue counts.
+    for (const step of byQuestion.steps) {
+      const counts = (await queue({ itemId: step.key })).counts;
+      expect({ total: step.total, validated: step.validated, proposed: step.proposed }).toEqual({
+        total: counts.total,
+        validated: counts.validated,
+        proposed: counts.proposed,
+      });
+    }
+
+    const byStudent = await service.gradingSteps(db, record, { by: "student", anonymous: true });
+    expect(byStudent.steps.map((s) => [s.key, s.total, s.validated, s.proposed])).toEqual([
+      [rows[0]!.id, 2, 1, 1],
+      [rows[1]!.id, 2, 1, 0],
+    ]);
+    // The labels are the queue's: a pseudonym by default, the name on request.
+    const anonymousLabels = (await queue({ by: "student" })).raw.map((e) => e.label);
+    expect(byStudent.steps.map((s) => s.label)).toEqual([anonymousLabels[0], anonymousLabels[2]]);
+    const named = await service.gradingSteps(db, record, { by: "student", anonymous: false });
+    expect(named.steps.map((s) => s.label)).toEqual(["Test student", "Test student"]);
+  });
+
   it("labels, views and history of every entry", async () => {
     const { queue } = await queueFixture();
     const named = (await queue({ anonymous: false })).raw;

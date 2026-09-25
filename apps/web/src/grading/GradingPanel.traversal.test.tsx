@@ -7,7 +7,13 @@ import type { GradingEntry } from "@quiz/contracts";
 import { DICTS } from "../i18n";
 import { makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
 import { GradingPanel } from "./GradingPanel";
-import { makeEntry, makeEvaluationDetail, makeGrading, makeQueue } from "../test/grading-fixtures";
+import {
+  makeEntry,
+  makeEvaluationDetail,
+  makeGrading,
+  makeQueue,
+  makeSteps,
+} from "../test/grading-fixtures";
 
 /*
  * The TRAVERSAL of the grading panel, pinned before FF-05 pulls it out of the
@@ -15,8 +21,9 @@ import { makeEntry, makeEvaluationDetail, makeGrading, makeQueue } from "../test
  *
  * Everything asserted here is a rule the extracted hooks have to keep:
  *   - the two orders and the REQUEST each one produces — by question the
- *     steps are the items, by student they are the attempts of the roster,
- *     read from the queue of the first question rather than a sixth endpoint;
+ *     steps are the items, by student they are the attempts, read from the
+ *     step summary (`…/grading/steps`, #107), which also gives every step its
+ *     state for the step picker;
  *   - the filters, which are partly server-side (`state`) and partly
  *     client-side (`source`, `confidence`) — a distinction that is invisible
  *     on screen and very visible in the network tab;
@@ -35,6 +42,7 @@ const BY_QUESTION = (itemId: string, extra = "") =>
   `${EVAL}/grading?by=question&itemId=${itemId}&anonymous=1${extra}`;
 const BY_STUDENT = (attemptId: string, extra = "") =>
   `${EVAL}/grading?by=student&attemptId=${attemptId}&anonymous=1${extra}`;
+const STEPS = (by: "question" | "student") => `${EVAL}/grading/steps?by=${by}&anonymous=1`;
 
 /**
  * Four answers of the first question, deliberately NOT in the order the panel
@@ -69,6 +77,20 @@ function routes(over: Record<string, ReturnType<typeof ok>> = {}) {
     [`GET ${EVAL}`]: ok(makeEvaluationDetail()),
     [`GET ${BY_QUESTION("i1")}`]: ok(makeQueue(ENTRIES)),
     [`GET ${BY_QUESTION("i2")}`]: ok(makeQueue([])),
+    [`GET ${STEPS("question")}`]: ok(
+      makeSteps("question", [
+        { key: "i1", validated: 2, proposed: 2 },
+        { key: "i2", validated: 0, total: 4 },
+      ]),
+    ),
+    [`GET ${STEPS("student")}`]: ok(
+      makeSteps("student", [
+        { key: "a1", label: "Amber Lynx", validated: 2 },
+        { key: "a2", label: "Bold Raven", validated: 1, proposed: 1 },
+        { key: "a3", label: "Calm Heron", validated: 2 },
+        { key: "a4", label: "Wise Otter", proposed: 2 },
+      ]),
+    ),
     [`GET ${EVAL}/grading/progress`]: ok({
       done: 6,
       total: 6,
@@ -91,32 +113,36 @@ function setup(over: Record<string, ReturnType<typeof ok>> = {}) {
 }
 
 /*
- * A row's accessible name is `grading.entry.open` with the label substituted
- * in. Taken from the dictionary rather than retyped here: an English string
- * in a test is a second, silent translation of a key that N-I18N-01 says has
- * exactly one, and rewording the entry would leave these queries matching
- * nothing with no hint as to why.
+ * A row's accessible name is `grading.entry.row` — "{label}, {state},
+ * {score}". The label is what comes before the first separator of that
+ * template, taken from the dictionary rather than retyped here: an English
+ * string in a test is a second, silent translation of a key that N-I18N-01
+ * says has exactly one.
  */
-const OPEN_TEMPLATE = DICTS.en["grading.entry.open"]!;
-const OPEN_PREFIX = OPEN_TEMPLATE.slice(0, OPEN_TEMPLATE.indexOf("{label}"));
+const ROW_TEMPLATE = DICTS.en["grading.entry.row"]!;
+const SEPARATOR = ROW_TEMPLATE.slice(
+  ROW_TEMPLATE.indexOf("{label}") + "{label}".length,
+  ROW_TEMPLATE.indexOf("{state}"),
+);
 
-/** The rows of the list, in the order they are shown. */
-const rows = () => screen.getAllByRole("button", { name: (name) => name.startsWith(OPEN_PREFIX) });
+/** The rows of the answer list, in the order they are shown. */
+const rows = () =>
+  within(screen.getByRole("list", { name: DICTS.en["grading.list.label"] })).getAllByRole(
+    "button",
+  );
 const labels = () =>
-  rows().map((r) => (r.getAttribute("aria-label") ?? "").slice(OPEN_PREFIX.length));
-const openIndex = () => rows().findIndex((r) => r.getAttribute("aria-expanded") === "true");
+  rows().map((r) => {
+    const name = r.getAttribute("aria-label") ?? "";
+    return name.slice(0, name.indexOf(SEPARATOR));
+  });
+const openIndex = () => rows().findIndex((r) => r.getAttribute("aria-current") === "true");
 
-/**
- * Opens the row at `index` the only way that works today.
- *
- * `EntryList` spreads `pressable()` on the row and gives it no `onClick`, so
- * the row answers Enter and Space and IGNORES the mouse — see the last test
- * of this file, which pins that. Everything else here is about the
- * traversal, not about that defect, so it goes through the keyboard.
- */
+/** The one detail area, and the name its header shows. */
+const detail = () => screen.getByRole("region", { name: DICTS.en["grading.detail.label"] });
+
+/** Opens the row at `index` as a teacher does: with the mouse. */
 async function openRow(user: ReturnType<typeof userEvent.setup>, index: number) {
-  rows()[index]!.focus();
-  await user.keyboard("{Enter}");
+  await user.click(rows()[index]!);
 }
 
 beforeEach(() => {
@@ -143,17 +169,20 @@ describe("GradingPanel — the order of the traversal", () => {
     expect(await screen.findByText("Question 1 of 2")).toBeVisible();
   });
 
-  it("reads the students off the queue of the FIRST question, not a sixth endpoint", async () => {
+  it("reads the students from the step summary, never from a queue", async () => {
     const user = userEvent.setup();
     const { calls } = setup({ [`GET ${BY_STUDENT("a1")}`]: ok(makeQueue([ENTRIES[0]!])) });
     await screen.findByText("Question 1 of 2");
 
     await user.click(screen.getByRole("radio", { name: "By student" }));
     expect(await screen.findByText("Student 1 of 4")).toBeVisible();
-    // The roster and the queue share the same URL, so the cache answers the
-    // second one: no extra endpoint exists for the list of students.
-    expect(calls.every((c) => !c.url.includes("/roster"))).toBe(true);
+    expect(calls.some((c) => c.url === STEPS("student"))).toBe(true);
     expect(calls.some((c) => c.url === BY_STUDENT("a1"))).toBe(true);
+    // No whole queue is downloaded just to learn who the students are.
+    expect(calls.filter((c) => c.url.includes("/grading?")).map((c) => c.url)).toEqual([
+      BY_QUESTION("i1"),
+      BY_STUDENT("a1"),
+    ]);
   });
 
   it("switches the queue to `by=student` and restarts at the first step", async () => {
@@ -423,30 +452,19 @@ describe("GradingPanel — the keyboard", () => {
     expect(screen.getByRole("dialog")).toBeVisible();
   });
 
-  /*
-   * DEFECT, pinned as it stands so the fix is a visible flip of this test.
-   *
-   * `EntryList.tsx` spreads `pressable(() => onSelect(key))` on the row and
-   * never adds the `onClick` that `pressable`'s own documentation says to
-   * spread it next to ("Spread it next to the element's own `onClick`",
-   * ui/layers.tsx). The row therefore carries `cursor-pointer`, announces itself as
-   * a button and answers Enter and Space — and does nothing at all when it
-   * is clicked, which is how every teacher will actually use it. When the
-   * `onClick` is added, this expectation becomes `toBe(2)` and the name
-   * becomes "opens the row that is clicked".
-   */
-  it("today: a mouse click on a row selects nothing (no onClick beside `pressable`)", async () => {
+  it("opens the row that is clicked, and Enter on a focused row does the same", async () => {
     const user = userEvent.setup();
     setup();
     await screen.findByText("Question 1 of 2");
     await waitFor(() => expect(openIndex()).toBe(0));
 
     await user.click(rows()[2]!);
-    expect(openIndex()).toBe(0);
-    // The same row DOES answer the keyboard, which is what makes the gap a
-    // missing handler rather than a disabled list.
+    expect(openIndex()).toBe(2);
+    expect(within(detail()).getByText("Amber Lynx")).toBeVisible();
+
+    rows()[3]!.focus();
     await user.keyboard("{Enter}");
-    await waitFor(() => expect(openIndex()).toBe(2));
+    await waitFor(() => expect(openIndex()).toBe(3));
   });
 
   it("leaves a browser shortcut alone", async () => {
@@ -457,5 +475,185 @@ describe("GradingPanel — the keyboard", () => {
     // Ctrl/Cmd/Alt belong to the browser, never to the panel.
     await user.keyboard("{Control>}{ArrowRight}{/Control}");
     expect(openIndex()).toBe(0);
+  });
+});
+
+describe("GradingPanel — one answer at a fixed place (#102)", () => {
+  it("replaces the detail in place on Next and Previous", async () => {
+    const user = userEvent.setup();
+    setup();
+    await screen.findByText("Question 1 of 2");
+    await waitFor(() => expect(openIndex()).toBe(0));
+
+    const area = detail();
+    expect(within(area).getByText("Bold Raven")).toBeVisible();
+    expect(within(area).getByText("Answer 1 of 4")).toBeVisible();
+    // At the first answer there is nothing before it.
+    expect(within(area).getByRole("button", { name: "Previous answer" })).toBeDisabled();
+
+    await user.click(within(area).getByRole("button", { name: "Next answer" }));
+    // The SAME element, with new content: nothing was collapsed and expanded
+    // a row lower, which is what made the answer slide down the page.
+    expect(detail()).toBe(area);
+    expect(within(area).getByText("Wise Otter")).toBeVisible();
+    expect(within(area).getByText("Answer 2 of 4")).toBeVisible();
+    expect(within(area).queryByText("Bold Raven")).toBeNull();
+    expect(openIndex()).toBe(1);
+    expect(screen.getAllByRole("region", { name: DICTS.en["grading.detail.label"] })).toHaveLength(1);
+
+    await user.click(within(area).getByRole("button", { name: "Previous answer" }));
+    expect(within(area).getByText("Bold Raven")).toBeVisible();
+    expect(openIndex()).toBe(0);
+  });
+
+  it("stops Next at the last answer", async () => {
+    const user = userEvent.setup();
+    setup();
+    await screen.findByText("Question 1 of 2");
+    await waitFor(() => expect(labels()).toHaveLength(4));
+    await openRow(user, 3);
+    expect(within(detail()).getByRole("button", { name: "Next answer" })).toBeDisabled();
+  });
+
+  it("offers the answers as a select for a phone, bound to the same position", async () => {
+    const user = userEvent.setup();
+    setup();
+    await screen.findByText("Question 1 of 2");
+    const picker = await screen.findByRole("combobox", { name: DICTS.en["grading.list.pick"] });
+    await waitFor(() => expect(openIndex()).toBe(0));
+    expect(within(picker).getAllByRole("option")).toHaveLength(4);
+
+    await user.selectOptions(picker, "a3:i1");
+    expect(openIndex()).toBe(3);
+    expect(within(detail()).getByText("Calm Heron")).toBeVisible();
+    // The keyboard walks from where the select left it.
+    await user.click(document.body);
+    await user.keyboard("{ArrowLeft}");
+    expect(openIndex()).toBe(2);
+    expect(picker).toHaveValue("a1:i1");
+  });
+});
+
+describe("GradingPanel — the step picker (#107)", () => {
+  const openPicker = async (user: ReturnType<typeof userEvent.setup>, title: string) => {
+    await user.click(screen.getByRole("button", { name: new RegExp(`^${title}`) }));
+    return screen.getByRole("listbox");
+  };
+
+  it("lists every step with its state", async () => {
+    const user = userEvent.setup();
+    setup();
+    await screen.findByText("Question 1 of 2");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /^Question 1 of 2/ })).toBeEnabled(),
+    );
+    const list = await openPicker(user, "Question 1 of 2");
+    await waitFor(() => expect(within(list).getAllByRole("option")).toHaveLength(2));
+    const [first, second] = within(list).getAllByRole("option");
+    expect(first).toHaveTextContent("1. sizeof-ptr");
+    expect(first).toHaveTextContent("2 to validate");
+    expect(first).toHaveTextContent("current");
+    expect(second).toHaveTextContent("4 not graded");
+  });
+
+  it("filters the students and jumps to the one picked", async () => {
+    const user = userEvent.setup();
+    const { calls } = setup({
+      [`GET ${BY_STUDENT("a1")}`]: ok(makeQueue([ENTRIES[0]!])),
+      [`GET ${BY_STUDENT("a3")}`]: ok(makeQueue([ENTRIES[2]!])),
+    });
+    await screen.findByText("Question 1 of 2");
+    await user.click(screen.getByRole("radio", { name: "By student" }));
+    await screen.findByText("Student 1 of 4");
+
+    const list = await openPicker(user, "Student 1 of 4");
+    expect(within(list).getAllByRole("option")).toHaveLength(4);
+    expect(within(list).getAllByRole("option")[0]).toHaveTextContent("All validated");
+    await user.keyboard("heron");
+    const options = within(list).getAllByRole("option");
+    expect(options).toHaveLength(1);
+    expect(options[0]).toHaveTextContent("Calm Heron");
+
+    await user.keyboard("{Enter}");
+    expect(await screen.findByText("Student 3 of 4")).toBeVisible();
+    expect(screen.queryByRole("listbox")).toBeNull();
+    // The focus goes back to the button it came from.
+    expect(screen.getByRole("button", { name: /^Student 3 of 4/ })).toHaveFocus();
+    await waitFor(() => expect(calls.some((c) => c.url === BY_STUDENT("a3"))).toBe(true));
+  });
+
+  it("jumps on a click, says so when nothing matches, and closes on Escape", async () => {
+    const user = userEvent.setup();
+    setup();
+    await screen.findByText("Question 1 of 2");
+    let list = await openPicker(user, "Question 1 of 2");
+    await user.keyboard("zzz");
+    expect(within(list).getByText(/Nothing matches/)).toBeVisible();
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("listbox")).toBeNull();
+
+    list = await openPicker(user, "Question 1 of 2");
+    await user.click(within(list).getByRole("option", { name: /array-decay/ }));
+    expect(await screen.findByText("Question 2 of 2")).toBeVisible();
+  });
+
+  it("leaves the answer keys alone while its field is typed in", async () => {
+    const user = userEvent.setup();
+    setup();
+    await screen.findByText("Question 1 of 2");
+    await waitFor(() => expect(openIndex()).toBe(0));
+    await openPicker(user, "Question 1 of 2");
+    await user.keyboard("vo{ArrowRight}");
+    expect(openIndex()).toBe(0);
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});
+
+describe("GradingPanel — the step picker's button", () => {
+  it("closes the panel when pressed again", async () => {
+    const user = userEvent.setup();
+    setup();
+    await screen.findByText("Question 1 of 2");
+    const button = screen.getByRole("button", { name: /^Question 1 of 2/ });
+    await user.click(button);
+    expect(screen.getByRole("listbox")).toBeVisible();
+    await user.click(button);
+    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(button).toHaveAttribute("aria-expanded", "false");
+  });
+});
+
+describe("GradingPanel — focus and the staff row", () => {
+  it("moves the focus with the selection when it was in the list", async () => {
+    const user = userEvent.setup();
+    setup();
+    await screen.findByText("Question 1 of 2");
+    await waitFor(() => expect(openIndex()).toBe(0));
+    await user.click(rows()[1]!);
+    expect(rows()[1]).toHaveFocus();
+    await user.keyboard("{ArrowRight}");
+    expect(openIndex()).toBe(2);
+    expect(rows()[2]).toHaveFocus();
+    // Enter now acts on the open row, not on the one clicked before.
+    await user.keyboard("{Enter}");
+    expect(openIndex()).toBe(2);
+  });
+
+  it("says a teacher's own attempt out loud, not only with an icon", async () => {
+    setup({
+      [`GET ${BY_QUESTION("i1")}`]: ok(
+        makeQueue([makeEntry({ attemptId: "a9", label: "Prof Démo", staff: true })]),
+      ),
+    });
+    await screen.findByText("Question 1 of 2");
+    await waitFor(() => expect(rows()).toHaveLength(1));
+    expect(rows()[0]!.getAttribute("aria-label")).toMatch(/^Prof Démo \(.+\), /);
+  });
+
+  it("keeps the batch banner, quiet, once nothing is left to validate", async () => {
+    setup({ [`GET ${BY_QUESTION("i1")}`]: ok(makeQueue([ENTRIES[0]!, ENTRIES[2]!])) });
+    await screen.findByText("Question 1 of 2");
+    expect(await screen.findByText(DICTS.en["grading.batch.none"]!)).toBeVisible();
+    expect(screen.queryByRole("button", { name: /Validate \d+ proposal/ })).toBeNull();
   });
 });

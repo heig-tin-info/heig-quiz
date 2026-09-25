@@ -520,6 +520,40 @@ on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
   };
 });
 
+/** The path of a traversal with each step's state (#107): three counters per step. */
+on("GET", "/app/api/evaluations/:id/grading/steps", (m, _body, url) => {
+  const e = gradingWorldOr404(m.groups!.id!);
+  const by = url.searchParams.get("by") === "student" ? "student" : "question";
+  const anonymous = url.searchParams.get("anonymous") !== "0";
+  const tally = (cells: { a: MockAttempt; i: MockEvalItem }[]) => {
+    let validated = 0;
+    let proposed = 0;
+    for (const { a, i } of cells) {
+      const g = standingGrading(e, a.id, i.id);
+      if (g?.state === "validated") validated += 1;
+      else if (g?.state === "proposed") proposed += 1;
+    }
+    return { total: cells.length, validated, proposed };
+  };
+  return {
+    order: by,
+    steps:
+      by === "question"
+        ? e.items.map((i) => ({
+            key: i.id,
+            label: i.internalName,
+            staff: false,
+            ...tally(e.attempts.map((a) => ({ a, i }))),
+          }))
+        : e.attempts.map((a) => ({
+            key: a.id,
+            label: anonymous ? a.pseudonym : a.displayName,
+            staff: a.staff,
+            ...tally(e.items.map((i) => ({ a, i }))),
+          })),
+  };
+});
+
 on("GET", "/app/api/evaluations/:id/grading/progress", (m) => {
   const e = gradingWorldOr404(m.groups!.id!);
   const total = e.attempts.length * e.items.length;

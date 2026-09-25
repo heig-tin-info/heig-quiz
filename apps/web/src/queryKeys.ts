@@ -98,9 +98,9 @@ export const attemptInspectPrefix = (evaluationId: string) =>
 
 /** The prefix of every grading read of one evaluation. */
 export const gradingKey = (evaluationId: string) => ["grading", evaluationId] as const;
-/** `anonymous` is the `"0"`/`"1"` the request carries. */
-export const gradingRosterKey = (evaluationId: string, itemId: string, anonymous: string) =>
-  ["grading", evaluationId, "roster", itemId, anonymous] as const;
+/** The steps of a traversal and their state. `anonymous` is the `"0"`/`"1"` the request carries. */
+export const gradingStepsKey = (evaluationId: string, order: string, anonymous: string) =>
+  ["grading", evaluationId, "steps", order, anonymous] as const;
 export const gradingQueueKey = (
   evaluationId: string,
   scope: string | null,

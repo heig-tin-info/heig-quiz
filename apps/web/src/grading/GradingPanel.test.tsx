@@ -3,7 +3,13 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GradingPanel } from "./GradingPanel";
-import { makeEntry, makeEvaluationDetail, makeGrading, makeQueue } from "../test/grading-fixtures";
+import {
+  makeEntry,
+  makeEvaluationDetail,
+  makeGrading,
+  makeQueue,
+  makeSteps,
+} from "../test/grading-fixtures";
 import { mockFetch, ok, renderWithProviders } from "../test/render";
 
 /*
@@ -16,6 +22,12 @@ import { mockFetch, ok, renderWithProviders } from "../test/render";
 
 const EVAL = "/app/api/evaluations/e1";
 const QUEUE = (itemId: string) => `${EVAL}/grading?by=question&itemId=${itemId}&anonymous=1`;
+
+/** The rows of the answer list, and the one marked current. */
+const findRows = () =>
+  screen.findAllByRole("button", { name: /^(Swift Otter|Calm Ibex|Golden Lynx|Marie Rochat), / });
+const currentRow = async () =>
+  (await findRows()).findIndex((r) => r.getAttribute("aria-current") === "true");
 
 const entries = [
   makeEntry({ attemptId: "a1", label: "Swift Otter" }),
@@ -32,6 +44,9 @@ function routes(over: Record<string, unknown> = {}) {
     [`GET ${EVAL}`]: ok(makeEvaluationDetail()),
     [`GET ${QUEUE("i1")}`]: ok(makeQueue(entries)),
     [`GET ${QUEUE("i2")}`]: ok(makeQueue([])),
+    [`GET ${EVAL}/grading/steps?by=question&anonymous=1`]: ok(
+      makeSteps("question", [{ key: "i1", proposed: 2, validated: 1 }, { key: "i2" }]),
+    ),
     [`GET ${EVAL}/grading/progress`]: ok({
       done: 6,
       total: 6,
@@ -49,7 +64,7 @@ beforeEach(() => {
 });
 
 describe("GradingPanel", () => {
-  it("opens on the first question with the proposals first and the first one expanded", async () => {
+  it("opens on the first question with the proposals first and the first one shown", async () => {
     mockFetch(routes());
     renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
 
@@ -59,19 +74,16 @@ describe("GradingPanel", () => {
     // EVALUATION query, the rows from the separate grading one. On a loaded
     // runner the second lands a tick later, and a synchronous read here saw
     // an empty list about one run in thirty.
-    const rows = await screen.findAllByRole("button", { name: /Open the answer of/ });
+    const rows = await findRows();
     // The validated one sits last: proposals are what the teacher came for.
     expect(rows.map((r) => r.getAttribute("aria-label"))).toEqual([
-      "Open the answer of Swift Otter",
-      "Open the answer of Calm Ibex",
-      "Open the answer of Golden Lynx",
+      "Swift Otter, to validate, 2 / 2",
+      "Calm Ibex, to validate, 2 / 2",
+      "Golden Lynx, validated, 0 / 2",
     ]);
-    await waitFor(() =>
-      expect(screen.getAllByRole("button", { name: /Open the answer of/ })[0]).toHaveAttribute(
-        "aria-expanded",
-        "true",
-      ),
-    );
+    await waitFor(async () => expect(await currentRow()).toBe(0));
+    const detail = screen.getByRole("region", { name: "The open answer" });
+    expect(within(detail).getByText("Swift Otter")).toBeVisible();
   });
 
   it("walks the questions from the header", async () => {
@@ -88,29 +100,25 @@ describe("GradingPanel", () => {
     renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
     // The rows, not just the step counter: `v` acts on the OPEN entry, and
     // the entries come from the grading query.
-    await screen.findAllByRole("button", { name: /Open the answer of/ });
+    await findRows();
 
     await userEvent.keyboard("v");
     await waitFor(() =>
       expect(calls.some((c) => c.url === "/app/api/gradings/g1/validate")).toBe(true),
     );
-    const rows = await screen.findAllByRole("button", { name: /Open the answer of/ });
-    expect(rows[0]).toHaveAttribute("aria-expanded", "false");
-    expect(rows[1]).toHaveAttribute("aria-expanded", "true");
+    await waitFor(async () => expect(await currentRow()).toBe(1));
   });
 
   it("moves between answers with the arrows without grading anything", async () => {
     const { calls } = mockFetch(routes());
     renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
     // The arrows walk the entries, so they must exist before the keystrokes.
-    await screen.findAllByRole("button", { name: /Open the answer of/ });
+    await findRows();
 
     await userEvent.keyboard("{ArrowRight}{ArrowRight}");
-    let rows = await screen.findAllByRole("button", { name: /Open the answer of/ });
-    expect(rows[2]).toHaveAttribute("aria-expanded", "true");
+    expect(await currentRow()).toBe(2);
     await userEvent.keyboard("{ArrowLeft}");
-    rows = await screen.findAllByRole("button", { name: /Open the answer of/ });
-    expect(rows[1]).toHaveAttribute("aria-expanded", "true");
+    expect(await currentRow()).toBe(1);
     expect(calls.every((c) => c.method === "GET")).toBe(true);
   });
 
@@ -118,7 +126,7 @@ describe("GradingPanel", () => {
     mockFetch(routes());
     renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
     // `o` adjusts the OPEN entry, so wait for the entries and not the counter.
-    await screen.findAllByRole("button", { name: /Open the answer of/ });
+    await findRows();
 
     await userEvent.keyboard("o");
     expect(await screen.findByRole("dialog")).toHaveAccessibleName("Adjust this grading");
@@ -170,7 +178,8 @@ describe("GradingPanel", () => {
     renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
     await screen.findByText("Question 1 of 2");
     await userEvent.click(screen.getByRole("switch", { name: "Show names" }));
-    expect(await screen.findByText("Marie Rochat")).toBeVisible();
+    const detail = await screen.findByRole("region", { name: "The open answer" });
+    expect(await within(detail).findByText("Marie Rochat")).toBeVisible();
     expect(calls.some((c) => c.url.includes("anonymous=0"))).toBe(true);
   });
 });

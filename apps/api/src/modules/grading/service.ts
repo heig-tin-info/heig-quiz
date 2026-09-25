@@ -26,6 +26,8 @@ import type {
   GradingProgress,
   GradingQuery,
   GradingQueue,
+  GradingSteps,
+  GradingStepsQuery,
   GradingSource,
   GradingState,
   Verdict,
@@ -542,6 +544,83 @@ export async function gradingQueue(
     })),
     entries,
     counts: { total, validated, proposed, missing: total - validated - proposed },
+  };
+}
+
+/**
+ * `GET /evaluations/:id/grading/steps` (#107). The path of a traversal with
+ * the state of every step, for the step picker: one step per item by
+ * question, one per attempt by student, in the order the queue walks them.
+ *
+ * Counted from the same standing gradings as the queue's `counts`, so a step
+ * reads "2 to validate" here exactly when its queue would say so. No answer,
+ * no view and no history is loaded: this is three counters per step.
+ */
+export async function gradingSteps(
+  db: Db,
+  evaluation: EvaluationRecord,
+  query: GradingStepsQuery,
+): Promise<GradingSteps> {
+  const items = await joinedItems(db, evaluation.id);
+  const attemptRows = await db
+    .select({ id: attempts.id, userId: attempts.userId })
+    .from(attempts)
+    .where(eq(attempts.evaluationId, evaluation.id))
+    .orderBy(asc(attempts.createdAt));
+  // The state of each standing cell and nothing else — not the details, the
+  // comment or the history `standingGradings` carries for the queue. Same
+  // rule: superseded ones are history, and a validated grading outranks a
+  // proposal on the same cell.
+  const rows = await db
+    .select({ attemptId: gradings.attemptId, itemId: gradings.itemId, state: gradings.state })
+    .from(gradings)
+    .innerJoin(attempts, eq(gradings.attemptId, attempts.id))
+    .where(and(eq(attempts.evaluationId, evaluation.id), ne(gradings.state, "superseded")));
+  const standing = new Map<PairKey, "validated" | "proposed">();
+  for (const row of rows) {
+    const key = pairKey(row.attemptId, row.itemId);
+    if (standing.get(key) !== "validated") standing.set(key, row.state as "validated" | "proposed");
+  }
+
+  const tally = (cells: PairKey[]) => {
+    let validated = 0;
+    let proposed = 0;
+    for (const key of cells) {
+      const state = standing.get(key);
+      if (state === "validated") validated += 1;
+      else if (state === "proposed") proposed += 1;
+    }
+    return { total: cells.length, validated, proposed };
+  };
+
+  if (query.by === "question") {
+    return {
+      order: "question",
+      steps: items.map((item) => ({
+        key: item.item.id,
+        label: item.question.internalName,
+        staff: false,
+        ...tally(attemptRows.map((a) => pairKey(a.id, item.item.id))),
+      })),
+    };
+  }
+
+  const roster = await rosterOf(db, evaluation.id);
+  const staff = await staffAttemptIds(db, evaluation);
+  return {
+    order: "student",
+    steps: attemptRows.map((attempt) => {
+      const who = roster.get(attempt.id);
+      return {
+        key: attempt.id,
+        // The same rule as `entryOf`: the step and its answers carry one name.
+        label: query.anonymous
+          ? (who?.pseudonym ?? "—")
+          : (who?.displayName ?? attempt.userId ?? "—"),
+        staff: staff.has(attempt.id),
+        ...tally(items.map((item) => pairKey(attempt.id, item.item.id))),
+      };
+    }),
   };
 }
 

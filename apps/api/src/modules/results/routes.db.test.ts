@@ -97,6 +97,27 @@ describe("the grading panel (§4.5)", () => {
     expect(named.json().entries[0].label).not.toBe(queue.entries[0].label);
   });
 
+  it("serves the steps of a traversal with their state (#107)", async () => {
+    const steps = await get(
+      `/app/api/evaluations/${built.evaluationId}/grading/steps?by=student`,
+      teacher.headers,
+    );
+    expect(steps.statusCode).toBe(200);
+    expect(steps.json()).toMatchObject({
+      order: "student",
+      steps: [{ key: built.attemptId, total: 1, validated: 1, proposed: 0, staff: false }],
+    });
+    expect(steps.json().steps[0].label).not.toContain("Test");
+    const byQuestion = await get(
+      `/app/api/evaluations/${built.evaluationId}/grading/steps`,
+      teacher.headers,
+    );
+    expect(byQuestion.json().steps).toMatchObject([{ key: built.itemId, total: 1 }]);
+    expect(
+      (await get(`/app/api/evaluations/${built.evaluationId}/grading/steps`, other.headers)).statusCode,
+    ).toBe(404);
+  });
+
   it("reports progress and re-runs on demand", async () => {
     const progress = await get(
       `/app/api/evaluations/${built.evaluationId}/grading/progress`,

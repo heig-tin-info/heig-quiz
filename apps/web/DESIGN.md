@@ -661,6 +661,21 @@ live in `ui/state.ts`, each written once.
   the answer in a glyph or two ("A, C", "NULL", "12 L") beside the icon, and
   INHERITS the state's ink rather than carrying `fg` — that is what keeps it
   readable on the filled `done` blue, where `fg` measured 2.9:1.
+- Master and detail (the grading panel, #102): from `lg`, the step header
+  (picker, chevrons, progress) sticks to the top on a strip of `canvas`; its
+  measured height is the CSS variable `--grading-sticky`, under which the
+  compact list column (300 px, scrolling inside itself) and the detail's own
+  header stick. The answer itself stays in the page's flow — a wheel over it
+  scrolls the page, never a pane — and is at least a window tall, so that
+  opening another answer can always bring its top back right under the
+  sticky header: the teacher never scrolls to find it, and reads every answer
+  from the same spot, at 768 px of height as at 1080. The list keeps the
+  current row in view by scrolling itself (never `scrollIntoView`, which
+  scrolls the page too). The current row is the sidebar's: `accent-soft`
+  with its name in `accent`. Anything above the answer that could vanish
+  keeps its place instead (the batch banner says "nothing left" rather than
+  disappearing). Below `lg` the list becomes a `Select` above the answer and
+  the same alignment happens under the phone's top bar.
 - SyncBadge: whether the student's work is safe — `saved`, `saving`,
   `offline`, `closed` — icon plus word, in a polite live region, since it is
   the answer to "did that save?". The word hides under `sm` where the zen bar
