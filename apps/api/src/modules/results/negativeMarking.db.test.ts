@@ -24,7 +24,7 @@ import type {
 } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
-import { attempts, evaluations, gradings, questions } from "../../db/schema.js";
+import { answers, attempts, evaluations, gradings, questions } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { reload, seedLive } from "../../test/live.js";
@@ -335,6 +335,71 @@ describe("an exam with negative marking", () => {
     expect((await override(2, 4.5)).statusCode).toBe(422);
     expect((await override(0, -0.5)).statusCode).toBe(422);
     expect((await override(0, 1)).statusCode).toBe(200);
+  });
+});
+
+describe("a single-answer question takes ONE choice", () => {
+  it("refuses a crafted write of several choices, and grades it wrong if one got through", async () => {
+    const { seed, items } = await build({});
+    const evaluation = await applyState(db(), await reload(db(), seed.evaluationId), "running", server.clock.now());
+    const participant = (await live.participantOf(db(), evaluation, students[0]!.id))!;
+    const entered = await live.enterEvaluation(db(), { evaluation, participant, now: server.clock.now() });
+    let attempt = entered.attempt;
+    if (attempt.state === "not_started") {
+      attempt = await live.beginAttempt(db(), evaluation, attempt, participant, server.clock.now());
+    }
+    const write = (payload: unknown) =>
+      live
+        .saveAnswer(db(), {
+          evaluation,
+          attempt,
+          itemId: items[1]!.item.id,
+          payload,
+          revision: 1,
+          now: server.clock.now(),
+        })
+        .then(
+          () => null,
+          (error: { code?: string; status?: number }) => [error.code, error.status],
+        );
+    // The key (1) and a distractor (0): +1.33 of 2 unguarded, under negative marking.
+    expect(await write({ selected: [0, 1] })).toEqual(["answer_invalid", 422]);
+    expect(await write({ selected: [1] })).toBeNull();
+    // A multiple-answer question still takes several.
+    const multiple = await live
+      .saveAnswer(db(), {
+        evaluation,
+        attempt,
+        itemId: items[2]!.item.id,
+        payload: { selected: [0, 1] },
+        revision: 1,
+        now: server.clock.now(),
+      })
+      .then(() => "ok");
+    expect(multiple).toBe("ok");
+
+    // Defence in depth: a row written before the gate is graded wrong, −1/3.
+    await db()
+      .update(answers)
+      .set({ payload: { selected: [0, 1] } })
+      .where(and(eq(answers.attemptId, attempt.id), eq(answers.itemId, items[1]!.item.id)));
+    await live.submitAttempt(db(), evaluation, attempt, server.clock.now());
+    await close(evaluation.id);
+    const mine = new Map((await pointsOf(attempt.id)).map((g) => [g.itemId, g.points]));
+    expect(mine.get(items[1]!.item.id)).toBe(-1);
+  });
+});
+
+describe("the live dashboard", () => {
+  it("shows the floored total of a row", async () => {
+    const { seed } = await build({});
+    const evaluation = await applyState(db(), await reload(db(), seed.evaluationId), "running", server.clock.now());
+    const guesser = await sit(evaluation, students[0]!.id, ["nope", [0], [2, 3]]);
+    await close(evaluation.id);
+    const view = (await get(`/app/api/evaluations/${seed.evaluationId}/dashboard`, teacher.headers)).json() as {
+      rows: { attemptId: string | null; points: number | null }[];
+    };
+    expect(view.rows.find((r) => r.attemptId === guesser.id)!.points).toBe(0);
   });
 });
 

@@ -207,6 +207,49 @@ describe("mcqFraction with negative marking", () => {
   });
 });
 
+/**
+ * A `single` question answered with several choices (a crafted write; the
+ * player sends one, the API refuses more) is wrong, never better than a guess.
+ */
+describe("mcqFraction on a single question with several selections", () => {
+  it("is wrong: -1/(n-1) under negative marking, 0 otherwise, for every selection", () => {
+    for (let n = 2; n <= 6; n++) {
+      for (let key = 0; key < n; key++) {
+        for (let mask = 0; mask < 1 << n; mask++) {
+          const selected = indices(mask, n);
+          if (selected.length < 2) continue;
+          const input = { correct: [key], choiceCount: n, selected, mode: "single" as const };
+          expect(
+            mcqFraction({ ...input, policy: "symmetric", negativeMarking: true }).fraction,
+          ).toBeCloseTo(-1 / (n - 1), 10);
+          for (const policy of Object.keys(EXPECTED) as McqScorePolicy[]) {
+            expect(mcqFraction({ ...input, policy }).fraction).toBe(0);
+          }
+        }
+      }
+    }
+  });
+
+  it("never beats the expected value of an honest guess", () => {
+    // [key, distractor] on four choices: 1 - 1/3 unguarded, a wrong answer here.
+    const f = mcqFraction({
+      correct: [1],
+      choiceCount: 4,
+      selected: [0, 1],
+      policy: "all_or_nothing",
+      negativeMarking: true,
+      mode: "single",
+    }).fraction;
+    expect(f).toBeCloseTo(-1 / 3, 10);
+  });
+
+  it("leaves a single selection alone", () => {
+    const base1 = { correct: [1], choiceCount: 4, policy: "all_or_nothing" as const, mode: "single" as const };
+    expect(mcqFraction({ ...base1, selected: [1], negativeMarking: true }).fraction).toBe(1);
+    expect(mcqFraction({ ...base1, selected: [], negativeMarking: true }).fraction).toBe(0);
+  });
+});
+
 /** The indices of the set bits of `mask`, below `n`. */
 function indices(mask: number, n: number): number[] {
   const out: number[] = [];

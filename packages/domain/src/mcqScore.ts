@@ -103,6 +103,14 @@ export interface McqScoreInput {
    * (ADR-026): `policy` is then ignored and the fraction lies in [-1, 1].
    */
   negativeMarking?: boolean | undefined;
+  /**
+   * The question's mode. A `single` question answered with SEVERAL choices —
+   * which the player cannot send and the answer write refuses — is WRONG,
+   * whatever it holds: 0, or -1/(n - 1) under negative marking. Without this,
+   * a crafted [key, distractor] would score 1 - 1/(n - 1) under negative
+   * marking, better than an honest guess.
+   */
+  mode?: "single" | "multiple" | undefined;
 }
 
 export interface McqScore {
@@ -126,6 +134,9 @@ export function mcqFraction(input: McqScoreInput): McqScore {
   // corrupted row from throwing inside the grading worker.
   if (C === 0) return { fraction: 0, c, w, C, W };
 
+  if (input.mode === "single" && selected.size > 1) {
+    return { fraction: input.negativeMarking === true ? -1 / Math.max(1, W) : 0, c, w, C, W };
+  }
   if (input.negativeMarking === true) {
     return { fraction: clamp(negativeFraction({ c, w, C, W }), -1, 1), c, w, C, W };
   }

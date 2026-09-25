@@ -344,6 +344,15 @@ export interface QuestionTypeServer<
   isAnswered(answer: TAnswer): boolean;
 
   /**
+   * The shape rules of an answer that depend on the CONFIG, which
+   * `answerSchema` cannot see: `null` when the answer fits the question, or
+   * the reason it does not (an `mcq` in `single` mode answered with several
+   * choices). The answer write refuses a misfit with `422 answer_invalid`;
+   * the grader still defends itself. Omitting the hook means "always fits".
+   */
+  answerMisfit?(config: TConfig, answer: TAnswer): string | null;
+
+  /**
    * The per-type statistics of one item over the class (F-RES-03, audit
    * B-15): the answer distribution, a test-case pass rate.
    *

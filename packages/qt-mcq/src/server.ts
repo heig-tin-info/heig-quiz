@@ -82,6 +82,15 @@ export const mcqServer: QuestionTypeServer<
   keylessConfigSchema: McqKeylessConfigSchema,
   answerSchema: McqAnswerSchema,
   isAnswered: isMcqAnswered,
+
+  /**
+   * A `single` question takes one choice. The player cannot send more; a
+   * crafted write can, and under negative marking it would otherwise try
+   * the key and a distractor at once (ADR-026). `maxSelections` stays a
+   * grading-time truncation: an answer that is too long is never lost.
+   */
+  answerMisfit: (config, answer) =>
+    config.mode === "single" && new Set(answer.selected).size > 1 ? "mcq.single_one_choice" : null,
   studentSchema: McqStudentSchema,
   solutionSchema: McqSolutionSchema,
   detailsSchema: McqDetailsSchema,

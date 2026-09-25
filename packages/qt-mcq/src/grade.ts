@@ -76,6 +76,7 @@ export function gradeMcq(
     choiceCount: config.choices.length,
     policy,
     negativeMarking,
+    mode: config.mode,
   });
 
   return {

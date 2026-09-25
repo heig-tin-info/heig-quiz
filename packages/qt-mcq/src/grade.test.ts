@@ -220,6 +220,13 @@ describe("negative marking", () => {
     expect(gradedNow(single, null, 3, negative()).points).toBe(0);
   });
 
+  it("grades several choices on a single question as a wrong answer, never a hedge", () => {
+    // [key, distractor]: 1 - 1/3 unguarded; a wrong answer, −1/3, instead.
+    expect(gradedNow(single, { selected: [0, 1] }, 3, negative()).points).toBe(-1);
+    expect(gradedNow(single, { selected: [0, 1, 2, 3] }, 3, negative()).points).toBe(-1);
+    expect(gradedNow(single, { selected: [0, 1] }, 3, withPolicy("symmetric")).points).toBe(0);
+  });
+
   it("scores a multiple answer c/C - w/W without the floor", () => {
     const config = multipleConfig({ policy: "ripkey" });
     expect(gradedNow(config, { selected: [2, 3] }, 4, negative()).points).toBe(-4);
