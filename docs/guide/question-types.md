@@ -32,10 +32,33 @@ The policies are named below as the editor, the evaluation options and **Setting
 | **Exact** (all or nothing) | 1 if the ticked set is the key, else 0 | the exact set of correct choices, or nothing |
 | **True/false** (true/false per choice) | `(c + (W - w)) / (C + W)` | every choice is its own true/false item; ticking nothing already scores `W / (C + W)` |
 | **Distance** (discordances) | `d = (C - c) + w`: 0 gives 1, 1 gives 0.5, 2 gives 0.2, more gives 0 | by the number of choices got the wrong way round |
-| **Symmetric** | `c/C - w/W` | a wrong tick costs what a right one earns; random ticking is worth nothing on average |
+| **Symmetric** | `c/C - w/W` | a wrong tick costs what a right one earns; before the floor at zero, random ticking is worth nothing on average |
 | **Ripkey** | `c/C`, or 0 as soon as `w > 0` | pays a student who ticks only what they are sure of |
 
 No policy ever goes below zero: answering is never worse than leaving the question blank. The result is multiplied by the points of the item.
+
+#### A worked example
+
+Four choices A, B, C and D, of which A and C are correct (`C = 2`, `W = 2`). Every policy depends only on `c` and `w`, so the sixteen possible answers fall into nine cases:
+
+| `c` | `w` | Answers (A B C D) | Count | Exact | True/false | Distance | Symmetric | Ripkey |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2 | 0 | **1010** (the key) | 1 | **1** | **1** | **1** | **1** | **1** |
+| 2 | 1 | 1110, 1011 | 2 | 0 | 0.75 | 0.5 | 0.5 | 0 |
+| 2 | 2 | 1111 | 1 | 0 | 0.5 | 0.2 | 0 | 0 |
+| 1 | 0 | 1000, 0010 | 2 | 0 | 0.75 | 0.5 | 0.5 | 0.5 |
+| 1 | 1 | 1100, 1001, 0110, 0011 | 4 | 0 | 0.5 | 0.2 | 0 | 0 |
+| 1 | 2 | 1101, 0111 | 2 | 0 | 0.25 | 0 | 0 | 0 |
+| 0 | 0 | 0000 | 1 | 0 | 0.5 | 0.2 | 0 | 0 |
+| 0 | 1 | 0100, 0001 | 2 | 0 | 0.25 | 0 | 0 | 0 |
+| 0 | 2 | 0101 | 1 | 0 | 0 | 0 | 0 | 0 |
+| | | *random ticking, on average* | 16 | 0.06 | 0.5 | 0.26 | 0.19 | 0.12 |
+
+The last row weights each case by its count: it is what a student who ticks every choice on a coin toss earns on average. Three things stand out:
+
+- **A blank answer is not always zero.** True/false gives 0.5 and Distance 0.2 for ticking nothing, since two of the four choices are then "right".
+- **Ripkey alone voids the key plus one distractor** (`c = 2`, `w = 1`): the other partial policies keep half or more.
+- **Symmetric still pays for guessing.** Its formula is worth nothing on average, but the floor turns every negative case into 0, and random ticking then earns 0.19. Only a score allowed below zero makes guessing worthless.
 
 ### What the student sees
 
