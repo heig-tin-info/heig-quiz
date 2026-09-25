@@ -78,3 +78,13 @@ compose network only.
    the only thing to remember, and it lives in one `.env.prod` line.
 4. **Plain HTTP on a firewalled port**: student code and outputs in clear across the
    internet, for no saving.
+
+## Update 2026-09-25
+
+The application VM is now the Hetzner Cloud VM `portal.heig.chevallier.io`
+(CPX12, 1 vCPU, 2 GB + 2 GB swap), shared with heig-classroom and evaluation-tb
+as before; `quiz.chevallier.io` is a CNAME to it. The stack lives in
+`/srv/quiz` and runs as the `srv` account on rootless Docker, and the CI key is
+pinned in `/home/srv/.ssh/authorized_keys` (`DEPLOY_USER=srv`). The runner's
+Caddy allowlist names the new address, `128.140.71.35`. The runner VM is
+unchanged. `deploy.md` holds the current layout.

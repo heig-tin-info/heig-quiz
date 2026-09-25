@@ -3,7 +3,8 @@
 # The VM hosts three services behind one NATIVE Caddy (apt). The host's
 # /etc/caddy/Caddyfile only holds `import /etc/caddy/conf.d/*.caddy`: each
 # project drops its own fragment and never overwrites a neighbour's.
-#   sudo cp Caddyfile /etc/caddy/conf.d/quiz.caddy && sudo systemctl reload caddy
+# As `srv` (conf.d is group-writable; sudo covers exactly these two commands):
+#   cp Caddyfile /etc/caddy/conf.d/quiz.caddy && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && sudo systemctl reload caddy
 quiz.chevallier.io {
 	encode gzip
 

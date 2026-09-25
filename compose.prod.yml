@@ -44,10 +44,12 @@ services:
       POSTGRES_USER: quiz
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
       POSTGRES_DB: quiz
-    # The VM is 1 CPU / 956 MiB and already runs the classroom's PostgreSQL:
-    # the same tuning as there (correctness over throughput). Runtime GUCs,
-    # no re-init, data untouched. max_connections 40 fits app(10)+pg-boss(10)+
-    # backup with headroom; parallel query is pointless on one CPU.
+    # The VM is 1 vCPU / 2 GB + 2 GB swap, shared by three services and two
+    # PostgreSQL instances (this one and the classroom's, ~50 MB each), kept
+    # separate on purpose so each service stays movable and restorable alone:
+    # the same tuning as the classroom's (correctness over throughput). Runtime
+    # GUCs, no re-init, data untouched. max_connections 40 fits app(10)+
+    # pg-boss(10)+backup with headroom; parallel query is pointless on one vCPU.
     command:
       - postgres
       - -c
