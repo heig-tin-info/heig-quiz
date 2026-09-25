@@ -12,8 +12,15 @@ qui attend encore le runner et ce qui a échoué.
 **Par question** par défaut — corriger une même question pour toute la
 classe est ce qui garde la correction cohérente — ou **Par étudiant**. Le
 chemin en haut dit où vous en êtes ; les chevrons et les flèches vous y
-déplacent. Les filtres restreignent la liste à ce qui reste à valider, ou à
-une source, ou à une confiance.
+déplacent. Les filtres restreignent la liste à ce qui reste à valider, ou selon
+qui a corrigé et avec quelle confiance.
+
+**Corrigé par** dit d'où vient la proposition : **Automatique (règles)**,
+ce sont les règles de la question (les bons choix, les valeurs attendues, les
+tests du code) ; **Modèle d'IA**, un modèle de langage qui travaille à partir
+des critères et de la réponse de référence ; **Enseignant**, des points
+fixés à la main. **Confiance** dit à quel point le correcteur s'est dit sûr
+de lui — commencez par les confiances basses.
 
 Les noms sont masqués tant que vous ne les demandez pas ; un pseudonyme
 garde votre attention sur la réponse.

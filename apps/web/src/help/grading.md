@@ -12,7 +12,13 @@ for the runner and what failed.
 **By question** by default — grading one question across the whole class is
 how you stay consistent — or **By student**. The path at the top says where
 you are; the chevrons and the arrow keys move you along it. Filters narrow
-the list to what is still to validate, or to one source or confidence.
+the list to what is still to validate, or by who graded and how sure it was.
+
+**Graded by** is where the proposal comes from: **Automatic (rules)** is the
+question's own rules (the correct choices, the expected values, the code
+tests); **AI model** is a language model working from the criteria and the
+reference answer; **Teacher** is points set by hand. **Confidence** is how
+sure the grader said it was — start with the low ones.
 
 Names are hidden until you ask for them; a pseudonym keeps your attention
 on the answer.

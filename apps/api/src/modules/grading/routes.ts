@@ -17,6 +17,7 @@ import {
   GradingRunBody,
   IdParam,
   ItemParam,
+  type ItemVersions,
   type GradingRunAccepted,
   ManualGradingBody,
   RegradeBody,
@@ -27,7 +28,8 @@ import { tracer, type AuditAction } from "../../audit.js";
 import { gradings, questionVersions } from "../../db/schema.js";
 import { loadEvaluation, staffAnswer, staffGrading, teacherGuard } from "../guards.js";
 import { notFound, teacherRoute } from "../http.js";
-import { joinedItems, retargetItemVersion } from "../evaluation/service.js";
+import { joinedItem, joinedItems, retargetItemVersion } from "../evaluation/service.js";
+import { listVersions } from "../pool/service.js";
 import { markModifiedAfterRelease } from "../results/service.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "./jobs.js";
@@ -234,6 +236,31 @@ export async function gradingPlugin(app: FastifyInstance) {
   );
 
   // --- Regrade (F-GRADE-06) ----------------------------------------------
+
+  /**
+   * The published versions a regrade may target (issue #106), newest first,
+   * with the number the evaluation froze. Scoped by the evaluation item and
+   * loaded through the staff guard, NOT through `poolAccess`: the pool route
+   * `GET /questions/:id/versions` refuses a co-teacher once the question's
+   * pool is unlinked from the course (or the question moved to a private
+   * pool), and whoever may grade the evaluation must still see what they
+   * grade against.
+   */
+  app.get(
+    "/app/api/evaluations/:id/items/:itemId/versions",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: ItemParam, load: staffEvaluation },
+      async ({ reply, params, scope }): Promise<ItemVersions | FastifyReply> => {
+        const item = await joinedItem(app.db, scope.evaluation.id, params.itemId);
+        if (!item) return notFound(reply);
+        return {
+          frozenNumber: item.version.number!,
+          versions: await listVersions(app.db, item.question.id),
+        };
+      },
+    ),
+  );
 
   /**
    * Re-grades ONE item across every attempt. Optionally repoints the item at

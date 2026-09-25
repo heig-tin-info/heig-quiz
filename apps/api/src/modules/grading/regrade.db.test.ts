@@ -10,15 +10,25 @@
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { ItemVersions } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
-import { answers, auditLog, evaluations, gradings } from "../../db/schema.js";
+import {
+  answers,
+  auditLog,
+  courseStaff,
+  coursePools,
+  evaluations,
+  gradings,
+  questions,
+} from "../../db/schema.js";
 import { subscribe } from "../../events.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { seedLive } from "../../test/live.js";
 import { applyState, joinedItems } from "../evaluation/service.js";
 import * as live from "../live/service.js";
+import * as pool from "../pool/service.js";
 
 let server: TestServer;
 let restore: () => void;
@@ -174,6 +184,80 @@ describe("regrade (F-GRADE-06, F-GRADE-09)", () => {
       { note: "nope" },
     );
     expect(wrong.statusCode).toBe(404);
+  });
+});
+
+/**
+ * The versions the regrade sheet offers (issue #106). Reached through the
+ * evaluation's staff (invariant 6), never through the pool's roster: a
+ * co-teacher of the course grades a question whose pool is no longer linked
+ * to it, and still has to see what they may grade against.
+ */
+describe("the versions of an item, for the regrade sheet", () => {
+  async function twoVersions() {
+    const db = server.app.db;
+    const seed = await seedLive(db, { teacherId: teacher.id, studentIds: [], questions: 1 });
+    const [question] = await db
+      .select()
+      .from(questions)
+      .where(eq(questions.id, seed.questionIds[0]!));
+    await pool.putDraft(db, question!, {
+      config: { statement: "Fixed statement", answer: "right-answer" },
+    });
+    await pool.publishQuestion(db, question!, {
+      userId: teacher.id,
+      changeNote: "the key was wrong",
+    });
+    return seed;
+  }
+
+  it("lists every published version, newest first, with the frozen one", async () => {
+    const seed = await twoVersions();
+    const res = await get(
+      `/app/api/evaluations/${seed.evaluationId}/items/${seed.itemIds[0]}/versions`,
+      teacher.headers,
+    );
+    expect(res.statusCode).toBe(200);
+    const body = ItemVersions.parse(res.json());
+    expect(body.frozenNumber).toBe(1);
+    expect(body.versions.map((v) => v.number)).toEqual([2, 1]);
+    expect(body.versions[0]!.changeNote).toBe("the key was wrong");
+  });
+
+  it("answers a co-teacher of the course even when the pool is not theirs any more", async () => {
+    const db = server.app.db;
+    const seed = await twoVersions();
+    const colleague = await server.signIn("teacher");
+    await db.insert(courseStaff).values({ courseId: seed.courseId, userId: colleague.id });
+    // The pool is unlinked from the course: `poolAccess` lets the colleague
+    // go, the staff of the evaluation does not.
+    await db.delete(coursePools).where(eq(coursePools.courseId, seed.courseId));
+
+    const viaPool = await get(`/app/api/questions/${seed.questionIds[0]}/versions`, colleague.headers);
+    expect(viaPool.statusCode).toBe(404);
+
+    const viaItem = await get(
+      `/app/api/evaluations/${seed.evaluationId}/items/${seed.itemIds[0]}/versions`,
+      colleague.headers,
+    );
+    expect(viaItem.statusCode).toBe(200);
+    expect(ItemVersions.parse(viaItem.json()).versions).toHaveLength(2);
+  });
+
+  it("is a 404 off the staff, and for an item of another evaluation", async () => {
+    const seed = await twoVersions();
+    const elsewhere = await twoVersions();
+    const url = `/app/api/evaluations/${seed.evaluationId}/items/${seed.itemIds[0]}/versions`;
+    const stranger = await get(url, other.headers);
+    expect(stranger.statusCode).toBe(404);
+    expect(stranger.json()).toEqual({ error: "not_found" });
+    expect((await get(url, student.headers)).statusCode).toBe(403);
+
+    const foreignItem = await get(
+      `/app/api/evaluations/${seed.evaluationId}/items/${elsewhere.itemIds[0]}/versions`,
+      teacher.headers,
+    );
+    expect(foreignItem.statusCode).toBe(404);
   });
 });
 
