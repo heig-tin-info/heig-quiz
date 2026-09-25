@@ -107,7 +107,7 @@ jobs:
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != ''
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_HOST" "$GHCR_TOKEN"
+        run: ssh -i ~/.ssh/id_ed25519 ${{ vars.DEPLOY_USER || 'root' }}@"$DEPLOY_HOST" "$GHCR_TOKEN"
       - name: Deploy the runner (forced command runs apps/runner/deploy/deploy.sh on the code VM)
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != '' && env.DEPLOY_RUNNER_HOST != ''
         env:
