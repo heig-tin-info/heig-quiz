@@ -36,6 +36,7 @@ import {
   questions,
   studentView,
   tryAnswer,
+  versionRow,
 } from "./pool";
 import {
   STUDENT_ATTEMPT,
@@ -633,9 +634,24 @@ on("POST", "/app/api/evaluations/:id/grading/validate-batch", (m, body) => {
   return { validated };
 });
 
+/** The versions the regrade sheet offers, newest first, and the frozen one. */
+on("GET", "/app/api/evaluations/:id/items/:itemId/versions", (m) => {
+  const e = gradingWorldOr404(m.groups!.id!);
+  const item = e.evaluation.items.find((i) => i.id === m.groups!.itemId);
+  const question = item ? questions.find((q) => q.id === item.questionId) : undefined;
+  if (!item || !question) throw new MockError(404, "Item not found");
+  return {
+    frozenNumber: item.versionNumber,
+    versions: question.versions.map(versionRow).reverse(),
+  };
+});
+
 on("POST", "/app/api/evaluations/:id/items/:itemId/regrade", (m, body) => {
   const e = gradingWorldOr404(m.groups!.id!);
   const itemId = String(m.groups!.itemId);
+  const target = Number(body.toVersionNumber);
+  const frozen = e.evaluation.items.find((i) => i.id === itemId);
+  if (frozen && Number.isInteger(target) && target > 0) frozen.versionNumber = target;
   const note = String(body.note ?? "");
   for (const [key, chain] of e.gradings) {
     if (!key.endsWith(`:${itemId}`)) continue;

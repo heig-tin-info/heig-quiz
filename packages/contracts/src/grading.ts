@@ -12,6 +12,8 @@
  */
 import { z } from "zod";
 
+import { VersionRow } from "./pool.js";
+
 /** Who produced a grading. `llm` is phase 2 and only ever `proposed` in MVP. */
 export const GradingSource = z.enum(["auto", "llm", "manual"]);
 export type GradingSource = z.infer<typeof GradingSource>;
@@ -177,6 +179,20 @@ export const RegradeBody = z.object({
   toVersionNumber: z.number().int().positive().optional(),
 });
 export type RegradeBody = z.infer<typeof RegradeBody>;
+
+/**
+ * `GET /evaluations/:id/items/:itemId/versions`: what the regrade sheet
+ * offers (issue #106). Every published version of the item's question,
+ * newest first, and the number the evaluation froze. Reached through the
+ * evaluation's staff, not the pool's roster: a teacher who may grade must
+ * always see the versions of what they grade, even when the question's pool
+ * is no longer linked to the course.
+ */
+export const ItemVersions = z.object({
+  frozenNumber: z.number().int().positive(),
+  versions: z.array(VersionRow),
+});
+export type ItemVersions = z.infer<typeof ItemVersions>;
 
 /** `/answers/:answerId/gradings` */
 export const AnswerIdParam = z.object({ answerId: z.uuid() });

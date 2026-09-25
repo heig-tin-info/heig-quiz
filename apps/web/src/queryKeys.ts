@@ -109,6 +109,9 @@ export const gradingQueueKey = (
 ) => ["grading", evaluationId, "queue", scope, state, anonymous] as const;
 export const gradingProgressKey = (evaluationId: string) =>
   ["grading", evaluationId, "progress"] as const;
+/** The published versions a regrade of one item may target (issue #106). */
+export const gradingItemVersionsKey = (evaluationId: string, itemId: string) =>
+  ["grading", evaluationId, "versions", itemId] as const;
 
 /** The prefix of every results read of one evaluation. */
 export const resultsKey = (evaluationId: string) => ["results", evaluationId] as const;

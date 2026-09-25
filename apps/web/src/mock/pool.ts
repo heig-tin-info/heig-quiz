@@ -1235,7 +1235,7 @@ const questionMeta = (q: MockQuestion) => ({
   updatedAt: q.updatedAt,
 });
 
-const versionRow = (v: MockVersion) => ({
+export const versionRow = (v: MockVersion) => ({
   number: v.number,
   publishedAt: v.publishedAt,
   publishedBy: v.publishedBy,

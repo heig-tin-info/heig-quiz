@@ -418,6 +418,8 @@ const scenes = [
       await nextQuestion(p, 3);
       await p.getByRole("button", { name: /^(Validate|Valider) \d+/ }).first().click();
     } },
+  // The filter row with a source chosen: the help line under it explains the choice (#98).
+  { name: "grading-filtered", role: "teacher", path: "/evaluations/closed/grading", act: (p) => p.getByLabel(/^(Graded by|Corrigé par)$/).selectOption("llm") },
   { name: "grading-regrade", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: (p) => p.getByRole("button", { name: /re-grade this question|re-corriger cette question/i }).first().click() },
   { name: "grading-empty", role: "teacher", path: "/evaluations/closed/grading?empty=1", settle: 800 },
   { name: "grading-error", role: "teacher", path: "/evaluations/closed/grading?fail=1", settle: 2500 },

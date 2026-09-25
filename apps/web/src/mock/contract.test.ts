@@ -34,6 +34,7 @@ import {
   EvaluationSummary,
   GradingProgress,
   GradingQueue,
+  ItemVersions,
   NotificationList,
   ApiToken,
   OAuthConnection,
@@ -240,6 +241,11 @@ const CHECKED: Case[] = [
       "/app/api/evaluations/:id/grading/progress",
       `/app/api/evaluations/${id}/grading/progress`,
       GradingProgress,
+    ),
+    one(
+      "/app/api/evaluations/:id/items/:itemId/versions",
+      `/app/api/evaluations/${id}/items/${gradedItems[i]}/versions`,
+      ItemVersions,
     ),
     one("/app/api/evaluations/:id/results", `/app/api/evaluations/${id}/results`, ResultsView),
     each(

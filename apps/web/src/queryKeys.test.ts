@@ -66,6 +66,11 @@ describe("queryKeys — each factory is the literal it replaced", () => {
       ["grading", "e1", "queue", "by=question&itemId=i1", "proposed", "0"],
     ],
     ["gradingProgressKey", keys.gradingProgressKey("e1"), ["grading", "e1", "progress"]],
+    [
+      "gradingItemVersionsKey",
+      keys.gradingItemVersionsKey("e1", "i1"),
+      ["grading", "e1", "versions", "i1"],
+    ],
     ["resultsKey", keys.resultsKey("e1"), ["results", "e1"]],
     ["resultsViewKey", keys.resultsViewKey("e1"), ["results", "e1", "view"]],
     ["resultsByQuestionKey", keys.resultsByQuestionKey("e1"), ["results", "e1", "by-question"]],
