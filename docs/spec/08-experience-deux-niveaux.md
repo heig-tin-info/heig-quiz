@@ -24,7 +24,7 @@ The platform serves two profiles of teachers with the same interface. The novice
 | Configure a quiz without mistakes | Three screens: pick the questions, set the time, start. Named presets: "Graded quiz 20 min", "Exercise of the week", "Poll". Everything else under "Advanced options". |
 | Understand a setting | Every option has a help sentence under its label, not a tooltip. |
 | Grade effortlessly | Grading panel with the LLM proposals sorted by confidence. "Validate everything with high confidence" in one click, then review of the remaining cases. |
-| See what the student sees | "Student preview" button wherever a question or an evaluation is displayed. |
+| See what the student sees | "Student preview" button wherever a question or an evaluation is displayed. For an evaluation it is a stateless walk in its own tab: a random seed, the student's player under a "Preview" banner, the countdown, and the full correction when it is handed in; nothing is stored (ADR-018, fourth addendum). |
 
 ## 8.3 Expert mode
 

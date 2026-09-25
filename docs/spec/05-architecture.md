@@ -61,6 +61,7 @@ Each module lives in `apps/api/src/modules/<name>/` with `routes.ts` the HTTP ha
 | `pool` | Pools, categories, tags, questions, versions, drafts, assets, search | `auth`, `core` |
 | `evaluation` | Configuration of an evaluation, items, lifecycle, settings | `org`, `pool` |
 | `live` | Attempts, answers, autosave, presence, clock, live control, deadline ticker | `evaluation` |
+| `preview` | The teacher's stateless preview of an evaluation: seed, student view, runs and grading, nothing stored (ADR-018) | `live`, `grading`, `runner` |
 | `grading` | Automatic grading, runner, LLM, validation panel, regrading, release | `live`, `runner`, `llm` |
 | `results` | Grades, grade scale, CSV exports, statistical views of an evaluation, student feedback | `grading` |
 | `stats` | Item analysis per version, aggregates for the pool, phase 2 | `results` |
