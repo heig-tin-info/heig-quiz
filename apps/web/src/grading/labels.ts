@@ -66,16 +66,14 @@ export type GradingOrder = "question" | "student";
 /** The words of a traversal, which name its steps after what they are. */
 export const ORDER_WORDS: Record<
   GradingOrder,
-  { heading: keyof Dict; prev: keyof Dict; next: keyof Dict; position: keyof Dict }
+  { prev: keyof Dict; next: keyof Dict; position: keyof Dict }
 > = {
   question: {
-    heading: "grading.order.byQuestion",
     prev: "grading.prevItem",
     next: "grading.nextItem",
     position: "grading.item.position",
   },
   student: {
-    heading: "grading.order.byStudent",
     prev: "grading.prevStudent",
     next: "grading.nextStudent",
     position: "grading.student.position",

@@ -35,9 +35,10 @@ La barre au-dessus de la liste valide en un clic toutes les propositions de
 la question courante — ou de toute la sélection filtrée. Chacune reste
 modifiable ensuite.
 
-**Re-corriger cette question** relance la correction automatique sur toutes
-les tentatives, contre la version figée ou une version publiée plus
-récente. Une note est obligatoire et accompagne chaque nouvelle correction.
+**Re-corriger**, à côté du titre de la question sur chaque réponse, relance
+la correction automatique de cette question sur toutes les tentatives,
+contre la version figée ou une version publiée plus récente — par question
+comme par étudiant. Une note est obligatoire et accompagne chaque nouvelle correction.
 
 ## Raccourcis
 

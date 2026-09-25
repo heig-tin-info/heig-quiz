@@ -1842,6 +1842,7 @@ export const fr: Record<keyof Dict, string> = {
   "grading.score": "{points} / {max}",
   "grading.points": "{n} pts",
   "grading.answers": "{n} réponses",
+  "grading.studentTotal": "Total {points} / {max} pts",
   "grading.empty.title": "Plus rien à corriger",
   "grading.empty.body": "Toutes les réponses de cette sélection sont validées.",
   "grading.empty.noAttempt.title": "Aucune réponse à corriger",
@@ -1902,6 +1903,9 @@ export const fr: Record<keyof Dict, string> = {
   "grading.batch.done": "{n} propositions validées.",
   "grading.batch.failed": "Le lot n'a pas pu être validé.",
   "grading.regrade": "Re-corriger cette question",
+  "grading.regrade.open": "Re-corriger",
+  "grading.regrade.tip":
+    "Corriger à nouveau cette question pour tous les étudiants, éventuellement selon une autre version",
   "grading.regrade.title": "Re-corriger une question",
   "grading.regrade.subtitle":
     "Toutes les tentatives sont corrigées à nouveau pour cette question ; les corrections remplacées sont conservées.",

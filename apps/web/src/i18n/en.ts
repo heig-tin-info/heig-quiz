@@ -1853,6 +1853,7 @@ export const en = {
   "grading.score": "{points} / {max}",
   "grading.points": "{n} pts",
   "grading.answers": "{n} answers",
+  "grading.studentTotal": "Total {points} / {max} pts",
   "grading.empty.title": "Nothing left to grade",
   "grading.empty.body": "Every answer of this selection is validated.",
   "grading.empty.noAttempt.title": "No answer to grade",
@@ -1913,6 +1914,9 @@ export const en = {
   "grading.batch.done": "{n} proposals validated.",
   "grading.batch.failed": "Could not validate the batch.",
   "grading.regrade": "Re-grade this question",
+  "grading.regrade.open": "Re-grade",
+  "grading.regrade.tip":
+    "Grade this question again for every student, possibly against another version",
   "grading.regrade.title": "Re-grade a question",
   "grading.regrade.subtitle":
     "Every attempt is graded again for this question; the gradings it replaces are kept as history.",

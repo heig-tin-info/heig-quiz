@@ -33,8 +33,9 @@ The bar above the list validates every proposal of the current question — or
 of the whole filtered selection — in one click. Each one stays editable
 afterwards.
 
-**Re-grade this question** runs the automatic grading again on every
-attempt, against the frozen version or a newer published one. A note is
+**Re-grade**, beside the question's title on every answer, runs the
+automatic grading of that question again on every attempt, against the
+frozen version or a newer published one — by question or by student alike. A note is
 mandatory and is carried by each new grading.
 
 ## Shortcuts

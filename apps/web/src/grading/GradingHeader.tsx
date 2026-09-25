@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, Play } from "lucide-react";
+import type { ReactNode } from "react";
 
 import type { GradingProgress, GradingQueue } from "@quiz/contracts";
 
@@ -14,6 +15,8 @@ import type { Step } from "./useGradingTraversal";
  * already validated. The step counter is the step PICKER (#107): the
  * chevrons walk one step, the counter opens every step to jump to one; the
  * strip of bars under them stays a picture of the path, not a control.
+ * Beside the counter, the step's badges (#108): what the step is — a
+ * question's type, points and answers, a student's answers and total.
  *
  * Never red. Red on this screen means "the thing to press", and an
  * advancement bar is not an action — mockup `04-correction.html` makes the
@@ -34,6 +37,7 @@ export function GradingHeader({
   onRun,
   running,
   runPrimary,
+  badges,
 }: {
   order: GradingOrder;
   steps: Step[];
@@ -51,6 +55,8 @@ export function GradingHeader({
   running: boolean;
   /** True while running the pass IS the one thing to do on this screen. */
   runPrimary: boolean;
+  /** What the current step is, as a row of badges beside its counter. */
+  badges?: ReactNode;
 }) {
   const t = useT();
   const done = counts.total === 0 ? 0 : Math.round((counts.validated / counts.total) * 100);
@@ -66,6 +72,7 @@ export function GradingHeader({
           <ChevronLeft />
         </IconButton>
         <StepPicker order={order} steps={steps} index={index} title={title} onJump={onJump} />
+        {badges ? <span className="flex flex-wrap items-center gap-1.5">{badges}</span> : null}
         <span className="text-[13px] text-fg-muted">
           {t(counts.proposed === 1 ? "grading.remaining.one" : "grading.remaining", {
             n: counts.proposed,
