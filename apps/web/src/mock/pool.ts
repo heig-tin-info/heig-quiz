@@ -723,6 +723,10 @@ export const questions: MockQuestion[] = [
       text:
         "Pour allouer un tableau de `n` entiers on écrit `int *t = {{malloc|calloc}}(n * sizeof({{int}}));`, " +
         "puis on libère la mémoire avec {{=free|delete|dispose}}.\n\n" +
+        // A list among the holes: the cloze text is markdown like any prompt
+        // (issue #100), in the player, the review and the grading panel alike.
+        "- une allocation ratée renvoie `NULL` ;\n" +
+        "- un bloc se libère une seule fois.\n\n" +
         "| Fonction | Met la mémoire à zéro |\n" +
         "| -------- | --------------------- |\n" +
         "| `malloc` | {{oui|=non}}          |\n" +

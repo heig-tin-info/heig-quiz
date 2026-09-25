@@ -9,7 +9,8 @@
  * A `qt-*` package owns no markdown renderer (it cannot depend on `apps/web`),
  * so the host injects its own sanitised one through `renderText`. What lives
  * here is the fallback: paragraphs, fenced code blocks, inline code, bold and
- * italic. It is deliberately small; `apps/web` will pass its `MarkdownView`.
+ * italic — no list, no heading, no link. It is deliberately small; `apps/web`
+ * passes its own pipeline (`markdown/ClozeMarkdownText.tsx`) everywhere.
  */
 import type { ReactNode } from "react";
 import { CLOZE_SENTINEL_PATTERN } from "@quiz/domain/cloze";

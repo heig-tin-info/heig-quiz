@@ -47,6 +47,7 @@ import {
   clozeEditorStrings,
   clozePlayerStrings,
   clozeReviewStrings,
+  type ClozeTextRenderer,
 } from "@quiz/qt-cloze/client";
 import {
   EDITOR_STRINGS,
@@ -79,6 +80,7 @@ import {
 import { api } from "./api";
 import { HelpIcon } from "./help";
 import type { Dict, TFunction } from "./i18n";
+import { ClozeMarkdownText } from "./markdown/ClozeMarkdownText";
 import { MarkdownView } from "./markdown/MarkdownView";
 import { BrowserRunnerUnavailable, runnerFor } from "./runner";
 import { imageReferenceRunRequest, referenceRunRequest } from "./runner/codeRun";
@@ -574,6 +576,8 @@ interface PlayerHostProps {
   strings?: unknown;
   canvasStrings?: unknown;
   renderMarkdown?: (source: string) => ReactNode;
+  /** `cloze` only: its text with the blanks in place (`ClozeMarkdownText`). */
+  renderText?: ClozeTextRenderer;
   onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
   allowManualRun?: boolean;
   testsPrimary?: boolean;
@@ -627,6 +631,7 @@ export function QuestionPlayerHost({
           strings={playerStrings[client.id](t)}
           {...(client.id === "circuit" ? { canvasStrings: circuitCanvasStrings(t) } : {})}
           renderMarkdown={renderInline}
+          {...(client.id === "cloze" ? { renderText: ClozeMarkdownText } : {})}
           {...(onRun === undefined ? {} : { onRun })}
           {...(allowManualRun === undefined ? {} : { allowManualRun })}
           {...(testsPrimary === undefined ? {} : { testsPrimary })}
@@ -648,6 +653,8 @@ interface ReviewHostProps {
   strings?: unknown;
   canvasStrings?: unknown;
   renderMarkdown?: (source: string) => ReactNode;
+  /** `cloze` only: its text with the blanks in place (`ClozeMarkdownText`). */
+  renderText?: ClozeTextRenderer;
 }
 
 export function QuestionReviewHost({
@@ -691,6 +698,7 @@ export function QuestionReviewHost({
           strings={reviewStrings[client.id](t)}
           {...(client.id === "circuit" ? { canvasStrings: circuitCanvasStrings(t) } : {})}
           renderMarkdown={renderInline}
+          {...(client.id === "cloze" ? { renderText: ClozeMarkdownText } : {})}
         />
       </Suspense>
     </ScrollableCode>

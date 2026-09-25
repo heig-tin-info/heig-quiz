@@ -324,6 +324,23 @@ html.dark {
   line-height: 1.6;
   overflow-wrap: anywhere;
 }
+/* Rendered markdown owns its whitespace: a newline in the source is a soft
+   break, and the newlines marked writes BETWEEN blocks (`<ul>\n<li>`) are
+   nothing. A host that sets `white-space: pre-wrap` for its plain-text
+   fallback (the `code`, `codeimage` and `circuit` statements) used to turn
+   every one of them into an empty line — a bulleted list came out as items
+   floating in blank space (issue #100). `pre` keeps its own `white-space`
+   from the user agent. The editing surface wears `.md-body` too, and
+   ProseMirror needs its `pre-wrap`: it is left alone. */
+.md-body:not(.ProseMirror) { white-space: normal; }
+/* A cloze text holds fields in its lines: the size, and the line height of a
+   field (h-8) plus air, as the package's own fallback renderer had them
+   (`text-base leading-9`) — in a paragraph, a tight list item and a table
+   cell alike, so two fields on consecutive lines never touch. */
+.md-body.md-cloze { font-size: 1rem; }
+.md-body.md-cloze p,
+.md-body.md-cloze li,
+.md-body.md-cloze td { line-height: 2.25rem; }
 .md-body > :first-child { margin-top: 0; }
 .md-body > :last-child { margin-bottom: 0; }
 .md-body p,
