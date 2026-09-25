@@ -88,6 +88,10 @@ export const RetakeSettings = z.object({
 });
 export type RetakeSettings = z.infer<typeof RetakeSettings>;
 
+/** The negative-marking switch of an evaluation's settings (ADR-026); absent is off. */
+export const negativeMarkingOf = (settings: { negativeMarking?: boolean | undefined }): boolean =>
+  settings.negativeMarking === true;
+
 /** A stored evaluation without the field: one attempt, as before #92. */
 export const defaultRetakes = (): RetakeSettings => ({
   enabled: false,
@@ -117,6 +121,13 @@ export const EvaluationSettings = z.object({
    * means one attempt: read it through {@link retakesOf}, never raw.
    */
   retakes: RetakeSettings.optional(),
+  /**
+   * ADR-026 (#130): every choice question of the evaluation is scored with
+   * negative marking — a wrong answer costs points, no answer costs nothing,
+   * and the total is floored at 0. Refused on a `poll`. Absent means off:
+   * read it through {@link negativeMarkingOf}, never raw.
+   */
+  negativeMarking: z.boolean().optional(),
   /** Only on a `poll` evaluation (`./poll.ts`); absent everywhere else. */
   poll: z
     .object({ anonymous: z.boolean().default(false), revealed: z.boolean().default(false) })
@@ -297,6 +308,7 @@ export const EvaluationSettingsPatch = z.object({
   requireFullscreen: z.boolean().optional(),
   /** Replaced whole: the three fields of the retake rule travel together. */
   retakes: RetakeSettings.optional(),
+  negativeMarking: z.boolean().optional(),
   poll: EvaluationSettings.shape.poll,
 });
 export type EvaluationSettingsPatch = z.infer<typeof EvaluationSettingsPatch>;

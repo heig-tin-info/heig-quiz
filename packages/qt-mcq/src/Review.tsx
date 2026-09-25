@@ -84,6 +84,7 @@ export function McqReview({
           </span>
         ) : null}
       </ScoreHeader>
+      {details?.negativeMarking ? <p className={helpClass}>{s.negativeMarking}</p> : null}
       {details?.truncated ? <p className={helpClass}>{s.truncated}</p> : null}
     </div>
   );

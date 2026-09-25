@@ -56,7 +56,14 @@ export type McqQuestionPolicy = z.infer<typeof McqQuestionPolicySchema>;
  * parses its own entry and falls back to `all_or_nothing` when it is absent
  * (the teacher's Try panel, which has no evaluation).
  */
-export const McqDefaultsSchema = z.object({ policy: McqPolicySchema });
+export const McqDefaultsSchema = z.object({
+  policy: McqPolicySchema,
+  /**
+   * The evaluation scores its choice questions with negative marking
+   * (ADR-026): it overrides `policy` and the question's own policy alike.
+   */
+  negativeMarking: z.boolean().optional(),
+});
 
 const McqConfigShape = z.object({
   configVersion: z.literal(MCQ_CONFIG_VERSION),
@@ -135,6 +142,14 @@ export const McqStudentSchema = z.object({
   choices: z.array(z.object({ id: z.number().int(), text: z.string() })),
   mode: McqModeSchema,
   maxSelections: z.number().int().optional(),
+  /**
+   * Present, and true, when the evaluation scores this question with negative
+   * marking (ADR-026): the player tells the student that a wrong answer costs
+   * points and no answer costs nothing. A rule of the evaluation that the
+   * student must know BEFORE answering; the question's own policy never
+   * travels.
+   */
+  negativeMarking: z.literal(true).optional(),
 });
 export type McqStudent = z.infer<typeof McqStudentSchema>;
 
@@ -143,8 +158,16 @@ export type McqSolution = z.infer<typeof McqSolutionSchema>;
 
 /** `C`/`W` are the key's counts, `c`/`w` the student's hits and misses (§7.3). */
 export const McqDetailsSchema = z.object({
-  /** The policy that was APPLIED, `inherit` resolved. */
+  /**
+   * The question's policy, `inherit` resolved. It is the one that scored the
+   * answer unless `negativeMarking` says the evaluation's rule overrode it.
+   */
   policy: McqPolicySchema,
+  /**
+   * The evaluation's negative marking scored this answer (ADR-026): the
+   * fraction lies in [-1, 1]. Absent on every grading written without it.
+   */
+  negativeMarking: z.boolean().optional(),
   correct: z.array(z.number().int()),
   selected: z.array(z.number().int()),
   c: z.number().int(),

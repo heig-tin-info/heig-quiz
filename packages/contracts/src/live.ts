@@ -121,6 +121,12 @@ export const LobbyView = z.object({
    * content: it says how the student may move, nothing about what they see.
    */
   navigation: Navigation,
+  /**
+   * The evaluation scores its choice questions with negative marking
+   * (ADR-026): the waiting room says so before anybody starts. A rule of the
+   * evaluation, like `navigation`, not question content.
+   */
+  negativeMarking: z.boolean(),
   present: z.number().int(),
   enrolled: z.number().int(),
   timeBonusPercent: z.number().int(),

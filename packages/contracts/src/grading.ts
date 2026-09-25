@@ -73,6 +73,12 @@ export const GradingQueueItem = z.object({
   internalName: z.string(),
   type: z.string(),
   points: z.number(),
+  /**
+   * The lowest points a manual correction may give (F-GRADE-05): 0, or
+   * `-points` for a choice question of an evaluation with negative marking
+   * (ADR-026). The highest is `points`.
+   */
+  minPoints: z.number(),
 });
 export type GradingQueueItem = z.infer<typeof GradingQueueItem>;
 

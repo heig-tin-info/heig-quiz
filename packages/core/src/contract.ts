@@ -88,6 +88,13 @@ export interface StudentView {
   itemId: string;
   /** Evaluation-level shuffle switch AND question-level shuffleable flag, ANDed by the caller. */
   shuffle: boolean;
+  /**
+   * The same per-type settings of the evaluation as `GradeContext.defaults`,
+   * when the view is built for one. A type may publish the part of its entry
+   * a student must know BEFORE answering — `mcq` tells whether wrong answers
+   * cost points (ADR-026) — and never the rest. Absent: no evaluation.
+   */
+  defaults?: Readonly<Record<string, unknown>>;
 }
 
 /**

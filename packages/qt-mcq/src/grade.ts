@@ -18,6 +18,11 @@
  * `POST /questions/:id/try` — the teacher's Try panel — has NO evaluation, so
  * it passes no `defaults`: an `inherit` question is then graded
  * `all_or_nothing`, the same thing an evaluation would default to.
+ *
+ * Above the three levels sits the evaluation's NEGATIVE MARKING (ADR-026,
+ * `defaults.mcq.negativeMarking`): when it is on, every choice question of
+ * the evaluation, single or multiple answer, is scored with the negative
+ * rule of `mcqFraction`, whatever its policy — and the points may be below 0.
  */
 import type { GradeContext, GradedResult } from "@quiz/core/server";
 import { DEFAULT_MCQ_SCORE_POLICY, mcqFraction, truncateSelection } from "@quiz/domain/mcqScore";
@@ -46,6 +51,12 @@ export function resolvePolicy(
   return parsed.success ? parsed.data.policy : DEFAULT_MCQ_SCORE_POLICY;
 }
 
+/** Whether the evaluation behind `defaults` scores its choice questions negatively (ADR-026). */
+export function negativeMarkingOf(defaults: GradeContext["defaults"] | undefined): boolean {
+  const parsed = McqDefaultsSchema.safeParse(defaults?.["mcq"]);
+  return parsed.success && parsed.data.negativeMarking === true;
+}
+
 export function gradeMcq(
   config: McqConfig,
   answer: McqAnswer | null,
@@ -53,6 +64,7 @@ export function gradeMcq(
   defaults?: GradeContext["defaults"],
 ): GradedResult<McqDetails> {
   const policy = resolvePolicy(config, defaults);
+  const negativeMarking = negativeMarkingOf(defaults);
   const correct = correctIndices(config);
   const { selected, truncated } = truncateSelection(
     answer === null ? [] : answer.selected,
@@ -63,6 +75,7 @@ export function gradeMcq(
     selected,
     choiceCount: config.choices.length,
     policy,
+    negativeMarking,
   });
 
   return {
@@ -75,6 +88,7 @@ export function gradeMcq(
       // The APPLIED policy, `inherit` resolved: the teacher panel shows what
       // actually scored this answer, not what the config happens to say now.
       policy,
+      ...(negativeMarking ? { negativeMarking: true } : {}),
       correct,
       selected,
       c: score.c,

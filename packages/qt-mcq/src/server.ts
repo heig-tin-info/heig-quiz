@@ -11,7 +11,7 @@ import {
   type StudentView,
 } from "@quiz/core/server";
 import { seededShuffle, streamSeed } from "@quiz/core/rng";
-import { gradeMcq } from "./grade.js";
+import { gradeMcq, negativeMarkingOf } from "./grade.js";
 import { fromCanonical, toCanonical } from "./canonical.js";
 import {
   choiceLetter,
@@ -118,7 +118,9 @@ export const mcqServer: QuestionTypeServer<
    * THE single exit toward a student (invariant 4). It keeps the prompt, the
    * choice texts, the mode and `maxSelections`, and drops `correct` and
    * `policy` — knowing the policy would tell a student whether guessing costs
-   * anything.
+   * anything. What the student IS told is the evaluation's negative marking
+   * (ADR-026), read from `view.defaults`: under it a wrong answer costs
+   * points, and a student must know that before answering.
    */
   toStudent(config, view): McqStudent {
     const order = choiceOrder(config, view);
@@ -128,6 +130,7 @@ export const mcqServer: QuestionTypeServer<
       mode: config.mode,
     };
     if (config.maxSelections !== undefined) student.maxSelections = config.maxSelections;
+    if (negativeMarkingOf(view.defaults)) student.negativeMarking = true;
     return student;
   },
 

@@ -81,6 +81,8 @@ export const mcqPlayerStrings = {
   chooseSeveral: "Choose every correct answer.",
   chooseUpTo: "Choose at most the allowed number of answers.",
   limitReached: "You have reached the maximum number of selections.",
+  /** Negative marking (ADR-026): shown on every choice question it applies to. */
+  negativeMarking: "Wrong answers cost points; not answering costs nothing.",
 } as const;
 
 export type McqPlayerStringKey = keyof typeof mcqPlayerStrings;
@@ -96,6 +98,8 @@ export const mcqReviewStrings = {
   breakdown: "Correct choices ticked",
   wrongTicked: "Wrong choices ticked",
   truncated: "Extra selections were dropped by the answer limit.",
+  /** Negative marking (ADR-026): why the score may be below zero. */
+  negativeMarking: "Negative marking: wrong answers cost points.",
 } as const;
 
 export type McqReviewStringKey = keyof typeof mcqReviewStrings;
