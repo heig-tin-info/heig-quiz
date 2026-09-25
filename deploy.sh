@@ -23,6 +23,17 @@ if [ "$(id -u)" != 0 ] && [ -z "${DOCKER_HOST:-}" ]; then
   export DOCKER_HOST="unix:///run/user/$(id -u)/docker.sock"
 fi
 
+# The registry login lives in a throwaway directory, never in the shared
+# ~/.docker/config.json: heig-classroom deploys on the same account, and a
+# concurrent deploy's login (a token scoped to ITS package) overwrote ours
+# between login and pull -- "denied" on 2026-09-25. The re-exec below keeps
+# the directory (inherited through DOCKER_CONFIG) and removes it on exit.
+if [ -z "${QUIZ_DEPLOY_REEXEC:-}" ]; then
+  DOCKER_CONFIG="$(mktemp -d)"
+  export DOCKER_CONFIG
+fi
+trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+
 # Optional GHCR login (private package): the token comes in over SSH, is piped
 # straight to docker login's stdin (never eval'd), and is discarded after.
 if [ -n "${SSH_ORIGINAL_COMMAND:-}" ]; then
