@@ -317,27 +317,44 @@ export function setDateFormat(f: DateFormat | null | undefined) {
   dateFormat = f ?? "iso";
 }
 
-/** A date-time in an explicit format (used by the settings preview). */
-export function formatDateTimeAs(iso: string, f: DateFormat): string {
+/** The date and the time of a moment, apart, in an explicit format. */
+function datePartsAs(iso: string, f: DateFormat): { date: string; time: string } {
   const d = new Date(iso);
   const p = (n: number) => String(n).padStart(2, "0");
   const [Y, M, D] = [d.getFullYear(), p(d.getMonth() + 1), p(d.getDate())];
   const hm = `${p(d.getHours())}:${p(d.getMinutes())}`;
   switch (f) {
     case "eu":
-      return `${D}.${M}.${Y} ${hm}`;
+      return { date: `${D}.${M}.${Y}`, time: hm };
     case "uk":
-      return `${D}/${M}/${Y} ${hm}`;
+      return { date: `${D}/${M}/${Y}`, time: hm };
     case "us":
-      return `${M}/${D}/${Y} ${d.getHours() % 12 || 12}:${p(d.getMinutes())} ${d.getHours() < 12 ? "AM" : "PM"}`;
+      return {
+        date: `${M}/${D}/${Y}`,
+        time: `${d.getHours() % 12 || 12}:${p(d.getMinutes())} ${d.getHours() < 12 ? "AM" : "PM"}`,
+      };
     default:
-      return `${Y}-${M}-${D} ${hm}`;
+      return { date: `${Y}-${M}-${D}`, time: hm };
   }
+}
+
+/** A date-time in an explicit format (used by the settings preview). */
+export function formatDateTimeAs(iso: string, f: DateFormat): string {
+  const { date, time } = datePartsAs(iso, f);
+  return `${date} ${time}`;
 }
 
 /** Local date-time in the user's preferred format; ISO `2026-09-01 08:00` by default. */
 export function isoDateTime(iso: string): string {
   return formatDateTimeAs(iso, dateFormat);
+}
+
+/**
+ * The same moment as {@link isoDateTime}, date and time apart, for a sentence
+ * that puts a word between them ("Started on {date} at {time}").
+ */
+export function isoDateParts(iso: string): { date: string; time: string } {
+  return datePartsAs(iso, dateFormat);
 }
 
 /**

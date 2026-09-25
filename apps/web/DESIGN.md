@@ -410,6 +410,11 @@ live in `ui/state.ts`, each written once.
   a real `aria-pressed` button, so the state and the label are never
   separated; `pressed` left undefined drops `aria-pressed` for the one pill
   in a row that is an action and not a value ("Show all (37)").
+  `tone="neutral"` is the same pill pressed as a solid `fg` fill with
+  `surface` text (the progress strip's "done" segment): for a screen whose
+  one accent is spoken for — the player's
+  question tools (Flag for review, I won't answer, Clear), which must read
+  as buttons and as on/off without ever out-shouting Next (issue #128).
 - Segmented: `surface-3` pill track, selected chip raised to `surface`.
   Segmented is ONE choice out of a set small enough to show whole — two or
   three normally, five at most and only with one-word labels (the pool

@@ -22,8 +22,14 @@
  * outside the Shell that used to be the only place it existed (W15). The list
  * is the player's, and it is four entries long: there is nowhere else to go
  * during an exam.
+ *
+ * An EXERCISE is different (issue #125): it can be left at any time, every
+ * answer is saved and the student home offers Continue. There, and only
+ * there, the bar opens with a quiet Home button (`onHome`). An exam never
+ * gets one: leaving does not stop its clock, and a way out would read as a
+ * pause.
  */
-import { Moon, Sun } from "lucide-react";
+import { Home, Moon, Sun } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { CommandPalette } from "../CommandPalette";
@@ -51,6 +57,8 @@ export function PlayerShell({
   onSelectSegment,
   progressLabel,
   headerAction,
+  onHome,
+  homeBusy = false,
   commands,
   banner,
   footer,
@@ -75,6 +83,13 @@ export function PlayerShell({
   progressLabel?: string;
   /** "Hand in", the only action of the bar. */
   headerAction?: ReactNode;
+  /**
+   * The way back to the student home, first in the bar. Given for an
+   * exercise only; absent in an exam and in the teacher's preview.
+   */
+  onHome?: () => void;
+  /** Leaving is under way: the button reads as disabled (the player ignores a second press). */
+  homeBusy?: boolean;
   /** What `Ctrl+K` offers here. Empty means no palette at all. */
   commands?: Command[];
   /** The offline alert, in the flow under the bar. */
@@ -118,6 +133,22 @@ export function PlayerShell({
           )}
         >
           <div className="flex items-center gap-3">
+            {onHome ? (
+              // `-ml-1.5`: the round button's own padding, so the house
+              // lines up with the question column below it.
+              <IconButton
+                label={t("player.command.home")}
+                onClick={onHome}
+                // `aria-disabled`, not `disabled`: the keyboard focus stays on
+                // Home while the answers are sent, and is still there after
+                // "Stay". The player's own guard ignores a second press.
+                aria-disabled={homeBusy || undefined}
+                aria-busy={homeBusy || undefined}
+                className="-ml-1.5 -mr-1 aria-disabled:opacity-40"
+              >
+                <Home />
+              </IconButton>
+            ) : null}
             <div className="min-w-0 flex-1">
               {/* The page's heading is what the page IS — the evaluation the
                   student is sitting. It is quiet on purpose (13 px, the bar's

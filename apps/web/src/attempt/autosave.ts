@@ -209,6 +209,43 @@ export class Autosave {
   }
 
   /**
+   * Where the writes stand: `closed` after a final stop (a `410`, a
+   * submission), `paused` between a `410 paused` and the resume, `open`
+   * otherwise. What the player's Home button reads to say WHY an answer is
+   * not saved (issue #125) — a connection, a pause, or the end.
+   */
+  get condition(): "open" | "paused" | "closed" {
+    return this.final ? "closed" : this.paused ? "paused" : "open";
+  }
+
+  /**
+   * {@link settle} for every item at once: resolves `true` once nothing is
+   * left to send, and `false` AS SOON AS one payload could not be sent — it
+   * does not wait on the others, one of which may hang. What the player's
+   * Home button waits for before leaving (issue #125): unmounting the player
+   * drops this object, and a payload still in its debounce would go with it.
+   * Stopped (for good or suspended) or paused, nothing leaves, so it answers
+   * at once: `true` only when there is nothing to send. It never rejects;
+   * the caller bounds the wait (a request may never answer).
+   */
+  settleAll(): Promise<boolean> {
+    if (this.final || this.paused || this.stopped) return Promise.resolve(!this.dirty);
+    const pending = [...this.items.entries()]
+      .filter(([, item]) => item.hasPending || item.inFlight)
+      .map(([itemId]) => this.settle(itemId));
+    if (pending.length === 0) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      let left = pending.length;
+      for (const one of pending) {
+        void one.then((saved) => {
+          if (!saved) resolve(false);
+          else if (--left === 0) resolve(true);
+        });
+      }
+    });
+  }
+
+  /**
    * Sends everything pending at once: the reconnection path (N-RES-02) and
    * the resume after a pause (D17). Resets the backoff — the reason to retry
    * now is new information, not another tick of the same failure.

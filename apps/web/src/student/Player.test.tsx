@@ -1,7 +1,7 @@
 import axe from "axe-core";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { StrictMode } from "react";
+import { StrictMode, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AttemptOrLobby, AttemptView } from "@quiz/contracts";
@@ -486,14 +486,52 @@ describe("the zen player", () => {
       ).toBeInTheDocument();
       // Settled: the accent goes to the way out of the last question.
       expect(isPrimary(screen.getByRole("button", { name: "Rendre" }))).toBe(true);
-      // And it can be taken back by hand…
-      expect(screen.getByRole("button", { name: "Finalement, y répondre" })).toBeInTheDocument();
+      // And it can be taken back by hand — the chip is pressed (issue #128)…
+      const skip = screen.getByRole("button", { name: "Je ne répondrai pas à cette question" });
+      expect(skip).toHaveAttribute("aria-pressed", "true");
 
       // …or by answering, which the list reads at once.
       await userEvent.type(await screen.findByLabelText("Votre réponse"), "1");
       expect(await screen.findByText("Répondue")).toBeInTheDocument();
       expect(screen.queryByText("Je n'y réponds pas")).toBeNull();
-      expect(screen.queryByRole("button", { name: "Finalement, y répondre" })).toBeNull();
+      expect(
+        screen.queryByRole("button", { name: "Je ne répondrai pas à cette question" }),
+      ).toBeNull();
+    });
+
+    // Issue #128: the question's two tools are one group of real toggles,
+    // under the card, and never the accent.
+    it("groups the flag and 'I won't answer' as pressed toggles under the question", async () => {
+      const view = attemptView({ lastItemId: "i3" });
+      const { calls } = stubs(view);
+      render(view);
+      await screen.findByText("Question 3");
+
+      const tools = screen.getByRole("group", { name: "Cette question" });
+      const flag = within(tools).getByRole("button", { name: "Marquer à revoir" });
+      const skip = within(tools).getByRole("button", {
+        name: "Je ne répondrai pas à cette question",
+      });
+      for (const chip of [flag, skip]) {
+        expect(chip).toHaveAttribute("aria-pressed", "false");
+        expect(isPrimary(chip)).toBe(false);
+        expect(chip.className).not.toMatch(/accent/);
+      }
+
+      await userEvent.click(skip);
+      await waitFor(() => expect(skip).toHaveAttribute("aria-pressed", "true"));
+      await userEvent.click(skip);
+      await waitFor(() => expect(skip).toHaveAttribute("aria-pressed", "false"));
+      expect(
+        calls
+          .filter((c) => c.url.endsWith("/answers/i3/skip"))
+          .map((c) => (c.body as { skipped: boolean }).skipped),
+      ).toEqual([true, false]);
+
+      await userEvent.click(flag);
+      await waitFor(() => expect(flag).toHaveAttribute("aria-pressed", "true"));
+      expect(flag).toHaveAccessibleName("Marquer à revoir");
+      expect(flag.className).not.toMatch(/accent|warning/);
     });
 
     it("toggles the review flag, stored on the server and shown in the list", async () => {
@@ -505,8 +543,9 @@ describe("the zen player", () => {
       const flag = screen.getByRole("button", { name: "Marquer à revoir" });
       expect(flag).toHaveAttribute("aria-pressed", "false");
       await userEvent.click(flag);
-      const pressed = await screen.findByRole("button", { name: "Marquée à revoir" });
-      expect(pressed).toHaveAttribute("aria-pressed", "true");
+      // One name, on or off (issue #128): `aria-pressed` carries the state.
+      await waitFor(() => expect(flag).toHaveAttribute("aria-pressed", "true"));
+      const pressed = flag;
       expect(isPrimary(pressed)).toBe(false);
       await waitFor(() =>
         expect(
@@ -524,7 +563,7 @@ describe("the zen player", () => {
       ).toBeInTheDocument();
 
       await userEvent.click(pressed);
-      expect(await screen.findByRole("button", { name: "Marquer à revoir" })).toBeInTheDocument();
+      await waitFor(() => expect(flag).toHaveAttribute("aria-pressed", "false"));
     });
 
     it("offers 'Clear' on a multiple choice only, and it puts the question back to unanswered", async () => {
@@ -611,6 +650,169 @@ describe("the zen player", () => {
       // And handing in still goes through its confirmation (F-LIVE-10).
       await userEvent.click(screen.getByRole("button", { name: "Rendre" }));
       expect(await screen.findByText("Rendre vos réponses ?")).toBeInTheDocument();
+    });
+  });
+
+  /*
+   * Issue #125: an exercise can be left at any time and continued from the
+   * student home; an exam keeps the zen player with nowhere to go.
+   */
+  describe("the way home", () => {
+    const exercise = (): AttemptView => {
+      const view = attemptView();
+      return { ...view, evaluation: { ...view.evaluation, mode: "exercise" } };
+    };
+    const renderWith = (navigate: (r: unknown) => void) =>
+      renderWithProviders(<AttemptPage evaluationId={EVAL} navigate={navigate} />, {
+        locale: "fr",
+        route: `/take/${EVAL}`,
+      });
+
+    it("offers no Home button during an exam", async () => {
+      stubs(attemptView());
+      render();
+      await screen.findByText("Question 2");
+      expect(screen.queryByRole("button", { name: "Revenir à mes quiz" })).toBeNull();
+    });
+
+    it(
+      "goes home from an exercise without handing in, once the pending answer is saved",
+      { timeout: 15_000 },
+      async () => {
+        const view = exercise();
+        const saves: unknown[] = [];
+        const { calls } = stubs(view, {
+          [`PUT /app/api/attempts/${ATTEMPT}/answers/i2`]: (call) => {
+            saves.push(call.body);
+            return ok({ accepted: true, revision: 9, serverNow: "2026-09-20T10:00:01.000Z" });
+          },
+        });
+        const navigate = vi.fn();
+        renderWith(navigate);
+        const field = await screen.findByLabelText("Votre réponse");
+        // Typed, and still inside the 300 ms debounce when Home is pressed.
+        await userEvent.type(field, "2");
+        await userEvent.click(screen.getByRole("button", { name: "Revenir à mes quiz" }));
+        await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "home" }));
+        // The answer reached the server first…
+        expect((saves.at(-1) as { payload: { text: string } }).payload.text).toBe("42");
+        // …and nothing was handed in: the attempt stays in progress.
+        expect(calls.some((c) => c.url.endsWith("/submit"))).toBe(false);
+      },
+    );
+
+    /** Home pressed with "2" typed and still in its debounce. */
+    const typeThenHome = async () => {
+      await userEvent.type(await screen.findByLabelText("Votre réponse"), "2");
+      await userEvent.click(screen.getByRole("button", { name: "Revenir à mes quiz" }));
+    };
+
+    it("asks before leaving when an answer cannot be saved, Stay focused", { timeout: 15_000 }, async () => {
+      stubs(exercise(), {
+        [`PUT /app/api/attempts/${ATTEMPT}/answers/i2`]: fail(500, { error: "boom" }),
+      });
+      const navigate = vi.fn();
+      renderWith(navigate);
+      await typeThenHome();
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByText(/risquent d'être perdues/)).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: "Rester" })).toHaveFocus();
+      await userEvent.click(within(dialog).getByRole("button", { name: "Rester" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      expect(navigate).not.toHaveBeenCalledWith({ view: "home" });
+
+      // Asked again, the student may leave anyway.
+      await userEvent.click(screen.getByRole("button", { name: "Revenir à mes quiz" }));
+      await userEvent.click(
+        within(await screen.findByRole("dialog")).getByRole("button", { name: "Partir quand même" }),
+      );
+      await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "home" }));
+    });
+
+    it("says the evaluation is paused when the save met a 410 paused", { timeout: 15_000 }, async () => {
+      stubs(exercise(), {
+        [`PUT /app/api/attempts/${ATTEMPT}/answers/i2`]: fail(410, {
+          error: "attempt_closed",
+          reason: "paused",
+          deadlineAt: null,
+          serverNow: "2026-09-20T10:00:01.000Z",
+        }),
+      });
+      renderWith(vi.fn());
+      await typeThenHome();
+      const dialog = await screen.findByRole("dialog", { name: "Quitter cet exercice ?" });
+      expect(within(dialog).getByText(/mis l'évaluation en pause/)).toBeInTheDocument();
+      expect(within(dialog).queryByText(/connexion/)).toBeNull();
+    });
+
+    it("says the attempt is closed when the save met a 410 closed", { timeout: 15_000 }, async () => {
+      stubs(exercise(), {
+        [`PUT /app/api/attempts/${ATTEMPT}/answers/i2`]: fail(410, {
+          error: "attempt_closed",
+          reason: "deadline",
+          deadlineAt: null,
+          serverNow: "2026-09-20T10:00:01.000Z",
+        }),
+      });
+      renderWith(vi.fn());
+      await typeThenHome();
+      const dialog = await screen.findByRole("dialog", { name: "Quitter cet exercice ?" });
+      expect(within(dialog).getByText(/Cette tentative est fermée/)).toBeInTheDocument();
+    });
+
+    /** Every autosave hangs: the request leaves and never answers. */
+    const hangSaves = (fetchMock: ReturnType<typeof stubs>["fetchMock"]) => {
+      const base = fetchMock.getMockImplementation()!;
+      fetchMock.mockImplementation((input: RequestInfo | URL, init: RequestInit = {}) =>
+        init.method === "PUT" ? new Promise<Response>(() => {}) : base(input, init),
+      );
+    };
+
+    it("stops waiting for a hung save after a few seconds, and never fires twice", { timeout: 20_000 }, async () => {
+      const { fetchMock } = stubs(exercise());
+      hangSaves(fetchMock);
+      const navigate = vi.fn();
+      renderWith(navigate);
+      await typeThenHome();
+      const home = screen.getByRole("button", { name: "Revenir à mes quiz" });
+      // Leaving is under way: Home reads as disabled but keeps the focus,
+      // and a second press asks nothing more.
+      await waitFor(() => expect(home).toHaveAttribute("aria-disabled", "true"));
+      expect(home).toHaveFocus();
+      await userEvent.click(home);
+      // The bound is 6 s: the question is asked, not a dead button.
+      const dialog = await screen.findByRole("dialog", {}, { timeout: 8_000 });
+      expect(screen.getAllByRole("dialog")).toHaveLength(1);
+      expect(within(dialog).getByText(/risquent d'être perdues/)).toBeInTheDocument();
+      await userEvent.click(within(dialog).getByRole("button", { name: "Rester" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+      // Back where the student was: on Home, enabled again.
+      await waitFor(() => expect(home).toHaveFocus());
+      expect(home).not.toHaveAttribute("aria-disabled");
+      expect(navigate).not.toHaveBeenCalledWith({ view: "home" });
+    });
+
+    it("asks nothing once the player is gone (Home, then Back)", { timeout: 20_000 }, async () => {
+      const { fetchMock } = stubs(exercise());
+      hangSaves(fetchMock);
+      function Away() {
+        const [on, setOn] = useState(true);
+        return (
+          <>
+            {on ? <AttemptPage evaluationId={EVAL} navigate={() => {}} /> : null}
+            <button type="button" onClick={() => setOn(false)}>
+              back
+            </button>
+          </>
+        );
+      }
+      renderWithProviders(<Away />, { locale: "fr", route: `/take/${EVAL}` });
+      await typeThenHome();
+      await userEvent.click(screen.getByRole("button", { name: "back" }));
+      expect(screen.queryByText("Question 2")).toBeNull();
+      // Past the 6 s bound: the confirmation stays shut on the next page.
+      await new Promise((resolve) => setTimeout(resolve, 6_500));
+      expect(screen.queryByRole("dialog")).toBeNull();
     });
   });
 

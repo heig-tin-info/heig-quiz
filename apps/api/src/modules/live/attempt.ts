@@ -1322,6 +1322,7 @@ export async function studentHome(db: Db, userId: string, now: Date): Promise<St
     durationS: row.evaluation.durationS,
     attemptId: row.attempt?.id ?? null,
     attemptState: row.attempt?.state ?? null,
+    attemptStartedAt: isoOrNull(row.attempt?.startedAt ?? null),
     deadlineAt: isoOrNull(row.attempt?.deadlineAt ?? null),
     grade: gradeOf(row),
     retakes: retakesOf(row),

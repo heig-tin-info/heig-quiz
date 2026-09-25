@@ -6,15 +6,18 @@
  * the student can set by hand is what the answer alone cannot say:
  *
  *   - "I won't answer this question", on an EMPTY question: settled on
- *     purpose, left blank. Writing an answer takes it back, and so does the
- *     secondary "Answer it after all";
- *   - the review FLAG, a toggle beside the points: a note to self, shown in
- *     the question list and on the teacher's grid, no effect on the grade;
+ *     purpose, left blank. A toggle: pressing it again — or writing an
+ *     answer — takes it back;
+ *   - the review FLAG, a toggle: a note to self, shown in the question list
+ *     and on the teacher's grid, no effect on the grade;
  *   - "Clear", for MULTIPLE CHOICE only (the other types are emptied by
  *     hand): with negative points, withdrawing a selection must be possible.
  *
- * Those three are one line of quiet buttons under the question — tools, not
- * the page's action. ONE primary action, and it moves with the question:
+ * Those three are ONE toolbar of neutral chips under the question (issue
+ * #128): outlined so they read as buttons, each with its icon, pressed in
+ * `fg` rather than the accent — tools, not the page's action. They used to be
+ * ghost buttons at two ends of the card, and students read them as text.
+ * ONE primary action, and it moves with the question:
  *
  *   - where the navigation asks for it — every question in `forward_only`, a
  *     checkpoint in `milestones` — "Validate and continue", the one
@@ -44,7 +47,7 @@
  * student decides to try again (ADR-025 addendum, issue #121).
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Check, Flag, Lock, Minus } from "lucide-react";
+import { Check, CircleSlash, Eraser, Flag, Lock, Minus } from "lucide-react";
 
 import { retakesOf, type AttemptView } from "@quiz/contracts";
 import { answerMark, mayValidate, maySkip, retakesOn } from "@quiz/domain";
@@ -56,7 +59,7 @@ import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
 import { useToast } from "../notify";
 import { useShortcuts } from "../shortcuts";
-import { Badge, Button, Card, cx, modKey, Spinner, useMinWidth } from "../ui";
+import { Badge, Button, Card, cx, modKey, Spinner, ToggleChip, useMinWidth } from "../ui";
 import { ClosedScreen } from "./ClosedScreen";
 import { OfflineBanner } from "./OfflineBanner";
 import { PausedOverlay } from "./PausedOverlay";
@@ -141,6 +144,13 @@ export type PlayerSession = Pick<
  * the student there by itself, so Back does not land on a player that would
  * only forward again.
  */
+/**
+ * How long Home waits for the pending answers (issue #125) before asking the
+ * student whether to leave anyway: two autosave backoffs, and short enough
+ * that a hung request never reads as a dead button.
+ */
+const LEAVE_FLUSH_TIMEOUT_MS = 6_000;
+
 export type OnResults = (attemptId: string, options?: { replace?: boolean }) => void;
 
 export function Player({
@@ -164,6 +174,61 @@ export function Player({
 }) {
   const attempt = useAttempt(initial.attempt.id, initial);
   const attemptId = initial.attempt.id;
+  const t = useT();
+  const confirm = useConfirm();
+  const { flush, closed } = attempt;
+  // Issue #125: leaving unmounts the player, and its autosave with it. An
+  // answer still waiting for its debounce — or on its way — must reach the
+  // server first. The wait is bounded (a request may never answer), and
+  // when the answers are not all saved the student is ASKED, told why, with
+  // Stay focused: leaving may lose them. The attempt stays in progress.
+  const [leaving, setLeaving] = useState(false);
+  const leavingRef = useRef(false);
+  // Home, then the browser's Back within the wait: the player is gone, and
+  // the app-level confirmation must not open on whatever page came next.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+  const leave = useCallback(async () => {
+    // The end screen has nothing left to save, and says so itself.
+    if (closed !== null) return onHome();
+    if (leavingRef.current) return;
+    leavingRef.current = true;
+    setLeaving(true);
+    try {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const result = await Promise.race([
+        flush(),
+        new Promise<"timeout">((resolve) => {
+          timer = setTimeout(() => resolve("timeout"), LEAVE_FLUSH_TIMEOUT_MS);
+        }),
+      ]);
+      clearTimeout(timer);
+      if (!mounted.current) return;
+      if (result === "saved") return onHome();
+      const ok = await confirm({
+        title: t("player.leave.title"),
+        message: t(
+          result === "paused"
+            ? "player.leave.paused"
+            : result === "closed"
+              ? "player.leave.closed"
+              : "player.leave.unsaved",
+        ),
+        confirmLabel: t("player.leave.confirm"),
+        cancelLabel: t("player.leave.stay"),
+        focusCancel: true,
+      });
+      if (ok) onHome();
+    } finally {
+      leavingRef.current = false;
+      if (mounted.current) setLeaving(false);
+    }
+  }, [closed, flush, onHome, confirm, t]);
   const session = useMemo<PlayerSession>(
     () => ({
       ...attempt,
@@ -175,7 +240,8 @@ export function Player({
     <PlayerView
       initial={initial}
       session={session}
-      onHome={onHome}
+      onHome={() => void leave()}
+      homeBusy={leaving}
       onResults={onResults}
       {...(onExitStudentView ? { onExitStudentView } : {})}
     />
@@ -190,10 +256,13 @@ export function PlayerView({
   onResults,
   onExitStudentView,
   banner,
+  homeBusy = false,
 }: {
   initial: AttemptView;
   session: PlayerSession;
   onHome: () => void;
+  /** Leaving is under way (the answers are being sent): Home is disabled. */
+  homeBusy?: boolean;
   /** Absent where there is no feedback page to open (the preview). */
   onResults?: OnResults;
   onExitStudentView?: () => void;
@@ -412,26 +481,56 @@ export function PlayerView({
         onMove={(delta) => dispatch({ type: "move", delta })}
       />
     ) : null;
-  // The one tool of the answer, beside the flag: exactly one of the three
-  // can apply at a time, because they read the same two facts.
+  // The question's tools (issue #128): the flag, and the one tool of the
+  // answer — exactly one of Clear and I-won't-answer can apply at a time,
+  // because they read the same two facts.
   const clearable = item?.type === "mcq" && answered && !readOnly;
   const skippable = item !== undefined && !readOnly && maySkip({ answered });
-  const tool = clearable ? (
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={() => {
-        if (!item) return;
-        setAnswer(item.id, emptyAnswerOf(item.type, item.student), false);
-      }}
-    >
-      {t("player.clear")}
-    </Button>
-  ) : skippable ? (
-    <Button variant="ghost" size="sm" onClick={() => void toggleSkip()}>
-      {item?.skipped ? t("player.unskip") : t("player.skip")}
-    </Button>
-  ) : null;
+  // A closed question keeps a flag that is ON (it still means something in
+  // the list), disabled; an unflagged one has nothing to say.
+  const flaggable = item !== undefined && (!readOnly || item.flagged);
+  const tools =
+    item && (flaggable || clearable || skippable) ? (
+      <div
+        role="group"
+        aria-label={t("player.tools")}
+        className="mt-3 flex flex-wrap items-center gap-2"
+      >
+        {flaggable ? (
+          <ToggleChip
+            tone="neutral"
+            icon={Flag}
+            // One label, on or off: `aria-pressed` carries the state, and a
+            // label that changed with it would be read twice.
+            label={t("player.flag")}
+            pressed={item.flagged}
+            disabled={readOnly}
+            onToggle={() => void toggleFlag()}
+            // Filled when on, in the chip's own text colour: `warning` on
+            // the pressed fill falls under 3:1 in the dark theme.
+            className={cx(item.flagged && "[&_svg]:fill-current")}
+          />
+        ) : null}
+        {clearable ? (
+          <ToggleChip
+            tone="neutral"
+            icon={Eraser}
+            label={t("player.clear")}
+            onToggle={() => setAnswer(item.id, emptyAnswerOf(item.type, item.student), false)}
+          />
+        ) : skippable ? (
+          <ToggleChip
+            tone="neutral"
+            icon={CircleSlash}
+            // One label, on or off: the badge above already says "Won't
+            // answer", and the pressed chip is how it is taken back.
+            label={t("player.skip")}
+            pressed={item.skipped}
+            onToggle={() => void toggleSkip()}
+          />
+        ) : null}
+      </div>
+    ) : null;
 
   return (
     <>
@@ -445,6 +544,11 @@ export function PlayerView({
         onSelectSegment={(itemId) => dispatch({ type: "goto", itemId })}
         progressLabel={t("player.progress", { n: state.index + 1, total })}
         commands={commands}
+        // Issue #125: an exercise may be left and continued later; an exam
+        // may not look like it can. The preview is a tab of its own.
+        {...(initial.evaluation.mode === "exercise" && !initial.attempt.preview
+          ? { onHome, homeBusy }
+          : {})}
         headerAction={
           <Button
             variant={handInIsPrimary ? "primary" : "secondary"}
@@ -496,25 +600,6 @@ export function PlayerView({
               <span className="ml-auto text-[13px] text-fg-muted">
                 {item.points === 1 ? t("player.point") : t("player.points", { n: item.points })}
               </span>
-              {readOnly && !item.flagged ? null : (
-                // The word hides on a phone, where it would take a line of
-                // its own; the name stays, and so does the pressed state.
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-pressed={item.flagged}
-                  aria-label={item.flagged ? t("player.flagged") : t("player.flag")}
-                  title={item.flagged ? t("player.flagged") : t("player.flag")}
-                  disabled={readOnly}
-                  onClick={() => void toggleFlag()}
-                  className={cx("-mr-2", item.flagged && "!text-warning")}
-                >
-                  <Flag className={cx("size-3.5", item.flagged && "fill-current")} aria-hidden />
-                  <span className="hidden sm:inline">
-                    {item.flagged ? t("player.flagged") : t("player.flag")}
-                  </span>
-                </Button>
-              )}
             </div>
             <Card className="p-5 sm:p-6">
               <QuestionHost
@@ -575,9 +660,7 @@ export function PlayerView({
                   : {})}
               />
             </Card>
-            {/* `-ml-3`: the ghost button's own padding, so its word lines
-                up with the card's edge rather than floating off it. */}
-            {tool ? <div className="-ml-3 mt-2 flex items-center">{tool}</div> : null}
+            {tools}
             {desktop && actions ? (
               <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>
             ) : null}

@@ -489,11 +489,14 @@ describe("the screens with several attempts", () => {
     });
 
     // During the retake: no Retake, the score of attempt 1 still stands.
+    app.clock.advance(60_000);
     const second = await retake(app, evaluation, student);
     home = await live.studentHome(db, student, app.clock.now());
     card = home.open.find((c) => c.id === evaluation.id)!;
     expect(card.attemptId).toBe(second.id);
     expect(card.attemptState).toBe("in_progress");
+    // Issue #126: the start of the attempt "Continue" opens — the retake's.
+    expect(card.attemptStartedAt).toBe(app.clock.now().toISOString());
     expect(card.retakes).toMatchObject({ attemptCount: 2, canRetake: false, kept: { attemptNumber: 1 } });
 
     // A better second attempt becomes the kept one.

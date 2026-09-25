@@ -341,3 +341,56 @@ describe("settle (issue #89)", () => {
     await expect(save.settle("i1")).resolves.toBe(true);
   });
 });
+
+describe("settleAll (issue #125)", () => {
+  it("sends every pending item now and resolves once all are acknowledged", async () => {
+    const { save, sent } = make();
+    save.change("i1", "x");
+    save.change("i2", "y");
+    let settled: boolean | null = null;
+    void save.settleAll().then((saved) => {
+      settled = saved;
+    });
+    expect(sent.map((s) => s.itemId)).toEqual(["i1", "i2"]);
+    sent[0]!.resolve(accepted(1));
+    await Promise.resolve();
+    expect(settled).toBeNull();
+    sent[1]!.resolve(accepted(1));
+    await vi.waitFor(() => expect(settled).toBe(true));
+  });
+
+  it("answers false when one item could not be sent", async () => {
+    const { save, sent } = make();
+    save.change("i1", "x");
+    const settled = save.settleAll();
+    sent[0]!.reject(new ApiError(503, { error: "unavailable" }));
+    await expect(settled).resolves.toBe(false);
+  });
+
+  it("answers false at once when one item fails, without waiting on a hung one", async () => {
+    const { save, sent } = make();
+    save.change("i1", "x");
+    save.change("i2", "y");
+    let settled: boolean | null = null;
+    void save.settleAll().then((saved) => {
+      settled = saved;
+    });
+    // i1 never answers; i2 fails.
+    sent[1]!.reject(new ApiError(503, { error: "unavailable" }));
+    await vi.waitFor(() => expect(settled).toBe(false));
+  });
+
+  it("answers at once when nothing can leave, and says why", async () => {
+    const { save, sent } = make();
+    await expect(save.settleAll()).resolves.toBe(true);
+    expect(save.condition).toBe("open");
+    save.change("i1", "x");
+    vi.advanceTimersByTime(300);
+    sent[0]!.reject(new ApiError(410, { error: "attempt_closed", reason: "paused", deadlineAt: null, serverNow: serverNow() }));
+    await vi.waitFor(() => expect(save.condition).toBe("paused"));
+    await expect(save.settleAll()).resolves.toBe(false);
+    save.stop();
+    expect(save.condition).toBe("closed");
+    await expect(save.settleAll()).resolves.toBe(false);
+  });
+});

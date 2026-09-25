@@ -52,7 +52,8 @@ export type Scene =
   | "extend"
   | "single"
   | "marks"
-  | "forward";
+  | "forward"
+  | "exercise";
 const SCENE_KEY = "quiz-mock-scene";
 const sceneParam = params.get("scene");
 if (sceneParam !== null) {
