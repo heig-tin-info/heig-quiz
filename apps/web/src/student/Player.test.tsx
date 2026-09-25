@@ -486,14 +486,52 @@ describe("the zen player", () => {
       ).toBeInTheDocument();
       // Settled: the accent goes to the way out of the last question.
       expect(isPrimary(screen.getByRole("button", { name: "Rendre" }))).toBe(true);
-      // And it can be taken back by hand…
-      expect(screen.getByRole("button", { name: "Finalement, y répondre" })).toBeInTheDocument();
+      // And it can be taken back by hand — the chip is pressed (issue #128)…
+      const skip = screen.getByRole("button", { name: "Je ne répondrai pas à cette question" });
+      expect(skip).toHaveAttribute("aria-pressed", "true");
 
       // …or by answering, which the list reads at once.
       await userEvent.type(await screen.findByLabelText("Votre réponse"), "1");
       expect(await screen.findByText("Répondue")).toBeInTheDocument();
       expect(screen.queryByText("Je n'y réponds pas")).toBeNull();
-      expect(screen.queryByRole("button", { name: "Finalement, y répondre" })).toBeNull();
+      expect(
+        screen.queryByRole("button", { name: "Je ne répondrai pas à cette question" }),
+      ).toBeNull();
+    });
+
+    // Issue #128: the question's two tools are one group of real toggles,
+    // under the card, and never the accent.
+    it("groups the flag and 'I won't answer' as pressed toggles under the question", async () => {
+      const view = attemptView({ lastItemId: "i3" });
+      const { calls } = stubs(view);
+      render(view);
+      await screen.findByText("Question 3");
+
+      const tools = screen.getByRole("group", { name: "Cette question" });
+      const flag = within(tools).getByRole("button", { name: "Marquer à revoir" });
+      const skip = within(tools).getByRole("button", {
+        name: "Je ne répondrai pas à cette question",
+      });
+      for (const chip of [flag, skip]) {
+        expect(chip).toHaveAttribute("aria-pressed", "false");
+        expect(isPrimary(chip)).toBe(false);
+        expect(chip.className).not.toMatch(/accent/);
+      }
+
+      await userEvent.click(skip);
+      await waitFor(() => expect(skip).toHaveAttribute("aria-pressed", "true"));
+      await userEvent.click(skip);
+      await waitFor(() => expect(skip).toHaveAttribute("aria-pressed", "false"));
+      expect(
+        calls
+          .filter((c) => c.url.endsWith("/answers/i3/skip"))
+          .map((c) => (c.body as { skipped: boolean }).skipped),
+      ).toEqual([true, false]);
+
+      await userEvent.click(flag);
+      const pressed = await within(tools).findByRole("button", { name: "Marquée à revoir" });
+      expect(pressed).toHaveAttribute("aria-pressed", "true");
+      expect(pressed.className).not.toMatch(/accent/);
     });
 
     it("toggles the review flag, stored on the server and shown in the list", async () => {

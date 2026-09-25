@@ -271,6 +271,8 @@ export function ToggleChip({
   icon: Icon,
   pressed,
   onToggle,
+  tone = "accent",
+  disabled,
   className = "",
   "aria-label": ariaLabel,
 }: {
@@ -283,6 +285,14 @@ export function ToggleChip({
    */
   pressed?: boolean;
   onToggle: () => void;
+  /**
+   * `neutral` for a chip on a screen whose accent belongs to something else
+   * (the player's own tools under a question, issue #128): pressed, it is
+   * filled `fg` with `surface` text — the progress strip's "done" fill, as
+   * plain to read as the accent one, without taking the screen's colour.
+   */
+  tone?: "accent" | "neutral";
+  disabled?: boolean;
   className?: string;
   /** For a chip whose visible label is a bare number ("3" is not a name). */
   "aria-label"?: string;
@@ -292,11 +302,14 @@ export function ToggleChip({
       type="button"
       aria-pressed={pressed}
       aria-label={ariaLabel}
+      disabled={disabled}
       onClick={onToggle}
       className={cx(
-        "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[13px] font-medium transition-colors duration-150",
+        "inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-3 text-[13px] font-medium transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50",
         pressed
-          ? "border-accent bg-accent-soft text-accent"
+          ? tone === "neutral"
+            ? "border-fg bg-fg text-surface"
+            : "border-accent bg-accent-soft text-accent"
           : "border-line-strong bg-surface text-fg-muted hover:border-fg-faint hover:text-fg",
         className,
       )}
