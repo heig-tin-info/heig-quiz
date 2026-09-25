@@ -19,7 +19,7 @@ Whether the question is single or multiple is decided by the ticks, not by a set
 
 ### How it is graded
 
-A single-answer question is always all or nothing. A multiple-answer question is scored by a policy, resolved through three levels, each overriding the one above it:
+A single-answer question is all or nothing, unless the evaluation turns on negative marking (below). A multiple-answer question is scored by a policy, resolved through three levels, each overriding the one above it:
 
 1. your preference in **Settings**, which seeds the evaluations you create and nothing else;
 2. the evaluation, under its advanced options, for every question it plays;
@@ -32,10 +32,41 @@ The policies are named below as the editor, the evaluation options and **Setting
 | **Exact** (all or nothing) | 1 if the ticked set is the key, else 0 | the exact set of correct choices, or nothing |
 | **True/false** (true/false per choice) | `(c + (W - w)) / (C + W)` | every choice is its own true/false item; ticking nothing already scores `W / (C + W)` |
 | **Distance** (discordances) | `d = (C - c) + w`: 0 gives 1, 1 gives 0.5, 2 gives 0.2, more gives 0 | by the number of choices got the wrong way round |
-| **Symmetric** | `c/C - w/W` | a wrong tick costs what a right one earns; random ticking is worth nothing on average |
+| **Symmetric** | `c/C - w/W` | a wrong tick costs what a right one earns; before the floor at zero, random ticking is worth nothing on average |
 | **Ripkey** | `c/C`, or 0 as soon as `w > 0` | pays a student who ticks only what they are sure of |
 
-No policy ever goes below zero: answering is never worse than leaving the question blank. The result is multiplied by the points of the item.
+No policy goes below zero: answering is never worse than leaving the question blank. The result is multiplied by the points of the item.
+
+**Negative marking** is the one exception. It is a switch of the evaluation, not a policy, and when it is on it replaces the policy of every choice question the evaluation plays, single-answer ones included (ADR-026):
+
+- a multiple-answer question scores `c/C - w/W`, the Symmetric formula without its floor, from −1 to 1;
+- a single-answer question scores 1 for the key and `−1/(n − 1)` for a wrong choice, `n` being the number of choices; ticking several choices is refused while the student answers, and scored as wrong;
+- no answer scores 0, which is what **Clear my selection** is for.
+
+A question may then be worth negative points; only the total of the attempt is brought back to 0, and the grade is computed from that total. Students are told before they start and on every choice question.
+
+#### A worked example
+
+Four choices A, B, C and D, of which A and C are correct (`C = 2`, `W = 2`). Every policy, and negative marking, depends only on `c` and `w`, so the sixteen possible answers fall into nine cases:
+
+| `c` | `w` | Answers (A B C D) | Count | Exact | True/false | Distance | Symmetric | Ripkey | Negative marking |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 2 | 0 | **1010** (the key) | 1 | **1** | **1** | **1** | **1** | **1** | **1** |
+| 2 | 1 | 1110, 1011 | 2 | 0 | 0.75 | 0.5 | 0.5 | 0 | 0.5 |
+| 2 | 2 | 1111 | 1 | 0 | 0.5 | 0.2 | 0 | 0 | 0 |
+| 1 | 0 | 1000, 0010 | 2 | 0 | 0.75 | 0.5 | 0.5 | 0.5 | 0.5 |
+| 1 | 1 | 1100, 1001, 0110, 0011 | 4 | 0 | 0.5 | 0.2 | 0 | 0 | 0 |
+| 1 | 2 | 1101, 0111 | 2 | 0 | 0.25 | 0 | 0 | 0 | −0.5 |
+| 0 | 0 | 0000 | 1 | 0 | 0.5 | 0.2 | 0 | 0 | 0 |
+| 0 | 1 | 0100, 0001 | 2 | 0 | 0.25 | 0 | 0 | 0 | −0.5 |
+| 0 | 2 | 0101 | 1 | 0 | 0 | 0 | 0 | 0 | −1 |
+| | | *random ticking, on average* | 16 | 0.06 | 0.5 | 0.26 | 0.19 | 0.12 | **0** |
+
+The last row weights each case by its count: it is what a student who ticks every choice on a coin toss earns on average. Three things stand out:
+
+- **A blank answer is not always zero.** True/false gives 0.5 and Distance 0.2 for ticking nothing, since two of the four choices are then "right".
+- **Ripkey alone voids the key plus one distractor** (`c = 2`, `w = 1`): the other partial policies keep half or more.
+- **Symmetric still pays for guessing.** Its formula is worth nothing on average, but the floor turns every negative case into 0, and random ticking then earns 0.19. Negative marking keeps those negative cases, and guessing is worth exactly nothing.
 
 ### What the student sees
 
