@@ -18,7 +18,7 @@
  * nobody has to reload to begin.
  */
 import { useState } from "react";
-import { CheckCheck, Save, ShieldCheck } from "lucide-react";
+import { CheckCheck, CircleMinus, Save, ShieldCheck } from "lucide-react";
 
 import type { LobbyView } from "@quiz/contracts";
 
@@ -69,9 +69,15 @@ export function Lobby({
   const time = new Date(clock.synced ? clock.now() : tick);
 
   // Three fixed lines (§6.3), the navigation rule first: `LobbyView` carries
-  // the evaluation's `settings.navigation` for exactly this line.
+  // the evaluation's `settings.navigation` for exactly this line. A fourth
+  // when the evaluation uses negative marking (ADR-026): the student must
+  // know that a guess costs points BEFORE the first question, and this is
+  // the one screen they read while they have time to.
   const rules = [
     { icon: CheckCheck, ...NAV_COPY[view.navigation] } as const,
+    ...(view.negativeMarking === true
+      ? [{ icon: CircleMinus, title: "lobby.negative.title", body: "lobby.negative.body" } as const]
+      : []),
     { icon: Save, title: "lobby.saving.title", body: "lobby.saving.body" } as const,
     { icon: ShieldCheck, title: "lobby.attempt.title", body: "lobby.attempt.body" } as const,
   ];

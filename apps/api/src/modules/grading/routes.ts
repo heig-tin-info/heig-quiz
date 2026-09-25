@@ -143,6 +143,7 @@ export async function gradingPlugin(app: FastifyInstance) {
     body: ManualGradingBody,
     now: Date,
   ) {
+    await service.assertPointsInRange(app.db, evaluation, cell, body.points);
     const row = await service.manualOverride(
       app.db,
       cell,
@@ -211,6 +212,9 @@ export async function gradingPlugin(app: FastifyInstance) {
     teacher(
       { params: GradingIdParam, body: ValidateGradingBody, optionalBody: true, load: gradingOf },
       async ({ req, now, body, scope }) => {
+        if (body.points !== undefined) {
+          await service.assertPointsInRange(app.db, scope.evaluation, scope.grading, body.points);
+        }
         const row = await service.validateGrading(app.db, scope.grading, body, req.user!.id, now);
         await afterCorrection(req, scope.evaluation, row, "grading.validate");
         return service.toGrading(row);

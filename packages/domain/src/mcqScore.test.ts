@@ -111,3 +111,148 @@ describe("truncateSelection", () => {
     expect(truncateSelection([3, 1, 1], null)).toEqual({ selected: [1, 3], truncated: false });
   });
 });
+
+/**
+ * Negative marking (ADR-026, #130): an evaluation-level rule that overrides
+ * every policy, single and multiple answer alike.
+ */
+describe("mcqFraction with negative marking", () => {
+  const neg = (correct: number[], choiceCount: number, selected: number[]) =>
+    mcqFraction({ correct, choiceCount, selected, policy: "all_or_nothing", negativeMarking: true })
+      .fraction;
+
+  it("scores a single-answer question +1, -1/(n-1) or 0", () => {
+    // Four choices, key 2: a distractor costs a third.
+    expect(neg([2], 4, [2])).toBe(1);
+    expect(neg([2], 4, [0])).toBeCloseTo(-1 / 3, 10);
+    expect(neg([2], 4, [])).toBe(0);
+    // Two choices (true / false): a wrong answer costs the whole point.
+    expect(neg([0], 2, [1])).toBe(-1);
+    // Five choices: a quarter.
+    expect(neg([0], 5, [4])).toBe(-0.25);
+  });
+
+  it("scores a multiple-answer question c/C - w/W without the floor", () => {
+    // C = 2, W = 2, the fixture of the truth table above.
+    const table: [number[], number][] = [
+      [[0, 1], 1],
+      [[2, 3], -1],
+      [[0], 0.5],
+      [[0, 2], 0],
+      [[2], -0.5],
+      [[], 0],
+      [[0, 1, 2, 3], 0],
+    ];
+    for (const [selected, expected] of table) {
+      expect(neg([0, 1], 4, selected), String(selected)).toBeCloseTo(expected, 10);
+    }
+  });
+
+  it("overrides every policy the question names", () => {
+    for (const policy of Object.keys(EXPECTED) as McqScorePolicy[]) {
+      const score = mcqFraction({ ...base, selected: [2, 3], policy, negativeMarking: true });
+      expect(score.fraction, policy).toBe(-1);
+    }
+  });
+
+  it("stays in [-1, 1] on every possible selection", () => {
+    for (let n = 2; n <= 6; n++) {
+      for (let keyMask = 1; keyMask < 1 << n; keyMask++) {
+        const correct = indices(keyMask, n);
+        for (let mask = 0; mask < 1 << n; mask++) {
+          const f = neg(correct, n, indices(mask, n));
+          expect(f).toBeGreaterThanOrEqual(-1);
+          expect(f).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+  });
+
+  it("gives a random single answer an expected value of 0", () => {
+    for (let n = 2; n <= 8; n++) {
+      let sum = 0;
+      for (let pick = 0; pick < n; pick++) sum += neg([0], n, [pick]);
+      expect(sum / n, `n = ${n}`).toBeCloseTo(0, 10);
+    }
+  });
+
+  it("gives every random tick of a multiple-answer question an expected value of 0", () => {
+    // Ticking each choice independently with probability 1/2 — every subset
+    // equally likely — for every key of up to six choices with a distractor.
+    for (let n = 2; n <= 6; n++) {
+      for (let keyMask = 1; keyMask < (1 << n) - 1; keyMask++) {
+        const correct = indices(keyMask, n);
+        let sum = 0;
+        for (let mask = 0; mask < 1 << n; mask++) sum += neg(correct, n, indices(mask, n));
+        expect(sum / (1 << n), `n = ${n}, key ${correct}`).toBeCloseTo(0, 10);
+      }
+    }
+  });
+
+  it("scores no answer 0 and leaves the counters as they were", () => {
+    const score = mcqFraction({ ...base, selected: [], policy: "symmetric", negativeMarking: true });
+    expect(score).toEqual({ fraction: 0, c: 0, w: 0, C: 2, W: 2 });
+  });
+
+  it("is off unless asked for", () => {
+    expect(mcqFraction({ ...base, selected: [2, 3], policy: "symmetric" }).fraction).toBe(0);
+    expect(
+      mcqFraction({ ...base, selected: [2, 3], policy: "symmetric", negativeMarking: false })
+        .fraction,
+    ).toBe(0);
+  });
+
+  it("stays total when a corrupted row has no correct choice", () => {
+    expect(neg([], 4, [0])).toBe(0);
+  });
+});
+
+/**
+ * A `single` question answered with several choices (a crafted write; the
+ * player sends one, the API refuses more) is wrong, never better than a guess.
+ */
+describe("mcqFraction on a single question with several selections", () => {
+  it("is wrong: -1/(n-1) under negative marking, 0 otherwise, for every selection", () => {
+    for (let n = 2; n <= 6; n++) {
+      for (let key = 0; key < n; key++) {
+        for (let mask = 0; mask < 1 << n; mask++) {
+          const selected = indices(mask, n);
+          if (selected.length < 2) continue;
+          const input = { correct: [key], choiceCount: n, selected, mode: "single" as const };
+          expect(
+            mcqFraction({ ...input, policy: "symmetric", negativeMarking: true }).fraction,
+          ).toBeCloseTo(-1 / (n - 1), 10);
+          for (const policy of Object.keys(EXPECTED) as McqScorePolicy[]) {
+            expect(mcqFraction({ ...input, policy }).fraction).toBe(0);
+          }
+        }
+      }
+    }
+  });
+
+  it("never beats the expected value of an honest guess", () => {
+    // [key, distractor] on four choices: 1 - 1/3 unguarded, a wrong answer here.
+    const f = mcqFraction({
+      correct: [1],
+      choiceCount: 4,
+      selected: [0, 1],
+      policy: "all_or_nothing",
+      negativeMarking: true,
+      mode: "single",
+    }).fraction;
+    expect(f).toBeCloseTo(-1 / 3, 10);
+  });
+
+  it("leaves a single selection alone", () => {
+    const base1 = { correct: [1], choiceCount: 4, policy: "all_or_nothing" as const, mode: "single" as const };
+    expect(mcqFraction({ ...base1, selected: [1], negativeMarking: true }).fraction).toBe(1);
+    expect(mcqFraction({ ...base1, selected: [], negativeMarking: true }).fraction).toBe(0);
+  });
+});
+
+/** The indices of the set bits of `mask`, below `n`. */
+function indices(mask: number, n: number): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) if (mask & (1 << i)) out.push(i);
+  return out;
+}

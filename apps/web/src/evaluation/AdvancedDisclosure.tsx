@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
-import { McqPolicy, type EvaluationDetail, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
+import { McqPolicy, negativeMarkingOf, type EvaluationDetail, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
 import { allowedFeedbackWhen, feedbackWhenFor, isInClass } from "@quiz/domain";
 
 import type { Dict } from "../i18n";
@@ -232,6 +232,20 @@ export function AdvancedDisclosure({
             ))}
           </Select>
         </SettingRow>
+
+        {/* ADR-026: negative marking, beside the policy it overrides. For
+            the whole evaluation, never per question, and frozen with the
+            rest of what decides a score. A poll has no score to penalise. */}
+        {mode === "poll" ? null : (
+          <SettingRow title={t("eval.negativeMarking")} desc={t("eval.negativeMarking.desc")}>
+            <Switch
+              checked={negativeMarkingOf(settings)}
+              disabled={disabled}
+              label={t("eval.negativeMarking")}
+              onChange={(negativeMarking) => set({ negativeMarking })}
+            />
+          </SettingRow>
+        )}
 
         <SettingRow title={t("eval.accessCode")} desc={t("eval.accessCode.desc")}>
           <input

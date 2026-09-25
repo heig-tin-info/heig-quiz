@@ -6,12 +6,13 @@ import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import type { AttemptInspect, AttemptState, DashboardView, Verdict } from "@quiz/contracts";
 import { shuffle } from "@quiz/core/rng";
-import { countsAsCompleted, round2, uniquePseudonyms } from "@quiz/domain";
+import { attemptTotal, countsAsCompleted, round2, uniquePseudonyms } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { answers, attemptEvents, attempts, enrollments, users } from "../../db/schema.js";
 import {
+  gradeDefaults,
   retakesEnabled,
   settingsOf,
   staffRosterWithAttempt,
@@ -261,21 +262,21 @@ export async function dashboardView(
   };
 }
 
-/** The validated points of one attempt; `null` while nothing is graded yet. */
+/**
+ * The validated points of one attempt; `null` while nothing is graded yet.
+ * The total is `attemptTotal`'s, floored at 0 like every other (ADR-026).
+ */
 function pointsOf(
   standing: ReadonlyMap<PairKey, GradingRecord>,
   attemptId: string,
   items: readonly JoinedItem[],
 ): number | null {
-  let total = 0;
-  let seen = 0;
+  const points: number[] = [];
   for (const item of items) {
     const grading = standing.get(pairKey(attemptId, item.item.id));
-    if (grading?.state !== "validated") continue;
-    total += grading.points;
-    seen += 1;
+    if (grading?.state === "validated") points.push(grading.points);
   }
-  return seen === 0 ? null : round2(total);
+  return points.length === 0 ? null : attemptTotal(points);
 }
 
 /**
@@ -358,6 +359,7 @@ export async function attemptInspect(
           seed: attempt.seed,
           itemId: entry.item.id,
           shuffle: settingsOf(evaluation).shuffleChoices && entry.question.shuffleable,
+          defaults: gradeDefaults(evaluation),
         }),
         answer: answer?.payload ?? null,
         revision: answer?.revision ?? 0,

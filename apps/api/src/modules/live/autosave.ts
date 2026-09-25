@@ -324,6 +324,16 @@ export async function saveAnswer(
   const parsed = type.answerSchema.safeParse(input.payload);
   if (!parsed.success) throw new AnswerInvalid(parsed.error.issues);
   const payload = parsed.data;
+  // The rules that need the config (an mcq in `single` mode takes one
+  // choice, ADR-026): the same 422 as a malformed payload.
+  const misfit = type.answerMisfit?.(
+    loadConfig(joined.question.type, {
+      config: joined.version.config,
+      configVersion: joined.version.configVersion,
+    }),
+    payload,
+  );
+  if (misfit) throw new AnswerInvalid([{ message: misfit }]);
   // Issue #89: writing an answer that holds something takes back an "I won't
   // answer". An EMPTY write leaves it alone — a cleared field is not an
   // answer, and the student may have said "won't answer" just before it.

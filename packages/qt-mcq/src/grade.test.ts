@@ -191,3 +191,70 @@ describe("the details", () => {
     expect(mcqServer.detailsSchema.safeParse(result.details).success).toBe(true);
   });
 });
+
+/**
+ * Negative marking (ADR-026, #130): an EVALUATION setting that overrides the
+ * policy of every choice question, single and multiple answer.
+ */
+describe("negative marking", () => {
+  const negative = (policy: McqPolicy = "all_or_nothing") => ({
+    mcq: { policy, negativeMarking: true },
+  });
+  const single = McqConfigSchema.parse({
+    configVersion: MCQ_CONFIG_VERSION,
+    prompt: "What is `p + 1`?",
+    choices: [
+      { text: "0x1001", correct: false },
+      { text: "0x1004", correct: true },
+      { text: "0x1008", correct: false },
+      { text: "0x1010", correct: false },
+    ],
+  });
+
+  it("scores a single answer +1, -1/(n-1) or 0, times the item's points", () => {
+    expect(gradedNow(single, { selected: [1] }, 3, negative()).points).toBe(3);
+    // Four choices: a distractor costs a third of the item.
+    expect(gradedNow(single, { selected: [0] }, 3, negative()).points).toBe(-1);
+    expect(gradedNow(single, { selected: [0] }, 2, negative()).points).toBe(-0.67);
+    expect(gradedNow(single, { selected: [] }, 3, negative()).points).toBe(0);
+    expect(gradedNow(single, null, 3, negative()).points).toBe(0);
+  });
+
+  it("grades several choices on a single question as a wrong answer, never a hedge", () => {
+    // [key, distractor]: 1 - 1/3 unguarded; a wrong answer, −1/3, instead.
+    expect(gradedNow(single, { selected: [0, 1] }, 3, negative()).points).toBe(-1);
+    expect(gradedNow(single, { selected: [0, 1, 2, 3] }, 3, negative()).points).toBe(-1);
+    expect(gradedNow(single, { selected: [0, 1] }, 3, withPolicy("symmetric")).points).toBe(0);
+  });
+
+  it("scores a multiple answer c/C - w/W without the floor", () => {
+    const config = multipleConfig({ policy: "ripkey" });
+    expect(gradedNow(config, { selected: [2, 3] }, 4, negative()).points).toBe(-4);
+    expect(gradedNow(config, { selected: [2] }, 4, negative()).points).toBe(-2);
+    expect(gradedNow(config, { selected: [0, 2] }, 4, negative()).points).toBe(0);
+    expect(gradedNow(config, { selected: [0] }, 4, negative()).points).toBe(2);
+    expect(gradedNow(config, { selected: [0, 1] }, 4, negative()).points).toBe(4);
+  });
+
+  it("overrides the question's policy and the evaluation's alike", () => {
+    for (const policy of ["inherit", "all_or_nothing", "true_false", "discordance", "symmetric", "ripkey"] as const) {
+      const config = multipleConfig({ policy });
+      expect(fractionOf(config, [2, 3], 1, negative("true_false")), policy).toBe(-1);
+    }
+  });
+
+  it("records that the negative rule scored the answer", () => {
+    const result = gradedNow(single, { selected: [0] }, 1, negative());
+    expect(result.details.negativeMarking).toBe(true);
+    expect(result.details.fraction).toBeCloseTo(-1 / 3, 10);
+    expect(mcqServer.detailsSchema.safeParse(result.details).success).toBe(true);
+    expect(gradedNow(single, { selected: [0] }, 1, withPolicy("symmetric")).details).not.toHaveProperty(
+      "negativeMarking",
+    );
+  });
+
+  it("is off when the evaluation says false, or nothing", () => {
+    expect(fractionOf(single, [0], 1, { mcq: { policy: "symmetric", negativeMarking: false } })).toBe(0);
+    expect(fractionOf(single, [0], 1)).toBe(0);
+  });
+});

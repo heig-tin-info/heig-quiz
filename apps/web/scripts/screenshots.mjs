@@ -530,6 +530,15 @@ const scenes = [
   { name: "results-error", role: "teacher", path: "/evaluations/closed/results?fail=1", settle: 2500 },
 
   { name: "feedback", role: "student", path: `/attempts/${ATTEMPT_PAST}/feedback` },
+  // ADR-026 (#130): negative marking, the mock's `?negative=1` scene flag.
+  { name: "negative-eval-advanced", role: "teacher", path: "/evaluations/draft?step=timing&negative=1", act: (p) => p.getByRole("button", { name: /^advanced options$/i }).first().click() },
+  { name: "negative-lobby", role: "student", path: `${TAKE}?scene=lobby&negative=1` },
+  { name: "negative-player-mcq", role: "student", path: `${TAKE}?scene=running&negative=1` },
+  { name: "negative-grading", role: "teacher", path: "/evaluations/closed/grading?negative=1", act: (p) => nextQuestion(p, 1) },
+  { name: "negative-grading-by-student", role: "teacher", path: "/evaluations/closed/grading?negative=1", act: (p) => p.locator("label").filter({ hasText: /^(By student|Par étudiant)$/ }).first().click() },
+  { name: "negative-grading-override", role: "teacher", path: "/evaluations/closed/grading?negative=1", fold: true, act: async (p) => { await nextQuestion(p, 1); await p.getByRole("button", { name: /^(Adjust|Modifier)$/ }).first().click(); } },
+  { name: "negative-results", role: "teacher", path: "/evaluations/released/results?negative=1" },
+  { name: "negative-feedback", role: "student", path: `/attempts/${ATTEMPT_PAST}/feedback?negative=1` },
   { name: "feedback-pending", role: "student", path: `/attempts/${ATTEMPT_OPEN}/feedback` },
   { name: "feedback-error", role: "student", path: `/attempts/${ATTEMPT_PAST}/feedback?fail=1`, settle: 2500 },
 

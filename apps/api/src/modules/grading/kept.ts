@@ -15,7 +15,7 @@
 import { and, asc, count, eq, inArray, sql } from "drizzle-orm";
 
 import type { AttemptScore } from "@quiz/contracts";
-import { keptAttempt, round2 } from "@quiz/domain";
+import { attemptTotal, keptAttempt } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { attempts, gradings } from "../../db/schema.js";
@@ -23,7 +23,12 @@ import { retakePolicyOf, type EvaluationRecord } from "../evaluation/service.js"
 
 type AttemptRecord = typeof attempts.$inferSelect;
 
-/** The validated points of an attempt and how many of its cells they cover. */
+/**
+ * The validated points of an attempt and how many of its cells they cover.
+ * `points` is the attempt's TOTAL (`attemptTotal`): floored at 0, so a
+ * negative sum under negative marking (ADR-026) is 0 here, in the kept rule
+ * and on every screen that reads it.
+ */
 export interface AttemptTally {
   points: number;
   graded: number;
@@ -45,7 +50,7 @@ export async function tallyByAttempt(
     .where(and(inArray(gradings.attemptId, [...attemptIds]), eq(gradings.state, "validated")))
     .groupBy(gradings.attemptId);
   return new Map(
-    rows.map((r) => [r.attemptId, { points: round2(Number(r.points)), graded: r.graded }]),
+    rows.map((r) => [r.attemptId, { points: attemptTotal([Number(r.points)]), graded: r.graded }]),
   );
 }
 

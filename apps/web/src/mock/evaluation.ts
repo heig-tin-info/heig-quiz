@@ -321,6 +321,8 @@ const defaultEvaluationSettings = () => ({
   showProgressBar: true,
   logVisibility: true,
   requireFullscreen: false,
+  // ADR-026, behind the `?negative=1` scene flag.
+  ...(flags.negative ? { negativeMarking: true } : {}),
 });
 
 /**

@@ -55,6 +55,22 @@
  *
  * Every policy returns a fraction in [0, 1]. There is no penalty factor and
  * no negative score: a question is never worth less than not answering it.
+ *
+ * NEGATIVE MARKING (ADR-026, #130) is not a sixth policy but a setting of the
+ * EVALUATION (`settings.negativeMarking`). When it is on, every choice
+ * question of that evaluation, single or multiple answer, is scored with one
+ * rule, whatever its own policy says:
+ *
+ *     f = c/C - w/W        (W = 0: f = c/C), NOT floored, in [-1, 1]
+ *
+ *   For a `single` question (C = 1, W = n - 1) it reads: the key is +1, a
+ *   distractor is -1/(n - 1). For a `multiple` one it is `symmetric` without
+ *   its floor. Nothing selected is 0 — which is what "I won't answer" and
+ *   "Clear" leave behind. Ticking at random has an expected value of 0
+ *   (`mcqScore.test.ts` checks it by enumeration), so guessing buys nothing.
+ *
+ *   A question may then be worth LESS than not answering it; the evaluation's
+ *   TOTAL never is: {@link attemptTotal} in `./grade.ts` floors it at 0.
  */
 import { clamp } from "./round.js";
 
@@ -82,6 +98,19 @@ export interface McqScoreInput {
   selected: readonly number[];
   choiceCount: number;
   policy: McqScorePolicy;
+  /**
+   * The evaluation scores its choice questions with negative marking
+   * (ADR-026): `policy` is then ignored and the fraction lies in [-1, 1].
+   */
+  negativeMarking?: boolean | undefined;
+  /**
+   * The question's mode. A `single` question answered with SEVERAL choices —
+   * which the player cannot send and the answer write refuses — is WRONG,
+   * whatever it holds: 0, or -1/(n - 1) under negative marking. Without this,
+   * a crafted [key, distractor] would score 1 - 1/(n - 1) under negative
+   * marking, better than an honest guess.
+   */
+  mode?: "single" | "multiple" | undefined;
 }
 
 export interface McqScore {
@@ -105,7 +134,22 @@ export function mcqFraction(input: McqScoreInput): McqScore {
   // corrupted row from throwing inside the grading worker.
   if (C === 0) return { fraction: 0, c, w, C, W };
 
+  if (input.mode === "single" && selected.size > 1) {
+    return { fraction: input.negativeMarking === true ? -1 / Math.max(1, W) : 0, c, w, C, W };
+  }
+  if (input.negativeMarking === true) {
+    return { fraction: clamp(negativeFraction({ c, w, C, W }), -1, 1), c, w, C, W };
+  }
   return { fraction: clamp(rawFraction(input.policy, { c, w, C, W }), 0, 1), c, w, C, W };
+}
+
+/**
+ * The negative-marking rule (ADR-026): +1/C per key ticked, -1/W per
+ * distractor ticked, not floored. With one key it is +1 for the key and
+ * -1/(n - 1) for a distractor.
+ */
+function negativeFraction({ c, w, C, W }: { c: number; w: number; C: number; W: number }): number {
+  return W === 0 ? c / C : c / C - w / W;
 }
 
 /** The formulas themselves, one line each, in the order of the doc comment. */

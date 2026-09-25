@@ -25,3 +25,18 @@ nombre de choix corrects cochés et `w` le nombre de faux cochés.
 
 Aucune politique ne descend sous zéro : répondre n'est jamais pire que ne
 pas répondre.
+
+## Points négatifs
+
+Une évaluation peut activer les **points négatifs**, dans ses options
+avancées. Toutes ses questions à choix sont alors notées de la même façon,
+quelle que soit la politique de la question, à réponse unique ou multiple :
+
+- une bonne réponse parmi `n` choix : la bonne rapporte 1, une fausse coûte `1/(n - 1)` ;
+- plusieurs bonnes réponses : `c/C - w/W`, la formule symétrique, sans plancher — jusqu'à -1 ;
+- pas de réponse (rien de coché, « Je ne réponds pas », sélection effacée) : 0.
+
+Deviner au hasard vaut 0 en moyenne : cela ne paie plus. Les points d'une
+question peuvent être négatifs et sont affichés tels quels ; le total de
+l'évaluation ne descend jamais sous 0. Les étudiants en sont avertis dans la
+salle d'attente et sur chaque question à choix.

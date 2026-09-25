@@ -211,3 +211,19 @@ describe("aggregate (F-RES-03, audit B-15)", () => {
     expect(stats).toEqual({ distribution: [["2", 1], ["0", 2]] });
   });
 });
+
+describe("answerMisfit (ADR-026)", () => {
+  it("refuses several choices on a single question, and nothing else", () => {
+    const single = McqConfigSchema.parse({ ...SECRET_CONFIG, mode: "single" });
+    expect(mcqServer.answerMisfit!(single, { selected: [0, 1] })).toBe("mcq.single_one_choice");
+    expect(mcqServer.answerMisfit!(single, { selected: [1, 1] })).toBeNull();
+    expect(mcqServer.answerMisfit!(single, { selected: [1] })).toBeNull();
+    expect(mcqServer.answerMisfit!(single, { selected: [] })).toBeNull();
+    const multiple = McqConfigSchema.parse({
+      ...SECRET_CONFIG,
+      mode: "multiple",
+      choices: SECRET_CONFIG.choices.map((c, i) => ({ ...c, correct: i > 0 })),
+    });
+    expect(mcqServer.answerMisfit!(multiple, { selected: [0, 1, 2] })).toBeNull();
+  });
+});

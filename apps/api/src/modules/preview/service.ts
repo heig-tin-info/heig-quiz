@@ -44,7 +44,7 @@ import {
   type RunnerOutcome,
   type RunnerService,
 } from "@quiz/core/server";
-import { compilesPerMinute, gradeFromPoints, previewDurationS, round2 } from "@quiz/domain";
+import { attemptTotal, compilesPerMinute, gradeFromPoints, previewDurationS, round2 } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import {
@@ -415,7 +415,7 @@ export async function gradePreview(
   const answers = new Map(Object.entries(input.answers));
 
   const items: PreviewCorrectionItem[] = [];
-  let points = 0;
+  const scored: number[] = [];
   let pending = 0;
   for (const [rank, shown] of view.items.entries()) {
     const item = byId.get(shown.id);
@@ -424,7 +424,7 @@ export async function gradePreview(
     if (!item) continue;
     const payload = answers.has(shown.id) ? answers.get(shown.id) : undefined;
     const outcome = await gradeItem(input.runner, evaluation, item, seed, payload, now, input.log);
-    if (outcome.points !== null) points += outcome.points;
+    if (outcome.points !== null) scored.push(outcome.points);
     if (outcome.status !== "graded" && outcome.status !== "no_key") pending += 1;
     const version = { config: item.version.config, configVersion: item.version.configVersion };
     items.push({
@@ -450,7 +450,8 @@ export async function gradePreview(
     });
   }
 
-  points = round2(points);
+  // The total the student's own results would show: floored at 0 (ADR-026).
+  const points = attemptTotal(scored);
   const totalPoints = totalPointsOf(view.items);
   const scale = scaleOf(evaluation);
   return {

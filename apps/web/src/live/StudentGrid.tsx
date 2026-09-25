@@ -1,6 +1,7 @@
 import { Clock, DoorOpen, Eye, Flag, GraduationCap, RotateCcw, WifiOff } from "lucide-react";
 
 import type { DashboardRow, EvaluationState } from "@quiz/contracts";
+import { displayedRate } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import type { GridState } from "../realtime/grid";
@@ -462,8 +463,8 @@ export function StudentGrid({
                         ? t("live.grid.noneGradable")
                         : t("live.grid.afterClose")
                       : total.provisional
-                        ? t("live.grid.successRateLive", { rate: percent(total.successRate) })
-                        : t("live.grid.successRate", { rate: percent(total.successRate) })}
+                        ? t("live.grid.successRateLive", { rate: percent(displayedRate(total.successRate)) })
+                        : t("live.grid.successRate", { rate: percent(displayedRate(total.successRate)) })}
                   </span>
                 </td>
               );

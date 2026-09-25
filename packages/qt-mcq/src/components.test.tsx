@@ -547,7 +547,68 @@ describe("McqPlayer", () => {
   });
 });
 
+describe("McqPlayer — negative marking (ADR-026)", () => {
+  it("says on the question that wrong answers cost points", () => {
+    render(
+      <McqPlayer
+        student={{ ...student, negativeMarking: true }}
+        answer={null}
+        onChange={() => {}}
+        readOnly={false}
+      />,
+    );
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "Wrong answers cost points; not answering costs nothing.",
+    );
+  });
+
+  it("says nothing when the evaluation does not use it", () => {
+    render(<McqPlayer student={student} answer={null} onChange={() => {}} readOnly={false} />);
+    expect(screen.queryByRole("note")).toBeNull();
+  });
+
+  it("takes the host's sentence", () => {
+    render(
+      <McqPlayer
+        student={{ ...student, negativeMarking: true }}
+        answer={null}
+        onChange={() => {}}
+        readOnly={false}
+        strings={{ negativeMarking: "Les réponses fausses coûtent des points." }}
+      />,
+    );
+    expect(screen.getByRole("note")).toHaveTextContent("Les réponses fausses coûtent des points.");
+  });
+});
+
 describe("McqReview", () => {
+  it("prints a negative score as such, and says why", () => {
+    render(
+      <McqReview
+        student={student}
+        answer={{ selected: [0] }}
+        solution={{ correct: [1] }}
+        details={{
+          policy: "all_or_nothing",
+          negativeMarking: true,
+          correct: [1],
+          selected: [0],
+          c: 0,
+          w: 1,
+          C: 1,
+          W: 2,
+          fraction: -0.5,
+          truncated: false,
+        }}
+        points={-1}
+        maxPoints={2}
+        audience="student"
+      />,
+    );
+    expect(screen.getByText("Negative marking: wrong answers cost points.")).toBeInTheDocument();
+    expect(document.body.textContent).toMatch(/[-−]1/);
+  });
+
   it("shows a verdict per choice, not a bare score", () => {
     render(
       <McqReview

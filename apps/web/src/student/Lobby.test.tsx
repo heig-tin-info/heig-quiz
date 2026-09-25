@@ -146,4 +146,16 @@ describe("the lobby", () => {
     }
     expect(onStart).not.toHaveBeenCalled();
   });
+
+  /* ADR-026: the student is told before the first question. */
+  it("says that wrong answers cost points when the evaluation uses negative marking", () => {
+    render(vi.fn(), vi.fn(), { ...view, negativeMarking: true });
+    expect(screen.getByText("Les réponses fausses coûtent des points")).toBeInTheDocument();
+    expect(screen.getByText(/ne pas répondre ne coûte rien/)).toBeInTheDocument();
+  });
+
+  it("says nothing of it otherwise", () => {
+    render(vi.fn(), vi.fn(), { ...view, negativeMarking: false });
+    expect(screen.queryByText("Les réponses fausses coûtent des points")).toBeNull();
+  });
 });

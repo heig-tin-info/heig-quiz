@@ -81,4 +81,37 @@ describe("toStudent", () => {
       mcqServer.toStudent(SECRET_CONFIG, preview),
     );
   });
+
+  /*
+   * ADR-026: under the evaluation's negative marking the student is told that
+   * wrong answers cost points — one flag, and nothing else of the scoring.
+   */
+  it("says negative marking is on, and still leaks neither key nor policy", () => {
+    const view = {
+      seed: 7,
+      itemId: "i",
+      shuffle: true,
+      defaults: { mcq: { policy: "discordance", negativeMarking: true } },
+    };
+    const student = mcqServer.toStudent(SECRET_CONFIG, view);
+    expect(student.negativeMarking).toBe(true);
+    expect(Object.keys(student).sort()).toEqual(["choices", "mode", "negativeMarking", "prompt"]);
+    expect(mcqServer.studentSchema.safeParse(student).success).toBe(true);
+    const out = JSON.stringify(student);
+    for (const key of FORBIDDEN_KEYS) expect(out).not.toContain(`"${key}"`);
+    expect(out).not.toContain("discordance");
+    expect(out).not.toContain("inherit");
+    expect(out).not.toContain('"correct"');
+  });
+
+  it("says nothing when negative marking is off or unreadable", () => {
+    for (const defaults of [
+      { mcq: { policy: "symmetric", negativeMarking: false } },
+      { mcq: { policy: "symmetric" } },
+      { mcq: "negative" },
+    ]) {
+      const student = mcqServer.toStudent(SECRET_CONFIG, { seed: 7, itemId: "i", shuffle: false, defaults });
+      expect(student.negativeMarking).toBeUndefined();
+    }
+  });
 });

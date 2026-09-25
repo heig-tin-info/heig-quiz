@@ -70,4 +70,32 @@ describe("OverrideSheet", () => {
     await waitFor(() => expect(calls).toHaveLength(1));
     expect(calls[0]!.url).toBe("/app/api/answers/ans9/gradings");
   });
+
+  /* ADR-026: a choice question under negative marking goes down to −max. */
+  it("takes a negative score down to the item's lower bound, and no further", async () => {
+    const { calls } = mockFetch({
+      "POST /app/api/gradings/g1/override": ok(makeGrading({ state: "validated" })),
+    });
+    renderWithProviders(
+      <OverrideSheet
+        evaluationId="e1"
+        entry={makeEntry()}
+        maxPoints={2}
+        minPoints={-2}
+        onClose={vi.fn()}
+      />,
+    );
+    const points = screen.getByLabelText("Points");
+    await userEvent.clear(points);
+    await userEvent.type(points, "-3");
+    await userEvent.type(screen.getByLabelText(/Comment/), "A guess.");
+    await userEvent.click(screen.getByRole("button", { name: "Save and validate" }));
+    expect(await screen.findByText(/between -2 and 2/)).toBeVisible();
+    expect(calls).toHaveLength(0);
+
+    await userEvent.clear(points);
+    await userEvent.type(points, "-1.5");
+    await userEvent.click(screen.getByRole("button", { name: "Save and validate" }));
+    await waitFor(() => expect(calls[0]?.body).toMatchObject({ points: -1.5 }));
+  });
 });

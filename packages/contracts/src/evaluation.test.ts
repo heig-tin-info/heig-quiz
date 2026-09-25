@@ -6,6 +6,7 @@ import {
   EvaluationSettings,
   EvaluationSettingsPatch,
   RetakeSettings,
+  negativeMarkingOf,
   retakesOf,
   FeedbackPolicy,
   GradingScale,
@@ -126,5 +127,18 @@ describe("retake settings (F-EVAL-15)", () => {
     expect(
       EvaluationSettingsPatch.parse({ retakes: { enabled: true, keep: "last", maxAttempts: 3 } }).retakes,
     ).toEqual({ enabled: true, keep: "last", maxAttempts: 3 });
+  });
+});
+
+describe("negative marking (ADR-026)", () => {
+  it("is absent, and off, on a stored evaluation that never set it", () => {
+    const settings = EvaluationSettings.parse({});
+    expect(settings).not.toHaveProperty("negativeMarking");
+    expect(negativeMarkingOf(settings)).toBe(false);
+  });
+
+  it("travels in a settings patch, alone", () => {
+    expect(EvaluationSettingsPatch.parse({ negativeMarking: true })).toEqual({ negativeMarking: true });
+    expect(negativeMarkingOf(EvaluationSettings.parse({ negativeMarking: true }))).toBe(true);
   });
 });

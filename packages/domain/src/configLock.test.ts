@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 
-import { configLock, isConfigEditable, isConfigFieldWritable } from "./evaluationConfig.js";
+import {
+  configLock,
+  isConfigEditable,
+  isConfigFieldWritable,
+  negativeMarkingAllowedFor,
+  negativeMarkingOn,
+  scoresNegatively,
+} from "./evaluationConfig.js";
 import { EVALUATION_STATES } from "./itemList.js";
 
 describe("configLock (#86)", () => {
@@ -50,5 +57,34 @@ describe("configLock (#86)", () => {
     expect(isConfigEditable("lobby", 0)).toBe(true);
     expect(isConfigEditable("running", 0)).toBe(false);
     expect(isConfigEditable("closed", 1)).toBe(false);
+  });
+});
+
+describe("negative marking (ADR-026)", () => {
+  it("is allowed on an exam and an exercise, never on a poll", () => {
+    expect(negativeMarkingAllowedFor("exam")).toBe(true);
+    expect(negativeMarkingAllowedFor("exercise")).toBe(true);
+    expect(negativeMarkingAllowedFor("poll")).toBe(false);
+  });
+
+  it("is on only when set, and never on a poll", () => {
+    expect(negativeMarkingOn("exam", true)).toBe(true);
+    expect(negativeMarkingOn("exam", false)).toBe(false);
+    expect(negativeMarkingOn("exercise", undefined)).toBe(false);
+    expect(negativeMarkingOn("poll", true)).toBe(false);
+  });
+
+  it("concerns the choice questions only", () => {
+    expect(scoresNegatively("mcq", true)).toBe(true);
+    expect(scoresNegatively("mcq", false)).toBe(false);
+    for (const type of ["short", "cloze", "code", "codeimage", "circuit"]) {
+      expect(scoresNegatively(type, true), type).toBe(false);
+    }
+  });
+
+  it("is frozen with the rest of the settings", () => {
+    // `settings` is structural: locked by the run and by the first attempt.
+    expect(isConfigFieldWritable("running", "settings")).toBe(false);
+    expect(isConfigFieldWritable("attempts", "settings")).toBe(false);
   });
 });

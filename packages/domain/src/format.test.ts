@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatGrade, formatPoints } from "./format.js";
+import { displayedRate, formatGrade, formatPoints } from "./format.js";
 
 describe("formatPoints", () => {
   const cases: [number, string][] = [
@@ -44,5 +44,13 @@ describe("formatGrade", () => {
 
   it("always writes one decimal, the way a Swiss grade is written", () => {
     for (const [input, expected] of cases) expect(formatGrade(input)).toBe(expected);
+  });
+});
+
+describe("displayedRate (ADR-026)", () => {
+  it("clamps a success rate to [0, 1] for the screens", () => {
+    expect(displayedRate(-0.25)).toBe(0);
+    expect(displayedRate(0.42)).toBe(0.42);
+    expect(displayedRate(1.2)).toBe(1);
   });
 });

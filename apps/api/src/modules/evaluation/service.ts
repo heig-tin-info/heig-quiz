@@ -43,6 +43,7 @@ import {
   type McqPolicy,
   type PoolSummary,
   ReleasedGrades,
+  negativeMarkingOf,
   retakesOf,
   type RetakeSettings,
 } from "@quiz/contracts";
@@ -56,6 +57,8 @@ import {
   isFeedbackAllowed,
   poolRoleAllows,
   missingTimingFields,
+  negativeMarkingAllowedFor,
+  negativeMarkingOn,
   retakesAllowedFor,
   retakesOn,
   round2,
@@ -142,6 +145,17 @@ export class RunningLocked extends EvaluationError {
 class RetakesNotAllowed extends EvaluationError {
   constructor(mode: string) {
     super("retakes_not_allowed", 422, `an evaluation of mode "${mode}" takes one attempt (F-EVAL-15)`);
+  }
+}
+
+/** ADR-026: a poll has no score, so nothing to penalise. */
+class NegativeMarkingNotAllowed extends EvaluationError {
+  constructor(mode: string) {
+    super(
+      "negative_marking_not_allowed",
+      422,
+      `an evaluation of mode "${mode}" has no score to penalise (ADR-026)`,
+    );
   }
 }
 
@@ -390,7 +404,17 @@ export function toEvaluation(row: EvaluationRecord): Evaluation {
  * its key here and nowhere else.
  */
 export function gradeDefaults(row: EvaluationRecord): Readonly<Record<string, unknown>> {
-  return { mcq: { policy: row.mcqPolicy } };
+  return { mcq: { policy: row.mcqPolicy, negativeMarking: negativeMarkingEnabled(row) } };
+}
+
+/**
+ * ADR-026: the evaluation scores its choice questions with negative marking.
+ * Read here and nowhere else — the grader through {@link gradeDefaults}, the
+ * student's question through the same defaults, the waiting room, and the
+ * range of a manual correction — and never on a poll, whatever its row says.
+ */
+export function negativeMarkingEnabled(row: EvaluationRecord): boolean {
+  return negativeMarkingOn(row.mode, negativeMarkingOf(settingsOf(row)));
 }
 
 /**
@@ -943,6 +967,11 @@ export async function patchEvaluation(
     // switching them off always passes.
     if (retakesOf(settings).enabled && !retakesAllowedFor(row.mode)) {
       throw new RetakesNotAllowed(row.mode);
+    }
+    // A poll is tallied, not graded (ADR-026): switching negative marking on
+    // there is refused, switching it off always passes.
+    if (negativeMarkingOf(settings) && !negativeMarkingAllowedFor(row.mode)) {
+      throw new NegativeMarkingNotAllowed(row.mode);
     }
     next.settings = settings;
   }

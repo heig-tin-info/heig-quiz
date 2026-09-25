@@ -2,7 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { BarChart3, CheckCheck, RefreshCcw } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 
-import { formatPoints } from "@quiz/domain";
+import { attemptTotal, formatPoints } from "@quiz/domain";
 
 import { api } from "../api";
 import { useT } from "../i18n";
@@ -265,16 +265,18 @@ export function GradingPanel({
   const stepEntries = queue.data?.entries ?? [];
   const studentTotal =
     order === "student" && stateFilter === "all" && queue.data && stepEntries.length > 0
-      ? stepEntries.reduce(
-          (sum, e) => ({
-            points: sum.points + (e.grading?.points ?? 0),
-            max: sum.max + (e.grading?.maxPoints ?? itemsById.get(e.itemId)?.points ?? 0),
-            // A proposal not validated yet, or an answer not graded at all
-            // (counted 0), makes the sum a forecast, not the grade.
-            provisional: sum.provisional || !e.grading || e.grading.state !== "validated",
-          }),
-          { points: 0, max: 0, provisional: false },
-        )
+      ? {
+          // The server's one total: signed per question, floored at 0
+          // (`attemptTotal`, ADR-026).
+          points: attemptTotal(stepEntries.map((e) => e.grading?.points ?? 0)),
+          max: stepEntries.reduce(
+            (sum, e) => sum + (e.grading?.maxPoints ?? itemsById.get(e.itemId)?.points ?? 0),
+            0,
+          ),
+          // A proposal not validated yet, or an answer not graded at all
+          // (counted 0), makes the sum a forecast, not the grade.
+          provisional: stepEntries.some((e) => !e.grading || e.grading.state !== "validated"),
+        }
       : null;
   const badges = (
     <>
@@ -453,6 +455,7 @@ export function GradingPanel({
           maxPoints={
             overrideEntry.grading?.maxPoints ?? itemsById.get(overrideEntry.itemId)?.points ?? 0
           }
+          minPoints={itemsById.get(overrideEntry.itemId)?.minPoints ?? 0}
           onClose={() => setOverrideKey(null)}
         />
       ) : null}

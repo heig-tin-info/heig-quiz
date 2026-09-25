@@ -1504,6 +1504,7 @@ export function tryAnswer(
   config: Record<string, unknown>,
   answer: unknown,
   evaluationPolicy: McqScorePolicy | null = null,
+  negativeMarking = false,
 ): unknown {
   if (q.type === "code") return { status: "runner_unavailable", reason: "not_configured" };
   /*
@@ -1553,13 +1554,20 @@ export function tryAnswer(
       (answer as { selected?: number[] } | null)?.selected ?? [],
       (config.maxSelections as number | undefined) ?? null,
     );
-    const score = mcqFraction({ correct, selected, choiceCount: choices.length, policy });
+    const score = mcqFraction({
+      correct,
+      selected,
+      choiceCount: choices.length,
+      policy,
+      negativeMarking,
+    });
     return {
       status: "graded",
       points: Math.round(score.fraction * 100) / 100,
       maxPoints: 1,
       details: {
         policy,
+        ...(negativeMarking ? { negativeMarking: true } : {}),
         correct,
         selected,
         c: score.c,

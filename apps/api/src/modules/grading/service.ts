@@ -32,19 +32,22 @@ import type {
   GradingState,
   Verdict,
 } from "@quiz/contracts";
-import { round2, uniquePseudonyms } from "@quiz/domain";
+import { overridePointsRange, round2, scoresNegatively, uniquePseudonyms } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { answers, attempts, gradings, users } from "../../db/schema.js";
 import {
   flagReleasedEvaluationsOf,
+  joinedItem,
   joinedItems,
+  negativeMarkingEnabled,
   staffAttemptIds,
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
 import { solutionView, studentView } from "../live/studentView.js";
+import { tallyByAttempt } from "./kept.js";
 
 export type GradingRecord = typeof gradings.$inferSelect;
 
@@ -77,6 +80,16 @@ export class GradingError extends Error {
 export class CommentRequired extends GradingError {
   constructor() {
     super("comment_required", 422, "a manual override must carry a comment");
+  }
+}
+
+/**
+ * F-GRADE-05 (ADR-026): a manual score outside what the item can be worth —
+ * `[0, max]`, or `[-max, max]` for a choice question under negative marking.
+ */
+export class PointsOutOfRange extends GradingError {
+  constructor(range: { min: number; max: number }) {
+    super("points_out_of_range", 422, `the points must lie in [${range.min}, ${range.max}]`);
   }
 }
 
@@ -552,6 +565,7 @@ export async function gradingQueue(
       internalName: i.question.internalName,
       type: i.question.type,
       points: i.item.points,
+      minPoints: pointsRangeOf(evaluation, i.question.type, i.item.points).min,
     })),
     entries,
     counts: { total, validated, proposed, missing: total - validated - proposed },
@@ -636,6 +650,33 @@ export async function gradingSteps(
 }
 
 // --- Teacher writes -------------------------------------------------------
+
+/**
+ * The points a teacher may give an item of type `type` in `evaluation` by
+ * hand (F-GRADE-05): `[0, max]`, or `[-max, max]` for a choice question when
+ * the evaluation uses negative marking (ADR-026). The grading panel receives
+ * the lower bound (`GradingQueueItem.minPoints`), the routes enforce both.
+ */
+export function pointsRangeOf(
+  evaluation: EvaluationRecord,
+  type: string,
+  maxPoints: number,
+): { min: number; max: number } {
+  return overridePointsRange(maxPoints, scoresNegatively(type, negativeMarkingEnabled(evaluation)));
+}
+
+/** Refuses a manual score outside {@link pointsRangeOf} with `422 points_out_of_range`. */
+export async function assertPointsInRange(
+  db: Db,
+  evaluation: EvaluationRecord,
+  cell: { itemId: string; maxPoints: number },
+  points: number,
+): Promise<void> {
+  const item = await joinedItem(db, evaluation.id, cell.itemId);
+  const range = pointsRangeOf(evaluation, item?.question.type ?? "", cell.maxPoints);
+  const value = round2(points);
+  if (value < range.min || value > range.max) throw new PointsOutOfRange(range);
+}
 
 /**
  * F-GRADE-05. The comment is not optional and the previous grading is kept as
@@ -786,21 +827,17 @@ export async function cellOfAnswer(
   };
 }
 
-/** `sum(points)` of the validated gradings, per attempt, in one query. */
+/**
+ * The TOTAL of each attempt — the validated points summed and floored at 0
+ * (`attemptTotal`, ADR-026) — in one query. The same numbers as
+ * {@link tallyByAttempt}, of which it is the points half.
+ */
 export async function pointsByAttempt(
   db: Db,
   attemptIds: readonly string[],
 ): Promise<Map<string, number>> {
-  if (attemptIds.length === 0) return new Map();
-  const rows = await db
-    .select({
-      attemptId: gradings.attemptId,
-      points: sql<string>`sum(${gradings.points})`,
-    })
-    .from(gradings)
-    .where(and(inArray(gradings.attemptId, [...attemptIds]), eq(gradings.state, "validated")))
-    .groupBy(gradings.attemptId);
-  return new Map(rows.map((r) => [r.attemptId, round2(Number(r.points))]));
+  const tallies = await tallyByAttempt(db, attemptIds);
+  return new Map([...tallies].map(([id, tally]) => [id, tally.points]));
 }
 
 // The kept attempt of each student (F-EVAL-15, ADR-025), in `./kept.ts`.

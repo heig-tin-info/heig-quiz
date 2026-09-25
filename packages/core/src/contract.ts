@@ -88,6 +88,13 @@ export interface StudentView {
   itemId: string;
   /** Evaluation-level shuffle switch AND question-level shuffleable flag, ANDed by the caller. */
   shuffle: boolean;
+  /**
+   * The same per-type settings of the evaluation as `GradeContext.defaults`,
+   * when the view is built for one. A type may publish the part of its entry
+   * a student must know BEFORE answering — `mcq` tells whether wrong answers
+   * cost points (ADR-026) — and never the rest. Absent: no evaluation.
+   */
+  defaults?: Readonly<Record<string, unknown>>;
 }
 
 /**
@@ -335,6 +342,15 @@ export interface QuestionTypeServer<
    * `answer` has already been parsed by {@link answerSchema}.
    */
   isAnswered(answer: TAnswer): boolean;
+
+  /**
+   * The shape rules of an answer that depend on the CONFIG, which
+   * `answerSchema` cannot see: `null` when the answer fits the question, or
+   * the reason it does not (an `mcq` in `single` mode answered with several
+   * choices). The answer write refuses a misfit with `422 answer_invalid`;
+   * the grader still defends itself. Omitting the hook means "always fits".
+   */
+  answerMisfit?(config: TConfig, answer: TAnswer): string | null;
 
   /**
    * The per-type statistics of one item over the class (F-RES-03, audit

@@ -25,11 +25,17 @@ export function OverrideSheet({
   evaluationId,
   entry,
   maxPoints,
+  minPoints = 0,
   onClose,
 }: {
   evaluationId: string;
   entry: GradingEntry;
   maxPoints: number;
+  /**
+   * The lowest score the server takes (`GradingQueueItem.minPoints`): 0, or
+   * `-maxPoints` for a choice question under negative marking (ADR-026).
+   */
+  minPoints?: number;
   onClose: () => void;
 }) {
   const t = useT();
@@ -41,7 +47,7 @@ export function OverrideSheet({
   const [comment, setComment] = useState(entry.grading?.comment ?? "");
 
   const value = Number(points.replace(",", "."));
-  const pointsInvalid = !Number.isFinite(value) || value < 0 || value > maxPoints;
+  const pointsInvalid = !Number.isFinite(value) || value < minPoints || value > maxPoints;
   const commentInvalid = comment.trim() === "";
 
   const path = entry.grading
@@ -79,10 +85,17 @@ export function OverrideSheet({
           <p className="text-sm text-fg-muted">{entry.label}</p>
           <Field
             label={t("grading.override.points")}
-            hint={t("grading.override.max", { max: formatPoints(maxPoints) })}
+            hint={
+              minPoints < 0
+                ? t("grading.override.range", {
+                    min: formatPoints(minPoints),
+                    max: formatPoints(maxPoints),
+                  })
+                : t("grading.override.max", { max: formatPoints(maxPoints) })
+            }
             type="number"
             step="0.5"
-            min={0}
+            min={minPoints}
             max={maxPoints}
             autoFocus
             width="w-32"
@@ -92,7 +105,10 @@ export function OverrideSheet({
           />
           {touched && pointsInvalid ? (
             <p className="text-[13px] text-danger">
-              {t("grading.override.pointsInvalid", { max: formatPoints(maxPoints) })}
+              {t("grading.override.pointsInvalid", {
+                min: formatPoints(minPoints),
+                max: formatPoints(maxPoints),
+              })}
             </p>
           ) : null}
           <div className="space-y-1.5">

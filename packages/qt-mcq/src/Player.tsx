@@ -53,6 +53,19 @@ export function McqPlayer({
         {markdown(renderMarkdown, student.prompt)}
       </legend>
       <p className={helpClass}>{instructions}</p>
+      {/*
+       * Negative marking (ADR-026): said on the question itself, where the
+       * decision to guess is taken — the waiting room said it once already,
+       * but an exercise without one has no other place to say it.
+       */}
+      {student.negativeMarking ? (
+        <p
+          className="-mt-2 rounded-lg bg-warning-soft px-3 py-1.5 text-[13px] font-medium text-warning"
+          role="note"
+        >
+          {s.negativeMarking}
+        </p>
+      ) : null}
       <ul className="flex flex-col gap-2">
         {student.choices.map((choice, index) => {
           const checked = selected.includes(choice.id);
