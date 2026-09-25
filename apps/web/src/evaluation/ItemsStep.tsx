@@ -176,6 +176,38 @@ function MilestoneGap({ name, onAdd, t }: { name: string; onAdd: () => void; t: 
   );
 }
 
+/**
+ * The version the item is frozen on, in a column of its own (#85) so a list
+ * reads at a glance — `v3` in the monospace of the pool's version column.
+ * A newer published version shows beside it in amber, `→ v5`: the same fact
+ * the refresh button at the end of the row acts on.
+ */
+function VersionCell({ item, stale, t }: { item: ItemRow; stale: boolean; t: TFunction }) {
+  const frozen = t("eval.questions.version", { n: item.versionNumber });
+  return (
+    <span className="flex w-20 shrink-0 items-center gap-1 text-sm">
+      <Tip label={t("eval.questions.versionFrozen", { n: item.versionNumber })}>
+        <span className="font-mono tabular-nums text-fg-muted">{frozen}</span>
+      </Tip>
+      {stale && item.latestVersionNumber !== null ? (
+        <Tip label={t("eval.questions.stale", { n: item.latestVersionNumber })}>
+          <span className="flex items-center gap-1 font-mono tabular-nums">
+            <span aria-hidden className="text-fg-faint">
+              →
+            </span>
+            <span aria-hidden className="text-warning">
+              {t("eval.questions.version", { n: item.latestVersionNumber })}
+            </span>
+            <span className="sr-only">
+              {t("eval.questions.stale", { n: item.latestVersionNumber })}
+            </span>
+          </span>
+        </Tip>
+      ) : null}
+    </span>
+  );
+}
+
 function ItemCard({
   item,
   index,
@@ -235,17 +267,11 @@ function ItemCard({
         <span className="flex min-w-0 flex-1 basis-56 flex-col gap-1">
           <span className="flex flex-wrap items-center gap-2">
             <span className="truncate font-semibold">{item.internalName}</span>
-            {stale ? (
-              <Badge tone="amber">
-                {t("eval.questions.stale", { n: item.latestVersionNumber ?? "" })}
-              </Badge>
-            ) : null}
             {item.deprecated ? <Badge tone="red">{t("eval.questions.deprecated")}</Badge> : null}
           </span>
-          <span className="text-xs text-fg-faint">
-            {typeLabel(t, item.type)} · {t("eval.questions.version", { n: item.versionNumber })}
-          </span>
+          <span className="text-xs text-fg-faint">{typeLabel(t, item.type)}</span>
         </span>
+        <VersionCell item={item} stale={stale} t={t} />
         <PointsField item={item} disabled={locked} onCommit={onPoints} />
         {/* A fixed, right-aligned slot: the refresh button appears on some
             rows only, and without it the points fields of the rows would not

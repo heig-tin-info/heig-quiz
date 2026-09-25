@@ -1524,6 +1524,7 @@ export const fr: Record<keyof Dict, string> = {
   "eval.questions.deprecated": "obsolète",
   "eval.questions.total": "{n} questions · {points} points",
   "eval.questions.version": "v{n}",
+  "eval.questions.versionFrozen": "Figée sur la version {n}",
   "picker.title": "Ajouter des questions",
   "picker.pool": "Banque",
   "picker.search": "Chercher une question…",

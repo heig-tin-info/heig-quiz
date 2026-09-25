@@ -1535,6 +1535,7 @@ export const en = {
   "eval.questions.deprecated": "deprecated",
   "eval.questions.total": "{n} questions · {points} points",
   "eval.questions.version": "v{n}",
+  "eval.questions.versionFrozen": "Frozen on version {n}",
   "picker.title": "Add questions",
   "picker.pool": "Pool",
   "picker.search": "Search a question…",

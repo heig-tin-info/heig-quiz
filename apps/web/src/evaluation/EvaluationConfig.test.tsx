@@ -108,6 +108,10 @@ describe("EvaluationConfig", () => {
     });
 
     expect(await screen.findByText(/version 3 available/i)).toBeInTheDocument();
+    // #85: the frozen version reads in a column of its own, the newer one beside it.
+    const row = screen.getByText(stale.internalName).closest("li")!;
+    expect(within(row).getByText("v1")).toBeInTheDocument();
+    expect(within(row).getByText("v3")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /update it/i }));
     await waitFor(() =>
       expect(calls.some((c) => c.url.endsWith("/items/update-versions"))).toBe(true),
