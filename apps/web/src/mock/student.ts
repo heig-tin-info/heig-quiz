@@ -33,12 +33,15 @@ import { codeimageConfig, codeimageRunOutcome, codeimageStudentView } from "./co
 // serves:
 //
 //   ?scene=lobby | running | paused | closed | extend | single | marks | forward
-//                                                     (running by default)
+//          | exercise                                 (running by default)
 //
 // `marks` is the question list of issue #89 with every state at once:
 // answered, "won't answer", flagged, and nothing yet. `forward` is the same
 // paper in `forward_only`, its first question validated and closed, so the
 // "Validate and continue" step is on screen.
+//
+// `exercise` is the `running` paper as an EXERCISE: the player's bar then
+// opens with its Home button (issue #125), which an exam never has.
 //
 // `single` serves the SAME attempt cut down to its first question: the
 // one-question evaluation the player draws without a progress strip and
@@ -294,7 +297,7 @@ export const studentAttemptView = (): AttemptView => ({
   evaluation: {
     id: STUDENT_EVAL,
     title: "Quiz 3 — Pointeurs et lois fondamentales",
-    mode: "exam",
+    mode: scene === "exercise" ? "exercise" : "exam",
     state: studentEvaluationState(),
     settings: {
       navigation: scene === "forward" ? "forward_only" : "free",
