@@ -164,6 +164,17 @@ export function Player({
 }) {
   const attempt = useAttempt(initial.attempt.id, initial);
   const attemptId = initial.attempt.id;
+  const t = useT();
+  const toast = useToast();
+  const { flush } = attempt;
+  // Issue #125: leaving unmounts the player, and its autosave with it. An
+  // answer still waiting for its debounce — or on its way — must reach the
+  // server first; if it cannot, the student stays, told why, rather than
+  // leaving an answer behind. The attempt itself stays in progress.
+  const leave = useCallback(async () => {
+    if (await flush()) onHome();
+    else toast(t("player.leaveUnsaved"), "error");
+  }, [flush, onHome, toast, t]);
   const session = useMemo<PlayerSession>(
     () => ({
       ...attempt,
@@ -175,7 +186,7 @@ export function Player({
     <PlayerView
       initial={initial}
       session={session}
-      onHome={onHome}
+      onHome={() => void leave()}
       onResults={onResults}
       {...(onExitStudentView ? { onExitStudentView } : {})}
     />
@@ -445,6 +456,11 @@ export function PlayerView({
         onSelectSegment={(itemId) => dispatch({ type: "goto", itemId })}
         progressLabel={t("player.progress", { n: state.index + 1, total })}
         commands={commands}
+        // Issue #125: an exercise may be left and continued later; an exam
+        // may not look like it can. The preview is a tab of its own.
+        {...(initial.evaluation.mode === "exercise" && !initial.attempt.preview
+          ? { onHome }
+          : {})}
         headerAction={
           <Button
             variant={handInIsPrimary ? "primary" : "secondary"}

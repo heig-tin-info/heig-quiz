@@ -99,6 +99,12 @@ export interface UseAttempt {
   ) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
   /** F-EVAL-13: the journal. Never blocks, never surfaces an error. */
   report: (kind: AttemptEventKind, details?: unknown) => void;
+  /**
+   * Issue #125: sends every pending answer now and resolves `true` once the
+   * server holds them all, `false` if one could not be sent. What leaving
+   * the player waits for; it never rejects.
+   */
+  flush: () => Promise<boolean>;
 }
 
 /** The SSE result shape is not the runner's; the player speaks the latter. */
@@ -476,6 +482,8 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
     [attemptId],
   );
 
+  const flush = useCallback(() => saver.settleAll(), [saver]);
+
   return useMemo(
     () => ({
       state,
@@ -494,6 +502,7 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
       submit,
       run,
       report,
+      flush,
     }),
     [
       state,
@@ -511,6 +520,7 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
       submit,
       run,
       report,
+      flush,
     ],
   );
 }

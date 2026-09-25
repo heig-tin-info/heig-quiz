@@ -1450,6 +1450,7 @@ export const fr: Record<keyof Dict, string> = {
   "player.submitFailed": "La remise a échoué. Réessayez.",
   "player.validateFailed": "Cette question n'a pas pu être validée. Réessayez.",
   "player.validateUnsaved": "Votre dernière réponse n'est pas encore enregistrée. La question reste ouverte : réessayez dans un instant.",
+  "player.leaveUnsaved": "Votre dernière réponse n'est pas encore enregistrée. Vérifiez votre connexion, puis réessayez.",
   "player.saveFailed": "Cela n'a pas pu être enregistré. Réessayez.",
   "player.progress": "Progression : question {n} sur {total}",
   "player.shortcuts": "pour passer d'une question à l'autre",

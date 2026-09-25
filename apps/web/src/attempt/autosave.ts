@@ -209,6 +209,25 @@ export class Autosave {
   }
 
   /**
+   * {@link settle} for every item at once: resolves `true` once nothing is
+   * left to send, `false` as soon as one payload could not be sent. What the
+   * player's Home button waits for before leaving (issue #125): unmounting
+   * the player drops this object, and a payload still in its debounce would
+   * go with it. Paused or suspended, nothing leaves, so it answers at once —
+   * `true` only when there was nothing to send anyway. Once the attempt is
+   * over (a final stop) nothing ever will be sent, and leaving loses nothing
+   * more: `true`. It never rejects.
+   */
+  settleAll(): Promise<boolean> {
+    if (this.final) return Promise.resolve(true);
+    if (this.paused || this.stopped) return Promise.resolve(!this.dirty);
+    const pending = [...this.items.entries()]
+      .filter(([, item]) => item.hasPending || item.inFlight)
+      .map(([itemId]) => this.settle(itemId));
+    return Promise.all(pending).then((saved) => saved.every(Boolean));
+  }
+
+  /**
    * Sends everything pending at once: the reconnection path (N-RES-02) and
    * the resume after a pause (D17). Resets the backoff — the reason to retry
    * now is new information, not another tick of the same failure.

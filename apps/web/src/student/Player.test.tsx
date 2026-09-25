@@ -614,6 +614,70 @@ describe("the zen player", () => {
     });
   });
 
+  /*
+   * Issue #125: an exercise can be left at any time and continued from the
+   * student home; an exam keeps the zen player with nowhere to go.
+   */
+  describe("the way home", () => {
+    const exercise = (): AttemptView => {
+      const view = attemptView();
+      return { ...view, evaluation: { ...view.evaluation, mode: "exercise" } };
+    };
+    const renderWith = (navigate: (r: unknown) => void) =>
+      renderWithProviders(<AttemptPage evaluationId={EVAL} navigate={navigate} />, {
+        locale: "fr",
+        route: `/take/${EVAL}`,
+      });
+
+    it("offers no Home button during an exam", async () => {
+      stubs(attemptView());
+      render();
+      await screen.findByText("Question 2");
+      expect(screen.queryByRole("button", { name: "Revenir à mes quiz" })).toBeNull();
+    });
+
+    it(
+      "goes home from an exercise without handing in, once the pending answer is saved",
+      { timeout: 15_000 },
+      async () => {
+        const view = exercise();
+        const saves: unknown[] = [];
+        const { calls } = stubs(view, {
+          [`PUT /app/api/attempts/${ATTEMPT}/answers/i2`]: (call) => {
+            saves.push(call.body);
+            return ok({ accepted: true, revision: 9, serverNow: "2026-09-20T10:00:01.000Z" });
+          },
+        });
+        const navigate = vi.fn();
+        renderWith(navigate);
+        const field = await screen.findByLabelText("Votre réponse");
+        // Typed, and still inside the 300 ms debounce when Home is pressed.
+        await userEvent.type(field, "2");
+        await userEvent.click(screen.getByRole("button", { name: "Revenir à mes quiz" }));
+        await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "home" }));
+        // The answer reached the server first…
+        expect((saves.at(-1) as { payload: { text: string } }).payload.text).toBe("42");
+        // …and nothing was handed in: the attempt stays in progress.
+        expect(calls.some((c) => c.url.endsWith("/submit"))).toBe(false);
+      },
+    );
+
+    it("stays when the pending answer cannot be saved", { timeout: 15_000 }, async () => {
+      const view = exercise();
+      stubs(view, {
+        [`PUT /app/api/attempts/${ATTEMPT}/answers/i2`]: fail(500, { error: "boom" }),
+      });
+      const navigate = vi.fn();
+      renderWith(navigate);
+      await userEvent.type(await screen.findByLabelText("Votre réponse"), "2");
+      await userEvent.click(screen.getByRole("button", { name: "Revenir à mes quiz" }));
+      expect(
+        await screen.findByText(/Vérifiez votre connexion, puis réessayez/),
+      ).toBeInTheDocument();
+      expect(navigate).not.toHaveBeenCalledWith({ view: "home" });
+    });
+  });
+
   it("has no axe violation", async () => {
     const view = attemptView();
     stubs(view);

@@ -341,3 +341,37 @@ describe("settle (issue #89)", () => {
     await expect(save.settle("i1")).resolves.toBe(true);
   });
 });
+
+describe("settleAll (issue #125)", () => {
+  it("sends every pending item now and resolves once all are acknowledged", async () => {
+    const { save, sent } = make();
+    save.change("i1", "x");
+    save.change("i2", "y");
+    let settled: boolean | null = null;
+    void save.settleAll().then((saved) => {
+      settled = saved;
+    });
+    expect(sent.map((s) => s.itemId)).toEqual(["i1", "i2"]);
+    sent[0]!.resolve(accepted(1));
+    await Promise.resolve();
+    expect(settled).toBeNull();
+    sent[1]!.resolve(accepted(1));
+    await vi.waitFor(() => expect(settled).toBe(true));
+  });
+
+  it("answers false when one item could not be sent", async () => {
+    const { save, sent } = make();
+    save.change("i1", "x");
+    const settled = save.settleAll();
+    sent[0]!.reject(new ApiError(503, { error: "unavailable" }));
+    await expect(settled).resolves.toBe(false);
+  });
+
+  it("answers at once: true with nothing pending, and after a final stop", async () => {
+    const { save } = make();
+    await expect(save.settleAll()).resolves.toBe(true);
+    save.change("i1", "x");
+    save.stop();
+    await expect(save.settleAll()).resolves.toBe(true);
+  });
+});
