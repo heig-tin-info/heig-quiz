@@ -111,6 +111,92 @@ describe("ShortEditor", () => {
     expect(onChange.mock.calls.at(-1)?.[0].constraints).not.toHaveProperty("min");
   });
 
+  it("labels every field of a number answer, and says what it accepts", () => {
+    render(
+      <ShortEditor
+        config={config({
+          kind: "number",
+          matchers: [
+            {
+              kind: "number",
+              value: 9.81,
+              tolerance: 0.05,
+              toleranceMode: "abs",
+              unit: "m/s²",
+              unitRequired: true,
+              points: 1,
+            },
+          ],
+        })}
+        onChange={() => {}}
+      />,
+    );
+    // Visible words, each tied to its own control.
+    for (const word of ["Matcher", "Value", "Tolerance", "Mode", "Unit", "Points"]) {
+      expect(screen.getByText(word, { selector: "label" })).toBeVisible();
+    }
+    expect(screen.getByLabelText("Value 1")).toHaveValue(9.81);
+    expect(screen.getByLabelText("Tolerance 1")).toHaveValue(0.05);
+    expect(screen.getByLabelText("Mode 1")).toHaveValue("abs");
+    expect(screen.getByLabelText("Unit 1")).toHaveValue("m/s²");
+    expect(screen.getByLabelText("Unit required 1")).toBeChecked();
+    expect(screen.getByLabelText("Points 1")).toHaveAccessibleDescription("Share of the item, 0 to 1");
+    expect(
+      screen.getByText("Accepts 9.81 ± 0.05 m/s². The unit m/s² is required."),
+    ).toBeInTheDocument();
+  });
+
+  it("types a relative tolerance in percent and stores the fraction", async () => {
+    const onChange = vi.fn();
+    render(
+      <ShortEditor
+        config={config({
+          kind: "number",
+          matchers: [
+            { kind: "number", value: 50, tolerance: 0.02, toleranceMode: "rel", unitRequired: false, points: 1 },
+          ],
+        })}
+        onChange={onChange}
+      />,
+    );
+    const field = screen.getByLabelText("Tolerance (%) 1");
+    expect(field).toHaveValue(2);
+    expect(screen.getByText("Accepts 50 ± 2 %, from 49 to 51.")).toBeInTheDocument();
+    await userEvent.type(field, "5");
+    expect(onChange.mock.calls.at(-1)?.[0].matchers[0].tolerance).toBe(0.25);
+  });
+
+  it("labels a date answer's tolerance in days and explains the window", () => {
+    render(
+      <ShortEditor
+        config={config({
+          kind: "date",
+          matchers: [{ kind: "date", value: "2026-09-20", toleranceDays: 2, points: 1 }],
+        })}
+        onChange={() => {}}
+      />,
+    );
+    expect(screen.getByLabelText("Value 1")).toHaveValue("2026-09-20");
+    expect(screen.getByLabelText("Tolerance (days) 1")).toHaveValue(2);
+    expect(
+      screen.getByText("Accepts 2026-09-18 to 2026-09-22 (2026-09-20 ± 2 days)."),
+    ).toBeInTheDocument();
+  });
+
+  it("labels a time answer's tolerance in minutes", () => {
+    render(
+      <ShortEditor
+        config={config({
+          kind: "time",
+          matchers: [{ kind: "time", value: "14:05", toleranceMinutes: 0, points: 1 }],
+        })}
+        onChange={() => {}}
+      />,
+    );
+    expect(screen.getByLabelText("Tolerance (minutes) 1")).toHaveValue(0);
+    expect(screen.getByText("Accepts 14:05 only.")).toBeInTheDocument();
+  });
+
   it("carries the two prefilters, and no per-matcher case box", async () => {
     const onChange = vi.fn();
     render(<ShortEditor config={config()} onChange={onChange} />);
@@ -127,7 +213,7 @@ describe("ShortEditor", () => {
     expect(screen.getByLabelText("Value 1")).toBeInTheDocument();
     expect(screen.queryByLabelText("Trim")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Points 1")).not.toBeInTheDocument();
-    expect(screen.queryByText("Share of the item awarded by this matcher.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Share of the item, 0 to 1")).not.toBeInTheDocument();
   });
 
   it("lets a poll drop its last accepted answer: the key is optional there", async () => {
