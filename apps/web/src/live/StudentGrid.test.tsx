@@ -202,19 +202,34 @@ describe("StudentGrid — the row actions per state", () => {
     ]);
   });
 
-  it("drops extend and close once the evaluation itself is closed", () => {
+  it("offers nothing but the answers on a finished attempt once the evaluation is closed", () => {
     const view = viewIn("closed", 1, 2);
     view.rows[0] = { ...view.rows[0]!, state: "submitted" };
     setup(view);
-    expect(actionsOf("Nadia Roux 0")).toEqual(["Open the answers", "Reopen this attempt"]);
+    // Reopening there would hand back a paper the server refuses every write
+    // to (#95); a make-up session is another feature.
+    expect(actionsOf("Nadia Roux 0")).toEqual(["Open the answers"]);
   });
 
-  it("offers reopen on a finished attempt, and never once the results are out", () => {
-    const closed = viewIn("closed", 1, 2);
-    closed.rows[0] = { ...closed.rows[0]!, state: "expired" };
-    const { unmount } = setup(closed);
-    expect(actionsOf("Nadia Roux 0")).toContain("Reopen this attempt");
-    unmount();
+  it("keeps close, and only close, on an attempt still open in a finished evaluation", () => {
+    // A row reopened after the close, before #95: it must stay closable.
+    for (const state of ["closed", "released"] as const) {
+      const view = viewIn(state, 1, 2);
+      view.rows[0] = { ...view.rows[0]!, state: "in_progress" };
+      const { unmount } = setup(view);
+      expect(actionsOf("Nadia Roux 0")).toEqual(["Open the answers", "Close this attempt"]);
+      unmount();
+    }
+  });
+
+  it("offers reopen on a finished attempt only while the evaluation runs or is paused", () => {
+    for (const state of ["running", "paused"] as const) {
+      const view = viewIn(state, 1, 2);
+      view.rows[0] = { ...view.rows[0]!, state: "expired" };
+      const { unmount } = setup(view);
+      expect(actionsOf("Nadia Roux 0")).toEqual(["Open the answers", "Reopen this attempt"]);
+      unmount();
+    }
 
     const released = viewIn("released", 1, 2);
     released.rows[0] = { ...released.rows[0]!, state: "submitted" };
@@ -243,7 +258,7 @@ describe("StudentGrid — the row actions per state", () => {
   });
 
   it("asks the page to close, and to reopen, the row it was clicked on", async () => {
-    const view = viewIn("closed", 2, 2);
+    const view = viewIn("running", 2, 2);
     view.rows[0] = { ...view.rows[0]!, state: "submitted" };
     const { onReopen } = setup(view);
     await userEvent.click(

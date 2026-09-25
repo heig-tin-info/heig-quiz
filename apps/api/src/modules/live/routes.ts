@@ -441,7 +441,7 @@ export async function livePlugin(app: FastifyInstance) {
     "/app/api/evaluations/:id/attempts/:attemptId/close",
     { preHandler: requireTeacher },
     teacher({ params: AttemptParam, load: staffEvaluationAttempt }, async ({ req, now, scope }) => {
-      const row = await service.closeAttempt(app.db, scope.evaluation, scope.attempt, now);
+      const row = await service.closeAttempt(app.db, scope.evaluation, scope.attempt, now, app);
       await trace(req, "attempt.close", "attempt", row.id, { evaluationId: scope.evaluation.id });
       return { state: row.state, serverNow: iso(now) };
     }),

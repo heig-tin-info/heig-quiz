@@ -53,6 +53,9 @@ on("POST", "/app/api/evaluations/:id/close", (m) => {
 });
 on("POST", "/app/api/evaluations/:id/extend", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);
+  if (e.state === "closed" || e.state === "released") {
+    throw new MockError(409, "the evaluation is already closed");
+  }
   const ms = Number(body.minutes ?? 5) * 60_000;
   const target = body.scope === "attempt" ? String(body.attemptId) : null;
   let updated = 0;
@@ -78,6 +81,9 @@ on("POST", "/app/api/evaluations/:id/attempts/:attemptId/close", (m) => {
 });
 on("POST", "/app/api/evaluations/:id/attempts/:attemptId/reopen", (m) => {
   const e = evaluationOr404(m.groups!.id!);
+  if (e.state !== "running" && e.state !== "paused") {
+    throw new MockError(409, "the evaluation is not running or paused");
+  }
   const row = e.rows.find((r) => r.attemptId === m.groups!.attemptId);
   if (row) {
     row.state = "in_progress";

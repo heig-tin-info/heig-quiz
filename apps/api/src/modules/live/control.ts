@@ -20,7 +20,12 @@ import {
 } from "../evaluation/service.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
-import { type AttemptRecord, attemptById, beginAttempt } from "./attempt.js";
+import {
+  type AttemptRecord,
+  EvaluationFinished,
+  attemptById,
+  beginAttempt,
+} from "./attempt.js";
 import { logAttemptEvent } from "./autosave.js";
 
 // --- Teacher controls (§5.1, F-LIVE-11) -----------------------------------
@@ -176,6 +181,9 @@ export async function extendTime(
   input: { minutes: number; attemptId?: string | undefined },
   now: Date,
 ): Promise<number> {
+  if (evaluation.state === "closed" || evaluation.state === "released") {
+    throw new EvaluationFinished();
+  }
   const seconds = input.minutes * 60;
   const target = input.attemptId;
   // In `deadline` timing the attempts hang off `closes_at` (§5.2): extending

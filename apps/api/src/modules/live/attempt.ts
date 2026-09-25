@@ -6,6 +6,8 @@
  */
 import { createHash, randomUUID } from "node:crypto";
 
+import type { FastifyInstance } from "fastify";
+
 import { and, count, desc, eq, inArray } from "drizzle-orm";
 
 import {
@@ -40,6 +42,7 @@ import {
   cachedGrade,
 } from "../evaluation/service.js";
 import * as events from "./events.js";
+import { enqueueEvaluationGrading } from "../grading/jobs.js";
 import { pointsByAttempt } from "../grading/service.js";
 import { presence } from "../realtime/presence.js";
 import { isShuffleable, studentView } from "./studentView.js";
@@ -79,6 +82,31 @@ export class AttemptClosedError extends LiveError {
       deadlineAt: isoOrNull(this.deadlineAt),
       serverNow: iso(now),
     };
+  }
+}
+
+/**
+ * Reopening an attempt gives a student their paper back, which only means
+ * something while the evaluation still takes writes: `running` or `paused`.
+ * Anywhere else `closedReason` answers `evaluation_closed` to every write,
+ * so a reopened attempt would be `in_progress` and yet unusable (#95). A
+ * make-up session after the close is another feature: the grading pass has
+ * already run.
+ */
+export class EvaluationNotLive extends LiveError {
+  constructor() {
+    super("evaluation_not_live", 409, "the evaluation is not running or paused");
+  }
+}
+
+/**
+ * Extra time on a finished evaluation (`closed`, `released`) moves a deadline
+ * nobody can use any more: the attempts are closed and graded. The dashboard
+ * offers no `+N min` there; the server refuses it the same way.
+ */
+export class EvaluationFinished extends LiveError {
+  constructor() {
+    super("evaluation_finished", 409, "the evaluation is already closed");
   }
 }
 
@@ -920,19 +948,34 @@ export async function submitAttempt(
   return row;
 }
 
-/** Closes ONE attempt without closing the evaluation (F-LIVE-11). */
+/**
+ * Closes ONE attempt without closing the evaluation (F-LIVE-11).
+ *
+ * Allowed whatever the state of the evaluation: an `in_progress` attempt left
+ * behind in a finished evaluation (reopened after the close, before #95) must
+ * stay closable. A no-op on an attempt that is already finished.
+ */
 export async function closeAttempt(
   db: Db,
   evaluation: EvaluationRecord,
   attempt: AttemptRecord,
   now: Date,
+  app?: FastifyInstance,
 ): Promise<AttemptRecord> {
-  await db
+  const closed = await db
     .update(attempts)
     .set({ state: "expired", closedAt: now, closedBy: "teacher", updatedAt: now })
-    .where(and(eq(attempts.id, attempt.id), eq(attempts.state, "in_progress")));
+    .where(and(eq(attempts.id, attempt.id), eq(attempts.state, "in_progress")))
+    .returning({ id: attempts.id });
   const row = (await attemptById(db, attempt.id))!;
   events.attemptClosed(evaluation.id, row, "teacher", now);
+  // The pass of the evaluation's close has already run, and it ran while this
+  // attempt was open: grade it now, alone (the pass never touches a cell a
+  // teacher validated). Not on a `released` evaluation, whose grades are
+  // published: those stay the teacher's to change, from the grading panel.
+  if (app && closed.length > 0 && evaluation.state === "closed") {
+    await enqueueEvaluationGrading(app, { evaluationId: evaluation.id, attemptIds: [row.id] });
+  }
   return row;
 }
 
@@ -947,6 +990,9 @@ export async function reopenAttempt(
   attempt: AttemptRecord,
   now: Date,
 ): Promise<AttemptRecord> {
+  if (evaluation.state !== "running" && evaluation.state !== "paused") {
+    throw new EvaluationNotLive();
+  }
   if (attempt.state === "in_progress") return attempt;
   const participant = await participantOfAttempt(db, evaluation, attempt);
   const { deadlineAt, bonusS } = deadlineFor(evaluation, {
