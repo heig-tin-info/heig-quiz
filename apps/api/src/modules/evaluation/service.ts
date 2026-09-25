@@ -147,6 +147,23 @@ class FeedbackNotAllowed extends EvaluationError {
   }
 }
 
+/**
+ * A poll keeps its reveal in two places, moved together by the poll's own
+ * reveal route (`poll.setRevealed`, F-LIVE-13): `settings.poll.revealed`,
+ * which the projection reads, and `feedbackPolicy.showKey`/`showExplanation`,
+ * which the feedback route obeys. A generic patch of the second half would
+ * publish the key while the projection still says "not revealed" (#86).
+ */
+class PollFeedbackLocked extends EvaluationError {
+  constructor() {
+    super(
+      "poll_feedback_locked",
+      409,
+      "a poll's feedback follows its reveal: use the poll's reveal route",
+    );
+  }
+}
+
 class AttemptsExist extends EvaluationError {
   constructor() {
     super("attempts_exist", 409, "versions cannot be updated once an attempt exists");
@@ -816,7 +833,8 @@ export async function byId(db: DbOrTx, id: string): Promise<EvaluationRecord | n
  * control and the feedback policy once an attempt exists (F-EVAL-03), and
  * while the evaluation runs (#86) — access must stay fixable mid-exam, for a
  * student the allowlist locks out, and a forgotten answer key hideable. The
- * in-class rule on `immediate` (#78) below applies in every state.
+ * in-class rule on `immediate` (#78) below applies in every state. A poll's
+ * feedback is never patched: it moves with the reveal (`PollFeedbackLocked`).
  */
 export async function patchEvaluation(
   db: Db,
@@ -828,6 +846,7 @@ export async function patchEvaluation(
   if (Object.keys(patch).some((k) => !isConfigFieldWritable(lock, k))) {
     throw lock === "running" ? new RunningLocked() : new Locked();
   }
+  if (row.mode === "poll" && patch.feedbackPolicy !== undefined) throw new PollFeedbackLocked();
   const next: Partial<typeof evaluations.$inferInsert> = { updatedAt: new Date() };
   if (patch.title !== undefined) next.title = patch.title;
   if (patch.settings !== undefined) {
