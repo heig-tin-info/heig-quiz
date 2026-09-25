@@ -13,7 +13,15 @@
 # the same way on ITS VM by apps/runner/deploy/deploy.sh (ADR-016).
 set -euo pipefail
 
-cd /opt/quiz
+# The script's own checkout: /opt/quiz on the DigitalOcean VM (root, rootful
+# Docker), /srv/quiz on the Hetzner VM (the `srv` account, rootless Docker).
+cd "$(dirname "$(readlink -f "$0")")"
+
+# Rootless Docker listens on a per-user socket; a forced-command SSH session
+# does not always load the profile that exports it.
+if [ "$(id -u)" != 0 ] && [ -z "${DOCKER_HOST:-}" ]; then
+  export DOCKER_HOST="unix:///run/user/$(id -u)/docker.sock"
+fi
 
 # Optional GHCR login (private package): the token comes in over SSH, is piped
 # straight to docker login's stdin (never eval'd), and is discarded after.

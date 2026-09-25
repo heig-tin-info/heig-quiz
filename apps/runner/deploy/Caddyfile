@@ -20,7 +20,7 @@ https://code.chevallier.io:8443 {
 		-Server
 	}
 
-	@quiz remote_ip 165.245.246.213
+	@quiz remote_ip 165.245.246.213 128.140.71.35
 	handle @quiz {
 		reverse_proxy 127.0.0.1:3200
 	}
