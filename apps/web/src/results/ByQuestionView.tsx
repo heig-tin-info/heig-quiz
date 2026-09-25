@@ -1,13 +1,16 @@
 import { ListChecks } from "lucide-react";
 
 import type { ByQuestion } from "@quiz/contracts";
+import { displayedRate } from "@quiz/domain";
 
 import { useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { typeLabel, QuestionReviewHost } from "../questionTypes";
 import { Badge, Card, cx, EmptyState, NotePanel, SectionHeading } from "../ui";
 
-const percent = (rate: number | null) => (rate === null ? "—" : `${Math.round(rate * 100)}%`);
+// Clamped for display (ADR-026): negative marking can push a mean below 0.
+const percent = (rate: number | null) =>
+  rate === null ? "—" : `${Math.round(displayedRate(rate) * 100)}%`;
 
 /** The `code` key, when the payload carries one and the policy let it out. */
 function referenceSolution(solution: unknown): string | null {

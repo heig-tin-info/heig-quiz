@@ -60,6 +60,15 @@ the immediate feedback, the teacher preview and the regrade (F-GRADE-06) all
 apply it without a code path of their own. `gradings.details` records
 `negativeMarking: true` beside the question's resolved policy.
 
+### 2b. A single-answer question takes one choice
+
+Unfloored, `c/C - w/W` would pay a crafted `single` answer holding the key
+AND a distractor 1 - 1/(n - 1) — better than an honest guess. Two gates:
+the answer write refuses it (`answerMisfit` of the type, `422
+answer_invalid`, beside the schema check), and `mcqFraction` scores several
+selections on a `single` question as a wrong answer, -1/(n - 1) under
+negative marking and 0 otherwise, for a row written before the gate.
+
 ### 3. Negative points per question, a total floored at 0 in ONE function
 
 Per-question points are stored and shown signed: the grade table, the CSV,
@@ -69,7 +78,8 @@ is the ONLY way the API sums points: the grade table (and therefore the CSV,
 the release snapshot, the statistics of grades), the student's feedback, the
 result cards, the student home, the teacher preview, and the tallies behind
 the kept attempt of a retake (ADR-025) and the score shown between attempts.
-The grade is computed from that floored total. Outside negative marking every
+The grade is computed from that floored total. The grading panel's
+running total of a student uses the same function. Outside negative marking every
 item scores in [0, max] and the floor changes nothing.
 
 For the kept attempt, the consequence is deliberate: two attempts whose sums
@@ -105,9 +115,10 @@ writes itself skip the guard; names and emails keep it.
 
 - Existing evaluations are unaffected: the field is absent, which reads as
   off, and no stored grading changes. No migration.
-- The per-question success rate of the statistics may be negative for a
-  question under negative marking; it is the class's mean fraction, shown as
-  it is.
+- The per-question success rate may be negative for a question under
+  negative marking (the class's mean fraction). The API and the CSV carry
+  the raw value; the screens (results by question, live dashboard) show it
+  clamped to [0, 100 %] through `displayedRate`.
 - `docs/spec/04` §4.4 is rewritten to the v2 policies and this mode; the
   v1 `penalty` / `allowNegative` are gone for good (the v1 → v2 migration of
   `packages/qt-mcq` still drops them).

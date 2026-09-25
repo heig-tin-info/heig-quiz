@@ -13,7 +13,7 @@
  * Both live in the domain so that a list, a detail, a table, a histogram and
  * a student's feedback cannot drift apart — they were seven one-liners.
  */
-import { round2 } from "./round.js";
+import { clamp, round2 } from "./round.js";
 
 /**
  * Points: at most two decimals, no trailing zeroes (`3` , `2.5`, `2.33`).
@@ -35,4 +35,14 @@ export function formatPoints(n: number): string {
  */
 export function formatGrade(n: number): string {
   return n.toFixed(1);
+}
+
+/**
+ * A success rate as a screen shows it: clamped to [0, 1]. Under negative
+ * marking (ADR-026) the class's mean fraction on a choice question may fall
+ * below 0; "-12 %" of success means nothing to a reader, so the screens show
+ * 0 %, while the raw value stays what the API and the CSV carry.
+ */
+export function displayedRate(rate: number): number {
+  return clamp(rate, 0, 1);
 }
