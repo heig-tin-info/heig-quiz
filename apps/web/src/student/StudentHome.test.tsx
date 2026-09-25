@@ -35,6 +35,7 @@ const card = (over: Partial<EvaluationCard>): EvaluationCard => ({
   durationS: 1200,
   attemptId: null,
   attemptState: null,
+  attemptStartedAt: null,
   grade: null,
   deadlineAt: null,
   retakes: null,
@@ -92,6 +93,26 @@ describe("the student home", () => {
     });
     render();
     expect(await screen.findByRole("button", { name: "Continuer" })).toBeInTheDocument();
+  });
+
+  // Issue #126: which attempt "Continue" opens, by when it was started.
+  it("says when the attempt in progress was started", async () => {
+    // Built from LOCAL time, so the test reads the same in every time zone.
+    const startedAt = new Date(2026, 8, 25, 14, 5).toISOString();
+    mockFetch({
+      "GET /app/api/student/home": ok({
+        ...home,
+        open: [
+          card({ attemptId: "a1", attemptState: "in_progress", attemptStartedAt: startedAt }),
+          // Not started: nothing to say.
+          card({ id: "e4", title: "Série 5", attemptStartedAt: null }),
+        ],
+      }),
+      "GET /app/api/student/classrooms": ok([]),
+    });
+    render();
+    expect(await screen.findByText(/Commencé le 2026-09-25 à 14:05/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Commencé le/)).toHaveLength(1);
   });
 
   // WP10: the one student results page, `/attempts/:id/feedback`.

@@ -43,6 +43,7 @@ import {
   Card,
   EmptyState,
   Field,
+  isoDateParts,
   isoDateTime,
   PageHeader,
   QueryError,
@@ -66,7 +67,20 @@ function primaryAction(card: EvaluationCardData, t: TFunction): string {
   return t("shome.start");
 }
 
+/**
+ * Issue #126: when the attempt being resumed was started, so a student with
+ * retakes (F-EVAL-15), or an exercise left open for days, knows which one
+ * "Continue" opens. Before the time left: it names the attempt, the time
+ * left is about the evaluation.
+ */
 function timingLine(card: EvaluationCardData, now: number, t: TFunction): string | null {
+  const left = timeLeftLine(card, now, t);
+  if (card.attemptState !== "in_progress" || card.attemptStartedAt === null) return left;
+  const started = t("shome.startedAt", isoDateParts(card.attemptStartedAt));
+  return left === null ? started : `${started} · ${left}`;
+}
+
+function timeLeftLine(card: EvaluationCardData, now: number, t: TFunction): string | null {
   if (card.deadlineAt !== null) {
     const left = Date.parse(card.deadlineAt) - now;
     if (left > 0) return t("shome.left", { time: formatDuration(left, t) });

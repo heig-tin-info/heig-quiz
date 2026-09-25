@@ -353,6 +353,12 @@ export const EvaluationCard = z.object({
   durationS: z.number().int().nullable(),
   attemptId: z.uuid().nullable(),
   attemptState: AttemptState.nullable(),
+  /**
+   * When the student's attempt started (issue #126) — the LATEST one with
+   * retakes (F-EVAL-15), like `attemptId`. `null` without an attempt, or for
+   * one still in the lobby.
+   */
+  attemptStartedAt: z.iso.datetime().nullable(),
   deadlineAt: z.iso.datetime().nullable(),
   /**
    * The Swiss grade, once the results are released (WP6). `null` everywhere

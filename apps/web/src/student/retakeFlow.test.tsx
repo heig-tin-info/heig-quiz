@@ -138,6 +138,7 @@ function card(canRetake: boolean, keep: Keep = "best"): EvaluationCard {
     durationS: null,
     attemptId: FIRST,
     attemptState: "submitted",
+    attemptStartedAt: null,
     grade: null,
     deadlineAt: null,
     retakes: {

@@ -1347,6 +1347,7 @@ export const fr: Record<keyof Dict, string> = {
   "shome.review": "Voir",
   "shome.opensIn": "Commence dans {time}",
   "shome.opensAt": "Commence à {when}",
+  "shome.startedAt": "Commencé le {date} à {time}",
   "shome.left": "{time} restantes",
   "shome.dueAt": "À rendre {when}",
   "shome.duration": "{n} min",

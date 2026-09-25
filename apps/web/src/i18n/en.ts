@@ -1353,6 +1353,7 @@ export const en = {
   "shome.review": "View",
   "shome.opensIn": "Starts in {time}",
   "shome.opensAt": "Starts at {when}",
+  "shome.startedAt": "Started on {date} at {time}",
   "shome.left": "{time} left",
   "shome.dueAt": "Due {when}",
   "shome.duration": "{n} min",
