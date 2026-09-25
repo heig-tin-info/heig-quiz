@@ -103,7 +103,7 @@ export const COMPILE_BUDGET_CAP = 60;
  * Compile has no visible cooldown, only "one at a time", so a student who
  * compiles after every edit is bounded by the compiler's own latency (about a
  * second on the runner). `3 × runsPerMinute` with a floor of 20 — one
- * compilation every 3 s sustained for the default 10 runs a minute gives 30 —
+ * compilation every 2 s sustained for the default 10 runs a minute gives 30 —
  * is above what a person working on their code does, and below what a
  * held-down key or a script would reach; the cap keeps the most generous
  * question at one a second. A value that is not a positive number reads as
