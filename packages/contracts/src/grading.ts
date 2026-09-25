@@ -119,6 +119,38 @@ export const GradingQuery = z.object({
 });
 export type GradingQuery = z.infer<typeof GradingQuery>;
 
+/**
+ * `GET /evaluations/:id/grading/steps?by=&anonymous=` — the path of a
+ * traversal, one step per question or per student, each with the state of
+ * its cells (#107). The step picker lists them without downloading a single
+ * answer: the queue carries whole answers and solutions, this carries three
+ * counters per step.
+ */
+export const GradingStepsQuery = GradingQuery.pick({ by: true, anonymous: true });
+export type GradingStepsQuery = z.infer<typeof GradingStepsQuery>;
+
+export const GradingStepSummary = z.object({
+  /** The item id by question, the attempt id by student. */
+  key: z.uuid(),
+  /**
+   * By question, the item's internal name; by student, the pseudonym or the
+   * display name, by the same rule as `GradingEntry.label` (F-GRADE-03).
+   */
+  label: z.string(),
+  /** By student only: the attempt is a teacher's own staff test (ADR-018). */
+  staff: z.boolean(),
+  total: z.number().int(),
+  validated: z.number().int(),
+  proposed: z.number().int(),
+});
+export type GradingStepSummary = z.infer<typeof GradingStepSummary>;
+
+export const GradingSteps = z.object({
+  order: z.enum(["question", "student"]),
+  steps: z.array(GradingStepSummary),
+});
+export type GradingSteps = z.infer<typeof GradingSteps>;
+
 /** `GET /evaluations/:id/grading/progress` */
 export const GradingProgress = z.object({
   done: z.number().int(),
