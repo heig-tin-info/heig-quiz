@@ -119,10 +119,13 @@ export function feedbackWhenFor(ctx: FeedbackContext, wanted: FeedbackWhen): Fee
  *
  * - `running`: the evaluation is `running` or `paused`. Students are sitting
  *   it, whether or not one of them has entered yet: nothing that decides what
- *   they see, how long they have or what they learn afterwards may move under
- *   them. Time is added from the live dashboard (`live.extendTime`), never
- *   here. Only the access control stays open — a student locked out by a
- *   mistyped code or allowlist must be let in mid-exam — and the title.
+ *   they see or how long they have may move under them. Time is added from
+ *   the live dashboard (`live.extendTime`), never here. The access control
+ *   stays open — a student locked out by a mistyped code or allowlist must be
+ *   let in mid-exam — and so do the title and the feedback policy: a
+ *   forgotten answer key must be hideable during the run (#86). The in-class
+ *   rule still holds there: an evaluation with a waiting room never switches
+ *   to `immediate` (`isFeedbackAllowed`, #78).
  * - `attempts`: at least one attempt exists and the evaluation is not running
  *   (a closed one waiting for its release, typically). The feedback policy is
  *   still the teacher's to choose until the results are released.
@@ -138,7 +141,7 @@ export const CONFIG_LIVE_STATES: readonly EvaluationStateName[] = ["running", "p
 
 /** The fields of `EvaluationPatch` each lock leaves writable. */
 const WRITABLE_UNDER: Record<ConfigLock, readonly string[]> = {
-  running: ["title", "accessCode", "ipAllowlist"],
+  running: ["title", "accessCode", "ipAllowlist", "feedbackPolicy"],
   attempts: ["title", "accessCode", "ipAllowlist", "feedbackPolicy"],
 };
 

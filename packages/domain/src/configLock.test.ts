@@ -17,7 +17,7 @@ describe("configLock (#86)", () => {
     }
   });
 
-  it("leaves only the title and the access control writable during a run", () => {
+  it("leaves only the title, the access control and the feedback writable during a run", () => {
     const fields = [
       "title",
       "accessCode",
@@ -34,6 +34,7 @@ describe("configLock (#86)", () => {
       "title",
       "accessCode",
       "ipAllowlist",
+      "feedbackPolicy",
     ]);
     expect(fields.filter((f) => isConfigFieldWritable("attempts", f))).toEqual([
       "title",

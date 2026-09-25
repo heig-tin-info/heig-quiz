@@ -28,9 +28,10 @@ export function AdvancedDisclosure({
   /** The structural settings: frozen by an attempt, or by the run (#86). */
   disabled: boolean;
   /**
-   * The feedback policy: it outlives an attempt (it may change until the
-   * release) but not the run (#86). The access code is never disabled — a
-   * student locked out mid-exam must be let back in.
+   * The feedback policy, as `isConfigFieldWritable` says: it outlives an
+   * attempt (it may change until the release) and the run too, so a forgotten
+   * answer key can be hidden mid-exam (#86). The access code is never
+   * disabled — a student locked out mid-exam must be let back in.
    */
   feedbackDisabled: boolean;
 }) {

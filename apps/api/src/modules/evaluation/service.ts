@@ -16,7 +16,8 @@
  *   - a structural change is refused once an attempt exists, because the
  *     wording, the order and the scale a student saw can never move under
  *     them; and while the evaluation runs, the whole configuration is locked
- *     but for the title and the access control (#86, `configLock`).
+ *     but for the title, the access control and the feedback policy (#86,
+ *     `configLock`).
  */
 import { randomUUID } from "node:crypto";
 
@@ -122,8 +123,9 @@ export class Locked extends EvaluationError {
 
 /**
  * The evaluation is `running` or `paused` (#86): its configuration is locked
- * until it closes, whether or not anybody has entered. Time is added from the
- * live dashboard, not through a patch.
+ * until it closes, whether or not anybody has entered — all but the title,
+ * the access control and the feedback policy. Time is added from the live
+ * dashboard, not through a patch.
  */
 export class RunningLocked extends EvaluationError {
   constructor() {
@@ -811,9 +813,10 @@ export async function byId(db: DbOrTx, id: string): Promise<EvaluationRecord | n
 /**
  * What a patch may still touch is `configLock`'s to say (`@quiz/domain`):
  * everything while nothing locks the configuration; the title, the access
- * control and the feedback policy once an attempt exists (F-EVAL-03); only
- * the title and the access control while the evaluation runs (#86) — access
- * must stay fixable mid-exam, for a student the allowlist locks out.
+ * control and the feedback policy once an attempt exists (F-EVAL-03), and
+ * while the evaluation runs (#86) — access must stay fixable mid-exam, for a
+ * student the allowlist locks out, and a forgotten answer key hideable. The
+ * in-class rule on `immediate` (#78) below applies in every state.
  */
 export async function patchEvaluation(
   db: Db,
