@@ -19,16 +19,20 @@ import {
   AutosaveRequest,
   DashboardQuery,
   ExtendBody,
+  FlagBody,
   IdParam,
   MarkDoneBody,
   PositionBody,
   RunBody,
   SimulateBody,
+  SkipBody,
   StartBody,
   SubmitBody,
   type ExtendResponse,
+  type FlagResponse,
   type ResetAttemptResponse,
   type RunAccepted,
+  type SkipResponse,
   type SubmitResponse,
 } from "@quiz/contracts";
 
@@ -214,7 +218,7 @@ export async function livePlugin(app: FastifyInstance) {
     ),
   );
 
-  /** F-LIVE-08. */
+  /** F-LIVE-08: validate — "Validate and continue", crossing a checkpoint. */
   app.post(
     "/app/api/attempts/:id/answers/:itemId/done",
     { preHandler: requireSession },
@@ -229,6 +233,44 @@ export async function livePlugin(app: FastifyInstance) {
           now,
         });
         return { ...result, serverNow: iso(now) };
+      },
+    ),
+  );
+
+  /** Issue #89: "I won't answer this question", or taking it back. */
+  app.post(
+    "/app/api/attempts/:id/answers/:itemId/skip",
+    { preHandler: requireSession },
+    student(
+      { params: AnswerParam, body: SkipBody, load: own },
+      async ({ now, params, body, scope }) => {
+        const result = await service.setSkipped(app.db, {
+          evaluation: scope.evaluation,
+          attempt: scope.attempt,
+          itemId: params.itemId,
+          skipped: body.skipped,
+          now,
+        });
+        return { ...result, serverNow: iso(now) } satisfies SkipResponse;
+      },
+    ),
+  );
+
+  /** Issue #89: the review flag. Staff see it on the grid; nobody else does. */
+  app.post(
+    "/app/api/attempts/:id/answers/:itemId/flag",
+    { preHandler: requireSession },
+    student(
+      { params: AnswerParam, body: FlagBody, load: own },
+      async ({ now, params, body, scope }) => {
+        const result = await service.setFlagged(app.db, {
+          evaluation: scope.evaluation,
+          attempt: scope.attempt,
+          itemId: params.itemId,
+          flagged: body.flagged,
+          now,
+        });
+        return { ...result, serverNow: iso(now) } satisfies FlagResponse;
       },
     ),
   );

@@ -9,6 +9,7 @@
 import { lazy } from "react";
 
 import type { QuestionTypeClient } from "@quiz/core/client";
+import { isCircuitAnswered } from "./schema.js";
 
 import { LIBRARY } from "./library.js";
 import type {
@@ -68,10 +69,7 @@ export const circuitClient: QuestionTypeClient<
     return { schematic: { components: [], wires: [] } };
   },
 
-  isAnswered(answer) {
-    if (answer === null) return false;
-    return answer.schematic.components.length > 0 || answer.schematic.wires.length > 0;
-  },
+  isAnswered: (answer) => answer !== null && isCircuitAnswered(answer),
 
   /**
    * The budget, which is the one number a teacher scanning the dashboard can

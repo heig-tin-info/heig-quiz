@@ -46,7 +46,7 @@ The ring shows how many students of the class are already here. Under it, three 
 
 ## Taking an evaluation
 
-The player shows one question per screen. The strip at the top has one segment per question, coloured by its state, and clicking a segment moves to that question when the navigation allows it. The header carries the countdown when the evaluation is timed, the saving indicator, a theme toggle and **Hand in**.
+The player shows one question per screen. The strip at the top is the list of the questions, one segment per question, and clicking a segment moves to that question when the navigation allows it. Each segment says where you stand, by its shape as well as its colour: a solid bar with a check for a question that holds an answer, a dashed bar with a dash for one you said you will not answer, a hollow bar for one with nothing yet, and a small flag beside the number of a question you flagged for review. The current question is outlined in red. The header carries the countdown when the evaluation is timed, the saving indicator, a theme toggle and **Hand in**.
 
 <figure markdown="span">
   ![The player on a phone: the progress strip, question 1 marked Done, four choices with B selected, and the Previous, Done and Next buttons](../assets/screenshots/player-mcq-phone-light.png#only-light){ width="390" }
@@ -72,10 +72,16 @@ The countdown in the header is the server's clock, the same for everybody whatev
 Your teacher chooses one of three rules, and the waiting room names the one in force.
 
 - **Free navigation**: you move between questions as you like and change an answer until the time is up.
-- **One way through**: a question you mark as done cannot be opened again.
+- **One way through**: a question you validate cannot be opened again.
 - **Checkpoints**: the list has milestones. Passing one closes every question before it, and you do not come back. The player asks for confirmation before you cross a milestone.
 
-**Mark as done** tells your teacher you consider the question finished; the segment in the strip turns dark and the header of the question reads **Done**. Under the free rule you can still change the answer afterwards. Under the other two, the hint under the question warns you first: **Once this question is marked as done, it cannot be changed.**
+A question counts as **answered** as soon as it holds an answer: there is nothing to click, and the header of the question reads **Answered**. Three quiet buttons cover the rest:
+
+- **I won't answer this question**, on a question with nothing in it, tells your teacher you left it blank on purpose; it reads **Won't answer**. Writing an answer afterwards takes it back, and so does **Answer it after all**. A question left blank scores 0 either way.
+- **Flag for review**, beside the points, marks a question you want to come back to. It changes nothing to your grade. Your teacher sees the flags on the live grid, which tells them when a question is unclear to many; the other students never see them.
+- **Clear my selection**, on a multiple-choice question, withdraws what you ticked. It matters when a wrong choice costs points.
+
+Under **One way through**, each question ends with **Validate and continue**: it asks for a confirmation, closes the question for good and moves to the next one (`Ctrl+Enter` does the same). Under **Checkpoints**, the checkpoint question carries the same button, and validating it closes everything up to it.
 
 ### How answers are saved
 

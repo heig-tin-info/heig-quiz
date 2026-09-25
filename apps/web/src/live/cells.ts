@@ -9,14 +9,17 @@
  *   - the "answers" toggle decides whether the cell carries the student's
  *     answer in a glyph or two. Hiding answers must hide them, not grey them:
  *     the teacher turns it off precisely because the screen is projected;
- *   - the four progress states are not three. `seen` (opened, nothing typed)
- *     stays neutral, `in_progress` (something written) is the light blue and
- *     `done` (the student marked it done) is the filled one, so a column
- *     darkening downward IS the class moving through the quiz;
+ *   - the progress states are not three. `seen` (opened, nothing typed)
+ *     stays neutral, `in_progress` (it holds an answer) is the light blue and
+ *     `done` (validated, in the locking navigations) is the filled one, so a
+ *     column darkening downward IS the class moving through the quiz;
+ *     `skipped` ("I won't answer", issue #89) is neutral and dashed — a
+ *     decision, not progress through the answer;
  *   - "names off" shows a NUMBER, not the animal pseudonym, and the number
  *     must not leak the roster's alphabetical order (below).
  */
 import type { DashboardCell, DashboardRow } from "@quiz/contracts";
+import { countsAsCompleted } from "@quiz/domain";
 
 import type { VerdictState } from "../ui";
 
@@ -35,6 +38,8 @@ export function cellState(cell: DashboardCell, showResults: boolean): VerdictSta
       return "inProgress";
     case "in_progress":
       return "answered";
+    case "skipped":
+      return "skipped";
     case "done":
       return "done";
   }
@@ -50,15 +55,17 @@ export function cellValue(cell: DashboardCell, showAnswers: boolean): string | u
  * How far one student has got, as a fraction of the questions.
  *
  * The rule, so that nobody has to guess it from the arithmetic: a question
- * COUNTS as soon as the student has written something in it (`in_progress`)
- * or marked it done (`done`). `seen` does not count — opening a question and
- * leaving it blank is not progress — and neither does `empty`. It is
- * deliberately not the score: the grid says how much of the quiz has been
- * gone through, months before any of it is graded.
+ * COUNTS as soon as the student has dealt with it — it holds an answer
+ * (`in_progress`), they said they will not answer it (`skipped`), or they
+ * validated it (`done`); `@quiz/domain#countsAsCompleted`, which the server
+ * applies to the class totals too. `seen` does not count — opening a
+ * question and leaving it blank is not progress — and neither does `empty`.
+ * It is deliberately not the score: the grid says how much of the quiz has
+ * been gone through, months before any of it is graded.
  */
 export function completionOf(row: DashboardRow): { done: number; total: number; percent: number } {
   const total = row.cells.length;
-  const done = row.cells.filter((c) => c.status === "in_progress" || c.status === "done").length;
+  const done = row.cells.filter((c) => countsAsCompleted(c.status)).length;
   return { done, total, percent: total === 0 ? 0 : Math.round((done / total) * 100) };
 }
 

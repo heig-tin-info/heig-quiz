@@ -1,7 +1,8 @@
 /**
  * The autosave path (PLAN-MVP §4.7): the answer summaries a cell shows, the
- * live grader, `saveAnswer`, `markDone`, `setPosition`, and the attempt
- * journal. Imported through `./service.ts`.
+ * live grader, `saveAnswer`, `markDone` (validate), `setSkipped` and
+ * `setFlagged` (issue #89), `setPosition`, and the attempt journal. Imported
+ * through `./service.ts`.
  */
 import { randomUUID } from "node:crypto";
 
@@ -9,7 +10,7 @@ import { and, count, eq, gte, sql } from "drizzle-orm";
 
 import type { AutosaveResponse, CellStatus, Verdict } from "@quiz/contracts";
 import { ANSWER_SUMMARY_MAX, isGraded, type AnyQuestionTypeServer } from "@quiz/core/server";
-import { round2 } from "@quiz/domain";
+import { mayValidate, progressStatus, round2 } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -25,8 +26,10 @@ import {
   type AnswerRecord,
   LiveError,
   AnswerInvalid,
+  AlreadyAnswered,
   Irreversible,
   ItemLocked,
+  NotValidatable,
   orderItems,
   lockedItemIds,
   answersOf,
@@ -219,10 +222,67 @@ async function previewVerdict(
   return (await grade(attempt, payload))?.verdict ?? null;
 }
 
-export function cellStatus(answer: AnswerRecord | null): CellStatus {
-  if (!answer) return "empty";
-  if (answer.markedDone) return "done";
-  return answer.revision > 0 ? "in_progress" : "seen";
+/**
+ * "Does this payload hold something?" — the question TYPE's call
+ * (`isAnswered` of the contract, issue #89), resolved once per item like
+ * {@link answerSummarizer}. Defensive for the same reason: it runs on every
+ * autosave and on every cell of the grid, and an unknown type or a payload
+ * stored under an older schema falls back to "anything at all".
+ */
+export function answeredBy(item: JoinedItem): (payload: unknown) => boolean {
+  let type: AnyQuestionTypeServer | null = null;
+  try {
+    type = typeOf(item.question.type);
+  } catch {
+    /* an unknown type: the fallback below */
+  }
+  const known = type;
+  return (payload) => {
+    if (payload === null || payload === undefined) return false;
+    if (!known) return true;
+    try {
+      const parsed = known.answerSchema.safeParse(payload);
+      return parsed.success ? known.isAnswered(parsed.data) : true;
+    } catch {
+      return true;
+    }
+  };
+}
+
+/** One cell's progress (F-DASH-01), by the rule of `@quiz/domain`. */
+export function cellStatus(answer: AnswerRecord | null, answered: boolean): CellStatus {
+  return progressStatus({
+    row: answer !== null,
+    answered,
+    skipped: answer?.skipped ?? false,
+    validated: answer?.markedDone ?? false,
+  });
+}
+
+/**
+ * The `dashboard.cell` frame of one stored row: every write of the student's
+ * (an answer, a validation, a skip, a flag) moves the cell through here, so
+ * the grid always receives the WHOLE state of the cell and never a fragment
+ * of it.
+ */
+async function publishCell(
+  evaluation: EvaluationRecord,
+  attempt: AttemptRecord,
+  item: JoinedItem | null,
+  row: AnswerRecord,
+  now: Date,
+): Promise<void> {
+  const answered = item ? answeredBy(item)(row.payload) : row.payload !== null;
+  events.cellChanged({
+    evaluationId: evaluation.id,
+    attemptId: attempt.id,
+    itemId: row.itemId,
+    status: cellStatus(row, answered),
+    revision: row.revision,
+    flagged: row.flagged,
+    summary: item && row.payload !== null ? summarizeAnswer(item, row.payload) : null,
+    verdict: item ? await previewVerdict(evaluation, item, attempt, row.payload, now) : null,
+  });
 }
 
 /**
@@ -264,6 +324,10 @@ export async function saveAnswer(
   const parsed = type.answerSchema.safeParse(input.payload);
   if (!parsed.success) throw new AnswerInvalid(parsed.error.issues);
   const payload = parsed.data;
+  // Issue #89: writing an answer that holds something takes back an "I won't
+  // answer". An EMPTY write leaves it alone — a cleared field is not an
+  // answer, and the student may have said "won't answer" just before it.
+  const answered = type.isAnswered(payload);
 
   const written = await db
     .insert(answers)
@@ -281,11 +345,12 @@ export async function saveAnswer(
       set: {
         payload: sql`excluded.payload`,
         revision: sql`excluded.revision`,
+        ...(answered ? { skipped: false } : {}),
         updatedAt: now,
       },
       setWhere: sql`${answers.revision} < excluded.revision`,
     })
-    .returning({ payload: answers.payload, revision: answers.revision });
+    .returning();
 
   if (written.length === 0) {
     // Stale: the row in the database is newer. Hand it back so the client
@@ -300,19 +365,16 @@ export async function saveAnswer(
   }
 
   const row = written[0]!;
-  events.cellChanged({
-    evaluationId: evaluation.id,
-    attemptId: attempt.id,
-    itemId,
-    status: stored.get(itemId)?.markedDone === true ? "done" : "in_progress",
-    revision: row.revision,
-    summary: summarizeAnswer(joined, row.payload),
-    verdict: await previewVerdict(evaluation, joined, attempt, row.payload, now),
-  });
+  await publishCell(evaluation, attempt, joined, row, now);
   return { accepted: true, revision: row.revision, serverNow: iso(now) };
 }
 
-/** F-LIVE-08. In `forward_only` the flag only ever goes up. */
+/**
+ * F-LIVE-08: VALIDATE a question — "Validate and continue" in
+ * `forward_only`, crossing a checkpoint in `milestones` (issue #89 replaced
+ * the "Mark as done" that used this route). In `forward_only` the flag only
+ * ever goes up.
+ */
 export async function markDone(
   db: Db,
   input: {
@@ -328,31 +390,6 @@ export async function markDone(
   const settings = settingsOf(evaluation);
   const stored = await answersOf(db, attempt.id);
   const current = stored.get(itemId) ?? null;
-  if (settings.navigation === "forward_only" && current?.markedDone && !input.done) {
-    throw new Irreversible();
-  }
-
-  if (current) {
-    await db
-      .update(answers)
-      .set({ markedDone: input.done, updatedAt: now })
-      .where(eq(answers.id, current.id));
-  } else {
-    // "Seen, nothing typed": the row has to exist for the flag to, and
-    // `payload` is NOT NULL, so it holds the JSON value `null` — which is
-    // what a type's `grade(config, null, …)` already means (F-GRADE-01).
-    await db.insert(answers).values({
-      id: randomUUID(),
-      attemptId: attempt.id,
-      itemId,
-      payload: sql`'null'::jsonb`,
-      revision: 0,
-      markedDone: input.done,
-      firstSeenAt: now,
-      updatedAt: now,
-    });
-  }
-
   const ordered = orderItems(
     await joinedItems(db, evaluation.id),
     settings,
@@ -360,23 +397,151 @@ export async function markDone(
     evaluation.id,
   );
   const ownItem = ordered.find((o) => o.item.id === itemId) ?? null;
-  const rank = ownItem?.rank ?? -1;
+  if (!ownItem) throw new LiveError("not_found", 404);
+  const locked = lockedItemIds(settings, ordered, stored).has(itemId);
+  if (input.done) {
+    // Validation exists only where the navigation locks: every question in
+    // `forward_only`, a checkpoint in `milestones` (issue #89). Anywhere else
+    // a `true` would read "Validated" for a question nothing closed.
+    if (!mayValidate(settings.navigation, { milestone: ownItem.item.milestone })) {
+      throw new NotValidatable();
+    }
+    // Behind a crossed checkpoint, a question is closed for every write.
+    if (locked && !current?.markedDone) throw new ItemLocked();
+  } else if (settings.navigation !== "free") {
+    // Irreversible in every locking mode: un-validating a crossed checkpoint
+    // would re-open every question before it.
+    if (current?.markedDone) throw new Irreversible();
+    if (locked) throw new ItemLocked();
+  }
+
+  const row = await writeState(db, attempt, itemId, current, { markedDone: input.done }, now);
+
+  const rank = ownItem.rank;
   const next = ordered.find((o) => o.rank === rank + 1)?.item.id ?? null;
   if (next !== null) await db.update(attempts).set({ lastItemId: next, updatedAt: now }).where(eq(attempts.id, attempt.id));
 
-  events.cellChanged({
-    evaluationId: evaluation.id,
-    attemptId: attempt.id,
-    itemId,
-    status: input.done ? "done" : cellStatus(current),
-    revision: current?.revision ?? 0,
-    summary: current && ownItem ? summarizeAnswer(ownItem, current.payload) : null,
-    verdict:
-      current && ownItem
-        ? await previewVerdict(evaluation, ownItem, attempt, current.payload, now)
-        : null,
-  });
+  await publishCell(evaluation, attempt, ownItem, row, now);
   return { done: input.done, nextItemId: next };
+}
+
+/**
+ * The state columns of one answer row, written whether or not the row exists
+ * yet. "Seen, nothing typed": the row has to exist for a flag to, and
+ * `payload` is NOT NULL, so it holds the JSON value `null` — which is what a
+ * type's `grade(config, null, …)` already means (F-GRADE-01).
+ */
+async function writeState(
+  db: Db,
+  attempt: AttemptRecord,
+  itemId: string,
+  current: AnswerRecord | null,
+  set: Partial<Pick<AnswerRecord, "markedDone" | "skipped" | "flagged">>,
+  now: Date,
+): Promise<AnswerRecord> {
+  if (current) {
+    const [row] = await db
+      .update(answers)
+      .set({ ...set, updatedAt: now })
+      .where(eq(answers.id, current.id))
+      .returning();
+    return row!;
+  }
+  const [row] = await db
+    .insert(answers)
+    .values({
+      id: randomUUID(),
+      attemptId: attempt.id,
+      itemId,
+      payload: sql`'null'::jsonb`,
+      revision: 0,
+      ...set,
+      firstSeenAt: now,
+      updatedAt: now,
+    })
+    // Two tabs racing on a never-opened question: the second one updates.
+    .onConflictDoUpdate({
+      target: [answers.attemptId, answers.itemId],
+      set: { ...set, updatedAt: now },
+    })
+    .returning();
+  return row!;
+}
+
+/**
+ * What the two state writes of issue #89 share: the write gate (a `410` past
+ * the deadline plus grace, on the server's clock), the item, and the lock of
+ * the locking navigations — a validated question takes no write of any kind.
+ */
+async function stateTarget(
+  db: Db,
+  evaluation: EvaluationRecord,
+  attempt: AttemptRecord,
+  itemId: string,
+  now: Date,
+): Promise<{ joined: JoinedItem; current: AnswerRecord | null }> {
+  assertWritable(evaluation, attempt, now);
+  const settings = settingsOf(evaluation);
+  const ordered =
+    settings.navigation === "free"
+      ? null
+      : orderItems(await joinedItems(db, evaluation.id), settings, attempt.seed, evaluation.id);
+  const joined = ordered
+    ? (ordered.find((o) => o.item.id === itemId) ?? null)
+    : await itemOf(db, evaluation.id, itemId);
+  if (!joined) throw new LiveError("not_found", 404);
+  const stored = await answersOf(db, attempt.id);
+  if (ordered && lockedItemIds(settings, ordered, stored).has(itemId)) throw new ItemLocked();
+  return { joined, current: stored.get(itemId) ?? null };
+}
+
+/**
+ * "I won't answer this question" (issue #89), or taking it back. Refused on a
+ * question that holds an answer: that would be a way to erase one, and the
+ * player never offers it there. Grading does not read it.
+ */
+export async function setSkipped(
+  db: Db,
+  input: {
+    evaluation: EvaluationRecord;
+    attempt: AttemptRecord;
+    itemId: string;
+    skipped: boolean;
+    now: Date;
+  },
+): Promise<{ skipped: boolean }> {
+  const { evaluation, attempt, itemId, now } = input;
+  const { joined, current } = await stateTarget(db, evaluation, attempt, itemId, now);
+  if (input.skipped && current && answeredBy(joined)(current.payload)) throw new AlreadyAnswered();
+  const row = await writeState(db, attempt, itemId, current, { skipped: input.skipped }, now);
+  await publishCell(evaluation, attempt, joined, row, now);
+  return { skipped: row.skipped };
+}
+
+/**
+ * The review flag (issue #89). It is not an answer, yet it takes the ANSWER
+ * gate, pause included: a pause covers the paper (decision D17, the
+ * student's screen shows nothing but the overlay), so there is nothing to
+ * flag, and a flag is a note ABOUT the content the student is reading —
+ * unlike the position or the journal, which the client sends by itself while
+ * the student waits. One gate for every write the student makes on a
+ * question keeps the rule one sentence long.
+ */
+export async function setFlagged(
+  db: Db,
+  input: {
+    evaluation: EvaluationRecord;
+    attempt: AttemptRecord;
+    itemId: string;
+    flagged: boolean;
+    now: Date;
+  },
+): Promise<{ flagged: boolean }> {
+  const { evaluation, attempt, itemId, now } = input;
+  const { joined, current } = await stateTarget(db, evaluation, attempt, itemId, now);
+  const row = await writeState(db, attempt, itemId, current, { flagged: input.flagged }, now);
+  await publishCell(evaluation, attempt, joined, row, now);
+  return { flagged: row.flagged };
 }
 
 /** F-LIVE-06: where the student was, so a reload lands on the same question. */

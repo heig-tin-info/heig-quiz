@@ -123,6 +123,8 @@ export function cellChanged(input: {
   status: CellStatus;
   revision: number;
   summary: string | null;
+  /** The review flag (issue #89): staff only, like the rest of the frame. */
+  flagged: boolean;
   verdict: Verdict | null;
 }): void {
   bus.dashboardCell({ ...input, points: null });

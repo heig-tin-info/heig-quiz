@@ -1,5 +1,5 @@
 /** Section 3 of the mock — see `index.ts` for the layout. */
-import {
+import { countsAsCompleted,
   configLock,
   isConfigEditable,
   isConfigFieldWritable,
@@ -218,7 +218,9 @@ export const itemQuestion = (item: { questionId: string }): MockQuestion | null 
   questions.find((q) => q.id === item.questionId) ?? null;
 interface MockCell {
   itemId: string;
-  status: "empty" | "seen" | "in_progress" | "done";
+  status: "empty" | "seen" | "in_progress" | "skipped" | "done";
+  /** The student's review flag (issue #89). */
+  flagged: boolean;
   /**
    * The live verdict of ADR-020: with the "Results" switch on, the real
    * server grades the answer it already holds. The mock fakes it the only
@@ -384,31 +386,36 @@ export function makeRows(e: MockEvaluation, started: boolean): MockRowState[] {
       points: null,
       maxPoints,
       cells: e.items.map((item, i) => {
-        // The four states of F-DASH-01, all four reachable: done behind the
-        // student, `in_progress` where they are, `seen` on the next question
-        // for a third of the class (opened, nothing typed) and empty after.
+        // The states of F-DASH-01 a `free` paper reaches (issue #89): an
+        // answer behind the student and where they are, now and then a
+        // question left on purpose ("won't answer"), `seen` on the next
+        // question for a third of the class (opened, nothing typed) and
+        // empty after. `done` is the validation of the locking navigations,
+        // which this paper does not use.
         const status: MockCell["status"] =
-          i < progress - 1
-            ? "done"
-            : i === progress - 1
-              ? "in_progress"
-              : i === progress && index % 3 === 0
-                ? "seen"
-                : "empty";
+          i < progress
+            ? (index + i) % 7 === 3
+              ? "skipped"
+              : "in_progress"
+            : i === progress && index % 3 === 0
+              ? "seen"
+              : "empty";
         const question = itemQuestion(item);
-        const answered = status === "done" || status === "in_progress";
+        const answered = status === "in_progress";
         return {
           itemId: item.id,
           status,
+          // The second question is the unclear one: most of the class that
+          // reached it flagged it — the story the column header tells.
+          flagged:
+            status !== "empty" && ((i === 1 && index % 3 !== 2) || (index * 5 + i) % 29 === 0),
           verdict: answered ? mockVerdict(index * 7 + i * 3) : null,
           provisional: answered,
           points: null,
           revision: status === "empty" || status === "seen" ? 0 : 1 + i,
           // `seen` carries nothing on purpose: there is no answer to preview.
           summary:
-            (status === "done" || status === "in_progress") && question !== null
-              ? summaryOf(question, index + i)
-              : null,
+            answered && question !== null ? summaryOf(question, index + i) : null,
         };
       }),
     };
@@ -577,7 +584,8 @@ function staffRow(e: MockEvaluation): MockRowState {
     maxPoints,
     cells: e.items.map((item, i) => ({
       itemId: item.id,
-      status: "done" as const,
+      status: "in_progress" as const,
+      flagged: false,
       verdict: mockVerdict(i * 3),
       provisional: true,
       points: null,
@@ -713,9 +721,10 @@ export const dashboardView = (e: MockEvaluation, includeAnswers: boolean) => {
       cells: r.cells.map((c) => ({ ...c, summary: includeAnswers ? c.summary : null })),
     })),
     totals: e.items.map((item) => {
-      const done = classRows.filter(
-        (r) => r.cells.find((c) => c.itemId === item.id)?.status === "done",
-      ).length;
+      const done = classRows.filter((r) => {
+        const status = r.cells.find((c) => c.itemId === item.id)?.status;
+        return status !== undefined && countsAsCompleted(status);
+      }).length;
       const graded = classRows
         .map((r) => r.cells.find((c) => c.itemId === item.id))
         .filter((c) => c?.verdict != null);
@@ -774,6 +783,8 @@ export const attemptInspect = (e: MockEvaluation, attemptId: string) => {
             : null,
         revision: cell?.revision ?? 0,
         markedDone: cell?.status === "done",
+        skipped: cell?.status === "skipped",
+        flagged: cell?.flagged ?? false,
         solution: solutionOf(q),
       }];
     }),

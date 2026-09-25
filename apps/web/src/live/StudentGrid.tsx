@@ -1,4 +1,4 @@
-import { Clock, DoorOpen, Eye, GraduationCap, RotateCcw, WifiOff } from "lucide-react";
+import { Clock, DoorOpen, Eye, Flag, GraduationCap, RotateCcw, WifiOff } from "lucide-react";
 
 import type { DashboardRow, EvaluationState } from "@quiz/contracts";
 
@@ -115,6 +115,18 @@ export function StudentGrid({
   const totals = new Map(view.totals.map((x) => [x.itemId, x]));
   const percent = (v: number) => `${Math.round(v * 100)} %`;
   const studentCount = view.rows.filter((r) => !r.staff).length;
+  // Issue #89: how many students flagged each question for review. The CLASS
+  // only, like every total of this grid — a teacher's own test walk flags
+  // nothing about the paper's clarity. A question many students flag may be
+  // unclear, which is the one thing this count is for.
+  const flaggedBy = new Map(
+    view.items.map((item) => [
+      item.id,
+      view.rows.filter(
+        (r) => !r.staff && r.cells.some((c) => c.itemId === item.id && c.flagged),
+      ).length,
+    ]),
+  );
 
   // Mirrors of the server's own rules, so no button is offered that the API
   // would refuse (`live/attempt.ts`, `live/control.ts`):
@@ -158,14 +170,39 @@ export function StudentGrid({
             <th scope="col" className={cx(T.th, "hidden w-20 min-w-20 text-right sm:table-cell")}>
               {t("live.grid.time")}
             </th>
-            {view.items.map((item, index) => (
-              <th key={item.id} scope="col" className={cx(T.th, COL, "text-center")}>
-                <span className="block font-mono text-[11px] font-semibold text-fg">
-                  Q{index + 1}
-                </span>
-                <span className="block truncate text-[10px] text-fg-faint">{item.type}</span>
-              </th>
-            ))}
+            {view.items.map((item, index) => {
+              const flagged = flaggedBy.get(item.id) ?? 0;
+              return (
+                <th key={item.id} scope="col" className={cx(T.th, COL, "text-center")}>
+                  <span className="block font-mono text-[11px] font-semibold text-fg">
+                    Q{index + 1}
+                  </span>
+                  <span className="block truncate text-[10px] text-fg-faint">{item.type}</span>
+                  {/* The line is there with or without flags, so the header
+                      never grows the moment the first student flags. */}
+                  <span
+                    className="flex h-3.5 items-center justify-center gap-0.5 text-[10px] font-semibold tabular-nums text-warning"
+                    aria-hidden
+                  >
+                    {/* A flag and a number: the column is 64 px wide, and
+                        the legend under the grid names the flag. */}
+                    {flagged > 0 ? (
+                      <>
+                        <Flag className="size-2.5 fill-current" />
+                        {flagged}
+                      </>
+                    ) : null}
+                  </span>
+                  {flagged > 0 ? (
+                    <span className="sr-only">
+                      {flagged === 1
+                        ? t("live.grid.flaggedLabelOne")
+                        : t("live.grid.flaggedLabel", { n: flagged })}
+                    </span>
+                  ) : null}
+                </th>
+              );
+            })}
             <th
               scope="col"
               className={cx(
@@ -320,6 +357,7 @@ export function StudentGrid({
                             <VerdictCell
                               state={cellState(cell, showResults)}
                               value={cellValue(cell, showAnswers)}
+                              flagged={cell.flagged}
                               label={label}
                               describedBy={describedBy}
                               onClick={

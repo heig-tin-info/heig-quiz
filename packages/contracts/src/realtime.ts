@@ -108,6 +108,8 @@ export const DashboardCellEvent = z.object({
   revision: z.number().int(),
   points: z.number().nullable(),
   summary: z.string().nullable(),
+  /** The student's review flag (issue #89); staff connections only. */
+  flagged: z.boolean(),
   /**
    * The verdict this answer WOULD get if the evaluation closed now, for the
    * deterministic types only (ADR-020). `null` when the type is graded by the

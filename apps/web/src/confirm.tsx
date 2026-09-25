@@ -15,6 +15,12 @@ export interface ConfirmOptions {
   cancelLabel?: string;
   /** Destructive: the confirm button turns red, never primary-styled. */
   danger?: boolean;
+  /**
+   * Focus Cancel instead of Confirm when the dialog opens: for an
+   * IRREVERSIBLE step reached by a shortcut (the player's "Validate and
+   * continue" on Ctrl+Enter), a habitual Enter must not confirm it.
+   */
+  focusCancel?: boolean;
 }
 
 type ConfirmFn = (options: ConfirmOptions) => Promise<boolean>;
@@ -54,12 +60,16 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
           onClose={() => settle(false)}
           footer={
             <>
-              <Button variant="ghost" onClick={() => settle(false)}>
+              <Button
+                variant="ghost"
+                autoFocus={pending.options.focusCancel === true}
+                onClick={() => settle(false)}
+              >
                 {pending.options.cancelLabel ?? t("common.cancel")}
               </Button>
               <Button
                 variant={pending.options.danger ? "danger" : "primary"}
-                autoFocus
+                autoFocus={pending.options.focusCancel !== true}
                 onClick={() => settle(true)}
               >
                 {pending.options.confirmLabel ?? t("common.confirm")}

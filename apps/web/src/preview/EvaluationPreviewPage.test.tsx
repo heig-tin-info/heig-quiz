@@ -79,6 +79,8 @@ const view = (): AttemptView => ({
       answer: null,
       revision: 0,
       markedDone: false,
+      skipped: false,
+      flagged: false,
       locked: false,
     },
     {
@@ -98,6 +100,8 @@ const view = (): AttemptView => ({
       answer: null,
       revision: 0,
       markedDone: false,
+      skipped: false,
+      flagged: false,
       locked: false,
     },
   ],

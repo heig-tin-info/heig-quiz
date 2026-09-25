@@ -85,6 +85,7 @@ describe("isStaffOnly", () => {
       revision: 3,
       points: null,
       summary: null,
+      flagged: true,
       verdict: null,
     } as const;
     expect(isStaffOnly(ServerEvent.parse(cell))).toBe(true);

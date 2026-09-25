@@ -1285,37 +1285,50 @@ describe("Ring", () => {
 
 describe("ProgressSegments", () => {
   const segments: Segment[] = [
-    { id: "q1", state: "done" },
-    { id: "q2", state: "answered" },
-    { id: "q3", state: "current" },
-    { id: "q4", state: "empty" },
+    { id: "q1", mark: "answered" },
+    { id: "q2", mark: "skipped", flagged: true },
+    { id: "q3", mark: "unanswered", current: true },
+    { id: "q4", mark: "unanswered", locked: true },
   ];
 
-  it("names every segment with its number and its state in words", () => {
+  it("names every segment with its number and its facts in words (issue #89)", () => {
     renderWithProviders(<ProgressSegments segments={segments} label="Progress" onSelect={() => {}} />);
     expect(screen.getByRole("navigation", { name: "Progress" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Question 1, done" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Question 2, opened, not marked done" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Question 4, not opened" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Question 1, answered" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Question 2, you won't answer it, flagged for review" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Question 4, not answered, closed" })).toBeInTheDocument();
   });
 
   it("marks the current one and gives it the only tab stop", () => {
     renderWithProviders(<ProgressSegments segments={segments} label="Progress" onSelect={() => {}} />);
-    const current = screen.getByRole("button", { name: "Question 3, current" });
+    const current = screen.getByRole("button", { name: "Question 3, not answered, current" });
     expect(current).toHaveAttribute("aria-current", "true");
     const stops = screen.getAllByRole("button").filter((b) => b.tabIndex === 0);
     expect(stops).toEqual([current]);
   });
 
-  it("gives each state its own bar, not just its own tint", () => {
+  it("draws each mark as a SHAPE with a symbol, not only a tint (colour-blind safe)", () => {
     const { container } = renderWithProviders(
       <ProgressSegments segments={segments} label="Progress" onSelect={() => {}} />,
     );
     const bars = Array.from(container.querySelectorAll("button > span:first-child"));
+    // Answered: solid, with a check inside.
     expect(bars[0]).toHaveClass("bg-fg");
-    expect(bars[1]).toHaveClass("bg-line-strong");
-    expect(bars[2]).toHaveClass("bg-accent", "h-2");
-    expect(bars[3]).toHaveClass("bg-surface-3");
+    expect(bars[0]!.querySelector("svg")).not.toBeNull();
+    // Won't answer: a dashed outline on a recessed fill, with a dash inside.
+    expect(bars[1]).toHaveClass("border-dashed", "bg-surface-3");
+    expect(bars[1]!.querySelector("svg")).not.toBeNull();
+    // Nothing yet: hollow, no symbol.
+    expect(bars[2]).toHaveClass("bg-surface");
+    expect(bars[2]!.querySelector("svg")).toBeNull();
+    // Where the student is: the accent outline, whatever the mark.
+    expect(bars[2]).toHaveClass("outline-accent");
+    // The flag sits by the number, and only on the flagged one.
+    const labels = Array.from(container.querySelectorAll("button > span:last-child"));
+    expect(labels[1]!.querySelector("svg")).not.toBeNull();
+    expect(labels[0]!.querySelector("svg")).toBeNull();
   });
 
   it("moves with the arrows, wraps, and jumps with Home and End", async () => {
@@ -1337,7 +1350,7 @@ describe("ProgressSegments", () => {
   it("hands the caller the id and the index it clicked", async () => {
     const onSelect = vi.fn();
     renderWithProviders(<ProgressSegments segments={segments} label="Progress" onSelect={onSelect} />);
-    await userEvent.click(screen.getByRole("button", { name: "Question 2, opened, not marked done" }));
+    await userEvent.click(screen.getByRole("button", { name: /^Question 2,/ }));
     expect(onSelect).toHaveBeenCalledWith("q2", 1);
   });
 
@@ -1363,7 +1376,9 @@ describe("ProgressSegments", () => {
     try {
       const many: Segment[] = Array.from({ length: 40 }, (_, i) => ({
         id: `q${i + 1}`,
-        state: i === 6 ? "current" : i < 6 ? "done" : "empty",
+        mark: i < 6 ? "answered" : "unanswered",
+        current: i === 6,
+        flagged: i === 30,
       }));
       const { container } = renderWithProviders(
         <ProgressSegments segments={many} label="Progress" onSelect={() => {}} />,
@@ -1375,7 +1390,11 @@ describe("ProgressSegments", () => {
       expect(numbers).toEqual(["1", "5", "7", "10", "15", "20", "25", "30", "35", "40"]);
       // The strip still names all forty of them for a screen reader.
       expect(screen.getAllByRole("button")).toHaveLength(40);
-      expect(screen.getByRole("button", { name: "Question 23, not opened" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Question 23, not answered" })).toBeInTheDocument();
+      // A flag is never thinned out with the numbers.
+      expect(
+        Array.from(container.querySelectorAll("button > span:last-child"))[30]!.querySelector("svg"),
+      ).not.toBeNull();
     } finally {
       width.mockRestore();
     }
@@ -1387,6 +1406,7 @@ describe("VerdictCell", () => {
     "blank",
     "inProgress",
     "answered",
+    "skipped",
     "done",
     "correct",
     "partial",

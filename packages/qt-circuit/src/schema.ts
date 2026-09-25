@@ -302,6 +302,15 @@ export const CircuitAnswer = z.object({
 });
 export type CircuitAnswer = z.infer<typeof CircuitAnswer>;
 
+/**
+ * Whether the answer holds something (issue #89): the ONE predicate behind
+ * both `isAnswered` hooks, server and client, so the student's list and the
+ * teacher's grid can never disagree about it.
+ */
+export function isCircuitAnswered(answer: CircuitAnswer): boolean {
+  return answer.schematic.components.length > 0 || answer.schematic.wires.length > 0;
+}
+
 // ---------------------------------------------------------------------------
 // Student view
 // ---------------------------------------------------------------------------

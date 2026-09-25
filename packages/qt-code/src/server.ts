@@ -20,6 +20,7 @@ import {
   emptyCodeConfig,
   totalCasePoints,
 } from "./schema.js";
+import { isCodeAnswered } from "./schema.js";
 
 export const codeServer: QuestionTypeServer<
   CodeConfig,
@@ -33,6 +34,7 @@ export const codeServer: QuestionTypeServer<
 
   configSchema: CodeConfig,
   answerSchema: CodeAnswer,
+  isAnswered: isCodeAnswered,
   studentSchema: CodeStudent,
   solutionSchema: CodeSolution,
   detailsSchema: CodeDetails,

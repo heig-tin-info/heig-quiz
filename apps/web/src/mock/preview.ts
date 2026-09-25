@@ -84,6 +84,8 @@ function viewOf(e: MockEvaluation, seed: number): AttemptView {
           answer: null,
           revision: 0,
           markedDone: false,
+          skipped: false,
+          flagged: false,
           locked: false,
         },
       ];

@@ -324,6 +324,19 @@ export interface QuestionTypeServer<
   summarizeAnswer?(config: TConfig, answer: TAnswer): string;
 
   /**
+   * Whether this answer holds SOMETHING (F-LIVE-08, issue #89): a question
+   * counts as answered as soon as it does, with no click. The server reads it
+   * to build the dashboard's progress and to clear an "I won't answer" when
+   * an answer is written; the client registry carries the same predicate
+   * (`QuestionTypeClient.isAnswered`) for the student's question list, and a
+   * package implements both from ONE function so the two never disagree.
+   *
+   * It never says whether the answer is right, and reads nothing of the key.
+   * `answer` has already been parsed by {@link answerSchema}.
+   */
+  isAnswered(answer: TAnswer): boolean;
+
+  /**
    * The per-type statistics of one item over the class (F-RES-03, audit
    * B-15): the answer distribution, a test-case pass rate.
    *

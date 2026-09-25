@@ -66,6 +66,18 @@ export function isAnswered(type: string, answer: unknown): boolean {
   }
 }
 
+/**
+ * The type's own empty answer, for "Clear" (issue #89, multiple choice only).
+ * `null` for a type the registry does not know: nothing is offered then.
+ */
+export function emptyAnswerOf(type: string, student: unknown): unknown {
+  try {
+    return questionTypeClient(type).emptyAnswer(student);
+  } catch {
+    return null;
+  }
+}
+
 export function QuestionHost({
   type,
   student,

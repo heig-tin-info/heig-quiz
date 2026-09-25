@@ -55,7 +55,7 @@
 | Id | Requirement |
 |---|---|
 | N-A11Y-01 | WCAG 2.1 AA conformance targeted on the student flows and the teacher dashboard: contrast, full keyboard navigation, visible focus, labels, screen reader on forms. |
-| N-A11Y-02 | The player is usable with the keyboard alone. Documented shortcuts: next question, previous question, mark as done. |
+| N-A11Y-02 | The player is usable with the keyboard alone. Documented shortcuts: next question, previous question, validate and continue (in the navigations that have it). |
 | N-A11Y-03 | Information is never carried by colour alone. The correct / wrong / partial states have an icon. |
 | N-A11Y-04 | Font size and browser zoom up to 200 % without loss of function. |
 | N-I18N-01 | Interface in French and in English, language chosen by the user, the browser's by default. Every string goes through the translation system. |

@@ -25,6 +25,7 @@ const state = () => initialGrid(makeDashboard(3, 4));
 function cellEvent(over: Partial<Extract<ServerEvent, { type: "dashboard.cell" }>> = {}) {
   return {
     type: "dashboard.cell",
+    flagged: false,
     evaluationId: EVALUATION_ID,
     attemptId: id("attempt", 0),
     itemId: ITEM(0),
@@ -83,6 +84,27 @@ describe("applyGridEvent — dashboard.cell", () => {
     for (const row of view.rows.slice(1, 23)) row.cells[0] = { ...row.cells[0]!, status: "done" };
     const after = applyGridEvent(initialGrid(view), cellEvent());
     expect(after.view.totals[0]!.completion).toBe(0.58);
+  });
+
+  it("lands a flag on its own: same revision, only the flag moved (issue #89)", () => {
+    const first = applyGridEvent(state(), cellEvent());
+    const flagged = applyGridEvent(first, cellEvent({ flagged: true }));
+    expect(flagged).not.toBe(first);
+    expect(flagged.view.rows[0]!.cells[0]!.flagged).toBe(true);
+    const unflagged = applyGridEvent(flagged, cellEvent({ flagged: false }));
+    expect(unflagged.view.rows[0]!.cells[0]!.flagged).toBe(false);
+  });
+
+  it("counts an answered, a skipped and a validated question toward completion, never a seen one", () => {
+    const before = state();
+    for (const [status, completion] of [
+      ["in_progress", 0.33],
+      ["skipped", 0.33],
+      ["done", 0.33],
+      ["seen", 0],
+    ] as const) {
+      expect(applyGridEvent(before, cellEvent({ status })).view.totals[0]!.completion).toBe(completion);
+    }
   });
 
   it("ignores an event addressed to another evaluation or to an unknown attempt", () => {
@@ -163,6 +185,7 @@ describe("applyGridEvent — dashboard.attempt", () => {
     const started = applyGridEvent(waiting(), event());
     const answered = applyGridEvent(started, {
       type: "dashboard.cell",
+      flagged: false,
       evaluationId: EVALUATION_ID,
       attemptId: id("attempt", 1),
       itemId: ITEM(0),
@@ -179,6 +202,7 @@ describe("applyGridEvent — dashboard.attempt", () => {
     // Two started rows, one of them done on Q1 — 50 %.
     const before = applyGridEvent(waiting(), {
       type: "dashboard.cell",
+      flagged: false,
       evaluationId: EVALUATION_ID,
       attemptId: id("attempt", 0),
       itemId: ITEM(0),

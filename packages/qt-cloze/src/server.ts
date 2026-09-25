@@ -21,6 +21,7 @@ import {
   type ClozeSolution,
   type ClozeStudent,
 } from "./schema.js";
+import { isClozeAnswered } from "./schema.js";
 
 /** Does this text hold at least one dropdown, the only shuffleable thing here? */
 export function hasSelectBlank(config: ClozeConfig): boolean {
@@ -39,6 +40,7 @@ export const clozeServer: QuestionTypeServer<
 
   configSchema: ClozeConfigSchema,
   answerSchema: ClozeAnswerSchema,
+  isAnswered: isClozeAnswered,
   studentSchema: ClozeStudentSchema,
   solutionSchema: ClozeSolutionSchema,
   detailsSchema: ClozeDetailsSchema,

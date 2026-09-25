@@ -26,6 +26,7 @@ import {
   emptyCircuitConfig,
   totalStimulusPoints,
 } from "./schema.js";
+import { isCircuitAnswered } from "./schema.js";
 
 export const circuitServer: QuestionTypeServer<
   CircuitConfig,
@@ -39,6 +40,7 @@ export const circuitServer: QuestionTypeServer<
 
   configSchema: CircuitConfig,
   answerSchema: CircuitAnswer,
+  isAnswered: isCircuitAnswered,
   studentSchema: CircuitStudent,
   solutionSchema: CircuitSolution,
   detailsSchema: CircuitDetails,

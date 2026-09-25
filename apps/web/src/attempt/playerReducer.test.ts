@@ -14,10 +14,10 @@ import {
 } from "./playerReducer";
 
 /*
- * The navigation rules, which exist twice on purpose: here and in
- * `lockedItemIds` of the live service. These tests are the client half of
- * that pair — same inputs, same answers, or a student is offered a move the
- * server answers with a 409.
+ * The navigation rules, read here and in `lockedItemIds` of the live service
+ * from ONE function (`@quiz/domain#lockedItems`). These tests are the client
+ * half of that pair — same inputs, same answers, or a student is offered a
+ * move the server answers with a 409.
  */
 
 const item = (n: number, over: Partial<AttemptView["items"][number]> = {}) => ({
@@ -30,6 +30,8 @@ const item = (n: number, over: Partial<AttemptView["items"][number]> = {}) => ({
   answer: null,
   revision: 0,
   markedDone: false,
+  skipped: false,
+  flagged: false,
   locked: false,
   ...over,
 });
@@ -193,5 +195,40 @@ describe("playerReducer: the server has the last word", () => {
     expect(canReach(state, 0)).toBe(true); // it is where the student already is
     const elsewhere = playerReducer(state, { type: "goto", itemId: "i2" });
     expect(canReach(elsewhere, 0)).toBe(false);
+  });
+});
+
+describe("playerReducer: won't answer and the review flag (issue #89)", () => {
+  const state = load(view("free", [item(1), item(2, { skipped: true, flagged: true })]));
+
+  it("loads both from the server", () => {
+    expect(state.items[1]).toMatchObject({ skipped: true, flagged: true });
+    expect(state.items[0]).toMatchObject({ skipped: false, flagged: false });
+  });
+
+  it("sets and takes back a skip, and toggles a flag", () => {
+    const skipped = playerReducer(state, { type: "skip", itemId: "i1", skipped: true });
+    expect(skipped.items[0]!.skipped).toBe(true);
+    const flagged = playerReducer(skipped, { type: "flag", itemId: "i1", flagged: true });
+    expect(flagged.items[0]).toMatchObject({ skipped: true, flagged: true });
+    expect(playerReducer(flagged, { type: "flag", itemId: "i1", flagged: false }).items[0]!.flagged).toBe(false);
+  });
+
+  it("clears the skip when an answer that holds something is written, not otherwise", () => {
+    const empty = playerReducer(state, { type: "answer", itemId: "i2", payload: { selected: [] }, answered: false });
+    expect(empty.items[1]!.skipped).toBe(true);
+    const written = playerReducer(state, { type: "answer", itemId: "i2", payload: { selected: [1] }, answered: true });
+    expect(written.items[1]).toMatchObject({ skipped: false, flagged: true });
+  });
+
+  it("returns the same state when nothing moved", () => {
+    expect(playerReducer(state, { type: "flag", itemId: "i2", flagged: true })).toBe(state);
+  });
+
+  it("refuses both on a validated question in forward_only", () => {
+    const fwd = load(view("forward_only", [item(1), item(2)]));
+    const done = playerReducer(fwd, { type: "done", itemId: "i1", done: true });
+    expect(playerReducer(done, { type: "skip", itemId: "i1", skipped: true })).toBe(done);
+    expect(playerReducer(done, { type: "flag", itemId: "i1", flagged: true })).toBe(done);
   });
 });

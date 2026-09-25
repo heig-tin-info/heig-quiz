@@ -17,6 +17,7 @@ export * from "./mcqScore.js";
 export * from "./pollTally.js";
 export * from "./poolRole.js";
 export * from "./pseudonym.js";
+export * from "./questionProgress.js";
 export * from "./roster.js";
 export * from "./round.js";
 export * from "./short.js";

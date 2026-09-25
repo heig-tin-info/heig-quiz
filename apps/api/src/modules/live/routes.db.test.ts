@@ -252,7 +252,7 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
     expect(item.revision).toBe(4);
   });
 
-  it("journals an attempt event and marks a question done", async () => {
+  it("journals an attempt event, and has nothing to validate in free navigation", async () => {
     expect(
       (await post(`/app/api/attempts/${attemptId}/events`, student.headers, { kind: "visibility" }))
         .statusCode,
@@ -262,9 +262,9 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
       student.headers,
       { done: true },
     );
-    expect(done.statusCode).toBe(200);
-    expect(done.json()).toMatchObject({ done: true });
-    expect(done.json().nextItemId).not.toBeNull();
+    // Issue #89: validation is the step of the locking navigations only.
+    expect(done.statusCode).toBe(409);
+    expect(done.json().error).toBe("not_validatable");
   });
 
   it("shows the grid with the cell the student just filled", async () => {
@@ -275,8 +275,48 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
     expect(dashboard.statusCode).toBe(200);
     const row = dashboard.json().rows.find((r: { userId: string }) => r.userId === student.id);
     expect(row.state).toBe("in_progress");
-    expect(row.cells[0].status).toBe("done");
+    expect(row.cells[0].status).toBe("in_progress");
     expect(row.cells[0].summary).toContain("Rome");
+  });
+
+  it("flags a question and skips another, for the student's own attempt only (issue #89)", async () => {
+    const view = await get(`/app/api/attempts/${attemptId}`, student.headers);
+    const other = view.json().view.items.find((i: { id: string }) => i.id !== itemId).id as string;
+
+    const flag = await post(`/app/api/attempts/${attemptId}/answers/${other}/flag`, student.headers, {
+      flagged: true,
+    });
+    expect(flag.statusCode).toBe(200);
+    expect(flag.json()).toMatchObject({ flagged: true });
+    expect(flag.json().serverNow).toBe(server.clock.now().toISOString());
+
+    // The first question holds "Rome": skipping it would erase an answer.
+    const refused = await post(`/app/api/attempts/${attemptId}/answers/${itemId}/skip`, student.headers, {
+      skipped: true,
+    });
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json().error).toBe("answered");
+
+    const skip = await post(`/app/api/attempts/${attemptId}/answers/${other}/skip`, student.headers, {
+      skipped: true,
+    });
+    expect(skip.statusCode).toBe(200);
+    expect(skip.json()).toMatchObject({ skipped: true });
+
+    // Somebody else's attempt is a 404, like every student route.
+    const foreign = await post(`/app/api/attempts/${attemptId}/answers/${other}/flag`, outsider.headers, {
+      flagged: false,
+    });
+    expect(foreign.statusCode).toBe(404);
+
+    const dashboard = await get(`/app/api/evaluations/${seed.evaluationId}/dashboard`, teacher.headers);
+    const row = dashboard.json().rows.find((r: { userId: string }) => r.userId === student.id);
+    const cell = row.cells.find((c: { itemId: string }) => c.itemId === other);
+    expect(cell).toMatchObject({ flagged: true, status: "skipped" });
+
+    const restored = await get(`/app/api/attempts/${attemptId}`, student.headers);
+    const item = restored.json().view.items.find((i: { id: string }) => i.id === other);
+    expect(item).toMatchObject({ flagged: true, skipped: true });
   });
 
   it("inspects one attempt, key included, for the teacher only (F-DASH-05)", async () => {
@@ -304,6 +344,20 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
     expect(late.statusCode).toBe(410);
     expect(late.json()).toMatchObject({ error: "attempt_closed", reason: "deadline" });
     expect(late.json().serverNow).toBe(server.clock.now().toISOString());
+
+    // The two state writes of issue #89 take the same gate.
+    for (const [action, body] of [
+      ["flag", { flagged: false }],
+      ["skip", { skipped: false }],
+    ] as const) {
+      const refused = await post(
+        `/app/api/attempts/${attemptId}/answers/${itemId}/${action}`,
+        student.headers,
+        body,
+      );
+      expect(refused.statusCode).toBe(410);
+      expect(refused.json()).toMatchObject({ error: "attempt_closed", reason: "deadline" });
+    }
     server.clock.set(new Date(deadline.getTime() - 60_000));
   });
 

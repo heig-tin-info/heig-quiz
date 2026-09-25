@@ -18,16 +18,21 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 
-import type {
-  AttemptClosed,
-  AttemptEventKind,
-  AttemptOrLobby,
-  AttemptView,
-  AutosaveResponse,
+import {
+  FlagBody,
+  FlagResponse,
+  MarkDoneBody,
   MarkDoneResponse,
-  RunAccepted,
-  RunnerResultEvent,
-  SubmitResponse,
+  SkipBody,
+  SkipResponse,
+  type AttemptClosed,
+  type AttemptEventKind,
+  type AttemptOrLobby,
+  type AttemptView,
+  type AutosaveResponse,
+  type RunAccepted,
+  type RunnerResultEvent,
+  type SubmitResponse,
 } from "@quiz/contracts";
 import type { RunnerOutcome } from "@quiz/core/server";
 
@@ -42,6 +47,17 @@ import {
   type PlayerState,
 } from "./playerReducer";
 import { attemptKey } from "../queryKeys";
+
+/**
+ * A write that depends on the answer (a validation, a skip) was not sent:
+ * the latest answer is not on the server yet. The player says so and keeps
+ * the question open (issue #89).
+ */
+export class UnsavedAnswer extends Error {
+  constructor() {
+    super("the latest answer is not saved yet");
+  }
+}
 
 /** Why the attempt stopped accepting writes. `null` while it is running. */
 interface ClosedInfo {
@@ -61,8 +77,17 @@ export interface UseAttempt {
   /** The teacher pressed pause (decision D17): everything is buffered. */
   paused: boolean;
   dispatch: (action: PlayerAction) => void;
-  setAnswer: (itemId: string, payload: unknown) => void;
+  /**
+   * `answered`: the payload holds something (the type's `isAnswered`). The
+   * caller knows the type; an answer takes back an "I won't answer".
+   */
+  setAnswer: (itemId: string, payload: unknown, answered?: boolean) => void;
+  /** F-LIVE-08: validate — "Validate and continue", crossing a checkpoint. */
   markDone: (itemId: string, done: boolean) => Promise<void>;
+  /** Issue #89: "I won't answer this question", or taking it back. */
+  skip: (itemId: string, skipped: boolean) => Promise<void>;
+  /** Issue #89: the review flag. */
+  flag: (itemId: string, flagged: boolean) => Promise<void>;
   submit: () => Promise<void>;
   run: (
     itemId: string,
@@ -286,12 +311,37 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
   }, [attemptId, current, closed, preview]);
 
   const setAnswer = useCallback(
-    (itemId: string, payload: unknown) => {
+    (itemId: string, payload: unknown, answered?: boolean) => {
       if (closed !== null) return;
-      dispatch({ type: "answer", itemId, payload });
+      dispatch({ type: "answer", itemId, payload, ...(answered === undefined ? {} : { answered }) });
       if (!preview) saver.change(itemId, payload);
     },
     [closed, saver, preview],
+  );
+
+  /**
+   * A `410` on one of the state writes below means what it means on the
+   * autosave: a pause keeps the attempt (D17), the three other reasons end
+   * it. The error is rethrown either way, so the button that asked can say
+   * its write did not land.
+   */
+  const gate = useCallback(
+    async <T,>(write: () => Promise<T>): Promise<T> => {
+      try {
+        return await write();
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 410) {
+          const body = error.body as AttemptClosed | null;
+          if (body?.reason === "paused") setPaused(true);
+          else {
+            setClosed({ reason: body?.reason ?? "deadline" });
+            saver.stop();
+          }
+        }
+        throw error;
+      }
+    },
+    [saver],
   );
 
   const markDone = useCallback(
@@ -300,14 +350,70 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
         dispatch({ type: "done", itemId, done });
         return;
       }
-      const response = await api<MarkDoneResponse>(
-        `/app/api/attempts/${attemptId}/answers/${itemId}/done`,
-        { method: "POST", body: JSON.stringify({ done }) },
+      // Validation locks the question: what the student typed last must be
+      // on the server before it closes. If it is not — a failed write whose
+      // retry is still pending — the question stays open and the caller says
+      // so, rather than locking an older answer for good.
+      if (!(await saver.settle(itemId))) throw new UnsavedAnswer();
+      const response = await gate(() =>
+        api<MarkDoneResponse>(`/app/api/attempts/${attemptId}/answers/${itemId}/done`, {
+          method: "POST",
+          body: JSON.stringify(MarkDoneBody.parse({ done })),
+        }),
       );
-      sample(response.serverNow);
+      sample(MarkDoneResponse.parse(response).serverNow);
       dispatch({ type: "done", itemId, done: response.done });
     },
-    [attemptId, closed, preview, sample],
+    [attemptId, closed, preview, sample, saver, gate],
+  );
+
+  const skip = useCallback(
+    async (itemId: string, skipped: boolean) => {
+      if (closed !== null) return;
+      if (preview) {
+        dispatch({ type: "skip", itemId, skipped });
+        return;
+      }
+      // The empty payload that made the question skippable must land BEFORE
+      // the skip, or the server still sees the answer it held and refuses.
+      if (!(await saver.settle(itemId))) throw new UnsavedAnswer();
+      const response = SkipResponse.parse(
+        await gate(() =>
+          api(`/app/api/attempts/${attemptId}/answers/${itemId}/skip`, {
+            method: "POST",
+            body: JSON.stringify(SkipBody.parse({ skipped })),
+          }),
+        ),
+      );
+      sample(response.serverNow);
+      dispatch({ type: "skip", itemId, skipped: response.skipped });
+    },
+    [attemptId, closed, preview, sample, saver, gate],
+  );
+
+  const flag = useCallback(
+    async (itemId: string, flagged: boolean) => {
+      if (closed !== null) return;
+      // Optimistic: a flag is a note to self, and a toggle that lags a round
+      // trip behind the click reads as a missed click. Put back on failure.
+      dispatch({ type: "flag", itemId, flagged });
+      if (preview) return;
+      try {
+        const response = FlagResponse.parse(
+          await gate(() =>
+            api(`/app/api/attempts/${attemptId}/answers/${itemId}/flag`, {
+              method: "POST",
+              body: JSON.stringify(FlagBody.parse({ flagged })),
+            }),
+          ),
+        );
+        sample(response.serverNow);
+      } catch (error) {
+        dispatch({ type: "flag", itemId, flagged: !flagged });
+        throw error;
+      }
+    },
+    [attemptId, closed, preview, sample, gate],
   );
 
   const submit = useCallback(async () => {
@@ -382,6 +488,8 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
       dispatch,
       setAnswer,
       markDone,
+      skip,
+      flag,
       submit,
       run,
       report,
@@ -397,6 +505,8 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
       paused,
       setAnswer,
       markDone,
+      skip,
+      flag,
       submit,
       run,
       report,

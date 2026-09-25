@@ -45,7 +45,7 @@ No policy ever goes below zero: answering is never worse than leaving the questi
   <figcaption>A single-answer question in the player, its choices shuffled for this student.</figcaption>
 </figure>
 
-The choices are large buttons with a letter, under the hint **Choose one answer.** or **Choose every correct answer.** The letters follow the student's order, not yours, when the evaluation shuffles. The answer is saved as it changes, and a question marked done shows a **Done** badge.
+The choices are large buttons with a letter, under the hint **Choose one answer.** or **Choose every correct answer.** The letters follow the student's order, not yours, when the evaluation shuffles. The answer is saved as it changes, and the question reads **Answered** as soon as a choice is ticked. **Clear my selection** withdraws every choice, which matters when a wrong one costs points.
 
 !!! tip
     Write wrong choices that a student with a specific misconception would pick. A choice nobody picks teaches you nothing in the results.

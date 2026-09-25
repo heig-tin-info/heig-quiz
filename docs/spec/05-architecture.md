@@ -156,7 +156,7 @@ Common columns omitted: `id uuid pk`, `created_at`, `updated_at`.
 | `evaluations` | `classroom_id`, `title`, `mode` exam / exercise / poll, `state`, `settings` jsonb, `grading_scale` jsonb, `feedback_policy` jsonb, `opens_at`, `closes_at`, `duration_s`, `access_code`, `ip_allowlist` text[], `released_at`, `released_grades` jsonb, `modified_after_release` bool | `settings` validated by a schema from `contracts`: navigation, presentation, shuffling, waiting room |
 | `evaluation_items` | `evaluation_id`, `position`, `question_version_id`, `points` numeric, `milestone` bool | unique (evaluation, position). Frozen copy of `question_version_id` |
 | `attempts` | `evaluation_id`, `user_id`, `state`, `seed` int, `started_at`, `deadline_at`, `bonus_s` int, `submitted_at`, `closed_at`, `closed_by` server / student / teacher, `last_position` int | unique (evaluation, user). Partial index `(deadline_at) WHERE state = 'in_progress'` for the ticker |
-| `answers` | `attempt_id`, `item_id`, `payload` jsonb, `revision` int, `marked_done` bool, `first_seen_at`, `updated_at` | unique (attempt, item). The payload is validated by the type's `answerSchema` |
+| `answers` | `attempt_id`, `item_id`, `payload` jsonb, `revision` int, `marked_done` bool (validated: "Validate and continue", a crossed checkpoint), `skipped` bool ("I won't answer"), `flagged` bool (review flag), `first_seen_at`, `updated_at` | unique (attempt, item). The payload is validated by the type's `answerSchema`. An accepted answer that holds something clears `skipped` (issue #89) |
 | `attempt_events` | `attempt_id`, `kind` visibility / focus / ip_change / reconnect / time_added / paused, `at`, `details` jsonb | Light anti-cheat and support log |
 | `guest_participants` | `evaluation_id`, `pseudonym`, `token_hash` | `poll` mode without an account, phase 2. A guest has an `attempts` row with `user_id` null and `guest_id` |
 
@@ -241,7 +241,7 @@ One stream per tab, `GET /events?watch=evaluation:<id>` or `watch=attempt:<id>`.
 | `evaluation.state` | `evaluation:<id>` | `state`, `pausedAt`, `closesAt` | students and teacher |
 | `attempt.deadline` | `attempt:<id>` | `deadlineAt`, `bonusS`, `reason` | one student, when the teacher adds time |
 | `attempt.closed` | `attempt:<id>` | `closedBy` | one student |
-| `dashboard.cell` | `evaluation:<id>` | `attemptId`, `itemId`, `status`, `revision`, `points` nullable | teacher, coalesced |
+| `dashboard.cell` | `evaluation:<id>` | `attemptId`, `itemId`, `status`, `revision`, `points` nullable, `flagged` (the student's review flag, issue #89) | teacher, coalesced |
 | `dashboard.presence` | `evaluation:<id>` | `userId`, `online`, `lastSeenAt` | teacher and waiting room |
 | `lobby.count` | `evaluation:<id>` | `present`, `enrolled` | waiting room |
 | `poll.tally` | `evaluation:<id>` | aggregated distribution | teacher and projection, coalesced 500 ms |

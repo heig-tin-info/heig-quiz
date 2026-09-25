@@ -277,3 +277,67 @@ describe("Autosave", () => {
     expect(save.unsaved).toEqual([]);
   });
 });
+
+describe("settle (issue #89)", () => {
+  it("resolves at once when nothing is pending", async () => {
+    const { save } = make();
+    await expect(save.settle("i1")).resolves.toBe(true);
+  });
+
+  it("skips the debounce and resolves once the latest payload is acknowledged", async () => {
+    const { save, sent } = make();
+    save.change("i1", "x");
+    let settled: boolean | null = null;
+    void save.settle("i1").then((saved) => {
+      settled = saved;
+    });
+    // Sent without waiting for the 300 ms debounce.
+    expect(sent).toHaveLength(1);
+    await Promise.resolve();
+    expect(settled).toBeNull();
+    sent[0]!.resolve(accepted(1));
+    await vi.waitFor(() => expect(settled).toBe(true));
+  });
+
+  it("waits for a change typed while the first request was in flight", async () => {
+    const { save, sent } = make();
+    save.change("i1", "x");
+    vi.advanceTimersByTime(300);
+    save.change("i1", "");
+    let settled: boolean | null = null;
+    void save.settle("i1").then((saved) => {
+      settled = saved;
+    });
+    sent[0]!.resolve(accepted(1));
+    await vi.waitFor(() => expect(sent).toHaveLength(2));
+    expect(settled).toBeNull();
+    expect(sent[1]!.body.payload).toBe("");
+    sent[1]!.resolve(accepted(2));
+    await vi.waitFor(() => expect(settled).toBe(true));
+  });
+
+  it("never rejects: a failed write answers false, the payload still pending", async () => {
+    const { save, sent } = make();
+    save.change("i1", "x");
+    const settled = save.settle("i1");
+    sent[0]!.reject(new ApiError(503, { error: "unavailable" }));
+    await expect(settled).resolves.toBe(false);
+    expect(save.unsaved).toEqual(["i1"]);
+  });
+
+  it("answers false at once while a failed payload waits for its retry (5xx, then validate)", async () => {
+    const { save, sent } = make();
+    save.change("i1", "x");
+    vi.advanceTimersByTime(300);
+    sent[0]!.reject(new ApiError(500, { error: "boom" }));
+    await vi.waitFor(() => expect(save.unsaved).toEqual(["i1"]));
+    // The newest payload is NOT on the server: a validation must not proceed.
+    await expect(save.settle("i1")).resolves.toBe(false);
+    // Once the retry lands, it is safe again.
+    vi.advanceTimersByTime(5_000);
+    await vi.waitFor(() => expect(sent).toHaveLength(2));
+    sent[1]!.resolve(accepted(1));
+    await vi.waitFor(() => expect(save.unsaved).toEqual([]));
+    await expect(save.settle("i1")).resolves.toBe(true);
+  });
+});

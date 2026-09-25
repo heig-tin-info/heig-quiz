@@ -87,8 +87,8 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 | F-LIVE-05 | Every change to an answer is sent to the server with a batching delay of at most 300 ms, and acknowledged. The interface shows an unsaved or offline state. | P1 | M |
 | F-LIVE-06 | After a reload or a reconnection, the student finds exactly the state of their answers and their position. | P1 | M |
 | F-LIVE-07 | The countdown is computed on the server clock. The client corrects its offset on every tick. The server accepts a write until the deadline plus 3 seconds of grace, then refuses. | P1 | M |
-| F-LIVE-08 | The student may mark a question as "done". In `forward_only`, marking as done is irreversible and moves to the next question. In `milestones`, crossing the milestone asks for a confirmation. | P1 | M |
-| F-LIVE-09 | A progress bar shows the questions, their done / seen / empty state, and allows going to one when the navigation permits it. | P1 | M |
+| F-LIVE-08 | A question counts as **answered** as soon as it holds an answer — the question type decides what an empty answer is — with no click. The student may say **"I won't answer this question"** on an empty question: it is settled on purpose, stored with the attempt, taken back by writing an answer, and graded like an empty answer (0). The student may **flag a question for review**: a toggle stored with the attempt, no effect on grading, shown to the staff on the live dashboard (F-DASH-01). A **multiple-choice** question offers **Clear**, which withdraws the selection (with negative points, a student must be able to); the other types are emptied by hand. In `forward_only`, an explicit **"Validate and continue"** step, confirmed, is irreversible and moves to the next question. In `milestones`, validating a checkpoint question asks for a confirmation and closes everything up to it. Every one of these writes goes through the write gate of F-LIVE-07. Decided in issue #89, which replaced the former "Mark as done". | P1 | M |
+| F-LIVE-09 | The question list shows every question with a distinct style, and a symbol besides the colour, for answered / not answered / "won't answer" / flagged, marks the current and the closed ones, and allows going to one when the navigation permits it. | P1 | M |
 | F-LIVE-10 | The student may hand in before the end after a confirmation. At the deadline the attempt is closed by the server. | P1 | M |
 | F-LIVE-11 | The teacher may pause, resume, add 1, 5 or 10 minutes to everybody or to one student, and close. Every action is propagated immediately and logged. | P1 | M |
 | F-LIVE-12 | A late student starts with the full duration in `duration` mode, or until the common end in `deadline` mode. The teacher may grant them time individually. | P1 | M |
@@ -99,10 +99,10 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 
 | Id | Requirement | Phase | Prio |
 |---|---|---|---|
-| F-DASH-01 | Grid with students as rows, questions as columns. Every cell shows the state: empty, in progress, done, and after grading correct / partial / wrong. | P1 | M |
+| F-DASH-01 | Grid with students as rows, questions as columns. Every cell shows the state: not opened, opened, answered, "won't answer", validated (`forward_only`, a crossed checkpoint), and after grading correct / partial / wrong. A cell the student flagged for review carries a flag, and each column header counts the students who flagged it — a question many students flag may be unclear (issue #89). Staff only: a student never sees another student's flags. | P1 | M |
 | F-DASH-02 | Toggles: show names, show answers, show results. Hidden names give a stable pseudonym per row. | P1 | M |
 | F-DASH-03 | Columns: running score, individual remaining time, connection state, last event. Sort by column. | P1 | M |
-| F-DASH-04 | Total row per question: completion rate, and after grading success rate. | P1 | M |
+| F-DASH-04 | Total row per question: completion rate — the share of started students who answered the question, said they would not, or validated it — and after grading success rate. | P1 | M |
 | F-DASH-05 | A click on a cell opens the student's answer read-only. | P1 | M |
 | F-DASH-06 | Full-screen mode suited to projection. | P1 | S |
 

@@ -9,6 +9,7 @@
 import { lazy } from "react";
 
 import type { QuestionTypeClient } from "@quiz/core/client";
+import { isCodeAnswered } from "./schema.js";
 
 import { initialRegions } from "./segments.js";
 import type { CodeAnswer, CodeConfig, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
@@ -62,9 +63,7 @@ export const codeClient: QuestionTypeClient<
     return { regions: [] };
   },
 
-  isAnswered(answer) {
-    return answer !== null && answer.regions.some((r) => r.trim() !== "");
-  },
+  isAnswered: (answer) => answer !== null && isCodeAnswered(answer),
 
   summarize(answer, student) {
     if (answer === null) return "—";
