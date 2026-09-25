@@ -72,19 +72,31 @@ variables:
 
 ## 4.4 Multiple choice `mcq`
 
-**Configuration**: `prompt` markdown, `choices[]` with `text` markdown and `correct`, `mode` `single` or `multiple`, optional `maxSelections`, `policy`, `penalty` factor from 0 to 1, default 1, `allowNegative` default false.
+**Configuration** (config version 2): `prompt` markdown, `choices[]` with `text` markdown and `correct`, `mode` `single` or `multiple`, optional `maxSelections`, `policy` one of the five below or `inherit` (default), `shuffleChoices`. Version 1 carried a `penalty` factor and an `allowNegative` flag; the v1 → v2 migration maps `partial` and `penalized` onto `symmetric` and drops both fields.
 
 **Answer**: `selected[]` indices of the choices in canonical order. Shuffling is applied by `toStudent`; the answer is always in canonical indices.
 
-**Scoring**, with C correct answers, W wrong ones, c correct ones ticked, w wrong ones ticked:
+**Which rule applies**, in this order:
+
+1. the evaluation uses **negative marking** (`settings.negativeMarking`, ADR-026): every choice question of the evaluation, single or multiple answer, is scored with the negative rule below, whatever its policy;
+2. otherwise a `single` question is always `all_or_nothing`;
+3. otherwise the question's own `policy`, or, when it says `inherit`, the evaluation's `mcqPolicy` (seeded at creation from the teacher's preference).
+
+**Scoring**, with C correct choices, W distractors, c correct ones ticked, w distractors ticked. The formulas live in `@quiz/domain/mcqScore`:
 
 | Policy | Formula | Comment |
 |---|---|---|
-| `all_or_nothing` | 1 if c = C and w = 0, otherwise 0 | Default for `single` |
-| `partial` | max(0, (c − w) / C) | One mistake cancels one correct answer |
-| `penalized` | max(0, c / C − penalty × w / W) | One mistake costs a fraction of W |
+| `all_or_nothing` | 1 if c = C and w = 0, otherwise 0 | Default |
+| `true_false` | (c + (W − w)) / (C + W) | Every choice is its own true/false item |
+| `discordance` | d = (C − c) + w; d = 0 → 1, 1 → 0.5, 2 → 0.2, more → 0 | French medical QRM convention |
+| `symmetric` | max(0, c/C − w/W) | Zero expectation before the floor |
+| `ripkey` | 0 if w > 0, otherwise c/C | One wrong tick voids the question |
 
-If `allowNegative` is true, the lower bound becomes −1. The result is multiplied by the item's points.
+The five policies lie in [0, 1]: a question is never worth less than no answer.
+
+**Negative marking** (evaluation setting, ADR-026): f = c/C − w/W, not floored, in [−1, 1]; with a single answer among n choices, +1 for the key and −1/(n − 1) for a distractor. No answer (nothing ticked, "I won't answer", cleared) is 0. Random guessing has an expected value of 0. The per-question points may be negative and are shown as such; the TOTAL of the evaluation is floored at 0 (`attemptTotal`), and the grade is computed from it. The student is told in the waiting room and on each choice question; a `poll` refuses the setting.
+
+The fraction is multiplied by the item's points and rounded to the hundredth.
 
 **Editor**: list of choices, one checkbox per choice to mark it correct, add with Enter, reorder by drag, live preview.
 

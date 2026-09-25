@@ -24,3 +24,18 @@ many correct ones the student ticked and `w` how many wrong ones.
 - **Ripkey** — `c/C`, cancelled to 0 by a single wrong tick. It pays a student who ticks only what they are sure of.
 
 No policy ever goes below zero: answering is never worse than not answering.
+
+## Negative marking
+
+An evaluation may switch on **negative marking**, under its advanced options.
+It then scores **every** choice question of that evaluation the same way,
+whatever policy the question names, one answer or several:
+
+- one correct answer among `n` choices: the right one earns 1, a wrong one costs `1/(n - 1)`;
+- several correct answers: `c/C - w/W`, the symmetric formula, not floored — it may reach -1;
+- no answer (nothing ticked, "I won't answer", cleared): 0.
+
+Guessing at random is worth 0 on average, so it no longer pays. The points
+of a question may be negative and are shown as such; the evaluation's total
+never goes below 0. Students are told in the waiting room and on each
+choice question.

@@ -75,6 +75,7 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 | F-EVAL-13 | An evaluation may enable the recommended full-screen mode and the logging of tab visibility changes. Nothing is blocking, everything is visible to the teacher. | P2 | S |
 | F-EVAL-14 | An evaluation can be duplicated to the same classroom or to another one. | P1 | S |
 | F-EVAL-15 | An `exercise` evaluation may allow several attempts, keeping the best or the last one (the teacher's choice), with an optional maximum. A retake starts blank, with a new question order, once the previous attempt is handed in and while the evaluation is open; the student sees the score of each attempt, not the correction, until the evaluation closes. Results, grade, CSV and statistics use the kept attempt. An exam keeps one attempt (ADR-025). | P2 | C |
+| F-EVAL-16 | An `exam` or `exercise` evaluation may use **negative marking**: every choice question is then scored so that a wrong answer costs points (single answer: +1 or −1/(n − 1); several: c/C − w/W, not floored) and no answer costs nothing. Per-question points may be negative; the evaluation total is floored at 0 and the grade computed from it. The student is told in the waiting room and on each choice question. Frozen once an attempt exists (ADR-026, issue #130). | P1 | S |
 
 ## F-LIVE Live run
 
@@ -114,7 +115,7 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 | F-GRADE-02 | The answers of LLM-graded types are sent anonymised to the configured provider, with the statement, the criteria grid and the reference answer. The proposal contains the points per criterion, a justification and a confidence. | P2 | M |
 | F-GRADE-03 | Grading panel: walk by student in quiz order, or by question across all students. The student's name is hidden by default. | P1 | M |
 | F-GRADE-04 | The teacher validates one proposal, a filtered batch, for example every high-confidence proposal, or every proposal of a question, or changes the points and a comment before validating. | P1 | M |
-| F-GRADE-05 | The teacher may override any grading, including an automatic one, with a mandatory comment. The previous grading is kept as `superseded`. | P1 | M |
+| F-GRADE-05 | The teacher may override any grading, including an automatic one, with a mandatory comment. The previous grading is kept as `superseded`. The points lie in [0, item points], or [−item points, item points] for a choice question under negative marking (F-EVAL-16). | P1 | M |
 | F-GRADE-06 | Re-grading: after publishing a new version of a question, the teacher may re-run the automatic grading of an item on every attempt. Every re-run grading carries the annotation "re-graded with version N" and the old one is kept. | P1 | M |
 | F-GRADE-07 | One teacher comment per answer is visible to the student according to the feedback policy. | P1 | S |
 | F-GRADE-08 | A student may report a question from their results with a reason. The teacher sees the reports on the grading panel. | P2 | S |
