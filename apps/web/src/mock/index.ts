@@ -43,6 +43,7 @@
  *   live.ts        3b. the teacher's controls on a live evaluation;
  *   student.ts     4.  the student's home, lobby and player;
  *   grading.ts     5.  grading, results and the student's feedback;
+ *   preview.ts     5b. the teacher's stateless preview of an evaluation;
  *   poll.ts        6.  the participant's poll page and the teacher's half.
  *
  * That list is also the dependency order, and the graph is acyclic: a file
@@ -104,6 +105,7 @@ import {
   studentLobbyView,
 } from "./student";
 import "./grading";
+import "./preview";
 import {
   polls,
   pollOfTeacher,

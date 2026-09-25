@@ -5,6 +5,7 @@ import {
   BarChart3,
   ClipboardCheck,
   Copy,
+  Eye,
   MonitorPlay,
   RotateCcw,
   Trash2,
@@ -19,7 +20,7 @@ import { gradingLinks } from "../grading";
 import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
-import { useSearchParam } from "../router";
+import { routeToPath, useSearchParam } from "../router";
 import {
   Badge,
   Button,
@@ -66,7 +67,9 @@ import { classroomKey, evaluationKey, evaluationsKey } from "../queryKeys";
  * walked the real thing. The second is now the `Teacher | Student` switch of
  * the application frame (ADR-018's addendum), reachable from every page
  * instead of this one, and with it gone the read-only sheet was the lesser
- * half of a pair that no longer exists.
+ * half of a pair that no longer exists. "Preview" came back (issue #75,
+ * ADR-018's fourth addendum) as a different thing: a stateless walk of the
+ * whole evaluation, in a tab of its own, answerable and graded at the end.
  */
 
 const STEPS = ["questions", "timing", "launch"] as const;
@@ -191,6 +194,15 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
     control?.focus();
   };
 
+  /**
+   * `noopener`, like every other `target="_blank"`: the preview needs nothing
+   * from this page, and this page keeps its own state (the step, a half-typed
+   * field) while the teacher walks the quiz in the other tab.
+   */
+  const openPreview = () => {
+    window.open(routeToPath({ view: "evaluationPreview", id }), "_blank", "noopener");
+  };
+
   const rename = (title: string) => {
     const parsed = EvaluationPatch.safeParse({ title });
     if (!parsed.success) return;
@@ -226,6 +238,13 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
         help="evaluation"
         actions={
           <>
+            {/* Issue #75: walk the whole evaluation as a student, statelessly,
+                in any state — in a new tab, so this page stays open to be
+                edited while the preview runs. Secondary: the primary belongs
+                to the step, never to the header. */}
+            <Button variant="secondary" onClick={openPreview}>
+              <Eye /> {t("eval.preview")}
+            </Button>
             {/* WP10: once it is closed, the correction is where this screen
                 leads — the configuration is history at that point. */}
             {isGraded(evaluation.state) ? (

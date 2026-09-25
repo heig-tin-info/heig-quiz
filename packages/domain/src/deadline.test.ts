@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { attemptDeadline, bonusSeconds, GRACE_MS, isWritable, remainingSeconds } from "./deadline.js";
+import {
+  attemptDeadline,
+  bonusSeconds,
+  GRACE_MS,
+  isWritable,
+  previewDurationS,
+  remainingSeconds,
+} from "./deadline.js";
 
 const startedAt = new Date("2026-09-20T08:00:00Z");
 const opensAt = new Date("2026-09-20T08:00:00Z");
@@ -95,5 +102,30 @@ describe("remainingSeconds", () => {
     expect(remainingSeconds(deadline, new Date("2026-09-20T08:29:00Z"))).toBe(60);
     expect(remainingSeconds(deadline, new Date("2026-09-20T08:31:00Z"))).toBe(0);
     expect(remainingSeconds(null, new Date())).toBeNull();
+  });
+});
+
+describe("previewDurationS", () => {
+  const none = { durationS: null, opensAt: null, closesAt: null };
+
+  it("is the duration of a duration evaluation", () => {
+    expect(previewDurationS({ ...none, timing: "duration", durationS: 1800 })).toBe(1800);
+    expect(previewDurationS({ ...none, timing: "duration" })).toBeNull();
+    expect(previewDurationS({ ...none, timing: "duration", durationS: 0 })).toBeNull();
+  });
+
+  it("is the announced window of a common-deadline evaluation", () => {
+    expect(previewDurationS({ ...none, timing: "deadline", opensAt, closesAt })).toBe(3600);
+    expect(previewDurationS({ ...none, timing: "deadline", closesAt })).toBeNull();
+    // A window that closes before it opens has no clock to rehearse.
+    expect(
+      previewDurationS({ ...none, timing: "deadline", opensAt: closesAt, closesAt: opensAt }),
+    ).toBeNull();
+  });
+
+  it("has no countdown in manual timing, whatever else is set", () => {
+    expect(
+      previewDurationS({ timing: "manual", durationS: 1800, opensAt, closesAt }),
+    ).toBeNull();
   });
 });

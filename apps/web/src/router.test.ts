@@ -95,6 +95,7 @@ describe("routeToPath / parsePath", () => {
     for (const r of [
       { view: "evaluation", id: "e-1" },
       { view: "live", id: "e-1" },
+      { view: "evaluationPreview", id: "e-1" },
     ] as const) {
       expect(parsePath(routeToPath(r))).toEqual(r);
     }
@@ -126,6 +127,7 @@ describe("ROUTES", () => {
     oauthConsent: { view: "oauthConsent", id: "0190d3c4-0000-7000-8000-000000000001" },
     feedback: { view: "feedback", attemptId: "a-1" },
     live: { view: "live", id: "e-1" },
+    evaluationPreview: { view: "evaluationPreview", id: "e-1" },
     poll: { view: "poll", id: "e-1" },
     grading: { view: "grading", evaluationId: "e-1" },
     results: { view: "results", evaluationId: "e-1" },
@@ -175,6 +177,7 @@ describe("ROUTES", () => {
         "classroom",
         "devUi",
         "evaluation",
+        "evaluationPreview",
         "feedback",
         "grading",
         "join",

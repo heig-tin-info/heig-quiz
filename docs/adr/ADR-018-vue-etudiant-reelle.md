@@ -350,3 +350,88 @@ of the frame (`StudentViewBanner`, `Shell.tsx`) is now also drawn by `App`
 above the attempt, for a teacher in student view only: "Back to teacher view"
 returns to the page the walk started from and leaves the attempt open. A
 student never sees it.
+
+## Addendum (2026-09-25, fourth) — a stateless preview of the whole evaluation
+
+### Context
+
+Issue #75. To check an evaluation before giving it — the item order, the
+shuffled choices, the blanks, the code questions and their test cases — a
+teacher had to start it, walk it with a staff seat, close it, reset the
+attempt and put the evaluation back to draft. The attempt of the record above
+answers "does this quiz work in production", and it pays for that with a
+real row: it exists only once the evaluation is running, and it freezes the
+structure like any other attempt. The second addendum had removed the old
+read-only "Preview as student", and `POST /evaluations/:id/preview` stayed on
+the server with no client.
+
+Two designs were offered on the issue: a real attempt flagged as a preview,
+deleted when the evaluation leaves draft, or a stateless preview whose answers
+live in the browser. The product owner chose the stateless one, with a
+countdown, the full correction at the end whatever the feedback policy, a
+visible banner, and availability in EVERY state of the evaluation.
+
+### Decision
+
+1. **A preview is a seed.** `POST /evaluations/:id/preview` (the dormant
+   route, moved to its own module `modules/preview`) draws a fresh seed and
+   answers `{ seed, durationS, view }`. `view` is `live.previewView` under
+   that seed — the builder of `attemptView`, so the item order, the choice
+   shuffles and `toStudent` (invariant 4) are exactly an attempt's.
+2. **Nothing is written.** No attempt, no answer, no journal entry, no
+   grading, no audit entry: the four routes are reads behind a POST
+   (`readOnly: true`, no refresh hint). A db test counts the rows before and
+   after a whole preview.
+3. **The browser holds the answers, and the clock.** The player is the
+   student's own `PlayerView`, driven by `usePreviewSession` instead of
+   `useAttempt` (same reducer, no autosave, no stream). The countdown is
+   `previewDurationS` (`@quiz/domain`): the duration, or `closesAt − opensAt`
+   for a common deadline, none in `manual` timing; it starts when the preview
+   arrives and reaching zero hands the paper in. Restart draws a new seed.
+4. **One grading call, rebuilt from the seed.**
+   `POST /evaluations/:id/preview/grade` takes `{ seed, answers }` and nothing
+   about a question: the items, their frozen versions, the order and the
+   shuffles are rebuilt server-side. Each answer is parsed by its type's
+   `answerSchema`, graded by `type.grade` with the evaluation's
+   `gradeDefaults` and item points, and a runner type runs its WHOLE request
+   (hidden cases included) and `finalizeRunner` — the two halves the grading
+   pass runs. The answer is the full correction (answer, key, explanation,
+   full details) with points per item, the total and the grade under the
+   evaluation's scale. A runner that is not there is an item marked
+   `runner_unavailable`, never a failed call (D14).
+5. **Run and Simulate work without an attempt.**
+   `POST /evaluations/:id/preview/run` and `/simulate` take the seed in place
+   of an attempt; the source is rebuilt from the stored template and the
+   regions (invariant 14), only the visible cases run, and the case
+   filtering and judging are the SAME helpers as `POST /attempts/:id/run`
+   (`live/visibleRun.ts`, extracted for this). Budgets: the question's own
+   runs per minute, and ten gradings per minute, per teacher, in memory — an
+   attempt counts its runs in its journal, and a preview has none.
+6. **Staff only, every state.** Every route loads the evaluation through
+   `loadEvaluation` (invariant 6): a teacher off the staff gets the 404 of a
+   missing evaluation. The preview touches nothing a student can see, so it
+   is open in draft, while running and after the release alike.
+7. **Where it lives.** A secondary "Preview" button in the evaluation header
+   opens `/evaluations/:id/preview` in a new tab, full screen like the
+   question preview, so the configuration stays open to be edited.
+
+### What it does not exercise
+
+The autosave and its revision race, the server clock and the 410 gate, the
+server-side lock enforcement (the player's reducer enforces the navigation
+rules, the server does not re-check them), the lobby, pause, the journal and
+the grading panel. That is the walk of decision 1 above, which stays: the two
+answer different questions, "is this the quiz I meant" and "does the exam
+path work".
+
+### Rejected alternatives
+
+1. **The real attempt flagged as a preview.** Proposed on the issue and
+   declined by the product owner as more than needed. It would also have had
+   to exist outside draft, where an attempt freezes the structure.
+2. **Trusting item content from the browser.** The client holds the student
+   view; grading it would grade what the browser says the question is. The
+   seed is enough to rebuild everything, so nothing else is sent.
+3. **Starting the preview with a query.** The refresh hints invalidate every
+   query, and a refetch would draw a new seed and drop the teacher's answers.
+   The start is a mutation.

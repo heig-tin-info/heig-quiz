@@ -30,6 +30,12 @@ export type Route =
   | { view: "evaluation"; id: string }
   /** The live grid of one evaluation. */
   | { view: "live"; id: string }
+  /**
+   * The teacher walks the whole evaluation as a student, statelessly, and
+   * gets the full correction (issue #75). Opened in a new tab from the
+   * evaluation page, so the configuration stays open beside it.
+   */
+  | { view: "evaluationPreview"; id: string }
   /** The poll launcher: pick or write the question, then the wall (F-LIVE-13). */
   | { view: "polls" }
   /** The projection of a poll: the question, the tally, the QR (F-LIVE-14). */
@@ -95,7 +101,7 @@ function fixed<V extends Route["view"]>(
   };
 }
 
-type EvaluationTailView = "live" | "poll" | "grading" | "results";
+type EvaluationTailView = "live" | "poll" | "grading" | "results" | "evaluationPreview";
 
 /** `/evaluations/:id/<tail>`: one of the screens that hang off an evaluation. */
 function evaluationTail<V extends EvaluationTailView>(
@@ -125,8 +131,8 @@ function evaluationIdOf(route: RouteOf<EvaluationTailView | "evaluation">): stri
  * are told apart by their first segment and could sit anywhere; the one
  * place order matters is the evaluation family: `evaluation` accepts ANY
  * tail after the id — an unknown tail lands on the configuration screen
- * rather than on the home — so it comes after `live`, `poll`, `grading` and
- * `results`. `home` matches nothing: it is the fallback.
+ * rather than on the home — so it comes after `live`, `poll`, `grading`,
+ * `results` and `evaluationPreview`. `home` matches nothing: it is the fallback.
  */
 export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   home: { path: () => "/", match: () => null, studentSafe: true, section: "home" },
@@ -209,6 +215,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   // WP8 + WP10: ONE place decides what follows an evaluation id, so a new
   // tail is an entry here and nowhere else.
   live: evaluationTail("live", (id) => ({ view: "live", id }), { evaluationId: evaluationIdOf }),
+  evaluationPreview: evaluationTail("preview", (id) => ({ view: "evaluationPreview", id })),
   // The projection IS the poll: the launcher's row stays lit while it is up.
   poll: evaluationTail("poll", (id) => ({ view: "poll", id }), { section: "polls" }),
   grading: evaluationTail("grading", (evaluationId) => ({ view: "grading", evaluationId }), {

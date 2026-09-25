@@ -82,8 +82,8 @@ describe("the teacher's authoring surface (§4.3)", () => {
   it("previews as a student, without creating an attempt", async () => {
     const preview = await post(`/app/api/evaluations/${seed.evaluationId}/preview`, teacher.headers);
     expect(preview.statusCode).toBe(200);
-    expect(preview.json().attempt.preview).toBe(true);
-    expect(preview.json().items).toHaveLength(2);
+    expect(preview.json().view.attempt.preview).toBe(true);
+    expect(preview.json().view.items).toHaveLength(2);
     expect(JSON.stringify(preview.json())).not.toContain("answer-q0");
   });
 

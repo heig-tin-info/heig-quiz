@@ -30,7 +30,6 @@ import { tracer, type AuditAction } from "../../audit.js";
 import { hasKey, loadConfig, typeOf } from "../pool/config.js";
 import { findAccessibleClassroom, loadEvaluation, teacherGuard } from "../guards.js";
 import { notFound, teacherRoute } from "../http.js";
-import * as live from "../live/service.js";
 import { evaluationChanged } from "./events.js";
 import * as service from "./service.js";
 
@@ -300,7 +299,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
     ),
   );
 
-  // --- State and preview -------------------------------------------------
+  // --- State ---------------------------------------------------------------
 
   app.post(
     "/app/api/evaluations/:id/state",
@@ -319,16 +318,6 @@ export async function evaluationPlugin(app: FastifyInstance) {
     ),
   );
 
-  /**
-   * "See it as a student" (§4.3): a REAL student view built by
-   * `studentView()`, with seed 0 and no attempt row anywhere. The teacher
-   * cannot answer it, so nothing can be persisted by accident.
-   */
-  app.post(
-    "/app/api/evaluations/:id/preview",
-    { preHandler: requireTeacher },
-    teacher({ params: IdParam, load: staffEvaluation }, ({ now, scope }) =>
-      live.previewView(app.db, scope.evaluation, now),
-    ),
-  );
+  // "See it as a student" moved to `modules/preview` (issue #75): the same
+  // `POST /evaluations/:id/preview`, now with a fresh seed and a grading.
 }

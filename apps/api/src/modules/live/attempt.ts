@@ -707,16 +707,19 @@ export async function attemptView(
 }
 
 /**
- * The teacher's "see it as a student" (§4.3): a real student view, with seed
- * 0 so it is stable between reloads, and NO attempt row anywhere.
+ * The teacher's "see it as a student" (§4.3): a real student view, and NO
+ * attempt row anywhere. Seed 0 by default, so it is stable between reloads;
+ * the stateless preview of issue #75 passes the seed it drew instead, and
+ * gets exactly the order and the shuffles an attempt of that seed would.
  */
 export async function previewView(
   db: Db,
   evaluation: EvaluationRecord,
   now: Date,
+  seed = 0,
 ): Promise<AttemptView> {
   return viewOf(db, evaluation, {
-    seed: 0,
+    seed,
     answered: new Map(),
     header: {
       id: PREVIEW_ATTEMPT_ID,
