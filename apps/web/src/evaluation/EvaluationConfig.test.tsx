@@ -142,6 +142,21 @@ describe("EvaluationConfig", () => {
     });
   });
 
+  it("the matched preset's card says the values in force, the other what it would set (#87)", async () => {
+    const base = makeEvaluationDetail();
+    mockFetch(routes({ ...base, evaluation: { ...base.evaluation, durationS: 30 * 60 } }));
+    renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+      route: "/evaluations/x?step=timing",
+    });
+    const inClass = await screen.findByRole("button", { name: /in-class evaluation/i });
+    expect(inClass).toHaveAttribute("aria-pressed", "true");
+    expect(inClass).toHaveTextContent(/^In-class evaluation30 minutes each, waiting room opened by you/);
+    expect(inClass).not.toHaveTextContent(/45/);
+    expect(screen.getByRole("button", { name: /homework exercise/i })).toHaveTextContent(
+      /Sets a common deadline/,
+    );
+  });
+
   /*
    * "Time and mode" is the densest form of the flow: a duration, two dates
    * and three segmented controls, plus everything the advanced disclosure

@@ -14,12 +14,14 @@ import {
   cx,
   Field,
   FormError,
+  isoDateTime,
   SectionHeading,
   Segmented,
   SettingRow,
 } from "../ui";
 import { AdvancedDisclosure } from "./AdvancedDisclosure";
 import { matchPreset, presetPatch, type PresetId } from "./presets";
+import { presetSummary } from "./presetSummary";
 import { missingTiming, missingTimingKey, TIMING_FIELD_ID, type TimingField } from "./timing";
 import type { useEvaluationPatch } from "./usePatch";
 
@@ -47,14 +49,20 @@ function fromLocalInput(value: string): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
+/**
+ * One preset. The card in force says what IS set — `summary`, built from the
+ * values below it (#87) — and the others what picking them would set.
+ */
 function PresetCard({
   id,
   active,
+  summary,
   onPick,
   disabled,
 }: {
   id: PresetId;
   active: boolean;
+  summary: string;
   onPick: () => void;
   disabled: boolean;
 }) {
@@ -81,7 +89,7 @@ function PresetCard({
         {t(`eval.preset.${id}` as keyof Dict)}
       </span>
       <span className="mt-1 block text-[13px] text-fg-muted">
-        {t(`eval.preset.desc.${id}` as keyof Dict)}
+        {active ? summary : t(`eval.preset.desc.${id}` as keyof Dict)}
       </span>
     </button>
   );
@@ -126,6 +134,7 @@ export function TimingStep({
   const locked = !detail.editable;
   const lock = configLock(state, detail.attemptCount);
   const preset = matchPreset(detail);
+  const summary = presetSummary(detail.evaluation, t, isoDateTime);
   // Empty while nothing is stored: a "45" the server does not have was a
   // duration the teacher believed set, and the waiting room then refused to
   // open for want of it (#76). The 45 stays, as a placeholder.
@@ -177,6 +186,7 @@ export function TimingStep({
             key={id}
             id={id}
             active={preset === id}
+            summary={summary}
             disabled={locked}
             onPick={() => patch.mutate(presetPatch(id, mode))}
           />
