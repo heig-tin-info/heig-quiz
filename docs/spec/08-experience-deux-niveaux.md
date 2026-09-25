@@ -69,7 +69,7 @@ The actions are provided by the mounted screens, through a command registry in `
 | Editor | `Ctrl+Enter` | Try the question |
 | Code editor | those of VS Code | Monaco |
 | Student player | `Alt+→` `Alt+←` | Next / previous question |
-| Student player | `Ctrl+Enter` | Mark as done, or run the code in a code question |
+| Student player | `Ctrl+Enter` | "Validate and continue", where the navigation has one (`forward_only`, a checkpoint question in `milestones`); it opens the same confirmation as the button. Nothing in `free`, where a question is answered as soon as it holds an answer (issue #89) |
 | Dashboard | `n` `r` `s` | Toggle names / answers / results |
 | Dashboard | `Space` | Pause / resume |
 | Grading | `v` `→` | Validate and move on to the next |
