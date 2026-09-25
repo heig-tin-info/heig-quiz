@@ -270,6 +270,8 @@ interface MockRowState {
   lastSeenAt: string | null;
   deadlineAt: string | null;
   timeBonusPercent: number;
+  /** F-EVAL-15: the row shows the latest attempt; this many were taken. */
+  attemptCount: number;
   points: null;
   maxPoints: number;
   cells: MockCell[];
@@ -356,9 +358,15 @@ function makeItems(count: number): MockItem[] {
   });
 }
 
+/** F-EVAL-15, as the server reads it: an exercise whose retakes are on. */
+const retakesOnMock = (e: MockEvaluation): boolean =>
+  e.mode === "exercise" &&
+  (e.settings as { retakes?: { enabled?: boolean } }).retakes?.enabled === true;
+
 export function makeRows(e: MockEvaluation, started: boolean): MockRowState[] {
   const roster = classroomRoster(e.classroomId);
   const maxPoints = e.items.reduce((sum, i) => sum + i.points, 0);
+  const retaking = retakesOnMock(e);
   return roster.map((student, index) => {
     // A deterministic spread: some are ahead, some have not opened it.
     const progress = started ? Math.min(e.items.length, Math.floor(rand() * (e.items.length + 2))) : 0;
@@ -383,6 +391,8 @@ export function makeRows(e: MockEvaluation, started: boolean): MockRowState[] {
       lastSeenAt: online ? iso(-2000) : hasAttempt ? iso(-40_000) : null,
       deadlineAt: hasAttempt ? iso(12 * 60_000 + index * 1000) : null,
       timeBonusPercent: student.timeBonusPercent,
+      // An exercise with retakes: every third student is on a later attempt.
+      attemptCount: !hasAttempt ? 0 : retaking && index % 3 === 1 ? 2 + (index % 2) : 1,
       points: null,
       maxPoints,
       cells: e.items.map((item, i) => {
@@ -479,6 +489,8 @@ export function makeEvaluation(
 }
 
 export const evaluations: MockEvaluation[] = [];
+/** The draft exercise with retakes (F-EVAL-15), addressable by id. */
+export const RETAKE_DRAFT_ID = "eeeeeeee-0000-4000-8000-000000000015";
 /** The classroom every seeded evaluation belongs to (`r1`, emptied or not). */
 export const EVAL_ROOM = "r1";
 
@@ -520,8 +532,35 @@ function seedEvaluations() {
       startedAt: iso(-13 * 60_000),
       closesAt: iso(12 * 60_000),
     }),
+    // F-EVAL-15: a draft exercise with retakes on, at a fixed id so the
+    // screenshot script can open its timing step (the `draft` alias is the
+    // exam above).
+    makeEvaluation(room.id, "Série 5 — entraînement libre", "draft", 4, {
+      id: RETAKE_DRAFT_ID,
+      mode: "exercise",
+      durationS: null,
+      settings: {
+        ...defaultEvaluationSettings(),
+        timing: "manual",
+        lobby: "skip",
+        retakes: { enabled: true, keep: "best", maxAttempts: 3 },
+      },
+      feedbackPolicy: {
+        when: "immediate",
+        showAnswer: true,
+        showKey: true,
+        showExplanation: true,
+        showHiddenCaseNames: true,
+        showTeacherComment: true,
+      },
+    }),
     makeEvaluation(room.id, "Exercice — allocation dynamique", "paused", 5, {
       mode: "exercise",
+      // F-EVAL-15: several attempts, the best one kept, three at most.
+      settings: {
+        ...defaultEvaluationSettings(),
+        retakes: { enabled: true, keep: "best", maxAttempts: 3 },
+      },
       startedAt: iso(-30 * 60_000),
       closesAt: iso(8 * 60_000),
       pausedAt: iso(-60_000),
@@ -580,6 +619,7 @@ function staffRow(e: MockEvaluation): MockRowState {
     lastSeenAt: iso(-5 * 60_000),
     deadlineAt: null,
     timeBonusPercent: 0,
+    attemptCount: 1,
     points: null,
     maxPoints,
     cells: e.items.map((item, i) => ({
@@ -707,6 +747,7 @@ export const dashboardView = (e: MockEvaluation, includeAnswers: boolean) => {
       pausedAt: e.pausedAt,
       closesAt: e.closesAt,
       serverNow: iso(0),
+      retakes: retakesOnMock(e),
     },
     items: e.items.map((i) => ({
       id: i.id,
@@ -843,7 +884,16 @@ on("PATCH", "/app/api/evaluations/:id", (m, body) => {
       message: "a poll's feedback follows its reveal: use the poll's reveal route",
     });
   }
-  const settings = body.settings as { lobby?: LobbyName } | undefined;
+  const settings = body.settings as
+    | { lobby?: LobbyName; retakes?: { enabled?: boolean } }
+    | undefined;
+  // F-EVAL-15: an exam takes one attempt, as on the server.
+  if (settings?.retakes?.enabled === true && e.mode !== "exercise") {
+    throw new MockPayload(422, {
+      error: "retakes_not_allowed",
+      message: `an evaluation of mode "${e.mode}" takes one attempt (F-EVAL-15)`,
+    });
+  }
   const feedback = body.feedbackPolicy as { when?: FeedbackWhen } | undefined;
   // F-EVAL-11, #78: the server refuses `immediate` in class, whichever half
   // of the pair the patch moves, and writes nothing.

@@ -59,6 +59,9 @@ const STUDENT_EVAL_NEXT = "11111111-1111-4111-8111-111111111112";
 const STUDENT_EVAL_PAST = "11111111-1111-4111-8111-111111111113";
 export const STUDENT_ATTEMPT = "22222222-2222-4222-8222-222222222222";
 export const STUDENT_PAST_ATTEMPT = "22222222-2222-4222-8222-222222222223";
+/** F-EVAL-15: an exercise the student already sat twice and may sit again. */
+export const STUDENT_EVAL_RETAKE = "11111111-1111-4111-8111-111111111114";
+export const STUDENT_RETAKE_ATTEMPT = "22222222-2222-4222-8222-222222222224";
 const studentItem = (n: number) => `aaaaaaaa-0000-4000-8000-00000000000${n}`;
 
 /** The evaluation's state follows the scene; everything else is fixed. */
@@ -380,6 +383,32 @@ on("GET", "/app/api/student/home", (): StudentHomeData => {
         attemptState: scene === "lobby" ? null : "in_progress",
         grade: null,
         deadlineAt: scene === "lobby" ? null : new Date(studentDeadline).toISOString(),
+        retakes: null,
+      },
+      {
+        id: STUDENT_EVAL_RETAKE,
+        title: "Série 3 — Pointeurs, entraînement",
+        mode: "exercise",
+        state: "running",
+        ...room,
+        opensAt: iso(-2 * D),
+        closesAt: iso(5 * D),
+        durationS: null,
+        attemptId: STUDENT_RETAKE_ATTEMPT,
+        attemptState: "submitted",
+        grade: null,
+        deadlineAt: null,
+        retakes: {
+          keep: "best",
+          maxAttempts: 3,
+          attemptCount: 2,
+          canRetake: true,
+          kept: {
+            attemptId: STUDENT_RETAKE_ATTEMPT,
+            attemptNumber: 2,
+            score: { points: 7.5, totalPoints: 10, pending: false },
+          },
+        },
       },
     ],
     upcoming: [
@@ -396,6 +425,7 @@ on("GET", "/app/api/student/home", (): StudentHomeData => {
         attemptState: null,
         grade: null,
         deadlineAt: null,
+        retakes: null,
       },
     ],
     past: [
@@ -412,11 +442,27 @@ on("GET", "/app/api/student/home", (): StudentHomeData => {
         attemptState: "submitted",
         grade: null,
         deadlineAt: null,
+        retakes: null,
       },
     ],
     serverNow: new Date().toISOString(),
   };
 });
+
+// F-EVAL-15: the retake opens a fresh attempt; the mock hands back the one
+// attempt view it has, which is what the player then enters.
+on("POST", "/app/api/evaluations/:id/retake", () => ({
+  kind: "attempt",
+  view: studentAttemptView(),
+}));
+
+// Between two attempts the student reads the score and nothing else (ADR-025).
+on("GET", `/app/api/attempts/${STUDENT_RETAKE_ATTEMPT}/feedback`, () => ({
+  available: false,
+  reason: "retakes_open",
+  evaluation: { id: STUDENT_EVAL_RETAKE, title: "Série 3 — Pointeurs, entraînement" },
+  score: { points: 7.5, totalPoints: 10, pending: false },
+}));
 
 on("POST", "/app/api/evaluations/:id/attempt", () =>
   scene === "lobby"

@@ -71,6 +71,34 @@ export type McqPolicy = z.infer<typeof McqPolicy>;
 /** What an evaluation gets when its creator expressed no preference. */
 export const DEFAULT_MCQ_POLICY = "all_or_nothing" satisfies McqPolicy;
 
+/** F-EVAL-15: which attempt is a student's result when an exercise allows several. */
+export const RetakeKeep = z.enum(["best", "last"]);
+export type RetakeKeep = z.infer<typeof RetakeKeep>;
+
+/**
+ * F-EVAL-15 (ADR-025, #92): several attempts on an `exercise`. Refused on an
+ * exam by the server. `maxAttempts` counts every attempt, the first one
+ * included; `null` is unlimited. Structural, like the rest of the settings:
+ * frozen once an attempt exists and while the evaluation runs.
+ */
+export const RetakeSettings = z.object({
+  enabled: z.boolean().default(false),
+  keep: RetakeKeep.default("best"),
+  maxAttempts: z.number().int().min(2).max(100).nullable().default(null),
+});
+export type RetakeSettings = z.infer<typeof RetakeSettings>;
+
+/** A stored evaluation without the field: one attempt, as before #92. */
+export const defaultRetakes = (): RetakeSettings => ({
+  enabled: false,
+  keep: "best",
+  maxAttempts: null,
+});
+
+/** The retake rule of an evaluation's settings; absent is {@link defaultRetakes}. */
+export const retakesOf = (settings: { retakes?: RetakeSettings | undefined }): RetakeSettings =>
+  settings.retakes ?? defaultRetakes();
+
 export const EvaluationSettings = z.object({
   navigation: Navigation.default("free"),
   presentation: Presentation.default("zen"),
@@ -84,6 +112,11 @@ export const EvaluationSettings = z.object({
   /** F-EVAL-13: tab visibility changes are journalled, never blocked. */
   logVisibility: z.boolean().default(true),
   requireFullscreen: z.boolean().default(false),
+  /**
+   * F-EVAL-15. Absent on every evaluation that never set it, and absent
+   * means one attempt: read it through {@link retakesOf}, never raw.
+   */
+  retakes: RetakeSettings.optional(),
   /** Only on a `poll` evaluation (`./poll.ts`); absent everywhere else. */
   poll: z
     .object({ anonymous: z.boolean().default(false), revealed: z.boolean().default(false) })
@@ -255,6 +288,8 @@ export const EvaluationSettingsPatch = z.object({
   showProgressBar: z.boolean().optional(),
   logVisibility: z.boolean().optional(),
   requireFullscreen: z.boolean().optional(),
+  /** Replaced whole: the three fields of the retake rule travel together. */
+  retakes: RetakeSettings.optional(),
   poll: EvaluationSettings.shape.poll,
 });
 export type EvaluationSettingsPatch = z.infer<typeof EvaluationSettingsPatch>;

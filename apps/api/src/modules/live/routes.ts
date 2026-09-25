@@ -73,6 +73,11 @@ export async function livePlugin(app: FastifyInstance) {
         .code(429)
         .send({ error: error.code });
     }
+    if (error instanceof service.RetakeRefused) {
+      return reply
+        .code(error.status)
+        .send({ error: error.code, reason: error.reason, message: error.message });
+    }
     if (error instanceof service.RunnerDown) {
       // `reason` beside `message`: the player names the failure with it
       // ("busy", "not_configured", "timeout") without parsing a sentence.
@@ -152,6 +157,38 @@ export async function livePlugin(app: FastifyInstance) {
         return result.kind === "lobby"
           ? { kind: "lobby", view: result.view }
           : { kind: "attempt", view: result.view };
+      },
+    ),
+  );
+
+  /**
+   * F-EVAL-15 (ADR-025): another attempt on an exercise that allows several.
+   * The rule is the server's (`retakeRefusal`); a refusal is `409
+   * retake_refused` with its reason. A success answers what entering does,
+   * on the NEW attempt, so the player opens on it directly.
+   */
+  app.post(
+    "/app/api/evaluations/:id/retake",
+    { preHandler: requireSession },
+    student(
+      {
+        params: IdParam,
+        load: (req, reply, p) => reachableEvaluation(app, req, reply, p.id),
+      },
+      async ({ req, reply, now, scope }) => {
+        const participant = await service.participantOf(app.db, scope.evaluation, req.user!.id);
+        if (!participant) return notFound(reply);
+        const attempt = await service.retakeAttempt(app.db, {
+          evaluation: scope.evaluation,
+          participant,
+          ip: req.ip,
+          now,
+        });
+        await trace(req, "attempt.retake", "attempt", attempt.id, {
+          evaluationId: scope.evaluation.id,
+          attemptNumber: attempt.attemptNumber,
+        });
+        return service.attemptOrLobbyView(app.db, scope.evaluation, attempt, now);
       },
     ),
   );
@@ -290,7 +327,8 @@ export async function livePlugin(app: FastifyInstance) {
     "/app/api/attempts/:id/submit",
     { preHandler: requireSession },
     student({ params: IdParam, body: SubmitBody, load: own }, async ({ now, scope }) => {
-      const row = await service.submitAttempt(app.db, scope.evaluation, scope.attempt, now);
+      // An exercise with retakes grades the attempt this request finished.
+      const row = await service.submitAttempt(app.db, scope.evaluation, scope.attempt, now, app);
       return {
         state: row.state,
         submittedAt: iso(row.submittedAt ?? now),

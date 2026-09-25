@@ -10,10 +10,10 @@ import { GRACE_MS } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { attempts, evaluations } from "../../db/schema.js";
-import { applyState, settingsOf, type EvaluationRecord } from "../evaluation/service.js";
+import { applyState, byId, settingsOf, type EvaluationRecord } from "../evaluation/service.js";
 import * as events from "./events.js";
 import { presence } from "../realtime/presence.js";
-import { type AttemptRecord, enrolledCounts } from "./attempt.js";
+import { type AttemptRecord, enrolledCounts, gradeFinishedRetakes } from "./attempt.js";
 import { startEvaluation, closeEvaluation } from "./control.js";
 
 // --- Ticker tasks (§5.3) --------------------------------------------------
@@ -32,6 +32,7 @@ import { startEvaluation, closeEvaluation } from "./control.js";
 export async function expireDueAttempts(
   db: Db,
   now: Date,
+  app?: FastifyInstance,
 ): Promise<{ id: string; evaluationId: string }[]> {
   const cutoff = new Date(now.getTime() - GRACE_MS);
   const closed = await db
@@ -56,6 +57,18 @@ export async function expireDueAttempts(
       "server",
       now,
     );
+  }
+  // An exercise with retakes grades each attempt as it ends (ADR-025), the
+  // ones time ran out on included: the student reads that score next.
+  if (app) {
+    const byEvaluation = new Map<string, string[]>();
+    for (const row of closed) {
+      byEvaluation.set(row.evaluationId, [...(byEvaluation.get(row.evaluationId) ?? []), row.id]);
+    }
+    for (const [evaluationId, ids] of byEvaluation) {
+      const evaluation = await byId(db, evaluationId);
+      if (evaluation) await gradeFinishedRetakes(app, evaluation, ids);
+    }
   }
   return closed;
 }

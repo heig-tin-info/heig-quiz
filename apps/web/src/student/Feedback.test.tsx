@@ -45,6 +45,24 @@ describe("student feedback", () => {
     expect(await screen.findByText("No feedback for this evaluation")).toBeVisible();
   });
 
+  // F-EVAL-15 (ADR-025): between two attempts, the score and nothing else.
+  it("shows the score of the attempt only while an exercise takes retakes", async () => {
+    mockFetch({
+      [`GET ${URL}`]: ok({
+        available: false,
+        reason: "retakes_open",
+        evaluation: { id: "e1", title: "Série 3" },
+        score: { points: 3, totalPoints: 5, pending: true },
+      }),
+    });
+    renderWithProviders(<Feedback attemptId="a1" />);
+    expect(await screen.findByText("Attempt handed in")).toBeVisible();
+    expect(screen.getByText("Score of this attempt").nextSibling).toHaveTextContent("3 / 5");
+    expect(screen.getByText(/still to be graded/)).toBeVisible();
+    expect(screen.queryByText("Grade")).toBeNull();
+    expect(screen.queryByText(/Question 1/)).toBeNull();
+  });
+
   it("shows the grade, the points and the per-question review once published", async () => {
     mockFetch({ [`GET ${URL}`]: ok(makeFeedback()) });
     renderWithProviders(<Feedback attemptId="a1" />);

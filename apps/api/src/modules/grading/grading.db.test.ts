@@ -59,6 +59,9 @@ async function closedEvaluation(options: Parameters<typeof seedLive>[1] = {}) {
 
   const attemptRows = [];
   for (const [index, userId] of seed.studentIds.entries()) {
+    // One millisecond apart: the panel orders attempts by creation, and two
+    // rows created on the same instant have no order of their own.
+    app.clock.advance(1);
     const participant = (await live.participantOf(db, evaluation, userId))!;
     const created = await live.ensureAttempt(db, evaluation, participant, app.clock.now());
     const attempt = await live.beginAttempt(db, evaluation, created, participant, app.clock.now());

@@ -15,7 +15,7 @@ To be settled before starting the code. Each row states the value assumed in the
 | 9 | The public pool: who may publish to it at first? | **Settled (ADR-013)**: a `public` pool is READABLE by every teacher; it is written by its owner and by the members the owner named (`contributor`, `owner`). The admin remains the de facto owner everywhere. |
 | 10 | Format of the off-VM backups: Hetzner object storage or other? | Hetzner object storage through rclone |
 | 11 | Drawing relies on embedded Excalidraw: accepted despite its own style? | Yes, reduced toolbar and aligned theme |
-| 12 | An `exercise` evaluation with several attempts: best or last? | Last, phase 2 |
+| 12 | An `exercise` evaluation with several attempts: best or last? | **Settled (ADR-025, #92)**: configurable per evaluation, `best` (ties to the latest) or `last`, with an optional maximum number of attempts. Each retake is a new blank attempt with a new seed; between attempts the student sees the score only. |
 | 13 | Default LLM model for grading and for generation, and who pays: institutional key or the teacher's key? | Opus for grading, Sonnet for generation, the teacher's key |
 | 14 | Design system: start from a precise visual reference? The screenshot provided shows the expected dashboard. | A design document to be written before the first screen |
 | 15 | Live poll: how to identify a participant without an account? | **Settled (ADR-014)**: a `quiz_guest` cookie (HttpOnly, `SameSite=Lax`, path `/app/api/p`, 12 h) of which the database only keeps `sha256(token:evaluation)`, and one `guest_participants` row per (poll, browser). `attempts.user_id` becomes nullable, `attempts.guest_id` appears, and a CHECK constraint imposes exactly one owner. No fictitious account is created. |

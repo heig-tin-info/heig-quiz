@@ -43,6 +43,8 @@ import {
   type McqPolicy,
   type PoolSummary,
   ReleasedGrades,
+  retakesOf,
+  type RetakeSettings,
 } from "@quiz/contracts";
 
 import {
@@ -53,6 +55,8 @@ import {
   itemListLock,
   isFeedbackAllowed,
   missingTimingFields,
+  retakesAllowedFor,
+  retakesOn,
   round2,
   type EvaluationStateName,
 } from "@quiz/domain";
@@ -130,6 +134,13 @@ export class Locked extends EvaluationError {
 export class RunningLocked extends EvaluationError {
   constructor() {
     super("running_locked", 409, "the evaluation is running: its configuration is locked until it closes");
+  }
+}
+
+/** F-EVAL-15 (ADR-025): several attempts are an exercise's, never an exam's. */
+class RetakesNotAllowed extends EvaluationError {
+  constructor(mode: string) {
+    super("retakes_not_allowed", 422, `an evaluation of mode "${mode}" takes one attempt (F-EVAL-15)`);
   }
 }
 
@@ -316,6 +327,25 @@ export function settingsOf(row: EvaluationRecord): EvaluationSettings {
   return EvaluationSettings.parse(row.settings);
 }
 
+/** F-EVAL-15: the retake rule of an evaluation, one attempt when it never set one. */
+export function retakePolicyOf(row: EvaluationRecord): RetakeSettings {
+  return retakesOf(settingsOf(row));
+}
+
+/** F-EVAL-15: the evaluation lets a student take several attempts. */
+export function retakesEnabled(row: EvaluationRecord): boolean {
+  return retakesOn(row.mode, retakePolicyOf(row));
+}
+
+/**
+ * The student's CURRENT attempt among several (F-EVAL-15, ADR-025): no other
+ * attempt of the same student on the same evaluation has a higher number. A
+ * predicate on the row `attempts`, for the joins that must see ONE row per
+ * student; a guest (`user_id` null) holds one attempt and always passes.
+ * Only in a SELECT, where drizzle qualifies the outer columns by table name.
+ */
+export const isLatestAttempt = sql`not exists (select 1 from ${attempts} as later where later.evaluation_id = ${attempts.evaluationId} and later.user_id = ${attempts.userId} and later.attempt_number > ${attempts.attemptNumber})`;
+
 export function feedbackOf(row: EvaluationRecord): FeedbackPolicy {
   return FeedbackPolicy.parse(row.feedbackPolicy);
 }
@@ -421,6 +451,10 @@ export async function joinedItem(
  * with the student's own attempt when there is one: what the student home
  * and the results page are both drawn from. Returned unawaited so that a
  * caller may still order it.
+ *
+ * The attempt is the LATEST one (F-EVAL-15): one row per evaluation, however
+ * many retakes. The attempt that COUNTS is the grading module's
+ * `studentAttempts` to say.
  */
 export function studentEvaluationRows(db: Db, userId: string) {
   return db
@@ -436,7 +470,7 @@ export function studentEvaluationRows(db: Db, userId: string) {
     .innerJoin(evaluations, eq(evaluations.classroomId, classrooms.id))
     .leftJoin(
       attempts,
-      and(eq(attempts.evaluationId, evaluations.id), eq(attempts.userId, userId)),
+      and(eq(attempts.evaluationId, evaluations.id), eq(attempts.userId, userId), isLatestAttempt),
     )
     .where(eq(enrollments.userId, userId));
 }
@@ -456,6 +490,20 @@ export async function totalPointsByEvaluation(
     .where(inArray(evaluationItems.evaluationId, [...evaluationIds]))
     .groupBy(evaluationItems.evaluationId);
   return new Map(rows.map((r) => [r.evaluationId, round2(Number(r.points))]));
+}
+
+/** How many items each evaluation holds, in one grouped query. */
+export async function itemCountsByEvaluation(
+  db: Db,
+  evaluationIds: readonly string[],
+): Promise<Map<string, number>> {
+  if (evaluationIds.length === 0) return new Map();
+  const rows = await db
+    .select({ evaluationId: evaluationItems.evaluationId, n: count() })
+    .from(evaluationItems)
+    .where(inArray(evaluationItems.evaluationId, [...evaluationIds]))
+    .groupBy(evaluationItems.evaluationId);
+  return new Map(rows.map((r) => [r.evaluationId, r.n]));
 }
 
 /** The highest published version number of each question, in one query. */
@@ -567,7 +615,12 @@ export async function staffRosterWithAttempt(
     .from(enrollments)
     .innerJoin(
       attempts,
-      and(eq(attempts.userId, enrollments.userId), eq(attempts.evaluationId, evaluation.id)),
+      // One row per seat, however many attempts the teacher took (F-EVAL-15).
+      and(
+        eq(attempts.userId, enrollments.userId),
+        eq(attempts.evaluationId, evaluation.id),
+        isLatestAttempt,
+      ),
     )
     .where(
       and(eq(enrollments.classroomId, evaluation.classroomId), eq(enrollments.staff, true)),
@@ -603,6 +656,7 @@ async function selfOf(
     .select({ id: attempts.id })
     .from(attempts)
     .where(and(eq(attempts.evaluationId, row.id), eq(attempts.userId, userId)))
+    .orderBy(desc(attempts.attemptNumber))
     .limit(1);
   return {
     seat: seat !== undefined,
@@ -649,8 +703,12 @@ export async function listEvaluations(
     .from(evaluationItems)
     .where(inArray(evaluationItems.evaluationId, ids))
     .groupBy(evaluationItems.evaluationId);
+  // Students, not attempt rows: a retake (F-EVAL-15) is not a second student.
   const attemptStats = await db
-    .select({ evaluationId: attempts.evaluationId, n: count() })
+    .select({
+      evaluationId: attempts.evaluationId,
+      n: sql<number>`count(distinct coalesce(${attempts.userId}, ${attempts.guestId}))`.mapWith(Number),
+    })
     .from(attempts)
     .where(inArray(attempts.evaluationId, ids))
     .groupBy(attempts.evaluationId);
@@ -850,7 +908,13 @@ export async function patchEvaluation(
   const next: Partial<typeof evaluations.$inferInsert> = { updatedAt: new Date() };
   if (patch.title !== undefined) next.title = patch.title;
   if (patch.settings !== undefined) {
-    next.settings = EvaluationSettings.parse({ ...settingsOf(row), ...patch.settings });
+    const settings = EvaluationSettings.parse({ ...settingsOf(row), ...patch.settings });
+    // An exam is one sitting (F-EVAL-15): switching retakes on is refused,
+    // switching them off always passes.
+    if (retakesOf(settings).enabled && !retakesAllowedFor(row.mode)) {
+      throw new RetakesNotAllowed(row.mode);
+    }
+    next.settings = settings;
   }
   if (patch.gradingScale !== undefined) next.gradingScale = patch.gradingScale;
   if (patch.mcqPolicy !== undefined) next.mcqPolicy = patch.mcqPolicy;

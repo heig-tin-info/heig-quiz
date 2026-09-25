@@ -85,6 +85,17 @@ The **Time** row offers three modes, each explained by a sentence under the labe
 
 Extra time granted on the roster (see [Students](students.md)) applies on top: a student with `+25 % time` gets 56 minutes out of 45 in **Per student** mode, and in **Common end** mode their own end is pushed past the common one.
 
+### Several attempts (exercises)
+
+An **exercise** shows a **Several attempts** switch under the timing; an exam never does, it is one sitting. Switched on:
+
+- once a student has handed in (or run out of time), their home page offers **Try again** for as long as the exercise is open: until its common end, or until you close it. Each attempt starts blank, with the questions in a new order and the choices shuffled again;
+- after each attempt the student sees **their score only**, whatever the feedback setting says about the correction. The correction follows the feedback setting once the exercise is closed (**Right away** then shows it at once, **On release** when you publish);
+- **Result kept** decides which attempt counts in the grades, the CSV export, the published results and the per-question statistics: the **Best** (a tie goes to the latest) or the **Last**;
+- **Maximum** caps the number of attempts, the first one included; empty means no limit.
+
+Every attempt is graded by the usual pass as soon as it ends; an answer that needs you (an open answer) waits in the grading panel, where each attempt of a student who retook the exercise is listed with its number (`· #2`). The live dashboard shows each student's latest attempt with an **attempt n** badge, and offers no **Reopen** there: the student tries again instead. Like the other rules of the evaluation, the setting is frozen once somebody has started.
+
 ### Advanced options
 
 Everything else lives behind **Advanced options**, folded by default. A novice never has to open it to run a first quiz; the settings are, in order:

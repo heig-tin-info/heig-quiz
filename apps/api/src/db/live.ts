@@ -2,10 +2,15 @@
  * Attempts, answers and the attempt journal (PLAN-MVP §3.4). Owned by the
  * `live` module.
  *
- * The three properties that matter under concurrency are in the schema:
- *   - `attempts_evaluation_user_uq` makes `POST /evaluations/:id/attempt`
- *     idempotent through `INSERT … ON CONFLICT DO NOTHING`: two tabs opened
- *     at the same second share one attempt, one seed and one deadline;
+ * The properties that matter under concurrency are in the schema:
+ *   - `attempts_evaluation_user_number_uq` makes `POST /evaluations/:id/attempt`
+ *     idempotent through `INSERT … ON CONFLICT DO NOTHING` on attempt number
+ *     1: two tabs opened at the same second share one attempt, one seed and
+ *     one deadline. A retake (F-EVAL-15, ADR-025) inserts number n + 1, and
+ *     two clicks racing for the same number create one row;
+ *   - `attempts_evaluation_user_open_uq` is PARTIAL on the unfinished states:
+ *     a student holds at most ONE attempt that is not finished, whatever the
+ *     service does;
  *   - `attempts_deadline_idx` is PARTIAL on `state = 'in_progress'`, which is
  *     what makes the one-second ticker sweep free;
  *   - `answers_attempt_item_uq` is the target of the autosave upsert, whose
@@ -75,6 +80,11 @@ export const attempts = pgTable(
     state: text("state", { enum: ["not_started", "in_progress", "submitted", "expired"] })
       .notNull()
       .default("not_started"),
+    /**
+     * 1 for the first attempt, n + 1 for each retake of an exercise
+     * (F-EVAL-15, ADR-025). The student's CURRENT attempt is the highest.
+     */
+    attemptNumber: integer("attempt_number").notNull().default(1),
     /** Drawn once; every permutation is derived from it and never stored (D19). */
     seed: integer("seed").notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }),
@@ -95,7 +105,17 @@ export const attempts = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex("attempts_evaluation_user_uq").on(t.evaluationId, t.userId),
+    uniqueIndex("attempts_evaluation_user_number_uq").on(
+      t.evaluationId,
+      t.userId,
+      t.attemptNumber,
+    ),
+    // One unfinished attempt per student, in the database: a retake is only
+    // ever created beside FINISHED attempts, and two concurrent retakes
+    // cannot both open one.
+    uniqueIndex("attempts_evaluation_user_open_uq")
+      .on(t.evaluationId, t.userId)
+      .where(sql`${t.state} in ('not_started', 'in_progress')`),
     // The same idempotency, for the guest half: one attempt per (poll,
     // browser), so a reload of `/p/<code>` never opens a second one.
     uniqueIndex("attempts_evaluation_guest_uq").on(t.evaluationId, t.guestId),

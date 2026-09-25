@@ -27,7 +27,7 @@ export const LIVE_TASKS: TickTask[] = [
     // same tick close each attempt exactly once between them.
     name: "live.expire_attempts",
     run: async (app) => {
-      await expireDueAttempts(app.db, app.clock.now());
+      await expireDueAttempts(app.db, app.clock.now(), app);
     },
   },
   {

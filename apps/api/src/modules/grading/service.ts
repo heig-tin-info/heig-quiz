@@ -349,6 +349,7 @@ async function rosterOf(db: Db, evaluationId: string): Promise<Map<string, Roste
     .select({
       attemptId: attempts.id,
       userId: attempts.userId,
+      attemptNumber: attempts.attemptNumber,
       givenName: users.givenName,
       familyName: users.familyName,
       email: users.email,
@@ -357,10 +358,19 @@ async function rosterOf(db: Db, evaluationId: string): Promise<Map<string, Roste
     .leftJoin(users, eq(attempts.userId, users.id))
     .where(eq(attempts.evaluationId, evaluationId))
     .orderBy(asc(attempts.createdAt));
-  const pseudonyms = uniquePseudonyms(
-    evaluationId,
-    rows.map((r) => r.userId).filter((id): id is string => id !== null),
-  );
+  // Deduplicated: a student who retook an exercise holds several attempts
+  // (F-EVAL-15), and a repeated id would draw them a second pseudonym.
+  const userIds = [...new Set(rows.map((r) => r.userId).filter((id): id is string => id !== null))];
+  const pseudonyms = uniquePseudonyms(evaluationId, userIds);
+  const attemptsOf = new Map<string, number>();
+  for (const r of rows) if (r.userId) attemptsOf.set(r.userId, (attemptsOf.get(r.userId) ?? 0) + 1);
+  /**
+   * Which of a retaking student's attempts this is, as " · #2" — a number,
+   * so the same label reads in both languages. Nothing for a student who
+   * took one attempt, which is every student of every exam.
+   */
+  const nth = (r: (typeof rows)[number]): string =>
+    r.userId !== null && (attemptsOf.get(r.userId) ?? 0) > 1 ? ` · #${r.attemptNumber}` : "";
   let guests = 0;
   return new Map(
     rows.map((r) => {
@@ -373,8 +383,9 @@ async function rosterOf(db: Db, evaluationId: string): Promise<Map<string, Roste
         r.attemptId,
         {
           userId: r.userId,
-          displayName: `${r.givenName ?? ""} ${r.familyName ?? ""}`.trim() || (r.email ?? ""),
-          pseudonym: pseudonyms.get(r.userId) ?? "—",
+          displayName:
+            (`${r.givenName ?? ""} ${r.familyName ?? ""}`.trim() || (r.email ?? "")) + nth(r),
+          pseudonym: (pseudonyms.get(r.userId) ?? "—") + nth(r),
         },
       ];
     }),
@@ -791,3 +802,13 @@ export async function pointsByAttempt(
     .groupBy(gradings.attemptId);
   return new Map(rows.map((r) => [r.attemptId, round2(Number(r.points))]));
 }
+
+// The kept attempt of each student (F-EVAL-15, ADR-025), in `./kept.ts`.
+export {
+  keptAttempts,
+  scoreOf,
+  studentAttempts,
+  tallyByAttempt,
+  type AttemptTally,
+  type StudentAttempts,
+} from "./kept.js";

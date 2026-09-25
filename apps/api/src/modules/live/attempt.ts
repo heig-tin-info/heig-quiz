@@ -8,7 +8,7 @@ import { createHash, randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
 
-import { and, count, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 
 import {
   EvaluationSettings,
@@ -22,7 +22,17 @@ import {
   type StudentHome,
 } from "@quiz/contracts";
 import { shuffle, streamSeed } from "@quiz/core/rng";
-import { GRACE_MS, attemptDeadline, bonusSeconds, gradeFromPoints, lockedItems } from "@quiz/domain";
+import {
+  GRACE_MS,
+  attemptDeadline,
+  bonusSeconds,
+  gradeFromPoints,
+  isFinishedAttempt,
+  latestAttempt,
+  lockedItems,
+  retakeRefusal,
+  type RetakeRefusal,
+} from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -34,8 +44,12 @@ import {
   type JoinedItem,
 } from "../evaluation/service.js";
 import {
+  isLatestAttempt,
+  itemCountsByEvaluation,
   joinedItem,
   joinedItems,
+  retakePolicyOf,
+  retakesEnabled,
   studentEvaluationRows,
   totalPointsByEvaluation,
   totalPointsOf,
@@ -43,8 +57,9 @@ import {
 } from "../evaluation/service.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
-import { pointsByAttempt } from "../grading/service.js";
+import { pointsByAttempt, scoreOf, studentAttempts, tallyByAttempt } from "../grading/service.js";
 import { presence } from "../realtime/presence.js";
+import { scoreVisible } from "../results/service.js";
 import { isShuffleable, studentView } from "./studentView.js";
 
 export type AttemptRecord = typeof attempts.$inferSelect;
@@ -107,6 +122,27 @@ export class EvaluationNotLive extends LiveError {
 export class EvaluationFinished extends LiveError {
   constructor() {
     super("evaluation_finished", 409, "the evaluation is already closed");
+  }
+}
+
+/**
+ * F-EVAL-15: a retake the rule refuses (`@quiz/domain#retakeRefusal`). The
+ * reason travels in the body, so the student home can say which.
+ */
+export class RetakeRefused extends LiveError {
+  constructor(readonly reason: RetakeRefusal) {
+    super("retake_refused", 409, `retake refused: ${reason}`);
+  }
+}
+
+/**
+ * An exercise that allows several attempts reopens none (ADR-025): the
+ * student starts another attempt instead, and a reopened attempt that was
+ * already graded would keep its first grades.
+ */
+export class RetakesEnabled extends LiveError {
+  constructor() {
+    super("retakes_enabled", 409, "this exercise allows retakes: the student starts a new attempt");
   }
 }
 
@@ -380,9 +416,11 @@ export async function enrolledCounts(
     .from(enrollments)
     .innerJoin(
       attempts,
+      // A staff seat is ONE person in the room, however many attempts.
       and(
         eq(attempts.userId, enrollments.userId),
         inArray(attempts.evaluationId, rows.map((r) => r.id)),
+        isLatestAttempt,
       ),
     )
     .innerJoin(evaluations, eq(evaluations.id, attempts.evaluationId))
@@ -460,6 +498,11 @@ export async function attemptById(db: Db, id: string): Promise<AttemptRecord | n
   return row ?? null;
 }
 
+/**
+ * The participant's CURRENT attempt: the latest one (F-EVAL-15). Everything
+ * a student enters, resumes or reads back is this one; the earlier attempts
+ * of an exercise are only reached by id.
+ */
 export async function attemptOf(
   db: Db,
   evaluationId: string,
@@ -476,8 +519,22 @@ export async function attemptOf(
         guestId === null ? eq(attempts.userId, userId!) : eq(attempts.guestId, guestId),
       ),
     )
+    .orderBy(desc(attempts.attemptNumber))
     .limit(1);
   return row ?? null;
+}
+
+/** Every attempt of one account on one evaluation, first attempt first. */
+export async function attemptsOfUser(
+  db: Db,
+  evaluationId: string,
+  userId: string,
+): Promise<AttemptRecord[]> {
+  return db
+    .select()
+    .from(attempts)
+    .where(and(eq(attempts.evaluationId, evaluationId), eq(attempts.userId, userId)))
+    .orderBy(asc(attempts.attemptNumber));
 }
 
 /** A 32-bit seed, drawn once per attempt and never stored per permutation (D19). */
@@ -486,10 +543,11 @@ function drawSeed(): number {
 }
 
 /**
- * Idempotent creation. The unique index `(evaluation_id, user_id)` is the
- * mechanism: a second call inserts nothing and reads the row that is already
+ * Idempotent creation of the FIRST attempt. The unique index
+ * `(evaluation_id, user_id, attempt_number)` is the mechanism: a second call
+ * inserts number 1 again, is refused, and reads the row that is already
  * there, so two tabs opened at the same second share one seed, one start and
- * one deadline.
+ * one deadline. A retake is {@link retakeAttempt}, never this.
  */
 export async function ensureAttempt(
   db: Db,
@@ -513,13 +571,10 @@ export async function ensureAttempt(
       updatedAt: now,
     })
     // A guest is keyed on `(evaluation_id, guest_id)`, an account on
-    // `(evaluation_id, user_id)`: two unique indexes, the same idempotency.
-    .onConflictDoNothing({
-      target:
-        participant.guestId === null
-          ? [attempts.evaluationId, attempts.userId]
-          : [attempts.evaluationId, attempts.guestId],
-    })
+    // `(evaluation_id, user_id, attempt_number)` and on its one unfinished
+    // attempt: whichever index refuses, the same idempotency. No target, so
+    // the partial index of the unfinished attempt counts too.
+    .onConflictDoNothing()
     .returning({ id: attempts.id });
   const row = await attemptOf(db, evaluation.id, participant);
   if (!row) throw new LiveError("internal_error", 500, "attempt vanished after insert");
@@ -536,6 +591,125 @@ export async function ensureAttempt(
     if (seat?.staff) events.rosterChanged(evaluation.id);
   }
   return row;
+}
+
+/**
+ * F-EVAL-15 (ADR-025): a NEW attempt on an exercise that allows several —
+ * number n + 1, a new seed (so a new item order and newly shuffled choices
+ * on the same frozen versions), blank, and started at once: the rule only
+ * allows it on a running evaluation.
+ *
+ * The server decides (`@quiz/domain#retakeRefusal`); the access code is not
+ * asked again — the student was admitted by the first attempt — but the
+ * network allowlist is, like every entry.
+ *
+ * Two clicks racing: both compute n + 1, the unique index lets one row in,
+ * and the loser enters the attempt the winner opened (or, if it read after
+ * the winner committed, is told `unfinished`). The partial index on the
+ * unfinished attempt says the same thing a second time, in the schema.
+ *
+ * A retake racing the teacher's Close (review of #116): the rule is read
+ * again INSIDE a transaction that holds the evaluation row `FOR SHARE`, and
+ * the attempt is inserted already started in that same transaction.
+ * `closeEvaluation` flips the state to `closed` BEFORE it expires the open
+ * attempts, and that UPDATE needs the row lock: either it waits for the
+ * retake to commit and then expires the new attempt with the others, or the
+ * retake waits for the flip and reads `closed`. A blank attempt can never
+ * be left open on a closed evaluation, graded 0, and kept as the "last".
+ */
+export async function retakeAttempt(
+  db: Db,
+  input: {
+    evaluation: EvaluationRecord;
+    participant: Participant;
+    ip?: string | undefined;
+    now: Date;
+  },
+): Promise<AttemptRecord> {
+  const { participant, now } = input;
+  if (participant.userId === null) throw new RetakeRefused("not_allowed");
+  if (!ipAllowed(input.evaluation.ipAllowlist, input.ip)) throw new IpNotAllowed();
+  const userId = participant.userId;
+
+  const outcome = await db.transaction(async (tx) => {
+    // The evaluation as it is NOW, locked against a concurrent state change;
+    // the record the route loaded at the start of the request may be stale.
+    const [evaluation] = await tx
+      .select()
+      .from(evaluations)
+      .where(eq(evaluations.id, input.evaluation.id))
+      .for("share");
+    if (!evaluation) throw new RetakeRefused("not_open");
+    const previous = await tx
+      .select()
+      .from(attempts)
+      .where(and(eq(attempts.evaluationId, evaluation.id), eq(attempts.userId, userId)))
+      .orderBy(asc(attempts.attemptNumber));
+    const refusal = retakeRefusal({
+      mode: evaluation.mode,
+      retakes: retakePolicyOf(evaluation),
+      evaluationState: evaluation.state,
+      closesAt: evaluation.closesAt,
+      now,
+      attempts: previous,
+    });
+    if (refusal !== null) throw new RetakeRefused(refusal);
+
+    // Started at once: `running` is the only state the rule allows, so there
+    // is no lobby to wait in, and no `not_started` row a close would miss.
+    const { deadlineAt, bonusS } = deadlineFor(evaluation, {
+      startedAt: now,
+      timeBonusPercent: participant.timeBonusPercent,
+      extraS: 0,
+    });
+    const created = await tx
+      .insert(attempts)
+      .values({
+        id: randomUUID(),
+        evaluationId: evaluation.id,
+        ...ownerOf(participant),
+        attemptNumber: (latestAttempt(previous)?.attemptNumber ?? 0) + 1,
+        state: "in_progress",
+        seed: drawSeed(),
+        startedAt: now,
+        deadlineAt,
+        bonusS,
+        presentAt: now,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing()
+      .returning();
+    return { evaluation, row: created[0] ?? null };
+  });
+
+  if (outcome.row === null) {
+    // Lost the race: enter the attempt the winner opened, if it is still open.
+    const row = await attemptOf(db, outcome.evaluation.id, participant);
+    if (!row || isFinishedAttempt(row.state)) throw new RetakeRefused("unfinished");
+    return row;
+  }
+  events.attemptStarted(outcome.evaluation, outcome.row, now);
+  // The grid shows each student's latest attempt: the row now stands on
+  // another attempt, with blank cells. No typed frame moves a whole row.
+  events.rosterChanged(outcome.evaluation.id);
+  return outcome.row;
+}
+
+/**
+ * An attempt of an exercise that allows retakes is graded as soon as it is
+ * finished, alone (ADR-025): its score is what the student reads before
+ * deciding to try again. Everywhere else the pass of the evaluation's close
+ * grades every attempt, as before.
+ */
+export async function gradeFinishedRetakes(
+  app: FastifyInstance,
+  evaluation: EvaluationRecord,
+  attemptIds: readonly string[],
+): Promise<void> {
+  if (attemptIds.length === 0 || !retakesEnabled(evaluation)) return;
+  if (evaluation.state !== "running" && evaluation.state !== "paused") return;
+  await enqueueEvaluationGrading(app, { evaluationId: evaluation.id, attemptIds: [...attemptIds] });
 }
 
 /** `not_started → in_progress`, with the deadline computed once (§5.2). */
@@ -946,15 +1120,22 @@ export async function itemOf(
   return joinedItem(db, evaluationId, itemId);
 }
 
-/** F-LIVE-10. Terminal and irreversible for the student. */
+/**
+ * F-LIVE-10. Terminal and irreversible for the student.
+ *
+ * With `app`, an exercise with retakes grades the attempt now (ADR-025) —
+ * only when THIS call is the one that finished it: a repeated or concurrent
+ * submit of the same attempt updates nothing and enqueues nothing.
+ */
 export async function submitAttempt(
   db: Db,
   evaluation: EvaluationRecord,
   attempt: AttemptRecord,
   now: Date,
+  app?: FastifyInstance,
 ): Promise<AttemptRecord> {
   assertGate(evaluation, attempt, now, "submit");
-  await db
+  const finished = await db
     .update(attempts)
     .set({
       state: "submitted",
@@ -963,9 +1144,11 @@ export async function submitAttempt(
       closedBy: "student",
       updatedAt: now,
     })
-    .where(and(eq(attempts.id, attempt.id), eq(attempts.state, "in_progress")));
+    .where(and(eq(attempts.id, attempt.id), eq(attempts.state, "in_progress")))
+    .returning({ id: attempts.id });
   const row = (await attemptById(db, attempt.id))!;
   events.attemptClosed(evaluation.id, row, "student", now);
+  if (app && finished.length > 0) await gradeFinishedRetakes(app, evaluation, [row.id]);
   return row;
 }
 
@@ -996,6 +1179,8 @@ export async function closeAttempt(
   // published: those stay the teacher's to change, from the grading panel.
   if (app && closed.length > 0 && evaluation.state === "closed") {
     await enqueueEvaluationGrading(app, { evaluationId: evaluation.id, attemptIds: [row.id] });
+  } else if (app && closed.length > 0) {
+    await gradeFinishedRetakes(app, evaluation, [row.id]);
   }
   return row;
 }
@@ -1015,6 +1200,7 @@ export async function reopenAttempt(
     throw new EvaluationNotLive();
   }
   if (attempt.state === "in_progress") return attempt;
+  if (retakesEnabled(evaluation)) throw new RetakesEnabled();
   const participant = await participantOfAttempt(db, evaluation, attempt);
   const { deadlineAt, bonusS } = deadlineFor(evaluation, {
     startedAt: attempt.startedAt ?? now,
@@ -1044,25 +1230,83 @@ export async function reopenAttempt(
 export async function studentHome(db: Db, userId: string, now: Date): Promise<StudentHome> {
   const rows = await studentEvaluationRows(db, userId).orderBy(desc(evaluations.createdAt));
 
+  // F-EVAL-15: an exercise with retakes shows the attempt that COUNTS (best
+  // or last) and how many were taken; its grade is the kept attempt's. Every
+  // other card is its one attempt, as before.
+  const withRetakes = rows.filter((r) => retakesEnabled(r.evaluation));
+  const perEvaluation = await studentAttempts(
+    db,
+    userId,
+    withRetakes.map((r) => r.evaluation),
+  );
+  const counted = (row: (typeof rows)[number]): string | null =>
+    perEvaluation.has(row.evaluation.id)
+      ? (perEvaluation.get(row.evaluation.id)!.kept?.id ?? null)
+      : (row.attempt?.id ?? null);
+
   // The grade of a released evaluation (WP6): the sum of the validated
-  // gradings of the student's own attempt, converted by the evaluation's
-  // scale. Two queries for the whole page, not one per card.
-  const attemptIds = rows
-    .map((r) => r.attempt?.id)
-    .filter((id): id is string => id !== undefined && id !== null);
+  // gradings of the student's counted attempt, converted by the evaluation's
+  // scale. A fixed number of queries for the whole page, not one per card.
+  const attemptIds = rows.map(counted).filter((id): id is string => id !== null);
   const pointsPerAttempt = await pointsByAttempt(db, attemptIds);
   const released = rows.filter((r) => r.evaluation.releasedAt !== null);
   const totals = await totalPointsByEvaluation(db, [
-    ...new Set(released.map((r) => r.evaluation.id)),
+    ...new Set([...released, ...withRetakes].map((r) => r.evaluation.id)),
   ]);
+  const itemCounts = await itemCountsByEvaluation(
+    db,
+    withRetakes.map((r) => r.evaluation.id),
+  );
+  const keptTallies = await tallyByAttempt(
+    db,
+    withRetakes.map(counted).filter((id): id is string => id !== null),
+  );
 
   const gradeOf = (row: (typeof rows)[number]): number | null => {
     if (row.evaluation.releasedAt === null) return null;
-    const hit = cachedGrade(row.evaluation, userId, row.attempt?.id ?? null);
+    const attemptId = counted(row);
+    const hit = cachedGrade(row.evaluation, userId, attemptId);
     if (hit) return hit.grade;
     const total = totals.get(row.evaluation.id) ?? 0;
-    const points = row.attempt ? (pointsPerAttempt.get(row.attempt.id) ?? 0) : 0;
+    const points = attemptId ? (pointsPerAttempt.get(attemptId) ?? 0) : 0;
     return gradeFromPoints(points, total, GradingScale.parse(row.evaluation.gradingScale));
+  };
+
+  const retakesOf = (row: (typeof rows)[number]): EvaluationCard["retakes"] => {
+    const mine = perEvaluation.get(row.evaluation.id);
+    if (!mine) return null;
+    const policy = retakePolicyOf(row.evaluation);
+    const kept = mine.kept;
+    return {
+      keep: policy.keep,
+      maxAttempts: policy.maxAttempts,
+      attemptCount: mine.all.length,
+      canRetake:
+        retakeRefusal({
+          mode: row.evaluation.mode,
+          retakes: policy,
+          evaluationState: row.evaluation.state,
+          closesAt: row.evaluation.closesAt,
+          now,
+          attempts: mine.all,
+        }) === null,
+      // Only a finished attempt has a score to read (ADR-025).
+      kept:
+        kept === null || !isFinishedAttempt(kept.state)
+          ? null
+          : {
+              attemptId: kept.id,
+              attemptNumber: kept.attemptNumber,
+              // What the feedback page would show, and no more.
+              score: scoreVisible(row.evaluation, kept.state)
+                ? scoreOf(
+                    keptTallies.get(kept.id),
+                    itemCounts.get(row.evaluation.id) ?? 0,
+                    totals.get(row.evaluation.id) ?? 0,
+                  )
+                : null,
+            },
+    };
   };
 
   const card = (row: (typeof rows)[number]): EvaluationCard => ({
@@ -1080,6 +1324,7 @@ export async function studentHome(db: Db, userId: string, now: Date): Promise<St
     attemptState: row.attempt?.state ?? null,
     deadlineAt: isoOrNull(row.attempt?.deadlineAt ?? null),
     grade: gradeOf(row),
+    retakes: retakesOf(row),
   });
 
   const open: EvaluationCard[] = [];

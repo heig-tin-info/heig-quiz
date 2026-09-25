@@ -51,6 +51,7 @@ import {
   clearRelease,
   feedbackOf,
   joinedItems,
+  retakesEnabled,
   scaleOf,
   setModifiedAfterRelease,
   setRelease,
@@ -64,8 +65,12 @@ import {
   type JoinedItem,
 } from "../evaluation/service.js";
 import {
+  keptAttempts,
   pairKey,
   pointsByAttempt,
+  scoreOf,
+  studentAttempts,
+  tallyByAttempt,
   validatedGradings,
   verdictOf,
   type GradingRecord,
@@ -131,11 +136,10 @@ async function computeResults(
    */
   const staffSeats = await staffRosterWithAttempt(db, evaluation);
 
-  const attemptRows = await db
-    .select()
-    .from(attempts)
-    .where(eq(attempts.evaluationId, evaluation.id));
-  const byUser = new Map(attemptRows.map((a) => [a.userId, a]));
+  // The attempt that COUNTS for each student: their only one, or with
+  // retakes the best or the last (F-EVAL-15, ADR-025). The grade, the CSV,
+  // the release and the statistics all read this one map.
+  const byUser = await keptAttempts(db, evaluation);
   const staffAttempts = await staffAttemptIds(db, evaluation);
   const validated = await validatedGradings(db, evaluation.id);
 
@@ -174,7 +178,25 @@ async function computeResults(
     });
   }
 
-  return { totalPoints, scale, items: itemViews(items, validated, staffAttempts), rows };
+  return {
+    totalPoints,
+    scale,
+    items: itemViews(items, validated, countedAttempts(byUser, staffAttempts)),
+    rows,
+  };
+}
+
+/**
+ * The attempts the statistics count: each student's kept attempt, and not a
+ * teacher's own test (ADR-018). With retakes, the per-question figures are
+ * those of the attempts the grades come from — one per student — not of
+ * every try (ADR-025).
+ */
+function countedAttempts(
+  kept: ReadonlyMap<string, { id: string }>,
+  staffAttempts: ReadonlySet<string>,
+): Set<string> {
+  return new Set([...kept.values()].map((a) => a.id).filter((id) => !staffAttempts.has(id)));
 }
 
 function durationOf(
@@ -187,18 +209,19 @@ function durationOf(
 }
 
 /**
- * Per-item success rate: the mean of `points / maxPoints` over the CLASS.
- * `staffAttempts` — the teachers' own test walks (ADR-018) — are skipped: a
- * teacher who knows the key would otherwise pull every rate up.
+ * Per-item success rate: the mean of `points / maxPoints` over the CLASS —
+ * the `counted` attempts, one per student (see {@link countedAttempts}). The
+ * teachers' own test walks (ADR-018) are not among them: a teacher who knows
+ * the key would otherwise pull every rate up.
  */
 function itemViews(
   items: readonly JoinedItem[],
   validated: ReadonlyMap<PairKey, GradingRecord>,
-  staffAttempts: ReadonlySet<string>,
+  counted: ReadonlySet<string>,
 ): ResultsItem[] {
   const sums = new Map<string, { sum: number; n: number }>();
   for (const grading of validated.values()) {
-    if (staffAttempts.has(grading.attemptId)) continue;
+    if (!counted.has(grading.attemptId)) continue;
     if (grading.maxPoints <= 0) continue;
     const acc = sums.get(grading.itemId) ?? { sum: 0, n: 0 };
     acc.sum += grading.points / grading.maxPoints;
@@ -323,13 +346,10 @@ export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<
   // The class debrief is about the CLASS: the teacher's own rehearsal is not
   // in the success rates and not in the answer distributions (ADR-018).
   const staffAttempts = await staffAttemptIds(db, evaluation);
-  const views = itemViews(items, validated, staffAttempts);
-  const attemptRows = (
-    await db
-      .select({ id: attempts.id, seed: attempts.seed })
-      .from(attempts)
-      .where(eq(attempts.evaluationId, evaluation.id))
-  ).filter((a) => !staffAttempts.has(a.id));
+  // One attempt per student, the one that counts (ADR-025).
+  const counted = countedAttempts(await keptAttempts(db, evaluation), staffAttempts);
+  const views = itemViews(items, validated, counted);
+  const attemptRows = [...counted].map((id) => ({ id }));
   const answerRows =
     attemptRows.length === 0
       ? []
@@ -348,7 +368,9 @@ export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<
     const itemAnswers = answerRows.filter(
       (a) => a.itemId === item.item.id && a.payload !== null,
     );
-    const itemGradings = [...validated.values()].filter((g) => g.itemId === item.item.id);
+    const itemGradings = [...validated.values()].filter(
+      (g) => g.itemId === item.item.id && counted.has(g.attemptId),
+    );
     // The per-type statistics come from the type itself (audit B-15): the
     // results module knows no answer shape and no details shape.
     const stats =
@@ -396,16 +418,47 @@ function distributionOf(
 
 // --- Student feedback (F-RES-04, docs/05 §5.7) ---------------------------
 
+/**
+ * An exercise that allows retakes, while it still takes them (ADR-025): the
+ * student reads the SCORE of a finished attempt and nothing else, whatever
+ * the policy says — the correction of attempt 1 would be the key of
+ * attempt 2. Once the evaluation is closed the teacher's feedback policy
+ * decides, unchanged: `immediate` shows the correction, `on_release` waits
+ * for the release, `none` shows nothing — the score included.
+ * The score is shown under `none` too: a retake without it has no point, and
+ * enabling retakes is the teacher's consent to it.
+ */
+function scoreOnly(evaluation: EvaluationRecord): boolean {
+  return (
+    retakesEnabled(evaluation) &&
+    (evaluation.state === "lobby" || evaluation.state === "running" || evaluation.state === "paused")
+  );
+}
+
+/**
+ * Whether a student may read the SCORE of this attempt right now: while the
+ * exercise still takes retakes (score only, ADR-025), or whenever the
+ * feedback policy lets the results through. The student home asks this
+ * before it prints a kept score, so the card never says more than the
+ * feedback page would.
+ */
+export function scoreVisible(evaluation: EvaluationRecord, attemptState: string): boolean {
+  return feedbackAvailable(feedbackOf(evaluation), evaluation, attemptState).ok
+    || (scoreOnly(evaluation) && attemptState !== "in_progress" && attemptState !== "not_started");
+}
+
 /** Whether a student may see anything at all right now. */
 function feedbackAvailable(
   policy: FeedbackPolicy,
   evaluation: EvaluationRecord,
   attemptState: string,
-): { ok: true } | { ok: false; reason: "results_pending" | "no_feedback" | "attempt_open" } {
+):
+  | { ok: true }
+  | { ok: false; reason: "results_pending" | "no_feedback" | "attempt_open" | "retakes_open" } {
+  const open = attemptState === "in_progress" || attemptState === "not_started";
+  if (!open && scoreOnly(evaluation)) return { ok: false, reason: "retakes_open" };
   if (policy.when === "none") return { ok: false, reason: "no_feedback" };
-  if (attemptState === "in_progress" || attemptState === "not_started") {
-    return { ok: false, reason: "attempt_open" };
-  }
+  if (open) return { ok: false, reason: "attempt_open" };
   if (policy.when === "immediate") return { ok: true };
   return evaluation.releasedAt === null ? { ok: false, reason: "results_pending" } : { ok: true };
 }
@@ -423,10 +476,19 @@ export async function studentFeedback(
   const policy = feedbackOf(evaluation);
   const gate = feedbackAvailable(policy, evaluation, attempt.state);
   if (!gate.ok) {
-    return {
-      available: false,
+    const pending = {
+      available: false as const,
       reason: gate.reason,
       evaluation: { id: evaluation.id, title: evaluation.title },
+    };
+    if (gate.reason !== "retakes_open") return pending;
+    // The points of THIS attempt, and not one item: no verdict, no answer,
+    // no key (ADR-025).
+    const items = await joinedItems(db, evaluation.id);
+    const tally = (await tallyByAttempt(db, [attempt.id])).get(attempt.id);
+    return {
+      ...pending,
+      score: scoreOf(tally, items.length, totalPointsOf(items.map((i) => i.item))),
     };
   }
 
@@ -564,33 +626,38 @@ export async function studentResultCards(db: Db, userId: string): Promise<Result
   // release UPDATES the grades, so once `modified_after_release` is set they
   // are recomputed from the validated gradings. Two grouped queries for the
   // cards that need it, not two per card — and none when every card is cached.
+  // The attempt that counts (F-EVAL-15): with retakes, the best or the last
+  // one; otherwise the student's only attempt, which the row already holds.
+  const retaking = await studentAttempts(
+    db,
+    userId,
+    rows.filter((row) => retakesEnabled(row.evaluation)).map((row) => row.evaluation),
+  );
+  const countedOf = (row: (typeof rows)[number]): string | null =>
+    retaking.has(row.evaluation.id)
+      ? (retaking.get(row.evaluation.id)!.kept?.id ?? null)
+      : (row.attempt?.id ?? null);
   const cached = new Map(
-    rows.map((row) => [
-      row,
-      cachedGrade(row.evaluation, userId, row.attempt?.id ?? null),
-    ]),
+    rows.map((row) => [row, cachedGrade(row.evaluation, userId, countedOf(row))]),
   );
   const live = rows.filter((row) => cached.get(row) === null);
   const totals = await totalPointsByEvaluation(db, [...new Set(live.map((r) => r.evaluation.id))]);
   const pointsPerAttempt = await pointsByAttempt(
     db,
-    live.map((r) => r.attempt?.id).filter((id): id is string => typeof id === "string"),
+    live.map(countedOf).filter((id): id is string => typeof id === "string"),
   );
   return rows.map((row) => {
     const hit = cached.get(row) ?? null;
+    const attemptId = countedOf(row);
     const totalPoints = hit ? hit.totalPoints : (totals.get(row.evaluation.id) ?? 0);
-    const points = hit
-      ? hit.points
-      : row.attempt
-        ? (pointsPerAttempt.get(row.attempt.id) ?? 0)
-        : 0;
+    const points = hit ? hit.points : attemptId ? (pointsPerAttempt.get(attemptId) ?? 0) : 0;
     return {
       evaluationId: row.evaluation.id,
       title: row.evaluation.title,
       classroomId: row.evaluation.classroomId,
       classroomName: row.classroomName,
       courseCode: row.courseCode,
-      attemptId: row.attempt?.id ?? null,
+      attemptId,
       releasedAt: isoOrNull(row.evaluation.releasedAt),
       points,
       totalPoints,
