@@ -93,7 +93,8 @@ function runnerDown(error: unknown): PreviewError | null {
 /**
  * The per-minute budgets of a preview, in memory. An attempt counts its runs
  * in its journal (N-SEC-07); a preview has no journal and must not grow one,
- * so the window lives here, keyed by teacher. It is per process and lost on
+ * so the window lives here: runs keyed by teacher AND evaluation (one budget
+ * for all the items, like an attempt's), gradings by teacher. It is per process and lost on
  * restart, which is the right weight for a budget that protects the runner
  * from a held-down button, not from a determined colleague.
  */
@@ -220,7 +221,7 @@ export async function runPreview(
   const { joined, type, config, student } = await previewItem(db, evaluation, input.itemId, input.seed);
   if (!type.finalizeRunner) throw notRunnable();
   budget.spend(
-    `run:${input.userId}:${joined.item.id}`,
+    `run:${input.userId}:${evaluation.id}`,
     student.runsPerMinute ?? DEFAULT_RUNS_PER_MINUTE,
     now,
   );
@@ -262,7 +263,7 @@ export async function simulatePreview(
   const { joined, type, config, student } = await previewItem(db, evaluation, input.itemId, input.seed);
   if (!type.interactiveRequest) throw notRunnable();
   budget.spend(
-    `run:${input.userId}:${joined.item.id}`,
+    `run:${input.userId}:${evaluation.id}`,
     student.simulationsPerMinute ?? student.runsPerMinute ?? DEFAULT_RUNS_PER_MINUTE,
     now,
   );
@@ -386,7 +387,10 @@ export async function gradePreview(
   let points = 0;
   let pending = 0;
   for (const [rank, shown] of view.items.entries()) {
-    const item = byId.get(shown.id)!;
+    const item = byId.get(shown.id);
+    // Removed between the two reads (a draft stays editable during a
+    // preview): there is nothing left to grade, and no reason to fail.
+    if (!item) continue;
     const payload = answers.has(shown.id) ? answers.get(shown.id) : undefined;
     const outcome = await gradeItem(input.runner, evaluation, item, seed, payload, now, input.log);
     if (outcome.points !== null) points += outcome.points;

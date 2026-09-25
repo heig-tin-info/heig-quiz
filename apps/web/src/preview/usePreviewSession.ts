@@ -92,11 +92,16 @@ export function usePreviewSession({
     }
   }, [onSubmit]);
 
-  // Reaching zero hands the paper in, as the ticker does for a student.
+  // Reaching zero hands the paper in, as the ticker does for a student —
+  // ONCE. A failed automatic hand-in is not retried every second (the clock
+  // keeps ticking past zero): the page says the grading failed, and "Hand in"
+  // is how the teacher tries again.
+  const autoFired = useRef(false);
   useEffect(() => {
-    if (deadlineAt === null || now < deadlineAt || handedIn.current) return;
+    if (deadlineAt === null || now < deadlineAt || autoFired.current) return;
+    autoFired.current = true;
     void submit().catch(() => {
-      // The page says what went wrong; the timer does not fire twice.
+      // The page says what went wrong.
     });
   }, [deadlineAt, now, submit]);
 

@@ -227,6 +227,27 @@ describe("EvaluationPreviewPage", () => {
     expect(calls.filter((c) => c.url === `${URL}/grade`)).toHaveLength(1);
   });
 
+  it("hands in by itself only once when that grading fails, and Hand in still works", async () => {
+    const user = userEvent.setup();
+    let failing = true;
+    const { calls } = mockFetch({
+      [`POST ${URL}`]: ok(preview(9, 1)),
+      [`POST ${URL}/grade`]: () =>
+        failing ? fail(503, { error: "runner_unavailable" }) : ok(correction(9)),
+    });
+    renderWithProviders(<EvaluationPreviewPage id={EVAL} navigate={() => {}} />);
+    expect(await screen.findByText("The grading failed", {}, { timeout: 4000 })).toBeInTheDocument();
+    // The clock keeps ticking past zero: no retry every second.
+    await new Promise((r) => setTimeout(r, 2500));
+    expect(calls.filter((c) => c.url === `${URL}/grade`)).toHaveLength(1);
+    // The manual button is the retry.
+    failing = false;
+    await user.click(screen.getByRole("button", { name: "Hand in" }));
+    await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Hand in" }));
+    expect(await screen.findByRole("heading", { name: "Preview correction" })).toBeInTheDocument();
+    expect(calls.filter((c) => c.url === `${URL}/grade`)).toHaveLength(2);
+  });
+
   it("keeps the answers when the grading fails", async () => {
     const user = userEvent.setup();
     mockFetch({

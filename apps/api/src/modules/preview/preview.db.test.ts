@@ -406,6 +406,32 @@ describe("the Run button of a preview", () => {
     expect(res.statusCode).toBe(404);
   });
 
+  it("shares one budget across the items of an evaluation, like an attempt", async () => {
+    const w = await world();
+    // A second code question in the same evaluation, same budget of 3.
+    const second = await publish(w.poolId, teacher.id, "code", codeConfig);
+    const added = await evaluationService.addItems(
+      db,
+      await reload(db, w.evaluationId),
+      [second],
+      (type, version) =>
+        typeOf(type).defaultPoints(
+          loadConfig(type, { config: version.config, configVersion: version.configVersion }),
+        ),
+      { attemptCount: 0 },
+    );
+    const secondItemId = added.at(-1)!.id;
+    setRunner(recorder().runner);
+    const run = (itemId: string) =>
+      post(`${w.url}/run`, teacher.headers, { seed: 7, itemId, regions: [] });
+    expect((await run(w.codeItemId)).statusCode).toBe(200);
+    expect((await run(w.codeItemId)).statusCode).toBe(200);
+    expect((await run(secondItemId)).statusCode).toBe(200);
+    // Three spent over the two items: the second item has none left either.
+    expect((await run(secondItemId)).statusCode).toBe(429);
+    expect((await run(w.codeItemId)).statusCode).toBe(429);
+  });
+
   it("spends the question's own budget per minute (runsPerMinute: 3)", async () => {
     const w = await world();
     setRunner(recorder().runner);
