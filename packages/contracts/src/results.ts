@@ -12,7 +12,7 @@
 import { z } from "zod";
 
 import { GradingScale } from "./evaluation.js";
-import { AttemptState } from "./live.js";
+import { AttemptScore, AttemptState } from "./live.js";
 import { Verdict } from "./grading.js";
 
 /** A student with no attempt at all still gets a row, and a 1.0 (F-RES-02). */
@@ -183,8 +183,16 @@ export type StudentResults = z.infer<typeof StudentResults>;
  */
 export const FeedbackPending = z.object({
   available: z.literal(false),
-  reason: z.enum(["results_pending", "no_feedback", "attempt_open"]),
+  /**
+   * `retakes_open`: an exercise that allows several attempts is still open
+   * (F-EVAL-15, ADR-025). The student reads the score of this attempt and
+   * nothing else, whatever the policy says about the correction, which
+   * follows once the evaluation is closed.
+   */
+  reason: z.enum(["results_pending", "no_feedback", "attempt_open", "retakes_open"]),
   evaluation: z.object({ id: z.uuid(), title: z.string() }),
+  /** Only with `retakes_open`: the points of this attempt, and nothing else. */
+  score: AttemptScore.optional(),
 });
 export type FeedbackPending = z.infer<typeof FeedbackPending>;
 

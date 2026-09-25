@@ -4,6 +4,9 @@ import {
   DEFAULT_MCQ_POLICY,
   EvaluationPatch,
   EvaluationSettings,
+  EvaluationSettingsPatch,
+  RetakeSettings,
+  retakesOf,
   FeedbackPolicy,
   GradingScale,
   defaultFeedbackPolicy,
@@ -95,5 +98,33 @@ describe("EvaluationPatch", () => {
   it("still validates each field it carries", () => {
     expect(EvaluationPatch.safeParse({ settings: { timing: "whenever" } }).success).toBe(false);
     expect(EvaluationPatch.safeParse({ feedbackPolicy: { when: "later" } }).success).toBe(false);
+  });
+});
+
+describe("retake settings (F-EVAL-15)", () => {
+  it("reads a stored evaluation without the field as one attempt", () => {
+    expect(EvaluationSettings.parse({}).retakes).toBeUndefined();
+    expect(retakesOf(EvaluationSettings.parse({}))).toEqual({
+      enabled: false,
+      keep: "best",
+      maxAttempts: null,
+    });
+  });
+
+  it("fills the omitted fields of the object and bounds the maximum", () => {
+    expect(RetakeSettings.parse({ enabled: true })).toEqual({
+      enabled: true,
+      keep: "best",
+      maxAttempts: null,
+    });
+    expect(RetakeSettings.safeParse({ enabled: true, maxAttempts: 1 }).success).toBe(false);
+    expect(RetakeSettings.safeParse({ enabled: true, keep: "worst" }).success).toBe(false);
+  });
+
+  it("travels whole in a settings patch, and is absent when not sent", () => {
+    expect(EvaluationSettingsPatch.parse({ shuffleItems: true })).not.toHaveProperty("retakes");
+    expect(
+      EvaluationSettingsPatch.parse({ retakes: { enabled: true, keep: "last", maxAttempts: 3 } }).retakes,
+    ).toEqual({ enabled: true, keep: "last", maxAttempts: 3 });
   });
 });

@@ -17,6 +17,7 @@ import {
   EvaluationState,
   FeedbackPolicy,
   Navigation,
+  RetakeKeep,
 } from "./evaluation.js";
 
 export const AttemptState = z.enum(["not_started", "in_progress", "submitted", "expired"]);
@@ -140,6 +141,18 @@ export type AttemptOrLobby = z.infer<typeof AttemptOrLobby>;
 
 export const AttemptStartBody = z.object({ accessCode: z.string().max(32).optional() });
 export type AttemptStartBody = z.infer<typeof AttemptStartBody>;
+
+/**
+ * `POST /evaluations/:id/retake` refused (F-EVAL-15): the reason is
+ * `retakeRefusal`'s in `@quiz/domain`, spelled again here because contracts
+ * depend on no package. A success answers {@link AttemptOrLobby}.
+ */
+export const RetakeRefused = z.object({
+  error: z.literal("retake_refused"),
+  reason: z.enum(["not_allowed", "not_open", "closed", "no_attempt", "unfinished", "max_attempts"]),
+  message: z.string().optional(),
+});
+export type RetakeRefused = z.infer<typeof RetakeRefused>;
 
 // --- Autosave (PLAN-MVP §4.7) --------------------------------------------
 
@@ -276,6 +289,37 @@ export type SimulateBody = z.infer<typeof SimulateBody>;
 
 // --- Student home ---------------------------------------------------------
 
+/**
+ * The score of one attempt as a student may read it between two attempts
+ * (F-EVAL-15, ADR-025): the validated points and nothing else — no item, no
+ * verdict, no key. `pending` says some answer still waits for a teacher (a
+ * hand-graded question), so the points may still rise.
+ */
+export const AttemptScore = z.object({
+  points: z.number(),
+  totalPoints: z.number(),
+  pending: z.boolean(),
+});
+export type AttemptScore = z.infer<typeof AttemptScore>;
+
+/**
+ * The student's side of an exercise that allows several attempts (F-EVAL-15).
+ * `null` on the card of any other evaluation.
+ */
+export const CardRetakes = z.object({
+  keep: RetakeKeep,
+  maxAttempts: z.number().int().nullable(),
+  /** How many attempts the student has taken, the one in progress included. */
+  attemptCount: z.number().int(),
+  /** The server's rule (`retakeRefusal`), evaluated now: the Retake button. */
+  canRetake: z.boolean(),
+  /** The attempt that counts (best or last) and its score; `null` before any. */
+  kept: z
+    .object({ attemptId: z.uuid(), attemptNumber: z.number().int(), score: AttemptScore })
+    .nullable(),
+});
+export type CardRetakes = z.infer<typeof CardRetakes>;
+
 export const EvaluationCard = z.object({
   id: z.uuid(),
   title: z.string(),
@@ -296,6 +340,8 @@ export const EvaluationCard = z.object({
    * one must not leak the one it would have.
    */
   grade: z.number().nullable(),
+  /** F-EVAL-15: set only on an exercise that allows several attempts. */
+  retakes: CardRetakes.nullable(),
 });
 export type EvaluationCard = z.infer<typeof EvaluationCard>;
 
@@ -362,6 +408,11 @@ export const DashboardRow = z.object({
   lastSeenAt: z.iso.datetime().nullable(),
   deadlineAt: z.iso.datetime().nullable(),
   timeBonusPercent: z.number().int(),
+  /**
+   * How many attempts the student has taken (F-EVAL-15). The row always
+   * shows the LATEST one; the grading panel reaches every other.
+   */
+  attemptCount: z.number().int(),
   points: z.number().nullable(),
   maxPoints: z.number(),
   cells: z.array(DashboardCell),
@@ -376,6 +427,12 @@ export const DashboardView = z.object({
     pausedAt: z.iso.datetime().nullable(),
     closesAt: z.iso.datetime().nullable(),
     serverNow: z.iso.datetime(),
+    /**
+     * The exercise allows several attempts (F-EVAL-15): a student starts a
+     * new attempt instead of having one reopened, so the grid offers no
+     * Reopen (ADR-025).
+     */
+    retakes: z.boolean(),
   }),
   items: z.array(
     z.object({
