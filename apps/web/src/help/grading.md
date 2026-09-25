@@ -28,6 +28,10 @@ prompt, the explanation, the expected answer or solution, the grading
 comment. The student's answer is always there — it is what you grade — and
 hiding the comment never stops you from writing one with **Adjust**.
 
+This browser remembers the order, the filters and what **Show** keeps, from
+one visit to the next and across evaluations. It never remembers the names:
+they are hidden again each time you open the page.
+
 ## Acting on an answer
 
 **Validate** takes the proposal as it stands. **Adjust** rewrites the points

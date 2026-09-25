@@ -4,8 +4,6 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from
 
 import { formatPoints } from "@quiz/domain";
 
-import type { GradingConfidence, GradingSource } from "@quiz/contracts";
-
 import { api } from "../api";
 import { useT } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
@@ -20,19 +18,13 @@ import { GradingFilters } from "./GradingFilters";
 import { GradingHeader } from "./GradingHeader";
 import { StepAnswers, StepList } from "./GradingStep";
 import { gradingLinks } from "./index";
-import { ORDER_WORDS, type GradingOrder } from "./labels";
+import { ORDER_WORDS } from "./labels";
 import { RegradeSheet } from "./RegradeSheet";
 import { OverrideSheet } from "./OverrideSheet";
-import { ALL_PARTS_SHOWN, type ShownParts } from "./parts";
 import { useGradingInvalidate } from "./useGradingInvalidate";
 import { useGradingKeys } from "./useGradingKeys";
-import {
-  ANY,
-  neighbour,
-  useGradingTraversal,
-  type Any,
-  type StateFilter,
-} from "./useGradingTraversal";
+import { useGradingView } from "./view";
+import { ANY, neighbour, useGradingTraversal } from "./useGradingTraversal";
 
 /**
  * The grading panel (F-GRADE-03 to 06, mockup `04-correction.html`).
@@ -76,12 +68,11 @@ export function GradingPanel({
   const toast = useToast();
   const toastError = useErrorToast();
 
-  const [order, setOrder] = useState<GradingOrder>("question");
+  // The order, the filters and the parts shown are remembered per browser
+  // (#110); the names are not, and start hidden on every visit (F-GRADE-03).
+  const [view, setView] = useGradingView();
+  const { order, stateFilter, source, confidence, parts } = view;
   const [showNames, setShowNames] = useState(false);
-  const [stateFilter, setStateFilter] = useState<StateFilter>("all");
-  const [source, setSource] = useState<GradingSource | Any>(ANY);
-  const [confidence, setConfidence] = useState<GradingConfidence | Any>(ANY);
-  const [parts, setParts] = useState<ShownParts>(ALL_PARTS_SHOWN);
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const [overrideKey, setOverrideKey] = useState<string | null>(null);
@@ -363,19 +354,19 @@ export function GradingPanel({
           <GradingFilters
             order={order}
             onOrder={(v) => {
-              setOrder(v);
+              setView({ order: v });
               setIndex(0);
             }}
             stateFilter={stateFilter}
-            onStateFilter={setStateFilter}
+            onStateFilter={(v) => setView({ stateFilter: v })}
             source={source}
-            onSource={setSource}
+            onSource={(v) => setView({ source: v })}
             confidence={confidence}
-            onConfidence={setConfidence}
+            onConfidence={(v) => setView({ confidence: v })}
             showNames={showNames}
             onShowNames={setShowNames}
             parts={parts}
-            onParts={setParts}
+            onParts={(v) => setView({ parts: v })}
           />
 
           {/* Always there by question, even at zero: the banner going away

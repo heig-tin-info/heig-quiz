@@ -31,6 +31,10 @@ de correction. La réponse de l'étudiant est toujours là — c'est ce que vous
 corrigez — et masquer le commentaire ne vous empêche jamais d'en écrire un
 avec **Modifier**.
 
+Ce navigateur retient l'ordre, les filtres et ce que garde **Afficher**,
+d'une visite à l'autre et d'une évaluation à l'autre. Il ne retient jamais
+les noms : ils sont de nouveau masqués à chaque ouverture de la page.
+
 ## Agir sur une réponse
 
 **Valider** prend la proposition telle quelle. **Modifier** récrit les
