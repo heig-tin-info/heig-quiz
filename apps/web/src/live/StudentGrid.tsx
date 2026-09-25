@@ -5,6 +5,7 @@ import type { DashboardRow, EvaluationState } from "@quiz/contracts";
 import { useT } from "../i18n";
 import type { GridState } from "../realtime/grid";
 import { Badge, Countdown, cx, IconButton, T, VerdictCell } from "../ui";
+import { AnswerTip } from "./AnswerTip";
 import { cellState, cellValue, completionOf } from "./cells";
 
 /**
@@ -36,8 +37,10 @@ import { cellState, cellValue, completionOf } from "./cells";
  * between them. So on a phone the actions sit at the end of the row, where
  * scrolling right through the questions lands anyway.
  *
- * Every cell is a plain `VerdictCell`; none of them fetches anything. The
- * whole grid is a pure function of the state `useDashboard` walks forward.
+ * Every cell is a plain `VerdictCell`; none of them fetches anything by
+ * itself. The whole grid is a pure function of the state `useDashboard`
+ * walks forward — the one exception being the tooltip of a cell (#94), which
+ * reads the student's paper only once a teacher has hovered or focused it.
  */
 
 /** Fixed width of a question column: two glyphs and the icon, and no more. */
@@ -183,7 +186,17 @@ export function StudentGrid({
             const progress = completionOf(row);
             const running = row.state === "in_progress";
             const finished = row.state === "submitted" || row.state === "expired";
-            const stick = active ? "bg-accent-soft" : "bg-surface group-hover:bg-surface-2/70";
+            // The sticky cells must be OPAQUE: questions scroll under them.
+            // The row's tints are translucent (`surface-2/70` on hover, and
+            // `accent-soft` in dark mode), so they are painted here as a
+            // layer over the card's surface (`.sticky-tint`, style.css) —
+            // the exact colour of the row, with nothing showing through.
+            const stick = cx(
+              "sticky-tint",
+              active
+                ? "[--tint:var(--accent-soft)]"
+                : "group-hover:[--tint:color-mix(in_srgb,var(--surface-2)_70%,transparent)]",
+            );
             return (
               <tr
                 key={row.seatId}
@@ -290,14 +303,31 @@ export function StudentGrid({
                       {cell === undefined ? (
                         <span className="text-fg-faint">—</span>
                       ) : (
-                        <VerdictCell
-                          state={cellState(cell, showResults)}
-                          value={cellValue(cell, showAnswers)}
-                          label={label}
-                          onClick={
-                            row.attemptId === null ? undefined : () => onInspect(row, item.id)
-                          }
-                        />
+                        // The complete answer on hover or focus (#94), read
+                        // on demand: only while the answers are shown, and
+                        // only on a cell that has one. The wrapper is there
+                        // EITHER WAY, so the button — and the keyboard focus
+                        // on it — survives the first answer arriving.
+                        <AnswerTip
+                          evaluationId={view.evaluation.id}
+                          attemptId={row.attemptId}
+                          itemId={item.id}
+                          fallback={cell.summary ?? ""}
+                          revision={cell.revision}
+                          enabled={showAnswers && !!cell.summary && row.attemptId !== null}
+                        >
+                          {(describedBy) => (
+                            <VerdictCell
+                              state={cellState(cell, showResults)}
+                              value={cellValue(cell, showAnswers)}
+                              label={label}
+                              describedBy={describedBy}
+                              onClick={
+                                row.attemptId === null ? undefined : () => onInspect(row, item.id)
+                              }
+                            />
+                          )}
+                        </AnswerTip>
                       )}
                     </td>
                   );

@@ -335,6 +335,7 @@ export function Shell({
   teacherUi,
   studentView,
   onToggleStudentView,
+  wide = false,
   children,
 }: {
   me: Me;
@@ -343,6 +344,14 @@ export function Shell({
   teacherUi: boolean;
   studentView: boolean;
   onToggleStudentView?: () => void;
+  /**
+   * The page drops the reading-width cap and takes the whole content area.
+   * An opt-in of the route (`WIDE` in App.tsx), never a default: a form or a
+   * list stretched across a 27" screen is harder to read, while a matrix —
+   * the live grid, thirty students by twelve questions — capped at 70 rem
+   * scrolls sideways beside two empty margins (#93).
+   */
+  wide?: boolean;
   children: ReactNode;
 }) {
   const { t, locale, setLocale } = useI18n();
@@ -537,7 +546,14 @@ export function Shell({
 
         {studentView ? <StudentViewBanner onLeave={onToggleStudentView} /> : null}
 
-        <main className="mx-auto w-full max-w-280 px-4 py-6 sm:px-8 lg:py-8">{children}</main>
+        <main
+          className={cx(
+            "mx-auto w-full px-4 py-6 sm:px-8 lg:py-8",
+            wide ? "max-w-none" : "max-w-280",
+          )}
+        >
+          {children}
+        </main>
       </div>
 
       {/* Mounted only while open: nothing of it — the key listener of its

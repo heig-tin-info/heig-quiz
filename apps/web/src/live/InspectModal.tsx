@@ -1,10 +1,8 @@
-import { useQuery } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight, FileQuestion } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef } from "react";
 
-import type { AttemptInspect, DashboardRow } from "@quiz/contracts";
+import type { DashboardRow } from "@quiz/contracts";
 
-import { api } from "../api";
 import { useT } from "../i18n";
 import { QuestionReviewHost, typeLabel } from "../questionTypes";
 import type { GridState } from "../realtime/grid";
@@ -20,7 +18,7 @@ import {
   VerdictCell,
 } from "../ui";
 import { cellState } from "./cells";
-import { attemptInspectKey } from "../queryKeys";
+import { useAttemptInspect } from "./useAttemptInspect";
 
 /**
  * F-DASH-05: one student's whole paper, read from the grid.
@@ -66,11 +64,7 @@ export function InspectModal({
 }) {
   const t = useT();
   const { view } = state;
-  const inspect = useQuery<AttemptInspect>({
-    queryKey: attemptInspectKey(evaluationId, row.attemptId),
-    enabled: row.attemptId !== null,
-    queryFn: () => api(`/app/api/evaluations/${evaluationId}/attempts/${row.attemptId}`),
-  });
+  const inspect = useAttemptInspect(evaluationId, row.attemptId);
 
   const rowsWithAttempt = view.rows.filter((r) => r.attemptId !== null);
   const rowIndex = rowsWithAttempt.findIndex((r) => r.seatId === row.seatId);
@@ -105,13 +99,22 @@ export function InspectModal({
    * and it moves by the exact distance between the two boxes.
    */
   const anchors = useRef(new Map<string, HTMLElement>());
+  /**
+   * ONCE per student and question: when the content first lands. A refetch
+   * of the same paper (a reconnect re-reads every cached one) must not throw
+   * a teacher who has scrolled on to question 7 back to the one they clicked.
+   */
+  const scrolledFor = useRef<string | null>(null);
   useLayoutEffect(() => {
+    const target = `${row.attemptId}:${itemId}`;
+    if (scrolledFor.current === target) return;
     const el = anchors.current.get(itemId);
     if (!el) return;
+    scrolledFor.current = target;
     let box = el.parentElement;
     while (box && box.scrollHeight <= box.clientHeight) box = box.parentElement;
     if (box) box.scrollTop += el.getBoundingClientRect().top - box.getBoundingClientRect().top;
-  }, [itemId, inspect.data]);
+  }, [row.attemptId, itemId, inspect.data]);
 
   const name = nameOf(row);
   const position = t("live.inspect.position", {

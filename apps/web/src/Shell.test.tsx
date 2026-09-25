@@ -70,6 +70,7 @@ function renderShell({
   pool,
   poolList,
   path,
+  wide,
   children,
 }: {
   route?: Route;
@@ -87,6 +88,8 @@ function renderShell({
   poolList?: PoolSummary[];
   /** URL the frame reads `?category=` from. */
   path?: string;
+  /** The route's opt-out of the reading-width cap (#93). */
+  wide?: boolean;
   /** What the frame wraps; a screen registering its own shortcuts, here. */
   children?: ReactNode;
 } = {}) {
@@ -102,6 +105,7 @@ function renderShell({
       teacherUi={teacherUi}
       studentView={studentView}
       {...(canSwitchView ? { onToggleStudentView } : {})}
+      wide={wide}
     >
       {children ?? <p>Page content</p>}
     </Shell>,
@@ -112,6 +116,20 @@ function renderShell({
 
 /** The sidebar of the desktop layout (the drawer renders the same nav). */
 const sidebar = () => screen.getAllByRole("navigation")[0]!;
+
+describe("Shell content width (#93)", () => {
+  it("caps the page at the reading width by default", () => {
+    renderShell();
+    expect(screen.getByRole("main")).toHaveClass("max-w-280");
+  });
+
+  it("lets a wide route take the whole content area", () => {
+    renderShell({ route: { view: "live", id: "e1" }, wide: true });
+    const main = screen.getByRole("main");
+    expect(main).not.toHaveClass("max-w-280");
+    expect(main).toHaveClass("max-w-none");
+  });
+});
 
 describe("Shell sidebar", () => {
   it("shows the teacher navigation and the classrooms of the query", () => {

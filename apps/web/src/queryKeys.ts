@@ -90,6 +90,9 @@ export const dashboardKey = (id: string, includeAnswers: boolean, includeResults
   ["dashboard", id, includeAnswers, includeResults] as const;
 export const attemptInspectKey = (evaluationId: string, attemptId: string | null) =>
   ["attempt-inspect", evaluationId, attemptId] as const;
+/** Every student paper cached for one evaluation, for a blanket invalidation. */
+export const attemptInspectPrefix = (evaluationId: string) =>
+  ["attempt-inspect", evaluationId] as const;
 
 // --- Grading and results -------------------------------------------------------
 

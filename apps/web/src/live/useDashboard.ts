@@ -7,7 +7,7 @@ import { api } from "../api";
 import { applyGridEvent, initialGrid, type GridState } from "../realtime/grid";
 import { useEventStream } from "../realtime/useEventStream";
 import { useServerClock, type ServerClock } from "../realtime/useServerClock";
-import { dashboardKey } from "../queryKeys";
+import { attemptInspectKey, attemptInspectPrefix, dashboardKey } from "../queryKeys";
 
 /**
  * The live dashboard as one hook: the read model, the stream that moves it,
@@ -62,6 +62,10 @@ export function useDashboard(
 
   const refresh = useCallback(() => {
     void qc.invalidateQueries({ queryKey: key });
+    // A re-read of the grid (a reconnect, a snapshot, a hint) may follow
+    // frames this tab never received, so every paper cached for a tooltip or
+    // the inspection modal is suspect too.
+    void qc.invalidateQueries({ queryKey: attemptInspectPrefix(id) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qc, id, includeAnswers, includeResults]);
 
@@ -84,6 +88,28 @@ export function useDashboard(
     },
     onEvent: (event) => {
       qc.setQueryData<GridState>(key, (prev) => (prev ? applyGridEvent(prev, event) : prev));
+      // The student wrote something, or their attempt changed state: the
+      // paper cached for that attempt (the cell tooltip's, the modal's) is
+      // now behind the grid. It is MARKED stale and not refetched here: a
+      // student typing sends a frame a second, and an open modal re-reading
+      // the whole paper at that pace is a request a second for nothing —
+      // it reads the fresh one on its next opening. A tooltip that is open
+      // compares the paper's revision with its cell's and re-reads it
+      // itself (`AnswerTip`), so it never shows an answer older than its
+      // cell (#94).
+      const attemptId =
+        event.type === "dashboard.cell" ||
+        event.type === "dashboard.attempt" ||
+        event.type === "attempt.closed" ||
+        event.type === "attempt.deadline"
+          ? event.attemptId
+          : null;
+      if (attemptId !== null) {
+        void qc.invalidateQueries({
+          queryKey: attemptInspectKey(id, attemptId),
+          refetchType: "none",
+        });
+      }
     },
     /*
      * A hint on the `evaluations` family means the grid gained or lost a ROW

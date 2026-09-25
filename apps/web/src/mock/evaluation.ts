@@ -741,6 +741,9 @@ export const dashboardView = (e: MockEvaluation, includeAnswers: boolean) => {
 export const attemptInspect = (e: MockEvaluation, attemptId: string) => {
   const row = e.rows.find((r) => r.attemptId === attemptId);
   if (!row) throw new MockError(404, "Attempt not found");
+  // The seed the row's cells were summarised with (`makeRows`), so the paper
+  // read here is the answer the cell's glyph and its tooltip describe.
+  const rowIndex = e.rows.indexOf(row);
   return {
     attempt: {
       id: attemptId,
@@ -765,7 +768,10 @@ export const attemptInspect = (e: MockEvaluation, attemptId: string) => {
           internalName: item.internalName,
         },
         studentConfig: studentConfigOf(q),
-        answer: cell && cell.status !== "empty" ? answerOf(q, i) : null,
+        answer:
+          cell && (cell.status === "in_progress" || cell.status === "done")
+            ? answerOf(q, rowIndex + i)
+            : null,
         revision: cell?.revision ?? 0,
         markedDone: cell?.status === "done",
         solution: solutionOf(q),
