@@ -31,6 +31,7 @@ import { Legend } from "./Legend";
 import { LobbyPanel } from "./LobbyPanel";
 import { LiveHeader, type LiveControls } from "./LiveHeader";
 import { StudentGrid } from "./StudentGrid";
+import { useLiveToggles } from "./toggles";
 import { useDashboard } from "./useDashboard";
 import { useLiveCommands } from "./useLiveCommands";
 import { dashboardKey, evaluationKey } from "../queryKeys";
@@ -51,19 +52,13 @@ import { dashboardKey, evaluationKey } from "../queryKeys";
  *     is what the teacher opened it for, and the grid is one Escape away.
  */
 
-/** Toggles (F-DASH-02), their keys, and their initial state. */
-interface Toggles {
-  names: boolean;
-  answers: boolean;
-  results: boolean;
-}
-
 export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Route) => void }) {
   const t = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
   const toastError = useErrorToast();
-  const [toggles, setToggles] = useState<Toggles>({ names: true, answers: true, results: true });
+  // The display switches (F-DASH-02), remembered per browser (#80).
+  const [toggles, setToggles] = useLiveToggles();
   const [fullscreen, toggleFullscreen] = useFullscreen();
   const [selected, setSelected] = useState<{ attemptId: string; seatId: string; itemId: string } | null>(
     null,

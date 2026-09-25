@@ -22,6 +22,7 @@ import {
 } from "../test/live-fixtures";
 import { fail, makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
 import { LiveDashboard } from "./LiveDashboard";
+import { LIVE_TOGGLES_KEY } from "./toggles";
 import { dashboardKey } from "../queryKeys";
 
 /*
@@ -152,6 +153,37 @@ describe("LiveDashboard — keyboard", () => {
     expect(screen.getByText("Nadia Roux 0")).toBeInTheDocument();
     await user.keyboard("s");
     await waitFor(() => expect(results()).toHaveAttribute("aria-checked", "false"));
+  });
+
+  it("remembers the switches across a reload (#80)", async () => {
+    const user = userEvent.setup();
+    const first = setup();
+    await screen.findByText("Nadia Roux 0");
+    await user.keyboard("n");
+    await user.click(screen.getByRole("switch", { name: /answers/i }));
+    await waitFor(() =>
+      expect(screen.getByRole("switch", { name: /answers/i })).toHaveAttribute("aria-checked", "false"),
+    );
+    expect(JSON.parse(localStorage.getItem(LIVE_TOGGLES_KEY) ?? "null")).toEqual({
+      names: false,
+      answers: false,
+      results: true,
+    });
+    first.unmount();
+
+    setup();
+    expect(await screen.findByText("Student 1")).toBeInTheDocument();
+    expect(screen.queryByText("Nadia Roux 0")).not.toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: /names/i })).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("switch", { name: /answers/i })).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("switch", { name: /results/i })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("opens with the defaults when the stored preference is malformed", async () => {
+    localStorage.setItem(LIVE_TOGGLES_KEY, "{not json");
+    setup();
+    expect(await screen.findByText("Nadia Roux 0")).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: /answers/i })).toHaveAttribute("aria-checked", "true");
   });
 
   it("Space pauses a running evaluation and resumes a paused one", async () => {
