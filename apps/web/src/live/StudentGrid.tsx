@@ -114,15 +114,18 @@ export function StudentGrid({
   const studentCount = view.rows.filter((r) => !r.staff).length;
 
   // Mirrors of the server's own rules, so no button is offered that the API
-  // would refuse (`live/service.ts`): `extendTime` and `closeAttempt` only
-  // move an attempt that is `in_progress`, and only while the evaluation is
-  // still running or paused; `reopenAttempt` returns an `in_progress` attempt
-  // untouched, so it is offered for a finished one only — and never once the
-  // results are out, where giving somebody the paper back would contradict a
-  // grade already published.
+  // would refuse (`live/attempt.ts`, `live/control.ts`):
+  //   - `closeAttempt` moves any attempt that is `in_progress`, whatever the
+  //     state of the evaluation — a row left open in a finished evaluation
+  //     must stay closable (#95);
+  //   - `extendTime` is refused once the evaluation is `closed` or `released`,
+  //     and is offered here only while it is running or paused;
+  //   - `reopenAttempt` only while the evaluation is running or paused, the
+  //     only states in which a reopened student can write anything, and it
+  //     returns an `in_progress` attempt untouched, so it is offered for a
+  //     finished one only.
   const evaluationState: EvaluationState = view.evaluation.state;
   const live = evaluationState === "running" || evaluationState === "paused";
-  const canReopen = evaluationState !== "released";
 
   return (
     // `relative`, and not only `overflow-x-auto`: the accessible names inside
@@ -318,25 +321,25 @@ export function StudentGrid({
                       </IconButton>
                     )}
                     {running && live ? (
-                      <>
-                        <IconButton
-                          size="sm"
-                          label={t("live.row.extend")}
-                          onClick={() => onExtend(row)}
-                        >
-                          <Clock />
-                        </IconButton>
-                        <IconButton
-                          size="sm"
-                          danger
-                          label={t("live.row.close")}
-                          onClick={() => onClose(row)}
-                        >
-                          <DoorOpen />
-                        </IconButton>
-                      </>
+                      <IconButton
+                        size="sm"
+                        label={t("live.row.extend")}
+                        onClick={() => onExtend(row)}
+                      >
+                        <Clock />
+                      </IconButton>
                     ) : null}
-                    {finished && canReopen ? (
+                    {running ? (
+                      <IconButton
+                        size="sm"
+                        danger
+                        label={t("live.row.close")}
+                        onClick={() => onClose(row)}
+                      >
+                        <DoorOpen />
+                      </IconButton>
+                    ) : null}
+                    {finished && live ? (
                       <IconButton
                         size="sm"
                         danger

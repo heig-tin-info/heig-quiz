@@ -8,11 +8,11 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { GRACE_MS } from "@quiz/domain";
 import { registerForTests } from "@quiz/registry/server";
 
-import { evaluations } from "../../db/schema.js";
+import { attempts, evaluations, gradings } from "../../db/schema.js";
 import { subscribe, type Topic } from "../../events.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
@@ -392,6 +392,112 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
       .from(evaluations)
       .where(eq(evaluations.id, seed.evaluationId));
     expect(row!.closedAt).not.toBeNull();
+  });
+});
+
+describe("closing and reopening one attempt around the close (#95)", () => {
+  let own: Awaited<ReturnType<typeof seedLive>>;
+  let pupil: { id: string; headers: Record<string, string> };
+  let attemptId: string;
+
+  const standing = (id: string) =>
+    server.app.db
+      .select()
+      .from(gradings)
+      .where(and(eq(gradings.attemptId, id), ne(gradings.state, "superseded")));
+  const attemptRow = async (id: string) =>
+    (await server.app.db.select().from(attempts).where(eq(attempts.id, id)))[0]!;
+  const base = () => `/app/api/evaluations/${own.evaluationId}`;
+
+  beforeAll(async () => {
+    pupil = await server.signIn("student");
+    own = await seedLive(server.app.db, {
+      teacherId: teacher.id,
+      studentIds: [pupil.id],
+      questions: 2,
+    });
+    await post(`${base()}/start`, teacher.headers, { confirm: true });
+    const entered = await post(`${base()}/attempt`, pupil.headers, {});
+    attemptId = entered.json().view.attempt.id;
+    const itemId = entered.json().view.items[0].id;
+    await server.app.inject({
+      method: "PUT",
+      url: `/app/api/attempts/${attemptId}/answers/${itemId}`,
+      headers: pupil.headers,
+      payload: { payload: "Rome", revision: 1, clientTs: server.clock.now().toISOString() },
+    });
+  });
+
+  it("closes and reopens one attempt while the evaluation runs", async () => {
+    const closed = await post(`${base()}/attempts/${attemptId}/close`, teacher.headers);
+    expect(closed.statusCode).toBe(200);
+    expect(closed.json().state).toBe("expired");
+    const reopened = await post(`${base()}/attempts/${attemptId}/reopen`, teacher.headers);
+    expect(reopened.statusCode).toBe(200);
+    expect(reopened.json().state).toBe("in_progress");
+  });
+
+  it("refuses to reopen, or to extend, once the evaluation is closed", async () => {
+    expect((await post(`${base()}/close`, teacher.headers)).statusCode).toBe(200);
+    expect((await attemptRow(attemptId)).state).toBe("expired");
+    // The close ran the grading pass: one grading per item.
+    expect(await standing(attemptId)).toHaveLength(2);
+
+    // A reopened attempt there would be `in_progress` and yet refuse every
+    // write with `evaluation_closed`: a zombie nobody could close.
+    const reopened = await post(`${base()}/attempts/${attemptId}/reopen`, teacher.headers);
+    expect(reopened.statusCode).toBe(409);
+    expect(reopened.json().error).toBe("evaluation_not_live");
+    expect((await attemptRow(attemptId)).state).toBe("expired");
+
+    for (const body of [
+      { minutes: 5, scope: "all" },
+      { minutes: 5, scope: "attempt", attemptId },
+    ]) {
+      const extended = await post(`${base()}/extend`, teacher.headers, body);
+      expect(extended.statusCode).toBe(409);
+      expect(extended.json().error).toBe("evaluation_finished");
+    }
+  });
+
+  it("closes an attempt left open in a closed evaluation, and grades it", async () => {
+    // The row a reopen after the close used to leave behind: `in_progress`,
+    // and never graded as such.
+    await server.app.db.delete(gradings).where(eq(gradings.attemptId, attemptId));
+    await server.app.db
+      .update(attempts)
+      .set({ state: "in_progress", closedAt: null, closedBy: null, deadlineAt: null })
+      .where(eq(attempts.id, attemptId));
+
+    const closed = await post(`${base()}/attempts/${attemptId}/close`, teacher.headers);
+    expect(closed.statusCode).toBe(200);
+    expect(closed.json().state).toBe("expired");
+    const row = await attemptRow(attemptId);
+    expect(row.closedBy).toBe("teacher");
+    expect(await standing(attemptId)).toHaveLength(2);
+  });
+
+  it("closes one left open in a released evaluation, without touching its grades", async () => {
+    await server.app.db
+      .update(evaluations)
+      .set({ state: "released" })
+      .where(eq(evaluations.id, own.evaluationId));
+    await server.app.db.delete(gradings).where(eq(gradings.attemptId, attemptId));
+    await server.app.db
+      .update(attempts)
+      .set({ state: "in_progress", closedAt: null, closedBy: null })
+      .where(eq(attempts.id, attemptId));
+
+    const closed = await post(`${base()}/attempts/${attemptId}/close`, teacher.headers);
+    expect(closed.statusCode).toBe(200);
+    expect(closed.json().state).toBe("expired");
+    // Published grades stay the teacher's to change, from the panel.
+    expect(await standing(attemptId)).toHaveLength(0);
+
+    const reopened = await post(`${base()}/attempts/${attemptId}/reopen`, teacher.headers);
+    expect(reopened.statusCode).toBe(409);
+    const extended = await post(`${base()}/extend`, teacher.headers, { minutes: 1, scope: "all" });
+    expect(extended.statusCode).toBe(409);
   });
 });
 

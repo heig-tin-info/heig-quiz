@@ -94,6 +94,11 @@ interface EvaluationGradingJob {
   evaluationId: string;
   /** Restricts the pass to these items; omitted = the whole evaluation. */
   itemIds?: string[];
+  /**
+   * Restricts the pass to these attempts; omitted = every attempt. One
+   * attempt closed by the teacher after the evaluation's own close (#95).
+   */
+  attemptIds?: string[];
   /** Stamped on every grading this pass writes (F-GRADE-06). */
   regradeNote?: string;
 }
@@ -166,7 +171,11 @@ async function loadPass(
   const attemptRows = await db
     .select()
     .from(attempts)
-    .where(eq(attempts.evaluationId, evaluation.id));
+    .where(
+      job.attemptIds
+        ? and(eq(attempts.evaluationId, evaluation.id), inArray(attempts.id, job.attemptIds))
+        : eq(attempts.evaluationId, evaluation.id),
+    );
   if (items.length === 0 || attemptRows.length === 0) return null;
 
   const answerRows = await db
