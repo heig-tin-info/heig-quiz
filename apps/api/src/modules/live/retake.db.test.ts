@@ -557,6 +557,48 @@ describe("the screens with several attempts", () => {
     expect(view.rows.find((r) => r.userId === seed.studentIds[1])!.attemptCount).toBe(0);
   });
 
+  it("keeps skip and flag per attempt: attempt 2 starts clean, the grid shows attempt 2's", async () => {
+    const { app, seed, evaluation, items } = await exercise();
+    const student = seed.studentIds[0]!;
+    const entered = await live.enterEvaluation(db, {
+      evaluation,
+      participant: await participant(evaluation, student),
+      now: app.clock.now(),
+    });
+    const first = entered.attempt;
+    await live.setFlagged(db, { evaluation, attempt: first, itemId: items[0]!.item.id, flagged: true, now: app.clock.now() });
+    await live.setSkipped(db, { evaluation, attempt: first, itemId: items[1]!.item.id, skipped: true, now: app.clock.now() });
+    await sit(app, evaluation, items, student, [], first);
+
+    const second = await retake(app, evaluation, student);
+    let view = await live.dashboardView(db, await reload(db, evaluation.id), {
+      now: app.clock.now(),
+      includeAnswers: false,
+      includeResults: false,
+    });
+    let row = view.rows.find((r) => r.userId === student)!;
+    expect(row.attemptId).toBe(second.id);
+    // Attempt 1's flag and skip do not leak into the row of attempt 2.
+    expect(row.cells.map((c) => c.flagged)).toEqual([false, false]);
+    expect(row.cells.map((c) => c.status)).toEqual(["empty", "empty"]);
+
+    // The same writes work on attempt 2, and only there.
+    await live.setFlagged(db, { evaluation, attempt: second, itemId: items[1]!.item.id, flagged: true, now: app.clock.now() });
+    await live.setSkipped(db, { evaluation, attempt: second, itemId: items[0]!.item.id, skipped: true, now: app.clock.now() });
+    view = await live.dashboardView(db, await reload(db, evaluation.id), {
+      now: app.clock.now(),
+      includeAnswers: false,
+      includeResults: false,
+    });
+    row = view.rows.find((r) => r.userId === student)!;
+    expect(row.cells.map((c) => c.flagged)).toEqual([false, true]);
+    expect(row.cells[0]!.status).toBe("skipped");
+    const secondView = await live.attemptView(db, evaluation, second, app.clock.now());
+    expect(secondView.items.find((i) => i.id === items[1]!.item.id)).toMatchObject({ flagged: true });
+    const firstView = await live.attemptView(db, evaluation, (await live.attemptById(db, first.id))!, app.clock.now());
+    expect(firstView.items.find((i) => i.id === items[0]!.item.id)).toMatchObject({ flagged: true });
+  });
+
   it("lets the grading panel reach every attempt, numbered", async () => {
     const { app, seed, evaluation, items } = await exercise();
     const student = seed.studentIds[0]!;

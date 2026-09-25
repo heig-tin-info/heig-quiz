@@ -4,7 +4,7 @@
 
 Accepted (2026-09-25, issue #92, with `@quiz/domain/retake`,
 `apps/api/src/modules/grading/kept.ts`, migration
-`0014_exercise_retakes.sql` and `POST /evaluations/:id/retake`). Settles
+`0015_exercise_retakes.sql` and `POST /evaluations/:id/retake`). Settles
 open question 12 of `docs/spec/06-questions-ouvertes.md`.
 
 ## Context
@@ -155,7 +155,7 @@ through (`scoreVisible`).
 
 ### Rollback
 
-Migration `0014` is not reversible by reverting the code alone. Reverting
+Migration `0015` is not reversible by reverting the code alone. Reverting
 the application after it ran needs a DOWN migration that drops
 `attempts_evaluation_user_open_uq` and `attempts_evaluation_user_number_uq`,
 recreates `attempts_evaluation_user_uq (evaluation_id, user_id)` and drops
