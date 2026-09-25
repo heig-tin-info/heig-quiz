@@ -65,26 +65,24 @@ describe("spreadsheetRows", () => {
   // rows, so the reader's quirks have to be settled here.
   const roster = async (format: "xlsx" | "ods") => {
     const { write } = await import("hucre");
-    const bytes = await write(
-      {
-        sheets: [
-          {
-            name: "Liste",
-            rows: [
-              ["Nom", "Prénom", "E-mail", "Temps sup."],
-              ["Dupont", "Marie", "marie@heig-vd.ch", 1.5],
-              ["Rochat", "Léa", "lea@heig-vd.ch", 0.25],
-              ["Muller", "Jean", null, 25],
-            ],
-            cells: new Map([
-              ["1,3", { style: { numFmt: "0%" } }],
-              ["2,3", { style: { numFmt: "0%" } }],
-            ]),
-          },
-        ],
-      },
+    const bytes = await write({
+      sheets: [
+        {
+          name: "Liste",
+          rows: [
+            ["Nom", "Prénom", "E-mail", "Temps sup."],
+            ["Dupont", "Marie", "marie@heig-vd.ch", 1.5],
+            ["Rochat", "Léa", "lea@heig-vd.ch", 0.25],
+            ["Muller", "Jean", null, 25],
+          ],
+          cells: new Map([
+            ["1,3", { style: { numFmt: "0%" } }],
+            ["2,3", { style: { numFmt: "0%" } }],
+          ]),
+        },
+      ],
       format,
-    );
+    });
     return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
   };
 
