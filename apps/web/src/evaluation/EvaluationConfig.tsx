@@ -329,7 +329,12 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
         {step === "questions" ? (
           <ItemsStep detail={data} />
         ) : step === "timing" ? (
-          <TimingStep detail={data} patch={patch} showMissing={timingChecked} />
+          <TimingStep
+            detail={data}
+            patch={patch}
+            showMissing={timingChecked}
+            onOpenDashboard={() => navigate({ view: "live", id })}
+          />
         ) : (
           <LaunchStep detail={data} navigate={navigate} />
         )}

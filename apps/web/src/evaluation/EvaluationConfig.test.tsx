@@ -108,6 +108,10 @@ describe("EvaluationConfig", () => {
     });
 
     expect(await screen.findByText(/version 3 available/i)).toBeInTheDocument();
+    // #85: the frozen version reads in a column of its own, the newer one beside it.
+    const row = screen.getByText(stale.internalName).closest("li")!;
+    expect(within(row).getByText("v1")).toBeInTheDocument();
+    expect(within(row).getByText("v3")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /update it/i }));
     await waitFor(() =>
       expect(calls.some((c) => c.url.endsWith("/items/update-versions"))).toBe(true),
@@ -140,6 +144,21 @@ describe("EvaluationConfig", () => {
       expect(patch?.body).toHaveProperty("opensAt", expect.any(String));
       expect(patch?.body).toHaveProperty("closesAt", expect.any(String));
     });
+  });
+
+  it("the matched preset's card says the values in force, the other what it would set (#87)", async () => {
+    const base = makeEvaluationDetail();
+    mockFetch(routes({ ...base, evaluation: { ...base.evaluation, durationS: 30 * 60 } }));
+    renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+      route: "/evaluations/x?step=timing",
+    });
+    const inClass = await screen.findByRole("button", { name: /in-class evaluation/i });
+    expect(inClass).toHaveAttribute("aria-pressed", "true");
+    expect(inClass).toHaveTextContent(/^In-class evaluation30 minutes each, waiting room opened by you/);
+    expect(inClass).not.toHaveTextContent(/45/);
+    expect(screen.getByRole("button", { name: /homework exercise/i })).toHaveTextContent(
+      /Sets a common deadline/,
+    );
   });
 
   /*
@@ -413,7 +432,9 @@ describe("EvaluationConfig", () => {
 
   it("freezes the question list once the evaluation is opened, nobody entered yet (#79)", async () => {
     const base = makeEvaluationDetail();
-    mockFetch(routes({ ...base, evaluation: { ...base.evaluation, state: "running" } }));
+    mockFetch(
+      routes({ ...base, editable: false, evaluation: { ...base.evaluation, state: "running" } }),
+    );
     renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
       route: "/evaluations/x?step=questions",
     });
@@ -423,6 +444,53 @@ describe("EvaluationConfig", () => {
       expect(remove).toBeDisabled();
     }
     for (const points of screen.getAllByRole("spinbutton")) expect(points).toBeDisabled();
+  });
+
+  describe("the configuration locks while the evaluation runs (#86)", () => {
+    const inState = (state: "running" | "closed", attemptCount: number) => {
+      const base = makeEvaluationDetail();
+      return {
+        ...base,
+        editable: false,
+        attemptCount,
+        evaluation: { ...base.evaluation, state },
+      };
+    };
+
+    it("disables everything but the access code, nobody entered yet, and says where time is added", async () => {
+      const user = userEvent.setup();
+      navigate.mockClear();
+      mockFetch(routes(inState("running", 0)));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      expect(await screen.findByText(/locked until it closes/i)).toBeInTheDocument();
+      expect(screen.getByText(/use the live dashboard/i)).toBeInTheDocument();
+      expect(screen.queryByText(/the structure is frozen/i)).toBeNull();
+      expect(screen.getByRole("button", { name: /in-class evaluation/i })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /homework exercise/i })).toBeDisabled();
+      expect(screen.getByLabelText(/^minutes$/i)).toBeDisabled();
+
+      await user.click(screen.getByRole("button", { name: /^advanced options$/i }));
+      expect(await screen.findByRole("radio", { name: /^on release$/i })).toBeDisabled();
+      expect(screen.getByRole("switch", { name: /show the expected answer/i })).toBeDisabled();
+      expect(screen.getByRole("textbox", { name: /access code/i })).toBeEnabled();
+
+      await user.click(screen.getByRole("button", { name: /^live dashboard$/i }));
+      expect(navigate).toHaveBeenCalledWith({ view: "live", id: EVALUATION_ID });
+    });
+
+    it("keeps the feedback policy editable once closed, before the release", async () => {
+      const user = userEvent.setup();
+      mockFetch(routes(inState("closed", 3)));
+      renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+        route: "/evaluations/x?step=timing",
+      });
+      expect(await screen.findByText(/the structure is frozen/i)).toBeInTheDocument();
+      expect(screen.queryByText(/locked until it closes/i)).toBeNull();
+      await user.click(screen.getByRole("button", { name: /^advanced options$/i }));
+      expect(await screen.findByRole("radio", { name: /^on release$/i })).toBeEnabled();
+    });
   });
 
   it("renders the failed state of its own query", async () => {

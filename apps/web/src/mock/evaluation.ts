@@ -1,5 +1,8 @@
 /** Section 3 of the mock — see `index.ts` for the layout. */
 import {
+  configLock,
+  isConfigEditable,
+  isConfigFieldWritable,
   isFeedbackAllowed,
   itemListLock,
   missingTimingFields,
@@ -679,7 +682,7 @@ const evaluationDetail = (e: MockEvaluation) => ({
     .filter((i) => i.latestVersionNumber !== null && i.latestVersionNumber > i.versionNumber)
     .map((i) => i.id),
   attemptCount: attemptCountOf(e),
-  editable: attemptCountOf(e) === 0,
+  editable: isConfigEditable(e.state, attemptCountOf(e)),
   self: selfOf(e),
 });
 
@@ -803,6 +806,19 @@ on("GET", "/app/api/evaluations/:id/pools", (m) => {
 });
 on("PATCH", "/app/api/evaluations/:id", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);
+  // #86: what a patch may touch is the domain's `configLock`, as on the server.
+  const lock = configLock(e.state, attemptCountOf(e));
+  if (Object.keys(body).some((k) => !isConfigFieldWritable(lock, k))) {
+    throw new MockPayload(
+      409,
+      lock === "running"
+        ? {
+            error: "running_locked",
+            message: "the evaluation is running: its configuration is locked until it closes",
+          }
+        : { error: "locked", message: "an attempt exists: the structure is frozen" },
+    );
+  }
   const settings = body.settings as { lobby?: LobbyName } | undefined;
   const feedback = body.feedbackPolicy as { when?: FeedbackWhen } | undefined;
   // F-EVAL-11, #78: the server refuses `immediate` in class, whichever half

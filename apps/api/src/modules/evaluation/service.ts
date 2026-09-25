@@ -15,7 +15,8 @@
  *     `modules/live/service.ts`, which calls back into `applyState` here;
  *   - a structural change is refused once an attempt exists, because the
  *     wording, the order and the scale a student saw can never move under
- *     them.
+ *     them; and while the evaluation runs, the whole configuration is locked
+ *     but for the title and the access control (#86, `configLock`).
  */
 import { randomUUID } from "node:crypto";
 
@@ -45,6 +46,9 @@ import {
 
 import {
   EVALUATION_STATES,
+  configLock,
+  isConfigEditable,
+  isConfigFieldWritable,
   itemListLock,
   isFeedbackAllowed,
   missingTimingFields,
@@ -113,6 +117,17 @@ export class IllegalTransition extends EvaluationError {
 export class Locked extends EvaluationError {
   constructor(message = "an attempt exists: the structure is frozen") {
     super("locked", 409, message);
+  }
+}
+
+/**
+ * The evaluation is `running` or `paused` (#86): its configuration is locked
+ * until it closes, whether or not anybody has entered. Time is added from the
+ * live dashboard, not through a patch.
+ */
+export class RunningLocked extends EvaluationError {
+  constructor() {
+    super("running_locked", 409, "the evaluation is running: its configuration is locked until it closes");
   }
 }
 
@@ -590,7 +605,7 @@ export async function evaluationDetail(
     totalPoints: totalPointsOf(items),
     staleItems: staleOf(items),
     attemptCount: attemptsSoFar,
-    editable: attemptsSoFar === 0,
+    editable: isConfigEditable(row.state, attemptsSoFar),
     self: await selfOf(db, row, viewerId),
   };
 }
@@ -794,23 +809,22 @@ export async function byId(db: DbOrTx, id: string): Promise<EvaluationRecord | n
 }
 
 /**
- * Fields a teacher may still change once a student has an attempt: the title,
- * the access control and the feedback policy. Everything else decides what a
- * student sees or how long they have, and is frozen (F-EVAL-03).
+ * What a patch may still touch is `configLock`'s to say (`@quiz/domain`):
+ * everything while nothing locks the configuration; the title, the access
+ * control and the feedback policy once an attempt exists (F-EVAL-03); only
+ * the title and the access control while the evaluation runs (#86) — access
+ * must stay fixable mid-exam, for a student the allowlist locks out.
  */
-const SAFE_FIELDS = new Set(["title", "accessCode", "ipAllowlist", "feedbackPolicy"]);
-
-function isStructural(patch: EvaluationPatch): boolean {
-  return Object.keys(patch).some((k) => !SAFE_FIELDS.has(k));
-}
-
 export async function patchEvaluation(
   db: Db,
   row: EvaluationRecord,
   patch: EvaluationPatch,
   ctx: { attemptCount: number },
 ): Promise<EvaluationRecord> {
-  if (ctx.attemptCount > 0 && isStructural(patch)) throw new Locked();
+  const lock = configLock(row.state, ctx.attemptCount);
+  if (Object.keys(patch).some((k) => !isConfigFieldWritable(lock, k))) {
+    throw lock === "running" ? new RunningLocked() : new Locked();
+  }
   const next: Partial<typeof evaluations.$inferInsert> = { updatedAt: new Date() };
   if (patch.title !== undefined) next.title = patch.title;
   if (patch.settings !== undefined) {

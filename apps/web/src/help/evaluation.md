@@ -39,6 +39,12 @@ rest lives under **Advanced options**: navigation, presentation, shuffling,
 progress bar, access code, grading scale. Extra time from the roster applies
 on top of the duration.
 
+While the evaluation is running or paused, this step is locked until it
+closes: only the title and the access code still change — the code so that a
+student shut out can be let in. Extra time for everybody is given from the
+live dashboard. Once it is closed, the feedback policy can change again until
+the results are released.
+
 ## Launch
 
 A summary, then one action: open the waiting room, or schedule it. Once the

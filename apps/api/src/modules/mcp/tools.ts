@@ -403,7 +403,8 @@ export const TOOLS: Tool[] = [
     title: "Update an evaluation",
     description:
       "Changes an evaluation's title, settings, feedback policy, grading scale or schedule (`opensAt`, " +
-      "`closesAt` as ISO date-times, `durationS` in seconds). Does not start it.",
+      "`closesAt` as ISO date-times, `durationS` in seconds). Does not start it. While it is running or " +
+      "paused, only the title, the access code and the IP allowlist may change.",
     input: z.object({ evaluationId: Id, ...EvaluationPatch.shape }),
     annotations: { ...WRITE, idempotentHint: true },
     run: (api, { evaluationId, ...body }) => api.patch(`/evaluations/${evaluationId}`, body),
