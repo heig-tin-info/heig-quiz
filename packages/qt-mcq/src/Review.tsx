@@ -4,9 +4,13 @@
  * What it may show is decided upstream: `solution` is `null` when the feedback
  * policy hides the key, and the component then shows what the student ticked
  * without ever guessing the rest.
+ *
+ * `sections` (#109): without the prompt the choices stay — they ARE the
+ * answer; without the solution the choices the student missed lose their
+ * mark, while the verdict on each ticked choice stays, since it is the grade.
  */
 import type { MarkdownRenderer, ReviewProps, StringOverrides } from "@quiz/core/client";
-import { resolveStrings } from "@quiz/core/client";
+import { resolveStrings, showsSection } from "@quiz/core/client";
 import type { McqAnswer, McqDetails, McqSolution, McqStudent } from "./schema.js";
 import { mcqReviewStrings, type McqReviewStringKey } from "./strings.js";
 import { type BadgeTone, cx, helpClass, markdown, ScoreHeader, Verdict } from "@quiz/ui";
@@ -23,18 +27,20 @@ export function McqReview({
   details,
   points,
   maxPoints,
+  sections,
   strings,
   renderMarkdown,
 }: McqReviewProps) {
   const s = resolveStrings(mcqReviewStrings, strings);
   const selected = answer?.selected ?? [];
   const key = solution === null ? null : new Set(solution.correct);
+  const showKey = showsSection(sections, "solution");
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-fg">
-        {markdown(renderMarkdown, student.prompt)}
-      </p>
+      {showsSection(sections, "prompt") ? (
+        <p className="text-sm text-fg">{markdown(renderMarkdown, student.prompt)}</p>
+      ) : null}
 
       <ul className="flex flex-col gap-1.5">
         {student.choices.map((choice) => {
@@ -49,7 +55,7 @@ export function McqReview({
                 ? { tone: "success", label: s.correct }
                 : chosen && !correct
                   ? { tone: "danger", label: s.incorrect }
-                  : !chosen && correct
+                  : !chosen && correct && showKey
                     ? { tone: "warning", label: s.missed }
                     : null;
           return (

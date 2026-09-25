@@ -16,6 +16,7 @@ import {
   sourceTone,
   type GradingOrder,
 } from "./labels";
+import { ALL_PARTS_SHOWN, reviewSections, type ShownParts } from "./parts";
 
 /**
  * One answer, open: the body of the detail area (`StepAnswers`), which holds
@@ -37,6 +38,7 @@ export function EntryDetail({
   entry,
   item,
   order,
+  parts = ALL_PARTS_SHOWN,
   explanation,
   onValidate,
   validating,
@@ -46,6 +48,8 @@ export function EntryDetail({
   entry: GradingEntry;
   item: GradingQueueItem;
   order: GradingOrder;
+  /** Which of the question's parts are drawn (#109); the answer always is. */
+  parts?: ShownParts;
   /** The question's explanation, when the results view could be read. */
   explanation?: string | null;
   onValidate: () => void;
@@ -62,9 +66,11 @@ export function EntryDetail({
     <div className="space-y-4 px-4 py-4 sm:px-5">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
         {/* 0-based on the wire; every screen numbers questions from 1. */}
-        <h3 className="min-w-0 truncate text-sm font-semibold text-fg">
-          {item.position + 1}. {item.internalName}
-        </h3>
+        {parts.internalName ? (
+          <h3 className="min-w-0 truncate text-sm font-semibold text-fg">
+            {item.position + 1}. {item.internalName}
+          </h3>
+        ) : null}
         {order === "student" ? (
           <span className="flex items-center gap-1.5">
             <Badge tone="zinc">{typeLabel(t, item.type)}</Badge>
@@ -72,7 +78,14 @@ export function EntryDetail({
           </span>
         ) : null}
         <Tip label={t("grading.regrade.tip")}>
-          <Button variant="ghost" size="sm" onClick={onRegrade} aria-describedby={tipId}>
+          <Button
+            variant="ghost"
+            size="sm"
+            // Alone on its line, its icon lines up with the answer's left edge.
+            className={parts.internalName ? "" : "-ml-3"}
+            onClick={onRegrade}
+            aria-describedby={tipId}
+          >
             <RefreshCcw /> {t("grading.regrade.open")}
           </Button>
         </Tip>
@@ -93,12 +106,13 @@ export function EntryDetail({
         points={grading ? grading.points : null}
         maxPoints={grading?.maxPoints ?? item.points}
         audience="teacher"
+        sections={reviewSections(parts)}
       />
 
       {/* A comment is the teacher's only when the grading is: an automatic
           pass puts its own note here ("runner unavailable"), and labelling
           that "visible to the student" would be a promise nobody made. */}
-      {grading?.comment ? (
+      {grading?.comment && parts.comment ? (
         <div className="rounded-field border border-line-strong bg-surface p-3">
           <p className="flex items-center gap-1.5 text-xs text-fg-faint">
             <MessageSquare className="size-3.5" />
@@ -108,7 +122,7 @@ export function EntryDetail({
         </div>
       ) : null}
 
-      {explanation ? (
+      {explanation && parts.explanation ? (
         <NotePanel eyebrow={t("grading.explanation")}>
           <MarkdownView size="sm" source={explanation} />
         </NotePanel>

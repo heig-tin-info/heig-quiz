@@ -1,10 +1,12 @@
+import { Eye } from "lucide-react";
 import { useId } from "react";
 
 import type { GradingConfidence, GradingSource } from "@quiz/contracts";
 
 import { useT, type Dict } from "../i18n";
-import { Segmented, Select, Switch } from "../ui";
+import { Button, Checkbox, Popover, Segmented, Select, Switch } from "../ui";
 import type { GradingOrder } from "./labels";
+import { ANSWER_PARTS, PART_LABELS, type ShownParts } from "./parts";
 import { ANY, type Any, type StateFilter } from "./useGradingTraversal";
 
 /**
@@ -29,7 +31,8 @@ const CONFIDENCE_HELP: Record<GradingConfidence | Any, keyof Dict> = {
 
 /**
  * The filter row of the grading panel: the order of the traversal, the state
- * filter, who graded and with what confidence, and the names switch — with
+ * filter, who graded and with what confidence, the parts of an answer shown
+ * (#109), and the names switch — with
  * the note that says the list is anonymous while it is. Every control is the
  * panel's state; this only draws it.
  */
@@ -44,6 +47,8 @@ export function GradingFilters({
   onConfidence,
   showNames,
   onShowNames,
+  parts,
+  onParts,
 }: {
   order: GradingOrder;
   onOrder: (order: GradingOrder) => void;
@@ -55,6 +60,8 @@ export function GradingFilters({
   onConfidence: (confidence: GradingConfidence | Any) => void;
   showNames: boolean;
   onShowNames: (show: boolean) => void;
+  parts: ShownParts;
+  onParts: (parts: ShownParts) => void;
 }) {
   const t = useT();
   const sourceId = useId();
@@ -119,6 +126,7 @@ export function GradingFilters({
             <option value="high">{t("grading.filter.confidence.high")}</option>
           </Select>
         </span>
+        <PartsMenu parts={parts} onParts={onParts} />
         <span className="flex-1" />
         <span className="flex items-center gap-2 text-[13px] font-medium text-fg-muted">
           <Switch checked={showNames} onChange={onShowNames} label={t("grading.showNames")} />
@@ -131,5 +139,58 @@ export function GradingFilters({
       </p>
       {!showNames ? <p className="text-xs text-fg-faint">{t("grading.anonymousNote")}</p> : null}
     </div>
+  );
+}
+
+/**
+ * "Show": which parts of an open answer are drawn (#109), as a checkbox list
+ * in a popover — a menu would close on the first tick, and a teacher
+ * decluttering the screen usually unticks three things in a row. The
+ * student's answer heads the list, ticked and disabled: it is what is
+ * graded, and seeing it there says the rest can go without losing it.
+ */
+function PartsMenu({
+  parts,
+  onParts,
+}: {
+  parts: ShownParts;
+  onParts: (parts: ShownParts) => void;
+}) {
+  const t = useT();
+  const shown = ANSWER_PARTS.filter((p) => parts[p]).length;
+  const all = shown === ANSWER_PARTS.length;
+  return (
+    <Popover
+      label={t("grading.parts.label")}
+      align="start"
+      trigger={
+        <Button variant="secondary" size="sm">
+          <Eye />
+          {all
+            ? t("grading.parts.open")
+            : t("grading.parts.openSome", { n: shown, total: ANSWER_PARTS.length })}
+        </Button>
+      }
+    >
+      <fieldset>
+        <legend className="mb-2.5 text-[13px] font-semibold text-fg">
+          {t("grading.parts.label")}
+        </legend>
+        <ul className="space-y-2.5">
+          <li>
+            <Checkbox label={t("grading.parts.answer")} checked disabled readOnly />
+          </li>
+          {ANSWER_PARTS.map((part) => (
+            <li key={part}>
+              <Checkbox
+                label={t(PART_LABELS[part])}
+                checked={parts[part]}
+                onChange={(e) => onParts({ ...parts, [part]: e.target.checked })}
+              />
+            </li>
+          ))}
+        </ul>
+      </fieldset>
+    </Popover>
   );
 }

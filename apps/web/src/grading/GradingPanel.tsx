@@ -23,6 +23,7 @@ import { gradingLinks } from "./index";
 import { ORDER_WORDS, type GradingOrder } from "./labels";
 import { RegradeSheet } from "./RegradeSheet";
 import { OverrideSheet } from "./OverrideSheet";
+import { ALL_PARTS_SHOWN, type ShownParts } from "./parts";
 import { useGradingInvalidate } from "./useGradingInvalidate";
 import { useGradingKeys } from "./useGradingKeys";
 import {
@@ -80,6 +81,7 @@ export function GradingPanel({
   const [stateFilter, setStateFilter] = useState<StateFilter>("all");
   const [source, setSource] = useState<GradingSource | Any>(ANY);
   const [confidence, setConfidence] = useState<GradingConfidence | Any>(ANY);
+  const [parts, setParts] = useState<ShownParts>(ALL_PARTS_SHOWN);
   const [index, setIndex] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const [overrideKey, setOverrideKey] = useState<string | null>(null);
@@ -372,6 +374,8 @@ export function GradingPanel({
             onConfidence={setConfidence}
             showNames={showNames}
             onShowNames={setShowNames}
+            parts={parts}
+            onParts={setParts}
           />
 
           {/* Always there by question, even at zero: the banner going away
@@ -438,6 +442,7 @@ export function GradingPanel({
                 onValidate={validate.mutate}
                 onOverride={setOverrideKey}
                 onRegrade={(item) => setRegradeId(item.id)}
+                parts={parts}
               />
             </section>
           </div>

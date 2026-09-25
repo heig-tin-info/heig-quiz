@@ -9,7 +9,7 @@
  * `studentDetails`; this component renders what it was given and never
  * reconstructs a key.
  */
-import { fmt, resolveStrings } from "@quiz/core/client";
+import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
 import type { MarkdownRenderer, ReviewProps } from "@quiz/core/client";
 
 import { Plot, SchematicView, type CanvasStrings } from "./canvas/index.js";
@@ -126,19 +126,23 @@ export function CircuitReview({
   points,
   maxPoints,
   audience,
+  sections,
   strings,
   canvasStrings,
   renderMarkdown,
 }: CircuitReviewProps) {
   const s = resolveStrings(REVIEW_STRINGS, strings);
   const teacher = audience === "teacher";
+  /* The reference schematic is the key; the reader may put it away (#109).
+     The waveforms' expected curves stay: they are the verdict's evidence. */
+  const reference = teacher && showsSection(sections, "solution") ? (solution?.reference ?? null) : null;
 
   /* The statement, so a verdict is never read without the question it judges. */
-  const statement = (
+  const statement = showsSection(sections, "prompt") ? (
     <div className="whitespace-pre-wrap text-sm text-fg">
       {markdown(renderMarkdown, student.prompt)}
     </div>
-  );
+  ) : null;
 
   const canvas = canvasStrings === undefined ? {} : { strings: canvasStrings };
 
@@ -198,15 +202,15 @@ export function CircuitReview({
          * the KEY, and the only reason it is on this screen at all is that
          * the teacher is correcting against it.
          */
-        <div className={cx("grid gap-3", teacher && solution?.reference ? "lg:grid-cols-2" : "")}>
+        <div className={cx("grid gap-3", reference ? "lg:grid-cols-2" : "")}>
           <section className={cx(card, "flex flex-col gap-2 p-4")}>
             <h3 className={sectionTitle}>{s.yourCircuit}</h3>
             <SchematicView schematic={schematic} {...canvas} />
           </section>
-          {teacher && solution?.reference ? (
+          {reference ? (
             <section className={cx(card, "flex flex-col gap-2 p-4")}>
               <h3 className={sectionTitle}>{s.reference}</h3>
-              <SchematicView schematic={solution.reference} {...canvas} />
+              <SchematicView schematic={reference} {...canvas} />
             </section>
           ) : null}
         </div>
@@ -327,7 +331,7 @@ export function CircuitReview({
             ))
         : null}
 
-      {teacher && solution !== null && solution.reference === null ? (
+      {teacher && showsSection(sections, "solution") && solution !== null && solution.reference === null ? (
         <p className={hint}>{s.noReference}</p>
       ) : null}
     </div>

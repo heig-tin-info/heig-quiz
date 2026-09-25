@@ -2,10 +2,11 @@
  * The `short` review: WHICH matcher accepted the answer, not a bare score.
  *
  * `solution` is `null` when the feedback policy hides the key; the component
- * then shows the verdict without the accepted answers.
+ * then shows the verdict without the accepted answers — and so does
+ * `sections.solution === false` (#109).
  */
 import type { MarkdownRenderer, ReviewProps, StringOverrides } from "@quiz/core/client";
-import { resolveStrings } from "@quiz/core/client";
+import { resolveStrings, showsSection } from "@quiz/core/client";
 import type { ShortAnswer, ShortDetails, ShortSolution, ShortStudent } from "./schema.js";
 import { shortReviewStrings, type ShortReviewStringKey } from "./strings.js";
 import { type BadgeTone, helpClass, markdown, ScoreHeader, Verdict } from "@quiz/ui";
@@ -27,6 +28,7 @@ export function ShortReview({
   details,
   points,
   maxPoints,
+  sections,
   strings,
   renderMarkdown,
 }: ShortReviewProps) {
@@ -44,9 +46,9 @@ export function ShortReview({
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-sm text-fg">
-        {markdown(renderMarkdown, student.prompt)}
-      </p>
+      {showsSection(sections, "prompt") ? (
+        <p className="text-sm text-fg">{markdown(renderMarkdown, student.prompt)}</p>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[13px] font-medium text-fg">{s.yourAnswer}</span>
@@ -66,7 +68,7 @@ export function ShortReview({
         </p>
       ) : null}
 
-      {solution !== null && solution.expected.length > 0 ? (
+      {solution !== null && solution.expected.length > 0 && showsSection(sections, "solution") ? (
         <div className="flex flex-col gap-1">
           <span className="text-[13px] font-medium text-fg">{s.expected}</span>
           <ul className="flex flex-wrap gap-1.5">

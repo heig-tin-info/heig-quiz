@@ -477,6 +477,20 @@ const scenes = [
       await p.getByRole("button", { name: /^(Re-grade|Re-corriger)$/ }).first().hover();
       await p.waitForTimeout(400);
     } },
+  // #109: the "Show" menu open, then the answers alone (everything unticked).
+  { name: "grading-parts-menu", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("button", { name: /^(Show|Afficher)/ }).first().click();
+    } },
+  { name: "grading-parts-answer-only", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("button", { name: /^(Show|Afficher)/ }).first().click();
+      for (const name of [/^(Internal name|Nom interne)$/, /^(Prompt|Énoncé)$/, /^(Explanation|Explication)$/, /^(Expected answer|Réponse attendue)/, /^(Grading comment|Commentaire de correction)$/]) {
+        await p.getByRole("checkbox", { name }).click();
+      }
+      await p.keyboard.press("Escape");
+      await p.waitForTimeout(200);
+    } },
   { name: "grading-by-student-fold", role: "teacher", path: "/evaluations/closed/grading", fold: true, act: async (p) => {
       await skipCoach(p);
       await p.locator("label").filter({ hasText: /^(By student|Par étudiant)$/ }).first().click();

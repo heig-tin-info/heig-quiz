@@ -9,7 +9,7 @@
  */
 import { useMemo, useState } from "react";
 
-import { resolveStrings } from "@quiz/core/client";
+import { resolveStrings, showsSection } from "@quiz/core/client";
 import type { MarkdownRenderer, ReviewProps } from "@quiz/core/client";
 import { breakdownOf, hint, markdown } from "@quiz/ui";
 
@@ -47,6 +47,7 @@ export function CodeImageReview({
   details,
   points,
   maxPoints,
+  sections,
   strings,
   renderMarkdown,
 }: CodeImageReviewProps) {
@@ -69,11 +70,13 @@ export function CodeImageReview({
     [breakdown, spec.palette, count],
   );
 
-  const statement = (
+  // The target picture stays with the answer whatever `sections` says: it is
+  // what the output is judged against, not the teacher's solution (#109).
+  const statement = showsSection(sections, "prompt") ? (
     <div className="whitespace-pre-wrap text-sm text-fg">
       {markdown(renderMarkdown, student.prompt)}
     </div>
-  );
+  ) : null;
 
   if (breakdown === null) {
     return (
@@ -104,7 +107,7 @@ export function CodeImageReview({
         s={s}
         emptyLabel={s.noImage}
       />
-      <ReferenceSolutionCard solution={solution} s={s} />
+      {showsSection(sections, "solution") ? <ReferenceSolutionCard solution={solution} s={s} /> : null}
     </div>
   );
 }

@@ -17,6 +17,7 @@ import {
 import { EntryDetail } from "./EntryDetail";
 import { EntryList, EntryPicker, entryKey, type RowLabel } from "./EntryList";
 import { ListSkeleton } from "./ListSkeleton";
+import type { ShownParts } from "./parts";
 import { entryVerdict, type GradingOrder } from "./labels";
 
 /**
@@ -107,6 +108,7 @@ export function StepAnswers({
   onValidate,
   onOverride,
   onRegrade,
+  parts,
 }: StepProps & {
   /** The open answer and its place, as `useGradingTraversal` resolved it. */
   current: { entry: GradingEntry; index: number } | null;
@@ -118,6 +120,8 @@ export function StepAnswers({
   onOverride: (key: string) => void;
   /** Re-grade the question of the open answer, for every student (F-GRADE-06). */
   onRegrade: (item: GradingQueueItem) => void;
+  /** Which parts of the open answer are drawn (#109). */
+  parts: ShownParts;
 }) {
   const t = useT();
   const at = current?.index ?? -1;
@@ -204,6 +208,7 @@ export function StepAnswers({
               entry={entry}
               item={item}
               order={order}
+              parts={parts}
               onRegrade={() => onRegrade(item)}
               explanation={explanations.get(entry.itemId) ?? null}
               validating={validating}

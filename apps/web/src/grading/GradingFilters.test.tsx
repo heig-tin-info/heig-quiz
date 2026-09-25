@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { renderWithProviders } from "../test/render";
 import { GradingFilters } from "./GradingFilters";
+import { ALL_PARTS_SHOWN } from "./parts";
 import { ANY } from "./useGradingTraversal";
 
 /*
@@ -24,6 +25,8 @@ function draw(source: "auto" | "llm" | "manual" | typeof ANY, confidence: "low" 
       onConfidence={vi.fn()}
       showNames={false}
       onShowNames={vi.fn()}
+      parts={ALL_PARTS_SHOWN}
+      onParts={vi.fn()}
     />,
   );
 }

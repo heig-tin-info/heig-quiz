@@ -166,6 +166,37 @@ export interface ReviewProps<TStudent, TAnswer, TSolution, TDetails> {
   maxPoints: number;
   /** "teacher" shows everything; "student" respects the already-applied filtering. */
   audience: "teacher" | "student";
+  /**
+   * Which of the question's own parts to draw beside the student's answer
+   * (#109): the grading page lets a teacher declutter the screen down to the
+   * answers alone. Absent, or a part absent from it, means SHOWN — a review
+   * that ignores this prop is still correct, only less tidy. It never hides
+   * the student's answer nor the verdict on it: those are what is graded.
+   */
+  sections?: ReviewSections;
+}
+
+/**
+ * The parts of a review a reader may choose to hide. `false` hides; `true`
+ * and `undefined` show.
+ *
+ * - `prompt`: the statement of the question (for `cloze`, the text with the
+ *   blanks in place — the per-blank table still gives every answer).
+ * - `solution`: what the teacher expected — the accepted answers, the
+ *   missed choices, the reference program or circuit. The verdict on what
+ *   the student gave stays.
+ */
+export interface ReviewSections {
+  prompt?: boolean;
+  solution?: boolean;
+}
+
+/** Whether `part` is drawn under `sections`: shown unless explicitly `false`. */
+export function showsSection(
+  sections: ReviewSections | undefined,
+  part: keyof ReviewSections,
+): boolean {
+  return sections?.[part] !== false;
 }
 
 export interface StatsProps<TStudent, TAnswer> {

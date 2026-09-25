@@ -589,6 +589,45 @@ describe("McqReview", () => {
     expect(screen.queryByText("Correct")).not.toBeInTheDocument();
     expect(screen.getByText("Chosen")).toBeInTheDocument();
   });
+
+  /* #109: the grading page may put the question's own parts away; the
+     student's ticks and their verdicts always stay. */
+  it("hides the prompt and the missed choices on request, never the verdict on a tick", () => {
+    render(
+      <McqReview
+        student={student}
+        answer={{ selected: [0] }}
+        solution={{ correct: [1] }}
+        details={null}
+        points={0}
+        maxPoints={2}
+        audience="teacher"
+        sections={{ prompt: false, solution: false }}
+        renderMarkdown={(source: string) => <span data-testid="md">{source}</span>}
+      />,
+    );
+    expect(screen.queryByText(student.prompt)).toBeNull();
+    expect(screen.queryByText("Missed")).toBeNull();
+    expect(screen.getByText("Incorrect")).toBeInTheDocument();
+    expect(screen.getAllByTestId("md")).toHaveLength(student.choices.length);
+  });
+
+  it("shows every part when no sections are given", () => {
+    render(
+      <McqReview
+        student={student}
+        answer={{ selected: [0] }}
+        solution={{ correct: [1] }}
+        details={null}
+        points={0}
+        maxPoints={2}
+        audience="teacher"
+        renderMarkdown={(source: string) => <span data-testid="md">{source}</span>}
+      />,
+    );
+    expect(screen.getByText(student.prompt)).toBeInTheDocument();
+    expect(screen.getByText("Missed")).toBeInTheDocument();
+  });
 });
 
 describe("McqStats", () => {

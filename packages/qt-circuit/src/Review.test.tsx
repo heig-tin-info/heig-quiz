@@ -161,4 +161,12 @@ describe("CircuitReview", () => {
     expect(screen.getByText("Not answered.")).toBeInTheDocument();
     expect(screen.queryByTestId("schematic-view")).not.toBeInTheDocument();
   });
+
+  it("hides the statement and the reference circuit on request (#109), keeping the answer", () => {
+    setup({ sections: { prompt: false, solution: false }, renderMarkdown: (source: string) => <span data-testid="md">{source}</span> });
+    expect(screen.queryByTestId("md")).toBeNull();
+    expect(screen.getAllByTestId("schematic-view")).toHaveLength(1);
+    expect(screen.queryByText("Reference circuit")).toBeNull();
+    expect(screen.getByText("the sneaky one")).toBeInTheDocument();
+  });
 });

@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 
-import { fmt, issuesAt, plural, resolveStrings, rootIssues } from "./client.js";
+import { fmt, issuesAt, plural, resolveStrings, rootIssues, showsSection } from "./client.js";
 
 const DEFAULTS = { title: "Answer", hint: "Pick one", count: (n: number) => `${n} left` };
 
@@ -78,5 +78,22 @@ describe("issuesAt / rootIssues", () => {
 
   it("keeps the issues of the config as a whole", () => {
     expect(rootIssues(issues).map((i) => i.message)).toEqual(["root"]);
+  });
+});
+
+describe("showsSection", () => {
+  it("shows every part when no selection is given", () => {
+    expect(showsSection(undefined, "prompt")).toBe(true);
+    expect(showsSection(undefined, "solution")).toBe(true);
+  });
+
+  it("shows a part left out of the selection, and one set to true", () => {
+    expect(showsSection({ solution: false }, "prompt")).toBe(true);
+    expect(showsSection({ prompt: true }, "prompt")).toBe(true);
+  });
+
+  it("hides only a part explicitly set to false", () => {
+    expect(showsSection({ prompt: false }, "prompt")).toBe(false);
+    expect(showsSection({ prompt: false }, "solution")).toBe(true);
   });
 });

@@ -141,4 +141,16 @@ describe("CodeReview", () => {
     expect(screen.queryByTestId("md")).toBeNull();
     expect(screen.getByText(student.prompt)).toBeInTheDocument();
   });
+
+  it("hides the statement and the reference solution on request (#109), keeping the cases", () => {
+    setup(graded.details, {
+      audience: "teacher",
+      solution: codeServer.toSolution(config, { seed: 0, itemId: "i", shuffle: false }),
+      sections: { prompt: false, solution: false },
+      renderMarkdown: (source: string) => <span data-testid="md">{source}</span>,
+    });
+    expect(screen.queryByTestId("md")).toBeNull();
+    expect(screen.queryByText("Reference solution")).toBeNull();
+    expect(screen.getAllByText("Passed").length).toBeGreaterThan(0);
+  });
 });

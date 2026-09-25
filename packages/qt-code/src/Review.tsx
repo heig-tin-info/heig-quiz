@@ -7,7 +7,7 @@
  * filtering itself happened server-side in `studentDetails`; this component
  * renders what it was given and never reconstructs a key.
  */
-import { fmt, resolveStrings } from "@quiz/core/client";
+import { fmt, resolveStrings, showsSection } from "@quiz/core/client";
 import type { MarkdownRenderer, ReviewProps } from "@quiz/core/client";
 
 import type { CodeAnswer, CodeCaseDetail, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
@@ -82,6 +82,7 @@ export function CodeReview({
   points,
   maxPoints,
   audience,
+  sections,
   showHiddenCaseNames,
   strings,
   renderMarkdown,
@@ -89,12 +90,15 @@ export function CodeReview({
   const s = resolveStrings(REVIEW_STRINGS, strings);
   const reveal = audience === "teacher" || showHiddenCaseNames === true;
 
-  /* The statement, so a verdict is never read without the question it judges. */
-  const statement = (
+  /* The statement, so a verdict is never read without the question it judges —
+     unless the reader chose to hide it (#109). The cases table stays either
+     way: its expected column is what the run was judged against, the
+     verdict itself, not the solution. */
+  const statement = showsSection(sections, "prompt") ? (
     <div className="whitespace-pre-wrap text-sm text-fg">
       {markdown(renderMarkdown, student.prompt)}
     </div>
-  );
+  ) : null;
 
   // No breakdown — an absent answer, a grading-level marker — reads the same
   // to a student either way.
@@ -190,7 +194,7 @@ export function CodeReview({
         <p className={hint}>{fmt(s.hiddenSummary, { passed: hiddenPassed, count: hidden.length })}</p>
       ) : null}
 
-      <ReferenceSolutionCard solution={solution} s={s} />
+      {showsSection(sections, "solution") ? <ReferenceSolutionCard solution={solution} s={s} /> : null}
     </div>
   );
 }
