@@ -124,7 +124,8 @@ export function Popover({
       close(false);
     };
     const onScroll = (e: Event) => {
-      if (panel.current?.contains(e.target as Node)) return;
+      // `window` is not a Node, and `contains` throws on one.
+      if (e.target instanceof Node && panel.current?.contains(e.target)) return;
       const rect = anchor.current?.getBoundingClientRect();
       if (!rect || rect.bottom <= 0 || rect.top >= window.innerHeight) {
         close(false);
