@@ -99,13 +99,22 @@ export function InspectModal({
    * and it moves by the exact distance between the two boxes.
    */
   const anchors = useRef(new Map<string, HTMLElement>());
+  /**
+   * ONCE per student and question: when the content first lands. A refetch
+   * of the same paper (a reconnect re-reads every cached one) must not throw
+   * a teacher who has scrolled on to question 7 back to the one they clicked.
+   */
+  const scrolledFor = useRef<string | null>(null);
   useLayoutEffect(() => {
+    const target = `${row.attemptId}:${itemId}`;
+    if (scrolledFor.current === target) return;
     const el = anchors.current.get(itemId);
     if (!el) return;
+    scrolledFor.current = target;
     let box = el.parentElement;
     while (box && box.scrollHeight <= box.clientHeight) box = box.parentElement;
     if (box) box.scrollTop += el.getBoundingClientRect().top - box.getBoundingClientRect().top;
-  }, [itemId, inspect.data]);
+  }, [row.attemptId, itemId, inspect.data]);
 
   const name = nameOf(row);
   const position = t("live.inspect.position", {

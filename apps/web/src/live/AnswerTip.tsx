@@ -43,13 +43,24 @@ export function AnswerTip({
   attemptId,
   itemId,
   fallback,
+  revision,
+  enabled,
   children,
 }: {
   evaluationId: string;
-  attemptId: string;
+  attemptId: string | null;
   itemId: string;
   /** The cell's own summary, shown when the answer has no richer rendering. */
   fallback: string;
+  /** The cell's revision: a paper older than this is not shown. */
+  revision: number;
+  /**
+   * Whether the tooltip exists at all (answers shown, an answer in the cell).
+   * The wrapper is rendered EITHER WAY, so that the cell's button keeps its
+   * identity — and the keyboard focus — the moment a first answer arrives or
+   * the answers are toggled.
+   */
+  enabled: boolean;
   /** The cell, handed the tooltip's id while it is shown. */
   children: (describedBy: string | undefined) => ReactNode;
 }) {
@@ -81,6 +92,10 @@ export function AnswerTip({
   };
 
   useEffect(() => () => clearTimer(), []);
+  // Switched off while open (the answers hidden before projecting): gone at once.
+  useEffect(() => {
+    if (!enabled) hide();
+  }, [enabled, hide]);
 
   // Escape dismisses without moving the focus; the page scrolling or the grid
   // scrolling sideways leaves fixed coordinates pointing at nothing.
@@ -121,6 +136,7 @@ export function AnswerTip({
       ref={anchor}
       className="block"
       onMouseEnter={() => {
+        if (!enabled) return;
         clearTimer();
         timer.current = setTimeout(show, ANSWER_TIP_DELAY);
       }}
@@ -133,7 +149,7 @@ export function AnswerTip({
         hide();
       }}
       onFocus={() => {
-        if (pressing.current) return;
+        if (!enabled || pressing.current) return;
         clearTimer();
         show();
       }}
@@ -144,7 +160,7 @@ export function AnswerTip({
       }}
     >
       {children(open ? id : undefined)}
-      {pos
+      {pos && enabled && attemptId !== null
         ? createPortal(
             <div
               ref={bubble}
@@ -162,6 +178,7 @@ export function AnswerTip({
                 attemptId={attemptId}
                 itemId={itemId}
                 fallback={fallback}
+                revision={revision}
               />
             </div>,
             document.body,
@@ -177,22 +194,41 @@ function AnswerTipBody({
   attemptId,
   itemId,
   fallback,
+  revision,
 }: {
   evaluationId: string;
   attemptId: string;
   itemId: string;
   fallback: string;
+  revision: number;
 }) {
   const t = useT();
   const inspect = useAttemptInspect(evaluationId, attemptId);
-  if (inspect.data === undefined) {
+  const entry = inspect.data?.items.find((i) => i.item.id === itemId);
+  /*
+   * The cached paper is older than the cell: the student wrote since it was
+   * read (the dashboard only MARKS it stale). Showing it would put the old
+   * answer beside the new summary, so it is re-read, and the tooltip says
+   * so meanwhile.
+   */
+  const behind = entry !== undefined && entry.revision < revision;
+  // Once per revision: a server that answers with the same paper again is
+  // not asked in a loop — its answer is then shown as it is.
+  const triedFor = useRef<number | null>(null);
+  const { refetch, isFetching } = inspect;
+  useEffect(() => {
+    if (!behind || isFetching || triedFor.current === revision) return;
+    triedFor.current = revision;
+    void refetch();
+  }, [behind, isFetching, refetch, revision]);
+  const waiting = behind && (isFetching || triedFor.current !== revision);
+  if (inspect.data === undefined || (waiting && !inspect.isError)) {
     return (
       <p className="text-fg-muted">
         {inspect.isError ? t("live.tip.failed") : t("live.tip.loading")}
       </p>
     );
   }
-  const entry = inspect.data.items.find((i) => i.item.id === itemId);
   if (!entry || entry.answer === null) return <p className="text-fg-muted">{t("live.tip.empty")}</p>;
   const text = answerText(entry.item.type, entry.studentConfig, entry.answer);
   if (text === null) {

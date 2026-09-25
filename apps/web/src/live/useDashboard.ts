@@ -88,12 +88,27 @@ export function useDashboard(
     },
     onEvent: (event) => {
       qc.setQueryData<GridState>(key, (prev) => (prev ? applyGridEvent(prev, event) : prev));
-      // The student wrote something: the paper cached for that attempt (the
-      // cell tooltip's, the modal's) is now behind the grid. Marked stale,
-      // and refetched at once only if something on screen is reading it —
-      // so a tooltip never shows an answer older than its own cell (#94).
-      if (event.type === "dashboard.cell" && event.evaluationId === id) {
-        void qc.invalidateQueries({ queryKey: attemptInspectKey(id, event.attemptId) });
+      // The student wrote something, or their attempt changed state: the
+      // paper cached for that attempt (the cell tooltip's, the modal's) is
+      // now behind the grid. It is MARKED stale and not refetched here: a
+      // student typing sends a frame a second, and an open modal re-reading
+      // the whole paper at that pace is a request a second for nothing —
+      // it reads the fresh one on its next opening. A tooltip that is open
+      // compares the paper's revision with its cell's and re-reads it
+      // itself (`AnswerTip`), so it never shows an answer older than its
+      // cell (#94).
+      const attemptId =
+        event.type === "dashboard.cell" ||
+        event.type === "dashboard.attempt" ||
+        event.type === "attempt.closed" ||
+        event.type === "attempt.deadline"
+          ? event.attemptId
+          : null;
+      if (attemptId !== null) {
+        void qc.invalidateQueries({
+          queryKey: attemptInspectKey(id, attemptId),
+          refetchType: "none",
+        });
       }
     },
     /*

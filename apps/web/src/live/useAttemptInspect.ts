@@ -6,12 +6,12 @@ import { api } from "../api";
 import { attemptInspectKey } from "../queryKeys";
 
 /**
- * How long a student's paper is trusted without asking again. Short on
- * purpose, and not what keeps it FRESH: `useDashboard` invalidates the entry
- * the moment a `dashboard.cell` frame says that student wrote something. The
- * staleTime only spares the server a request per cell while the pointer
- * travels along one row of the grid, each cell's tooltip reading the same
- * attempt.
+ * How long a student's paper is trusted without asking again. Not what keeps
+ * it FRESH: `useDashboard` marks the entry stale the moment a frame says that
+ * student wrote something or their attempt changed state, so the modal's next
+ * opening reads it again, and an open tooltip compares revisions and re-reads
+ * it itself. The staleTime only spares the server a request per cell while
+ * the pointer travels along one row of the grid.
  */
 export const INSPECT_STALE_MS = 10_000;
 

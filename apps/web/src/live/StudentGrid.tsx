@@ -302,15 +302,19 @@ export function StudentGrid({
                     <td key={item.id} className={cx(T.td, COL, "px-1 text-center")}>
                       {cell === undefined ? (
                         <span className="text-fg-faint">—</span>
-                      ) : showAnswers && cell.summary && row.attemptId !== null ? (
+                      ) : (
                         // The complete answer on hover or focus (#94), read
                         // on demand: only while the answers are shown, and
-                        // only on a cell that has one.
+                        // only on a cell that has one. The wrapper is there
+                        // EITHER WAY, so the button — and the keyboard focus
+                        // on it — survives the first answer arriving.
                         <AnswerTip
                           evaluationId={view.evaluation.id}
                           attemptId={row.attemptId}
                           itemId={item.id}
-                          fallback={cell.summary}
+                          fallback={cell.summary ?? ""}
+                          revision={cell.revision}
+                          enabled={showAnswers && !!cell.summary && row.attemptId !== null}
                         >
                           {(describedBy) => (
                             <VerdictCell
@@ -318,19 +322,12 @@ export function StudentGrid({
                               value={cellValue(cell, showAnswers)}
                               label={label}
                               describedBy={describedBy}
-                              onClick={() => onInspect(row, item.id)}
+                              onClick={
+                                row.attemptId === null ? undefined : () => onInspect(row, item.id)
+                              }
                             />
                           )}
                         </AnswerTip>
-                      ) : (
-                        <VerdictCell
-                          state={cellState(cell, showResults)}
-                          value={cellValue(cell, showAnswers)}
-                          label={label}
-                          onClick={
-                            row.attemptId === null ? undefined : () => onInspect(row, item.id)
-                          }
-                        />
                       )}
                     </td>
                   );
