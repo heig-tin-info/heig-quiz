@@ -163,3 +163,36 @@ export function isConfigFieldWritable(lock: ConfigLock | null, field: string): b
 export function isConfigEditable(state: EvaluationStateName, attemptCount: number): boolean {
   return configLock(state, attemptCount) === null;
 }
+
+// --- Negative marking (ADR-026, #130) --------------------------------------
+
+/**
+ * Negative marking scores the CHOICE questions of an evaluation with a rule
+ * where a wrong answer costs points (`mcqFraction`, `negativeMarking`). It is
+ * a setting of the evaluation, never of a question: mixing penalised and
+ * unpenalised questions in one sitting would leave the student guessing which
+ * is which.
+ *
+ * A `poll` has no score to penalise — its votes are tallied, not graded — so
+ * the server refuses the setting there, and an evaluation of that mode reads
+ * it as off whatever its row says.
+ */
+export function negativeMarkingAllowedFor(mode: EvaluationModeName): boolean {
+  return mode !== "poll";
+}
+
+/** Whether this evaluation scores its choice questions negatively. */
+export function negativeMarkingOn(
+  mode: EvaluationModeName,
+  negativeMarking: boolean | undefined,
+): boolean {
+  return negativeMarkingAllowedFor(mode) && negativeMarking === true;
+}
+
+/** The question types negative marking applies to: the choice questions. */
+export const NEGATIVE_MARKING_TYPES: readonly string[] = ["mcq"];
+
+/** Whether an item of `type` may score below 0 in an evaluation where it is `on`. */
+export function scoresNegatively(type: string, on: boolean): boolean {
+  return on && NEGATIVE_MARKING_TYPES.includes(type);
+}
