@@ -46,10 +46,18 @@ echo "staging-refresh: restoring $dump"
   -c 'DROP DATABASE IF EXISTS quiz WITH (FORCE)' -c 'CREATE DATABASE quiz OWNER quiz'
 "${STAGING[@]}" exec -T postgres pg_restore -U quiz -d quiz --no-owner --role=quiz \
   --exit-on-error < "$dump"
+# Only the tables the dump has: a dump older than the staging code lacks the
+# newest ones (launch_tickets, on 2026-09-26), which its migration will
+# create empty anyway.
 "${STAGING[@]}" exec -T postgres psql -U quiz -d quiz -v ON_ERROR_STOP=1 <<'SQL'
-BEGIN;
-TRUNCATE sessions, launch_tickets, api_tokens, oauth_requests, oauth_grants;
-COMMIT;
+DO $$
+DECLARE present text;
+BEGIN
+  SELECT string_agg(quote_ident(t), ', ') INTO present
+  FROM unnest(ARRAY['sessions', 'launch_tickets', 'api_tokens', 'oauth_requests', 'oauth_grants']) AS t
+  WHERE to_regclass(t) IS NOT NULL;
+  IF present IS NOT NULL THEN EXECUTE 'TRUNCATE ' || present; END IF;
+END $$;
 SQL
 
 # The question images, content-addressed. Both directories belong to the
