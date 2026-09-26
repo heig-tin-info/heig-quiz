@@ -20,7 +20,7 @@ import type { CodeDetails } from "@quiz/qt-code/server";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
-import { evaluationItems, evaluations } from "../../db/schema.js";
+import { evaluationItems, evaluations, notifications } from "../../db/schema.js";
 import { testApp, testDb, type TestDb } from "../../test/db.js";
 import { seedCodeEvaluation } from "../../test/codeFixture.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
@@ -29,6 +29,7 @@ import { applyState, isLegalTransition, joinedItems } from "../evaluation/servic
 import { runEvaluationGrading } from "../grading/jobs.js";
 import * as grading from "../grading/service.js";
 import * as live from "../live/service.js";
+import { listNotifications } from "../notifications/service.js";
 import { BOM, csvField, resultsCsv } from "./csv.js";
 import * as service from "./service.js";
 
@@ -202,6 +203,42 @@ describe("release (F-RES-04, F-GRADE-09)", () => {
     // Finding L7: the withdrawal goes through the state table like every
     // other move, instead of writing `closed` behind its back.
     expect(isLegalTransition("released", "closed")).toBe(true);
+  });
+
+  it("tells the students who sat it, once, with ids and a title only, and withdraws the bell", async () => {
+    const built = await evaluationWorth(20);
+    await award(built.app, built, 10);
+    const [present, absent] = built.seed.studentIds as [string, string];
+
+    await service.releaseResults(db, await reload(db, built.evaluation.id), built.app.clock.now());
+    const inbox = await listNotifications(db, present);
+    const told = inbox.items.filter((n) => n.payload.kind === "results_released");
+    expect(told.map((n) => n.payload)).toEqual([
+      {
+        kind: "results_released",
+        evaluationId: built.evaluation.id,
+        evaluationTitle: built.evaluation.title,
+        attemptId: built.attempt.id,
+      },
+    ]);
+    // No grade, no points: the payload leaves the platform by e-mail too.
+    expect(JSON.stringify(told)).not.toMatch(/grade|points/i);
+    // The student who never showed up has no feedback page to be sent to.
+    expect((await listNotifications(db, absent)).items).toHaveLength(0);
+
+    // A re-release keeps the original date, and tells nobody again.
+    await service.releaseResults(db, await reload(db, built.evaluation.id), built.app.clock.now());
+    expect(
+      (await listNotifications(db, present)).items.filter((n) => n.payload.kind === "results_released"),
+    ).toHaveLength(1);
+
+    // Withdrawn: the bell would open a page that shows nothing.
+    await service.unreleaseResults(db, await reload(db, built.evaluation.id), built.app.clock.now());
+    const left = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.evaluationId, built.evaluation.id));
+    expect(left).toHaveLength(0);
   });
 
   it("refuses to release an evaluation that is still running", async () => {

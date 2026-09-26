@@ -29,6 +29,7 @@ import { registerGradingJobs } from "./modules/grading/jobs.js";
 import { livePlugin } from "./modules/live/routes.js";
 import { previewPlugin } from "./modules/preview/routes.js";
 import { mcpPlugin } from "./modules/mcp/routes.js";
+import { registerNotificationJobs } from "./modules/notifications/jobs.js";
 import { notificationsPlugin } from "./modules/notifications/routes.js";
 import { orgPlugin } from "./modules/org/routes.js";
 import { pollPlugin } from "./modules/poll/routes.js";
@@ -174,7 +175,7 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
   await app.register(previewPlugin);
   await app.register(gradingPlugin);
   await app.register(resultsPlugin);
-  await app.register(notificationsPlugin);
+  await app.register(notificationsPlugin, { config });
   await app.register(mcpPlugin, { config });
 
   // Job queue + ticker. A database that is unreachable at boot does not kill
@@ -191,6 +192,9 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
     // — `JOBS_DISABLED=1`, or a database that was unreachable at boot — the
     // grading pass runs inline at the call site instead of being dropped.
     if (queue) await registerGradingJobs(app, queue);
+    // The e-mail and Teams deliveries (ADR-030). Without a queue they are not
+    // made at all — the bell row stands alone, nothing is sent inline.
+    if (queue) await registerNotificationJobs(app, queue, config);
     if (runWorkers) startTicker(app, config);
   } catch (err) {
     app.log.error({ err }, "job queue start failed — jobs disabled");

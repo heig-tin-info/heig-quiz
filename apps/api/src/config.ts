@@ -167,6 +167,38 @@ const EnvSchema = z.object({
    * the developers only. The super administrator is always admitted.
    */
   LOGIN_ALLOWLIST: z.string().default(""),
+
+  // --- Notification channels (ADR-030) ---
+
+  /**
+   * Transactional e-mail through Scaleway TEM, the provider of heig-classroom.
+   * Without BOTH credentials the mailer runs dry: every e-mail is logged,
+   * none is sent — which is what development and the tests want.
+   */
+  SCW_SECRET_KEY: z.string().default(""),
+  SCW_DEFAULT_PROJECT_ID: z.string().default(""),
+  MAIL_FROM: z.string().default("no-reply@chevallier.io"),
+  MAIL_FROM_NAME: z.string().default("HEIG Quiz"),
+  MAIL_REGION: z.string().default("fr-par"),
+
+  /**
+   * Microsoft Teams: ONE multi-tenant Entra application that is at once the
+   * "Connect Teams" sign-in, the Graph client that installs the app for a
+   * user, and the bot that writes to them (docs/development/teams.md). The channel exists
+   * only when the three are set; otherwise the settings say Teams is not
+   * available and its routes answer 503.
+   */
+  TEAMS_CLIENT_ID: z.string().default(""),
+  TEAMS_CLIENT_SECRET: z.string().default(""),
+  /** The id of the Teams app in the tenants' catalogs (its manifest id once published). */
+  TEAMS_APP_ID: z.string().default(""),
+  /**
+   * The tenant that issues the bot's Bot Connector token: `botframework.com`
+   * for a multi-tenant bot, the home tenant id for a single-tenant one.
+   */
+  TEAMS_BOT_TENANT: z.string().default("botframework.com"),
+  /** Bot Connector endpoint for Teams; the global one routes to every region. */
+  TEAMS_SERVICE_URL: z.string().default("https://smba.trafficmanager.net/teams"),
 });
 
 export type AppConfig = z.infer<typeof EnvSchema>;
@@ -236,6 +268,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     ASSETS_DIR: resolve(parsed.data.ASSETS_DIR),
     RUNNER_URL: parsed.data.RUNNER_URL.trim().replace(/\/+$/, ""),
     RUNNER_TOKEN: parsed.data.RUNNER_TOKEN.trim(),
+    SCW_SECRET_KEY: parsed.data.SCW_SECRET_KEY.trim(),
+    SCW_DEFAULT_PROJECT_ID: parsed.data.SCW_DEFAULT_PROJECT_ID.trim(),
+    TEAMS_CLIENT_ID: parsed.data.TEAMS_CLIENT_ID.trim(),
+    TEAMS_CLIENT_SECRET: parsed.data.TEAMS_CLIENT_SECRET.trim(),
+    TEAMS_APP_ID: parsed.data.TEAMS_APP_ID.trim(),
+    TEAMS_SERVICE_URL: parsed.data.TEAMS_SERVICE_URL.trim().replace(/\/+$/, ""),
     SUPER_ADMIN_EMAIL: parsed.data.SUPER_ADMIN_EMAIL.trim().toLowerCase(),
     LOGIN_ALLOWLIST: parsed.data.LOGIN_ALLOWLIST.split(",")
       .map((e) => e.trim().toLowerCase())
@@ -247,6 +285,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       ? resolve(parsed.data.OIDC_PRIVATE_KEY_PATH)
       : "",
   };
+}
+
+/** Scaleway credentials present: e-mails are really sent (otherwise logged). */
+export function mailEnabled(
+  config: Pick<AppConfig, "SCW_SECRET_KEY" | "SCW_DEFAULT_PROJECT_ID">,
+): boolean {
+  return config.SCW_SECRET_KEY !== "" && config.SCW_DEFAULT_PROJECT_ID !== "";
+}
+
+/** The Teams channel exists: its Entra application is configured (ADR-030). */
+export function teamsEnabled(
+  config: Pick<AppConfig, "TEAMS_CLIENT_ID" | "TEAMS_CLIENT_SECRET" | "TEAMS_APP_ID">,
+): boolean {
+  return config.TEAMS_CLIENT_ID !== "" && config.TEAMS_CLIENT_SECRET !== "" && config.TEAMS_APP_ID !== "";
 }
 
 /**

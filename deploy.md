@@ -68,6 +68,14 @@ a development identity provider and is not deployed. `AUTH_DEV_LOGIN` and a
 starting, on purpose. The super administrator is `SUPER_ADMIN_EMAIL`; teachers
 are managed from the Admin screen.
 
+Notifications (ADR-030): e-mails go out through Scaleway TEM once
+`SCW_SECRET_KEY` and `SCW_DEFAULT_PROJECT_ID` are set in `.env.prod` (the
+classroom's project and sender domain; without them every e-mail is only
+logged). The Microsoft Teams channel stays off until an Entra application,
+an Azure Bot and a Teams app exist and `TEAMS_CLIENT_ID`,
+`TEAMS_CLIENT_SECRET` and `TEAMS_APP_ID` are set: the whole setup is
+[docs/development/teams.md](docs/development/teams.md). Staging sets neither.
+
 An encrypted copy of `.env.prod` and `secrets/` in the vault (`age`) is a
 precondition of the 4 h RTO (ADR-010).
 

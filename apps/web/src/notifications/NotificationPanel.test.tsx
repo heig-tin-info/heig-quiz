@@ -104,6 +104,31 @@ describe("the inbox in the account menu", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("announces released results and opens the feedback of that attempt", async () => {
+    const RELEASED: Notification = {
+      id: "n3",
+      payload: {
+        kind: "results_released",
+        evaluationId: "e1",
+        evaluationTitle: "Test 0 — bases du C",
+        attemptId: "a7",
+      },
+      createdAt: new Date(Date.now() - 60_000).toISOString(),
+      readAt: null,
+    };
+    mockFetch({
+      [`GET ${LIST}`]: ok({ items: [RELEASED], unread: 1 }),
+      "POST /app/api/notifications/n3/read": { status: 204 },
+    });
+    const navigate = vi.fn();
+    renderMenu(navigate);
+    await openInbox();
+    await userEvent.click(
+      screen.getByText(/The results of “Test 0 — bases du C” are available\./),
+    );
+    expect(navigate).toHaveBeenCalledWith({ view: "feedback", attemptId: "a7" });
+  });
+
   it("marks the whole inbox read from the panel", async () => {
     const { calls } = mockFetch({
       [`GET ${LIST}`]: ok({ items: [SHARED], unread: 1 }),

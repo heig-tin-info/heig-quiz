@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { BellRing, GraduationCap, School, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { GraduationCap, MessageSquare, School, ShieldCheck, SlidersHorizontal } from "lucide-react";
 
 import { ApiTokensCard, ConnectionsCard } from "./ApiTokensCard";
 import { AvatarEditor } from "./AvatarEditor";
@@ -14,6 +14,7 @@ import {
   type NoticeKind,
 } from "@quiz/contracts";
 
+import { NotificationSettingsSection } from "./notifications/NotificationSettings";
 import { NOTICE_KINDS, notifyPrefs, setNotifyPref, useToast } from "./notify";
 import { meKey } from "./queryKeys";
 import { setThemeChoice, useThemeChoice } from "./theme";
@@ -173,8 +174,12 @@ function PreferencesCard({ me }: { me: Me }) {
   );
 }
 
-/** Per-kind toggles for the real-time toasts; stored in this browser. */
-function NotificationsCard() {
+/**
+ * Per-kind toggles for the real-time toasts; stored in this browser. Not the
+ * notifications of the account (`NotificationSettingsSection`): a toast is
+ * gone once read, and says what happens in this tab right now.
+ */
+function ToastsCard() {
   const { t } = useI18n();
   const [prefs, setPrefs] = useState(notifyPrefs);
   const toggle = (kind: NoticeKind, next: boolean) => {
@@ -184,8 +189,8 @@ function NotificationsCard() {
   return (
     <section className="space-y-3">
       <SectionHeading
-        icon={BellRing}
-        title={t("settings.notifications")}
+        icon={MessageSquare}
+        title={t("settings.toasts")}
         description={t("settings.notificationsBrowser")}
       />
       <Card className="divide-y divide-line px-5">
@@ -248,9 +253,10 @@ export function SettingsPage({ me }: { me: Me }) {
       </section>
 
       <PreferencesCard me={me} />
-      <NotificationsCard />
+      <NotificationSettingsSection me={me} />
       {me.role === "student" ? null : (
         <>
+          <ToastsCard />
           <ConnectionsCard />
           <ApiTokensCard />
         </>
