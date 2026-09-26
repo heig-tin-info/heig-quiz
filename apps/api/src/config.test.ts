@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { loadConfig, pgliteDir } from "./config.js";
+import { loadConfig, loginAllowed, pgliteDir } from "./config.js";
 
 /*
  * The configuration is the last place a development convenience can be
@@ -73,5 +73,30 @@ describe("pgliteDir", () => {
 
   it("leaves a real PostgreSQL URL alone", () => {
     expect(pgliteDir("postgres://quiz:quiz@localhost:5432/quiz")).toBeNull();
+  });
+});
+
+describe("loginAllowed", () => {
+  it("admits everyone when the allowlist is empty", () => {
+    expect(loginAllowed(loadConfig({}), ["anyone@example.org"])).toBe(true);
+  });
+
+  it("admits a listed address, a listed domain and the super administrator", () => {
+    const config = loadConfig({
+      LOGIN_ALLOWLIST: " Dev@Example.org, @heig-vd.ch ,",
+      SUPER_ADMIN_EMAIL: "boss@example.org",
+    });
+    expect(loginAllowed(config, ["dev@example.org"])).toBe(true);
+    expect(loginAllowed(config, ["someone@heig-vd.ch"])).toBe(true);
+    expect(loginAllowed(config, ["boss@example.org"])).toBe(true);
+    // Any address of the login counts, not only the first.
+    expect(loginAllowed(config, ["private@gmail.com", "dev@example.org"])).toBe(true);
+  });
+
+  it("refuses everyone else, a look-alike domain included", () => {
+    const config = loadConfig({ LOGIN_ALLOWLIST: "@heig-vd.ch" });
+    expect(loginAllowed(config, ["student@gmail.com"])).toBe(false);
+    expect(loginAllowed(config, ["x@evil-heig-vd.ch"])).toBe(false);
+    expect(loginAllowed(config, [])).toBe(false);
   });
 });

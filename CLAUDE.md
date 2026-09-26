@@ -12,7 +12,8 @@ adapted or dropped is spelled out in `docs/spec/07-reutilisation-heig-classroom.
 ## Several agents at once
 
 Other sessions work on this repository concurrently, and every push to
-`main` deploys. `AGENTS.md` has the rules: a worktree per agent, `main` by
+`main` deploys to staging (`quiz.dev.chevallier.io`), then to production on
+approval (ADR-028). `AGENTS.md` has the rules: a worktree per agent, `main` by
 merge only, staging by path, atomic lockfile commits. Read it first.
 
 ## The rule about the spec

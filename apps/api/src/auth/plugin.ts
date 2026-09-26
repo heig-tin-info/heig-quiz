@@ -5,7 +5,7 @@ import fp from "fastify-plugin";
 import { eq, sql } from "drizzle-orm";
 
 import { audit } from "../audit.js";
-import type { AppConfig } from "../config.js";
+import { loginAllowed, type AppConfig } from "../config.js";
 import { avatars, users } from "../db/schema.js";
 import { publish } from "../events.js";
 import { CoachSeenPatch, MePatch, type PublicConfig, type SessionKind } from "@quiz/contracts";
@@ -276,6 +276,16 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     } catch (err) {
       req.log.warn({ err }, "OIDC exchange failed");
       return reply.code(401).send({ error: "oidc", message: "Authentication refused" });
+    }
+
+    // The staging allowlist (ADR-028) is checked before any row is written:
+    // a refused login leaves no user behind.
+    const emails = addressesOf(claims.raw).map((a) => a.email);
+    if (!loginAllowed(config, emails)) {
+      req.log.warn({ sub: claims.sub }, "Login refused by LOGIN_ALLOWLIST");
+      return reply
+        .code(403)
+        .send({ error: "login_not_allowed", message: "This environment is restricted" });
     }
 
     const user = await upsertUser(app, config, claims);

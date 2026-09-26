@@ -1,0 +1,94 @@
+# Staging -- quiz.dev.chevallier.io, on the SAME VM as production (ADR-028).
+# It runs the image CI just built, before that same image is promoted to
+# production. Caddy imports its fragment (Caddyfile.staging) next to the
+# production one; only a loopback port is published, 3003 (3000-3002 are the
+# classroom, tb and production quiz).
+# Start with (deploy.sh does it on every staging deploy):
+#   docker compose -f compose.staging.yml --env-file .env.staging --env-file .env.image up -d
+#
+# Staging must never cost production anything. Every container here is CAPPED
+# (memory, CPU, a low CPU weight): under pressure the kernel kills or starves
+# staging, never the neighbours. The production containers carry no cap. On
+# an exam day, stop it: `docker compose -f compose.staging.yml stop`.
+#
+# The data is a copy of production's, refreshed on demand by
+# scripts/staging-refresh.sh -- never on deploy, so a test being prepared
+# survives the next push. There is no backup service: staging data is
+# disposable by definition.
+name: quiz-staging
+
+services:
+  app:
+    # The sha is written to .env.image by deploy.sh, so a manual `up -d`
+    # restarts the deployed image, not whatever :latest points to.
+    image: ghcr.io/heig-tin-info/quiz:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env.staging
+    environment:
+      DATABASE_URL: postgres://quiz:${POSTGRES_PASSWORD:?}@postgres:5432/quiz
+      PUBLIC_URL: https://quiz.dev.chevallier.io
+      NODE_ENV: production
+      ASSETS_DIR: /app/assets
+      # The image sets 1536 MB for production: under the cap below, V8 would
+      # grow past it and be OOM-killed instead of collecting.
+      NODE_OPTIONS: --max-old-space-size=192
+    ports:
+      - "127.0.0.1:3003:3000" # native Caddy -> reverse_proxy localhost:3003
+    volumes:
+      - ./secrets:/app/secrets:ro
+      - ./assets:/app/assets
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: 0.5
+    cpu_shares: 256
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: quiz
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: quiz
+    # Production's tuning (compose.prod.yml), a notch smaller: staging serves
+    # a handful of developers.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=16MB
+      - -c
+      - effective_cache_size=64MB
+      - -c
+      - maintenance_work_mem=16MB
+      - -c
+      - work_mem=2MB
+      - -c
+      - max_connections=30
+      - -c
+      - max_worker_processes=2
+      - -c
+      - max_parallel_workers=0
+      - -c
+      - max_parallel_workers_per_gather=0
+      - -c
+      - max_parallel_maintenance_workers=0
+      - -c
+      - autovacuum_max_workers=1
+      - -c
+      - wal_buffers=1MB
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    mem_limit: 160m
+    memswap_limit: 160m
+    cpus: 0.5
+    cpu_shares: 256
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quiz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

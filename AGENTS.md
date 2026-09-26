@@ -1,8 +1,8 @@
 # Working on this repository with several agents
 
 Several agents (Claude Code sessions, or a person and an agent) work on this
-repository at the same time, and every push to `main` deploys to production
-(`.github/workflows/ci.yml`). These directives exist because a shared working
+repository at the same time, and every push to `main` deploys to staging,
+then to production once approved (`.github/workflows/ci.yml`, ADR-028). These directives exist because a shared working
 tree once turned another agent's half-written package into a broken deploy.
 They complete `CLAUDE.md`, which holds the product invariants.
 
@@ -23,8 +23,8 @@ deploying, not for editing.
 
 - Push your branch and open a pull request; the `checks` job runs there
   (build, typecheck, tests, frozen lockfile) before anything reaches `main`.
-- Merge when green. The `deploy` job runs on `main` only, so production
-  never sees a commit the checks did not pass.
+- Merge when green. The deploy jobs run on `main` only, so neither staging
+  nor production ever sees a commit the checks did not pass.
 - Rebase often (`git pull --rebase origin main` on your branch): small diffs,
   rare conflicts.
 
