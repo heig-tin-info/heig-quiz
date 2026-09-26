@@ -158,6 +158,15 @@ const EnvSchema = z.object({
    * Teachers are managed in the database, from the admin screen.
    */
   SUPER_ADMIN_EMAIL: z.string().default(""),
+
+  /**
+   * Who may sign in (ADR-028): a comma-separated list of addresses, and of
+   * `@domain` entries matching a whole domain. Empty — the default, and
+   * production — admits everyone the IdP authenticates. The staging
+   * environment sets it, so that a copy of the production data is reached by
+   * the developers only. The super administrator is always admitted.
+   */
+  LOGIN_ALLOWLIST: z.string().default(""),
 });
 
 export type AppConfig = z.infer<typeof EnvSchema>;
@@ -228,10 +237,29 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     RUNNER_URL: parsed.data.RUNNER_URL.trim().replace(/\/+$/, ""),
     RUNNER_TOKEN: parsed.data.RUNNER_TOKEN.trim(),
     SUPER_ADMIN_EMAIL: parsed.data.SUPER_ADMIN_EMAIL.trim().toLowerCase(),
+    LOGIN_ALLOWLIST: parsed.data.LOGIN_ALLOWLIST.split(",")
+      .map((e) => e.trim().toLowerCase())
+      .filter((e) => e !== "")
+      .join(","),
     // PEM path made absolute at load time: the process no longer depends on
     // its launch directory (ADR-010, secret in a file).
     OIDC_PRIVATE_KEY_PATH: parsed.data.OIDC_PRIVATE_KEY_PATH
       ? resolve(parsed.data.OIDC_PRIVATE_KEY_PATH)
       : "",
   };
+}
+
+/**
+ * Whether a login revealing `emails` (normalized) may open a session. An
+ * empty allowlist admits everyone; otherwise one address must be listed, or
+ * belong to a listed `@domain`, or be the super administrator's.
+ */
+export function loginAllowed(config: AppConfig, emails: readonly string[]): boolean {
+  if (config.LOGIN_ALLOWLIST === "") return true;
+  const entries = new Set(config.LOGIN_ALLOWLIST.split(","));
+  if (config.SUPER_ADMIN_EMAIL) entries.add(config.SUPER_ADMIN_EMAIL);
+  return emails.some((email) => {
+    const at = email.lastIndexOf("@");
+    return entries.has(email) || (at > 0 && entries.has(email.slice(at)));
+  });
 }

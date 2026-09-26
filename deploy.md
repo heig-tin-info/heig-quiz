@@ -6,9 +6,9 @@ heig-classroom is, on the same machines (ADR-016):
 | | `portal.heig.chevallier.io` (Hetzner CPX12, 1 vCPU / 2 GB + 2 GB swap) | `code.chevallier.io` (Hetzner, 2 CPU / 4 GB) |
 | --- | --- | --- |
 | Already runs | heig-classroom (`:3000`), evaluation-tb (`:3001`), a native Caddy | heig-codespace, rootful Podman 5.7, a native Caddy |
-| Gets | `/srv/quiz`: `app` (`127.0.0.1:3002`), `postgres`, `backup` — Docker Compose, rootless, as `srv` | `/opt/quiz-runner`: the runner as a Podman quadlet on `127.0.0.1:3200` |
+| Gets | `/srv/quiz`: `app` (`127.0.0.1:3002`), `postgres`, `backup` — Docker Compose, rootless, as `srv`; and staging, `/srv/quiz-staging` (`127.0.0.1:3003`, §8) | `/opt/quiz-runner`: the runner as a Podman quadlet on `127.0.0.1:3200` |
 | Vhost | `/etc/caddy/conf.d/quiz.caddy` → `quiz.chevallier.io` | `/etc/caddy/conf.d/quiz-runner.caddy` → `code.chevallier.io:8443` |
-| Deploys through | `/srv/quiz/deploy.sh` (forced command, user `srv`) | `/opt/quiz-runner/apps/runner/deploy/deploy.sh` (forced command) |
+| Deploys through | `/srv/quiz/deploy.sh production` and `/srv/quiz-staging/deploy.sh staging` (forced commands, user `srv`) | `/opt/quiz-runner/apps/runner/deploy/deploy.sh` (forced command) |
 
 Until 2026-09-25 the application VM was a DigitalOcean droplet
 (`165.245.246.213`, root, rootful Docker, everything under `/opt`); the three
@@ -113,11 +113,13 @@ before the switch, as the 2026-09-25 migration did.
 
 ## 4. CI → the two VMs (once)
 
-The `deploy` job of `.github/workflows/ci.yml` SSHes to both VMs with one key,
-pinned to a script on each (`command="…",restrict`): the key can ONLY deploy,
-never open a shell, even if it leaks. The images stay private on GHCR: the
-runner passes its ephemeral token as the SSH "command" (→
-`$SSH_ORIGINAL_COMMAND`), which each `deploy.sh` pipes into `docker login` /
+Every push to `main` goes to staging, then waits for an approval before the
+SAME sha goes to production (ADR-028, §8). The `deploy-production` job of
+`.github/workflows/ci.yml` SSHes to both VMs with one key, pinned to a script
+on each (`command="…",restrict`): the key can ONLY deploy, never open a
+shell, even if it leaks. The images stay private on GHCR: the runner passes
+`<sha> <ephemeral token>` as the SSH "command" (→ `$SSH_ORIGINAL_COMMAND`);
+each `deploy.sh` checks out that sha and pipes the token into `docker login` /
 `podman login` for the pull — no registry credential is stored on either VM.
 
 ```bash
@@ -129,7 +131,7 @@ gh variable set DEPLOY_HOST_KEY --repo heig-tin-info/heig-quiz --body "$(ssh-key
 gh variable set DEPLOY_RUNNER_HOST --repo heig-tin-info/heig-quiz --body code.chevallier.io
 gh variable set DEPLOY_RUNNER_HOST_KEY --repo heig-tin-info/heig-quiz --body "$(ssh-keyscan -t ed25519 code.chevallier.io | awk '{print $2" "$3}')"
 # on the application VM, as srv
-printf 'command="/srv/quiz/deploy.sh",restrict %s\n' "$(cat ci_deploy.pub)" >> /home/srv/.ssh/authorized_keys
+printf 'command="/srv/quiz/deploy.sh production",restrict %s\n' "$(cat ci_deploy.pub)" >> /home/srv/.ssh/authorized_keys
 # on the runner VM
 printf 'command="/opt/quiz-runner/apps/runner/deploy/deploy.sh",restrict %s\n' "$(cat ci_deploy.pub)" >> /root/.ssh/authorized_keys
 shred -u ci_deploy
@@ -148,7 +150,9 @@ without `DEPLOY_RUNNER_HOST` only the application is deployed.
 
 ## 5. First deployment, and every one after
 
-Push to `main`: checks, two images, two SSH calls. Then:
+Push to `main`: checks, two images, the staging deploy and its health check,
+then the `production` environment waits for an approval (Actions → the run →
+*Review deployments*) before two SSH calls. Then:
 
 ```bash
 curl -s https://quiz.chevallier.io/healthz | jq .              # database, jobs, runner: "up"
@@ -164,29 +168,27 @@ its grading is proposed for a manual review (decision D14).
 ### Manually (if CI is unavailable)
 
 ```bash
-# application VM, as srv: deploy.sh does the pull, the login and the restart
-cd /srv/quiz && SSH_ORIGINAL_COMMAND=<PAT read:packages> ./deploy.sh
-# or by hand, the login in a throwaway directory, never in ~/.docker
-cd /srv/quiz && git pull --ff-only
-export DOCKER_CONFIG=$(mktemp -d)
-echo <PAT read:packages> | docker login ghcr.io -u heig-tin-info --password-stdin
-docker compose -f compose.prod.yml --env-file .env.prod pull app
-docker compose -f compose.prod.yml --env-file .env.prod up -d
-rm -rf "$DOCKER_CONFIG"; unset DOCKER_CONFIG
+# application VM, as srv: deploy.sh does the checkout, the login, the pull and
+# the restart. "<sha> <PAT>" deploys that commit; "<PAT>" alone, origin/main.
+cd /srv/quiz && SSH_ORIGINAL_COMMAND="<sha> <PAT read:packages>" ./deploy.sh production
 # runner VM
-cd /opt/quiz-runner && echo <PAT read:packages> | podman login ghcr.io -u heig-tin-info --password-stdin
-SSH_ORIGINAL_COMMAND= ./apps/runner/deploy/deploy.sh
+cd /opt/quiz-runner && SSH_ORIGINAL_COMMAND="<sha> <PAT read:packages>" ./apps/runner/deploy/deploy.sh
+```
+
+The checkouts are DETACHED at the deployed commit, and `.env.image` holds its
+tag: a manual compose command passes both env files, so that it restarts the
+deployed image and not `:latest` (main's head, not yet approved):
+
+```bash
+docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.image <command>
 ```
 
 ### Rollback
 
-The sha tags stay on GHCR:
-
-```bash
-IMAGE_TAG=<sha of the healthy commit> docker compose -f compose.prod.yml --env-file .env.prod up -d   # application VM
-# runner VM: podman pull ghcr.io/heig-tin-info/quiz-runner:<sha> && podman tag … :latest && systemctl restart quiz-runner
-# additive migrations — when in doubt, restore the database (§6).
-```
+Re-run the `deploy-production` job of the run of the healthy commit (Actions →
+that run → *Re-run jobs*): same sha, same image, both VMs. Without CI, the
+manual deploy above with that sha. Migrations are additive — when in doubt,
+restore the database (§6).
 
 **Never build on the application VM** (1 vCPU, 2 GB): an on-VM build makes
 the host swap and strangles PostgreSQL — the classroom learned it on
@@ -241,3 +243,82 @@ An external 60 s probe on `https://quiz.chevallier.io/healthz`; logs through
 `docker compose logs -f app` on one VM and `journalctl -u quiz-runner -f` on
 the other (credentials masked). `GET /metrics` needs an admin session or
 `METRICS_TOKEN`.
+
+## 8. Staging (`quiz.dev.chevallier.io`, ADR-028)
+
+Staging runs on the application VM, next to production, as `srv`: its own
+checkout, compose project (`quiz-staging`), PostgreSQL, port (`3003`) and
+secrets, every container capped (`compose.staging.yml`). It is production
+configured: `NODE_ENV=production`, the edu-ID login, no development login.
+Only the addresses in `LOGIN_ALLOWLIST` (and the super administrator) may
+sign in, because its data is a copy of production's.
+
+### Once
+
+```bash
+# DNS at Gandi: quiz.dev.chevallier.io CNAME portal.heig.chevallier.io, TTL 300.
+# SWITCH Resource Registry: add the redirect URI
+#   https://quiz.dev.chevallier.io/app/auth/callback   (or register a client of its own)
+
+# On the application VM, as srv. Rootless Docker applies `cpus`/`cpu_shares`
+# only when systemd delegates the cpu controller: this must list `cpu`.
+cat /sys/fs/cgroup/user.slice/user-$(id -u).slice/user@$(id -u).service/cgroup.controllers
+#   Without it (as root): mkdir -p /etc/systemd/system/user@.service.d && printf \
+#     '[Service]\nDelegate=cpu cpuset io memory pids\n' > /etc/systemd/system/user@.service.d/delegate.conf \
+#     && systemctl daemon-reload,
+#   then restart the srv user session (or reboot).
+
+cd /srv && git clone https://github.com/heig-tin-info/heig-quiz.git quiz-staging && cd quiz-staging
+mkdir -p secrets assets
+# The production key belongs to its container's `node`: read it through a container.
+docker run --rm -v /srv/quiz/secrets:/s:ro alpine cat /s/eduid-private-key.pem > secrets/eduid-private-key.pem
+docker run --rm -v "$PWD":/w alpine sh -c 'chown -R 1000:1000 /w/secrets /w/assets && chmod 600 /w/secrets/*.pem'
+cp .env.staging.example .env.staging && chmod 600 .env.staging
+nano .env.staging   # POSTGRES_PASSWORD, COOKIE_SECRET (new values), OIDC_CLIENT_ID, LOGIN_ALLOWLIST
+cp Caddyfile.staging /etc/caddy/conf.d/quiz-staging.caddy && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && sudo systemctl reload caddy
+
+# A second CI key, pinned to staging: the production key never reaches it.
+ssh-keygen -t ed25519 -f ci_staging -N "" -C ci-deploy-staging@quiz
+gh secret set STAGING_DEPLOY_SSH_KEY --repo heig-tin-info/heig-quiz < ci_staging
+printf 'command="/srv/quiz-staging/deploy.sh staging",restrict %s\n' "$(cat ci_staging.pub)" >> /home/srv/.ssh/authorized_keys
+shred -u ci_staging
+
+# The approval: Settings → Environments → production → Required reviewers.
+# Until it is set, production deploys right after staging, unattended.
+```
+
+**The switch from the previous `deploy.sh`** (once, before the first
+promotion): the scripts in place still expect a bare token, and the CI now
+sends `<sha> <token>`. Move both production checkouts to the new scripts by
+hand first — `git -C /srv/quiz fetch && git -C /srv/quiz checkout --detach
+origin/main` on the application VM, the same in `/opt/quiz-runner` on the code
+VM — and change the production key's line in `authorized_keys` to
+`command="/srv/quiz/deploy.sh production"` (the bare form still means
+production).
+
+The first staging deploy starts an empty database; fill it with
+production's data (below).
+
+### Refreshing the data
+
+```bash
+/srv/quiz-staging/scripts/staging-refresh.sh            # last night's dump
+/srv/quiz-staging/scripts/staging-refresh.sh --fresh    # a dump taken now
+```
+
+Never on deploy: a refresh wipes whatever a test had prepared. It restores
+the dump into a recreated database, empties sessions, launch tickets, API
+tokens and OAuth grants (nothing production issued works here), copies the
+question images, and starts the app, which migrates the copy forward — the
+very migration production will run next. It doubles as the restore test of
+§6.
+
+### Exam days
+
+Staging shares the vCPU. Stop it for the duration of an exam:
+
+```bash
+cd /srv/quiz-staging && docker compose -f compose.staging.yml --env-file .env.staging --env-file .env.image stop
+```
+
+A deploy restarts it (`up -d`); so does `start`.

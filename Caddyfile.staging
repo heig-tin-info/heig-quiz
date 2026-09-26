@@ -1,0 +1,27 @@
+# Vhost of quiz.dev.chevallier.io, the staging environment (ADR-028).
+#
+# Same VM, same native Caddy as production (Caddyfile): one more fragment.
+# As `srv`:
+#   cp Caddyfile.staging /etc/caddy/conf.d/quiz-staging.caddy && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && sudo systemctl reload caddy
+quiz.dev.chevallier.io {
+	encode gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		# Staging is never a search result a student could land on.
+		X-Robots-Tag "noindex, nofollow"
+	}
+
+	handle /app/api/events {
+		reverse_proxy localhost:3003 {
+			flush_interval -1
+		}
+	}
+
+	# 3002 is production quiz: staging listens on 3003 (loopback).
+	handle {
+		reverse_proxy localhost:3003
+	}
+}

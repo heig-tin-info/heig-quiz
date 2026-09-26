@@ -91,8 +91,9 @@ Production is <https://quiz.chevallier.io>, on the VM that already hosts
 heig-classroom, with the code runner on the codespace VM behind
 `https://code.chevallier.io:8443` (ADR-016). Every push to `main` runs the
 checks, builds the two images on GitHub Actions, pushes them to GHCR and
-SSHes to both VMs, where a forced-command key can only run `deploy.sh`.
-Nothing is ever built on a VM. `deploy.md` has the whole of it: the two
+deploys that sha to staging (<https://quiz.dev.chevallier.io>, same VM,
+ADR-028); once approved, the same sha goes to both production VMs, where a
+forced-command key can only run `deploy.sh`. Nothing is ever built on a VM. `deploy.md` has the whole of it: the two
 machines, the secrets, the DNS records, the CI key, backups and rollback.
 
 ## Status

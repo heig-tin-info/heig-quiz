@@ -66,17 +66,73 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # Deploy: the runner SSHes to the two VMs (ADR-016), whose authorized_keys
-  # pin the CI key to /srv/quiz/deploy.sh on the quiz VM (user srv, DEPLOY_USER) and to
-  # /opt/quiz-runner/apps/runner/deploy/deploy.sh on the code VM (forced commands) — the key can
-  # ONLY deploy, never open a shell. The ephemeral GHCR token is passed as the
-  # SSH command (→ $SSH_ORIGINAL_COMMAND) so the private images pull without
-  # any credential stored on either VM. Without DEPLOY_SSH_KEY the job no-ops,
-  # so the pipeline stays green until the key is provisioned; without
-  # DEPLOY_RUNNER_HOST only the application is deployed.
-  deploy:
+  # Deploy, in two steps (ADR-028): every push to main goes to STAGING
+  # (quiz.dev.chevallier.io) automatically; the SAME sha goes to PRODUCTION
+  # once a human approves the `production` environment's deployment (a
+  # required reviewer, set in the repository settings). Rollback is a re-run
+  # of an older run's `deploy-production` job: same sha, same image.
+  #
+  # Each VM's authorized_keys pins a CI key to a script (forced commands) —
+  # a key can ONLY deploy, never open a shell:
+  #   staging key    → /srv/quiz-staging/deploy.sh staging        (app VM, srv)
+  #   production key → /srv/quiz/deploy.sh production             (app VM, srv)
+  #                  → /opt/quiz-runner/apps/runner/deploy/deploy.sh (code VM)
+  # The SSH command is "<sha> <ephemeral GHCR token>" (→ $SSH_ORIGINAL_COMMAND):
+  # the commit to deploy, and a pull credential stored nowhere. Without its
+  # key a job no-ops, so the pipeline stays green until keys are provisioned.
+  deploy-staging:
     needs: image
     runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: ${{ vars.STAGING_URL || 'https://quiz.dev.chevallier.io' }}
+    permissions:
+      contents: read
+      packages: read
+    concurrency:
+      group: staging-deploy
+      cancel-in-progress: false
+    env:
+      DEPLOY_SSH_KEY: ${{ secrets.STAGING_DEPLOY_SSH_KEY }}
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+      DEPLOY_HOST_KEY: ${{ vars.DEPLOY_HOST_KEY }}
+      STAGING_URL: ${{ vars.STAGING_URL || 'https://quiz.dev.chevallier.io' }}
+    steps:
+      - name: Skip when the staging key is not configured
+        if: env.DEPLOY_SSH_KEY == '' || env.DEPLOY_HOST == ''
+        run: echo "::notice::STAGING_DEPLOY_SSH_KEY/DEPLOY_HOST not set — staging deploy skipped."
+      - name: Set up SSH (pinned host key)
+        if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != ''
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s %s\n' "$DEPLOY_HOST" "$DEPLOY_HOST_KEY" >> ~/.ssh/known_hosts
+      - name: Deploy to staging (forced command runs /srv/quiz-staging/deploy.sh staging)
+        if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != ''
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ssh -i ~/.ssh/id_ed25519 ${{ vars.DEPLOY_USER || 'root' }}@"$DEPLOY_HOST" "$GITHUB_SHA $GHCR_TOKEN"
+      # The gate: a staging that does not come up healthy (a migration that
+      # fails on production-shaped data, a crash at boot) stops the promotion.
+      - name: Staging answers healthy
+        if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != ''
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS "$STAGING_URL/healthz"; then exit 0; fi
+            sleep 5
+          done
+          echo "::error::$STAGING_URL/healthz did not answer 200 within 150 s"
+          exit 1
+
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    # The approval gate: the job waits here until a required reviewer of the
+    # `production` environment approves it (repository settings).
+    environment:
+      name: production
+      url: https://quiz.chevallier.io
     permissions:
       contents: read
       packages: read
@@ -107,9 +163,9 @@ jobs:
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != ''
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ssh -i ~/.ssh/id_ed25519 ${{ vars.DEPLOY_USER || 'root' }}@"$DEPLOY_HOST" "$GHCR_TOKEN"
+        run: ssh -i ~/.ssh/id_ed25519 ${{ vars.DEPLOY_USER || 'root' }}@"$DEPLOY_HOST" "$GITHUB_SHA $GHCR_TOKEN"
       - name: Deploy the runner (forced command runs apps/runner/deploy/deploy.sh on the code VM)
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != '' && env.DEPLOY_RUNNER_HOST != ''
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "$GHCR_TOKEN"
+        run: ssh -i ~/.ssh/id_ed25519 root@"$DEPLOY_RUNNER_HOST" "$GITHUB_SHA $GHCR_TOKEN"
