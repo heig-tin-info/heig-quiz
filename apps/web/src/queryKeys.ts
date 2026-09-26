@@ -21,6 +21,8 @@
 export const configKey = ["config"] as const;
 export const meKey = ["me"] as const;
 export const notificationsKey = ["notifications"] as const;
+/** The kinds x channels grid, the address and the Teams link (settings, ADR-030). */
+export const notificationSettingsKey = ["notification-settings"] as const;
 export const adminTeachersKey = ["admin-teachers"] as const;
 /** The caller's personal API tokens (settings). */
 export const apiTokensKey = ["api-tokens"] as const;

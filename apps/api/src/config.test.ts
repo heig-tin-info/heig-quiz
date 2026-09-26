@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { loadConfig, loginAllowed, pgliteDir } from "./config.js";
+import { loadConfig, loginAllowed, mailEnabled, pgliteDir, teamsEnabled } from "./config.js";
 
 /*
  * The configuration is the last place a development convenience can be
@@ -98,5 +98,24 @@ describe("loginAllowed", () => {
     expect(loginAllowed(config, ["student@gmail.com"])).toBe(false);
     expect(loginAllowed(config, ["x@evil-heig-vd.ch"])).toBe(false);
     expect(loginAllowed(config, [])).toBe(false);
+  });
+});
+
+describe("notification channels (ADR-030)", () => {
+  it("mails for real only with both Scaleway credentials", () => {
+    expect(mailEnabled(loadConfig({}))).toBe(false);
+    expect(mailEnabled(loadConfig({ SCW_SECRET_KEY: "k" }))).toBe(false);
+    expect(mailEnabled(loadConfig({ SCW_SECRET_KEY: " k ", SCW_DEFAULT_PROJECT_ID: "p" }))).toBe(true);
+    expect(loadConfig({}).MAIL_FROM_NAME).toBe("HEIG Quiz");
+  });
+
+  it("turns Teams on only with its three variables", () => {
+    const all = { TEAMS_CLIENT_ID: "c", TEAMS_CLIENT_SECRET: "s", TEAMS_APP_ID: "a" };
+    expect(teamsEnabled(loadConfig({}))).toBe(false);
+    expect(teamsEnabled(loadConfig({ ...all, TEAMS_APP_ID: " " }))).toBe(false);
+    expect(teamsEnabled(loadConfig(all))).toBe(true);
+    expect(loadConfig({ TEAMS_SERVICE_URL: "https://smba.test/teams/" }).TEAMS_SERVICE_URL).toBe(
+      "https://smba.test/teams",
+    );
   });
 });

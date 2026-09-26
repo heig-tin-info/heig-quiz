@@ -38,6 +38,7 @@ import {
   ItemPreview,
   ItemVersions,
   NotificationList,
+  NotificationSettings,
   ApiToken,
   OAuthConnection,
   OAuthRequestView,
@@ -204,6 +205,7 @@ const CHECKED: Case[] = [
     VersionDetail,
   ),
   one("/app/api/notifications", "/app/api/notifications", NotificationList),
+  one("/app/api/notifications/settings", "/app/api/notifications/settings", NotificationSettings),
   each("/app/api/me/tokens", "/app/api/me/tokens", ApiToken),
   each("/app/api/me/connections", "/app/api/me/connections", OAuthConnection),
   one(
