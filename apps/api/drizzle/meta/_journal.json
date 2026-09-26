@@ -113,6 +113,13 @@
       "when": 1790332234914,
       "tag": "0015_exercise_retakes",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1790420737578,
+      "tag": "0016_seb_launch",
+      "breakpoints": true
     }
   ]
 }

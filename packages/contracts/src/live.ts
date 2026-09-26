@@ -375,6 +375,8 @@ export const EvaluationCard = z.object({
   grade: z.number().nullable(),
   /** F-EVAL-15: set only on an exercise that allows several attempts. */
   retakes: CardRetakes.nullable(),
+  /** ADR-027: sat in Safe Exam Browser only; the card downloads the `.seb` instead of opening. */
+  safeExamBrowser: z.boolean().optional(),
 });
 export type EvaluationCard = z.infer<typeof EvaluationCard>;
 

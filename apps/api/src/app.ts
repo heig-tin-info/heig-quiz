@@ -15,6 +15,7 @@ import { collectDefaultMetrics, Gauge, Registry } from "prom-client";
 import { AvatarMime, type HealthResponse } from "@quiz/contracts";
 import type { Clock } from "./clock.js";
 import { authPlugin } from "./auth/plugin.js";
+import { redactLaunchUrl } from "./auth/seb.js";
 import { systemClock } from "./clock.js";
 import type { AppConfig } from "./config.js";
 import { createDb } from "./db/client.js";
@@ -55,6 +56,10 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
       level: config.LOG_LEVEL,
       // Never put credentials in the logs.
       redact: ["req.headers.authorization", "req.headers.cookie"],
+      // Nor the one-time secret of a SEB launch, which travels in its path.
+      serializers: {
+        req: (req) => ({ method: req.method, url: redactLaunchUrl(req.url), remoteAddress: req.ip }),
+      },
     },
     // ONE hop, named by its address (ADR-009, `TRUSTED_PROXIES`). `true`
     // would make `req.ip` the LEFT-MOST X-Forwarded-For entry, which is the

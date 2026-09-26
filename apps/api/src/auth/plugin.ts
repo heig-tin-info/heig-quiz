@@ -8,7 +8,7 @@ import { audit } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import { avatars, users } from "../db/schema.js";
 import { publish } from "../events.js";
-import { CoachSeenPatch, MePatch, type PublicConfig } from "@quiz/contracts";
+import { CoachSeenPatch, MePatch, type PublicConfig, type SessionKind } from "@quiz/contracts";
 
 import { claimEnrollments } from "../modules/org/service.js";
 import { roleForIdentity } from "../roles.js";
@@ -18,15 +18,18 @@ import { OidcProvider, type OidcClaims } from "./oidc.js";
 import { returnToOf, safeReturnTo } from "./returnTo.js";
 import { MCP_PATH } from "./oauth/service.js";
 import { oauthRoutes } from "./oauth/routes.js";
+import { SEB_SESSION_HOURS, sebRoutes } from "./seb.js";
 import { apiTokenRoutes } from "./tokenRoutes.js";
 import { findTokenUser, isApiToken } from "./tokens.js";
 import {
   CSRF_COOKIE,
   CSRF_HEADER,
+  PORTAL,
   SESSION_COOKIE,
   createSession,
   deleteSession,
   findSessionUser,
+  type SessionAuth,
 } from "./session.js";
 
 const LOGIN_STASH_COOKIE = "quiz_login";
@@ -41,8 +44,20 @@ declare module "fastify" {
      * token in `Authorization: Bearer` (ADR-022). Null when anonymous.
      */
     authVia: "session" | "token" | null;
+    /** What the browser session is (ADR-027); null for a token or when anonymous. */
+    auth: SessionAuth | null;
+  }
+  interface FastifyContextConfig {
+    /**
+     * The session kinds this route serves (ADR-027). Absent means `portal`
+     * only: a new route is closed to a `seb` session until it says otherwise.
+     */
+    sessions?: readonly SessionKind[];
   }
 }
+
+/** The route config of the routes a `seb` session may call: sitting its evaluation. */
+export const SITTING = { sessions: ["portal", "seb"] } as const;
 
 const BEARER = /^Bearer\s+(\S+)$/i;
 
@@ -111,6 +126,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   // --- Session resolution on every request ---
   app.decorateRequest("user", null);
   app.decorateRequest("authVia", null);
+  app.decorateRequest("auth", null);
   const internalSecret = randomBytes(32).toString("base64url");
   app.decorate("internalCallSecret", internalSecret);
   const isInternalCall = (req: FastifyRequest) => {
@@ -148,8 +164,13 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
       renewTtlHours: config.SESSION_TTL_HOURS,
     });
     if (!found) return;
+    // Default deny (ADR-027): on a route that does not serve its kind, the
+    // session is not there at all — anonymous, so a 401 wherever a session
+    // is required, and public routes and static files unaffected.
+    if (!(req.routeOptions.config.sessions ?? ["portal"]).includes(found.auth.kind)) return;
     req.user = found.user;
     req.authVia = "session";
+    req.auth = found.auth;
     // Mirror the sliding renewal on the cookies, else the browser drops them
     // while the server-side session is still alive.
     if (found.renewedTo) {
@@ -188,8 +209,9 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
    */
   app.decorate(
     "openSession",
-    async (reply: FastifyReply, user: SessionUser) => {
-      const session = await createSession(app.db, user.id, config.SESSION_TTL_HOURS);
+    async (reply: FastifyReply, user: SessionUser, auth: SessionAuth = PORTAL) => {
+      const ttlHours = auth.kind === "seb" ? SEB_SESSION_HOURS : config.SESSION_TTL_HOURS;
+      const session = await createSession(app.db, user.id, ttlHours, auth);
       const base = { path: "/", sameSite: "lax", secure } as const;
       reply.setCookie(SESSION_COOKIE, session.token, {
         ...base,
@@ -282,6 +304,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   });
 
   await apiTokenRoutes(app);
+  await sebRoutes(app, config);
   await oauthRoutes(app, config);
 
   // Development persona picker. Registered only when explicitly enabled, and
@@ -312,7 +335,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
 
   app.get(
     "/app/api/me",
-    { preHandler: (req, reply) => app.requireSession(req, reply) },
+    { preHandler: (req, reply) => app.requireSession(req, reply), config: SITTING },
     async (req) => {
       const u = req.user!;
       // Uploaded avatar takes priority over the IdP claim; ?v= busts the cache.
@@ -337,6 +360,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
         dateFormat: u.dateFormat,
         mcqPolicy: u.mcqPolicy,
         coach: { enabled: u.coachEnabled, seen: u.coachSeen },
+        session: { kind: req.auth?.kind ?? "portal", evaluationId: req.auth?.evaluationId ?? null },
       };
     },
   );
@@ -409,8 +433,8 @@ declare module "fastify" {
       req: FastifyRequest,
       reply: FastifyReply,
     ) => Promise<FastifyReply | undefined>;
-    /** Mints the session cookies for `user` (the single sign-in path). */
-    openSession: (reply: FastifyReply, user: SessionUser) => Promise<void>;
+    /** Mints the session cookies for `user` (the single sign-in path); a portal session by default. */
+    openSession: (reply: FastifyReply, user: SessionUser, auth?: SessionAuth) => Promise<void>;
     /** The value of {@link INTERNAL_CALL_HEADER} for this process. */
     internalCallSecret: string;
   }

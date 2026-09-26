@@ -37,11 +37,13 @@ import {
 } from "@quiz/contracts";
 
 import { tracer, type AuditAction } from "../../audit.js";
+import { SITTING } from "../../auth/plugin.js";
 import { iso } from "../../clock.js";
 import {
   loadEvaluation,
   ownAttempt,
   reachableEvaluation,
+  sits,
   staffAttempt,
   teacherGuard,
 } from "../guards.js";
@@ -101,9 +103,22 @@ export async function livePlugin(app: FastifyInstance) {
   const student = studentRoute(app, failure);
   const teacher = teacherRoute(app, failure);
 
-  // The loaders of invariant 6, each answering its own 404.
-  const own = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
-    ownAttempt(app, req, reply, p.id);
+  // The loaders of invariant 6, each answering its own 404 — and, for the
+  // routes that sit an evaluation, the same 404 when this session may not
+  // sit it (ADR-027).
+  function sitting<S extends { evaluation: Parameters<typeof sits>[1] }>(
+    req: FastifyRequest,
+    reply: FastifyReply,
+    scope: S | null,
+  ): S | null {
+    if (!scope || sits(req, scope.evaluation)) return scope;
+    notFound(reply);
+    return null;
+  }
+  const own = async (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
+    sitting(req, reply, await ownAttempt(app, req, reply, p.id));
+  /** The routes a `seb` session may call: sitting its evaluation, nothing else. */
+  const sit = { preHandler: requireSession, config: SITTING };
   const staffEvaluation = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
     loadEvaluation(app, req, reply, p.id);
   const staffEvaluationAttempt = async (
@@ -128,13 +143,14 @@ export async function livePlugin(app: FastifyInstance) {
   /** F-LIVE-01. Idempotent: the same student always lands on the same attempt. */
   app.post(
     "/app/api/evaluations/:id/attempt",
-    { preHandler: requireSession },
+    sit,
     student(
       {
         params: IdParam,
         body: AttemptStartBody,
         optionalBody: true,
-        load: (req, reply, p) => reachableEvaluation(app, req, reply, p.id),
+        load: async (req, reply, p) =>
+          sitting(req, reply, await reachableEvaluation(app, req, reply, p.id)),
       },
       async ({ req, reply, now, body, scope }) => {
         const participant = await service.participantOf(app.db, scope.evaluation, req.user!.id);
@@ -228,7 +244,7 @@ export async function livePlugin(app: FastifyInstance) {
    */
   app.get(
     "/app/api/attempts/:id",
-    { preHandler: requireSession },
+    sit,
     student({ params: IdParam, load: own }, async ({ now, scope }) => {
       // A sign of life only counts while the attempt is live: a submitted
       // student refreshing this page must not show up as online on the grid.
@@ -242,7 +258,7 @@ export async function livePlugin(app: FastifyInstance) {
   /** §4.7 — the autosave. One statement, three 410 reasons, always `serverNow`. */
   app.put(
     "/app/api/attempts/:id/answers/:itemId",
-    { preHandler: requireSession },
+    sit,
     student({ params: AnswerParam, body: AutosaveRequest, load: own }, ({ now, params, body, scope }) =>
       service.saveAnswer(app.db, {
         evaluation: scope.evaluation,
@@ -258,7 +274,7 @@ export async function livePlugin(app: FastifyInstance) {
   /** F-LIVE-08: validate — "Validate and continue", crossing a checkpoint. */
   app.post(
     "/app/api/attempts/:id/answers/:itemId/done",
-    { preHandler: requireSession },
+    sit,
     student(
       { params: AnswerParam, body: MarkDoneBody, load: own },
       async ({ now, params, body, scope }) => {
@@ -277,7 +293,7 @@ export async function livePlugin(app: FastifyInstance) {
   /** Issue #89: "I won't answer this question", or taking it back. */
   app.post(
     "/app/api/attempts/:id/answers/:itemId/skip",
-    { preHandler: requireSession },
+    sit,
     student(
       { params: AnswerParam, body: SkipBody, load: own },
       async ({ now, params, body, scope }) => {
@@ -296,7 +312,7 @@ export async function livePlugin(app: FastifyInstance) {
   /** Issue #89: the review flag. Staff see it on the grid; nobody else does. */
   app.post(
     "/app/api/attempts/:id/answers/:itemId/flag",
-    { preHandler: requireSession },
+    sit,
     student(
       { params: AnswerParam, body: FlagBody, load: own },
       async ({ now, params, body, scope }) => {
@@ -314,7 +330,7 @@ export async function livePlugin(app: FastifyInstance) {
 
   app.post(
     "/app/api/attempts/:id/position",
-    { preHandler: requireSession },
+    sit,
     student({ params: IdParam, body: PositionBody, load: own }, async ({ reply, now, body, scope }) => {
       service.assertOpen(scope.evaluation, scope.attempt, now);
       await service.setPosition(app.db, scope.attempt, body.itemId, now);
@@ -325,7 +341,7 @@ export async function livePlugin(app: FastifyInstance) {
   /** F-LIVE-10. */
   app.post(
     "/app/api/attempts/:id/submit",
-    { preHandler: requireSession },
+    sit,
     student({ params: IdParam, body: SubmitBody, load: own }, async ({ now, scope }) => {
       // An exercise with retakes grades the attempt this request finished.
       const row = await service.submitAttempt(app.db, scope.evaluation, scope.attempt, now, app);
@@ -340,7 +356,7 @@ export async function livePlugin(app: FastifyInstance) {
   /** F-EVAL-13: the journal. Bounded, never blocking, never a 4xx storm. */
   app.post(
     "/app/api/attempts/:id/events",
-    { preHandler: requireSession },
+    sit,
     student(
       { params: IdParam, body: AttemptEventBody, load: own },
       async ({ reply, now, body, scope }) => {
@@ -370,7 +386,7 @@ export async function livePlugin(app: FastifyInstance) {
    */
   app.post(
     "/app/api/attempts/:id/run",
-    { preHandler: requireSession },
+    sit,
     student({ params: IdParam, body: RunBody, load: own }, async ({ reply, now, body, scope }) => {
       const outcome = await service.runVisibleCases(app.db, {
         runner: app.runner,
@@ -406,7 +422,7 @@ export async function livePlugin(app: FastifyInstance) {
    */
   app.post(
     "/app/api/attempts/:id/simulate",
-    { preHandler: requireSession },
+    sit,
     student({ params: IdParam, body: SimulateBody, load: own }, async ({ reply, now, body, scope }) => {
       const outcome = await service.simulateAnswer(app.db, {
         runner: app.runner,

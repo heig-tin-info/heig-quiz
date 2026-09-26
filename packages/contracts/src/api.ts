@@ -26,6 +26,15 @@ export interface PublicConfig {
   devLogin: boolean;
 }
 
+/**
+ * What a browser session is (ADR-027). `portal`: the ordinary sign-in, the
+ * whole application. `seb`: opened by a one-time launch ticket inside Safe
+ * Exam Browser, confined to ONE evaluation. A route accepts `portal` only
+ * unless it declares otherwise.
+ */
+export const SESSION_KINDS = ["portal", "seb"] as const;
+export type SessionKind = (typeof SESSION_KINDS)[number];
+
 export interface Me {
   id: string;
   email: string;
@@ -50,6 +59,8 @@ export interface Me {
    * again on the classroom's PC.
    */
   coach: { enabled: boolean | null; seen: string[] };
+  /** The session this request rode on; `evaluationId` is set on a `seb` one only. Absent: `portal`. */
+  session?: { kind: SessionKind; evaluationId: string | null };
 }
 
 /** A coach mark's id: `<screen>.<step>`, lower case (`pool.new-question`). */

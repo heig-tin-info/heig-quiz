@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { LogOut } from "lucide-react";
 
 import type { Me, PublicConfig } from "@quiz/contracts";
 
@@ -17,7 +18,7 @@ import {
   studentRouteFor,
   useStudentView,
 } from "./studentView";
-import { Button, LinkButton, setDateFormat, Spinner } from "./ui";
+import { Button, Card, EmptyState, LinkButton, setDateFormat, Spinner } from "./ui";
 import { configKey } from "./queryKeys";
 
 // One chunk per page: a student never downloads the teacher UI and vice versa.
@@ -109,6 +110,12 @@ function Landing() {
           <Logo className="mx-auto w-55" />
         </h1>
         <p className="mt-6 text-base leading-relaxed text-fg-muted">{t("landing.tagline")}</p>
+        {/* ADR-027: a SEB launch that was refused lands here, in SEB. */}
+        {new URLSearchParams(window.location.search).has("seb") ? (
+          <p role="alert" className="mt-4 text-sm text-danger">
+            {t("seb.invalid")}
+          </p>
+        ) : null}
         <LinkButton href="/app/auth/login" variant="primary" size="lg" className="mt-8 w-full">
           {t("landing.signin")}
         </LinkButton>
@@ -261,6 +268,29 @@ function SignedOut({ route, navigate }: { route: Route; navigate: (r: Route) => 
 }
 
 /**
+ * ADR-027: what a `seb` session shows outside its evaluation — after the
+ * submit, or on leaving the waiting room. Safe Exam Browser is closed from its
+ * own frame; the one action here is going back to the exam.
+ */
+function SebElsewhere({ onBack }: { onBack: () => void }) {
+  const t = useT();
+  return (
+    <main className="mx-auto w-full max-w-160 px-4 py-16 sm:px-6">
+      <Card className="px-6 py-4">
+        <EmptyState
+          icon={LogOut}
+          title={t("seb.elsewhere.title")}
+          titleAs="h1"
+          action={<Button onClick={onBack}>{t("seb.elsewhere.back")}</Button>}
+        >
+          {t("seb.elsewhere.body")}
+        </EmptyState>
+      </Card>
+    </main>
+  );
+}
+
+/**
  * The student-view switch, both ways. Going IN remembers the page it was
  * thrown from and lands on that page's student twin — the evaluation's own
  * `/take/:id` for the two screens that have one, the student home otherwise
@@ -290,7 +320,9 @@ export default function App() {
   // stream (`attempt:`/`evaluation:`), which delivers the start, the deadline,
   // the pause and the closure as typed frames, so the attempt route needs no
   // hints at all.
-  useLiveUpdates(me.data != null && route.view !== "attempt");
+  // ADR-027: a `seb` session has one evaluation, and no other page.
+  const confinedTo = me.data?.session?.evaluationId ?? null;
+  useLiveUpdates(me.data != null && confinedTo === null && route.view !== "attempt");
   // The account's saved language wins on load, so the choice follows the user
   // across devices (no re-persist: adopt only).
   const serverLocale = me.data?.locale ?? null;
@@ -318,6 +350,15 @@ export default function App() {
 
   if (me.isLoading) return null;
   if (!me.data) return <SignedOut route={route} navigate={navigate} />;
+  if (confinedTo !== null) {
+    return route.view === "attempt" ? (
+      <Suspense fallback={<Spinner className="py-24" />}>
+        {renderPage({ view: "attempt", evaluationId: confinedTo }, { me: me.data, navigate, teacherUi: false })}
+      </Suspense>
+    ) : (
+      <SebElsewhere onBack={() => navigate({ view: "attempt", evaluationId: confinedTo })} />
+    );
+  }
   const shown: Route = onTeacherRoute ? { view: "home" } : route;
   const page = (
     <Suspense fallback={<Spinner className="py-24" />}>

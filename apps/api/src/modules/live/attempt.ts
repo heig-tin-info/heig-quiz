@@ -13,6 +13,7 @@ import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import {
   EvaluationSettings,
   GradingScale,
+  safeExamBrowserOf,
   type AttemptClosed,
   type AttemptItem,
   type AttemptOrLobby,
@@ -1333,6 +1334,7 @@ export async function studentHome(db: Db, userId: string, now: Date): Promise<St
     deadlineAt: isoOrNull(row.attempt?.deadlineAt ?? null),
     grade: gradeOf(row),
     retakes: retakesOf(row),
+    safeExamBrowser: safeExamBrowserOf(settingsOf(row.evaluation)),
   });
 
   const open: EvaluationCard[] = [];

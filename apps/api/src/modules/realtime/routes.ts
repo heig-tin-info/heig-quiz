@@ -26,7 +26,8 @@ import { WatchSubject, isStaffOnly, type ServerEvent } from "@quiz/contracts";
 import { iso } from "../../clock.js";
 import { classrooms, courses, enrollments, evaluations, pools } from "../../db/schema.js";
 import { subscribe, type BusMessage } from "../../events.js";
-import { accessWhere, findReachableEvaluation, poolAccess, staffAccess } from "../guards.js";
+import { SITTING } from "../../auth/plugin.js";
+import { accessWhere, findReachableEvaluation, poolAccess, sits, staffAccess } from "../guards.js";
 import * as live from "../live/service.js";
 import * as bus from "./bus.js";
 import { presence } from "./presence.js";
@@ -131,7 +132,7 @@ async function resolveWatch(
   const [kind, id] = [subject.slice(0, separator), subject.slice(separator + 1)];
   if (kind === "evaluation") {
     const scope = await findReachableEvaluation(app.db, req.user!, id);
-    if (!scope) return null;
+    if (!scope || !sits(req, scope.evaluation, scope.staff)) return null;
     return { watch: { kind: "evaluation", evaluationId: id }, staff: scope.staff, participant: false };
   }
   if (kind === "lobby") {
@@ -140,7 +141,7 @@ async function resolveWatch(
     // draws the waiting room, so it receives no `dashboard.*` whoever opened
     // it, and it counts as present when its user holds a seat.
     const scope = await findReachableEvaluation(app.db, req.user!, id);
-    if (!scope) return null;
+    if (!scope || !sits(req, scope.evaluation)) return null;
     const seat = await live.participantOf(app.db, scope.evaluation, req.user!.id);
     return { watch: { kind: "lobby", evaluationId: id }, staff: false, participant: seat !== null };
   }
@@ -152,6 +153,7 @@ async function resolveWatch(
     // A student watches their OWN attempt; a staff member watches any of
     // the evaluation's, which is what the dashboard's cell inspector needs.
     if (!scope.staff && attempt.userId !== req.user!.id) return null;
+    if (!sits(req, scope.evaluation, attempt.userId !== req.user!.id)) return null;
     return {
       watch: { kind: "attempt", attemptId: id, evaluationId: attempt.evaluationId },
       staff: scope.staff,
@@ -243,6 +245,8 @@ export async function realtimePlugin(app: FastifyInstance) {
     let watch: Watch | null = null;
     let staff = me.role === "teacher" || me.role === "admin";
     let participant = false;
+    // A `seb` session streams its evaluation and nothing else (ADR-027).
+    if (raw === null && req.auth?.evaluationId) return reply.code(404).send({ error: "not_found" });
     if (raw !== null) {
       // The grammar is a contract (`WatchSubject`), not a `split(":")`:
       // `attempt:not-a-uuid` used to reach the database and answer a 500.
@@ -369,7 +373,10 @@ export async function realtimePlugin(app: FastifyInstance) {
     return reply;
   };
 
-  const guarded = { preHandler: (req: FastifyRequest, reply: FastifyReply) => app.requireSession(req, reply) };
+  const guarded = {
+    preHandler: (req: FastifyRequest, reply: FastifyReply) => app.requireSession(req, reply),
+    config: SITTING,
+  };
   app.get("/app/api/events", guarded, handler);
 }
 
