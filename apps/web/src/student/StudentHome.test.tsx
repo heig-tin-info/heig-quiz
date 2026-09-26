@@ -83,6 +83,20 @@ describe("the student home", () => {
     expect(within(upcoming as HTMLElement).queryByRole("button")).toBeNull();
   });
 
+  it("hands out the Safe Exam Browser file instead of opening an exam that requires it", async () => {
+    mockFetch({
+      "GET /app/api/student/home": ok({ ...home, open: [card({ safeExamBrowser: true })] }),
+      "GET /app/api/student/classrooms": ok([]),
+    });
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
+    const { navigate } = render();
+    await userEvent.click(await screen.findByRole("button", { name: "Ouvrir dans Safe Exam Browser" }));
+    expect(assign).toHaveBeenCalledWith("/app/api/evaluations/e1/seb");
+    expect(navigate).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
   it("says “resume” on an attempt already started", async () => {
     mockFetch({
       "GET /app/api/student/home": ok({

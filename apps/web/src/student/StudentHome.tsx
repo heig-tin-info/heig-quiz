@@ -261,6 +261,14 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
         };
       }
     }
+    // ADR-027: sat in Safe Exam Browser only — the card hands out the file.
+    if (card.safeExamBrowser) {
+      return {
+        label: t("shome.seb"),
+        primary: true,
+        onClick: () => window.location.assign(`/app/api/evaluations/${card.id}/seb`),
+      };
+    }
     return {
       label: primaryAction(card, t),
       primary: true,

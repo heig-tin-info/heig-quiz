@@ -76,6 +76,7 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 | F-EVAL-14 | An evaluation can be duplicated to the same classroom or to another one. | P1 | S |
 | F-EVAL-15 | An `exercise` evaluation may allow several attempts, keeping the best or the last one (the teacher's choice), with an optional maximum. A retake starts blank, with a new question order, once the previous attempt is handed in and while the evaluation is open; the student sees the score of each attempt, not the correction, until the evaluation closes. Results, grade, CSV and statistics use the kept attempt. An exam keeps one attempt (ADR-025). | P2 | C |
 | F-EVAL-16 | An `exam` or `exercise` evaluation may use **negative marking**: every choice question is then scored so that a wrong answer costs points (single answer: +1 or −1/(n − 1); several: c/C − w/W, not floored) and no answer costs nothing. Per-question points may be negative; the evaluation total is floored at 0 and the grade computed from it. The student is told in the waiting room and on each choice question. Frozen once an attempt exists (ADR-026, issue #130). | P1 | S |
+| F-EVAL-17 | An `exam` may require **Safe Exam Browser**. The student's card then downloads a one-time `.seb` that opens the exam in SEB under their identity, with no second sign-in; the session so opened reaches that exam only, and a portal session cannot sit the exam (ADR-027, issue #139). | P2 | S |
 
 ## F-LIVE Live run
 

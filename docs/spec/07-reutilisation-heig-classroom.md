@@ -81,7 +81,7 @@ heig-classroom has no built-in code runner: grading is done by GitHub Actions on
 | Engine module | `apps/codespace/src/engine/` | Driving Podman in `--remote` through the socket, `--format json` output. Reuse as the base of `apps/runner`. |
 | Invariants | `apps/codespace/CLAUDE.md` | "No secret inside the container", "network closed by construction", "hardening from the very first run". Copy into the quiz's `CLAUDE.md`. |
 | Internal nftables network | `apps/codespace/infra/net/`, `infra/nft/` | Not needed. The quiz's runner is in `--network none`, it has no git channel to open. |
-| SEB mode | `apps/codespace/src/seb/` | Out of scope for the quiz, see 0.6. Remains available if a proctored exam is ever requested. |
+| SEB mode | `apps/codespace/src/seb/` | The Config Key and the `.seb` file, cut down to the plist subset the quiz writes, in `apps/api/src/auth/seb.ts` (ADR-027). The signed exam cookie and the BEK list are not reused: the quiz opens a typed session from a one-time ticket. |
 
 Consequence on [05-architecture.md](05-architecture.md), section 5.5: the runner is driven by **rootful Podman in `--remote`** like the codespace, rather than by the Docker socket. gVisor remains the recommended option on top, if the Hetzner VM accepts it; otherwise the codespace's Podman hardening is the reference, it is already proven. The codespace maintains a long session per student, the quiz's runner launches one container per execution of a few seconds: the engine module is reused, the session management is not.
 

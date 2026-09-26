@@ -44,6 +44,7 @@ import {
   type PoolSummary,
   ReleasedGrades,
   negativeMarkingOf,
+  safeExamBrowserOf,
   retakesOf,
   type RetakeSettings,
 } from "@quiz/contracts";
@@ -415,6 +416,11 @@ export function gradeDefaults(row: EvaluationRecord): Readonly<Record<string, un
  */
 export function negativeMarkingEnabled(row: EvaluationRecord): boolean {
   return negativeMarkingOn(row.mode, negativeMarkingOf(settingsOf(row)));
+}
+
+/** ADR-027: sat in Safe Exam Browser only. An exam's switch; inert on any other mode. */
+export function sebRequired(row: EvaluationRecord): boolean {
+  return row.mode === "exam" && safeExamBrowserOf(settingsOf(row));
 }
 
 /**

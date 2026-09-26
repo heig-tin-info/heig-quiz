@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
-import { McqPolicy, negativeMarkingOf, type EvaluationDetail, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
+import { McqPolicy, negativeMarkingOf, safeExamBrowserOf, type EvaluationDetail, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
 import { allowedFeedbackWhen, feedbackWhenFor, isInClass } from "@quiz/domain";
 
 import type { Dict } from "../i18n";
@@ -246,6 +246,18 @@ export function AdvancedDisclosure({
             />
           </SettingRow>
         )}
+
+        {/* ADR-027: an exam sat in Safe Exam Browser only. */}
+        {mode === "exam" ? (
+          <SettingRow title={t("eval.seb")} desc={t("eval.seb.desc")}>
+            <Switch
+              checked={safeExamBrowserOf(settings)}
+              disabled={disabled}
+              label={t("eval.seb")}
+              onChange={(safeExamBrowser) => set({ safeExamBrowser })}
+            />
+          </SettingRow>
+        ) : null}
 
         <SettingRow title={t("eval.accessCode")} desc={t("eval.accessCode.desc")}>
           <input

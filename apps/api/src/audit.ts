@@ -13,6 +13,9 @@ export type AuditAction =
   | "auth.dev_login"
   | "auth.login"
   | "auth.logout"
+  | "auth.seb_launch"
+  | "auth.seb_login"
+  | "auth.seb_refused"
   | "avatar.delete"
   | "avatar.update"
   | "attempt.close"
@@ -138,7 +141,8 @@ export type Trace = (
 export function tracer(app: FastifyInstance): Trace {
   return (req, action, subjectType, subjectId, payload) =>
     audit(app.db, {
-      actorUserId: req.user?.id ?? null,
+      // The person acting, who is not the user when a session was delegated (ADR-027).
+      actorUserId: req.auth?.actorUserId ?? req.user?.id ?? null,
       actorType: req.authVia === "token" ? "api_key" : "user",
       action,
       subjectType,

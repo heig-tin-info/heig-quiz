@@ -100,3 +100,24 @@ describe("the frame's view switch", () => {
     await waitFor(() => expect(window.location.pathname).toBe("/pools"));
   });
 });
+
+describe("a Safe Exam Browser session (ADR-027)", () => {
+  it("shows its own evaluation and nothing else of the portal", async () => {
+    vi.stubGlobal("EventSource", FakeStream);
+    const { calls } = mockFetch({
+      "GET /app/api/me": ok(makeMe({ session: { kind: "seb", evaluationId: EVAL } })),
+      [`POST /app/api/evaluations/${EVAL}/attempt`]: ok(lobby),
+    });
+    // Another evaluation's address still opens the one the session is for.
+    renderWithProviders(<App />, { route: "/take/22222222-2222-4222-8222-222222222222" });
+    expect(await screen.findByText("Quiz 3 — Pointers")).toBeVisible();
+    expect(screen.queryByRole("navigation")).toBeNull();
+    expect(calls.every((c) => !c.url.includes("2222"))).toBe(true);
+
+    // Leaving the waiting room leads nowhere but back.
+    await userEvent.click(screen.getByRole("button", { name: "Leave" }));
+    expect(await screen.findByText("You have left the exam")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Back to the exam" }));
+    expect(await screen.findByText("Quiz 3 — Pointers")).toBeVisible();
+  });
+});

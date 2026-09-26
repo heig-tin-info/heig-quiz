@@ -92,6 +92,10 @@ export type RetakeSettings = z.infer<typeof RetakeSettings>;
 export const negativeMarkingOf = (settings: { negativeMarking?: boolean | undefined }): boolean =>
   settings.negativeMarking === true;
 
+/** The Safe Exam Browser switch of an evaluation's settings (ADR-027); absent is off. */
+export const safeExamBrowserOf = (settings: { safeExamBrowser?: boolean | undefined }): boolean =>
+  settings.safeExamBrowser === true;
+
 /** A stored evaluation without the field: one attempt, as before #92. */
 export const defaultRetakes = (): RetakeSettings => ({
   enabled: false,
@@ -128,6 +132,13 @@ export const EvaluationSettings = z.object({
    * read it through {@link negativeMarkingOf}, never raw.
    */
   negativeMarking: z.boolean().optional(),
+  /**
+   * ADR-027 (#139): the evaluation is sat in Safe Exam Browser only. A
+   * student launches it from the portal with a one-time `.seb` file; a
+   * portal session cannot sit it. Absent means off: read it through
+   * {@link safeExamBrowserOf}, never raw.
+   */
+  safeExamBrowser: z.boolean().optional(),
   /** Only on a `poll` evaluation (`./poll.ts`); absent everywhere else. */
   poll: z
     .object({ anonymous: z.boolean().default(false), revealed: z.boolean().default(false) })
@@ -309,6 +320,7 @@ export const EvaluationSettingsPatch = z.object({
   /** Replaced whole: the three fields of the retake rule travel together. */
   retakes: RetakeSettings.optional(),
   negativeMarking: z.boolean().optional(),
+  safeExamBrowser: z.boolean().optional(),
   poll: EvaluationSettings.shape.poll,
 });
 export type EvaluationSettingsPatch = z.infer<typeof EvaluationSettingsPatch>;

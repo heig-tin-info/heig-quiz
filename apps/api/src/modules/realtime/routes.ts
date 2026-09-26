@@ -26,7 +26,8 @@ import { WatchSubject, isStaffOnly, type ServerEvent } from "@quiz/contracts";
 import { iso } from "../../clock.js";
 import { classrooms, courses, enrollments, evaluations, pools } from "../../db/schema.js";
 import { subscribe, type BusMessage } from "../../events.js";
-import { accessWhere, findReachableEvaluation, poolAccess, staffAccess } from "../guards.js";
+import { SITTING } from "../../auth/session.js";
+import { accessWhere, findReachableEvaluation, poolAccess, sits, staffAccess } from "../guards.js";
 import * as live from "../live/service.js";
 import * as bus from "./bus.js";
 import { presence } from "./presence.js";
@@ -126,13 +127,23 @@ async function resolveWatch(
   app: FastifyInstance,
   req: FastifyRequest,
   subject: WatchSubject,
-): Promise<{ watch: Watch; staff: boolean; participant: boolean } | null> {
+): Promise<{
+  watch: Watch;
+  evaluation: typeof evaluations.$inferSelect;
+  staff: boolean;
+  participant: boolean;
+} | null> {
   const separator = subject.indexOf(":");
   const [kind, id] = [subject.slice(0, separator), subject.slice(separator + 1)];
   if (kind === "evaluation") {
     const scope = await findReachableEvaluation(app.db, req.user!, id);
     if (!scope) return null;
-    return { watch: { kind: "evaluation", evaluationId: id }, staff: scope.staff, participant: false };
+    return {
+      watch: { kind: "evaluation", evaluationId: id },
+      evaluation: scope.evaluation,
+      staff: scope.staff,
+      participant: false,
+    };
   }
   if (kind === "lobby") {
     // The SAME authorisation as `evaluation:` — nothing here is a second
@@ -142,7 +153,12 @@ async function resolveWatch(
     const scope = await findReachableEvaluation(app.db, req.user!, id);
     if (!scope) return null;
     const seat = await live.participantOf(app.db, scope.evaluation, req.user!.id);
-    return { watch: { kind: "lobby", evaluationId: id }, staff: false, participant: seat !== null };
+    return {
+      watch: { kind: "lobby", evaluationId: id },
+      evaluation: scope.evaluation,
+      staff: false,
+      participant: seat !== null,
+    };
   }
   if (kind === "attempt") {
     const attempt = await live.attemptById(app.db, id);
@@ -154,6 +170,7 @@ async function resolveWatch(
     if (!scope.staff && attempt.userId !== req.user!.id) return null;
     return {
       watch: { kind: "attempt", attemptId: id, evaluationId: attempt.evaluationId },
+      evaluation: scope.evaluation,
       staff: scope.staff,
       // Watching one's OWN attempt is sitting the quiz, teacher or not; a
       // staff inspector watching somebody else's row is not in the room.
@@ -243,14 +260,20 @@ export async function realtimePlugin(app: FastifyInstance) {
     let watch: Watch | null = null;
     let staff = me.role === "teacher" || me.role === "admin";
     let participant = false;
+    // A `seb` session streams its evaluation and nothing else (ADR-027).
+    if (raw === null && req.auth?.evaluationId) return reply.code(404).send({ error: "not_found" });
     if (raw !== null) {
       // The grammar is a contract (`WatchSubject`), not a `split(":")`:
       // `attempt:not-a-uuid` used to reach the database and answer a 500.
       const subject = WatchSubject.safeParse(raw);
       if (!subject.success) return reply.code(400).send({ error: "validation" });
       const resolved = await resolveWatch(app, req, subject.data);
-      // An unreachable subject is a 404, exactly like a missing one.
-      if (!resolved) return reply.code(404).send({ error: "not_found" });
+      // An unreachable subject is a 404, exactly like a missing one — and so
+      // is one this session may not sit (ADR-027); staff watching somebody
+      // else's room is not sitting it.
+      if (!resolved || !sits(req, resolved.evaluation, resolved.staff && !resolved.participant)) {
+        return reply.code(404).send({ error: "not_found" });
+      }
       watch = resolved.watch;
       staff = resolved.staff;
       participant = resolved.participant;
@@ -369,7 +392,10 @@ export async function realtimePlugin(app: FastifyInstance) {
     return reply;
   };
 
-  const guarded = { preHandler: (req: FastifyRequest, reply: FastifyReply) => app.requireSession(req, reply) };
+  const guarded = {
+    preHandler: (req: FastifyRequest, reply: FastifyReply) => app.requireSession(req, reply),
+    config: SITTING,
+  };
   app.get("/app/api/events", guarded, handler);
 }
 

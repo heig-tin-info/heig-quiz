@@ -19,6 +19,10 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+import { SESSION_KINDS } from "@quiz/contracts";
+
+import { evaluations } from "./evaluation.js";
+
 export const users = pgTable(
   "users",
   {
@@ -75,8 +79,40 @@ export const sessions = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /** What the session is and which routes it reaches (ADR-027). */
+    kind: text("kind", { enum: SESSION_KINDS }).notNull().default("portal"),
+    /** Who acts through the session when it is not `user_id` themself; null otherwise. */
+    actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "cascade" }),
+    /** The one evaluation a `seb` session is confined to; null on a `portal` one. */
+    evaluationId: uuid("evaluation_id").references(() => evaluations.id, { onDelete: "cascade" }),
   },
   (t) => [index("sessions_expires_idx").on(t.expiresAt)],
+);
+
+/**
+ * One-time launch tickets (ADR-027): the right to open ONE session of a
+ * given kind, for a given user, a few minutes long. Only the SHA-256 of the
+ * secret is stored, like a session. Consumed by a single conditional UPDATE;
+ * revoked or consumed rows stay, for the audit trail.
+ */
+export const launchTickets = pgTable(
+  "launch_tickets",
+  {
+    id: uuid("id").primaryKey(),
+    secretHash: char("secret_hash", { length: 64 }).notNull().unique(),
+    kind: text("kind", { enum: SESSION_KINDS }).notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** Who will act through the session, when not the user themself (as on `sessions`). */
+    actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "cascade" }),
+    evaluationId: uuid("evaluation_id").references(() => evaluations.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [index("launch_tickets_user_idx").on(t.userId, t.evaluationId)],
 );
 
 /**

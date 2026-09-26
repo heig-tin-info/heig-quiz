@@ -35,6 +35,7 @@ import {
   pools,
   questions,
 } from "../db/schema.js";
+import { sebRequired } from "./evaluation/service.js";
 
 const IdParam = z.object({ id: z.uuid() });
 
@@ -428,6 +429,25 @@ export async function findReachableEvaluation(
     .where(eq(evaluations.id, evaluationId))
     .limit(1);
   return student ? { evaluation: student.evaluation, staff: false } : null;
+}
+
+/**
+ * ADR-027: whether this request may SIT `evaluation` — enter it, answer it,
+ * watch it as a participant. A `seb` session sits its own evaluation and
+ * nothing else; any other session sits every evaluation that does not require
+ * Safe Exam Browser, staff included: a teacher rehearses a SEB exam with its
+ * `.seb`, like a student. `staffWatch` is a staff member watching somebody
+ * else (dashboard, inspector), which is not sitting. Checked after the loaders
+ * of invariant 6, and answered with their 404.
+ */
+export function sits(
+  req: FastifyRequest,
+  evaluation: typeof evaluations.$inferSelect,
+  staffWatch: boolean,
+): boolean {
+  const confinedTo = req.auth?.evaluationId ?? null;
+  if (confinedTo !== null) return confinedTo === evaluation.id;
+  return staffWatch || !sebRequired(evaluation);
 }
 
 /** `findReachableEvaluation`, answering 404 when it finds nothing. */
