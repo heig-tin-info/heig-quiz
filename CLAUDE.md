@@ -73,7 +73,10 @@ exported as `codeimageServer` / `codeimageClient` and registered beside `code`.
 `packages/ui` exists since the refactoring campaign of 2026-09-23 (PR #51): the
 shared primitives of the question-type surfaces (`@quiz/ui`, React as a
 peer, `@quiz/core` its only dependency; it never imports a `qt-*` package nor
-`apps/web`). Packages still to create, in this order (`docs/spec/05-architecture.md`,
+`apps/web`). The generic primitives of `apps/web/src/ui/` are due to move
+to `@heig-platform/ui`, a library shared with heig-classroom (ADR-029, not
+extracted yet): a new generic primitive belongs there, not in this repo.
+Packages still to create, in this order (`docs/spec/05-architecture.md`,
 5.2 and `docs/PLAN-MVP.md` §8): `packages/canonical`,
 `packages/cli`.
 
