@@ -4,6 +4,20 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Browser chrome (address bar, status bar) in the colour of the app's
+         top bar, --canvas of src/style.css. These two follow the OS until
+         the SPA boots; theme.ts then rewrites them to the theme actually
+         chosen, which may differ from the OS. -->
+    <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#131211" media="(prefers-color-scheme: dark)" />
+    <meta name="color-scheme" content="light dark" />
+    <!-- Installed on a home screen (iOS, Android). -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Quiz" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Quiz</title>
   </head>
   <body>

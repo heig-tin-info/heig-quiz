@@ -72,6 +72,23 @@ export function useResolvedTheme(): Theme {
   return useSyncExternalStore(subscribe, snapshot, snapshot);
 }
 
+/**
+ * Paints the browser chrome (the address bar of a mobile browser, the status
+ * bar of an installed app) in the colour of the top bar. index.html ships
+ * one `theme-color` per OS scheme so the first paint is right; an explicit
+ * choice can contradict the OS, so both are rewritten to the theme on screen
+ * and lose their media query. The colour is read from `--canvas`, never
+ * restated here.
+ */
+function paintBrowserChrome() {
+  const canvas = getComputedStyle(document.documentElement).getPropertyValue("--canvas").trim();
+  if (!canvas) return;
+  for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
+    meta.removeAttribute("media");
+    meta.content = canvas;
+  }
+}
+
 let unsubscribe: (() => void) | null = null;
 
 export function applyTheme(choice: ThemeChoice) {
@@ -79,6 +96,7 @@ export function applyTheme(choice: ThemeChoice) {
   const set = (theme: Theme) => {
     document.documentElement.classList.toggle("dark", theme === "dark");
     document.documentElement.style.colorScheme = theme;
+    paintBrowserChrome();
   };
   set(resolveTheme(choice));
   if (choice === "system") removeStored(KEY);
@@ -111,9 +129,11 @@ export function useProjectionTheme(): { dark: boolean; toggle: () => void } {
     const scheme = root.style.colorScheme;
     root.classList.toggle("dark", dark);
     root.style.colorScheme = dark ? "dark" : "light";
+    paintBrowserChrome();
     return () => {
       root.classList.toggle("dark", before);
       root.style.colorScheme = scheme;
+      paintBrowserChrome();
     };
   }, [dark]);
   return { dark, toggle: () => setThemeChoice(dark ? "light" : "dark") };

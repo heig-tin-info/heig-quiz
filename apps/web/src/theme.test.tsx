@@ -37,6 +37,28 @@ describe("theme store", () => {
     applyTheme("light");
     expect(localStorage.getItem("quiz-ui-theme")).toBeNull();
   });
+
+  it("paints the browser chrome with the theme on screen, not the OS one", () => {
+    // index.html ships one theme-color per OS scheme; jsdom has no style.css,
+    // so --canvas is set by hand, as html.dark would.
+    document.head.innerHTML =
+      '<meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">' +
+      '<meta name="theme-color" content="#131211" media="(prefers-color-scheme: dark)">';
+    const root = document.documentElement;
+    root.style.setProperty("--canvas", "#131211");
+    try {
+      // The OS says light (the jsdom matchMedia stub), the reader chose dark.
+      setThemeChoice("dark");
+      const metas = [...document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')];
+      expect(metas.map((m) => [m.content, m.getAttribute("media")])).toEqual([
+        ["#131211", null],
+        ["#131211", null],
+      ]);
+    } finally {
+      root.style.removeProperty("--canvas");
+      document.head.innerHTML = "";
+    }
+  });
 });
 
 describe("theme surfaces stay in step", () => {
