@@ -18,7 +18,7 @@ import { OidcProvider, type OidcClaims } from "./oidc.js";
 import { returnToOf, safeReturnTo } from "./returnTo.js";
 import { MCP_PATH } from "./oauth/service.js";
 import { oauthRoutes } from "./oauth/routes.js";
-import { SEB_SESSION_HOURS, sebRoutes } from "./seb.js";
+import { sebRoutes } from "./seb.js";
 import { apiTokenRoutes } from "./tokenRoutes.js";
 import { findTokenUser, isApiToken } from "./tokens.js";
 import {
@@ -26,6 +26,7 @@ import {
   CSRF_HEADER,
   PORTAL,
   SESSION_COOKIE,
+  SITTING,
   createSession,
   deleteSession,
   findSessionUser,
@@ -56,8 +57,6 @@ declare module "fastify" {
   }
 }
 
-/** The route config of the routes a `seb` session may call: sitting its evaluation. */
-export const SITTING = { sessions: ["portal", "seb"] } as const;
 
 const BEARER = /^Bearer\s+(\S+)$/i;
 
@@ -210,8 +209,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   app.decorate(
     "openSession",
     async (reply: FastifyReply, user: SessionUser, auth: SessionAuth = PORTAL) => {
-      const ttlHours = auth.kind === "seb" ? SEB_SESSION_HOURS : config.SESSION_TTL_HOURS;
-      const session = await createSession(app.db, user.id, ttlHours, auth);
+      const session = await createSession(app.db, user.id, config.SESSION_TTL_HOURS, auth);
       const base = { path: "/", sameSite: "lax", secure } as const;
       reply.setCookie(SESSION_COOKIE, session.token, {
         ...base,

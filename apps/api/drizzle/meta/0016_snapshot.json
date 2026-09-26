@@ -1,5 +1,5 @@
 {
-  "id": "3057ece2-21d9-40de-9d55-dd8c60d58b5f",
+  "id": "90c57cdd-7395-4c84-96b9-0693340b1db2",
   "prevId": "050d6874-1a34-48ad-a34f-65fbc02d9de9",
   "version": "7",
   "dialect": "postgresql",
@@ -333,7 +333,7 @@
           "name": "actor_user_id",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "evaluation_id": {
           "name": "evaluation_id",

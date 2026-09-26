@@ -17,6 +17,41 @@ import { CONFIG_KEY_HEADER, configKeyHeaderFor } from "./seb.js";
 import { CSRF_COOKIE, SESSION_COOKIE } from "./session.js";
 
 type Who = { id: string; headers: Record<string, string> };
+type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+/** The routes that declare `SITTING` (ADR-027), and no others. */
+const SITTING_ROUTES = new Set([
+  "GET /app/api/me",
+  "GET /app/api/events",
+  "POST /app/api/evaluations/:id/attempt",
+  "GET /app/api/attempts/:id",
+  "PUT /app/api/attempts/:id/answers/:itemId",
+  "POST /app/api/attempts/:id/answers/:itemId/done",
+  "POST /app/api/attempts/:id/answers/:itemId/skip",
+  "POST /app/api/attempts/:id/answers/:itemId/flag",
+  "POST /app/api/attempts/:id/position",
+  "POST /app/api/attempts/:id/submit",
+  "POST /app/api/attempts/:id/events",
+  "POST /app/api/attempts/:id/run",
+  "POST /app/api/attempts/:id/simulate",
+]);
+
+/** Every (method, path) of `printRoutes`' tree, HEAD aside. */
+function routesOf(tree: string): { method: Method; path: string }[] {
+  const stack: string[] = [];
+  return tree.split("\n").flatMap((line) => {
+    const match = /^(.*?)[├└]── (\S+) \(([^)]+)\)/.exec(line);
+    if (!match) return [];
+    const depth = match[1]!.length / 4;
+    stack.length = depth;
+    stack.push(match[2]!);
+    const path = stack.join("");
+    return match[3]!
+      .split(", ")
+      .filter((m) => m !== "HEAD")
+      .map((method) => ({ method: method as Method, path }));
+  });
+}
 
 let server: TestServer;
 let restore: () => void;
@@ -26,7 +61,7 @@ let exam: Awaited<ReturnType<typeof seedLive>>;
 let other: Awaited<ReturnType<typeof seedLive>>;
 
 const call = (
-  method: "GET" | "POST" | "PUT" | "PATCH",
+  method: Method,
   url: string,
   headers: Record<string, string>,
   payload: object = {},
@@ -109,11 +144,19 @@ describe("the launch ticket", () => {
     expect((await launch(url)).headers.location).toBe("/?seb=invalid");
   });
 
-  it("is only issued to a seated student, on an evaluation that requires SEB", async () => {
+  it("is only issued to a seated student, on an exam that requires SEB", async () => {
     const stranger = await server.signIn("student");
     expect((await call("GET", `/app/api/evaluations/${exam.evaluationId}/seb`, stranger.headers)).statusCode).toBe(404);
     const plain = await seedLive(server.app.db, { teacherId: teacher.id, studentIds: [student.id] });
     expect((await call("GET", `/app/api/evaluations/${plain.evaluationId}/seb`, student.headers)).statusCode).toBe(404);
+    // The switch is an exam's: on an exercise it is inert, and the exercise is sat from the portal.
+    const exercise = await seedLive(server.app.db, {
+      teacherId: teacher.id,
+      studentIds: [student.id],
+      mode: "exercise",
+      settings: { safeExamBrowser: true },
+    });
+    expect((await call("GET", `/app/api/evaluations/${exercise.evaluationId}/seb`, student.headers)).statusCode).toBe(404);
   });
 });
 
@@ -147,20 +190,16 @@ describe("the seb session (ADR-027)", () => {
   });
 
   it("is no session at all on every route that does not declare it", async () => {
-    for (const [method, url] of [
-      ["GET", "/app/api/student/home"],
-      ["GET", "/app/api/me/tokens"],
-      ["POST", "/app/api/me/tokens"],
-      ["PATCH", "/app/api/me"],
-      ["GET", "/app/api/me/connections"],
-      ["GET", `/app/api/evaluations/${exam.evaluationId}/seb`],
-      ["GET", `/app/api/evaluations/${exam.evaluationId}`],
-      ["GET", `/app/api/evaluations/${exam.evaluationId}/dashboard`],
-      ["GET", `/app/api/classrooms/${exam.classroomId}`],
-      ["GET", "/app/api/pools"],
-      ["GET", `/app/api/attempts/${attemptId}/feedback`],
-    ] as const) {
-      expect((await call(method, url, seb)).statusCode, `${method} ${url}`).toBe(401);
+    // Every route of the application, from Fastify's own tree, is asked twice:
+    // with the `seb` session and with none. Outside the routes that declare
+    // `SITTING`, the two answers must be the same — a route that opens up to
+    // `seb` without being listed here fails this test.
+    const anonymous = { "x-csrf-token": seb["x-csrf-token"]! };
+    for (const { method, path } of routesOf(server.app.printRoutes({ commonPrefix: false }))) {
+      if (SITTING_ROUTES.has(`${method} ${path}`) || path.startsWith("/app/auth/")) continue;
+      const url = path.replace(/:\w+/g, "00000000-0000-4000-8000-000000000000").replace("*", "x");
+      const [asSeb, asNobody] = await Promise.all([call(method, url, seb), call(method, url, anonymous)]);
+      expect(asSeb.statusCode, `${method} ${path}`).toBe(asNobody.statusCode);
     }
   });
 

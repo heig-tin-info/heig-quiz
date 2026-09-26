@@ -37,6 +37,15 @@ export interface SessionAuth {
 
 export const PORTAL: SessionAuth = { kind: "portal", actorUserId: null, evaluationId: null };
 
+/**
+ * The lifetime of each kind: fixed hours, never renewed — or null for
+ * SESSION_TTL_HOURS with sliding renewal. A `seb` session outlives any sitting.
+ */
+const FIXED_HOURS: Record<SessionKind, number | null> = { portal: null, seb: 6 };
+
+/** The route config of the routes a `seb` session may call: sitting its evaluation. */
+export const SITTING = { sessions: ["portal", "seb"] } as const;
+
 export async function createSession(
   db: Db,
   userId: string,
@@ -45,7 +54,8 @@ export async function createSession(
 ) {
   const token = newToken();
   const csrf = newToken();
-  const expiresAt = new Date(Date.now() + ttlHours * 3_600_000);
+  const hours = FIXED_HOURS[auth.kind] ?? ttlHours;
+  const expiresAt = new Date(Date.now() + hours * 3_600_000);
   await db.insert(sessions).values({ sidHash: hashToken(token), userId, expiresAt, ...auth });
   return { token, csrf, expiresAt };
 }
@@ -71,10 +81,10 @@ export async function findSessionUser(db: Db, token: string, opts?: { renewTtlHo
   // Sliding renewal: once less than half the TTL remains, push the expiry
   // back to a full TTL. Active users stay signed in indefinitely; an idle
   // session still dies after SESSION_TTL_HOURS. At most one UPDATE per
-  // half-TTL window, so the per-request cost stays nil. Only a portal
-  // session slides: a `seb` one ends when its sitting does (ADR-027).
+  // half-TTL window, so the per-request cost stays nil. A kind with a fixed
+  // lifetime never slides (ADR-027).
   let renewedTo: Date | null = null;
-  const ttlMs = row.auth.kind === "portal" ? (opts?.renewTtlHours ?? 0) * 3_600_000 : 0;
+  const ttlMs = FIXED_HOURS[row.auth.kind] === null ? (opts?.renewTtlHours ?? 0) * 3_600_000 : 0;
   if (ttlMs > 0 && row.expiresAt.getTime() - Date.now() < ttlMs / 2) {
     renewedTo = new Date(Date.now() + ttlMs);
     await db

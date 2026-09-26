@@ -43,7 +43,9 @@ it only revokes an unused file.
 `GET /app/auth/seb/<secret>` checks SEB's `X-SafeExamBrowser-ConfigKeyHash`
 header first (`sha256(URL + Config Key)`), so a copied file opened in an
 ordinary browser is refused WITHOUT consuming the ticket. Then it consumes the
-ticket, checks the seat again (the ticket is minutes old), opens a `seb`
+ticket, checks again that the seat is held and that the exam still requires
+SEB (`sebSeat`, the same check as the download; the ticket is minutes old),
+opens a `seb`
 session through `openSession` — still the one place session cookies are
 minted — and lands on `/take/<evaluation>`. Every refusal looks the same to
 the client (`/?seb=invalid`); the audit log keeps the reason
@@ -74,24 +76,31 @@ session is simply not there: the request is anonymous, so a 401 wherever a
 session is required, and the static files and public routes are unaffected.
 A new route is therefore closed to `seb` until it opts in.
 
-A `seb` session never slides, and lives `SEB_SESSION_HOURS` (6 h) from the
-launch. It is not deleted on submit: after it, every write is a `410` and the
+The lifetime of each kind is one table in `auth/session.ts`: a `portal`
+session slides on `SESSION_TTL_HOURS`; a `seb` one never slides, and lives
+6 h from the launch. It is not deleted on submit: after it, every write is a `410` and the
 session reads its own closed attempt, which is what the screen shows.
 
 ### 4. One rule for who sits what: `sits`
 
-`sits(req, evaluation)` in `modules/guards.ts`: a `seb` session sits its own
-evaluation and nothing else; any other session sits every evaluation that does
-not require SEB. It is applied after the loaders of the sitting routes (enter,
-every `/attempts/:id/…`) and of the SSE watches, and answered with their 404.
-A staff member watching the dashboard is not sitting and is not affected.
-`settings.safeExamBrowser` switches the requirement on; the switch is shown on
-exams only.
+`sits` in `modules/guards.ts`: a `seb` session sits its own evaluation and
+nothing else; any other session sits every evaluation that does not require
+SEB. It is applied after the loaders of the sitting routes (enter, retake,
+every `/attempts/:id/…`) and once for every SSE watch, and answered with their
+404. A staff member watching somebody else (dashboard, inspector) is not
+sitting and is not affected; a teacher REHEARSING the exam through their own
+seat (ADR-018) is sitting, and does it with the `.seb` like a student.
+
+`settings.safeExamBrowser` switches the requirement on. It is an exam's switch
+(`sebRequired`): shown on exams only, and inert on any other mode, the way
+negative marking is on a poll — so no path of an exercise (retakes included)
+can be a way around it.
 
 ### 5. Shaped for delegation, not building it
 
-`actor_user_id` (who acts) is distinct from `user_id` (as whom), on the ticket
-and on the session, and `tracer` writes the actor. That is what a teacher
+`actor_user_id` (who acts, null when the user acts for themself) is distinct
+from `user_id` (as whom), with the same meaning on the ticket and on the
+session, and `tracer` writes the actor. That is what a teacher
 acting as a student would need; nothing else of it exists, and its policy is
 an open question (06, row 24).
 
@@ -99,7 +108,9 @@ an open question (06, row 24).
 
 - A `seb` session reaches: `GET /me`, entering its evaluation, the routes of
   its own attempt, and the SSE stream of its evaluation. Everything else is
-  anonymous to it (`auth/seb.db.test.ts`, the hostile client).
+  anonymous to it: `auth/seb.db.test.ts` asks every route of Fastify's tree
+  with the session and without, and fails on any route outside the declared
+  list that answers differently.
 - The SPA, on a `seb` session, renders the attempt page of its evaluation and
   otherwise one screen ("You have left the exam"), with no frame at all.
 - The request log masks the secret (`redactLaunchUrl`). The Caddyfile keeps no

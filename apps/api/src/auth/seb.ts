@@ -15,19 +15,13 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
-import { IdParam, safeExamBrowserOf } from "@quiz/contracts";
+import { IdParam } from "@quiz/contracts";
 
-import { audit } from "../audit.js";
+import { audit, tracer } from "../audit.js";
 import type { AppConfig } from "../config.js";
 import { users } from "../db/schema.js";
-import { settingsOf } from "../modules/evaluation/service.js";
-import { findReachableEvaluation } from "../modules/guards.js";
-import { notFound } from "../modules/http.js";
-import { participantOf } from "../modules/live/service.js";
+import { sebSeat } from "../modules/live/service.js";
 import { consumeLaunchTicket, issueLaunchTicket } from "./launch.js";
-
-/** A `seb` session outlives any sitting, and is never renewed. */
-export const SEB_SESSION_HOURS = 6;
 
 /** Where the `.seb` starts; the ticket secret is the last segment. */
 const LAUNCH_PATH = "/app/auth/seb/";
@@ -151,6 +145,7 @@ export function configKeyMatches(url: string, header: unknown): boolean {
 // --- The routes ----------------------------------------------------------------
 
 export async function sebRoutes(app: FastifyInstance, config: AppConfig) {
+  const trace = tracer(app);
   /**
    * The `.seb` of one evaluation, for a student holding a seat in it. A
    * portal session only (the route declares no other kind): a `seb` session
@@ -163,28 +158,14 @@ export async function sebRoutes(app: FastifyInstance, config: AppConfig) {
     { preHandler: (req, reply) => app.requireSession(req, reply) },
     async (req, reply) => {
       const params = IdParam.safeParse(req.params);
-      if (!params.success) return notFound(reply);
-      const user = req.user!;
-      const scope = await findReachableEvaluation(app.db, user, params.data.id);
-      if (
-        !scope ||
-        !safeExamBrowserOf(settingsOf(scope.evaluation)) ||
-        !(await participantOf(app.db, scope.evaluation, user.id))
-      ) {
-        return notFound(reply);
-      }
+      const evaluation = params.success && (await sebSeat(app.db, req.user!.id, params.data.id));
+      if (!evaluation) return reply.code(404).send({ error: "not_found" });
       const secret = await issueLaunchTicket(
         app.db,
-        { kind: "seb", userId: user.id, actorUserId: user.id, evaluationId: scope.evaluation.id },
+        { kind: "seb", userId: req.user!.id, actorUserId: null, evaluationId: evaluation.id },
         app.clock.now(),
       );
-      await audit(app.db, {
-        actorUserId: user.id,
-        actorType: "user",
-        action: "auth.seb_launch",
-        subjectType: "evaluation",
-        subjectId: scope.evaluation.id,
-      });
+      await trace(req, "auth.seb_launch", "evaluation", evaluation.id);
       const startUrl = new URL(`${LAUNCH_PATH}${secret}`, config.PUBLIC_URL).href;
       return reply
         .header("content-type", "application/seb")
@@ -216,21 +197,19 @@ export async function sebRoutes(app: FastifyInstance, config: AppConfig) {
     if (!configKeyMatches(url, req.headers[CONFIG_KEY_HEADER])) return refuse("config_key");
     const ticket = await consumeLaunchTicket(app.db, req.params.secret, now);
     if (!ticket) return refuse("ticket");
-    // The ticket is a few minutes old; the seat is checked again now.
+    // The ticket is a few minutes old: the seat, and the requirement, are checked again now.
+    const evaluation = await sebSeat(app.db, ticket.userId, ticket.auth.evaluationId!);
     const [user] = await app.db.select().from(users).where(eq(users.id, ticket.userId));
-    const scope = user && (await findReachableEvaluation(app.db, user, ticket.auth.evaluationId!));
-    if (!user || !scope || !(await participantOf(app.db, scope.evaluation, user.id))) {
-      return refuse("seat", ticket.id);
-    }
+    if (!evaluation || !user) return refuse("seat", ticket.id);
     await app.openSession(reply, user, ticket.auth);
     await audit(app.db, {
       actorUserId: ticket.auth.actorUserId ?? user.id,
       actorType: "user",
       action: "auth.seb_login",
       subjectType: "evaluation",
-      subjectId: scope.evaluation.id,
+      subjectId: evaluation.id,
       payload: { ticketId: ticket.id },
     });
-    return reply.redirect(`/take/${scope.evaluation.id}`, 303);
+    return reply.redirect(`/take/${evaluation.id}`, 303);
   });
 }

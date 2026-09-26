@@ -39,6 +39,7 @@ export {
   RetakeRefused,
   RetakesEnabled,
   participantOf,
+  sebSeat,
   resetOwnStaffAttempt,
   enrolledCount,
   guestByToken,

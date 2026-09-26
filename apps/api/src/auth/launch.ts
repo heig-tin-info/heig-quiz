@@ -19,8 +19,8 @@ export const LAUNCH_TICKET_TTL_MS = 5 * 60_000;
 
 export interface LaunchTicket {
   userId: string;
-  /** Who asked for it: the user themself for a `seb` launch. */
-  actorUserId: string;
+  /** Who acts through the session, when not the user themself (as on `sessions`). */
+  actorUserId: string | null;
   /** The session it opens; a `portal` one is never launched. */
   kind: Exclude<SessionKind, "portal">;
   evaluationId: string;
@@ -88,7 +88,7 @@ export async function consumeLaunchTicket(
     userId: row.userId,
     auth: {
       kind: row.kind,
-      actorUserId: row.actorUserId === row.userId ? null : row.actorUserId,
+      actorUserId: row.actorUserId,
       evaluationId: row.evaluationId,
     },
   };

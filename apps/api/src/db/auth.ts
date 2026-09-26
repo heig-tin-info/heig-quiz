@@ -104,10 +104,8 @@ export const launchTickets = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    /** Who asked for the ticket: the user themself for `seb`. */
-    actorUserId: uuid("actor_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+    /** Who will act through the session, when not the user themself (as on `sessions`). */
+    actorUserId: uuid("actor_user_id").references(() => users.id, { onDelete: "cascade" }),
     evaluationId: uuid("evaluation_id").references(() => evaluations.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),

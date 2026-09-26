@@ -37,7 +37,7 @@ import {
 } from "@quiz/contracts";
 
 import { tracer, type AuditAction } from "../../audit.js";
-import { SITTING } from "../../auth/plugin.js";
+import { SITTING } from "../../auth/session.js";
 import { iso } from "../../clock.js";
 import {
   loadEvaluation,
@@ -111,7 +111,7 @@ export async function livePlugin(app: FastifyInstance) {
     reply: FastifyReply,
     scope: S | null,
   ): S | null {
-    if (!scope || sits(req, scope.evaluation)) return scope;
+    if (!scope || sits(req, scope.evaluation, false)) return scope;
     notFound(reply);
     return null;
   }
@@ -189,7 +189,8 @@ export async function livePlugin(app: FastifyInstance) {
     student(
       {
         params: IdParam,
-        load: (req, reply, p) => reachableEvaluation(app, req, reply, p.id),
+        load: async (req, reply, p) =>
+          sitting(req, reply, await reachableEvaluation(app, req, reply, p.id)),
       },
       async ({ req, reply, now, scope }) => {
         const participant = await service.participantOf(app.db, scope.evaluation, req.user!.id);

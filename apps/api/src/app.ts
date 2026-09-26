@@ -58,7 +58,12 @@ export async function buildApp({ config, clock }: AppDeps): Promise<FastifyInsta
       redact: ["req.headers.authorization", "req.headers.cookie"],
       // Nor the one-time secret of a SEB launch, which travels in its path.
       serializers: {
-        req: (req) => ({ method: req.method, url: redactLaunchUrl(req.url), remoteAddress: req.ip }),
+        req: (req) => ({
+          method: req.method,
+          url: redactLaunchUrl(req.url),
+          host: req.host,
+          remoteAddress: req.ip,
+        }),
       },
     },
     // ONE hop, named by its address (ADR-009, `TRUSTED_PROXIES`). `true`

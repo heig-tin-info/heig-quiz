@@ -3,7 +3,7 @@ CREATE TABLE "launch_tickets" (
 	"secret_hash" char(64) NOT NULL,
 	"kind" text NOT NULL,
 	"user_id" uuid NOT NULL,
-	"actor_user_id" uuid NOT NULL,
+	"actor_user_id" uuid,
 	"evaluation_id" uuid,
 	"created_at" timestamp with time zone NOT NULL,
 	"expires_at" timestamp with time zone NOT NULL,

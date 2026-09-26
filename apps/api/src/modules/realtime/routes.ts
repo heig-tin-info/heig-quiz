@@ -26,7 +26,7 @@ import { WatchSubject, isStaffOnly, type ServerEvent } from "@quiz/contracts";
 import { iso } from "../../clock.js";
 import { classrooms, courses, enrollments, evaluations, pools } from "../../db/schema.js";
 import { subscribe, type BusMessage } from "../../events.js";
-import { SITTING } from "../../auth/plugin.js";
+import { SITTING } from "../../auth/session.js";
 import { accessWhere, findReachableEvaluation, poolAccess, sits, staffAccess } from "../guards.js";
 import * as live from "../live/service.js";
 import * as bus from "./bus.js";
@@ -127,13 +127,23 @@ async function resolveWatch(
   app: FastifyInstance,
   req: FastifyRequest,
   subject: WatchSubject,
-): Promise<{ watch: Watch; staff: boolean; participant: boolean } | null> {
+): Promise<{
+  watch: Watch;
+  evaluation: typeof evaluations.$inferSelect;
+  staff: boolean;
+  participant: boolean;
+} | null> {
   const separator = subject.indexOf(":");
   const [kind, id] = [subject.slice(0, separator), subject.slice(separator + 1)];
   if (kind === "evaluation") {
     const scope = await findReachableEvaluation(app.db, req.user!, id);
-    if (!scope || !sits(req, scope.evaluation, scope.staff)) return null;
-    return { watch: { kind: "evaluation", evaluationId: id }, staff: scope.staff, participant: false };
+    if (!scope) return null;
+    return {
+      watch: { kind: "evaluation", evaluationId: id },
+      evaluation: scope.evaluation,
+      staff: scope.staff,
+      participant: false,
+    };
   }
   if (kind === "lobby") {
     // The SAME authorisation as `evaluation:` — nothing here is a second
@@ -141,9 +151,14 @@ async function resolveWatch(
     // draws the waiting room, so it receives no `dashboard.*` whoever opened
     // it, and it counts as present when its user holds a seat.
     const scope = await findReachableEvaluation(app.db, req.user!, id);
-    if (!scope || !sits(req, scope.evaluation)) return null;
+    if (!scope) return null;
     const seat = await live.participantOf(app.db, scope.evaluation, req.user!.id);
-    return { watch: { kind: "lobby", evaluationId: id }, staff: false, participant: seat !== null };
+    return {
+      watch: { kind: "lobby", evaluationId: id },
+      evaluation: scope.evaluation,
+      staff: false,
+      participant: seat !== null,
+    };
   }
   if (kind === "attempt") {
     const attempt = await live.attemptById(app.db, id);
@@ -153,9 +168,9 @@ async function resolveWatch(
     // A student watches their OWN attempt; a staff member watches any of
     // the evaluation's, which is what the dashboard's cell inspector needs.
     if (!scope.staff && attempt.userId !== req.user!.id) return null;
-    if (!sits(req, scope.evaluation, attempt.userId !== req.user!.id)) return null;
     return {
       watch: { kind: "attempt", attemptId: id, evaluationId: attempt.evaluationId },
+      evaluation: scope.evaluation,
       staff: scope.staff,
       // Watching one's OWN attempt is sitting the quiz, teacher or not; a
       // staff inspector watching somebody else's row is not in the room.
@@ -253,8 +268,12 @@ export async function realtimePlugin(app: FastifyInstance) {
       const subject = WatchSubject.safeParse(raw);
       if (!subject.success) return reply.code(400).send({ error: "validation" });
       const resolved = await resolveWatch(app, req, subject.data);
-      // An unreachable subject is a 404, exactly like a missing one.
-      if (!resolved) return reply.code(404).send({ error: "not_found" });
+      // An unreachable subject is a 404, exactly like a missing one — and so
+      // is one this session may not sit (ADR-027); staff watching somebody
+      // else's room is not sitting it.
+      if (!resolved || !sits(req, resolved.evaluation, resolved.staff && !resolved.participant)) {
+        return reply.code(404).send({ error: "not_found" });
+      }
       watch = resolved.watch;
       staff = resolved.staff;
       participant = resolved.participant;

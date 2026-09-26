@@ -13,7 +13,6 @@ import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
 import {
   EvaluationSettings,
   GradingScale,
-  safeExamBrowserOf,
   type AttemptClosed,
   type AttemptItem,
   type AttemptOrLobby,
@@ -42,6 +41,7 @@ import {
   feedbackOf,
   gradeDefaults,
   negativeMarkingEnabled,
+  sebRequired,
   settingsOf,
   type EvaluationRecord,
   type JoinedItem,
@@ -310,6 +310,21 @@ export async function participantOf(
     )
     .limit(1);
   return row ? { userId, guestId: null, timeBonusPercent: row.timeBonusPercent } : null;
+}
+
+/**
+ * ADR-027: the evaluation a `.seb` opens — one that requires Safe Exam
+ * Browser and in which `userId` holds a seat — or `null`. Checked when the
+ * file is issued AND when it is used, minutes later.
+ */
+export async function sebSeat(
+  db: Db,
+  userId: string,
+  evaluationId: string,
+): Promise<EvaluationRecord | null> {
+  const [evaluation] = await db.select().from(evaluations).where(eq(evaluations.id, evaluationId));
+  if (!evaluation || !sebRequired(evaluation)) return null;
+  return (await participantOf(db, evaluation, userId)) ? evaluation : null;
 }
 
 /**
@@ -1334,7 +1349,7 @@ export async function studentHome(db: Db, userId: string, now: Date): Promise<St
     deadlineAt: isoOrNull(row.attempt?.deadlineAt ?? null),
     grade: gradeOf(row),
     retakes: retakesOf(row),
-    safeExamBrowser: safeExamBrowserOf(settingsOf(row.evaluation)),
+    safeExamBrowser: sebRequired(row.evaluation),
   });
 
   const open: EvaluationCard[] = [];
