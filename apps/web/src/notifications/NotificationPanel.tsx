@@ -24,8 +24,8 @@ import {
 import { notificationsKey } from "../queryKeys";
 
 /**
- * The inbox: what happened to this account while it was away (F-POOL-05 for
- * now — a pool shared, a pool inherited). It lives in the account menu — an
+ * The inbox: what happened to this account while it was away — a pool
+ * shared or inherited (F-POOL-05), results released (F-GRADE-09). It lives in the account menu — an
  * item "Notifications" and a count on the avatar — rather than behind a bell
  * of its own, which sat beside the account row and truncated the e-mail.
  * Unlike a toast, a notification survives a reload, so the list is a query and not a state.
@@ -74,12 +74,24 @@ function notificationSentence(payload: NotificationPayload, t: TFunction): strin
         poolName: payload.poolName,
         fromName: payload.fromName,
       });
+    case "results_released":
+      return t("notif.resultsReleased", { evaluationTitle: payload.evaluationTitle });
   }
 }
 
-/** Where a notification takes the reader: today, always the pool it is about. */
+/**
+ * Where a notification takes the reader: the pool it is about, or the
+ * feedback page of the attempt whose results were released. The e-mail and
+ * the Teams message link to the same page (`templates.ts` on the server).
+ */
 function notificationRoute(payload: NotificationPayload): Route {
-  return { view: "pool", id: payload.poolId };
+  switch (payload.kind) {
+    case "pool_shared":
+    case "pool_ownership":
+      return { view: "pool", id: payload.poolId };
+    case "results_released":
+      return { view: "feedback", attemptId: payload.attemptId };
+  }
 }
 
 function NotificationRow({

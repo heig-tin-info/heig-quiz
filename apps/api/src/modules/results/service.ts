@@ -74,6 +74,7 @@ import {
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
+import { notify, withdrawResultsReleased } from "../notifications/service.js";
 import {
   keptAttempts,
   pairKey,
@@ -308,6 +309,21 @@ export async function releaseResults(
       })),
   };
   await setRelease(db, evaluation.id, { releasedAt, releasedGrades: snapshot }, now);
+  // F-GRADE-09: the students are told — on the FIRST release only. A
+  // re-release keeps the original `released_at`, the date they were told
+  // about, and telling them twice would announce nothing new. Only a student
+  // with an attempt has a feedback page to open; an absent one is not told.
+  if (evaluation.releasedAt === null) {
+    for (const row of snapshot.rows) {
+      if (row.attemptId === null) continue;
+      await notify(db, row.userId, {
+        kind: "results_released",
+        evaluationId: evaluation.id,
+        evaluationTitle: evaluation.title,
+        attemptId: row.attemptId,
+      });
+    }
+  }
   return { releasedAt, rows: snapshot.rows.length };
 }
 
@@ -331,6 +347,8 @@ export async function unreleaseResults(
     await clearRelease(tx, evaluation.id, now);
     await applyState(tx, evaluation, "closed", now);
   });
+  // The bells that announced it would open a page that shows nothing now.
+  await withdrawResultsReleased(db, evaluation.id);
 }
 
 /**

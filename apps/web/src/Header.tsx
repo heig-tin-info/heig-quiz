@@ -157,9 +157,9 @@ export function UserMenu({
   studentView?: boolean;
   onToggleStudentView?: () => void;
   /**
-   * The inbox (teacher surfaces only): an item that opens the panel, and the
-   * unread count on the avatar. It used to be a bell beside the account row,
-   * where it truncated the e-mail.
+   * The inbox, for every account (a student is told of a released result): an
+   * item that opens the panel, and the unread count on the avatar. It used to
+   * be a bell beside the account row, where it truncated the e-mail.
    */
   notifications?: { navigate: (r: Route) => void };
 }) {

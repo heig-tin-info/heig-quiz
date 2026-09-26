@@ -41,7 +41,7 @@ Thirteen ADRs in `docs/adr/` document the choices. ADRs 001, 002, 003, 004, 005,
 | Tests | `apps/server/src/test/db.ts` with PGlite, `*.db.test.ts` conventions | Identical. Database tests without an external Postgres. |
 | Markdown rendering | `apps/web/src/markdown.tsx` | No. It is a minimal rendering for the help, trusted content. The quiz needs a real editor and a sanitised rendering with KaTeX, see 5.1. |
 | GitHub integration | `apps/server/src/github/`, `octokit` | No. Remove. |
-| Mailer | `mailer.ts`, `modules/email.ts` | Later. Useful to notify the release of the results, F-GRADE-09, but not in phase 1. |
+| Mailer | `mailer.ts`, `modules/email.ts` | Reused (issue #144, ADR-030). The Scaleway TEM transport, its configuration (`SCW_SECRET_KEY`, `SCW_DEFAULT_PROJECT_ID`, `MAIL_FROM`, `MAIL_FROM_NAME`, `MAIL_REGION`) and its dry run without credentials live in `apps/api/src/modules/notifications/mailer.ts`. Adapted: an e-mail is one channel of `notify`, enqueued as a job, with per-kind preferences shared with the bell and Teams instead of a jsonb column of e-mail preferences, and no unsubscribe link (the settings page is the one place to choose). It carries the release of the results, F-GRADE-09. |
 
 ## 7.3 To adapt
 

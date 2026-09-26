@@ -120,6 +120,13 @@
       "when": 1790421943543,
       "tag": "0016_seb_launch",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790451946206,
+      "tag": "0017_notification_channels",
+      "breakpoints": true
     }
   ]
 }

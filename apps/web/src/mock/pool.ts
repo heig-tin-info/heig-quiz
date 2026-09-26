@@ -31,8 +31,10 @@ import type {
   Schematic,
   StimulusDetail,
 } from "@quiz/qt-circuit/client";
-import type {
-  Notification,
+import {
+  NotificationPreferencePut,
+  type Notification,
+  type NotificationSettings,
 } from "@quiz/contracts";
 import {
   D,
@@ -180,6 +182,19 @@ const notifications: Notification[] = [
       byName: "Ada Lovelace",
     },
     createdAt: iso(-3 * D),
+    readAt: null,
+  },
+  {
+    // The released quiz of the student home (`student.ts`, which this file
+    // may not import): the row opens the feedback page that really exists.
+    id: "n0",
+    payload: {
+      kind: "results_released",
+      evaluationId: "11111111-1111-4111-8111-111111111113",
+      evaluationTitle: "Quiz 2 — Tableaux et chaînes",
+      attemptId: "22222222-2222-4222-8222-222222222223",
+    },
+    createdAt: iso(-2 * H),
     readAt: null,
   },
   {
@@ -1785,6 +1800,37 @@ on("POST", "/app/api/notifications/:id/read", (m) => {
 on("POST", "/app/api/notifications/read-all", () => {
   for (const row of notifications) row.readAt ??= iso(0);
   return notificationList();
+});
+
+/**
+ * The channels of the notifications (ADR-030): every kind × channel on,
+ * except the e-mail of a shared pool, so an off switch is on screen. Teams is
+ * configured and not linked; "Connect" links it in place (the real flow goes
+ * through Microsoft and comes back with `?teams=linked`).
+ */
+const notificationSettings: NotificationSettings = {
+  matrix: {
+    results_released: { bell: true, email: true, teams: true },
+    pool_shared: { bell: true, email: false, teams: true },
+    pool_ownership: { bell: true, email: true, teams: true },
+  },
+  email: me?.email ?? "",
+  teams: { available: true, linkedAt: null },
+};
+
+on("GET", "/app/api/notifications/settings", () => notificationSettings);
+on("PUT", "/app/api/notifications/preferences", (_m, body) => {
+  const pref = NotificationPreferencePut.parse(body);
+  notificationSettings.matrix[pref.kind][pref.channel] = pref.enabled;
+  return notificationSettings;
+});
+on("POST", "/app/api/notifications/teams/connect", () => {
+  notificationSettings.teams.linkedAt = iso(0);
+  return { url: "/settings?teams=linked" };
+});
+on("DELETE", "/app/api/notifications/teams", () => {
+  notificationSettings.teams.linkedAt = null;
+  return notificationSettings;
 });
 on("GET", "/app/api/pools/:id/tags", (m) => poolTagDetails(poolOr404(m.groups!.id!).id));
 on("PATCH", "/app/api/pools/:id/tags/:tag", (m, body) => {

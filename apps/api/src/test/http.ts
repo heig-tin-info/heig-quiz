@@ -31,7 +31,8 @@ export interface TestServer {
   close: () => Promise<void>;
 }
 
-export async function testServer(): Promise<TestServer> {
+/** `env` adds to (or overrides) the test configuration, e.g. the `TEAMS_*` variables. */
+export async function testServer(env: Record<string, string> = {}): Promise<TestServer> {
   const clock = new TestClock();
   const dir = await mkdtemp(join(tmpdir(), "quiz-api-"));
   const config = loadConfig({
@@ -45,6 +46,7 @@ export async function testServer(): Promise<TestServer> {
     // is not started cannot print a connection failure (see config.ts).
     JOBS_DISABLED: "1",
     LOG_LEVEL: "fatal",
+    ...env,
   });
   // The real migration chain, exactly as `server.ts` applies it at boot.
   const handle = createDb(config.DATABASE_URL);

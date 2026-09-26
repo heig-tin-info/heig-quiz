@@ -88,6 +88,8 @@ export type AuditAction =
   | "roster.unclaim"
   | "roster.update"
   | "tag.describe"
+  | "teams.link"
+  | "teams.unlink"
   | "teacher.grant"
   | "teacher.revoke";
 

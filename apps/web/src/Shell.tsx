@@ -430,7 +430,7 @@ export function Shell({
       onOpenSettings={() => navigate({ view: "settings" })}
       studentView={studentView}
       onToggleStudentView={onToggleStudentView}
-      notifications={teacherUi ? { navigate } : undefined}
+      notifications={{ navigate }}
     />
   );
   /*
