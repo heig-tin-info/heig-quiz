@@ -196,7 +196,8 @@ describe("the seb session (ADR-027)", () => {
     // `seb` without being listed here fails this test.
     const anonymous = { "x-csrf-token": seb["x-csrf-token"]! };
     for (const { method, path } of routesOf(server.app.printRoutes({ commonPrefix: false }))) {
-      if (SITTING_ROUTES.has(`${method} ${path}`) || path.startsWith("/app/auth/")) continue;
+      // The OIDC round trip reaches for the identity provider; neither serves `seb`.
+      if (SITTING_ROUTES.has(`${method} ${path}`) || /^\/app\/auth\/(login|callback)$/.test(path)) continue;
       const url = path.replace(/:\w+/g, "00000000-0000-4000-8000-000000000000").replace("*", "x");
       const [asSeb, asNobody] = await Promise.all([call(method, url, seb), call(method, url, anonymous)]);
       expect(asSeb.statusCode, `${method} ${path}`).toBe(asNobody.statusCode);

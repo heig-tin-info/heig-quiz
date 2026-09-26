@@ -111,6 +111,7 @@ export async function livePlugin(app: FastifyInstance) {
     reply: FastifyReply,
     scope: S | null,
   ): S | null {
+    // `false`: a sitting route is never a staff watch, whoever calls it.
     if (!scope || sits(req, scope.evaluation, false)) return scope;
     notFound(reply);
     return null;
