@@ -155,7 +155,7 @@ describe("creating and starting a poll", () => {
     });
     expect(code).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/);
     expect(body.joinUrl).toMatch(new RegExp(`/p/${code}$`));
-    expect(body.settings).toEqual({ anonymous: true, revealed: false });
+    expect(body.settings).toEqual({ anonymous: true, revealed: false, votes: false });
     expect(body.tally).toMatchObject({ joined: 0, answered: 0 });
     expect(body.tally.choices).toHaveLength(3);
   });
@@ -378,6 +378,26 @@ describe("the public page (F-AUTH-05)", () => {
       { payload: { selected: "Lausanne" } },
     );
     expect(refused.statusCode).toBe(422);
+  });
+
+  it("puts the votes on the wall only: a phone still sees no distribution (#157)", async () => {
+    const shown = await post(
+      `/app/api/evaluations/${evaluationId}/poll/reveal`,
+      teacher.headers,
+      { revealed: false, votes: true },
+    );
+    expect(shown.statusCode).toBe(200);
+    expect(shown.json().settings).toMatchObject({ revealed: false, votes: true });
+    const phone = (await get(`/app/api/p/${code}`)).json();
+    expect(phone.tally).toBeNull();
+    expect(phone.solution).toBeNull();
+    // A reveal that says nothing of the votes leaves them where they were.
+    const hidden = await post(
+      `/app/api/evaluations/${evaluationId}/poll/reveal`,
+      teacher.headers,
+      { revealed: false, votes: false },
+    );
+    expect(hidden.json().settings.votes).toBe(false);
   });
 
   it("shows the key once the teacher reveals, and not before", async () => {

@@ -89,7 +89,7 @@ describe("PollLauncher", () => {
       "POST /app/api/polls": ok({
         evaluation: { id: "e1", classroomId: ROOM, title: "t", state: "running", code: "QZ1", createdAt: new Date().toISOString() },
         joinUrl: "/p/QZ1",
-        settings: { anonymous: true, revealed: false },
+        settings: { anonymous: true, revealed: false, votes: false },
         question: { id: QUESTION, type: "mcq", student: {}, solution: {} },
         tally: { joined: 0, answered: 0, choices: [], answers: [] },
       }),
@@ -124,7 +124,7 @@ describe("PollLauncher", () => {
   const started = ok({
     evaluation: { id: "e2", classroomId: ROOM, title: "t", state: "running", code: "QZ2", createdAt: new Date().toISOString() },
     joinUrl: "/p/QZ2",
-    settings: { anonymous: true, revealed: false },
+    settings: { anonymous: true, revealed: false, votes: false },
     question: { id: QUESTION, type: "short", student: {}, solution: {} },
     tally: { joined: 0, answered: 0, choices: [], answers: [] },
   });

@@ -32,19 +32,21 @@ Press **Start the poll**. The poll is running from that instant and the projecti
 The projection is the one screen of the product that is not a page: no sidebar, no header, dark by default because a beamer throws light. Put this window on the beamer and press the full-screen button at the top right, or the `F` key.
 
 <figure markdown="span">
-  ![The projection of a running poll: the question in large type, one bar per choice with votes and percentages, the join code and its QR code](../assets/screenshots/poll-projection-light.png#only-light)
-  ![The projection of a running poll: the question in large type, one bar per choice with votes and percentages, the join code and its QR code](../assets/screenshots/poll-projection-dark.png#only-dark)
+  ![The projection of a running poll: the question in large type, its choices with the votes hidden, the join code and its QR code](../assets/screenshots/poll-projection-light.png#only-light)
+  ![The projection of a running poll: the question in large type, its choices with the votes hidden, the join code and its QR code](../assets/screenshots/poll-projection-dark.png#only-dark)
   <figcaption>The projection while the poll runs; at this window height the last choice is partly cut off by the footer, and it scrolls into view.</figcaption>
 </figure>
 
-From top to bottom: the course and classroom with a **Live** pulse, the statement in large type, then one line per choice with a bar, the vote count and the percentage. For a short-answer question the distinct answers are listed instead, the most frequent first, folded so that spelling and capitalisation do not split a count. The tally updates by itself as answers arrive.
+From top to bottom: the course and classroom with a **Live** pulse, the statement in large type, then one line per choice. While the room votes the votes are hidden: the choices are on the wall, without bars or figures, so that nobody votes like the longest bar. Once shown, each choice gains a bar, the vote count and the percentage. For a short-answer question the distinct answers are listed instead, the most frequent first, folded so that spelling and capitalisation do not split a count; hidden, none is listed. The tally updates by itself as answers arrive.
 
 The footer carries the ring of answers received out of people present, the join address, the six-character session code and its QR code. A crossed eye reminds the room that no name is shown.
 
-The controls at the top right are the segmented **Live** / **Answer revealed** switch, the theme toggle, **Full screen** and a menu holding **Keep this question** (for a question written in the launcher), **End poll** and **Back to the classroom**. Nothing else happens on this screen.
+The controls at the top right are the segmented **Hide votes** / **Show votes** / **Reveal answer** switch, a bookmark to **Keep this question** (for a question written in the launcher), the theme toggle, **Full screen** and **End poll**. The arrow before the course name goes back to the classroom. Nothing else happens on this screen.
+
+The switch is three steps of one progression, and the arrow keys walk it: `→` or `Page Down` one step on, `←` or `Page Up` one step back, which is what a presenter clicker sends. `V` shows or hides the votes, `R` reveals or hides the answer. An opinion poll, which has no correct answer, has two steps: **Hide votes** and **Show results**.
 
 !!! note
-    The distribution is sent only to you. A phone in the room never sees how the votes are spread before you reveal the answer, so the majority does not drag the undecided along.
+    The distribution is sent only to you. **Show votes** puts it on the wall, never on the phones: a phone in the room never sees how the votes are spread before you reveal the answer, so the majority does not drag the undecided along.
 
 ## How the room joins
 
@@ -62,7 +64,7 @@ A participant who is signed in on the platform is counted as themselves, and the
 
 ## Revealing the answer
 
-Switch the control at the top right to **Answer revealed**, or press `R`. On the wall, the correct choice turns green with a **Correct answer** tick and the other bars fade; no row ever turns red, because nobody in the room is being marked wrong.
+Switch the control at the top right to **Reveal answer**, or press `R`. On the wall, the correct choice turns green with a **Correct answer** tick and the other bars fade; no row ever turns red, because nobody in the room is being marked wrong.
 
 <figure markdown="span">
   ![The projection after the reveal: the first choice marked Correct answer in green, the other bars faded](../assets/screenshots/poll-revealed-light.png#only-light)
@@ -78,11 +80,11 @@ The phones follow within a few seconds. The answer field goes away, the choices 
   <figcaption>The same poll on a guest phone once the answer is revealed.</figcaption>
 </figure>
 
-Revealing is reversible: switch back to **Live** and the key is hidden again, on the wall and on the phones. You can reveal before or after ending the poll.
+Revealing is reversible: switch back to **Show votes** or **Hide votes** and the key is hidden again, on the wall and on the phones. You can reveal before or after ending the poll.
 
 ## Ending the poll
 
-**End poll**, in the menu at the top right, asks for confirmation and stops the poll: no further answer is accepted, and a phone whose answer arrives too late is told so. The header reads **Poll ended** and the primary action becomes **Run again**, which starts a fresh poll on the same question in the same classroom, with an empty tally and a new code.
+**End poll**, at the top right, asks for confirmation and stops the poll: no further answer is accepted, and a phone whose answer arrives too late is told so. The header reads **Poll ended** and the primary action becomes **Run again**, which starts a fresh poll on the same question in the same classroom, with an empty tally and a new code.
 
 <figure markdown="span">
   ![The projection after the end: Poll ended in the header, the whole tally with the correct answer marked, and Run again as the primary action](../assets/screenshots/poll-ended-light.png#only-light)
@@ -97,7 +99,7 @@ The code keeps working for two hours after the end. A phone that reloads the pag
 
 ## Where the question lives afterwards
 
-A question written in the launcher is saved nowhere until you say so. **Keep this question**, in the menu while the poll runs or beside **Run again** once it has ended, puts it in your personal pool named **Polls**, created for you by the first question you keep. The button then reads **Kept in Polls** and opens the question in its pool. It is an ordinary pool from then on: it shows on your pools page, you can rename it, share it and add questions to it like any other. See `classrooms.md` for how pools are linked to courses.
+A question written in the launcher is saved nowhere until you say so. **Keep this question**, the bookmark at the top right while the poll runs or a button beside **Run again** once it has ended, puts it in your personal pool named **Polls**, created for you by the first question you keep. The button then reads **Kept in Polls** and opens the question in its pool. It is an ordinary pool from then on: it shows on your pools page, you can rename it, share it and add questions to it like any other. See `classrooms.md` for how pools are linked to courses.
 
 A kept question without a correct answer runs polls only. The evaluation's question picker shows it greyed out, marked **polls only**, and the question editor says so in one line. You can open and read it without adding anything; publishing a new version of it asks for a correct answer, like any pool question.
 

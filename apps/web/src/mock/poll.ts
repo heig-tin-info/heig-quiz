@@ -64,6 +64,7 @@ import {
 // when the teacher presses "Reveal":
 //
 //   ?revealed=1  the key is out on the two running polls
+//   ?votes=1     the distribution is on the wall of the running polls (#157)
 //   ?as=guest    this browser has NO session. It is a persona like the other
 //                three, so it nulls the session the WHOLE app reads: a
 //                participant who scanned a QR in a lecture hall is signed
@@ -84,6 +85,8 @@ interface MockPoll {
   anonymous: boolean;
   /** The teacher pressed "Reveal" on this one for good. */
   revealed: boolean;
+  /** The distribution is on the wall (#157); absent means hidden. */
+  votes?: boolean;
   type: "mcq" | "short";
   student: unknown;
   solution: unknown;
@@ -218,6 +221,11 @@ const pollOr404 = (code: string): MockPoll => {
   return poll;
 };
 
+/** The wall's distribution switch, `?votes=1` turning it on for a running poll. */
+function votesOn(poll: MockPoll): boolean {
+  return poll.votes === true || (poll.state === "running" && pollFlag("votes"));
+}
+
 function pollPublicView(poll: MockPoll): PollPublicView {
   const revealed = poll.revealed || (poll.state === "running" && pollFlag("revealed"));
   const loginRequired = !poll.anonymous && me === null;
@@ -225,7 +233,7 @@ function pollPublicView(poll: MockPoll): PollPublicView {
     code: poll.code,
     title: poll.title,
     state: poll.state,
-    settings: { anonymous: poll.anonymous, revealed },
+    settings: { anonymous: poll.anonymous, revealed, votes: votesOn(poll) },
     question: { type: poll.type, student: poll.student },
     // Never before the teacher says so: the key is the one thing on this
     // payload a participant must not be able to read early (invariant 4).
@@ -477,7 +485,7 @@ function pollTeacherView(tp: MockTeacherPoll) {
       createdAt: tp.createdAt,
     },
     joinUrl: `${window.location.origin}/p/${poll.code}`,
-    settings: { anonymous: poll.anonymous, revealed },
+    settings: { anonymous: poll.anonymous, revealed, votes: votesOn(poll) },
     question: {
       id: tp.questionId ?? tp.id,
       type: poll.type,
@@ -758,7 +766,9 @@ on("GET", "/app/api/evaluations/:id/poll", (m) => pollTeacherView(teacherPollOr4
 
 on("POST", "/app/api/evaluations/:id/poll/reveal", (m, body) => {
   const tp = teacherPollOr404(m.groups!.id!);
-  pollOfTeacher(tp)!.revealed = body.revealed === true;
+  const poll = pollOfTeacher(tp)!;
+  poll.revealed = body.revealed === true;
+  if (typeof body.votes === "boolean") poll.votes = body.votes;
   return pollTeacherView(tp);
 });
 
@@ -775,7 +785,15 @@ on("POST", "/app/api/evaluations/:id/poll/again", (m) => {
   const tp = teacherPollOr404(m.groups!.id!);
   const previous = pollOfTeacher(tp)!;
   const code = `QZ${Math.floor(rand() * 9000 + 1000)}`;
-  polls.push({ ...previous, code, state: "running", revealed: false, joined: false, answer: null });
+  polls.push({
+    ...previous,
+    code,
+    state: "running",
+    revealed: false,
+    votes: false,
+    joined: false,
+    answer: null,
+  });
   const next: MockTeacherPoll = {
     id: uuid(),
     code,

@@ -269,3 +269,23 @@ column. Every reader of an item — `joinedItems`, grading, results, the dashboa
 autosave gate — joins `question_versions` and `questions`; a second shape of item would
 have to be taught to each of them, and a second path to `toStudent` is the one thing
 invariant 4 forbids.
+
+## Addendum (2026-09-27): the votes are hidden until the teacher shows them (#157)
+
+The projection drew the distribution as the votes arrived. The room reads the wall, and
+the last to vote followed the longest bar: the herd effect decision 7 keeps off the phones
+came back through the beamer.
+
+- *Three steps, one progression.* What the wall shows is `hidden` → `votes` → `answer`
+  (`PollDisplay`, derived by `pollDisplayOf` from `settings.poll`). A reveal implies the
+  votes. An opinion poll has two steps, `hidden` → `answer`: its reveal is what hands the
+  phones the results, so a wall-only step would say nothing more.
+- *Server state.* `settings.poll.votes` (default `false`) sits beside `revealed` and moves
+  through the same route, `POST …/poll/reveal { revealed, votes? }`; `votes` omitted leaves
+  it where it was. A reload, or a second screen on the same poll, shows the same step.
+- *Wall only.* `votes` never reaches a phone: `PollPublicView.tally` stays null until the
+  reveal, and the `poll.tally` frames stay staff-only. Hidden, an mcq keeps its choices on
+  the wall without bar or figure; a short-answer poll lists no answer.
+- *No menu.* The projection's `…` menu is gone: the way back is an arrow before the context
+  line, "Keep this question" a bookmark icon, "End poll" a named ghost button, still
+  confirmed. The arrow keys and Page Up / Page Down (a presenter clicker) walk the steps.
