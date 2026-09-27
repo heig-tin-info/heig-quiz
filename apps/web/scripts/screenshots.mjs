@@ -77,6 +77,14 @@ const scenes = [
   // page opens on the evaluations, which is where the work is once the
   // classroom has students, so every roster scene names its tab.
   { name: "classroom", role: "teacher", path: "/classrooms/r1" },
+  // #153: the sidebar's Classrooms section, one label per row, on the
+  // classroom whose name outgrows 240 px — and that row's tip.
+  { name: "sidebar-classrooms", role: "teacher", path: "/classrooms/r4", fold: true, act: skipCoach },
+  { name: "sidebar-classroom-tip", role: "teacher", path: "/classrooms/r4", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await p.getByRole("button", { name: "Prog-C-2026-2027-test", exact: true }).first().hover();
+      await p.waitForTimeout(400);
+    } },
   { name: "classroom-roster", role: "teacher", path: "/classrooms/r1?tab=roster" },
   { name: "classroom-empty", role: "teacher", path: "/classrooms/r1?empty=1", settle: 800 },
   { name: "classroom-error", role: "teacher", path: "/classrooms/r1?fail=1", settle: 2500 },

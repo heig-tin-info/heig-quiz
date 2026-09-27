@@ -59,6 +59,8 @@ export const fr: Record<keyof Dict, string> = {
 
   "nav.courses": "Cours",
   "nav.admin": "Administration",
+  "nav.classroomCourse": "{code} · {name}",
+  "nav.classroomTip": "{name} — {course}",
 
   "courses.title": "Cours",
   "courses.subtitle": "Un cours porte son équipe, ses classes et sa banque de questions.",

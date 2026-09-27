@@ -219,31 +219,38 @@ describe("Shell sidebar classroom names", () => {
   const row = () => within(sidebar()).getByRole("button", { name: /^Classroom 1(?!\d)/ });
   afterEach(() => vi.restoreAllMocks());
 
-  it("reveals the full name on hover when the ellipsis cut it", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("labels a row with the classroom name alone, the course in its description (#153)", () => {
+    renderShell();
+    const r = within(sidebar()).getByRole("button", { name: "Classroom 1" });
+    expect(r).toHaveTextContent(/^Classroom 1$/);
+    expect(r).toHaveAttribute("aria-description", "PRG1 · Programmation C");
+  });
+
+  it("reveals the full name and the course on hover when the ellipsis cut it", () => {
     measures(240, 120);
     vi.useFakeTimers();
     renderShell();
-    const copies = screen.getAllByText("Classroom 1").length;
     fireEvent.mouseEnter(row().parentElement!);
     act(() => {
       vi.advanceTimersByTime(150);
     });
-    expect(screen.getAllByText("Classroom 1")).toHaveLength(copies + 1);
+    expect(screen.getByText("Classroom 1 — PRG1 · Programmation C")).toBeInTheDocument();
   });
 
   it("reveals it to the keyboard as well, on the row that takes the focus", () => {
     measures(240, 120);
     vi.useFakeTimers();
     renderShell();
-    const copies = screen.getAllByText("Classroom 1").length;
     act(() => row().focus());
     act(() => {
       vi.advanceTimersByTime(150);
     });
-    expect(screen.getAllByText("Classroom 1")).toHaveLength(copies + 1);
+    expect(screen.getByText("Classroom 1 — PRG1 · Programmation C")).toBeInTheDocument();
   });
 
-  it("says nothing when the name fits: a tooltip repeating a readable label is noise", () => {
+  it("shows only the course when the name fits: repeating a readable label is noise", () => {
     measures(120, 120);
     vi.useFakeTimers();
     renderShell();
@@ -252,6 +259,7 @@ describe("Shell sidebar classroom names", () => {
     act(() => {
       vi.advanceTimersByTime(150);
     });
+    expect(screen.getByText("PRG1 · Programmation C")).toBeInTheDocument();
     expect(screen.getAllByText("Classroom 1")).toHaveLength(copies);
   });
 });
