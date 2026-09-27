@@ -1906,17 +1906,18 @@ on("DELETE", "/app/api/categories/:id", (m) => {
   return undefined;
 });
 
-on("GET", "/app/api/pools/:id/questions", (m, _body, url) => {
-  const pool = poolOr404(m.groups!.id!);
-  const params = url.searchParams;
+/**
+ * The search of the pool screen over `candidates`, filtered and sorted as
+ * `GET /pools/:id/questions` reads its query string — shared with the poll
+ * launcher's "From pools" (`poll.ts`), as the API shares `filterWhere`.
+ */
+export function searchQuestions(candidates: MockQuestion[], params: URLSearchParams): MockQuestion[] {
   const list = params.getAll("type").flatMap((v) => v.split(","));
   const tags = params.getAll("tag").flatMap((v) => v.split(","));
   const difficulties = params.getAll("difficulty").flatMap((v) => v.split(",")).map(Number);
   const q = (params.get("q") ?? "").trim().toLowerCase();
   const categoryId = params.get("categoryId");
   const includeDeleted = params.get("includeDeleted") === "1";
-  const limit = Number(params.get("limit") ?? 25);
-  const cursor = params.get("cursor");
   // `versionMin` / `versionMax` are bounds on the highest PUBLISHED number,
   // so a draft-only question (no number at all) matches neither of them.
   const versionMin = params.get("versionMin");
@@ -1941,7 +1942,7 @@ on("GET", "/app/api/pools/:id/questions", (m, _body, url) => {
     }
   };
 
-  const matching = liveQuestions(pool.id)
+  return candidates
     .filter((question) => includeDeleted || question.deletedAt === null)
     .filter((question) => list.length === 0 || list.includes(question.type))
     .filter((question) => tags.length === 0 || question.tags.some((x) => tags.includes(x)))
@@ -1970,6 +1971,13 @@ on("GET", "/app/api/pools/:id/questions", (m, _body, url) => {
       // cursor that encodes the order it was cut in.
       return (cmp === 0 ? a.internalName.localeCompare(b.internalName) : cmp) * dir;
     });
+}
+
+on("GET", "/app/api/pools/:id/questions", (m, _body, url) => {
+  const pool = poolOr404(m.groups!.id!);
+  const limit = Number(url.searchParams.get("limit") ?? 25);
+  const cursor = url.searchParams.get("cursor");
+  const matching = searchQuestions(liveQuestions(pool.id), url.searchParams);
   const start = cursor ? matching.findIndex((x) => x.id === cursor) + 1 : 0;
   const page = matching.slice(start, start + limit);
   const next = start + limit < matching.length ? page.at(-1)!.id : null;

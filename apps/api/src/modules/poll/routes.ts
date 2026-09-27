@@ -38,6 +38,7 @@ import {
   PollCreate,
   type PollAudience,
   PollInlineCreate,
+  PollPoolSearch,
   PollQuestionCreate,
   PollRevealBody,
   type PollTeacherView,
@@ -176,6 +177,37 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
       poolWhere: accessWhere(req.user!, poolAccess(req.user!.id)),
     }),
   );
+
+  /**
+   * The launcher's "From pools" (issue #162): the pool screen's search over
+   * every pool the caller reaches, or — with `classroomId` — over the pools
+   * linked to that classroom's course. The classroom is loaded through the
+   * staff predicate first, and an unreachable one is a 404 (invariant 6).
+   */
+  app.get("/app/api/polls/pool-questions", { preHandler: requireTeacher }, async (req, reply) => {
+    const query = PollPoolSearch.safeParse(req.query ?? {});
+    if (!query.success) return invalid(reply, query.error);
+    let courseId: string | null = null;
+    if (query.data.classroomId !== undefined) {
+      const room = await reachableClassroom(req, query.data.classroomId);
+      if (!room) return notFound(reply);
+      courseId = room.courseId;
+    }
+    try {
+      return await service.poolQuestionPage(app.db, {
+        poolWhere: accessWhere(req.user!, poolAccess(req.user!.id)),
+        courseId,
+        search: query.data,
+      });
+    } catch (error) {
+      if (error instanceof poolService.InvalidCursor) {
+        return reply
+          .code(400)
+          .send({ error: "invalid_cursor", message: "Restart the list", reason: error.reason });
+      }
+      throw error;
+    }
+  });
 
   /**
    * A new poll question, in the teacher's personal pool — which this route

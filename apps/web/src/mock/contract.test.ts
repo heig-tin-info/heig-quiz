@@ -42,6 +42,7 @@ import {
   ApiToken,
   OAuthConnection,
   OAuthRequestView,
+  PollPoolPage,
   PollPublicView,
   PollQuestionPick,
   PollSummary,
@@ -289,6 +290,7 @@ const CHECKED: Case[] = [
   ]),
   each("/app/api/polls", "/app/api/polls", PollSummary),
   each("/app/api/polls/questions", "/app/api/polls/questions", PollQuestionPick),
+  one("/app/api/polls/pool-questions", "/app/api/polls/pool-questions", PollPoolPage),
   ...polls.map((p) =>
     one("/app/api/evaluations/:id/poll", `/app/api/evaluations/${p.id}/poll`, PollTeacherView),
   ),

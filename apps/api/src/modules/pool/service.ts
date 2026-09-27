@@ -1062,7 +1062,19 @@ function keyText(value: unknown): string {
  * searches for what they wrote, published or not.
  */
 function searchWhere(poolId: string, search: QuestionSearch): SQL[] {
-  const clauses: SQL[] = [eq(questions.poolId, poolId)];
+  return [eq(questions.poolId, poolId), ...filterWhere(search)];
+}
+
+/** What {@link filterWhere} reads: the search without its order and page. */
+type SearchFilters = Omit<QuestionSearch, "sort" | "dir" | "limit" | "cursor">;
+
+/**
+ * The filters of the search box and its sheet, without the pool: shared by
+ * one pool's list and the poll launcher's search across pools (issue #162),
+ * so the two answer the same query the same way.
+ */
+function filterWhere(search: SearchFilters): SQL[] {
+  const clauses: SQL[] = [];
   if (!search.includeDeleted) clauses.push(isNull(questions.deletedAt));
   if (search.categoryId) clauses.push(eq(questions.categoryId, search.categoryId));
   if (search.type?.length) clauses.push(inArray(questions.type, search.type));
@@ -1200,13 +1212,29 @@ function rowJson(
 /**
  * `GET /pools/:id/questions`: filtered, sorted on the requested column,
  * cursor-paginated.
+ */
+export async function listQuestions(db: Db, poolId: string, search: QuestionSearch) {
+  const { page, tags, facts, nextCursor, total } = await pageWhere(
+    db,
+    searchWhere(poolId, search),
+    search,
+  );
+  return {
+    items: page.map((q) => rowJson(q, tags.get(q.id) ?? [], facts.get(q.id))),
+    nextCursor,
+    total,
+  };
+}
+
+/**
+ * One page of the questions `clauses` select, sorted and cut by `search`.
  *
  * The sort key is SELECTED as well as ordered on, so the cursor carries the
  * exact value the database produced — a `lower()` recomputed in JavaScript
  * could disagree with the collation and silently skip a row at a page break.
  */
-export async function listQuestions(db: Db, poolId: string, search: QuestionSearch) {
-  const clauses = searchWhere(poolId, search);
+async function pageWhere(db: Db, where: SQL[], search: QuestionSearch) {
+  const clauses = [...where];
   // Counted before the cursor narrows the clauses: the total of the search,
   // the same on every page, and not the size of the page.
   const [counted] = await db
@@ -1231,14 +1259,14 @@ export async function listQuestions(db: Db, poolId: string, search: QuestionSear
     .where(and(...clauses))
     .orderBy(order(key), order(questions.id))
     .limit(search.limit + 1);
-  const page = rows.slice(0, search.limit);
-  const ids = page.map((r) => r.question.id);
+  const page = rows.slice(0, search.limit).map((r) => r.question);
+  const ids = page.map((q) => q.id);
   const [tags, facts] = await Promise.all([tagsOf(db, ids), versionFactsOf(db, ids)]);
-  const last = page.at(-1);
+  const last = rows[search.limit - 1];
   return {
-    items: page.map((r) =>
-      rowJson(r.question, tags.get(r.question.id) ?? [], facts.get(r.question.id)),
-    ),
+    page,
+    tags,
+    facts,
     nextCursor:
       rows.length > search.limit && last
         ? encodeCursor({
@@ -1250,6 +1278,92 @@ export async function listQuestions(db: Db, poolId: string, search: QuestionSear
         : null,
     total: counted?.n ?? 0,
   };
+}
+
+/** One row of {@link searchReachableQuestions}: a published question and its pool. */
+export interface ReachableQuestion {
+  question: QuestionRecord;
+  pool: { id: string; name: string };
+  tags: string[];
+  latestNumber: number;
+  /** The latest published version, for what the caller shows of it. */
+  latest: { config: unknown; configVersion: number };
+}
+
+/**
+ * The PUBLISHED, live questions of every pool the caller reaches, searched
+ * with the grammar of the pool screen (issue #162, the poll launcher's
+ * "From pools"). `poolWhere` is the pool predicate of the caller —
+ * `undefined` for an admin — and `courseId`, when set, narrows to the pools
+ * linked to that course. `types` is what the caller can run: a `type:`
+ * filter outside it matches nothing rather than widening the search.
+ *
+ * `tags` is every tag of the SCOPE (the filters left out), for the filter
+ * sheet and the `tag:` completion, the way a pool's own tags feed its bar.
+ */
+export async function searchReachableQuestions(
+  db: Db,
+  input: {
+    poolWhere: SQL | undefined;
+    courseId: string | null;
+    types: readonly string[];
+    search: QuestionSearch;
+  },
+): Promise<{ items: ReachableQuestion[]; nextCursor: string | null; total: number; tags: string[] }> {
+  const { search } = input;
+  const types = search.type?.length
+    ? input.types.filter((t) => search.type!.includes(t))
+    : [...input.types];
+  const reachable =
+    input.poolWhere === undefined
+      ? isNotNull(questions.poolId)
+      : sql`EXISTS (SELECT 1 FROM ${pools} WHERE ${qualified(pools.id)} = ${qualified(questions.poolId)} AND ${input.poolWhere})`;
+  const scope: SQL[] = [
+    reachable,
+    isNull(questions.deletedAt),
+    sql`${latestNumber} IS NOT NULL`,
+    types.length === 0 ? sql`false` : inArray(questions.type, types),
+  ];
+  if (input.courseId !== null) {
+    scope.push(
+      sql`EXISTS (SELECT 1 FROM ${coursePools} WHERE ${qualified(coursePools.poolId)} = ${qualified(questions.poolId)} AND ${qualified(coursePools.courseId)} = ${input.courseId})`,
+    );
+  }
+  const filters = filterWhere({ ...search, type: undefined, categoryId: undefined, includeDeleted: false });
+  const [{ page, tags, facts, nextCursor, total }, scopeTags] = await Promise.all([
+    pageWhere(db, [...scope, ...filters], search),
+    db
+      .selectDistinct({ tag: questionTags.tag })
+      .from(questionTags)
+      .innerJoin(questions, eq(questions.id, questionTags.questionId))
+      .where(and(...scope))
+      .orderBy(asc(questionTags.tag)),
+  ]);
+  const poolIds = [...new Set(page.map((q) => q.poolId).filter((id): id is string => id !== null))];
+  const names =
+    poolIds.length === 0
+      ? new Map<string, string>()
+      : new Map(
+          (
+            await db
+              .select({ id: pools.id, name: pools.name })
+              .from(pools)
+              .where(inArray(pools.id, poolIds))
+          ).map((p) => [p.id, p.name] as const),
+        );
+  const items: ReachableQuestion[] = [];
+  for (const question of page) {
+    const fact = facts.get(question.id);
+    if (!fact?.latest || fact.latestNumber === null || question.poolId === null) continue;
+    items.push({
+      question,
+      pool: { id: question.poolId, name: names.get(question.poolId) ?? "" },
+      tags: tags.get(question.id) ?? [],
+      latestNumber: fact.latestNumber,
+      latest: fact.latest,
+    });
+  }
+  return { items, nextCursor, total, tags: scopeTags.map((r) => r.tag) };
 }
 
 function metaJson(question: QuestionRecord, tags: string[]): QuestionMeta {

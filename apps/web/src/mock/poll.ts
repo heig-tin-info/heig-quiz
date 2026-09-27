@@ -1,5 +1,6 @@
 /** Section 6 of the mock — see `index.ts` for the layout. */
 import type {
+  PollPoolPage,
   PollPublicView,
   PollQuestionPick,
 } from "@quiz/contracts";
@@ -34,6 +35,7 @@ import {
 import {
   ME_MEMBER,
   MockQuestion,
+  coursePools,
   draftIssues,
   emptyConfig,
   frozenConfig,
@@ -43,6 +45,7 @@ import {
   questionDetail,
   questionOr404,
   questions,
+  searchQuestions,
   solutionOf,
   studentView,
 } from "./pool";
@@ -888,6 +891,49 @@ on("POST", "/app/api/polls/questions", (_m, body) => {
   created.updatedAt = iso(0);
   questions.push(created);
   return questionDetail(created);
+});
+
+/**
+ * "From pools" (issue #162): the pool screen's search over every pool of
+ * the mock — or, with `classroomId`, over the pools linked to its course —
+ * restricted to the published, live `mcq` / `short` questions.
+ */
+on("GET", "/app/api/polls/pool-questions", (_m, _body, url): PollPoolPage => {
+  const params = url.searchParams;
+  const classroomId = params.get("classroomId");
+  let poolIds = pools.map((p) => p.id);
+  if (classroomId !== null) {
+    const room = rooms.find((r) => r.id === classroomId);
+    if (!room) throw new MockError(404, "Classroom not found");
+    poolIds = coursePools[room.courseId] ?? [];
+  }
+  const scope = questions.filter(
+    (q) =>
+      poolIds.includes(q.poolId) &&
+      q.deletedAt === null &&
+      q.versions.length > 0 &&
+      (q.type === "mcq" || q.type === "short"),
+  );
+  const matching = searchQuestions(scope, params);
+  const limit = Number(params.get("limit") ?? 25);
+  const cursor = params.get("cursor");
+  const start = cursor ? matching.findIndex((x) => x.id === cursor) + 1 : 0;
+  const page = matching.slice(start, start + limit);
+  return {
+    items: page.map((q) => ({
+      id: q.id,
+      type: q.type as "mcq" | "short",
+      internalName: q.internalName,
+      prompt: String(frozenConfig(q).prompt ?? ""),
+      pool: { id: q.poolId, name: pools.find((p) => p.id === q.poolId)?.name ?? "" },
+      tags: q.tags,
+      difficulty: q.difficulty,
+      latestNumber: q.versions.at(-1)!.number,
+    })),
+    nextCursor: start + limit < matching.length ? page.at(-1)!.id : null,
+    total: matching.length,
+    tags: [...new Set(scope.flatMap((q) => q.tags))].sort(),
+  };
 });
 
 on("GET", "/app/api/polls", () => teacherPolls.map(pollSummary));

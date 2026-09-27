@@ -1,8 +1,8 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { CourseSummary, PollQuestionPick } from "@quiz/contracts";
+import type { CourseSummary, PollPoolPage, PollQuestionPick } from "@quiz/contracts";
 
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { PollLauncher } from "./PollLauncher";
@@ -287,4 +287,140 @@ describe("PollLauncher", () => {
     };
     expect(body.config.choices.map((c) => c.correct)).toEqual([false, false]);
   }, 20_000);
+});
+
+describe("PollLauncher · From pools (#162)", () => {
+  const POOLS = "/app/api/polls/pool-questions";
+  const POOL_QUESTION = "66666666-6666-4666-8666-666666666666";
+  const OTHER_QUESTION = "77777777-7777-4777-8777-777777777777";
+
+  const pageOf = (items: PollPoolPage["items"], tags: string[] = []): PollPoolPage => ({
+    items,
+    nextCursor: null,
+    total: items.length,
+    tags,
+  });
+  const linked = {
+    id: POOL_QUESTION,
+    type: "mcq" as const,
+    internalName: "ptr-arith",
+    prompt: "What does `p + 1` point to?",
+    pool: { id: "88888888-8888-4888-8888-888888888888", name: "Programmation C" },
+    tags: ["pointeurs"],
+    difficulty: 2,
+    latestNumber: 3,
+  };
+  const elsewhere = {
+    id: OTHER_QUESTION,
+    type: "short" as const,
+    internalName: "i2c-lines",
+    prompt: "How many lines does I²C use?",
+    pool: { id: "99999999-9999-4999-8999-999999999999", name: "Systèmes embarqués" },
+    tags: ["i2c"],
+    difficulty: 1,
+    latestNumber: 1,
+  };
+
+  it("searches every pool without a scope control when anyone answers, and starts the pick", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch({
+      [`GET ${QUESTIONS}`]: ok(picks),
+      [`GET ${COURSES}`]: ok(courses),
+      [`GET ${POOLS}?limit=25`]: ok(pageOf([linked, elsewhere], ["i2c", "pointeurs"])),
+      "POST /app/api/polls": ok({
+        evaluation: { id: "e3", classroomId: null, title: "t", state: "running", code: "QZ3", createdAt: new Date().toISOString() },
+        joinUrl: "/p/QZ3",
+        settings: { anonymous: true, revealed: false, votes: false },
+        question: { id: OTHER_QUESTION, type: "short", student: {}, solution: {} },
+        tally: { joined: 0, answered: 0, choices: [], answers: [] },
+      }),
+    });
+    const navigate = vi.fn();
+    renderWithProviders(<PollLauncher navigate={navigate} />);
+
+    await user.click(await screen.findByRole("tab", { name: /From pools/ }));
+    expect(await screen.findByText("i2c-lines")).toBeVisible();
+    // The pool, the version and the tags say where the question comes from.
+    expect(screen.getByText(/Systèmes embarqués · v1 · #i2c/)).toBeVisible();
+    expect(screen.getByText("2 questions")).toBeVisible();
+    // An anonymous poll belongs to no course: nothing to narrow to.
+    expect(screen.queryByRole("radiogroup", { name: "Which pools" })).toBeNull();
+
+    const start = screen.getByRole("button", { name: "Start the poll" });
+    expect(start).toBeDisabled();
+    await user.click(screen.getByText("i2c-lines"));
+    await user.click(start);
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "poll", id: "e3" }));
+    expect(calls.find((c) => c.url === "/app/api/polls")?.body).toEqual({
+      questionId: OTHER_QUESTION,
+      audience: { kind: "anonymous" },
+    });
+  });
+
+  it("narrows to the classroom's pools by default, and widens to all of them", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch({
+      [`GET ${QUESTIONS}`]: ok(picks),
+      [`GET ${COURSES}`]: ok(courses),
+      [`GET ${POOLS}?limit=25`]: ok(pageOf([linked, elsewhere])),
+      [`GET ${POOLS}?limit=25&classroomId=${ROOM}`]: ok(pageOf([linked])),
+    });
+    renderWithProviders(<PollLauncher navigate={vi.fn()} />);
+
+    await user.selectOptions(await screen.findByRole("combobox", { name: "Who answers" }), ROOM);
+    await user.click(screen.getByRole("tab", { name: /From pools/ }));
+    const scope = await screen.findByRole("radiogroup", { name: "Which pools" });
+    expect(within(scope).getByRole("radio", { name: "Classroom pools" })).toBeChecked();
+    expect(await screen.findByText("ptr-arith")).toBeVisible();
+    expect(screen.queryByText("i2c-lines")).toBeNull();
+    expect(calls.some((c) => c.url === `${POOLS}?limit=25&classroomId=${ROOM}`)).toBe(true);
+
+    await user.click(within(scope).getByRole("radio", { name: "All pools" }));
+    expect(await screen.findByText("i2c-lines")).toBeVisible();
+    expect(screen.getByText("ptr-arith")).toBeVisible();
+  });
+
+  it("offers every pool when the classroom's are empty", async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      [`GET ${QUESTIONS}`]: ok(picks),
+      [`GET ${COURSES}`]: ok(courses),
+      [`GET ${POOLS}?limit=25`]: ok(pageOf([elsewhere])),
+      [`GET ${POOLS}?limit=25&classroomId=${ROOM}`]: ok(pageOf([])),
+    });
+    renderWithProviders(<PollLauncher navigate={vi.fn()} />);
+
+    await user.selectOptions(await screen.findByRole("combobox", { name: "Who answers" }), ROOM);
+    await user.click(screen.getByRole("tab", { name: /From pools/ }));
+    expect(await screen.findByText("No question to poll in this classroom's pools")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "All pools" }));
+    expect(await screen.findByText("i2c-lines")).toBeVisible();
+  });
+
+  it("speaks the pool screen's grammar, and its sheet offers only the two poll types", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch({
+      [`GET ${QUESTIONS}`]: ok(picks),
+      [`GET ${COURSES}`]: ok(courses),
+      [`GET ${POOLS}?limit=25`]: ok(pageOf([linked, elsewhere], ["i2c", "pointeurs"])),
+      [`GET ${POOLS}?tag=i2c&limit=25`]: ok(pageOf([elsewhere], ["i2c", "pointeurs"])),
+    });
+    renderWithProviders(<PollLauncher navigate={vi.fn()} />);
+
+    await user.click(await screen.findByRole("tab", { name: /From pools/ }));
+    await screen.findByText("ptr-arith");
+    await user.type(screen.getByLabelText("Search a question"), "tag:i2c ");
+    await waitFor(() => expect(screen.queryByText("ptr-arith")).toBeNull());
+    expect(calls.some((c) => c.url === `${POOLS}?tag=i2c&limit=25`)).toBe(true);
+    // The token became a chip, as on the pool screen.
+    expect(screen.getByRole("button", { name: "Clear filters — #i2c" })).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: /Filters/ }));
+    const sheet = await screen.findByRole("dialog", { name: "Filters" });
+    expect(within(sheet).getByRole("button", { name: /Multiple choice/ })).toBeVisible();
+    expect(within(sheet).getByRole("button", { name: /Short answer/ })).toBeVisible();
+    expect(within(sheet).queryByRole("button", { name: /^Code/ })).toBeNull();
+    // A poll never runs a deleted question: no switch for them.
+    expect(within(sheet).queryByRole("switch")).toBeNull();
+  });
 });
