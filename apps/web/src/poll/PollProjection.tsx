@@ -1,7 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo } from "react";
 
-import type { PollTeacherView, WatchSubject } from "@quiz/contracts";
+import {
+  pollDisplayOf,
+  type PollDisplay,
+  type PollTeacherView,
+  type WatchSubject,
+} from "@quiz/contracts";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -14,7 +19,7 @@ import { useProjectionTheme } from "../theme";
 import { cx, isTyping, PageError, Skeleton, useFullscreen } from "../ui";
 import { PollBars } from "./PollBars";
 import { ProjectionFooter } from "./ProjectionFooter";
-import { ProjectionHeader, projectionPhase } from "./ProjectionHeader";
+import { displayBody, displaySteps, ProjectionHeader, projectionPhase } from "./ProjectionHeader";
 import { hasKey, pollRows, PROJECTION_ROW_CAP, promptOf, questionScale } from "./pollTally";
 import { useStageFit } from "./useStageFit";
 import { anyPoolKey, pollKey, pollQuestionsKey, poolsKey } from "../queryKeys";
@@ -48,8 +53,10 @@ import { anyPoolKey, pollKey, pollQuestionsKey, poolsKey } from "../queryKeys";
  * code the rest of the room was trying to scan. The two corners are now
  * opposite ones, and neither has to know about the other.
  *
- * The one primary action is "Reveal the answer" while the poll runs, and
- * "Run again" once it has ended. Everything else is quiet, in the same top
+ * The one primary action is moving the wall one step on — hide the votes,
+ * show them, reveal the answer (#157) — while the poll runs, and "Run again"
+ * once it has ended. The votes start hidden: a room that sees the bars while
+ * it votes follows the longest one. Everything else is quiet, in the same top
  * strip, left of the QR: the teacher's hand is there and the room's eye is
  * not.
  *
@@ -67,19 +74,37 @@ import { anyPoolKey, pollKey, pollQuestionsKey, poolsKey } from "../queryKeys";
 /**
  * The question and its distribution, laid out at whatever width the fit
  * asked for: the title, at most `PROJECTION_ROW_CAP` bars, and one muted line
- * counting the rest.
+ * counting the rest. Votes hidden, an mcq keeps its choices on the wall — the
+ * room has to read them — without a bar or a figure; a short answer's rows
+ * ARE the votes, so none is drawn.
  */
 function ProjectionQuestion({
   view,
-  revealed,
+  display,
 }: {
   view: PollTeacherView;
-  revealed: boolean;
+  display: PollDisplay;
 }) {
   const t = useT();
   const allRows = useMemo(() => pollRows(view.question, view.tally), [view]);
   // No key, nothing to mark: the bars of an opinion poll stay as they are.
-  const marked = revealed && hasKey(view.question);
+  const marked = display === "answer" && hasKey(view.question);
+  const hidden = display === "hidden";
+  if (hidden && view.question.type === "short") {
+    return (
+      <>
+        <h1
+          className={cx(
+            "max-w-[24ch] font-bold leading-[1.08] tracking-[-0.03em]",
+            questionScale(promptOf(view.question)),
+          )}
+        >
+          <MarkdownView source={promptOf(view.question)} inline />
+        </h1>
+        <p className="text-[clamp(16px,1.6vw,22px)] text-fg-muted">{t("poll.votesHidden")}</p>
+      </>
+    );
+  }
   const rows = allRows.slice(0, PROJECTION_ROW_CAP);
   const overflow = allRows.length - rows.length;
   return (
@@ -96,7 +121,7 @@ function ProjectionQuestion({
         <p className="text-[clamp(16px,1.6vw,22px)] text-fg-muted">{t("poll.noAnswersYet")}</p>
       ) : (
         <>
-          <PollBars rows={rows} revealed={marked} />
+          <PollBars rows={rows} revealed={marked} hideVotes={hidden} />
           {overflow > 0 ? (
             <p className="text-[clamp(13px,1.2vw,17px)] text-fg-faint">
               {t(overflow === 1 ? "poll.moreAnswers.one" : "poll.moreAnswers", { n: overflow })}
@@ -183,9 +208,10 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
     onError: toastError("poll.keepFailed"),
   });
 
-  const revealed = view?.settings.revealed ?? false;
-  const setRevealed = useCallback(
-    (next: boolean) => act.mutate({ path: "reveal", body: { revealed: next } }),
+  const display: PollDisplay = view ? pollDisplayOf(view.settings) : "hidden";
+  const steps = displaySteps(view ? hasKey(view.question) : true);
+  const setDisplay = useCallback(
+    (next: PollDisplay) => act.mutate({ path: "reveal", body: displayBody(next) }),
     // `act` is rebuilt on every render; `mutate` itself is stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
@@ -211,9 +237,21 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target)) return;
       const k = e.key.toLowerCase();
-      if (k === "r" && view !== null) {
+      // A presenter clicker sends PageDown / PageUp: the same keys walk the
+      // wall one step on or back, and stop at either end.
+      const at = Math.max(0, steps.indexOf(display));
+      const forward = k === "arrowright" || k === "pagedown";
+      const back = k === "arrowleft" || k === "pageup";
+      if (view !== null && (forward || back)) {
         e.preventDefault();
-        setRevealed(!revealed);
+        const next = steps[Math.min(steps.length - 1, Math.max(0, at + (forward ? 1 : -1)))]!;
+        if (next !== display) setDisplay(next);
+      } else if (k === "r" && view !== null) {
+        e.preventDefault();
+        setDisplay(display === "answer" ? "votes" : "answer");
+      } else if (k === "v" && view !== null && display !== "answer") {
+        e.preventDefault();
+        setDisplay(display === "hidden" ? "votes" : "hidden");
       } else if (k === "f") {
         e.preventDefault();
         toggleFullscreen();
@@ -223,7 +261,7 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [revealed, view, setRevealed, toggleFullscreen]);
+  }, [display, steps, view, setDisplay, toggleFullscreen]);
 
   const fit = useStageFit(view !== null);
 
@@ -273,8 +311,8 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
       <ProjectionHeader
         view={view}
         phase={projectionPhase(view)}
-        revealed={revealed}
-        onReveal={setRevealed}
+        display={display}
+        onDisplay={setDisplay}
         onAgain={() => act.mutate({ path: "again" })}
         againPending={act.isPending}
         dark={dark}
@@ -324,7 +362,7 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
                 : null),
             }}
           >
-            <ProjectionQuestion view={view} revealed={revealed} />
+            <ProjectionQuestion view={view} display={display} />
           </div>
         </div>
       </div>

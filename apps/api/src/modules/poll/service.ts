@@ -159,7 +159,7 @@ export interface PollScope {
 
 export function pollSettingsOf(evaluation: EvaluationRecord): PollSettings {
   const settings = settingsOf(evaluation);
-  return settings.poll ?? { anonymous: false, revealed: false };
+  return settings.poll ?? { anonymous: false, revealed: false, votes: false };
 }
 
 /** The single item of a poll, with its frozen version. */
@@ -318,12 +318,17 @@ export async function createInlinePoll(
  * `feedbackPolicy.showKey` is what the ordinary feedback route of a signed-in
  * participant obeys. Leaving the second one behind would publish the key to
  * `GET /attempts/:id/feedback` before the teacher revealed anything.
+ *
+ * `votes` is the projection's own switch (#157): the distribution on the
+ * wall. Omitted, it stays as it was. It never reaches a phone — only the
+ * reveal does (`publicView`).
  */
 export async function setRevealed(
   db: Db,
   evaluation: EvaluationRecord,
   revealed: boolean,
   now: Date,
+  votes?: boolean,
 ): Promise<EvaluationRecord> {
   const settings = settingsOf(evaluation);
   const feedbackPolicy = {
@@ -334,7 +339,13 @@ export async function setRevealed(
   await setPollSettings(
     db,
     evaluation.id,
-    { settings: { ...settings, poll: { ...pollSettingsOf(evaluation), revealed } }, feedbackPolicy },
+    {
+      settings: {
+        ...settings,
+        poll: { ...pollSettingsOf(evaluation), revealed, ...(votes === undefined ? {} : { votes }) },
+      },
+      feedbackPolicy,
+    },
     now,
   );
   const row = (await byId(db, evaluation.id))!;

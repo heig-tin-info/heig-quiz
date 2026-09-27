@@ -25,8 +25,27 @@ export const PollSettings = z.object({
   anonymous: z.boolean().default(false),
   /** The teacher pressed "Reveal": the key is shown on every screen. */
   revealed: z.boolean().default(false),
+  /**
+   * The distribution is on the wall (#157). Off by default: a room that
+   * reads the bars while it votes votes like the longest one. The phones
+   * never see it before the reveal, whatever this says.
+   */
+  votes: z.boolean().default(false),
 });
 export type PollSettings = z.infer<typeof PollSettings>;
+
+/**
+ * What the projection shows, as the three steps of one progression: the
+ * choices alone, then the distribution, then the key. Revealing implies
+ * showing the votes, so `revealed` wins over `votes`.
+ */
+export const PollDisplay = z.enum(["hidden", "votes", "answer"]);
+export type PollDisplay = z.infer<typeof PollDisplay>;
+
+export function pollDisplayOf(settings: Pick<PollSettings, "revealed" | "votes">): PollDisplay {
+  if (settings.revealed) return "answer";
+  return settings.votes ? "votes" : "hidden";
+}
 
 /** `POST /app/api/polls`: creates the evaluation AND starts it. */
 export const PollCreate = z.object({
@@ -177,8 +196,11 @@ export const PollCodeParam = z.object({
 });
 export type PollCodeParam = z.infer<typeof PollCodeParam>;
 
-/** `POST /app/api/evaluations/:id/poll/reveal`. */
-export const PollRevealBody = z.object({ revealed: z.boolean() });
+/**
+ * `POST /app/api/evaluations/:id/poll/reveal`. `votes` omitted leaves the
+ * distribution as it was; a reveal shows it whatever `votes` says.
+ */
+export const PollRevealBody = z.object({ revealed: z.boolean(), votes: z.boolean().optional() });
 export type PollRevealBody = z.infer<typeof PollRevealBody>;
 
 /** `POST /app/api/p/:code/answer`: the whole answer, validated by the type's schema. */

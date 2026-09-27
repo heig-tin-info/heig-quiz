@@ -1,4 +1,5 @@
 import {
+  ArrowLeft,
   BookmarkCheck,
   BookmarkPlus,
   Check,
@@ -10,10 +11,10 @@ import {
   Sun,
 } from "lucide-react";
 
-import type { PollTeacherView } from "@quiz/contracts";
+import type { PollDisplay, PollTeacherView } from "@quiz/contracts";
 
 import { useT } from "../i18n";
-import { Button, IconButton, Menu, Segmented } from "../ui";
+import { Button, IconButton, Segmented } from "../ui";
 import { PollQr } from "./PollQr";
 import { hasKey, joinHost } from "./pollTally";
 
@@ -32,6 +33,21 @@ function isEnded(state: string): boolean {
 export function projectionPhase(view: PollTeacherView): ProjectionPhase {
   if (isEnded(view.evaluation.state)) return "ended";
   return view.settings.revealed ? "revealed" : "live";
+}
+
+/**
+ * The steps of the display switch, in the order a lecture walks them (#157):
+ * the choices alone while the room votes, then the distribution, then the
+ * key. An opinion poll has no key, so its second step is the last one, and
+ * it is the reveal: that is what hands the phones the results.
+ */
+export function displaySteps(keyed: boolean): PollDisplay[] {
+  return keyed ? ["hidden", "votes", "answer"] : ["hidden", "answer"];
+}
+
+/** The body of `POST …/poll/reveal` that puts the wall on `step`. */
+export function displayBody(step: PollDisplay): { revealed: boolean; votes: boolean } {
+  return { revealed: step === "answer", votes: step !== "hidden" };
 }
 
 /** The word after the context: one of the three phases, never the colour alone. */
@@ -68,8 +84,8 @@ function PhaseLabel({ phase, keyed }: { phase: ProjectionPhase; keyed: boolean }
 export function ProjectionHeader({
   view,
   phase,
-  revealed,
-  onReveal,
+  display,
+  onDisplay,
   onAgain,
   againPending,
   dark,
@@ -84,9 +100,9 @@ export function ProjectionHeader({
 }: {
   view: PollTeacherView;
   phase: ProjectionPhase;
-  /** The reveal switch, which stays where it was once the poll has ended. */
-  revealed: boolean;
-  onReveal: (revealed: boolean) => void;
+  /** What the wall shows; it stays where it was once the poll has ended. */
+  display: PollDisplay;
+  onDisplay: (display: PollDisplay) => void;
   onAgain: () => void;
   againPending: boolean;
   dark: boolean;
@@ -117,7 +133,7 @@ export function ProjectionHeader({
   /*
    * "Keep this question" (ADR-014, addenda item 6). A question written in
    * the launcher is saved nowhere until the teacher says so. While the room
-   * answers the offer waits in the menu — the wall is the room's, not the
+   * answers the offer is a bookmark icon — the wall is the room's, not the
    * teacher's; once the poll is over it is a secondary button beside "Run
    * again", then the place it went: "Kept in Polls", which opens it.
    */
@@ -127,20 +143,38 @@ export function ProjectionHeader({
   return (
     <header className="flex flex-wrap items-start gap-[clamp(16px,2.4vw,32px)]">
       <div className="flex min-w-0 flex-1 flex-wrap items-center gap-4">
+        {/* No menu on this screen (#157): the way out is the arrow before
+            where we are, as on every page that has a way back. */}
+        <span className="-mr-2 flex items-center">
+          <IconButton label={t("poll.back")} onClick={onBack}>
+            <ArrowLeft />
+          </IconButton>
+        </span>
         <span className="text-[clamp(14px,1.4vw,18px)] font-semibold tracking-[-0.01em] text-fg-muted">
           {context}
         </span>
         <span className="size-1 rounded-full bg-fg-faint" aria-hidden />
         <PhaseLabel phase={phase} keyed={keyed} />
         <span className="ml-auto flex flex-wrap items-center gap-2">
+          {/* What the wall shows, one step after the other (#157): the
+              room votes before it sees how the others voted. */}
           <Segmented
-            name="poll-reveal"
-            value={revealed ? "revealed" : "live"}
-            onChange={(v) => onReveal(v === "revealed")}
-            options={[
-              { value: "live", label: t("poll.live") },
-              { value: "revealed", label: t(keyed ? "poll.reveal" : "poll.resultsShown") },
-            ]}
+            name="poll-display"
+            label={t("poll.display")}
+            value={display}
+            onChange={onDisplay}
+            options={displaySteps(keyed).map((step) => ({
+              value: step,
+              label: t(
+                step === "hidden"
+                  ? "poll.hideVotes"
+                  : step === "votes"
+                    ? "poll.showVotes"
+                    : keyed
+                      ? "poll.reveal"
+                      : "poll.showResults",
+              ),
+            }))}
           />
           {ended && !saved ? (
             <Button size="sm" variant="secondary" onClick={onKeep} loading={keepPending}>
@@ -157,6 +191,16 @@ export function ProjectionHeader({
               <RotateCcw /> {t("poll.again")}
             </Button>
           ) : null}
+          {!ended && !saved ? (
+            <IconButton label={t("poll.keep")} onClick={onKeep} disabled={keepPending}>
+              <BookmarkPlus />
+            </IconButton>
+          ) : null}
+          {!ended && keptLabel ? (
+            <IconButton label={keptLabel} onClick={onOpenQuestion}>
+              <BookmarkCheck />
+            </IconButton>
+          ) : null}
           <IconButton
             label={dark ? t("menu.lightTheme") : t("menu.darkTheme")}
             onClick={onToggleTheme}
@@ -169,21 +213,13 @@ export function ProjectionHeader({
           >
             {fullscreen ? <Minimize2 /> : <Maximize2 />}
           </IconButton>
-          <Menu
-            label={t("common.actions")}
-            items={[
-              ...(ended || saved
-                ? []
-                : [{ label: t("poll.keep"), icon: BookmarkPlus, onSelect: onKeep }]),
-              ...(!ended && keptLabel
-                ? [{ label: keptLabel, icon: BookmarkCheck, onSelect: onOpenQuestion }]
-                : []),
-              ...(ended
-                ? []
-                : [{ label: t("poll.end"), icon: Square, danger: true, onSelect: onEnd }]),
-              { label: t("poll.back"), separator: !ended, onSelect: onBack },
-            ]}
-          />
+          {/* Words, not a bare icon: a slip of the hand here ends the poll
+              for the whole room, so it is named, kept apart and confirmed. */}
+          {ended ? null : (
+            <Button size="sm" variant="ghost" onClick={onEnd} className="ml-2">
+              <Square /> {t("poll.end")}
+            </Button>
+          )}
         </span>
       </div>
 

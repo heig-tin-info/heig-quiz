@@ -19,6 +19,10 @@ import type { PollRow } from "./pollTally";
  * correct row gains a tick AND the word, and the others fade rather than turn
  * red — nobody in the room is being marked wrong.
  *
+ * Votes hidden (#157), a row is its letter and its label and nothing else:
+ * no count, no percentage, no bar — the choices the room is voting on, not
+ * how it is voting.
+ *
  * From six rows up, and only on a screen wide enough for it, they go in TWO
  * columns: eight bars in one column is a list so tall that the fit has to
  * shrink the whole wall to a third of its size to hold it, and the room then
@@ -31,7 +35,16 @@ import type { PollRow } from "./pollTally";
 /** From this many rows on, the wall is better read in two columns. */
 const TWO_COLUMNS_FROM = 6;
 
-export function PollBars({ rows, revealed }: { rows: PollRow[]; revealed: boolean }) {
+export function PollBars({
+  rows,
+  revealed,
+  hideVotes = false,
+}: {
+  rows: PollRow[];
+  revealed: boolean;
+  /** The choices alone: nothing on the wall says how the room votes. */
+  hideVotes?: boolean;
+}) {
   const t = useT();
   const lettered = rows.some((r) => r.letter !== null);
   const split = rows.length >= TWO_COLUMNS_FROM;
@@ -56,7 +69,7 @@ export function PollBars({ rows, revealed }: { rows: PollRow[]; revealed: boolea
       }
       // The bars move as the answers arrive; a reader who cannot see them
       // move gets the whole distribution read out instead.
-      aria-live="polite"
+      aria-live={hideVotes ? undefined : "polite"}
     >
       {rows.map((row) => {
         const faded = revealed && !row.correct;
@@ -104,41 +117,47 @@ export function PollBars({ rows, revealed }: { rows: PollRow[]; revealed: boolea
               ) : null}
               {/* The count leaves first when the screen narrows: the
                   percentage is the figure a room reads. */}
-              <span
-                className="hidden w-[clamp(64px,6vw,100px)] shrink-0 text-right font-mono text-[clamp(13px,1.2vw,17px)] tabular-nums text-fg-faint sm:block"
-              >
-                {t(row.count === 1 ? "poll.votes.one" : "poll.votes", { n: row.count })}
-              </span>
-              <span
-                className={cx(
-                  "shrink-0 font-mono text-[clamp(20px,2.4vw,38px)] font-bold tracking-[-0.02em] tabular-nums",
-                  right && "text-success",
-                  faded && "text-fg-faint",
-                )}
-              >
-                {t("poll.percent", { n: row.percent })}
-              </span>
-            </div>
-            <div
-              className={cx(
-                "mt-[clamp(8px,1.2vh,14px)] h-[clamp(8px,0.9vh,12px)] overflow-hidden rounded-full bg-surface-2",
-                lettered && "ml-[calc(clamp(36px,3.4vw,54px)+clamp(12px,1.4vw,22px))]",
+              {hideVotes ? null : (
+                <>
+                  <span className="hidden w-[clamp(64px,6vw,100px)] shrink-0 text-right font-mono text-[clamp(13px,1.2vw,17px)] tabular-nums text-fg-faint sm:block">
+                    {t(row.count === 1 ? "poll.votes.one" : "poll.votes", { n: row.count })}
+                  </span>
+                  <span
+                    className={cx(
+                      "shrink-0 font-mono text-[clamp(20px,2.4vw,38px)] font-bold tracking-[-0.02em] tabular-nums",
+                      right && "text-success",
+                      faded && "text-fg-faint",
+                    )}
+                  >
+                    {t("poll.percent", { n: row.percent })}
+                  </span>
+                </>
               )}
-            >
-              <span
-                className={cx(
-                  "block h-full rounded-full border transition-[width,background-color,border-color] duration-200 ease-out-emphasized",
-                  right
-                    ? "border-success bg-success-soft"
-                    : faded
-                      ? "border-transparent bg-surface-3"
-                      : "border-accent bg-accent-soft",
-                )}
-                // The one inline style of the screen: the width IS the datum,
-                // and it changes twice a second.
-                style={{ width: `${Math.min(100, row.percent)}%` }}
-              />
             </div>
+            {hideVotes ? null : (
+              <div
+                className={cx(
+                  "mt-[clamp(8px,1.2vh,14px)] h-[clamp(8px,0.9vh,12px)] overflow-hidden rounded-full bg-surface-2",
+                  lettered && "ml-[calc(clamp(36px,3.4vw,54px)+clamp(12px,1.4vw,22px))]",
+                )}
+              >
+                <span
+                  className={cx(
+                    "block h-full rounded-full border transition-[width,background-color,border-color] duration-200 ease-out-emphasized",
+                    right
+                      ? "border-success bg-success-soft"
+                      : faded
+                        ? "border-transparent bg-surface-3"
+                        : "border-accent bg-accent-soft",
+                  )}
+                  // The one inline style of the screen: the width IS the datum,
+                  // and it changes twice a second.
+                  style={{
+                    width: `${Math.min(100, row.percent)}%`,
+                  }}
+                />
+              </div>
+            )}
           </li>
         );
       })}

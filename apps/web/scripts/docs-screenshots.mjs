@@ -525,12 +525,12 @@ const scenes = [
   },
   {
     name: "poll-projection",
-    caption: "The projection of a running poll: the question, the live tally, the join code and its QR.",
+    caption: "The projection of a running poll: the question, its choices with the votes hidden, the join code and its QR.",
     persona: "teacher",
     path: (w) => `/evaluations/${w.poll.id}/poll`,
     phase: "poll-open",
     settle: 2500,
-    state: "A poll on “prg1-pointeur-non-initialise”; three students answered. The tally is live, the correct answer is not revealed yet.",
+    state: "A poll on “prg1-pointeur-non-initialise”; three students answered. The votes are hidden (the default) and the correct answer is not revealed yet.",
   },
   {
     name: "join-mcq",

@@ -290,9 +290,9 @@ const scenes = [
   { name: "poll-projection-revealed", role: "teacher", path: "/evaluations/poll/poll?revealed=1", fold: true },
   { name: "poll-ended", role: "teacher", path: "/evaluations/poll-ended/poll", fold: true },
   // "Keep this question" (ADR-014, addenda item 6): beside "Run again" once
-  // the poll is over, then "Kept in Polls"; in the menu while it runs.
+  // the poll is over, then "Kept in Polls"; a bookmark icon while it runs.
   { name: "poll-kept", role: "teacher", path: "/evaluations/poll-ended/poll", fold: true, act: (p) => p.getByRole("button", { name: /keep this question|garder cette question/i }).click() },
-  { name: "poll-keep-menu", role: "teacher", path: "/evaluations/poll-opinion/poll", fold: true, act: (p) => p.getByRole("button", { name: /^actions$/i }).first().click() },
+  { name: "poll-projection-votes", role: "teacher", path: "/evaluations/poll/poll?votes=1", fold: true },
   // No question kept yet: where they come from, and the other tab.
   { name: "poll-launcher-empty", role: "teacher", path: "/polls?empty=1" },
   // The evaluation's picker on the Polls pool: the opinion question is out of reach.

@@ -141,7 +141,11 @@ export const EvaluationSettings = z.object({
   safeExamBrowser: z.boolean().optional(),
   /** Only on a `poll` evaluation (`./poll.ts`); absent everywhere else. */
   poll: z
-    .object({ anonymous: z.boolean().default(false), revealed: z.boolean().default(false) })
+    .object({
+      anonymous: z.boolean().default(false),
+      revealed: z.boolean().default(false),
+      votes: z.boolean().default(false),
+    })
     .optional(),
 });
 export type EvaluationSettings = z.infer<typeof EvaluationSettings>;

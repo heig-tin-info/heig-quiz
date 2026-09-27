@@ -35,7 +35,7 @@ function view(patch: Partial<PollTeacherView> = {}): PollTeacherView {
       ...(patch.evaluation ?? {}),
     },
     joinUrl: "https://quiz.heig-vd.ch/p/QZ4F7K",
-    settings: { anonymous: true, revealed: false, ...(patch.settings ?? {}) },
+    settings: { anonymous: true, revealed: false, votes: true, ...(patch.settings ?? {}) },
     question: {
       id: "q1",
       type: "mcq",
@@ -176,8 +176,68 @@ describe("PollProjection", () => {
     expect(band!.className).not.toContain("overflow-y-auto");
   });
 
+  it("keeps the choices on the wall and the votes off it until shown (#157)", async () => {
+    const { calls } = mockFetch({
+      [`GET ${POLL}`]: ok(view({ settings: { anonymous: true, revealed: false, votes: false } })),
+      [`POST ${POLL}/reveal`]: ok(view({ settings: { anonymous: true, revealed: false, votes: true } })),
+    });
+    renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
+    await screen.findByRole("heading", { name: /How many bytes/ });
+
+    // The room reads what it votes on, not how it votes.
+    expect(screen.getByText("four")).toBeVisible();
+    expect(screen.getByText("eight")).toBeVisible();
+    expect(screen.queryByText("75%")).toBeNull();
+    expect(screen.queryByText("6 votes")).toBeNull();
+    expect(screen.getByRole("radio", { name: "Hide votes" })).toBeChecked();
+    // The footer still says how many answered: that is when to move on.
+    expect(screen.getByText("8 answers received · 2 waiting")).toBeVisible();
+
+    await userEvent.keyboard("{ArrowRight}");
+    expect(await screen.findByText("75%")).toBeVisible();
+    expect(calls.find((c) => c.url === `${POLL}/reveal`)?.body).toEqual({
+      revealed: false,
+      votes: true,
+    });
+  });
+
+  it("lists no typed answer while the votes of a short poll are hidden", async () => {
+    mockFetch({
+      [`GET ${POLL}`]: ok(
+        view({
+          settings: { anonymous: true, revealed: false, votes: false },
+          question: {
+            id: "q1",
+            type: "short",
+            student: { prompt: "Name a pointer size" },
+            solution: { expected: ["8"] },
+            saved: false,
+            pool: null,
+          },
+          tally: { joined: 3, answered: 2, choices: [], answers: [{ text: "eight", count: 2 }] },
+        }),
+      ),
+    });
+    renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
+    expect(await screen.findByText("The answers stay hidden for now.")).toBeVisible();
+    expect(screen.queryByText("eight")).toBeNull();
+  });
+
+  it("has no menu: the way back, the bookmark and End poll are on the strip", async () => {
+    const navigate = vi.fn();
+    mockFetch({ [`GET ${POLL}`]: ok(view()) });
+    renderWithProviders(<PollProjection id={ID} navigate={navigate} />);
+    await screen.findByRole("heading", { name: /How many bytes/ });
+
+    expect(screen.queryByRole("button", { name: /^actions$/i })).toBeNull();
+    expect(screen.getByRole("button", { name: "Keep this question" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "End poll" })).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Back to the classroom" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: ROOM });
+  });
+
   it("names the correct choice once the answer is revealed", async () => {
-    mockFetch({ [`GET ${POLL}`]: ok(view({ settings: { anonymous: true, revealed: true } })) });
+    mockFetch({ [`GET ${POLL}`]: ok(view({ settings: { anonymous: true, revealed: true, votes: true } })) });
     renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
 
     // Icon AND word, never the tint alone: a projector eats half the
@@ -190,7 +250,7 @@ describe("PollProjection", () => {
       [`GET ${POLL}`]: ok(view({ question: { id: "q1", type: "mcq", student: view().question.student, solution: { correct: [] }, saved: false, pool: null } })),
       [`POST ${POLL}/reveal`]: ok(
         view({
-          settings: { anonymous: true, revealed: true },
+          settings: { anonymous: true, revealed: true, votes: true },
           question: { id: "q1", type: "mcq", student: view().question.student, solution: { correct: [] }, saved: false, pool: null },
         }),
       ),
@@ -198,9 +258,14 @@ describe("PollProjection", () => {
     renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
     await screen.findByRole("heading", { name: /How many bytes/ });
 
-    await userEvent.click(screen.getByRole("radio", { name: "Results shown" }));
+    // No key, no "Show votes" step: the second step is the results.
+    expect(screen.queryByRole("radio", { name: "Show votes" })).toBeNull();
+    await userEvent.click(screen.getByRole("radio", { name: "Show results" }));
     expect(await screen.findByText("Results shown", { selector: "span" })).toBeVisible();
-    expect(calls.find((c) => c.url === `${POLL}/reveal`)?.body).toEqual({ revealed: true });
+    expect(calls.find((c) => c.url === `${POLL}/reveal`)?.body).toEqual({
+      revealed: true,
+      votes: true,
+    });
     // The distribution stays whole: no tick, no word, no faded row.
     expect(screen.getByText("75%")).toBeVisible();
     expect(screen.queryByText("Correct answer")).toBeNull();
@@ -211,14 +276,17 @@ describe("PollProjection", () => {
   it("reveals through the server, never locally", async () => {
     const { calls } = mockFetch({
       [`GET ${POLL}`]: ok(view()),
-      [`POST ${POLL}/reveal`]: ok(view({ settings: { anonymous: true, revealed: true } })),
+      [`POST ${POLL}/reveal`]: ok(view({ settings: { anonymous: true, revealed: true, votes: true } })),
     });
     renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
     await screen.findByRole("heading", { name: /How many bytes/ });
 
-    await userEvent.click(screen.getByRole("radio", { name: "Answer revealed" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Reveal answer" }));
     expect(await screen.findByText("Correct answer")).toBeVisible();
-    expect(calls.find((c) => c.url === `${POLL}/reveal`)?.body).toEqual({ revealed: true });
+    expect(calls.find((c) => c.url === `${POLL}/reveal`)?.body).toEqual({
+      revealed: true,
+      votes: true,
+    });
   });
 
   it("offers Run again, and only that, once the poll is over", async () => {
@@ -258,24 +326,22 @@ describe("PollProjection — keep this question (ADR-014, addenda item 6)", () =
   };
   const kept = { saved: true, pool: { id: "p0", name: "Polls" } };
 
-  it("keeps an unsaved question from the menu while the room answers", async () => {
+  it("keeps an unsaved question from its bookmark while the room answers", async () => {
+    const navigate = vi.fn();
     const { calls } = mockFetch({
       [`GET ${POLL}`]: ok(view()),
       [`POST ${POLL}/keep`]: ok(view({ question: { ...view().question, ...kept } })),
     });
-    renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);
+    renderWithProviders(<PollProjection id={ID} navigate={navigate} />);
     await screen.findByRole("heading", { name: /How many bytes/ });
-    // The wall is the room's: no button for it while the poll runs.
-    expect(screen.queryByRole("button", { name: /Keep this question/ })).toBeNull();
 
-    await userEvent.click(screen.getByRole("button", { name: "Actions" }));
-    await userEvent.click(screen.getByRole("menuitem", { name: /Keep this question/ }));
+    // The wall is the room's: an icon while the poll runs, not a button in words.
+    await userEvent.click(screen.getByRole("button", { name: "Keep this question" }));
     expect(calls.some((c) => c.url === `${POLL}/keep`)).toBe(true);
-    expect(await screen.findByText("Kept in Polls")).toBeVisible();
-
-    await userEvent.click(screen.getByRole("button", { name: "Actions" }));
-    expect(screen.queryByRole("menuitem", { name: /Keep this question/ })).toBeNull();
-    expect(screen.getByRole("menuitem", { name: /Kept in Polls/ })).toBeVisible();
+    const where = await screen.findByRole("button", { name: "Kept in Polls" });
+    expect(screen.queryByRole("button", { name: "Keep this question" })).toBeNull();
+    await userEvent.click(where);
+    expect(navigate).toHaveBeenCalledWith({ view: "question", id: "q1" });
   });
 
   it("offers Keep beside Run again once the poll is over, then where it went", async () => {

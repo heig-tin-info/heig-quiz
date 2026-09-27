@@ -40,7 +40,7 @@ function view(patch: Partial<PollPublicView> = {}): PollPublicView {
     code: CODE,
     title: "Échauffement",
     state: "running",
-    settings: { anonymous: true, revealed: false },
+    settings: { anonymous: true, revealed: false, votes: false },
     question: { type: "mcq", student: mcqStudent },
     solution: null,
     tally: null,
@@ -75,7 +75,7 @@ describe("the poll participant page", () => {
     render({
       [`GET ${URL}`]: ok(
         view({
-          settings: { anonymous: false, revealed: false },
+          settings: { anonymous: false, revealed: false, votes: false },
           me: { identified: false, loginRequired: true, joined: false, answer: null },
         }),
       ),
@@ -136,7 +136,7 @@ describe("the poll participant page", () => {
     render({
       [`GET ${URL}`]: ok(
         view({
-          settings: { anonymous: true, revealed: true },
+          settings: { anonymous: true, revealed: true, votes: true },
           solution: { correct: [0] },
           me: { identified: true, loginRequired: false, joined: true, answer: { selected: [1] } },
         }),
@@ -152,7 +152,7 @@ describe("the poll participant page", () => {
     render({
       [`GET ${URL}`]: ok(
         view({
-          settings: { anonymous: true, revealed: true },
+          settings: { anonymous: true, revealed: true, votes: true },
           solution: { correct: [] },
           tally: { joined: 5, answered: 4, choices: [{ index: 0, count: 1 }, { index: 1, count: 3 }], answers: [] },
           me: { identified: true, loginRequired: false, joined: true, answer: { selected: [1] } },

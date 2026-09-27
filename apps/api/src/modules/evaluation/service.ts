@@ -885,7 +885,7 @@ export async function createPollEvaluation(
   // `settings.poll.revealed` and `feedbackPolicy.showKey` together.
   const settings: EvaluationSettings = EvaluationSettings.parse({
     ...presetSettings("exercise").settings,
-    poll: { anonymous: input.anonymous, revealed: false },
+    poll: { anonymous: input.anonymous, revealed: false, votes: false },
   });
   const feedbackPolicy: FeedbackPolicy = FeedbackPolicy.parse({
     when: "immediate",
