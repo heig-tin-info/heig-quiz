@@ -1,101 +1,155 @@
 # Microsoft Teams notifications: the setup
 
-The Teams channel of the notifications (ADR-030) needs one Microsoft Entra
-application, registered once by someone with rights in a Microsoft tenant
-(the HEIG-VD one, or any other). Until the three variables below are set in
-`.env.prod`, the channel is off: the settings page says Teams is not
-available and nothing is sent.
+The Teams channel of the notifications (ADR-030) is a bot, "HEIG Quiz", that
+each user installs in their own Teams by uploading a small app package the
+platform serves. It needs no consent from an administrator of the users'
+tenant, no Graph permission and no app in any organization's catalog: one
+Entra application and one Azure Bot, both in a tenant we control.
+
+Until the first two variables below are set in `.env.prod`, the channel is
+off: the settings page says Teams is not available, and the bot's routes
+answer 404.
 
 ```bash
-TEAMS_CLIENT_ID=      # the Entra application (client) id
+TEAMS_CLIENT_ID=      # the Entra application (client) id of the bot
 TEAMS_CLIENT_SECRET=  # a client secret of that application
-TEAMS_APP_ID=         # the Teams app's id in the tenants' catalogs
-#TEAMS_BOT_TENANT=botframework.com   # or the home tenant id, for a single-tenant bot
-#TEAMS_SERVICE_URL=https://smba.trafficmanager.net/teams
+TEAMS_ALLOWED_TENANTS=a372f724-c0b2-4ea0-abfb-0eb8c6f84e40   # HEIG-VD only
+#TEAMS_BOT_TENANT=96412a41-a2a2-422e-8438-f29c95c02686   # single-tenant bot only
 ```
 
-One application plays three roles: the **sign-in** of "Connect Microsoft
-Teams" (to learn the user's tenant and object id), the **Graph client** that
-installs the Teams app for a user and finds their chat with it, and the
-**bot** that posts the message. The platform keeps no Microsoft token.
+`TEAMS_ALLOWED_TENANTS` lists the Microsoft 365 organizations (Entra tenant
+ids, comma-separated) whose Teams accounts may be linked. Anyone can upload
+the app into their own Teams; without the list, a stranger could send a HEIG
+user the link of their own chat and receive that user's notifications
+(ADR-030, "Consent phishing across tenants"). Leave it empty only for a test
+bot. A Teams account of another organization gets one line from the bot
+("HEIG Quiz only links Teams accounts of the HEIG-VD organization") and no
+link.
+
+Where things live today:
+
+| What | Where |
+| --- | --- |
+| Entra application, Azure Bot | the owner's tenant `96412a41-a2a2-422e-8438-f29c95c02686` |
+| Users | HEIG-VD tenant `a372f724-c0b2-4ea0-abfb-0eb8c6f84e40` (any tenant works) |
+| Messaging endpoint | `https://quiz.chevallier.io/app/api/notifications/teams/messages` |
+| App package | `https://quiz.chevallier.io/app/api/notifications/teams/app.zip` |
+
+Staging has no Teams: it holds a copy of production's accounts and must never
+message a real person (`.env.staging.example`).
 
 ## 1. The Entra application
 
-In the Entra admin center, *App registrations → New registration*:
+In the Entra admin center of our tenant, *App registrations → New
+registration*:
 
+- **Name**: HEIG Quiz bot.
 - **Supported account types**: *Accounts in any organizational directory
-  (multitenant)*.
-- **Redirect URI** (platform *Web*):
-  `https://quiz.chevallier.io/app/api/notifications/teams/callback`
-  (and the staging host if staging ever gets Teams — it should not, see
-  `.env.staging.example`).
+  (multitenant)* — or single tenant, see step 2; the bot works either way.
+- No redirect URI, no API permission: the application only authenticates the
+  bot to Bot Connector.
 
-Then:
+Then *Certificates & secrets → New client secret*, **24 months**. Its value
+is `TEAMS_CLIENT_SECRET`; the application (client) id is `TEAMS_CLIENT_ID`.
 
-- *Certificates & secrets → New client secret*: its value is
-  `TEAMS_CLIENT_SECRET` (note the expiry: a lapsed secret fails every link and
-  every delivery, visible in the logs as `notification delivery failed`).
-- *API permissions*:
-  - Microsoft Graph, **delegated**: `openid`, `profile` (the sign-in).
-  - Microsoft Graph, **application**:
-    `TeamsAppInstallation.ReadWriteSelfForUser.All` (install the app for a
-    user and read the chat with it).
-- *Grant admin consent* for the home tenant.
+**Rotation.** Put the expiry date in the calendar a month ahead. To rotate:
+create a second secret, set it in `.env.prod`, restart the app container,
+check that a notification still reaches Teams (below), then delete the old
+secret. A lapsed secret fails every send with a 401 at
+`login.microsoftonline.com`, visible in the logs as `notification delivery
+failed` / `teams reply failed`; the deliveries are retried five times, then
+left failed in pg-boss. Nothing else breaks.
 
-The application (client) id is `TEAMS_CLIENT_ID`.
+## 2. The Azure Bot
 
-## 2. The bot
+In the Azure portal, *Create a resource → Azure Bot*:
 
-In the Azure portal, *Create an Azure Bot*:
+- **Pricing tier**: **F0** (free; the standard channels, Teams included, are
+  free and unlimited).
+- **Type of app**: *Single Tenant* if Azure offers nothing else for a new bot
+  (Microsoft is retiring multi-tenant bot registrations), or *Multi Tenant*.
+- **Creation type**: *Use existing app registration*, the application of
+  step 1 (its id and, for single tenant, our tenant id).
 
-- **Microsoft App ID**: *Use existing app registration*, the application of
-  step 1. For a new bot Azure may only offer *Single Tenant*; then set
-  `TEAMS_BOT_TENANT` to the home tenant id. A single-tenant bot still writes
-  to users of other tenants once the Teams app is installed there.
-- **Messaging endpoint**: required by the form, never called by the platform
-  (it does not converse). Any HTTPS URL of the platform will do, e.g.
-  `https://quiz.chevallier.io/healthz`.
-- *Channels*: add **Microsoft Teams**.
+Then, on the bot:
+
+- *Configuration → Messaging endpoint*:
+  `https://quiz.chevallier.io/app/api/notifications/teams/messages`.
+- *Channels → Microsoft Teams*: add it, accept the terms, *Microsoft Teams
+  Commercial*.
+
+**Single tenant: set `TEAMS_BOT_TENANT`** to our tenant id
+(`96412a41-a2a2-422e-8438-f29c95c02686`). It is the tenant the bot asks for
+its Bot Connector token when it SENDS; left at `botframework.com` with a
+single-tenant bot, every send fails with a 401 from `login.microsoftonline.com`.
+It changes nothing on RECEPTION: Bot Connector signs what it posts to the
+messaging endpoint with the Bot Framework keys and the issuer
+`https://api.botframework.com` for either kind of bot, and that is the only
+issuer the endpoint accepts (ADR-030).
+
+A single-tenant bot still talks to users of any tenant once they have
+installed its Teams app.
 
 ## 3. The Teams app
 
-A Teams app package (a zip of `manifest.json` and two icons) declaring the
-bot, built with the Teams Developer Portal (*Apps → New app*):
+Nothing to build by hand: `GET /app/api/notifications/teams/app.zip` (public)
+generates the package from the configuration — `manifest.json` (schema 1.17,
+`id` and `botId` = `TEAMS_CLIENT_ID`, the personal scope only, `validDomains`
+= the host of `PUBLIC_URL`) and the two icons, compiled into the API as
+base64 constants (`apps/api/src/modules/notifications/teamsIcons.ts`,
+generated by `node apps/web/scripts/icons.mjs`). Its `version` is
+`TEAMS_APP_VERSION` in `apps/api/src/modules/notifications/teamsApp.ts`,
+bumped by hand whenever the manifest changes.
 
-- **App features → Bot**: the bot of step 2, scope **Personal** only.
-- **Name**: "HEIG Quiz"; **Short description**: the notifications of the quiz
-  platform.
-- `webApplicationInfo.id` = `TEAMS_CLIENT_ID`.
+The package can also be checked in the Teams Developer Portal (*Apps → Import
+app*) before anyone uploads it.
 
-Publish it:
+## 4. What a user does
 
-- to one tenant: *Teams admin center → Manage apps → Upload new app*. The id
-  Graph knows it by in that tenant's catalog is shown in the app's details
-  (it is NOT the manifest id for an app uploaded by an organization): that
-  id is `TEAMS_APP_ID`;
-- to every tenant: submit it to the Teams Store. A Store app keeps its
-  manifest id as its catalog id everywhere, which is what a multi-tenant
-  `TEAMS_APP_ID` needs.
+The settings page (*Settings → Notifications → Microsoft Teams*) shows the
+same steps under **Download the Teams app**:
 
-## 4. Each tenant whose users link Teams
+1. In Teams: *Apps → Manage your apps → Upload an app → Upload a customised
+   app*, and choose `heig-quiz-teams.zip`. (HEIG-VD allows it; a tenant whose
+   policy forbids custom apps cannot use the channel.)
+2. The chat with **HEIG Quiz** opens; the bot posts a card.
+3. **Link to my Quiz account** opens `/teams/link?token=…` in the browser.
+   After signing in if needed, the page shows the Teams name, its Microsoft
+   365 organization and the Quiz account; **Link** does it. The bot confirms
+   in the chat.
 
-An administrator of that tenant must, once:
-
-1. grant admin consent to the application (the consent URL is
-   `https://login.microsoftonline.com/<tenant>/adminconsent?client_id=<TEAMS_CLIENT_ID>`);
-2. allow the Teams app (*Teams admin center → Manage apps*, and the app
-   permission policies if custom apps are restricted).
-
-Without the consent, a user of that tenant can link, and every delivery to
-them fails with a 401/403 from Microsoft: logged, retried five times, then
-left failed in pg-boss.
+The link in the card works once and for fifteen minutes. Any message sent to
+the bot brings a new card (at most one a minute), or, once linked, says which
+Quiz account the chat is linked to. Removing the app from Teams unlinks the
+account; so does *Disconnect* in the settings.
 
 ## Checking it
 
-1. Set the three variables, restart the container.
-2. *Settings → Notifications → Connect Microsoft Teams*, sign in at
-   Microsoft: the page comes back with "Microsoft Teams is connected".
-3. Release the results of an evaluation you took as a student (or share a
-   pool with the account): a message from the bot arrives in Teams within
-   seconds. `docker compose logs -f app | grep -i teams` shows
-   `teams notification sent`, or the Microsoft error.
+1. Set the variables, restart the container (`docker compose up -d app`).
+2. `curl -sI https://quiz.chevallier.io/app/api/notifications/teams/app.zip`
+   answers `200` with `content-type: application/zip`.
+3. Upload the app in Teams and link it: the bot answers within seconds, and
+   the settings show "Linked to <your Teams name>".
+4. Release the results of an evaluation you took as a student (or share a
+   pool with the account): the message arrives in the chat.
+
+The logs:
+
+```bash
+docker compose logs -f app | grep -i teams
+```
+
+- `teams link refused: tenant not allowed` (with the `tenantId`): a Teams
+  account of another organization asked for a link — check
+  `TEAMS_ALLOWED_TENANTS` if it should have been admitted;
+- `teams activity refused` (with a `reason`): a call to the messaging
+  endpoint failed authentication — normal for scanners; if Microsoft's own
+  calls are refused, check `TEAMS_CLIENT_ID` against the bot's app id;
+- `teams reply failed`: the bot could not answer in a chat (token, network);
+- `teams notification sent`: a delivery went out;
+- `teams notification refused for good, not retried`: Teams answered 403 or
+  404 (the bot was blocked, the chat is gone);
+- `notification delivery failed`: any other error, retried by pg-boss.
+
+In the Azure portal, *Azure Bot → Channels → Microsoft Teams* shows the
+channel's health and recent errors of the messaging endpoint.

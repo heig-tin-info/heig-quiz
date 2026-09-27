@@ -35,6 +35,7 @@ import {
   NotificationPreferencePut,
   type Notification,
   type NotificationSettings,
+  type TeamsLinkPreview,
 } from "@quiz/contracts";
 import {
   D,
@@ -1805,8 +1806,10 @@ on("POST", "/app/api/notifications/read-all", () => {
 /**
  * The channels of the notifications (ADR-030): every kind × channel on,
  * except the e-mail of a shared pool, so an off switch is on screen. Teams is
- * configured and not linked; "Connect" links it in place (the real flow goes
- * through Microsoft and comes back with `?teams=linked`).
+ * configured and not linked: the settings show the app to download and the
+ * steps. `/teams/link?token=<43 characters>` is the link page of a pending
+ * link; confirming it links Teams here. A token that starts with `expired`
+ * has expired.
  */
 const notificationSettings: NotificationSettings = {
   matrix: {
@@ -1815,7 +1818,7 @@ const notificationSettings: NotificationSettings = {
     pool_ownership: { bell: true, email: true, teams: true },
   },
   email: me?.email ?? "",
-  teams: { available: true, linkedAt: null },
+  teams: { available: true, linkedAt: null, teamsName: null },
 };
 
 on("GET", "/app/api/notifications/settings", () => notificationSettings);
@@ -1824,12 +1827,21 @@ on("PUT", "/app/api/notifications/preferences", (_m, body) => {
   notificationSettings.matrix[pref.kind][pref.channel] = pref.enabled;
   return notificationSettings;
 });
-on("POST", "/app/api/notifications/teams/connect", () => {
-  notificationSettings.teams.linkedAt = iso(0);
-  return { url: "/settings?teams=linked" };
+const TEAMS_NAME = "Léa Rochat (HEIG-VD)";
+on("POST", "/app/api/notifications/teams/link/preview", (_m, body): TeamsLinkPreview => {
+  if (String(body.token ?? "").startsWith("expired")) throw new MockError(404, "link_invalid");
+  return {
+    teamsName: TEAMS_NAME,
+    tenantId: "a372f724-c0b2-4ea0-abfb-0eb8c6f84e40",
+    expiresAt: iso(15 * 60_000),
+  };
+});
+on("POST", "/app/api/notifications/teams/link", () => {
+  notificationSettings.teams = { available: true, linkedAt: iso(0), teamsName: TEAMS_NAME };
+  return notificationSettings;
 });
 on("DELETE", "/app/api/notifications/teams", () => {
-  notificationSettings.teams.linkedAt = null;
+  notificationSettings.teams = { available: true, linkedAt: null, teamsName: null };
   return notificationSettings;
 });
 on("GET", "/app/api/pools/:id/tags", (m) => poolTagDetails(poolOr404(m.groups!.id!).id));

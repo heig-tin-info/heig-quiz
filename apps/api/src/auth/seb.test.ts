@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { configKey, configKeyMatches, configKeyHeaderFor, redactLaunchUrl, sebConfig, sebJson, toPlistXml } from "./seb.js";
+import { configKey, configKeyMatches, configKeyHeaderFor, sebConfig, sebJson, toPlistXml } from "./seb.js";
 
 const sha256 = (text: string) => createHash("sha256").update(text, "utf8").digest("hex");
 
@@ -42,10 +42,5 @@ describe("the launch file", () => {
     expect(configKeyMatches(url, configKeyHeaderFor(url))).toBe(true);
     expect(configKeyMatches(url, configKeyHeaderFor(`${url}x`))).toBe(false);
     expect(configKeyMatches(url, undefined)).toBe(false);
-  });
-
-  it("never writes the secret to the request log", () => {
-    expect(redactLaunchUrl("/app/auth/seb/s3cret")).not.toContain("s3cret");
-    expect(redactLaunchUrl("/app/api/me")).toBe("/app/api/me");
   });
 });

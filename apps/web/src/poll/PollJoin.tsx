@@ -31,19 +31,20 @@
  * answer nobody asked to send. Pending → sent → error with a retry, and
  * nothing else.
  */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Send, SearchX, UserX } from "lucide-react";
 
-import type { Me, PollPublicView, PublicConfig } from "@quiz/contracts";
+import type { Me, PollPublicView } from "@quiz/contracts";
 
 import { api, ApiError } from "../api";
 import { useT } from "../i18n";
 import type { Route } from "../router";
 import { isAnswered, QuestionHost } from "../student/QuestionHost";
-import { Alert, Button, Card, EmptyState, Field, QueryError, Skeleton } from "../ui";
+import { SignInGate } from "../SignInGate";
+import { Alert, Button, Card, EmptyState, Field, GateFrame, QueryError, Skeleton } from "../ui";
 import { PollJoinReveal } from "./PollJoinReveal";
-import { configKey, publicPollKey } from "../queryKeys";
+import { publicPollKey } from "../queryKeys";
 
 /** How often a running poll is re-read: the reveal must land while reading. */
 const POLL_MS = 3_000;
@@ -56,13 +57,6 @@ const statusOf = (error: unknown): number | null =>
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
-function Frame({ children }: { children: ReactNode }) {
-  return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-115 flex-col justify-center px-4 py-10">
-      {children}
-    </main>
-  );
-}
 
 export function PollJoin({
   code,
@@ -161,13 +155,13 @@ export function PollJoin({
 
   if (poll.isLoading) {
     return (
-      <Frame>
+      <GateFrame>
         <div className="space-y-4" role="status" aria-label={t("join.loading")}>
           <Skeleton className="h-3 w-16" />
           <Skeleton className="h-5 w-48" />
           <Skeleton className="h-56 w-full rounded-card" />
         </div>
-      </Frame>
+      </GateFrame>
     );
   }
 
@@ -177,7 +171,7 @@ export function PollJoin({
     if (statusOf(poll.error) === 404) return <NotFound navigate={navigate} />;
     if (errorCode(poll.error) === "not_on_roster") return <NotOnRoster />;
     return (
-      <Frame>
+      <GateFrame>
         <h1 className="mb-4 text-lg font-bold tracking-tight">{t("join.loadFailed")}</h1>
         <QueryError
           title={t("error.title")}
@@ -185,7 +179,7 @@ export function PollJoin({
           onRetry={() => void poll.refetch()}
           retrying={poll.isFetching}
         />
-      </Frame>
+      </GateFrame>
     );
   }
 
@@ -308,43 +302,16 @@ export function PollJoin({
  */
 function LoginGate({ code, title }: { code: string; title: string }) {
   const t = useT();
-  const config = useQuery<PublicConfig>({
-    queryKey: configKey,
-    queryFn: () => api<PublicConfig>("/app/api/config"),
-    retry: false,
-  });
-  const next = encodeURIComponent(`/p/${code}`);
   return (
-    <Frame>
-      <Card className="px-6 py-8 text-center">
-        <p className="text-[12px] font-medium uppercase tracking-wide text-fg-faint">
-          {t("join.eyebrow")}
-        </p>
-        <h1 className="mt-1 text-lg font-bold tracking-tight">{title}</h1>
-        <p className="mt-4 text-sm leading-relaxed text-fg-muted">{t("join.login.body")}</p>
-        <Button
-          variant="primary"
-          size="lg"
-          className="mt-6 w-full"
-          onClick={() => window.location.assign(`/app/auth/login?next=${next}`)}
-        >
-          {t("join.login.action")}
-        </Button>
-        {config.data?.devLogin ? (
-          <>
-            <Button
-              variant="secondary"
-              size="lg"
-              className="mt-3 w-full"
-              onClick={() => window.location.assign(`/app/auth/dev?next=${next}`)}
-            >
-              {t("landing.devSignin")}
-            </Button>
-            <p className="mt-2 text-xs text-fg-faint">{t("landing.devHint")}</p>
-          </>
-        ) : null}
-      </Card>
-    </Frame>
+    <SignInGate
+      next={`/p/${code}`}
+      header={
+        <p className="text-[12px] font-medium uppercase tracking-wide text-fg-faint">{t("join.eyebrow")}</p>
+      }
+      title={title}
+      body={t("join.login.body")}
+      action={t("join.login.action")}
+    />
   );
 }
 
@@ -357,13 +324,13 @@ function LoginGate({ code, title }: { code: string; title: string }) {
 function NotOnRoster() {
   const t = useT();
   return (
-    <Frame>
+    <GateFrame>
       <Card className="px-6 py-6">
         <EmptyState icon={UserX} titleAs="h1" title={t("join.notOnRoster.title")} className="py-6">
           {t("join.notOnRoster.body")}
         </EmptyState>
       </Card>
-    </Frame>
+    </GateFrame>
   );
 }
 
@@ -377,7 +344,7 @@ function NotFound({ navigate }: { navigate: (r: Route) => void }) {
   const [typed, setTyped] = useState("");
   const trimmed = typed.trim().toUpperCase();
   return (
-    <Frame>
+    <GateFrame>
       <Card className="px-6 py-6">
         <EmptyState
           icon={SearchX}
@@ -410,6 +377,6 @@ function NotFound({ navigate }: { navigate: (r: Route) => void }) {
           {t("join.notFound.body")}
         </EmptyState>
       </Card>
-    </Frame>
+    </GateFrame>
   );
 }

@@ -14,7 +14,7 @@ import { deliver, type DeliveryDeps } from "./jobs.js";
 import type { Mail } from "./mailer.js";
 import { closeOutbox, NOTIFICATION_DELIVERY_QUEUE, openOutbox, type DeliveryJob } from "./outbox.js";
 import * as service from "./service.js";
-import type { TeamsClient, TeamsTarget } from "./teams.js";
+import { TeamsError, type OutgoingActivity, type TeamsClient, type TeamsConversation } from "./teams.js";
 
 let db: Db;
 let alice: string;
@@ -45,6 +45,19 @@ function poolShared(poolId: string, name: string) {
     role: "reader",
     byName: "Prof Démo",
   } as const;
+}
+
+/** A Teams link as the link page writes it; the flow itself is `teams.db.test.ts`'s. */
+async function linkChat(userId: string, conversationId = `a:${userId}`, linkedAt = new Date()) {
+  await db.insert(teamsLinks).values({
+    userId,
+    tenantId: "t",
+    aadObjectId: `o-${userId}`,
+    conversationId,
+    serviceUrl: "https://smba.trafficmanager.net/emea/",
+    teamsName: "Léa Teams",
+    linkedAt,
+  });
 }
 
 /** `notify` when the bell is on, which every test of the inbox relies on. */
@@ -246,30 +259,24 @@ describe("preferences", () => {
     const dave = await seedUser("dave@heig.test");
     const none = await service.notificationSettings(db, dave, true);
     expect(none.email).toBe("dave@heig.test");
-    expect(none.teams).toEqual({ available: true, linkedAt: null });
+    expect(none.teams).toEqual({ available: true, linkedAt: null, teamsName: null });
 
-    await service.linkTeams(db, dave, { tenantId: "t1", objectId: "o1" }, new Date("2026-09-01T10:00:00Z"));
+    await linkChat(dave, "a:dave", new Date("2026-09-01T10:00:00Z"));
     const linked = await service.notificationSettings(db, dave, true);
-    expect(linked.teams.linkedAt).toBe("2026-09-01T10:00:00.000Z");
+    expect(linked.teams).toEqual({
+      available: true,
+      linkedAt: "2026-09-01T10:00:00.000Z",
+      teamsName: "Léa Teams",
+    });
     expect((await service.notificationSettings(db, dave, false)).teams).toEqual({
       available: false,
       linkedAt: null,
+      teamsName: null,
     });
 
-    expect(await service.unlinkTeams(db, dave)).toBe(true);
-    expect(await service.unlinkTeams(db, dave)).toBe(false);
-    expect(await service.teamsLinkOf(db, dave)).toBeNull();
-  });
-
-  it("forgets the cached chat when the account links another identity", async () => {
-    const erin = await seedUser("erin@heig.test");
-    await service.linkTeams(db, erin, { tenantId: "t1", objectId: "o1" }, new Date());
-    await service.rememberTeamsChat(db, erin, "o1", "19:chat");
-    expect((await service.teamsLinkOf(db, erin))!.chatId).toBe("19:chat");
-    // A chat found for a previous identity is not written onto the new one.
-    await service.linkTeams(db, erin, { tenantId: "t2", objectId: "o2" }, new Date());
-    await service.rememberTeamsChat(db, erin, "o1", "19:stale");
-    expect((await service.teamsLinkOf(db, erin))!.chatId).toBeNull();
+    expect(await service.unlinkTeams(db, { userId: dave })).toBe(dave);
+    expect(await service.unlinkTeams(db, { userId: dave })).toBeNull();
+    expect(await service.teamsLinkOf(db, { userId: dave })).toBeNull();
   });
 });
 
@@ -298,7 +305,7 @@ describe("notify fans out", () => {
     expect(sent[0]!.data).toEqual({ userId: grace, channel: "email", payload });
 
     sent.length = 0;
-    await service.linkTeams(db, grace, { tenantId: "t", objectId: "o" }, new Date());
+    await linkChat(grace);
     await bell(db, grace, payload);
     expect(sent.map((j) => j.data.channel)).toEqual(["email", "teams"]);
 
@@ -310,7 +317,7 @@ describe("notify fans out", () => {
 
   it("sends no Teams job when the platform has no Teams application", async () => {
     const heidi = await seedUser("heidi@heig.test");
-    await service.linkTeams(db, heidi, { tenantId: "t", objectId: "o" }, new Date());
+    await linkChat(heidi);
     const { queue, sent } = recordingQueue();
     openOutbox({ queue, teams: false, log });
     await bell(db, heidi, await sharedPool("Sans Teams"));
@@ -330,15 +337,13 @@ describe("notify fans out", () => {
 describe("the delivery job", () => {
   function fakes() {
     const mails: Mail[] = [];
-    const posts: { target: TeamsTarget; html: string }[] = [];
+    const posts: { to: TeamsConversation; activity: OutgoingActivity }[] = [];
+    const warnings: object[] = [];
+    let refuse: number | null = null;
     const teams: TeamsClient = {
-      beginLink: () => {
-        throw new Error("not in a job");
-      },
-      completeLink: () => Promise.reject(new Error("not in a job")),
-      async send(target, html) {
-        posts.push({ target, html });
-        return { chatId: "19:found" };
+      async send(to, activity) {
+        if (refuse) throw new TeamsError(`refused ${refuse}`, refuse);
+        posts.push({ to, activity });
       },
     };
     const deps: DeliveryDeps = {
@@ -351,9 +356,10 @@ describe("the delivery job", () => {
         },
       },
       teams,
-      log: { info: () => {} },
+      tenants: [] as string[],
+      log: { info: () => {}, warn: (obj: object) => void warnings.push(obj) },
     };
-    return { deps, mails, posts };
+    return { deps, mails, posts, warnings, refuseWith: (status: number) => (refuse = status) };
   }
 
   const released = (title: string): NotificationPayload => ({
@@ -377,21 +383,47 @@ describe("the delivery job", () => {
     );
   });
 
-  it("posts to Teams, caches the chat, and does nothing once unlinked", async () => {
+  it("posts to the linked chat, and does nothing once unlinked", async () => {
     const ken = await seedUser("ken@heig.test");
-    await service.linkTeams(db, ken, { tenantId: "t", objectId: "o-ken" }, new Date());
+    await linkChat(ken, "a:ken");
     const { deps, posts } = fakes();
     await deliver(deps, { userId: ken, channel: "teams", payload: released("Labo") });
     expect(posts).toHaveLength(1);
-    expect(posts[0]!.target).toMatchObject({ tenantId: "t", objectId: "o-ken", chatId: null });
-    expect(posts[0]!.html).toContain("Labo");
-    expect((await db.select().from(teamsLinks).where(eq(teamsLinks.userId, ken)))[0]!.chatId).toBe(
-      "19:found",
-    );
+    expect(posts[0]!.to).toEqual({ serviceUrl: "https://smba.trafficmanager.net/emea/", conversationId: "a:ken" });
+    expect(posts[0]!.activity).toMatchObject({ type: "message", textFormat: "xml" });
+    expect(posts[0]!.activity.text).toContain("Labo");
 
-    await service.unlinkTeams(db, ken);
+    await service.unlinkTeams(db, { userId: ken });
     await deliver(deps, { userId: ken, channel: "teams", payload: released("Labo") });
     expect(posts).toHaveLength(1);
+  });
+
+  it("sends nothing to a link whose tenant was removed from the allowed list", async () => {
+    const olga = await seedUser("olga@heig.test");
+    await linkChat(olga);
+    const { deps, posts, warnings } = fakes();
+    deps.tenants = ["another-tenant"];
+    await expect(deliver(deps, { userId: olga, channel: "teams", payload: released("X") })).resolves.toBeUndefined();
+    expect(posts).toHaveLength(0);
+    expect(warnings).toHaveLength(1);
+    deps.tenants = ["another-tenant", "t"];
+    await deliver(deps, { userId: olga, channel: "teams", payload: released("X") });
+    expect(posts).toHaveLength(1);
+  });
+
+  it("drops a delivery Teams refuses for good (403, 404), keeps the link, and retries the rest", async () => {
+    const nina = await seedUser("nina@heig.test");
+    await linkChat(nina);
+    for (const status of [403, 404]) {
+      const { deps, warnings, refuseWith } = fakes();
+      refuseWith(status);
+      await expect(deliver(deps, { userId: nina, channel: "teams", payload: released("X") })).resolves.toBeUndefined();
+      expect(warnings).toHaveLength(1);
+    }
+    expect(await service.teamsLinkOf(db, { userId: nina })).not.toBeNull();
+    const { deps, refuseWith } = fakes();
+    refuseWith(502);
+    await expect(deliver(deps, { userId: nina, channel: "teams", payload: released("X") })).rejects.toThrow("502");
   });
 
   it("drops a delivery for an account that is gone or anonymized", async () => {

@@ -32,6 +32,13 @@ const en = {
   "role.owner": "owner",
   footer: "You receive this message from HEIG Quiz. Choose which notifications reach you, and where, in your settings:",
   "footer.link": "Notification settings",
+  "bot.welcome":
+    "Hello! I send you the notifications of HEIG Quiz. Link this chat to your Quiz account to receive them here. The link is valid for 15 minutes and works once.",
+  "bot.link.action": "Link to my Quiz account",
+  "bot.linked": "This chat is linked to the HEIG Quiz account of {name}. Choose what reaches you here in your settings: {settings}",
+  "bot.confirmed": "Done: this chat is now linked to the HEIG Quiz account of {name}. Your notifications will arrive here.",
+  "bot.tenantRefused":
+    "Sorry, HEIG Quiz only links Teams accounts of the HEIG-VD organization. Sign in to Teams with your HEIG-VD account and try again.",
 } as const;
 
 type Key = keyof typeof en;
@@ -51,6 +58,13 @@ const fr: Record<Key, string> = {
   "role.owner": "propriétaire",
   footer: "Vous recevez ce message de HEIG Quiz. Choisissez quelles notifications vous parviennent, et où, dans vos réglages :",
   "footer.link": "Réglages des notifications",
+  "bot.welcome":
+    "Bonjour ! Je vous transmets les notifications de HEIG Quiz. Liez cette conversation à votre compte Quiz pour les recevoir ici. Le lien est valable 15 minutes et ne sert qu'une fois.",
+  "bot.link.action": "Lier à mon compte Quiz",
+  "bot.linked": "Cette conversation est liée au compte HEIG Quiz de {name}. Choisissez ce qui vous parvient ici dans vos réglages : {settings}",
+  "bot.confirmed": "C'est fait : cette conversation est liée au compte HEIG Quiz de {name}. Vos notifications arriveront ici.",
+  "bot.tenantRefused":
+    "Désolé, HEIG Quiz ne lie que des comptes Teams de l'organisation HEIG-VD. Connectez-vous à Teams avec votre compte HEIG-VD et réessayez.",
 };
 
 const DICTS: Record<MailLocale, Record<Key, string>> = { en, fr };
@@ -158,4 +172,50 @@ export function renderNotification(
   const teams = `<p>${bodyHtml}</p><p><a href="${escapeHtml(link)}">${escapeHtml(action)}</a></p>`;
 
   return { subject, text, html, teams };
+}
+
+// --- The bot's own messages (ADR-030) ----------------------------------------
+
+/**
+ * The language of a Teams activity (`fr-CH`, `en-US`, …), for the bot's
+ * replies: French for any French variant, English otherwise.
+ */
+export function botLocale(locale: string | null | undefined): MailLocale {
+  return /^fr(\b|[-_])/i.test(locale ?? "") ? "fr" : "en";
+}
+
+/** A plain-text message of the bot; `vars` are never interpreted as markup. */
+export function botText(
+  locale: MailLocale,
+  key: "bot.linked" | "bot.confirmed" | "bot.tenantRefused",
+  vars: Record<string, string> = {},
+): { type: "message"; textFormat: "plain"; text: string } {
+  return { type: "message", textFormat: "plain", text: fill(DICTS[locale][key], vars, plain) };
+}
+
+/**
+ * The link card: the welcome sentence and ONE button that opens
+ * `/teams/link?token=…` in the browser (an Adaptive Card, which Teams renders
+ * in a personal chat on every client).
+ */
+export function linkCard(
+  locale: MailLocale,
+  linkUrl: string,
+): { type: "message"; attachments: { contentType: string; content: unknown }[] } {
+  const t = DICTS[locale];
+  return {
+    type: "message",
+    attachments: [
+      {
+        contentType: "application/vnd.microsoft.card.adaptive",
+        content: {
+          type: "AdaptiveCard",
+          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+          version: "1.4",
+          body: [{ type: "TextBlock", text: t["bot.welcome"], wrap: true }],
+          actions: [{ type: "Action.OpenUrl", title: t["bot.link.action"], url: linkUrl }],
+        },
+      },
+    ],
+  };
 }

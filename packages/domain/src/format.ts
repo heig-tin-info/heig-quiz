@@ -46,3 +46,17 @@ export function formatGrade(n: number): string {
 export function displayedRate(rate: number): number {
   return clamp(rate, 0, 1);
 }
+
+/**
+ * How a person is named to another person — a pool's owner, the account a
+ * Teams chat is linked to: "Prof Démo", or the e-mail while the account has
+ * no name yet. One rule for the API and the web app.
+ */
+export function displayName(person: {
+  givenName: string | null;
+  familyName: string | null;
+  email: string | null;
+}): string {
+  const full = `${person.givenName ?? ""} ${person.familyName ?? ""}`.trim();
+  return full === "" ? (person.email ?? "") : full;
+}

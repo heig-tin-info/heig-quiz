@@ -643,6 +643,10 @@ const scenes = [
   { name: "oauth-consent", role: "teacher", path: "/oauth/authorize/0190d3c4-0000-7000-8000-000000000001" },
   { name: "oauth-consent-loopback", role: "teacher", path: "/oauth/authorize/0190d3c4-0000-7000-8000-000000000001?loopback=1" },
   { name: "oauth-invalid", role: "teacher", path: "/oauth/authorize/invalid?reason=invalid_redirect_uri" },
+  // ADR-030: the page the Teams bot's card opens; a token starting with
+  // `expired` is one the mock refuses.
+  { name: "teams-link", role: "student", path: `/teams/link?token=${"T".repeat(43)}` },
+  { name: "teams-link-expired", role: "student", path: `/teams/link?token=expired${"T".repeat(36)}` },
   { name: "settings-token-new", role: "teacher", path: "/settings", fold: true, act: (p) => p.getByRole("button", { name: /new token/i }).first().click() },
   {
     name: "settings-token-created",

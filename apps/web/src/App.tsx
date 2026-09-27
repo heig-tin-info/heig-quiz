@@ -147,6 +147,9 @@ const PollProjection = lazy(() =>
 );
 const PollJoin = lazy(() => import("./poll/PollJoin").then((m) => ({ default: m.PollJoin })));
 const OAuthConsent = lazy(() => import("./oauth/OAuthConsent").then((m) => ({ default: m.OAuthConsent })));
+const TeamsLinkPage = lazy(() =>
+  import("./notifications/TeamsLinkPage").then((m) => ({ default: m.TeamsLinkPage })),
+);
 const PollLauncher = lazy(() =>
   import("./poll/PollLauncher").then((m) => ({ default: m.PollLauncher })),
 );
@@ -186,6 +189,7 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   attempt: (r, c) => <AttemptPage evaluationId={r.evaluationId} navigate={c.navigate} />,
   join: (r, c) => <PollJoin code={r.code} me={c.me} navigate={c.navigate} />,
   oauthConsent: (r, c) => <OAuthConsent id={r.id} me={c.me} />,
+  teamsLink: (_, c) => <TeamsLinkPage me={c.me} onSettings={() => c.navigate({ view: "settings" })} />,
   // Invariant 3: the gallery exists in development only. The
   // route parses in every build; this is what refuses to render it.
   devUi: (_, c) => (import.meta.env.DEV ? <DevGallery /> : <TeacherHome navigate={c.navigate} />),
@@ -232,6 +236,7 @@ const FULL_SCREEN: ReadonlySet<Route["view"]> = new Set([
   "poll",
   "join",
   "oauthConsent",
+  "teamsLink",
 ]);
 
 /**
@@ -246,14 +251,22 @@ const WIDE: ReadonlySet<Route["view"]> = new Set(["live"]);
  * No session. The participant of an anonymous poll may have no account
  * (`settings.poll.anonymous`: the poll belongs to no classroom), and the page
  * itself sends to login for a classroom's poll.
- * The OAuth consent page is the other one: it offers the sign-in with a
- * `next` back to itself. Everything else is the landing page.
+ * The OAuth consent page and the Teams link page are the others: each
+ * offers the sign-in with a `next` back to itself. Everything else is the landing page.
  */
 function SignedOut({ route, navigate }: { route: Route; navigate: (r: Route) => void }) {
   if (route.view === "join") {
     return (
       <Suspense fallback={<Spinner className="py-24" />}>
         <PollJoin code={route.code} me={null} navigate={navigate} />
+      </Suspense>
+    );
+  }
+  // The Teams link page (ADR-030) signs in and comes back to itself too.
+  if (route.view === "teamsLink") {
+    return (
+      <Suspense fallback={<Spinner className="py-24" />}>
+        <TeamsLinkPage me={null} />
       </Suspense>
     );
   }

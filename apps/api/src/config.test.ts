@@ -109,13 +109,19 @@ describe("notification channels (ADR-030)", () => {
     expect(loadConfig({}).MAIL_FROM_NAME).toBe("HEIG Quiz");
   });
 
-  it("turns Teams on only with its three variables", () => {
-    const all = { TEAMS_CLIENT_ID: "c", TEAMS_CLIENT_SECRET: "s", TEAMS_APP_ID: "a" };
+  it("turns Teams on only with the bot's id and secret", () => {
+    const all = { TEAMS_CLIENT_ID: "c", TEAMS_CLIENT_SECRET: "s" };
     expect(teamsEnabled(loadConfig({}))).toBe(false);
-    expect(teamsEnabled(loadConfig({ ...all, TEAMS_APP_ID: " " }))).toBe(false);
+    expect(teamsEnabled(loadConfig({ ...all, TEAMS_CLIENT_SECRET: " " }))).toBe(false);
     expect(teamsEnabled(loadConfig(all))).toBe(true);
-    expect(loadConfig({ TEAMS_SERVICE_URL: "https://smba.test/teams/" }).TEAMS_SERVICE_URL).toBe(
-      "https://smba.test/teams",
-    );
+    expect(loadConfig({}).TEAMS_BOT_TENANT).toBe("botframework.com");
+    expect(loadConfig({ TEAMS_BOT_TENANT: " 96412a41 " }).TEAMS_BOT_TENANT).toBe("96412a41");
+  });
+
+  it("parses the allowed Teams tenants once, lower-cased", () => {
+    const heig = "a372f724-c0b2-4ea0-abfb-0eb8c6f84e40";
+    const listed = loadConfig({ TEAMS_ALLOWED_TENANTS: ` ${heig.toUpperCase()} , ,other ` });
+    expect(listed.TEAMS_ALLOWED_TENANTS).toEqual([heig, "other"]);
+    expect(loadConfig({}).TEAMS_ALLOWED_TENANTS).toEqual([]);
   });
 });

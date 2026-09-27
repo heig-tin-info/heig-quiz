@@ -9,6 +9,11 @@
  * Ownership is never checked after the fact — it is part of every query
  * (invariant 6), so `POST /notifications/:id/read` on somebody else's row is
  * a 404 indistinguishable from a row that never existed.
+ *
+ * Two Teams routes are PUBLIC, and nothing else here is: the bot's
+ * messaging endpoint, which Microsoft calls with its own signed token (no
+ * session, so no CSRF check either), and the Teams app package, which holds
+ * no secret.
  */
 import type { FastifyInstance } from "fastify";
 
@@ -16,27 +21,40 @@ import {
   IdParam,
   NotificationPreferencePut,
   NotificationQuery,
-  TeamsCallbackQuery,
-  type TeamsConnectStart,
+  TeamsActivity,
+  TeamsLinkBody,
+  type TeamsLinkPreview,
 } from "@quiz/contracts";
 
 import { tracer } from "../../audit.js";
 import { teamsEnabled, type AppConfig } from "../../config.js";
+import { accountName, handleActivity, type BotDeps } from "./bot.js";
+import { BotAuthError, createBotTokenVerifier, type BotClaims } from "./botAuth.js";
 import * as service from "./service.js";
-import { createTeamsClient } from "./teams.js";
+import { allowedServiceUrl, createTeamsClient, TeamsError } from "./teams.js";
+import { teamsAppPackage } from "./teamsApp.js";
+import { consumeLinkToken, previewLinkToken, type AllowedTenants } from "./teamsLink.js";
+import { botText, mailLocale } from "./templates.js";
 
-/** The signed cookie that carries one Teams linking attempt to its callback. */
-const TEAMS_STASH_COOKIE = "quiz_teams";
 const TEAMS_PATH = "/app/api/notifications/teams";
+/** An activity is a few kilobytes; Teams caps a message at 28 KB of text. */
+const ACTIVITY_BODY_LIMIT = 64 * 1024;
+
+declare module "fastify" {
+  interface FastifyRequest {
+    /** The claims of the Bot Connector token of a messaging call; null elsewhere. */
+    botClaims: BotClaims | null;
+  }
+}
 
 export async function notificationsPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
   const trace = tracer(app);
   const teamsOn = teamsEnabled(config);
   const teams = teamsOn ? createTeamsClient(config) : null;
-  const secure = config.NODE_ENV === "production";
-  // Registered in the Entra application as its redirect URI (docs/development/teams.md).
-  const redirectUri = new URL(`${TEAMS_PATH}/callback`, config.PUBLIC_URL).href;
+  const verifier = teamsOn ? createBotTokenVerifier({ appId: config.TEAMS_CLIENT_ID }) : null;
+  const tenants: AllowedTenants = config.TEAMS_ALLOWED_TENANTS;
+  app.decorateRequest("botClaims", null);
 
   /** Any signed-in account; the inbox is per user, whatever their role. */
   const requireSession = (
@@ -77,88 +95,146 @@ export async function notificationsPlugin(app: FastifyInstance, opts: { config: 
     return service.notificationSettings(app.db, req.user!.id, teamsOn);
   });
 
-  // --- Microsoft Teams ---------------------------------------------------
+  // --- Microsoft Teams: the bot ------------------------------------------
 
   /**
-   * Starts the link: a POST (so the CSRF check applies) that answers with
-   * the Microsoft URL the browser then navigates to. The PKCE verifier, the
-   * state, the nonce and the account they belong to travel in a SIGNED,
-   * short-lived cookie scoped to the callback — never in the `state`, which
-   * Microsoft echoes back.
+   * The Bot Framework messaging endpoint (the Azure Bot's "Messaging
+   * endpoint"). The token is checked in `onRequest`, BEFORE the body is read
+   * (`botAuth.ts`; jose's key-set cooldown bounds what forged tokens cost).
+   * The body then has to be an activity whose `serviceUrl` is the one the
+   * token vouches for and an allowed Teams host. A failure while answering
+   * in the chat is logged and still a 200: Microsoft would only retry the
+   * activity, and the bot would answer twice.
    */
-  app.post(`${TEAMS_PATH}/connect`, { preHandler: requireSession }, async (req, reply) => {
-    if (!teams) return reply.code(503).send({ error: "teams_unavailable" });
-    const start = teams.beginLink(redirectUri);
-    reply.setCookie(
-      TEAMS_STASH_COOKIE,
-      JSON.stringify({
-        state: start.state,
-        nonce: start.nonce,
-        codeVerifier: start.codeVerifier,
-        userId: req.user!.id,
-      }),
-      { path: TEAMS_PATH, httpOnly: true, sameSite: "lax", secure, signed: true, maxAge: 600 },
-    );
-    const answer: TeamsConnectStart = { url: start.url };
-    return answer;
+  app.post(
+    `${TEAMS_PATH}/messages`,
+    {
+      bodyLimit: ACTIVITY_BODY_LIMIT,
+      onRequest: async (req, reply) => {
+        if (!verifier) return reply.code(404).send({ error: "not_found" });
+        try {
+          req.botClaims = await verifier.verify(req.headers.authorization);
+        } catch (err) {
+          const status = err instanceof BotAuthError ? err.status : 401;
+          req.log.warn({ reason: err instanceof Error ? err.message : "?" }, "teams activity refused");
+          return reply.code(status).send({ error: "unauthorized" });
+        }
+        return undefined;
+      },
+    },
+    async (req, reply) => {
+      // Reached only when `onRequest` let the call through: Teams is on and
+      // the token verified.
+      const claims = req.botClaims!;
+      const parsed = TeamsActivity.safeParse(req.body);
+      if (!parsed.success) return reply.code(400).send({ error: "validation" });
+      const activity = parsed.data;
+      if (activity.serviceUrl !== claims.serviceUrl) {
+        req.log.warn({}, "teams activity refused: serviceUrl differs from the token's");
+        return reply.code(401).send({ error: "unauthorized" });
+      }
+      if (!allowedServiceUrl(activity.serviceUrl)) {
+        req.log.warn({ serviceUrl: activity.serviceUrl }, "teams activity refused: serviceUrl not allowed");
+        return reply.code(403).send({ error: "forbidden" });
+      }
+      const deps: BotDeps = {
+        db: app.db,
+        teams: teams!,
+        webUrl: config.WEB_URL,
+        tenants,
+        now: () => app.clock.now(),
+        log: req.log,
+      };
+      try {
+        await handleActivity(deps, activity);
+      } catch (err) {
+        if (!(err instanceof TeamsError)) throw err;
+        req.log.warn({ err, type: activity.type }, "teams reply failed");
+      }
+      return reply.code(200).send();
+    },
+  );
+
+  /**
+   * The Teams app package a user uploads into their own Teams. Public: it
+   * holds the bot's application id, which Teams shows anyway, and nothing
+   * else. Built once, on first request.
+   */
+  let appPackage: Buffer | null = null;
+  app.get(`${TEAMS_PATH}/app.zip`, async (_req, reply) => {
+    if (!teamsOn) return reply.code(404).send({ error: "not_found" });
+    appPackage ??= teamsAppPackage({ appId: config.TEAMS_CLIENT_ID, publicUrl: config.PUBLIC_URL });
+    return reply
+      .type("application/zip")
+      .header("content-disposition", 'attachment; filename="heig-quiz-teams.zip"')
+      .header("cache-control", "no-cache")
+      .send(appPackage);
   });
 
+  // --- Microsoft Teams: the link page -----------------------------------
+  //
+  // The token travels in a BODY, never in an API path: a path is what every
+  // log line and proxy writes down.
+
+  /** What the link would do, for the confirmation page; consumes nothing. */
+  app.post(
+    `${TEAMS_PATH}/link/preview`,
+    { preHandler: requireSession, config: { readOnly: true } },
+    async (req, reply) => {
+      if (!teamsOn) return reply.code(404).send({ error: "not_found" });
+      // Like `/link`: a person in a browser, never a personal API token.
+      if (req.authVia !== "session") return reply.code(403).send({ error: "forbidden" });
+      const body = TeamsLinkBody.safeParse(req.body);
+      const pending = body.success
+        ? await previewLinkToken(app.db, body.data.token, app.clock.now(), tenants)
+        : null;
+      if (!pending) return reply.code(404).send({ error: "link_invalid" });
+      const preview: TeamsLinkPreview = {
+        teamsName: pending.teamsName,
+        tenantId: pending.tenantId,
+        expiresAt: pending.expiresAt.toISOString(),
+      };
+      return preview;
+    },
+  );
+
   /**
-   * Microsoft's redirect. A browser lands here, so every outcome is a
-   * redirect to the settings page with `?teams=linked|error`, never a JSON
-   * body in a tab. The stash must be intact, carry the same state, and
-   * belong to the account whose session came back with it.
+   * Links the chat to the signed-in account (the CSRF check of
+   * `requireSession` applies). The token is consumed in the transaction that
+   * writes the link — and only if its tenant is still allowed; the bot's
+   * confirmation in Teams comes after the commit, best effort — the page
+   * already says it worked.
    */
-  app.get(`${TEAMS_PATH}/callback`, async (req, reply) => {
+  app.post(`${TEAMS_PATH}/link`, { preHandler: requireSession }, async (req, reply) => {
     if (!teams) return reply.code(404).send({ error: "not_found" });
-    const back = (outcome: "linked" | "error") => reply.redirect(`/settings?teams=${outcome}`, 303);
+    // A person in a browser, never a personal API token (ADR-022) nor an assistant.
+    if (req.authVia !== "session") return reply.code(403).send({ error: "forbidden" });
+    const body = TeamsLinkBody.safeParse(req.body);
+    if (!body.success) return reply.code(404).send({ error: "link_invalid" });
+    const userId = req.user!.id;
+    const outcome = await consumeLinkToken(app.db, userId, body.data.token, app.clock.now(), tenants);
+    if (!outcome) return reply.code(404).send({ error: "link_invalid" });
+    if (outcome.displaced) {
+      await trace(req, "teams.unlink", "user", outcome.displaced, { via: "moved", to: userId });
+    }
+    await trace(req, "teams.link", "user", userId, { tenantId: outcome.link.tenantId });
 
-    const raw = req.cookies[TEAMS_STASH_COOKIE];
-    reply.clearCookie(TEAMS_STASH_COOKIE, { path: TEAMS_PATH });
-    const unsigned = raw ? req.unsignCookie(raw) : { valid: false as const, value: null };
-    const query = TeamsCallbackQuery.safeParse(req.query);
-    if (!req.user || !unsigned.valid || !unsigned.value || !query.success) return back("error");
-    let stash: { state?: unknown; nonce?: unknown; codeVerifier?: unknown; userId?: unknown };
-    try {
-      stash = JSON.parse(unsigned.value) as typeof stash;
-    } catch {
-      return back("error");
-    }
-    const { code, state, error } = query.data;
-    if (
-      error ||
-      !code ||
-      typeof stash.state !== "string" ||
-      typeof stash.nonce !== "string" ||
-      typeof stash.codeVerifier !== "string" ||
-      state !== stash.state ||
-      stash.userId !== req.user.id
-    ) {
-      if (error) req.log.warn({ error }, "Teams link refused at Microsoft");
-      return back("error");
-    }
+    // In the account's language: the page that asked is the account's.
+    const { link } = outcome;
+    const confirmation = botText(mailLocale(req.user!.locale), "bot.confirmed", {
+      name: await accountName(app.db, userId),
+    });
+    teams
+      .send({ serviceUrl: link.serviceUrl, conversationId: link.conversationId }, confirmation)
+      .catch((err: unknown) => req.log.warn({ err }, "teams link confirmation not sent"));
 
-    let identity: { tenantId: string; objectId: string };
-    try {
-      identity = await teams.completeLink({
-        code,
-        redirectUri,
-        codeVerifier: stash.codeVerifier,
-        nonce: stash.nonce,
-      });
-    } catch (err) {
-      req.log.warn({ err }, "Teams link: code exchange failed");
-      return back("error");
-    }
-    await service.linkTeams(app.db, req.user.id, identity, app.clock.now());
-    await trace(req, "teams.link", "user", req.user.id, { tenantId: identity.tenantId });
-    return back("linked");
+    return service.notificationSettings(app.db, userId, teamsOn);
   });
 
   /** Forgets the link. Nothing is uninstalled at Microsoft: the user owns their Teams. */
   app.delete(TEAMS_PATH, { preHandler: requireSession }, async (req, reply) => {
     if (!teams) return reply.code(503).send({ error: "teams_unavailable" });
-    const removed = await service.unlinkTeams(app.db, req.user!.id);
+    const removed = await service.unlinkTeams(app.db, { userId: req.user!.id });
     if (removed) await trace(req, "teams.unlink", "user", req.user!.id);
     return service.notificationSettings(app.db, req.user!.id, teamsOn);
   });

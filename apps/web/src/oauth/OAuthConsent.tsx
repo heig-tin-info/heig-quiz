@@ -1,13 +1,13 @@
-import type { ReactNode } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Bot, Check, KeyRound, TriangleAlert, X } from "lucide-react";
 
-import type { Me, OAuthDecisionResult, OAuthRequestView, PublicConfig } from "@quiz/contracts";
+import type { Me, OAuthDecisionResult, OAuthRequestView } from "@quiz/contracts";
 
 import { api, ApiError } from "../api";
 import { useT } from "../i18n";
-import { configKey, oauthRequestKey } from "../queryKeys";
-import { Alert, Button, Card, FormError, Skeleton } from "../ui";
+import { oauthRequestKey } from "../queryKeys";
+import { SignInGate } from "../SignInGate";
+import { Alert, Button, Card, FormError, GateFrame, Skeleton } from "../ui";
 
 /**
  * The OAuth consent page (ADR-023): claude.ai, ChatGPT or another MCP client
@@ -24,7 +24,7 @@ export function OAuthConsent({ id, me }: { id: string; me: Me | null }) {
     const reason = new URLSearchParams(window.location.search).get("reason") ?? "invalid_request";
     const known = ["invalid_client", "invalid_redirect_uri", "invalid_client_metadata"].includes(reason);
     return (
-      <Frame>
+      <GateFrame>
         <Card className="px-6 py-8 text-center">
           <TriangleAlert className="mx-auto size-8 text-warning" />
           <h1 className="mt-3 text-lg font-bold tracking-tight">{t("oauth.invalid.title")}</h1>
@@ -32,66 +32,35 @@ export function OAuthConsent({ id, me }: { id: string; me: Me | null }) {
             {known ? t(`oauth.invalid.${reason}` as Parameters<typeof t>[0]) : t("oauth.invalid.invalid_request")}
           </p>
         </Card>
-      </Frame>
+      </GateFrame>
     );
   }
-  if (!me) return <SignInGate id={id} />;
+  if (!me) return <SignInFirst id={id} />;
   if (me.role === "student") {
     return (
-      <Frame>
+      <GateFrame>
         <Card className="px-6 py-8 text-center">
           <h1 className="text-lg font-bold tracking-tight">{t("oauth.teachersOnly.title")}</h1>
           <p className="mt-2 text-sm text-fg-muted">{t("oauth.teachersOnly.body")}</p>
         </Card>
-      </Frame>
+      </GateFrame>
     );
   }
   return <Consent id={id} me={me} />;
 }
 
-function Frame({ children }: { children: ReactNode }) {
-  return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-115 flex-col justify-center px-4 py-10">{children}</main>
-  );
-}
 
 /** No session yet: the sign-in, with a `next` back to this very request. */
-function SignInGate({ id }: { id: string }) {
+function SignInFirst({ id }: { id: string }) {
   const t = useT();
-  const config = useQuery<PublicConfig>({
-    queryKey: configKey,
-    queryFn: () => api<PublicConfig>("/app/api/config"),
-    retry: false,
-  });
-  const next = encodeURIComponent(`/oauth/authorize/${id}`);
   return (
-    <Frame>
-      <Card className="px-6 py-8 text-center">
-        <Bot className="mx-auto size-8 text-fg-muted" />
-        <h1 className="mt-3 text-lg font-bold tracking-tight">{t("oauth.signIn.title")}</h1>
-        <p className="mt-2 text-sm text-fg-muted">{t("oauth.signIn.body")}</p>
-        <Button
-          size="lg"
-          className="mt-6 w-full"
-          onClick={() => window.location.assign(`/app/auth/login?next=${next}`)}
-        >
-          {t("oauth.signIn.action")}
-        </Button>
-        {config.data?.devLogin ? (
-          <>
-            <Button
-              variant="secondary"
-              size="lg"
-              className="mt-3 w-full"
-              onClick={() => window.location.assign(`/app/auth/dev?next=${next}`)}
-            >
-              {t("landing.devSignin")}
-            </Button>
-            <p className="mt-2 text-xs text-fg-faint">{t("landing.devHint")}</p>
-          </>
-        ) : null}
-      </Card>
-    </Frame>
+    <SignInGate
+      next={`/oauth/authorize/${id}`}
+      header={<Bot className="mx-auto size-8 text-fg-muted" />}
+      title={t("oauth.signIn.title")}
+      body={t("oauth.signIn.body")}
+      action={t("oauth.signIn.action")}
+    />
   );
 }
 
@@ -114,19 +83,19 @@ function Consent({ id, me }: { id: string; me: Me }) {
 
   if (request.isPending) {
     return (
-      <Frame>
+      <GateFrame>
         <Card className="space-y-3 px-6 py-8">
           <Skeleton className="mx-auto h-6 w-2/3" />
           <Skeleton className="h-4 w-full" />
           <Skeleton className="h-4 w-5/6" />
         </Card>
-      </Frame>
+      </GateFrame>
     );
   }
   if (request.isError) {
     const gone = request.error instanceof ApiError && request.error.status === 404;
     return (
-      <Frame>
+      <GateFrame>
         <Card className="px-6 py-8 text-center">
           <TriangleAlert className="mx-auto size-8 text-warning" />
           <h1 className="mt-3 text-lg font-bold tracking-tight">
@@ -134,14 +103,14 @@ function Consent({ id, me }: { id: string; me: Me }) {
           </h1>
           {gone ? <p className="mt-2 text-sm text-fg-muted">{t("oauth.expired.body")}</p> : null}
         </Card>
-      </Frame>
+      </GateFrame>
     );
   }
 
   const r = request.data;
   const busy = decide.isPending || decide.isSuccess;
   return (
-    <Frame>
+    <GateFrame>
       <Card className="px-6 py-8">
         <div className="text-center">
           <span className="inline-flex rounded-full bg-accent-soft p-3">
@@ -196,6 +165,6 @@ function Consent({ id, me }: { id: string; me: Me }) {
         </div>
         <p className="mt-4 text-xs text-fg-faint">{t("oauth.consent.revokeHint")}</p>
       </Card>
-    </Frame>
+    </GateFrame>
   );
 }

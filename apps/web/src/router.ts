@@ -58,6 +58,11 @@ export type Route =
    * server refused the request before it could be trusted (`?reason=`).
    */
   | { view: "oauthConsent"; id: string }
+  /**
+   * The Teams link page (ADR-030): the bot's card opens it with the pending
+   * link's one-time token in `?token=`, which the page reads itself.
+   */
+  | { view: "teamsLink" }
   // WP10: grading + results
   /** The teacher's grading panel for one evaluation. */
   | { view: "grading"; evaluationId: string }
@@ -212,6 +217,12 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
     path: (r) => `/oauth/authorize/${r.id}`,
     match: ([head, tail, id]) =>
       head === "oauth" && tail === "authorize" && id ? { view: "oauthConsent", id } : null,
+    studentSafe: true,
+  },
+  // ADR-030: reached from the bot's card in Teams, signed in or not, by any role.
+  teamsLink: {
+    path: () => "/teams/link",
+    match: ([head, tail]) => (head === "teams" && tail === "link" ? { view: "teamsLink" } : null),
     studentSafe: true,
   },
   // WP10: the student's feedback on one attempt — the ONE student results page.

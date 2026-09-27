@@ -7,6 +7,7 @@
  * backoff (pg-boss; the in-process development queue only logs). What is
  * not a failure returns quietly: an account gone or anonymized, an empty
  * address, a Teams link removed since — there is nobody left to retry for.
+ * So does a Teams answer that a retry cannot change (403, 404): logged.
  */
 import type { FastifyInstance } from "fastify";
 
@@ -23,8 +24,9 @@ import {
   openOutbox,
   type DeliveryJob,
 } from "./outbox.js";
-import { rememberTeamsChat, teamsLinkOf } from "./service.js";
-import { createTeamsClient, type TeamsClient } from "./teams.js";
+import { teamsLinkOf } from "./service.js";
+import { createTeamsClient, TeamsError, type TeamsClient } from "./teams.js";
+import { tenantAllowed, type AllowedTenants } from "./teamsLink.js";
 import { mailLocale, renderNotification } from "./templates.js";
 
 export interface DeliveryDeps {
@@ -34,7 +36,9 @@ export interface DeliveryDeps {
   mailer: Mailer;
   /** Null when Teams is not configured on this platform. */
   teams: TeamsClient | null;
-  log: { info(obj: object, msg: string): void };
+  /** `TEAMS_ALLOWED_TENANTS`: a link of a tenant no longer listed is not delivered to. */
+  tenants: AllowedTenants;
+  log: { info(obj: object, msg: string): void; warn(obj: object, msg: string): void };
 }
 
 /** Performs one delivery. Exported for the tests, which pass fakes for both transports. */
@@ -59,10 +63,32 @@ export async function deliver(deps: DeliveryDeps, job: DeliveryJob): Promise<voi
   }
 
   if (!deps.teams) return;
-  const link = await teamsLinkOf(deps.db, job.userId);
+  const link = await teamsLinkOf(deps.db, { userId: job.userId });
   if (!link) return;
-  const { chatId } = await deps.teams.send(link, message.teams);
-  if (chatId !== link.chatId) await rememberTeamsChat(deps.db, job.userId, link.objectId, chatId);
+  if (!tenantAllowed(deps.tenants, link.tenantId)) {
+    // The organization was removed from the list since the link was made:
+    // nothing is sent, and a retry would meet the same list.
+    deps.log.warn({ userId: job.userId, tenantId: link.tenantId }, "teams notification skipped: tenant not allowed");
+    return;
+  }
+  try {
+    await deps.teams.send(
+      { serviceUrl: link.serviceUrl, conversationId: link.conversationId },
+      { type: "message", textFormat: "xml", text: message.teams },
+    );
+  } catch (err) {
+    // The bot was blocked, the chat is gone, or the stored serviceUrl is no
+    // longer allowed: a retry would meet the same answer. Logged, dropped;
+    // the link stays (the uninstall event, or the user, removes it).
+    if (err instanceof TeamsError && err.permanent) {
+      deps.log.warn(
+        { userId: job.userId, kind: job.payload.kind, status: err.status },
+        "teams notification refused for good, not retried",
+      );
+      return;
+    }
+    throw err;
+  }
   deps.log.info({ userId: job.userId, kind: job.payload.kind }, "teams notification sent");
 }
 
@@ -83,6 +109,7 @@ export async function registerNotificationJobs(
     webUrl: config.WEB_URL,
     mailer: createMailer(config, app.log),
     teams: teams ? createTeamsClient(config) : null,
+    tenants: config.TEAMS_ALLOWED_TENANTS,
     log: app.log,
   };
   await queue.work<DeliveryJob>(NOTIFICATION_DELIVERY_QUEUE, async (job) => {

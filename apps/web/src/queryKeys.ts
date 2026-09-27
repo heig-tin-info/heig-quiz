@@ -30,6 +30,8 @@ export const apiTokensKey = ["api-tokens"] as const;
 export const connectionsKey = ["oauth-connections"] as const;
 /** One pending OAuth request, on the consent page. */
 export const oauthRequestKey = (id: string) => ["oauth-request", id] as const;
+/** One pending Teams link, on the link page (ADR-030). */
+export const teamsLinkKey = (token: string) => ["teams-link", token] as const;
 
 // --- Courses and classrooms --------------------------------------------------
 

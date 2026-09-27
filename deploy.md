@@ -71,9 +71,11 @@ are managed from the Admin screen.
 Notifications (ADR-030): e-mails go out through Scaleway TEM once
 `SCW_SECRET_KEY` and `SCW_DEFAULT_PROJECT_ID` are set in `.env.prod` (the
 classroom's project and sender domain; without them every e-mail is only
-logged). The Microsoft Teams channel stays off until an Entra application,
-an Azure Bot and a Teams app exist and `TEAMS_CLIENT_ID`,
-`TEAMS_CLIENT_SECRET` and `TEAMS_APP_ID` are set: the whole setup is
+logged). The Microsoft Teams channel stays off until the Azure Bot and its
+Entra application exist and `TEAMS_CLIENT_ID` and `TEAMS_CLIENT_SECRET`
+(plus `TEAMS_ALLOWED_TENANTS`, HEIG-VD's tenant, and `TEAMS_BOT_TENANT` for
+a single-tenant bot) are set: the whole setup,
+the secret's rotation included, is
 [docs/development/teams.md](docs/development/teams.md). Staging sets neither.
 
 An encrypted copy of `.env.prod` and `secrets/` in the vault (`age`) is a

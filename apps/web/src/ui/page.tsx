@@ -634,6 +634,17 @@ export function EmptyState({
 
 // --- Surfaces and page structure ---
 
+/**
+ * A page of one narrow card centered on the screen, with no shell around it:
+ * the doors reached from outside the app — a poll's QR code, an assistant's
+ * consent, the Teams bot's link.
+ */
+export function GateFrame({ children }: { children: ReactNode }) {
+  return (
+    <main className="mx-auto flex min-h-dvh w-full max-w-115 flex-col justify-center px-4 py-10">{children}</main>
+  );
+}
+
 export function Card({
   children,
   className = "",

@@ -108,10 +108,12 @@ export type NotificationMatrix = z.infer<typeof NotificationMatrix>;
 
 /** The Teams link as the settings card shows it. */
 export const TeamsLinkStatus = z.object({
-  /** The platform has a Teams application configured (`TEAMS_*` env). */
+  /** The platform has a Teams bot configured (`TEAMS_*` env). */
   available: z.boolean(),
   /** When this account linked Teams; null when it did not. */
   linkedAt: z.string().nullable(),
+  /** The Teams display name of the linked chat; null when not linked. */
+  teamsName: z.string().nullable(),
 });
 export type TeamsLinkStatus = z.infer<typeof TeamsLinkStatus>;
 
@@ -132,18 +134,63 @@ export const NotificationPreferencePut = z.object({
 });
 export type NotificationPreferencePut = z.infer<typeof NotificationPreferencePut>;
 
-/** `POST /app/api/notifications/teams/connect`: where the browser goes next. */
-export const TeamsConnectStart = z.object({ url: z.string() });
-export type TeamsConnectStart = z.infer<typeof TeamsConnectStart>;
+/**
+ * The one-time secret of a pending Teams link, as the bot's link card puts it
+ * in `/teams/link?token=`: 32 random bytes, base64url.
+ */
+export const TeamsLinkToken = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 
-/** The query Microsoft sends back to the Teams callback. */
-export const TeamsCallbackQuery = z.object({
-  code: z.string().min(1).max(4096).optional(),
-  state: z.string().min(1).max(512).optional(),
-  error: z.string().max(256).optional(),
-  error_description: z.string().max(2048).optional(),
+/** `POST /app/api/notifications/teams/link/preview`: what linking would do, not done yet. */
+export const TeamsLinkPreview = z.object({
+  /** The display name Teams gave the bot for the person in the chat. */
+  teamsName: z.string(),
+  /** The Microsoft Entra tenant of that Teams account. */
+  tenantId: z.string(),
+  expiresAt: z.string(),
 });
-export type TeamsCallbackQuery = z.infer<typeof TeamsCallbackQuery>;
+export type TeamsLinkPreview = z.infer<typeof TeamsLinkPreview>;
+
+/**
+ * The body of `POST …/teams/link/preview` (reads) and `POST …/teams/link`
+ * (consumes the token for the signed-in account). A body, never a path: a
+ * path is what logs and proxies write down.
+ */
+export const TeamsLinkBody = z.object({ token: TeamsLinkToken });
+export type TeamsLinkBody = z.infer<typeof TeamsLinkBody>;
+
+/**
+ * A Bot Framework activity, as Microsoft Teams posts it to the messaging
+ * endpoint (`POST /app/api/notifications/teams/messages`). Only the fields
+ * the bot reads are named; every object is LOOSE, because Microsoft adds
+ * fields without notice and an unknown one must never turn a delivery into a
+ * 400 that Teams would retry.
+ */
+const TeamsAccount = z.looseObject({
+  id: z.string().max(512),
+  name: z.string().max(512).optional(),
+  aadObjectId: z.string().max(128).optional(),
+});
+export const TeamsActivity = z.looseObject({
+  type: z.string().max(64),
+  channelId: z.string().max(64),
+  serviceUrl: z.string().max(2048),
+  locale: z.string().max(32).optional(),
+  from: TeamsAccount.optional(),
+  recipient: TeamsAccount.optional(),
+  conversation: z.looseObject({
+    id: z.string().min(1).max(1024),
+    conversationType: z.string().max(64).optional(),
+    tenantId: z.string().max(128).optional(),
+  }),
+  channelData: z
+    .looseObject({ tenant: z.looseObject({ id: z.string().max(128) }).optional() })
+    .optional(),
+  /** `installationUpdate`: `add`, `remove`, `add-upgrade`, `remove-upgrade`. */
+  action: z.string().max(64).optional(),
+  membersAdded: z.array(TeamsAccount).max(100).optional(),
+  text: z.string().max(28_000).optional(),
+});
+export type TeamsActivity = z.infer<typeof TeamsActivity>;
 
 /**
  * The catalogue of kinds and the payload union are one list: a kind added to
