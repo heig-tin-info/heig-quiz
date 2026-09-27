@@ -54,6 +54,9 @@ export default defineConfig({
     },
   },
   test: {
+    // Capped so several agents testing at once cannot exhaust a
+    // workstation's RAM (apps/api/vitest.config.ts says why).
+    maxWorkers: Number(process.env.VITEST_MAX_WORKERS) || 6,
     // Vitest 4 removed `environmentMatchGlobs`; test projects are its
     // replacement. Two of them, so the pure-logic suite keeps running in
     // `node` (fast, no DOM to boot) while the component suite gets jsdom,
