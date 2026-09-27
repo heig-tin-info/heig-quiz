@@ -208,14 +208,16 @@ function Nav({
   // the courses the teacher hid are left out as everywhere in the navigation
   // (#155), and a dated classroom shows only while its period covers today —
   // the browser's local date, a display rule and not a deadline (#156). The
-  // course tree above and the course cards keep every classroom.
+  // classroom being read stays, ended or not: the current page is never
+  // missing from its own navigation. The course tree above and the course
+  // cards keep every classroom.
   const list = courses.data ?? [];
   const activeCourse = activeCourseOf(list, route);
   const today = new Date();
   const allRooms = list
     .filter((c) => inNavigation(c, activeCourse))
     .flatMap((c) => c.classrooms)
-    .filter((r) => isCurrent(r.periodStart, r.periodEnd, today));
+    .filter((r) => r.id === currentRoom || isCurrent(r.periodStart, r.periodEnd, today));
   const shownRooms = showAll
     ? allRooms
     : cappedClassrooms(allRooms, currentRoom, SIDEBAR_CLASSROOM_CAP);

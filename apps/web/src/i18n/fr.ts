@@ -109,7 +109,6 @@ export const fr: Record<keyof Dict, string> = {
   "classrooms.spring": "Printemps {year}",
   "classrooms.noDates": "Sans dates",
   "classrooms.datesHint": "Affichée dans la barre latérale d'un mois avant à un mois après.",
-  "classrooms.datesNoneHint": "Toujours affichée dans la barre latérale, jusqu'à l'archivage.",
   "classrooms.datesInvalid": "Indiquez les deux mois, le dernier pas avant le premier.",
   "classrooms.periodPlaceholder": "2026-A",
   "classrooms.empty": "Aucune classe dans ce cours.",

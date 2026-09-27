@@ -246,6 +246,16 @@ describe("Shell sidebar", () => {
       expect(nav.getByRole("button", { name: /^Spring room/ })).toBeInTheDocument();
     });
 
+    it("keeps the classroom being read, even out of its period", () => {
+      at(2026, 11);
+      renderShell({ courses: dated(), route: { view: "classroom", id: "s" } });
+      const nav = within(classroomsSection());
+      expect(nav.getByRole("button", { name: /^Spring room/ })).toHaveAttribute(
+        "aria-current",
+        "page",
+      );
+    });
+
     it("counts only the current classrooms in Show all", () => {
       at(2027, 5);
       const courses = dated();

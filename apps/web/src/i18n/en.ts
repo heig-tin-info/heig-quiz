@@ -112,7 +112,6 @@ export const en = {
   "classrooms.spring": "Spring {year}",
   "classrooms.noDates": "No dates",
   "classrooms.datesHint": "Listed in the sidebar from a month before to a month after.",
-  "classrooms.datesNoneHint": "Always listed in the sidebar, until archived.",
   "classrooms.datesInvalid": "Give both months, the last not before the first.",
   "classrooms.periodPlaceholder": "2026-A",
   "classrooms.empty": "No classroom in this course yet.",

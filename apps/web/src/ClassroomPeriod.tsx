@@ -56,12 +56,18 @@ function draftSemester(d: PeriodDraft): Semester | null {
     : null;
 }
 
+/** The two presets: the current-or-next semester, and the one after it. */
+function presetSemesters(today: Date): [Semester, Semester] {
+  const first = currentOrNextSemester(today);
+  return [first, nextSemester(first)];
+}
+
 /**
- * The draft of a new classroom: the current-or-next semester, label included
- * — the preset applied once, as if clicked.
+ * The draft of a new classroom: the first preset, label included — applied
+ * once, as if clicked.
  */
 export function newPeriodDraft(today: Date, t: TFunction): PeriodDraft {
-  const s = currentOrNextSemester(today);
+  const [s] = presetSemesters(today);
   const { start, end } = semesterMonths(s);
   return { period: semesterLabel(s, t), periodStart: start, periodEnd: end };
 }
@@ -88,10 +94,7 @@ export function PeriodFields({
   invalid: boolean;
 }) {
   const t = useT();
-  const [presets] = useState(() => {
-    const first = currentOrNextSemester(new Date());
-    return [first, nextSemester(first)];
-  });
+  const [presets] = useState(() => presetSemesters(new Date()));
   // The name of the preset that last wrote the label: while the label still
   // says that, the next preset may replace it. Seeded from the months the
   // dialog opens with, so an edit behaves like a creation.
@@ -152,10 +155,8 @@ export function PeriodFields({
         </div>
         {invalid ? (
           <p className="text-[13px] text-danger">{t("classrooms.datesInvalid")}</p>
-        ) : (
-          <p className="text-xs text-fg-faint">
-            {undated ? t("classrooms.datesNoneHint") : t("classrooms.datesHint")}
-          </p>
+        ) : undated ? null : (
+          <p className="text-xs text-fg-faint">{t("classrooms.datesHint")}</p>
         )}
       </fieldset>
       <Field
