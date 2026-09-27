@@ -1,4 +1,5 @@
 import { iconNames } from "lucide-react/dynamic";
+import aliases from "virtual:lucide-aliases";
 import { describe, expect, it } from "vitest";
 
 import { searchIcons } from "./IconCatalogue";
@@ -39,5 +40,32 @@ describe("poolIcons", () => {
     expect(searchIcons("")).toHaveLength(ICON_SEARCH_LIMIT);
     expect(searchIcons("zzzqqq")).toEqual([]);
     expect(searchIcons("a", 5)).toHaveLength(5);
+  });
+});
+
+/*
+ * lucide lists ~250 aliases beside its canonical names (#165). The catalogue
+ * offers each glyph once, under its canonical name, and a pool saved under
+ * an alias before that keeps drawing the same glyph.
+ */
+describe("lucide aliases", () => {
+  const KNOWN_ALIAS = "bar-chart-3";
+  const ITS_CANONICAL = "chart-column";
+
+  it("maps a known alias onto its canonical name, and not the reverse", () => {
+    expect(aliases[KNOWN_ALIAS]).toBe(ITS_CANONICAL);
+    expect(aliases[ITS_CANONICAL]).toBeUndefined();
+  });
+
+  it("lists no alias and no name twice", () => {
+    const all = searchIcons("", Infinity);
+    expect(new Set(all).size).toBe(all.length);
+    expect(all.filter((name) => name in aliases)).toEqual([]);
+  });
+
+  it("finds an icon by its alias, and lists it once", () => {
+    expect(searchIcons(KNOWN_ALIAS)).toContain(ITS_CANONICAL);
+    expect(searchIcons(KNOWN_ALIAS)).not.toContain(KNOWN_ALIAS);
+    expect(searchIcons("chart-column").filter((n) => n === ITS_CANONICAL)).toHaveLength(1);
   });
 });
