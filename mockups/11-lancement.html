@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lancement · Maquettes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!--
+  Step 3 of an evaluation, "Launch": three layouts for discussion (issue).
+  ?v=a|b|c        the variant
+  ?state=ready|warn|blocked|scheduled
+  ?theme=dark     dark tokens
+  ?shot=1         hides the variant switcher (for screenshots)
+-->
+<style>
+:root {
+  --canvas:#f6f5f2; --surface:#ffffff; --surface-2:#f3f1ed; --surface-3:#eae7e1;
+  --line:#e7e4de; --line-strong:#d3cfc7;
+  --fg:#1a1917; --fg-muted:#67635b; --fg-faint:#726d64;
+  --accent:#b41f24; --accent-hover:#9a1b1f; --accent-soft:#fbebeb; --on-fill:#ffffff;
+  --success:#1f7a4d; --success-soft:#e7f4ec;
+  --warning:#a35810; --warning-soft:#fdf1e2;
+  --danger:#c2242a; --danger-soft:#fbe9e9;
+  --info:#1268a0; --info-soft:#e8f2f9;
+}
+html.dark {
+  --canvas:#131211; --surface:#1b1a18; --surface-2:#232220; --surface-3:#2c2a27;
+  --line:#2a2825; --line-strong:#3a3733;
+  --fg:#ecebe7; --fg-muted:#a39e94; --fg-faint:#8d887f;
+  --accent:#e85f64; --accent-hover:#f0787c; --accent-soft:rgb(232 95 100 / .10); --on-fill:#131211;
+  --success:#4cc38a; --success-soft:rgb(76 195 138 / .14);
+  --warning:#f0a04b; --warning-soft:rgb(240 160 75 / .14);
+  --danger:#f26d72; --danger-soft:rgb(242 109 114 / .14);
+  --info:#58a9e0; --info-soft:rgb(88 169 224 / .14);
+}
+* { box-sizing:border-box; }
+html, body { margin:0; padding:0; }
+body { background:var(--canvas); color:var(--fg); font-family:Manrope, system-ui, sans-serif; font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased; }
+.num { font-variant-numeric:tabular-nums; }
+.mono { font-family:'JetBrains Mono', ui-monospace, monospace; }
+a { color:inherit; }
+button { font:inherit; color:inherit; }
+.i { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.75; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+.i.lg { width:20px; height:20px; }
+
+/* ---------- chrome ---------- */
+.topbar { background:var(--surface); border-bottom:1px solid var(--line); }
+.topbar-in { max-width:1120px; margin:0 auto; padding:0 24px; height:52px; display:flex; align-items:center; gap:20px; }
+.brand { display:flex; align-items:center; gap:8px; font-weight:700; letter-spacing:-.02em; font-size:15px; }
+.brand .i { color:var(--accent); width:20px; height:20px; }
+.nav { display:flex; gap:4px; font-size:13px; color:var(--fg-muted); }
+.nav a { text-decoration:none; padding:6px 10px; border-radius:999px; }
+.nav a.on { background:var(--accent-soft); color:var(--accent); font-weight:600; }
+.spacer { flex:1; }
+.iconbtn { width:32px; height:32px; border-radius:999px; border:0; background:transparent; color:var(--fg-faint); display:inline-flex; align-items:center; justify-content:center; }
+.avatar { width:30px; height:30px; border-radius:999px; background:var(--accent); color:var(--on-fill); display:inline-flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; }
+.burger { display:none; }
+
+.page { max-width:1120px; margin:0 auto; padding:24px 24px 64px; }
+.crumb { font-size:13px; color:var(--fg-muted); margin:0 0 6px; }
+.titlerow { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+h1 { margin:0; font-size:28px; font-weight:700; letter-spacing:-.02em; line-height:1.2; }
+.titlerow .actions { margin-left:auto; display:flex; gap:6px; align-items:center; }
+.badge { display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:3px 10px; font-size:12px; font-weight:500; background:var(--surface-2); color:var(--fg-muted); white-space:nowrap; }
+.badge.info { background:var(--info-soft); color:var(--info); }
+.badge.ok { background:var(--success-soft); color:var(--success); }
+.badge.warn { background:var(--warning-soft); color:var(--warning); }
+.badge.bad { background:var(--danger-soft); color:var(--danger); }
+.tabs { display:flex; gap:24px; border-bottom:1px solid var(--line); margin:20px 0 24px; font-size:14px; }
+.tabs a { text-decoration:none; color:var(--fg-muted); padding:10px 0; border-bottom:2px solid transparent; margin-bottom:-1px; white-space:nowrap; }
+.tabs a.on { color:var(--fg); font-weight:600; border-color:var(--fg); }
+.tabs .n { color:var(--fg-faint); font-size:12px; margin-left:4px; }
+
+/* ---------- primitives ---------- */
+.btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; height:40px; padding:0 18px; border-radius:999px; font-size:14px; font-weight:600; border:1px solid transparent; cursor:pointer; white-space:nowrap; }
+.btn.primary { background:var(--accent); color:var(--on-fill); }
+.btn.secondary[disabled] { color:var(--fg-faint); cursor:not-allowed; }
+.btn.primary[disabled] { background:var(--surface-3); color:var(--fg-faint); cursor:not-allowed; }
+.btn.secondary { background:var(--surface); border-color:var(--line-strong); color:var(--fg); }
+.btn.ghost { background:transparent; color:var(--fg-muted); font-weight:500; }
+.btn.sm { height:32px; padding:0 12px; font-size:13px; }
+.btn.lg { height:48px; font-size:15px; }
+.btn.block { width:100%; }
+.card { background:var(--surface); border:1px solid var(--line); border-radius:12px; }
+.eyebrow { font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--fg-faint); margin:0; }
+.link { font-size:13px; color:var(--fg-muted); text-decoration:underline; text-underline-offset:3px; text-decoration-color:var(--line-strong); white-space:nowrap; }
+.muted { color:var(--fg-muted); }
+.faint { color:var(--fg-faint); }
+.dot { width:8px; height:8px; border-radius:999px; background:var(--success); display:inline-block; flex:none; }
+.dot.warn { background:var(--warning); }
+.dot.bad { background:var(--danger); }
+.dot.info { background:var(--info); }
+
+/* type mix: a thin stacked bar, one hue per type, neutral steps (colour is not the info) */
+.mix { display:flex; height:6px; border-radius:999px; overflow:hidden; gap:2px; width:120px; }
+.mix span { background:var(--fg-muted); }
+.mix span:nth-child(2) { background:var(--fg-faint); opacity:.7; }
+.mix span:nth-child(3) { background:var(--line-strong); }
+
+/* sticky action bar (phones) */
+.dock { display:none; }
+
+/* ---------- variant switcher (not part of the design) ---------- */
+.switch { position:fixed; right:16px; bottom:16px; z-index:10; display:flex; gap:4px; padding:4px; background:var(--surface); border:1px solid var(--line); border-radius:999px; box-shadow:0 10px 32px -12px rgb(28 25 20 / .24); font-size:12px; }
+.switch a { text-decoration:none; padding:6px 10px; border-radius:999px; color:var(--fg-muted); }
+.switch a.on { background:var(--fg); color:var(--canvas); }
+html.shot .switch { display:none; }
+
+[data-variant] { display:none; }
+html[data-v="a"] [data-variant="a"], html[data-v="b"] [data-variant="b"], html[data-v="c"] [data-variant="c"] { display:block; }
+html[data-s="ready"] [data-state]:not([data-state~="ready"]),
+html[data-s="warn"] [data-state]:not([data-state~="warn"]),
+html[data-s="blocked"] [data-state]:not([data-state~="blocked"]),
+html[data-s="scheduled"] [data-state]:not([data-state~="scheduled"]) { display:none !important; }
+
+/* =========================================================
+   A · Summary + launch panel
+   ========================================================= */
+.a-grid { display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:24px; align-items:start; }
+.a-sum .group { padding:16px 20px 4px; }
+.a-sum .group + .group { border-top:1px solid var(--line); }
+.a-sum .group .eyebrow { margin-bottom:4px; }
+.a-row { display:grid; grid-template-columns:132px minmax(0,1fr) auto; gap:16px; align-items:baseline; padding:9px 0; }
+.a-row + .a-row { border-top:1px solid var(--line); }
+.a-row .k { color:var(--fg-muted); font-size:13px; }
+.a-row .v b { font-weight:600; }
+.a-row .v .d { color:var(--fg-muted); font-size:13px; }
+.a-row .v .d::before { content:"· "; color:var(--fg-faint); }
+.a-row .v .d.block { display:block; }
+.a-row .v .d.block::before { content:none; }
+.a-row .chev { display:none; color:var(--fg-faint); }
+.a-panel { position:sticky; top:24px; padding:20px; }
+.a-panel .status { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--fg-muted); }
+.a-panel h2 { margin:10px 0 4px; font-size:20px; font-weight:700; letter-spacing:-.01em; line-height:1.25; }
+.a-panel .lede { margin:0 0 18px; color:var(--fg-muted); font-size:13px; }
+.a-panel .facts { display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--line); border:1px solid var(--line); border-radius:10px; overflow:hidden; margin-bottom:18px; }
+.a-panel .facts div { background:var(--surface); padding:10px 12px; }
+.a-panel .facts b { display:block; font-size:18px; font-weight:700; letter-spacing:-.01em; }
+.a-panel .facts span { font-size:12px; color:var(--fg-muted); }
+.a-panel .stack { display:grid; gap:8px; }
+.a-steps { list-style:none; margin:18px 0 0; padding:16px 0 0; border-top:1px solid var(--line); display:grid; gap:10px; counter-reset:s; }
+.a-steps li { display:flex; gap:10px; font-size:13px; color:var(--fg-muted); }
+.a-steps li::before { counter-increment:s; content:counter(s); flex:none; width:20px; height:20px; border-radius:999px; background:var(--surface-2); color:var(--fg-muted); font-size:11px; font-weight:600; display:inline-flex; align-items:center; justify-content:center; }
+.a-sched { display:flex; gap:10px; align-items:flex-start; background:var(--info-soft); color:var(--info); border-radius:10px; padding:10px 12px; font-size:13px; margin-bottom:18px; }
+.a-sched b { color:var(--fg); font-weight:600; display:block; }
+
+/* =========================================================
+   B · Pre-flight checklist
+   ========================================================= */
+.b-wrap { max-width:760px; margin:0 auto; }
+.b-head { display:flex; gap:16px; align-items:center; margin:8px 0 20px; }
+.b-ring { width:56px; height:56px; flex:none; position:relative; }
+.b-ring svg { transform:rotate(-90deg); }
+.b-ring .track { stroke:var(--surface-3); }
+.b-ring .fill { stroke:var(--success); stroke-linecap:round; }
+html[data-s="warn"] .b-ring .fill { stroke:var(--warning); }
+html[data-s="blocked"] .b-ring .fill { stroke:var(--danger); }
+.b-ring .c { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; }
+.b-head h2 { margin:0; font-size:20px; font-weight:700; letter-spacing:-.01em; }
+.b-head p { margin:2px 0 0; color:var(--fg-muted); }
+.b-list { list-style:none; margin:0; padding:0; }
+.b-item { display:grid; grid-template-columns:24px minmax(0,1fr) auto; gap:12px; align-items:start; padding:14px 20px; }
+.b-item + .b-item { border-top:1px solid var(--line); }
+.b-item .ico { margin-top:1px; }
+.b-item.ok .ico { color:var(--success); }
+.b-item.warn { background:linear-gradient(var(--warning-soft), var(--warning-soft)); }
+.b-item.warn .ico { color:var(--warning); }
+.b-item.bad { background:var(--danger-soft); }
+.b-item.bad .ico { color:var(--danger); }
+.b-item .t { font-weight:600; }
+.b-item .d { color:var(--fg-muted); font-size:13px; margin-top:1px; }
+.b-item .go { align-self:center; }
+.b-item .go .chev { display:none; color:var(--fg-faint); }
+a.btn { text-decoration:none; }
+.b-item:first-child { border-radius:12px 12px 0 0; }
+.b-item:last-child { border-radius:0 0 12px 12px; }
+.b-sep { font-size:11px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:var(--fg-faint); padding:14px 20px 6px; border-top:1px solid var(--line); }
+.b-action { margin-top:16px; display:flex; align-items:center; gap:16px; padding:16px 20px; }
+.b-action p { margin:0; color:var(--fg-muted); font-size:13px; flex:1; }
+.b-action .btns { display:flex; gap:8px; }
+
+/* =========================================================
+   C · What the class will see
+   ========================================================= */
+.c-grid { display:grid; grid-template-columns:minmax(0,1fr) 360px; gap:32px; align-items:start; }
+.c-stats { display:grid; grid-template-columns:repeat(4,1fr); }
+.c-stats > div { padding:16px 20px; }
+.c-stats > div + div { border-left:1px solid var(--line); }
+.c-stats .k { font-size:12px; color:var(--fg-muted); display:flex; align-items:center; gap:6px; }
+.c-stats .k .i { width:14px; height:14px; color:var(--fg-faint); }
+.c-stats b { display:block; font-size:28px; font-weight:700; letter-spacing:-.02em; line-height:1.2; margin-top:4px; }
+.c-stats .s { font-size:12px; color:var(--fg-faint); }
+.c-set { margin-top:16px; }
+.c-set header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px 0; }
+.c-set dl { display:grid; grid-template-columns:1fr 1fr; margin:0; padding:6px 20px 12px; column-gap:32px; }
+.c-set dl > div { display:flex; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); }
+.c-set dl > div:nth-last-child(-n+2) { border-bottom:0; }
+.c-set dt { color:var(--fg-muted); font-size:13px; width:112px; flex:none; }
+.c-set dd { margin:0; font-weight:500; }
+.c-go { margin-top:24px; display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+.c-go p { margin:0 0 0 4px; color:var(--fg-muted); font-size:13px; }
+.c-prev .eyebrow { display:flex; align-items:center; gap:6px; margin-bottom:10px; }
+.phone { border:1px solid var(--line-strong); border-radius:28px; padding:10px; background:var(--surface-2); }
+.phone .scr { background:var(--canvas); border-radius:20px; overflow:hidden; border:1px solid var(--line); }
+.phone .bar { height:36px; background:var(--surface); border-bottom:1px solid var(--line); display:flex; align-items:center; gap:6px; padding:0 12px; font-weight:700; font-size:12px; }
+.phone .bar .i { color:var(--accent); width:14px; height:14px; }
+.phone .body { padding:22px 18px 20px; text-align:center; }
+.phone .ey { font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--fg-faint); font-weight:600; }
+.phone h3 { margin:6px 0 2px; font-size:18px; letter-spacing:-.01em; }
+.phone .f { font-size:12px; color:var(--fg-muted); }
+.phone .wait { margin:18px auto 0; display:inline-flex; gap:8px; align-items:center; font-size:12px; color:var(--fg-muted); }
+.phone .wait .dot { background:var(--fg-faint); }
+.phone .rules { margin-top:18px; text-align:left; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:2px 12px; }
+.phone .rules div { display:flex; gap:8px; padding:9px 0; font-size:12px; }
+.phone .rules div + div { border-top:1px solid var(--line); }
+.phone .rules .i { width:14px; height:14px; color:var(--fg-faint); margin-top:2px; }
+.phone .rules b { font-weight:600; display:block; }
+.phone .rules span { color:var(--fg-muted); }
+.c-prev .cap { font-size:12px; color:var(--fg-faint); margin:10px 4px 0; text-align:center; }
+.c-prevrow { display:none; }
+
+/* ---------- phones ---------- */
+@media (max-width: 760px) {
+  .topbar-in { padding:0 16px; gap:12px; }
+  .nav { display:none; }
+  .burger { display:inline-flex; margin-left:-6px; }
+  .page { padding:16px 16px 140px; }
+  h1 { font-size:22px; }
+  .titlerow .actions .btn { display:none; }
+  .titlerow { gap:8px; }
+  .tabs { gap:20px; margin:16px 0 16px; }
+
+  .dock { display:flex; position:fixed; left:0; right:0; bottom:0; z-index:5; gap:8px; padding:12px 16px calc(12px + env(safe-area-inset-bottom)); background:var(--surface); border-top:1px solid var(--line); align-items:center; }
+  .dock .btn.primary { flex:1; height:48px; font-size:15px; }
+  .dock .btn.secondary { height:48px; width:48px; padding:0; }
+  .dock { flex-wrap:wrap; row-gap:8px; }
+  .dock .meta { flex-basis:100%; font-size:12px; color:var(--fg-muted); text-align:center; }
+
+  /* A */
+  .a-grid { grid-template-columns:1fr; gap:16px; }
+  .a-panel { position:static; order:-1; padding:16px; }
+  .a-panel h2 { font-size:18px; margin-bottom:14px; }
+  .a-panel .stack, .a-panel .lede { display:none; }
+  .a-panel .facts { margin-bottom:0; }
+  .a-panel .a-steps { display:none; }
+  .a-panel .a-sched { margin:0 0 12px; }
+  .a-sum .group { padding:12px 16px 2px; }
+  .a-row { grid-template-columns:minmax(0,1fr) auto; gap:4px 12px; padding:10px 0; }
+  .a-row .k { grid-column:1; font-size:12px; }
+  .a-row .v { grid-column:1; }
+  .a-row .edit { display:none; }
+  .a-row .chev { display:block; grid-column:2; grid-row:1 / span 2; align-self:center; }
+
+  /* B */
+  .b-head { margin-top:0; }
+  .b-head h2 { font-size:18px; }
+  .b-item { padding:12px 16px; grid-template-columns:22px minmax(0,1fr) auto; }
+  .b-item .go .link { display:none; }
+  .b-item .go .chev { display:block; }
+  .b-item .go:has(.btn) { grid-column:2 / span 2; justify-self:start; }
+  .b-action { display:none; }
+
+  /* C */
+  .c-grid { grid-template-columns:1fr; gap:16px; }
+  .c-stats { grid-template-columns:1fr 1fr; }
+  .c-stats > div { padding:12px 16px; }
+  .c-stats > div + div { border-left:0; }
+  .c-stats > div:nth-child(2n) { border-left:1px solid var(--line); }
+  .c-stats > div:nth-child(n+3) { border-top:1px solid var(--line); }
+  .c-stats b { font-size:22px; }
+  .c-set dl { grid-template-columns:1fr; padding:4px 16px 8px; }
+  .c-set dl > div:nth-last-child(2) { border-bottom:1px solid var(--line); }
+  .c-set header { padding:12px 16px 0; }
+  .c-go, .c-prev { display:none; }
+  .c-prevrow { display:flex; align-items:center; gap:12px; padding:14px 16px; margin-top:16px; }
+  .c-prevrow .t { font-weight:600; }
+  .c-prevrow .d { font-size:12px; color:var(--fg-muted); }
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="logo" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.2a2.9 2.9 0 0 1 5.6 1c0 1.9-2.8 2.4-2.8 2.4"/><path d="M12 17h.01"/></symbol>
+    <symbol id="rocket" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></symbol>
+    <symbol id="cal" viewBox="0 0 24 24"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h5"/><path d="M17.5 17.5 16 16.3V14"/><circle cx="16" cy="16" r="6"/></symbol>
+    <symbol id="ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="warn" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+    <symbol id="bad" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></symbol>
+    <symbol id="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+    <symbol id="list" viewBox="0 0 24 24"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></symbol>
+    <symbol id="eye" viewBox="0 0 24 24"><path d="M2.06 12.35a1 1 0 0 1 0-.7 10.75 10.75 0 0 1 19.88 0 1 1 0 0 1 0 .7 10.75 10.75 0 0 1-19.88 0"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+    <symbol id="moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+    <symbol id="menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+    <symbol id="msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="arrow" viewBox="0 0 24 24"><path d="M4 12h16M14 6l6 6-6 6"/></symbol>
+    <symbol id="shield" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 4.4 3.2 8.2 8 9 4.8-.8 8-4.6 8-9V6l-8-3Z"/></symbol>
+    <symbol id="hourglass" viewBox="0 0 24 24"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></symbol>
+    <symbol id="refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+    <symbol id="phone" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></symbol>
+  </defs>
+</svg>
+
+<header class="topbar">
+  <div class="topbar-in">
+    <button class="iconbtn burger" aria-label="Menu"><svg class="i lg"><use href="#menu"/></svg></button>
+    <span class="brand"><svg class="i"><use href="#logo"/></svg>Quiz</span>
+    <nav class="nav"><a href="#" class="on">Cours</a><a href="#">Pools</a><a href="#">Évaluations</a></nav>
+    <span class="spacer"></span>
+    <button class="iconbtn" aria-label="Thème" onclick="toggleTheme()"><svg class="i lg"><use href="#moon"/></svg></button>
+    <span class="avatar">LP</span>
+  </div>
+</header>
+
+<main class="page">
+  <p class="crumb">CULTGEN · Culture générale 2026-2027</p>
+  <div class="titlerow">
+    <h1>Musique ancienne : Monteverdi</h1>
+    <span class="badge" data-state="ready warn blocked">Brouillon</span>
+    <span class="badge info" data-state="scheduled">Planifié</span>
+    <div class="actions">
+      <button class="btn secondary sm"><svg class="i"><use href="#eye"/></svg>Aperçu</button>
+      <button class="iconbtn" aria-label="Plus"><svg class="i lg"><use href="#more"/></svg></button>
+    </div>
+  </div>
+  <nav class="tabs"><a href="#">Questions<span class="n">5</span></a><a href="#">Temps et mode</a><a href="#" class="on">Lancement</a></nav>
+
+  <!-- =====================================================
+       A · Summary + launch panel
+       ===================================================== -->
+  <section data-variant="a">
+    <div class="a-grid">
+      <div class="card a-sum">
+        <div class="group">
+          <p class="eyebrow">Contenu</p>
+          <div class="a-row"><span class="k">Questions</span><span class="v"><b>5 questions</b> <span class="d">3 QCM, 1 réponse courte, 1 texte à trous</span></span><a class="link edit" href="#">Modifier</a><svg class="i chev"><use href="#chev"/></svg></div>
+          <div class="a-row"><span class="k">Points</span><span class="v"><b class="num">5 pts</b> <span class="d">échelle linéaire</span></span><a class="link edit" href="#">Modifier</a><svg class="i chev"><use href="#chev"/></svg></div>
+        </div>
+        <div class="group">
+          <p class="eyebrow">Participants</p>
+          <div class="a-row"><span class="k">Classe</span><span class="v"><b>24 étudiants</b> <span class="d">CULTGEN-2026, dont 2 sans compte lié</span></span><a class="link edit" href="#">Voir la liste</a><svg class="i chev"><use href="#chev"/></svg></div>
+          <div class="a-row"><span class="k">Accès</span><span class="v"><b>Toute la classe</b> <span class="d">sans code, tous réseaux</span></span><a class="link edit" href="#">Modifier</a><svg class="i chev"><use href="#chev"/></svg></div>
+        </div>
+        <div class="group">
+          <p class="eyebrow">Temps</p>
+          <div class="a-row"><span class="k">Fin</span><span class="v"><b>Vous le fermez</b> <span class="d">pas de limite de temps</span></span><a class="link edit" href="#">Modifier</a><svg class="i chev"><use href="#chev"/></svg></div>
+          <div class="a-row"><span class="k">Durée estimée</span><span class="v"><b class="num">≈ 8 min</b> <span class="d">d'après les types de questions</span></span><span></span><svg class="i chev" style="visibility:hidden"><use href="#chev"/></svg></div>
+          <div class="a-row"><span class="k">Départ</span><span class="v"><b>Vous donnez le départ</b> <span class="d">depuis le tableau de bord</span></span><a class="link edit" href="#">Modifier</a><svg class="i chev"><use href="#chev"/></svg></div>
+        </div>
+        <div class="group">
+          <p class="eyebrow">Déroulement et correction</p>
+          <div class="a-row"><span class="k">Navigation</span><span class="v"><b>Libre</b> <span class="d">une question par écran, ordre mélangé</span></span><a class="link edit" href="#">Modifier</a><svg class="i chev"><use href="#chev"/></svg></div>
+          <div class="a-row"><span class="k">Correction</span><span class="v"><b>Immédiate</b> <span class="d">solution et explication montrées</span></span><a class="link edit" href="#">Modifier</a><svg class="i chev"><use href="#chev"/></svg></div>
+        </div>
+      </div>
+
+      <aside class="card a-panel">
+        <div class="status" data-state="ready"><span class="dot"></span>Prêt à lancer</div>
+        <div class="status" data-state="scheduled"><span class="dot info"></span>Planifié</div>
+        <h2 data-state="ready">Lancez maintenant, ou planifiez.</h2>
+        <h2 data-state="scheduled">La salle s'ouvrira toute seule.</h2>
+        <p class="lede" data-state="ready">Rien n'est visible des étudiants avant que vous ouvriez la salle.</p>
+        <div class="a-sched" data-state="scheduled"><svg class="i"><use href="#cal"/></svg><span><b>Lundi 29 septembre, 10:15</b>Les 24 étudiants la verront apparaître dans leur accueil.</span></div>
+        <div class="facts">
+          <div><b class="num">24</b><span>étudiants attendus</span></div>
+          <div><b class="num">≈ 8 min</b><span>sans limite</span></div>
+        </div>
+        <div class="stack">
+          <button class="btn primary lg block" data-state="ready"><svg class="i"><use href="#rocket"/></svg>Ouvrir la salle d'attente</button>
+          <button class="btn secondary block" data-state="ready"><svg class="i"><use href="#cal"/></svg>Planifier…</button>
+          <button class="btn primary lg block" data-state="scheduled"><svg class="i"><use href="#rocket"/></svg>Ouvrir maintenant</button>
+          <button class="btn secondary block" data-state="scheduled">Repasser en brouillon</button>
+        </div>
+        <ol class="a-steps">
+          <li>Les étudiants entrent dans la salle d'attente.</li>
+          <li>Vous donnez le départ depuis le tableau de bord.</li>
+          <li>Vous fermez quand vous le décidez.</li>
+        </ol>
+      </aside>
+    </div>
+
+    <div class="dock">
+      <span class="meta" data-state="ready">Rien n'est visible des étudiants avant l'ouverture.</span>
+      <button class="btn secondary" aria-label="Planifier" data-state="ready"><svg class="i lg"><use href="#cal"/></svg></button>
+      <button class="btn primary" data-state="ready"><svg class="i"><use href="#rocket"/></svg>Ouvrir la salle d'attente</button>
+      <button class="btn secondary" data-state="scheduled" style="width:auto;padding:0 16px">Brouillon</button>
+      <button class="btn primary" data-state="scheduled"><svg class="i"><use href="#rocket"/></svg>Ouvrir maintenant</button>
+    </div>
+  </section>
+
+  <!-- =====================================================
+       B · Pre-flight checklist
+       ===================================================== -->
+  <section data-variant="b">
+    <div class="b-wrap">
+      <div class="b-head">
+        <div class="b-ring">
+          <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden="true">
+            <circle class="track" cx="28" cy="28" r="24" fill="none" stroke-width="5"/>
+            <circle class="fill" cx="28" cy="28" r="24" fill="none" stroke-width="5" data-state="ready" stroke-dasharray="150.8 150.8"/>
+            <circle class="fill" cx="28" cy="28" r="24" fill="none" stroke-width="5" data-state="warn" stroke-dasharray="107.7 150.8"/>
+            <circle class="fill" cx="28" cy="28" r="24" fill="none" stroke-width="5" data-state="blocked" stroke-dasharray="86.2 150.8"/>
+          </svg>
+          <span class="c num" data-state="ready">7/7</span>
+          <span class="c num" data-state="warn">5/7</span>
+          <span class="c num" data-state="blocked">4/7</span>
+        </div>
+        <div>
+          <h2 data-state="ready">Tout est prêt.</h2>
+          <h2 data-state="warn">Presque prêt.</h2>
+          <h2 data-state="blocked">Pas encore prêt.</h2>
+          <p data-state="ready">Sept vérifications passées. Rien n'est visible des étudiants avant l'ouverture.</p>
+          <p data-state="warn">Deux points à regarder ; aucun n'empêche le lancement.</p>
+          <p data-state="blocked">Une évaluation sans question ne peut pas s'ouvrir.</p>
+        </div>
+      </div>
+
+      <ul class="card b-list">
+        <li class="b-item ok" data-state="ready warn"><svg class="i lg ico"><use href="#ok"/></svg><div><div class="t">5 questions, 5 points</div><div class="d">3 QCM, 1 réponse courte, 1 texte à trous</div></div><span class="go"><a class="link" href="#">Questions</a><svg class="i chev"><use href="#chev"/></svg></span></li>
+        <li class="b-item bad" data-state="blocked"><svg class="i lg ico"><use href="#bad"/></svg><div><div class="t">Aucune question</div><div class="d">Ajoutez au moins une question depuis un pool du cours.</div></div><span class="go"><a class="btn secondary sm" href="#">Ajouter</a></span></li>
+        <li class="b-item warn" data-state="warn"><svg class="i lg ico"><use href="#warn"/></svg><div><div class="t">1 question a une version plus récente</div><div class="d">« L'Orfeo, 1607 » est en v2 ici, la v3 est publiée dans le pool.</div></div><span class="go"><a class="btn secondary sm" href="#"><svg class="i"><use href="#refresh"/></svg>Mettre à jour</a></span></li>
+        <li class="b-item ok" data-state="ready blocked"><svg class="i lg ico"><use href="#ok"/></svg><div><div class="t">24 étudiants dans la classe</div><div class="d">CULTGEN-2026, tous avec un compte lié</div></div><span class="go"><a class="link" href="#">Voir la liste</a><svg class="i chev"><use href="#chev"/></svg></span></li>
+        <li class="b-item warn" data-state="warn"><svg class="i lg ico"><use href="#warn"/></svg><div><div class="t">2 étudiants sans compte lié</div><div class="d">Ils ne verront l'évaluation qu'après s'être connectés une première fois.</div></div><span class="go"><a class="link" href="#">Voir qui</a><svg class="i chev"><use href="#chev"/></svg></span></li>
+        <li class="b-item ok"><svg class="i lg ico"><use href="#ok"/></svg><div><div class="t">Vous le fermez, ≈ 8 min estimées</div><div class="d">Pas de limite de temps ; vous donnez le départ depuis le tableau de bord</div></div><span class="go"><a class="link" href="#">Temps et mode</a><svg class="i chev"><use href="#chev"/></svg></span></li>
+        <li class="b-item ok"><svg class="i lg ico"><use href="#ok"/></svg><div><div class="t">Correction immédiate</div><div class="d">Solution et explication montrées à la validation de chaque question</div></div><span class="go"><a class="link" href="#">Temps et mode</a><svg class="i chev"><use href="#chev"/></svg></span></li>
+        <li class="b-item ok"><svg class="i lg ico"><use href="#ok"/></svg><div><div class="t">Navigation libre, ordre mélangé</div><div class="d">Une question par écran, une seule tentative, sans code d'accès</div></div><span class="go"><a class="link" href="#">Temps et mode</a><svg class="i chev"><use href="#chev"/></svg></span></li>
+      </ul>
+
+      <div class="card b-action">
+        <p data-state="ready warn">La salle s'ouvre maintenant ; vous donnez le départ depuis le tableau de bord.</p>
+        <p data-state="blocked">Ajoutez une question pour pouvoir ouvrir la salle.</p>
+        <div class="btns">
+          <button class="btn secondary" data-state="ready warn"><svg class="i"><use href="#cal"/></svg>Planifier…</button>
+          <button class="btn primary" data-state="ready warn"><svg class="i"><use href="#rocket"/></svg>Ouvrir la salle d'attente</button>
+          <button class="btn secondary" disabled data-state="blocked"><svg class="i"><use href="#cal"/></svg>Planifier…</button>
+          <button class="btn primary" disabled data-state="blocked"><svg class="i"><use href="#rocket"/></svg>Ouvrir la salle d'attente</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="dock">
+      <span class="meta" data-state="warn">2 points à regarder, rien de bloquant</span>
+      <span class="meta" data-state="blocked">Ajoutez une question pour ouvrir la salle</span>
+      <button class="btn secondary" aria-label="Planifier" data-state="ready warn"><svg class="i lg"><use href="#cal"/></svg></button>
+      <button class="btn primary" data-state="ready warn"><svg class="i"><use href="#rocket"/></svg>Ouvrir la salle d'attente</button>
+      <button class="btn secondary" aria-label="Planifier" disabled data-state="blocked"><svg class="i lg"><use href="#cal"/></svg></button>
+      <button class="btn primary" disabled data-state="blocked"><svg class="i"><use href="#rocket"/></svg>Ouvrir la salle d'attente</button>
+    </div>
+  </section>
+
+  <!-- =====================================================
+       C · What the class will see
+       ===================================================== -->
+  <section data-variant="c">
+    <div class="c-grid">
+      <div>
+        <div class="card c-stats">
+          <div><span class="k"><svg class="i"><use href="#users"/></svg>Étudiants</span><b class="num">24</b><span class="s">CULTGEN-2026</span></div>
+          <div><span class="k"><svg class="i"><use href="#list"/></svg>Questions</span><b class="num">5</b><span class="s">3 QCM · 1 courte · 1 trous</span></div>
+          <div><span class="k"><svg class="i"><use href="#ok"/></svg>Points</span><b class="num">5</b><span class="s">échelle linéaire</span></div>
+          <div><span class="k"><svg class="i"><use href="#hourglass"/></svg>Durée</span><b class="num">≈ 8 min</b><span class="s">estimée · pas de limite</span></div>
+        </div>
+
+        <div class="card c-set">
+          <header><p class="eyebrow">Règles de la session</p><a class="link" href="#">Temps et mode</a></header>
+          <dl>
+            <div><dt>Fin</dt><dd>Vous le fermez</dd></div>
+            <div><dt>Départ</dt><dd>Vous le donnez</dd></div>
+            <div><dt>Navigation</dt><dd>Libre, une par écran</dd></div>
+            <div><dt>Ordre</dt><dd>Mélangé</dd></div>
+            <div><dt>Tentatives</dt><dd>Une seule</dd></div>
+            <div><dt>Correction</dt><dd>Immédiate</dd></div>
+            <div><dt>Accès</dt><dd>Sans code</dd></div>
+            <div><dt>Pénalités</dt><dd>Aucune</dd></div>
+          </dl>
+        </div>
+
+        <div class="c-prevrow card">
+          <svg class="i lg faint"><use href="#phone"/></svg>
+          <div style="flex:1"><div class="t">Ce que voient les étudiants</div><div class="d">La salle d'attente, telle qu'elle s'affichera</div></div>
+          <svg class="i faint"><use href="#chev"/></svg>
+        </div>
+
+        <div class="c-go">
+          <button class="btn primary lg"><svg class="i"><use href="#rocket"/></svg>Ouvrir la salle d'attente</button>
+          <button class="btn secondary lg"><svg class="i"><use href="#cal"/></svg>Planifier…</button>
+          <p>Rien n'est visible avant l'ouverture.</p>
+        </div>
+      </div>
+
+      <aside class="c-prev">
+        <p class="eyebrow"><svg class="i"><use href="#phone"/></svg>Ce que verront les étudiants</p>
+        <div class="phone"><div class="scr">
+          <div class="bar"><svg class="i"><use href="#logo"/></svg>Quiz</div>
+          <div class="body">
+            <div class="ey">Salle d'attente</div>
+            <h3>Musique ancienne : Monteverdi</h3>
+            <div class="f">Culture générale · 5 questions · sans limite</div>
+            <div class="wait"><span class="dot"></span>L'enseignant va donner le départ.</div>
+            <div class="rules">
+              <div><svg class="i"><use href="#arrow"/></svg><p style="margin:0"><b>Navigation libre</b><span>Vous pouvez revenir sur une question.</span></p></div>
+              <div><svg class="i"><use href="#msg"/></svg><p style="margin:0"><b>Correction immédiate</b><span>Vous voyez la solution après chaque question.</span></p></div>
+              <div><svg class="i"><use href="#shield"/></svg><p style="margin:0"><b>Une seule tentative</b><span>Vos réponses sont enregistrées en continu.</span></p></div>
+            </div>
+          </div>
+        </div></div>
+        <p class="cap">Aperçu en direct de la salle d'attente</p>
+      </aside>
+    </div>
+
+    <div class="dock">
+      <span class="meta">Rien n'est visible avant l'ouverture</span>
+      <button class="btn secondary" aria-label="Planifier"><svg class="i lg"><use href="#cal"/></svg></button>
+      <button class="btn primary"><svg class="i"><use href="#rocket"/></svg>Ouvrir la salle d'attente</button>
+    </div>
+  </section>
+</main>
+
+<nav class="switch" aria-label="Variante">
+  <a href="?v=a">A · Récap</a><a href="?v=b&state=warn">B · Vérifications</a><a href="?v=c">C · Côté étudiant</a>
+</nav>
+
+<script>
+  const q = new URLSearchParams(location.search);
+  const v = q.get("v") || "a";
+  const root = document.documentElement;
+  root.dataset.v = v;
+  root.dataset.s = q.get("state") || "ready";
+  if (q.get("shot")) root.classList.add("shot");
+  if (q.get("theme") === "dark" || (!q.get("theme") && localStorage.getItem("quiz-theme") === "dark")) root.classList.add("dark");
+  document.querySelectorAll(".switch a").forEach((a) => a.classList.toggle("on", a.getAttribute("href").startsWith("?v=" + v)));
+  function toggleTheme() {
+    root.classList.toggle("dark");
+    localStorage.setItem("quiz-theme", root.classList.contains("dark") ? "dark" : "light");
+  }
+</script>
+</body>
+</html>
