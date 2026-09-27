@@ -2,6 +2,7 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
+import { availableParallelism } from "node:os";
 import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
@@ -54,6 +55,9 @@ export default defineConfig({
     },
   },
   test: {
+    // Capped so several agents testing at once cannot exhaust a
+    // workstation's RAM (apps/api/vitest.config.ts says why).
+    maxWorkers: Number(process.env.VITEST_MAX_WORKERS) || Math.max(1, Math.min(6, availableParallelism() - 1)),
     // Vitest 4 removed `environmentMatchGlobs`; test projects are its
     // replacement. Two of them, so the pure-logic suite keeps running in
     // `node` (fast, no DOM to boot) while the component suite gets jsdom,

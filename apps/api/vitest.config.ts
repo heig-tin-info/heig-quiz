@@ -1,3 +1,4 @@
+import { availableParallelism } from "node:os";
 import { defineConfig } from "vitest/config";
 
 /**
@@ -7,11 +8,18 @@ import { defineConfig } from "vitest/config";
  * measure of machine load, not of the code under test — a new test file used
  * to push unrelated files over the edge. Same posture as
  * apps/codespace/vitest.config.ts.
+ *
+ * `maxWorkers` is capped for the same reason, and for memory: each worker
+ * holds a PGlite of ~800 MB, and several agents testing at once on one
+ * workstation once exhausted its RAM. Never above vitest's own default
+ * (cores - 1), so a small CI runner is not oversubscribed.
+ * VITEST_MAX_WORKERS overrides it.
  */
 export default defineConfig({
   test: {
     include: ["src/**/*.test.ts"],
     testTimeout: 60_000,
     hookTimeout: 120_000,
+    maxWorkers: Number(process.env.VITEST_MAX_WORKERS) || Math.max(1, Math.min(6, availableParallelism() - 1)),
   },
 });
