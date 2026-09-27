@@ -78,6 +78,11 @@ const scenes = [
   { name: "course-template-use", role: "teacher", path: "/", fold: true, act: (p) => p.getByRole("button", { name: /use in a classroom|utiliser dans une classe/i }).first().click() },
   { name: "eval-new-from-template", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /new evaluation|nouvelle évaluation/i }).first().click() },
   { name: "eval-save-template", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: async (p) => { await p.getByRole("button", { name: /^actions$/i }).first().click(); await p.getByRole("menuitem", { name: /save as template|enregistrer comme modèle/i }).click(); } },
+  // #155: a hidden course brought back by "Show hidden", the course menu with
+  // "Hide for me", and a course's archived classrooms behind "Show archived".
+  { name: "teacher-home-hidden", role: "teacher", path: "/", act: (p) => p.getByRole("button", { name: /show hidden|afficher les masqués/i }).first().click() },
+  { name: "course-menu", role: "teacher", path: "/", fold: true, act: (p) => p.getByRole("button", { name: /^actions$/i }).first().click() },
+  { name: "course-archived", role: "teacher", path: "/", act: (p) => p.getByRole("button", { name: /show archived|afficher les archivées/i }).first().click() },
 
   // Classroom. Two tabs: the roster and the evaluations. Without `?tab=` the
   // page opens on the evaluations, which is where the work is once the

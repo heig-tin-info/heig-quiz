@@ -107,6 +107,18 @@ describe("buildCommands: who sees what", () => {
     expect(ids(student).some((id) => id.startsWith(CLASSROOM_COMMAND_PREFIX))).toBe(false);
   });
 
+  it("leaves out the classrooms of a course the teacher hid (#155)", () => {
+    const hidden = makeCourseSummary({
+      id: "k9",
+      hidden: true,
+      classrooms: [makeClassroomSummary({ id: "h1", name: "ALG-2024" })],
+    });
+    const commands = buildCommands(makeContext({ courses: [...courses(1), hidden] }));
+    expect(ids(commands).filter((id) => id.startsWith(CLASSROOM_COMMAND_PREFIX))).toEqual([
+      "classroom:c1",
+    ]);
+  });
+
   it("opens the classroom it names", () => {
     const navigate = vi.fn();
     const commands = buildCommands(makeContext({ navigate, courses: courses(3) }));

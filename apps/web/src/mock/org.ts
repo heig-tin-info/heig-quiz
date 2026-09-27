@@ -86,6 +86,8 @@ export interface Course {
   code: string;
   createdAt: string;
   staff: CourseSummary["staff"];
+  /** The mock teacher hid this course from their navigation (#155). */
+  hidden?: boolean;
 }
 
 export const ME_TEACHER = {
@@ -119,6 +121,16 @@ export const courses: Course[] = [
     code: "EMB",
     createdAt: iso(-200 * D),
     staff: [ME_TEACHER],
+  },
+  // A course the teacher no longer teaches, hidden (#155): out of the list
+  // until "Show hidden", out of the sidebar tree and of the palette.
+  {
+    id: "c3",
+    name: "Algorithmique",
+    code: "ALG",
+    createdAt: iso(-800 * D),
+    staff: [ME_TEACHER],
+    hidden: true,
   },
 ];
 
@@ -160,6 +172,25 @@ export const rooms: Room[] = [
     createdAt: iso(-5 * D),
     archivedAt: null,
     roster: makeStudents(3, 1, "r4"),
+  },
+  {
+    id: "r5",
+    name: "ALG-2024",
+    period: "2024-A",
+    courseId: "c3",
+    createdAt: iso(-750 * D),
+    archivedAt: null,
+    roster: makeStudents(20, 1, "r5"),
+  },
+  // A past year, archived: reached from the course card's "Show archived".
+  {
+    id: "r6",
+    name: "PRG1-2024",
+    period: "2024-A",
+    courseId: "c1",
+    createdAt: iso(-760 * D),
+    archivedAt: iso(-300 * D),
+    roster: makeStudents(22, 1, "r6"),
   },
 ];
 
@@ -287,6 +318,7 @@ const courseSummary = (c: Course): CourseSummary => ({
   name: c.name,
   code: c.code,
   createdAt: c.createdAt,
+  hidden: c.hidden ?? false,
   staff: c.staff,
   classrooms: rooms
     .filter((r) => r.courseId === c.id && !r.archivedAt)
@@ -373,6 +405,14 @@ on("DELETE", "/app/api/courses/:id", (m) => {
       if (rooms[k]!.courseId === c!.id) rooms.splice(k, 1);
     }
   }
+  return undefined;
+});
+on("POST", "/app/api/courses/:id/hide", (m) => {
+  courseOr404(m.groups!.id!).hidden = true;
+  return undefined;
+});
+on("POST", "/app/api/courses/:id/unhide", (m) => {
+  courseOr404(m.groups!.id!).hidden = false;
   return undefined;
 });
 on("POST", "/app/api/courses/:id/staff", (m, body) => {

@@ -88,6 +88,14 @@ export const fr: Record<keyof Dict, string> = {
   "courses.staffRemoveConfirm": "Retirer {name} de l'équipe de « {course} » ?",
   "courses.staffUnknown": "Aucun compte ne s'est encore connecté avec cette adresse.",
 
+  "courses.hide": "Masquer pour moi",
+  "courses.hideHint": "Retiré de votre liste, de la barre latérale et de la palette. Vos collègues le voient toujours.",
+  "courses.unhide": "Réafficher",
+  "courses.hidden": "Masqué",
+  "courses.showHidden": "Afficher les masqués ({n})",
+  "courses.hiddenToast": "{code} est masqué. « Afficher les masqués » le fait réapparaître.",
+  "courses.allHidden": "Tous vos cours sont masqués",
+  "courses.allHiddenBody": "Les cours masqués restent les vôtres : affichez-les pour en ouvrir un ou le réafficher.",
   "classrooms.title": "Classes",
   "classrooms.new": "Nouvelle classe",
   "classrooms.name": "Nom",
@@ -101,6 +109,7 @@ export const fr: Record<keyof Dict, string> = {
   "classrooms.archive": "Archiver",
   "classrooms.unarchive": "Restaurer",
   "classrooms.archived": "archivée",
+  "classrooms.showArchived": "Afficher les archivées ({n})",
   "classrooms.delete": "Supprimer la classe",
   "classrooms.deleteConfirm":
     "Supprimer « {name} » ? Sa liste et ses résultats disparaissent avec elle.",

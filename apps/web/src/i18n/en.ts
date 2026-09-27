@@ -91,6 +91,14 @@ export const en = {
   "courses.staffRemoveConfirm": "Remove {name} from the staff of “{course}”?",
   "courses.staffUnknown": "No account has signed in with this address yet.",
 
+  "courses.hide": "Hide for me",
+  "courses.hideHint": "Out of your list, sidebar and palette. Your colleagues still see it.",
+  "courses.unhide": "Show again",
+  "courses.hidden": "Hidden",
+  "courses.showHidden": "Show hidden ({n})",
+  "courses.hiddenToast": "{code} is hidden. “Show hidden” brings it back.",
+  "courses.allHidden": "All your courses are hidden",
+  "courses.allHiddenBody": "Hidden courses are still yours: show them to open one or to show it again.",
   "classrooms.title": "Classrooms",
   "classrooms.new": "New classroom",
   "classrooms.name": "Name",
@@ -104,6 +112,7 @@ export const en = {
   "classrooms.archive": "Archive",
   "classrooms.unarchive": "Restore",
   "classrooms.archived": "archived",
+  "classrooms.showArchived": "Show archived ({n})",
   "classrooms.delete": "Delete classroom",
   "classrooms.deleteConfirm": "Delete “{name}”? Its roster and results go with it.",
   // The name goes in the label: the button IS the <h1>'s text, so a bare

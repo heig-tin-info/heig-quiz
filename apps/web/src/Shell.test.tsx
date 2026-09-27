@@ -794,6 +794,23 @@ describe("Shell course tree", () => {
     );
   });
 
+  it("leaves a hidden course out of all (#155)", () => {
+    localStorage.setItem(KEY, "all");
+    renderShell({ courses: [COURSES[0]!, { ...COURSES[1]!, hidden: true }], route: { view: "home" } });
+    expect(within(sidebar()).getByRole("button", { name: "PRG1" })).toBeVisible();
+    expect(within(sidebar()).queryByRole("button", { name: "EMB" })).toBeNull();
+  });
+
+  it("keeps a hidden course in the tree while one of its classrooms is the page", () => {
+    localStorage.setItem(KEY, "all");
+    renderShell({
+      courses: [COURSES[0]!, { ...COURSES[1]!, hidden: true }],
+      route: { view: "classroom", id: "r3" },
+    });
+    // The tree says where the reader is before it offers where to go.
+    expect(within(sidebar()).getByText("EMB")).toBeVisible();
+  });
+
   it("is teacher UI only", () => {
     localStorage.setItem(KEY, "all");
     renderShell({ courses: COURSES, teacherUi: false, me: makeMe({ role: "student" }) });

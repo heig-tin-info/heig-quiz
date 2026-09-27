@@ -1,5 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Archive,
+  ArchiveRestore,
+  Eye,
+  EyeOff,
   FolderTree,
   LayoutGrid,
   Library,
@@ -19,10 +23,11 @@ import type { CourseDetail, CourseSummary, EvaluationTemplate, PoolSummary } fro
 import { api } from "./api";
 import { useConfirm } from "./confirm";
 import { useT } from "./i18n";
-import { useErrorToast } from "./notify";
+import { useErrorToast, useToast } from "./notify";
 import type { Route } from "./router";
 import {
   Actions,
+  Badge,
   Button,
   Card,
   EmptyState,
@@ -41,6 +46,7 @@ import {
   Spinner,
   T,
   TableHead,
+  ToggleChip,
   type Column,
   usePersistentChoice,
   useSortableTable,
@@ -63,8 +69,14 @@ import { CourseTemplates } from "./evaluation/templates";
  *
  * The staff is read on the title line, as a row of discs, and everything
  * about ONE colleague — their address, their seat — waits inside the disc's
- * card. The course itself offers two things (a colleague, deletion), so they
- * are two icon buttons and not a menu; `Actions` is what decides that.
+ * card. The course itself offers three things (a colleague, hiding it,
+ * deletion), so they sit in a menu; `Actions` is what decides that.
+ *
+ * A course the teacher no longer teaches can be hidden (#155, ADR-032): for
+ * them alone, out of this list, the sidebar and the palette. "Show hidden"
+ * brings those courses back here, each one badged and with "Show again" in
+ * its menu. The toggle is not remembered — hidden is meant to stay out of
+ * sight — and it only exists while something is hidden.
  */
 
 const VIEW_KEY = "quiz-courses-view";
@@ -354,6 +366,18 @@ function useCourseActions(course: CourseSummary): {
       api(`/app/api/courses/${course.id}/staff/${userId}`, { method: "DELETE" }),
     onSuccess: invalidate,
   });
+  const toast = useToast();
+  const toastError = useErrorToast();
+  // A hidden course leaves the list at once, so the toast says where it went.
+  const setHidden = useMutation({
+    mutationFn: (hidden: boolean) =>
+      api(`/app/api/courses/${course.id}/${hidden ? "hide" : "unhide"}`, { method: "POST" }),
+    onSuccess: async (_data, hidden) => {
+      await invalidate();
+      if (hidden) toast(t("courses.hiddenToast", { code: course.code }), "success");
+    },
+    onError: toastError("error.save"),
+  });
 
   return {
     newClassroom: () => setNewRoom(true),
@@ -390,6 +414,14 @@ function useCourseActions(course: CourseSummary): {
         icon: UserPlus,
         onSelect: () => setNewStaff(true),
       },
+      course.hidden
+        ? { label: t("courses.unhide"), icon: Eye, onSelect: () => setHidden.mutate(false) }
+        : {
+            label: t("courses.hide"),
+            description: t("courses.hideHint"),
+            icon: EyeOff,
+            onSelect: () => setHidden.mutate(true),
+          },
       {
         label: t("courses.delete"),
         icon: Trash2,
@@ -441,6 +473,85 @@ function useCourseActions(course: CourseSummary): {
   };
 }
 
+/**
+ * The archived classrooms of a course (#155): the course list leaves them
+ * out, so they would be reachable by URL alone. They come from the course
+ * detail the card already reads for its pools (same query key, one request),
+ * behind a "Show archived" toggle that exists only when there is one — a
+ * past year is looked up, not read every day. Each row opens its classroom;
+ * "Restore" puts it back among the live ones.
+ */
+function ArchivedClassrooms({
+  course,
+  navigate,
+}: {
+  course: CourseSummary;
+  navigate: (r: Route) => void;
+}) {
+  const t = useT();
+  const qc = useQueryClient();
+  const toastError = useErrorToast();
+  const [shown, setShown] = useState(false);
+  const detail = useQuery<CourseDetail>({
+    queryKey: courseKey(course.id),
+    queryFn: () => api(`/app/api/courses/${course.id}`),
+  });
+  const restore = useMutation({
+    mutationFn: (id: string) => api(`/app/api/classrooms/${id}/unarchive`, { method: "POST" }),
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: coursesKey }),
+        qc.invalidateQueries({ queryKey: courseKey(course.id) }),
+      ]);
+    },
+    onError: toastError("error.save"),
+  });
+  const archived = (detail.data?.classrooms ?? []).filter((r) => r.archivedAt !== null);
+  if (archived.length === 0) return null;
+
+  return (
+    <>
+      <div className="flex justify-end pt-1">
+        <ToggleChip
+          icon={Archive}
+          tone="neutral"
+          label={t("classrooms.showArchived", { n: archived.length })}
+          pressed={shown}
+          onToggle={() => setShown((v) => !v)}
+        />
+      </div>
+      {shown
+        ? archived.map((room) => (
+            <div key={room.id} className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => navigate({ view: "classroom", id: room.id })}
+                className="flex min-w-0 flex-1 items-center gap-3 rounded-field px-2.5 py-2 text-left text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
+              >
+                <Archive className="size-4 shrink-0 text-fg-faint" />
+                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{room.name}</span>
+                {room.period ? (
+                  <span className="shrink-0 text-xs text-fg-faint">{room.period}</span>
+                ) : null}
+              </button>
+              <Actions
+                label={t("common.actions")}
+                size="sm"
+                items={[
+                  {
+                    label: t("classrooms.unarchive"),
+                    icon: ArchiveRestore,
+                    onSelect: () => restore.mutate(room.id),
+                  },
+                ]}
+              />
+            </div>
+          ))
+        : null}
+    </>
+  );
+}
+
 function CourseCard({
   course,
   navigate,
@@ -462,6 +573,11 @@ function CourseCard({
           <span className="flex flex-wrap items-center gap-2">
             {course.name}
             <span className="text-[13px] font-normal text-fg-faint">{course.code}</span>
+            {course.hidden ? (
+              <Badge tone="zinc" icon={EyeOff}>
+                {t("courses.hidden")}
+              </Badge>
+            ) : null}
             <PeopleStack people={course.staff} actions={staffActions} className="ml-2" />
           </span>
         }
@@ -499,6 +615,7 @@ function CourseCard({
             </button>
           ))
         )}
+        <ArchivedClassrooms course={course} navigate={navigate} />
       </div>
 
       <CoursePools course={course} navigate={navigate} />
@@ -529,6 +646,11 @@ function CourseRow({
         <span className="flex flex-wrap items-baseline gap-2">
           <span className="font-semibold">{course.name}</span>
           <span className="text-xs text-fg-faint">{course.code}</span>
+          {course.hidden ? (
+            <Badge tone="zinc" icon={EyeOff}>
+              {t("courses.hidden")}
+            </Badge>
+          ) : null}
         </span>
       </td>
       <td className={T.td}>
@@ -569,11 +691,14 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
   const t = useT();
   const [creating, setCreating] = useState(false);
   const [view, setView] = usePersistentChoice(VIEW_KEY, VIEWS, "cards");
+  const [showHidden, setShowHidden] = useState(false);
   const courses = useQuery<CourseSummary[]>({
     queryKey: coursesKey,
     queryFn: () => api("/app/api/courses"),
   });
-  const rows = courses.data ?? [];
+  const all = courses.data ?? [];
+  const hiddenCount = all.filter((c) => c.hidden).length;
+  const rows = showHidden ? all : all.filter((c) => !c.hidden);
   /**
    * The table sorts, the cards do not: a card list is read in the order it
    * was given, while a table is scanned down one column. Three keys, the
@@ -622,7 +747,7 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
           // same action, and two accent fills of the SAME action on one
           // screen is noise, not emphasis (W19). One button, in the place
           // the reader is already looking.
-          rows.length > 0 ? (
+          all.length > 0 ? (
             <Button data-coach="home.new-course" onClick={() => setCreating(true)}>
               <Plus /> {t("courses.new")}
             </Button>
@@ -632,8 +757,17 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
 
       {/* Under the header and hard right: it changes how the list below is
           drawn, so it belongs to the list, not to the title. */}
-      {rows.length > 0 && !courses.isError ? (
-        <div className="flex justify-end">
+      {all.length > 0 && !courses.isError ? (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {hiddenCount > 0 ? (
+            <ToggleChip
+              icon={EyeOff}
+              tone="neutral"
+              label={t("courses.showHidden", { n: hiddenCount })}
+              pressed={showHidden}
+              onToggle={() => setShowHidden((v) => !v)}
+            />
+          ) : null}
           <Segmented
             name="courses-view"
             value={view}
@@ -659,6 +793,19 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
           retrying={courses.isFetching}
           fallback={t("error.server")}
         />
+      ) : all.length > 0 && rows.length === 0 ? (
+        // Every course is hidden: the list is not empty, it is folded away.
+        <EmptyState
+          icon={EyeOff}
+          title={t("courses.allHidden")}
+          action={
+            <Button variant="secondary" onClick={() => setShowHidden(true)}>
+              <Eye /> {t("courses.showHidden", { n: hiddenCount })}
+            </Button>
+          }
+        >
+          {t("courses.allHiddenBody")}
+        </EmptyState>
       ) : rows.length === 0 ? (
         <EmptyState
           icon={Library}
