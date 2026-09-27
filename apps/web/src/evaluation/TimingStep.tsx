@@ -23,7 +23,14 @@ import { AdvancedDisclosure } from "./AdvancedDisclosure";
 import { RetakesSetting } from "./RetakesSetting";
 import { matchPreset, presetPatch, type PresetId } from "./presets";
 import { presetSummary } from "./presetSummary";
-import { missingTiming, missingTimingKey, TIMING_FIELD_ID, type TimingField } from "./timing";
+import {
+  fromLocalInput,
+  missingTiming,
+  missingTimingKey,
+  TIMING_FIELD_ID,
+  toLocalInput,
+  type TimingField,
+} from "./timing";
 import type { useEvaluationPatch } from "./usePatch";
 
 /**
@@ -35,20 +42,6 @@ import type { useEvaluationPatch } from "./usePatch";
  * preset decided stays visible and editable underneath — a preset is a
  * starting point, never a mode.
  */
-
-/** A `datetime-local` value from an ISO instant, in the reader's own zone. */
-function toLocalInput(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
-}
-
-function fromLocalInput(value: string): string | null {
-  if (!value) return null;
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString();
-}
 
 /**
  * One preset. The card in force says what IS set — `summary`, built from the

@@ -39,6 +39,7 @@ import {
   teacherGuard,
 } from "../guards.js";
 import { notFound, teacherRoute } from "../http.js";
+import * as live from "../live/service.js";
 import { evaluationChanged } from "./events.js";
 import * as service from "./service.js";
 import * as templates from "./templates.js";
@@ -62,10 +63,12 @@ export async function evaluationPlugin(app: FastifyInstance) {
   /** The audit entry every write of this module leaves behind. */
   const trace = tracer(app);
 
-  const detail = (
+  const detail = async (
     req: FastifyRequest,
     row: service.EvaluationRecord,
-  ): Promise<EvaluationDetail> => service.evaluationDetail(app.db, row, req.user!);
+  ): Promise<EvaluationDetail> =>
+    // The lobby ring's denominator, a rule of the `live` module (#152).
+    service.evaluationDetail(app.db, row, req.user!, await live.enrolledCount(app.db, row));
 
   // The loaders of invariant 6, each answering its own 404.
   const staffClassroom = async (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => {

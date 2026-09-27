@@ -336,7 +336,8 @@ describe("EvaluationConfig", () => {
     renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
       route: "/evaluations/x?step=launch",
     });
-    expect(await screen.findByText(/add at least one question/i)).toBeInTheDocument();
+    expect(await screen.findByRole("status")).toHaveTextContent(/add at least one question/i);
+    expect(screen.getByRole("heading", { name: /not ready yet/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeDisabled();
   });
 
@@ -385,7 +386,8 @@ describe("EvaluationConfig", () => {
         route: "/evaluations/x?step=timing",
       });
       await user.click(await screen.findByRole("button", { name: /^go to launch$/i }));
-      expect(await screen.findByRole("button", { name: /open the waiting room/i })).toBeEnabled();
+      // No waiting room in this preset: the one action opens the evaluation (#152).
+      expect(await screen.findByRole("button", { name: /^open$/i })).toBeEnabled();
     });
 
     it("says what is missing on the launch step reached by its tab, and offers no launch", async () => {
@@ -393,10 +395,10 @@ describe("EvaluationConfig", () => {
       renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
         route: "/evaluations/x?step=launch",
       });
-      expect(await screen.findByText(/finish the timing in time and mode/i)).toBeInTheDocument();
+      expect(await screen.findByRole("status")).toHaveTextContent(/finish the timing in time and mode/i);
       expect(screen.getByText(/enter the opening time/i)).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeDisabled();
-      expect(screen.getByRole("button", { name: /schedule it/i })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /^open$/i })).toBeDisabled();
+      expect(screen.getByRole("button", { name: /schedule/i })).toBeDisabled();
     });
 
     it("translates the server's refusal instead of printing it", async () => {

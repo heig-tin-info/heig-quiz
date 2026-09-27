@@ -369,7 +369,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
             onOpenDashboard={() => navigate({ view: "live", id })}
           />
         ) : (
-          <LaunchStep detail={data} navigate={navigate} />
+          <LaunchStep detail={data} navigate={navigate} onStep={setStep} />
         )}
       </TabPanel>
 

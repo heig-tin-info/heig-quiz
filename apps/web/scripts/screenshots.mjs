@@ -153,7 +153,36 @@ const scenes = [
   { name: "eval-config-retakes", role: "teacher", path: "/evaluations/eeeeeeee-0000-4000-8000-000000000015?step=timing" },
   { name: "eval-config-retakes-locked", role: "teacher", path: "/evaluations/paused?step=timing" },
   { name: "eval-config-advanced-running", role: "teacher", path: "/evaluations/running?step=timing", act: (p) => p.getByRole("button", { name: /^advanced options$/i }).first().click() },
-  { name: "eval-config-launch", role: "teacher", path: "/evaluations/draft?step=launch" },
+  // #152: the pre-flight checklist — ready with warnings (the draft exam),
+  // scheduled, no waiting room (the retake exercise opens straight into
+  // `running`), blocked (an empty classroom has no question), and the
+  // one-field Schedule dialog. `fold`: on a phone the dock is sticky, and a
+  // full-page capture would pin it to the very bottom of the page.
+  { name: "eval-config-launch", role: "teacher", path: "/evaluations/draft?step=launch", act: skipCoachTwice },
+  { name: "eval-config-launch-fold", role: "teacher", path: "/evaluations/draft?step=launch", fold: true, act: skipCoachTwice },
+  { name: "eval-config-launch-scheduled", role: "teacher", path: "/evaluations/scheduled?step=launch", act: skipCoachTwice },
+  { name: "eval-config-launch-skip", role: "teacher", path: "/evaluations/eeeeeeee-0000-4000-8000-000000000015?step=launch", act: skipCoachTwice },
+  {
+    name: "eval-config-launch-blocked", role: "teacher", path: "/evaluations/eeeeeeee-0000-4000-8000-000000000015?step=questions", fold: true,
+    act: async (p) => {
+      // A draft emptied of its questions: the one blocker a click can make.
+      // By its id, not the `draft` alias: the item routes invalidate the
+      // query of the real id, which an alias-keyed page never refetches.
+      await skipCoachTwice(p);
+      const remove = p.getByRole("button", { name: /^remove .* from the evaluation$|^retirer .* de l'évaluation$/i });
+      await remove.first().waitFor({ timeout: 5000 });
+      for (let i = 0; i < 20 && (await remove.count()) > 0; i++) {
+        await remove.first().click({ timeout: 2000 }).catch(() => {});
+        await p.waitForTimeout(400);
+      }
+      await p.getByRole("tab", { name: /^(launch|lancement)$/i }).click();
+      await p.waitForTimeout(300);
+    },
+  },
+  { name: "eval-config-launch-schedule", role: "teacher", path: "/evaluations/draft?step=launch", fold: true, act: async (p) => {
+      await skipCoachTwice(p);
+      await p.getByRole("button", { name: /^schedule…$|^planifier…$/i }).first().click();
+    } },
   { name: "eval-config-loading", role: "teacher", path: "/evaluations/draft?slow=1", settle: 300 },
   { name: "eval-config-error", role: "teacher", path: "/evaluations/draft?fail=1", settle: 2500 },
   // Issue #75: the stateless preview of the whole evaluation — the player
@@ -667,6 +696,12 @@ async function skipCoach(page) {
     await skip.click({ timeout: 3000, force: true }).catch(() => {});
     await page.waitForTimeout(300);
   }
+}
+
+/** The evaluation page can queue a second walk behind the first one. */
+async function skipCoachTwice(page) {
+  await skipCoach(page);
+  await skipCoach(page);
 }
 
 /**

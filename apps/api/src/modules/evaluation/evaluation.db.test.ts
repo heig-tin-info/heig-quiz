@@ -15,7 +15,7 @@ import { registerForTests } from "@quiz/registry/server";
 
 import { TestClock } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { attempts, evaluationItems, evaluations, questions } from "../../db/schema.js";
+import { attempts, enrollments, evaluationItems, evaluations, questions } from "../../db/schema.js";
 import { testDb } from "../../test/db.js";
 import { testServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
@@ -47,7 +47,7 @@ async function addAttempt(evaluationId: string, userId: string): Promise<string>
 
 describe("state machine (§5.1)", () => {
   it("walks draft → scheduled → lobby → running ⇄ paused → closed", async () => {
-    const seed = await seedLive(db);
+    const seed = await seedLive(db, { opensAt: new Date(clock.now().getTime() + 3_600_000) });
     let row = await reload(db, seed.evaluationId);
 
     row = await service.transition(db, row, "scheduled", clock.now());
@@ -85,6 +85,79 @@ describe("state machine (§5.1)", () => {
     await expect(service.transition(db, row, "scheduled", clock.now())).rejects.toMatchObject({
       code: "illegal_transition",
     });
+  });
+
+  /*
+   * #152: the ticker opens a scheduled evaluation at `opensAt` and at nothing
+   * else, so a schedule without one would park it forever. The refusal names
+   * its reason, for the launch step to translate.
+   */
+  it("refuses to schedule without an opening time, and says so (#152)", async () => {
+    const server = await testServer();
+    try {
+      const teacher = await server.signIn("teacher");
+      const seed = await seedLive(server.app.db, { teacherId: teacher.id });
+      const url = `/app/api/evaluations/${seed.evaluationId}`;
+      const schedule = () =>
+        server.app.inject({
+          method: "POST",
+          url: `${url}/state`,
+          headers: teacher.headers,
+          payload: { to: "scheduled" },
+        });
+
+      const refused = await schedule();
+      expect(refused.statusCode).toBe(409);
+      expect(TransitionRefusal.parse(refused.json())).toMatchObject({
+        error: "illegal_transition",
+        reason: "opens_at_missing",
+      });
+
+      const opensAt = new Date(clock.now().getTime() + 24 * 3_600_000).toISOString();
+      const patched = await server.app.inject({
+        method: "PATCH",
+        url,
+        headers: teacher.headers,
+        payload: { opensAt },
+      });
+      expect(patched.statusCode).toBe(200);
+      const scheduled = await schedule();
+      expect(scheduled.statusCode).toBe(200);
+      expect(scheduled.json()).toMatchObject({ state: "scheduled", opensAt });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("counts the roster for the launch checklist, never a staff seat (#152)", async () => {
+    const server = await testServer();
+    try {
+      const teacher = await server.signIn("teacher");
+      const seed = await seedLive(server.app.db, { teacherId: teacher.id, students: 2 });
+      const seat = (extra: Partial<typeof enrollments.$inferInsert>) =>
+        server.app.db.insert(enrollments).values({
+          id: randomUUID(),
+          classroomId: seed.classroomId,
+          nom: "Nom",
+          prenom: "Prénom",
+          email: `${randomUUID()}@heig.test`,
+          ...extra,
+        });
+      // One student who never signed in and whom the import flagged, and a
+      // staff seat without an account: only the first one counts.
+      await seat({ conflictFlag: true });
+      await seat({ staff: true });
+
+      const detail = await server.app.inject({
+        method: "GET",
+        url: `/app/api/evaluations/${seed.evaluationId}`,
+        headers: teacher.headers,
+      });
+      expect(detail.statusCode).toBe(200);
+      expect(detail.json().roster).toEqual({ enrolled: 3, unlinked: 1, conflicts: 1 });
+    } finally {
+      await server.close();
+    }
   });
 
   it("refuses to schedule an exam whose timing says nothing (F-EVAL-04)", async () => {

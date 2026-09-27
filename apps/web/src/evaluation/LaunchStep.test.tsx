@@ -1,0 +1,208 @@
+import { screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { EvaluationDetail } from "@quiz/contracts";
+
+import { EVALUATION_ID, makeEvaluationDetail, makeItemRow } from "../test/live-fixtures";
+import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
+import { LaunchStep } from "./LaunchStep";
+import { toLocalInput } from "./timing";
+
+/*
+ * The pre-flight checklist of #152: which rows block, which warn, what the
+ * one action posts, and what "Schedule…" sends before it changes the state.
+ */
+
+const BASE = `/app/api/evaluations/${EVALUATION_ID}`;
+const HOUR = 3_600_000;
+
+const navigate = vi.fn();
+const onStep = vi.fn();
+
+function withEvaluation(patch: Partial<EvaluationDetail["evaluation"]>, over: Partial<EvaluationDetail> = {}) {
+  const base = makeEvaluationDetail(over);
+  return { ...base, evaluation: { ...base.evaluation, ...patch } };
+}
+
+function render(detail: EvaluationDetail) {
+  return renderWithProviders(<LaunchStep detail={detail} navigate={navigate} onStep={onStep} />);
+}
+
+beforeEach(() => {
+  navigate.mockClear();
+  onStep.mockClear();
+});
+
+describe("LaunchStep checklist (#152)", () => {
+  it("reads Ready when nothing needs a look, and keeps unlinked accounts as information", async () => {
+    mockFetch({});
+    render(makeEvaluationDetail());
+    expect(screen.getByRole("heading", { name: /^ready$/i })).toBeInTheDocument();
+    expect(screen.getByText(/24 expected in the room/i)).toBeInTheDocument();
+    expect(screen.getByText(/2 have not signed in yet/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeEnabled();
+    expect(screen.getByRole("status")).toHaveTextContent(/start the evaluation from the dashboard/i);
+  });
+
+  it("counts the warnings, lists them first, and updates stale versions in place", async () => {
+    const user = userEvent.setup();
+    const stale = makeItemRow(1);
+    const { calls } = mockFetch({ [`POST ${BASE}/items/update-versions`]: ok([]) });
+    render(
+      makeEvaluationDetail({
+        items: [makeItemRow(0), stale],
+        staleItems: [stale.id],
+        roster: { enrolled: 24, unlinked: 0, conflicts: 2 },
+      }),
+    );
+    expect(screen.getByRole("heading", { name: /2 things to look at/i })).toBeInTheDocument();
+    // A warning never disables the launch: only the server's refusals do.
+    expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeEnabled();
+    const rows = screen.getAllByText(/newer version|roster conflicts|questions,/i);
+    expect(rows[0]).toHaveTextContent(/newer version/i);
+    expect(rows[1]).toHaveTextContent(/2 roster conflicts/i);
+
+    await user.click(screen.getByRole("button", { name: /^update$/i }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.url.endsWith("/update-versions"))).toMatchObject({ method: "POST" }),
+    );
+  });
+
+  it("names negative marking and SEB only in the modes the server honours them", () => {
+    mockFetch({});
+    const settings = {
+      ...makeEvaluationDetail().evaluation.settings,
+      negativeMarking: true,
+      safeExamBrowser: true,
+    };
+    const { unmount } = render(withEvaluation({ settings }));
+    expect(screen.getByText(/negative marking/i)).toBeInTheDocument();
+    expect(screen.getByText(/safe exam browser/i)).toBeInTheDocument();
+    unmount();
+    // A poll ignores both switches.
+    render(withEvaluation({ mode: "poll", settings }));
+    expect(screen.queryByText(/negative marking/i)).toBeNull();
+    expect(screen.queryByText(/safe exam browser/i)).toBeNull();
+  });
+
+  it("warns on an empty roster and on a common end already past", async () => {
+    mockFetch({});
+    render(
+      withEvaluation(
+        {
+          settings: { ...makeEvaluationDetail().evaluation.settings, timing: "deadline" },
+          opensAt: new Date(Date.now() - 2 * HOUR).toISOString(),
+          closesAt: new Date(Date.now() - HOUR).toISOString(),
+        },
+        { roster: { enrolled: 0, unlinked: 0, conflicts: 0 } },
+      ),
+    );
+    expect(screen.getByRole("heading", { name: /2 things to look at/i })).toBeInTheDocument();
+    expect(screen.getByText(/nobody in the classroom yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/the common end has passed/i)).toBeInTheDocument();
+  });
+
+  it("sends a row to the step or the roster that fixes it", async () => {
+    const user = userEvent.setup();
+    mockFetch({});
+    render(makeEvaluationDetail());
+    await user.click(screen.getByRole("button", { name: /24 expected in the room/i }));
+    expect(navigate).toHaveBeenCalledWith({
+      view: "classroom",
+      id: makeEvaluationDetail().evaluation.classroomId,
+      tab: "roster",
+    });
+    await user.click(screen.getByRole("button", { name: /2 questions/i }));
+    expect(onStep).toHaveBeenCalledWith("questions");
+  });
+
+  it("opens the evaluation itself when there is no waiting room", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch({ [`POST ${BASE}/start`]: ok({}) });
+    render(
+      withEvaluation({
+        mode: "exercise",
+        settings: { ...makeEvaluationDetail().evaluation.settings, lobby: "skip" },
+      }),
+    );
+    expect(screen.queryByRole("button", { name: /open the waiting room/i })).toBeNull();
+    await user.click(screen.getByRole("button", { name: /^open$/i }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.url.endsWith("/start"))).toMatchObject({ body: { confirm: true } }),
+    );
+    expect(calls.some((c) => c.url.endsWith("/state"))).toBe(false);
+  });
+
+  it("says a scheduled evaluation opens by itself, and takes it back to draft", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch({ [`POST ${BASE}/state`]: ok({}) });
+    render(withEvaluation({ state: "scheduled", opensAt: new Date(Date.now() + 24 * HOUR).toISOString() }));
+    expect(screen.getByRole("status")).toHaveTextContent(/opens by itself on/i);
+    await user.click(screen.getByRole("button", { name: /back to draft/i }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.url.endsWith("/state"))).toMatchObject({ body: { to: "draft" } }),
+    );
+  });
+});
+
+describe("Schedule… (#152)", () => {
+  it("writes the opening time, then schedules", async () => {
+    const user = userEvent.setup();
+    const { calls } = mockFetch({
+      [`PATCH ${BASE}`]: ok(makeEvaluationDetail()),
+      [`POST ${BASE}/state`]: ok({}),
+    });
+    render(makeEvaluationDetail());
+    await user.click(screen.getByRole("button", { name: /schedule/i }));
+    const dialog = await screen.findByRole("dialog", { name: /schedule the opening/i });
+    const when = new Date(Date.now() + 48 * HOUR);
+    when.setSeconds(0, 0);
+    const input = within(dialog).getByLabelText(/opens at/i);
+    await user.clear(input);
+    await user.type(input, toLocalInput(when.toISOString()));
+    await user.click(within(dialog).getByRole("button", { name: /^schedule$/i }));
+
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith("/state"))).toBe(true));
+    const writes = calls.filter((c) => c.method !== "GET");
+    expect(writes[0]).toMatchObject({ method: "PATCH", body: { opensAt: when.toISOString() } });
+    expect(writes[1]).toMatchObject({ method: "POST", body: { to: "scheduled" } });
+  });
+
+  it("shows the opening time of a common end read-only, and leads to the timing to change it", async () => {
+    const user = userEvent.setup();
+    mockFetch({});
+    render(
+      withEvaluation({
+        settings: { ...makeEvaluationDetail().evaluation.settings, timing: "deadline" },
+        opensAt: new Date(Date.now() - HOUR).toISOString(),
+        closesAt: new Date(Date.now() + 2 * HOUR).toISOString(),
+      }),
+    );
+    await user.click(screen.getByRole("button", { name: /schedule/i }));
+    const dialog = await screen.findByRole("dialog", { name: /schedule the opening/i });
+    expect(within(dialog).queryByRole("textbox")).toBeNull();
+    // Already past: scheduling it would open it at the next tick.
+    expect(within(dialog).getByText(/this time has passed/i)).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: /^schedule$/i })).toBeDisabled();
+    await user.click(within(dialog).getByRole("button", { name: /change it in time and mode/i }));
+    expect(onStep).toHaveBeenCalledWith("timing");
+  });
+
+  it("translates the server's refusal of a schedule without an opening time", async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      [`POST ${BASE}/state`]: fail(409, {
+        error: "illegal_transition",
+        message: "a scheduled evaluation needs an opening time",
+        reason: "opens_at_missing",
+      }),
+    });
+    const opensAt = new Date(Date.now() + 24 * HOUR).toISOString();
+    render(withEvaluation({ opensAt }));
+    await user.click(screen.getByRole("button", { name: /schedule/i }));
+    const dialog = await screen.findByRole("dialog", { name: /schedule the opening/i });
+    await user.click(within(dialog).getByRole("button", { name: /^schedule$/i }));
+    expect(await within(dialog).findByText(/choose when it opens/i)).toBeInTheDocument();
+  });
+});

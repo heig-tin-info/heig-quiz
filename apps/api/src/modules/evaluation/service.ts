@@ -63,6 +63,7 @@ import {
   retakesAllowedFor,
   retakesOn,
   round2,
+  safeExamBrowserOn,
   type EvaluationStateName,
 } from "@quiz/domain";
 
@@ -329,6 +330,13 @@ export function guardTransition(
       );
     }
   }
+  // The ticker opens a scheduled evaluation at `opensAt` and at nothing else:
+  // scheduled without one, it would wait forever (#152).
+  if (to === "scheduled" && row.opensAt === null) {
+    throw new IllegalTransition(from, to, "a scheduled evaluation needs an opening time", {
+      reason: "opens_at_missing",
+    });
+  }
   if (to === "paused" && row.mode !== "exam") {
     throw new IllegalTransition(from, to, "only an exam can be paused");
   }
@@ -441,7 +449,7 @@ export function negativeMarkingEnabled(row: EvaluationRecord): boolean {
 
 /** ADR-027: sat in Safe Exam Browser only. An exam's switch; inert on any other mode. */
 export function sebRequired(row: EvaluationRecord): boolean {
-  return row.mode === "exam" && safeExamBrowserOf(settingsOf(row));
+  return safeExamBrowserOn(row.mode, safeExamBrowserOf(settingsOf(row)));
 }
 
 /**
@@ -745,10 +753,37 @@ async function editableQuestionIdsOf(
   return rows.filter((r) => r.poolId !== null && writable.has(r.poolId)).map((r) => r.id);
 }
 
+/**
+ * The roster half of the launch checklist (#152): the class seats still
+ * without an account, and those the import flagged. Staff seats are never
+ * counted, like the class headcount. `enrolled` comes from the caller, because it
+ * is the lobby ring's denominator and that rule lives in the `live` module.
+ */
+async function rosterOf(
+  db: Db,
+  row: EvaluationRecord,
+  enrolled: number,
+): Promise<EvaluationDetail["roster"]> {
+  if (row.classroomId === null) return null;
+  const [counts] = await db
+    .select({
+      unlinked: sql<number>`count(*) filter (where ${enrollments.userId} is null)`.mapWith(Number),
+      conflicts: sql<number>`count(*) filter (where ${enrollments.conflictFlag})`.mapWith(Number),
+    })
+    .from(enrollments)
+    .where(and(seatsOf(row), eq(enrollments.staff, false)));
+  return {
+    enrolled,
+    unlinked: counts?.unlinked ?? 0,
+    conflicts: counts?.conflicts ?? 0,
+  };
+}
+
 export async function evaluationDetail(
   db: Db,
   row: EvaluationRecord,
   viewer: { id: string; role: string },
+  enrolled: number,
 ): Promise<EvaluationDetail> {
   const items = await itemRows(db, row.id);
   const attemptsSoFar = await attemptCount(db, row.id);
@@ -761,6 +796,7 @@ export async function evaluationDetail(
     editable: isConfigEditable(row.state, attemptsSoFar),
     self: await selfOf(db, row, viewer.id),
     editableQuestionIds: await editableQuestionIdsOf(db, items, viewer),
+    roster: await rosterOf(db, row, enrolled),
   };
 }
 

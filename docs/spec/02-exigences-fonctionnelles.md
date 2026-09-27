@@ -84,6 +84,7 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 | F-EVAL-20 | **Instantiate** makes a draft evaluation in a classroom of the SAME course from a template, recording the template and its revision. A question whose pool is no longer linked to the course blocks it with the list of such items; a deprecated version only warns. An instance with `deadline` timing is born without dates and cannot be opened until they are filled (F-EVAL-04). | P2 | S |
 | F-EVAL-21 | Deleting a template leaves its instances untouched; they only lose their link to it. | P2 | S |
 | F-EVAL-22 | At evaluation creation, "Start from a template" is offered only when the course has at least one template; otherwise the creation dialog is unchanged (08). | P2 | S |
+| F-EVAL-23 | The last configuration step is a **pre-flight checklist**: what the API would refuse (no question, incomplete timing) blocks the launch; stale question versions, an empty roster, roster conflicts and a common end already past are warnings, each with its fix; the rest of the rules is shown for information. From there the teacher opens the waiting room now — the evaluation itself when it has none (`lobby: skip`) — or **schedules** the opening: a scheduled evaluation carries an opening time (`opensAt`), the move to `scheduled` is refused without one, and the ticker opens it at that time (issue #152). | P1 | M |
 
 ## F-LIVE Live run
 
