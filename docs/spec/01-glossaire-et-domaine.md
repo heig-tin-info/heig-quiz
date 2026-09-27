@@ -18,6 +18,7 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Draft | The version being edited, unnumbered, never usable in an evaluation. Publishing creates the next version. |
 | Question type | A plugin that defines the configuration schema, the answer schema, the editor, the player, the review view and the grader. E.g. `mcq`, `short`, `cloze`, `code`. |
 | Evaluation | An ordered set of question versions with run settings, created in a classroom. A single term: no quiz, assignment, activity or session. |
+| Evaluation template | An evaluation kept at the course level rather than in a classroom: its questions, points, order, milestones and settings, without dates, access code nor IP list. Never opened, never answered; each classroom's evaluation is made from it by *Instantiate* and records the template and its revision. `exam` and `exercise` only, never `poll` (ADR-031). |
 | Evaluation mode | `exam` timed and graded, `exercise` open with a deadline, `poll` one live question. |
 | Attempt | A student's participation in an evaluation. Only one per student and per evaluation in phase 1. Carries the start time, the effective end, the state. |
 | Answer | The current state of a student's answer to a question of an evaluation. One record per attempt and per question, updated on every autosave. |
@@ -66,6 +67,8 @@ erDiagram
     QUESTION ||--o{ QUESTION_VERSION : versions
     QUESTION }o--o{ TAG : tagged
     CLASSROOM ||--o{ EVALUATION : hosts
+    COURSE ||--o{ EVALUATION : templates
+    EVALUATION |o--o{ EVALUATION : instantiates
     EVALUATION ||--o{ EVALUATION_ITEM : ordered
     QUESTION_VERSION ||--o{ EVALUATION_ITEM : used_in
     EVALUATION ||--o{ ATTEMPT : has
@@ -86,7 +89,7 @@ erDiagram
 - **POOL**: `id`, `name`, `visibility` `private` / `shared` / `public`, `owner_id`.
 - **QUESTION**: `id`, `pool_id`, `category_id`, `type`, `internal_name`, `difficulty` 1 to 5, `created_by`, `origin_question_id` for a fork.
 - **QUESTION_VERSION**: `question_id`, `number` null for the draft, `config` JSONB conforming to the type's schema, `explanation`, `published_at`, `published_by`, `change_note`.
-- **EVALUATION**: `id`, `classroom_id`, `title`, `mode`, `state`, `settings` JSONB, see [02-exigences-fonctionnelles.md](02-exigences-fonctionnelles.md) F-EVAL, `grading_scale`, `feedback_policy`, `opens_at`, `closes_at`, `duration_s`.
+- **EVALUATION**: `id`, `classroom_id`, `course_id` set on a template only (exactly one home: a classroom, a course, or — an anonymous poll — its owner), `revision` on a template, `origin_template_id` and `origin_revision` on an instance, `title`, `mode`, `state`, `settings` JSONB, see [02-exigences-fonctionnelles.md](02-exigences-fonctionnelles.md) F-EVAL, `grading_scale`, `feedback_policy`, `opens_at`, `closes_at`, `duration_s`.
 - **EVALUATION_ITEM**: `evaluation_id`, `position`, `question_version_id`, `points`, `milestone` boolean.
 - **ATTEMPT**: `evaluation_id`, `user_id`, `state`, `started_at`, `deadline_at` computed with the bonus, `submitted_at`, `seed`, `client_events` JSONB for light cheating events.
 - **ANSWER**: `attempt_id`, `item_id`, `payload` JSONB conforming to the type's answer schema, `revision` integer incremented on every autosave, `marked_done` (the question was validated in a locking navigation), `skipped` ("I won't answer this question"), `flagged` (the student's review flag), `updated_at`.
@@ -105,6 +108,8 @@ erDiagram
 ## 1.4 Lifecycles
 
 **Question version**: `draft` → publish → `published` number N. A published version may be marked `deprecated` to signal that a more recent version fixes an error.
+
+**Evaluation template**: always `draft`; its `revision` starts at 1 and moves with every committed change to its items or template-level settings, never with its title (ADR-031).
 
 **Evaluation**: `draft` → `scheduled` → `lobby` waiting room → `running` → `paused` ↔ `running` → `closed` → `grading` → `released`. The `exercise` mode skips `lobby` and `paused`. The `poll` mode goes from `running` to `released` directly.
 
