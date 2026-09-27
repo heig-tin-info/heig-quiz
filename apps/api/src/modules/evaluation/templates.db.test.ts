@@ -90,28 +90,39 @@ async function saveTemplate(teacher: Caller, evaluationId: string): Promise<Eval
 }
 
 describe("the schema (ADR-031 §1)", () => {
-  it("refuses a template that carries a date, a code, an IP, a state or a poll, and a row with two homes", async () => {
+  const base = (seed: Seeded) => ({
+    id: randomUUID(),
+    courseId: seed.courseId,
+    title: "T",
+    mode: "exam" as const,
+    settings: {},
+    gradingScale: {},
+    feedbackPolicy: {},
+    revision: 1,
+  });
+  const insert = (row: Record<string, unknown>) =>
+    server.app.db.insert(evaluations).values(row as typeof evaluations.$inferInsert);
+
+  it("accepts a bare template", async () => {
     const { seed } = await world();
-    const base = {
-      courseId: seed.courseId,
-      title: "T",
-      mode: "exam" as const,
-      settings: {},
-      gradingScale: {},
-      feedbackPolicy: {},
-      revision: 1,
-    };
-    const insert = (extra: Record<string, unknown>) =>
-      server.app.db.insert(evaluations).values({ id: randomUUID(), ...base, ...extra });
-    await expect(insert({ opensAt: new Date() })).rejects.toThrow();
-    await expect(insert({ accessCode: "X" })).rejects.toThrow();
-    await expect(insert({ ipAllowlist: ["10."] })).rejects.toThrow();
-    await expect(insert({ state: "running" })).rejects.toThrow();
-    await expect(insert({ mode: "poll" })).rejects.toThrow();
-    await expect(insert({ revision: null })).rejects.toThrow();
-    await expect(insert({ classroomId: seed.classroomId })).rejects.toThrow();
-    // The clean shape passes.
-    await expect(insert({})).resolves.toBeDefined();
+    await expect(insert(base(seed))).resolves.toBeDefined();
+  });
+
+  it.each([
+    ["an opening date", () => ({ opensAt: new Date() })],
+    ["a closing date", () => ({ closesAt: new Date() })],
+    ["an access code", () => ({ accessCode: "X" })],
+    ["an IP list", () => ({ ipAllowlist: ["10."] })],
+    ["another state than draft", () => ({ state: "running" })],
+    ["the poll mode", () => ({ mode: "poll" })],
+    ["no revision", () => ({ revision: null })],
+    ["an origin of its own", (seed: Seeded) => ({ originTemplateId: seed.evaluationId })],
+    ["a classroom as well", (seed: Seeded) => ({ classroomId: seed.classroomId })],
+    // Neither a classroom nor a course, and not a poll: no home at all.
+    ["no home at all (an exam)", () => ({ courseId: null, revision: null })],
+  ] as const)("refuses a template with %s", async (_what, patch) => {
+    const { seed } = await world();
+    await expect(insert({ ...base(seed), ...patch(seed) })).rejects.toThrow();
   });
 });
 
@@ -241,6 +252,43 @@ describe("save, list, instantiate, delete", () => {
     expect((await call(teacher, "GET", `/app/api/evaluations/${instance.id}`)).statusCode).toBe(200);
   });
 
+  it("leaves the instance unchanged when the template is edited, then deleted", async () => {
+    const { teacher, seed } = await world();
+    const template = await saveTemplate(teacher, seed.evaluationId);
+    const made = TemplateInstance.parse(
+      (
+        await call(teacher, "POST", `/app/api/templates/${template.id}/instances`, {
+          classroomId: seed.classroomId,
+        })
+      ).json(),
+    );
+    const instanceId = made.evaluation.id;
+    const itemsOf = (evaluationId: string) =>
+      server.app.db
+        .select()
+        .from(evaluationItems)
+        .where(eq(evaluationItems.evaluationId, evaluationId))
+        .orderBy(evaluationItems.position);
+    const before = { row: await service.byId(server.app.db, instanceId), items: await itemsOf(instanceId) };
+
+    // No edit route yet (a later PR): the template's rows move by hand.
+    await server.app.db
+      .update(evaluations)
+      .set({ durationS: 60, settings: { navigation: "free" }, revision: 2 })
+      .where(eq(evaluations.id, template.id));
+    await server.app.db
+      .update(evaluationItems)
+      .set({ points: 42 })
+      .where(eq(evaluationItems.evaluationId, template.id));
+    expect(await service.byId(server.app.db, instanceId)).toEqual(before.row);
+    expect(await itemsOf(instanceId)).toEqual(before.items);
+
+    expect((await call(teacher, "DELETE", `/app/api/templates/${template.id}`)).statusCode).toBe(204);
+    expect(await service.byId(server.app.db, template.id)).toBeNull();
+    expect(await service.byId(server.app.db, instanceId)).toEqual({ ...before.row, originTemplateId: null });
+    expect(await itemsOf(instanceId)).toEqual(before.items);
+  });
+
   it("goes with its course, and survives the classroom it was saved from", async () => {
     const { teacher, seed } = await world();
     const template = await saveTemplate(teacher, seed.evaluationId);
@@ -301,9 +349,21 @@ describe("access (invariant 6)", () => {
     const template = await saveTemplate(teacher, seed.evaluationId);
     const id = template.id;
 
-    // Its creator, through the finders the poll module and the stream use.
-    expect(await findManagedEvaluation(server.app.db, teacher, id)).toBeNull();
-    expect(await findReachableEvaluation(server.app.db, teacher, id)).toBeNull();
+    // Its creator, through the finders the poll module and the stream use —
+    // and an admin, whom `accessWhere` lets past every ownership test: the
+    // owned-poll shape alone must keep a template out.
+    const admin = await server.signIn("admin");
+    const asTeacher = { id: teacher.id, role: "teacher" };
+    expect(await findManagedEvaluation(server.app.db, asTeacher, id)).toBeNull();
+    expect(await findReachableEvaluation(server.app.db, asTeacher, id)).toBeNull();
+    expect(await findManagedEvaluation(server.app.db, { id: admin.id, role: "admin" }, id)).toBeNull();
+    for (const [method, url] of [
+      ["GET", `/app/api/evaluations/${id}/poll`],
+      ["POST", `/app/api/evaluations/${id}/poll/end`],
+    ] as const) {
+      const res = await call(admin, method, url, method === "GET" ? undefined : {});
+      expect([method, url, res.statusCode]).toEqual([method, url, 404]);
+    }
 
     for (const [method, url] of [
       ["GET", `/app/api/evaluations/${id}`],
