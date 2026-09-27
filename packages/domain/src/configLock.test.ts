@@ -6,6 +6,7 @@ import {
   isConfigFieldWritable,
   negativeMarkingAllowedFor,
   negativeMarkingOn,
+  safeExamBrowserOn,
   scoresNegatively,
 } from "./evaluationConfig.js";
 import { EVALUATION_STATES } from "./itemList.js";
@@ -57,6 +58,15 @@ describe("configLock (#86)", () => {
     expect(isConfigEditable("lobby", 0)).toBe(true);
     expect(isConfigEditable("running", 0)).toBe(false);
     expect(isConfigEditable("closed", 1)).toBe(false);
+  });
+});
+
+describe("Safe Exam Browser (ADR-027)", () => {
+  it("is on only when set on an exam", () => {
+    expect(safeExamBrowserOn("exam", true)).toBe(true);
+    expect(safeExamBrowserOn("exam", undefined)).toBe(false);
+    expect(safeExamBrowserOn("exercise", true)).toBe(false);
+    expect(safeExamBrowserOn("poll", true)).toBe(false);
   });
 });
 

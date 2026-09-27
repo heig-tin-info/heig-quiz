@@ -18,7 +18,7 @@ import { useState } from "react";
 import { TransitionRefusal, type Evaluation, type EvaluationDetail } from "@quiz/contracts";
 
 import { ApiError, api } from "../api";
-import { useT, type Dict, type TFunction } from "../i18n";
+import { useT, type TFunction } from "../i18n";
 import type { Route } from "../router";
 import { Alert, Button, Card, cx, Field, FormDialog, isoDateTime, useNow, type IconType } from "../ui";
 import { launchChecks, lobbyKey, readiness, type LaunchCheck } from "./launchChecks";
@@ -189,9 +189,10 @@ function Checklist({
   // The status line says what the button will do, or why it cannot. A
   // blocked launch names the first blocker, the one the heading's list starts
   // with.
-  const status =
-    checks.find((c) => c.level === "blocker")?.status ??
-    (evaluation.state === "scheduled" && evaluation.opensAt !== null
+  const blocker = checks.find((c) => c.level === "blocker");
+  const status = blocker
+    ? (blocker.status ?? blocker.detail)
+    : (evaluation.state === "scheduled" && evaluation.opensAt !== null
       ? t("launch.status.scheduled", { date: isoDateTime(evaluation.opensAt) })
       : `${t("launch.when.now")} ${t(lobbyKey(evaluation.settings.lobby))}`);
 

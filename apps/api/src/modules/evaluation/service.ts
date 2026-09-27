@@ -63,6 +63,7 @@ import {
   retakesAllowedFor,
   retakesOn,
   round2,
+  safeExamBrowserOn,
   type EvaluationStateName,
 } from "@quiz/domain";
 
@@ -448,7 +449,7 @@ export function negativeMarkingEnabled(row: EvaluationRecord): boolean {
 
 /** ADR-027: sat in Safe Exam Browser only. An exam's switch; inert on any other mode. */
 export function sebRequired(row: EvaluationRecord): boolean {
-  return row.mode === "exam" && safeExamBrowserOf(settingsOf(row));
+  return safeExamBrowserOn(row.mode, safeExamBrowserOf(settingsOf(row)));
 }
 
 /**

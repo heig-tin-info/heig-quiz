@@ -181,6 +181,17 @@ export function negativeMarkingAllowedFor(mode: EvaluationModeName): boolean {
   return mode !== "poll";
 }
 
+/**
+ * Whether this evaluation is sat in Safe Exam Browser only (ADR-027): an
+ * exam's switch, inert on any other mode whatever its row says.
+ */
+export function safeExamBrowserOn(
+  mode: EvaluationModeName,
+  safeExamBrowser: boolean | undefined,
+): boolean {
+  return mode === "exam" && safeExamBrowser === true;
+}
+
 /** Whether this evaluation scores its choice questions negatively. */
 export function negativeMarkingOn(
   mode: EvaluationModeName,

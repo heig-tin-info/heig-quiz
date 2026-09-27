@@ -22,7 +22,7 @@ import {
   safeExamBrowserOf,
   type EvaluationDetail,
 } from "@quiz/contracts";
-import { negativeMarkingOn, retakesOn } from "@quiz/domain";
+import { negativeMarkingOn, retakesOn, safeExamBrowserOn } from "@quiz/domain";
 
 import type { Dict, TFunction } from "../i18n";
 import { typeLabel } from "../questionTypes";
@@ -42,7 +42,7 @@ export interface LaunchCheck {
   level: CheckLevel;
   title: string;
   detail: string;
-  /** A blocker's reason, as the action bar's status line says it. */
+  /** A blocker's reason for the action bar's status line, when it differs from `detail`. */
   status?: string;
   fix?: CheckFix;
 }
@@ -69,7 +69,6 @@ function itemsCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
       level: "blocker",
       title: t("launch.items.none"),
       detail: t("eval.launch.needQuestions"),
-      status: t("eval.launch.needQuestions"),
       fix: { kind: "step", step: "questions" },
     };
   }
@@ -200,8 +199,9 @@ function accessCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
   const parts = [
     ...(evaluation.accessCode !== null ? [t("launch.access.code")] : []),
     ...(evaluation.ipAllowlist.length > 0 ? [t("launch.access.ip")] : []),
-    // Gated by mode like the server (`sebRequired`): SEB is an exam's switch.
-    ...(evaluation.mode === "exam" && safeExamBrowserOf(evaluation.settings) ? [t("eval.seb")] : []),
+    ...(safeExamBrowserOn(evaluation.mode, safeExamBrowserOf(evaluation.settings))
+      ? [t("eval.seb")]
+      : []),
   ];
   return {
     id: "access",
