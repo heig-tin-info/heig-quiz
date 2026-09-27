@@ -125,6 +125,35 @@ describe("TeacherHome", () => {
     ]);
   });
 
+  it("prefills a new classroom with the current semester, dates and label (#156)", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 7, 20)); // August: the coming autumn
+    try {
+      const { calls } = mockFetch({
+        [`GET ${COURSES}`]: ok([makeCourseSummary()]),
+        "POST /app/api/courses/c1/classrooms": ok({ id: "r9" }),
+      });
+      renderWithProviders(<TeacherHome navigate={vi.fn()} />);
+      await userEvent.click(await screen.findByRole("button", { name: "New classroom" }));
+      const dialog = await screen.findByRole("dialog", { name: "New classroom" });
+      expect(within(dialog).getByLabelText("First month")).toHaveValue("2026-09");
+      expect(within(dialog).getByLabelText("Last month")).toHaveValue("2027-01");
+      expect(within(dialog).getByRole("textbox", { name: "Period label" })).toHaveValue(
+        "Autumn 2026",
+      );
+      await userEvent.type(within(dialog).getByRole("textbox", { name: /^Name/ }), "PRG1-2026");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Create" }));
+      expect(calls.find((c) => c.method === "POST")?.body).toEqual({
+        name: "PRG1-2026",
+        period: "Autumn 2026",
+        periodStart: "2026-09",
+        periodEnd: "2027-01",
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("offers the three course actions in one menu", async () => {
     mockFetch({ [`GET ${COURSES}`]: ok([makeCourseSummary()]) });
     renderWithProviders(<TeacherHome navigate={vi.fn()} />);

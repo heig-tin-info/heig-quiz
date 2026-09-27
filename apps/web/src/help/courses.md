@@ -11,9 +11,17 @@ headcount; a click opens one.
 
 ## Classrooms
 
-**New classroom** asks for a name and, optionally, a period. A classroom is
-one group following this course for one period, and it is where rosters,
-evaluations and results live.
+**New classroom** asks for a name and a period. A classroom is one group
+following this course for one period, and it is where rosters, evaluations
+and results live.
+
+The period has dates — a first and a last month — and a free label. The
+dialog starts on the current semester; **Autumn** and **Spring** fill both
+months (and the label, while you have not typed one of your own). A dated
+classroom stays in the sidebar's **Classrooms** list from a month before its
+first month to a month after its last, then leaves it on its own — it stays
+in its course, nothing is archived. **No dates** keeps it in the list until
+you archive it.
 
 ## Staff
 

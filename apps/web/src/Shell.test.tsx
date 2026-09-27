@@ -213,6 +213,55 @@ describe("Shell sidebar", () => {
     expect(nav.queryByRole("button", { name: /^Classroom 24(?!\d)/ })).toBeNull();
   });
 
+  describe("the dated period (#156)", () => {
+    afterEach(() => vi.useRealTimers());
+    const dated = (): CourseSummary[] => [
+      makeCourseSummary({
+        classrooms: [
+          makeClassroomSummary({ id: "a", name: "Autumn room", periodStart: "2026-09", periodEnd: "2027-01" }),
+          makeClassroomSummary({ id: "s", name: "Spring room", periodStart: "2027-02", periodEnd: "2027-07" }),
+          makeClassroomSummary({ id: "u", name: "Undated room", periodStart: null, periodEnd: null }),
+        ],
+      }),
+    ];
+    const at = (y: number, m: number) => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(y, m - 1, 15));
+    };
+
+    it("lists a dated classroom only while its period, margin included, covers today", () => {
+      at(2026, 11);
+      renderShell({ courses: dated() });
+      const nav = within(classroomsSection());
+      expect(nav.getByRole("button", { name: /^Autumn room/ })).toBeInTheDocument();
+      expect(nav.queryByRole("button", { name: /^Spring room/ })).toBeNull();
+      expect(nav.getByRole("button", { name: /^Undated room/ })).toBeInTheDocument();
+    });
+
+    it("overlaps two semesters inside the margin", () => {
+      at(2027, 2);
+      renderShell({ courses: dated() });
+      const nav = within(classroomsSection());
+      expect(nav.getByRole("button", { name: /^Autumn room/ })).toBeInTheDocument();
+      expect(nav.getByRole("button", { name: /^Spring room/ })).toBeInTheDocument();
+    });
+
+    it("counts only the current classrooms in Show all", () => {
+      at(2027, 5);
+      const courses = dated();
+      courses[0]!.classrooms.push(
+        ...Array.from({ length: 13 }, (_, i) =>
+          makeClassroomSummary({ id: `x${i}`, name: `Old ${i}`, periodStart: "2025-09", periodEnd: "2026-01" }),
+        ),
+      );
+      renderShell({ courses });
+      const nav = within(classroomsSection());
+      expect(nav.queryByRole("button", { name: /^Old/ })).toBeNull();
+      expect(nav.queryByRole("button", { name: /Show all/ })).toBeNull();
+      expect(nav.getByRole("button", { name: /^Spring room/ })).toBeInTheDocument();
+    });
+  });
+
   it("shows the student navigation, with no classroom list, outside the teacher UI", () => {
     renderShell({ teacherUi: false, me: makeMe({ role: "student" }) });
     const nav = within(sidebar());

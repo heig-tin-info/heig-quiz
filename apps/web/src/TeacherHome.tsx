@@ -17,9 +17,16 @@ import {
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import type { CourseDetail, CourseSummary, EvaluationTemplate, PoolSummary } from "@quiz/contracts";
+import {
+  ClassroomCreate,
+  type CourseDetail,
+  type CourseSummary,
+  type EvaluationTemplate,
+  type PoolSummary,
+} from "@quiz/contracts";
 
 import { api } from "./api";
+import { newPeriodDraft, PeriodFields, periodBody, periodInvalid } from "./ClassroomPeriod";
 import { useConfirm } from "./confirm";
 import { inNavigation } from "./CourseNav";
 import { useT } from "./i18n";
@@ -132,12 +139,14 @@ function NewCourseModal({ onClose }: { onClose: () => void }) {
 function NewClassroomModal({ course, onClose }: { course: CourseSummary; onClose: () => void }) {
   const t = useT();
   const qc = useQueryClient();
-  const [form, setForm] = useState({ name: "", period: "" });
+  const [name, setName] = useState("");
+  const [period, setPeriod] = useState(() => newPeriodDraft(new Date(), t));
+  const body = ClassroomCreate.safeParse({ name: name.trim(), ...periodBody(period) });
   const create = useMutation({
     mutationFn: () =>
       api(`/app/api/courses/${course.id}/classrooms`, {
         method: "POST",
-        body: JSON.stringify(form),
+        body: JSON.stringify(body.data),
       }),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: coursesKey });
@@ -151,7 +160,7 @@ function NewClassroomModal({ course, onClose }: { course: CourseSummary; onClose
       onSubmit={() => create.mutate()}
       submitLabel={t("common.create")}
       submitting={create.isPending}
-      canSubmit={form.name.trim() !== ""}
+      canSubmit={body.success}
       error={<FormError error={create.error} fallback={t("courses.createFailed")} />}
     >
       <Field
@@ -160,16 +169,10 @@ function NewClassroomModal({ course, onClose }: { course: CourseSummary; onClose
         fullWidth
         autoFocus
         placeholder={t("classrooms.namePlaceholder")}
-        value={form.name}
-        onChange={(e) => setForm({ ...form, name: e.target.value })}
+        value={name}
+        onChange={(e) => setName(e.target.value)}
       />
-      <Field
-        label={t("classrooms.period")}
-        fullWidth
-        placeholder={t("classrooms.periodPlaceholder")}
-        value={form.period}
-        onChange={(e) => setForm({ ...form, period: e.target.value })}
-      />
+      <PeriodFields value={period} onChange={setPeriod} invalid={periodInvalid(body)} />
     </FormDialog>
   );
 }

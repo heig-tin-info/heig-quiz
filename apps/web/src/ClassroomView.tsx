@@ -12,9 +12,10 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import type { ClassroomDetail, EvaluationSummary } from "@quiz/contracts";
+import { ClassroomPatch, type ClassroomDetail, type EvaluationSummary } from "@quiz/contracts";
 
 import { api, useMe } from "./api";
+import { PeriodFields, periodBody, periodInvalid, type PeriodDraft } from "./ClassroomPeriod";
 import { useConfirm } from "./confirm";
 import { useT } from "./i18n";
 // WP8: evaluation + dashboard
@@ -29,7 +30,6 @@ import {
   Card,
   cx,
   EmptyState,
-  Field,
   FormDialog,
   inputClass,
   Menu,
@@ -149,22 +149,27 @@ function ClassroomName({ room }: { room: ClassroomDetail }) {
 }
 
 /**
- * The period ("2026-A"), one field in a dialog.
+ * The period: its dates and its label (F-ORG-03, #156), in a dialog.
  *
  * The name renames in the title; the period does not, because an empty one
- * leaves nothing on screen to hover and click. One field, so a modal and not
- * a sheet.
+ * leaves nothing on screen to hover and click. Two fields (the dates with
+ * their presets, and the label), so a modal and not a sheet.
  */
 function PeriodModal({ room, onClose }: { room: ClassroomDetail; onClose: () => void }) {
   const t = useT();
   const qc = useQueryClient();
   const toastError = useErrorToast();
-  const [period, setPeriod] = useState(room.period);
+  const [draft, setDraft] = useState<PeriodDraft>({
+    period: room.period,
+    periodStart: room.periodStart ?? "",
+    periodEnd: room.periodEnd ?? "",
+  });
+  const body = ClassroomPatch.safeParse(periodBody(draft));
   const save = useMutation({
     mutationFn: () =>
       api(`/app/api/classrooms/${room.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ period: period.trim() }),
+        body: JSON.stringify(body.data),
       }),
     onSuccess: async () => {
       await qc.invalidateQueries();
@@ -179,15 +184,9 @@ function PeriodModal({ room, onClose }: { room: ClassroomDetail; onClose: () => 
       onSubmit={() => save.mutate()}
       submitLabel={t("common.save")}
       submitting={save.isPending}
+      canSubmit={body.success}
     >
-      <Field
-        label={t("classrooms.period")}
-        fullWidth
-        autoFocus
-        placeholder={t("classrooms.periodPlaceholder")}
-        value={period}
-        onChange={(e) => setPeriod(e.target.value)}
-      />
+      <PeriodFields value={draft} onChange={setDraft} invalid={periodInvalid(body)} />
     </FormDialog>
   );
 }
