@@ -4,6 +4,7 @@ import {
   Bell,
   BookOpen,
   Code2,
+  GitCommitHorizontal,
   GraduationCap,
   LogOut,
   Moon,
@@ -24,7 +25,7 @@ import {
 } from "./notifications/NotificationPanel";
 import type { Route } from "./router";
 import { setThemeChoice, useResolvedTheme } from "./theme";
-import { Avatar, cx, IconButton, Menu, Segmented, type MenuItem } from "./ui";
+import { Avatar, cx, IconButton, isoDateTime, Menu, Segmented, type MenuItem } from "./ui";
 import { meKey } from "./queryKeys";
 
 /**
@@ -209,6 +210,19 @@ export function UserMenu({
     },
     { label: t("header.docs"), icon: BookOpen, href: DOCS_URL, separator: true },
     { label: t("header.sources"), icon: Code2, href: SOURCES_URL },
+    ...(__COMMIT__
+      ? [
+          {
+            label: t("menu.version", {
+              sha: __COMMIT__.sha.slice(0, 7),
+              date: isoDateTime(__COMMIT__.date),
+            }),
+            title: __COMMIT__.sha,
+            icon: GitCommitHorizontal,
+            href: `${SOURCES_URL}/commit/${__COMMIT__.sha}`,
+          },
+        ]
+      : []),
     { label: t("menu.signout"), icon: LogOut, onSelect: signOut, separator: true },
   ];
   return (

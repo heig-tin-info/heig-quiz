@@ -651,6 +651,8 @@ export interface MenuItem {
   onSelect?: () => void;
   /** Plain link item (external URLs, downloads). */
   href?: string;
+  /** Tooltip on hover: what the label abbreviates. */
+  title?: string;
   danger?: boolean;
   /**
    * Greys the item out and takes it out of the arrow order. It reflects the
@@ -1012,6 +1014,7 @@ export function Menu({
                         href={it.href}
                         target={it.href.startsWith("http") ? "_blank" : undefined}
                         rel="noreferrer"
+                        title={it.title}
                         className={cls}
                         onClick={() => close(true)}
                       >
@@ -1025,6 +1028,7 @@ export function Menu({
                         type="button"
                         role="menuitem"
                         tabIndex={-1}
+                        title={it.title}
                         className={cls}
                         disabled={it.disabled}
                         aria-disabled={it.disabled}

@@ -24,6 +24,7 @@ export const fr: Record<keyof Dict, string> = {
   "menu.user": "Menu du compte",
   "menu.userUnread": "Menu du compte ({n} notifications non lues)",
   "menu.studentView": "Passer en vue étudiant",
+  "menu.version": "Version {sha} · {date}",
   "menu.teacherView": "Revenir en vue enseignant",
   "menu.lightTheme": "Thème clair",
   "menu.darkTheme": "Thème sombre",
