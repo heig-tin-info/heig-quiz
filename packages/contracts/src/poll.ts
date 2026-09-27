@@ -86,7 +86,45 @@ export const PollInlineCreate = z.object({
 });
 export type PollInlineCreate = z.infer<typeof PollInlineCreate>;
 
-/** A pollable question of the teacher's personal pool, most recently used first. */
+/** One part of a poll outcome: a rate in [0, 1] and its whole percentage. */
+export const PollOutcomeShare = z.object({
+  rate: z.number().min(0).max(1),
+  /** Whole percentages of one outcome sum to 100 (largest remainder). */
+  percent: z.number().int().min(0).max(100),
+});
+export type PollOutcomeShare = z.infer<typeof PollOutcomeShare>;
+
+/**
+ * How a question fared over its last runs (`pollOutcome` of `@quiz/domain`,
+ * issue #161): a donut when it has a key — with abstention only when every
+ * averaged run had a roster — "n answers" when it has none, nothing when no
+ * run has finished.
+ */
+export const PollOutcome = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("none") }),
+  z.object({
+    kind: z.literal("opinion"),
+    runs: z.number().int().min(1),
+    /** Answers per run, on average, rounded. */
+    answers: z.number().int().min(0),
+  }),
+  z.object({
+    kind: z.literal("keyed"),
+    runs: z.number().int().min(1),
+    correct: PollOutcomeShare,
+    incorrect: PollOutcomeShare,
+    abstention: PollOutcomeShare.nullable(),
+  }),
+]);
+export type PollOutcome = z.infer<typeof PollOutcome>;
+
+/**
+ * `GET /app/api/polls/questions`, the launcher's "Recent polls": the
+ * questions of the polls the caller launched, one row per question, most
+ * recent run first — the questions written in the launcher and never kept
+ * included (ADR-014, addendum 2026-09-27) — then the published questions of
+ * their personal pool that never ran.
+ */
 export const PollQuestionPick = z.object({
   id: z.uuid(),
   type: PollQuestionType,
@@ -95,6 +133,10 @@ export const PollQuestionPick = z.object({
   prompt: z.string(),
   lastUsedAt: z.iso.datetime().nullable(),
   useCount: z.number().int(),
+  /** The question sits in a pool; false for one written in the launcher and not kept. */
+  saved: z.boolean(),
+  /** Over the caller's last runs of the question (`POLL_OUTCOME_WINDOW` of `@quiz/domain`). */
+  outcome: PollOutcome,
 });
 export type PollQuestionPick = z.infer<typeof PollQuestionPick>;
 

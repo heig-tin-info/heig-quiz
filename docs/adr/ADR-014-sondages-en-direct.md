@@ -289,3 +289,61 @@ came back through the beamer.
 - *No menu.* The projection's `…` menu is gone: the way back is an arrow before the context
   line, "Keep this question" a bookmark icon, "End poll" a named ghost button, still
   confirmed. The arrow keys and Page Up / Page Down (a presenter clicker) walk the steps.
+
+## Addendum (2026-09-27): "Recent polls" lists every question the teacher ran
+
+Issue #161. Addendum 2026-09-23, item 3, said an unsaved question "is in no list, no
+search, no count and no editor", and item 6 made "Keep this question" the only way back to
+it. In practice a teacher's first wish in the launcher is to re-run a question they asked
+last week — most of which they wrote inline and never kept — and those were unreachable
+once the poll ended. Decided by the product owner: the list INCLUDES them.
+
+1. **The tab is "Recent polls"** (« Derniers polls »). `GET /app/api/polls/questions`
+   answers the questions of the polls the caller LAUNCHED (`evaluations.mode = 'poll'`,
+   `created_by` = caller), one row per question, most recent run first — kept or not —
+   then the published questions of their personal pool that never ran, most recently
+   edited first. `PollQuestionPick` gains `saved` (the question sits in a pool) and
+   `outcome`. "Used" and "use count" now count the caller's own runs. A pool question is
+   listed only while `poolAccess` still lets the caller reach it, so every row can be
+   relaunched. The launcher opens on this tab when it has rows, on "Ask a new question"
+   otherwise.
+2. **Item 3 is amended, not dropped.** An unsaved question is still in no POOL list, no
+   search of the pool screens, no count and no editor, and `addItems` still refuses it.
+   It is reachable from exactly one more place, the caller's "Recent polls", on exactly
+   one ground: they ran a poll on it. `POST /app/api/polls` relaunches it through
+   `findOwnUnsavedPollQuestion` (`guards.ts`) — `pool_id` null AND a poll created by the
+   caller froze a version of it, or the caller is an admin — tried after the pool
+   predicate; a colleague on the same staff gets the ordinary 404 (they reach the poll,
+   and "Run again" on it, through the staff predicate as before). The relaunch reuses the
+   same question row and its one version; nothing is copied. "Keep this question" is
+   unchanged: it is how a question gets into a pool, not how it stays reachable.
+3. **The outcome is a pure rule**, `pollOutcome` in `@quiz/domain`, fed per FINISHED run
+   (a running poll is still moving) with `{ keyed, answered, correct, roster }`:
+   - `keyed` is the type's `hasKey` on the FROZEN version; `correct` counts the answers
+     whose validated grading has full marks (`points >= max_points > 0`) — the grading
+     pass is what decides right and wrong, nothing is re-graded for a list; a keyed run
+     with answers and no grading yet is not a result and is skipped;
+   - `roster` is the classroom's current non-staff enrolments for a poll that asks who
+     answers, and NULL for an anonymous one. It is keyed on "has a roster", not on the
+     classroom (`rosterOfRun`): an anonymous poll knows nobody who was meant to answer,
+     and a classroom-less poll (#160) has no roster at all;
+   - the kind follows the newest run (keyless → "n answers" per run, on average; keyed →
+     donut), runs of the other kind are dropped, and the window is the last five runs
+     left (`POLL_OUTCOME_WINDOW`);
+   - abstention is shown only when EVERY run of the window had a roster; one anonymous run
+     folds the donut to correct / incorrect over the answers — an average of "share of the
+     room" and "share of those who answered" means neither;
+   - the average is the mean of the per-run rates, each over `max(roster, answered)` (a
+     signed-in teacher trying their own poll has no seat) or over `answered`; a run with
+     no denominator is left out. Whole percentages are distributed by largest remainder,
+     so a tooltip always sums to 100.
+4. **Drawing it** is `apps/web/DESIGN.md`, "Poll outcome donut": `success` / `warning` /
+   grey, fixed clockwise order, 2 px gaps, the correct share in the hole, every share in
+   words on hover and focus.
+
+Rejected: listing only kept questions and nudging the teacher to keep more — the point of
+the inline path is that a lecture has no time for filing; a `last_polled_at` column on
+`questions` — the polls already hold that fact; recomputing correctness from the answer
+payloads with the type's `grade` — a second grading path whose verdict could disagree with
+the grading panel's; the roster frozen at poll time — no table holds it, and a roster that
+changed since is a rare, visible drift on a five-run average.

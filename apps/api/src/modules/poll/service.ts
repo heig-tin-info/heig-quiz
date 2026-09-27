@@ -20,7 +20,7 @@
  */
 import { randomBytes } from "node:crypto";
 
-import { and, asc, count, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
 import {
@@ -32,7 +32,7 @@ import {
   type PollTally,
   type PollTeacherView,
 } from "@quiz/contracts";
-import { pollTally, type PollType } from "@quiz/domain";
+import { pollOutcome, pollTally, type PollRunCounts, type PollType } from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import { isUniqueViolation, type Db } from "../../db/client.js";
@@ -41,8 +41,11 @@ import {
   attempts,
   classrooms,
   courses,
+  enrollments,
   evaluationItems,
   evaluations,
+  gradings,
+  pools,
   questionVersions,
   questions,
 } from "../../db/schema.js";
@@ -57,7 +60,7 @@ import {
 } from "../evaluation/service.js";
 import * as live from "../live/service.js";
 import { solutionView, studentViewOf } from "../live/studentView.js";
-import { loadConfig, typeOf } from "../pool/config.js";
+import { hasKey, loadConfig, typeOf } from "../pool/config.js";
 import { createUnsavedQuestion } from "../pool/service.js";
 import * as events from "./events.js";
 
@@ -632,78 +635,188 @@ export async function publicView(
 // --- The launcher ---------------------------------------------------------
 
 /**
- * The pollable questions of one pool, most recently USED first and never
- * used last. "Used" is read from the poll evaluations that froze a version
- * of the question — no column is added to `questions` for it.
+ * The people a run was addressed to: its classroom's roster (staff seats
+ * excluded), or NONE for an anonymous poll. Keyed on "has a roster", not on
+ * the classroom alone: an anonymous poll counts no abstention even while it
+ * still lives in a classroom — nobody knows who was meant to answer — and a
+ * classroom-less poll has no roster at all.
  */
-export async function questionPicks(db: Db, poolId: string): Promise<PollQuestionPick[]> {
+export function rosterOfRun(
+  anonymous: boolean,
+  classroomId: string | null,
+  rosters: ReadonlyMap<string, number>,
+): number | null {
+  if (anonymous || classroomId === null) return null;
+  return rosters.get(classroomId) ?? 0;
+}
+
+/**
+ * The launcher's "Recent polls" (issue #161, ADR-014 addendum 2026-09-27):
+ * the questions of the polls the caller LAUNCHED, one row per question, most
+ * recent run first, each with the outcome of its last runs (`pollOutcome` of
+ * `@quiz/domain`); then the published questions of their personal pool that
+ * never ran, most recently edited first.
+ *
+ * A question written in the launcher and never kept (`pool_id` null) is
+ * listed like any other: the caller ran it, and relaunching it reuses the
+ * same row (`findOwnUnsavedPollQuestion` in the guards). A pool question is
+ * listed only while `poolWhere` — the caller's `poolAccess`, `undefined` for
+ * an admin — still lets them reach it, so every row can be relaunched.
+ *
+ * "Used" is read from the poll evaluations that froze a version of the
+ * question; no column is added to `questions` for it.
+ */
+export async function questionPicks(
+  db: Db,
+  input: { userId: string; poolWhere: SQL | undefined },
+): Promise<PollQuestionPick[]> {
+  const runRows = await db
+    .select({
+      evaluation: evaluations,
+      questionId: questionVersions.questionId,
+      config: questionVersions.config,
+      configVersion: questionVersions.configVersion,
+    })
+    .from(evaluations)
+    .innerJoin(evaluationItems, eq(evaluationItems.evaluationId, evaluations.id))
+    .innerJoin(questionVersions, eq(questionVersions.id, evaluationItems.questionVersionId))
+    .where(and(eq(evaluations.mode, "poll"), eq(evaluations.createdBy, input.userId)))
+    .orderBy(desc(evaluations.createdAt));
+
+  const personal = await db
+    .select({ id: questions.id })
+    .from(questions)
+    .innerJoin(pools, eq(pools.id, questions.poolId))
+    .where(and(eq(pools.ownerId, input.userId), eq(pools.isPersonal, true)));
+
+  const candidates = [...new Set([...runRows.map((r) => r.questionId), ...personal.map((p) => p.id)])];
+  if (candidates.length === 0) return [];
+
   const rows = await db
     .select({ question: questions })
     .from(questions)
+    .leftJoin(pools, eq(pools.id, questions.poolId))
     .where(
       and(
-        eq(questions.poolId, poolId),
+        inArray(questions.id, candidates),
         inArray(questions.type, ["mcq", "short"]),
-        sql`${questions.deletedAt} is null`,
+        isNull(questions.deletedAt),
+        input.poolWhere === undefined ? undefined : or(isNull(questions.poolId), input.poolWhere),
       ),
-    )
-    .orderBy(asc(questions.internalName));
+    );
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.question.id);
+  const typeById = new Map(rows.map((r) => [r.question.id, r.question.type] as const));
 
   const versions = await db
     .select()
     .from(questionVersions)
-    .where(and(inArray(questionVersions.questionId, ids), sql`${questionVersions.number} is not null`))
+    .where(and(inArray(questionVersions.questionId, ids), isNotNull(questionVersions.number)))
     .orderBy(asc(questionVersions.questionId), desc(questionVersions.number));
   const latest = new Map<string, (typeof versions)[number]>();
   for (const version of versions) if (!latest.has(version.questionId)) latest.set(version.questionId, version);
 
-  const usage = await db
-    .select({
-      questionId: questionVersions.questionId,
-      lastUsedAt: sql<Date | null>`max(${evaluations.createdAt})`,
-      useCount: count(),
-    })
-    .from(evaluationItems)
-    .innerJoin(evaluations, eq(evaluations.id, evaluationItems.evaluationId))
-    .innerJoin(questionVersions, eq(questionVersions.id, evaluationItems.questionVersionId))
-    .where(and(eq(evaluations.mode, "poll"), inArray(questionVersions.questionId, ids)))
-    .groupBy(questionVersions.questionId);
-  const used = new Map(usage.map((u) => [u.questionId, u]));
+  // What each FINISHED run counts: its answers, the answers the grading pass
+  // gave full marks (validated gradings only), and its roster. A running
+  // poll is still moving and is not a result yet.
+  const runs = runRows.filter((r) => typeById.has(r.questionId));
+  const finished = runs.filter((r) => r.evaluation.state !== "running");
+  const finishedIds = finished.map((r) => r.evaluation.id);
+  const classroomIds = [...new Set(finished.map((r) => r.evaluation.classroomId))];
+  const [answeredRows, gradedRows, rosterRows] =
+    finishedIds.length === 0
+      ? [[], [], []]
+      : await Promise.all([
+          db
+            .select({ evaluationId: attempts.evaluationId, n: count() })
+            .from(answers)
+            .innerJoin(attempts, eq(answers.attemptId, attempts.id))
+            .where(inArray(attempts.evaluationId, finishedIds))
+            .groupBy(attempts.evaluationId),
+          db
+            .select({
+              evaluationId: attempts.evaluationId,
+              graded: count(),
+              correct: sql<number>`(count(*) filter (where ${gradings.maxPoints} > 0 and ${gradings.points} >= ${gradings.maxPoints}))::int`,
+            })
+            .from(gradings)
+            .innerJoin(attempts, eq(gradings.attemptId, attempts.id))
+            .where(
+              and(
+                inArray(attempts.evaluationId, finishedIds),
+                eq(gradings.state, "validated"),
+                isNotNull(gradings.answerId),
+              ),
+            )
+            .groupBy(attempts.evaluationId),
+          db
+            .select({ classroomId: enrollments.classroomId, n: count() })
+            .from(enrollments)
+            .where(and(inArray(enrollments.classroomId, classroomIds), eq(enrollments.staff, false)))
+            .groupBy(enrollments.classroomId),
+        ]);
+  const answeredOf = new Map(answeredRows.map((r) => [r.evaluationId, r.n]));
+  const gradedOf = new Map(gradedRows.map((r) => [r.evaluationId, r]));
+  const rosters = new Map(rosterRows.map((r) => [r.classroomId, r.n]));
+
+  const usage = new Map<string, { lastUsedAt: Date; useCount: number; counts: PollRunCounts[] }>();
+  for (const run of runs) {
+    let entry = usage.get(run.questionId);
+    if (!entry) {
+      // Newest first: the first run seen is the last one.
+      entry = { lastUsedAt: run.evaluation.createdAt, useCount: 0, counts: [] };
+      usage.set(run.questionId, entry);
+    }
+    entry.useCount += 1;
+    if (run.evaluation.state === "running") continue;
+    const type = typeById.get(run.questionId)!;
+    const keyed = hasKey(type, loadConfig(type, { config: run.config, configVersion: run.configVersion }));
+    const answered = answeredOf.get(run.evaluation.id) ?? 0;
+    const graded = gradedOf.get(run.evaluation.id);
+    entry.counts.push({
+      keyed,
+      answered,
+      // Nobody answered: nothing to grade, and zero is the truth. Otherwise
+      // a run the grading pass has not reached is no result yet.
+      correct: answered === 0 ? 0 : graded ? graded.correct : null,
+      roster: rosterOfRun(
+        pollSettingsOf(run.evaluation).anonymous,
+        run.evaluation.classroomId,
+        rosters,
+      ),
+    });
+  }
 
   const picks: PollQuestionPick[] = [];
   for (const { question } of rows) {
     const version = latest.get(question.id);
     if (!version) continue; // a draft-only question is not runnable (F-EVAL-03)
-    const stats = used.get(question.id);
+    const stats = usage.get(question.id);
     const student = studentPayload(
       question.type,
       { config: version.config, configVersion: version.configVersion },
       question.id,
     ) as { prompt?: unknown };
-    const lastUsedAt = stats?.lastUsedAt ? new Date(stats.lastUsedAt) : null;
     picks.push({
       id: question.id,
       type: question.type as PollType,
       internalName: question.internalName,
       prompt: typeof student.prompt === "string" ? student.prompt : "",
-      lastUsedAt: lastUsedAt === null ? null : iso(lastUsedAt),
+      lastUsedAt: stats ? iso(stats.lastUsedAt) : null,
       useCount: stats?.useCount ?? 0,
+      saved: question.poolId !== null,
+      outcome: pollOutcome(stats?.counts ?? []),
     });
   }
-  // Most recently TOUCHED first: the last run when there was one, else the
-  // last edit. A question published a minute ago has never run, and it is
-  // the one the teacher came back to the launcher for — it must be on top,
-  // not under every question that ever ran (the create-then-return flow of
-  // the launcher relies on this and on nothing else).
+  // The last run first; the questions that never ran after them, the most
+  // recently edited first.
   const touchedAt = new Map(
     rows.map((r) => [r.question.id, r.question.updatedAt.toISOString()] as const),
   );
-  const keyOf = (pick: PollQuestionPick) => pick.lastUsedAt ?? touchedAt.get(pick.id) ?? "";
   return picks.sort((a, b) => {
-    const ka = keyOf(a);
-    const kb = keyOf(b);
+    if ((a.lastUsedAt === null) !== (b.lastUsedAt === null)) return a.lastUsedAt === null ? 1 : -1;
+    const ka = a.lastUsedAt ?? touchedAt.get(a.id) ?? "";
+    const kb = b.lastUsedAt ?? touchedAt.get(b.id) ?? "";
     if (ka === kb) return a.internalName.localeCompare(b.internalName);
     return ka < kb ? 1 : -1;
   });

@@ -937,6 +937,32 @@ or EDIT them?". A list you scan stays a table however many columns it has to
 drop. A list you edit field by field becomes panels as soon as a row needs
 more than one line.
 
+## Poll outcome donut (launcher, "Recent polls")
+
+A 36 px ring beside each row of the launcher's "Recent polls" (issue #161,
+`poll/OutcomeDonut.tsx`): how the question fared over its last five runs.
+The only chart of the teacher's surfaces, so its rules are written here.
+
+- **Three parts, fixed order**, clockwise from twelve o'clock: correct,
+  incorrect, no answer. The order never follows the size of a share.
+- **Colours**: correct `success`; incorrect `warning`, NOT `danger`; no
+  answer `fg-faint` at 50 %. Red against green was measured with the dataviz
+  validator: ΔE 6.7 (deutan) in light and 4.0 in dark — below the floor even
+  with secondary encoding; `success`/`warning` is 7.1 / 7.6, legal with it.
+  It is also the voice of the projection: a poll marks nobody wrong. No
+  answer is an absence, not a category, hence a grey; `line-strong` vanished
+  on the dark surface.
+- **Never colour alone**: 2 px surface gaps between the parts, the correct
+  share printed in the hole (10 px, tabular), the exact shares in words on
+  hover AND focus (`Tip`; the ring is focusable, `role="img"`, and its
+  accessible name is the same sentence), and one legend line above the list
+  naming the colours ("no answer" only when some ring has it).
+- **An opinion poll has no ring**: no key, nothing to be right about — the
+  row says "n answers" in `fg-muted`. A question with no finished run shows
+  nothing.
+- The ring sits BESIDE the pressable part of the row, not inside it: a
+  focusable thing nested in a button is one control too many.
+
 ## Voice
 
 Sentence case everywhere. Buttons start with a verb ("Create question",

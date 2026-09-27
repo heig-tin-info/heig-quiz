@@ -38,6 +38,24 @@ const picks: PollQuestionPick[] = [
     prompt: "How many bytes is a pointer on LP64?",
     lastUsedAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
     useCount: 4,
+    saved: true,
+    outcome: {
+      kind: "keyed",
+      runs: 4,
+      correct: { rate: 0.45, percent: 45 },
+      incorrect: { rate: 0.3, percent: 30 },
+      abstention: { rate: 0.25, percent: 25 },
+    },
+  },
+  {
+    id: "55555555-5555-4555-8555-555555555555",
+    type: "mcq",
+    internalName: "Is the lab pace right?",
+    prompt: "Is the lab pace right?",
+    lastUsedAt: new Date(Date.now() - 4 * 86_400_000).toISOString(),
+    useCount: 2,
+    saved: false,
+    outcome: { kind: "opinion", runs: 2, answers: 38 },
   },
   {
     id: "44444444-4444-4444-8444-444444444444",
@@ -46,6 +64,8 @@ const picks: PollQuestionPick[] = [
     prompt: "Complexity of a binary search?",
     lastUsedAt: null,
     useCount: 0,
+    saved: true,
+    outcome: { kind: "none" },
   },
 ];
 
@@ -71,13 +91,33 @@ describe("PollLauncher", () => {
     expect(screen.getByText("Never polled")).toBeVisible();
   });
 
-  it("says where its questions come from while it has none, and points to the other tab", async () => {
-    // No personal pool yet: the API answers an empty list, never a 404.
+  it("opens on the recent polls, each with its outcome in words", async () => {
+    mockFetch({ [`GET ${QUESTIONS}`]: ok(picks), [`GET ${COURSES}`]: ok(courses) });
+    renderWithProviders(<PollLauncher navigate={vi.fn()} />);
+
+    await screen.findByText("sizeof-ptr-64");
+    expect(screen.getByRole("tab", { name: /Recent polls/, selected: true })).toBeVisible();
+    // A donut is an image whose name spells every share out.
+    expect(
+      screen.getByRole("img", { name: "Correct 45 % · Incorrect 30 % · No answer 25 % (last 4 runs)" }),
+    ).toBeVisible();
+    // An opinion poll has no donut, a count instead; a question never kept says so.
+    expect(screen.getByText("38 answers")).toBeVisible();
+    expect(screen.getByText(/not kept/)).toBeVisible();
+    // One legend names the colours, abstention included.
+    expect(screen.getByText("Outcome of the last runs")).toBeVisible();
+    expect(screen.getByText("no answer")).toBeVisible();
+  });
+
+  it("opens on a new question while there is no poll to run again", async () => {
+    // A teacher who never polled: the API answers an empty list, never a 404.
     mockFetch({ [`GET ${QUESTIONS}`]: ok([]), [`GET ${COURSES}`]: ok(courses) });
     renderWithProviders(<PollLauncher navigate={vi.fn()} />);
 
-    expect(await screen.findByText("No question kept yet")).toBeVisible();
-    expect(screen.getByText(/Questions you keep after a poll land here/)).toBeVisible();
+    expect(await screen.findByLabelText("Statement")).toBeVisible();
+    await userEvent.click(screen.getByRole("tab", { name: /Recent polls/ }));
+    expect(await screen.findByText("No poll yet")).toBeVisible();
+    expect(screen.getByText(/The questions of the polls you launch land here/)).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Ask a new question" }));
     expect(await screen.findByLabelText("Statement")).toBeVisible();
   }, 20_000);

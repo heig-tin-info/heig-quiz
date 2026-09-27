@@ -549,6 +549,8 @@ describe("a poll on a question written in the launcher and never saved", () => {
 
   it("starts the poll, titled by its statement, on a question no pool holds", async () => {
     const before = await unsavedCount();
+    // A minute later than every poll before it: "Recent polls" is newest first.
+    server.clock.advance(60_000);
     const created = await inline(teacher.headers, { type: "mcq", config: MCQ_CONFIG });
     expect(created.statusCode).toBe(201);
     const body = created.json();
@@ -560,8 +562,9 @@ describe("a poll on a question written in the launcher and never saved", () => {
     expect(body.question.type).toBe("mcq");
     expect(body.question.solution).toEqual({ correct: [0] });
 
-    // One question more, and it belongs to no pool: nothing lists it, and
-    // the editor's route cannot reach it.
+    // One question more, and it belongs to no pool: no pool lists it and
+    // the editor's route cannot reach it — only the launcher's "Recent
+    // polls" of the teacher who ran it does (ADR-014, addendum 2026-09-27).
     expect(await unsavedCount()).toBe(before + 1);
     const [row] = await server.app.db
       .select()
@@ -569,7 +572,7 @@ describe("a poll on a question written in the launcher and never saved", () => {
       .where(eq(questions.id, body.question.id));
     expect(row!.poolId).toBeNull();
     const picks = await get("/app/api/polls/questions", teacher.headers);
-    expect((picks.json() as { id: string }[]).map((p) => p.id)).not.toContain(body.question.id);
+    expect(picks.json()[0]).toMatchObject({ id: body.question.id, saved: false, useCount: 1 });
     expect((await get(`/app/api/questions/${body.question.id}`, teacher.headers)).statusCode).toBe(404);
 
     // Audited like the other path, and says which path it was.
@@ -1036,5 +1039,172 @@ describe("the order of the refusals on the teacher side", () => {
     expect(malformed.json().error).toBe("validation");
 
     await post(`/app/api/evaluations/${id}/poll/end`, teacher.headers);
+  });
+});
+
+/**
+ * The launcher's "Recent polls" (issue #161, ADR-014 addendum 2026-09-27):
+ * the questions of the polls the caller launched — never-kept ones included —
+ * one row per question, most recent run first, each with the outcome of its
+ * last runs. A teacher of their own, so nothing else in this file shows up.
+ */
+describe("the launcher's recent polls", () => {
+  let lecturer: { id: string; headers: Record<string, string> };
+  let students: { id: string; headers: Record<string, string> }[];
+  let room: Awaited<ReturnType<typeof seedLive>>;
+
+  const recent = async () => {
+    const res = await get("/app/api/polls/questions", lecturer.headers);
+    expect(res.statusCode).toBe(200);
+    return res.json() as {
+      id: string;
+      saved: boolean;
+      useCount: number;
+      lastUsedAt: string | null;
+      outcome: Record<string, unknown>;
+    }[];
+  };
+  const launch = async (anonymous: boolean, type: "mcq" | "short", config: unknown) => {
+    server.clock.advance(60_000); // one run a minute: the list is newest first
+    const created = await post("/app/api/polls/inline", lecturer.headers, {
+      classroomId: room.classroomId,
+      anonymous,
+      type,
+      config,
+    });
+    expect(created.statusCode).toBe(201);
+    return {
+      id: created.json().evaluation.id as string,
+      code: created.json().evaluation.code as string,
+      questionId: created.json().question.id as string,
+    };
+  };
+  const vote = async (code: string, selected: number[], headers?: Record<string, string>) => {
+    const joined = await post(`/app/api/p/${code}/join`, headers ?? {});
+    const who = headers ?? { cookie: `${GUEST_COOKIE}=${guestCookieOf(joined)!}` };
+    const answered = await post(`/app/api/p/${code}/answer`, who, { payload: { selected } });
+    expect(answered.statusCode).toBe(200);
+  };
+  const end = (id: string) => post(`/app/api/evaluations/${id}/poll/end`, lecturer.headers);
+
+  let named: { id: string; code: string; questionId: string };
+  let anonymous: { id: string; code: string; questionId: string };
+  let opinion: { id: string; code: string; questionId: string };
+
+  beforeAll(async () => {
+    lecturer = await server.signIn("teacher");
+    students = await Promise.all(Array.from({ length: 4 }, () => server.signIn("student")));
+    room = await seedLive(server.app.db, {
+      teacherId: lecturer.id,
+      studentIds: students.map((s) => s.id),
+      questions: 0,
+    });
+  });
+
+  it("is empty for a teacher who never launched a poll", async () => {
+    expect(await recent()).toEqual([]);
+  });
+
+  it("counts abstention against the roster of a poll that asks who answers", async () => {
+    named = await launch(false, "mcq", { ...MCQ_CONFIG, prompt: "Named: capital of Vaud?" });
+    await vote(named.code, [0], students[0]!.headers);
+    await vote(named.code, [1], students[1]!.headers);
+    await end(named.id);
+
+    const [row] = await recent();
+    expect(row).toMatchObject({ id: named.questionId, saved: false, useCount: 1 });
+    // 4 on the roster, 1 right, 1 wrong, 2 silent.
+    expect(row!.outcome).toEqual({
+      kind: "keyed",
+      runs: 1,
+      correct: { rate: 0.25, percent: 25 },
+      incorrect: { rate: 0.25, percent: 25 },
+      abstention: { rate: 0.5, percent: 50 },
+    });
+  });
+
+  it("has no abstention for an anonymous poll, and no donut for an opinion poll", async () => {
+    anonymous = await launch(true, "mcq", { ...MCQ_CONFIG, prompt: "Anonymous: capital of Vaud?" });
+    await vote(anonymous.code, [0]);
+    await vote(anonymous.code, [0]);
+    await vote(anonymous.code, [2]);
+    await vote(anonymous.code, [0]);
+    await end(anonymous.id);
+
+    opinion = await launch(true, "mcq", {
+      configVersion: 2,
+      prompt: "Opinion: the pace of the lab?",
+      choices: [
+        { text: "Slow", correct: false },
+        { text: "Fine", correct: false },
+      ],
+      mode: "single",
+    });
+    await vote(opinion.code, [0]);
+    await vote(opinion.code, [1]);
+    await vote(opinion.code, [1]);
+    await end(opinion.id);
+
+    const rows = await recent();
+    // Most recent run first.
+    expect(rows.map((r) => r.id)).toEqual([opinion.questionId, anonymous.questionId, named.questionId]);
+    expect(rows[0]!.outcome).toEqual({ kind: "opinion", runs: 1, answers: 3 });
+    expect(rows[1]!.outcome).toEqual({
+      kind: "keyed",
+      runs: 1,
+      correct: { rate: 0.75, percent: 75 },
+      incorrect: { rate: 0.25, percent: 25 },
+      abstention: null,
+    });
+  });
+
+  it("relaunches a question that was never kept, and averages the runs", async () => {
+    server.clock.advance(60_000);
+    const again = await post("/app/api/polls", lecturer.headers, {
+      classroomId: room.classroomId,
+      questionId: named.questionId,
+      anonymous: false,
+    });
+    expect(again.statusCode).toBe(201);
+    expect(again.json().question).toMatchObject({ id: named.questionId, saved: false });
+    const againId = again.json().evaluation.id as string;
+
+    // While it runs, it is on top but its outcome has not moved.
+    let rows = await recent();
+    expect(rows[0]).toMatchObject({ id: named.questionId, useCount: 2 });
+    expect(rows[0]!.outcome).toMatchObject({ runs: 1, correct: { percent: 25 } });
+
+    // Everyone right this time: (25 % + 100 %) / 2, abstention (50 % + 0) / 2.
+    const code = again.json().evaluation.code as string;
+    for (const student of students) await vote(code, [0], student.headers);
+    await end(againId);
+    rows = await recent();
+    expect(rows[0]!.outcome).toEqual({
+      kind: "keyed",
+      runs: 2,
+      correct: { rate: 0.625, percent: 63 },
+      incorrect: { rate: 0.125, percent: 12 },
+      abstention: { rate: 0.25, percent: 25 },
+    });
+  });
+
+  it("is the caller's own: a colleague neither lists nor relaunches it", async () => {
+    const colleague = await server.signIn("teacher");
+    await server.app.db.insert(courseStaff).values({ courseId: room.courseId, userId: colleague.id });
+    const theirs = await get("/app/api/polls/questions", colleague.headers);
+    expect(theirs.json()).toEqual([]);
+    const refused = await post("/app/api/polls", colleague.headers, {
+      classroomId: room.classroomId,
+      questionId: named.questionId,
+      anonymous: true,
+    });
+    expect(refused.statusCode).toBe(404);
+  });
+
+  it("marks a kept question saved, and keeps its history", async () => {
+    const kept = await post(`/app/api/evaluations/${opinion.id}/poll/keep`, lecturer.headers);
+    expect(kept.statusCode).toBe(200);
+    const row = (await recent()).find((r) => r.id === opinion.questionId);
+    expect(row).toMatchObject({ saved: true, useCount: 1, outcome: { kind: "opinion", answers: 3 } });
   });
 });

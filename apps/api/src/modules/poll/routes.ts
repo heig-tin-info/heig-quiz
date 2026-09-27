@@ -24,7 +24,7 @@
  *         student payload (invariant 4).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import {
   IdParam,
@@ -40,8 +40,15 @@ import {
 import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { CSRF_COOKIE, CSRF_HEADER } from "../../auth/session.js";
-import { pools, questions } from "../../db/schema.js";
-import { findAccessibleClassroom, findAccessibleQuestion, teacherGuard } from "../guards.js";
+import { questions } from "../../db/schema.js";
+import {
+  accessWhere,
+  findAccessibleClassroom,
+  findAccessibleQuestion,
+  findOwnUnsavedPollQuestion,
+  poolAccess,
+  teacherGuard,
+} from "../guards.js";
 import { emptyBody, invalid, notFound, teacherRoute } from "../http.js";
 import { byId } from "../evaluation/service.js";
 import * as live from "../live/service.js";
@@ -81,9 +88,16 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     return (await findAccessibleClassroom(app.db, req.user!, classroomId))?.room ?? null;
   }
 
-  /** The question, loaded through the pool predicate — 404 otherwise. */
+  /**
+   * The question, loaded through the pool predicate, or — for one written
+   * in the launcher and never kept — through the polls the caller launched
+   * on it (ADR-014, addendum 2026-09-27). 404 otherwise.
+   */
   async function reachableQuestion(req: FastifyRequest, questionId: string) {
-    return (await findAccessibleQuestion(app.db, req.user!, questionId))?.question ?? null;
+    return (
+      (await findAccessibleQuestion(app.db, req.user!, questionId))?.question ??
+      (await findOwnUnsavedPollQuestion(app.db, req.user!, questionId))
+    );
   }
 
   /** The poll, loaded through the staff predicate of its classroom. */
@@ -127,19 +141,17 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
   );
 
   /**
-   * The pollable questions of the teacher's personal pool. A teacher who has
-   * never run a poll has no personal pool yet, and gets an empty list: a
-   * READ never creates one.
+   * The launcher's "Recent polls" (issue #161): the questions of the polls
+   * the caller launched — kept or not — with their outcome, then the
+   * never-run questions of their personal pool. A read never creates that
+   * pool: a teacher who has never polled gets an empty list.
    */
-  app.get("/app/api/polls/questions", { preHandler: requireTeacher }, async (req) => {
-    const [pool] = await app.db
-      .select({ id: pools.id })
-      .from(pools)
-      .where(and(eq(pools.ownerId, req.user!.id), eq(pools.isPersonal, true)))
-      .limit(1);
-    if (!pool) return [];
-    return service.questionPicks(app.db, pool.id);
-  });
+  app.get("/app/api/polls/questions", { preHandler: requireTeacher }, async (req) =>
+    service.questionPicks(app.db, {
+      userId: req.user!.id,
+      poolWhere: accessWhere(req.user!, poolAccess(req.user!.id)),
+    }),
+  );
 
   /**
    * A new poll question, in the teacher's personal pool — which this route

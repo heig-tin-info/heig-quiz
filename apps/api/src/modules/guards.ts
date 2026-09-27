@@ -13,7 +13,7 @@
  * the reply-aware loader is that finder plus the 404. One query, two doors.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { and, eq, getTableName, sql, type AnyColumn, type SQL } from "drizzle-orm";
+import { and, eq, getTableName, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { PoolRole } from "@quiz/contracts";
@@ -29,10 +29,12 @@ import {
   courseStaff,
   courses,
   enrollments,
+  evaluationItems,
   evaluations,
   gradings,
   poolMembers,
   pools,
+  questionVersions,
   questions,
 } from "../db/schema.js";
 import { sebRequired } from "./evaluation/service.js";
@@ -321,6 +323,28 @@ export async function findAccessibleQuestion(
     .from(questions)
     .innerJoin(pools, eq(questions.poolId, pools.id))
     .where(and(eq(questions.id, questionId), accessWhere(user, poolAccess(user.id))))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * A question written in the poll launcher and never kept (`pool_id` null,
+ * ADR-014 addenda 2026-09-23 and 2026-09-27), loaded if and only if the
+ * caller LAUNCHED a poll on it (or is an admin); null otherwise. It has no
+ * pool for `poolAccess` to read, and the polls that froze it are the only
+ * thing that ties it to anyone: the launcher's "Recent polls" lists it on
+ * exactly this ground, so the two cannot disagree.
+ */
+export async function findOwnUnsavedPollQuestion(
+  db: Db,
+  user: Caller,
+  questionId: string,
+): Promise<typeof questions.$inferSelect | null> {
+  const launched = sql`EXISTS (SELECT 1 FROM ${evaluationItems} JOIN ${evaluations} ON ${qualified(evaluations.id)} = ${qualified(evaluationItems.evaluationId)} JOIN ${questionVersions} ON ${qualified(questionVersions.id)} = ${qualified(evaluationItems.questionVersionId)} WHERE ${qualified(questionVersions.questionId)} = ${qualified(questions.id)} AND ${qualified(evaluations.mode)} = 'poll' AND ${qualified(evaluations.createdBy)} = ${user.id})`;
+  const [row] = await db
+    .select()
+    .from(questions)
+    .where(and(eq(questions.id, questionId), isNull(questions.poolId), accessWhere(user, launched)))
     .limit(1);
   return row ?? null;
 }
