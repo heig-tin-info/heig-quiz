@@ -39,7 +39,7 @@ describe("LaunchStep checklist (#152)", () => {
     mockFetch({});
     render(makeEvaluationDetail());
     expect(screen.getByRole("heading", { name: /^ready$/i })).toBeInTheDocument();
-    expect(screen.getByText(/24 students in the classroom/i)).toBeInTheDocument();
+    expect(screen.getByText(/24 expected in the room/i)).toBeInTheDocument();
     expect(screen.getByText(/2 have not signed in yet/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeEnabled();
     expect(screen.getByRole("status")).toHaveTextContent(/start the evaluation from the dashboard/i);
@@ -69,6 +69,23 @@ describe("LaunchStep checklist (#152)", () => {
     );
   });
 
+  it("names negative marking and SEB only in the modes the server honours them", () => {
+    mockFetch({});
+    const settings = {
+      ...makeEvaluationDetail().evaluation.settings,
+      negativeMarking: true,
+      safeExamBrowser: true,
+    };
+    const { unmount } = render(withEvaluation({ settings }));
+    expect(screen.getByText(/negative marking/i)).toBeInTheDocument();
+    expect(screen.getByText(/safe exam browser/i)).toBeInTheDocument();
+    unmount();
+    // A poll ignores both switches.
+    render(withEvaluation({ mode: "poll", settings }));
+    expect(screen.queryByText(/negative marking/i)).toBeNull();
+    expect(screen.queryByText(/safe exam browser/i)).toBeNull();
+  });
+
   it("warns on an empty roster and on a common end already past", async () => {
     mockFetch({});
     render(
@@ -90,7 +107,7 @@ describe("LaunchStep checklist (#152)", () => {
     const user = userEvent.setup();
     mockFetch({});
     render(makeEvaluationDetail());
-    await user.click(screen.getByRole("button", { name: /24 students in the classroom/i }));
+    await user.click(screen.getByRole("button", { name: /24 expected in the room/i }));
     expect(navigate).toHaveBeenCalledWith({
       view: "classroom",
       id: makeEvaluationDetail().evaluation.classroomId,

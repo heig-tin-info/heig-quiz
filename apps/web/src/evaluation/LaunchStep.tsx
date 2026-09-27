@@ -21,7 +21,7 @@ import { ApiError, api } from "../api";
 import { useT, type Dict, type TFunction } from "../i18n";
 import type { Route } from "../router";
 import { Alert, Button, Card, cx, Field, FormDialog, isoDateTime, useNow, type IconType } from "../ui";
-import { launchChecks, readiness, type LaunchCheck } from "./launchChecks";
+import { launchChecks, lobbyKey, readiness, type LaunchCheck } from "./launchChecks";
 import { fromLocalInput, missingTimingKey, toLocalInput } from "./timing";
 import { evaluationKey } from "../queryKeys";
 
@@ -189,14 +189,11 @@ function Checklist({
   // The status line says what the button will do, or why it cannot. A
   // blocked launch names the first blocker, the one the heading's list starts
   // with.
-  const firstBlocker = checks.find((c) => c.level === "blocker");
-  const status = firstBlocker
-    ? firstBlocker.id === "items"
-      ? t("eval.launch.needQuestions")
-      : t("eval.launch.needTiming")
-    : evaluation.state === "scheduled" && evaluation.opensAt !== null
+  const status =
+    checks.find((c) => c.level === "blocker")?.status ??
+    (evaluation.state === "scheduled" && evaluation.opensAt !== null
       ? t("launch.status.scheduled", { date: isoDateTime(evaluation.opensAt) })
-      : t(`launch.status.${evaluation.settings.lobby}` as keyof Dict);
+      : `${t("launch.when.now")} ${t(lobbyKey(evaluation.settings.lobby))}`);
 
   const fix = (check: LaunchCheck) => {
     if (!check.fix) return;
@@ -391,6 +388,7 @@ function ScheduleDialog({
   const deadline = evaluation.settings.timing === "deadline";
   const [value, setValue] = useState(() => toLocalInput(evaluation.opensAt));
   const opensAt = deadline ? evaluation.opensAt : fromLocalInput(value);
+  // A convenience only: the server refusal of a past opening is tracked in #178.
   const past = opensAt !== null && Date.parse(opensAt) <= now;
 
   const schedule = useMutation({
@@ -455,7 +453,7 @@ function ScheduleDialog({
       )}
       {past ? <p className="text-[13px] text-danger">{t("launch.schedule.past")}</p> : null}
       <p className="text-sm text-fg-muted">
-        {t(`launch.schedule.what.${evaluation.settings.lobby}` as keyof Dict)}
+        {t("launch.when.scheduled")} {t(lobbyKey(evaluation.settings.lobby))}
       </p>
     </FormDialog>
   );

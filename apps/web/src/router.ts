@@ -14,7 +14,7 @@ export type Route =
    * #152), carried in `?tab=` like the page's own tabs; `parsePath` never
    * sees it, the page reads it off the query string.
    */
-  | { view: "classroom"; id: string; tab?: "roster" | "evaluations" }
+  | { view: "classroom"; id: string; tab?: "roster" }
   /** The teacher's question pools (WP7). */
   | { view: "pools" }
   | { view: "pool"; id: string }

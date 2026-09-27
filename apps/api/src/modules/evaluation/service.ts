@@ -755,13 +755,13 @@ async function editableQuestionIdsOf(
 /**
  * The roster half of the launch checklist (#152): the class seats still
  * without an account, and those the import flagged. Staff seats are never
- * counted, like the class headcount. `enrolled` is the caller's, because it
+ * counted, like the class headcount. `enrolled` comes from the caller, because it
  * is the lobby ring's denominator and that rule lives in the `live` module.
  */
 async function rosterOf(
   db: Db,
   row: EvaluationRecord,
-  enrolledOf: (row: EvaluationRecord) => Promise<number>,
+  enrolled: number,
 ): Promise<EvaluationDetail["roster"]> {
   if (row.classroomId === null) return null;
   const [counts] = await db
@@ -772,7 +772,7 @@ async function rosterOf(
     .from(enrollments)
     .where(and(seatsOf(row), eq(enrollments.staff, false)));
   return {
-    enrolled: await enrolledOf(row),
+    enrolled,
     unlinked: counts?.unlinked ?? 0,
     conflicts: counts?.conflicts ?? 0,
   };
@@ -782,7 +782,7 @@ export async function evaluationDetail(
   db: Db,
   row: EvaluationRecord,
   viewer: { id: string; role: string },
-  enrolledOf: (row: EvaluationRecord) => Promise<number>,
+  enrolled: number,
 ): Promise<EvaluationDetail> {
   const items = await itemRows(db, row.id);
   const attemptsSoFar = await attemptCount(db, row.id);
@@ -795,7 +795,7 @@ export async function evaluationDetail(
     editable: isConfigEditable(row.state, attemptsSoFar),
     self: await selfOf(db, row, viewer.id),
     editableQuestionIds: await editableQuestionIdsOf(db, items, viewer),
-    roster: await rosterOf(db, row, enrolledOf),
+    roster: await rosterOf(db, row, enrolled),
   };
 }
 

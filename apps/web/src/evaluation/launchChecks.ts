@@ -22,7 +22,7 @@ import {
   safeExamBrowserOf,
   type EvaluationDetail,
 } from "@quiz/contracts";
-import { retakesOn } from "@quiz/domain";
+import { negativeMarkingOn, retakesOn } from "@quiz/domain";
 
 import type { Dict, TFunction } from "../i18n";
 import { typeLabel } from "../questionTypes";
@@ -42,8 +42,13 @@ export interface LaunchCheck {
   level: CheckLevel;
   title: string;
   detail: string;
+  /** A blocker's reason, as the action bar's status line says it. */
+  status?: string;
   fix?: CheckFix;
 }
+
+/** What opening does, per waiting-room setting; the status line and the dialog prefix it. */
+export const lobbyKey = (lobby: "manual" | "auto" | "skip"): keyof Dict => `launch.lobby.${lobby}`;
 
 const capitalize = (s: string) => `${s.charAt(0).toUpperCase()}${s.slice(1)}`;
 
@@ -63,7 +68,8 @@ function itemsCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
       id: "items",
       level: "blocker",
       title: t("launch.items.none"),
-      detail: t("launch.items.none.detail"),
+      detail: t("eval.launch.needQuestions"),
+      status: t("eval.launch.needQuestions"),
       fix: { kind: "step", step: "questions" },
     };
   }
@@ -138,6 +144,7 @@ function timingCheck(
       id: "timing",
       level: "blocker",
       title: t("launch.timing.incomplete"),
+      status: t("eval.launch.needTiming"),
       detail: missing.map((field) => t(missingTimingKey(field))).join(" "),
       fix,
     };
@@ -159,7 +166,7 @@ function timingCheck(
     id: "timing",
     level: "ok",
     title: capitalize(timingFragment(evaluation, t, formatDate)),
-    detail: t(`launch.start.${evaluation.settings.lobby}` as keyof Dict),
+    detail: t(lobbyKey(evaluation.settings.lobby)),
     fix,
   };
 }
@@ -181,7 +188,7 @@ function rulesCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
         settings.shuffleItems ? t("launch.rules.shuffled") : t("launch.rules.fixedOrder"),
       ].join(", "),
     ),
-    detail: [attempts, ...(negativeMarkingOf(settings) ? [t("launch.rules.negative")] : [])].join(
+    detail: [attempts, ...(negativeMarkingOn(mode, negativeMarkingOf(settings)) ? [t("launch.rules.negative")] : [])].join(
       " · ",
     ),
     fix: { kind: "step", step: "timing" },
@@ -193,7 +200,8 @@ function accessCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
   const parts = [
     ...(evaluation.accessCode !== null ? [t("launch.access.code")] : []),
     ...(evaluation.ipAllowlist.length > 0 ? [t("launch.access.ip")] : []),
-    ...(safeExamBrowserOf(evaluation.settings) ? [t("eval.seb")] : []),
+    // Gated by mode like the server (`sebRequired`): SEB is an exam's switch.
+    ...(evaluation.mode === "exam" && safeExamBrowserOf(evaluation.settings) ? [t("eval.seb")] : []),
   ];
   return {
     id: "access",
