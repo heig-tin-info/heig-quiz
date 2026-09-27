@@ -1040,3 +1040,8 @@ waiting room — and "Schedule…" is its only secondary.
   then the primary at full width with the secondary as a 40 px round button
   beside it. One DOM for both, so a label or a disabled state cannot differ.
   The status line says what the button will do, or why it cannot.
+- "What students will see": the student's own `LobbyScreen` in `compact`
+  (148 px ring, 20 px title, in a `div`), on `canvas` inside a hairline
+  frame, in a 320 px sticky column from `lg` up; below `lg`, one chevron row
+  that opens it in a sheet. It is a picture, never the connected lobby
+  (ADR-018, fifth addendum), and it is absent when there is no waiting room.

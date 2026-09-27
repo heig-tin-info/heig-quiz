@@ -990,6 +990,11 @@ async function viewOf(
   };
 }
 
+/**
+ * What the waiting room shows a student. Mirrored on the teacher's launch
+ * step by `lobbyPreviewView` (`apps/web/src/evaluation/LobbyPreview.tsx`,
+ * #152): a field added here belongs there too.
+ */
 export async function lobbyView(
   db: Db,
   evaluation: EvaluationRecord,

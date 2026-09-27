@@ -22,6 +22,7 @@ import { useT, type TFunction } from "../i18n";
 import type { Route } from "../router";
 import { Alert, Button, Card, cx, Field, FormDialog, isoDateTime, useNow, type IconType } from "../ui";
 import { launchChecks, lobbyKey, readiness, type LaunchCheck } from "./launchChecks";
+import { LobbyPreviewColumn, LobbyPreviewRow } from "./LobbyPreview";
 import { fromLocalInput, missingTimingKey, toLocalInput } from "./timing";
 import { evaluationKey } from "../queryKeys";
 
@@ -206,8 +207,11 @@ function Checklist({
 
   const error = open.error ?? unschedule.error;
 
-  return (
-    <div className="mx-auto max-w-180 space-y-6">
+  // What the class will see (#152, variant C's preview): beside the list on
+  // a wide screen, a row opening a sheet below that. An evaluation with no
+  // waiting room has nothing to preview, and keeps the single column.
+  const checklist = (
+    <div className="space-y-6">
       <header>
         <h2 className="text-xl font-bold tracking-[-0.01em]">{heading.title}</h2>
         <p className="mt-1 text-sm text-fg-muted">{heading.detail}</p>
@@ -223,6 +227,12 @@ function Checklist({
           />
         ))}
       </Card>
+
+      {skip ? null : (
+        <div className="lg:hidden">
+          <LobbyPreviewRow detail={detail} />
+        </div>
+      )}
 
       {error ? (
         <Alert tone="danger" title={t("eval.launch.failed")}>
@@ -292,6 +302,16 @@ function Checklist({
           }}
         />
       ) : null}
+    </div>
+  );
+
+  if (skip) return <div className="mx-auto max-w-180">{checklist}</div>;
+  return (
+    <div className="grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+      {checklist}
+      <div className="hidden lg:block">
+        <LobbyPreviewColumn detail={detail} />
+      </div>
     </div>
   );
 }
