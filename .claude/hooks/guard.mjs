@@ -5,12 +5,16 @@
 //   Bash:        refuses `git add -A|.|--all` and `git commit -a|--all`, and a
 //                commit that leaves a modified pnpm-lock.yaml or
 //                pnpm-workspace.yaml behind while a package.json goes in.
+//                Refuses starting a test run (vitest, `pnpm … test`) while the
+//                machine is short of memory or already runs many vitest
+//                workers: several agents testing at once took WSL down.
 //   Edit/Write:  refuses editing a tracked file in a checkout on `main`.
 //
 // QUIZ_ALLOW_MAIN=1 in the environment lifts the `main` rule, for the person
-// merging in the main checkout.
+// merging in the main checkout. QUIZ_SKIP_MEMORY_GUARD=1 lifts the test-run
+// rule.
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 
 const input = JSON.parse(readFileSync(0, "utf8"));
@@ -101,10 +105,69 @@ function commitsAll(args) {
   return false;
 }
 
+// A test run: `vitest …`, or a package manager running a `test*` script
+// (`pnpm test`, `pnpm -r test`, `pnpm --filter @quiz/api test -- …`,
+// `npm test`). Leading `VAR=value` assignments are skipped.
+function startsTestRun(words) {
+  const w = words.slice(words.findIndex((x) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(x)));
+  if (!w.length) return false;
+  if (w[0] === "vitest" || w[0].endsWith("/vitest")) return true;
+  if (!["pnpm", "npm", "npx", "yarn"].includes(w[0])) return false;
+  const end = w.indexOf("--");
+  const own = end < 0 ? w.slice(1) : w.slice(1, end);
+  return own.some((a) => a === "vitest" || /^test(:|$)/.test(a));
+}
+
+// Each api worker holds a PGlite of ~800 MB; the thresholds leave room for
+// one more capped run (VITEST_MAX_WORKERS, .claude/settings.json).
+const MIN_AVAILABLE_GB = 8;
+const MAX_RUNNING_WORKERS = 20;
+
+function vitestWorkers() {
+  const byTree = new Map();
+  for (const pid of readdirSync("/proc").filter((d) => /^\d+$/.test(d))) {
+    let cmd;
+    try {
+      cmd = readFileSync(`/proc/${pid}/cmdline`, "utf8").replaceAll("\0", " ");
+    } catch {
+      continue;
+    }
+    if (!cmd.includes("vitest/dist/workers")) continue;
+    const tree = cmd.match(/(\/\S+?)\/node_modules\//)?.[1] ?? "?";
+    byTree.set(tree, (byTree.get(tree) ?? 0) + 1);
+  }
+  return byTree;
+}
+
+function checkMemory() {
+  if (process.env.QUIZ_SKIP_MEMORY_GUARD === "1") return;
+  let meminfo;
+  try {
+    meminfo = readFileSync("/proc/meminfo", "utf8");
+  } catch {
+    return; // not Linux: nothing to measure
+  }
+  const kb = Number(meminfo.match(/^MemAvailable:\s+(\d+)/m)?.[1]);
+  if (!kb) return;
+  const availableGb = kb / 1048576;
+  const byTree = vitestWorkers();
+  const running = [...byTree.values()].reduce((a, b) => a + b, 0);
+  if (availableGb >= MIN_AVAILABLE_GB && running <= MAX_RUNNING_WORKERS) return;
+  const who = [...byTree].map(([tree, n]) => `${n} in ${tree}`).join(", ") || "none";
+  block(
+    `not starting a test run now: ${availableGb.toFixed(1)} GB of RAM available (minimum ${MIN_AVAILABLE_GB}), ` +
+      `${running} vitest workers already running (maximum ${MAX_RUNNING_WORKERS}; ${who}). ` +
+      "Several test runs at once exhausted this machine's RAM and took WSL down. Wait for the other runs to " +
+      "finish (a Monitor until-loop on /proc/meminfo, not sleep), then retry; run only the files you touched, " +
+      "with `-- --maxWorkers=2`. QUIZ_SKIP_MEMORY_GUARD=1 lifts this check.",
+  );
+}
+
 function checkBash(command) {
   let dir = cwd;
   const pendingAdds = [];
   for (const words of simpleCommands(command)) {
+    if (startsTestRun(words)) checkMemory();
     if (words[0] === "cd" && words[1]) {
       dir = resolve(dir, words[1]);
       continue;

@@ -66,3 +66,23 @@ cd ../heig-quiz-<subject> && git stash pop
   `package.json` committed without the pending `pnpm-lock.yaml` or
   `pnpm-workspace.yaml`, and an edit to a tracked file in a checkout on
   `main`. Whoever merges in the main checkout sets `QUIZ_ALLOW_MAIN=1`.
+
+## 7. One machine, shared RAM
+
+All agents run on one workstation (WSL, 31 GB). Vitest starts a worker per
+core, and every `apps/api` worker holds a PGlite of ~800 MB: two or three
+full suites at once exhausted the RAM and took WSL down, twice, with every
+session on it.
+
+- `.claude/settings.json` sets `VITEST_MAX_WORKERS=4` for every session;
+  `apps/api` and `apps/web` read it (their config caps it at
+  `min(6, cores − 1)` otherwise).
+- While iterating, run only the files you touched
+  (`pnpm --filter @quiz/api test -- src/modules/<name>`); the full suite once,
+  at the end, with `pnpm -r --workspace-concurrency=1 test`.
+- `guard.mjs` refuses to start a test run while less than 8 GB is available
+  or more than 20 vitest workers already run on the machine
+  (the crashes happened at 58 to 76). Wait for them
+  (a `Monitor` until-loop on `/proc/meminfo`) instead of retrying at once.
+  `QUIZ_SKIP_MEMORY_GUARD=1` lifts the check.
+- Kill every dev server or Vite you started before you finish.
