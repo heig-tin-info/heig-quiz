@@ -141,6 +141,13 @@
       "when": 1790535666283,
       "tag": "0019_evaluation_templates",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1790541453129,
+      "tag": "0020_user_course_prefs",
+      "breakpoints": true
     }
   ]
 }

@@ -21,6 +21,7 @@ import {
 
 import type { CourseSummary, Me, PoolSummary } from "@quiz/contracts";
 
+import { inNavigation } from "./CourseNav";
 import { fuzzyFilter } from "./fuzzy";
 import { gradingLinks } from "./grading";
 import { DOCS_URL, SOURCES_URL } from "./Header";
@@ -169,7 +170,9 @@ export function buildCommands(ctx: CommandContext): Command[] {
         run: () => navigate({ view: "pool", id: pool.id }),
       });
     }
-    for (const course of ctx.courses) {
+    // A course the teacher hid is out of their navigation, the palette
+    // included (#155); its classrooms stay one click away on the course list.
+    for (const course of ctx.courses.filter((c) => inNavigation(c))) {
       for (const room of course.classrooms) {
         commands.push({
           id: `${CLASSROOM_COMMAND_PREFIX}${room.id}`,

@@ -131,6 +131,7 @@ Common columns omitted: `id uuid pk`, `created_at`, `updated_at`.
 | `api_tokens` | `user_id`, `token_hash`, `label`, `scopes` text[], `last_used_at`, `expires_at` | Expert, API and CLI |
 | `courses` | `name`, `code` | |
 | `course_staff` | `course_id`, `user_id` | composite pk |
+| `user_course_prefs` | `user_id`, `course_id`, `hidden_at` nullable | composite pk, both FKs cascade; one user's display state for one course (ADR-032), no `id` nor timestamps |
 | `course_pools` | `course_id`, `pool_id` | composite pk |
 | `classrooms` | `course_id`, `name`, `period`, `join_code` unique nullable, `archived_at` | |
 | `enrollments` | `classroom_id`, `user_id`, `time_bonus_percent` int default 0, `note` | unique (classroom, user) |

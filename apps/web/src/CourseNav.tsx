@@ -28,7 +28,9 @@ import { cx, Tip, useTruncated } from "./ui";
  * section (`GET /courses`, on `coursesKey`), handed down by `Nav`: every
  * course of the caller's staff, each with its classrooms. The server leaves
  * the archived classrooms out of that list, so the tree never shows one; it
- * is reached from the course's card.
+ * is reached from the course's card ("Show archived"). A course the teacher
+ * hid (#155) is left out of "all" too — except the one being read, because
+ * the tree says where the reader is before it offers where to go.
  */
 
 export function useCourseNavState(): NavCycle {
@@ -48,9 +50,19 @@ export function inCourseSection(route: Route): boolean {
 }
 
 /** The course whose classroom is being read, or `null` off a classroom page. */
-function activeCourseOf(courses: CourseSummary[], route: Route): string | null {
+export function activeCourseOf(courses: CourseSummary[], route: Route): string | null {
   if (route.view !== "classroom") return null;
   return courses.find((c) => c.classrooms.some((r) => r.id === route.id))?.id ?? null;
+}
+
+/**
+ * THE navigation rule of a hidden course (#155, ADR-032): the course list,
+ * both sidebar sections and the palette leave out a course the caller hid —
+ * except `activeId`, the course being read, because the navigation says
+ * where the reader is before it offers where to go. Pickers never ask.
+ */
+export function inNavigation(course: CourseSummary, activeId?: string | null): boolean {
+  return !course.hidden || course.id === activeId;
 }
 
 /**
@@ -222,8 +234,16 @@ export function CourseNavTree({
       if (!next.delete(id)) next.add(id);
       return next;
     });
+  const shown = {
+    isLoading: courses.isLoading,
+    isError: courses.isError,
+    data: courses.data?.filter((c) => inNavigation(c, activeId)),
+  };
   return (
-    <NavTree query={courses} empty={t("courses.empty.title")}>
+    <NavTree
+      query={shown}
+      empty={courses.data?.length ? t("courses.allHidden") : t("courses.empty.title")}
+    >
       {(list) => (
         <ul className="space-y-0.5">
           {list.map((course) => {

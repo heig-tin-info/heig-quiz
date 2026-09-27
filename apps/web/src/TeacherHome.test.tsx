@@ -125,15 +125,101 @@ describe("TeacherHome", () => {
     ]);
   });
 
-  it("offers the two course actions as icon buttons, named", async () => {
+  it("offers the three course actions in one menu", async () => {
     mockFetch({ [`GET ${COURSES}`]: ok([makeCourseSummary()]) });
     renderWithProviders(<TeacherHome navigate={vi.fn()} />);
 
-    // Two actions, so two buttons and NO overflow menu: `Actions` decides the
-    // shape, and a course has exactly these two things beyond its classrooms.
-    expect(await screen.findByRole("button", { name: "Add a staff member" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Delete course" })).toBeVisible();
-    expect(screen.queryByRole("button", { name: "More actions" })).toBeNull();
+    // Three actions, so a menu: `Actions` decides the shape.
+    await userEvent.click(await screen.findByRole("button", { name: "Actions" }));
+    expect(screen.getByRole("menuitem", { name: /Add a staff member/ })).toBeVisible();
+    expect(screen.getByRole("menuitem", { name: /Hide for me/ })).toBeVisible();
+    expect(screen.getByRole("menuitem", { name: /Delete course/ })).toBeVisible();
+  });
+
+  it("hides a course for the caller from its menu (#155)", async () => {
+    const { calls } = mockFetch({
+      [`GET ${COURSES}`]: ok([makeCourseSummary()]),
+      "POST /app/api/courses/c1/hide": ok(undefined),
+    });
+    renderWithProviders(<TeacherHome navigate={vi.fn()} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Actions" }));
+    await userEvent.click(screen.getByRole("menuitem", { name: /Hide for me/ }));
+    expect(calls.some((c) => c.method === "POST" && c.url === "/app/api/courses/c1/hide")).toBe(
+      true,
+    );
+  });
+
+  it("leaves a hidden course out until “Show hidden”, then offers to show it again", async () => {
+    const { calls } = mockFetch({
+      [`GET ${COURSES}`]: ok([
+        makeCourseSummary(),
+        makeCourseSummary({ id: "c3", name: "Algorithmique", code: "ALG", hidden: true, classrooms: [] }),
+      ]),
+      "POST /app/api/courses/c3/unhide": ok(undefined),
+    });
+    renderWithProviders(<TeacherHome navigate={vi.fn()} />);
+
+    expect(await screen.findByText("Programmation C")).toBeVisible();
+    expect(screen.queryByText("Algorithmique")).toBeNull();
+    const toggle = screen.getByRole("button", { name: /Show hidden \(1\)/ });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("Algorithmique")).toBeVisible();
+    expect(screen.getByText("Hidden")).toBeVisible();
+
+    const menus = screen.getAllByRole("button", { name: "Actions" });
+    await userEvent.click(menus[1]!);
+    await userEvent.click(screen.getByRole("menuitem", { name: /Show again/ }));
+    expect(calls.some((c) => c.method === "POST" && c.url === "/app/api/courses/c3/unhide")).toBe(
+      true,
+    );
+  });
+
+  it("says the list is folded away when every course is hidden", async () => {
+    mockFetch({ [`GET ${COURSES}`]: ok([makeCourseSummary({ hidden: true })]) });
+    renderWithProviders(<TeacherHome navigate={vi.fn()} />);
+
+    expect(await screen.findByText("All your courses are hidden")).toBeVisible();
+    expect(screen.queryByText("No courses yet")).toBeNull();
+    // One way back, the empty state's: the toolbar chip stands down.
+    const back = screen.getAllByRole("button", { name: /Show hidden \(1\)/ });
+    expect(back).toHaveLength(1);
+    await userEvent.click(back[0]!);
+    expect(screen.getByText("Programmation C")).toBeVisible();
+  });
+
+  it("lists the archived classrooms behind “Show archived”, each opening its page (#155)", async () => {
+    mockFetch({
+      [`GET ${COURSES}`]: ok([makeCourseSummary()]),
+      "GET /app/api/courses/c1": ok({
+        course: { id: "c1", name: "Programmation C", code: "PRG1" },
+        staff: [],
+        pools: [],
+        classrooms: [
+          { id: "r1", name: "PRG1-2026", period: "2026-A", archivedAt: null, joinCode: null, joinCodeEnabled: false },
+          {
+            id: "r0",
+            name: "PRG1-2024",
+            period: "2024-A",
+            archivedAt: "2025-02-01T08:00:00.000Z",
+            joinCode: null,
+            joinCodeEnabled: false,
+          },
+        ],
+      }),
+      "GET /app/api/pools": ok([]),
+    });
+    const navigate = vi.fn();
+    renderWithProviders(<TeacherHome navigate={navigate} />);
+
+    const toggle = await screen.findByRole("button", { name: /Show archived \(1\)/ });
+    expect(screen.queryByRole("button", { name: /PRG1-2024/ })).toBeNull();
+    await userEvent.click(toggle);
+    await userEvent.click(screen.getByRole("button", { name: /PRG1-2024/ }));
+    // Restoring is the classroom page's business: the row only opens it.
+    expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r0" });
   });
 
   it("removes a staff member from that person's own card", async () => {

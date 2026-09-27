@@ -18,7 +18,7 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 |---|---|---|---|
 | F-ORG-01 | A teacher creates a course with a name and a short code. They may add other teachers to it. | P1 | M |
 | F-ORG-02 | A course references one or more pools. The course's evaluations draw from these pools. | P1 | M |
-| F-ORG-03 | A teacher creates a classroom in a course with a name and a period. A classroom may be archived. | P1 | M |
+| F-ORG-03 | A teacher creates a classroom in a course with a name and a period. A classroom may be archived: it leaves the course list, the sidebar and the palette, and stays reachable from its course behind "Show archived". | P1 | M |
 | F-ORG-04 | The roster is imported from CSV with at least the edu-ID email. Lines already known are merged, never duplicated. | P1 | M |
 | F-ORG-05 | A student whose email appears in a roster is attached to the classroom on their first sign-in. | P1 | M |
 | F-ORG-06 | A classroom exposes a join code. A student who enters it joins the roster. The teacher may disable the code. | P1 | S |
@@ -26,6 +26,7 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 | F-ORG-08 | The teacher may remove a student from a roster. Their past attempts are kept. | P1 | M |
 | F-ORG-09 | Deleting a classroom deletes its evaluations, attempts, answers and gradings after a confirmation that names the classroom. The questions of the pool and the course's evaluation templates are not affected: a template belongs to the course and survives every classroom (ADR-031). Deleting a course deletes its templates, and its confirmation names how many. | P1 | M |
 | F-ORG-10 | A classroom may be duplicated to a new period, without roster nor attempts, with its evaluations as drafts. | P2 | S |
+| F-ORG-11 | A teacher (or an admin) may hide a course they reach from their OWN navigation — the course list, both sections of the sidebar and the command palette — and show it again. Hiding is per user: the other staff members see nothing change, and nothing about the course changes either (classrooms, join codes, evaluations, pools). Pickers and the MCP `list_courses` keep listing a hidden course, and the course list brings hidden courses back behind "Show hidden" (#155, ADR-032, 06 no. 26). | P1 | S |
 
 ## F-POOL Pools and organisation of questions
 
