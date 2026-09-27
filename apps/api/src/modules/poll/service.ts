@@ -32,6 +32,8 @@ import type { FastifyInstance } from "fastify";
 import {
   POLL_SHORT_CAP,
   type PollAudience,
+  type PollPoolPage,
+  type PollPoolSearch,
   type PollPublicView,
   type PollQuestionPick,
   type PollSettings,
@@ -68,7 +70,7 @@ import {
 import * as live from "../live/service.js";
 import { solutionView, studentViewOf } from "../live/studentView.js";
 import { hasKey, loadConfig, typeOf } from "../pool/config.js";
-import { createUnsavedQuestion } from "../pool/service.js";
+import { createUnsavedQuestion, searchReachableQuestions } from "../pool/service.js";
 import * as events from "./events.js";
 
 // --- Failures -------------------------------------------------------------
@@ -845,6 +847,54 @@ export async function questionPicks(
     if (ka === kb) return a.internalName.localeCompare(b.internalName);
     return ka < kb ? 1 : -1;
   });
+}
+
+/** The types a poll runs, as the search across pools restricts them. */
+const POLLABLE_TYPES: readonly PollType[] = ["mcq", "short"];
+
+/**
+ * The launcher's "From pools" (issue #162): the pool screen's search over
+ * every pool the caller reaches — `poolWhere`, their pool predicate — or,
+ * with `courseId`, over the pools linked to that course. A poll is not
+ * graded, so any reachable pool may lend it a question; `POST /polls` loads
+ * the question through the same pool predicate. The statement is the one the
+ * student would see, through `toStudent` like every other poll payload.
+ */
+export async function poolQuestionPage(
+  db: Db,
+  input: { poolWhere: SQL | undefined; courseId: string | null; search: PollPoolSearch },
+): Promise<PollPoolPage> {
+  const found = await searchReachableQuestions(db, {
+    poolWhere: input.poolWhere,
+    courseId: input.courseId,
+    types: POLLABLE_TYPES,
+    search: input.search,
+  });
+  return {
+    items: found.items.map(({ question, pool, tags, latestNumber, latest }) => {
+      let prompt = "";
+      try {
+        const student = studentPayload(question.type, latest, question.id) as { prompt?: unknown };
+        if (typeof student.prompt === "string") prompt = student.prompt;
+      } catch {
+        // A version that no longer parses still shows its name; `POST /polls`
+        // is where it would be refused.
+      }
+      return {
+        id: question.id,
+        type: question.type as PollType,
+        internalName: question.internalName,
+        prompt,
+        pool,
+        tags,
+        difficulty: question.difficulty,
+        latestNumber,
+      };
+    }),
+    nextCursor: found.nextCursor,
+    total: found.total,
+    tags: found.tags,
+  };
 }
 
 /** The teacher's own polls, newest first — "run again" reads this. */

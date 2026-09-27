@@ -447,3 +447,39 @@ Rejected alternatives:
 4. **A 404 for an account off the roster.** Invariant 6 hides an entity a caller could not
    know about. This caller read the code off the wall; a 404 would tell them to check a code
    that is right.
+
+## Addendum (2026-09-27): "From pools" — a poll borrows from any pool the teacher reaches
+
+Issue #162. Until now a pool question reached the launcher only once it had run a poll
+("Recent polls") or sat in the personal pool. The product owner settled the third way in: a
+poll may run a published question of ANY pool the teacher can access, not only the pools linked
+to the course of the classroom that answers. A poll is not graded and releases nothing (8), so
+the rule that ties an evaluation's questions to its course (`addItems`) has nothing to protect
+here.
+
+1. **Access is the pool predicate, as it already was.** `POST /app/api/polls` loads the question
+   through `findAccessibleQuestion` (`poolAccess`) and never checked the course; this addendum
+   makes that the stated rule and a tested one (`pollPools.db.test.ts`): a question of a pool
+   the classroom's course does not use is polled, one of a pool the caller cannot reach is the
+   404 of a question that does not exist.
+2. **One search, not two.** `GET /app/api/polls/pool-questions` (`PollPoolSearch` →
+   `PollPoolPage` in `@quiz/contracts`) takes the parameters of `GET /pools/:id/questions`
+   (`QuestionSearch` without the category and the deleted switch) and runs the same SQL filters
+   (`filterWhere`, split out of `searchWhere` in the pool service) and the same keyset cursor
+   (`pageWhere`), across every pool the caller reaches — published, live `mcq`/`short` only; a
+   `type` outside those matches nothing. The launcher tab is the pool screen's own bar
+   (`QuestionSearchBar`, the grammar of `searchSyntax.ts`), narrowed to the two poll types.
+3. **The classroom narrows, it does not gate.** With `classroomId` the search keeps the pools
+   linked to that classroom's course; the classroom is loaded through the staff predicate first
+   (404 otherwise). The launcher offers it as a segmented control, "Classroom pools" (default) |
+   "All pools", shown only when the audience is a classroom: an anonymous poll belongs to no
+   course, so there is nothing to narrow to.
+4. **What a row shows** is the statement through `toStudent` (as every poll payload), the pool's
+   name, the published version a poll would freeze, and the tags. The page carries the scope's
+   tags (the filters left out) for the sheet and the `tag:` completion, the way a pool's tags
+   feed its own bar.
+
+Rejected: restricting polls to the course's pools — a poll is often the question of a
+colleague's pool or of last year's course, and nothing is graded; a second, client-side
+fuzzy search over a prefetched list — the grammar would drift from the pool screen's, and a
+teacher who reaches a few thousand questions would download them all.

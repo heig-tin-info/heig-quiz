@@ -2228,6 +2228,17 @@ export const fr: Record<keyof Dict, string> = {
   "poll.launcherHint": "Une question, projetée, à laquelle répond qui est dans la salle.",
   "poll.tab.pick": "Derniers polls",
   "poll.tab.new": "Poser une nouvelle question",
+  "poll.tab.pools": "Depuis les pools",
+  "poll.scope": "Quels pools",
+  "poll.scope.room": "Pools de la classe",
+  "poll.scope.all": "Tous les pools",
+  "poll.poolsFailed": "Impossible de charger les questions de vos pools.",
+  "poll.noPoolQuestions": "Aucune question à poser dans vos pools",
+  "poll.noPoolQuestionsBody":
+    "Un poll pose une question à choix multiple ou à réponse courte publiée. Publiez-en une dans un pool, ou posez une nouvelle question ici.",
+  "poll.noRoomQuestions": "Aucune question à poser dans les pools de cette classe",
+  "poll.noRoomQuestionsBody":
+    "Les pools liés à ce cours ne contiennent aucune question à choix multiple ou à réponse courte publiée. Vos autres pools, peut-être.",
   "poll.searchLabel": "Chercher parmi les questions",
   "poll.searchPlaceholder": "Chercher par nom ou par énoncé…",
   "poll.questionsFailed": "Impossible de charger vos derniers polls.",

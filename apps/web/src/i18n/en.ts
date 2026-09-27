@@ -2241,6 +2241,17 @@ export const en = {
   "poll.launcherHint": "One question, on the wall, answered by whoever is in the room.",
   "poll.tab.pick": "Recent polls",
   "poll.tab.new": "Ask a new question",
+  "poll.tab.pools": "From pools",
+  "poll.scope": "Which pools",
+  "poll.scope.room": "Classroom pools",
+  "poll.scope.all": "All pools",
+  "poll.poolsFailed": "Could not load the questions of your pools.",
+  "poll.noPoolQuestions": "No question to poll in your pools",
+  "poll.noPoolQuestionsBody":
+    "A poll runs published multiple-choice and short-answer questions. Publish one in a pool, or ask a new question here.",
+  "poll.noRoomQuestions": "No question to poll in this classroom's pools",
+  "poll.noRoomQuestionsBody":
+    "The pools linked to this course hold no published multiple-choice or short-answer question. Your other pools may.",
   "poll.searchLabel": "Search the questions",
   "poll.searchPlaceholder": "Search by name or statement…",
   "poll.questionsFailed": "Could not load your recent polls.",

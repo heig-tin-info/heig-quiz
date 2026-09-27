@@ -15,8 +15,9 @@ import { emptyShortDraft } from "@quiz/qt-short/client";
 import { api, ApiError } from "../api";
 import { fuzzyFilter } from "../fuzzy";
 import { useT } from "../i18n";
-import { TypeGlyph } from "../pool/QuestionTable";
 import { OutcomeBadge, OutcomeLegend } from "./OutcomeDonut";
+import { PickRow, promptLine } from "./PickRow";
+import { PoolPicks } from "./PoolPicks";
 import { QuestionTypePicker } from "../pool/QuestionTypePicker";
 import { toConfigIssues } from "../question/issues";
 import { QuestionEditorHost } from "../questionTypes";
@@ -24,11 +25,9 @@ import type { Route } from "../router";
 import {
   Alert,
   Button,
-  cx,
   EmptyState,
   FormError,
   PageHeader,
-  pressable,
   QueryError,
   RelativeTime,
   SearchInput,
@@ -51,12 +50,14 @@ import { coursesKey, pollQuestionsKey } from "../queryKeys";
  * and a dialog holding a scrolling list plus two options is a page with a
  * backdrop.
  *
- * Two tabs, because there are exactly two ways to have a question: one you
+ * Three tabs, because there are three ways to have a question: one you
  * already ran ("Recent polls", issue #161: the questions of your polls, kept
- * or not, each with a donut of how its last runs went), or one you write
- * now. The first is the default when it has rows. Both end in the same primary action,
- * "Start the poll", and the classroom and the anonymity above the tabs apply
- * to either.
+ * or not, each with a donut of how its last runs went), one that waits in a
+ * pool ("From pools", issue #162: the pool screen's own search, over every
+ * pool you reach, narrowed to the classroom's pools when the audience is
+ * one), or one you write now. The first is the default when it has rows. All
+ * end in the same primary action, "Start the poll", and the audience above
+ * the tabs applies to each.
  *
  * ### Why a new question is not saved
  *
@@ -129,13 +130,8 @@ function audienceOf(choice: string): PollAudience {
   return choice === ANYONE ? { kind: "anonymous" } : { kind: "classroom", classroomId: choice };
 }
 
-/** The first line of a prompt, short enough for a row. */
-export function promptLine(prompt: string, max = 120): string {
-  const line = prompt.replace(/[`*_#>\n]+/g, " ").replace(/\s+/g, " ").trim();
-  return line.length <= max ? line : `${line.slice(0, max - 1).trimEnd()}…`;
-}
-
-function QuestionRow({
+/** A row of "Recent polls": how often it ran, and how its last runs went. */
+function RecentRow({
   pick,
   selected,
   onSelect,
@@ -145,54 +141,35 @@ function QuestionRow({
   onSelect: () => void;
 }) {
   const t = useT();
-  // The outcome sits BESIDE the pressable part, not inside it: it takes the
-  // focus to show its rates, and a focusable thing inside a button is one
-  // control too many for a screen reader.
   return (
-    <li
-      className={cx(
-        "flex items-center gap-3 rounded-field border pr-3 transition-colors",
-        selected ? "border-accent bg-accent-soft" : "border-line bg-surface hover:bg-surface-2",
-      )}
-    >
-      <div
-        {...pressable(onSelect)}
-        aria-pressed={selected}
-        onClick={onSelect}
-        className="flex min-w-0 flex-1 cursor-pointer items-start gap-3 rounded-field p-3 text-left"
-      >
-        <span className="mt-0.5">
-          <TypeGlyph type={pick.type} />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate font-mono text-[13px] font-bold">
-            {pick.internalName}
-          </span>
-          <span className="mt-0.5 block text-[13px] text-fg-muted">
-            {promptLine(pick.prompt)}
-          </span>
-          <span className="mt-1 block text-xs text-fg-faint">
-            {pick.useCount === 0 ? (
-              t("poll.neverUsed")
-            ) : (
-              <>
-                {t(pick.useCount === 1 ? "poll.usedOnce" : "poll.usedTimes", {
-                  n: pick.useCount,
-                })}
-                {pick.lastUsedAt ? (
-                  <>
-                    {" · "}
-                    <RelativeTime iso={pick.lastUsedAt} />
-                  </>
-                ) : null}
-              </>
-            )}
-            {pick.saved ? null : ` · ${t("poll.unsaved")}`}
-          </span>
-        </span>
-      </div>
-      <OutcomeBadge outcome={pick.outcome} />
-    </li>
+    <PickRow
+      type={pick.type}
+      name={pick.internalName}
+      prompt={pick.prompt}
+      selected={selected}
+      onSelect={onSelect}
+      aside={<OutcomeBadge outcome={pick.outcome} />}
+      meta={
+        <>
+          {pick.useCount === 0 ? (
+            t("poll.neverUsed")
+          ) : (
+            <>
+              {t(pick.useCount === 1 ? "poll.usedOnce" : "poll.usedTimes", {
+                n: pick.useCount,
+              })}
+              {pick.lastUsedAt ? (
+                <>
+                  {" · "}
+                  <RelativeTime iso={pick.lastUsedAt} />
+                </>
+              ) : null}
+            </>
+          )}
+          {pick.saved ? null : ` · ${t("poll.unsaved")}`}
+        </>
+      }
+    />
   );
 }
 
@@ -200,9 +177,12 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
   const t = useT();
   // No tab chosen yet: "Recent polls" when it has rows (or is still loading
   // them), "Ask a new question" when there is nothing to run again.
-  const [chosenTab, setTab] = useState<"pick" | "new" | null>(null);
+  const [chosenTab, setTab] = useState<"pick" | "pools" | "new" | null>(null);
   const [query, setQuery] = useState("");
   const [questionId, setQuestionId] = useState<string | null>(null);
+  // One selection per list: a question picked in one tab is never started
+  // from the other, where it is not on screen.
+  const [poolQuestionId, setPoolQuestionId] = useState<string | null>(null);
   const [room, setRoom] = usePersistentChoice<string>(ROOM_KEY, anyRoom, ANYONE);
   const [type, setType] = useState<PollType>(POLL_TYPES[0]);
   // One working copy per type, so a switch back and forth loses nothing.
@@ -245,11 +225,12 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
     [query, picks.data],
   );
 
+  const picked = tab === "pools" ? poolQuestionId : questionId;
   const start = useMutation({
     mutationFn: () =>
       api<PollTeacherView>("/app/api/polls", {
         method: "POST",
-        body: JSON.stringify({ questionId, audience }),
+        body: JSON.stringify({ questionId: picked, audience }),
       }),
     onSuccess: (view) => {
       setRoom(view.evaluation.classroomId ?? ANYONE);
@@ -274,12 +255,12 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
   // ONE primary action per screen, whichever tab: start the poll — on the
   // picked question, or on the one written below.
   const primary =
-    tab === "pick" ? (
+    tab !== "new" ? (
       <Button
         data-coach="polls.launch"
         onClick={() => start.mutate()}
         loading={start.isPending}
-        disabled={questionId === null || !audienceReady}
+        disabled={picked === null || !audienceReady}
       >
         {t("poll.startAction")}
       </Button>
@@ -324,11 +305,22 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
         label={t("poll.launcher")}
         items={[
           { value: "pick", label: t("poll.tab.pick"), count: picks.data?.length },
+          { value: "pools", label: t("poll.tab.pools") },
           { value: "new", label: t("poll.tab.new") },
         ]}
       />
 
-      {tab === "pick" ? (
+      {tab === "pools" ? (
+        <div className="mt-5 space-y-4">
+          <PoolPicks
+            classroomId={audience.kind === "classroom" ? audience.classroomId : null}
+            selected={poolQuestionId}
+            onSelect={setPoolQuestionId}
+            onAsk={() => setTab("new")}
+          />
+          <FormError error={start.error} title={t("poll.startFailed")} />
+        </div>
+      ) : tab === "pick" ? (
         <div className="mt-5 space-y-4">
           <SearchInput
             className="w-full"
@@ -370,7 +362,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
               {donutLegend ? <OutcomeLegend abstention={donutLegend.abstention} /> : null}
               <ul className="space-y-2">
                 {filtered.map((pick) => (
-                  <QuestionRow
+                  <RecentRow
                     key={pick.id}
                     pick={pick}
                     selected={questionId === pick.id}

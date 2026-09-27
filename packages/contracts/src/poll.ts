@@ -14,7 +14,8 @@
  */
 import { z } from "zod";
 
-import { QuestionTypeId } from "./pool.js";
+import { pageOf } from "./common.js";
+import { QuestionSearch, QuestionTypeId } from "./pool.js";
 
 /** The two question types a poll may run for now. */
 export const PollQuestionType = z.enum(["mcq", "short"]);
@@ -163,6 +164,46 @@ export const PollQuestionPick = z.object({
   outcome: PollOutcome,
 });
 export type PollQuestionPick = z.infer<typeof PollQuestionPick>;
+
+/**
+ * `GET /app/api/polls/pool-questions`, the launcher's "From pools" (issue
+ * #162): the search of the pool screen — same parameters, same grammar once
+ * the web app has parsed the box — run across EVERY pool the caller reaches,
+ * over the published, live `mcq`/`short` questions only. A `type` outside
+ * those two matches nothing. `classroomId` narrows the scope to the pools
+ * linked to that classroom's course; the classroom is loaded through the
+ * staff predicate, and an unreachable one is a 404.
+ */
+export const PollPoolSearch = QuestionSearch.omit({ categoryId: true, includeDeleted: true }).extend({
+  classroomId: z.uuid().optional(),
+});
+export type PollPoolSearch = z.infer<typeof PollPoolSearch>;
+
+/** One question of "From pools": what the row shows, and what it starts. */
+export const PollPoolQuestion = z.object({
+  id: z.uuid(),
+  type: PollQuestionType,
+  internalName: z.string(),
+  /** The statement, as the student sees it (`toStudent`). */
+  prompt: z.string(),
+  pool: z.object({ id: z.uuid(), name: z.string() }),
+  tags: z.array(z.string()),
+  difficulty: z.number().int().min(1).max(5),
+  /** The published version a poll would freeze. */
+  latestNumber: z.number().int().min(1),
+});
+export type PollPoolQuestion = z.infer<typeof PollPoolQuestion>;
+
+/**
+ * One page of "From pools". `total` counts every match, and `tags` is every
+ * tag of the scope — the filters left out — for the filter sheet and the
+ * `tag:` completion, the way a pool's tags feed its own bar.
+ */
+export const PollPoolPage = pageOf(PollPoolQuestion).extend({
+  total: z.number().int().nonnegative(),
+  tags: z.array(z.string()),
+});
+export type PollPoolPage = z.infer<typeof PollPoolPage>;
 
 /** The aggregate of one poll: what the projection draws (spec `poll.tally`). */
 export const PollTally = z.object({

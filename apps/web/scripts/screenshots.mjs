@@ -286,6 +286,20 @@ const scenes = [
       await p.getByRole("button", { name: /start the poll|lancer le sondage/i }).click();
     },
   },
+  // "From pools" (#162): the pool screen's search over every pool; with a
+  // classroom as the audience, the "Classroom pools | All pools" control.
+  { name: "poll-launcher-pools", role: "teacher", path: "/polls", act: (p) => p.getByRole("tab", { name: /from pools|depuis les pools/i }).click() },
+  { name: "poll-launcher-pools-room", role: "teacher", path: "/polls", ls: { "quiz-poll-classroom": "r1" }, act: (p) => p.getByRole("tab", { name: /from pools|depuis les pools/i }).click() },
+  {
+    name: "poll-launcher-pools-filters",
+    role: "teacher",
+    path: "/polls",
+    fold: true,
+    act: async (p) => {
+      await p.getByRole("tab", { name: /from pools|depuis les pools/i }).click();
+      await p.getByRole("button", { name: /^(filters|filtres)/i }).click();
+    },
+  },
   { name: "poll-projection", role: "teacher", path: "/evaluations/poll/poll", fold: true },
   { name: "poll-projection-revealed", role: "teacher", path: "/evaluations/poll/poll?revealed=1", fold: true },
   { name: "poll-ended", role: "teacher", path: "/evaluations/poll-ended/poll", fold: true },
