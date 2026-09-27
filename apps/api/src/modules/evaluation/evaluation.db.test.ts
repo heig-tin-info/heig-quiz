@@ -691,7 +691,7 @@ describe("patch and duplicate", () => {
     const seed = await seedLive(db, { questions: 2 });
     const source = await reload(db, seed.evaluationId);
     const copy = await service.copyEvaluation(db, source, {
-      as: { duplicate: { classroomId: seed.classroomId } },
+      home: { classroomId: seed.classroomId },
       title: "Copy",
       createdBy: seed.teacherId,
     });

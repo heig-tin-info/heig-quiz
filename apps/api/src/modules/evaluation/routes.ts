@@ -202,7 +202,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
           target = other.room.id;
         }
         const row = await service.copyEvaluation(app.db, scope.evaluation, {
-          as: { duplicate: { classroomId: target } },
+          home: { classroomId: target },
           title: body.title,
           createdBy: req.user!.id,
         });
@@ -362,7 +362,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
           courseId: scope.classroom.courseId,
           title: row.title,
         });
-        return reply.code(201).send(await templates.templateSummary(app.db, row));
+        return reply.code(201).send(await templates.templateOf(app.db, row));
       },
     ),
   );

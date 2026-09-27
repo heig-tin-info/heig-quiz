@@ -9,7 +9,7 @@
  * import it directly; `service.ts` does not re-export it, which keeps the
  * import one-way (this file needs `service.ts` at load time for its errors).
  */
-import { desc, eq, type SQL } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
 import type { EvaluationTemplate, TemplateItemRef } from "@quiz/contracts";
 
@@ -56,19 +56,14 @@ export async function saveAsTemplate(
 ): Promise<EvaluationRecord> {
   if (row.mode === "poll") throw new TemplatePoll();
   return copyEvaluation(db, row, {
-    as: { template: { courseId: input.courseId } },
+    home: { courseId: input.courseId },
     title: input.title,
     createdBy: input.createdBy,
   });
 }
 
-/** The templates `where` selects, newest first, with the counts the list shows. */
-async function summaries(db: Db, where: SQL): Promise<EvaluationTemplate[]> {
-  const rows = await db
-    .select()
-    .from(evaluations)
-    .where(where)
-    .orderBy(desc(evaluations.createdAt));
+/** Template rows in the list's shape, with the counts the list shows. */
+async function withStats(db: Db, rows: EvaluationRecord[]): Promise<EvaluationTemplate[]> {
   const ids = rows.map((r) => r.id);
   const [itemCounts, points] = await Promise.all([
     itemCountsByEvaluation(db, ids),
@@ -93,16 +88,20 @@ async function summaries(db: Db, where: SQL): Promise<EvaluationTemplate[]> {
   });
 }
 
-/** The templates of a course. */
-export function listTemplates(db: Db, courseId: string): Promise<EvaluationTemplate[]> {
-  return summaries(db, eq(evaluations.courseId, courseId));
+/** The templates of a course, newest first. */
+export async function listTemplates(db: Db, courseId: string): Promise<EvaluationTemplate[]> {
+  const rows = await db
+    .select()
+    .from(evaluations)
+    .where(eq(evaluations.courseId, courseId))
+    .orderBy(desc(evaluations.createdAt));
+  return withStats(db, rows);
 }
 
 /** One template in the list's shape, after a write. */
-export async function templateSummary(db: Db, row: EvaluationRecord): Promise<EvaluationTemplate> {
-  const [found] = await summaries(db, eq(evaluations.id, row.id));
-  if (!found) throw new Error(`template ${row.id} vanished`);
-  return found;
+export async function templateOf(db: Db, row: EvaluationRecord): Promise<EvaluationTemplate> {
+  const [template] = await withStats(db, [row]);
+  return template!;
 }
 
 /** The instances keep running; their `origin_template_id` is nulled by the FK. */
@@ -141,12 +140,8 @@ export async function instantiateTemplate(
   // Checked outside the copy's transaction: a pool unlinked in that instant
   // leaves one draft still playing it, like one authored just before.
   const evaluation = await copyEvaluation(db, template, {
-    as: {
-      instance: {
-        classroomId: input.classroomId,
-        origin: { templateId: template.id, revision: template.revision! },
-      },
-    },
+    home: { classroomId: input.classroomId },
+    origin: { templateId: template.id, revision: template.revision! },
     title: input.title,
     createdBy: input.createdBy,
   });

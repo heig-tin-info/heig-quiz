@@ -1473,30 +1473,30 @@ export async function updateVersions(
 }
 
 /**
- * What a copy becomes, and so what travels with it:
- *   - `duplicate` (F-EVAL-14): another draft in a classroom, run settings
- *     (dates, access code, IP list) included;
- *   - `template` (ADR-031): kept at the course level, without anything of a
- *     run, at revision 1;
- *   - `instance` (ADR-031): a classroom's draft made from a template, which
- *     it records with its revision.
+ * Where a copy lives: a classroom (a duplicate, F-EVAL-14, or an instance of
+ * a template) or a course (a template, ADR-031).
  */
-export type CopyTarget =
-  | { duplicate: { classroomId: string } }
-  | { template: { courseId: string } }
-  | { instance: { classroomId: string; origin: { templateId: string; revision: number } } };
+export type CopyHome = { classroomId: string } | { courseId: string };
 
 /**
  * THE copy of an evaluation into a new draft: its settings, grade scale,
  * feedback and MCQ policies, duration, and its items — the SAME frozen
  * versions, points, order and milestones. Duplicate, "Save as template" and
- * "Instantiate" differ only in {@link CopyTarget}. One transaction: a copy
- * is never half-made.
+ * "Instantiate" differ only in the home and the origin. A copy into a
+ * course is a template, at revision 1, and carries nothing of a run (dates,
+ * access code, IP list); a copy into a classroom keeps them — a template
+ * has none to give. One transaction: a copy is never half-made.
  */
 export async function copyEvaluation(
   db: Db,
   row: EvaluationRecord,
-  target: { as: CopyTarget; title: string; createdBy: string },
+  target: {
+    home: CopyHome;
+    title: string;
+    createdBy: string;
+    /** An instance records the template and the revision it came from. */
+    origin?: { templateId: string; revision: number };
+  },
 ): Promise<EvaluationRecord> {
   const id = randomUUID();
   const items = await db
@@ -1504,23 +1504,18 @@ export async function copyEvaluation(
     .from(evaluationItems)
     .where(eq(evaluationItems.evaluationId, row.id))
     .orderBy(asc(evaluationItems.position));
-  const as = target.as;
   const home =
-    "duplicate" in as
-      ? {
-          classroomId: as.duplicate.classroomId,
+    "courseId" in target.home
+      ? { courseId: target.home.courseId, revision: 1 }
+      : {
+          classroomId: target.home.classroomId,
           opensAt: row.opensAt,
           closesAt: row.closesAt,
           accessCode: row.accessCode,
           ipAllowlist: row.ipAllowlist,
-        }
-      : "template" in as
-        ? { courseId: as.template.courseId, revision: 1 }
-        : {
-            classroomId: as.instance.classroomId,
-            originTemplateId: as.instance.origin.templateId,
-            originRevision: as.instance.origin.revision,
-          };
+          originTemplateId: target.origin?.templateId ?? null,
+          originRevision: target.origin?.revision ?? null,
+        };
   await db.transaction(async (tx) => {
     await tx.insert(evaluations).values({
       id,
