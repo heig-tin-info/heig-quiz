@@ -22,7 +22,13 @@ import { Logo, UserMenu, useSignOut, ViewModeToggle } from "./Header";
 import { helpTopics, useHelp } from "./help";
 import { useI18n, useT } from "./i18n";
 import { sectionOf, type Route } from "./router";
-import { CourseNavTree, inCourseSection, useCourseNavState } from "./CourseNav";
+import {
+  activeCourseOf,
+  CourseNavTree,
+  inCourseSection,
+  inNavigation,
+  useCourseNavState,
+} from "./CourseNav";
 import type { NavCycle } from "./navTree";
 import { inPoolSection, PoolNavTree, usePoolNavState } from "./pool/PoolNav";
 import { shortcutCaps, useActiveShortcuts, useGlobalShortcuts } from "./shortcuts";
@@ -197,7 +203,10 @@ function Nav({
   // The sidebar lists CLASSROOMS, flattened out of the courses: that is what
   // a teacher navigates to. The course each one belongs to is in the row's
   // tip, not a second label on it nor a second level of folding.
-  const allRooms = (courses.data ?? []).flatMap((c) => c.classrooms);
+  // Minus the courses the teacher hid (#155), as everywhere in the navigation.
+  const list = courses.data ?? [];
+  const activeCourse = activeCourseOf(list, route);
+  const allRooms = list.filter((c) => inNavigation(c, activeCourse)).flatMap((c) => c.classrooms);
   const shownRooms = showAll
     ? allRooms
     : cappedClassrooms(allRooms, currentRoom, SIDEBAR_CLASSROOM_CAP);

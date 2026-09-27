@@ -171,6 +171,22 @@ describe("Shell sidebar", () => {
     expect(within(sidebar()).getByRole("button", { name: "Courses" })).not.toHaveAttribute("aria-current");
   });
 
+  it("leaves the classrooms of a hidden course out of the flat section (#155)", () => {
+    renderShell({
+      courses: [
+        makeCourseSummary({ classrooms: [makeClassroomSummary({ id: "r1", name: "PRG1-2026" })] }),
+        makeCourseSummary({
+          id: "k9",
+          hidden: true,
+          classrooms: [makeClassroomSummary({ id: "h1", name: "ALG-2024", courseId: "k9" })],
+        }),
+      ],
+    });
+    const nav = within(classroomsSection());
+    expect(nav.getByRole("button", { name: /^PRG1-2026/ })).toBeVisible();
+    expect(nav.queryByRole("button", { name: /^ALG-2024/ })).toBeNull();
+  });
+
   it("navigates when a classroom is picked", async () => {
     const { navigate } = renderShell();
     await userEvent.click(within(sidebar()).getByRole("button", { name: /^Classroom 2(?!\d)/ }));

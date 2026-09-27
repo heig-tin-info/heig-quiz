@@ -113,7 +113,7 @@ export const enrollments = pgTable(
 /**
  * One user's own display state for one course (#155, ADR-032). Today it
  * holds only `hidden_at`: a course the user no longer teaches, taken out of
- * THEIR navigation (course list, sidebar tree, command palette) and nowhere
+ * THEIR navigation (course list, sidebar, command palette) and nowhere
  * else — pickers and the MCP `list_courses` still list it, and nothing about
  * the course itself changes for its other staff members.
  *

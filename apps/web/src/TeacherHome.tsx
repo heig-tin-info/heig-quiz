@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Archive,
-  ArchiveRestore,
   Eye,
   EyeOff,
   FolderTree,
@@ -22,6 +21,7 @@ import type { CourseDetail, CourseSummary, EvaluationTemplate, PoolSummary } fro
 
 import { api } from "./api";
 import { useConfirm } from "./confirm";
+import { inNavigation } from "./CourseNav";
 import { useT } from "./i18n";
 import { useErrorToast, useToast } from "./notify";
 import type { Route } from "./router";
@@ -30,6 +30,7 @@ import {
   Badge,
   Button,
   Card,
+  cx,
   EmptyState,
   Field,
   FormDialog,
@@ -214,6 +215,66 @@ function AddStaffModal({ course, onClose }: { course: CourseSummary; onClose: ()
 }
 
 /**
+ * The course detail (`GET /courses/:id`): its pools for `CoursePools`, its
+ * archived classrooms for `ArchivedClassrooms`. One query key, one request.
+ */
+function useCourseDetail(courseId: string) {
+  return useQuery<CourseDetail>({
+    queryKey: courseKey(courseId),
+    queryFn: () => api(`/app/api/courses/${courseId}`),
+  });
+}
+
+/** The badge of a course the caller hid (#155), on its card and its table row. */
+function HiddenBadge({ course }: { course: CourseSummary }) {
+  const t = useT();
+  return course.hidden ? (
+    <Badge tone="zinc" icon={EyeOff}>
+      {t("courses.hidden")}
+    </Badge>
+  ) : null;
+}
+
+/**
+ * One classroom of a course card, live or archived: it opens the classroom.
+ * An archived one is muted, wears the archive icon and has no headcount; it
+ * is restored from its own page, which already offers that.
+ */
+function ClassroomRow({
+  room,
+  archived = false,
+  students,
+  navigate,
+}: {
+  room: { id: string; name: string; period: string };
+  archived?: boolean;
+  students?: number;
+  navigate: (r: Route) => void;
+}) {
+  const t = useT();
+  const Icon = archived ? Archive : School;
+  return (
+    <button
+      type="button"
+      onClick={() => navigate({ view: "classroom", id: room.id })}
+      className={cx(
+        "flex w-full items-center gap-3 rounded-field px-2.5 py-2 text-left transition-colors hover:bg-surface-2",
+        archived && "text-fg-muted hover:text-fg",
+      )}
+    >
+      <Icon className="size-4 shrink-0 text-fg-faint" />
+      <span className="min-w-0 flex-1 truncate text-sm font-semibold">{room.name}</span>
+      {room.period ? <span className="shrink-0 text-xs text-fg-faint">{room.period}</span> : null}
+      {students !== undefined ? (
+        <span className="shrink-0 text-xs tabular-nums text-fg-muted">
+          {t(students === 1 ? "classrooms.students.one" : "classrooms.students", { n: students })}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+/**
  * The pools a course draws from (F-POOL-05). `PUT /courses/:id/pools`
  * replaces the WHOLE set in one call, so both the link and the unlink send
  * the list the course should end up with — there is no add/remove route, and
@@ -231,10 +292,7 @@ function CoursePools({
   const confirm = useConfirm();
   const toastError = useErrorToast();
 
-  const detail = useQuery<CourseDetail>({
-    queryKey: courseKey(course.id),
-    queryFn: () => api(`/app/api/courses/${course.id}`),
-  });
+  const detail = useCourseDetail(course.id);
   const pools = useQuery<PoolSummary[]>({
     queryKey: poolsKey,
     queryFn: () => api("/app/api/pools"),
@@ -476,10 +534,10 @@ function useCourseActions(course: CourseSummary): {
 /**
  * The archived classrooms of a course (#155): the course list leaves them
  * out, so they would be reachable by URL alone. They come from the course
- * detail the card already reads for its pools (same query key, one request),
- * behind a "Show archived" toggle that exists only when there is one — a
- * past year is looked up, not read every day. Each row opens its classroom;
- * "Restore" puts it back among the live ones.
+ * detail (`useCourseDetail`), behind a "Show archived" toggle that exists
+ * only when there is one — a past year is looked up, not read every day.
+ * The table view has no such toggle: archived classrooms are reached from
+ * the card view.
  */
 function ArchivedClassrooms({
   course,
@@ -489,23 +547,8 @@ function ArchivedClassrooms({
   navigate: (r: Route) => void;
 }) {
   const t = useT();
-  const qc = useQueryClient();
-  const toastError = useErrorToast();
   const [shown, setShown] = useState(false);
-  const detail = useQuery<CourseDetail>({
-    queryKey: courseKey(course.id),
-    queryFn: () => api(`/app/api/courses/${course.id}`),
-  });
-  const restore = useMutation({
-    mutationFn: (id: string) => api(`/app/api/classrooms/${id}/unarchive`, { method: "POST" }),
-    onSuccess: async () => {
-      await Promise.all([
-        qc.invalidateQueries({ queryKey: coursesKey }),
-        qc.invalidateQueries({ queryKey: courseKey(course.id) }),
-      ]);
-    },
-    onError: toastError("error.save"),
-  });
+  const detail = useCourseDetail(course.id);
   const archived = (detail.data?.classrooms ?? []).filter((r) => r.archivedAt !== null);
   if (archived.length === 0) return null;
 
@@ -522,30 +565,7 @@ function ArchivedClassrooms({
       </div>
       {shown
         ? archived.map((room) => (
-            <div key={room.id} className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => navigate({ view: "classroom", id: room.id })}
-                className="flex min-w-0 flex-1 items-center gap-3 rounded-field px-2.5 py-2 text-left text-fg-muted transition-colors hover:bg-surface-2 hover:text-fg"
-              >
-                <Archive className="size-4 shrink-0 text-fg-faint" />
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{room.name}</span>
-                {room.period ? (
-                  <span className="shrink-0 text-xs text-fg-faint">{room.period}</span>
-                ) : null}
-              </button>
-              <Actions
-                label={t("common.actions")}
-                size="sm"
-                items={[
-                  {
-                    label: t("classrooms.unarchive"),
-                    icon: ArchiveRestore,
-                    onSelect: () => restore.mutate(room.id),
-                  },
-                ]}
-              />
-            </div>
+            <ClassroomRow key={room.id} room={room} archived navigate={navigate} />
           ))
         : null}
     </>
@@ -573,11 +593,7 @@ function CourseCard({
           <span className="flex flex-wrap items-center gap-2">
             {course.name}
             <span className="text-[13px] font-normal text-fg-faint">{course.code}</span>
-            {course.hidden ? (
-              <Badge tone="zinc" icon={EyeOff}>
-                {t("courses.hidden")}
-              </Badge>
-            ) : null}
+            <HiddenBadge course={course} />
             <PeopleStack people={course.staff} actions={staffActions} className="ml-2" />
           </span>
         }
@@ -596,23 +612,7 @@ function CourseCard({
           <p className="text-sm text-fg-muted">{t("classrooms.empty")}</p>
         ) : (
           course.classrooms.map((room) => (
-            <button
-              key={room.id}
-              type="button"
-              onClick={() => navigate({ view: "classroom", id: room.id })}
-              className="flex w-full items-center gap-3 rounded-field px-2.5 py-2 text-left transition-colors hover:bg-surface-2"
-            >
-              <School className="size-4 shrink-0 text-fg-faint" />
-              <span className="min-w-0 flex-1 truncate text-sm font-semibold">{room.name}</span>
-              {room.period ? (
-                <span className="shrink-0 text-xs text-fg-faint">{room.period}</span>
-              ) : null}
-              <span className="shrink-0 text-xs tabular-nums text-fg-muted">
-                {t(room.students === 1 ? "classrooms.students.one" : "classrooms.students", {
-                  n: room.students,
-                })}
-              </span>
-            </button>
+            <ClassroomRow key={room.id} room={room} students={room.students} navigate={navigate} />
           ))
         )}
         <ArchivedClassrooms course={course} navigate={navigate} />
@@ -629,7 +629,8 @@ function CourseCard({
 /**
  * One course as a table row: its identity, the classrooms it holds — each a
  * link, because that is what a teacher came for — and its staff. The pools of
- * a course are a card affair; the table answers "which classroom, where".
+ * a course are a card affair, and so are its archived classrooms ("Show
+ * archived" on the card); the table answers "which live classroom, where".
  */
 function CourseRow({
   course,
@@ -646,11 +647,7 @@ function CourseRow({
         <span className="flex flex-wrap items-baseline gap-2">
           <span className="font-semibold">{course.name}</span>
           <span className="text-xs text-fg-faint">{course.code}</span>
-          {course.hidden ? (
-            <Badge tone="zinc" icon={EyeOff}>
-              {t("courses.hidden")}
-            </Badge>
-          ) : null}
+          <HiddenBadge course={course} />
         </span>
       </td>
       <td className={T.td}>
@@ -698,7 +695,7 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
   });
   const all = courses.data ?? [];
   const hiddenCount = all.filter((c) => c.hidden).length;
-  const rows = showHidden ? all : all.filter((c) => !c.hidden);
+  const rows = showHidden ? all : all.filter((c) => inNavigation(c));
   /**
    * The table sorts, the cards do not: a card list is read in the order it
    * was given, while a table is scanned down one column. Three keys, the
@@ -759,7 +756,9 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
           drawn, so it belongs to the list, not to the title. */}
       {all.length > 0 && !courses.isError ? (
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {hiddenCount > 0 ? (
+          {/* Not while every course is hidden: the empty state below carries
+              the same action, once. */}
+          {hiddenCount > 0 && rows.length > 0 ? (
             <ToggleChip
               icon={EyeOff}
               tone="neutral"

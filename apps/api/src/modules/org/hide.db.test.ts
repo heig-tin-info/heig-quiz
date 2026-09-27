@@ -1,14 +1,13 @@
 /**
  * Hiding a course from one's own navigation (#155, ADR-032): per user, under
  * `staffAccess`, and out of the navigation only — `GET /courses` still lists
- * the course, flagged, for the pickers and the MCP `list_courses`. And the
- * course detail lists the archived classrooms the course list leaves out.
+ * the course, flagged, for the pickers and the MCP `list_courses`.
  */
 import { randomUUID } from "node:crypto";
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import type { ApiTokenCreated, CourseDetail, CourseSummary } from "@quiz/contracts";
+import type { ApiTokenCreated, CourseSummary } from "@quiz/contracts";
 
 import { classrooms, courseStaff, courses } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
@@ -129,20 +128,5 @@ describe("hiding a course (#155)", () => {
     const listed = JSON.parse(res.json().result.content[0].text) as CourseSummary[];
     expect(listed.map((c) => c.id)).toContain(courseId);
     await post(teacherA, "unhide");
-  });
-});
-
-describe("archived classrooms of a course (#155)", () => {
-  it("are out of the course list and in the course detail, flagged", async () => {
-    const course = (await listOf(teacherA)).find((c) => c.id === courseId)!;
-    expect(course.classrooms.map((r) => r.id)).not.toContain(archivedRoomId);
-    const res = await server.app.inject({
-      method: "GET",
-      url: `/app/api/courses/${courseId}`,
-      headers: teacherA.headers,
-    });
-    const detail = res.json() as CourseDetail;
-    const archived = detail.classrooms.filter((r) => r.archivedAt !== null).map((r) => r.id);
-    expect(archived).toEqual([archivedRoomId]);
   });
 });

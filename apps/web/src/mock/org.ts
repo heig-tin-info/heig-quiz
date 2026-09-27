@@ -123,7 +123,7 @@ export const courses: Course[] = [
     staff: [ME_TEACHER],
   },
   // A course the teacher no longer teaches, hidden (#155): out of the list
-  // until "Show hidden", out of the sidebar tree and of the palette.
+  // until "Show hidden", out of both sidebar sections and of the palette.
   {
     id: "c3",
     name: "Algorithmique",

@@ -183,12 +183,15 @@ describe("TeacherHome", () => {
 
     expect(await screen.findByText("All your courses are hidden")).toBeVisible();
     expect(screen.queryByText("No courses yet")).toBeNull();
-    await userEvent.click(screen.getAllByRole("button", { name: /Show hidden \(1\)/ }).at(-1)!);
+    // One way back, the empty state's: the toolbar chip stands down.
+    const back = screen.getAllByRole("button", { name: /Show hidden \(1\)/ });
+    expect(back).toHaveLength(1);
+    await userEvent.click(back[0]!);
     expect(screen.getByText("Programmation C")).toBeVisible();
   });
 
-  it("lists the archived classrooms behind “Show archived” and restores one (#155)", async () => {
-    const { calls } = mockFetch({
+  it("lists the archived classrooms behind “Show archived”, each opening its page (#155)", async () => {
+    mockFetch({
       [`GET ${COURSES}`]: ok([makeCourseSummary()]),
       "GET /app/api/courses/c1": ok({
         course: { id: "c1", name: "Programmation C", code: "PRG1" },
@@ -207,7 +210,6 @@ describe("TeacherHome", () => {
         ],
       }),
       "GET /app/api/pools": ok([]),
-      "POST /app/api/classrooms/r0/unarchive": ok(undefined),
     });
     const navigate = vi.fn();
     renderWithProviders(<TeacherHome navigate={navigate} />);
@@ -216,12 +218,8 @@ describe("TeacherHome", () => {
     expect(screen.queryByRole("button", { name: /PRG1-2024/ })).toBeNull();
     await userEvent.click(toggle);
     await userEvent.click(screen.getByRole("button", { name: /PRG1-2024/ }));
+    // Restoring is the classroom page's business: the row only opens it.
     expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r0" });
-
-    await userEvent.click(screen.getByRole("button", { name: "Restore" }));
-    expect(
-      calls.some((c) => c.method === "POST" && c.url === "/app/api/classrooms/r0/unarchive"),
-    ).toBe(true);
   });
 
   it("removes a staff member from that person's own card", async () => {
