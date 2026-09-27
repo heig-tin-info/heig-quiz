@@ -95,7 +95,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   // --- Courses ---
 
   app.get("/app/api/courses", { preHandler: requireTeacher }, async (req) =>
-    service.listCourses(app.db, accessWhere(req.user!, staffAccess(req.user!.id))),
+    service.listCourses(app.db, accessWhere(req.user!, staffAccess(req.user!.id)), req.user!.id),
   );
 
   app.post("/app/api/courses", { preHandler: requireTeacher }, async (req, reply) => {
@@ -173,6 +173,27 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
       return reply.code(204).send();
     }),
   );
+
+  /**
+   * Hide a course from the caller's own navigation, or show it again (#155,
+   * ADR-032). Loaded under `staffAccess` like every course route, so an
+   * admin may hide too and anyone off the staff gets the 404. Personal
+   * display state: no audit event; the `onResponse` hook of `app.ts` already
+   * tells the caller's other tabs to refetch.
+   */
+  for (const [path, hidden] of [
+    ["hide", true],
+    ["unhide", false],
+  ] as const) {
+    app.post(
+      `/app/api/courses/:id/${path}`,
+      { preHandler: requireTeacher },
+      teacher(onCourse, async ({ req, reply, scope: course }) => {
+        await service.setCourseHidden(app.db, req.user!.id, course.id, hidden);
+        return reply.code(204).send();
+      }),
+    );
+  }
 
   /**
    * The whole set of pools the course draws from, replaced in one call.

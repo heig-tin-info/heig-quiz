@@ -123,6 +123,12 @@ export interface CourseSummary {
   name: string;
   code: string;
   createdAt: string;
+  /**
+   * The caller hid this course from their own navigation (#155, ADR-032):
+   * the course list, the sidebar and the command palette leave it out, the
+   * pickers keep it. Per user, never seen by the other staff members.
+   */
+  hidden: boolean;
   /** Non-archived classrooms of this course, oldest first. */
   classrooms: ClassroomSummary[];
   staff: CourseStaffMember[];

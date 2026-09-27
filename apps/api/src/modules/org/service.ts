@@ -16,7 +16,15 @@ import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { EnrollmentPatch, StudentClassroom } from "@quiz/contracts";
 
 import type { Db } from "../../db/client.js";
-import { avatars, classrooms, courseStaff, courses, enrollments, users } from "../../db/schema.js";
+import {
+  avatars,
+  classrooms,
+  courseStaff,
+  courses,
+  enrollments,
+  userCoursePrefs,
+  users,
+} from "../../db/schema.js";
 import { emailIn, knownEmails } from "../../identity.js";
 
 export { claimEnrollments } from "./roster.js";
@@ -50,12 +58,26 @@ async function staffOf(db: Db, courseIds: string[]) {
 /**
  * The course cards of `GET /courses`: every course `access` lets through
  * (`accessWhere(user, staffAccess(user.id))`), with its live classrooms and
- * their headcounts, and its staff.
+ * their headcounts, its staff, and whether `viewerId` hid it (#155).
+ *
+ * A hidden course is still IN the list, flagged: hiding takes a course out
+ * of the viewer's navigation only (ADR-032), and the pickers and the MCP
+ * `list_courses` read this same list and must keep seeing it.
  */
-export async function listCourses(db: Db, access: SQL | undefined) {
+export async function listCourses(db: Db, access: SQL | undefined, viewerId: string) {
   const rows = await db
-    .select({ id: courses.id, name: courses.name, code: courses.code, createdAt: courses.createdAt })
+    .select({
+      id: courses.id,
+      name: courses.name,
+      code: courses.code,
+      createdAt: courses.createdAt,
+      hiddenAt: userCoursePrefs.hiddenAt,
+    })
     .from(courses)
+    .leftJoin(
+      userCoursePrefs,
+      and(eq(userCoursePrefs.courseId, courses.id), eq(userCoursePrefs.userId, viewerId)),
+    )
     .where(access)
     .orderBy(asc(courses.code));
   const ids = rows.map((r) => r.id);
@@ -83,6 +105,7 @@ export async function listCourses(db: Db, access: SQL | undefined) {
     name: c.name,
     code: c.code,
     createdAt: c.createdAt.toISOString(),
+    hidden: c.hiddenAt !== null,
     classrooms: rooms
       .filter((r) => r.courseId === c.id)
       .map((r) => ({
@@ -166,6 +189,25 @@ export async function staffOfCourse(db: Db, courseId: string) {
     .innerJoin(users, eq(courseStaff.userId, users.id))
     .where(eq(courseStaff.courseId, courseId))
     .orderBy(asc(users.familyName), asc(users.givenName));
+}
+
+/**
+ * Hides a course from ONE user's navigation, or shows it again (#155,
+ * ADR-032). Personal display state: no audit event, and nothing changes for
+ * the course's other staff members. Unhiding clears the column and keeps the
+ * row, the home of any later per-user preference.
+ */
+export async function setCourseHidden(
+  db: Db,
+  userId: string,
+  courseId: string,
+  hidden: boolean,
+): Promise<void> {
+  const hiddenAt = hidden ? new Date() : null;
+  await db
+    .insert(userCoursePrefs)
+    .values({ userId, courseId, hiddenAt })
+    .onConflictDoUpdate({ target: [userCoursePrefs.userId, userCoursePrefs.courseId], set: { hiddenAt } });
 }
 
 // --- Course staff -----------------------------------------------------------

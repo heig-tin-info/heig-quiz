@@ -83,6 +83,7 @@ export function makeCourseSummary(overrides: Partial<CourseSummary> = {}): Cours
     name: "Programmation C",
     code: "PRG1",
     createdAt: at(-400 * DAY),
+    hidden: false,
     classrooms: [makeClassroomSummary()],
     staff: [
       {
