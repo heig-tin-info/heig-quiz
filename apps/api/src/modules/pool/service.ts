@@ -36,6 +36,7 @@ import type {
   Pool,
   PoolCandidates,
   PoolCategories,
+  PoolInUse,
   PoolMember,
   PoolMembers,
   PoolRole,
@@ -53,7 +54,7 @@ import type {
 import { issuesOf } from "@quiz/contracts";
 import { effectivePoolRole } from "@quiz/domain";
 
-import { isUniqueViolation, type Db } from "../../db/client.js";
+import { isForeignKeyViolation, isUniqueViolation, type Db } from "../../db/client.js";
 import {
   assets,
   attempts,
@@ -326,11 +327,58 @@ export async function updatePool(
 }
 
 /**
- * The pool. The bells that point at it go with it: `notifications.pool_id`
- * cascades, so no reader is walked to a 404.
+ * The evaluations, templates and polls that pin a version of this pool's
+ * questions (ADR-031, F-POOL-09): while there is one, the pool is not
+ * deleted — `evaluation_items.question_version_id` has no cascade, on
+ * purpose (F-EVAL-03). `managed` is the caller's access predicate on
+ * `evaluations` (`managedEvaluationAccess` in `guards.ts`, undefined for an
+ * admin): the holders it lets in are named, the others only counted. Read
+ * by join: `evaluations` is the evaluation module's table.
  */
-export async function deletePool(db: Db, poolId: string): Promise<void> {
-  await db.delete(pools).where(eq(pools.id, poolId));
+export async function poolUses(
+  db: Db,
+  poolId: string,
+  managed: SQL | undefined,
+): Promise<PoolInUse | null> {
+  const rows = await db
+    .selectDistinct({
+      id: evaluations.id,
+      title: evaluations.title,
+      template: sql<boolean>`${evaluations.courseId} is not null`,
+      reachable: sql<boolean>`${managed ?? sql`true`}`,
+    })
+    .from(evaluationItems)
+    .innerJoin(questionVersions, eq(questionVersions.id, evaluationItems.questionVersionId))
+    .innerJoin(questions, eq(questions.id, questionVersions.questionId))
+    .innerJoin(evaluations, eq(evaluations.id, evaluationItems.evaluationId))
+    .leftJoin(classrooms, eq(classrooms.id, evaluations.classroomId))
+    .where(eq(questions.poolId, poolId))
+    .orderBy(evaluations.title);
+  if (rows.length === 0) return null;
+  const uses = rows.filter((r) => r.reachable);
+  return {
+    error: "pool_in_use",
+    uses: uses.map(({ id, title, template }) => ({ id, title, template })),
+    hidden: rows.length - uses.length,
+  };
+}
+
+/**
+ * The pool. The bells that point at it go with it: `notifications.pool_id`
+ * cascades, so no reader is walked to a 404. The caller has checked
+ * {@link poolUses} first; false when an evaluation pinned one of its
+ * versions in between — the foreign key, not a 500, says so.
+ */
+export async function deletePool(db: Db, poolId: string): Promise<boolean> {
+  try {
+    await db.delete(pools).where(eq(pools.id, poolId));
+    return true;
+  } catch (err) {
+    if (isForeignKeyViolation(err, "evaluation_items_question_version_id_question_versions_id_fk")) {
+      return false;
+    }
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------

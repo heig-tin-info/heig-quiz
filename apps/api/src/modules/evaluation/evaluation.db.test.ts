@@ -690,8 +690,8 @@ describe("patch and duplicate", () => {
   it("duplicates the items on the SAME frozen versions (F-EVAL-14)", async () => {
     const seed = await seedLive(db, { questions: 2 });
     const source = await reload(db, seed.evaluationId);
-    const copy = await service.duplicateEvaluation(db, source, {
-      classroomId: seed.classroomId,
+    const copy = await service.copyEvaluation(db, source, {
+      home: { classroomId: seed.classroomId },
       title: "Copy",
       createdBy: seed.teacherId,
     });

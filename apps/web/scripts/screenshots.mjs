@@ -72,6 +72,12 @@ const scenes = [
   { name: "course-link-pool", role: "teacher", path: "/", fold: true, act: (p) => p.getByRole("button", { name: /link a pool|lier une banque/i }).first().click() },
   { name: "course-new", role: "teacher", path: "/", act: (p) => p.getByRole("button", { name: /new course/i }).first().click() },
   { name: "classroom-new", role: "teacher", path: "/", act: (p) => p.getByRole("button", { name: /new classroom/i }).first().click() },
+  // ADR-031: the course's evaluation templates, under its pools, and the
+  // dialog that makes a classroom's evaluation from one.
+  { name: "course-templates", role: "teacher", path: "/", fold: true },
+  { name: "course-template-use", role: "teacher", path: "/", fold: true, act: (p) => p.getByRole("button", { name: /use in a classroom|utiliser dans une classe/i }).first().click() },
+  { name: "eval-new-from-template", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /new evaluation|nouvelle évaluation/i }).first().click() },
+  { name: "eval-save-template", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: async (p) => { await p.getByRole("button", { name: /^actions$/i }).first().click(); await p.getByRole("menuitem", { name: /save as template|enregistrer comme modèle/i }).click(); } },
 
   // Classroom. Two tabs: the roster and the evaluations. Without `?tab=` the
   // page opens on the evaluations, which is where the work is once the

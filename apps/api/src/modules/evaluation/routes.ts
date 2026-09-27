@@ -22,16 +22,26 @@ import {
   ItemPatch,
   ItemsAdd,
   ItemsOrder,
+  TemplateCreate,
+  TemplateInstantiate,
   UpdateVersions,
   type EvaluationDetail,
+  type TemplateInstance,
 } from "@quiz/contracts";
 
 import { tracer, type AuditAction } from "../../audit.js";
 import { hasKey, loadConfig, typeOf } from "../pool/config.js";
-import { findAccessibleClassroom, loadEvaluation, teacherGuard } from "../guards.js";
+import {
+  accessibleCourse,
+  findAccessibleClassroom,
+  loadEvaluation,
+  loadTemplate,
+  teacherGuard,
+} from "../guards.js";
 import { notFound, teacherRoute } from "../http.js";
 import { evaluationChanged } from "./events.js";
 import * as service from "./service.js";
+import * as templates from "./templates.js";
 
 export async function evaluationPlugin(app: FastifyInstance) {
   const requireTeacher = teacherGuard(app);
@@ -191,8 +201,8 @@ export async function evaluationPlugin(app: FastifyInstance) {
           if (!other) return notFound(reply);
           target = other.room.id;
         }
-        const row = await service.duplicateEvaluation(app.db, scope.evaluation, {
-          classroomId: target,
+        const row = await service.copyEvaluation(app.db, scope.evaluation, {
+          home: { classroomId: target },
           title: body.title,
           createdBy: req.user!.id,
         });
@@ -314,6 +324,92 @@ export async function evaluationPlugin(app: FastifyInstance) {
         });
         evaluationChanged(service.classroomIdOf(row), row.id);
         return service.toEvaluation(row);
+      },
+    ),
+  );
+
+  // --- Templates (ADR-031) --------------------------------------------------
+  //
+  // A template is reached through its COURSE's staff (`loadTemplate`), never
+  // through `loadEvaluation`, whose classroom join cannot find one: none of
+  // the generic routes above ever sees a template.
+
+  const staffTemplate = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
+    loadTemplate(app, req, reply, p.id);
+
+  app.get(
+    "/app/api/courses/:id/templates",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: (req, reply) => accessibleCourse(app, req, reply) }, ({ scope }) =>
+      templates.listTemplates(app.db, scope.id),
+    ),
+  );
+
+  /** "Save as template": the evaluation, into its course, without anything of a run. */
+  app.post(
+    "/app/api/evaluations/:id/template",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: TemplateCreate, load: staffEvaluation },
+      async ({ req, reply, body, scope }) => {
+        const row = await templates.saveAsTemplate(app.db, scope.evaluation, {
+          courseId: scope.classroom.courseId,
+          title: body.title,
+          createdBy: req.user!.id,
+        });
+        await trace(req, "template.create", "evaluation", row.id, {
+          from: scope.evaluation.id,
+          courseId: scope.classroom.courseId,
+          title: row.title,
+        });
+        return reply.code(201).send(await templates.templateOf(app.db, row));
+      },
+    ),
+  );
+
+  /** Its instances keep running and lose their link to it. */
+  app.delete(
+    "/app/api/templates/:id",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: staffTemplate }, async ({ req, reply, scope }) => {
+      await templates.deleteTemplate(app.db, scope.template);
+      await trace(req, "template.delete", "evaluation", scope.template.id, {
+        courseId: scope.course.id,
+        title: scope.template.title,
+      });
+      return reply.code(204).send();
+    }),
+  );
+
+  /**
+   * "Instantiate" into a classroom of the SAME course. A classroom of another
+   * course — even one the caller is staff of — is the 404 of a classroom this
+   * template does not reach.
+   */
+  app.post(
+    "/app/api/templates/:id/instances",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: TemplateInstantiate, load: staffTemplate },
+      async ({ req, reply, body, scope }) => {
+        const room = await findAccessibleClassroom(app.db, req.user!, body.classroomId);
+        if (!room || room.room.courseId !== scope.course.id) return notFound(reply);
+        const made = await templates.instantiateTemplate(app.db, scope.template, {
+          classroomId: room.room.id,
+          title: body.title ?? scope.template.title,
+          createdBy: req.user!.id,
+        });
+        await trace(req, "template.instantiate", "evaluation", made.evaluation.id, {
+          templateId: scope.template.id,
+          revision: scope.template.revision,
+          classroomId: room.room.id,
+        });
+        evaluationChanged(room.room.id, made.evaluation.id);
+        const answer: TemplateInstance = {
+          evaluation: service.toEvaluation(made.evaluation),
+          deprecatedItems: made.deprecatedItems,
+        };
+        return reply.code(201).send(answer);
       },
     ),
   );

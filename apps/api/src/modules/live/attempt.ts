@@ -426,7 +426,7 @@ export async function enrolledCounts(
   rows: readonly EvaluationRecord[],
 ): Promise<Map<string, number>> {
   if (rows.length === 0) return new Map();
-  // An anonymous poll has no classroom, and so no seat to count.
+  // An anonymous poll (or a template) has no classroom, and so no seat to count.
   const classroomIds = [
     ...new Set(rows.flatMap((r) => (r.classroomId === null ? [] : [r.classroomId]))),
   ];

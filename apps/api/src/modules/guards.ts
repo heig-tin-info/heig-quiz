@@ -36,6 +36,7 @@ import {
   pools,
   questionVersions,
   questions,
+  ownedPollSql,
 } from "../db/schema.js";
 import { sebRequired } from "./evaluation/service.js";
 
@@ -47,10 +48,12 @@ const IdParam = z.object({ id: z.uuid() });
  * (docs/spec/07, 7.3) — there is no permission matrix, and no owner.
  *
  * Every loader below, the course listing and the SSE topics go through it:
- * one predicate, one definition of "who may work on this course".
+ * one predicate, one definition of "who may work on this course". `courseId`
+ * names the course column when the query reaches it by another way than
+ * `courses.id` ({@link managedEvaluationAccess}).
  */
-export function staffAccess(userId: string): SQL {
-  return sql`EXISTS (SELECT 1 FROM ${courseStaff} WHERE ${courseStaff.courseId} = ${courses.id} AND ${courseStaff.userId} = ${userId})`;
+export function staffAccess(userId: string, courseId: AnyColumn | SQL = courses.id): SQL {
+  return sql`EXISTS (SELECT 1 FROM ${courseStaff} WHERE ${courseStaff.courseId} = ${courseId} AND ${courseStaff.userId} = ${userId})`;
 }
 
 /**
@@ -418,18 +421,63 @@ export async function accessibleEvaluation(
   return loadEvaluation(app, req, reply, params.data.id);
 }
 
+/**
+ * An evaluation TEMPLATE (ADR-031) and its course, for a member of that
+ * course's staff; null otherwise. A template is a row of `evaluations` whose
+ * `course_id` is set, so the inner join on `courses` through that column is
+ * what tells it apart: a classroom's evaluation or a poll never matches.
+ */
+export async function findTemplate(
+  db: Db,
+  user: Caller,
+  templateId: string,
+): Promise<{ template: typeof evaluations.$inferSelect; course: typeof courses.$inferSelect } | null> {
+  const [row] = await db
+    .select({ template: evaluations, course: courses })
+    .from(evaluations)
+    .innerJoin(courses, eq(evaluations.courseId, courses.id))
+    .where(and(eq(evaluations.id, templateId), accessWhere(user, staffAccess(user.id))))
+    .limit(1);
+  return row ?? null;
+}
+
+/** {@link findTemplate}, answering the 404 of a missing template (invariant 6). */
+export async function loadTemplate(
+  app: FastifyInstance,
+  req: FastifyRequest,
+  reply: FastifyReply,
+  templateId: string,
+) {
+  return (await findTemplate(app.db, req.user!, templateId)) ?? notFound(reply);
+}
+
 type ReachableEvaluation = { evaluation: typeof evaluations.$inferSelect; staff: boolean };
 
 /**
- * THE access predicate of an evaluation that has no classroom — an anonymous
- * poll, the only kind the schema allows (`evaluations_home_ck`; ADR-014,
- * addendum 2026-09-27) — on a query that has `evaluations` in scope. There
+ * THE access predicate of an anonymous poll — an evaluation with no
+ * classroom AND no course (`evaluations_home_ck`; ADR-014, addendum
+ * 2026-09-27; ADR-031) — on a query that has `evaluations` in scope. There
  * is no course and so no staff: the teacher who launched it OWNS it, and
  * nobody else reaches it (an admin, through `accessWhere`). A colleague gets
  * the same 404 as for a poll that does not exist.
  */
 export function ownedPollAccess(userId: string): SQL {
-  return sql`(${qualified(evaluations.classroomId)} is null and ${qualified(evaluations.createdBy)} = ${userId})`;
+  // `classroom_id is null` alone is no longer a poll: a template has none
+  // either (ADR-031), and its creator must NOT own it through this door.
+  return sql`(${ownedPollSql()} and ${qualified(evaluations.createdBy)} = ${userId})`;
+}
+
+/**
+ * "The caller manages this row", on a query that has `evaluations` in scope
+ * and `classrooms` LEFT-joined on its classroom: a staff seat on its course —
+ * the classroom's, or a template's own (ADR-031) — or the ownership of an
+ * anonymous poll. Undefined for an admin, like {@link accessWhere}. For a
+ * query that must tell what it may name from what it may only count (the
+ * pool-delete refusal), not for loading one entity.
+ */
+export function managedEvaluationAccess(user: Caller): SQL | undefined {
+  const course = sql`coalesce(${qualified(evaluations.courseId)}, ${qualified(classrooms.courseId)})`;
+  return accessWhere(user, sql`(${staffAccess(user.id, course)} OR ${ownedPollAccess(user.id)})`);
 }
 
 /**
@@ -461,7 +509,7 @@ export async function findManagedEvaluation(
     .where(
       and(
         eq(evaluations.id, evaluationId),
-        isNull(evaluations.classroomId),
+        ownedPollSql(),
         accessWhere(user, ownedPollAccess(user.id)),
       ),
     )

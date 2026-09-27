@@ -47,7 +47,7 @@ import {
 import { tracer } from "../../audit.js";
 import type { AppConfig } from "../../config.js";
 import { CSRF_COOKIE, CSRF_HEADER } from "../../auth/session.js";
-import { questions } from "../../db/schema.js";
+import { isOwnedPoll, questions } from "../../db/schema.js";
 import {
   accessWhere,
   findAccessibleClassroom,
@@ -465,7 +465,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     const found = await service.byCode(app.db, code, now);
     if (!found) return null;
     if (
-      found.evaluation.classroomId !== null &&
+      !isOwnedPoll(found.evaluation) &&
       req.user &&
       !(await findReachableEvaluation(app.db, req.user, found.evaluation.id))
     ) {
