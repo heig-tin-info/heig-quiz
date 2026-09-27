@@ -85,6 +85,21 @@ const scenes = [
       await p.getByRole("button", { name: "Prog-C-2026-2027-test", exact: true }).first().hover();
       await p.waitForTimeout(400);
     } },
+  // #154: the course → classroom tree under "Courses", in its three states,
+  // and a second course unfolded in "all" with its code's tip.
+  ...["collapsed", "active", "all"].map((state) => ({
+    name: `sidebar-courses-${state}`, role: "teacher", path: "/classrooms/r4", fold: true,
+    ls: { "quiz-courses-nav": state }, act: skipCoach,
+  })),
+  { name: "sidebar-courses-all-tip", role: "teacher", path: "/classrooms/r4", fold: true, ls: { "quiz-courses-nav": "all" }, act: async (p) => {
+      await skipCoach(p);
+      const emb = p.getByRole("button", { name: "EMB", exact: true }).first();
+      await emb.click();
+      // A click dismisses a tip: leave the row, then come back to it.
+      await p.mouse.move(700, 600);
+      await emb.hover();
+      await p.waitForTimeout(400);
+    } },
   { name: "classroom-roster", role: "teacher", path: "/classrooms/r1?tab=roster" },
   { name: "classroom-empty", role: "teacher", path: "/classrooms/r1?empty=1", settle: 800 },
   { name: "classroom-error", role: "teacher", path: "/classrooms/r1?fail=1", settle: 2500 },

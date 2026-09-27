@@ -5,7 +5,8 @@ import type { PoolSummary } from "@quiz/contracts";
 import { api } from "../api";
 import { useT } from "../i18n";
 import { sectionOf, type Route } from "../router";
-import { cx, Skeleton, usePersistentChoice } from "../ui";
+import { NavTree, navRowClass, useNavCycle, type NavCycle } from "../navTree";
+import { cx } from "../ui";
 import { SidebarCategories } from "./CategoryTree";
 import { useMoveQuestions, useQuestionDrop, type QuestionDrag } from "./move";
 import { PoolIcon } from "./PoolIcon";
@@ -24,35 +25,15 @@ import { poolsKey } from "../queryKeys";
  * there (ADR-017), and a target you cannot see is not a target. It is also the
  * shortest way between two pools, which is otherwise a trip through /pools.
  *
- * The cycle is a viewer's HABIT, so it is remembered in `localStorage` like
- * the pool page's table/cards choice, and never in the URL or on the server.
- *
- * Navigation and disclosure share the row without fighting over it: from
- * anywhere else the click NAVIGATES to the pools (and opens the section if it
- * was collapsed), and only a click made while already inside the pool section
- * cycles. A teacher reading a question therefore never loses it by folding the
- * tree, and nobody has to hunt for a second control to see their pools.
+ * The cycle, its memory and the navigate-vs-cycle click are `useNavCycle`
+ * (navTree.tsx), shared with the "Courses" row: from anywhere else the click
+ * NAVIGATES to the pools (and opens the section if it was collapsed), and only
+ * a click made while already inside the pool section cycles. A teacher
+ * reading a question therefore never loses it by folding the tree.
  */
 
-export type PoolNavState = "collapsed" | "active" | "all";
-
-const NAV_KEY = "quiz-pools-nav";
-const ORDER: PoolNavState[] = ["collapsed", "active", "all"];
-
-export function usePoolNavState(): {
-  state: PoolNavState;
-  /** Next state in the cycle. */
-  cycle: () => void;
-  open: () => void;
-} {
-  const [state, write] = usePersistentChoice(NAV_KEY, ORDER, "active");
-  return {
-    state,
-    cycle: () => write(ORDER[(ORDER.indexOf(state) + 1) % ORDER.length]!),
-    open: () => {
-      if (state === "collapsed") write("active");
-    },
-  };
+export function usePoolNavState(): NavCycle {
+  return useNavCycle("quiz-pools-nav");
 }
 
 /** True while the reader is inside the pool section, whichever of its pages. */
@@ -96,7 +77,7 @@ function PoolRow({
       aria-label={drop.over ? t("pool.move.dropInto", { pool: pool.name }) : undefined}
       {...drop.handlers}
       className={cx(
-        "flex w-full items-center gap-2 rounded-field px-2.5 py-1.5 text-left text-[13px] transition-colors",
+        navRowClass,
         active ? "font-semibold text-fg" : "text-fg-muted hover:bg-surface-2 hover:text-fg",
         drop.over && "bg-accent-soft text-accent outline-2 outline-offset-[-2px] outline-accent",
       )}
@@ -120,7 +101,7 @@ export function PoolNavTree({
   route,
   navigate,
 }: {
-  state: PoolNavState;
+  state: NavCycle["state"];
   route: Route;
   navigate: (r: Route) => void;
 }) {
@@ -142,19 +123,10 @@ export function PoolNavTree({
   }
 
   return (
-    <div className="ml-3 space-y-0.5 border-l border-line pl-1.5">
-      {pools.isLoading ? (
-        <div className="space-y-1 px-2.5 py-1.5">
-          <Skeleton className="h-4 w-28" />
-          <Skeleton className="h-4 w-20" />
-        </div>
-      ) : pools.isError ? (
-        <p className="px-2.5 py-1.5 text-[13px] text-fg-muted">{t("error.server")}</p>
-      ) : (pools.data ?? []).length === 0 ? (
-        <p className="px-2.5 py-1.5 text-[13px] text-fg-muted">{t("pools.empty.title")}</p>
-      ) : (
+    <NavTree query={pools} empty={t("pools.empty.title")}>
+      {(list) => (
         <ul className="space-y-0.5">
-          {(pools.data ?? []).map((pool) => (
+          {list.map((pool) => (
             <li key={pool.id}>
               <PoolRow
                 pool={pool}
@@ -175,6 +147,6 @@ export function PoolNavTree({
           ))}
         </ul>
       )}
-    </div>
+    </NavTree>
   );
 }

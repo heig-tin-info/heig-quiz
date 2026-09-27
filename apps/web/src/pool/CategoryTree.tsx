@@ -8,6 +8,7 @@ import { api } from "../api";
 import { useT } from "../i18n";
 import { useMoveQuestions, useQuestionDrop, type QuestionDrag } from "./move";
 import { useSearchParam, type Route } from "../router";
+import { NavTree, navRowClass } from "../navTree";
 import { cx, Skeleton, Tip, useTruncated } from "../ui";
 import { poolKey } from "../queryKeys";
 
@@ -135,7 +136,7 @@ function PoolLinkRow({
       aria-current={current ? "true" : undefined}
       {...drop?.handlers}
       className={cx(
-        "flex w-full items-center gap-2 rounded-field px-2.5 py-1.5 text-left text-[13px] transition-colors",
+        navRowClass,
         current
           ? "bg-accent-soft font-semibold text-accent"
           : "text-fg-muted hover:bg-surface-2 hover:text-fg",
@@ -158,7 +159,7 @@ function SidebarPool({ label }: { label: ReactNode }) {
   return (
     <div
       aria-current="page"
-      className="flex w-full items-center gap-2 rounded-field px-2.5 py-1.5 text-[13px] font-semibold text-fg"
+      className={cx(navRowClass, "font-semibold text-fg")}
     >
       <span className="min-w-0 flex-1 truncate">{label}</span>
     </div>
@@ -220,20 +221,18 @@ export function SidebarCategories({
   const selected = onCategoriesPage ? undefined : category === "" ? null : category;
 
   return (
-    <div className="ml-3 space-y-0.5 border-l border-line pl-1.5">
-      {heading ? (
-        <SidebarPool
-          label={detail.data ? detail.data.pool.name : <Skeleton className="h-4 w-24" />}
-        />
-      ) : null}
-      {detail.isLoading ? (
-        <div className="space-y-1 px-2.5 py-1.5">
-          <Skeleton className="h-4 w-28" />
-          <Skeleton className="h-4 w-20" />
-        </div>
-      ) : detail.isError || !detail.data ? (
-        <p className="px-2.5 py-1.5 text-[13px] text-fg-muted">{t("pools.notFound")}</p>
-      ) : (
+    <NavTree
+      query={detail}
+      error={t("pools.notFound")}
+      heading={
+        heading ? (
+          <SidebarPool
+            label={detail.data ? detail.data.pool.name : <Skeleton className="h-4 w-24" />}
+          />
+        ) : null
+      }
+    >
+      {(data) => (
         <ul className="space-y-0.5">
           <li>
             <PoolLinkRow
@@ -252,7 +251,7 @@ export function SidebarCategories({
               onClick={() => navigate({ view: "poolCategories", id: poolId })}
             />
           </li>
-          {detail.data.categories.map((node) => (
+          {data.categories.map((node) => (
             <CategoryRow
               key={node.id}
               node={node}
@@ -264,6 +263,6 @@ export function SidebarCategories({
           ))}
         </ul>
       )}
-    </div>
+    </NavTree>
   );
 }

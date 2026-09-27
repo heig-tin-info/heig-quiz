@@ -238,6 +238,15 @@ whole classroom name when the ellipsis cut it. The Classrooms section sits
 under a `border-t border-line` hairline, like the shortcut strip: it is apart
 from the navigation, and it looks apart.
 
+"Courses" and "Question pools" disclose a tree under their row, and both
+behave alike (`useNavCycle`, #154): collapsed → the one being read → all,
+remembered per browser; a click from outside the section navigates (and
+opens a collapsed tree), a click from inside it cycles. In a tree the current
+row is marked by weight (`font-semibold text-fg`), never by `accent-soft`:
+the one accent chip of the column belongs to the current page's row, and a
+classroom shown both in the course tree and in the flat section would
+otherwise read as two selections.
+
 Toasts sit in one `aria-live="polite"` region, each one a `role="status"`
 with a keyboard-reachable dismiss button.
 
@@ -286,7 +295,7 @@ live in `ui/state.ts`, each written once.
 
 - `usePersistentChoice(key, values, fallback)`: a choice that is a reader's
   HABIT and not a state of the data — table or cards, the grouping of the
-  pool, the pool tree's cycle, the classroom of the last poll — remembered per
+  pool, the cycle of the pool and course trees (`useNavCycle`), the classroom of the last poll — remembered per
   browser in `localStorage`, never in the URL or on the server. `values` is
   the closed list of choices (or a predicate for an open set, an id); anything
   else stored gives `fallback`. Both accessors are wrapped: a private window
