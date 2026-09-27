@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import type { Me, Pool, PoolInUse, PoolSummary } from "@quiz/contracts";
+import { PoolInUse, type Me, type Pool, type PoolSummary } from "@quiz/contracts";
 
 import { api, ApiError, useMe } from "../api";
 import { useConfirm } from "../confirm";
@@ -56,8 +56,8 @@ import { allPoolsKey, poolsKey } from "../queryKeys";
 /** The body of a `409 pool_in_use`, or null for any other failure. */
 function poolInUse(error: unknown): PoolInUse | null {
   if (!(error instanceof ApiError) || error.status !== 409) return null;
-  const body = error.body as PoolInUse | null;
-  return body?.error === "pool_in_use" ? body : null;
+  const parsed = PoolInUse.safeParse(error.body);
+  return parsed.success ? parsed.data : null;
 }
 
 /** What still holds the pool, by title, with the ones the caller cannot open counted. */

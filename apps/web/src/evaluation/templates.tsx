@@ -2,13 +2,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CopyPlus, FileStack, Trash2 } from "lucide-react";
 import { useState } from "react";
 
-import type {
-  ClassroomSummary,
-  EvaluationTemplate,
-  TemplateCreate,
-  TemplateInstance,
-  TemplateInstantiate,
-  TemplateItemRef,
+import {
+  TemplatePoolUnlinked,
+  type ClassroomSummary,
+  type EvaluationTemplate,
+  type TemplateCreate,
+  type TemplateInstance,
+  type TemplateInstantiate,
+  type TemplateItemRef,
 } from "@quiz/contracts";
 
 import { api, ApiError } from "../api";
@@ -44,11 +45,9 @@ const itemNames = (items: readonly TemplateItemRef[]) =>
 
 /** What an "Instantiate" that failed says, translated from its machine half. */
 function instantiateError(error: unknown, t: TFunction): string | null {
-  const body = error instanceof ApiError ? (error.body as { error?: string; items?: TemplateItemRef[] }) : null;
-  if (body?.error === "template_pool_unlinked" && body.items) {
-    return t("templates.unlinked", { names: itemNames(body.items) });
-  }
-  return null;
+  if (!(error instanceof ApiError)) return null;
+  const parsed = TemplatePoolUnlinked.safeParse(error.body);
+  return parsed.success ? t("templates.unlinked", { names: itemNames(parsed.data.items) }) : null;
 }
 
 /**
@@ -206,6 +205,7 @@ export function CourseTemplates({
               {t(template.itemCount === 1 ? "templates.meta.one" : "templates.meta", {
                 n: template.itemCount,
                 points: template.totalPoints,
+                revision: template.revision,
               })}
             </span>
             <Actions
