@@ -8,6 +8,7 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 |---|---|
 | User | A person authenticated by edu-ID. Carries a global role: `student`, `teacher` or `admin`. The role comes from the edu-ID affiliation attribute, the admin is a configured edu-ID. |
 | Course | A teacher's teaching unit, persistent from one year to the next. E.g. "Programmation C". References one or more pools. |
+| Hidden course | A course a user took out of their own navigation (F-ORG-11). A per-user display state, not a state of the course: the word is "hidden", never "archived", which is a state of a classroom seen by the whole staff. |
 | Classroom | An instance of a course for a group and a period. E.g. "Prog C, class A, autumn 2026". Owns a roster. |
 | Roster | The list of the students of a classroom, with their accommodations. Fed by CSV import or by self-enrolment with a classroom code. |
 | Pool | A collection of questions. Private to a teacher, or shared with roles. A global public pool is readable by every teacher. |
