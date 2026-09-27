@@ -45,6 +45,39 @@ describe("McqEditor", () => {
     expect(onChange.mock.calls[0]?.[0].choices).toHaveLength(4);
   });
 
+  it("draws 'Add a choice' as an icon on the last row, named and reachable (#159)", async () => {
+    const onChange = vi.fn();
+    render(<McqEditor config={SECRET_CONFIG} onChange={onChange} />);
+    const add = screen.getByRole("button", { name: "Add a choice" });
+    // Icon-only: the sentence is its accessible name and its tooltip, never
+    // a visible label taking a row of its own.
+    expect(add).toHaveTextContent("");
+    expect(add.querySelector("svg")).not.toBeNull();
+    // It sits on the LAST choice row, and on no other.
+    const rows = screen.getAllByRole("listitem");
+    expect(within(rows[rows.length - 1]!).getByRole("button", { name: "Add a choice" })).toBe(
+      add,
+    );
+    expect(within(rows[0]!).queryByRole("button", { name: "Add a choice" })).toBeNull();
+    // Keyboard: the bin of the last row, then the `+`, and Enter presses it.
+    screen.getByRole("button", { name: "Remove choice C" }).focus();
+    await userEvent.tab();
+    expect(add).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    expect(onChange.mock.calls[0]?.[0].choices).toHaveLength(4);
+  });
+
+  it("names the icon with the host's string", () => {
+    render(
+      <McqEditor
+        config={SECRET_CONFIG}
+        onChange={() => {}}
+        strings={{ addChoice: "Ajouter un choix" }}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Ajouter un choix" })).toBeInTheDocument();
+  });
+
   it("shows the issues the host reported, verbatim", () => {
     render(
       <McqEditor

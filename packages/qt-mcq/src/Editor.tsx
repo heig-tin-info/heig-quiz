@@ -54,7 +54,6 @@ import {
 import { mcqEditorStrings, type McqEditorStringKey } from "./strings.js";
 import {
   AsideSection,
-  buttonClass,
   cardTitleClass,
   cx,
   helpClass,
@@ -73,6 +72,7 @@ import {
   GripIcon,
   iconButtonClass,
   Pastille,
+  PlusIcon,
   Tip,
   TrashIcon,
 } from "./ui.js";
@@ -365,6 +365,36 @@ export function McqEditor({
     </AsideSection>
   );
 
+  /**
+   * "Add a choice", as a `+` at the right of the LAST row (issue #159).
+   *
+   * It was a full-width row of its own under the list, which in the poll
+   * launcher's short form read as one more line of clutter under A and B. Tab
+   * and Enter at the end of the last choice already grow the list, so the
+   * button is the pointer's way in, and an icon beside the row it extends is
+   * enough for that. It keeps its accessible name, and the tooltip says the
+   * same sentence to the eye.
+   */
+  const addButton = (
+    <Tip label={s.addChoice} align="end">
+      <button
+        type="button"
+        className={cx(
+          iconButtonClass,
+          "mt-1.25 border border-line text-fg-muted hover:border-line-strong",
+        )}
+        aria-label={s.addChoice}
+        disabled={disabled || config.choices.length >= MCQ_MAX_CHOICES}
+        onClick={() => {
+          const added = addChoice();
+          if (added !== null) setFocusAfterRender(added);
+        }}
+      >
+        <PlusIcon />
+      </button>
+    </Tip>
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <IssueList issues={rootIssues(issues)} />
@@ -412,6 +442,7 @@ export function McqEditor({
                   s={s}
                   disabled={disabled === true}
                   removable={config.choices.length > MCQ_MIN_CHOICES}
+                  trailing={index === config.choices.length - 1 ? addButton : null}
                   {...(RichText === undefined ? {} : { RichText })}
                   {...(uploadAsset === undefined ? {} : { uploadAsset })}
                   onText={(text) => setChoices(patchAt(config.choices, index, { text }))}
@@ -446,19 +477,6 @@ export function McqEditor({
         </DndContext>
 
         <IssueList issues={issuesAt(issues, "choices")} />
-        <div>
-          <button
-            type="button"
-            className={buttonClass}
-            disabled={disabled || config.choices.length >= MCQ_MAX_CHOICES}
-            onClick={() => {
-              const added = addChoice();
-              if (added !== null) setFocusAfterRender(added);
-            }}
-          >
-            {s.addChoice}
-          </button>
-        </div>
       </section>
 
       {ungraded ? null : scoring}
@@ -467,7 +485,7 @@ export function McqEditor({
 }
 
 /**
- * One row: the handle, the letter, the text, the bin.
+ * One row: the handle, the letter, the text, the bin (and the `+` on the last).
  *
  * The LETTER IS THE CHECKBOX (`Pastille`). The row used to carry a grip, a
  * letter, a box labelled "Correct" and the field: four things for two, and the
@@ -493,6 +511,7 @@ function ChoiceRow({
   onRemove,
   onEnter,
   onTab,
+  trailing,
 }: {
   index: number;
   choice: McqChoice;
@@ -507,6 +526,11 @@ function ChoiceRow({
   onRemove: () => void;
   onEnter: () => void;
   onTab: (shift: boolean) => boolean;
+  /**
+   * What sits right of the bin: the `+` on the last row, and an empty slot of
+   * the same width on every other one, so the fields keep one right edge.
+   */
+  trailing: ReactNode;
 }) {
   const letter = choiceLetter(index);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -606,13 +630,15 @@ function ChoiceRow({
 
       <button
         type="button"
-        className={cx(iconButtonClass, "mt-0.75 hover:bg-danger-soft hover:text-danger")}
+        className={cx(iconButtonClass, "mt-1.25 hover:bg-danger-soft hover:text-danger")}
         aria-label={`${s.removeChoice} ${letter}`}
         disabled={disabled || !removable}
         onClick={onRemove}
       >
         <TrashIcon />
       </button>
+
+      {trailing ?? <span aria-hidden className="size-7 shrink-0" />}
     </li>
   );
 }

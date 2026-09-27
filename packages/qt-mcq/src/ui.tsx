@@ -114,16 +114,33 @@ export function Pastille({
  * `apps/web`'s `Tip` portals itself and arms on a timer; a package cannot
  * import it, and only this list uses one, so what is mirrored here
  * are the TOKENS and the two rules that matter — never focusable, never
- * clickable. The absolute position is enough for the one place this is used:
- * a row of a list nothing clips.
+ * clickable. The absolute position is enough for the two places this is used:
+ * the handle and the `+` of a list nothing clips.
  */
-export function Tip({ label, children }: { label: string; children: ReactNode }): ReactNode {
+export function Tip({
+  label,
+  align = "center",
+  children,
+}: {
+  label: string;
+  /**
+   * `end` pins the bubble's right edge to the control's: a control at the
+   * right edge of the column (the `+` of the list) would otherwise push half
+   * the bubble past it, and on a phone off the screen.
+   */
+  align?: "center" | "end";
+  children: ReactNode;
+}): ReactNode {
   return (
     <span className="group/tip relative inline-flex">
       {children}
       <span
         aria-hidden
-        className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-1.5 -translate-x-1/2 whitespace-nowrap rounded-lg bg-fg px-2.5 py-1.5 text-xs font-medium leading-snug text-canvas opacity-0 transition-opacity duration-150 group-hover/tip:opacity-100 group-focus-within/tip:opacity-100"
+        className={cx(
+          "pointer-events-none absolute bottom-full z-20 mb-1.5 whitespace-nowrap",
+          align === "end" ? "right-0" : "left-1/2 -translate-x-1/2",
+          "rounded-lg bg-fg px-2.5 py-1.5 text-xs font-medium leading-snug text-canvas opacity-0 transition-opacity duration-150 group-hover/tip:opacity-100 group-focus-within/tip:opacity-100",
+        )}
       >
         {label}
       </span>
@@ -132,7 +149,7 @@ export function Tip({ label, children }: { label: string; children: ReactNode })
 }
 
 /**
- * Two icons, drawn here rather than imported: `lucide-react` is a dependency
+ * Three icons, drawn here rather than imported: `lucide-react` is a dependency
  * of `apps/web`, not of this package, and a leaf question type has no business
  * pulling an icon set of its own (`McqIcon` in `client.tsx` does the same).
  */
@@ -181,6 +198,22 @@ export function TrashIcon({ className = "size-3.5" }: { className?: string }) {
 export const gripClass =
   "inline-flex h-7 w-6 shrink-0 cursor-grab items-center justify-center rounded-md text-fg-muted transition-colors group-hover/choice:text-fg hover:bg-surface-2 focus-visible:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:cursor-grabbing disabled:pointer-events-none disabled:opacity-40";
 
-/** Round, borderless control the size of a row: the handle and the bin. */
+/** Round control the size of a row: the bin, and the `+` that adds one. */
 export const iconButtonClass =
   "inline-flex size-7 shrink-0 items-center justify-center rounded-full text-fg-faint transition-colors hover:bg-surface-2 hover:text-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:pointer-events-none disabled:opacity-40";
+
+export function PlusIcon({ className = "size-3.5" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      className={className}
+      aria-hidden
+    >
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  );
+}
