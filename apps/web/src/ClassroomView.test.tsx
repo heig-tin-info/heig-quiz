@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { EvaluationSummary } from "@quiz/contracts";
 
@@ -164,14 +164,78 @@ describe("ClassroomView", () => {
     await userEvent.click(screen.getByRole("menuitem", { name: "Period…" }));
 
     const dialog = await screen.findByRole("dialog");
-    const field = within(dialog).getByRole("textbox", { name: /Period/ });
+    const field = within(dialog).getByRole("textbox", { name: "Period label" });
     expect(field).toHaveValue("2026-A");
     await userEvent.clear(field);
     await userEvent.type(field, "2027-P");
     await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
 
+    // The months travel with the label, both null for an undated classroom.
     expect(calls.find((c) => c.method === "PATCH" && c.url === ROOM)?.body).toEqual({
       period: "2027-P",
+      periodStart: null,
+      periodEnd: null,
+    });
+  });
+
+  describe("the period dates (#156)", () => {
+    afterEach(() => vi.useRealTimers());
+
+    it("dates a classroom from a preset, keeping a label the teacher typed", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(2026, 8, 27));
+      const { calls } = mockFetch({
+        [`GET ${ROOM}`]: ok(makeClassroomDetail()),
+        [`PATCH ${ROOM}`]: ok(makeClassroomDetail()),
+      });
+      renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
+      await userEvent.click(await screen.findByRole("button", { name: "Actions" }));
+      await userEvent.click(screen.getByRole("menuitem", { name: "Period…" }));
+      const dialog = await screen.findByRole("dialog");
+
+      // Undated: "No dates" is the pressed chip; the presets are the current
+      // semester and the next one.
+      expect(within(dialog).getByRole("button", { name: "No dates" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      await userEvent.click(within(dialog).getByRole("button", { name: "Spring 2027" }));
+      expect(within(dialog).getByLabelText("First month")).toHaveValue("2027-02");
+      expect(within(dialog).getByLabelText("Last month")).toHaveValue("2027-07");
+      expect(within(dialog).getByRole("textbox", { name: "Period label" })).toHaveValue("2026-A");
+      await userEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+
+      expect(calls.find((c) => c.method === "PATCH" && c.url === ROOM)?.body).toEqual({
+        period: "2026-A",
+        periodStart: "2027-02",
+        periodEnd: "2027-07",
+      });
+    });
+
+    it("lets a preset replace the label another preset wrote, and refuses half a period", async () => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(new Date(2026, 8, 27));
+      mockFetch({
+        [`GET ${ROOM}`]: ok(
+          makeClassroomDetail({ period: "Autumn 2026", periodStart: "2026-09", periodEnd: "2027-01" }),
+        ),
+      });
+      renderWithProviders(<ClassroomView id="r1" navigate={vi.fn()} />, { route: ROSTER_TAB });
+      await userEvent.click(await screen.findByRole("button", { name: "Actions" }));
+      await userEvent.click(screen.getByRole("menuitem", { name: "Period…" }));
+      const dialog = await screen.findByRole("dialog");
+      const label = within(dialog).getByRole("textbox", { name: "Period label" });
+
+      expect(within(dialog).getByRole("button", { name: "Autumn 2026" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+      await userEvent.click(within(dialog).getByRole("button", { name: "Spring 2027" }));
+      expect(label).toHaveValue("Spring 2027");
+
+      await userEvent.clear(within(dialog).getByLabelText("Last month"));
+      expect(within(dialog).getByText(/Give both months/)).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
     });
   });
 

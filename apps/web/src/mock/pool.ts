@@ -2186,6 +2186,8 @@ on("GET", "/app/api/courses/:id", (m) => {
         id: r.id,
         name: r.name,
         period: r.period,
+        periodStart: r.periodStart,
+        periodEnd: r.periodEnd,
         archivedAt: r.archivedAt,
         joinCode: null,
         joinCodeEnabled: false,

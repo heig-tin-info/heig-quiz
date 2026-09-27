@@ -9,6 +9,7 @@ import type {
   RosterEntry,
   StudentClassroom,
 } from "@quiz/contracts";
+import { addMonths, currentOrNextSemester, semesterMonths } from "@quiz/domain";
 import {
   D,
   H,
@@ -74,6 +75,8 @@ export interface Room {
   id: string;
   name: string;
   period: string;
+  periodStart: string | null;
+  periodEnd: string | null;
   courseId: string;
   createdAt: string;
   archivedAt: string | null;
@@ -134,11 +137,21 @@ export const courses: Course[] = [
   },
 ];
 
+/**
+ * The semester of the browser's today, and the same one a year back (#156):
+ * relative, like every date of the mock, so the sidebar shows the same
+ * classrooms whatever day the mock is opened — the ended one leaves it.
+ */
+const NOW = semesterMonths(currentOrNextSemester(new Date()));
+const LAST_YEAR = { start: addMonths(NOW.start, -12), end: addMonths(NOW.end, -12) };
+
 export const rooms: Room[] = [
   {
     id: "r1",
     name: "PRG1-2026",
     period: "2026-A",
+    periodStart: NOW.start,
+    periodEnd: NOW.end,
     courseId: "c1",
     createdAt: iso(-40 * D),
     archivedAt: null,
@@ -148,6 +161,8 @@ export const rooms: Room[] = [
     id: "r2",
     name: "PRG1-2025",
     period: "2025-A",
+    periodStart: LAST_YEAR.start,
+    periodEnd: LAST_YEAR.end,
     courseId: "c1",
     createdAt: iso(-400 * D),
     archivedAt: null,
@@ -157,6 +172,8 @@ export const rooms: Room[] = [
     id: "r3",
     name: "EMB-2026",
     period: "2026-A",
+    periodStart: NOW.start,
+    periodEnd: NOW.end,
     courseId: "c2",
     createdAt: iso(-30 * D),
     archivedAt: null,
@@ -168,6 +185,8 @@ export const rooms: Room[] = [
     id: "r4",
     name: "Prog-C-2026-2027-test",
     period: "2026-A",
+    periodStart: null,
+    periodEnd: null,
     courseId: "c1",
     createdAt: iso(-5 * D),
     archivedAt: null,
@@ -177,6 +196,8 @@ export const rooms: Room[] = [
     id: "r5",
     name: "ALG-2024",
     period: "2024-A",
+    periodStart: null,
+    periodEnd: null,
     courseId: "c3",
     createdAt: iso(-750 * D),
     archivedAt: null,
@@ -187,6 +208,8 @@ export const rooms: Room[] = [
     id: "r6",
     name: "PRG1-2024",
     period: "2024-A",
+    periodStart: null,
+    periodEnd: null,
     courseId: "c1",
     createdAt: iso(-760 * D),
     archivedAt: iso(-300 * D),
@@ -293,6 +316,9 @@ function inflate() {
       id: `r${i + 1}`,
       name: `${course.code}-${2020 + (i % 7)}`,
       period: `${2020 + (i % 7)}-A`,
+      // Undated: the "show all" row of the sidebar needs more than twelve.
+      periodStart: null,
+      periodEnd: null,
       courseId: course.id,
       createdAt: iso(-(20 + i) * D),
       archivedAt: null,
@@ -326,6 +352,8 @@ const courseSummary = (c: Course): CourseSummary => ({
       id: r.id,
       name: r.name,
       period: r.period,
+      periodStart: r.periodStart,
+      periodEnd: r.periodEnd,
       courseId: c.id,
       courseName: c.name,
       courseCode: c.code,
@@ -342,6 +370,8 @@ const classroomDetail = (r: Room): ClassroomDetail => {
     id: r.id,
     name: r.name,
     period: r.period,
+    periodStart: r.periodStart,
+    periodEnd: r.periodEnd,
     archivedAt: r.archivedAt,
     course: { id: c.id, name: c.name, code: c.code },
     roster: r.roster,
@@ -440,6 +470,8 @@ on("POST", "/app/api/courses/:id/classrooms", (m, body) => {
     id: nextId("r"),
     name: String(body.name),
     period: String(body.period ?? ""),
+    periodStart: typeof body.periodStart === "string" ? body.periodStart : null,
+    periodEnd: typeof body.periodEnd === "string" ? body.periodEnd : null,
     courseId: c.id,
     createdAt: iso(0),
     archivedAt: null,
@@ -456,6 +488,8 @@ on("PATCH", "/app/api/classrooms/:id", (m, body) => {
   const r = roomOr404(m.groups!.id!);
   if (typeof body.name === "string") r.name = body.name;
   if (typeof body.period === "string") r.period = body.period;
+  if (body.periodStart !== undefined) r.periodStart = (body.periodStart as string | null) ?? null;
+  if (body.periodEnd !== undefined) r.periodEnd = (body.periodEnd as string | null) ?? null;
   return classroomDetail(r);
 });
 on("DELETE", "/app/api/classrooms/:id", (m) => {

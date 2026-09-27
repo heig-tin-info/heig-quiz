@@ -16,6 +16,7 @@
 import { z } from "zod";
 
 import {
+  checkPeriodMonths,
   ClassroomCreate,
   CourseCreate,
   EvaluationCreate,
@@ -243,8 +244,19 @@ export const TOOLS: Tool[] = [
     title: "Create a classroom",
     description:
       "Creates a classroom (one class of students for one period, e.g. `Français 2026`) in a course. " +
-      "Evaluations live in a classroom.",
-    input: z.object({ courseId: Id, ...ClassroomCreate.shape }),
+      "Evaluations live in a classroom. `period` is a free label; `periodStart` and `periodEnd` date " +
+      "it by month (both or neither), which keeps it in the teacher's sidebar only while it runs. " +
+      "HEIG-VD semesters: autumn N = `N-09` to `(N+1)-01`, spring N = `N-02` to `N-07`.",
+    input: z.object({
+      courseId: Id,
+      ...ClassroomCreate.shape,
+      periodStart: ClassroomCreate.shape.periodStart.describe(
+        "First month of the period, `YYYY-MM` (e.g. `2026-09`); with `periodEnd`, or neither. Omitted = undated.",
+      ),
+      periodEnd: ClassroomCreate.shape.periodEnd.describe(
+        "Last month of the period, `YYYY-MM` (e.g. `2027-01`), not before `periodStart`.",
+      ),
+    }).superRefine(checkPeriodMonths),
     annotations: WRITE,
     run: async (api, { courseId, ...body }) => {
       const room = await api.post(`/courses/${courseId}/classrooms`, body);

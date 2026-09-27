@@ -15,6 +15,7 @@ import {
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 
 import type { CourseSummary, Me, PoolSummary } from "@quiz/contracts";
+import { isCurrent } from "@quiz/domain";
 
 import { api } from "./api";
 import { CommandPalette } from "./CommandPalette";
@@ -203,10 +204,20 @@ function Nav({
   // The sidebar lists CLASSROOMS, flattened out of the courses: that is what
   // a teacher navigates to. The course each one belongs to is in the row's
   // tip, not a second label on it nor a second level of folding.
-  // Minus the courses the teacher hid (#155), as everywhere in the navigation.
+  // It is the "right now" list: the server already leaves the archived out,
+  // the courses the teacher hid are left out as everywhere in the navigation
+  // (#155), and a dated classroom shows only while its period covers today —
+  // the browser's local date, a display rule and not a deadline (#156). The
+  // classroom being read stays, ended or not: the current page is never
+  // missing from its own navigation. The course tree above and the course
+  // cards keep every classroom.
   const list = courses.data ?? [];
   const activeCourse = activeCourseOf(list, route);
-  const allRooms = list.filter((c) => inNavigation(c, activeCourse)).flatMap((c) => c.classrooms);
+  const today = new Date();
+  const allRooms = list
+    .filter((c) => inNavigation(c, activeCourse))
+    .flatMap((c) => c.classrooms)
+    .filter((r) => r.id === currentRoom || isCurrent(r.periodStart, r.periodEnd, today));
   const shownRooms = showAll
     ? allRooms
     : cappedClassrooms(allRooms, currentRoom, SIDEBAR_CLASSROOM_CAP);

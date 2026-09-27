@@ -87,6 +87,8 @@ export async function listCourses(db: Db, access: SQL | undefined, viewerId: str
           id: classrooms.id,
           name: classrooms.name,
           period: classrooms.period,
+          periodStart: classrooms.periodStart,
+          periodEnd: classrooms.periodEnd,
           courseId: classrooms.courseId,
           createdAt: classrooms.createdAt,
           archivedAt: classrooms.archivedAt,
@@ -112,6 +114,8 @@ export async function listCourses(db: Db, access: SQL | undefined, viewerId: str
         id: r.id,
         name: r.name,
         period: r.period,
+        periodStart: r.periodStart,
+        periodEnd: r.periodEnd,
         courseId: c.id,
         courseName: c.name,
         courseCode: c.code,
@@ -236,7 +240,13 @@ export async function removeStaff(db: Db, courseId: string, userId: string): Pro
 export async function createClassroom(
   db: Db,
   courseId: string,
-  input: { name: string; period: string },
+  input: {
+    name: string;
+    period: string;
+    /** First and last month (`YYYY-MM`), both or neither; null by default. */
+    periodStart?: string | null;
+    periodEnd?: string | null;
+  },
 ): Promise<ClassroomRecord> {
   const [room] = await db
     .insert(classrooms)
@@ -245,6 +255,8 @@ export async function createClassroom(
       courseId,
       name: input.name.trim(),
       period: input.period.trim(),
+      periodStart: input.periodStart ?? null,
+      periodEnd: input.periodEnd ?? null,
     })
     .returning();
   return room!;
@@ -262,13 +274,20 @@ export async function classroomsOfCourse(db: Db, courseId: string) {
 export async function updateClassroom(
   db: Db,
   classroomId: string,
-  patch: { name?: string | undefined; period?: string | undefined },
+  patch: {
+    name?: string | undefined;
+    period?: string | undefined;
+    periodStart?: string | null | undefined;
+    periodEnd?: string | null | undefined;
+  },
 ) {
   const [updated] = await db
     .update(classrooms)
     .set({
       ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
       ...(patch.period !== undefined ? { period: patch.period.trim() } : {}),
+      ...(patch.periodStart !== undefined ? { periodStart: patch.periodStart } : {}),
+      ...(patch.periodEnd !== undefined ? { periodEnd: patch.periodEnd } : {}),
       updatedAt: new Date(),
     })
     .where(eq(classrooms.id, classroomId))

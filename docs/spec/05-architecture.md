@@ -133,7 +133,7 @@ Common columns omitted: `id uuid pk`, `created_at`, `updated_at`.
 | `course_staff` | `course_id`, `user_id` | composite pk |
 | `user_course_prefs` | `user_id`, `course_id`, `hidden_at` nullable | composite pk, both FKs cascade; one user's display state for one course (ADR-032), no `id` nor timestamps |
 | `course_pools` | `course_id`, `pool_id` | composite pk |
-| `classrooms` | `course_id`, `name`, `period`, `join_code` unique nullable, `archived_at` | |
+| `classrooms` | `course_id`, `name`, `period`, `period_start` / `period_end` text `YYYY-MM` nullable, `join_code` unique nullable, `archived_at` | `period` is a free label; the months are both or neither, end ≥ start (CHECK). Text, not `date`: a month has no day to pin nor time zone to shift, and `YYYY-MM` compares in calendar order |
 | `enrollments` | `classroom_id`, `user_id`, `time_bonus_percent` int default 0, `note` | unique (classroom, user) |
 | `audit_log` | `actor_id`, `action`, `target_type`, `target_id`, `details` jsonb | Closed catalogue of actions |
 

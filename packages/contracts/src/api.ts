@@ -109,6 +109,9 @@ export interface ClassroomSummary {
   id: string;
   name: string;
   period: string;
+  /** First and last month of the period (`YYYY-MM`), or both null (F-ORG-03). */
+  periodStart: string | null;
+  periodEnd: string | null;
   courseId: string;
   courseName: string;
   courseCode: string;
@@ -154,6 +157,8 @@ export interface ClassroomDetail {
   id: string;
   name: string;
   period: string;
+  periodStart: string | null;
+  periodEnd: string | null;
   archivedAt: string | null;
   course: { id: string; name: string; code: string };
   roster: RosterEntry[];

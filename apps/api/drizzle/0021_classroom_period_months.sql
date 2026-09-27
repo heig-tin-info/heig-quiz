@@ -1,0 +1,3 @@
+ALTER TABLE "classrooms" ADD COLUMN "period_start" text;--> statement-breakpoint
+ALTER TABLE "classrooms" ADD COLUMN "period_end" text;--> statement-breakpoint
+ALTER TABLE "classrooms" ADD CONSTRAINT "classrooms_period_months_ck" CHECK (("classrooms"."period_start" is null and "classrooms"."period_end" is null) or ("classrooms"."period_start" is not null and "classrooms"."period_end" is not null and "classrooms"."period_start" ~ '^[0-9]{4}-(0[1-9]|1[0-2])$' and "classrooms"."period_end" ~ '^[0-9]{4}-(0[1-9]|1[0-2])$' and "classrooms"."period_end" >= "classrooms"."period_start"));

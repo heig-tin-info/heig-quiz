@@ -11,9 +11,17 @@ effectif ; un clic en ouvre une.
 
 ## Classes
 
-**Nouvelle classe** demande un nom et, facultativement, une période. Une
-classe est un groupe qui suit ce cours pendant une période ; c'est là que
-vivent la liste des étudiants, les évaluations et les résultats.
+**Nouvelle classe** demande un nom et une période. Une classe est un groupe
+qui suit ce cours pendant une période ; c'est là que vivent la liste des
+étudiants, les évaluations et les résultats.
+
+La période a des dates — un premier et un dernier mois — et un libellé
+libre. La fenêtre part du semestre en cours ; **Automne** et **Printemps**
+remplissent les deux mois (et le libellé, tant que vous n'en avez pas saisi
+un vous-même). Une classe datée reste dans la liste **Classes** de la barre
+latérale d'un mois avant son premier mois à un mois après son dernier, puis
+en sort d'elle-même — elle reste dans son cours, rien n'est archivé. **Sans
+dates** la garde dans la liste jusqu'à ce que vous l'archiviez.
 
 ## Équipe
 
