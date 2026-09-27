@@ -325,9 +325,18 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
       const updated = await service.updateClassroom(app.db, scope.room.id, body.data);
       const { name, period, periodStart } = body.data;
       if (name !== undefined || period !== undefined || periodStart !== undefined) {
+        // The period is part of what the classroom is called: its old and new
+        // label and months ride on the same entry (#156).
+        const periodOf = (r: typeof scope.room) => ({
+          period: r.period,
+          periodStart: r.periodStart,
+          periodEnd: r.periodEnd,
+        });
         await trace(req, "classroom.rename", "classroom", scope.room.id, {
           from: scope.room.name,
           to: updated!.name,
+          periodFrom: periodOf(scope.room),
+          periodTo: periodOf(updated!),
         });
       }
       return updated;

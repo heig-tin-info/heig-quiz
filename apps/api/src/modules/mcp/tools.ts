@@ -16,6 +16,7 @@
 import { z } from "zod";
 
 import {
+  checkPeriodMonths,
   ClassroomCreate,
   CourseCreate,
   EvaluationCreate,
@@ -255,7 +256,7 @@ export const TOOLS: Tool[] = [
       periodEnd: ClassroomCreate.shape.periodEnd.describe(
         "Last month of the period, `YYYY-MM` (e.g. `2027-01`), not before `periodStart`.",
       ),
-    }),
+    }).superRefine(checkPeriodMonths),
     annotations: WRITE,
     run: async (api, { courseId, ...body }) => {
       const room = await api.post(`/courses/${courseId}/classrooms`, body);

@@ -1,11 +1,18 @@
 import { randomUUID } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { CourseDetail } from "@quiz/contracts";
 
-import { classrooms, courseStaff, courses, enrollments, userEmails } from "../../db/schema.js";
+import {
+  auditLog,
+  classrooms,
+  courseStaff,
+  courses,
+  enrollments,
+  userEmails,
+} from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 
 let server: TestServer;
@@ -245,14 +252,13 @@ describe("dated period (F-ORG-03, #156)", () => {
     });
   });
 
-  it("refuses half a period and an end before the start, at the contract", async () => {
-    expect((await create({ name: "x", periodStart: "2026-09" })).statusCode).toBe(400);
+  it("validates the months with the contract (its cases are tested there)", async () => {
     expect(
       (await create({ name: "x", periodStart: "2027-01", periodEnd: "2026-09" })).statusCode,
     ).toBe(400);
   });
 
-  it("dates, then undates, a classroom by PATCH", async () => {
+  it("dates, then undates, a classroom by PATCH, and audits both periods", async () => {
     const id = (await create({ name: "Printemps" })).json().id as string;
     const patch = (payload: unknown) =>
       server.app.inject({
@@ -263,7 +269,14 @@ describe("dated period (F-ORG-03, #156)", () => {
       });
     const dated = await patch({ periodStart: "2027-02", periodEnd: "2027-07" });
     expect(dated.json()).toMatchObject({ periodStart: "2027-02", periodEnd: "2027-07" });
-    expect((await patch({ periodStart: "2027-03" })).statusCode).toBe(400);
+    const [entry] = await server.app.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.action, "classroom.rename"), eq(auditLog.subjectId, id)));
+    expect(entry!.payload).toMatchObject({
+      periodFrom: { period: "", periodStart: null, periodEnd: null },
+      periodTo: { period: "", periodStart: "2027-02", periodEnd: "2027-07" },
+    });
     const cleared = await patch({ periodStart: null, periodEnd: null });
     expect(cleared.json()).toMatchObject({ periodStart: null, periodEnd: null });
   });

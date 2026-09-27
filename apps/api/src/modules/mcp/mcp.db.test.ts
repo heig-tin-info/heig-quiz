@@ -137,6 +137,17 @@ describe("an authoring session", () => {
     });
     expect(room.url).toContain(`/classrooms/${room.id}`);
     expect([room.periodStart, room.periodEnd]).toEqual(["2026-09", "2027-01"]);
+    // Half a period is refused at the tool's own input, with the field named.
+    const half = await call("create_classroom", {
+      courseId: course.id,
+      name: "Moitié",
+      periodStart: "2026-09",
+    });
+    expect(half.isError).toBe(true);
+    expect(half.data).toMatchObject({
+      error: "invalid_arguments",
+      issues: [{ path: "periodEnd" }],
+    });
     const pool = await ok("create_pool", { name: "Culture générale" });
     await ok("link_pool_to_course", { courseId: course.id, poolId: pool.id });
     // Idempotent: a second link keeps one entry.
