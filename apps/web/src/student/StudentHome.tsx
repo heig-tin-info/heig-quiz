@@ -30,6 +30,7 @@ import type {
   Me,
   StudentClassroom,
   StudentHome as StudentHomeData,
+  StudentPollCard,
 } from "@quiz/contracts";
 
 import { api } from "../api";
@@ -134,26 +135,35 @@ function upcomingLine(card: EvaluationCardData, now: number, t: TFunction): stri
     : t("shome.opensAt", { when: isoDateTime(card.opensAt) });
 }
 
-function EvaluationRow({
-  card,
+type RowAction = {
+  label: string;
+  onClick: () => void | Promise<void>;
+  primary?: boolean;
+  loading?: boolean;
+};
+
+/** One card of a list: what it is, where it comes from, one line, one button. */
+function ActivityRow({
+  title,
+  where,
   line,
+  badge,
   action,
 }: {
-  card: EvaluationCardData;
+  title: string;
+  where: string;
   line: string | null;
-  action?: { label: string; onClick: () => void | Promise<void>; primary?: boolean; loading?: boolean };
+  badge: { label: string; accent: boolean };
+  action?: RowAction | undefined;
 }) {
-  const t = useT();
   return (
     <Card className="flex flex-wrap items-center gap-x-5 gap-y-3 p-5">
       <div className="min-w-0 flex-1 basis-60">
-        <p className="text-[17px] font-bold leading-snug tracking-tight">{card.title}</p>
-        <p className="mt-0.5 text-sm text-fg-muted">
-          {card.courseCode} · {card.classroomName}
-        </p>
+        <p className="text-[17px] font-bold leading-snug tracking-tight">{title}</p>
+        <p className="mt-0.5 text-sm text-fg-muted">{where}</p>
         {line ? <p className="mt-1 text-[13px] text-fg-faint">{line}</p> : null}
       </div>
-      <Badge tone={card.mode === "exam" ? "accent" : "zinc"}>{t(MODE_KEY[card.mode])}</Badge>
+      <Badge tone={badge.accent ? "accent" : "zinc"}>{badge.label}</Badge>
       {action ? (
         <Button
           variant={action.primary ? "primary" : "secondary"}
@@ -164,6 +174,50 @@ function EvaluationRow({
         </Button>
       ) : null}
     </Card>
+  );
+}
+
+function EvaluationRow({
+  card,
+  line,
+  action,
+}: {
+  card: EvaluationCardData;
+  line: string | null;
+  action?: RowAction;
+}) {
+  const t = useT();
+  return (
+    <ActivityRow
+      title={card.title}
+      where={`${card.courseCode} · ${card.classroomName}`}
+      line={line}
+      badge={{ label: t(MODE_KEY[card.mode]), accent: card.mode === "exam" }}
+      action={action}
+    />
+  );
+}
+
+/**
+ * A running poll of one of the student's classrooms (issue #163), answered on
+ * the poll's own page, `/p/:code`, never in the player. It has no title of its
+ * own: the server sends none, because a poll's title is its question
+ * (invariant 4).
+ */
+function PollRow({ poll, navigate }: { poll: StudentPollCard; navigate: (r: Route) => void }) {
+  const t = useT();
+  return (
+    <ActivityRow
+      title={t("shome.poll.title")}
+      where={`${poll.courseCode} · ${poll.classroomName}`}
+      line={t("shome.poll.line")}
+      badge={{ label: t(MODE_KEY.poll), accent: false }}
+      action={{
+        label: t("shome.poll.answer"),
+        primary: true,
+        onClick: () => navigate({ view: "join", code: poll.code }),
+      }}
+    />
   );
 }
 
@@ -276,6 +330,7 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
     };
   };
 
+  const polls = home.data?.polls ?? [];
   const open = home.data?.open ?? [];
   const upcoming = home.data?.upcoming ?? [];
   const past = home.data?.past ?? [];
@@ -304,7 +359,10 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
         <>
           <section className="space-y-3">
             <SectionHeading title={t("shome.open")} />
-            {open.length === 0 ? (
+            {polls.map((poll) => (
+              <PollRow key={poll.id} poll={poll} navigate={navigate} />
+            ))}
+            {open.length === 0 && polls.length === 0 ? (
               <Card>
                 <EmptyState icon={CheckCircle2} title={t("shome.empty.title")}>
                   {t("shome.empty.body")}
