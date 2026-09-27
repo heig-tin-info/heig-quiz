@@ -109,3 +109,29 @@ export const enrollments = pgTable(
     index("enrollments_email_idx").on(sql`lower(${t.email})`),
   ],
 );
+
+/**
+ * One user's own display state for one course (#155, ADR-032). Today it
+ * holds only `hidden_at`: a course the user no longer teaches, taken out of
+ * THEIR navigation (course list, sidebar tree, command palette) and nowhere
+ * else — pickers and the MCP `list_courses` still list it, and nothing about
+ * the course itself changes for its other staff members.
+ *
+ * A table of its own and not a column of `course_staff`, because an admin
+ * reaches every course without a staff seat. A row with a null `hidden_at`
+ * is a visible course: the row is the home of any later per-user course
+ * preference (a favourite), so unhiding clears the column, not the row.
+ */
+export const userCoursePrefs = pgTable(
+  "user_course_prefs",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    courseId: uuid("course_id")
+      .notNull()
+      .references(() => courses.id, { onDelete: "cascade" }),
+    hiddenAt: timestamp("hidden_at", { withTimezone: true }),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.courseId] })],
+);
