@@ -148,6 +148,13 @@
       "when": 1790541453129,
       "tag": "0020_user_course_prefs",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1790542207982,
+      "tag": "0021_classroom_period_months",
+      "breakpoints": true
     }
   ]
 }

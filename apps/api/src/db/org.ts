@@ -6,6 +6,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   integer,
   pgTable,
@@ -64,6 +65,15 @@ export const classrooms = pgTable(
     name: text("name").notNull(),
     /** Free-form academic period label (`2026-A`, `Automne 2026`). */
     period: text("period").notNull().default(""),
+    /**
+     * The dated period (F-ORG-03, issue #156): first and last month, both
+     * inclusive, as `YYYY-MM`. Text and not a `date`: the value IS a month —
+     * no day to pin, no time zone to shift it — it is what an
+     * `<input type="month">` sends, and two of them compare as strings in
+     * calendar order. Both or neither (null = always current), checked below.
+     */
+    periodStart: text("period_start"),
+    periodEnd: text("period_end"),
     /** Self-enrolment code; null = never minted. */
     joinCode: text("join_code").unique(),
     /**
@@ -76,7 +86,16 @@ export const classrooms = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("classrooms_course_idx").on(t.courseId)],
+  (t) => [
+    index("classrooms_course_idx").on(t.courseId),
+    // The same rule as the zod contract (`ClassroomCreate`): two well-formed
+    // months or none, the last not before the first. A CHECK passes on NULL,
+    // so the explicit `is not null` pair is what refuses half a period.
+    check(
+      "classrooms_period_months_ck",
+      sql`(${t.periodStart} is null and ${t.periodEnd} is null) or (${t.periodStart} is not null and ${t.periodEnd} is not null and ${t.periodStart} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$' and ${t.periodEnd} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$' and ${t.periodEnd} >= ${t.periodStart})`,
+    ),
+  ],
 );
 
 export const enrollments = pgTable(
