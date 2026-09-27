@@ -20,6 +20,7 @@ import {
   type EvaluationCard,
   type LobbyView,
   type StudentHome,
+  type StudentPollCard,
 } from "@quiz/contracts";
 import { shuffle, streamSeed } from "@quiz/core/rng";
 import {
@@ -1256,7 +1257,29 @@ export async function reopenAttempt(
 // --- Student home (F-LIVE-01) --------------------------------------------
 
 export async function studentHome(db: Db, userId: string, now: Date): Promise<StudentHome> {
-  const rows = await studentEvaluationRows(db, userId).orderBy(desc(evaluations.createdAt));
+  const all = await studentEvaluationRows(db, userId).orderBy(desc(evaluations.createdAt));
+
+  // Issue #163: a poll is answered at `/p/:code`, never through an attempt of
+  // the player (`enterEvaluation` refuses one), so it is never an evaluation
+  // card. A RUNNING one is listed on its own, with its code and nothing of its
+  // question; an ended one is gone, since nothing of a poll is released
+  // (ADR-014 §8). The rows come through the student's roster seats, so a
+  // classroom-less (anonymous) poll can never be among them.
+  const polls: StudentPollCard[] = all
+    .filter(
+      (r) =>
+        r.evaluation.mode === "poll" &&
+        r.evaluation.state === "running" &&
+        r.evaluation.accessCode !== null,
+    )
+    .map((r) => ({
+      id: r.evaluation.id,
+      code: r.evaluation.accessCode!,
+      classroomId: classroomIdOf(r.evaluation),
+      classroomName: r.classroomName,
+      courseCode: r.courseCode,
+    }));
+  const rows = all.filter((r) => r.evaluation.mode !== "poll");
 
   // F-EVAL-15: an exercise with retakes shows the attempt that COUNTS (best
   // or last) and how many were taken; its grade is the kept attempt's. Every
@@ -1366,5 +1389,5 @@ export async function studentHome(db: Db, userId: string, now: Date): Promise<St
     else if (state === "scheduled") upcoming.push(card(row));
     else if (state !== "draft") past.push(card(row));
   }
-  return { open, upcoming, past, serverNow: iso(now) };
+  return { polls, open, upcoming, past, serverNow: iso(now) };
 }

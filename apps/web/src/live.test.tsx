@@ -55,6 +55,7 @@ const lobby: AttemptOrLobby = {
 };
 
 const home: StudentHome = {
+  polls: [],
   open: [],
   upcoming: [],
   past: [],

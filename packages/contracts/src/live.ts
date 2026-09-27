@@ -380,7 +380,25 @@ export const EvaluationCard = z.object({
 });
 export type EvaluationCard = z.infer<typeof EvaluationCard>;
 
+/**
+ * A RUNNING poll of one of the student's classrooms (issue #163, ADR-014
+ * addendum 2026-09-27, item 9). What its one button needs — the code of
+ * `/p/:code` — and where it comes from, nothing more: no title (a poll's is
+ * its question's internal name or its statement, invariant 4), no settings,
+ * no item. A classroom-less (anonymous) poll never has one.
+ */
+export const StudentPollCard = z.object({
+  id: z.uuid(),
+  code: z.string(),
+  classroomId: z.uuid(),
+  classroomName: z.string(),
+  courseCode: z.string(),
+});
+export type StudentPollCard = z.infer<typeof StudentPollCard>;
+
 export const StudentHome = z.object({
+  /** Running classroom polls; a poll is never one of the evaluation cards. */
+  polls: z.array(StudentPollCard),
   open: z.array(EvaluationCard),
   upcoming: z.array(EvaluationCard),
   past: z.array(EvaluationCard),

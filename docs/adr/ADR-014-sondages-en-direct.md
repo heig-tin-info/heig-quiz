@@ -419,6 +419,18 @@ not, so the class it was filed under restricted nothing. The product owner settl
    and `classroom_id = NULL` must never be read as "every seat whose classroom is null".
    Paths that reached an evaluation THROUGH its classroom use `classroomIdOf`, which throws on
    the one shape they can never meet.
+9. **A running classroom poll is on its roster's home** (issue #163). Before it, the student
+   home listed a poll like any evaluation: a card under "Open now" whose Start button posted to
+   `/evaluations/:id/attempt`, which answers a poll `501`, and once ended a card under "Past"
+   whose View opened feedback that is never released (§8). A poll is now never an
+   `EvaluationCard`: `StudentHome.polls` lists the RUNNING polls of the classrooms the student
+   holds a claimed seat in, as `StudentPollCard` — `id`, `code`, classroom and course — and the
+   card's one button, "Answer", opens `/p/:code`. It carries no title: a poll's title is its
+   question's internal name or its statement, which only `toStudent` may hand out
+   (invariant 4); the card says "Live poll". An ended poll leaves the home. A classroom-less
+   poll is on no home: the list is drawn from roster seats. The card comes and goes without a
+   reload: the start and the end already hint `evaluations` on `classroom:<id>`, which every
+   student of the classroom is subscribed to, and the hint refetches the home.
 
 Rejected alternatives:
 

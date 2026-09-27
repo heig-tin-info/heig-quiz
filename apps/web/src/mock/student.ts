@@ -24,6 +24,7 @@ import {
   ngspiceOutcome,
 } from "./pool";
 import { codeimageConfig, codeimageRunOutcome, codeimageStudentView } from "./codeimage";
+import { pollOfTeacher, teacherPolls } from "./poll";
 
 // --- 4. The student: home, lobby and player (WP9) --------------------------
 //
@@ -374,10 +375,24 @@ export const studentLobbyView = (): LobbyView => ({
 
 on("GET", "/app/api/student/home", (): StudentHomeData => {
   if (flags.empty) {
-    return { open: [], upcoming: [], past: [], serverNow: new Date().toISOString() };
+    return { polls: [], open: [], upcoming: [], past: [], serverNow: new Date().toISOString() };
   }
   const room = { classroomId: "r1", classroomName: "PRG1-2026", courseCode: "PRG1" };
   return {
+    // Issue #163: the running polls of the student's classroom, like the API
+    // lists them — a classroom's poll, running, whose roster holds this
+    // account. An anonymous poll and an ended one are on no home. A poll the
+    // teacher persona launches for PRG1-2026 in this tab shows up here too.
+    polls: teacherPolls.flatMap((tp) => {
+      const poll = pollOfTeacher(tp);
+      return tp.classroomId === room.classroomId &&
+        poll !== null &&
+        poll.state === "running" &&
+        !poll.anonymous &&
+        poll.offRoster !== true
+        ? [{ id: tp.id, code: tp.code, ...room }]
+        : [];
+    }),
     open: [
       {
         id: STUDENT_EVAL,

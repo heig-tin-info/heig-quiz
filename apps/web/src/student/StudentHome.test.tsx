@@ -43,6 +43,7 @@ const card = (over: Partial<EvaluationCard>): EvaluationCard => ({
 });
 
 const home: StudentHomeData = {
+  polls: [],
   open: [card({})],
   upcoming: [
     card({ id: "e2", title: "Série 4 — Récursivité", mode: "exercise", state: "scheduled" }),
@@ -138,6 +139,34 @@ describe("the student home", () => {
     const { navigate } = render();
     await userEvent.click(await screen.findByRole("button", { name: "Voir" }));
     expect(navigate).toHaveBeenCalledWith({ view: "feedback", attemptId: "a3" });
+  });
+
+  // Issue #163: a running poll of the classroom, answered on its own page.
+  it("offers a running poll under “open now”, whose one button opens /p/:code", async () => {
+    mockFetch({
+      "GET /app/api/student/home": ok({
+        ...home,
+        open: [],
+        polls: [
+          {
+            id: "p1",
+            code: "NM2X9A",
+            classroomId: "r1",
+            classroomName: "PRG1-2026",
+            courseCode: "PRG1",
+          },
+        ],
+      }),
+      "GET /app/api/student/classrooms": ok([]),
+    });
+    const { navigate } = render();
+    const row = (await screen.findByText("Sondage en direct")).closest("div.rounded-card")!;
+    expect(within(row as HTMLElement).getByText("Sondage")).toBeInTheDocument();
+    expect(within(row as HTMLElement).getByText("PRG1 · PRG1-2026")).toBeInTheDocument();
+    await userEvent.click(within(row as HTMLElement).getByRole("button", { name: "Répondre" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "join", code: "NM2X9A" });
+    // A running poll is something to do: no "nothing to do" beside it.
+    expect(screen.queryByText("Rien à faire pour l'instant")).toBeNull();
   });
 
   it("shows the empty state when nothing is open", async () => {
