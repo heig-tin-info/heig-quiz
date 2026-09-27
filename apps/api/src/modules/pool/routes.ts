@@ -47,6 +47,7 @@ import {
   type MoveBlockingCourse,
   type MoveConflict,
   type MoveResult,
+  type PoolInUse,
   issuesOf,
   DEFAULT_MCQ_POLICY,
   McqPolicy,
@@ -247,9 +248,14 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       if (!(await requirePoolRole(app, req, reply, pool, "owner"))) return reply;
       // A version an evaluation or a template pins cannot vanish under it
       // (ADR-031): the refusal names what holds the pool, not a 500.
-      const uses = await service.poolUses(app.db, pool.id, managedEvaluationAccess(req.user!));
+      const inUse = () => service.poolUses(app.db, pool.id, managedEvaluationAccess(req.user!));
+      const uses = await inUse();
       if (uses) return reply.code(409).send(uses);
-      await service.deletePool(app.db, pool.id);
+      if (!(await service.deletePool(app.db, pool.id))) {
+        // Pinned between the check and the delete: the same refusal.
+        const late: PoolInUse = (await inUse()) ?? { error: "pool_in_use", uses: [], hidden: 0 };
+        return reply.code(409).send(late);
+      }
       await trace(req, "pool.delete", "pool", pool.id, { name: pool.name });
       poolChanged(pool.id);
       poolPeopleChanged(audience);

@@ -54,7 +54,7 @@ import type {
 import { issuesOf } from "@quiz/contracts";
 import { effectivePoolRole } from "@quiz/domain";
 
-import { isUniqueViolation, type Db } from "../../db/client.js";
+import { isForeignKeyViolation, isUniqueViolation, type Db } from "../../db/client.js";
 import {
   assets,
   attempts,
@@ -366,10 +366,19 @@ export async function poolUses(
 /**
  * The pool. The bells that point at it go with it: `notifications.pool_id`
  * cascades, so no reader is walked to a 404. The caller has checked
- * {@link poolUses} first.
+ * {@link poolUses} first; false when an evaluation pinned one of its
+ * versions in between — the foreign key, not a 500, says so.
  */
-export async function deletePool(db: Db, poolId: string): Promise<void> {
-  await db.delete(pools).where(eq(pools.id, poolId));
+export async function deletePool(db: Db, poolId: string): Promise<boolean> {
+  try {
+    await db.delete(pools).where(eq(pools.id, poolId));
+    return true;
+  } catch (err) {
+    if (isForeignKeyViolation(err, "evaluation_items_question_version_id_question_versions_id_fk")) {
+      return false;
+    }
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------

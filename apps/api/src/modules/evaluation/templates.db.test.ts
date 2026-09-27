@@ -445,6 +445,15 @@ describe("pool deletion (F-POOL-09)", () => {
     expect((await call(teacher, "DELETE", `/app/api/pools/${seed.poolId}`)).statusCode).toBe(204);
   });
 
+  it("reads a pinned version's foreign key as a refusal, not a 500, when the check is raced", async () => {
+    const { seed } = await world();
+    // Straight to the delete, as if an evaluation pinned the pool after the check.
+    expect(await poolService.deletePool(server.app.db, seed.poolId)).toBe(false);
+    expect(
+      await server.app.db.select().from(pools).where(eq(pools.id, seed.poolId)),
+    ).toHaveLength(1);
+  });
+
   it("only counts the holders a pool owner off the course cannot open", async () => {
     const { teacher, seed } = await world();
     await saveTemplate(teacher, seed.evaluationId);
