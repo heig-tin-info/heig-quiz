@@ -194,6 +194,7 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
     editable: false,
     self: { seat: false, staffSeat: false, attemptId: null },
     editableQuestionIds: ["q1", "q2"],
+    roster: { enrolled: 24, unlinked: 0, conflicts: 0 },
     ...over,
   };
 }

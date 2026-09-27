@@ -287,6 +287,20 @@ export const EvaluationDetail = z.object({
    * the pool's decision, and a question left out here offers no Edit.
    */
   editableQuestionIds: z.array(z.uuid()),
+  /**
+   * Who is about to take it, for the launch step's checklist (#152); `null`
+   * for an anonymous poll, which has no classroom. `enrolled` is the lobby
+   * ring's denominator (`enrolledCount`), so both screens say the same number;
+   * `unlinked` and `conflicts` count the class seats (never staff) still
+   * without an account, and flagged by the roster import.
+   */
+  roster: z
+    .object({
+      enrolled: z.number().int(),
+      unlinked: z.number().int(),
+      conflicts: z.number().int(),
+    })
+    .nullable(),
 });
 export type EvaluationDetail = z.infer<typeof EvaluationDetail>;
 
@@ -467,11 +481,14 @@ export type EvaluationStateBody = z.infer<typeof EvaluationStateBody>;
  * evaluation is not ready for it, and `missing` then names the timing fields
  * to fill (F-EVAL-04, decision D8) — the screen translates these rather than
  * printing `message`, which is for logs and API clients (#76).
+ * `opens_at_missing` refuses `→ scheduled` without an opening time: the
+ * ticker opens a scheduled evaluation at `opensAt`, and without one it would
+ * stay scheduled forever (#152).
  */
 export const TransitionRefusal = z.object({
   error: z.literal("illegal_transition"),
   message: z.string(),
-  reason: z.enum(["no_items", "timing_incomplete"]).optional(),
+  reason: z.enum(["no_items", "timing_incomplete", "opens_at_missing"]).optional(),
   missing: z.array(z.enum(["durationS", "opensAt", "closesAt", "timing"])).optional(),
 });
 export type TransitionRefusal = z.infer<typeof TransitionRefusal>;

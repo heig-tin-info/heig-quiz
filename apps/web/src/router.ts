@@ -9,7 +9,12 @@ export type Route =
   | { view: "home" }
   | { view: "settings" }
   | { view: "admin" }
-  | { view: "classroom"; id: string }
+  /**
+   * `tab`: the section to open on (the launch checklist's "Roster" link,
+   * #152), carried in `?tab=` like the page's own tabs; `parsePath` never
+   * sees it, the page reads it off the query string.
+   */
+  | { view: "classroom"; id: string; tab?: "roster" | "evaluations" }
   /** The teacher's question pools (WP7). */
   | { view: "pools" }
   | { view: "pool"; id: string }
@@ -144,7 +149,7 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   settings: fixed("settings", { view: "settings" }, true),
   admin: { ...fixed("admin", { view: "admin" }), section: "admin" },
   classroom: {
-    path: (r) => `/classrooms/${r.id}`,
+    path: (r) => `/classrooms/${r.id}${r.tab ? `?tab=${r.tab}` : ""}`,
     match: ([head, id]) => (head === "classrooms" && id ? { view: "classroom", id } : null),
     studentSafe: false,
   },

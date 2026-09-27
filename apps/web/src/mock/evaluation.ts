@@ -724,6 +724,21 @@ const selfOf = (e: MockEvaluation) => {
   };
 };
 
+/**
+ * The launch checklist's roster counts (#152), read off the classroom roster
+ * as the server reads `enrollments`: class seats only for the two flags, and
+ * the lobby ring's denominator — the class plus the staff seats that took an
+ * attempt — for `enrolled`.
+ */
+const rosterOf = (e: MockEvaluation) => {
+  const seats = (rooms.find((r) => r.id === e.classroomId)?.roster ?? []).filter((s) => !s.staff);
+  return {
+    enrolled: seats.length + e.rows.filter((r) => r.staff && r.attemptId !== null).length,
+    unlinked: seats.filter((s) => s.userId === null).length,
+    conflicts: seats.filter((s) => s.conflictFlag).length,
+  };
+};
+
 const evaluationDetail = (e: MockEvaluation) => ({
   evaluation: toEvaluation(e),
   items: e.items.map((i) => ({ ...i })),
@@ -739,6 +754,7 @@ const evaluationDetail = (e: MockEvaluation) => ({
     const q = itemQuestion(i);
     return q && q.poolId && poolSummary(poolOr404(q.poolId)).role !== "reader" ? [q.id] : [];
   }),
+  roster: rosterOf(e),
 });
 
 export const dashboardView = (e: MockEvaluation, includeAnswers: boolean) => {
@@ -1171,6 +1187,13 @@ on("POST", "/app/api/evaluations/:id/state", (m, body) => {
         missing,
       });
     }
+  }
+  if (body.to === "scheduled" && e.opensAt === null) {
+    throw new MockPayload(409, {
+      error: "illegal_transition",
+      message: "a scheduled evaluation needs an opening time",
+      reason: "opens_at_missing",
+    });
   }
   e.state = body.to as MockEvaluation["state"];
   return toEvaluation(e);

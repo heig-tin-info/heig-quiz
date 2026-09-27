@@ -1016,3 +1016,27 @@ draws before the session gate, so it carries its own door.
   GRADED surface (it always prints a score line, and `short` reads its verdict
   from grading details) and a poll produces none of that. A poll reveals the
   two facts it has — which answer is right, and which one this browser sent.
+
+## The launch checklist (evaluation, step 3)
+
+The last step before a class can enter (issue #152, variant B). Its one
+primary action is "Open the waiting room" — "Open" when the evaluation has no
+waiting room — and "Schedule…" is its only secondary.
+
+- A 20 px readiness heading ("Ready", "N things to look at", "Not ready yet")
+  over ONE card of rows, hairline-separated. No score ring: a "5/7" would count
+  information rows as checks, and it would borrow the shape of the lobby's
+  presence ring for a different meaning.
+- Four levels: a blocker (`danger` icon on a `danger-soft` row) is exactly
+  what the API refuses, a warning (`warning` on `warning-soft`) has a fix, a
+  passed check wears a `success` check, and an information row a neutral icon
+  in `fg-faint`. Blockers and warnings sort first. The tints are semantic;
+  the accent stays on the button.
+- A row that leads somewhere is a button across its width: the name of the
+  step it opens, underlined, on a desktop; a chevron on a phone. A fix done in
+  place (updating stale versions) is a real secondary `sm` button instead.
+- The action bar is a card in the flow on a desktop and a **sticky dock** on a
+  phone (`sticky bottom-0`, a hairline over it, full bleed): one status line,
+  then the primary at full width with the secondary as a 40 px round button
+  beside it. One DOM for both, so a label or a disabled state cannot differ.
+  The status line says what the button will do, or why it cannot.

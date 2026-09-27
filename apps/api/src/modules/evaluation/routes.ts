@@ -39,6 +39,7 @@ import {
   teacherGuard,
 } from "../guards.js";
 import { notFound, teacherRoute } from "../http.js";
+import * as live from "../live/service.js";
 import { evaluationChanged } from "./events.js";
 import * as service from "./service.js";
 import * as templates from "./templates.js";
@@ -65,7 +66,8 @@ export async function evaluationPlugin(app: FastifyInstance) {
   const detail = (
     req: FastifyRequest,
     row: service.EvaluationRecord,
-  ): Promise<EvaluationDetail> => service.evaluationDetail(app.db, row, req.user!);
+  ): Promise<EvaluationDetail> =>
+    service.evaluationDetail(app.db, row, req.user!, (r) => live.enrolledCount(app.db, r));
 
   // The loaders of invariant 6, each answering its own 404.
   const staffClassroom = async (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => {

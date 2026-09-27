@@ -15,7 +15,7 @@ import type { Dict, TFunction } from "../i18n";
 
 type SummaryInput = Pick<Evaluation, "settings" | "durationS" | "closesAt" | "feedbackPolicy">;
 
-function timingFragment(e: SummaryInput, t: TFunction, formatDate: (iso: string) => string): string {
+export function timingFragment(e: SummaryInput, t: TFunction, formatDate: (iso: string) => string): string {
   switch (e.settings.timing) {
     case "duration": {
       if (e.durationS === null || e.durationS <= 0) return t("eval.summary.durationUnset");
