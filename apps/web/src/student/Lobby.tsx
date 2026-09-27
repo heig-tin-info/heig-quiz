@@ -34,6 +34,34 @@ const NAV_COPY = {
   milestones: { title: "lobby.nav.milestones.title", body: "lobby.nav.milestones.body" },
 } as const;
 
+/**
+ * The two sizes of the waiting room: the student's page, and the miniature
+ * the launch step shows in a side column or a sheet (a `div` with a plain
+ * title there, since it sits inside a page that has its own `main` and `h1`).
+ */
+const SIZES = {
+  page: {
+    Root: "main",
+    Title: "h1",
+    frame: "max-w-160 px-4 py-10 sm:px-6",
+    title: "text-[28px]",
+    gap: "mt-8",
+    ring: 208,
+    percent: "text-[32px]",
+    rule: "px-5 py-4",
+  },
+  compact: {
+    Root: "div",
+    Title: "p",
+    frame: "px-4 py-6",
+    title: "text-xl",
+    gap: "mt-5",
+    ring: 148,
+    percent: "text-2xl",
+    rule: "px-4 py-3",
+  },
+} as const;
+
 /** What the waiting room says, stripped of what only the live room knows. */
 export type LobbyScreenView = Pick<
   LobbyView,
@@ -71,8 +99,8 @@ export function LobbyScreen({
   const percent = enrolled > 0 ? Math.round((present / enrolled) * 100) : 0;
   const durationS = view.evaluation.announcedDurationS;
   const bonusS = durationS === null ? null : Math.round((durationS * view.timeBonusPercent) / 100);
-  const Root = compact ? "div" : "main";
-  const gap = compact ? "mt-5" : "mt-8";
+  const size = SIZES[compact ? "compact" : "page"];
+  const { Root, Title, gap } = size;
 
   // Three fixed lines (§6.3), the navigation rule first: `LobbyView` carries
   // the evaluation's `settings.navigation` for exactly this line. A fourth
@@ -92,21 +120,15 @@ export function LobbyScreen({
     <Root
       className={cx(
         "mx-auto flex w-full flex-col items-center text-center",
-        compact ? "px-4 py-6" : "max-w-160 px-4 py-10 sm:px-6",
+        size.frame,
       )}
     >
       <p className="text-[13px] font-medium uppercase tracking-wide text-fg-faint">
         {t("lobby.title")}
       </p>
-      {compact ? (
-        <p className="mt-2 text-xl font-bold leading-tight tracking-[-0.02em]">
-          {view.evaluation.title}
-        </p>
-      ) : (
-        <h1 className="mt-2 text-[28px] font-bold leading-tight tracking-[-0.02em]">
-          {view.evaluation.title}
-        </h1>
-      )}
+      <Title className={cx("mt-2 font-bold leading-tight tracking-[-0.02em]", size.title)}>
+        {view.evaluation.title}
+      </Title>
       {durationS === null ? null : (
         <p className="mt-2 text-sm text-fg-muted">
           {t("lobby.duration", { n: Math.round(durationS / 60) })}
@@ -116,11 +138,11 @@ export function LobbyScreen({
       <Ring
         value={present}
         max={enrolled}
-        {...(compact ? { size: 148 } : {})}
+        size={size.ring}
         className={gap}
         label={t("lobby.presence", { present, enrolled })}
       >
-        <span className={cx("font-bold leading-none tabular-nums", compact ? "text-2xl" : "text-[32px]")}>
+        <span className={cx("font-bold leading-none tabular-nums", size.percent)}>
           {percent} %
         </span>
         <span className="mt-1 text-[13px] text-fg-muted">{t("lobby.present")}</span>
@@ -138,7 +160,7 @@ export function LobbyScreen({
         {rules.map((rule) => (
           <div
             key={rule.title}
-            className={cx("flex items-start gap-3", compact ? "px-4 py-3" : "px-5 py-4")}
+            className={cx("flex items-start gap-3", size.rule)}
           >
             <rule.icon className="mt-0.5 size-4 shrink-0 text-fg-faint" aria-hidden />
             <div className="min-w-0">
