@@ -19,11 +19,11 @@
  * sidebar — a display rule, not a deadline).
  */
 
-/** A month, as `YYYY-MM` — the value of an `<input type="month">`. */
+/**
+ * A month, as `YYYY-MM` — the value of an `<input type="month">`. Its shape
+ * is validated at the edge, by the `YearMonth` schema of `@quiz/contracts`.
+ */
 export type YearMonth = string;
-
-/** The shape of a {@link YearMonth}: four digits, a dash, a month 01–12. */
-export const YEAR_MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 /**
  * How many months a period stays current before its first and after its last
@@ -46,10 +46,6 @@ export interface MonthRange {
   end: YearMonth;
 }
 
-export function isYearMonth(value: string): value is YearMonth {
-  return YEAR_MONTH_PATTERN.test(value);
-}
-
 /** Months since year 0: makes month arithmetic a plain subtraction. */
 function toIndex(ym: YearMonth): number {
   const [y, m] = ym.split("-").map(Number) as [number, number];
@@ -67,9 +63,9 @@ export function addMonths(ym: YearMonth, n: number): YearMonth {
   return fromIndex(toIndex(ym) + n);
 }
 
-/** The month of a date, read in the LOCAL time zone of the caller. */
-export function yearMonthOf(date: Date): YearMonth {
-  return fromIndex(date.getFullYear() * 12 + date.getMonth());
+/** "Today" as a month; a `Date` is read in the LOCAL time zone of the caller. */
+function monthOf(today: YearMonth | Date): YearMonth {
+  return typeof today === "string" ? today : fromIndex(today.getFullYear() * 12 + today.getMonth());
 }
 
 /**
@@ -83,7 +79,7 @@ export function isCurrent(
   today: YearMonth | Date,
 ): boolean {
   if (start == null || end == null) return true;
-  const now = toIndex(typeof today === "string" ? today : yearMonthOf(today));
+  const now = toIndex(monthOf(today));
   return (
     now >= toIndex(start) - PERIOD_MARGIN_MONTHS && now <= toIndex(end) + PERIOD_MARGIN_MONTHS
   );
@@ -97,8 +93,7 @@ export function semesterMonths(s: Semester): MonthRange {
 }
 
 /** The semester a month falls in, or `null` for August (between two semesters). */
-export function semesterOf(today: YearMonth | Date): Semester | null {
-  const ym = typeof today === "string" ? today : yearMonthOf(today);
+function semesterOf(ym: YearMonth): Semester | null {
   const [year, month] = ym.split("-").map(Number) as [number, number];
   if (month >= 9) return { season: "autumn", year };
   if (month === 1) return { season: "autumn", year: year - 1 };
@@ -118,7 +113,7 @@ export function nextSemester(s: Semester): Semester {
  * or — in August — the one about to start. The creation form prefills it.
  */
 export function currentOrNextSemester(today: YearMonth | Date): Semester {
-  const ym = typeof today === "string" ? today : yearMonthOf(today);
+  const ym = monthOf(today);
   return semesterOf(ym) ?? { season: "autumn", year: Number(ym.slice(0, 4)) };
 }
 

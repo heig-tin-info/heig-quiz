@@ -4,25 +4,12 @@ import {
   addMonths,
   currentOrNextSemester,
   isCurrent,
-  isYearMonth,
   nextSemester,
   PERIOD_MARGIN_MONTHS,
   semesterMonths,
-  semesterOf,
   semesterOfRange,
   shiftSemester,
-  yearMonthOf,
 } from "./period.js";
-
-describe("isYearMonth", () => {
-  it("accepts YYYY-MM with a month 01–12 only", () => {
-    expect(isYearMonth("2026-09")).toBe(true);
-    expect(isYearMonth("2026-12")).toBe(true);
-    for (const bad of ["2026-00", "2026-13", "2026-9", "26-09", "2026-09-01", ""]) {
-      expect(isYearMonth(bad)).toBe(false);
-    }
-  });
-});
 
 describe("addMonths", () => {
   it("crosses year boundaries both ways", () => {
@@ -30,13 +17,6 @@ describe("addMonths", () => {
     expect(addMonths("2027-01", -1)).toBe("2026-12");
     expect(addMonths("2026-09", 6)).toBe("2027-03");
     expect(addMonths("2026-09", -21)).toBe("2024-12");
-  });
-});
-
-describe("yearMonthOf", () => {
-  it("reads the local calendar month of a date", () => {
-    expect(yearMonthOf(new Date(2026, 0, 1, 0, 0, 1))).toBe("2026-01");
-    expect(yearMonthOf(new Date(2026, 11, 31, 23, 59))).toBe("2026-12");
   });
 });
 
@@ -91,14 +71,23 @@ describe("semesters", () => {
     });
   });
 
-  it("semesterOf places every month, August in none", () => {
-    expect(semesterOf("2026-09")).toEqual({ season: "autumn", year: 2026 });
-    expect(semesterOf("2026-12")).toEqual({ season: "autumn", year: 2026 });
-    expect(semesterOf("2027-01")).toEqual({ season: "autumn", year: 2026 });
-    expect(semesterOf("2027-02")).toEqual({ season: "spring", year: 2027 });
-    expect(semesterOf("2027-07")).toEqual({ season: "spring", year: 2027 });
-    expect(semesterOf("2027-08")).toBeNull();
-    expect(semesterOf(new Date(2027, 0, 31))).toEqual({ season: "autumn", year: 2026 });
+  it("places every month in its semester, August in none", () => {
+    // Read through currentOrNextSemester: August is the only month it moves.
+    expect(currentOrNextSemester("2026-09")).toEqual({ season: "autumn", year: 2026 });
+    expect(currentOrNextSemester("2026-12")).toEqual({ season: "autumn", year: 2026 });
+    expect(currentOrNextSemester("2027-02")).toEqual({ season: "spring", year: 2027 });
+    expect(semesterOfRange({ start: "2027-08", end: "2027-08" })).toBeNull();
+  });
+
+  it("reads a Date as its local month", () => {
+    expect(currentOrNextSemester(new Date(2027, 0, 31, 23, 59))).toEqual({
+      season: "autumn",
+      year: 2026,
+    });
+    expect(currentOrNextSemester(new Date(2027, 1, 1, 0, 0, 1))).toEqual({
+      season: "spring",
+      year: 2027,
+    });
   });
 
   it("nextSemester alternates and advances the year after autumn", () => {

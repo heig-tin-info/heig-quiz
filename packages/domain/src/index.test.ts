@@ -29,7 +29,6 @@ describe("@quiz/domain public surface", () => {
       "pseudonym",
       "retakeRefusal",
       "round2",
-      "semesterOf",
       "seededShuffle",
       "shiftSemester",
       "shuffle",

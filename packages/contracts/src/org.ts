@@ -22,9 +22,9 @@ export const CoursePatch = CourseCreate.partial().refine(
 export type CoursePatch = z.infer<typeof CoursePatch>;
 
 /**
- * A month, `YYYY-MM` — the value of an `<input type="month">`. Two of them
- * compare as strings in calendar order, which is what the checks below use
- * (the rules on periods live in `@quiz/domain` period.ts).
+ * A month, `YYYY-MM` — the value of an `<input type="month">`, and the one
+ * place its shape is checked. Two of them compare as strings in calendar
+ * order, which is what the checks below use.
  */
 export const YearMonth = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Expected YYYY-MM");
 
@@ -38,8 +38,12 @@ const periodMonths = {
   periodEnd: YearMonth.nullable(),
 };
 
-/** Both months or neither, end ≥ start — the same rule as the DB check. */
-function checkPeriodMonths(
+/**
+ * Both months or neither, end ≥ start — the same rule as the DB check. Exported
+ * for the MCP tool, whose input spreads `ClassroomCreate.shape` and so loses
+ * the refinement.
+ */
+export function checkPeriodMonths(
   b: { periodStart?: string | null | undefined; periodEnd?: string | null | undefined },
   ctx: z.RefinementCtx,
 ): void {
