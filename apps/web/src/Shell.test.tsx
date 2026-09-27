@@ -1,6 +1,6 @@
 import { act, fireEvent, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { CourseSummary, PoolDetail, PoolSummary } from "@quiz/contracts";
@@ -116,6 +116,8 @@ function renderShell({
 
 /** The sidebar of the desktop layout (the drawer renders the same nav). */
 const sidebar = () => screen.getAllByRole("navigation")[0]!;
+/** The flat Classrooms section of the sidebar, under its heading. */
+const classroomsSection = () => within(sidebar()).getByText("Classrooms").parentElement!;
 
 describe("Shell content width (#93)", () => {
   it("caps the page at the reading width by default", () => {
@@ -158,14 +160,15 @@ describe("Shell sidebar", () => {
 
   it("marks the classroom being read with aria-current", () => {
     renderShell({ route: { view: "classroom", id: "c2" } });
-    const nav = within(sidebar());
+    // The course tree above lists it too (#154); this is the flat section.
+    const nav = within(classroomsSection());
     expect(nav.getByRole("button", { name: /^Classroom 2(?!\d)/ })).toHaveAttribute(
       "aria-current",
       "page",
     );
     expect(nav.getByRole("button", { name: /^Classroom 1(?!\d)/ })).not.toHaveAttribute("aria-current");
     // The classroom page is not the home page.
-    expect(nav.getByRole("button", { name: "Courses" })).not.toHaveAttribute("aria-current");
+    expect(within(sidebar()).getByRole("button", { name: "Courses" })).not.toHaveAttribute("aria-current");
   });
 
   it("navigates when a classroom is picked", async () => {
@@ -186,7 +189,7 @@ describe("Shell sidebar", () => {
 
   it("keeps the classroom being read visible past the cap", () => {
     renderShell({ courses: rooms(30), route: { view: "classroom", id: "c25" } });
-    const nav = within(sidebar());
+    const nav = within(classroomsSection());
     expect(nav.getByRole("button", { name: /^Classroom 25(?!\d)/ })).toHaveAttribute(
       "aria-current",
       "page",
@@ -653,5 +656,150 @@ describe("Shell pool navigation states", () => {
     const { navigate } = renderShell({ route: { view: "pools" }, poolList: POOLS });
     await userEvent.click(within(sidebar()).getByRole("button", { name: /^Embedded/ }));
     expect(navigate).toHaveBeenCalledWith({ view: "pool", id: "p2" });
+  });
+});
+
+/*
+ * #154: the course → classroom tree under "Courses", cycling like the pools.
+ * The flat Classrooms section below lists the same classrooms, so a name is
+ * counted in the whole sidebar: one copy there, a second one in the tree.
+ */
+describe("Shell course tree", () => {
+  const COURSES: CourseSummary[] = [
+    makeCourseSummary({
+      id: "k1",
+      code: "PRG1",
+      name: "Programmation C",
+      classrooms: [
+        makeClassroomSummary({ id: "r1", name: "PRG1-2026", courseId: "k1" }),
+        makeClassroomSummary({ id: "r2", name: "PRG1-2025", courseId: "k1" }),
+      ],
+    }),
+    makeCourseSummary({
+      id: "k2",
+      code: "EMB",
+      name: "Systèmes embarqués",
+      classrooms: [
+        makeClassroomSummary({ id: "r3", name: "EMB-2026", courseId: "k2", courseCode: "EMB" }),
+      ],
+    }),
+  ];
+  const KEY = "quiz-courses-nav";
+  afterEach(() => localStorage.removeItem(KEY));
+
+  const coursesRow = () => within(sidebar()).getByRole("button", { name: "Courses" });
+  const copies = (name: string) => within(sidebar()).queryAllByRole("button", { name }).length;
+
+  it("shows the course being read with its classrooms by default", () => {
+    renderShell({ courses: COURSES, route: { view: "classroom", id: "r1" } });
+    expect(coursesRow()).toHaveAttribute("aria-expanded", "true");
+    // The course heads its classrooms and names itself fully to a reader.
+    expect(within(sidebar()).getByText("PRG1").parentElement).toHaveAttribute(
+      "aria-description",
+      "Programmation C",
+    );
+    // Tree + flat section: the second copy is the tree's, by design.
+    expect(copies("PRG1-2025")).toBe(2);
+    expect(copies("EMB-2026")).toBe(1);
+    expect(within(sidebar()).queryByText("EMB")).toBeNull();
+  });
+
+  it("cycles active → all → collapsed from inside the section, without navigating", async () => {
+    const { navigate } = renderShell({ courses: COURSES, route: { view: "classroom", id: "r1" } });
+    await userEvent.click(coursesRow());
+    expect(localStorage.getItem(KEY)).toBe("all");
+    // Every course, the one being read unfolded (always: its row is no
+    // control), the others folded.
+    expect(within(sidebar()).queryByRole("button", { name: "PRG1" })).toBeNull();
+    expect(copies("PRG1-2025")).toBe(2);
+    expect(within(sidebar()).getByRole("button", { name: "EMB" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(copies("EMB-2026")).toBe(1);
+
+    await userEvent.click(coursesRow());
+    expect(localStorage.getItem(KEY)).toBe("collapsed");
+    expect(coursesRow()).toHaveAttribute("aria-expanded", "false");
+    expect(copies("PRG1-2025")).toBe(1);
+
+    await userEvent.click(coursesRow());
+    expect(localStorage.getItem(KEY)).toBe("active");
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("counts the course list as inside the section: a click there cycles", async () => {
+    localStorage.setItem(KEY, "active");
+    const { navigate } = renderShell({ courses: COURSES, route: { view: "home" } });
+    await userEvent.click(coursesRow());
+    expect(localStorage.getItem(KEY)).toBe("all");
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("navigates, and opens a collapsed tree, when the click comes from another section", async () => {
+    localStorage.setItem(KEY, "collapsed");
+    const { navigate } = renderShell({ courses: COURSES, route: { view: "pools" } });
+    await userEvent.click(coursesRow());
+    expect(navigate).toHaveBeenCalledWith({ view: "home" });
+    expect(localStorage.getItem(KEY)).toBe("active");
+  });
+
+  it("navigates without cycling from an evaluation screen, where an open tree stays open", async () => {
+    localStorage.setItem(KEY, "all");
+    const { navigate } = renderShell({ courses: COURSES, route: { view: "evaluation", id: "e1" } });
+    await userEvent.click(coursesRow());
+    expect(navigate).toHaveBeenCalledWith({ view: "home" });
+    expect(localStorage.getItem(KEY)).toBe("all");
+  });
+
+  it("unfolds another course on demand in all, and opens a classroom from it", async () => {
+    localStorage.setItem(KEY, "all");
+    const { navigate } = renderShell({ courses: COURSES, route: { view: "home" } });
+    const emb = within(sidebar()).getByRole("button", { name: "EMB" });
+    expect(emb).toHaveAttribute("aria-description", "Systèmes embarqués");
+    await userEvent.click(emb);
+    expect(emb).toHaveAttribute("aria-expanded", "true");
+    expect(copies("EMB-2026")).toBe(2);
+    await userEvent.click(within(sidebar()).getAllByRole("button", { name: "EMB-2026" })[0]!);
+    expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r3" });
+    await userEvent.click(emb);
+    expect(emb).toHaveAttribute("aria-expanded", "false");
+  });
+
+  it("keeps a course unfolded once the classroom opened from it is the page", async () => {
+    // A frame whose route really follows `navigate`, as the app's does.
+    function Routed() {
+      const [route, setRoute] = useState<Route>({ view: "classroom", id: "r1" });
+      return (
+        <Shell me={makeMe()} route={route} navigate={setRoute} teacherUi studentView={false}>
+          <p>Page content</p>
+        </Shell>
+      );
+    }
+    localStorage.setItem(KEY, "all");
+    const queryClient = makeQueryClient();
+    queryClient.setQueryData(["courses"], COURSES);
+    renderWithProviders(<Routed />, { queryClient });
+    await userEvent.click(within(sidebar()).getByRole("button", { name: "EMB" }));
+    await userEvent.click(within(sidebar()).getAllByRole("button", { name: "EMB-2026" })[0]!);
+    // EMB is now the course being read: still unfolded, its classroom current.
+    expect(copies("EMB-2026")).toBe(2);
+    for (const row of within(sidebar()).getAllByRole("button", { name: "EMB-2026" })) {
+      expect(row).toHaveAttribute("aria-current", "page");
+    }
+    // And PRG1, no longer read nor opened by a click, folds back.
+    expect(within(sidebar()).getByRole("button", { name: "PRG1" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
+  it("is teacher UI only", () => {
+    localStorage.setItem(KEY, "all");
+    renderShell({ courses: COURSES, teacherUi: false, me: makeMe({ role: "student" }) });
+    expect(within(sidebar()).getByRole("button", { name: "Home" })).not.toHaveAttribute(
+      "aria-expanded",
+    );
+    expect(within(sidebar()).queryByRole("button", { name: "PRG1" })).toBeNull();
   });
 });

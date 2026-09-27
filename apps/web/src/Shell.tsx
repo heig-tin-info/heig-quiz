@@ -22,6 +22,8 @@ import { Logo, UserMenu, useSignOut, ViewModeToggle } from "./Header";
 import { helpTopics, useHelp } from "./help";
 import { useI18n, useT } from "./i18n";
 import { sectionOf, type Route } from "./router";
+import { CourseNavTree, inCourseSection, useCourseNavState } from "./CourseNav";
+import type { NavCycle } from "./navTree";
 import { inPoolSection, PoolNavTree, usePoolNavState } from "./pool/PoolNav";
 import { shortcutCaps, useActiveShortcuts, useGlobalShortcuts } from "./shortcuts";
 import { setThemeChoice, useResolvedTheme, useThemeChoice } from "./theme";
@@ -157,6 +159,7 @@ function Nav({
   navigate,
   teacherUi,
   poolNav,
+  courseNav,
   onNavigate,
 }: {
   me: Me;
@@ -169,7 +172,9 @@ function Nav({
    * desktop sidebar and the mobile drawer both draw this navigation, and two
    * copies of the state would drift apart between them.
    */
-  poolNav: ReturnType<typeof usePoolNavState>;
+  poolNav: NavCycle;
+  /** The same, for the course → classroom tree under "Courses" (#154). */
+  courseNav: NavCycle;
   /** Called after any navigation (closes the mobile drawer). */
   onNavigate?: () => void;
 }) {
@@ -208,10 +213,19 @@ function Nav({
           label={teacherUi ? t("nav.courses") : t("shome.title")}
           active={section === "home"}
           coach="nav.home"
-          onClick={() => go({ view: "home" })}
+          expanded={teacherUi ? courseNav.state !== "collapsed" : undefined}
+          // The pools' rule (below): from outside the section the click goes
+          // to the course list; from inside it — the list, a classroom — it
+          // cycles collapsed → active course → all courses (CourseNav.tsx).
+          onClick={() =>
+            teacherUi
+              ? courseNav.press(inCourseSection(route), () => go({ view: "home" }))
+              : go({ view: "home" })
+          }
         />
         {teacherUi ? (
           <>
+            <CourseNavTree state={courseNav.state} courses={courses} route={route} navigate={go} />
             <NavItem
               icon={FolderTree}
               label={t("pools.title")}
@@ -225,13 +239,7 @@ function Nav({
               // from inside it cycles collapsed → active pool → all pools.
               // So a teacher reading a question cannot lose it by folding the
               // tree, and nobody needs a second control to see their pools.
-              onClick={() => {
-                if (inPoolSection(route)) poolNav.cycle();
-                else {
-                  poolNav.open();
-                  go({ view: "pools" });
-                }
-              }}
+              onClick={() => poolNav.press(inPoolSection(route), () => go({ view: "pools" }))}
             />
             {/* The tree of the pool being read, or every pool the teacher can
                 reach — the state the row above cycles through (PoolNav.tsx).
@@ -368,6 +376,7 @@ export function Shell({
   useLayer(drawerPanel, () => setDrawer(false), { enabled: drawer });
 
   const poolNav = usePoolNavState();
+  const courseNav = useCourseNavState();
   const [palette, setPalette] = useState(false);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -476,6 +485,7 @@ export function Shell({
           navigate={navigate}
           teacherUi={teacherUi}
           poolNav={poolNav}
+          courseNav={courseNav}
         />
         <ShortcutStrip />
         {/* The account row: what is about the PERSON rather than about the
@@ -517,6 +527,7 @@ export function Shell({
               navigate={navigate}
               teacherUi={teacherUi}
               poolNav={poolNav}
+              courseNav={courseNav}
               onNavigate={() => setDrawer(false)}
             />
             <div className="border-t border-line p-2">
