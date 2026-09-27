@@ -46,8 +46,8 @@ Three facts shape the answer:
 3. **Navigation only.** `GET /courses` still returns every course the caller
    reaches, each with a `hidden` flag computed for the caller. The SPA leaves
    hidden courses out of its navigation — the course list (until "Show
-   hidden"), the sidebar's course tree (except the course being read) and the
-   command palette — and nowhere else: the pickers read the same list and keep
+   hidden"), both sections of the sidebar (except the course being read) and
+   the command palette — and nowhere else: the pickers read the same list and keep
    offering them, and so does the MCP `list_courses`, because an assistant that
    cannot see a course creates it a second time. Every page of a hidden course
    stays readable.
@@ -65,9 +65,6 @@ Three facts shape the answer:
 
 - The course summary gains a field that depends on WHO asks. It is computed
   by a left join in `listCourses`, with no second query.
-- The flat "Classrooms" section of the sidebar still lists the live classrooms
-  of a hidden course: that section is the "right now" list and is being
-  filtered by period in #156, which is the filter that answers "a past year".
 - A global archive can still be added later, on `courses`, without touching
   this table: the two would answer different questions.
 - Deleting a user or a course takes its preference rows with it.
