@@ -1,5 +1,6 @@
 import { iconNames, type IconName } from "lucide-react/dynamic";
 import { useMemo, useState } from "react";
+import aliases from "virtual:lucide-aliases";
 
 import { fuzzyFilter } from "../fuzzy";
 import { useT } from "../i18n";
@@ -14,11 +15,25 @@ import { IconTile } from "./IconTile";
  * `iconNames` means importing `dynamicIconImports` — 1500 lazy imports, about
  * 62 kB gzipped. A teacher who takes an icon off the shelf never downloads
  * it; the one who goes looking pays for it once, at the moment they ask.
+ * The alias map (`virtual:lucide-aliases`, built by `vite.config.ts`) rides
+ * in the same chunk for the same reason.
  */
 
-/** The whole catalogue filtered by the app's fuzzy matcher, capped. */
+/** An alias (`bar-chart-3`) is listed under its canonical name (`chart-column`). */
+const canonicalIcon = (name: IconName): IconName => aliases[name] ?? name;
+
+/**
+ * The whole catalogue filtered by the app's fuzzy matcher, capped, one name
+ * per glyph. Aliases still match (a teacher typing `bar-chart` finds
+ * `chart-column`), but each result is a canonical name, listed once.
+ */
 export function searchIcons(query: string, limit = ICON_SEARCH_LIMIT): IconName[] {
-  return fuzzyFilter(query, [...iconNames], (name) => name).slice(0, limit);
+  const names = new Set<IconName>();
+  for (const name of fuzzyFilter(query, [...iconNames], (n) => n)) {
+    if (names.size === limit) break;
+    names.add(canonicalIcon(name));
+  }
+  return [...names];
 }
 
 export default function IconCatalogue({
@@ -31,6 +46,7 @@ export default function IconCatalogue({
   const t = useT();
   const [query, setQuery] = useState("");
   const results = useMemo(() => searchIcons(query), [query]);
+  const selected = value && canonicalIcon(value as IconName);
 
   return (
     <div className="space-y-3">
@@ -55,7 +71,7 @@ export default function IconCatalogue({
                 key={name}
                 label={name}
                 icon={name}
-                selected={value === name}
+                selected={selected === name}
                 onPick={() => onPick(name)}
               />
             ))}

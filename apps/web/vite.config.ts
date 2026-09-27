@@ -1,9 +1,42 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import type { Plugin } from "vite";
 import { defineConfig } from "vitest/config";
 
+/**
+ * `virtual:lucide-aliases`: alias -> canonical lucide names, so the pool icon
+ * catalogue lists each glyph once (#165). Nothing at runtime tells them apart,
+ * but in `dynamicIconImports` an alias imports its canonical's file. Parsed at
+ * build time from the installed package; an unparsable format fails the build.
+ */
+function lucideAliases(): Plugin {
+  const id = "virtual:lucide-aliases";
+  return {
+    name: "lucide-aliases",
+    resolveId: (source) => (source === id ? `\0${id}` : undefined),
+    load(resolved) {
+      if (resolved !== `\0${id}`) return undefined;
+      const file = createRequire(import.meta.url).resolve(
+        "lucide-react/dist/esm/dynamicIconImports.mjs",
+      );
+      const source = readFileSync(file, "utf8");
+      const entries = [...source.matchAll(/"([^"]+)": \(\) => import\('\.\/icons\/([^']+)\.mjs'\)/g)];
+      const total = source.match(/import\(/g)?.length ?? 0;
+      if (entries.length === 0 || entries.length !== total) {
+        throw new Error(`lucide-aliases: parsed ${entries.length} of ${total} entries in ${file}`);
+      }
+      const aliases = Object.fromEntries(
+        entries.filter(([, name, target]) => name !== target).map(([, name, target]) => [name, target]),
+      );
+      return `export default ${JSON.stringify(aliases)};`;
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), lucideAliases()],
   server: {
     // Listen on every interface: under WSL2 the browser runs on the Windows
     // side and reaches the dev server through the VM's address, not localhost.
