@@ -404,7 +404,7 @@ export const EvaluationTemplate = z.object({
   id: z.uuid(),
   courseId: z.uuid(),
   title: z.string(),
-  mode: z.enum(["exam", "exercise"]),
+  mode: EvaluationMode.exclude(["poll"]),
   /** 1 at creation. Editing in place (ADR-031, PR 3) will move it. */
   revision: z.number().int().min(1),
   itemCount: z.number().int(),
