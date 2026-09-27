@@ -425,7 +425,6 @@ function useCourseActions(course: CourseSummary): {
     onSuccess: invalidate,
   });
   const toast = useToast();
-  const toastError = useErrorToast();
   // A hidden course leaves the list at once, so the toast says where it went.
   const setHidden = useMutation({
     mutationFn: (hidden: boolean) =>
