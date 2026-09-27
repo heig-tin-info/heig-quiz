@@ -196,8 +196,6 @@ describe("EvaluationList", () => {
       revision: 2,
       itemCount: 3,
       totalPoints: 6,
-      createdAt: liveAt(-3600_000),
-      updatedAt: liveAt(-3600_000),
     };
 
     it("leaves the dialog unchanged when the course has none", async () => {

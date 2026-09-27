@@ -952,7 +952,6 @@ interface MockTemplate {
   courseId: string;
   revision: number;
   shell: MockEvaluation;
-  updatedAt: string;
 }
 
 const templates: MockTemplate[] = [];
@@ -975,7 +974,7 @@ function makeTemplate(courseId: string, source: MockEvaluation): MockTemplate {
     present: 0,
     items: source.items.map((item) => ({ ...item, id: uuid() })),
   };
-  return { id: shell.id, courseId, revision: 1, shell, updatedAt: shell.createdAt };
+  return { id: shell.id, courseId, revision: 1, shell };
 }
 
 const templateOr404 = (id: string) => {
@@ -992,8 +991,6 @@ const templateSummary = (x: MockTemplate) => ({
   revision: x.revision,
   itemCount: x.shell.items.length,
   totalPoints: totalPointsOf(x.shell),
-  createdAt: x.shell.createdAt,
-  updatedAt: x.updatedAt,
 });
 
 // Two templates on the first course, so the course card and the "Start from"
@@ -1007,7 +1004,6 @@ if (!flags.empty) {
         createdAt: iso(-300 * D),
       }),
     );
-    exam.updatedAt = iso(-12 * D);
     const series = makeTemplate(
       room.courseId,
       makeEvaluation(room.id, "Série d'exercices — pointeurs", "draft", 5, {
@@ -1030,7 +1026,6 @@ on("POST", "/app/api/evaluations/:id/template", (m, body) => {
   }
   const created = makeTemplate(roomOr404(e.classroomId).courseId, { ...e, title: String(body.title) });
   created.shell.createdAt = iso(0);
-  created.updatedAt = iso(0);
   templates.unshift(created);
   return templateSummary(created);
 });

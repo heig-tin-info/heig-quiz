@@ -13,7 +13,6 @@ import { desc, eq } from "drizzle-orm";
 
 import type { EvaluationTemplate, TemplateItemRef } from "@quiz/contracts";
 
-import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { coursePools, evaluations } from "../../db/schema.js";
 import {
@@ -82,8 +81,6 @@ async function withStats(db: Db, rows: EvaluationRecord[]): Promise<EvaluationTe
       revision: row.revision,
       itemCount: itemCounts.get(row.id) ?? 0,
       totalPoints: points.get(row.id) ?? 0,
-      createdAt: iso(row.createdAt),
-      updatedAt: iso(row.updatedAt),
     };
   });
 }

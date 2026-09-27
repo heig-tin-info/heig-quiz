@@ -409,8 +409,6 @@ export const EvaluationTemplate = z.object({
   revision: z.number().int().min(1),
   itemCount: z.number().int(),
   totalPoints: z.number(),
-  createdAt: z.iso.datetime(),
-  updatedAt: z.iso.datetime(),
 });
 export type EvaluationTemplate = z.infer<typeof EvaluationTemplate>;
 
