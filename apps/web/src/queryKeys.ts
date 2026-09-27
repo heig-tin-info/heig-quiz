@@ -35,6 +35,11 @@ export const oauthRequestKey = (id: string) => ["oauth-request", id] as const;
 
 export const coursesKey = ["courses"] as const;
 export const courseKey = (id: string) => ["course", id] as const;
+/**
+ * `GET /courses/:id/templates` (ADR-031): under the course, so a course
+ * refresh reaches it. `null` while the course is not known yet.
+ */
+export const courseTemplatesKey = (id: string | null) => ["course", id, "templates"] as const;
 /** `null` while the id is not known yet: the query is disabled, the key still well-formed. */
 export const classroomKey = (id: string | null) => ["classroom", id] as const;
 

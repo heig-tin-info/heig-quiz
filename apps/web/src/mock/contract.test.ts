@@ -32,6 +32,7 @@ import {
   DashboardView,
   EvaluationDetail,
   EvaluationSummary,
+  EvaluationTemplate,
   GradingProgress,
   GradingQueue,
   GradingSteps,
@@ -176,6 +177,11 @@ const each = (route: string, path: string, schema: Schema): Case => ({
 
 const CHECKED: Case[] = [
   one("/app/api/courses/:id", `/app/api/courses/${courses[0]!.id}`, CourseDetail),
+  each(
+    "/app/api/courses/:id/templates",
+    `/app/api/courses/${courses[0]!.id}/templates`,
+    EvaluationTemplate,
+  ),
   each(
     "/app/api/classrooms/:id/evaluations",
     `/app/api/classrooms/${classroomId}/evaluations`,

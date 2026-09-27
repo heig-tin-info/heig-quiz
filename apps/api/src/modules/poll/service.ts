@@ -54,6 +54,7 @@ import {
   evaluationItems,
   evaluations,
   gradings,
+  isOwnedPoll,
   pools,
   questionVersions,
   questions,
@@ -178,7 +179,7 @@ export interface PollScope {
 export function pollSettingsOf(evaluation: EvaluationRecord): PollSettings {
   const stored = settingsOf(evaluation).poll;
   return {
-    anonymous: evaluation.classroomId === null,
+    anonymous: isOwnedPoll(evaluation),
     revealed: stored?.revealed ?? false,
     votes: stored?.votes ?? false,
   };

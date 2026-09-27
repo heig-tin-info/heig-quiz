@@ -71,6 +71,7 @@ import {
   accessibleCategory,
   accessiblePool,
   accessibleQuestion,
+  managedEvaluationAccess,
   poolAccess,
   poolRoleOf,
   requirePoolRole,
@@ -244,6 +245,10 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       // contributor reach it to WORK in it, not to destroy it.
       const audience = await topicsOf(pool);
       if (!(await requirePoolRole(app, req, reply, pool, "owner"))) return reply;
+      // A version an evaluation or a template pins cannot vanish under it
+      // (ADR-031): the refusal names what holds the pool, not a 500.
+      const uses = await service.poolUses(app.db, pool.id, managedEvaluationAccess(req.user!));
+      if (uses) return reply.code(409).send(uses);
       await service.deletePool(app.db, pool.id);
       await trace(req, "pool.delete", "pool", pool.id, { name: pool.name });
       poolChanged(pool.id);

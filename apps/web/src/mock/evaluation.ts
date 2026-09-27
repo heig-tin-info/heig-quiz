@@ -940,6 +940,123 @@ on("POST", "/app/api/evaluations/:id/duplicate", (m, body) => {
   evaluations.push(copy);
   return toEvaluation(copy);
 });
+
+// --- Templates (ADR-031) ---------------------------------------------------
+//
+// A template is an evaluation kept at the course level. Here it is a shell
+// evaluation that no classroom lists, plus the few fields the list shows;
+// "Use in a classroom" copies the shell into a new draft, like the server.
+
+interface MockTemplate {
+  id: string;
+  courseId: string;
+  revision: number;
+  shell: MockEvaluation;
+  updatedAt: string;
+}
+
+const templates: MockTemplate[] = [];
+
+function makeTemplate(courseId: string, source: MockEvaluation): MockTemplate {
+  const shell: MockEvaluation = {
+    ...source,
+    id: uuid(),
+    classroomId: "",
+    state: "draft",
+    opensAt: null,
+    closesAt: null,
+    accessCode: null,
+    ipAllowlist: [],
+    startedAt: null,
+    pausedAt: null,
+    closedAt: null,
+    releasedAt: null,
+    rows: [],
+    present: 0,
+    items: source.items.map((item) => ({ ...item, id: uuid() })),
+  };
+  return { id: shell.id, courseId, revision: 1, shell, updatedAt: shell.createdAt };
+}
+
+const templateOr404 = (id: string) => {
+  const found = templates.find((x) => x.id === id);
+  if (!found) throw new MockError(404, "Template not found");
+  return found;
+};
+
+const templateSummary = (x: MockTemplate) => ({
+  id: x.id,
+  courseId: x.courseId,
+  title: x.shell.title,
+  mode: x.shell.mode === "poll" ? "exam" : x.shell.mode,
+  revision: x.revision,
+  itemCount: x.shell.items.length,
+  totalPoints: totalPointsOf(x.shell),
+  createdAt: x.shell.createdAt,
+  updatedAt: x.updatedAt,
+});
+
+// Two templates on the first course, so the course card and the "Start from"
+// choice of a new evaluation have something to show (none under `?empty=1`).
+if (!flags.empty) {
+  const room = rooms[0];
+  if (room) {
+    const exam = makeTemplate(
+      room.courseId,
+      makeEvaluation(room.id, "Examen final — programmation C", "draft", 8, {
+        createdAt: iso(-300 * D),
+      }),
+    );
+    exam.updatedAt = iso(-12 * D);
+    const series = makeTemplate(
+      room.courseId,
+      makeEvaluation(room.id, "Série d'exercices — pointeurs", "draft", 5, {
+        mode: "exercise",
+        durationS: null,
+        createdAt: iso(-200 * D),
+      }),
+    );
+    templates.push(exam, series);
+  }
+}
+
+on("GET", "/app/api/courses/:id/templates", (m) =>
+  templates.filter((x) => x.courseId === m.groups!.id).map(templateSummary),
+);
+on("POST", "/app/api/evaluations/:id/template", (m, body) => {
+  const e = evaluationOr404(m.groups!.id!);
+  if (e.mode === "poll") {
+    throw new MockPayload(422, { error: "template_poll", message: "a poll cannot be saved as a template" });
+  }
+  const created = makeTemplate(roomOr404(e.classroomId).courseId, { ...e, title: String(body.title) });
+  created.shell.createdAt = iso(0);
+  created.updatedAt = iso(0);
+  templates.unshift(created);
+  return templateSummary(created);
+});
+on("DELETE", "/app/api/templates/:id", (m) => {
+  const i = templates.findIndex((x) => x.id === m.groups!.id);
+  if (i >= 0) templates.splice(i, 1);
+  return undefined;
+});
+on("POST", "/app/api/templates/:id/instances", (m, body) => {
+  const template = templateOr404(m.groups!.id!);
+  const room = roomOr404(String(body.classroomId));
+  if (room.courseId !== template.courseId) throw new MockError(404, "Classroom not found");
+  const made = makeEvaluation(room.id, String(body.title ?? template.shell.title), "draft", 0, {
+    mode: template.shell.mode,
+    settings: template.shell.settings,
+    gradingScale: template.shell.gradingScale,
+    feedbackPolicy: template.shell.feedbackPolicy,
+    mcqPolicy: template.shell.mcqPolicy,
+    durationS: template.shell.durationS,
+    createdAt: iso(0),
+  });
+  made.items = template.shell.items.map((item) => ({ ...item, id: uuid() }));
+  evaluations.push(made);
+  return { evaluation: toEvaluation(made), deprecatedItems: [] };
+});
+
 /**
  * The item-list gate of the API (issue #79), with the same codes: the screen
  * disables its controls, and a stale tab that still tries is refused here

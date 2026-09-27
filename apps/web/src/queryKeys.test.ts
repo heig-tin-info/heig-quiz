@@ -21,6 +21,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["oauthRequestKey", keys.oauthRequestKey("q1"), ["oauth-request", "q1"]],
     ["coursesKey", keys.coursesKey, ["courses"]],
     ["courseKey", keys.courseKey("c1"), ["course", "c1"]],
+    ["courseTemplatesKey", keys.courseTemplatesKey("c1"), ["course", "c1", "templates"]],
     ["classroomKey", keys.classroomKey("r1"), ["classroom", "r1"]],
     ["classroomKey (not loaded)", keys.classroomKey(null), ["classroom", null]],
     ["poolsKey", keys.poolsKey, ["pools"]],

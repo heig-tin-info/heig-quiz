@@ -6,6 +6,7 @@ import {
   ClipboardCheck,
   Copy,
   Eye,
+  FileStack,
   MonitorPlay,
   RotateCcw,
   Trash2,
@@ -44,6 +45,7 @@ import { ItemsStep } from "./ItemsStep";
 import { LaunchStep } from "./LaunchStep";
 import { missingTiming, TIMING_FIELD_ID } from "./timing";
 import { TimingStep } from "./TimingStep";
+import { SaveAsTemplateDialog } from "./templates";
 import { useEvaluationPatch } from "./usePatch";
 import { classroomKey, evaluationKey, evaluationsKey } from "../queryKeys";
 
@@ -89,6 +91,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
   const step: Step = isStep(rawStep) ? rawStep : "questions";
   /** The teacher tried "Go to launch" with the timing incomplete (#76). */
   const [timingChecked, setTimingChecked] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
 
   const detail = useQuery<EvaluationDetail>({
     queryKey: evaluationKey(id),
@@ -275,6 +278,17 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
                   onSelect: () =>
                     duplicate.mutate(t("eval.duplicateTitle", { title: evaluation.title })),
                 },
+                // ADR-031: keep this evaluation at the course level, for every
+                // classroom of the course to start from.
+                ...(classroom.data
+                  ? [
+                      {
+                        label: t("templates.save"),
+                        icon: FileStack,
+                        onSelect: () => setSavingTemplate(true),
+                      },
+                    ]
+                  : []),
                 /*
                  * The teacher's own test attempt, thrown away so the walk can
                  * be done again (ADR-018). It only exists when there is one,
@@ -385,6 +399,14 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
         )}
       </div>
 
+      {savingTemplate && classroom.data ? (
+        <SaveAsTemplateDialog
+          evaluationId={id}
+          title={evaluation.title}
+          course={classroom.data.course}
+          onClose={() => setSavingTemplate(false)}
+        />
+      ) : null}
     </div>
   );
 }

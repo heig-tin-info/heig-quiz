@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import type { CourseDetail, CourseSummary, PoolSummary } from "@quiz/contracts";
+import type { CourseDetail, CourseSummary, EvaluationTemplate, PoolSummary } from "@quiz/contracts";
 
 import { api } from "./api";
 import { useConfirm } from "./confirm";
@@ -45,7 +45,8 @@ import {
   usePersistentChoice,
   useSortableTable,
 } from "./ui";
-import { courseKey, coursesKey, poolsKey } from "./queryKeys";
+import { courseKey, coursesKey, courseTemplatesKey, poolsKey } from "./queryKeys";
+import { CourseTemplates } from "./evaluation/templates";
 
 /**
  * Teacher home: the courses.
@@ -340,6 +341,7 @@ function useCourseActions(course: CourseSummary): {
   const t = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const toastError = useErrorToast();
   const [newRoom, setNewRoom] = useState(false);
   const [newStaff, setNewStaff] = useState(false);
   const invalidate = () => qc.invalidateQueries({ queryKey: coursesKey });
@@ -394,9 +396,32 @@ function useCourseActions(course: CourseSummary): {
         danger: true,
         separator: true,
         onSelect: async () => {
+          // The confirmation names what else goes (ADR-031): the course's
+          // templates cascade with it, and nothing else on this card says so.
+          // A count that could not be read is not confirmed as zero.
+          let templates: number;
+          try {
+            templates = (
+              await qc.fetchQuery<EvaluationTemplate[]>({
+                queryKey: courseTemplatesKey(course.id),
+                queryFn: () => api(`/app/api/courses/${course.id}/templates`),
+              })
+            ).length;
+          } catch (error) {
+            toastError("error.server")(error);
+            return;
+          }
           if (
             await confirm({
-              title: t("courses.deleteConfirm", { name: course.name }),
+              title:
+                templates === 0
+                  ? t("courses.deleteConfirm", { name: course.name })
+                  : t(
+                      templates === 1
+                        ? "courses.deleteConfirmTemplates.one"
+                        : "courses.deleteConfirmTemplates",
+                      { name: course.name, n: templates },
+                    ),
               confirmLabel: t("common.delete"),
               cancelLabel: t("common.cancel"),
               danger: true,
@@ -477,6 +502,7 @@ function CourseCard({
       </div>
 
       <CoursePools course={course} navigate={navigate} />
+      <CourseTemplates courseId={course.id} classrooms={course.classrooms} navigate={navigate} />
 
       {dialogs}
     </Card>

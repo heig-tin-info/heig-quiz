@@ -30,6 +30,7 @@ import type {
 } from "@quiz/contracts";
 
 import { iso, isoOrNull } from "../../clock.js";
+import { isOwnedPoll } from "../../db/evaluation.js";
 import {
   publish as publishHint,
   publishData,
@@ -54,13 +55,18 @@ const teacherTopic = (id: string): Topic => `teacher:${id}`;
  * Where an evaluation's listing lives, for the refresh hints: its
  * classroom's topic — or, for an anonymous poll that belongs to no
  * classroom (ADR-014, addendum 2026-09-27), its owner's own `teacher:` topic,
- * which is where their list of recent polls listens.
+ * which is where their list of recent polls listens. A template (ADR-031)
+ * is never run, so nothing that hints here ever holds one.
  */
 export function homeTopic(evaluation: {
+  id: string;
   classroomId: string | null;
+  courseId: string | null;
+  mode: string;
   createdBy: string | null;
 }): Topic[] {
   if (evaluation.classroomId !== null) return [`classroom:${evaluation.classroomId}`];
+  if (!isOwnedPoll(evaluation)) throw new Error(`evaluation ${evaluation.id} has no home to hint`);
   return evaluation.createdBy === null ? [] : [teacherTopic(evaluation.createdBy)];
 }
 

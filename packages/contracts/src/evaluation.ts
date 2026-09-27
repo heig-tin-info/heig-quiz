@@ -392,6 +392,71 @@ export const EvaluationDuplicate = z.object({
 });
 export type EvaluationDuplicate = z.infer<typeof EvaluationDuplicate>;
 
+// --- Templates (ADR-031) --------------------------------------------------
+
+/**
+ * An evaluation TEMPLATE of a course: kept at the course level, never run.
+ * Its own shape, so `Evaluation.classroomId` stays non-null. It has no
+ * dates, no access code and no IP list — the database refuses them — and is
+ * never a poll.
+ */
+export const EvaluationTemplate = z.object({
+  id: z.uuid(),
+  courseId: z.uuid(),
+  title: z.string(),
+  mode: z.enum(["exam", "exercise"]),
+  /** 1 at creation. Editing in place (ADR-031, PR 3) will move it. */
+  revision: z.number().int().min(1),
+  itemCount: z.number().int(),
+  totalPoints: z.number(),
+  createdAt: z.iso.datetime(),
+  updatedAt: z.iso.datetime(),
+});
+export type EvaluationTemplate = z.infer<typeof EvaluationTemplate>;
+
+/** `POST /evaluations/:id/template` — "Save as template". */
+export const TemplateCreate = z.object({
+  title: z.string().trim().min(1).max(200),
+});
+export type TemplateCreate = z.infer<typeof TemplateCreate>;
+
+/** `POST /templates/:id/instances` — "Instantiate" into a classroom of the course. */
+export const TemplateInstantiate = z.object({
+  classroomId: z.uuid(),
+  /** The template's title when absent. */
+  title: z.string().trim().min(1).max(200).optional(),
+});
+export type TemplateInstantiate = z.infer<typeof TemplateInstantiate>;
+
+/** One item of a template, named by where it stands and which question it plays. */
+export const TemplateItemRef = z.object({
+  position: z.number().int(),
+  questionId: z.uuid(),
+  internalName: z.string(),
+});
+export type TemplateItemRef = z.infer<typeof TemplateItemRef>;
+
+/**
+ * The answer of "Instantiate": the new draft, and the items frozen on a
+ * version since marked deprecated — a warning, never a refusal.
+ */
+export const TemplateInstance = z.object({
+  evaluation: Evaluation,
+  deprecatedItems: z.array(TemplateItemRef),
+});
+export type TemplateInstance = z.infer<typeof TemplateInstance>;
+
+/**
+ * The body of `422 template_pool_unlinked`: the items whose question sits in
+ * a pool no longer linked to the course (F-EVAL-01) — the instance could not
+ * have been authored with them either.
+ */
+export const TemplatePoolUnlinked = z.object({
+  error: z.literal("template_pool_unlinked"),
+  items: z.array(TemplateItemRef),
+});
+export type TemplatePoolUnlinked = z.infer<typeof TemplatePoolUnlinked>;
+
 /** The authoring transitions. `running`, `paused` and `closed` are `live` routes. */
 export const EvaluationStateBody = z.object({
   to: z.enum(["draft", "scheduled", "lobby"]),

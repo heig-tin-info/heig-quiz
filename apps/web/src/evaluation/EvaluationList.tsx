@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import type { EvaluationMode, EvaluationSummary } from "@quiz/contracts";
+import type { ClassroomDetail, EvaluationMode, EvaluationSummary } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -30,6 +30,7 @@ import {
   pressable,
   QueryError,
   Segmented,
+  Select,
   Skeleton,
   T,
   TableHead,
@@ -43,7 +44,8 @@ import {
   isLive,
   stateTone,
 } from "./common";
-import { evaluationsKey } from "../queryKeys";
+import { classroomKey, evaluationsKey } from "../queryKeys";
+import { InstantiateError, useCourseTemplates, useInstantiate } from "./templates";
 
 /**
  * The evaluations of one classroom, under its roster.
@@ -67,6 +69,19 @@ function NewEvaluationModal({
   const qc = useQueryClient();
   const [title, setTitle] = useState("");
   const [mode, setMode] = useState<Exclude<EvaluationMode, "poll">>("exam");
+  /*
+   * "Start from a template" (ADR-031) exists only when the course has one:
+   * the classroom names its course, the course lists its templates, and a
+   * course with none leaves this dialog exactly as it was (08, novice path).
+   */
+  const classroom = useQuery<ClassroomDetail>({
+    queryKey: classroomKey(classroomId),
+    queryFn: () => api(`/app/api/classrooms/${classroomId}`),
+  });
+  const templates = useCourseTemplates(classroom.data?.course.id ?? null).data ?? [];
+  const [templateId, setTemplateId] = useState("");
+  const template = templates.find((x) => x.id === templateId) ?? null;
+
   const create = useMutation({
     mutationFn: () =>
       api<EvaluationSummary>(`/app/api/classrooms/${classroomId}/evaluations`, {
@@ -78,16 +93,44 @@ function NewEvaluationModal({
       onCreated(row.id);
     },
   });
+  const instantiate = useInstantiate(onCreated);
   return (
     <FormDialog
       title={t("eval.new")}
       onClose={onClose}
-      onSubmit={() => create.mutate()}
+      onSubmit={() =>
+        template ? instantiate.mutate({ template, classroomId, title }) : create.mutate()
+      }
       submitLabel={t("eval.create")}
-      submitting={create.isPending}
+      submitting={create.isPending || instantiate.isPending}
       canSubmit={title.trim() !== ""}
-      error={<FormError error={create.error} title={t("eval.createFailed")} />}
+      error={
+        template ? (
+          <InstantiateError error={instantiate.error} />
+        ) : (
+          <FormError error={create.error} title={t("eval.createFailed")} />
+        )
+      }
     >
+      {templates.length > 0 ? (
+        <Select
+          label={t("templates.startFrom")}
+          value={templateId}
+          onChange={(e) => {
+            const next = templates.find((x) => x.id === e.target.value);
+            setTemplateId(e.target.value);
+            // The template's title is the obvious name; one typed already stays.
+            if (next && title.trim() === "") setTitle(next.title);
+          }}
+        >
+          <option value="">{t("templates.blank")}</option>
+          {templates.map((x) => (
+            <option key={x.id} value={x.id}>
+              {x.title}
+            </option>
+          ))}
+        </Select>
+      ) : null}
       <Field
         label={t("eval.titleLabel")}
         placeholder={t("eval.titlePlaceholder")}
@@ -97,21 +140,25 @@ function NewEvaluationModal({
         value={title}
         onChange={(e) => setTitle(e.target.value)}
       />
-      <div className="space-y-1.5">
-        <span className="text-[13px] font-medium">{t("eval.mode")}</span>
-        <div>
-          <Segmented
-            name="eval-mode"
-            value={mode}
-            onChange={setMode}
-            options={[
-              { value: "exam", label: t("eval.mode.exam") },
-              { value: "exercise", label: t("eval.mode.exercise") },
-            ]}
-          />
+      {template ? (
+        <p className="text-[13px] text-fg-muted">{t("templates.useHelp")}</p>
+      ) : (
+        <div className="space-y-1.5">
+          <span className="text-[13px] font-medium">{t("eval.mode")}</span>
+          <div>
+            <Segmented
+              name="eval-mode"
+              value={mode}
+              onChange={setMode}
+              options={[
+                { value: "exam", label: t("eval.mode.exam") },
+                { value: "exercise", label: t("eval.mode.exercise") },
+              ]}
+            />
+          </div>
+          <p className="text-[13px] text-fg-muted">{t(`eval.mode.desc.${mode}`)}</p>
         </div>
-        <p className="text-[13px] text-fg-muted">{t(`eval.mode.desc.${mode}`)}</p>
-      </div>
+      )}
     </FormDialog>
   );
 }

@@ -15,9 +15,9 @@ import {
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import type { Me, Pool, PoolSummary } from "@quiz/contracts";
+import type { Me, Pool, PoolInUse, PoolSummary } from "@quiz/contracts";
 
-import { api, useMe } from "../api";
+import { api, ApiError, useMe } from "../api";
 import { useConfirm } from "../confirm";
 import { useT, type TFunction } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
@@ -52,6 +52,25 @@ import { PoolIcon } from "./PoolIcon";
 import { PoolIconPicker } from "./PoolIconPicker";
 import { PoolShareSheet } from "./PoolShareSheet";
 import { allPoolsKey, poolsKey } from "../queryKeys";
+
+/** The body of a `409 pool_in_use`, or null for any other failure. */
+function poolInUse(error: unknown): PoolInUse | null {
+  if (!(error instanceof ApiError) || error.status !== 409) return null;
+  const body = error.body as PoolInUse | null;
+  return body?.error === "pool_in_use" ? body : null;
+}
+
+/** What still holds the pool, by title, with the ones the caller cannot open counted. */
+function poolInUseMessage(inUse: PoolInUse, t: TFunction): string {
+  const titles = inUse.uses.map((u) => u.title).join(", ");
+  const one = inUse.hidden === 1;
+  if (titles === "") return t(one ? "pools.inUse.hidden.one" : "pools.inUse.hidden", { n: inUse.hidden });
+  const names =
+    inUse.hidden > 0
+      ? t(one ? "pools.inUse.more.one" : "pools.inUse.more", { names: titles, n: inUse.hidden })
+      : titles;
+  return t("pools.inUse", { names });
+}
 
 /**
  * The teacher's question pools.
@@ -147,7 +166,13 @@ function usePoolActions(pool: PoolSummary, me: Me | null | undefined): PoolActio
   const remove = useMutation({
     mutationFn: () => api(`/app/api/pools/${pool.id}`, { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: poolsKey }),
-    onError: toastError("error.save"),
+    // ADR-031: a pool an evaluation or a template still pins is refused, and
+    // the refusal names them — translated here from its machine half.
+    onError: (error) => {
+      const inUse = poolInUse(error);
+      if (inUse) toast(poolInUseMessage(inUse, t), "error");
+      else toastError("error.save")(error);
+    },
   });
   const leave = useMutation({
     mutationFn: () =>

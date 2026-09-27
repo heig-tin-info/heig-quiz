@@ -341,9 +341,10 @@ export function guardTransition(
 
 /**
  * The roster seats of an evaluation, as a condition on `enrollments`: the
- * seats of its classroom. An anonymous poll belongs to no classroom
- * (ADR-014, addendum 2026-09-27) and has no roster, so for it the condition
- * matches no seat — never "every seat whose classroom is null".
+ * seats of its classroom. An anonymous poll (ADR-014, addendum 2026-09-27)
+ * and a template (ADR-031) belong to no classroom and have no roster, so for
+ * them the condition matches no seat — never "every seat whose classroom is
+ * null".
  */
 export function seatsOf(row: Pick<EvaluationRecord, "classroomId">): SQL {
   return row.classroomId === null ? sql`false` : eq(enrollments.classroomId, row.classroomId);
@@ -351,8 +352,8 @@ export function seatsOf(row: Pick<EvaluationRecord, "classroomId">): SQL {
 
 /**
  * The classroom of an evaluation that was reached THROUGH its classroom (a
- * join, a listing by classroom): it has one, and only an anonymous poll could
- * lack it — which no such path returns.
+ * join, a listing by classroom): it has one, and only an anonymous poll or a
+ * template could lack it — which no such path returns.
  */
 export function classroomIdOf(row: Pick<EvaluationRecord, "id" | "classroomId">): string {
   if (row.classroomId === null) throw new Error(`evaluation ${row.id} has no classroom`);
@@ -1471,11 +1472,31 @@ export async function updateVersions(
   return itemRows(db, row.id);
 }
 
-/** F-EVAL-14: same items, same settings, new draft, possibly another classroom. */
-export async function duplicateEvaluation(
+/**
+ * What a copy becomes, and so what travels with it:
+ *   - `duplicate` (F-EVAL-14): another draft in a classroom, run settings
+ *     (dates, access code, IP list) included;
+ *   - `template` (ADR-031): kept at the course level, without anything of a
+ *     run, at revision 1;
+ *   - `instance` (ADR-031): a classroom's draft made from a template, which
+ *     it records with its revision.
+ */
+export type CopyTarget =
+  | { duplicate: { classroomId: string } }
+  | { template: { courseId: string } }
+  | { instance: { classroomId: string; origin: { templateId: string; revision: number } } };
+
+/**
+ * THE copy of an evaluation into a new draft: its settings, grade scale,
+ * feedback and MCQ policies, duration, and its items — the SAME frozen
+ * versions, points, order and milestones. Duplicate, "Save as template" and
+ * "Instantiate" differ only in {@link CopyTarget}. One transaction: a copy
+ * is never half-made.
+ */
+export async function copyEvaluation(
   db: Db,
   row: EvaluationRecord,
-  input: { classroomId: string; title: string; createdBy: string },
+  target: { as: CopyTarget; title: string; createdBy: string },
 ): Promise<EvaluationRecord> {
   const id = randomUUID();
   const items = await db
@@ -1483,23 +1504,36 @@ export async function duplicateEvaluation(
     .from(evaluationItems)
     .where(eq(evaluationItems.evaluationId, row.id))
     .orderBy(asc(evaluationItems.position));
+  const as = target.as;
+  const home =
+    "duplicate" in as
+      ? {
+          classroomId: as.duplicate.classroomId,
+          opensAt: row.opensAt,
+          closesAt: row.closesAt,
+          accessCode: row.accessCode,
+          ipAllowlist: row.ipAllowlist,
+        }
+      : "template" in as
+        ? { courseId: as.template.courseId, revision: 1 }
+        : {
+            classroomId: as.instance.classroomId,
+            originTemplateId: as.instance.origin.templateId,
+            originRevision: as.instance.origin.revision,
+          };
   await db.transaction(async (tx) => {
     await tx.insert(evaluations).values({
       id,
-      classroomId: input.classroomId,
-      title: input.title,
+      ...home,
+      title: target.title,
       mode: row.mode,
       state: "draft",
       settings: row.settings,
       gradingScale: row.gradingScale,
       feedbackPolicy: row.feedbackPolicy,
       mcqPolicy: row.mcqPolicy,
-      opensAt: row.opensAt,
-      closesAt: row.closesAt,
       durationS: row.durationS,
-      accessCode: row.accessCode,
-      ipAllowlist: row.ipAllowlist,
-      createdBy: input.createdBy,
+      createdBy: target.createdBy,
     });
     if (items.length > 0) {
       await tx.insert(evaluationItems).values(
@@ -1507,7 +1541,7 @@ export async function duplicateEvaluation(
           id: randomUUID(),
           evaluationId: id,
           position: item.position,
-          // The copy points at the SAME frozen versions: duplicating an
+          // The copy points at the SAME frozen versions: copying an
           // evaluation must not silently upgrade its questions.
           questionVersionId: item.questionVersionId,
           points: item.points,

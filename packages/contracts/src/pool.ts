@@ -537,6 +537,27 @@ export const PoolDetail = z.object({
 });
 export type PoolDetail = z.infer<typeof PoolDetail>;
 
+/**
+ * The body of `409 pool_in_use` on `DELETE /pools/:id` (ADR-031, F-POOL-09):
+ * a pool whose question versions an evaluation or a template still pins is
+ * not deleted. The evaluations and templates the caller reaches are named;
+ * the others — another course's — are only counted, so a refusal never
+ * leaks what a caller could not open.
+ */
+export const PoolInUse = z.object({
+  error: z.literal("pool_in_use"),
+  uses: z.array(
+    z.object({
+      id: z.uuid(),
+      title: z.string(),
+      /** A course's template rather than a classroom's evaluation. */
+      template: z.boolean(),
+    }),
+  ),
+  hidden: z.number().int(),
+});
+export type PoolInUse = z.infer<typeof PoolInUse>;
+
 // --- Tags ----------------------------------------------------------------
 
 /**

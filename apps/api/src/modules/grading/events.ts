@@ -12,9 +12,9 @@ import { eq } from "drizzle-orm";
 import type { GradingProgressEvent } from "@quiz/contracts";
 
 import type { Db } from "../../db/client.js";
-import { classrooms, courseStaff } from "../../db/schema.js";
+import { classrooms, courseStaff, isOwnedPoll } from "../../db/schema.js";
 import * as bus from "../realtime/bus.js";
-import type { EvaluationRecord } from "../evaluation/service.js";
+import { classroomIdOf, type EvaluationRecord } from "../evaluation/service.js";
 
 /**
  * The teaching staff of the course an evaluation belongs to. They hold
@@ -24,14 +24,15 @@ import type { EvaluationRecord } from "../evaluation/service.js";
 export async function staffOf(db: Db, evaluation: EvaluationRecord): Promise<string[]> {
   // An anonymous poll has no course and no staff: its owner is the one
   // teacher (ADR-014, addendum 2026-09-27).
-  if (evaluation.classroomId === null) {
+  if (isOwnedPoll(evaluation)) {
     return evaluation.createdBy === null ? [] : [evaluation.createdBy];
   }
+  // A template (ADR-031) is never graded: `classroomIdOf` refuses it.
   const rows = await db
     .select({ userId: courseStaff.userId })
     .from(courseStaff)
     .innerJoin(classrooms, eq(classrooms.courseId, courseStaff.courseId))
-    .where(eq(classrooms.id, evaluation.classroomId));
+    .where(eq(classrooms.id, classroomIdOf(evaluation)));
   return [...new Set(rows.map((r) => r.userId))];
 }
 

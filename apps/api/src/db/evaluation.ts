@@ -12,10 +12,17 @@
  *     automatic transition, and there are never many of them;
  *   - `evaluations_running_poll_code_uq` makes a poll's session code unique
  *     among the running polls, so the code draw needs no check-then-insert;
- *   - `evaluations_home_ck` says where an evaluation lives: in a classroom,
- *     or — an anonymous poll, and nothing else — with its owner.
+ *   - `evaluations_home_ck` says where an evaluation lives, in exactly one
+ *     place: a classroom; a course, for an evaluation template (ADR-031); or
+ *     — an anonymous poll, and nothing else — with its owner;
+ *   - `evaluations_template_ck` keeps everything of a RUN off a template:
+ *     no date, no access code, no IP, never out of `draft`, never a poll.
+ *
+ * "An anonymous poll" is ONE predicate, {@link ownedPollSql} (and its row
+ * twin {@link isOwnedPoll}): since templates, `classroom_id is null` alone
+ * no longer names it, and every site that meant "owned poll" goes through it.
  */
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import {
   boolean,
   check,
@@ -24,6 +31,7 @@ import {
   jsonb,
   numeric,
   pgTable,
+  type AnyPgColumn,
   text,
   timestamp,
   uniqueIndex,
@@ -31,7 +39,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { users } from "./auth.js";
-import { classrooms } from "./org.js";
+import { classrooms, courses } from "./org.js";
 import { questionVersions } from "./pool.js";
 
 export const evaluations = pgTable(
@@ -44,6 +52,22 @@ export const evaluations = pgTable(
      * and `created_by` is then its owner — `evaluations_home_ck` below.
      */
     classroomId: uuid("classroom_id").references(() => classrooms.id, { onDelete: "cascade" }),
+    /**
+     * Set on an evaluation TEMPLATE and on nothing else (ADR-031): its
+     * presence is what makes the row a template, kept at the course level
+     * and never run. `evaluations_home_ck` and `evaluations_template_ck`.
+     */
+    courseId: uuid("course_id").references(() => courses.id, { onDelete: "cascade" }),
+    /** A template's revision, 1 at creation; null on every other row. */
+    revision: integer("revision"),
+    /**
+     * The template an instance was made from, and at which revision. Deleting
+     * the template nulls the link and leaves the instance running.
+     */
+    originTemplateId: uuid("origin_template_id").references((): AnyPgColumn => evaluations.id, {
+      onDelete: "set null",
+    }),
+    originRevision: integer("origin_revision"),
     title: text("title").notNull(),
     /** `poll` is stored but every route refuses it in the MVP (decision D7). */
     mode: text("mode", { enum: ["exam", "exercise", "poll"] }).notNull(),
@@ -113,18 +137,47 @@ export const evaluations = pgTable(
     uniqueIndex("evaluations_running_poll_code_uq")
       .on(t.accessCode)
       .where(sql`${t.mode} = 'poll' and ${t.state} = 'running'`),
-    // Every evaluation has a home: a classroom, or — for an anonymous poll
-    // only — an owner. An exam or an exercise without a classroom, or a
-    // classroom-less poll nobody owns, cannot be written.
+    // Every evaluation has exactly one home: a classroom; a course, for a
+    // template (ADR-031); or — for an anonymous poll only — an owner. An exam
+    // or an exercise with neither, a row with both, or a classroom-less poll
+    // nobody owns, cannot be written.
     check(
       "evaluations_home_ck",
-      sql`${t.classroomId} is not null or (${t.mode} = 'poll' and ${t.createdBy} is not null)`,
+      sql`(${t.classroomId} is not null and ${t.courseId} is null) or (${t.classroomId} is null and ${t.courseId} is not null) or (${t.classroomId} is null and ${t.courseId} is null and ${t.mode} = 'poll' and ${t.createdBy} is not null)`,
+    ),
+    // A template carries nothing of a run, whatever path writes it.
+    check(
+      "evaluations_template_ck",
+      sql`${t.courseId} is null or (${t.opensAt} is null and ${t.closesAt} is null and ${t.accessCode} is null and cardinality(${t.ipAllowlist}) = 0 and ${t.state} = 'draft' and ${t.mode} <> 'poll' and ${t.revision} is not null and ${t.originTemplateId} is null)`,
     ),
     index("evaluations_owned_poll_idx")
       .on(t.createdBy, t.createdAt)
-      .where(sql`${t.classroomId} is null`),
+      // The one "owned poll" predicate, so the index and every query agree.
+      .where(ownedPollSql()),
+    index("evaluations_template_idx")
+      .on(t.courseId, t.createdAt)
+      .where(sql`${t.courseId} is not null`),
   ],
 );
+
+/**
+ * THE "anonymous poll" predicate (ADR-014 addendum 2026-09-27, ADR-031), on
+ * a query that has `evaluations` in scope: no classroom, no course, a poll.
+ * Qualified by hand, so it survives being dropped into a correlated
+ * subquery (see `qualified` in `modules/guards.ts`).
+ */
+export function ownedPollSql(): SQL {
+  return sql`("evaluations"."classroom_id" is null and "evaluations"."course_id" is null and "evaluations"."mode" = 'poll')`;
+}
+
+/** {@link ownedPollSql} on a loaded row. */
+export function isOwnedPoll(row: {
+  classroomId: string | null;
+  courseId: string | null;
+  mode: string;
+}): boolean {
+  return row.classroomId === null && row.courseId === null && row.mode === "poll";
+}
 
 /**
  * One question of an evaluation, frozen on a published version.

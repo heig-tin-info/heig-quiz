@@ -173,4 +173,71 @@ describe("EvaluationList", () => {
     renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} />);
     expect(await screen.findByText(/evaluation not found/i)).toBeInTheDocument();
   });
+
+  // ADR-031: "Start from" exists only when the course has a template.
+  describe("start from a template", () => {
+    const COURSE = id("course", 1);
+    const TEMPLATE = id("template", 1);
+    const classroom = {
+      [`GET /app/api/classrooms/${CLASSROOM}`]: ok({
+        id: CLASSROOM,
+        name: "A",
+        period: "",
+        archivedAt: null,
+        course: { id: COURSE, name: "Programmation C", code: "PRG1" },
+        roster: [],
+      }),
+    };
+    const template = {
+      id: TEMPLATE,
+      courseId: COURSE,
+      title: "Final exam",
+      mode: "exam",
+      revision: 2,
+      itemCount: 3,
+      totalPoints: 6,
+      createdAt: liveAt(-3600_000),
+      updatedAt: liveAt(-3600_000),
+    };
+
+    it("leaves the dialog unchanged when the course has none", async () => {
+      const user = userEvent.setup();
+      mockFetch({
+        ...list([summary()]),
+        ...classroom,
+        [`GET /app/api/courses/${COURSE}/templates`]: ok([]),
+      });
+      renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} />);
+      await user.click(await screen.findByRole("button", { name: /new evaluation/i }));
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).queryByLabelText("Start from")).not.toBeInTheDocument();
+      expect(within(dialog).getByText("Mode")).toBeInTheDocument();
+    });
+
+    it("instantiates the chosen template and opens the new evaluation", async () => {
+      const user = userEvent.setup();
+      const navigate = vi.fn();
+      const created = id("evaluation", 9);
+      const { calls } = mockFetch({
+        ...list([summary()]),
+        ...classroom,
+        [`GET /app/api/courses/${COURSE}/templates`]: ok([template]),
+        [`POST /app/api/templates/${TEMPLATE}/instances`]: {
+          status: 201,
+          body: { evaluation: { id: created }, deprecatedItems: [] },
+        },
+      });
+      renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={navigate} />);
+      await user.click(await screen.findByRole("button", { name: /new evaluation/i }));
+      const select = await screen.findByLabelText("Start from");
+      await user.selectOptions(select, TEMPLATE);
+      const dialog = screen.getByRole("dialog");
+      expect(within(dialog).getByRole("textbox")).toHaveValue("Final exam");
+      expect(within(dialog).queryByText("Mode")).not.toBeInTheDocument();
+      await user.click(screen.getByRole("button", { name: "Create evaluation" }));
+      await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "evaluation", id: created }));
+      const post = calls.find((c) => c.method === "POST");
+      expect(post?.body).toEqual({ classroomId: CLASSROOM, title: "Final exam" });
+    });
+  });
 });
