@@ -87,6 +87,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["attemptEntryKey", keys.attemptEntryKey("e1", null), ["attempt", "enter", "e1", null]],
     ["attemptEntryKey (code)", keys.attemptEntryKey("e1", "X7"), ["attempt", "enter", "e1", "X7"]],
     ["pollQuestionsKey", keys.pollQuestionsKey, ["poll-questions"]],
+    ["pollPoolQuestionsKey", keys.pollPoolQuestionsKey("?limit=25"), ["poll-pool-questions", "?limit=25"]],
     ["pollKey", keys.pollKey("e1"), ["poll", "e1"]],
     ["publicPollKey", keys.publicPollKey("ABC123"), ["poll", "public", "ABC123"]],
   ];
