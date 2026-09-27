@@ -53,9 +53,12 @@ function NavItem({
   trailing,
   expanded,
   coach,
+  description,
 }: {
   icon?: IconType;
   label: ReactNode;
+  /** What the row's `Tip` shows, for a reader that cannot see the bubble. */
+  description?: string;
   active?: boolean;
   onClick: () => void;
   trailing?: ReactNode;
@@ -71,6 +74,7 @@ function NavItem({
       onClick={onClick}
       aria-current={active ? "page" : undefined}
       aria-expanded={expanded}
+      aria-description={description}
       className={cx(
         "flex w-full items-center gap-2.5 rounded-field px-2.5 py-1.5 text-left text-sm transition-colors",
         active ? "bg-accent-soft font-semibold text-accent" : "text-fg-muted hover:bg-surface-2 hover:text-fg",
@@ -84,43 +88,43 @@ function NavItem({
 }
 
 /**
- * A classroom in the sidebar: its name, and its course code as the second
- * name beside it. The name is the one label of the frame that is routinely
- * too long for 240 px — "Prog-C-2026-2027-test" is a classroom a teacher
- * really creates — so the row carries a `Tip` with the whole of it, and only
- * when the ellipsis is actually there (`useTruncated`). The `Tip` wraps the
- * ROW, not the text: React's `onFocus` rides `focusin`, which bubbles, so a
- * teacher who reaches the row with the Tab key reads the name the same way a
- * pointer does.
+ * A classroom in the sidebar: its name, and nothing else (#153). At 240 px a
+ * second label beside it truncated the name on almost every row, and the
+ * course code it showed did not even tell two classrooms of the same course
+ * apart. The course lives in the row's `Tip` instead — its code and its name,
+ * one hover or one Tab away — together with the whole classroom name when the
+ * ellipsis actually cut it (`useTruncated`): "Prog-C-2026-2027-test" is a
+ * classroom a teacher really creates. The `Tip` wraps the ROW, not the text:
+ * React's `onFocus` rides `focusin`, which bubbles, so a teacher who reaches
+ * the row with the Tab key reads it the same way a pointer does. The bubble
+ * is `aria-hidden`, so the course also rides the row's `aria-description`.
  */
 function ClassroomNavItem({
   name,
   courseCode,
+  courseName,
   active,
   onClick,
 }: {
   name: string;
   courseCode: string;
+  courseName: string;
   active: boolean;
   onClick: () => void;
 }) {
+  const t = useT();
   const [nameRef, truncated] = useTruncated<HTMLSpanElement>();
+  const course = t("nav.classroomCourse", { code: courseCode, name: courseName });
   return (
-    <Tip label={truncated ? name : null} className="block">
+    <Tip label={truncated ? t("nav.classroomTip", { name, course }) : course} className="block">
       <NavItem
         icon={School}
         label={
-          <span className="flex min-w-0 items-baseline gap-1.5">
-            <span ref={nameRef} className="truncate">
-              {name}
-            </span>
-            {/* `fg-muted`: a course code is the classroom's other name, not
-                decoration, and this row sits on `accent-soft` when it is the
-                one being read — the one background `fg-faint` still falls
-                short of 4.5:1 on (W1). */}
-            <span className="shrink-0 text-[11px] text-fg-muted">{courseCode}</span>
+          <span ref={nameRef} className="block truncate">
+            {name}
           </span>
         }
+        description={course}
         active={active}
         onClick={onClick}
       />
@@ -186,11 +190,9 @@ function Nav({
   // into a scrolling wall, and the teacher who wants them all says so once.
   const [showAll, setShowAll] = useState(false);
   // The sidebar lists CLASSROOMS, flattened out of the courses: that is what
-  // a teacher navigates to. The course each one belongs to is the small line
-  // under its name, not a second level of folding.
-  const allRooms = (courses.data ?? []).flatMap((c) =>
-    c.classrooms.map((r) => ({ ...r, courseCode: c.code })),
-  );
+  // a teacher navigates to. The course each one belongs to is in the row's
+  // tip, not a second label on it nor a second level of folding.
+  const allRooms = (courses.data ?? []).flatMap((c) => c.classrooms);
   const shownRooms = showAll
     ? allRooms
     : cappedClassrooms(allRooms, currentRoom, SIDEBAR_CLASSROOM_CAP);
@@ -258,7 +260,9 @@ function Nav({
         ) : null}
       </div>
       {teacherUi && allRooms.length ? (
-        <div>
+        // A hairline above, like the one over the shortcut strip: this is the
+        // "right now" list, apart from the navigation, and it looks apart.
+        <div className="border-t border-line pt-4">
           <p className="mb-1.5 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-fg-faint">
             {t("classrooms.title")}
           </p>
@@ -268,6 +272,7 @@ function Nav({
                 key={r.id}
                 name={r.name}
                 courseCode={r.courseCode}
+                courseName={r.courseName}
                 active={currentRoom === r.id}
                 onClick={() => go({ view: "classroom", id: r.id })}
               />

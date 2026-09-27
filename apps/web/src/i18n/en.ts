@@ -62,6 +62,8 @@ export const en = {
 
   "nav.courses": "Courses",
   "nav.admin": "Administration",
+  "nav.classroomCourse": "{code} · {name}",
+  "nav.classroomTip": "{name} — {course}",
 
   "courses.title": "Courses",
   "courses.subtitle": "A course holds its staff, its classrooms and its question pool.",

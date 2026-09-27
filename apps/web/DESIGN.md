@@ -230,6 +230,14 @@ armed only when the label is REALLY cut (`useTruncated`, which measures
 `scrollWidth` against `clientWidth`): a bubble repeating a label the eye
 already reads is noise on every row of the list.
 
+A sidebar row carries ONE label (#153). A classroom row shows its name and
+nothing beside it: a second label (the course code) cut the name on almost
+every row at 240 px and did not even tell two classrooms of one course apart.
+The course (code · name) is what that row's `Tip` always says, preceded by the
+whole classroom name when the ellipsis cut it. The Classrooms section sits
+under a `border-t border-line` hairline, like the shortcut strip: it is apart
+from the navigation, and it looks apart.
+
 Toasts sit in one `aria-live="polite"` region, each one a `role="status"`
 with a keyboard-reachable dismiss button.
 

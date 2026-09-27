@@ -150,6 +150,17 @@ export const rooms: Room[] = [
     archivedAt: null,
     roster: makeStudents(12, 0.6, "r3"),
   },
+  // A name a teacher really gives a classroom, and one that outgrows the
+  // 240 px sidebar: the row it lands on has to stay readable (#153).
+  {
+    id: "r4",
+    name: "Prog-C-2026-2027-test",
+    period: "2026-A",
+    courseId: "c1",
+    createdAt: iso(-5 * D),
+    archivedAt: null,
+    roster: makeStudents(3, 1, "r4"),
+  },
 ];
 
 export const teachers: AdminTeacher[] = [
