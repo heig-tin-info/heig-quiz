@@ -2,8 +2,9 @@ import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ViewModeToggle } from "./Header";
+import { SOURCES_URL, UserMenu, ViewModeToggle } from "./Header";
 import { enterStudentView, leaveStudentView, useStudentView } from "./studentView";
+import { makeMe } from "./test/fixtures";
 import { renderWithProviders } from "./test/render";
 
 /*
@@ -66,5 +67,21 @@ describe("ViewModeToggle", () => {
     renderWithProviders(<ViewModeToggle studentView compact onToggle={vi.fn()} />);
     const button = screen.getByRole("button", { name: "Back to teacher view" });
     expect(button).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
+describe("UserMenu", () => {
+  it("names the deployed commit: short sha and date, the full sha on hover (#179)", async () => {
+    // A test run happens in a checkout, so vite.config.ts found the commit.
+    const commit = __COMMIT__;
+    expect(commit).not.toBeNull();
+    if (!commit) return;
+    renderWithProviders(<UserMenu me={makeMe()} onOpenSettings={vi.fn()} />);
+    await userEvent.click(screen.getByRole("button", { name: "User menu" }));
+    const item = within(screen.getByRole("menu")).getByRole("menuitem", {
+      name: new RegExp(`^Version ${commit.sha.slice(0, 7)} · \\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}$`),
+    });
+    expect(item).toHaveAttribute("title", commit.sha);
+    expect(item).toHaveAttribute("href", `${SOURCES_URL}/commit/${commit.sha}`);
   });
 });

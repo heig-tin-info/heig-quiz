@@ -1,5 +1,6 @@
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import type { Plugin } from "vite";
@@ -35,8 +36,28 @@ function lucideAliases(): Plugin {
   };
 }
 
+/**
+ * The commit this build is made of (#179), for the user menu. CI passes it to
+ * the image build (`COMMIT_SHA`, `COMMIT_DATE`: the Docker context has no
+ * `.git`); a local build asks git; with neither the entry is left out.
+ */
+function commit(): { sha: string; date: string } | null {
+  const { COMMIT_SHA: sha, COMMIT_DATE: date } = process.env;
+  if (sha && date) return { sha, date };
+  try {
+    const [head, when] = execFileSync("git", ["log", "-1", "--format=%H%n%cI"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).split("\n");
+    return head && when ? { sha: head, date: when } : null;
+  } catch {
+    return null;
+  }
+}
+
 export default defineConfig({
   plugins: [react(), tailwindcss(), lucideAliases()],
+  define: { __COMMIT__: JSON.stringify(commit()) },
   server: {
     // Listen on every interface: under WSL2 the browser runs on the Windows
     // side and reaches the dev server through the VM's address, not localhost.

@@ -26,6 +26,8 @@ COPY apps/web ./apps/web
 # Small production VM: let Node spill into swap instead of aborting (exit 134),
 # and keep the workspace build sequential.
 ENV NODE_OPTIONS=--max-old-space-size=1536
+# The deployed commit, shown in the user menu (#179). The context has no .git.
+ARG COMMIT_SHA COMMIT_DATE
 RUN pnpm --workspace-concurrency=1 build
 # Self-contained production tree for the API (pruned node_modules + workspaces)
 RUN pnpm --filter @quiz/api deploy --prod --legacy /out \

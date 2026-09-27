@@ -23,6 +23,7 @@ export const en = {
   "menu.user": "User menu",
   "menu.userUnread": "User menu ({n} unread notifications)",
   "menu.studentView": "Switch to student view",
+  "menu.version": "Version {sha} · {date}",
   "menu.teacherView": "Back to teacher view",
   "menu.lightTheme": "Light theme",
   "menu.darkTheme": "Dark theme",

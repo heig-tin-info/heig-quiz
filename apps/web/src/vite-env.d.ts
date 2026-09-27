@@ -6,3 +6,6 @@ declare module "virtual:lucide-aliases" {
   const aliases: Readonly<Partial<Record<IconName, IconName>>>;
   export default aliases;
 }
+
+/** The commit this build is made of, or null when unknown (vite.config.ts). */
+declare const __COMMIT__: { sha: string; date: string } | null;
