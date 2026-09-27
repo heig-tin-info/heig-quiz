@@ -9,16 +9,21 @@ A poll runs a multiple-choice question or a short-answer question, and nothing e
 Click **Poll** in the sidebar, or open the command palette with `Ctrl+K` and choose **Start a poll**. The launcher opens on a page of its own, so you can reach it from wherever you happen to be.
 
 <figure markdown="span">
-  ![The poll launcher, on its Pick a question tab, with no question written yet](../assets/screenshots/poll-launcher-light.png#only-light)
-  ![The poll launcher, on its Pick a question tab, with no question written yet](../assets/screenshots/poll-launcher-dark.png#only-dark)
-  <figcaption>The launcher: pick a question you already wrote, or ask a new one, choose the classroom, and start.</figcaption>
+  ![The poll launcher, on its Recent polls tab, each question with the outcome of its last runs](../assets/screenshots/poll-launcher-light.png#only-light)
+  ![The poll launcher, on its Recent polls tab, each question with the outcome of its last runs](../assets/screenshots/poll-launcher-dark.png#only-dark)
+  <figcaption>The launcher: run again a question you already polled, or ask a new one, choose the classroom, and start.</figcaption>
 </figure>
 
 The launcher has two tabs, because there are exactly two ways to have a question.
 
-**Pick a question** lists the multiple-choice and short-answer questions of your personal **Polls** pool, the most recently used first. Each row shows the internal name, the first line of the statement and how many times it was polled. The search box filters by name or statement. Select a row, and the primary action becomes **Start the poll**. Until you have kept a question (see below), the tab says so and points to the other one.
+**Recent polls** lists the questions of the polls you launched, one row per question, the most recently polled first, including the questions you wrote in the launcher and never kept. Each row shows the internal name, the first line of the statement, how many times it was polled, and, on the right, how its last five runs went:
 
-**Ask a new question** holds the question type's own editor, without anything that only decides a mark. Write the statement and the choices (or the accepted answers), and **Start the poll** runs it at once. Marking a correct answer is optional: without one, the poll simply collects opinions. Nothing is saved at this point; the question lives with its poll until you keep it. See `question-types.md` for what a multiple-choice or a short-answer question can hold.
+- a small ring for a question with a correct answer: green for the share who answered right, amber for those who answered wrong, and grey for those on the roster who did not answer at all, with the right share printed in the middle. The grey part only appears when the runs asked who answers: an anonymous poll has no roster, so it shows right and wrong only. Hover or focus the ring for the exact percentages;
+- "*n* answers" instead of a ring for an opinion poll, which has no correct answer.
+
+The questions of your **Polls** pool that you have never polled come after them. The search box filters by name or statement. Select a row, and the primary action becomes **Start the poll**. The launcher opens on this tab when it has something to show, and on **Ask a new question** otherwise.
+
+**Ask a new question** holds the question type's own editor, without anything that only decides a mark. Write the statement and the choices (or the accepted answers), and **Start the poll** runs it at once. Marking a correct answer is optional: without one, the poll simply collects opinions. Nothing is saved at this point: the question lives with its poll, and in your **Recent polls** to run again, until you keep it. See `question-types.md` for what a multiple-choice or a short-answer question can hold.
 
 Two settings sit above the list on the first tab:
 

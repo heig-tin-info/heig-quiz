@@ -1,7 +1,9 @@
 /** Section 6 of the mock — see `index.ts` for the layout. */
 import type {
   PollPublicView,
+  PollQuestionPick,
 } from "@quiz/contracts";
+import { pollOutcome, type PollRunCounts } from "@quiz/domain";
 import {
   D,
   MockError,
@@ -631,42 +633,168 @@ setInterval(() => {
 // --- The teacher's poll endpoints ---
 
 /**
- * The questions a poll may run: the published `mcq` and `short` ones, most
- * recently USED first and then most recently edited — which is why a
- * question a teacher just wrote and has never polled is at the top of the
- * launcher when they come back from the editor.
+ * Finished runs from before this page load, so "Recent polls" has a history
+ * to draw its donuts from (issue #161). One row per past run, newest first
+ * per question; `roster: null` is an anonymous run.
  */
-on("GET", "/app/api/polls/questions", () => {
-  // The personal pool only, like the API — and none at all before the first
-  // "Keep this question": an empty list, never a 404.
+interface MockPastRun {
+  question: MockQuestion;
+  daysAgo: number;
+  answered: number;
+  correct: number;
+  roster: number | null;
+}
+
+/** Two questions written in the launcher and never kept: in no pool, and still listed. */
+const unsavedPast: MockQuestion[] = [
+  makeQuestion({
+    poolId: "",
+    type: "mcq",
+    internalName: "Quelle boucle s'exécute toujours au moins une fois ?",
+    categoryId: null,
+    difficulty: 2,
+    shuffleable: true,
+    randomizable: false,
+    tags: [],
+    config: {
+      prompt: "Quelle boucle s'exécute toujours au moins une fois ?",
+      mode: "single",
+      choices: [
+        { text: "`for`", correct: false },
+        { text: "`while`", correct: false },
+        { text: "`do … while`", correct: true },
+      ],
+    },
+    published: [{ number: 1, changeNote: "", daysAgo: 6 }],
+  }),
+  makeQuestion({
+    poolId: "",
+    type: "short",
+    internalName: "Un mot pour résumer la séance ?",
+    categoryId: null,
+    difficulty: 1,
+    shuffleable: true,
+    randomizable: false,
+    tags: [],
+    config: { prompt: "Un mot pour résumer la séance ?", matchers: [] },
+    published: [{ number: 1, changeNote: "", daysAgo: 1 }],
+  }),
+];
+
+const pastRuns: MockPastRun[] = (() => {
+  if (flags.empty) return [];
+  const kept = questions.filter((q) => q.poolId === "p0");
+  const [sizeofQ, bitsQ, paceQ] = kept;
+  const [loopQ, wordQ] = unsavedPast;
+  const roster = rooms.find((r) => r.id === EVAL_ROOM)?.roster.filter((s) => !s.staff).length ?? 24;
+  const runs: MockPastRun[] = [];
+  // A classroom poll asked who answers: correct / incorrect / no answer.
+  if (sizeofQ) {
+    runs.push(
+      { question: sizeofQ, daysAgo: 3, answered: 19, correct: 14, roster },
+      { question: sizeofQ, daysAgo: 10, answered: 21, correct: 12, roster },
+      { question: sizeofQ, daysAgo: 17, answered: 16, correct: 7, roster },
+    );
+  }
+  // Anonymous: correct / incorrect only, nobody knows who stayed silent.
+  if (loopQ) {
+    runs.push(
+      { question: loopQ, daysAgo: 1, answered: 47, correct: 29, roster: null },
+      { question: loopQ, daysAgo: 6, answered: 38, correct: 17, roster: null },
+    );
+  }
+  if (bitsQ) runs.push({ question: bitsQ, daysAgo: 9, answered: 22, correct: 20, roster });
+  // Opinion polls: no key, "n answers".
+  if (paceQ) {
+    runs.push(
+      { question: paceQ, daysAgo: 2, answered: 41, correct: 0, roster: null },
+      { question: paceQ, daysAgo: 16, answered: 35, correct: 0, roster: null },
+    );
+  }
+  if (wordQ) runs.push({ question: wordQ, daysAgo: 0.1, answered: 12, correct: 0, roster: null });
+  return runs;
+})();
+
+const hasSolution = (q: MockQuestion): boolean => {
+  const key = solutionOf(q) as { correct?: unknown[]; expected?: unknown[] };
+  return (key.correct ?? key.expected ?? []).length > 0;
+};
+
+/**
+ * "Recent polls" (issue #161): the questions of the polls the teacher
+ * launched — the past history above plus whatever this session started —
+ * one row per question, the most recent run first, each with the outcome
+ * the API computes the same way (`pollOutcome` of `@quiz/domain`). Then the
+ * never-run questions of the personal pool.
+ */
+on("GET", "/app/api/polls/questions", (): PollQuestionPick[] => {
+  type Run = { question: MockQuestion; at: string; running: boolean; counts: PollRunCounts | null };
+  const runs: Run[] = pastRuns.map((r) => ({
+    question: r.question,
+    at: iso(-r.daysAgo * D),
+    running: false,
+    counts: {
+      keyed: hasSolution(r.question),
+      answered: r.answered,
+      correct: r.correct,
+      roster: r.roster,
+    },
+  }));
+  for (const tp of teacherPolls) {
+    const question = tp.unsaved ?? questions.find((q) => q.id === tp.questionId);
+    const poll = pollOfTeacher(tp);
+    if (!question || !poll) continue;
+    const key = (solutionOf(question) as { correct?: number[] }).correct ?? [];
+    const running = poll.state !== "ended";
+    runs.push({
+      question,
+      at: tp.createdAt,
+      running,
+      counts: running
+        ? null
+        : {
+            keyed: hasSolution(question),
+            answered: tp.answered,
+            correct: key.reduce((sum, i) => sum + (tp.counts[i] ?? 0), 0),
+            roster: poll.anonymous
+              ? null
+              : (rooms.find((r) => r.id === tp.classroomId)?.roster.filter((s) => !s.staff).length ?? 0),
+          },
+    });
+  }
+  runs.sort((a, b) => b.at.localeCompare(a.at));
+
+  const rows = new Map<string, { question: MockQuestion; runs: Run[] }>();
+  for (const run of runs) {
+    const entry = rows.get(run.question.id) ?? { question: run.question, runs: [] };
+    entry.runs.push(run);
+    rows.set(run.question.id, entry);
+  }
   const personal = pools.find((p) => p.isPersonal && p.ownerId === "u-me");
-  const pollable = questions.filter(
-    (q) =>
-      personal !== undefined &&
-      q.poolId === personal.id &&
-      q.deletedAt === null &&
-      q.versions.length > 0 &&
-      (q.type === "mcq" || q.type === "short"),
-  );
-  return pollable
-    .map((q, i) => {
-      const config = frozenConfig(q);
-      // A deterministic history: two have been polled, the rest never.
-      const used = i === 0 ? 4 : i === 1 ? 1 : 0;
-      return {
-        id: q.id,
-        type: q.type as "mcq" | "short",
-        internalName: q.internalName,
-        prompt: String(config.prompt ?? ""),
-        lastUsedAt: used === 0 ? null : iso(i === 0 ? -3 * D : -12 * D),
-        useCount: used,
-        updatedAt: q.updatedAt,
-      };
-    })
-    .sort((a, b) =>
-      (b.lastUsedAt ?? b.updatedAt).localeCompare(a.lastUsedAt ?? a.updatedAt),
+  for (const q of questions) {
+    if (personal !== undefined && q.poolId === personal.id && !rows.has(q.id)) {
+      rows.set(q.id, { question: q, runs: [] });
+    }
+  }
+  return [...rows.values()]
+    .filter(
+      ({ question: q }) =>
+        q.deletedAt === null && q.versions.length > 0 && (q.type === "mcq" || q.type === "short"),
     )
-    .map(({ updatedAt: _updatedAt, ...pick }) => pick);
+    .map(({ question: q, runs: its }) => ({
+      id: q.id,
+      type: q.type as "mcq" | "short",
+      internalName: q.internalName,
+      prompt: String(frozenConfig(q).prompt ?? ""),
+      lastUsedAt: its[0]?.at ?? null,
+      useCount: its.length,
+      saved: q.poolId !== "",
+      outcome: pollOutcome(its.flatMap((r) => (r.counts ? [r.counts] : []))),
+    }))
+    .sort((a, b) => {
+      if ((a.lastUsedAt === null) !== (b.lastUsedAt === null)) return a.lastUsedAt === null ? 1 : -1;
+      return (b.lastUsedAt ?? "").localeCompare(a.lastUsedAt ?? "");
+    });
 });
 
 /**
@@ -696,7 +824,14 @@ on("POST", "/app/api/polls/questions", (_m, body) => {
 on("GET", "/app/api/polls", () => teacherPolls.map(pollSummary));
 
 /** Creates the evaluation AND starts it: there is no draft state for a poll. */
-on("POST", "/app/api/polls", (_m, body) => startPoll(questionOr404(String(body.questionId)), body));
+on("POST", "/app/api/polls", (_m, body) => {
+  // A question never kept is in no pool: it is found through the polls that
+  // ran it, as the API finds it (ADR-014, addendum 2026-09-27).
+  const id = String(body.questionId);
+  const unsaved =
+    unsavedPast.find((q) => q.id === id) ?? teacherPolls.find((tp) => tp.unsaved?.id === id)?.unsaved;
+  return unsaved ? startPoll(unsaved, body, { unsaved: true }) : startPoll(questionOr404(id), body);
+});
 
 /**
  * A poll on a question written in the launcher (`PollInlineCreate`): checked

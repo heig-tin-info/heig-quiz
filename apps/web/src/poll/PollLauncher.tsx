@@ -15,6 +15,7 @@ import { api, ApiError } from "../api";
 import { fuzzyFilter } from "../fuzzy";
 import { useT } from "../i18n";
 import { TypeGlyph } from "../pool/QuestionTable";
+import { OutcomeBadge, OutcomeLegend } from "./OutcomeDonut";
 import { QuestionTypePicker } from "../pool/QuestionTypePicker";
 import { toConfigIssues } from "../question/issues";
 import { QuestionEditorHost } from "../questionTypes";
@@ -51,7 +52,9 @@ import { coursesKey, pollQuestionsKey } from "../queryKeys";
  * backdrop.
  *
  * Two tabs, because there are exactly two ways to have a question: one you
- * already wrote, or one you write now. Both end in the same primary action,
+ * already ran ("Recent polls", issue #161: the questions of your polls, kept
+ * or not, each with a donut of how its last runs went), or one you write
+ * now. The first is the default when it has rows. Both end in the same primary action,
  * "Start the poll", and the classroom and the anonymity above the tabs apply
  * to either.
  *
@@ -64,10 +67,10 @@ import { coursesKey, pollQuestionsKey } from "../queryKeys";
  * mark (`ungraded`: no scoring policy, no points, no prefilters) — a poll
  * gives none — and "Start the poll" sends the content itself
  * (`POST /app/api/polls/inline`). The question is kept with its poll only,
- * in no pool (ADR-014, addendum 2026-09-23). A teacher who wants it for next
- * year presses "Keep this question" on the poll screen: it joins the `Polls`
- * pool — created by that first keep — and shows up in the other tab, whose
- * empty state says exactly that.
+ * in no pool (ADR-014, addendum 2026-09-23), and "Recent polls" lists it to
+ * run again all the same (addendum 2026-09-27). A teacher who wants it for
+ * next year, in a pool, presses "Keep this question" on the poll screen: it
+ * joins the `Polls` pool — created by that first keep.
  *
  * The key is optional there: with no correct answer marked, the poll asks
  * for opinions and its reveal is the distribution. One muted line under the
@@ -121,18 +124,21 @@ function QuestionRow({
   onSelect: () => void;
 }) {
   const t = useT();
+  // The outcome sits BESIDE the pressable part, not inside it: it takes the
+  // focus to show its rates, and a focusable thing inside a button is one
+  // control too many for a screen reader.
   return (
-    <li>
+    <li
+      className={cx(
+        "flex items-center gap-3 rounded-field border pr-3 transition-colors",
+        selected ? "border-accent bg-accent-soft" : "border-line bg-surface hover:bg-surface-2",
+      )}
+    >
       <div
         {...pressable(onSelect)}
         aria-pressed={selected}
         onClick={onSelect}
-        className={cx(
-          "flex w-full cursor-pointer items-start gap-3 rounded-field border p-3 text-left transition-colors",
-          selected
-            ? "border-accent bg-accent-soft"
-            : "border-line bg-surface hover:bg-surface-2",
-        )}
+        className="flex min-w-0 flex-1 cursor-pointer items-start gap-3 rounded-field p-3 text-left"
       >
         <span className="mt-0.5">
           <TypeGlyph type={pick.type} />
@@ -160,16 +166,20 @@ function QuestionRow({
                 ) : null}
               </>
             )}
+            {pick.saved ? null : ` · ${t("poll.unsaved")}`}
           </span>
         </span>
       </div>
+      <OutcomeBadge outcome={pick.outcome} />
     </li>
   );
 }
 
 export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
   const t = useT();
-  const [tab, setTab] = useState<"pick" | "new">("pick");
+  // No tab chosen yet: "Recent polls" when it has rows (or is still loading
+  // them), "Ask a new question" when there is nothing to run again.
+  const [chosenTab, setTab] = useState<"pick" | "new" | null>(null);
   const [query, setQuery] = useState("");
   const [questionId, setQuestionId] = useState<string | null>(null);
   const [anonymous, setAnonymous] = useState(true);
@@ -183,6 +193,11 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
     queryKey: pollQuestionsKey,
     queryFn: () => api("/app/api/polls/questions"),
   });
+  const tab = chosenTab ?? (picks.data?.length === 0 ? "new" : "pick");
+  const donutLegend = useMemo(() => {
+    const keyed = (picks.data ?? []).map((p) => p.outcome).filter((o) => o.kind === "keyed");
+    return keyed.length === 0 ? null : { abstention: keyed.some((o) => o.abstention !== null) };
+  }, [picks.data]);
   // The same key the sidebar and the palette already hold: no extra request.
   const courses = useQuery<CourseSummary[]>({
     queryKey: coursesKey,
@@ -329,16 +344,19 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
           ) : filtered.length === 0 ? (
             <p className="py-6 text-center text-[13px] text-fg-muted">{t("poll.noMatch")}</p>
           ) : (
-            <ul className="space-y-2">
-              {filtered.map((pick) => (
-                <QuestionRow
-                  key={pick.id}
-                  pick={pick}
-                  selected={questionId === pick.id}
-                  onSelect={() => setQuestionId(pick.id)}
-                />
-              ))}
-            </ul>
+            <div className="space-y-2">
+              {donutLegend ? <OutcomeLegend abstention={donutLegend.abstention} /> : null}
+              <ul className="space-y-2">
+                {filtered.map((pick) => (
+                  <QuestionRow
+                    key={pick.id}
+                    pick={pick}
+                    selected={questionId === pick.id}
+                    onSelect={() => setQuestionId(pick.id)}
+                  />
+                ))}
+              </ul>
+            </div>
           )}
 
           <FormError error={start.error} title={t("poll.startFailed")} />
