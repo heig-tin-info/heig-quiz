@@ -1,4 +1,7 @@
 {
+  "env": {
+    "VITEST_MAX_WORKERS": "4"
+  },
   "hooks": {
     "PreToolUse": [
       {
