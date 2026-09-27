@@ -10,7 +10,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import {
@@ -29,6 +29,8 @@ import {
   courses,
   evaluationItems,
   evaluations,
+  isOwnedPoll,
+  ownedPollSql,
   pools,
 } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
@@ -123,6 +125,38 @@ describe("the schema (ADR-031 §1)", () => {
   ] as const)("refuses a template with %s", async (_what, patch) => {
     const { seed } = await world();
     await expect(insert({ ...base(seed), ...patch(seed) })).rejects.toThrow();
+  });
+});
+
+describe("the owned-poll predicate", () => {
+  it("reads the same in SQL (ownedPollSql) and on a row (isOwnedPoll)", async () => {
+    const { teacher, seed } = await world();
+    const template = await saveTemplate(teacher, seed.evaluationId);
+    const pollId = randomUUID();
+    await server.app.db.insert(evaluations).values({
+      id: pollId,
+      title: "Owned poll",
+      mode: "poll",
+      settings: {},
+      gradingScale: {},
+      feedbackPolicy: {},
+      createdBy: teacher.id,
+    });
+    const ids = [seed.evaluationId, template.id, pollId];
+    const rows = await server.app.db
+      .select({
+        id: evaluations.id,
+        classroomId: evaluations.classroomId,
+        courseId: evaluations.courseId,
+        mode: evaluations.mode,
+        owned: sql<boolean>`${ownedPollSql()}`,
+      })
+      .from(evaluations)
+      .where(inArray(evaluations.id, ids));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    // Classroom evaluation, course template, owned poll.
+    expect(ids.map((id) => byId.get(id)!.owned)).toEqual([false, false, true]);
+    expect(ids.map((id) => isOwnedPoll(byId.get(id)!))).toEqual([false, false, true]);
   });
 });
 
