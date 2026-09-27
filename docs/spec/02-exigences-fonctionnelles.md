@@ -24,7 +24,7 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 | F-ORG-06 | A classroom exposes a join code. A student who enters it joins the roster. The teacher may disable the code. | P1 | S |
 | F-ORG-07 | Every roster line carries an extra time in percent, 0 by default, and a free note. | P1 | M |
 | F-ORG-08 | The teacher may remove a student from a roster. Their past attempts are kept. | P1 | M |
-| F-ORG-09 | Deleting a classroom deletes its evaluations, attempts, answers and gradings after a confirmation that names the classroom. The questions of the pool are not affected. | P1 | M |
+| F-ORG-09 | Deleting a classroom deletes its evaluations, attempts, answers and gradings after a confirmation that names the classroom. The questions of the pool and the course's evaluation templates are not affected: a template belongs to the course and survives every classroom (ADR-031). Deleting a course deletes its templates, and its confirmation names how many. | P1 | M |
 | F-ORG-10 | A classroom may be duplicated to a new period, without roster nor attempts, with its evaluations as drafts. | P2 | S |
 
 ## F-POOL Pools and organisation of questions
@@ -39,6 +39,7 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 | F-POOL-06 | A global public pool is readable by every teacher. The admin designates its contributors. | P2 | S |
 | F-POOL-07 | A pool exports as an archive of YAML files in the canonical format, one file per question, the category tree as folders. Importing this archive recreates the pool or merges into an existing pool by id. | P1 | S |
 | F-POOL-08 | Import of GIFT and Moodle XML files for the supported types. Questions that cannot be converted are listed with the reason. | P2 | C |
+| F-POOL-09 | Deleting a pool is refused while an evaluation or an evaluation template pins one of its question versions; the refusal names the holders the caller can open and counts the others (ADR-031). | P1 | M |
 
 ## F-QST Questions and versions
 
@@ -77,6 +78,11 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 | F-EVAL-15 | An `exercise` evaluation may allow several attempts, keeping the best or the last one (the teacher's choice), with an optional maximum. A retake starts blank, with a new question order, once the previous attempt is handed in and while the evaluation is open; the student sees the score of each attempt, not the correction, until the evaluation closes. Results, grade, CSV and statistics use the kept attempt. An exam keeps one attempt (ADR-025). | P2 | C |
 | F-EVAL-16 | An `exam` or `exercise` evaluation may use **negative marking**: every choice question is then scored so that a wrong answer costs points (single answer: +1 or −1/(n − 1); several: c/C − w/W, not floored) and no answer costs nothing. Per-question points may be negative; the evaluation total is floored at 0 and the grade computed from it. The student is told in the waiting room and on each choice question. Frozen once an attempt exists (ADR-026, issue #130). | P1 | S |
 | F-EVAL-17 | An `exam` may require **Safe Exam Browser**. The student's card then downloads a one-time `.seb` that opens the exam in SEB under their identity, with no second sign-in; the session so opened reaches that exam only, and a portal session cannot sit the exam (ADR-027, issue #139). | P2 | S |
+| F-EVAL-18 | An `exam` or `exercise` evaluation may be **saved as a template** of its course. The template keeps the items (frozen versions, points, order, milestones), the settings, the grade scale, the feedback policy, the MCQ policy and the duration, and drops the opening and closing dates, the access code and the IP list. A poll cannot be a template (`422`). The template starts at revision 1 (ADR-031, issue #151). | P2 | S |
+| F-EVAL-19 | The course lists its templates to every member of its staff, with their mode, number of questions, points and revision; anyone else gets the 404 of a missing template. A template is never opened, answered, graded, nor listed among a classroom's evaluations. | P2 | S |
+| F-EVAL-20 | **Instantiate** makes a draft evaluation in a classroom of the SAME course from a template, recording the template and its revision. A question whose pool is no longer linked to the course blocks it with the list of such items; a deprecated version only warns. An instance with `deadline` timing is born without dates and cannot be opened until they are filled (F-EVAL-04). | P2 | S |
+| F-EVAL-21 | Deleting a template leaves its instances untouched; they only lose their link to it. | P2 | S |
+| F-EVAL-22 | At evaluation creation, "Start from a template" is offered only when the course has at least one template; otherwise the creation dialog is unchanged (08). | P2 | S |
 
 ## F-LIVE Live run
 
