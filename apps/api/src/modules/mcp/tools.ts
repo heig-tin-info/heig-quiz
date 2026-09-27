@@ -416,29 +416,30 @@ export const TOOLS: Tool[] = [
     name: "create_poll",
     title: "Launch a live poll",
     description:
-      "Creates AND STARTS a one-question live poll in a classroom: students join with the returned code " +
-      "or `joinUrl`. Either pass `questionId` (a published `mcq` or `short` question) or write one inline " +
-      "with `type` + `config` (not saved in any pool; an opinion poll may have no correct answer). Only " +
-      "call it when the teacher wants to poll NOW.",
+      "Creates AND STARTS a one-question live poll: participants join with the returned code or " +
+      "`joinUrl`. With `classroomId`, only that classroom's students (signed in) and its staff may answer, " +
+      "by name; without it, the poll belongs to no classroom and anyone with the code answers anonymously. " +
+      "Either pass `questionId` (a published `mcq` or `short` question) or write one inline with `type` + " +
+      "`config` (not saved in any pool; an opinion poll may have no correct answer). Only call it when the " +
+      "teacher wants to poll NOW.",
     input: z.object({
-      classroomId: Id,
-      anonymous: z.boolean().default(false).describe("Let participants answer without signing in"),
+      classroomId: Id.optional().describe(
+        "The classroom whose students answer; omit for an anonymous poll open to anyone with the code",
+      ),
       questionId: Id.optional(),
       type: PollQuestionType.optional(),
       config: z.record(z.string(), z.unknown()).optional(),
     }),
     annotations: { ...WRITE, openWorldHint: true },
     run: async (api, a) => {
+      const audience = a.classroomId
+        ? { kind: "classroom", classroomId: a.classroomId }
+        : { kind: "anonymous" };
       let view;
       if (a.questionId) {
-        view = await api.post("/polls", { classroomId: a.classroomId, questionId: a.questionId, anonymous: a.anonymous });
+        view = await api.post("/polls", { audience, questionId: a.questionId });
       } else if (a.type && a.config) {
-        view = await api.post("/polls/inline", {
-          classroomId: a.classroomId,
-          anonymous: a.anonymous,
-          type: a.type,
-          config: a.config,
-        });
+        view = await api.post("/polls/inline", { audience, type: a.type, config: a.config });
       } else {
         throw new ToolRefusal("Pass either `questionId`, or both `type` and `config`.");
       }

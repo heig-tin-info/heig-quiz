@@ -243,8 +243,9 @@ const FULL_SCREEN: ReadonlySet<Route["view"]> = new Set([
 const WIDE: ReadonlySet<Route["view"]> = new Set(["live"]);
 
 /**
- * No session. The participant of a poll may have no account
- * (`settings.poll.anonymous`), and the page itself sends to login otherwise.
+ * No session. The participant of an anonymous poll may have no account
+ * (`settings.poll.anonymous`: the poll belongs to no classroom), and the page
+ * itself sends to login for a classroom's poll.
  * The OAuth consent page is the other one: it offers the sign-in with a
  * `next` back to itself. Everything else is the landing page.
  */

@@ -1,8 +1,9 @@
 /**
  * Live polls (F-LIVE-13 / F-LIVE-14 / F-AUTH-05): ONE question, run in the
  * open with a session code and a QR, answered by anyone who joins — an
- * account, or a guest when the poll allows it — with the tally on the
- * teacher's projection as it grows.
+ * account, or a guest when the poll is anonymous — with the tally on the
+ * teacher's projection as it grows. A classroom's poll is answered by its
+ * roster and its staff only (`PollAudience`).
  *
  * A poll IS an evaluation of mode `poll` (docs/spec/05, `evaluations.mode`),
  * with one item, started the moment it is created, and its settings carry
@@ -19,10 +20,35 @@ import { QuestionTypeId } from "./pool.js";
 export const PollQuestionType = z.enum(["mcq", "short"]);
 export type PollQuestionType = z.infer<typeof PollQuestionType>;
 
-/** Stored under `EvaluationSettings.poll`. */
+/**
+ * Who a poll is for (ADR-014, addendum 2026-09-27) — ONE choice, where the
+ * launcher used to ask two questions (a classroom, and "anonymous"):
+ *
+ *   - `anonymous`: anyone with the code. The poll belongs to NO classroom;
+ *     a guest answers through the `quiz_guest` cookie, a signed-in browser
+ *     as its account, and nobody is named. The teacher who launched it owns
+ *     it and is the only one (with the admins) who reaches it.
+ *   - `classroom`: the students of that classroom — its roster — and its
+ *     staff, signed in. Nobody else gets in, whatever code they hold.
+ *
+ * "A classroom, anonymously" does not exist: it was the combination that
+ * named nobody and still claimed a class.
+ */
+export const PollAudience = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("anonymous") }),
+  z.object({ kind: z.literal("classroom"), classroomId: z.uuid() }),
+]);
+export type PollAudience = z.infer<typeof PollAudience>;
+
+/**
+ * What the views carry under `settings`. `anonymous` is DERIVED from the
+ * audience — true exactly when the poll has no classroom — and never stored:
+ * `EvaluationSettings.poll` keeps `revealed` only, so the two can never
+ * disagree.
+ */
 export const PollSettings = z.object({
-  /** Anyone with the code may answer without an account (a guest cookie). */
-  anonymous: z.boolean().default(false),
+  /** No classroom: anyone with the code may answer, without an account. */
+  anonymous: z.boolean(),
   /** The teacher pressed "Reveal": the key is shown on every screen. */
   revealed: z.boolean().default(false),
   /**
@@ -50,9 +76,8 @@ export function pollDisplayOf(settings: Pick<PollSettings, "revealed" | "votes">
 /** `POST /app/api/polls`: creates the evaluation AND starts it. */
 export const PollCreate = z.object({
   questionId: z.uuid(),
-  /** The evaluation needs a home; the launcher remembers the last one. */
-  classroomId: z.uuid(),
-  anonymous: z.boolean().default(false),
+  /** The launcher remembers the last one. */
+  audience: PollAudience,
 });
 export type PollCreate = z.infer<typeof PollCreate>;
 
@@ -79,8 +104,7 @@ export type PollQuestionCreate = z.infer<typeof PollQuestionCreate>;
  * issues otherwise. No pool receives the question.
  */
 export const PollInlineCreate = z.object({
-  classroomId: z.uuid(),
-  anonymous: z.boolean().default(false),
+  audience: PollAudience,
   type: PollQuestionType,
   config: z.unknown(),
 });
@@ -164,10 +188,14 @@ export const POLL_SHORT_CAP = 60;
 export const PollTeacherView = z.object({
   evaluation: z.object({
     id: z.uuid(),
-    classroomId: z.uuid(),
-    /** For the projection's context line; spares the screen a second request. */
-    classroomName: z.string(),
-    courseName: z.string(),
+    /** Null for an anonymous poll, which belongs to no classroom. */
+    classroomId: z.uuid().nullable(),
+    /**
+     * For the projection's context line; spares the screen a second request.
+     * Null with the classroom.
+     */
+    classroomName: z.string().nullable(),
+    courseName: z.string().nullable(),
     title: z.string(),
     state: z.string(),
     /** The session code shown on the beamer; the QR encodes `joinUrl`. */
@@ -220,7 +248,7 @@ export const PollPublicView = z.object({
   me: z.object({
     /** A session or a guest cookie identifies this browser. */
     identified: z.boolean(),
-    /** No session and the poll is not anonymous: the page must send to login. */
+    /** No session and the poll is a classroom's: the page must send to login. */
     loginRequired: z.boolean(),
     joined: z.boolean(),
     /** The answer this browser last sent, to redraw it after a reload. */
@@ -252,7 +280,8 @@ export type PollAnswer = z.infer<typeof PollAnswer>;
 /** A past or running poll of the teacher, for "run again" and the launcher. */
 export const PollSummary = z.object({
   id: z.uuid(),
-  classroomId: z.uuid(),
+  /** Null for an anonymous poll (ADR-014, addendum 2026-09-27). */
+  classroomId: z.uuid().nullable(),
   title: z.string(),
   state: z.string(),
   code: z.string().nullable(),

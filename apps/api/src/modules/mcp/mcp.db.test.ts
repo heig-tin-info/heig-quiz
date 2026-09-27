@@ -249,6 +249,14 @@ describe("an authoring session", () => {
       },
     });
     expect(poll.code).toMatch(/^[A-Z0-9]+$/);
+
+    // Without a classroom: an anonymous poll, open to anyone with the code.
+    const open = await ok("create_poll", {
+      type: "short",
+      config: { configVersion: 2, prompt: "Un mot ?" },
+    });
+    expect(open.code).toMatch(/^[A-Z0-9]+$/);
+    expect(open.code).not.toBe(poll.code);
   });
 
   it("returns the argument issues when the model sends a malformed call", async () => {

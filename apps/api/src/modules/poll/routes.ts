@@ -4,7 +4,9 @@
  *
  *   - the TEACHER half (`/app/api/polls…`, `/app/api/evaluations/:id/poll…`)
  *     is an ordinary teacher surface: `requireTeacher`, then the entity is
- *     LOADED through the staff predicate and an unreachable one is a 404
+ *     LOADED through the staff predicate — or, for an anonymous poll that
+ *     belongs to no classroom, through its ownership (`findManagedEvaluation`,
+ *     ADR-014 addendum 2026-09-27) — and an unreachable one is a 404
  *     (invariant 6);
  *   - the PUBLIC half (`/app/api/p/:code…`) is the only unauthenticated
  *     write surface of the platform. It is safe because of what it can
@@ -12,6 +14,9 @@
  *       * a caller must hold a six-character code that only exists while a
  *         poll runs, and the answer it can write is an answer to THAT poll's
  *         single question — nothing else in the platform is addressable;
+ *       * a classroom's poll admits its roster and its staff, signed in, and
+ *         nobody else: the viewer is loaded through `findReachableEvaluation`
+ *         before anything is read, joined or answered;
  *       * the `quiz_guest` cookie is scoped to `/app/api/p`, is `HttpOnly`,
  *         carries no identity and is worth exactly one vote in one poll;
  *       * the ordinary double-submit CSRF check of `requireSession` does not
@@ -31,6 +36,7 @@ import {
   PollAnswer,
   PollCodeParam,
   PollCreate,
+  type PollAudience,
   PollInlineCreate,
   PollQuestionCreate,
   PollRevealBody,
@@ -45,12 +51,13 @@ import {
   accessWhere,
   findAccessibleClassroom,
   findAccessibleQuestion,
+  findManagedEvaluation,
   findOwnUnsavedPollQuestion,
+  findReachableEvaluation,
   poolAccess,
   teacherGuard,
 } from "../guards.js";
 import { emptyBody, invalid, notFound, teacherRoute } from "../http.js";
-import { byId } from "../evaluation/service.js";
 import * as live from "../live/service.js";
 import * as poolService from "../pool/service.js";
 import * as service from "./service.js";
@@ -100,13 +107,30 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     );
   }
 
-  /** The poll, loaded through the staff predicate of its classroom. */
+  /**
+   * The poll, loaded through the staff predicate of its classroom — or, when
+   * it has none, through its ownership (ADR-014, addendum 2026-09-27). A
+   * colleague asking for someone else's anonymous poll gets the 404 of a
+   * poll that does not exist.
+   */
   async function reachablePoll(req: FastifyRequest, evaluationId: string) {
-    const evaluation = await service.pollById(app.db, evaluationId);
-    if (!evaluation) return null;
-    const room = await reachableClassroom(req, evaluation.classroomId);
-    if (!room) return null;
+    const evaluation = await findManagedEvaluation(app.db, req.user!, evaluationId);
+    if (!evaluation || evaluation.mode !== "poll") return null;
     return service.scopeOf(app.db, evaluation);
+  }
+
+  /**
+   * Where a new poll lives: nowhere for an anonymous one, the classroom —
+   * loaded through the staff predicate, `undefined` when unreachable — for a
+   * classroom's.
+   */
+  async function homeOfAudience(
+    req: FastifyRequest,
+    audience: PollAudience,
+  ): Promise<string | null | undefined> {
+    const classroomId = service.audienceClassroom(audience);
+    if (classroomId === null) return null;
+    return (await reachableClassroom(req, classroomId))?.id;
   }
 
   /** `reachablePoll` as a loader of invariant 6: it answers its own 404. */
@@ -199,21 +223,21 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     const now = app.clock.now();
     const body = PollCreate.safeParse(emptyBody(req.body));
     if (!body.success) return invalid(reply, body.error);
-    const room = await reachableClassroom(req, body.data.classroomId);
-    if (!room) return notFound(reply);
+    const classroomId = await homeOfAudience(req, body.data.audience);
+    if (classroomId === undefined) return notFound(reply);
     const question = await reachableQuestion(req, body.data.questionId);
     if (!question) return notFound(reply);
     try {
       const scope = await service.createPoll(app.db, {
-        classroomId: room.id,
+        classroomId,
         questionId: question.id,
-        anonymous: body.data.anonymous,
         createdBy: req.user!.id,
         now,
       });
       await trace(req, "poll.create", "evaluation", scope.evaluation.id, {
         questionId: question.id,
-        anonymous: body.data.anonymous,
+        audience: body.data.audience.kind,
+        classroomId,
         code: scope.evaluation.accessCode,
       });
       return reply.code(201).send(await view(req, scope));
@@ -224,8 +248,8 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
 
   /**
    * F-LIVE-13, the quick path: a question written in the launcher, run at
-   * once and saved nowhere (ADR-014, addendum 2026-09-23). The classroom is
-   * loaded through the staff predicate like `POST /polls`; the content is
+   * once and saved nowhere (ADR-014, addendum 2026-09-23). The audience's
+   * classroom is loaded through the staff predicate like `POST /polls`; the content is
    * validated by the type's own schema in the `pool` service.
    */
   app.post("/app/api/polls/inline", { preHandler: requireTeacher }, async (req, reply) => {
@@ -240,14 +264,13 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
       }
       return invalid(reply, body.error);
     }
-    const room = await reachableClassroom(req, body.data.classroomId);
-    if (!room) return notFound(reply);
+    const classroomId = await homeOfAudience(req, body.data.audience);
+    if (classroomId === undefined) return notFound(reply);
     try {
       const scope = await service.createInlinePoll(app.db, {
-        classroomId: room.id,
+        classroomId,
         type: body.data.type,
         config: body.data.config,
-        anonymous: body.data.anonymous,
         createdBy: req.user!.id,
         now,
       });
@@ -255,7 +278,8 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
         questionId: scope.item.question.id,
         inline: true,
         type: body.data.type,
-        anonymous: body.data.anonymous,
+        audience: body.data.audience.kind,
+        classroomId,
         code: scope.evaluation.accessCode,
       });
       return reply.code(201).send(await view(req, scope));
@@ -308,7 +332,11 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     }),
   );
 
-  /** "Run the same question again": a NEW poll, a new code, a clean tally. */
+  /**
+   * "Run the same question again": a NEW poll, a new code, a clean tally —
+   * for the same audience. An anonymous poll is only ever reached by its
+   * owner, so its rerun is theirs as well.
+   */
   app.post(
     "/app/api/evaluations/:id/poll/again",
     { preHandler: requireTeacher },
@@ -316,7 +344,6 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
       const again = await service.createPoll(app.db, {
         classroomId: scope.evaluation.classroomId,
         questionId: scope.item.question.id,
-        anonymous: service.pollSettingsOf(scope.evaluation).anonymous,
         createdBy: req.user!.id,
         now,
       });
@@ -362,7 +389,8 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
   );
 
   // =========================================================================
-  // Public side — no session, no roster (F-AUTH-05)
+  // Public side — no session needed for an anonymous poll (F-AUTH-05); the
+  // roster and the staff, signed in, for a classroom's
   // =========================================================================
 
   /**
@@ -379,18 +407,38 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     return reply.code(403).send({ error: "csrf" });
   }
 
-  /** The poll a code names, with the browser's identity resolved. */
+  /**
+   * The poll a code names, with the browser's identity resolved — or
+   * `"not_on_roster"` when a classroom's poll is asked for by a signed-in
+   * account that holds neither a seat on its roster nor one on its staff
+   * (ADR-014, addendum 2026-09-27). That refusal is a 403 and not a 404: the
+   * code is on the wall of the room, so the poll's existence is no secret —
+   * what is withheld is its content, and the reason is the one thing the
+   * reader can act on (sign in with another account). A browser with no
+   * session is told to sign in first (`me.loginRequired`), as before.
+   */
   async function publicScope(
     req: FastifyRequest,
     code: string,
     now: Date,
-  ): Promise<{
-    scope: service.PollScope;
-    state: "running" | "ended";
-    viewer: service.Viewer & { loggedIn: boolean };
-  } | null> {
+  ): Promise<
+    | {
+        scope: service.PollScope;
+        state: "running" | "ended";
+        viewer: service.Viewer & { loggedIn: boolean };
+      }
+    | "not_on_roster"
+    | null
+  > {
     const found = await service.byCode(app.db, code, now);
     if (!found) return null;
+    if (
+      found.evaluation.classroomId !== null &&
+      req.user &&
+      !(await findReachableEvaluation(app.db, req.user, found.evaluation.id))
+    ) {
+      return "not_on_roster";
+    }
     const scope = await service.scopeOf(app.db, found.evaluation);
     if (!scope) return null;
     const token = req.cookies[service.GUEST_COOKIE];
@@ -407,18 +455,28 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     };
   }
 
+  function notOnRoster(reply: FastifyReply): FastifyReply {
+    return reply.code(403).send({
+      error: "not_on_roster",
+      message: "This poll is for the students of its classroom",
+    });
+  }
+
   app.get("/app/api/p/:code", async (req, reply) => {
     const now = app.clock.now();
     const params = PollCodeParam.safeParse(req.params);
     if (!params.success) return notFound(reply);
     const found = await publicScope(req, params.data.code, now);
     if (!found) return notFound(reply);
+    if (found === "not_on_roster") return notOnRoster(reply);
     return service.publicView(app.db, found.scope, found.state, found.viewer);
   });
 
   /**
-   * Joining. A session joins as itself; a browser with no session joins as a
-   * guest when the poll is anonymous, and is told to sign in otherwise.
+   * Joining. A session joins as itself — for a classroom's poll, only when
+   * it sits on the roster or the staff (`publicScope`); a browser with no
+   * session joins as a guest when the poll is anonymous, and is told to sign
+   * in otherwise.
    */
   app.post("/app/api/p/:code/join", async (req, reply) => {
     const now = app.clock.now();
@@ -428,6 +486,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     if (!params.success) return notFound(reply);
     const found = await publicScope(req, params.data.code, now);
     if (!found) return notFound(reply);
+    if (found === "not_on_roster") return notOnRoster(reply);
     const { scope, viewer } = found;
     if (found.state !== "running") {
       // Nothing to join any more; the page still shows the question.
@@ -437,7 +496,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     if (!viewer.loggedIn && !settings.anonymous) {
       return reply.code(401).send({
         error: "login_required",
-        message: "This poll asks who answers",
+        message: "This poll is for the students of its classroom",
         next: `/p/${scope.evaluation.accessCode}`,
       });
     }
@@ -476,6 +535,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     if (!body.success) return invalid(reply, body.error);
     const found = await publicScope(req, params.data.code, now);
     if (!found) return notFound(reply);
+    if (found === "not_on_roster") return notOnRoster(reply);
     const { scope, viewer } = found;
     if (found.state !== "running") {
       return reply.code(410).send({ error: "attempt_closed", reason: "evaluation_closed" });

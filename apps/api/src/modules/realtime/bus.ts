@@ -50,6 +50,20 @@ const attemptTopic = (id: string): Topic => `attempt:${id}`;
 export const userTopic = (id: string): Topic => `user:${id}`;
 const teacherTopic = (id: string): Topic => `teacher:${id}`;
 
+/**
+ * Where an evaluation's listing lives, for the refresh hints: its
+ * classroom's topic — or, for an anonymous poll that belongs to no
+ * classroom (ADR-014, addendum 2026-09-27), its owner's own `teacher:` topic,
+ * which is where their list of recent polls listens.
+ */
+export function homeTopic(evaluation: {
+  classroomId: string | null;
+  createdBy: string | null;
+}): Topic[] {
+  if (evaluation.classroomId !== null) return [`classroom:${evaluation.classroomId}`];
+  return evaluation.createdBy === null ? [] : [teacherTopic(evaluation.createdBy)];
+}
+
 /** The one low-level exit. Everything below funnels through it. */
 export function emit(event: ServerEvent, topics: Topic[], audience: Audience = "all"): void {
   publishData(event, topics, audience);

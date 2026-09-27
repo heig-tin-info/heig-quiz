@@ -1,7 +1,10 @@
 /**
  * One whole life of a live poll, over the REAL application (F-LIVE-13,
  * F-AUTH-05, ADR-014): the personal pool, the create-and-start, the public
- * join with a guest cookie, the tally, the reveal, the end.
+ * join with a guest cookie, the tally, the reveal, the end — and the two
+ * audiences of the addendum 2026-09-27: an anonymous poll that belongs to no
+ * classroom and is reached by its owner only, and a classroom's poll that
+ * admits its roster and its staff and nobody else.
  *
  * It runs against the real question types (`mcq` and `short`), not the fake
  * of `test/fakeType.ts`: what the tally counts is what those types store, and
@@ -32,14 +35,25 @@ import { createPoll, GUEST_COOKIE } from "./service.js";
 let server: TestServer;
 let teacher: { id: string; headers: Record<string, string> };
 let outsider: { id: string; headers: Record<string, string> };
+/** A student with a CLAIMED seat on the classroom's roster. */
+let rostered: { id: string; headers: Record<string, string> };
 let seed: Awaited<ReturnType<typeof seedLive>>;
+
+/** The two audiences of a poll (`PollAudience`). */
+const ANYONE = { kind: "anonymous" } as const;
+const classroom = () => ({ kind: "classroom", classroomId: seed.classroomId }) as const;
 
 beforeAll(async () => {
   server = await testServer();
   teacher = await server.signIn("teacher");
   outsider = await server.signIn("student");
+  rostered = await server.signIn("student");
   // `questions: 0`: this suite publishes its own, of the real types.
-  seed = await seedLive(server.app.db, { teacherId: teacher.id, questions: 0 });
+  seed = await seedLive(server.app.db, {
+    teacherId: teacher.id,
+    questions: 0,
+    studentIds: [rostered.id],
+  });
 });
 afterAll(async () => {
   await server.close();
@@ -136,36 +150,74 @@ describe("the personal pool is the home of poll questions (F-POOL-01)", () => {
 
 describe("creating and starting a poll", () => {
   it("creates an evaluation of mode poll, running, with one item and a code", async () => {
-    const created = await post("/app/api/polls", teacher.headers, {
-      classroomId: seed.classroomId,
-      questionId,
-      anonymous: true,
-    });
+    const created = await post("/app/api/polls", teacher.headers, { audience: ANYONE, questionId });
     expect(created.statusCode).toBe(201);
     const body = created.json();
     evaluationId = body.evaluation.id;
     code = body.evaluation.code;
     expect(body.evaluation.state).toBe("running");
-    // Where the poll lives, in the same answer: the projection's context line
-    // never asks a second route for a name it already implies.
+    // An anonymous poll lives in no classroom (ADR-014, addendum 2026-09-27).
     expect(body.evaluation).toMatchObject({
-      classroomId: seed.classroomId,
-      classroomName: "A",
-      courseName: "Programmation C",
+      classroomId: null,
+      classroomName: null,
+      courseName: null,
     });
     expect(code).toMatch(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{6}$/);
     expect(body.joinUrl).toMatch(new RegExp(`/p/${code}$`));
     expect(body.settings).toEqual({ anonymous: true, revealed: false, votes: false });
     expect(body.tally).toMatchObject({ joined: 0, answered: 0 });
     expect(body.tally.choices).toHaveLength(3);
+
+    // Its owner is its creator, and `anonymous` is not stored: it IS the
+    // missing classroom.
+    const [row] = await server.app.db.select().from(evaluations).where(eq(evaluations.id, evaluationId));
+    expect(row).toMatchObject({ classroomId: null, createdBy: teacher.id, mode: "poll" });
+    expect((row!.settings as { poll: unknown }).poll).toEqual({ revealed: false, votes: false });
+    const [entry] = await server.app.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.action, "poll.create"), eq(auditLog.subjectId, evaluationId)));
+    expect(entry).toMatchObject({ actorUserId: teacher.id });
+    expect(entry!.payload).toMatchObject({ audience: "anonymous", classroomId: null });
   });
 
-  it("draws a different code for every running poll", async () => {
-    const other = await post("/app/api/polls", teacher.headers, {
+  it("appears in no classroom's evaluation list", async () => {
+    const list = await get(`/app/api/classrooms/${seed.classroomId}/evaluations`, teacher.headers);
+    expect(list.statusCode).toBe(200);
+    expect((list.json() as { id: string }[]).map((e) => e.id)).not.toContain(evaluationId);
+    // The owner's own list of polls has it.
+    const mine = await get("/app/api/polls", teacher.headers);
+    expect((mine.json() as { id: string; classroomId: string | null }[]).find((p) => p.id === evaluationId))
+      .toMatchObject({ classroomId: null });
+  });
+
+  it("creates a classroom's poll that says where it lives", async () => {
+    const created = await post("/app/api/polls", teacher.headers, { audience: classroom(), questionId });
+    expect(created.statusCode).toBe(201);
+    // Where the poll lives, in the same answer: the projection's context line
+    // never asks a second route for a name it already implies.
+    expect(created.json().evaluation).toMatchObject({
+      classroomId: seed.classroomId,
+      classroomName: "A",
+      courseName: "Programmation C",
+    });
+    expect(created.json().settings).toEqual({ anonymous: false, revealed: false, votes: false });
+    const list = await get(`/app/api/classrooms/${seed.classroomId}/evaluations`, teacher.headers);
+    expect((list.json() as { id: string }[]).map((e) => e.id)).toContain(created.json().evaluation.id);
+    await post(`/app/api/evaluations/${created.json().evaluation.id}/poll/end`, teacher.headers);
+  });
+
+  it("refuses the audience a poll no longer has: a classroom, anonymously", async () => {
+    const refused = await post("/app/api/polls", teacher.headers, {
       classroomId: seed.classroomId,
       questionId,
       anonymous: true,
     });
+    expect(refused.statusCode).toBe(400);
+  });
+
+  it("draws a different code for every running poll", async () => {
+    const other = await post("/app/api/polls", teacher.headers, { audience: ANYONE, questionId });
     expect(other.statusCode).toBe(201);
     expect(other.json().evaluation.code).not.toBe(code);
     // Closed straight away: it is only here for the uniqueness check.
@@ -179,7 +231,6 @@ describe("creating and starting a poll", () => {
     const input = {
       classroomId: seed.classroomId,
       questionId,
-      anonymous: false,
       createdBy: teacher.id,
       now: server.clock.now(),
     };
@@ -207,7 +258,6 @@ describe("creating and starting a poll", () => {
     const scope = await createPoll(server.app.db, {
       classroomId: seed.classroomId,
       questionId,
-      anonymous: false,
       createdBy: teacher.id,
       now: server.clock.now(),
       drawCode: ((codes: string[]) => () => codes.shift() ?? "UNUSED")(["RACE22", "GRACE2"]),
@@ -223,7 +273,6 @@ describe("creating and starting a poll", () => {
     const input = {
       classroomId: seed.classroomId,
       questionId,
-      anonymous: false,
       createdBy: teacher.id,
       now: server.clock.now(),
     };
@@ -247,18 +296,56 @@ describe("creating and starting a poll", () => {
       .where(eq(evaluations.id, first.evaluation.id));
   });
 
+  it("answers 404 to another teacher on an anonymous poll, which only its owner reaches", async () => {
+    const stranger = await server.signIn("teacher");
+    // A seat on no staff helps nothing: an anonymous poll has no classroom.
+    await server.app.db.insert(courseStaff).values({ courseId: seed.courseId, userId: stranger.id });
+    for (const path of ["poll", "poll/reveal", "poll/end", "poll/again", "poll/keep"]) {
+      const response =
+        path === "poll"
+          ? await get(`/app/api/evaluations/${evaluationId}/${path}`, stranger.headers)
+          : await post(`/app/api/evaluations/${evaluationId}/${path}`, stranger.headers, {});
+      expect(response.statusCode, path).toBe(404);
+      expect(response.json(), path).toEqual({ error: "not_found" });
+    }
+    // Nor does the generic evaluation surface hand it to anyone, its owner
+    // included: it has no classroom to be loaded through.
+    expect((await get(`/app/api/evaluations/${evaluationId}`, teacher.headers)).statusCode).toBe(404);
+    // An admin reaches it.
+    const admin = await server.signIn("admin");
+    expect((await get(`/app/api/evaluations/${evaluationId}/poll`, admin.headers)).statusCode).toBe(200);
+    // The owner's live stream is authorised on it (the projection's tally).
+    const { findReachableEvaluation } = await import("../guards.js");
+    expect(
+      await findReachableEvaluation(server.app.db, { id: teacher.id, role: "teacher" }, evaluationId),
+    ).toMatchObject({ staff: true });
+    expect(
+      await findReachableEvaluation(server.app.db, { id: stranger.id, role: "teacher" }, evaluationId),
+    ).toBeNull();
+  });
+
   it("answers 404 to a teacher who is not on the classroom's staff", async () => {
     const stranger = await server.signIn("teacher");
-    expect((await get(`/app/api/evaluations/${evaluationId}/poll`, stranger.headers)).statusCode).toBe(404);
-    expect(
-      (
-        await post("/app/api/polls", stranger.headers, {
-          classroomId: seed.classroomId,
-          questionId,
-          anonymous: true,
-        })
-      ).statusCode,
-    ).toBe(404);
+    const created = await post("/app/api/polls", stranger.headers, { audience: classroom(), questionId });
+    expect(created.statusCode).toBe(404);
+  });
+
+  it("refuses an evaluation with no classroom unless it is an owned poll (schema)", async () => {
+    const { randomUUID } = await import("node:crypto");
+    const row = {
+      id: randomUUID(),
+      title: "Nowhere",
+      settings: {},
+      gradingScale: {},
+      feedbackPolicy: {},
+      createdBy: teacher.id,
+    };
+    await expect(
+      server.app.db.insert(evaluations).values({ ...row, mode: "exam" }),
+    ).rejects.toThrow();
+    await expect(
+      server.app.db.insert(evaluations).values({ ...row, mode: "poll", createdBy: null }),
+    ).rejects.toThrow();
   });
 
   it("answers 404 to its own classroom with a question from a pool it cannot reach", async () => {
@@ -271,9 +358,8 @@ describe("creating and starting a poll", () => {
     });
     expect(foreign.statusCode).toBe(201);
     const denied = await post("/app/api/polls", teacher.headers, {
-      classroomId: seed.classroomId,
+      audience: classroom(),
       questionId: foreign.json().meta.id as string,
-      anonymous: true,
     });
     expect(denied.statusCode).toBe(404);
     expect(denied.json()).toEqual({ error: "not_found" });
@@ -409,8 +495,8 @@ describe("the public page (F-AUTH-05)", () => {
     );
     expect(revealed.statusCode).toBe(200);
     expect(revealed.json().settings.revealed).toBe(true);
-    // Every exit builds the same teacher view, names included.
-    expect(revealed.json().evaluation.courseName).toBe("Programmation C");
+    // Every exit builds the same teacher view, audience included.
+    expect(revealed.json().evaluation.classroomId).toBeNull();
     expect((await get(`/app/api/p/${code}`)).json().solution).toEqual({ correct: [0] });
   });
 
@@ -420,7 +506,7 @@ describe("the public page (F-AUTH-05)", () => {
     // The glossary sends a poll from `running` to the end in one move; the
     // release is deliberately not taken (ADR-014).
     expect(ended.json().evaluation.state).toBe("closed");
-    expect(ended.json().evaluation.classroomName).toBe("A");
+    expect(ended.json().evaluation.classroomName).toBeNull();
 
     const view = await get(`/app/api/p/${code}`);
     expect(view.statusCode).toBe(200);
@@ -438,10 +524,9 @@ describe("the public page (F-AUTH-05)", () => {
     expect(again.statusCode).toBe(201);
     expect(again.json().evaluation.id).not.toBe(evaluationId);
     expect(again.json().evaluation.code).not.toBe(code);
-    expect(again.json().evaluation).toMatchObject({
-      classroomName: "A",
-      courseName: "Programmation C",
-    });
+    // For the same audience: anonymous again, and owned by the same teacher.
+    expect(again.json().evaluation).toMatchObject({ classroomId: null, classroomName: null });
+    expect(again.json().settings.anonymous).toBe(true);
     expect(again.json().tally).toMatchObject({ joined: 0, answered: 0 });
     expect(again.json().question.id).toBe(questionId);
     await post(`/app/api/evaluations/${again.json().evaluation.id}/poll/end`, teacher.headers);
@@ -454,16 +539,14 @@ describe("the public page (F-AUTH-05)", () => {
   });
 });
 
-describe("a poll that asks who answers", () => {
+describe("a classroom's poll: its roster and its staff, signed in", () => {
   let named: string;
+  let namedId: string;
 
   beforeAll(async () => {
-    const created = await post("/app/api/polls", teacher.headers, {
-      classroomId: seed.classroomId,
-      questionId,
-      anonymous: false,
-    });
+    const created = await post("/app/api/polls", teacher.headers, { audience: classroom(), questionId });
     named = created.json().evaluation.code;
+    namedId = created.json().evaluation.id;
   });
 
   it("sends a browser with no session to the login", async () => {
@@ -474,16 +557,53 @@ describe("a poll that asks who answers", () => {
     expect((await get(`/app/api/p/${named}`)).json().me.loginRequired).toBe(true);
   });
 
-  it("lets a signed-in account join although it holds no roster seat", async () => {
+  it("refuses a signed-in account that holds no seat on the roster, and writes nothing", async () => {
+    const read = await get(`/app/api/p/${named}`, outsider.headers);
+    expect(read.statusCode).toBe(403);
+    expect(read.json().error).toBe("not_on_roster");
+    // Nothing of the question in the refusal.
+    expect(JSON.stringify(read.json())).not.toContain("capitale");
     const joined = await post(`/app/api/p/${named}/join`, outsider.headers);
-    expect(joined.statusCode).toBe(200);
-    expect(joined.json().me).toMatchObject({ identified: true, joined: true, loginRequired: false });
+    expect(joined.statusCode).toBe(403);
+    expect(joined.json().error).toBe("not_on_roster");
+    const answered = await post(`/app/api/p/${named}/answer`, outsider.headers, {
+      payload: { selected: [0] },
+    });
+    expect(answered.statusCode).toBe(403);
     const rows = await server.app.db
       .select()
       .from(attempts)
-      .where(eq(attempts.userId, outsider.id));
+      .where(and(eq(attempts.userId, outsider.id), eq(attempts.evaluationId, namedId)));
+    expect(rows).toHaveLength(0);
+  });
+
+  it("refuses a teacher off the course's staff the same way", async () => {
+    const stranger = await server.signIn("teacher");
+    expect((await post(`/app/api/p/${named}/join`, stranger.headers)).statusCode).toBe(403);
+  });
+
+  it("lets a student of the roster join and answer, by name", async () => {
+    const joined = await post(`/app/api/p/${named}/join`, rostered.headers);
+    expect(joined.statusCode).toBe(200);
+    expect(joined.json().me).toMatchObject({ identified: true, joined: true, loginRequired: false });
+    expect(joined.json().settings.anonymous).toBe(false);
+    const answered = await post(`/app/api/p/${named}/answer`, rostered.headers, {
+      payload: { selected: [0] },
+    });
+    expect(answered.statusCode).toBe(200);
+    const rows = await server.app.db
+      .select()
+      .from(attempts)
+      .where(and(eq(attempts.userId, rostered.id), eq(attempts.evaluationId, namedId)));
     expect(rows).toHaveLength(1);
     expect(rows[0]!.guestId).toBeNull();
+  });
+
+  it("lets the staff try it", async () => {
+    const joined = await post(`/app/api/p/${named}/join`, teacher.headers);
+    expect(joined.statusCode).toBe(200);
+    const view = await get(`/app/api/evaluations/${namedId}/poll`, teacher.headers);
+    expect(view.json().tally).toMatchObject({ joined: 2, answered: 1 });
   });
 
   it("refuses a signed-in browser whose CSRF header does not match its cookie", async () => {
@@ -503,11 +623,7 @@ describe("the public view of a short poll never carries the answer", () => {
       prompt: "Quel mot ?",
       matchers: [{ kind: "exact", value: "S3CR3TANSWER" }],
     });
-    const created = await post("/app/api/polls", teacher.headers, {
-      classroomId: seed.classroomId,
-      questionId: id,
-      anonymous: true,
-    });
+    const created = await post("/app/api/polls", teacher.headers, { audience: ANYONE, questionId: id });
     const shortCode = created.json().evaluation.code;
     const view = await get(`/app/api/p/${shortCode}`);
     expect(view.statusCode).toBe(200);
@@ -539,11 +655,7 @@ describe("the public view of a short poll never carries the answer", () => {
 describe("a poll on a question written in the launcher and never saved", () => {
   const SECRET = "S3CR3T-INLINE";
   const inline = (headers: Record<string, string>, body: Record<string, unknown>) =>
-    post("/app/api/polls/inline", headers, {
-      classroomId: seed.classroomId,
-      anonymous: true,
-      ...body,
-    });
+    post("/app/api/polls/inline", headers, { audience: ANYONE, ...body });
   const unsavedCount = async () =>
     (await server.app.db.select().from(questions).where(isNull(questions.poolId))).length;
 
@@ -557,7 +669,7 @@ describe("a poll on a question written in the launcher and never saved", () => {
     expect(body.evaluation).toMatchObject({
       state: "running",
       title: MCQ_CONFIG.prompt,
-      classroomName: "A",
+      classroomId: null,
     });
     expect(body.question.type).toBe("mcq");
     expect(body.question.solution).toEqual({ correct: [0] });
@@ -664,7 +776,11 @@ describe("a poll on a question written in the launcher and never saved", () => {
     expect(code.statusCode).toBe(422);
     expect(code.json().error).toBe("poll_type");
 
-    const malformed = await inline(teacher.headers, { type: "mcq", config: MCQ_CONFIG, classroomId: "x" });
+    const malformed = await inline(teacher.headers, {
+      type: "mcq",
+      config: MCQ_CONFIG,
+      audience: { kind: "classroom", classroomId: "x" },
+    });
     expect(malformed.statusCode).toBe(400);
     expect(await unsavedCount()).toBe(before);
   });
@@ -674,7 +790,11 @@ describe("a poll on a question written in the launcher and never saved", () => {
     expect((await inline({}, { type: "mcq", config: MCQ_CONFIG })).statusCode).toBe(401);
     expect((await inline(outsider.headers, { type: "mcq", config: MCQ_CONFIG })).statusCode).toBe(403);
     const stranger = await server.signIn("teacher");
-    const offStaff = await inline(stranger.headers, { type: "mcq", config: MCQ_CONFIG });
+    const offStaff = await inline(stranger.headers, {
+      type: "mcq",
+      config: MCQ_CONFIG,
+      audience: classroom(),
+    });
     expect(offStaff.statusCode).toBe(404);
     expect(offStaff.json()).toEqual({ error: "not_found" });
     expect(await unsavedCount()).toBe(before);
@@ -698,11 +818,7 @@ describe("an opinion poll, whose question has no key", () => {
     mode: "single",
   };
   const inline = (body: Record<string, unknown>) =>
-    post("/app/api/polls/inline", teacher.headers, {
-      classroomId: seed.classroomId,
-      anonymous: true,
-      ...body,
-    });
+    post("/app/api/polls/inline", teacher.headers, { audience: ANYONE, ...body });
   const gradingsOf = async (id: string) =>
     server.app.db
       .select({ id: gradings.id })
@@ -845,8 +961,7 @@ describe("keeping the question of a poll (ADR-014, addenda item 6)", () => {
     colleague = await server.signIn("teacher");
     await server.app.db.insert(courseStaff).values({ courseId: seed.courseId, userId: colleague.id });
     const created = await post("/app/api/polls/inline", colleague.headers, {
-      classroomId: seed.classroomId,
-      anonymous: true,
+      audience: classroom(),
       type: "mcq",
       config: OPINION,
     });
@@ -935,9 +1050,8 @@ describe("keeping the question of a poll (ADR-014, addenda item 6)", () => {
 
   it("runs a poll again from the pick list", async () => {
     const again = await post("/app/api/polls", colleague.headers, {
-      classroomId: seed.classroomId,
+      audience: classroom(),
       questionId: keptId,
-      anonymous: true,
     });
     expect(again.statusCode).toBe(201);
     expect(again.json().question).toMatchObject({ id: keptId, saved: true, solution: { correct: [] } });
@@ -946,8 +1060,7 @@ describe("keeping the question of a poll (ADR-014, addenda item 6)", () => {
 
   it("names a second question with the same statement apart", async () => {
     const created = await post("/app/api/polls/inline", colleague.headers, {
-      classroomId: seed.classroomId,
-      anonymous: true,
+      audience: classroom(),
       type: "mcq",
       config: OPINION,
     });
@@ -965,8 +1078,7 @@ describe("keeping the question of a poll (ADR-014, addenda item 6)", () => {
   it("refuses a keyless kept question in an evaluation, and accepts a keyed one", async () => {
     // A keyed poll, kept too.
     const keyed = await post("/app/api/polls/inline", colleague.headers, {
-      classroomId: seed.classroomId,
-      anonymous: true,
+      audience: classroom(),
       type: "mcq",
       config: MCQ_CONFIG,
     });
@@ -1012,11 +1124,7 @@ describe("keeping the question of a poll (ADR-014, addenda item 6)", () => {
  */
 describe("the order of the refusals on the teacher side", () => {
   it("refuses session, params, scope, then body", async () => {
-    const running = await post("/app/api/polls", teacher.headers, {
-      classroomId: seed.classroomId,
-      questionId,
-      anonymous: true,
-    });
+    const running = await post("/app/api/polls", teacher.headers, { audience: classroom(), questionId });
     expect(running.statusCode).toBe(201);
     const id = running.json().evaluation.id as string;
     const url = `/app/api/evaluations/${id}/poll/reveal`;
@@ -1066,9 +1174,9 @@ describe("the launcher's recent polls", () => {
   };
   const launch = async (anonymous: boolean, type: "mcq" | "short", config: unknown) => {
     server.clock.advance(60_000); // one run a minute: the list is newest first
+    // An anonymous poll belongs to no classroom (addendum 2026-09-27).
     const created = await post("/app/api/polls/inline", lecturer.headers, {
-      classroomId: room.classroomId,
-      anonymous,
+      audience: anonymous ? ANYONE : { kind: "classroom", classroomId: room.classroomId },
       type,
       config,
     });
@@ -1161,9 +1269,8 @@ describe("the launcher's recent polls", () => {
   it("relaunches a question that was never kept, and averages the runs", async () => {
     server.clock.advance(60_000);
     const again = await post("/app/api/polls", lecturer.headers, {
-      classroomId: room.classroomId,
+      audience: { kind: "classroom", classroomId: room.classroomId },
       questionId: named.questionId,
-      anonymous: false,
     });
     expect(again.statusCode).toBe(201);
     expect(again.json().question).toMatchObject({ id: named.questionId, saved: false });
@@ -1194,9 +1301,8 @@ describe("the launcher's recent polls", () => {
     const theirs = await get("/app/api/polls/questions", colleague.headers);
     expect(theirs.json()).toEqual([]);
     const refused = await post("/app/api/polls", colleague.headers, {
-      classroomId: room.classroomId,
+      audience: { kind: "classroom", classroomId: room.classroomId },
       questionId: named.questionId,
-      anonymous: true,
     });
     expect(refused.statusCode).toBe(404);
   });

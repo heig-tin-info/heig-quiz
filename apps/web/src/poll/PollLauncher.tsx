@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 
 import type {
   CourseSummary,
+  PollAudience,
   PollQuestionPick,
   PollTeacherView,
   ZodIssueLite,
@@ -34,7 +35,6 @@ import {
   Select,
   SettingRow,
   Skeleton,
-  Switch,
   Tabs,
   usePersistentChoice,
 } from "../ui";
@@ -102,11 +102,32 @@ function refusedIssues(error: unknown): readonly ZodIssueLite[] | null {
   return body?.error === "config_invalid" ? (body.details ?? []) : null;
 }
 
-/** The classroom the last poll was thrown in; a convenience, never state. */
+/*
+ * One audience, not a classroom and a switch. Who answers is ONE choice
+ * (ADR-014, addendum 2026-09-27): anyone with the code, anonymously — the
+ * poll then belongs to no classroom — or the students of one classroom,
+ * signed in and by name. The launcher used to ask for a classroom AND
+ * whether the poll was anonymous, and "a classroom, anonymously" was a poll
+ * filed under a class that anybody could answer.
+ */
+
+/**
+ * The audience of the last poll — a classroom id, or {@link ANYONE}; a
+ * convenience, never state. The key predates the audience and still holds
+ * the classroom a teacher last polled, which stays a valid choice.
+ */
 const ROOM_KEY = "quiz-poll-classroom";
 
-/** Any stored id is taken; one that no longer exists falls back below. */
+/** The audience value of "anyone with the code". A classroom id never reads so. */
+const ANYONE = "anonymous";
+
+/** Any stored value is taken; a classroom that no longer exists falls back below. */
 const anyRoom = (raw: string): raw is string => true;
+
+/** What the Select holds, as the contract's audience. */
+function audienceOf(choice: string): PollAudience {
+  return choice === ANYONE ? { kind: "anonymous" } : { kind: "classroom", classroomId: choice };
+}
 
 /** The first line of a prompt, short enough for a row. */
 export function promptLine(prompt: string, max = 120): string {
@@ -182,8 +203,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
   const [chosenTab, setTab] = useState<"pick" | "new" | null>(null);
   const [query, setQuery] = useState("");
   const [questionId, setQuestionId] = useState<string | null>(null);
-  const [anonymous, setAnonymous] = useState(true);
-  const [room, setRoom] = usePersistentChoice<string>(ROOM_KEY, anyRoom, "");
+  const [room, setRoom] = usePersistentChoice<string>(ROOM_KEY, anyRoom, ANYONE);
   const [type, setType] = useState<PollType>(POLL_TYPES[0]);
   // One working copy per type, so a switch back and forth loses nothing.
   const [drafts, setDrafts] = useState<Partial<Record<PollType, unknown>>>({});
@@ -211,8 +231,13 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
       ),
     [courses.data],
   );
-  // The remembered classroom, when it still exists; otherwise the first one.
-  const classroomId = rooms.some((r) => r.id === room) ? room : (rooms[0]?.id ?? "");
+  // The remembered audience, when its classroom still exists; otherwise
+  // anyone with the code, which needs no classroom at all.
+  const choice = room !== ANYONE && rooms.some((r) => r.id === room) ? room : ANYONE;
+  const audience = audienceOf(choice);
+  // Until the classrooms are known, the remembered one cannot be shown, and
+  // a start would silently go to "anyone".
+  const audienceReady = !courses.isLoading;
 
   const filtered = useMemo(
     () =>
@@ -224,10 +249,10 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
     mutationFn: () =>
       api<PollTeacherView>("/app/api/polls", {
         method: "POST",
-        body: JSON.stringify({ questionId, classroomId, anonymous }),
+        body: JSON.stringify({ questionId, audience }),
       }),
     onSuccess: (view) => {
-      setRoom(view.evaluation.classroomId);
+      setRoom(view.evaluation.classroomId ?? ANYONE);
       navigate({ view: "poll", id: view.evaluation.id });
     },
   });
@@ -236,10 +261,10 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
     mutationFn: () =>
       api<PollTeacherView>("/app/api/polls/inline", {
         method: "POST",
-        body: JSON.stringify({ type, config, classroomId, anonymous }),
+        body: JSON.stringify({ type, config, audience }),
       }),
     onSuccess: (view) => {
-      setRoom(view.evaluation.classroomId);
+      setRoom(view.evaluation.classroomId ?? ANYONE);
       navigate({ view: "poll", id: view.evaluation.id });
     },
   });
@@ -254,7 +279,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
         data-coach="polls.launch"
         onClick={() => start.mutate()}
         loading={start.isPending}
-        disabled={questionId === null || classroomId === ""}
+        disabled={questionId === null || !audienceReady}
       >
         {t("poll.startAction")}
       </Button>
@@ -263,7 +288,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
         data-coach="polls.launch"
         onClick={() => inline.mutate()}
         loading={inline.isPending}
-        disabled={classroomId === ""}
+        disabled={!audienceReady}
       >
         {t("poll.startAction")}
       </Button>
@@ -273,17 +298,17 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
     <div className="mx-auto w-full max-w-3xl space-y-6">
       <PageHeader title={t("poll.launcher")} description={t("poll.launcherHint")} actions={primary} />
       <div className="divide-y divide-line border-b border-line pb-1">
-        <SettingRow title={t("poll.classroom")} desc={t("poll.classroomHint")} className="pt-0">
+        <SettingRow title={t("poll.audience")} desc={t("poll.audienceHint")} className="pt-0">
           {courses.isLoading ? (
-            <Skeleton className="h-9 w-56" />
+            <Skeleton className="h-9 w-full sm:w-80" />
           ) : (
             <Select
-              aria-label={t("poll.classroom")}
-              width="w-56"
-              value={classroomId}
+              aria-label={t("poll.audience")}
+              width="w-full sm:w-80"
+              value={choice}
               onChange={(e) => setRoom(e.currentTarget.value)}
             >
-              {rooms.length === 0 ? <option value="">{t("poll.noClassroom")}</option> : null}
+              <option value={ANYONE}>{t("poll.audience.anonymous")}</option>
               {rooms.map((r) => (
                 <option key={r.id} value={r.id}>
                   {r.label}
@@ -291,9 +316,6 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
               ))}
             </Select>
           )}
-        </SettingRow>
-        <SettingRow title={t("poll.anonymous")} desc={t("poll.anonymousHint")}>
-          <Switch checked={anonymous} label={t("poll.anonymous")} onChange={setAnonymous} />
         </SettingRow>
       </div>
       <Tabs

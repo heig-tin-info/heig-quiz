@@ -10,7 +10,7 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 | F-AUTH-02 | On first sign-in, the account is created with name, email and a role derived from the edu-ID affiliation: `staff` or `faculty` gives `teacher`, `student` gives `student`. | P1 | M |
 | F-AUTH-03 | The admin is identified by a list of edu-ID identifiers in the configuration. They may promote or demote a user to `teacher`. | P1 | M |
 | F-AUTH-04 | The session persists for 30 days. An explicit sign-out is available. A running exam never asks to sign in again. | P1 | M |
-| F-AUTH-05 | A participant without an account may join an evaluation in `poll` mode through a session code, anonymously: no pseudonym is asked for nor stored (see 06 no. 18). | P2 | M |
+| F-AUTH-05 | A participant without an account may join an evaluation in `poll` mode through a session code, anonymously: no pseudonym is asked for nor stored (see 06 no. 18). Only an anonymous poll, which belongs to no classroom, takes such a participant; a classroom's poll admits its roster and its staff, signed in (ADR-014, addendum 2026-09-27). | P2 | M |
 
 ## F-ORG Courses, classrooms, rosters
 
@@ -94,7 +94,7 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 | F-LIVE-10 | The student may hand in before the end after a confirmation. At the deadline the attempt is closed by the server. | P1 | M |
 | F-LIVE-11 | The teacher may pause, resume, add 1, 5 or 10 minutes to everybody or to one student, and close. Every action is propagated immediately and logged. | P1 | M |
 | F-LIVE-12 | A late student starts with the full duration in `duration` mode, or until the common end in `deadline` mode. The teacher may grant them time individually. | P1 | M |
-| F-LIVE-13 | `poll` mode: one question, aggregated results live on the teacher's screen, reveal of the correct answer on demand, possibility to relaunch the same question. A question written for the poll alone may have no correct answer (an opinion poll): the reveal then shows the distribution only, and nothing is graded (ADR-014, addendum 2026-09-23). | P2 | M |
+| F-LIVE-13 | `poll` mode: one question, aggregated results live on the teacher's screen, reveal of the correct answer on demand, possibility to relaunch the same question. A question written for the poll alone may have no correct answer (an opinion poll): the reveal then shows the distribution only, and nothing is graded (ADR-014, addendum 2026-09-23). Its audience is ONE choice: anyone with the code, anonymously, in no classroom and reached by its owner only; or one classroom, by name, restricted to its roster and staff (ADR-014, addendum 2026-09-27). | P2 | M |
 | F-LIVE-14 | The teacher may project a "presentation" view without student names: completion rate, and in `poll` the distribution of answers. | P2 | S |
 
 ## F-DASH Teacher's live dashboard

@@ -124,9 +124,13 @@ export function ProjectionHeader({
    * travel with `PollTeacherView.evaluation`. This screen used to fetch
    * `GET /classrooms/:id` for those two words — a second request, and a
    * second thing that can be in flight, on a page whose whole job is to be
-   * already there on a beamer.
+   * already there on a beamer. An anonymous poll lives in no classroom: the
+   * line says who may answer instead.
    */
-  const context = `${view.evaluation.courseName} · ${view.evaluation.classroomName}`;
+  const context =
+    view.evaluation.classroomName === null
+      ? t("poll.audience.context")
+      : `${view.evaluation.courseName ?? ""} · ${view.evaluation.classroomName}`;
   // An opinion poll has no answer to reveal; the switch shows the phones
   // the results instead (ADR-014, addendum 2026-09-23).
   const keyed = hasKey(view.question);
@@ -146,7 +150,10 @@ export function ProjectionHeader({
         {/* No menu on this screen (#157): the way out is the arrow before
             where we are, as on every page that has a way back. */}
         <span className="-mr-2 flex items-center">
-          <IconButton label={t("poll.back")} onClick={onBack}>
+          <IconButton
+            label={view.evaluation.classroomId === null ? t("poll.backToPolls") : t("poll.back")}
+            onClick={onBack}
+          >
             <ArrowLeft />
           </IconButton>
         </span>

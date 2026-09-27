@@ -41,6 +41,8 @@ import {
   feedbackOf,
   gradeDefaults,
   negativeMarkingEnabled,
+  classroomIdOf,
+  seatsOf,
   sebRequired,
   settingsOf,
   type EvaluationRecord,
@@ -304,7 +306,7 @@ export async function participantOf(
     .from(enrollments)
     .where(
       and(
-        eq(enrollments.classroomId, evaluation.classroomId),
+        seatsOf(evaluation),
         eq(enrollments.userId, userId),
       ),
     )
@@ -359,7 +361,7 @@ async function seatOf(
     .from(enrollments)
     .where(
       and(
-        eq(enrollments.classroomId, evaluation.classroomId),
+        seatsOf(evaluation),
         eq(enrollments.userId, userId),
       ),
     )
@@ -423,7 +425,10 @@ export async function enrolledCounts(
   rows: readonly EvaluationRecord[],
 ): Promise<Map<string, number>> {
   if (rows.length === 0) return new Map();
-  const classroomIds = [...new Set(rows.map((r) => r.classroomId))];
+  // An anonymous poll has no classroom, and so no seat to count.
+  const classroomIds = [
+    ...new Set(rows.flatMap((r) => (r.classroomId === null ? [] : [r.classroomId]))),
+  ];
   const klass = await db
     .select({ classroomId: enrollments.classroomId, n: count() })
     .from(enrollments)
@@ -447,7 +452,7 @@ export async function enrolledCounts(
   const byClassroom = new Map(klass.map((k) => [k.classroomId, k.n]));
   const byEvaluation = new Map(staff.map((s) => [s.evaluationId, s.n]));
   return new Map(
-    rows.map((r) => [r.id, (byClassroom.get(r.classroomId) ?? 0) + (byEvaluation.get(r.id) ?? 0)]),
+    rows.map((r) => [r.id, (byClassroom.get(r.classroomId ?? "") ?? 0) + (byEvaluation.get(r.id) ?? 0)]),
   );
 }
 
@@ -1337,7 +1342,7 @@ export async function studentHome(db: Db, userId: string, now: Date): Promise<St
     title: row.evaluation.title,
     mode: row.evaluation.mode,
     state: row.evaluation.state,
-    classroomId: row.evaluation.classroomId,
+    classroomId: classroomIdOf(row.evaluation),
     classroomName: row.classroomName,
     courseCode: row.courseCode,
     opensAt: isoOrNull(row.evaluation.opensAt),
