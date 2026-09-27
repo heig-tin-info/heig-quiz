@@ -128,8 +128,15 @@ describe("the question-type guide", () => {
 describe("an authoring session", () => {
   it("builds a course, a classroom, a pool, three questions and an exercise", async () => {
     const course = await ok("create_course", { name: "Français", code: "FRA-MCP" });
-    const room = await ok("create_classroom", { courseId: course.id, name: "Français 2026", period: "2026" });
+    const room = await ok("create_classroom", {
+      courseId: course.id,
+      name: "Français 2026",
+      period: "Automne 2026",
+      periodStart: "2026-09",
+      periodEnd: "2027-01",
+    });
     expect(room.url).toContain(`/classrooms/${room.id}`);
+    expect([room.periodStart, room.periodEnd]).toEqual(["2026-09", "2027-01"]);
     const pool = await ok("create_pool", { name: "Culture générale" });
     await ok("link_pool_to_course", { courseId: course.id, poolId: pool.id });
     // Idempotent: a second link keeps one entry.

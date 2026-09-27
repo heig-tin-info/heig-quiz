@@ -23,12 +23,19 @@ import { systemClock } from "./clock.js";
 import { loadConfig } from "./config.js";
 import { createDb, type Db } from "./db/client.js";
 import { classrooms, courseStaff, courses, enrollments } from "./db/schema.js";
+import { createClassroom } from "./modules/org/service.js";
 import { UnavailableRunner } from "./modules/runner/unavailable.js";
 import { MIGRATIONS_DIR } from "./paths.js";
 import { seedDemoContent } from "./seed/demo.js";
 
 const COURSE = { name: "Programmation C", code: "PRG1" };
-const CLASSROOM = { name: "PRG1-2026", period: "2026-A" };
+/** Dated explicitly (#156): autumn 2026, so the sidebar's "right now" list holds it. */
+const CLASSROOM = {
+  name: "PRG1-2026",
+  period: "2026-A",
+  periodStart: "2026-09",
+  periodEnd: "2027-01",
+};
 /** Léa gets the accommodation, so the extra-time path is always exercised. */
 const TIME_BONUS: Record<string, number> = { lea: 25 };
 
@@ -80,15 +87,7 @@ export async function seed(db: Db, log: (msg: string) => void = console.log) {
     .from(classrooms)
     .where(and(eq(classrooms.courseId, course!.id), eq(classrooms.name, CLASSROOM.name)))
     .limit(1);
-  const classroomId = existing?.id ?? randomUUID();
-  if (!existing) {
-    await db.insert(classrooms).values({
-      id: classroomId,
-      courseId: course!.id,
-      name: CLASSROOM.name,
-      period: CLASSROOM.period,
-    });
-  }
+  const classroomId = existing?.id ?? (await createClassroom(db, course!.id, CLASSROOM)).id;
   log(`classroom    ${CLASSROOM.name}`);
 
   const students: Persona[] = PERSONAS.filter((p) => p.role === "student");

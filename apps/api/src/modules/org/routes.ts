@@ -140,6 +140,8 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
           id: r.id,
           name: r.name,
           period: r.period,
+          periodStart: r.periodStart,
+          periodEnd: r.periodEnd,
           archivedAt: r.archivedAt?.toISOString() ?? null,
           joinCode: r.joinCode,
           joinCodeEnabled: r.joinCodeEnabled,
@@ -298,6 +300,8 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
       id: scope.room.id,
       name: scope.room.name,
       period: scope.room.period,
+      periodStart: scope.room.periodStart,
+      periodEnd: scope.room.periodEnd,
       archivedAt: scope.room.archivedAt?.toISOString() ?? null,
       course: { id: scope.course.id, name: scope.course.name, code: scope.course.code },
       roster: await rosterView(app.db, scope.room.id),
@@ -319,7 +323,8 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
         });
       }
       const updated = await service.updateClassroom(app.db, scope.room.id, body.data);
-      if (body.data.name !== undefined || body.data.period !== undefined) {
+      const { name, period, periodStart } = body.data;
+      if (name !== undefined || period !== undefined || periodStart !== undefined) {
         await trace(req, "classroom.rename", "classroom", scope.room.id, {
           from: scope.room.name,
           to: updated!.name,

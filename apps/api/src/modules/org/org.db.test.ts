@@ -205,6 +205,81 @@ describe("roster accommodations (F-ORG-07)", () => {
   });
 });
 
+describe("dated period (F-ORG-03, #156)", () => {
+  // A course of its own: the other blocks count the classrooms of `courseId`.
+  const courseId = randomUUID();
+  beforeAll(async () => {
+    await server.app.db.insert(courses).values({ id: courseId, name: "Périodes", code: "PER1" });
+    await server.app.db.insert(courseStaff).values({ courseId, userId: teacher.id });
+  });
+
+  const create = (payload: Record<string, unknown>) =>
+    server.app.inject({
+      method: "POST",
+      url: `/app/api/courses/${courseId}/classrooms`,
+      headers: teacher.headers,
+      payload,
+    });
+
+  it("creates an undated classroom by default, and a dated one on request", async () => {
+    const undated = await create({ name: "Sans dates" });
+    expect(undated.statusCode).toBe(201);
+    expect(undated.json()).toMatchObject({ periodStart: null, periodEnd: null });
+
+    const dated = await create({
+      name: "Automne",
+      period: "Automne 2026",
+      periodStart: "2026-09",
+      periodEnd: "2027-01",
+    });
+    expect(dated.statusCode).toBe(201);
+    const detail = await server.app.inject({
+      method: "GET",
+      url: `/app/api/classrooms/${dated.json().id}`,
+      headers: teacher.headers,
+    });
+    expect(detail.json()).toMatchObject({
+      period: "Automne 2026",
+      periodStart: "2026-09",
+      periodEnd: "2027-01",
+    });
+  });
+
+  it("refuses half a period and an end before the start, at the contract", async () => {
+    expect((await create({ name: "x", periodStart: "2026-09" })).statusCode).toBe(400);
+    expect(
+      (await create({ name: "x", periodStart: "2027-01", periodEnd: "2026-09" })).statusCode,
+    ).toBe(400);
+  });
+
+  it("dates, then undates, a classroom by PATCH", async () => {
+    const id = (await create({ name: "Printemps" })).json().id as string;
+    const patch = (payload: unknown) =>
+      server.app.inject({
+        method: "PATCH",
+        url: `/app/api/classrooms/${id}`,
+        headers: teacher.headers,
+        payload,
+      });
+    const dated = await patch({ periodStart: "2027-02", periodEnd: "2027-07" });
+    expect(dated.json()).toMatchObject({ periodStart: "2027-02", periodEnd: "2027-07" });
+    expect((await patch({ periodStart: "2027-03" })).statusCode).toBe(400);
+    const cleared = await patch({ periodStart: null, periodEnd: null });
+    expect(cleared.json()).toMatchObject({ periodStart: null, periodEnd: null });
+  });
+
+  it("is also enforced by the database check", async () => {
+    const insert = (periodStart: string | null, periodEnd: string | null) =>
+      server.app.db
+        .insert(classrooms)
+        .values({ id: randomUUID(), courseId, name: "raw", periodStart, periodEnd });
+    await expect(insert("2026-09", null)).rejects.toThrow();
+    await expect(insert("2027-01", "2026-09")).rejects.toThrow();
+    await expect(insert("2026-13", "2027-01")).rejects.toThrow();
+    await expect(insert("2026-09", "2026-09")).resolves.toBeDefined();
+  });
+});
+
 describe("GET /courses/:id", () => {
   it("returns the course, its staff, its classrooms and its pools", async () => {
     const pool = await server.app.inject({
