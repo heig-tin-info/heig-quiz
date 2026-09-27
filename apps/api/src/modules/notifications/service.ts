@@ -35,9 +35,10 @@ import {
 } from "@quiz/contracts";
 
 import type { Db } from "../../db/client.js";
-import { notificationPreferences, notifications, teamsLinks, users } from "../../db/schema.js";
+import { notificationPreferences, notifications, users } from "../../db/schema.js";
 import { hint, userTopic } from "../realtime/bus.js";
 import { enqueueDeliveries, teamsOpen, type ExternalChannel } from "./outbox.js";
+import { teamsLinkOf } from "./teamsLink.js";
 
 const DEFAULT_LIMIT = 30;
 
@@ -99,7 +100,7 @@ export async function notify(
   const external: ExternalChannel[] = [];
   if (wanted.email) external.push("email");
   // A Teams job needs a link; without one it would only be dropped later.
-  if (wanted.teams && teamsOpen() && (await teamsLinkOf(db, userId))) external.push("teams");
+  if (wanted.teams && teamsOpen() && (await teamsLinkOf(db, { userId }))) external.push("teams");
   if (external.length > 0) await enqueueDeliveries(userId, parsed, external);
   return created;
 }
@@ -253,71 +254,24 @@ export async function notificationSettings(
 ): Promise<NotificationSettings> {
   const [matrix, link, [user]] = await Promise.all([
     preferenceMatrix(db, userId),
-    teamsLinkOf(db, userId),
+    teamsLinkOf(db, { userId }),
     db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1),
   ]);
+  // A link made while Teams was configured means nothing once it is not.
+  const shown = teamsAvailable ? link : null;
   return {
     matrix,
     email: user?.email ?? "",
     teams: {
       available: teamsAvailable,
-      // A link made while Teams was configured means nothing once it is not.
-      linkedAt: teamsAvailable && link ? link.linkedAt.toISOString() : null,
+      linkedAt: shown?.linkedAt.toISOString() ?? null,
+      teamsName: shown?.teamsName ?? null,
     },
   };
 }
 
 // --- The Teams link (ADR-030) ----------------------------------------------
+// Made, read and forgotten in `teamsLink.ts`; the entry other modules import
+// is this one.
 
-export type TeamsLink = typeof teamsLinks.$inferSelect;
-
-export async function teamsLinkOf(db: Db, userId: string): Promise<TeamsLink | null> {
-  const [row] = await db.select().from(teamsLinks).where(eq(teamsLinks.userId, userId)).limit(1);
-  return row ?? null;
-}
-
-/**
- * Links (or re-links) an account to a Microsoft identity. A new identity
- * forgets the cached chat, which belonged to the previous one.
- */
-export async function linkTeams(
-  db: Db,
-  userId: string,
-  identity: { tenantId: string; objectId: string },
-  now: Date,
-): Promise<TeamsLink> {
-  const [row] = await db
-    .insert(teamsLinks)
-    .values({ userId, ...identity, chatId: null, linkedAt: now })
-    .onConflictDoUpdate({
-      target: teamsLinks.userId,
-      set: { ...identity, chatId: null, linkedAt: now },
-    })
-    .returning();
-  return row!;
-}
-
-/** Forgets the link; false when there was none. */
-export async function unlinkTeams(db: Db, userId: string): Promise<boolean> {
-  const deleted = await db
-    .delete(teamsLinks)
-    .where(eq(teamsLinks.userId, userId))
-    .returning({ userId: teamsLinks.userId });
-  return deleted.length > 0;
-}
-
-/**
- * Caches the chat a delivery found — for THAT identity only: a link replaced
- * while the job ran keeps its own (null) chat.
- */
-export async function rememberTeamsChat(
-  db: Db,
-  userId: string,
-  objectId: string,
-  chatId: string,
-): Promise<void> {
-  await db
-    .update(teamsLinks)
-    .set({ chatId })
-    .where(and(eq(teamsLinks.userId, userId), eq(teamsLinks.objectId, objectId)));
-}
+export { teamsLinkOf, unlinkTeams, type TeamsLink } from "./teamsLink.js";

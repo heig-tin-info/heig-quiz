@@ -52,7 +52,7 @@ import type {
   ZodIssueLite,
 } from "@quiz/contracts";
 import { issuesOf } from "@quiz/contracts";
-import { effectivePoolRole } from "@quiz/domain";
+import { displayName, effectivePoolRole } from "@quiz/domain";
 
 import { isForeignKeyViolation, isUniqueViolation, type Db } from "../../db/client.js";
 import {
@@ -179,12 +179,6 @@ function poolJson(pool: PoolRow): Pool {
     createdAt: pool.createdAt.toISOString(),
     updatedAt: pool.updatedAt.toISOString(),
   };
-}
-
-/** "Prof Démo", or the e-mail when the account has no name yet. */
-function displayName(row: { givenName: string | null; familyName: string | null; email: string }): string {
-  const full = `${row.givenName ?? ""} ${row.familyName ?? ""}`.trim();
-  return full === "" ? row.email : full;
 }
 
 /** The facts `effectivePoolRole` needs, gathered per row rather than per pool. */

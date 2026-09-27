@@ -23,12 +23,11 @@ import { users } from "../db/schema.js";
 import { sebSeat } from "../modules/live/service.js";
 import { consumeLaunchTicket, issueLaunchTicket } from "./launch.js";
 
-/** Where the `.seb` starts; the ticket secret is the last segment. */
-const LAUNCH_PATH = "/app/auth/seb/";
-
-/** The launch URL with its secret masked, for the request log. */
-export const redactLaunchUrl = (url: string): string =>
-  url.startsWith(LAUNCH_PATH) ? `${LAUNCH_PATH}…` : url;
+/**
+ * Where the `.seb` starts; the ticket secret is the last segment, which the
+ * request log masks (`redact.ts`).
+ */
+export const LAUNCH_PATH = "/app/auth/seb/";
 
 // --- The file --------------------------------------------------------------
 

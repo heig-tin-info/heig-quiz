@@ -182,23 +182,37 @@ const EnvSchema = z.object({
   MAIL_REGION: z.string().default("fr-par"),
 
   /**
-   * Microsoft Teams: ONE multi-tenant Entra application that is at once the
-   * "Connect Teams" sign-in, the Graph client that installs the app for a
-   * user, and the bot that writes to them (docs/development/teams.md). The channel exists
-   * only when the three are set; otherwise the settings say Teams is not
-   * available and its routes answer 503.
+   * Microsoft Teams: the Entra application of the Azure Bot "HEIG Quiz"
+   * (docs/development/teams.md). The users upload its Teams app themselves;
+   * no tenant consent and no Graph permission are involved. The channel
+   * exists only when both are set; otherwise the settings say Teams is not
+   * available and its routes answer 404 or 503.
    */
   TEAMS_CLIENT_ID: z.string().default(""),
   TEAMS_CLIENT_SECRET: z.string().default(""),
-  /** The id of the Teams app in the tenants' catalogs (its manifest id once published). */
-  TEAMS_APP_ID: z.string().default(""),
   /**
    * The tenant that issues the bot's Bot Connector token: `botframework.com`
    * for a multi-tenant bot, the home tenant id for a single-tenant one.
    */
   TEAMS_BOT_TENANT: z.string().default("botframework.com"),
-  /** Bot Connector endpoint for Teams; the global one routes to every region. */
-  TEAMS_SERVICE_URL: z.string().default("https://smba.trafficmanager.net/teams"),
+  /**
+   * The Microsoft 365 organizations (Entra tenant ids, comma-separated)
+   * whose Teams accounts may be linked: the bot mints no link for anyone
+   * else, and the link page refuses it again. EMPTY ADMITS EVERY TENANT —
+   * anybody who uploads the app could then send a HEIG user a link to their
+   * own chat — which is acceptable for a test bot and nowhere else (ADR-030).
+   * Parsed once, here, into lower-cased ids; `tenantAllowed` (teamsLink.ts)
+   * is the one reader.
+   */
+  TEAMS_ALLOWED_TENANTS: z
+    .string()
+    .default("")
+    .transform((list) =>
+      list
+        .split(",")
+        .map((t) => t.trim().toLowerCase())
+        .filter((t) => t !== ""),
+    ),
 });
 
 export type AppConfig = z.infer<typeof EnvSchema>;
@@ -272,8 +286,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     SCW_DEFAULT_PROJECT_ID: parsed.data.SCW_DEFAULT_PROJECT_ID.trim(),
     TEAMS_CLIENT_ID: parsed.data.TEAMS_CLIENT_ID.trim(),
     TEAMS_CLIENT_SECRET: parsed.data.TEAMS_CLIENT_SECRET.trim(),
-    TEAMS_APP_ID: parsed.data.TEAMS_APP_ID.trim(),
-    TEAMS_SERVICE_URL: parsed.data.TEAMS_SERVICE_URL.trim().replace(/\/+$/, ""),
+    TEAMS_BOT_TENANT: parsed.data.TEAMS_BOT_TENANT.trim() || "botframework.com",
     SUPER_ADMIN_EMAIL: parsed.data.SUPER_ADMIN_EMAIL.trim().toLowerCase(),
     LOGIN_ALLOWLIST: parsed.data.LOGIN_ALLOWLIST.split(",")
       .map((e) => e.trim().toLowerCase())
@@ -294,12 +307,11 @@ export function mailEnabled(
   return config.SCW_SECRET_KEY !== "" && config.SCW_DEFAULT_PROJECT_ID !== "";
 }
 
-/** The Teams channel exists: its Entra application is configured (ADR-030). */
-export function teamsEnabled(
-  config: Pick<AppConfig, "TEAMS_CLIENT_ID" | "TEAMS_CLIENT_SECRET" | "TEAMS_APP_ID">,
-): boolean {
-  return config.TEAMS_CLIENT_ID !== "" && config.TEAMS_CLIENT_SECRET !== "" && config.TEAMS_APP_ID !== "";
+/** The Teams channel exists: its bot's Entra application is configured (ADR-030). */
+export function teamsEnabled(config: Pick<AppConfig, "TEAMS_CLIENT_ID" | "TEAMS_CLIENT_SECRET">): boolean {
+  return config.TEAMS_CLIENT_ID !== "" && config.TEAMS_CLIENT_SECRET !== "";
 }
+
 
 /**
  * Whether a login revealing `emails` (normalized) may open a session. An

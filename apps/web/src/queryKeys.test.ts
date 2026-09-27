@@ -19,6 +19,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["apiTokensKey", keys.apiTokensKey, ["api-tokens"]],
     ["connectionsKey", keys.connectionsKey, ["oauth-connections"]],
     ["oauthRequestKey", keys.oauthRequestKey("q1"), ["oauth-request", "q1"]],
+    ["teamsLinkKey", keys.teamsLinkKey("t1"), ["teams-link", "t1"]],
     ["coursesKey", keys.coursesKey, ["courses"]],
     ["courseKey", keys.courseKey("c1"), ["course", "c1"]],
     ["courseTemplatesKey", keys.courseTemplatesKey("c1"), ["course", "c1", "templates"]],

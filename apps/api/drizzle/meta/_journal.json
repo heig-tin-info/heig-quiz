@@ -155,6 +155,13 @@
       "when": 1790542207982,
       "tag": "0021_classroom_period_months",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1790543216207,
+      "tag": "0022_teams_uploaded_app",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BellRing } from "lucide-react";
-import { useEffect } from "react";
 
 import {
   NOTIFICATION_CHANNELS,
@@ -10,7 +9,6 @@ import {
   type NotificationKind,
   type NotificationPreferencePut,
   type NotificationSettings,
-  type TeamsConnectStart,
 } from "@quiz/contracts";
 
 import { api } from "../api";
@@ -22,6 +20,7 @@ import {
   Card,
   FormError,
   isoDateTime,
+  LinkButton,
   QueryError,
   SectionHeading,
   SettingRow,
@@ -32,7 +31,8 @@ import {
 /**
  * Where each kind of notification reaches this account (ADR-030): a grid of
  * kinds × channels, then the channels themselves — the e-mail address, which
- * needs nothing, and Microsoft Teams, which needs one "Connect" at Microsoft.
+ * needs nothing, and Microsoft Teams, which needs the HEIG Quiz app uploaded
+ * into the user's Teams and its chat linked (the link page, `TeamsLinkPage`).
  *
  * The grid lists the kinds the account's role receives (a student is only
  * ever told of a released result). The Teams column is there only when the
@@ -44,22 +44,6 @@ import {
 const SETTINGS_URL = "/app/api/notifications/settings";
 
 type TKey = Parameters<ReturnType<typeof useT>>[0];
-
-/** `?teams=linked|error`, the landing of the Microsoft round trip: said once, then dropped. */
-function useTeamsOutcome() {
-  const t = useT();
-  const toast = useToast();
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const outcome = params.get("teams");
-    if (outcome !== "linked" && outcome !== "error") return;
-    if (outcome === "linked") toast(t("settings.teams.linkedToast"), "success");
-    else toast(t("settings.teams.errorToast"), "error");
-    params.delete("teams");
-    const query = params.toString();
-    window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
-  }, [t, toast]);
-}
 
 function ChannelGrid({
   settings,
@@ -130,19 +114,14 @@ function ChannelGrid({
   );
 }
 
+/** Where the platform serves the Teams app package (ADR-030). */
+const TEAMS_APP_URL = "/app/api/notifications/teams/app.zip";
+
 function TeamsRow({ settings }: { settings: NotificationSettings }) {
   const t = useT();
   const toast = useToast();
   const toastError = useErrorToast();
   const qc = useQueryClient();
-  const connect = useMutation({
-    mutationFn: () =>
-      api<TeamsConnectStart>("/app/api/notifications/teams/connect", { method: "POST" }),
-    // The rest of the flow is Microsoft's page, then the callback, then back
-    // here with `?teams=linked`.
-    onSuccess: ({ url }) => window.location.assign(url),
-    onError: toastError("settings.teams.errorToast"),
-  });
   const disconnect = useMutation({
     mutationFn: () =>
       api<NotificationSettings>("/app/api/notifications/teams", { method: "DELETE" }),
@@ -152,31 +131,44 @@ function TeamsRow({ settings }: { settings: NotificationSettings }) {
     },
     onError: toastError("error.save"),
   });
-  const { available, linkedAt } = settings.teams;
-  const desc = !available
-    ? t("settings.teams.unavailable")
-    : linkedAt
-      ? t("settings.teams.linked", { date: isoDateTime(linkedAt) })
-      : t("settings.teams.off");
-  return (
-    <SettingRow title={t("settings.teams.title")} desc={desc}>
-      {!available ? null : linkedAt ? (
+  const { available, linkedAt, teamsName } = settings.teams;
+  if (!available) {
+    return <SettingRow title={t("settings.teams.title")} desc={t("settings.teams.unavailable")} />;
+  }
+  if (linkedAt) {
+    return (
+      <SettingRow
+        title={t("settings.teams.title")}
+        desc={t("settings.teams.linked", { name: teamsName ?? "", date: isoDateTime(linkedAt) })}
+      >
         <Button variant="secondary" size="sm" loading={disconnect.isPending} onClick={() => disconnect.mutate()}>
           {t("settings.teams.disconnect")}
         </Button>
-      ) : (
-        <Button variant="secondary" size="sm" loading={connect.isPending} onClick={() => connect.mutate()}>
-          {t("settings.teams.connect")}
-        </Button>
-      )}
-    </SettingRow>
+      </SettingRow>
+    );
+  }
+  // Not linked: the package to upload, and the three steps that follow in
+  // Teams. The link itself is confirmed on the page the bot's card opens.
+  return (
+    <div className="pb-3">
+      <SettingRow title={t("settings.teams.title")} desc={t("settings.teams.off")}>
+        <LinkButton size="sm" href={TEAMS_APP_URL} download="heig-quiz-teams.zip">
+          {t("settings.teams.download")}
+        </LinkButton>
+      </SettingRow>
+      <p className="text-xs font-medium text-fg-muted">{t("settings.teams.steps")}</p>
+      <ol className="mt-1 list-decimal space-y-1 pl-5 text-[13px] text-fg-muted">
+        <li>{t("settings.teams.step1")}</li>
+        <li>{t("settings.teams.step2")}</li>
+        <li>{t("settings.teams.step3")}</li>
+      </ol>
+    </div>
   );
 }
 
 export function NotificationSettingsSection({ me }: { me: Me }) {
   const t = useT();
   const qc = useQueryClient();
-  useTeamsOutcome();
   const settings = useQuery<NotificationSettings>({
     queryKey: notificationSettingsKey,
     queryFn: () => api(SETTINGS_URL),

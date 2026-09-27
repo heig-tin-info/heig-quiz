@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { displayedRate, formatGrade, formatPoints } from "./format.js";
+import { displayedRate, displayName, formatGrade, formatPoints } from "./format.js";
+
+describe("displayName", () => {
+  it("is the full name, or the e-mail while there is none", () => {
+    expect(displayName({ givenName: "Prof", familyName: "Démo", email: "p@heig.test" })).toBe("Prof Démo");
+    expect(displayName({ givenName: " ", familyName: null, email: "p@heig.test" })).toBe("p@heig.test");
+    expect(displayName({ givenName: null, familyName: "Démo", email: null })).toBe("Démo");
+    expect(displayName({ givenName: null, familyName: null, email: null })).toBe("");
+  });
+});
 
 describe("formatPoints", () => {
   const cases: [number, string][] = [
