@@ -183,6 +183,12 @@ const scenes = [
       await skipCoachTwice(p);
       await p.getByRole("button", { name: /^schedule…$|^planifier…$/i }).first().click();
     } },
+  // The waiting-room preview: a side column from `lg` up (in the scenes
+  // above), a row opening a sheet on a phone.
+  { name: "eval-config-launch-preview-sheet", role: "teacher", path: "/evaluations/draft?step=launch", fold: true, act: async (p) => {
+      await skipCoachTwice(p);
+      await p.getByRole("button", { name: /^what students will see|^ce que verront les étudiants/i }).first().click();
+    } },
   { name: "eval-config-loading", role: "teacher", path: "/evaluations/draft?slow=1", settle: 300 },
   { name: "eval-config-error", role: "teacher", path: "/evaluations/draft?fail=1", settle: 2500 },
   // Issue #75: the stateless preview of the whole evaluation — the player

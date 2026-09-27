@@ -146,6 +146,48 @@ describe("LaunchStep checklist (#152)", () => {
   });
 });
 
+describe("the waiting-room preview (#152)", () => {
+  it("draws the student's waiting room without opening its stream", () => {
+    const streams = vi.fn();
+    vi.stubGlobal("EventSource", streams);
+    mockFetch({});
+    const detail = makeEvaluationDetail();
+    render(detail);
+    const preview = screen.getByRole("complementary", { name: /what students will see/i });
+    expect(within(preview).getByText(detail.evaluation.title)).toBeInTheDocument();
+    // Nobody is present yet, out of the roster the launch step counts.
+    expect(within(preview).getByRole("img", { name: /0 .*24/ })).toBeInTheDocument();
+    // A staff seat watching `lobby:` would be counted present (ADR-018).
+    expect(streams).not.toHaveBeenCalled();
+    // Rules only: no question of the evaluation is named in it.
+    for (const item of detail.items) {
+      expect(preview.textContent).not.toContain(item.internalName);
+    }
+    vi.unstubAllGlobals();
+  });
+
+  it("has nothing to preview without a waiting room", () => {
+    mockFetch({});
+    render(
+      withEvaluation({
+        mode: "exercise",
+        settings: { ...makeEvaluationDetail().evaluation.settings, lobby: "skip" },
+      }),
+    );
+    expect(screen.queryByRole("complementary", { name: /what students will see/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /what students will see/i })).toBeNull();
+  });
+
+  it("opens the same picture in a sheet from the phone row", async () => {
+    const user = userEvent.setup();
+    mockFetch({});
+    render(makeEvaluationDetail());
+    await user.click(screen.getByRole("button", { name: /what students will see/i }));
+    const sheet = await screen.findByRole("dialog", { name: /what students will see/i });
+    expect(within(sheet).getByText(makeEvaluationDetail().evaluation.title)).toBeInTheDocument();
+  });
+});
+
 describe("Schedule… (#152)", () => {
   it("writes the opening time, then schedules", async () => {
     const user = userEvent.setup();

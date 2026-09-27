@@ -435,3 +435,47 @@ path work".
 3. **Starting the preview with a query.** The refresh hints invalidate every
    query, and a refetch would draw a new seed and drop the teacher's answers.
    The start is a mutation.
+
+## Addendum (2026-09-27, fifth) — the waiting room previewed from the launch step
+
+### Context
+
+Issue #152 reworks the launch step as a pre-flight checklist, and the product
+owner kept one element of the third proposal: a preview of the students'
+waiting room, beside the list on a desktop and as a sheet on a phone. The
+obvious way — mount the student's `Lobby` — is wrong: it subscribes to
+`lobby:<id>`, the subject that makes a connection COUNT as present
+(F-LIVE-02, ADR-020), and a teacher holding a staff seat (decision 1 above)
+would then appear in the real room's ring while merely reading their
+configuration. A hand-drawn copy of the page would avoid that and drift from
+it with the next change to the lobby.
+
+### Decision
+
+1. **The lobby is split in two.** `LobbyScreen` (`student/Lobby.tsx`) draws
+   the waiting room from props alone — no stream, no clock, no request.
+   `Lobby` is its connected container: it opens the `lobby:` stream, samples
+   the server clock, counts presence and calls `onStart`. The student's page
+   renders `Lobby`, unchanged in behaviour.
+2. **The launch step renders `LobbyScreen` only.** Its view is built on the
+   client from the `EvaluationDetail` the page already holds, with the same
+   fields the server's `lobbyView` sends (title, announced duration,
+   navigation, negative marking); presence is 0 out of `roster.enrolled`, the
+   lobby ring's own denominator (`enrolledCount`). Nothing subscribes, so the
+   teacher is never counted present, and a test asserts that no
+   `EventSource` is opened.
+3. **No question content.** The waiting room states the evaluation's rules,
+   never a question: invariant 4 (`toStudent`) is not involved, and the test
+   checks that no item's name appears in the preview.
+4. **Not offered without a waiting room.** An evaluation with `lobby: skip`
+   opens straight into `running`; it has no room to preview.
+
+### Rejected alternatives
+
+1. **Mounting the real `Lobby` with a "preview" flag.** One prop away from
+   the subscription that counts presence; a flag forgotten once would put the
+   teacher in the ring.
+2. **Excluding staff connections from presence on the server.** A teacher
+   walking their own quiz is meant to be counted (the ring's own comment in
+   `enrolledCount`); the preview must simply not connect.
+3. **A screenshot or a drawn copy.** It drifts from the page it depicts.
