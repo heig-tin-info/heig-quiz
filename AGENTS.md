@@ -51,3 +51,18 @@ git stash -u                                   # in the shared checkout
 git worktree add ../heig-quiz-<subject> -b <subject>
 cd ../heig-quiz-<subject> && git stash pop
 ```
+
+## 6. Roles and guard rails in `.claude/`
+
+- `/feature` (`.claude/skills/feature/SKILL.md`) orders the work on a
+  feature: challenge, plan, implement in a worktree, review, PR. The session
+  that runs it orchestrates; subagents cannot spawn subagents.
+- `spec-challenger` runs before the code: it reads the spec, the ADRs and the
+  open questions, and returns the questions a person must settle.
+- `lean-reviewer` (design, footprint) and `invariant-reviewer` (the
+  invariants of `CLAUDE.md`) review the diff, read-only, before the PR.
+- `.claude/hooks/guard.mjs`, a `PreToolUse` hook, enforces sections 1–3
+  mechanically: it refuses `git add -A|.|-u`, `git commit -a`, a
+  `package.json` committed without the pending `pnpm-lock.yaml` or
+  `pnpm-workspace.yaml`, and an edit to a tracked file in a checkout on
+  `main`. Whoever merges in the main checkout sets `QUIZ_ALLOW_MAIN=1`.
