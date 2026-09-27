@@ -4,7 +4,12 @@
 //
 //   node apps/web/scripts/icons.mjs
 //
-// Every icon is the red Q bubble on an opaque square: iOS rounds the corners
+// Every icon is the Q bubble inverted, a white bubble and a red Q on a red
+// square: one tile that holds on a light and on a dark home screen alike
+// (issue #149), where the red bubble on the paper canvas vanished into a
+// light wallpaper. The tab keeps favicon.svg as it is, red on transparent.
+//
+// The square is opaque: iOS rounds the corners
 // of apple-touch-icon itself and fills transparency with black, and Android
 // crops a `maskable` icon to its own shape, so the mark stays inside the
 // central safe zone (a circle of 80% of the side) and nothing important
@@ -18,10 +23,18 @@ import { chromium } from "playwright-core";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(here, "..", "public");
-const mark = fs.readFileSync(path.join(publicDir, "favicon.svg"), "utf8");
+/** The red of the logo (apps/web/src/assets/quiz.svg), not the reading-weight `--accent`. */
+const RED = "#D60008";
+const WHITE = "#FFFFFF";
 
-/** The light `--canvas` of src/style.css: the icon sits on the app's own paper. */
-const BACKGROUND = "#f6f5f2";
+/** favicon.svg with its two fills swapped: the bubble white, the Q red. */
+const mark = fs
+  .readFileSync(path.join(publicDir, "favicon.svg"), "utf8")
+  .replace(/fill="(#D60008|#FFFFFF)"/gi, (_, fill) =>
+    fill.toUpperCase() === RED ? `fill="${WHITE}"` : `fill="${RED}"`,
+  );
+
+const BACKGROUND = RED;
 /** Share of the side the mark occupies; 0.6 keeps it inside the safe zone. */
 const MARK_RATIO = 0.6;
 
