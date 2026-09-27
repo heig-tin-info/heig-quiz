@@ -14,6 +14,7 @@ export * from "./grade.js";
 export * from "./itemList.js";
 export * from "./lockedTemplate.js";
 export * from "./mcqScore.js";
+export * from "./period.js";
 export * from "./pollOutcome.js";
 export * from "./pollTally.js";
 export * from "./poolRole.js";
