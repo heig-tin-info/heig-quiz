@@ -7,6 +7,7 @@ import { pollOutcome, type PollRunCounts } from "@quiz/domain";
 import {
   D,
   MockError,
+  MockPayload,
   MockValidation,
   flags,
   iso,
@@ -48,10 +49,14 @@ import {
 
 // --- 5. The participant's poll page (/p/:CODE) -----------------------------
 //
-// Three codes, the three shapes that page has to draw:
+// The shapes that page has to draw, one code each. An anonymous poll belongs
+// to no classroom; the others are a classroom's, for its roster only:
 //
 //   QZ4F7K  running, anonymous, mcq         the QR path — no account at all
-//   NM2X9A  running, NOT anonymous, short   the login gate
+//   NM2X9A  running, a classroom's, short   the login gate
+//   CL5S9P  running, a classroom's, mcq     signed in but NOT on its roster:
+//                                           the refusal (ADR-014, addendum
+//                                           2026-09-27)
 //   EN6D3D  ended and revealed, mcq         the key, after the fact
 //   LG8C2M  running, anonymous, mcq         the projection's worst case: a
 //                                           long statement and eight choices
@@ -84,7 +89,10 @@ interface MockPoll {
   code: string;
   title: string;
   state: "running" | "ended";
+  /** No classroom: anyone with the code answers. Otherwise a classroom's poll. */
   anonymous: boolean;
+  /** A classroom's poll whose roster does NOT hold this browser's account. */
+  offRoster?: boolean;
   /** The teacher pressed "Reveal" on this one for good. */
   revealed: boolean;
   /** The distribution is on the wall (#157); absent means hidden. */
@@ -215,7 +223,40 @@ export const polls: MockPoll[] = [
     joined: true,
     answer: { selected: [2] },
   },
+  {
+    code: "CL5S9P",
+    title: "Révision — pointeurs",
+    state: "running",
+    anonymous: false,
+    offRoster: true,
+    revealed: false,
+    type: "mcq",
+    student: {
+      prompt: "Que contient `p` après `int *p = &x;` ?",
+      mode: "single",
+      choices: [
+        { id: 0, text: "L'adresse de `x`" },
+        { id: 1, text: "La valeur de `x`" },
+      ],
+    },
+    solution: { correct: [0] },
+    joined: false,
+    answer: null,
+  },
 ];
+
+/**
+ * A classroom's poll lets in its roster and its staff, signed in; anybody
+ * else signed in is refused before reading anything, like the API does.
+ */
+function refuseOffRoster(poll: MockPoll): void {
+  if (!poll.anonymous && poll.offRoster === true && me !== null) {
+    throw new MockPayload(403, {
+      error: "not_on_roster",
+      message: "This poll is for the students of its classroom",
+    });
+  }
+}
 
 const pollOr404 = (code: string): MockPoll => {
   const poll = polls.find((p) => p.code === code.toUpperCase());
@@ -256,10 +297,15 @@ function publicTally(poll: MockPoll): PollPublicView["tally"] {
   return tp ? tallyOf(tp, poll) : { joined: 0, answered: 0, choices: [], answers: [] };
 }
 
-on("GET", "/app/api/p/:code", (m) => pollPublicView(pollOr404(m.groups!.code!)));
+on("GET", "/app/api/p/:code", (m) => {
+  const poll = pollOr404(m.groups!.code!);
+  refuseOffRoster(poll);
+  return pollPublicView(poll);
+});
 
 on("POST", "/app/api/p/:code/join", (m) => {
   const poll = pollOr404(m.groups!.code!);
+  refuseOffRoster(poll);
   if (!poll.anonymous && me === null) throw new MockError(401, "login_required");
   poll.joined = true;
   return pollPublicView(poll);
@@ -268,6 +314,7 @@ on("POST", "/app/api/p/:code/join", (m) => {
 on("POST", "/app/api/p/:code/answer", (m, body) => {
   const poll = pollOr404(m.groups!.code!);
   if (poll.state === "ended") throw new MockError(410, "This poll has ended.");
+  refuseOffRoster(poll);
   if (!poll.anonymous && me === null) throw new MockError(401, "login_required");
   poll.joined = true;
   poll.answer = body.payload ?? null;
@@ -312,7 +359,8 @@ export interface MockTeacherPoll {
   id: string;
   /** The session code, and therefore the row of `polls` this one is about. */
   code: string;
-  classroomId: string;
+  /** Null for an anonymous poll, which belongs to no classroom. */
+  classroomId: string | null;
   createdAt: string;
   /** Attempts opened, accounts and guests together. */
   joined: number;
@@ -341,15 +389,28 @@ export const teacherPolls: MockTeacherPoll[] = [];
 export const pollOfTeacher = (tp: MockTeacherPoll): MockPoll | null =>
   polls.find((p) => p.code === tp.code) ?? null;
 
+/** `/evaluations/poll/poll` and friends: an alias per seeded poll, classroom or not. */
+const pollAliases = new Map<string, string>();
+
+/** The teacher poll a URL names: its id, its alias, or its evaluation's alias. */
+export const findTeacherPoll = (key: string): MockTeacherPoll | null => {
+  const id = pollAliases.get(key) ?? findEvaluation(key)?.id ?? key;
+  return teacherPolls.find((p) => p.id === id) ?? null;
+};
+
 /**
- * The evaluation row a poll needs so it shows up in its classroom's list
- * (with the "Poll" badge that routes the row to the projection). Its single
- * item points at no pool question on purpose: a poll's question may have been
- * written for it and nothing on the teacher's screens reads that item.
+ * The evaluation row a classroom's poll needs so it shows up in its
+ * classroom's list (with the "Poll" badge that routes the row to the
+ * projection). An anonymous poll belongs to no classroom and gets none: it is
+ * in no list, like on the server. Its single item points at no pool question
+ * on purpose: a poll's question may have been written for it and nothing on
+ * the teacher's screens reads that item.
  */
 function seedPollEvaluation(tp: MockTeacherPoll, alias: string): void {
   const poll = pollOfTeacher(tp);
   if (poll === null) return;
+  pollAliases.set(alias, tp.id);
+  if (tp.classroomId === null) return;
   const e = makeEvaluation(tp.classroomId, poll.title, poll.state === "ended" ? "closed" : "running", 0, {
     id: tp.id,
     mode: "poll",
@@ -377,12 +438,17 @@ function seedPollEvaluation(tp: MockTeacherPoll, alias: string): void {
   aliased.set(alias, tp.id);
 }
 
+/** Where a seeded poll lives: nowhere when anonymous, the demo classroom otherwise. */
+function homeOf(poll: MockPoll): string | null {
+  return poll.anonymous ? null : EVAL_ROOM;
+}
+
 if (!flags.empty && polls.length >= 5) {
   teacherPolls.push(
     {
       id: POLL_RUNNING,
       code: polls[0]!.code,
-      classroomId: EVAL_ROOM,
+      classroomId: homeOf(polls[0]!),
       createdAt: iso(-4 * 60_000),
       joined: 61,
       answered: 52,
@@ -395,7 +461,7 @@ if (!flags.empty && polls.length >= 5) {
     {
       id: POLL_SHORT,
       code: polls[1]!.code,
-      classroomId: EVAL_ROOM,
+      classroomId: homeOf(polls[1]!),
       createdAt: iso(-2 * 60_000),
       joined: 48,
       answered: 40,
@@ -410,7 +476,7 @@ if (!flags.empty && polls.length >= 5) {
     {
       id: POLL_ENDED,
       code: polls[2]!.code,
-      classroomId: EVAL_ROOM,
+      classroomId: homeOf(polls[2]!),
       createdAt: iso(-40 * 60_000),
       joined: 26,
       // A `multiple` question: 44 votes from 24 voters.
@@ -424,7 +490,7 @@ if (!flags.empty && polls.length >= 5) {
       // a scrollbar.
       id: POLL_LONG,
       code: polls[3]!.code,
-      classroomId: EVAL_ROOM,
+      classroomId: homeOf(polls[3]!),
       createdAt: iso(-1 * 60_000),
       joined: 57,
       answered: 49,
@@ -434,7 +500,7 @@ if (!flags.empty && polls.length >= 5) {
     {
       id: POLL_OPINION,
       code: polls[4]!.code,
-      classroomId: EVAL_ROOM,
+      classroomId: homeOf(polls[4]!),
       createdAt: iso(-3 * 60_000),
       joined: 44,
       answered: 39,
@@ -465,7 +531,11 @@ export const tallyOf = (tp: MockTeacherPoll, _poll: MockPoll) => ({
  * fetches the classroom just to write its context line; the mock has to hand
  * them over for the same reason the API does.
  */
-function pollWhere(classroomId: string): { classroomName: string; courseName: string } {
+function pollWhere(classroomId: string | null): {
+  classroomName: string | null;
+  courseName: string | null;
+} {
+  if (classroomId === null) return { classroomName: null, courseName: null };
   const room = rooms.find((r) => r.id === classroomId);
   const course = room ? courses.find((c) => c.id === room.courseId) : undefined;
   return { classroomName: room?.name ?? "—", courseName: course?.name ?? "—" };
@@ -581,8 +651,7 @@ const pollSummary = (tp: MockTeacherPoll) => {
 };
 
 const teacherPollOr404 = (key: string): MockTeacherPoll => {
-  const evaluation = findEvaluation(key);
-  const found = teacherPolls.find((p) => p.id === (evaluation?.id ?? key));
+  const found = findTeacherPoll(key);
   if (!found) throw new MockError(404, "Poll not found");
   return found;
 };
@@ -869,11 +938,17 @@ function startPoll(
   const config = frozenConfig(q);
   const code = `QZ${Math.floor(rand() * 9000 + 1000)}`;
   const choiceCount = ((config.choices ?? []) as unknown[]).length;
+  // `PollAudience`: anyone with the code (no classroom), or one classroom.
+  const audience = (body.audience ?? {}) as { kind?: string; classroomId?: string };
+  const classroomId = audience.kind === "classroom" ? String(audience.classroomId) : null;
+  if (classroomId !== null && !rooms.some((r) => r.id === classroomId)) {
+    throw new MockError(404, "Not found");
+  }
   polls.push({
     code,
     title: q.internalName,
     state: "running",
-    anonymous: body.anonymous === true,
+    anonymous: classroomId === null,
     revealed: false,
     type: q.type === "short" ? "short" : "mcq",
     student: studentView(q, config),
@@ -884,7 +959,7 @@ function startPoll(
   const tp: MockTeacherPoll = {
     id: uuid(),
     code,
-    classroomId: String(body.classroomId ?? EVAL_ROOM),
+    classroomId,
     createdAt: iso(0),
     joined: 0,
     answered: 0,

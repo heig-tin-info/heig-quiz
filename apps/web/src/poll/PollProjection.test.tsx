@@ -90,6 +90,19 @@ describe("PollProjection", () => {
     expect(calls.some((c) => c.url.includes("/app/api/classrooms/"))).toBe(false);
   });
 
+  it("says who may answer when the poll belongs to no classroom, and goes back to the launcher", async () => {
+    const anonymous = view({
+      evaluation: { ...view().evaluation, classroomId: null, classroomName: null, courseName: null },
+    });
+    mockFetch({ [`GET ${POLL}`]: ok(anonymous) });
+    const navigate = vi.fn();
+    renderWithProviders(<PollProjection id={ID} navigate={navigate} />);
+    expect(await screen.findByText("Anyone with the code")).toBeVisible();
+    expect(screen.queryByText(/null/)).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Back to polls" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "polls" });
+  });
+
   it("puts the way in in the top-right corner, clear of the toasts", async () => {
     mockFetch({ [`GET ${POLL}`]: ok(view()) });
     const { container } = renderWithProviders(<PollProjection id={ID} navigate={vi.fn()} />);

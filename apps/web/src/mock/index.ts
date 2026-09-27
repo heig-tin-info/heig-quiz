@@ -108,9 +108,9 @@ import "./grading";
 import "./preview";
 import {
   polls,
+  findTeacherPoll,
   pollOfTeacher,
   tallyOf,
-  teacherPolls,
   type MockTeacherPoll,
 } from "./poll";
 
@@ -276,7 +276,7 @@ class MockEventSource {
     const evaluation = findEvaluation(id);
     // A poll watches the same `evaluation:<id>` subject as a quiz, and gets
     // the aggregate instead of the grid: one question, no roster, no cells.
-    const poll = teacherPolls.find((p) => p.id === (evaluation?.id ?? id)) ?? null;
+    const poll = findTeacherPoll(id);
     if (poll !== null) {
       this.poll(poll);
       return;

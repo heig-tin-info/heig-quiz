@@ -313,6 +313,9 @@ const scenes = [
   { name: "join-revealed", role: "teacher", path: "/p/QZ4F7K?as=guest&revealed=1" },
   { name: "join-ended", role: "teacher", path: "/p/EN6D3D?as=guest" },
   { name: "join-opinion-revealed", role: "teacher", path: "/p/AV3R8T?as=guest&revealed=1" },
+  // A classroom's poll, and this account is on neither its roster nor its staff
+  // (ADR-014, addendum 2026-09-27): the refusal, and nothing of the question.
+  { name: "join-not-on-roster", role: "student", path: "/p/CL5S9P" },
   { name: "pool", role: "teacher", path: "/pools/p1" },
   { name: "pool-empty", role: "teacher", path: "/pools/p1?empty=1", settle: 800 },
   { name: "pool-error", role: "teacher", path: "/pools/p1?fail=1", settle: 2500 },

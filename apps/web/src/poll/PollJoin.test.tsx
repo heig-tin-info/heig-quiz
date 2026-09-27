@@ -69,6 +69,22 @@ describe("the poll participant page", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "join", code: "NM2X9A" });
   });
 
+  it("says a classroom's poll is for another class, and shows nothing of it", async () => {
+    const { calls } = render({
+      [`GET ${URL}`]: fail(403, {
+        error: "not_on_roster",
+        message: "This poll is for the students of its classroom",
+      }),
+    });
+    expect(
+      await screen.findByRole("heading", { name: "This poll is for another class" }),
+    ).toBeVisible();
+    expect(screen.getByText(/your account is not on its list/)).toBeVisible();
+    // No join is attempted, and no retry offered: another account is the repair.
+    expect(calls.some((c) => c.method === "POST")).toBe(false);
+    expect(screen.queryByRole("button", { name: /Retry/ })).toBeNull();
+  });
+
   it("offers one way in when the poll is not anonymous and nobody is signed in", async () => {
     const assign = vi.fn();
     vi.stubGlobal("location", { ...window.location, assign, search: "" });

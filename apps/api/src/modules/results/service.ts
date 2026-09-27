@@ -62,7 +62,9 @@ import {
   joinedItems,
   retakePolicyOf,
   retakesEnabled,
+  classroomIdOf,
   scaleOf,
+  seatsOf,
   setModifiedAfterRelease,
   setRelease,
   settingsOf,
@@ -136,7 +138,7 @@ async function computeResults(
       email: enrollments.email,
     })
     .from(enrollments)
-    .where(and(eq(enrollments.classroomId, evaluation.classroomId), eq(enrollments.staff, false)))
+    .where(and(seatsOf(evaluation), eq(enrollments.staff, false)))
     .orderBy(asc(enrollments.nom), asc(enrollments.prenom));
   /*
    * The teacher's own test walk, appended after the class and flagged
@@ -717,7 +719,7 @@ export async function studentResultCards(db: Db, userId: string): Promise<Result
     return {
       evaluationId: row.evaluation.id,
       title: row.evaluation.title,
-      classroomId: row.evaluation.classroomId,
+      classroomId: classroomIdOf(row.evaluation),
       classroomName: row.classroomName,
       courseCode: row.courseCode,
       attemptId,

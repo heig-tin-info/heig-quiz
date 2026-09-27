@@ -21,7 +21,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, asc, count, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 
 import {
   DEFAULT_MCQ_POLICY,
@@ -339,6 +339,26 @@ export function guardTransition(
 
 // --- Reads ----------------------------------------------------------------
 
+/**
+ * The roster seats of an evaluation, as a condition on `enrollments`: the
+ * seats of its classroom. An anonymous poll belongs to no classroom
+ * (ADR-014, addendum 2026-09-27) and has no roster, so for it the condition
+ * matches no seat — never "every seat whose classroom is null".
+ */
+export function seatsOf(row: Pick<EvaluationRecord, "classroomId">): SQL {
+  return row.classroomId === null ? sql`false` : eq(enrollments.classroomId, row.classroomId);
+}
+
+/**
+ * The classroom of an evaluation that was reached THROUGH its classroom (a
+ * join, a listing by classroom): it has one, and only an anonymous poll could
+ * lack it — which no such path returns.
+ */
+export function classroomIdOf(row: Pick<EvaluationRecord, "id" | "classroomId">): string {
+  if (row.classroomId === null) throw new Error(`evaluation ${row.id} has no classroom`);
+  return row.classroomId;
+}
+
 export function settingsOf(row: EvaluationRecord): EvaluationSettings {
   return EvaluationSettings.parse(row.settings);
 }
@@ -374,7 +394,7 @@ export function scaleOf(row: EvaluationRecord): GradingScale {
 export function toEvaluation(row: EvaluationRecord): Evaluation {
   return {
     id: row.id,
-    classroomId: row.classroomId,
+    classroomId: classroomIdOf(row),
     title: row.title,
     mode: row.mode,
     state: row.state,
@@ -605,7 +625,7 @@ export async function staffAttemptIds(
     .innerJoin(
       enrollments,
       and(
-        eq(enrollments.classroomId, evaluation.classroomId),
+        seatsOf(evaluation),
         eq(enrollments.userId, attempts.userId),
         eq(enrollments.staff, true),
       ),
@@ -654,7 +674,7 @@ export async function staffRosterWithAttempt(
       ),
     )
     .where(
-      and(eq(enrollments.classroomId, evaluation.classroomId), eq(enrollments.staff, true)),
+      and(seatsOf(evaluation), eq(enrollments.staff, true)),
     )
     .orderBy(asc(enrollments.nom), asc(enrollments.prenom));
 }
@@ -678,7 +698,7 @@ async function selfOf(
     .from(enrollments)
     .where(
       and(
-        eq(enrollments.classroomId, row.classroomId),
+        seatsOf(row),
         eq(enrollments.userId, userId),
       ),
     )
@@ -776,7 +796,7 @@ export async function listEvaluations(
   const tries = new Map(attemptStats.map((s) => [s.evaluationId, s.n]));
   return rows.map((r) => ({
     id: r.id,
-    classroomId: r.classroomId,
+    classroomId,
     title: r.title,
     mode: r.mode,
     state: r.state,
@@ -857,16 +877,19 @@ export async function createEvaluation(
  * to sit in a pool of the classroom's course — a poll runs a question of the
  * teacher's personal pool, which is linked to nothing — and the two writes
  * are one transaction, so a poll is never half-created.
+ *
+ * `classroomId` null is the anonymous poll (ADR-014, addendum 2026-09-27):
+ * it belongs to no classroom and `createdBy` owns it — the schema's
+ * `evaluations_home_ck` refuses any other evaluation without a classroom.
  */
 export async function createPollEvaluation(
   db: Db,
   input: {
-    classroomId: string;
+    classroomId: string | null;
     title: string;
     createdBy: string;
     questionId: string;
     accessCode: string;
-    anonymous: boolean;
     defaultPoints: (type: string, version: typeof questionVersions.$inferSelect) => number;
     now: Date;
   },
@@ -880,12 +903,13 @@ export async function createPollEvaluation(
   const version = (await latestPublished(db, [input.questionId])).get(input.questionId);
   if (!version) throw new NoPublishedVersion(input.questionId);
 
-  // The exercise preset, plus the two poll switches. `immediate` feedback
-  // with the key HELD BACK: the reveal is the teacher's act, and it moves
-  // `settings.poll.revealed` and `feedbackPolicy.showKey` together.
+  // The exercise preset, plus the reveal switch. `immediate` feedback with
+  // the key HELD BACK: the reveal is the teacher's act, and it moves
+  // `settings.poll.revealed` and `feedbackPolicy.showKey` together. Whether
+  // the poll is anonymous is not a setting: it is `classroomId` being null.
   const settings: EvaluationSettings = EvaluationSettings.parse({
     ...presetSettings("exercise").settings,
-    poll: { anonymous: input.anonymous, revealed: false, votes: false },
+    poll: { revealed: false, votes: false },
   });
   const feedbackPolicy: FeedbackPolicy = FeedbackPolicy.parse({
     when: "immediate",

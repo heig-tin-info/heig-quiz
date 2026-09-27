@@ -11,11 +11,14 @@
  *     second: only `lobby`, `running` and `paused` rows are candidates for an
  *     automatic transition, and there are never many of them;
  *   - `evaluations_running_poll_code_uq` makes a poll's session code unique
- *     among the running polls, so the code draw needs no check-then-insert.
+ *     among the running polls, so the code draw needs no check-then-insert;
+ *   - `evaluations_home_ck` says where an evaluation lives: in a classroom,
+ *     or — an anonymous poll, and nothing else — with its owner.
  */
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -35,9 +38,12 @@ export const evaluations = pgTable(
   "evaluations",
   {
     id: uuid("id").primaryKey(),
-    classroomId: uuid("classroom_id")
-      .notNull()
-      .references(() => classrooms.id, { onDelete: "cascade" }),
+    /**
+     * The classroom the evaluation belongs to. Null for ONE shape only, an
+     * anonymous poll (ADR-014, addendum 2026-09-27): it belongs to no class,
+     * and `created_by` is then its owner — `evaluations_home_ck` below.
+     */
+    classroomId: uuid("classroom_id").references(() => classrooms.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
     /** `poll` is stored but every route refuses it in the MVP (decision D7). */
     mode: text("mode", { enum: ["exam", "exercise", "poll"] }).notNull(),
@@ -84,6 +90,11 @@ export const evaluations = pgTable(
     /** Frozen grades at release (ADR-012); written by WP6, never recomputed. */
     releasedGrades: jsonb("released_grades"),
     modifiedAfterRelease: boolean("modified_after_release").notNull().default(false),
+    /**
+     * Who created the evaluation. For a poll with no classroom it is also
+     * the OWNER, the one person (with the admins) who reaches it
+     * (`findOwnedPoll` in `modules/guards.ts`).
+     */
     createdBy: uuid("created_by").references(() => users.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -102,6 +113,16 @@ export const evaluations = pgTable(
     uniqueIndex("evaluations_running_poll_code_uq")
       .on(t.accessCode)
       .where(sql`${t.mode} = 'poll' and ${t.state} = 'running'`),
+    // Every evaluation has a home: a classroom, or — for an anonymous poll
+    // only — an owner. An exam or an exercise without a classroom, or a
+    // classroom-less poll nobody owns, cannot be written.
+    check(
+      "evaluations_home_ck",
+      sql`${t.classroomId} is not null or (${t.mode} = 'poll' and ${t.createdBy} is not null)`,
+    ),
+    index("evaluations_owned_poll_idx")
+      .on(t.createdBy, t.createdAt)
+      .where(sql`${t.classroomId} is null`),
   ],
 );
 

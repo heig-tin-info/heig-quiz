@@ -320,7 +320,12 @@ export function PollProjection({ id, navigate }: { id: string; navigate: (r: Rou
         fullscreen={fullscreen}
         onToggleFullscreen={toggleFullscreen}
         onEnd={endPoll}
-        onBack={() => navigate({ view: "classroom", id: view.evaluation.classroomId })}
+        onBack={() => {
+          // An anonymous poll lives in no classroom: back is the launcher,
+          // where its history is.
+          const classroomId = view.evaluation.classroomId;
+          navigate(classroomId === null ? { view: "polls" } : { view: "classroom", id: classroomId });
+        }}
         onKeep={() => keep.mutate()}
         keepPending={keep.isPending}
         onOpenQuestion={() => navigate({ view: "question", id: view.question.id })}

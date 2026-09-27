@@ -421,24 +421,69 @@ export async function accessibleEvaluation(
 type ReachableEvaluation = { evaluation: typeof evaluations.$inferSelect; staff: boolean };
 
 /**
+ * THE access predicate of an evaluation that has no classroom — an anonymous
+ * poll, the only kind the schema allows (`evaluations_home_ck`; ADR-014,
+ * addendum 2026-09-27) — on a query that has `evaluations` in scope. There
+ * is no course and so no staff: the teacher who launched it OWNS it, and
+ * nobody else reaches it (an admin, through `accessWhere`). A colleague gets
+ * the same 404 as for a poll that does not exist.
+ */
+export function ownedPollAccess(userId: string): SQL {
+  return sql`(${qualified(evaluations.classroomId)} is null and ${qualified(evaluations.createdBy)} = ${userId})`;
+}
+
+/**
+ * An evaluation the caller MANAGES: through a staff seat on its classroom's
+ * course (`staffAccess`), or — a poll with no classroom — as its owner
+ * (`ownedPollAccess`). Admins reach both. Null otherwise.
+ *
+ * `loadEvaluation` above keeps the classroom join, and therefore never finds
+ * a classroom-less poll: the generic evaluation routes (settings, items,
+ * grading, results) have nothing to offer one, and answer it 404. The poll
+ * module and the live stream are the two places that load through this.
+ */
+export async function findManagedEvaluation(
+  db: Db,
+  user: Caller,
+  evaluationId: string,
+): Promise<typeof evaluations.$inferSelect | null> {
+  const [row] = await db
+    .select({ evaluation: evaluations })
+    .from(evaluations)
+    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
+    .innerJoin(courses, eq(classrooms.courseId, courses.id))
+    .where(and(eq(evaluations.id, evaluationId), accessWhere(user, staffAccess(user.id))))
+    .limit(1);
+  if (row) return row.evaluation;
+  const [owned] = await db
+    .select()
+    .from(evaluations)
+    .where(
+      and(
+        eq(evaluations.id, evaluationId),
+        isNull(evaluations.classroomId),
+        accessWhere(user, ownedPollAccess(user.id)),
+      ),
+    )
+    .limit(1);
+  return owned ?? null;
+}
+
+/**
  * The same evaluation seen from the student side: reachable through a CLAIMED
  * roster seat in its classroom, and nothing else. A staff member also passes,
  * which is what makes the teacher preview, the dashboard and the SSE stream
- * share one predicate. Null when neither holds.
+ * share one predicate — and so does the owner of a poll with no classroom
+ * ({@link findManagedEvaluation}), whose projection listens on the stream.
+ * Null when none holds.
  */
 export async function findReachableEvaluation(
   db: Db,
   user: Caller,
   evaluationId: string,
 ): Promise<ReachableEvaluation | null> {
-  const [row] = await db
-    .select({ evaluation: evaluations, classroom: classrooms })
-    .from(evaluations)
-    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
-    .innerJoin(courses, eq(classrooms.courseId, courses.id))
-    .where(and(eq(evaluations.id, evaluationId), accessWhere(user, staffAccess(user.id))))
-    .limit(1);
-  if (row) return { evaluation: row.evaluation, staff: true };
+  const managed = await findManagedEvaluation(db, user, evaluationId);
+  if (managed) return { evaluation: managed, staff: true };
 
   const [student] = await db
     .select({ evaluation: evaluations })

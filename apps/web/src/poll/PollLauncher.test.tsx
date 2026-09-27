@@ -8,7 +8,7 @@ import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { PollLauncher } from "./PollLauncher";
 
 /*
- * The launcher: one question and one classroom, then the wall. Both tabs end
+ * The launcher: one question and one audience, then the wall. Both tabs end
  * in "Start the poll": on a picked question, or on one written in the type's
  * own editor and saved nowhere (ADR-014, addendum 2026-09-23).
  */
@@ -122,6 +122,20 @@ describe("PollLauncher", () => {
     expect(await screen.findByLabelText("Statement")).toBeVisible();
   }, 20_000);
 
+  it("asks who answers with ONE control: anyone with the code, or a classroom", async () => {
+    mockFetch({ [`GET ${QUESTIONS}`]: ok(picks), [`GET ${COURSES}`]: ok(courses) });
+    renderWithProviders(<PollLauncher navigate={vi.fn()} />);
+
+    const audience = await screen.findByRole("combobox", { name: "Who answers" });
+    // Nothing remembered: anyone with the code, which needs no classroom.
+    expect(audience).toHaveValue("anonymous");
+    expect(
+      Array.from((audience as HTMLSelectElement).options).map((o) => o.textContent),
+    ).toEqual(["Anyone with the code (anonymous)", "PRG1 · PRG1-2026"]);
+    // The anonymity switch is gone: it is the audience now.
+    expect(screen.queryByRole("switch")).toBeNull();
+  });
+
   it("starts the poll on the picked question and the chosen classroom", async () => {
     const { calls } = mockFetch({
       [`GET ${QUESTIONS}`]: ok(picks),
@@ -141,12 +155,12 @@ describe("PollLauncher", () => {
     await screen.findByText("sizeof-ptr-64");
     expect(screen.getByRole("button", { name: "Start the poll" })).toBeDisabled();
     await userEvent.click(screen.getByText("sizeof-ptr-64"));
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Who answers" }), ROOM);
     await userEvent.click(screen.getByRole("button", { name: "Start the poll" }));
 
     expect(calls.find((c) => c.url === "/app/api/polls")?.body).toEqual({
       questionId: QUESTION,
-      classroomId: ROOM,
-      anonymous: true,
+      audience: { kind: "classroom", classroomId: ROOM },
     });
     expect(navigate).toHaveBeenCalledWith({ view: "poll", id: "e1" });
   });
@@ -203,10 +217,9 @@ describe("PollLauncher", () => {
     const body = calls.find((c) => c.url === "/app/api/polls/inline")?.body as {
       type: string;
       config: { prompt: string; matchers: { value: string }[] };
-      classroomId: string;
-      anonymous: boolean;
+      audience: unknown;
     };
-    expect(body).toMatchObject({ type: "short", classroomId: ROOM, anonymous: true });
+    expect(body).toMatchObject({ type: "short", audience: { kind: "anonymous" } });
     expect(body.config.prompt).toContain("?");
     expect(body.config.matchers[0]!.value).toBe("C");
     // Nothing went through the personal pool.

@@ -14,6 +14,7 @@ import { answers, attemptEvents, attempts, enrollments, users } from "../../db/s
 import {
   gradeDefaults,
   retakesEnabled,
+  seatsOf,
   settingsOf,
   staffRosterWithAttempt,
   type EvaluationRecord,
@@ -52,7 +53,7 @@ export async function dashboardView(
     })
     .from(enrollments)
     .where(
-      and(eq(enrollments.classroomId, evaluation.classroomId), eq(enrollments.staff, false)),
+      and(seatsOf(evaluation), eq(enrollments.staff, false)),
     )
     .orderBy(asc(enrollments.nom), asc(enrollments.prenom));
   /*

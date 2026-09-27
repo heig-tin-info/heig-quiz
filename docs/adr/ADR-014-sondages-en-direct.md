@@ -347,3 +347,91 @@ the inline path is that a lecture has no time for filing; a `last_polled_at` col
 payloads with the type's `grade` — a second grading path whose verdict could disagree with
 the grading panel's; the roster frozen at poll time — no table holds it, and a roster that
 changed since is a rare, visible drift on a five-run average.
+
+## Addendum (2026-09-27): the audience of a poll — anonymous in no classroom, or a classroom's by name
+
+Decision 1 put every poll "in a classroom the teacher picks", and the launcher asked two
+questions: a classroom, and whether the poll was anonymous. Of their four answers only two
+meant anything. "A classroom, anonymously" filed the poll under a class that anybody holding
+the code could answer; "a classroom, not anonymously" let ANY signed-in account in, roster or
+not, so the class it was filed under restricted nothing. The product owner settled it
+(issue #160): the audience is one choice, and "a classroom, anonymously" is dropped.
+
+1. **Two audiences, one contract.** `PollAudience` in `@quiz/contracts` is
+   `{ kind: "anonymous" } | { kind: "classroom", classroomId }`, and it replaces
+   `classroomId + anonymous` in `PollCreate` and `PollInlineCreate`. A body in the old shape is
+   a `400`, not a silent default. The launcher shows ONE control, "Who answers": "Anyone with
+   the code (anonymous)" and one entry per classroom the teacher is on the staff of; it
+   remembers the last choice as it remembered the classroom, and falls back to "anyone" when
+   nothing is remembered or the classroom is gone — "anyone" needs no classroom, so a teacher
+   with none can poll. The MCP `create_poll` tool takes an optional `classroomId` instead of a
+   flag.
+2. **An anonymous poll belongs to no classroom.** `evaluations.classroom_id` becomes nullable
+   (migration `0018_poll_audience`), and the schema, not a service, says for what:
+   `CHECK evaluations_home_ck (classroom_id is not null or (mode = 'poll' and created_by is not
+   null))`. An exam or an exercise without a classroom cannot be written, and neither can a
+   classroom-less poll that nobody owns. **The owner is `created_by`**, which every evaluation
+   already carries — see the rejected alternative below. A partial index
+   `evaluations_owned_poll_idx (created_by, created_at) where classroom_id is null` serves the
+   owner's list.
+3. **`settings.poll.anonymous` is derived, never stored.** A poll is anonymous exactly when it
+   has no classroom. `EvaluationSettings.poll` keeps `revealed` only (an older row's
+   `anonymous` key is dropped by the parse); `pollSettingsOf` computes
+   `{ anonymous: classroom_id is null, revealed }`, and the views keep carrying
+   `settings.anonymous` so the phone and the projection read it where they always did. A
+   running poll created before this addendum as "classroom + anonymous" becomes a classroom's
+   poll: its guests' answers stay counted, and its page asks every browser without a session to
+   sign in. Polls run for minutes; no migration rewrites them.
+4. **Access (invariant 6).** One predicate is added beside `staffAccess`:
+   `ownedPollAccess(userId)` — `classroom_id is null and created_by = userId` — and one finder,
+   `findManagedEvaluation`: the evaluation through a staff seat on its course, or, when it has
+   no classroom, through ownership; an admin reaches both (`accessWhere`). The poll routes load
+   through it, so a colleague — even one on every staff the owner is on — gets the 404 of a
+   poll that does not exist. `findReachableEvaluation` starts with it too, which is what lets
+   the owner's projection open `?watch=evaluation:<id>` and receive `poll.tally`.
+   `loadEvaluation` keeps its classroom join on purpose: the generic evaluation routes
+   (settings, items, dashboard, grading, results, CSV) have nothing to offer a classroom-less
+   poll and answer it 404, its owner included.
+5. **A classroom's poll admits its roster and its staff, signed in.** The public loader
+   (`publicScope`) loads the signed-in viewer of a classroom's poll through
+   `findReachableEvaluation` — a CLAIMED seat on the roster, a staff seat, or an admin — before
+   anything is read, joined or answered. Anybody else signed in gets
+   `403 { error: "not_on_roster" }`, and the phone says the poll is for another class. It is a
+   403 and not the usual 404 because the code is on the wall of the room: the poll's existence
+   is no secret, the refusal carries nothing of its content, and its reason is the one thing
+   the reader can act on (another account). A browser with no session is still sent to the
+   login (`me.loginRequired`, `401 login_required` on join), with the path back to the poll.
+   `participantOf` stays bypassed: a staff member trying the poll holds no roster seat, and
+   the check that matters has already been made by the loader.
+6. **Where a classroom-less poll shows.** In no classroom's evaluation list (they list by
+   `classroom_id`); in the owner's `GET /app/api/polls`, whose `PollSummary.classroomId` is now
+   nullable — the "Recent polls" tab of #161. `PollTeacherView.evaluation.classroomId`,
+   `classroomName` and `courseName` are nullable; the projection's context line then reads
+   "Anyone with the code", and its "Back" goes to the launcher. The refresh hints that went to
+   `classroom:<id>` go to the owner's `teacher:<id>` topic instead (`homeTopic` in the bus),
+   and the grading progress of its end goes to the owner (`staffOf`).
+7. **Audit.** No new action. `poll.create` records `audience` and `classroomId` (null) in its
+   payload, and every event of a classroom-less poll has the owner as its actor, so the poll
+   stays attributable without a classroom to hang it on.
+8. **The roster is a condition, never a join on null.** The helpers that read the roster of an
+   evaluation (`participantOf`, the dashboard, the results, the staff-attempt queries) go
+   through `seatsOf(evaluation)`, which is `false` for a classroom-less poll: it has no roster,
+   and `classroom_id = NULL` must never be read as "every seat whose classroom is null".
+   Paths that reached an evaluation THROUGH its classroom use `classroomIdOf`, which throws on
+   the one shape they can never meet.
+
+Rejected alternatives:
+
+1. **A separate `owner_id` column.** It would always equal `created_by` on a classroom-less
+   poll — nobody else can reach it, so nobody else can "run again" on it — and two columns that
+   must agree are the double source of truth item 3 just removed. `created_by` gets the one
+   thing it lacked, a constraint that it is present where it matters.
+2. **A per-teacher "personal classroom"** to hold anonymous polls. It would put a fictional
+   class in every course listing, roster count and SSE topic, and a class that nobody is
+   enrolled in is exactly what an anonymous poll is not.
+3. **Keeping the flag and forbidding the combination in the service.** The two stored facts
+   could still disagree in a row written by any other path; the audience as a column that is
+   there or not cannot.
+4. **A 404 for an account off the roster.** Invariant 6 hides an entity a caller could not
+   know about. This caller read the code off the wall; a 404 would tell them to check a code
+   that is right.

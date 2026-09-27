@@ -1,0 +1,3 @@
+ALTER TABLE "evaluations" ALTER COLUMN "classroom_id" DROP NOT NULL;--> statement-breakpoint
+CREATE INDEX "evaluations_owned_poll_idx" ON "evaluations" USING btree ("created_by","created_at") WHERE "evaluations"."classroom_id" is null;--> statement-breakpoint
+ALTER TABLE "evaluations" ADD CONSTRAINT "evaluations_home_ck" CHECK ("evaluations"."classroom_id" is not null or ("evaluations"."mode" = 'poll' and "evaluations"."created_by" is not null));

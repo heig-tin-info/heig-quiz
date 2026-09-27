@@ -14,6 +14,7 @@ import {
   applyState,
   byId as evaluationById,
   setClosesAt,
+  seatsOf,
   settingsOf,
   tryApplyState,
   type EvaluationRecord,
@@ -42,7 +43,7 @@ async function attemptsWithBonus(db: Db, evaluation: EvaluationRecord): Promise<
       enrollments,
       and(
         eq(enrollments.userId, attempts.userId),
-        eq(enrollments.classroomId, evaluation.classroomId),
+        seatsOf(evaluation),
       ),
     )
     .where(eq(attempts.evaluationId, evaluation.id));

@@ -82,7 +82,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
     const attemptCount = await service.attemptCount(app.db, evaluation.id);
     const result = await write({ attemptCount });
     await trace(req, action, "evaluation", evaluation.id, payload);
-    evaluationChanged(evaluation.classroomId, evaluation.id);
+    evaluationChanged(service.classroomIdOf(evaluation), evaluation.id);
     return result;
   }
 
@@ -171,7 +171,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
         await trace(req, "evaluation.delete", "evaluation", scope.evaluation.id, {
           title: scope.evaluation.title,
         });
-        evaluationChanged(scope.evaluation.classroomId, scope.evaluation.id);
+        evaluationChanged(service.classroomIdOf(scope.evaluation), scope.evaluation.id);
         return reply.code(204).send();
       },
     ),
@@ -312,7 +312,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
           from: scope.evaluation.state,
           to: row.state,
         });
-        evaluationChanged(row.classroomId, row.id);
+        evaluationChanged(service.classroomIdOf(row), row.id);
         return service.toEvaluation(row);
       },
     ),

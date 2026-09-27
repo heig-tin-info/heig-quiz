@@ -14,9 +14,15 @@
  *     travels once the teacher revealed;
  *   - the aggregate is the pure rule `pollTally` of `@quiz/domain`.
  *
- * What is new here is the PARTICIPANT: a poll has no roster. Whoever holds
- * the code answers — an account, or (when the poll is anonymous) a browser
- * identified by the `quiz_guest` cookie and a row in `guest_participants`.
+ * What is new here is the PARTICIPANT, and it depends on the AUDIENCE
+ * (ADR-014, addendum 2026-09-27):
+ *   - an anonymous poll belongs to no classroom and has no roster. Whoever
+ *     holds the code answers — an account, or a browser identified by the
+ *     `quiz_guest` cookie and a row in `guest_participants`. Its launcher
+ *     owns it (`evaluations.created_by`);
+ *   - a classroom's poll is answered by that classroom's roster and staff,
+ *     signed in, and by nobody else (the route loads the viewer through
+ *     `findReachableEvaluation` before joining or answering).
  */
 import { randomBytes } from "node:crypto";
 
@@ -25,6 +31,7 @@ import type { FastifyInstance } from "fastify";
 
 import {
   POLL_SHORT_CAP,
+  type PollAudience,
   type PollPublicView,
   type PollQuestionPick,
   type PollSettings,
@@ -160,9 +167,24 @@ export interface PollScope {
   item: JoinedItem;
 }
 
+/**
+ * The poll's two switches as the views carry them. `anonymous` is DERIVED —
+ * a poll is anonymous exactly when it belongs to no classroom — and never
+ * read from the stored settings, which keep `revealed` only: one fact, one
+ * place (ADR-014, addendum 2026-09-27).
+ */
 export function pollSettingsOf(evaluation: EvaluationRecord): PollSettings {
-  const settings = settingsOf(evaluation);
-  return settings.poll ?? { anonymous: false, revealed: false, votes: false };
+  const stored = settingsOf(evaluation).poll;
+  return {
+    anonymous: evaluation.classroomId === null,
+    revealed: stored?.revealed ?? false,
+    votes: stored?.votes ?? false,
+  };
+}
+
+/** The classroom a poll is for, or null for anyone with the code. */
+export function audienceClassroom(audience: PollAudience): string | null {
+  return audience.kind === "classroom" ? audience.classroomId : null;
 }
 
 /** The single item of a poll, with its frozen version. */
@@ -194,12 +216,6 @@ export async function byCode(
   return { evaluation: row, state: row.state === "running" ? "running" : "ended" };
 }
 
-/** The teacher-side loader: an evaluation that is a poll, or nothing. */
-export async function pollById(db: Db, evaluationId: string): Promise<EvaluationRecord | null> {
-  const row = await byId(db, evaluationId);
-  return row && row.mode === "poll" ? row : null;
-}
-
 // --- Creating and running -------------------------------------------------
 
 /** F-LIVE-13: the question is a poll type AND it has a published version. */
@@ -224,13 +240,13 @@ async function assertPollable(db: Db, questionId: string): Promise<void> {
 /**
  * Creates the poll AND starts it (ADR-014). The evaluation and its single
  * item are written by the `evaluation` module, which owns those tables.
+ * `classroomId` null is an anonymous poll, owned by `createdBy`.
  */
 export async function createPoll(
   db: Db,
   input: {
-    classroomId: string;
+    classroomId: string | null;
     questionId: string;
-    anonymous: boolean;
     createdBy: string;
     now: Date;
     /** The code draw, injectable so a test can force a collision. */
@@ -262,7 +278,6 @@ export async function createPoll(
         createdBy: input.createdBy,
         questionId: input.questionId,
         accessCode: code,
-        anonymous: input.anonymous,
         defaultPoints: (type, version) =>
           typeOf(type).defaultPoints(
             loadConfig(type, { config: version.config, configVersion: version.configVersion }),
@@ -289,10 +304,9 @@ export async function createPoll(
 export async function createInlinePoll(
   db: Db,
   input: {
-    classroomId: string;
+    classroomId: string | null;
     type: string;
     config: unknown;
-    anonymous: boolean;
     createdBy: string;
     now: Date;
     drawCode?: () => string;
@@ -308,7 +322,6 @@ export async function createInlinePoll(
   return createPoll(db, {
     classroomId: input.classroomId,
     questionId,
-    anonymous: input.anonymous,
     createdBy: input.createdBy,
     now: input.now,
     ...(input.drawCode ? { drawCode: input.drawCode } : {}),
@@ -345,7 +358,10 @@ export async function setRevealed(
     {
       settings: {
         ...settings,
-        poll: { ...pollSettingsOf(evaluation), revealed, ...(votes === undefined ? {} : { votes }) },
+        poll: {
+          revealed,
+          votes: votes === undefined ? pollSettingsOf(evaluation).votes : votes,
+        },
       },
       feedbackPolicy,
     },
@@ -397,9 +413,11 @@ export async function attemptOfViewer(
 }
 
 /**
- * Joining: an attempt, started. No roster seat is consulted — `participantOf`
- * is bypassed for a poll on purpose (ADR-014): whoever holds the code takes
- * part, which is the whole point of F-AUTH-05.
+ * Joining: an attempt, started. `participantOf` is bypassed for a poll on
+ * purpose (ADR-014): a guest has no seat, and a staff member trying the poll
+ * holds none either. WHO may join is the route's loader: anyone with the code
+ * for an anonymous poll (F-AUTH-05), the roster and the staff for a
+ * classroom's (addendum 2026-09-27).
  */
 export async function join(
   db: Db,
@@ -533,15 +551,17 @@ function solutionOf(item: JoinedItem): unknown {
  */
 async function homeOf(
   db: Db,
-  classroomId: string,
-): Promise<{ classroomName: string; courseName: string }> {
+  classroomId: string | null,
+): Promise<{ classroomName: string | null; courseName: string | null }> {
+  // An anonymous poll lives nowhere: the projection says who may answer.
+  if (classroomId === null) return { classroomName: null, courseName: null };
   const [row] = await db
     .select({ classroomName: classrooms.name, courseName: courses.name })
     .from(classrooms)
     .innerJoin(courses, eq(courses.id, classrooms.courseId))
     .where(eq(classrooms.id, classroomId))
     .limit(1);
-  return row ?? { classroomName: "", courseName: "" };
+  return row ?? { classroomName: null, courseName: null };
 }
 
 /**
@@ -636,10 +656,10 @@ export async function publicView(
 
 /**
  * The people a run was addressed to: its classroom's roster (staff seats
- * excluded), or NONE for an anonymous poll. Keyed on "has a roster", not on
- * the classroom alone: an anonymous poll counts no abstention even while it
- * still lives in a classroom — nobody knows who was meant to answer — and a
- * classroom-less poll has no roster at all.
+ * excluded), or NONE for an anonymous poll. Since the audience addendum
+ * (2026-09-27) an anonymous poll IS a classroom-less one; both tests stay,
+ * because a poll run before it may still carry a classroom and the stored
+ * flag is gone — `anonymous` is derived from the classroom.
  */
 export function rosterOfRun(
   anonymous: boolean,
@@ -722,7 +742,12 @@ export async function questionPicks(
   const runs = runRows.filter((r) => typeById.has(r.questionId));
   const finished = runs.filter((r) => r.evaluation.state !== "running");
   const finishedIds = finished.map((r) => r.evaluation.id);
-  const classroomIds = [...new Set(finished.map((r) => r.evaluation.classroomId))];
+  // An anonymous poll has no classroom, and so no roster to count.
+  const classroomIds = [
+    ...new Set(
+      finished.flatMap((r) => (r.evaluation.classroomId === null ? [] : [r.evaluation.classroomId])),
+    ),
+  ];
   const [answeredRows, gradedRows, rosterRows] =
     finishedIds.length === 0
       ? [[], [], []]

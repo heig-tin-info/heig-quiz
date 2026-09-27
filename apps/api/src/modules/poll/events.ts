@@ -29,7 +29,7 @@ export function pollStarted(evaluation: EvaluationRecord, now: Date): void {
     closesAt: evaluation.closesAt,
     now,
   });
-  bus.hint("evaluations", [`classroom:${evaluation.classroomId}`]);
+  bus.hint("evaluations", bus.homeTopic(evaluation));
 }
 
 /**
@@ -40,6 +40,6 @@ export function pollStarted(evaluation: EvaluationRecord, now: Date): void {
 export function pollChanged(evaluation: EvaluationRecord): void {
   bus.hint("evaluations", [
     `evaluation:${evaluation.id}`,
-    `classroom:${evaluation.classroomId}`,
+    ...bus.homeTopic(evaluation),
   ]);
 }

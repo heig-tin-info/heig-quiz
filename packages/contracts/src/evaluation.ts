@@ -139,13 +139,14 @@ export const EvaluationSettings = z.object({
    * {@link safeExamBrowserOf}, never raw.
    */
   safeExamBrowser: z.boolean().optional(),
-  /** Only on a `poll` evaluation (`./poll.ts`); absent everywhere else. */
+  /**
+   * Only on a `poll` evaluation (`./poll.ts`); absent everywhere else. Whether
+   * the poll is anonymous is NOT stored here: it is the absence of a
+   * classroom (`PollAudience`, ADR-014 addendum 2026-09-27). A row written
+   * before that carries an `anonymous` key, which parsing drops.
+   */
   poll: z
-    .object({
-      anonymous: z.boolean().default(false),
-      revealed: z.boolean().default(false),
-      votes: z.boolean().default(false),
-    })
+    .object({ revealed: z.boolean().default(false), votes: z.boolean().default(false) })
     .optional(),
 });
 export type EvaluationSettings = z.infer<typeof EvaluationSettings>;

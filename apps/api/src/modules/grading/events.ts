@@ -22,6 +22,11 @@ import type { EvaluationRecord } from "../evaluation/service.js";
  * the dashboard is the screen they are looking at.
  */
 export async function staffOf(db: Db, evaluation: EvaluationRecord): Promise<string[]> {
+  // An anonymous poll has no course and no staff: its owner is the one
+  // teacher (ADR-014, addendum 2026-09-27).
+  if (evaluation.classroomId === null) {
+    return evaluation.createdBy === null ? [] : [evaluation.createdBy];
+  }
   const rows = await db
     .select({ userId: courseStaff.userId })
     .from(courseStaff)
@@ -39,21 +44,21 @@ export function progress(
   // The refresh hint the panel and the dashboard react to (ADR-005).
   bus.hint("grading", [
     `evaluation:${evaluation.id}`,
-    `classroom:${evaluation.classroomId}`,
+    ...bus.homeTopic(evaluation),
     ...teacherIds.map((id) => `teacher:${id}` as const),
   ]);
 }
 
 /** One grading changed: no payload, the panel re-reads what it is allowed to. */
 export function gradingChanged(evaluation: EvaluationRecord): void {
-  bus.hint("grading", [`evaluation:${evaluation.id}`, `classroom:${evaluation.classroomId}`]);
+  bus.hint("grading", [`evaluation:${evaluation.id}`, ...bus.homeTopic(evaluation)]);
 }
 
 /** Results released or withdrawn: the students' own streams hear it too. */
 export function resultsChanged(evaluation: EvaluationRecord, userIds: readonly string[]): void {
   bus.hint("results", [
     `evaluation:${evaluation.id}`,
-    `classroom:${evaluation.classroomId}`,
+    ...bus.homeTopic(evaluation),
     ...userIds.map((id) => `user:${id}` as const),
   ]);
 }

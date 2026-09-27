@@ -33,7 +33,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Send, SearchX } from "lucide-react";
+import { Check, Send, SearchX, UserX } from "lucide-react";
 
 import type { Me, PollPublicView, PublicConfig } from "@quiz/contracts";
 
@@ -175,6 +175,7 @@ export function PollJoin({
 
   if (poll.isError || view === null) {
     if (statusOf(poll.error) === 404) return <NotFound navigate={navigate} />;
+    if (errorCode(poll.error) === "not_on_roster") return <NotOnRoster />;
     return (
       <Frame>
         <h1 className="mb-4 text-lg font-bold tracking-tight">{t("join.loadFailed")}</h1>
@@ -342,6 +343,25 @@ function LoginGate({ code, title }: { code: string; title: string }) {
             <p className="mt-2 text-xs text-fg-faint">{t("landing.devHint")}</p>
           </>
         ) : null}
+      </Card>
+    </Frame>
+  );
+}
+
+/**
+ * A classroom's poll, and this account is neither on its roster nor on its
+ * staff (ADR-014, addendum 2026-09-27). Nothing to do here but read why: the
+ * server sent no question, and the only repair — another account — happens
+ * outside this page.
+ */
+function NotOnRoster() {
+  const t = useT();
+  return (
+    <Frame>
+      <Card className="px-6 py-6">
+        <EmptyState icon={UserX} titleAs="h1" title={t("join.notOnRoster.title")} className="py-6">
+          {t("join.notOnRoster.body")}
+        </EmptyState>
       </Card>
     </Frame>
   );

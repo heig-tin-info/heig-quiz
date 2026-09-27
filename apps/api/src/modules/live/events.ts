@@ -22,7 +22,7 @@ export function stateChanged(evaluation: EvaluationRecord, now: Date): void {
     closesAt: evaluation.closesAt,
     now,
   });
-  bus.hint("evaluations", [`classroom:${evaluation.classroomId}`]);
+  bus.hint("evaluations", bus.homeTopic(evaluation));
 }
 
 export function attemptStarted(
