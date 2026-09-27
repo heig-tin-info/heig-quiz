@@ -166,15 +166,22 @@ pull request.)
   the pool stays, which is the point of freezing versions (F-EVAL-03).
 - Every existing rule on an evaluation's configuration applies to a template
   unchanged, because it is the same row read by the same code.
-- `evaluations` carries three more nullable columns and a second CHECK. The
+- `evaluations` carries four more nullable columns and a second CHECK. The
   migration adds columns and replaces two constraints; no existing row
   changes shape (none has a `course_id`).
 
 ### Rollback
 
-The migration is additive: dropping the three columns and restoring the two
-constraints of `0018_poll_audience` brings the schema back. Templates are
-lost with the columns; their instances are ordinary evaluations and stay.
+The migration adds four nullable columns and replaces one CHECK with two
+(and the owned-poll index with a narrower one). It cannot be undone by
+dropping the columns alone: the home CHECK of `0018_poll_audience` reads a
+row with no classroom as an owned poll, so it refuses to be restored while a
+template row exists, and the previous code would read such a row the same
+way. A rollback therefore first deletes the templates
+(`DELETE FROM evaluations WHERE course_id IS NOT NULL`, their items
+cascading), then drops the four columns and restores the constraints and the
+index of `0018_poll_audience`. Templates are lost; their instances are
+ordinary evaluations and stay.
 
 ## Alternatives considered
 

@@ -19,6 +19,7 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Question type | A plugin that defines the configuration schema, the answer schema, the editor, the player, the review view and the grader. E.g. `mcq`, `short`, `cloze`, `code`. |
 | Evaluation | An ordered set of question versions with run settings, created in a classroom. A single term: no quiz, assignment, activity or session. |
 | Evaluation template | An evaluation kept at the course level rather than in a classroom: its questions, points, order, milestones and settings, without dates, access code nor IP list. Never opened, never answered; each classroom's evaluation is made from it by *Instantiate* and records the template and its revision. `exam` and `exercise` only, never `poll` (ADR-031). |
+| Instance | An evaluation instantiated from a template into a classroom. A frozen copy: it records the template and the revision it came from, and editing the template never changes it: a newer revision reaches it only when the teacher pulls it (ADR-031). |
 | Evaluation mode | `exam` timed and graded, `exercise` open with a deadline, `poll` one live question. |
 | Attempt | A student's participation in an evaluation. Only one per student and per evaluation in phase 1. Carries the start time, the effective end, the state. |
 | Answer | The current state of a student's answer to a question of an evaluation. One record per attempt and per question, updated on every autosave. |
@@ -42,6 +43,7 @@ One concept, one word. The terms below are used as they are in the spec, the cod
 | Read the public pool | No | Yes | Yes |
 | Edit a shared pool | No | According to the role on the pool | Yes |
 | Create, launch, drive, grade an evaluation | No | On own classrooms | Yes |
+| Create, instantiate, delete an evaluation template | No | On own courses | Yes |
 | See the grades of a classroom | Own grades | On own classrooms | Yes |
 | Configure the LLM providers, the runner languages, the admins | No | Own API key | Yes |
 | Delete a classroom or an evaluation and its data | No | On own classrooms | Yes |
