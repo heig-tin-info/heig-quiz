@@ -33,8 +33,7 @@ import {
   PROGRAM_ADVANCED_PATHS,
   ProgramAdvancedFields,
   ProgramPromptSection,
-  ReferenceSection,
-  TemplateSection,
+  ProgramSourceSections,
 } from "../ProgramEditor.js";
 import { referenceRegions } from "../reference.js";
 import { PixelGrid } from "./PixelGrid.js";
@@ -230,16 +229,7 @@ export function CodeImageEditor({
         <IssueList issues={issuesAt(issues, "target")} />
       </EditorSection>
 
-      <TemplateSection
-        config={config}
-        patch={patch}
-        s={s}
-        disabled={disabled}
-        issues={issues}
-        monaco={monaco}
-      />
-
-      <ReferenceSection
+      <ProgramSourceSections
         config={config}
         patch={patch}
         s={s}
@@ -274,7 +264,7 @@ export function CodeImageEditor({
             ) : null}
           </>
         )}
-      </ReferenceSection>
+      </ProgramSourceSections>
 
       <IssueList issues={advancedIssues} />
       <AdvancedDisclosure summary={s.advanced} className="grid gap-4 sm:grid-cols-2">

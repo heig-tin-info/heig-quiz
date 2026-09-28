@@ -25,6 +25,7 @@ import {
   type CodeCaseDetail,
   type CodeConfig,
   type CodeDetails,
+  type ProgramConfig,
 } from "./schema.js";
 import { caseVerdict } from "./verdict.js";
 
@@ -47,8 +48,106 @@ export function isEmptyAnswer(answer: CodeAnswer | null): boolean {
  * Rebuilds the compilable source from the STORED template and the student's
  * regions (invariant 14). The client never supplies a locked line.
  */
-export function assembleCodeSource(config: CodeConfig, answer: CodeAnswer): string {
+export function assembleCodeSource(config: ProgramConfig, answer: CodeAnswer): string {
   return assembleSource(config.template, config.language, answer.regions);
+}
+
+/** The hash of the source the runner compiled; `null` when none can be assembled. */
+export function sourceHashOf(config: ProgramConfig, answer: CodeAnswer | null): string | null {
+  if (answer === null) return null;
+  try {
+    return sha256(assembleCodeSource(config, answer));
+  } catch {
+    return null;
+  }
+}
+
+/** The compile step of a run, as `gradings.details` keeps it. */
+export function compileDetail(outcome: RunnerOutcome): { ok: boolean; stderr: string; ms: number } {
+  return {
+    ok: outcome.compile.ok,
+    stderr: truncate(outcome.compile.stderr),
+    ms: outcome.compile.ms,
+  };
+}
+
+/**
+ * The request of any program run. The single main file is named by the
+ * language, so a student cannot choose a file name, and the teacher's extra
+ * files are injected here rather than travelling through the browser.
+ */
+export function programRequest(
+  config: ProgramConfig,
+  source: string,
+  run: Pick<RunnerRequest, "action" | "limits" | "cases" | "priority">,
+): RunnerRequest {
+  return RunnerRequest.parse({
+    language: config.language,
+    files: [{ name: mainFileName(config.language), content: source }, ...config.files],
+    compileArgs: config.compileArgs,
+    ...run,
+  });
+}
+
+/**
+ * The first half of a program grading, `code`'s and `codeimage`'s alike:
+ * assemble, then delegate. Nothing is graded here, because nothing can be
+ * known before the code has run — except that an empty answer scores zero
+ * and an answer that cannot be sent goes to a human.
+ */
+export function delegateToRunner<D>(
+  config: ProgramConfig,
+  answer: CodeAnswer | null,
+  ctx: GradeContext,
+  zero: (runner: "ok" | "error", reason: string) => D,
+  request: (source: string) => RunnerRequest,
+): GradeResult<D> {
+  if (isEmptyAnswer(answer)) {
+    return {
+      kind: "graded",
+      points: 0,
+      maxPoints: ctx.itemPoints,
+      details: zero("ok", "empty"),
+      state: "validated",
+    };
+  }
+
+  let source: string;
+  try {
+    source = assembleCodeSource(config, answer as CodeAnswer);
+  } catch (err) {
+    // A stored answer that no longer fits the template (the teacher moved a
+    // lock marker after the attempt started). Never paste it into the wrong
+    // hole, and never silently score it zero either: a human decides.
+    if (err instanceof TemplateRegionMismatch) {
+      return {
+        kind: "graded",
+        points: 0,
+        maxPoints: ctx.itemPoints,
+        details: zero("error", err.code),
+        state: "proposed",
+        comment: err.code,
+      };
+    }
+    throw err;
+  }
+
+  let built: RunnerRequest;
+  try {
+    built = request(source);
+  } catch {
+    // Oversized source or file set: the runner would refuse it anyway.
+    return {
+      kind: "graded",
+      points: 0,
+      maxPoints: ctx.itemPoints,
+      details: zero("error", "runner_request_invalid"),
+      state: "proposed",
+      comment: "runner_request_invalid",
+    };
+  }
+
+  return { kind: "pending", via: "runner", request: built, details: { sourceSha256: sha256(source) } };
 }
 
 export interface BuildRequestOptions {
@@ -61,9 +160,7 @@ export interface BuildRequestOptions {
 }
 
 /**
- * Assembles the request the runner receives. The single main file is named by
- * the language, so a student cannot choose a file name, and the teacher's extra
- * files are injected here rather than travelling through the browser.
+ * Assembles the request the runner receives for a `code` question.
  *
  * `RunnerRequest.limits.timeMs` is global while a case may carry its own
  * budget, so the request asks for the LARGEST budget of the cases it sends and
@@ -76,10 +173,7 @@ export function buildRunnerRequest(
 ): RunnerRequest {
   const cases = options.cases ?? config.tests.cases;
   const timeMs = cases.reduce((max, c) => Math.max(max, caseTimeMs(config, c)), config.limits.timeMs);
-  return RunnerRequest.parse({
-    language: config.language,
-    files: [{ name: mainFileName(config.language), content: source }, ...config.files],
-    compileArgs: config.compileArgs,
+  return programRequest(config, source, {
     action: options.action ?? "run",
     limits: { ...config.limits, timeMs },
     // `args` is the case's command line, one argv entry per element. The
@@ -114,61 +208,19 @@ function zeroDetails(
   };
 }
 
-/**
- * First half: assemble, then delegate. Nothing is graded here, because nothing
- * can be known before the code has run.
- */
+/** First half: assemble, then delegate (`delegateToRunner`). */
 export function gradeCode(
   config: CodeConfig,
   answer: CodeAnswer | null,
   ctx: GradeContext,
 ): GradeResult<CodeDetails> {
-  if (isEmptyAnswer(answer)) {
-    return {
-      kind: "graded",
-      points: 0,
-      maxPoints: ctx.itemPoints,
-      details: zeroDetails(config, "ok", "empty"),
-      state: "validated",
-    };
-  }
-
-  let source: string;
-  try {
-    source = assembleCodeSource(config, answer as CodeAnswer);
-  } catch (err) {
-    // A stored answer that no longer fits the template (the teacher moved a
-    // lock marker after the attempt started). Never paste it into the wrong
-    // hole, and never silently score it zero either: a human decides.
-    if (err instanceof TemplateRegionMismatch) {
-      return {
-        kind: "graded",
-        points: 0,
-        maxPoints: ctx.itemPoints,
-        details: zeroDetails(config, "error", err.code),
-        state: "proposed",
-        comment: err.code,
-      };
-    }
-    throw err;
-  }
-
-  let request: RunnerRequest;
-  try {
-    request = buildRunnerRequest(config, source, { priority: "grading" });
-  } catch {
-    // Oversized source or file set: the runner would refuse it anyway.
-    return {
-      kind: "graded",
-      points: 0,
-      maxPoints: ctx.itemPoints,
-      details: zeroDetails(config, "error", "runner_request_invalid"),
-      state: "proposed",
-      comment: "runner_request_invalid",
-    };
-  }
-
-  return { kind: "pending", via: "runner", request, details: { sourceSha256: sha256(source) } };
+  return delegateToRunner(
+    config,
+    answer,
+    ctx,
+    (runner, reason) => zeroDetails(config, runner, reason),
+    (source) => buildRunnerRequest(config, source, { priority: "grading" }),
+  );
 }
 
 /**
@@ -182,20 +234,8 @@ export function finalizeRunnerCode(
   outcome: RunnerOutcome,
 ): GradedResult<CodeDetails> {
   const total = totalCasePoints(config);
-  let sourceSha256: string | null = null;
-  if (answer !== null) {
-    try {
-      sourceSha256 = sha256(assembleCodeSource(config, answer));
-    } catch {
-      sourceSha256 = null;
-    }
-  }
-
-  const compile = {
-    ok: outcome.compile.ok,
-    stderr: truncate(outcome.compile.stderr),
-    ms: outcome.compile.ms,
-  };
+  const sourceSha256 = sourceHashOf(config, answer);
+  const compile = compileDetail(outcome);
 
   if (!compile.ok) {
     return {

@@ -21,8 +21,7 @@ import {
   PROGRAM_ADVANCED_PATHS,
   ProgramAdvancedFields,
   ProgramPromptSection,
-  ReferenceSection,
-  TemplateSection,
+  ProgramSourceSections,
 } from "./ProgramEditor.js";
 import { ArgsInput } from "./ArgsInput.js";
 import { referenceRegions } from "./reference.js";
@@ -256,16 +255,7 @@ export function CodeEditor({
         uploadAsset={uploadAsset}
       />
 
-      <TemplateSection
-        config={config}
-        patch={patch}
-        s={s}
-        disabled={disabled}
-        issues={issues}
-        monaco={monaco}
-      />
-
-      <ReferenceSection
+      <ProgramSourceSections
         config={config}
         patch={patch}
         s={s}
@@ -292,7 +282,7 @@ export function CodeEditor({
             {plural(s, "tryDiverged", tryState.diverged)}
           </p>
         ) : null}
-      </ReferenceSection>
+      </ProgramSourceSections>
 
       {/*
        * One PANEL per case (`RowList`): a case carries ten fields — a name, a

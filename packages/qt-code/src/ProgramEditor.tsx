@@ -286,6 +286,28 @@ export function TemplateSection({
 }
 
 /**
+ * The two sections every program editor shows in a row: the starting code,
+ * then the reference solution with the editor's own "try" row as children.
+ */
+export function ProgramSourceSections(props: {
+  config: ProgramConfig;
+  patch: ProgramPatch;
+  s: ProgramEditorStrings;
+  disabled: boolean | undefined;
+  issues: readonly ConfigIssue[];
+  monaco: boolean | undefined;
+  children?: ReactNode;
+}): ReactNode {
+  const { children, ...shared } = props;
+  return (
+    <>
+      <TemplateSection {...shared} />
+      <ReferenceSection {...shared}>{children}</ReferenceSection>
+    </>
+  );
+}
+
+/**
  * The reference solution, and whatever checks it — the editor's own "try"
  * row, passed as children, so each type words its result its own way.
  *
