@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 
 import type {
-  ByQuestion,
   EvaluationDetail,
   GradingConfidence,
   GradingEntry,
@@ -21,7 +20,6 @@ import {
   evaluationKey,
   gradingQueueKey,
   gradingStepsKey,
-  resultsByQuestionKey,
 } from "../queryKeys";
 import { entryKey } from "./EntryList";
 import { proposalsFirst, type GradingOrder } from "./labels";
@@ -183,22 +181,17 @@ export function useGradingTraversal(evaluationId: string, choices: TraversalChoi
   const progress = useGradingProgress(evaluationId);
 
   /**
-   * The explanations, taken from the per-question results view. It is an
-   * aid, not the screen: a failure here shows nothing extra and never an
-   * error state, so a grading session is not interrupted by a secondary read.
+   * The explanations, an aid beside the answer: they travel with the queue's
+   * items, so the panel reads them in any state of the evaluation (the
+   * per-question results view only exists once it is over, ADR-033).
    */
-  const byQuestion = useQuery<ByQuestion[]>({
-    queryKey: resultsByQuestionKey(evaluationId),
-    retry: false,
-    queryFn: () => api(`/app/api/evaluations/${evaluationId}/results/by-question`),
-  });
   const explanations = useMemo(() => {
     const map = new Map<string, string>();
-    for (const q of byQuestion.data ?? []) {
-      if (q.explanation) map.set(q.item.id, q.explanation);
+    for (const item of queue.data?.items ?? []) {
+      if (item.explanation) map.set(item.id, item.explanation);
     }
     return map;
-  }, [byQuestion.data]);
+  }, [queue.data]);
 
   // --- Filtering and ordering -------------------------------------------
 

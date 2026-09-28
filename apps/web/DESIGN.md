@@ -944,7 +944,8 @@ nothing else on it leaves the system.
   the counts stay at reading size. It is the same 2× jump the rest of the
   product uses, multiplied by the room: the viewport IS the projector, so the
   sizes are measured against it rather than picked from the 12–28 px scale.
-  Nothing else in `apps/web` may use a `clamp()` type size.
+  Nothing else in `apps/web` may use a `clamp()` type size, except the
+  correction projection below, which is the same wall.
   The question's own step is picked from its LENGTH (`questionScale`): a
   one-line question gets the full 68 px, and two longer steps follow, because
   a four-line question at 68 px pushes the last bars off the wall — and
@@ -1115,6 +1116,33 @@ The only chart of the teacher's surfaces, so its rules are written here.
   nothing.
 - The ring sits BESIDE the pressable part of the row, not inside it: a
   focusable thing nested in a button is one control too many.
+
+## Correction projection (the graded evaluation on a beamer)
+
+`/evaluations/:id/correction` (`results/CorrectionProjection.tsx`, ADR-033):
+the Results "Questions" tab on the wall. It takes the projection's
+`clamp()` scale and its dark-by-default theme.
+
+- **One screen per question**, snapped, under a 64 px sticky strip: the way
+  back, the title, a stepper of question numbers only, the controls. The one
+  primary action is "Reveal the answers" (R).
+- **Head**: "Question n · type · points" (never the internal name), a 10 px
+  bar of the class with its legend (the same list of parts), and the success
+  rate in large mono with a half-size `%`, "out of n papers" under it.
+- **Thin bars are the one reading** (`SegmentedBar`, `ui/bar.tsx`): 8 px per
+  choice or test case, 6 px under a cloze blank. No count beside a bar; the
+  figures are in the hover and focus bubble and the accessible name, one
+  sentence built from the parts ("wrong: 4 · no answer: 1"). A short
+  answer's row is the exception: its count is the row's content.
+- **Colours**: full credit `success`, partial `success` hatched over the
+  track, wrong `danger`, no answer `warning`. Red, unlike the poll donut,
+  because a graded paper marks answers wrong (ADR-033); colour is never
+  alone — 2 px gaps, texture for partial, a fixed order, the figures in words.
+- **The key is not framed**: a key's letter is filled `success` / `on-fill`, a
+  distractor's is `danger-soft` / `danger` with its text in `fg-muted`.
+- **Hidden first**: a choice's bar drains to its track, a blank keeps its
+  width without ink, the reference solution is hatched `surface-2` /
+  `surface-3`. R reveals; E adds the explanation, only where there is one.
 
 ## Voice
 

@@ -78,26 +78,63 @@ export const ResultsView = z.object({
 });
 export type ResultsView = z.infer<typeof ResultsView>;
 
-/** F-RES-03: the per-question view, for the correction in front of the class. */
+/**
+ * F-RES-03: one answer group of the per-question view. Its verdict comes
+ * from the validated gradings of the answers in it (ADR-033).
+ */
 export const AnswerDistributionEntry = z.object({
   /** Canonical choice index for `mcq`, the normalised text otherwise. */
   key: z.string(),
+  /** What the class wrote; `""` for an empty answer, which the client names. */
   label: z.string(),
   count: z.number().int(),
+  /** `true` or `false` when every answer of the group agrees, `null` when mixed. */
   correct: z.boolean().nullable(),
+  /** The part of the question the group answers (a cloze blank's index), or `null`. */
+  part: z.number().int().nullable(),
 });
 export type AnswerDistributionEntry = z.infer<typeof AnswerDistributionEntry>;
 
+/**
+ * How the class fared on one item, over its counted attempts: an absent
+ * student is in none of them, an answer still waiting for its grading to be
+ * validated is in none of them either (ADR-033).
+ */
+export const ItemOutcomes = z.object({
+  /** Full marks. */
+  correct: z.number().int(),
+  /** More than zero, less than full marks. */
+  partial: z.number().int(),
+  /** An answer at zero points or below (ADR-026). */
+  wrong: z.number().int(),
+  /** No answer, or one left blank on purpose. */
+  blank: z.number().int(),
+});
+export type ItemOutcomes = z.infer<typeof ItemOutcomes>;
+
+/**
+ * F-RES-03: the per-question view, for the correction in front of the class
+ * — the Results "Questions" tab and its projection. Served once the
+ * evaluation is over (`closed`, `grading`, `released`); `409 not_over` before.
+ */
 export const ByQuestion = z.object({
   item: ResultsItem,
   /** The question as a student saw it (seed 0), never the raw config. */
   student: z.unknown(),
   solution: z.unknown(),
   explanation: z.string().nullable(),
-  answered: z.number().int(),
+  outcomes: ItemOutcomes,
+  /** Every answer group, most frequent first. */
   distribution: z.array(AnswerDistributionEntry),
-  /** `code` only: how many attempts passed each test case. */
-  casePassRate: z.array(z.object({ name: z.string(), passed: z.number().int(), total: z.number().int() })),
+  /**
+   * `code` only: how many attempts passed each test case. `label` is the
+   * name the class may read: a hidden case reads as a student reads it
+   * unless the feedback policy shows hidden case names (ADR-033).
+   */
+  casePassRate: z.array(
+    z.object({ name: z.string(), label: z.string(), passed: z.number().int(), total: z.number().int() }),
+  ),
+  /** Mean of `points / maxPoints` over the attempts of `outcomes`, a blank at 0. */
   successRate: z.number().nullable(),
   avgMs: z.number().nullable(),
 });

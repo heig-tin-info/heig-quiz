@@ -173,30 +173,61 @@ export interface StudentDetailsPolicy {
 }
 
 /**
+ * One answer group of {@link ItemAggregate.distribution}: the answers that
+ * share a key, and what the class debrief needs to draw them (F-RES-03).
+ */
+export interface TallyEntry {
+  /**
+   * What groups the answers, unique within the item: a canonical choice
+   * index, `"1: Galilee"` for a blank, the text of a short answer.
+   */
+  key: string;
+  count: number;
+  /** What the teacher reads, when it is not the key itself: a blank's text without its index. */
+  label?: string;
+  /** The part of the question the key answers: a cloze blank's index. */
+  part?: number;
+  /**
+   * The type's own verdict on the key, when it can judge the key alone — a
+   * choice is in the key or not, a blank was right or wrong. Absent, the
+   * caller takes the validated grading of the attempt the key came from
+   * (ADR-033).
+   */
+  correct?: boolean;
+}
+
+/**
  * What {@link QuestionTypeServer.aggregate} hands the class debrief of one
  * item (F-RES-03). Both fields are optional: a type fills the statistics that
  * mean something for it and leaves the rest out.
  */
 export interface ItemAggregate {
   /**
-   * How often each answer was given, as `[key, count]` pairs in the order the
-   * keys were first met. The key is what the teacher reads: a canonical
-   * choice index, `"1: Galilee"` for a blank, the text of a short answer.
-   * The caller sorts, truncates and labels.
+   * How often each answer was given, in the order the keys were first met.
+   * The caller sorts and merges.
    */
-  distribution?: ReadonlyArray<readonly [key: string, count: number]>;
-  /** How many graded attempts passed each named test case. */
-  casePassRate?: ReadonlyArray<{ name: string; passed: number; total: number }>;
+  distribution?: readonly TallyEntry[];
+  /**
+   * How many graded attempts passed each named test case. `label` is the
+   * name the class may read (a hidden case under a policy that closes the
+   * names reads as a student reads it); absent, it is `name`.
+   */
+  casePassRate?: ReadonlyArray<{ name: string; label?: string; passed: number; total: number }>;
 }
 
 /**
- * The `[key, count]` pairs of {@link ItemAggregate.distribution}: every key
- * counted, in first-seen order.
+ * The entries of {@link ItemAggregate.distribution}: every key counted, in
+ * first-seen order, a key's label, part and verdict as first seen.
  */
-export function tallyKeys(keys: Iterable<string>): [string, number][] {
-  const counts = new Map<string, number>();
-  for (const key of keys) counts.set(key, (counts.get(key) ?? 0) + 1);
-  return [...counts.entries()];
+export function tallyKeys(keys: Iterable<string | Omit<TallyEntry, "count">>): TallyEntry[] {
+  const counts = new Map<string, TallyEntry>();
+  for (const given of keys) {
+    const entry = typeof given === "string" ? { key: given } : given;
+    const seen = counts.get(entry.key);
+    if (seen) seen.count += 1;
+    else counts.set(entry.key, { ...entry, count: 1 });
+  }
+  return [...counts.values()];
 }
 
 /**
@@ -353,15 +384,19 @@ export interface QuestionTypeServer<
    * B-15): the answer distribution, a test-case pass rate.
    *
    * `answers` are the stored payloads of the class's answers to the item and
-   * `details` the `details` of its validated gradings, both RAW — they are
+   * `details` the `details` of their validated gradings, both RAW — they are
    * not re-parsed, because a payload stored under an older schema must still
-   * be counted, so an implementation skips what it does not recognise. The
+   * be counted, so an implementation skips what it does not recognise.
+   * `answers[i]` and `details[i]` belong to the same attempt: the results
+   * module calls the hook once per attempt and merges (ADR-033). The
    * result is teacher-facing only. Omitting the hook means "no per-type
    * statistics": the item shows its success rate and nothing more.
    */
   aggregate?(input: {
     answers: readonly unknown[];
     details: readonly unknown[];
+    /** The evaluation's feedback policy on hidden case names; absent, closed. */
+    showHiddenCaseNames?: boolean;
   }): ItemAggregate;
 
   /** Phase 2 random values; absent in MVP packages. */

@@ -59,7 +59,6 @@ function setup() {
       pending: { runner: 0, llm: 0 },
       failed: 0,
     }),
-    [`GET ${EVAL}/results/by-question`]: ok([]),
   });
   renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
   return stubs;

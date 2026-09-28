@@ -1,21 +1,57 @@
 import { ListChecks } from "lucide-react";
 
-import type { ByQuestion } from "@quiz/contracts";
+import type { AnswerDistributionEntry, ByQuestion } from "@quiz/contracts";
 import { displayedRate } from "@quiz/domain";
 
+import { ApiError } from "../api";
 import { useT } from "../i18n";
 import { MarkdownView } from "../markdown/MarkdownView";
+import { choicesOf } from "../poll/pollTally";
 import { typeLabel, QuestionReviewHost } from "../questionTypes";
-import { Badge, Card, cx, EmptyState, NotePanel, SectionHeading } from "../ui";
+import { Badge, Card, EmptyState, NotePanel, SectionHeading, SegmentedBar, type BarTone } from "../ui";
 
 // Clamped for display (ADR-026): negative marking can push a mean below 0.
 const percent = (rate: number | null) =>
   rate === null ? "—" : `${Math.round(displayedRate(rate) * 100)}%`;
 
 /** The `code` key, when the payload carries one and the policy let it out. */
-function referenceSolution(solution: unknown): string | null {
+export function referenceSolution(solution: unknown): string | null {
   const value = (solution as { referenceSolution?: unknown } | null)?.referenceSolution;
   return typeof value === "string" && value.trim() !== "" ? value : null;
+}
+
+/**
+ * The per-question view refused because the evaluation is not over yet
+ * (`409 not_over`, ADR-033). Its message is the server's, in English: a
+ * screen says `results.notOver` instead.
+ */
+export const isNotOver = (error: unknown): boolean =>
+  error instanceof ApiError && (error.body as { error?: string } | null)?.error === "not_over";
+
+/** A group's verdict as a tone: right, wrong, or both at once. */
+export const verdictTone = (entry: Pick<AnswerDistributionEntry, "correct">): BarTone =>
+  entry.correct === true ? "success" : entry.correct === false ? "danger" : "muted";
+
+/** The groups as rows: an mcq's choices by their letter and text, the rest as written. */
+function distributionRows(q: ByQuestion, blank: string) {
+  if (q.item.type === "mcq") {
+    const counts = new Map(q.distribution.map((d) => [d.key, d.count]));
+    return choicesOf(q).map((c) => ({
+      key: String(c.id),
+      label: `${c.letter}. ${c.text}`,
+      count: counts.get(String(c.id)) ?? 0,
+      tone: (c.correct ? "success" : "muted") as BarTone,
+      correct: c.correct,
+    }));
+  }
+  return q.distribution.map((d) => ({
+    key: d.key,
+    // A cloze group says which blank it answers, counted from 1.
+    label: `${d.part === null ? "" : `${d.part + 1}: `}${d.label === "" ? blank : d.label}`,
+    count: d.count,
+    tone: verdictTone(d),
+    correct: d.correct === true,
+  }));
 }
 
 /**
@@ -42,7 +78,9 @@ export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
   return (
     <div className="space-y-5">
       {questions.map((q) => {
-        const top = Math.max(1, ...q.distribution.map((d) => d.count));
+        const rows = distributionRows(q, t("results.byQuestion.blank"));
+        const top = Math.max(1, ...rows.map((d) => d.count));
+        const answered = q.outcomes.correct + q.outcomes.partial + q.outcomes.wrong;
         return (
           <Card key={q.item.id} className="space-y-4 p-5">
             <SectionHeading
@@ -52,7 +90,7 @@ export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
               actions={
                 <div className="flex flex-wrap items-center gap-1.5">
                   <Badge tone="zinc">{typeLabel(t, q.item.type)}</Badge>
-                  <Badge tone="zinc">{t("results.byQuestion.answered", { n: q.answered })}</Badge>
+                  <Badge tone="zinc">{t("results.byQuestion.answered", { n: answered })}</Badge>
                   <Badge tone={(q.successRate ?? 0) >= 0.5 ? "green" : "amber"}>
                     {t("results.byQuestion.successRate")} {percent(q.successRate)}
                   </Badge>
@@ -107,24 +145,16 @@ export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
               </NotePanel>
             ) : null}
 
-            {q.distribution.length > 0 ? (
+            {rows.length > 0 ? (
               <div>
                 <p className="text-[13px] font-medium">{t("results.byQuestion.distribution")}</p>
                 <ul className="mt-2 space-y-1.5">
-                  {q.distribution.map((d) => (
+                  {rows.map((d) => (
                     <li key={d.key} className="flex items-center gap-2 text-[13px]">
                       <span className="min-w-0 flex-1 truncate">{d.label}</span>
-                      {d.correct === true ? (
-                        <Badge tone="green">{t("results.byQuestion.correct")}</Badge>
-                      ) : null}
-                      <span className="h-2 w-32 shrink-0 overflow-hidden rounded-full bg-surface-3">
-                        <span
-                          className={cx(
-                            "block h-full rounded-full",
-                            d.correct === true ? "bg-success" : "bg-fg-muted",
-                          )}
-                          style={{ width: `${Math.round((d.count / top) * 100)}%` }}
-                        />
+                      {d.correct ? <Badge tone="green">{t("results.byQuestion.correct")}</Badge> : null}
+                      <span className="w-32 shrink-0">
+                        <SegmentedBar parts={[{ tone: d.tone, value: d.count }]} total={top} />
                       </span>
                       <span className="w-8 shrink-0 text-right tabular-nums text-fg-muted">
                         {d.count}
@@ -133,7 +163,7 @@ export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
                   ))}
                 </ul>
               </div>
-            ) : q.answered === 0 ? (
+            ) : answered === 0 ? (
               <p className="text-[13px] text-fg-muted">{t("results.byQuestion.noAnswers")}</p>
             ) : null}
 
@@ -144,12 +174,10 @@ export function ByQuestionView({ questions }: { questions: ByQuestion[] }) {
                   {q.casePassRate.map((c) => (
                     <li key={c.name} className="flex items-center gap-2 text-[13px]">
                       <span className="min-w-0 flex-1 truncate font-mono text-xs">{c.name}</span>
-                      <span className="h-2 w-32 shrink-0 overflow-hidden rounded-full bg-surface-3">
-                        <span
-                          className="block h-full rounded-full bg-fg-muted"
-                          style={{
-                            width: `${c.total === 0 ? 0 : Math.round((c.passed / c.total) * 100)}%`,
-                          }}
+                      <span className="w-32 shrink-0">
+                        <SegmentedBar
+                          parts={[{ tone: "muted", value: c.passed }]}
+                          total={Math.max(1, c.total)}
                         />
                       </span>
                       <span className="shrink-0 tabular-nums text-fg-muted">

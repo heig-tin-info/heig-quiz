@@ -36,9 +36,21 @@ describe("aggregate", () => {
     });
     expect(stats).toEqual({
       casePassRate: [
-        { name: "sum", passed: 2, total: 2 },
-        { name: "edge", passed: 1, total: 2 },
+        { name: "sum", label: "sum", passed: 2, total: 2 },
+        { name: "edge", label: "edge", passed: 1, total: 2 },
       ],
     });
+  });
+
+  it("labels a hidden case as a student reads it, unless the policy opens the names", () => {
+    const hidden = { ...verdict("overflow", false), visible: false };
+    const labels = (showHiddenCaseNames: boolean) =>
+      codeServer.aggregate!({
+        answers: [],
+        details: [details(verdict("sum", true), hidden)],
+        showHiddenCaseNames,
+      }).casePassRate!.map((c) => c.label);
+    expect(labels(false)).toEqual(["sum", "#2"]);
+    expect(labels(true)).toEqual(["sum", "overflow"]);
   });
 });

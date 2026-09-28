@@ -65,7 +65,6 @@ function setup(over: Record<string, ReturnType<typeof ok>> = {}) {
       pending: { runner: 0, llm: 0 },
       failed: 0,
     }),
-    [`GET ${EVAL}/results/by-question`]: ok([]),
     [`GET ${EVAL}/items/i1/versions`]: ok({ frozenNumber: 1, versions: [] }),
     [`GET ${EVAL}/items/i2/versions`]: ok({ frozenNumber: 1, versions: [] }),
     ...over,

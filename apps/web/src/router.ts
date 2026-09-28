@@ -86,6 +86,8 @@ export type Route =
   | { view: "grading"; evaluationId: string }
   /** The teacher's results table for one evaluation. */
   | { view: "results"; evaluationId: string }
+  /** The correction of a graded evaluation, projected in class (F-RES-03, ADR-033). */
+  | { view: "correction"; evaluationId: string }
   /** The student's own feedback on one finished attempt (the ONE such page). */
   | { view: "feedback"; attemptId: string }
   /** Development only: the gallery of the shared primitives (App.tsx gates it). */
@@ -134,7 +136,13 @@ function fixed<V extends Route["view"]>(
   };
 }
 
-type EvaluationTailView = "live" | "poll" | "grading" | "results" | "evaluationPreview";
+type EvaluationTailView =
+  | "live"
+  | "poll"
+  | "grading"
+  | "results"
+  | "correction"
+  | "evaluationPreview";
 
 /** `/evaluations/:id/<tail>`: one of the screens that hang off an evaluation. */
 function evaluationTail<V extends EvaluationTailView>(
@@ -287,7 +295,10 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   results: evaluationTail("results", (evaluationId) => ({ view: "results", evaluationId }), {
     evaluationId: evaluationIdOf,
   }),
-  // After the four tails above: this one takes whatever tail is left.
+  // The results' Questions tab on a beamer: like the poll, it links to none
+  // of the screens above.
+  correction: evaluationTail("correction", (evaluationId) => ({ view: "correction", evaluationId })),
+  // After the tails above: this one takes whatever tail is left.
   evaluation: {
     path: (r) => `/evaluations/${r.id}`,
     match: ([head, id]) => (head === "evaluations" && id ? { view: "evaluation", id } : null),

@@ -51,7 +51,6 @@ function routes() {
       pending: { runner: 0, llm: 0 },
       failed: 0,
     }),
-    [`GET ${EVAL}/results/by-question`]: ok([]),
   } as Parameters<typeof mockFetch>[0];
 }
 

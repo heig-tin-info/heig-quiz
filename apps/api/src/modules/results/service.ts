@@ -23,7 +23,6 @@
 import { and, asc, eq, inArray } from "drizzle-orm";
 
 import type {
-  AnswerDistributionEntry,
   ByQuestion,
   CardResults,
   FeedbackPolicy,
@@ -39,11 +38,13 @@ import type {
 } from "@quiz/contracts";
 import {
   attemptTotal,
+  debrief,
   describe,
   gradeFromPoints,
   histogram,
   retakeRefusal,
   round2,
+  type AttemptTally,
 } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
@@ -92,6 +93,7 @@ import {
   type PairKey,
   type StudentAttempts,
 } from "../grading/service.js";
+import { answeredBy } from "../live/service.js";
 import { solutionView, stripKeys, studentView } from "../live/studentView.js";
 import { typeOf } from "../pool/config.js";
 
@@ -103,6 +105,19 @@ export class NotReleasable extends ResultsError {
   constructor(message: string) {
     super("not_releasable", 409, message);
   }
+}
+
+export class NotOver extends ResultsError {
+  constructor(message: string) {
+    super("not_over", 409, message);
+  }
+}
+
+/** Closed, being graded or released: what the web calls `isGraded`. */
+function isOver(evaluation: EvaluationRecord): boolean {
+  return (
+    evaluation.state === "closed" || evaluation.state === "grading" || evaluation.state === "released"
+  );
 }
 
 // --- The grade table ------------------------------------------------------
@@ -285,7 +300,7 @@ export async function releaseResults(
   evaluation: EvaluationRecord,
   now: Date,
 ): Promise<{ releasedAt: Date; rows: number }> {
-  if (evaluation.state !== "closed" && evaluation.state !== "grading" && evaluation.state !== "released") {
+  if (!isOver(evaluation)) {
     throw new NotReleasable("an evaluation is released once it is closed");
   }
   const computed = await computeResults(db, evaluation);
@@ -375,7 +390,13 @@ export async function markModifiedAfterRelease(
 
 // --- Per-question view (F-RES-03) ----------------------------------------
 
+/**
+ * The debrief of every item — the Results "Questions" tab and its projection
+ * in class (ADR-033). Only once the evaluation is over: before, a projected
+ * key would reach a student still answering, or one about to retake.
+ */
 export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<ByQuestion[]> {
+  if (!isOver(evaluation)) throw new NotOver("the debrief of a question waits for the close");
   const items = await joinedItems(db, evaluation.id);
   const validated = await validatedGradings(db, evaluation.id);
   // The class debrief is about the CLASS: the teacher's own rehearsal is not
@@ -384,35 +405,42 @@ export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<
   // One attempt per student, the one that counts (ADR-025).
   const counted = countedAttempts(await keptAttempts(db, evaluation), staffAttempts);
   const views = itemViews(items, validated, counted);
-  const attemptRows = [...counted].map((id) => ({ id }));
   const answerRows =
-    attemptRows.length === 0
+    counted.size === 0
       ? []
-      : await db
-          .select()
-          .from(answers)
-          .where(
-            inArray(
-              answers.attemptId,
-              attemptRows.map((a) => a.id),
-            ),
-          );
+      : await db.select().from(answers).where(inArray(answers.attemptId, [...counted]));
+  const answerOf = new Map(answerRows.map((a) => [pairKey(a.attemptId, a.itemId), a]));
+  // Hidden case names reach the wall as a student would read them (ADR-033).
+  const { showHiddenCaseNames } = feedbackOf(evaluation);
 
   return items.map((item, index) => {
     const version = { config: item.version.config, configVersion: item.version.configVersion };
-    const itemAnswers = answerRows.filter(
-      (a) => a.itemId === item.item.id && a.payload !== null,
-    );
-    const itemGradings = [...validated.values()].filter(
-      (g) => g.itemId === item.item.id && counted.has(g.attemptId),
-    );
-    // The per-type statistics come from the type itself (audit B-15): the
-    // results module knows no answer shape and no details shape.
-    const stats =
-      typeOf(item.question.type).aggregate?.({
-        answers: itemAnswers.map((a) => a.payload),
-        details: itemGradings.map((g) => g.details),
-      }) ?? {};
+    const holdsAnswer = answeredBy(item);
+    const type = typeOf(item.question.type);
+    // Per attempt, so that what it wrote can take the verdict of its grading;
+    // the per-type statistics come from the type itself (audit B-15).
+    const tallies: AttemptTally[] = [];
+    for (const attemptId of counted) {
+      const cell = pairKey(attemptId, item.item.id);
+      const answer = answerOf.get(cell);
+      if (!answer || answer.skipped || !holdsAnswer(answer.payload)) {
+        tallies.push({ grading: null, aggregate: {} });
+        continue;
+      }
+      const grading = validated.get(cell);
+      // A proposal is not a zero: the answer waits, and counts nowhere yet.
+      if (!grading) continue;
+      tallies.push({
+        grading,
+        aggregate:
+          type.aggregate?.({
+            answers: [answer.payload],
+            details: [grading.details],
+            showHiddenCaseNames,
+          }) ?? {},
+      });
+    }
+    const { outcomes, successRate, distribution, casePassRate } = debrief(tallies);
     return {
       item: views[index]!,
       student: studentView({
@@ -429,26 +457,13 @@ export async function byQuestion(db: Db, evaluation: EvaluationRecord): Promise<
         itemId: item.item.id,
       }),
       explanation: item.version.explanation === "" ? null : item.version.explanation,
-      answered: itemAnswers.length,
-      distribution: distributionOf(stats.distribution ?? []),
-      casePassRate: (stats.casePassRate ?? []).map((c) => ({ ...c })),
-      successRate: views[index]!.successRate,
+      outcomes,
+      distribution,
+      casePassRate,
+      successRate,
       avgMs: null,
     };
   });
-}
-
-/**
- * The answer distribution of §4.6, as the debrief shows it: the type's
- * counts (`aggregate`), most frequent first, the first fifty.
- */
-function distributionOf(
-  counts: ReadonlyArray<readonly [key: string, count: number]>,
-): AnswerDistributionEntry[] {
-  return [...counts]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 50)
-    .map(([key, count]) => ({ key, label: key === "" ? "(vide)" : key, count, correct: null }));
 }
 
 // --- Student feedback (F-RES-04, docs/05 §5.7) ---------------------------

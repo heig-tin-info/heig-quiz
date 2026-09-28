@@ -35,7 +35,20 @@ const ENTRY = makeEntry({
 function setup() {
   mockFetch({
     [`GET ${EVAL}`]: ok(makeEvaluationDetail()),
-    [`GET ${EVAL}/grading?by=question&itemId=i1&anonymous=1`]: ok(makeQueue([ENTRY])),
+    [`GET ${EVAL}/grading?by=question&itemId=i1&anonymous=1`]: ok(
+      makeQueue([ENTRY], {
+        items: [
+          {
+            id: "i1",
+            position: 0,
+            internalName: "sizeof-ptr",
+            type: "mcq",
+            points: 2,
+            explanation: "Pointers are 8 bytes on LP64.",
+          },
+        ],
+      }),
+    ),
     [`GET ${EVAL}/grading/steps?by=question&anonymous=1`]: ok(
       makeSteps("question", [{ key: "i1", proposed: 1 }, { key: "i2" }]),
     ),
@@ -45,16 +58,13 @@ function setup() {
       pending: { runner: 0, llm: 0 },
       failed: 0,
     }),
-    [`GET ${EVAL}/results/by-question`]: ok([
-      { item: { id: "i1" }, explanation: "Pointers are 8 bytes on LP64." },
-    ]),
   });
   renderWithProviders(<GradingPanel evaluationId="e1" navigate={vi.fn()} />);
 }
 
 const detail = () => screen.getByRole("region", { name: en["grading.detail.label"] });
 
-/** Waits for the whole answer: the review is lazy, the explanation a second read. */
+/** Waits for the whole answer: the review is lazy. */
 async function ready() {
   const region = await screen.findByRole("region", { name: en["grading.detail.label"] });
   await within(region).findByText("Missed");

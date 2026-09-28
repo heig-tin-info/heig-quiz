@@ -80,6 +80,11 @@ export const GradingQueueItem = z.object({
    * reads as 0.
    */
   minPoints: z.number().optional(),
+  /**
+   * The question's explanation, an aid beside the answer being graded; the
+   * server sends it (`null`: none; absent in older fixtures). Teacher-facing only.
+   */
+  explanation: z.string().nullable().optional(),
 });
 export type GradingQueueItem = z.infer<typeof GradingQueueItem>;
 

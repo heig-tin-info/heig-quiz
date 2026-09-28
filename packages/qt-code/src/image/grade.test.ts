@@ -168,10 +168,10 @@ describe("aggregate", () => {
       details: [row(100), row(95), row(100), row(10), row(0), { junk: true }],
     });
     expect(result.distribution).toEqual([
-      ["100 %", 2],
-      ["90–99 %", 1],
-      ["1–49 %", 1],
-      ["0 %", 1],
+      { key: "100 %", count: 2 },
+      { key: "90–99 %", count: 1 },
+      { key: "1–49 %", count: 1 },
+      { key: "0 %", count: 1 },
     ]);
   });
 });

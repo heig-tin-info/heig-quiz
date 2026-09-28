@@ -66,6 +66,7 @@ export {
   studentHome,
 } from "./attempt.js";
 export {
+  answeredBy,
   saveAnswer,
   markDone,
   setSkipped,

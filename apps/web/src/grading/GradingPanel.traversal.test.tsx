@@ -97,7 +97,6 @@ function routes(over: Record<string, ReturnType<typeof ok>> = {}) {
       pending: { runner: 0, llm: 0 },
       failed: 0,
     }),
-    [`GET ${EVAL}/results/by-question`]: ok([]),
     ...over,
   };
 }

@@ -155,7 +155,7 @@ describe("results and the export (§4.6)", () => {
       teacher.headers,
     );
     expect(byQuestion.statusCode).toBe(200);
-    expect(byQuestion.json()[0]).toMatchObject({ answered: 1, successRate: 1 });
+    expect(byQuestion.json()[0]).toMatchObject({ outcomes: { correct: 1 }, successRate: 1 });
     expect(byQuestion.json()[0].distribution[0]).toMatchObject({ key: "answer-q0", count: 1 });
 
     const csv = await get(`/app/api/evaluations/${built.evaluationId}/results.csv`, teacher.headers);

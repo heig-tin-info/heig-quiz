@@ -451,7 +451,7 @@ describe("grading and results with several attempts", () => {
 
     const byQuestion = await results.byQuestion(db, reloaded);
     // One answer per student and question: the kept attempts only.
-    expect(byQuestion.map((q) => q.answered)).toEqual([2, 2]);
+    expect(byQuestion.map((q) => q.outcomes.correct + q.outcomes.wrong)).toEqual([2, 2]);
   });
 
   it("keeps the LAST attempt when the teacher said so", async () => {

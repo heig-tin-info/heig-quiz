@@ -17,11 +17,11 @@ import {
   type RunnerService,
 } from "@quiz/core/server";
 import type { ReleasedGrades } from "@quiz/contracts";
-import type { CodeDetails } from "@quiz/qt-code/server";
+import { codeServer, type CodeDetails } from "@quiz/qt-code/server";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
-import { evaluationItems, evaluations, notifications } from "../../db/schema.js";
+import { evaluationItems, evaluations, gradings, notifications } from "../../db/schema.js";
 import { testApp, testDatabase } from "../../test/db.js";
 import { seedCodeEvaluation } from "../../test/codeFixture.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
@@ -679,5 +679,152 @@ describe("the student's pages read in a fixed number of statements (audit D-05)"
     } finally {
       statements.mockRestore();
     }
+  });
+});
+
+describe("the per-question debrief (F-RES-03, ADR-033)", () => {
+  /**
+   * A class of eight on one question of the fake `short` type: what each
+   * student hands in (`undefined`: enters and answers nothing; `null`: never
+   * shows up), graded by the real pass, then overridden where the scenario
+   * says so.
+   */
+  async function classOf(given: readonly (string | null | undefined)[]) {
+    const app = await appFor();
+    const seed = await seedLive(db, { students: given.length, questions: 1 });
+    let evaluation = await applyState(db, await reload(db, seed.evaluationId), "running", app.clock.now());
+    const [item] = await joinedItems(db, evaluation.id);
+    const attempts: (live.AttemptRecord | null)[] = [];
+    for (const [index, text] of given.entries()) {
+      if (text === null) {
+        attempts.push(null);
+        continue;
+      }
+      const participant = (await live.participantOf(db, evaluation, seed.studentIds[index]!))!;
+      const { attempt } = await live.enterEvaluation(db, { evaluation, participant, now: app.clock.now() });
+      if (text !== undefined) {
+        await live.saveAnswer(db, {
+          evaluation,
+          attempt,
+          itemId: item!.item.id,
+          payload: text,
+          revision: 1,
+          now: app.clock.now(),
+        });
+      }
+      attempts.push(await live.submitAttempt(db, evaluation, attempt, app.clock.now()));
+    }
+    evaluation = await live.closeEvaluation(db, evaluation, app.clock.now());
+    await runEvaluationGrading(app, { evaluationId: evaluation.id });
+    const regrade = async (index: number, points: number, state: "validated" | "proposed") => {
+      app.clock.advance(1000);
+      await grading.writeGrading(db, {
+        attemptId: attempts[index]!.id,
+        itemId: item!.item.id,
+        answerId: null,
+        points,
+        maxPoints: 1,
+        source: "manual",
+        state,
+        details: { manual: true },
+        comment: "override",
+        now: app.clock.now(),
+      });
+    };
+    return { app, evaluation, attempts, regrade };
+  }
+
+  it("counts the outcomes over the attempts, and judges each answer group by its gradings", async () => {
+    const { evaluation, attempts, regrade } = await classOf([
+      "answer-q0", // correct
+      "nope", // wrong
+      "nope", // wrong, then overridden to full marks: the group is mixed
+      "four", // wrong
+      "half", // overridden to half a point: partial
+      undefined, // entered, answered nothing: blank
+      "   ", // nothing that counts as an answer: blank
+      "answer-q0", // only a proposal, not validated yet: counted nowhere
+      null, // absent: counted nowhere
+    ]);
+    await regrade(2, 1, "validated");
+    await regrade(4, 0.5, "validated");
+    await db.delete(gradings).where(eq(gradings.attemptId, attempts[7]!.id));
+    await regrade(7, 1, "proposed");
+
+    const [q] = await service.byQuestion(db, await reload(db, evaluation.id));
+    expect(q!.outcomes).toEqual({ correct: 2, partial: 1, wrong: 2, blank: 2 });
+    // Over the same seven attempts: (1 + 0 + 1 + 0 + 0.5 + 0 + 0) / 7.
+    expect(q!.successRate).toBe(0.36);
+    expect(q!.distribution.map((d) => [d.label, d.count, d.correct, d.part])).toEqual([
+      ["nope", 2, null, null],
+      ["answer-q0", 1, true, null],
+      ["four", 1, false, null],
+      ["half", 1, null, null],
+    ]);
+  });
+
+  it("names a hidden test case as a student reads it, unless the policy shows hidden names", async () => {
+    // The fake `code` of the fixture, with the REAL `code` aggregate: the
+    // label comes from qt-code's own student filter.
+    const restore = registerForTests({ ...fakeRunnableCode, aggregate: codeServer.aggregate! });
+    try {
+      const app = await appFor();
+      const fixture = await seedCodeEvaluation(db, app.clock.now());
+      const run = (name: string, visible: boolean) => ({
+        name,
+        visible,
+        points: 1,
+        ok: visible,
+        exitCode: 0,
+        ms: 1,
+        timedOut: false,
+        oom: false,
+      });
+      await grading.writeGrading(db, {
+        attemptId: fixture.attemptId,
+        itemId: fixture.itemId,
+        answerId: null,
+        points: 1,
+        maxPoints: 2,
+        source: "auto",
+        state: "validated",
+        details: {
+          runner: "ok",
+          compile: null,
+          cases: [run("visible-1", true), run("hidden-overflow", false)],
+          earned: 1,
+          total: 2,
+          sourceSha256: null,
+        },
+        now: app.clock.now(),
+      });
+      const labels = async (showHiddenCaseNames: boolean) => {
+        const evaluation = await reload(db, fixture.evaluationId);
+        await db
+          .update(evaluations)
+          .set({ feedbackPolicy: { ...(evaluation.feedbackPolicy as object), showHiddenCaseNames } })
+          .where(eq(evaluations.id, fixture.evaluationId));
+        const [q] = await service.byQuestion(db, await reload(db, fixture.evaluationId));
+        return q!.casePassRate.map((c) => [c.name, c.label]);
+      };
+      // The wall reads `label`; `name` stays for the staff's own tab.
+      expect(await labels(false)).toEqual([
+        ["visible-1", "visible-1"],
+        ["hidden-overflow", "#2"],
+      ]);
+      expect(await labels(true)).toEqual([
+        ["visible-1", "visible-1"],
+        ["hidden-overflow", "hidden-overflow"],
+      ]);
+    } finally {
+      restore();
+    }
+  });
+
+  it("is refused before the evaluation is over: a projected key would reach a student still answering", async () => {
+    const app = await appFor();
+    const seed = await seedLive(db, { students: 1, questions: 1 });
+    const running = await applyState(db, await reload(db, seed.evaluationId), "running", app.clock.now());
+    await expect(service.byQuestion(db, running)).rejects.toMatchObject({ code: "not_over", status: 409 });
   });
 });

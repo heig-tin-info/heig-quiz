@@ -53,7 +53,6 @@ function routes(over: Record<string, unknown> = {}) {
       pending: { runner: 0, llm: 0 },
       failed: 0,
     }),
-    [`GET ${EVAL}/results/by-question`]: ok([]),
     ...over,
   } as Parameters<typeof mockFetch>[0];
 }

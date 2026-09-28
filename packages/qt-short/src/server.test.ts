@@ -174,6 +174,11 @@ describe("aggregate (F-RES-03, audit B-15)", () => {
       answers: [{ text: " Galilee " }, "Galilee", { text: "" }, { selected: [1] }],
       details: [],
     });
-    expect(stats).toEqual({ distribution: [["Galilee", 2], ["", 1]] });
+    expect(stats).toEqual({
+      distribution: [
+        { key: "Galilee", count: 2 },
+        { key: "", count: 1 },
+      ],
+    });
   });
 });
