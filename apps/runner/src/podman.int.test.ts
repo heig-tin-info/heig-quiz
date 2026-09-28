@@ -268,10 +268,10 @@ const PERF_EVENT_OPEN =
 /**
  * The uid the program runs under, asked of the program itself.
  *
- * Every `images/*​/Containerfile` repeats the same `adduser` stanza and the
- * assertion has to be repeated with it: an image added later with the stanza
- * forgotten is exactly the mistake this loop catches, and it catches it on
- * that image rather than on `c`'s. Rust declares `getuid` itself — the image
+ * The `adduser` stanza lives in two files (`images/Containerfile` for the
+ * Alpine images, `images/js/Containerfile` for Node) and the assertion is
+ * repeated per image: an image added later without it is exactly the mistake
+ * this loop catches, and it catches it on that image rather than on `c`'s. Rust declares `getuid` itself — the image
  * ships `rustc` with no crate registry to fetch `libc` from, and there is no
  * network inside the container anyway (invariant 11).
  */

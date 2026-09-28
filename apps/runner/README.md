@@ -37,7 +37,7 @@ are in production: `images/c-dev/run-hardened.sh`, `infra/seccomp/codespace.json
 and the engine module `src/engine/`. They arrived in this repository as
 `apps/runner/_from-codespace/`, which this package replaces; the seccomp
 profile now lives at `infra/seccomp/runner.json`, unchanged, and the
-`c-dev` image's structure is what `images/*/Containerfile` is derived from,
+`c-dev` image's structure is what `images/Containerfile` is derived from,
 with code-server, gdb, git and every network client dropped.
 
 What was deliberately *not* carried over:
@@ -179,7 +179,9 @@ images/build.sh rust            # ~700 MB, never built by default
 | `quiz-runner-rust` | alpine 3.20 | `rust`, `cargo` | ~700 MB, on demand |
 | `quiz-runner-spice` | alpine 3.20 | `ngspice` (42) | ~65 MB |
 
-Alpine-based, one toolchain each, a non-root `uid 1000` — asserted image by
+Alpine-based, one toolchain each — the Alpine five share `images/Containerfile`
+and differ by the packages `images/build.sh` passes it; `js` has its own
+`images/js/Containerfile` — a non-root `uid 1000` — asserted image by
 image, by a program that prints its own uid (`src/podman.int.test.ts`) — no
 network client, no package manager needed at run time. `GET /health` lists the languages whose
 image is present; `POST /run` answers `503 language_unavailable` for the

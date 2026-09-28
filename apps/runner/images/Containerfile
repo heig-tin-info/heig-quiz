@@ -1,0 +1,34 @@
+# quiz-runner-<lang>: one toolchain on Alpine, and nothing else.
+#
+# The Alpine languages (c, cpp, python, rust, spice) differ by their `apk add`
+# line only, so they share this file; images/build.sh passes the packages of
+# each one as PACKAGES (its table says why each list is what it is). `js`
+# starts from the official Node image and keeps its own file (js/).
+#
+# Derived from the structure of the sibling project's `c-dev` image
+# (apps/runner/README.md) with code-server, gdb, git and the network tooling
+# dropped: this image never serves an editor, it compiles one file and runs it
+# with `--network none`.
+#
+# Built by images/build.sh, e.g. for C:
+#   podman build --build-arg PACKAGES="gcc musl-dev" -t quiz-runner-c:latest \
+#     -f images/Containerfile images
+FROM docker.io/library/alpine:3.20
+
+# The toolchain, and nothing more. No curl, no ca-certificates, no git: the
+# container has no network, so a network client in it would only be a tool
+# for an attacker. An empty list is refused rather than built into an image
+# that runs nothing.
+ARG PACKAGES
+RUN test -n "${PACKAGES}" && apk add --no-cache ${PACKAGES}
+
+# uid 1000, non-root, owning nothing outside the work directory. /work is
+# replaced at run time by a tmpfs (mode 1777, size RUNNER_WORKDIR_MB); the
+# directory here only exists so that WORKDIR resolves on an unmounted image.
+RUN adduser -D -u 1000 -h /work runner && mkdir -p /work && chown 1000:1000 /work
+
+USER 1000:1000
+WORKDIR /work
+# No ENTRYPOINT and no CMD that matter: the runner starts the container with
+# `sleep <budget>` and drives it with `podman exec`.
+CMD ["sleep", "60"]

@@ -79,7 +79,7 @@ The code execution service: Fastify on :3200, `POST /run` and
 `GET /health`, one hardened container per request driven over the Podman
 socket. It depends on `@quiz/core` only. `apps/runner/README.md` documents
 the flags of every container, the request lifecycle, the images under
-`images/*/Containerfile` and the configuration knobs. Its own image
+`images/` and the configuration knobs. Its own image
 (`apps/runner/Dockerfile`) ships no engine, only the `podman-remote` client.
 
 ## Packages
