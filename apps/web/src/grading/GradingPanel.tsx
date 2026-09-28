@@ -1,33 +1,27 @@
-import { useMutation } from "@tanstack/react-query";
-import { BarChart3, CheckCheck, RefreshCcw } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { BarChart3, CheckCheck } from "lucide-react";
+import { useState, type CSSProperties } from "react";
 
-import { attemptTotal, formatPoints } from "@quiz/domain";
-
-import { api } from "../api";
 import { useT } from "../i18n";
-import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
-import { useScreenCommands } from "../screenCommands";
-import { typeLabel } from "../questionTypes";
-import { Badge, Button, Card, cx, EmptyState, PageError, PageHeader, useMinWidth } from "../ui";
+import { Button, Card, EmptyState, PageError, PageHeader } from "../ui";
 import { BatchBar, type BatchScope } from "./BatchBar";
-import { ListSkeleton } from "./ListSkeleton";
 import { entryKey } from "./EntryList";
 import { GradingFilters } from "./GradingFilters";
 import { GradingHeader } from "./GradingHeader";
-import { StepAnswers, StepList } from "./GradingStep";
-import { gradingLinks } from "./index";
+import { GradingWorkspace } from "./GradingWorkspace";
+import { ListSkeleton } from "./ListSkeleton";
 import { ORDER_WORDS } from "./labels";
-import { RegradeSheet } from "./RegradeSheet";
 import { OverrideSheet } from "./OverrideSheet";
-import { useGradingInvalidate } from "./useGradingInvalidate";
+import { RegradeSheet } from "./RegradeSheet";
+import { StepBadges } from "./StepBadges";
+import { useAnswerAnchor } from "./useAnswerAnchor";
+import { useGradingActions } from "./useGradingActions";
 import { useGradingKeys } from "./useGradingKeys";
-import { useGradingView } from "./view";
-import { ANY, neighbour, useGradingTraversal } from "./useGradingTraversal";
+import { useGradingSession } from "./useGradingSession";
+import { ANY } from "./useGradingTraversal";
 
 /**
- * The grading panel (F-GRADE-03 to 06, mockup `04-correction.html`).
+ * The grading panel (F-GRADE-03 to 06).
  *
  * The whole screen is one traversal: a path of steps at the top — walked with
  * the chevrons or jumped through with the step picker (#107) — and under it
@@ -49,14 +43,12 @@ import { ANY, neighbour, useGradingTraversal } from "./useGradingTraversal";
  * The step's badges sit in the step header and re-grading is on each answer
  * (#108), so the side column holds the answer list alone.
  *
- * What it reads is `useGradingTraversal`, its keyboard is `useGradingKeys`,
- * its filter row is `GradingFilters` and one step is `GradingStep`; this
- * component holds the choices and lays the screen out.
+ * Its state and what it reads are `useGradingSession` (over
+ * `useGradingTraversal`), what it does is `useGradingActions`, its keyboard
+ * is `useGradingKeys` and the answer's fixed place `useAnswerAnchor`; its
+ * filter row is `GradingFilters`, the step's badges `StepBadges` and the
+ * list and the answer `GradingWorkspace`. This component composes them.
  */
-
-/** The phone's sticky top bar (`h-14` in `Shell`) plus a little air. */
-const PHONE_BAR = 64;
-
 export function GradingPanel({
   evaluationId,
   navigate,
@@ -65,168 +57,33 @@ export function GradingPanel({
   navigate: (r: Route) => void;
 }) {
   const t = useT();
-  const toast = useToast();
-  const toastError = useErrorToast();
-
-  // The order, the filters and the parts shown are remembered per browser
-  // (#110); the names are not, and start hidden on every visit (F-GRADE-03).
-  const [view, setView] = useGradingView();
-  const { order, stateFilter, source, confidence, parts } = view;
-  const [showNames, setShowNames] = useState(false);
-  const [index, setIndex] = useState(0);
-  const [selected, setSelected] = useState<string | null>(null);
+  const session = useGradingSession(evaluationId);
+  const { view, setView, evaluation, itemsById, steps, step, entries, counts, progress, current } =
+    session;
+  const { order, source, confidence } = view;
   const [overrideKey, setOverrideKey] = useState<string | null>(null);
   /** The item whose re-grade sheet is open (#108: from any answer, either order). */
   const [regradeId, setRegradeId] = useState<string | null>(null);
 
-  const {
-    evaluation,
-    itemsById,
-    steps,
-    step,
-    queue,
-    entries,
-    counts,
-    progress,
-    explanations,
-    current,
-  } =
-    useGradingTraversal(evaluationId, {
-      order,
-      index,
-      selected,
-      stateFilter,
-      source,
-      confidence,
-      showNames,
-    });
-
-  const proposedCount = entries.filter((e) => e.grading?.state === "proposed").length;
-
-  // The selection follows the list: it lands on the first answer of a step
-  // and never points at a row that is no longer there.
-  useEffect(() => {
-    if (entries.length === 0) {
-      setSelected(null);
-      return;
-    }
-    setSelected((current) =>
-      current && entries.some((e) => entryKey(e) === current) ? current : entryKey(entries[0]!),
-    );
-  }, [entries]);
-
-  const overrideEntry = entries.find((e) => entryKey(e) === overrideKey) ?? null;
-
-  // --- Keeping the answer in one place -----------------------------------
-
-  const wide = useMinWidth(1024);
-  const stickyRef = useRef<HTMLDivElement>(null);
-  const answersRef = useRef<HTMLElement>(null);
-  const [stickyHeight, setStickyHeight] = useState(0);
-
-  // The height of the sticky step header, as a CSS variable the list column
-  // and the detail's header stick under.
-  useLayoutEffect(() => {
-    const el = stickyRef.current;
-    if (!el || typeof ResizeObserver === "undefined") return;
-    const measure = () => setStickyHeight(wide ? el.offsetHeight : 0);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [wide, steps.length]);
-
-  /*
-   * Another answer opened: its top goes right under whatever sticks at the
-   * top of the window (the step header from `lg`, the phone's top bar
-   * below), wherever the teacher had scrolled to in the previous one — the
-   * next step's first answer included. The answer the panel opens on is
-   * not a move, and does not scroll.
-   */
-  const previous = useRef<string | null>(null);
-  useLayoutEffect(() => {
-    const was = previous.current;
-    previous.current = selected;
-    const el = answersRef.current;
-    if (!el || was === null || selected === null || was === selected) return;
-    const rect = el.getBoundingClientRect();
-    if (rect.height === 0) return; // no layout (a test): nothing to align
-    const target = wide ? stickyHeight : PHONE_BAR;
-    if (Math.abs(rect.top - target) > 1) window.scrollBy({ top: rect.top - target });
-  }, [selected, wide, stickyHeight]);
-
-  /** One answer back or forward: the detail's buttons, the same as `←` / `→`. */
-  const move = (delta: number) => {
-    const next = neighbour(entries, selected, delta);
-    if (next) setSelected(next);
-  };
-
-  // --- Mutations ---------------------------------------------------------
-
-  const invalidate = useGradingInvalidate(evaluationId);
-
-  const validate = useMutation({
-    mutationFn: (gradingId: string) =>
-      api(`/app/api/gradings/${gradingId}/validate`, { method: "POST", body: "{}" }),
-    onSuccess: invalidate,
-    onError: toastError("grading.validate.failed"),
-  });
-
-  const run = useMutation({
-    mutationFn: () =>
-      api(`/app/api/evaluations/${evaluationId}/grading/run`, { method: "POST", body: "{}" }),
-    onSuccess: () => {
-      invalidate();
-      toast(t("grading.run.started"), "progress");
-    },
-    onError: toastError("grading.run.failed"),
+  /** The step's question, by question. */
+  const currentItem = order === "question" && step ? itemsById.get(step.key) : undefined;
+  const { validate, run, openResults } = useGradingActions({
+    evaluationId,
+    navigate,
+    // The question a palette "re-grade" means: the step's, else the open answer's.
+    regradeTarget: currentItem ?? (current ? itemsById.get(current.entry.itemId) : undefined),
+    onRegrade: setRegradeId,
   });
 
   useGradingKeys({
     entries,
-    selected,
-    onSelect: setSelected,
+    selected: session.selected,
+    onSelect: session.select,
     onValidate: validate.mutate,
     onOverride: setOverrideKey,
   });
 
-  // --- Palette commands of this screen ----------------------------------
-
-  /** The question a palette "re-grade" means: the step's, else the open answer's. */
-  const regradeTarget =
-    (order === "question" && step ? itemsById.get(step.key) : undefined) ??
-    (current ? itemsById.get(current.entry.itemId) : undefined);
-
-  const links = gradingLinks(evaluationId);
-  useScreenCommands([
-    {
-      id: "grading:results",
-      label: t("palette.openResults"),
-      icon: BarChart3,
-      group: "navigate",
-      run: () => navigate(links.results),
-    },
-    {
-      id: "grading:run",
-      label: t("grading.run"),
-      icon: CheckCheck,
-      group: "action",
-      run: () => run.mutate(),
-    },
-    ...(regradeTarget
-      ? [
-          {
-            id: "grading:regrade",
-            label: t("grading.regrade"),
-            icon: RefreshCcw,
-            group: "action" as const,
-            run: () => setRegradeId(regradeTarget.id),
-          },
-        ]
-      : []),
-  ]);
-
-  // --- Render ------------------------------------------------------------
+  const { stickyRef, answersRef, stickyHeight } = useAnswerAnchor(session.selected, steps.length);
 
   if (evaluation.isLoading) return <ListSkeleton />;
   if (evaluation.isError) {
@@ -241,8 +98,6 @@ export function GradingPanel({
     );
   }
 
-  const title = evaluation.data?.evaluation.title ?? "";
-  const currentItem = order === "question" && step ? itemsById.get(step.key) : undefined;
   const words = ORDER_WORDS[order];
   /*
    * The screen's single accent action. Running the pass is it only while
@@ -253,57 +108,13 @@ export function GradingPanel({
    */
   const runPrimary =
     progress.data !== undefined && progress.data.total > 0 && progress.data.done === 0;
-  /*
-   * What the step is, beside its counter (#108). A question: its type, its
-   * points and how many answers it has. A student: how many answers, and
-   * their running total — the question's points mean nothing across a whole
-   * copy, the student's total is what a teacher checks at the end of one.
-   * The total is read from the queue as the server sent it, so only while
-   * the state filter keeps every answer: a total of the proposals alone
-   * would be a number that is no one's grade.
-   */
-  const stepEntries = queue.data?.entries ?? [];
-  const studentTotal =
-    order === "student" && stateFilter === "all" && queue.data && stepEntries.length > 0
-      ? {
-          // The server's one total: signed per question, floored at 0
-          // (`attemptTotal`, ADR-026).
-          points: attemptTotal(stepEntries.map((e) => e.grading?.points ?? 0)),
-          max: stepEntries.reduce(
-            (sum, e) => sum + (e.grading?.maxPoints ?? itemsById.get(e.itemId)?.points ?? 0),
-            0,
-          ),
-          // A proposal not validated yet, or an answer not graded at all
-          // (counted 0), makes the sum a forecast, not the grade.
-          provisional: stepEntries.some((e) => !e.grading || e.grading.state !== "validated"),
-        }
-      : null;
-  const badges = (
-    <>
-      {currentItem ? (
-        <>
-          <Badge tone="zinc">{typeLabel(t, currentItem.type)}</Badge>
-          <Badge tone="zinc">{t("grading.points", { n: currentItem.points })}</Badge>
-        </>
-      ) : null}
-      <Badge tone="zinc">{t("grading.answers", { n: counts.total })}</Badge>
-      {studentTotal ? (
-        <Badge tone="zinc">
-          {t(
-            studentTotal.provisional ? "grading.studentTotal.provisional" : "grading.studentTotal",
-            { points: formatPoints(studentTotal.points), max: formatPoints(studentTotal.max) },
-          )}
-        </Badge>
-      ) : null}
-    </>
-  );
-  const listed = queue.isLoading || (!queue.isError && entries.length > 0);
-  const regradeItem = regradeId ? itemsById.get(regradeId) : undefined;
   const scope: BatchScope = {
     ...(currentItem ? { itemId: currentItem.id } : {}),
     ...(source === ANY ? {} : { source }),
     ...(confidence === ANY ? {} : { confidence }),
   };
+  const overrideEntry = entries.find((e) => entryKey(e) === overrideKey) ?? null;
+  const regradeItem = regradeId ? itemsById.get(regradeId) : undefined;
 
   return (
     <div
@@ -311,12 +122,12 @@ export function GradingPanel({
       style={{ "--grading-sticky": `${stickyHeight}px` } as CSSProperties}
     >
       <PageHeader
-        eyebrow={title}
+        eyebrow={evaluation.data?.evaluation.title ?? ""}
         title={t("grading.title")}
         help="grading"
         description={t("grading.subtitle")}
         actions={
-          <Button variant="secondary" onClick={() => navigate(links.results)}>
+          <Button variant="secondary" onClick={openResults}>
             <BarChart3 /> {t("grading.openResults")}
           </Button>
         }
@@ -337,43 +148,49 @@ export function GradingPanel({
             ref={stickyRef}
             className="lg:sticky lg:top-0 lg:z-20 lg:-mt-4 lg:bg-canvas lg:pb-3 lg:pt-4"
           >
-          <GradingHeader
-            order={order}
-            steps={steps}
-            index={index}
-            onPrev={() => setIndex((i) => (i - 1 + steps.length) % steps.length)}
-            onNext={() => setIndex((i) => (i + 1) % steps.length)}
-            onJump={setIndex}
-            prevLabel={t(words.prev)}
-            nextLabel={t(words.next)}
-            title={t(words.position, { n: index + 1, total: steps.length })}
-            // By student the counter names who it counts (#119); by question
-            // the badges beside it and the answer's header name the question.
-            subject={order === "student" ? step?.label : undefined}
-            counts={counts}
-            progress={progress.data}
-            onRun={() => run.mutate()}
-            running={run.isPending}
-            runPrimary={runPrimary}
-            badges={badges}
-          />
+            <GradingHeader
+              order={order}
+              steps={steps}
+              index={session.index}
+              onPrev={session.prevStep}
+              onNext={session.nextStep}
+              onJump={session.jumpTo}
+              prevLabel={t(words.prev)}
+              nextLabel={t(words.next)}
+              title={t(words.position, { n: session.index + 1, total: steps.length })}
+              // By student the counter names who it counts (#119); by question
+              // the badges beside it and the answer's header name the question.
+              subject={order === "student" ? step?.label : undefined}
+              counts={counts}
+              progress={progress.data}
+              onRun={() => run.mutate()}
+              running={run.isPending}
+              runPrimary={runPrimary}
+              badges={
+                <StepBadges
+                  order={order}
+                  stateFilter={view.stateFilter}
+                  item={currentItem}
+                  queue={session.queue.data}
+                  total={counts.total}
+                  itemsById={itemsById}
+                />
+              }
+            />
           </div>
 
           <GradingFilters
             order={order}
-            onOrder={(v) => {
-              setView({ order: v });
-              setIndex(0);
-            }}
-            stateFilter={stateFilter}
+            onOrder={session.setOrder}
+            stateFilter={view.stateFilter}
             onStateFilter={(v) => setView({ stateFilter: v })}
             source={source}
             onSource={(v) => setView({ source: v })}
             confidence={confidence}
             onConfidence={(v) => setView({ confidence: v })}
-            showNames={showNames}
-            onShowNames={setShowNames}
-            parts={parts}
+            showNames={session.showNames}
+            onShowNames={session.setShowNames}
+            parts={view.parts}
             onParts={(v) => setView({ parts: v })}
           />
 
@@ -384,67 +201,20 @@ export function GradingPanel({
             <BatchBar
               evaluationId={evaluationId}
               scope={scope}
-              count={proposedCount}
+              count={entries.filter((e) => e.grading?.state === "proposed").length}
               scoped={source !== ANY || confidence !== ANY}
               primary={!runPrimary}
             />
           ) : null}
 
-          {/* Master and detail from `lg`: the list column sticks under the
-              step header and scrolls inside itself; the answer is in the
-              page's flow, at least a window tall, its own header sticking
-              under the step header. Moving to another answer brings the
-              answer's top back under that header (see `answersRef`), so the
-              teacher never scrolls to find it and it is always read from the
-              same spot. Below `lg` the columns stack, the list becomes a
-              select above the answer, and the same alignment happens under
-              the phone's top bar. */}
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-            {/* Only the list lives here since #108: below `lg` it is the
-                select above the answer, and the column is not drawn. */}
-            <aside
-              aria-label={t("aside.gradingItem")}
-              className={cx(
-                "hidden w-full shrink-0 flex-col gap-4 lg:sticky lg:top-(--grading-sticky) lg:max-h-[calc(100dvh-var(--grading-sticky)-1rem)] lg:w-75",
-                // Nothing to list, nothing to draw: an empty column would
-                // push the detail's empty state off centre for nothing.
-                listed && "lg:flex",
-              )}
-            >
-              <StepList
-                className="flex min-h-0 flex-1"
-                order={order}
-                queue={queue}
-                entries={entries}
-                items={itemsById}
-                selected={selected}
-                onSelect={setSelected}
-              />
-            </aside>
-
-            <section
-              ref={answersRef}
-              className="flex w-full min-w-0 flex-1 flex-col gap-3"
-              aria-label={t("grading.title")}
-            >
-              <StepAnswers
-                order={order}
-                queue={queue}
-                entries={entries}
-                items={itemsById}
-                selected={selected}
-                current={current}
-                onSelect={setSelected}
-                onMove={move}
-                explanations={explanations}
-                validating={validate.isPending}
-                onValidate={validate.mutate}
-                onOverride={setOverrideKey}
-                onRegrade={(item) => setRegradeId(item.id)}
-                parts={parts}
-              />
-            </section>
-          </div>
+          <GradingWorkspace
+            session={session}
+            answersRef={answersRef}
+            validating={validate.isPending}
+            onValidate={validate.mutate}
+            onOverride={setOverrideKey}
+            onRegrade={(item) => setRegradeId(item.id)}
+          />
         </>
       )}
 

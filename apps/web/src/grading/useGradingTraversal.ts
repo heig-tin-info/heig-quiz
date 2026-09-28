@@ -33,8 +33,8 @@ import { useGradingProgress } from "./progress";
  * teacher is on, the filtered, proposals-first list of that step's answers,
  * and the answer open among them.
  *
- * The panel owns the choices — order, step, open answer, filters, names —
- * and this hook turns them into requests and into a POSITION: which step,
+ * `useGradingSession` owns the choices — order, step, open answer, filters,
+ * names — and this hook turns them into requests and into a POSITION: which step,
  * which answer, and what lies either side. The step picker, the answer list,
  * the detail's Previous / Next and the keyboard all read that one position,
  * so none of them keeps a copy that could drift from the others. Names in particular are a REQUEST parameter
