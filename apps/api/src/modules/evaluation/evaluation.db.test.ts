@@ -292,6 +292,40 @@ describe("state machine (§5.1)", () => {
     }
   });
 
+  it("keeps a scheduled evaluation out of the past when it is patched (#178)", async () => {
+    const server = await testServer();
+    try {
+      const teacher = await server.signIn("teacher");
+      const now = server.clock.now();
+      const hour = 3_600_000;
+      const seed = await seedLive(server.app.db, {
+        teacherId: teacher.id,
+        durationS: null,
+        settings: { timing: "deadline" },
+        opensAt: new Date(now.getTime() + hour),
+        closesAt: new Date(now.getTime() + 2 * hour),
+      });
+      await service.applyState(server.app.db, await reload(server.app.db, seed.evaluationId), "scheduled", now);
+      const patch = (payload: Record<string, unknown>) =>
+        server.app.inject({
+          method: "PATCH",
+          url: `/app/api/evaluations/${seed.evaluationId}`,
+          headers: teacher.headers,
+          payload,
+        });
+
+      const opens = await patch({ opensAt: now.toISOString() });
+      expect(opens.statusCode).toBe(409);
+      expect(TransitionRefusal.parse(opens.json()).reason).toBe("opens_at_past");
+      const closes = await patch({ closesAt: now.toISOString() });
+      expect(closes.statusCode).toBe(409);
+      expect(TransitionRefusal.parse(closes.json()).reason).toBe("closes_at_past");
+      expect((await patch({ opensAt: new Date(now.getTime() + 1).toISOString() })).statusCode).toBe(200);
+    } finally {
+      await server.close();
+    }
+  });
+
   it("refuses to pause anything but an exam", async () => {
     const seed = await seedLive(db, { mode: "exercise" });
     const row = await service.applyState(db, await reload(db, seed.evaluationId), "running", clock.now());

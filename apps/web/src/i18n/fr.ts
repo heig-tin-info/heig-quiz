@@ -1977,6 +1977,7 @@ export const fr: Record<keyof Dict, string> = {
   "live.start": "Démarrer",
   "live.pause": "Pause",
   "live.controlFailed": "L’action a échoué. Réessayez.",
+  "live.closesAtPast": "La fin commune est passée. Repoussez-la avec Prolonger, puis démarrez.",
   "live.resume": "Reprendre",
   "live.extend": "Prolonger",
   "live.extendAll": "Prolonger pour toute la classe",

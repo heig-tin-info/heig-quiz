@@ -7,6 +7,7 @@ import { countsAsCompleted,
   itemListDiff,
   itemListLock,
   missingTimingFields,
+  pastTiming,
   parseCloze,
   round2,
   splitTemplate,
@@ -1494,20 +1495,14 @@ on("POST", "/app/api/evaluations/:id/state", (m, body) => {
       reason: "opens_at_missing",
     });
   }
-  const past = (at: string | null) => at !== null && Date.parse(at) <= Date.now();
-  if (body.to !== "draft" && (e.settings as { timing: EvaluationTiming }).timing === "deadline" && past(e.closesAt)) {
-    throw new MockPayload(409, {
-      error: "illegal_transition",
-      message: "the common end has already passed",
-      reason: "closes_at_past",
-    });
-  }
-  if (body.to === "scheduled" && past(e.opensAt)) {
-    throw new MockPayload(409, {
-      error: "illegal_transition",
-      message: "the opening time has already passed",
-      reason: "opens_at_past",
-    });
+  const past = pastTiming(
+    { timing: (e.settings as { timing: EvaluationTiming }).timing, opensAt: e.opensAt, closesAt: e.closesAt },
+    e.state,
+    body.to as MockEvaluation["state"],
+    new Date(),
+  );
+  if (past) {
+    throw new MockPayload(409, { error: "illegal_transition", message: past, reason: past });
   }
   e.state = body.to as MockEvaluation["state"];
   return toEvaluation(e);

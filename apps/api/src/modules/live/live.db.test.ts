@@ -1695,4 +1695,43 @@ describe("the lobby tick (step 3)", () => {
     expect((await reload(db, manual.evaluationId)).state).toBe("lobby");
     expect((await reload(db, unset.evaluationId)).state).toBe("lobby");
   });
+
+  /*
+   * #178: a common end already past would start the evaluation only for the
+   * next pass to close it. The ticker leaves it where it is: in the lobby,
+   * where "+N min" moves the end from now, and in `scheduled`.
+   */
+  it("starts or opens nothing whose common end has passed, until the teacher moves it (#178)", async () => {
+    const timing = {
+      settings: { timing: "deadline" as const, lobby: "auto" as const },
+      durationS: null,
+      opensAt: new Date(clock.now().getTime() - 2 * 3_600_000),
+      closesAt: new Date(clock.now().getTime() - 3_600_000),
+    };
+    const lobby = await seedLive(db, timing);
+    const room = await applyState(db, await reload(db, lobby.evaluationId), "lobby", clock.now());
+    for (const id of lobby.studentIds) {
+      const participant = (await service.participantOf(db, room, id))!;
+      await service.ensureAttempt(db, room, participant, clock.now());
+      presence.join(lobby.evaluationId, id, clock.now());
+    }
+    const started = async () =>
+      (await service.autoStartFullLobbies(db, clock.now())).map((row) => row.id);
+    expect(await started()).not.toContain(lobby.evaluationId);
+
+    // "+10 min" before the start: ten minutes from now, not from the old end,
+    // and no extra time on the attempts, whose deadline will come from it.
+    await service.extendTime(db, room, { minutes: 10 }, clock.now());
+    const moved = await reload(db, lobby.evaluationId);
+    expect(moved.closesAt!.getTime()).toBe(clock.now().getTime() + 10 * 60_000);
+    const rows = await db.select().from(attempts).where(eq(attempts.evaluationId, lobby.evaluationId));
+    expect(rows.map((a) => a.extraS)).toEqual([0, 0]);
+    expect(await started()).toContain(lobby.evaluationId);
+
+    const scheduled = await seedLive(db, { ...timing, settings: { timing: "deadline", lobby: "skip" } });
+    await applyState(db, await reload(db, scheduled.evaluationId), "scheduled", clock.now());
+    const opened = (await service.autoOpenScheduled(db, clock.now())).map((row) => row.id);
+    expect(opened).not.toContain(scheduled.evaluationId);
+    expect((await reload(db, scheduled.evaluationId)).state).toBe("scheduled");
+  });
 });

@@ -5,7 +5,7 @@
 import { and, count, eq } from "drizzle-orm";
 
 import type { EvaluationState } from "@quiz/contracts";
-import { missingTimingFields } from "@quiz/domain";
+import { missingTimingFields, pastTiming, type PastTiming } from "@quiz/domain";
 
 import { isUniqueViolation, type Db } from "../../db/client.js";
 import { evaluationItems, evaluations } from "../../db/schema.js";
@@ -14,6 +14,7 @@ import {
   type DbOrTx,
   IllegalTransition,
   CodeTaken,
+  refusePastTiming,
   PollNotImplemented,
 } from "./shared.js";
 import { settingsOf, attemptCount } from "./reads.js";
@@ -59,7 +60,7 @@ export function guardTransition(
   const from = row.state;
   if (!isLegalTransition(from, to)) throw new IllegalTransition(from, to);
   assertReady(row, to, ctx.itemCount);
-  assertNotPast(row, to, ctx.now);
+  refusePastTiming(from, to, pastTimingOf(row, to, ctx.now));
   if (to === "paused" && row.mode !== "exam") {
     throw new IllegalTransition(from, to, "only an exam can be paused");
   }
@@ -69,29 +70,12 @@ export function guardTransition(
 }
 
 /**
- * A time already past, against the server's clock (#178): a common end
- * reached before the evaluation opens would close it at the ticker's next
- * pass, and a schedule for a past instant would open it there. `paused →
- * running` is not a start: the resume moves `closesAt` by the pause itself.
+ * `pastTiming` (#178) for a move of `row` to `to`: what the guard refuses,
+ * and what the ticker's own openings leave where they are.
  */
-function assertNotPast(row: EvaluationRecord, to: EvaluationState, now: Date): void {
-  const from = row.state;
-  if (from === "paused") return;
-  if (
-    (to === "scheduled" || to === "lobby" || to === "running") &&
-    settingsOf(row).timing === "deadline" &&
-    row.closesAt !== null &&
-    row.closesAt.getTime() <= now.getTime()
-  ) {
-    throw new IllegalTransition(from, to, "the common end has already passed", {
-      reason: "closes_at_past",
-    });
-  }
-  if (to === "scheduled" && row.opensAt !== null && row.opensAt.getTime() <= now.getTime()) {
-    throw new IllegalTransition(from, to, "the opening time has already passed", {
-      reason: "opens_at_past",
-    });
-  }
+export function pastTimingOf(row: EvaluationRecord, to: EvaluationState, now: Date): PastTiming | null {
+  const timing = { timing: settingsOf(row).timing, opensAt: row.opensAt, closesAt: row.closesAt };
+  return pastTiming(timing, row.state, to, now);
 }
 
 /**

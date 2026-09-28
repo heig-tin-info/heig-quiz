@@ -42,6 +42,7 @@ export function LiveHeader({
   eyebrow,
   state,
   closesAt,
+  endPassed = false,
   clock,
   controls,
   fullscreen,
@@ -52,6 +53,11 @@ export function LiveHeader({
   eyebrow?: React.ReactNode;
   state: EvaluationState;
   closesAt: string | null;
+  /**
+   * In the waiting room, the common end has passed (#178): the server refuses
+   * the start, and "+N min" — moved from now — is the way out.
+   */
+  endPassed?: boolean;
   /** Server time, stable; the countdown re-reads it on its own tick. */
   clock: () => number;
   controls: LiveControls;
@@ -65,6 +71,31 @@ export function LiveHeader({
   const paused = state === "paused";
   const lobby = state === "lobby" || state === "scheduled";
   const live = running || paused;
+  const extendMenu = (
+    <Menu
+      label={t("live.extend")}
+      trigger={
+        <Button variant="secondary">
+          <Clock /> {t("live.extend")}
+        </Button>
+      }
+      items={[
+        {
+          label: t("live.extendMinutes", { n: 1 }),
+          description: t("live.extendAll"),
+          onSelect: () => controls.extend(1),
+        },
+        {
+          label: t("live.extendMinutes", { n: 5 }),
+          onSelect: () => controls.extend(5),
+        },
+        {
+          label: t("live.extendMinutes", { n: 10 }),
+          onSelect: () => controls.extend(10),
+        },
+      ]}
+    />
+  );
 
   return (
     <PageHeader
@@ -98,6 +129,7 @@ export function LiveHeader({
               <ClipboardCheck /> {t("live.goToGrading")}
             </Button>
           ) : null}
+          {lobby && endPassed ? extendMenu : null}
           {lobby ? (
             <Button data-coach="live.start" onClick={controls.start} loading={controls.busy}>
               <Play /> {t("live.start")}
@@ -114,29 +146,7 @@ export function LiveHeader({
                   {paused ? <Play /> : <Pause />} {paused ? t("live.resume") : t("live.pause")}
                 </Button>
               ) : null}
-              <Menu
-                label={t("live.extend")}
-                trigger={
-                  <Button variant="secondary">
-                    <Clock /> {t("live.extend")}
-                  </Button>
-                }
-                items={[
-                  {
-                    label: t("live.extendMinutes", { n: 1 }),
-                    description: t("live.extendAll"),
-                    onSelect: () => controls.extend(1),
-                  },
-                  {
-                    label: t("live.extendMinutes", { n: 5 }),
-                    onSelect: () => controls.extend(5),
-                  },
-                  {
-                    label: t("live.extendMinutes", { n: 10 }),
-                    onSelect: () => controls.extend(10),
-                  },
-                ]}
-              />
+              {extendMenu}
               <Button variant="danger" onClick={controls.close}>
                 <Square /> {t("live.closeAll")}
               </Button>

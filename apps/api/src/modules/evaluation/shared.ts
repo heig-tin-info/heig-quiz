@@ -3,7 +3,7 @@
  * handle type, the failures and the gate of the item list.
  */
 import type { EvaluationState, TemplateItemRef } from "@quiz/contracts";
-import { EVALUATION_STATES, itemListLock, type EvaluationStateName } from "@quiz/domain";
+import { EVALUATION_STATES, itemListLock, type EvaluationStateName, type PastTiming } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { evaluationItems, evaluations } from "../../db/schema.js";
@@ -40,6 +40,24 @@ export class IllegalTransition extends EvaluationError {
   ) {
     super("illegal_transition", 409, reason ?? `${from} -> ${to} is not a legal transition`, details);
   }
+}
+
+const PAST_TIMING_MESSAGE: Record<PastTiming, string> = {
+  closes_at_past: "the common end has already passed",
+  opens_at_past: "the opening time has already passed",
+};
+
+/**
+ * What `pastTiming` (#178) found, as the refusal of `from → to`, its reason
+ * named for the screen to translate. Shared by the guard of a transition and
+ * the patch of a scheduled evaluation, which must not slip into the past.
+ */
+export function refusePastTiming(
+  from: EvaluationState,
+  to: EvaluationState,
+  reason: PastTiming | null,
+): void {
+  if (reason) throw new IllegalTransition(from, to, PAST_TIMING_MESSAGE[reason], { reason });
 }
 
 export class Locked extends EvaluationError {

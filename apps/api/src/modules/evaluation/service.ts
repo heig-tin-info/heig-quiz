@@ -36,6 +36,7 @@ export {
   isLegalTransition,
   guardTransition,
   assertReady,
+  pastTimingOf,
   tryApplyState,
   applyState,
   transition,

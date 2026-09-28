@@ -1988,6 +1988,7 @@ export const en = {
   "live.start": "Start now",
   "live.pause": "Pause",
   "live.controlFailed": "The action failed. Try again.",
+  "live.closesAtPast": "The common end has passed. Push it back with Extend, then start.",
   "live.resume": "Resume",
   "live.extend": "Extend",
   "live.extendAll": "Extend for the whole class",

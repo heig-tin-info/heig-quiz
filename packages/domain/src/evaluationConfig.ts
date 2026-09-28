@@ -55,6 +55,30 @@ export function missingTimingFields(input: TimingInput): TimingField[] {
   }
 }
 
+/** A time already past, by the reason the API gives for it (#178). */
+export type PastTiming = "closes_at_past" | "opens_at_past";
+
+/**
+ * Whether a move from `from` to `to` would start from a time already past on
+ * the SERVER's clock (#178): a common end reached before the evaluation opens
+ * would close it at the ticker's next pass, and a schedule for a past instant
+ * would open it there. `paused → running` is not a start: the resume moves
+ * the common end by the pause itself. Also what a patch of a scheduled
+ * evaluation, and the ticker's own openings, are held to.
+ */
+export function pastTiming(
+  input: { timing: EvaluationTiming; opensAt: Date | string | null; closesAt: Date | string | null },
+  from: EvaluationStateName,
+  to: EvaluationStateName,
+  now: Date,
+): PastTiming | null {
+  if (from === "paused" || (to !== "scheduled" && to !== "lobby" && to !== "running")) return null;
+  const past = (at: Date | string | null) => at !== null && new Date(at).getTime() <= now.getTime();
+  if (input.timing === "deadline" && past(input.closesAt)) return "closes_at_past";
+  if (to === "scheduled" && past(input.opensAt)) return "opens_at_past";
+  return null;
+}
+
 // --- Feedback policy (F-EVAL-11, #78) --------------------------------------
 
 /** When the student sees the correction, as on the wire (`FeedbackPolicy.when`). */

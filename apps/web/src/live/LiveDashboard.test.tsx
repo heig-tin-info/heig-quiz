@@ -19,6 +19,7 @@ import {
   EVALUATION_ID,
   id,
   LIVE_NOW,
+  liveAt,
   makeDashboard,
   makeEvaluationDetail,
 } from "../test/live-fixtures";
@@ -308,6 +309,31 @@ describe("LiveDashboard — keyboard", () => {
     });
     await user.click(await screen.findByRole("button", { name: /^pause$/i }));
     expect(await screen.findByText(/only an exam can be paused/i)).toBeInTheDocument();
+  });
+
+  /*
+   * #178: in the waiting room, a common end already past makes the server
+   * refuse the start, and the timing is locked there. The refusal says what
+   * to press, and "Extend" is offered beside Start.
+   */
+  it("offers Extend in a waiting room past its common end, and says so on a refused start", async () => {
+    const user = userEvent.setup();
+    const view = makeDashboard(2, 2);
+    view.evaluation.state = "lobby";
+    view.evaluation.closesAt = liveAt(-60_000);
+    const detail = makeEvaluationDetail();
+    detail.evaluation.settings.timing = "deadline";
+    setup(view, {
+      [`GET /app/api/evaluations/${EVALUATION_ID}`]: ok(detail),
+      [`POST /app/api/evaluations/${EVALUATION_ID}/start`]: fail(409, {
+        error: "illegal_transition",
+        message: "the common end has already passed",
+        reason: "closes_at_past",
+      }),
+    });
+    expect(await screen.findByRole("button", { name: /^extend$/i })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /^start now$/i }));
+    expect(await screen.findByText(/push it back with extend/i)).toBeInTheDocument();
   });
 
   it("does not fire a shortcut typed into a field", async () => {
