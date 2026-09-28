@@ -2,14 +2,18 @@
  * In-process event bus (ADR-005): feeds the SSE stream of
  * `modules/realtime/routes.ts`.
  *
- * It carries two kinds of message on one emitter:
+ * It carries three kinds of message on one emitter:
  *
  *   - a HINT (`publish`), the inherited mechanism: a type and the topics it
  *     is addressed to, no data. The client re-issues its own authorized
  *     requests. Everything that is not the live path uses it, unchanged;
  *   - a DATA message (`publishData`), added by WP5 for the live domain, where
  *     a round trip is too slow or too noisy: the typed `ServerEvent` union of
- *     PLAN-MVP §4.8 travels as-is, with the audience it is allowed to reach.
+ *     PLAN-MVP §4.8 travels as-is, with the audience it is allowed to reach;
+ *   - a CLOSE (`publishClose`): the streams holding one of the topics are
+ *     ended. A stream computes its topics once, at connection; when access
+ *     is lost, closing it is how they are recomputed — the client reconnects
+ *     on its own (#248).
  *
  * Nothing publishes on this module directly except `modules/realtime/bus.ts`,
  * which is the seam the plan names (§10) and the place the coalescers live.
@@ -59,7 +63,8 @@ interface DataEvent {
 
 export type BusMessage =
   | ({ kind: "hint" } & AppEvent)
-  | ({ kind: "data" } & DataEvent);
+  | ({ kind: "data" } & DataEvent)
+  | { kind: "close"; topics: Topic[] };
 
 const bus = new EventEmitter();
 bus.setMaxListeners(0); // one SSE connection per tab
@@ -75,6 +80,12 @@ export function publish(type: EventType, topics: Topic[], notice?: AppNotice) {
 export function publishData(event: ServerEvent, topics: Topic[], audience: Audience = "all") {
   if (topics.length === 0) return;
   bus.emit("event", { kind: "data", event, topics, audience } satisfies BusMessage);
+}
+
+/** Ends the streams of these topics. Go through `modules/realtime/bus.ts`. */
+export function publishClose(topics: Topic[]) {
+  if (topics.length === 0) return;
+  bus.emit("event", { kind: "close", topics } satisfies BusMessage);
 }
 
 export function subscribe(listener: (e: BusMessage) => void): () => void {

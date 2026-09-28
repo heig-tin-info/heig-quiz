@@ -15,7 +15,9 @@
  *
  * Authorisation is loaded, never checked afterwards (invariant 6): the topic
  * set is computed once at connection time, and `dashboard.*` is dropped for a
- * student connection even when it watches the same `evaluation:<id>`.
+ * student connection even when it watches the same `evaluation:<id>`. When a
+ * user loses access, `bus.accessRevoked` closes their streams, and the
+ * reconnection computes the set again (#248).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { ServerResponse } from "node:http";
@@ -163,6 +165,10 @@ class TopicIndex {
       for (const stream of this.byTopic.get(topic) ?? []) reached.add(stream);
     }
     if (reached.size === 0) return;
+    if (message.kind === "close") {
+      for (const stream of reached) stream.close();
+      return;
+    }
     const at = Date.now();
     if (message.kind === "hint") {
       const chunk = hintFrame(message);

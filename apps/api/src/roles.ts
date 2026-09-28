@@ -21,6 +21,7 @@ import type { Db } from "./db/client.js";
 import { courseStaff, teacherGrants, userEmails, userIdpClaims, users } from "./db/schema.js";
 import { knownEmails, normalizeEmail, ownersOf } from "./identity.js";
 import { transferOnLoss } from "./modules/pool/service.js";
+import { accessRevoked } from "./modules/realtime/bus.js";
 
 type UserRole = (typeof users.$inferSelect)["role"];
 
@@ -203,6 +204,9 @@ interface StoreOptions {
   succession?: boolean;
 }
 
+/** Privilege order: a move down is a loss of access. */
+const RANK: Record<UserRole, number> = { student: 0, teacher: 1, admin: 2 };
+
 async function storeRole(
   db: Db,
   userId: string,
@@ -215,9 +219,12 @@ async function storeRole(
     .where(eq(users.id, userId))
     .limit(1);
   await db.update(users).set({ role }).where(eq(users.id, userId));
-  const was = before?.role === "teacher" || before?.role === "admin";
+  if (!before || RANK[role] >= RANK[before.role]) return;
+  // A privilege was lost: `admin`, or every `teacher:`/`course:`/`pool:`
+  // topic with the teacher role (#248).
+  accessRevoked([userId]);
   const is = role === "teacher" || role === "admin";
-  if (succession && was && !is) await transferOnLoss(db, userId);
+  if (succession && !is) await transferOnLoss(db, userId);
 }
 
 /**

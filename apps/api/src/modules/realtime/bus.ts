@@ -33,6 +33,7 @@ import { iso, isoOrNull } from "../../clock.js";
 import { isOwnedPoll } from "../../db/evaluation.js";
 import {
   publish as publishHint,
+  publishClose,
   publishData,
   type Audience,
   type AppNotice,
@@ -78,6 +79,17 @@ export function emit(event: ServerEvent, topics: Topic[], audience: Audience = "
 /** The inherited refresh hint, for everything that is not the live path. */
 export function hint(type: EventType, topics: Topic[], notice?: AppNotice): void {
   publishHint(type, topics, notice);
+}
+
+/**
+ * These users just LOST access to something — a staff seat, a roster line, a
+ * pool, the teacher role. A stream's topics are computed once, when it
+ * connects, so their open streams would keep hearing `course:`/`classroom:`
+ * /`pool:` until they reconnect (#248). They are closed instead: the client
+ * reconnects on its own and gets the topics it holds NOW (invariant 6).
+ */
+export function accessRevoked(userIds: readonly (string | null | undefined)[]): void {
+  publishClose(userIds.filter((id): id is string => !!id).map(userTopic));
 }
 
 /**

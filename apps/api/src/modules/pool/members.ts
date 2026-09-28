@@ -8,7 +8,7 @@ import type { Db } from "../../db/client.js";
 import { poolMembers, pools, userEmails, users } from "../../db/schema.js";
 import { audit } from "../../audit.js";
 import { notify } from "../notifications/service.js";
-import { userTopic } from "../realtime/bus.js";
+import { accessRevoked, userTopic } from "../realtime/bus.js";
 import { poolPeopleChanged } from "./events.js";
 import { type PoolRow, qualified } from "./shared.js";
 
@@ -205,6 +205,8 @@ export async function removeMember(db: Db, poolId: string, userId: string): Prom
     .delete(poolMembers)
     .where(and(eq(poolMembers.poolId, poolId), eq(poolMembers.userId, userId)))
     .returning({ userId: poolMembers.userId });
+  // The seat may have been their only way to the pool: close their streams (#248).
+  accessRevoked(removed.map((r) => r.userId));
   return removed.length > 0;
 }
 

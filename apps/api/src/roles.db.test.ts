@@ -1,10 +1,12 @@
 import { randomUUID } from "node:crypto";
 
+import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import type { AppConfig } from "./config.js";
 import type { Db } from "./db/client.js";
-import { teacherGrants, users } from "./db/schema.js";
+import { subscribe, type BusMessage } from "./events.js";
+import { teacherGrants, userEmails, users } from "./db/schema.js";
 import { roleForIdentity, syncUserRole, type Identity } from "./roles.js";
 import { testDb } from "./test/db.js";
 
@@ -14,13 +16,14 @@ const config = {
 } as AppConfig;
 
 let db: Db;
+let adminId: string;
 
 /** The role alone: most cases below are about which role, not why. */
 const roleOf = async (identity: Identity) => (await roleForIdentity(db, config, identity)).role;
 
 beforeAll(async () => {
   db = await testDb();
-  const adminId = randomUUID();
+  adminId = randomUUID();
   await db
     .insert(users)
     .values({ id: adminId, oidcSub: `u-${adminId}`, email: "boss@heig.test", role: "admin" });
@@ -161,5 +164,39 @@ describe("syncUserRole, account without an address set", () => {
 
   it("reaches it once verified", async () => {
     expect(await legacy("verified@heig.test", true)).toBe(1);
+  });
+});
+
+/** #248: losing a privilege closes the account's open streams. */
+describe("syncUserRole closes the streams of a demoted account", () => {
+  async function closesFor(role: "teacher" | "admin", email: string) {
+    const id = randomUUID();
+    await db.insert(users).values({ id, oidcSub: `u-${id}`, email, emailVerified: true, role });
+    await db.insert(userEmails).values({ userId: id, email, source: "login", verified: true });
+    const closed: string[] = [];
+    const unsubscribe = subscribe((m: BusMessage) => {
+      if (m.kind === "close") closed.push(...m.topics);
+    });
+    try {
+      await syncUserRole(db, config, email);
+    } finally {
+      unsubscribe();
+    }
+    const [row] = await db.select({ role: users.role }).from(users).where(eq(users.id, id));
+    return { role: row!.role, closed: closed.includes(`user:${id}`) };
+  }
+
+  it("when a teacher without grant nor seat falls back to student", async () => {
+    expect(await closesFor("teacher", "revoked@heig.test")).toEqual({ role: "student", closed: true });
+  });
+
+  it("when an admin falls back to teacher, and keeps the grant", async () => {
+    expect(await closesFor("admin", "granted@heig.test")).toEqual({ role: "teacher", closed: true });
+  });
+
+  it("not when nothing is lost", async () => {
+    const email = `kept-${randomUUID().slice(0, 8)}@heig.test`;
+    await db.insert(teacherGrants).values({ id: randomUUID(), email, createdBy: adminId });
+    expect(await closesFor("teacher", email)).toEqual({ role: "teacher", closed: false });
   });
 });

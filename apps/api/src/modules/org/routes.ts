@@ -414,7 +414,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
       try {
         const updated = await service.updateEnrollment(
           app.db,
-          entry.id,
+          entry,
           body,
           email,
           emailChanged,
@@ -435,7 +435,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
     "/app/api/classrooms/:id/roster/:eid/unclaim",
     { preHandler: requireTeacher },
     teacher(onEntry, async ({ req, scope: entry }) => {
-      const updated = await service.unclaimEnrollment(app.db, entry.id);
+      const updated = await service.unclaimEnrollment(app.db, entry);
       await trace(req, "roster.unclaim", "enrollment", entry.id, { previousUserId: entry.userId });
       return updated;
     }),
@@ -445,7 +445,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
     "/app/api/classrooms/:id/roster/:eid",
     { preHandler: requireTeacher },
     teacher(onEntry, async ({ req, reply, scope: entry }) => {
-      await service.removeEnrollment(app.db, entry.id);
+      await service.removeEnrollment(app.db, entry);
       await trace(req, "roster.remove", "enrollment", entry.id, {
         nom: entry.nom,
         prenom: entry.prenom,

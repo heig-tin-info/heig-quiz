@@ -14,6 +14,7 @@ import {
   userEmails,
 } from "../../db/schema.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
+import { studentJoined } from "../realtime/bus.js";
 import { claimEnrollments } from "./roster.js";
 
 let server: TestServer;
@@ -181,10 +182,16 @@ async function openStream(headers: Record<string, string>) {
   });
   expect(res.statusCode).toBe(200);
   let text = "";
+  let ended = false;
   res.stream().on("data", (chunk: Buffer) => (text += chunk.toString("utf8")));
+  res.stream().on("end", () => (ended = true));
   return {
     get text() {
       return text;
+    },
+    /** The server ended the stream (the client would reconnect). */
+    get ended() {
+      return ended;
     },
     close: () => res.stream().destroy(),
   };
@@ -267,6 +274,94 @@ describe("the student_joined notice", () => {
 
     expectStaffOnly({ ...streams, joiner }, "Grace Hopper");
     for (const s of [...Object.values(streams), joiner]) s.close();
+  });
+});
+
+/**
+ * #248: a stream's topics are computed once, at connection. Whoever loses a
+ * seat or a roster line has their streams closed, so the reconnection holds
+ * only what they may still reach.
+ */
+describe("losing access closes the streams", () => {
+  it("ends a removed staff member's, a removed and an unclaimed student's streams, and only theirs", async () => {
+    const course = randomUUID();
+    const room = randomUUID();
+    const entry = randomUUID();
+    const colleague = await server.signIn("teacher");
+    const student = await server.signIn("student");
+    const detached = await server.signIn("student");
+    const detachedEntry = randomUUID();
+    await server.app.db.insert(courses).values({ id: course, name: "Réseaux", code: `RES-${course.slice(0, 6)}` });
+    await server.app.db.insert(courseStaff).values([
+      { courseId: course, userId: teacher.id },
+      { courseId: course, userId: colleague.id },
+    ]);
+    await server.app.db.insert(classrooms).values({ id: room, courseId: course, name: "RES-A", period: "2026-A" });
+    await server.app.db.insert(enrollments).values({
+      id: entry,
+      classroomId: room,
+      nom: "Lovelace",
+      prenom: "Ada",
+      email: `ada-${entry.slice(0, 8)}@heig.test`,
+      userId: student.id,
+      claimedAt: new Date(),
+    });
+    await server.app.db.insert(enrollments).values({
+      id: detachedEntry,
+      classroomId: room,
+      nom: "Hamilton",
+      prenom: "Margaret",
+      email: `margaret-${detachedEntry.slice(0, 8)}@heig.test`,
+      userId: detached.id,
+      claimedAt: new Date(),
+    });
+    const streams = {
+      teacher: await openStream(teacher.headers),
+      colleague: await openStream(colleague.headers),
+      student: await openStream(student.headers),
+      detached: await openStream(detached.headers),
+    };
+    await settle();
+
+    const unseated = await server.app.inject({
+      method: "DELETE",
+      url: `/app/api/courses/${course}/staff/${colleague.id}`,
+      headers: teacher.headers,
+    });
+    expect(unseated.statusCode).toBe(204);
+    await settle();
+    expect(streams.colleague.ended).toBe(true);
+    expect(streams.teacher.ended).toBe(false);
+    expect(streams.student.ended).toBe(false);
+
+    // A notice on the course no longer reaches the removed colleague.
+    studentJoined({ courseId: course, classroomName: "RES-A", userId: randomUUID(), name: "Late Joiner" });
+    await settle();
+    expect(streams.teacher.text).toContain("Late Joiner");
+    expect(streams.colleague.text).not.toContain("Late Joiner");
+
+    const removed = await server.app.inject({
+      method: "DELETE",
+      url: `/app/api/classrooms/${room}/roster/${entry}`,
+      headers: teacher.headers,
+    });
+    expect(removed.statusCode).toBe(204);
+    await settle();
+    expect(streams.student.ended).toBe(true);
+    expect(streams.detached.ended).toBe(false);
+
+    // Unclaiming a line detaches its student from the classroom just the same.
+    const unclaimed = await server.app.inject({
+      method: "POST",
+      url: `/app/api/classrooms/${room}/roster/${detachedEntry}/unclaim`,
+      headers: teacher.headers,
+    });
+    expect(unclaimed.statusCode).toBe(200);
+    await settle();
+    expect(streams.detached.ended).toBe(true);
+    expect(streams.teacher.ended).toBe(false);
+
+    for (const s of Object.values(streams)) s.close();
   });
 });
 
