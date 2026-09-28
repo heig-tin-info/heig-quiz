@@ -94,7 +94,10 @@ printf 'IMAGE_TAG=%s\n' "$tag" > .env.image
 # issued for. `--ignore-pull-failures` is deliberately NOT used: a missing
 # image must stop the deploy, not half-restart the stack.
 "${COMPOSE[@]}" pull app
-"${COMPOSE[@]}" up -d
+# `--wait`: return only once every container is running and the app's
+# HEALTHCHECK (/healthz) says healthy, and fail otherwise -- so the exit code
+# the CI receives over SSH is the health of the deploy, production included.
+"${COMPOSE[@]}" up -d --wait --wait-timeout 150
 
 # Every deploy leaves a sha-tagged image behind, which a dangling-only prune
 # never removes. Drop the older ones; `rmi` refuses an image a container
