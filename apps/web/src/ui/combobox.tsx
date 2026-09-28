@@ -22,6 +22,8 @@ export interface ComboboxOptions {
    * at once, and Escape stops there instead of reaching the page.
    */
   completion?: boolean;
+  /** Home and End jump to the first and last row instead of moving the caret. */
+  ends?: boolean;
   /** A fixed id for the list, when a page names it; `useId` otherwise. */
   listId?: string;
   /** The id of row `index`; `<listId>-option-<index>` otherwise. */
@@ -78,6 +80,7 @@ export function useCombobox({
   onPick,
   query,
   completion = false,
+  ends = false,
   listId: fixedListId,
   optionId: fixedOptionId,
   state,
@@ -103,7 +106,7 @@ export function useCombobox({
       return;
     }
     if (completion && !open) return;
-    const next = listboxIndex(e.key, active, count);
+    const next = listboxIndex(e.key, active, count, { ends });
     if (next !== null) {
       e.preventDefault();
       setWanted(true);

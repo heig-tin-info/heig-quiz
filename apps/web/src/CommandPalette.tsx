@@ -11,7 +11,10 @@ import {
   type CommandContext,
 } from "./commands";
 import type { TFunction } from "./i18n";
-import { cx, Kbd, listboxIndex, useLayer, useScrollLock, Z } from "./ui";
+import { ComboboxOption, cx, Kbd, useCombobox, useLayer, useScrollLock, Z } from "./ui";
+
+/** The palette's list is open for as long as the palette is. */
+const ALWAYS_OPEN: [boolean, (open: boolean) => void] = [true, () => {}];
 
 /*
  * Ctrl/⌘+K: one field that reaches every page, every classroom, the theme,
@@ -43,11 +46,8 @@ type CommandPaletteProps = { open: boolean; onClose: () => void } & (
 export function CommandPalette(props: CommandPaletteProps) {
   const { open, onClose, t } = props;
   const [query, setQuery] = useState("");
-  const [active, setActive] = useState(0);
   const panel = useRef<HTMLDivElement>(null);
   const uid = useId();
-  const listId = `${uid}-list`;
-  const optionId = (index: number) => `${uid}-option-${index}`;
 
   // Escape, the Tab trap and the focus restore, from the shared contract.
   useLayer(panel, onClose, { enabled: open });
@@ -72,6 +72,24 @@ export function CommandPalette(props: CommandPaletteProps) {
   const flat = groups.flatMap((g) => g.commands);
   const position = new Map(flat.map((c, i) => [c.id, i]));
 
+  const run = (command: Command) => {
+    command.run();
+    onClose();
+  };
+  // The shared combobox (virtual focus, wrapping arrows), with Home/End to
+  // the ends of the list. Escape never reaches it: `useLayer` takes it first,
+  // in the capture phase, and closes the palette. A new query starts the
+  // highlight over on the best match rather than on a row that now means
+  // something else.
+  const combobox = useCombobox({
+    count: flat.length,
+    onPick: (index) => run(flat[index]!),
+    query,
+    ends: true,
+    state: ALWAYS_OPEN,
+  });
+  const { active } = combobox;
+
   // Most screen readers ignore an `aria-live` region that arrives with its
   // text already in it, and the whole region is inserted in the same commit as
   // its first count. Mounting it empty and filling it one paint later makes
@@ -82,30 +100,12 @@ export function CommandPalette(props: CommandPaletteProps) {
 
   // Keeps the active row in view when the arrows leave the visible slice.
   // `scrollIntoView` is not implemented under jsdom, hence the optional call.
+  const activeId = combobox.optionProps(active).id;
   useEffect(() => {
-    document.getElementById(`${uid}-option-${active}`)?.scrollIntoView?.({ block: "nearest" });
-  }, [active, uid]);
+    document.getElementById(activeId)?.scrollIntoView?.({ block: "nearest" });
+  }, [activeId]);
 
   if (!open) return null;
-
-  const run = (command: Command) => {
-    command.run();
-    onClose();
-  };
-
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    // Every branch prevents the default: the arrows must not move the caret
-    // inside the field, and Enter must not submit anything.
-    const next = listboxIndex(e.key, active, flat.length, { ends: true });
-    if (next !== null) {
-      e.preventDefault();
-      setActive(next);
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      const command = flat[active];
-      if (command) run(command);
-    }
-  };
 
   return createPortal(
     <div
@@ -128,22 +128,11 @@ export function CommandPalette(props: CommandPaletteProps) {
           <Search className="size-4 shrink-0 text-fg-faint" />
           <input
             autoFocus
+            {...combobox.inputProps}
             value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              // One more letter changes the list under the finger already on
-              // Enter; the selection goes back to the best match rather than
-              // staying on a row that now means something else.
-              setActive(0);
-            }}
-            onKeyDown={onKeyDown}
+            onChange={(e) => setQuery(e.target.value)}
             placeholder={t("palette.placeholder")}
             aria-label={t("palette.title")}
-            role="combobox"
-            aria-expanded
-            aria-controls={listId}
-            aria-activedescendant={flat.length ? optionId(active) : undefined}
-            aria-autocomplete="list"
             autoComplete="off"
             spellCheck={false}
             // No field chrome: the whole top band IS the field, and a second
@@ -158,7 +147,7 @@ export function CommandPalette(props: CommandPaletteProps) {
         {/* `dvh` and not `vh`: a soft keyboard shrinks the dynamic viewport, and
             a cap read from the static one would put the last rows under it. */}
         <div className="max-h-[60dvh] overflow-y-auto p-2">
-          <div id={listId} role="listbox" aria-label={t("palette.title")}>
+          <div {...combobox.listProps} aria-label={t("palette.title")}>
             {groups.map((group) => {
               const headingId = `${uid}-group-${group.group}`;
               return (
@@ -177,26 +166,14 @@ export function CommandPalette(props: CommandPaletteProps) {
                       const isActive = index === active;
                       const Icon = command.icon;
                       return (
-                        <div
+                        // Virtual focus: the rows are not in the Tab order,
+                        // `aria-activedescendant` on the input carries the
+                        // selection instead.
+                        <ComboboxOption
                           key={command.id}
-                          id={optionId(index)}
-                          role="option"
-                          aria-selected={isActive}
-                          // Virtual focus: the rows are not in the Tab order,
-                          // `aria-activedescendant` on the input carries the
-                          // selection instead.
-                          // `mousemove` and not `mouseenter`: an arrow key can
-                          // scroll a row under a motionless cursor, and the
-                          // mouse would then steal back a selection the reader
-                          // moved with the keyboard.
-                          onMouseMove={() => setActive(index)}
-                          onClick={() => run(command)}
-                          className={cx(
-                            "flex cursor-pointer items-center gap-2.5 rounded-field px-2.5 py-1.5 text-sm",
-                            isActive
-                              ? "bg-accent-soft font-semibold text-accent"
-                              : "text-fg-muted hover:bg-surface-2 hover:text-fg",
-                          )}
+                          combobox={combobox}
+                          index={index}
+                          className="flex items-center gap-2.5"
                         >
                           <Icon className="size-4 shrink-0" />
                           <span className="min-w-0 flex-1 truncate">{command.label}</span>
@@ -216,7 +193,7 @@ export function CommandPalette(props: CommandPaletteProps) {
                               {command.hint}
                             </span>
                           ) : null}
-                        </div>
+                        </ComboboxOption>
                       );
                     })}
                   </div>
