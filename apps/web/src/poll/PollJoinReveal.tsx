@@ -22,7 +22,7 @@
  */
 import { Check, X } from "lucide-react";
 
-import type { PollTally } from "@quiz/contracts";
+import type { PollQuestionType, PollTally } from "@quiz/contracts";
 import { foldPollAnswer } from "@quiz/domain";
 import type { McqSolution, McqStudent } from "@quiz/qt-mcq/client";
 import type { ShortSolution, ShortStudent } from "@quiz/qt-short/client";
@@ -179,7 +179,7 @@ function ResultsReveal({
   tally,
   answer,
 }: {
-  type: "mcq" | "short";
+  type: PollQuestionType;
   student: unknown;
   solution: unknown;
   tally: PollTally;
@@ -253,7 +253,7 @@ export function PollJoinReveal({
   tally = null,
   answer,
 }: {
-  type: "mcq" | "short";
+  type: PollQuestionType;
   student: unknown;
   solution: unknown;
   /** The distribution: what an opinion poll, which has no key, reveals. */
