@@ -7,6 +7,7 @@ import { AvatarMime } from "@quiz/contracts";
 import { audit } from "../audit.js";
 import { avatars } from "../db/schema.js";
 import { publish } from "../events.js";
+import { INERT_IMAGE_HEADERS, sniffImage } from "./pool/assets.js";
 
 /** `AvatarMime` is the one list (B-19); `app.ts` parses the same set. */
 const ACCEPTED: ReadonlySet<string> = new Set<string>(AvatarMime.options);
@@ -33,6 +34,14 @@ export async function avatarPlugin(app: FastifyInstance) {
       }
       if (body.length > MAX_BYTES) {
         return reply.code(413).send({ error: "too_large", message: "Image exceeds 1 MB" });
+      }
+      // The bytes decide the type, not the header the browser sent: an HTML
+      // page declared `image/png` is refused here, whatever `nosniff` does
+      // on the way out.
+      if (sniffImage(body)?.mime !== contentType) {
+        return reply
+          .code(415)
+          .send({ error: "unsupported_type", message: "Expected JPEG, PNG or WebP" });
       }
       await app.db
         .insert(avatars)
@@ -92,6 +101,7 @@ export async function avatarPlugin(app: FastifyInstance) {
       return reply
         .type(row.contentType)
         .header("cache-control", "private, max-age=86400")
+        .headers(INERT_IMAGE_HEADERS)
         .send(row.data);
     },
   );

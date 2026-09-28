@@ -57,6 +57,24 @@ describe("MarkdownView — sanitisation", () => {
     expect(body.querySelector("img")).toBeNull();
   });
 
+  it("drops a class the renderer never emits, so a prompt cannot overlay the screen", () => {
+    const body = view(
+      '<span class="fixed inset-0 z-50 opacity-0">x</span>\n\n<code class="language-c fixed">y</code>',
+    );
+    expect(body.querySelector(".fixed")).toBeNull();
+    expect(body.querySelector("[class]")).toBeNull();
+    expect(body.textContent).toContain("x");
+  });
+
+  it("keeps a raw <img> only when its src is exactly an asset URL", () => {
+    const body = view(
+      '<img src="/app/api/assets/../me/export.csv"><img src="/app/api/assets/abc?x=1"><img src="/app/api/assets/abc-123">',
+    );
+    const imgs = body.querySelectorAll("img");
+    expect(imgs).toHaveLength(1);
+    expect(imgs[0]).toHaveAttribute("src", "/app/api/assets/abc-123");
+  });
+
   it("keeps an http link but sends it to its own tab without a referrer", () => {
     const body = view("[docs](https://example.org/a)");
     const link = body.querySelector("a")!;
@@ -137,6 +155,8 @@ describe("MarkdownView — content", () => {
     expect(code.querySelector(".tok-kw")?.textContent).toBe("int");
     expect(code.querySelector(".tok-num")?.textContent).toBe("3");
     expect(code.querySelector(".tok-com")?.textContent).toBe("// note");
+    // The token classes pass the class allow-list, strings included.
+    expect(view('```c\nputs("hi");\n```').querySelector("pre code .tok-str")?.textContent).toBe('"hi"');
   });
 
   /*
@@ -174,6 +194,7 @@ describe("MarkdownView — content", () => {
     expect(boxes[0]).toBeChecked();
     expect(boxes[0]).toBeDisabled();
     expect(boxes[1]).toBeDisabled();
+    expect(body.querySelector("li")).toHaveClass("md-task");
   });
 
   it("renders nothing at all for empty source", () => {

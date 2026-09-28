@@ -169,8 +169,10 @@ and 404 when Teams is off. `ssoAuth.ts` verifies it with `jose`:
 - `iss` EXACTLY `https://login.microsoftonline.com/<tid>/v2.0`, the `tid`
   being the token's own;
 - `aud` = `TEAMS_CLIENT_ID`;
-- `tid` in `TEAMS_ALLOWED_TENANTS` (empty admits every tenant) — a 403
-  `tenant_not_allowed`, so the tab can say why;
+- `tid` in `TEAMS_ALLOWED_TENANTS` (empty admits every tenant, for a test
+  app only: under `NODE_ENV=production` the process refuses to start with
+  Teams on and the list empty) — a 403 `tenant_not_allowed`, so the tab can
+  say why;
 - a delegated token: `scp` holds `access_as_user`, `idtyp` is not `app`;
 - `azp` is a Teams client (`1fec8e78-bce4-4aaf-ab1b-5451cc387264`, desktop
   and mobile; `5e3ce6c0-2b1f-4285-8d4b-75ee78787346`, web);

@@ -24,7 +24,8 @@ ids, comma-separated) whose Teams accounts may be linked. Anyone can upload
 the app into their own Teams; without the list, a stranger could send a HEIG
 user a link to their own Teams account and receive that user's notifications
 (ADR-030, "Consent phishing across tenants"). Leave it empty only for a test
-app. A Teams account of another organization sees, in the tab, that HEIG Quiz
+app: under `NODE_ENV=production` an empty list with Teams on stops the process
+at boot. A Teams account of another organization sees, in the tab, that HEIG Quiz
 only links HEIG-VD accounts, and gets no link.
 
 Where things live today:

@@ -12,6 +12,21 @@ quiz.chevallier.io {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
+		# No framing by another site (click-jacking), no plugin content, no
+		# <base> rewriting every relative URL. The SPA frames nothing of its own.
+		X-Frame-Options "SAMEORIGIN"
+		Content-Security-Policy "frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
+	}
+
+	# ADR-030: Teams frames the tab `/teams` on its own origins, so that one
+	# page admits Microsoft's documented tab hosts (learn.microsoft.com,
+	# "Requirements for building tabs") and no one else. Not "anyone": a
+	# sibling *.chevallier.io site is same-site, so Lax cookies would reach
+	# a frame it embeds.
+	@teamsTab path /teams
+	header @teamsTab {
+		-X-Frame-Options
+		Content-Security-Policy "frame-ancestors 'self' https://teams.microsoft.com https://*.teams.microsoft.com https://*.cloud.microsoft https://*.microsoft365.com https://*.office.com https://outlook.office365.com; object-src 'none'; base-uri 'self'"
 	}
 
 	# SSE: unbuffered stream (ADR-005). HTTP/2 is what lifts the six-connection

@@ -6,10 +6,10 @@
  */
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
-import { like } from "drizzle-orm";
+import { eq, like } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { oauthClients, oauthGrants } from "../../db/schema.js";
+import { auditLog, oauthClients, oauthGrants } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { purgeOAuth } from "./service.js";
 
@@ -158,12 +158,10 @@ describe("the whole flow, with a registered client", () => {
     const again = await token({ grant_type: "authorization_code", code, redirect_uri: REDIRECT, code_verifier: verifier, client_id: client.client_id });
     expect(again.body.error).toBe("invalid_grant");
 
-    // Refresh rotates: the new one works, the old one is dead.
+    // Refresh rotates (a replay of the old one is the next test).
     const refreshed = await token({ grant_type: "refresh_token", refresh_token: exchanged.body.refresh_token!, client_id: client.client_id });
     expect(refreshed.status).toBe(200);
     expect(refreshed.body.refresh_token).not.toBe(exchanged.body.refresh_token);
-    const replay = await token({ grant_type: "refresh_token", refresh_token: exchanged.body.refresh_token!, client_id: client.client_id });
-    expect(replay.body.error).toBe("invalid_grant");
 
     // The teacher sees the assistant, and revoking it kills its tokens.
     const connections = await inject({ method: "GET", url: "/app/api/me/connections", headers: teacher.headers });
@@ -174,6 +172,69 @@ describe("the whole flow, with a registered client", () => {
     expect((await mcp(refreshed.body.access_token!, "ping")).statusCode).toBe(401);
     const afterRevoke = await token({ grant_type: "refresh_token", refresh_token: refreshed.body.refresh_token!, client_id: client.client_id });
     expect(afterRevoke.body.error).toBe("invalid_grant");
+  });
+
+  /** Registers, consents and exchanges: a live grant and its first tokens. */
+  async function freshGrant() {
+    const { body: client } = await register();
+    const { verifier, challenge } = pkce();
+    const { back } = await consent(client.client_id, challenge);
+    const exchanged = await token({
+      grant_type: "authorization_code",
+      code: back!.searchParams.get("code")!,
+      redirect_uri: REDIRECT,
+      code_verifier: verifier,
+      client_id: client.client_id,
+    });
+    expect(exchanged.status).toBe(200);
+    return { clientId: client.client_id, tokens: exchanged.body };
+  }
+
+  it("revokes the whole grant when a rotated-out refresh token comes back", async () => {
+    const { clientId, tokens } = await freshGrant();
+    const rotated = await token({ grant_type: "refresh_token", refresh_token: tokens.refresh_token!, client_id: clientId });
+    expect(rotated.status).toBe(200);
+    expect((await mcp(rotated.body.access_token!, "ping")).statusCode).toBe(200);
+
+    // The first token again: someone else holds a copy of it.
+    const replay = await token({ grant_type: "refresh_token", refresh_token: tokens.refresh_token!, client_id: clientId });
+    expect(replay.status).toBe(400);
+    expect(replay.body.error).toBe("invalid_grant");
+    // Everything issued under the grant is dead, the legitimate side included.
+    expect((await mcp(rotated.body.access_token!, "ping")).statusCode).toBe(401);
+    const next = await token({ grant_type: "refresh_token", refresh_token: rotated.body.refresh_token!, client_id: clientId });
+    expect(next.body.error).toBe("invalid_grant");
+    const [row] = await server.app.db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.action, "oauth.refresh_replay"));
+    expect(row).toMatchObject({ actorType: "system", subjectType: "oauth_grant" });
+  });
+
+  it("requires the client_id to refresh, and only the client's own", async () => {
+    const { clientId, tokens } = await freshGrant();
+    const anonymous = await token({ grant_type: "refresh_token", refresh_token: tokens.refresh_token! });
+    expect(anonymous.body.error).toBe("invalid_request");
+    const { body: other } = await register();
+    const foreign = await token({ grant_type: "refresh_token", refresh_token: tokens.refresh_token!, client_id: other.client_id });
+    expect(foreign.body.error).toBe("invalid_grant");
+    // Neither attempt spent the token: its own client still refreshes with it.
+    const own = await token({ grant_type: "refresh_token", refresh_token: tokens.refresh_token!, client_id: clientId });
+    expect(own.status).toBe(200);
+  });
+
+  it("answers a Basic header that does not decode with invalid_client, not a 500", async () => {
+    const res = await inject({
+      method: "POST",
+      url: "/app/oauth/token",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        authorization: `Basic ${Buffer.from("%E0%A4%A:").toString("base64")}`,
+      },
+      payload: new URLSearchParams({ grant_type: "refresh_token", refresh_token: "quiz_ort_x" }).toString(),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: "invalid_client" });
   });
 
   it("refuses a wrong PKCE verifier", async () => {

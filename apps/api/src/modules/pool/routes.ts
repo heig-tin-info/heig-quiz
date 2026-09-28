@@ -78,7 +78,7 @@ import {
   requirePoolRole,
   teacherGuard,
 } from "../guards.js";
-import { isAllowedMime, pathForHash, readAsset, sha256Of, sniffImage, writeAsset } from "./assets.js";
+import { INERT_IMAGE_HEADERS, isAllowedMime, pathForHash, readAsset, sha256Of, sniffImage, writeAsset } from "./assets.js";
 import { invalid, teacherRoute } from "../http.js";
 import { studentViewOf } from "../live/studentView.js";
 import { loadConfig, tryLoadConfig, typeOf } from "./config.js";
@@ -1293,9 +1293,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       return reply
         .header("content-type", asset.mime)
         .header("cache-control", "private, max-age=31536000, immutable")
-        .header("x-content-type-options", "nosniff")
-        .header("content-disposition", "inline")
-        .header("content-security-policy", "default-src 'none'; sandbox")
+        .headers(INERT_IMAGE_HEADERS)
         .send(bytes);
     },
   );

@@ -17,6 +17,17 @@ import { dirname, join, resolve, sep } from "node:path";
 
 import { AssetMime } from "@quiz/contracts";
 
+/**
+ * The headers of every uploaded image we serve (question assets, avatars):
+ * never sniffed into something executable, never a document with an origin
+ * of its own.
+ */
+export const INERT_IMAGE_HEADERS = {
+  "x-content-type-options": "nosniff",
+  "content-disposition": "inline",
+  "content-security-policy": "default-src 'none'; sandbox",
+} as const;
+
 /** The only types a question may embed; `AssetMime` is the one list (B-19). */
 export function isAllowedMime(mime: string): mime is AssetMime {
   return AssetMime.safeParse(mime).success;

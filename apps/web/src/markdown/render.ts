@@ -4,7 +4,7 @@ import { Marked, type Tokens } from "marked";
 
 import { CLOZE_SENTINEL_PATTERN } from "@quiz/domain/cloze";
 
-import { escapeHtml, highlight } from "./highlight";
+import { TOKEN_KINDS, escapeHtml, highlight } from "./highlight";
 
 /*
  * Markdown -> sanitised HTML for content a student reads: question prompts,
@@ -49,7 +49,11 @@ const ASSET_BASE = "/app/api/assets/";
  * presets below is ignored rather than honoured, so a hand-typed `?w=900`
  * cannot push an image out of the column.
  */
-const ASSET_REF = /^asset:([A-Za-z0-9_-]{1,64})(?:\?([A-Za-z0-9_=&%.-]{0,64}))?$/;
+const ASSET_ID = "[A-Za-z0-9_-]{1,64}";
+const ASSET_REF = new RegExp(`^asset:(${ASSET_ID})(?:\\?([A-Za-z0-9_=&%.-]{0,64}))?$`);
+
+/** The exact `src` the image renderer writes: one id segment, no `..`, no query. */
+const ASSET_SRC = new RegExp(`^${ASSET_BASE}${ASSET_ID}$`);
 
 /** The widths the size menu offers, as a percentage of the content width. */
 export const IMAGE_WIDTHS = [25, 33, 50, 66, 75, 100] as const;
@@ -94,10 +98,15 @@ const ALLOWED_TAGS = [
 ];
 
 /*
- * `class` is here because the code fences and the task lists need it, and it
- * is harmless: this app ships no stylesheet a class can weaponise (no
- * `position: fixed` overlay class, no `display:none` on a warning). `style`
- * is NOT here, which is what keeps a prompt from covering the countdown.
+ * `class` is here because the code fences and the sized images need it. It is
+ * NOT harmless on its own: the app's Tailwind stylesheet ships `fixed`,
+ * `inset-0`, `z-50`, `opacity-0`, `hidden`…, and marked passes raw HTML
+ * through, so a prompt with a free `class` could lay an invisible overlay
+ * over the whole exam screen. The `uponSanitizeAttribute` hook below keeps a
+ * `class` only when every one of its tokens is a class the renderer itself
+ * emits (`OWN_CLASS`); anything else loses the attribute. `style` is not
+ * admitted at all. The classes written AFTER sanitisation (`md-task`,
+ * `md-math`, KaTeX's) never meet the hook.
  */
 const ALLOWED_ATTR = ["href", "title", "alt", "src", "class", "type", "checked", "disabled", "start", "align", "colspan", "rowspan"];
 
@@ -108,6 +117,20 @@ const ALLOWED_ATTR = ["href", "title", "alt", "src", "class", "type", "checked",
  * alternatives are DOMPurify's own way of letting relative URLs through.
  */
 const ALLOWED_URI_REGEXP = /^(?:https?:|mailto:|[^a-z]|[a-z+.\-]+(?:[^a-z+:.\-]|$))/i;
+
+/** A class the pipeline emits before sanitisation: code fence, token, image width. */
+const OWN_CLASS = new RegExp(
+  `^(?:language-[a-z0-9_+#.-]+|tok-(?:${TOKEN_KINDS.join("|")})|md-img-(?:${IMAGE_WIDTHS.join("|")}))$`,
+);
+
+/** A private instance, so the class hook never leaks into another sanitiser. */
+const purify = DOMPurify();
+// Without a DOM (a node-only test importing the helpers) DOMPurify is a stub.
+if (purify.isSupported) purify.addHook("uponSanitizeAttribute", (_node, data) => {
+  if (data.attrName !== "class") return;
+  const tokens = data.attrValue.split(/\s+/).filter(Boolean);
+  if (!tokens.every((c) => OWN_CLASS.test(c))) data.keepAttr = false;
+});
 
 const marked = new Marked({
   gfm: true, // tables, task lists, strikethrough, autolinks
@@ -305,10 +328,11 @@ function postProcess(root: HTMLElement, codeBlockLabel: string, holes: EncodedHo
   }
 
   // An <img> that did not come from our renderer came from raw HTML. Its src
-  // survived the allow-list only if it happens to be same-origin; it is still
-  // not an asset of this course, so it goes.
+  // survived the allow-list only if it happens to be same-origin; unless it
+  // has the exact shape of an asset URL (a prefix test would admit
+  // `/app/api/assets/../<any GET>`), it goes.
   for (const img of Array.from(root.querySelectorAll("img"))) {
-    if (!img.getAttribute("src")?.startsWith(ASSET_BASE)) img.remove();
+    if (!ASSET_SRC.test(img.getAttribute("src") ?? "")) img.remove();
     else img.setAttribute("loading", "lazy");
   }
 
@@ -376,7 +400,7 @@ export function renderMarkdown(
   if (!source.trim()) return "";
   const holes = options.holes === true ? encodeHoles(source) : null;
   const html = marked.parse(holes ? holes.text : source, { async: false });
-  const body = DOMPurify.sanitize(html, {
+  const body = purify.sanitize(html, {
     ALLOWED_TAGS,
     ALLOWED_ATTR,
     ALLOWED_URI_REGEXP,

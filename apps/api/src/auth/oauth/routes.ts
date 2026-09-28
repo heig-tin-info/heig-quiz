@@ -175,13 +175,20 @@ export async function oauthRoutes(app: FastifyInstance, config: AppConfig) {
 
   // --- Token ----------------------------------------------------------------
 
-  /** A public client may still send its id as the user of a Basic header. */
+  /**
+   * A public client may still send its id as the user of a Basic header.
+   * A header that does not decode is a client that did not identify itself.
+   */
   function basicClientId(req: FastifyRequest): string | undefined {
     const m = /^Basic\s+(\S+)$/i.exec(req.headers.authorization ?? "");
     if (!m) return undefined;
     const decoded = Buffer.from(m[1]!, "base64").toString("utf8");
     const user = decoded.split(":")[0];
-    return user ? decodeURIComponent(user) : undefined;
+    try {
+      return user ? decodeURIComponent(user) : undefined;
+    } catch {
+      throw new OAuthError("invalid_client", "Malformed Basic authorization header");
+    }
   }
 
   app.post("/app/oauth/token", async (req, reply) => {
@@ -196,8 +203,8 @@ export async function oauthRoutes(app: FastifyInstance, config: AppConfig) {
       });
     }
     const now = app.clock.now();
-    const clientId = body.data.client_id ?? basicClientId(req);
     try {
+      const clientId = body.data.client_id ?? basicClientId(req);
       const tokens =
         body.data.grant_type === "authorization_code"
           ? await exchangeCode(app.db, {
