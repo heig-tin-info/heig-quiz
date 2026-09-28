@@ -51,7 +51,14 @@ const ENTRIES: GradingEntry[] = [
 
 const BASE: Record<string, ReturnType<typeof ok>> = {
   [`GET ${EVAL}`]: ok(makeEvaluationDetail()),
-  [`GET ${BY_QUESTION("i1")}`]: ok(makeQueue(ENTRIES)),
+  [`GET ${BY_QUESTION("i1")}`]: ok(
+    makeQueue(ENTRIES, {
+      items: [
+        { id: "i1", position: 0, internalName: "sizeof-ptr", type: "mcq", points: 2, explanation: "Pointers are 8 bytes." },
+        { id: "i2", position: 1, internalName: "deref", type: "mcq", points: 1, explanation: null },
+      ],
+    }),
+  ),
   [`GET ${EVAL}/grading/steps?by=question&anonymous=1`]: ok(
     makeSteps("question", [{ key: "i1", validated: 2, proposed: 2 }, { key: "i2", total: 4 }]),
   ),
@@ -64,10 +71,6 @@ const BASE: Record<string, ReturnType<typeof ok>> = {
     ]),
   ),
   [`GET ${EVAL}/grading/progress`]: ok({ done: 4, total: 4, pending: { runner: 0, llm: 0 }, failed: 0 }),
-  [`GET ${EVAL}/results/by-question`]: ok([
-    { item: { id: "i1" }, explanation: "Pointers are 8 bytes." },
-    { item: { id: "i2" }, explanation: null },
-  ]),
 };
 
 const CHOICES: TraversalChoices = {

@@ -32,7 +32,13 @@ import type {
   GradingState,
   Verdict,
 } from "@quiz/contracts";
-import { overridePointsRange, round2, scoresNegatively, uniquePseudonyms } from "@quiz/domain";
+import {
+  outcomeOf,
+  overridePointsRange,
+  round2,
+  scoresNegatively,
+  uniquePseudonyms,
+} from "@quiz/domain";
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
@@ -266,8 +272,7 @@ export const toGrading = (row: GradingRecord): Grading => ({
 /** The verdict a grid cell shows (F-DASH-01, F-RES-04). */
 export function verdictOf(row: Pick<GradingRecord, "points" | "maxPoints" | "state">): Verdict {
   if (row.state === "proposed") return "pending";
-  if (row.maxPoints > 0 && row.points >= row.maxPoints) return "correct";
-  return row.points > 0 ? "partial" : "wrong";
+  return outcomeOf(row.points, row.maxPoints);
 }
 
 /** The cells of an evaluation a read is about: all of them, or one item's, or one attempt's. */
@@ -625,6 +630,7 @@ export async function gradingQueue(
       type: i.question.type,
       points: i.item.points,
       minPoints: pointsRangeOf(evaluation, i.question.type, i.item.points).min,
+      explanation: i.version.explanation === "" ? null : i.version.explanation,
     })),
     entries,
     counts: { total, validated, proposed, missing: total - validated - proposed },

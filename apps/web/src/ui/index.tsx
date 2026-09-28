@@ -20,6 +20,7 @@
 //   people    a person as a disc, and a row of them (PersonPill,
 //             PeopleStack), on actions, popover and identity.
 //   live      the live primitives (PLAN-MVP §6.4).
+//   bar       a thin segmented bar of counts (SegmentedBar), on layers.
 //   forms     the short form in a dialog (FormDialog), on layers + controls.
 //   combobox  the ARIA combobox with virtual focus (useCombobox,
 //             ComboboxList, ComboboxOption), on layers and menu.
@@ -41,6 +42,7 @@ export * from "./actions";
 export * from "./popover";
 export * from "./people";
 export * from "./live";
+export * from "./bar";
 export * from "./forms";
 export * from "./combobox";
 export * from "./state";

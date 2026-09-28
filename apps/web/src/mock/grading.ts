@@ -1,19 +1,26 @@
 /** Section 5 of the mock — see `index.ts` for the layout. */
 import {
   attemptTotal,
+  debrief,
   describe,
   histogram,
   negativeMarkingOn,
   parseCloze,
   round2,
   scoresNegatively,
+  type AttemptTally,
 } from "@quiz/domain";
+import type { AnyQuestionTypeServer, ItemAggregate } from "@quiz/core/server";
+import { clozeServer } from "@quiz/qt-cloze/server";
+import { mcqServer } from "@quiz/qt-mcq/server";
+import { shortServer } from "@quiz/qt-short/server";
 import type {
   CircuitStudent,
 } from "@quiz/qt-circuit/client";
 import {
   H,
   MockError,
+  MockPayload,
   iso,
   on,
   pick,
@@ -518,6 +525,7 @@ on("GET", "/app/api/evaluations/:id/grading", (m, _body, url) => {
       type: i.type,
       points: i.points,
       minPoints: scoresNegatively(i.type, negativeOf(e.evaluation)) ? -i.points : 0,
+      explanation: questions.find((q) => q.id === i.questionId)?.versions.at(-1)?.explanation || null,
     })),
     entries,
     counts: {
@@ -793,40 +801,51 @@ function resultsView(e: MockGradingWorld) {
 
 on("GET", "/app/api/evaluations/:id/results", (m) => resultsView(gradingWorldOr404(m.groups!.id!)));
 
+/**
+ * The server halves the mock runs for real in the debrief (ADR-033): their
+ * `isAnswered` and their per-attempt `aggregate`. `code` is not one — its
+ * server half holds the grader, which needs Node — so its case tally is
+ * summed from the mock details below.
+ */
+const DEBRIEF_TYPES: Record<string, AnyQuestionTypeServer | undefined> = {
+  mcq: mcqServer,
+  short: shortServer,
+  cloze: clozeServer,
+};
+
+function attemptAggregate(type: string, answer: unknown, details: unknown): ItemAggregate {
+  const server = DEBRIEF_TYPES[type];
+  if (server?.aggregate) return server.aggregate({ answers: [answer], details: [details] });
+  const cases = (details as { cases?: { name: string; ok: boolean }[] } | null)?.cases ?? [];
+  return { casePassRate: cases.map((c) => ({ name: c.name, passed: c.ok ? 1 : 0, total: 1 })) };
+}
+
 on("GET", "/app/api/evaluations/:id/results/by-question", (m) => {
   const e = gradingWorldOr404(m.groups!.id!);
+  const state = e.evaluation.state;
+  if (state !== "closed" && state !== "grading" && state !== "released") {
+    throw new MockPayload(409, { error: "not_over", message: "the evaluation is not over" });
+  }
   const view = resultsView(e);
   return e.items.map((item, index) => {
     const q = questions.find((x) => x.id === item.questionId)!;
     const config = publishedConfig(q);
-    const given = e.attempts
-      .filter((a) => !a.staff)
-      .map((a) => e.answers.get(cellKey(a.id, item.id)))
-      .filter((x) => x !== undefined);
-    let distribution: { key: string; label: string; count: number; correct: boolean | null }[] = [];
-    if (q.type === "mcq") {
-      const choices = (config.choices ?? []) as { text: string; correct: boolean }[];
-      distribution = choices.map((choice, id) => ({
-        key: String(id),
-        label: choice.text,
-        count: given.filter((ans) => ((ans as { selected?: number[] }).selected ?? []).includes(id)).length,
-        correct: choice.correct,
-      }));
-    } else if (q.type === "short" || q.type === "cloze") {
-      const counts = new Map<string, number>();
-      for (const ans of given) {
-        const text =
-          q.type === "short"
-            ? String((ans as { text?: string }).text ?? "")
-            : ((ans as { blanks?: string[] }).blanks ?? []).join(" · ");
-        counts.set(text, (counts.get(text) ?? 0) + 1);
+    const server = DEBRIEF_TYPES[q.type];
+    // As `byQuestion` does it: one tally per attempt of the class, a blank
+    // for no answer (or one that holds nothing), nothing at all for an
+    // answer still waiting for its grading to be validated.
+    const tallies: AttemptTally[] = [];
+    for (const attempt of e.attempts.filter((a) => !a.staff)) {
+      const answer = e.answers.get(cellKey(attempt.id, item.id));
+      if (answer === undefined || (server !== undefined && !server.isAnswered(answer))) {
+        tallies.push({ grading: null, aggregate: {} });
+        continue;
       }
-      distribution = [...counts]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 8)
-        .map(([text, count]) => ({ key: text, label: text || "—", count, correct: null }));
+      const grading = standingGrading(e, attempt.id, item.id);
+      if (grading?.state !== "validated") continue;
+      tallies.push({ grading, aggregate: attemptAggregate(q.type, answer, grading.details) });
     }
-    const cases = ((config.tests as { cases?: CodeCaseLike[] })?.cases ?? []) as CodeCaseLike[];
+    const { outcomes, successRate, distribution, casePassRate } = debrief(tallies);
     return {
       item: view.items[index]!,
       student: studentView(q, config),
@@ -835,17 +854,10 @@ on("GET", "/app/api/evaluations/:id/results/by-question", (m) => {
           ? mockCodeDetails(config, 1).solution
           : (tryAnswer(q, config, null) as { solution?: unknown }).solution ?? null,
       explanation: q.versions.at(-1)?.explanation || null,
-      answered: given.length,
+      outcomes,
       distribution,
-      casePassRate:
-        q.type === "code"
-          ? cases.map((c) => ({
-              name: c.name,
-              passed: Math.round(e.attempts.length * (0.4 + rand() * 0.5)),
-              total: e.attempts.length,
-            }))
-          : [],
-      successRate: view.items[index]!.successRate,
+      casePassRate,
+      successRate,
       avgMs: null,
     };
   });

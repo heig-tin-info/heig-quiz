@@ -124,10 +124,29 @@ describe("aggregate (F-RES-03, audit B-15)", () => {
     });
     expect(stats).toEqual({
       distribution: [
-        ["0: a", 2],
-        ["1: ", 1],
-        ["1: b", 1],
+        { key: "0: a", label: "a", part: 0, count: 2 },
+        { key: "1: ", label: "", part: 1, count: 1 },
+        { key: "1: b", label: "b", part: 1, count: 1 },
       ],
     });
+  });
+
+  it("judges each blank by the verdict its grading recorded (ADR-033)", () => {
+    const blank = (index: number, ok: boolean) => ({
+      index,
+      weight: 1,
+      kind: "text",
+      ok,
+      given: null,
+      expected: "x",
+    });
+    const stats = clozeServer.aggregate!({
+      answers: [{ blanks: ["main", "exit"] }],
+      details: [{ perBlank: [blank(0, true), blank(1, false)], earned: 1, total: 2, fraction: 0.5 }],
+    });
+    expect(stats.distribution).toEqual([
+      { key: "0: main", label: "main", part: 0, correct: true, count: 1 },
+      { key: "1: exit", label: "exit", part: 1, correct: false, count: 1 },
+    ]);
   });
 });

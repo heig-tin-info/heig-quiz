@@ -158,6 +158,7 @@ describe("ROUTES", () => {
     poll: { view: "poll", id: "e-1" },
     grading: { view: "grading", evaluationId: "e-1" },
     results: { view: "results", evaluationId: "e-1" },
+    correction: { view: "correction", evaluationId: "e-1" },
     evaluation: { view: "evaluation", id: "e-1" },
     devUi: { view: "devUi" },
   };
@@ -206,6 +207,7 @@ describe("ROUTES", () => {
       [
         "attempt",
         "classroom",
+        "correction",
         "devUi",
         "evaluation",
         "evaluationPreview",

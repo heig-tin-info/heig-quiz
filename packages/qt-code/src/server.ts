@@ -128,19 +128,26 @@ export const codeServer: QuestionTypeServer<
    * How many graded attempts passed each named case (F-RES-03). The answer
    * distribution of a program is meaningless; this is the useful number.
    */
-  aggregate({ details }) {
-    const tally = new Map<string, { passed: number; total: number }>();
+  aggregate({ details, showHiddenCaseNames }) {
+    const tally = new Map<string, { name: string; label: string; passed: number; total: number }>();
     for (const row of details) {
       const parsed = CodeDetails.safeParse(row);
       if (!parsed.success) continue;
-      for (const c of parsed.data.cases) {
-        const acc = tally.get(c.name) ?? { passed: 0, total: 0 };
+      // Each case also under the name a student reads (the same filter).
+      const read = studentDetails(parsed.data, { showHiddenCaseNames: showHiddenCaseNames === true });
+      for (const [i, c] of parsed.data.cases.entries()) {
+        const acc = tally.get(c.name) ?? {
+          name: c.name,
+          label: read.cases[i]!.name,
+          passed: 0,
+          total: 0,
+        };
         acc.total += 1;
         if (c.ok) acc.passed += 1;
         tally.set(c.name, acc);
       }
     }
-    return { casePassRate: [...tally.entries()].map(([name, acc]) => ({ name, ...acc })) };
+    return { casePassRate: [...tally.values()] };
   },
 
   grade(config: CodeConfig, answer: CodeAnswer | null, ctx: GradeContext) {

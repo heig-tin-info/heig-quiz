@@ -76,6 +76,9 @@ const GradingPanel = lazy(() =>
 const ResultsView = lazy(() =>
   import("./results/ResultsView").then((m) => ({ default: m.ResultsView })),
 );
+const CorrectionProjection = lazy(() =>
+  import("./results/CorrectionProjection").then((m) => ({ default: m.CorrectionProjection })),
+);
 const SettingsPage = lazy(() => import("./SettingsPage").then((m) => ({ default: m.SettingsPage })));
 const AdminPage = lazy(() => import("./AdminPanel").then((m) => ({ default: m.AdminPage })));
 // Development only, and absent from the production bundle: behind the
@@ -227,6 +230,8 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   // WP10: grading + results
   grading: (r, c) => <GradingPanel evaluationId={r.evaluationId} navigate={c.navigate} />,
   results: (r, c) => <ResultsView evaluationId={r.evaluationId} navigate={c.navigate} />,
+  // The projection is for a beamer: no sidebar, no chrome.
+  correction: (r, c) => <CorrectionProjection evaluationId={r.evaluationId} navigate={c.navigate} />,
 };
 
 /** The page of `route` (the one cast of the table, as in `router.ts`). */
@@ -238,7 +243,7 @@ function renderPage(route: Route, ctx: PageContext): ReactNode {
  * The views drawn on the whole screen, with no sidebar. The attempt: a zen
  * player beside a navigation sidebar is not a zen player, and an exam is the
  * one place the rest of the app must go away. The question and evaluation previews,
- * for the same reason. The poll projection, for a beamer. And the join page, which a
+ * for the same reason. The poll and correction projections, for a beamer. And the join page, which a
  * guest with no account reaches as well.
  */
 const FULL_SCREEN: ReadonlySet<Route["view"]> = new Set([
@@ -246,6 +251,7 @@ const FULL_SCREEN: ReadonlySet<Route["view"]> = new Set([
   "questionPreview",
   "evaluationPreview",
   "poll",
+  "correction",
   "join",
   "oauthConsent",
   "teamsLink",

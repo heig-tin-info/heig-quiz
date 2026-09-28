@@ -208,7 +208,23 @@ describe("aggregate (F-RES-03, audit B-15)", () => {
       answers: [{ selected: [2, 0] }, { selected: [0, 0] }, { text: "stray" }, null],
       details: [],
     });
-    expect(stats).toEqual({ distribution: [["2", 1], ["0", 2]] });
+    expect(stats).toEqual({
+      distribution: [
+        { key: "2", count: 1 },
+        { key: "0", count: 2 },
+      ],
+    });
+  });
+
+  it("judges each choice alone, from the key its grading recorded (ADR-033)", () => {
+    const stats = mcqServer.aggregate!({
+      answers: [{ selected: [2, 0] }],
+      details: [{ correct: [0, 1], selected: [0, 2] }],
+    });
+    expect(stats.distribution).toEqual([
+      { key: "2", count: 1, correct: false },
+      { key: "0", count: 1, correct: true },
+    ]);
   });
 });
 

@@ -134,6 +134,8 @@ It is computed from the validated gradings, never typed in: adjust one grading i
 
 The **Questions** tab lists one block per item in quiz order, headed by its type, its number of answers and its **Success rate**. Each block shows **Question and answer key**, the explanation, and the **Answer distribution**: per choice for a multiple choice, per typed value for a short answer, per blank for a cloze, and per **Test cases** passed for a code question, with the reference solution. It is written to be scrolled through on the projector while you go over the paper in class.
 
+**Project the correction** opens the same questions full screen, dark, one screen per question, for the beamer. Each question shows how the class fared in one bar — full marks, partial, wrong, no answer — and its success rate; a multiple choice gives a bar per choice, a short answer the answers the class wrote, a cloze each blank, a code question each test case. The answers and their colours stay hidden until you press **R** (or **Reveal the answers**), so the room can think first; **E** shows the explanation, **↓** and **↑** move between questions, **F** goes full screen. Hover a bar for its exact figures. Only validated gradings count: an answer still waiting for your validation is not on the wall. The projection opens once the evaluation is closed.
+
 ### Export CSV
 
 **Export CSV** downloads one row per student: `email`, `last_name`, `first_name`, one column per item named after the question's internal name with the points earned, `total` and `grade`. The file uses semicolons and starts with a UTF-8 byte-order mark, so Excel opens it directly with the accents intact and without an import dialog.

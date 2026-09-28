@@ -3,7 +3,12 @@
  *
  * No React in this import graph: the API and the grading worker load it.
  */
-import { ConfigMigrationError, tallyKeys, type QuestionTypeServer } from "@quiz/core/server";
+import {
+  ConfigMigrationError,
+  tallyKeys,
+  type QuestionTypeServer,
+  type TallyEntry,
+} from "@quiz/core/server";
 import { clozeStudentTemplate, describeBlank, parseCloze } from "@quiz/domain/cloze";
 import { toCanonical } from "./canonical.js";
 import { gradeClozeAnswer } from "./grade.js";
@@ -134,15 +139,23 @@ export const clozeServer: QuestionTypeServer<
 
   /**
    * Per blank, by the text the student typed (`"1: Galilee"`), which is what
-   * makes "everybody wrote the same wrong word" visible.
+   * makes "everybody wrote the same wrong word" visible. Each blank is judged
+   * alone, by the verdict its grading recorded for it.
    */
-  aggregate({ answers }) {
-    const keys: string[] = [];
-    for (const payload of answers) {
+  aggregate({ answers, details }) {
+    const keys: Omit<TallyEntry, "count">[] = [];
+    for (const [row, payload] of answers.entries()) {
       if (!payload || typeof payload !== "object" || !("blanks" in payload)) continue;
       const blanks = (payload as { blanks: unknown }).blanks;
       if (!Array.isArray(blanks)) continue;
-      for (const [index, value] of blanks.entries()) keys.push(`${index}: ${String(value ?? "")}`);
+      const verdicts = ClozeDetailsSchema.shape.perBlank.safeParse(
+        (details[row] as ClozeDetails | null | undefined)?.perBlank,
+      ).data;
+      for (const [index, value] of blanks.entries()) {
+        const label = String(value ?? "");
+        const ok = verdicts?.find((blank) => blank.index === index)?.ok;
+        keys.push({ key: `${index}: ${label}`, label, part: index, ...(ok === undefined ? {} : { correct: ok }) });
+      }
     }
     return { distribution: tallyKeys(keys) };
   },

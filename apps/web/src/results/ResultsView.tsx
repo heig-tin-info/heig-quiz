@@ -1,5 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, BarChart3, ClipboardCheck, Send, Undo2, Users } from "lucide-react";
+import {
+  AlertTriangle,
+  BarChart3,
+  ClipboardCheck,
+  Presentation,
+  Send,
+  Undo2,
+  Users,
+} from "lucide-react";
 import { useState } from "react";
 
 import type {
@@ -33,7 +41,7 @@ import {
   Skeleton,
   Tabs,
 } from "../ui";
-import { ByQuestionView } from "./ByQuestionView";
+import { ByQuestionView, isNotOver } from "./ByQuestionView";
 import { ExportButton } from "./ExportButton";
 import { GradeTable } from "./GradeTable";
 import { Histogram } from "./Histogram";
@@ -258,13 +266,28 @@ export function ResultsView({
       ) : byQuestion.isError ? (
         <QueryError
           title={t("results.loadFailed")}
-          error={byQuestion.error}
+          // Before the close the server refuses (ADR-033): say so in the
+          // reader's language, never in the server's.
+          error={isNotOver(byQuestion.error) ? null : byQuestion.error}
           onRetry={() => void byQuestion.refetch()}
           retrying={byQuestion.isFetching}
-          fallback={t("error.server")}
+          fallback={t(isNotOver(byQuestion.error) ? "results.byQuestion.notOver" : "error.server")}
         />
       ) : (
-        <ByQuestionView questions={byQuestion.data ?? []} />
+        <div className="space-y-4">
+          {/* The same questions, on a beamer, for the correction in class. */}
+          {byQuestion.data?.length ? (
+            <div className="flex justify-end">
+              <Button
+                variant="secondary"
+                onClick={() => navigate({ view: "correction", evaluationId })}
+              >
+                <Presentation /> {t("results.byQuestion.project")}
+              </Button>
+            </div>
+          ) : null}
+          <ByQuestionView questions={byQuestion.data ?? []} />
+        </div>
       )}
     </div>
   );

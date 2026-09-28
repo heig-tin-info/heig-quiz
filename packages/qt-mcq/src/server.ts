@@ -181,14 +181,23 @@ export const mcqServer: QuestionTypeServer<
   /**
    * The class's answers, counted by CANONICAL choice index (decision D3
    * makes that index meaningless to a student and exact for the teacher). A
-   * choice ticked twice in one answer counts once.
+   * choice ticked twice in one answer counts once. A choice is judged alone —
+   * it is in the key or it is not — from the key its grading recorded: left
+   * out, the results module would lend each tick the verdict of its whole
+   * attempt, which says nothing about the choice (ADR-033).
    */
-  aggregate({ answers }) {
-    const keys: string[] = [];
+  aggregate({ answers, details }) {
+    const key = new Set(
+      details.flatMap((row) => McqDetailsSchema.shape.correct.safeParse((row as McqDetails | null)?.correct).data ?? []),
+    );
+    const keys: { key: string; correct?: boolean }[] = [];
     for (const payload of answers) {
       if (!payload || typeof payload !== "object" || !("selected" in payload)) continue;
       const selected = (payload as { selected: unknown }).selected;
-      if (Array.isArray(selected)) for (const index of new Set(selected)) keys.push(String(index));
+      if (!Array.isArray(selected)) continue;
+      for (const index of new Set(selected)) {
+        keys.push({ key: String(index), ...(key.size > 0 ? { correct: key.has(index as number) } : {}) });
+      }
     }
     return { distribution: tallyKeys(keys) };
   },

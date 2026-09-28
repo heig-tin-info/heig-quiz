@@ -24,24 +24,24 @@ import { choiceLetter } from "@quiz/qt-mcq/client";
 import type { PollTally, PollTeacherView } from "@quiz/contracts";
 
 /** The student view of an mcq, as `@quiz/qt-mcq` publishes it. */
-interface McqStudentLike {
+export interface McqStudentLike {
   prompt: string;
   choices: { id: number; text: string }[];
   mode?: string;
 }
 
 /** The student view of a short answer. */
-interface ShortStudentLike {
+export interface ShortStudentLike {
   prompt: string;
 }
 
 /** `toSolution` of an mcq: canonical indices of the key. */
-interface McqSolutionLike {
+export interface McqSolutionLike {
   correct: number[];
 }
 
 /** `toSolution` of a short answer: the key, already written out for a human. */
-interface ShortSolutionLike {
+export interface ShortSolutionLike {
   expected: string[];
 }
 
@@ -81,6 +81,28 @@ export function percentOf(count: number, answered: number): number {
 /** What the rows are drawn from: the teacher's question, or a revealed phone's. */
 type QuestionLike = Pick<PollTeacherView["question"], "type" | "student" | "solution">;
 
+/** An mcq choice as the room saw it: its letter, its text, whether it is in the key. */
+export interface ChoiceLike {
+  /** The canonical index, what a tally is keyed by. */
+  id: number;
+  letter: string;
+  text: string;
+  correct: boolean;
+}
+
+/** The choices of an mcq in the SERVED order, joined with its key. */
+export function choicesOf(question: Pick<QuestionLike, "student" | "solution">): ChoiceLike[] {
+  const student = question.student as McqStudentLike | null;
+  const solution = question.solution as McqSolutionLike | null;
+  const key = new Set(Array.isArray(solution?.correct) ? solution.correct : []);
+  return (Array.isArray(student?.choices) ? student.choices : []).map((choice, position) => ({
+    id: choice.id,
+    letter: choiceLetter(position),
+    text: choice.text,
+    correct: key.has(choice.id),
+  }));
+}
+
 /**
  * Whether the key names any answer at all. An opinion poll's names none
  * (ADR-014, addendum 2026-09-23): its reveal marks nothing right — and
@@ -92,28 +114,24 @@ export function hasKey(question: Pick<QuestionLike, "type" | "solution">): boole
   return Array.isArray(key) && key.length > 0;
 }
 
-/** The prompt of the question, whatever its type. */
-export function promptOf(question: PollTeacherView["question"]): string {
+/** The prompt of the question, whatever its type; `""` for one without (a cloze). */
+export function promptOf<Q extends Pick<QuestionLike, "student">>(question: Q): string {
   const student = question.student as Partial<McqStudentLike & ShortStudentLike> | null;
   return typeof student?.prompt === "string" ? student.prompt : "";
 }
 
 function mcqRows(question: QuestionLike, tally: PollTally): PollRow[] {
-  const student = question.student as McqStudentLike | null;
-  const choices = Array.isArray(student?.choices) ? student.choices : [];
-  const solution = question.solution as McqSolutionLike | null;
-  const key = new Set(Array.isArray(solution?.correct) ? solution.correct : []);
   const counts = new Map(tally.choices.map((c) => [c.index, c.count]));
-  return choices.map((choice, position) => {
+  return choicesOf(question).map((choice) => {
     const count = counts.get(choice.id) ?? 0;
     return {
       key: `c${choice.id}`,
-      letter: choiceLetter(position),
+      letter: choice.letter,
       label: choice.text,
       markdown: true,
       count,
       percent: percentOf(count, tally.answered),
-      correct: key.has(choice.id),
+      correct: choice.correct,
     };
   });
 }

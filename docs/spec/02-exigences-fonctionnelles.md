@@ -140,7 +140,7 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 |---|---|---|---|
 | F-RES-01 | Grades view of an evaluation: per student, points, grade to the tenth, time used, mean, median, standard deviation, histogram. | P1 | M |
 | F-RES-02 | CSV export: email, name, points per item, total, grade. Semicolon separator, UTF-8 encoding with BOM for Excel. | P1 | M |
-| F-RES-03 | Per-question view: statement, correct answer, explanation, distribution of answers, for a multiple choice the percentage per choice, success rate, mean time. Linear scrolling for going through the answers in class. | P1 | M |
+| F-RES-03 | Per-question view: statement, correct answer, explanation, distribution of answers, for a multiple choice the percentage per choice, success rate, mean time. Linear scrolling for going through the answers in class: a full-screen projection, one screen per question, key and verdicts hidden until revealed, served once the evaluation is closed (ADR-033). | P1 | M |
 | F-RES-04 | The student sees their released results: points per question, grade, and according to the feedback their answer, the key, the explanation, the teacher's comment. | P1 | M |
 | F-RES-05 | Cumulative view per classroom: grades of every released evaluation, configurable weighted mean. | P2 | S |
 
