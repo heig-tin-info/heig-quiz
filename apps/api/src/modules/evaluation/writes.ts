@@ -246,6 +246,9 @@ export async function patchEvaluation(
   if (patch.closesAt !== undefined) {
     next.closesAt = patch.closesAt === null ? null : new Date(patch.closesAt);
   }
+  // A timing set from the configuration is the announced one again (D8, #253):
+  // whatever the live controls had added is now part of it.
+  if (patch.opensAt !== undefined || patch.closesAt !== undefined) next.closesAtShiftS = 0;
   if (patch.durationS !== undefined) next.durationS = patch.durationS;
   if (patch.accessCode !== undefined) next.accessCode = patch.accessCode;
   if (patch.ipAllowlist !== undefined) next.ipAllowlist = patch.ipAllowlist;
@@ -303,6 +306,10 @@ export async function deleteEvaluation(db: Db, row: EvaluationRecord): Promise<v
  *
  * `fromNow`, before the start (#178): an end already past is moved from
  * `now`, so "+10 min" on an end gone an hour ago means ten minutes from now.
+ *
+ * The whole move, the jump to `now` included, is added to `closes_at_shift_s`,
+ * so the announced window — the base of the accommodation (D8, #253) — does
+ * not grow with it.
  */
 export async function extendClosesAt(
   db: DbOrTx,
@@ -318,6 +325,8 @@ export async function extendClosesAt(
     .update(evaluations)
     .set({
       closesAt: sql`${base} + make_interval(secs => ${seconds})`,
+      // Evaluated on the row as it was: the distance the end moves.
+      closesAtShiftS: sql`${evaluations.closesAtShiftS} + round(extract(epoch from ${base} + make_interval(secs => ${seconds}) - ${evaluations.closesAt}))::int`,
       updatedAt: now,
     })
     .where(and(eq(evaluations.id, id), isNotNull(evaluations.closesAt)))

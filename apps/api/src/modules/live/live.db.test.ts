@@ -33,7 +33,13 @@ import { testDb } from "../../test/db.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { UnavailableRunner } from "../runner/unavailable.js";
-import { applyState, itemRows, settingsOf, type EvaluationRecord } from "../evaluation/service.js";
+import {
+  applyState,
+  itemRows,
+  patchEvaluation,
+  settingsOf,
+  type EvaluationRecord,
+} from "../evaluation/service.js";
 import { presence } from "../realtime/presence.js";
 import * as service from "./service.js";
 
@@ -982,8 +988,8 @@ describe("teacher controls (F-LIVE-11, F-LIVE-12)", () => {
     );
     expect(ordinary!.extraS).toBe(0);
     expect(ordinary!.deadlineAt!.getTime()).toBe(end);
-    // 25 % of the announced window, which the extension widened to 70 min.
-    expect(accommodated!.deadlineAt!.getTime()).toBe(end + 0.25 * 70 * 60_000);
+    // 25 % of the announced hour: the extension moved the end, not the base (#253).
+    expect(accommodated!.deadlineAt!.getTime()).toBe(end + 0.25 * 60 * 60_000);
   });
 
   it("still gives the minutes to a student who begins after a duration extension", async () => {
@@ -1098,6 +1104,102 @@ describe.each([
     const reopened = await service.reopenAttempt(db, current, submitted, clock.now());
     expect(reopened.state).toBe("in_progress");
     expect(reopened.deadlineAt!.getTime()).toBe(shifted.deadlineAt!.getTime());
+  });
+});
+
+/*
+ * #253: the base of the accommodation in `deadline` timing is the ANNOUNCED
+ * window (decision D8). Time added to everybody — "+N min", a pause — moves
+ * the end, never the base, whether the student starts late or is reopened.
+ */
+describe("the accommodation takes the announced window (D8, #253)", () => {
+  const announcedMs = 90 * 60_000;
+  const bonusMs = 0.33 * announcedMs;
+
+  it("does not grow when a lobby whose end has passed is extended from now", async () => {
+    // Announced 06:00-07:30, still in the lobby at 08:00.
+    const opensAt = new Date(clock.now().getTime() - 2 * 3_600_000);
+    const seed = await seedLive(db, {
+      settings: { timing: "deadline" },
+      durationS: null,
+      opensAt,
+      closesAt: new Date(opensAt.getTime() + announcedMs),
+      timeBonusPercent: 33,
+    });
+    const room = await applyState(db, await reload(db, seed.evaluationId), "lobby", clock.now());
+    const participants = await Promise.all(
+      seed.studentIds.map(async (id) => (await service.participantOf(db, room, id))!),
+    );
+    const waiting = await Promise.all(
+      participants.map((p) => service.ensureAttempt(db, room, p, clock.now())),
+    );
+    await service.extendTime(db, room, { minutes: 10 }, clock.now());
+    await service.extendTime(db, await reload(db, seed.evaluationId), { minutes: 10 }, clock.now());
+    const row = await applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
+    const end = clock.now().getTime() + 20 * 60_000;
+    expect(row.closesAt!.getTime()).toBe(end);
+
+    // A student who begins late, after one more "+10 min" to everybody.
+    clock.advance(5 * 60_000);
+    await service.extendTime(db, row, { minutes: 10 }, clock.now());
+    const current = await reload(db, seed.evaluationId);
+    const [accommodated, ordinary] = await Promise.all(
+      waiting.map(async (attempt, i) =>
+        service.beginAttempt(db, current, (await service.attemptById(db, attempt.id))!, participants[i]!, clock.now()),
+      ),
+    );
+    expect(ordinary!.deadlineAt!.getTime()).toBe(end + 10 * 60_000);
+    expect(accommodated!.bonusS).toBe(Math.round(bonusMs / 1000));
+    expect(accommodated!.deadlineAt!.getTime()).toBe(end + 10 * 60_000 + bonusMs);
+  });
+
+  it("does not grow when an attempt is reopened after a pause", async () => {
+    const { evaluation, attempt } = await running({
+      settings: { timing: "deadline" },
+      durationS: null,
+      opensAt: clock.now(),
+      closesAt: new Date(clock.now().getTime() + announcedMs),
+      timeBonusPercent: 33,
+    });
+    expect(attempt.deadlineAt!.getTime()).toBe(clock.now().getTime() + announcedMs + bonusMs);
+    clock.advance(60_000);
+    const paused = await service.pauseEvaluation(db, evaluation, clock.now());
+    clock.advance(15 * 60_000);
+    await service.resumeEvaluation(db, paused, clock.now());
+    const current = await reload(db, evaluation.id);
+    expect(current.closesAtShiftS).toBe(15 * 60);
+
+    const submitted = await service.submitAttempt(
+      db,
+      current,
+      (await service.attemptById(db, attempt.id))!,
+      clock.now(),
+    );
+    const reopened = await service.reopenAttempt(db, current, submitted, clock.now());
+    expect(reopened.bonusS).toBe(Math.round(bonusMs / 1000));
+    expect(reopened.deadlineAt!.getTime()).toBe(current.closesAt!.getTime() + bonusMs);
+  });
+
+  it("follows the teacher's own timing edits while the configuration is open", async () => {
+    const opensAt = clock.now();
+    const seed = await seedLive(db, {
+      settings: { timing: "deadline" },
+      durationS: null,
+      opensAt,
+      closesAt: new Date(opensAt.getTime() + 3_600_000),
+    });
+    const room = await applyState(db, await reload(db, seed.evaluationId), "lobby", clock.now());
+    await service.extendTime(db, room, { minutes: 5 }, clock.now());
+    expect((await reload(db, seed.evaluationId)).closesAtShiftS).toBe(300);
+    // The teacher sets the end again: that is the announced window now.
+    const closesAt = new Date(opensAt.getTime() + announcedMs);
+    await patchEvaluation(db, await reload(db, seed.evaluationId), { closesAt: closesAt.toISOString() }, {
+      now: clock.now(),
+      attemptCount: 0,
+    });
+    const edited = await reload(db, seed.evaluationId);
+    expect(edited.closesAt!.getTime()).toBe(closesAt.getTime());
+    expect(edited.closesAtShiftS).toBe(0);
   });
 });
 

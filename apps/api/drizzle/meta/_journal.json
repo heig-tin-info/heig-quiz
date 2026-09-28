@@ -183,6 +183,13 @@
       "when": 1790610696413,
       "tag": "0025_pool_color",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1790618974383,
+      "tag": "0026_evaluation_closes_at_shift",
+      "breakpoints": true
     }
   ]
 }
