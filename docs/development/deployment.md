@@ -484,6 +484,7 @@ sudo install -d -o srv -g srvstg -m 2750 /srv/staging-inbox   # production write
 # As srvstg (sudo machinectl shell srvstg@): its own rootless Docker.
 dockerd-rootless-setuptool.sh install                   # socket /run/user/$(id -u)/docker.sock
 ls /srv/quiz                                            # must fail: Permission denied
+ls /home/srv                                            # must fail too (0750, srvstg not in group srv)
 # Rootless Docker applies `cpus`/`cpu_shares` only when systemd delegates the
 # cpu controller: this must list `cpu`.
 cat /sys/fs/cgroup/user.slice/user-$(id -u).slice/user@$(id -u).service/cgroup.controllers
@@ -525,6 +526,37 @@ client. Register a separate edu-ID client for staging, with a key of its own,
 and replace `secrets/eduid-private-key.pem`, `OIDC_CLIENT_ID` and
 `OIDC_PRIVATE_KEY_KID` in `.env.staging`; `srvstg` then holds nothing of
 production's.
+
+### Cutover from the old `srv` staging (2026-09-28, once)
+
+Staging ran as `srv` in `/srv/quiz-staging` until the commit that introduced
+`srvstg`. The move, in this order:
+
+1. **Before merging**: the whole *Setting up staging (once)* above: the
+   `srvstg` account, its rootless Docker, `chmod o-rwx`, the inbox, the
+   checkout, the secrets, `.env.staging`, the key in
+   `/home/srvstg/.ssh/authorized_keys`, then
+   `gh secret set STAGING_DEPLOY_SSH_KEY --env staging` and
+   `gh variable set STAGING_DEPLOY_USER --body srvstg`.
+2. **Just before the merge**, as `srv`, free `127.0.0.1:3003` (the new stack
+   binds it from another daemon):
+   `cd /srv/quiz-staging && docker compose -f compose.staging.yml --env-file .env.staging --env-file .env.image down -v`
+3. **Merge**: the first staging deploy lands on `srvstg`, database empty.
+4. **Fill the data** (below). `/srv/quiz/scripts/staging-export.sh` exists
+   only once production has been promoted to that commit; until then, run
+   `main`'s copy against the production checkout without switching it:
+
+   ```bash
+   # as srv
+   cd /srv/quiz && git fetch -q origin && git show origin/main:scripts/staging-export.sh > /tmp/staging-export.sh
+   QUIZ_PROD_DIR=/srv/quiz bash /tmp/staging-export.sh && rm /tmp/staging-export.sh
+   ```
+
+5. **Clean up** what `srv` still holds of staging: delete the
+   `command="/srv/quiz-staging/deploy.sh staging"` line from
+   `/home/srv/.ssh/authorized_keys`, `rm -rf /srv/quiz-staging` (it holds
+   production data and the edu-ID key), and remove the repository-level
+   leftover: `gh secret delete STAGING_DEPLOY_SSH_KEY --repo heig-tin-info/heig-quiz`.
 
 ### Refreshing the data
 

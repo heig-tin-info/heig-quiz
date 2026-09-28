@@ -4,6 +4,11 @@
 #
 #   /srv/quiz/scripts/staging-export.sh
 #
+# A copy of this script run from elsewhere (before production has been
+# promoted to the commit that adds it) names the checkout explicitly:
+#
+#   QUIZ_PROD_DIR=/srv/quiz bash /tmp/staging-export.sh
+#
 # Staging runs as its own account (`srvstg`), which cannot read /srv/quiz:
 # staging executes every commit of main before anyone approves it, so it must
 # never reach production's secrets, volumes or backups. The data therefore
@@ -16,7 +21,7 @@
 # Then, as `srvstg`: ~/quiz-staging/scripts/staging-refresh.sh
 set -euo pipefail
 
-cd "$(dirname "$(readlink -f "$0")")/.."
+cd "${QUIZ_PROD_DIR:-$(dirname "$(readlink -f "$0")")/..}"
 INBOX="${QUIZ_STAGING_INBOX:-/srv/staging-inbox}"
 [ -d "$INBOX" ] && [ -w "$INBOX" ] || { echo "staging-export: $INBOX is not a writable directory" >&2; exit 1; }
 
@@ -27,12 +32,13 @@ PROD=(docker compose -f compose.prod.yml --env-file .env.prod --env-file .env.im
 
 # Written under a temporary name and renamed: staging never reads half a dump.
 "${PROD[@]}" exec -T postgres pg_dump -Fc -U quiz quiz > "$INBOX/.quiz.dump.part"
+chmod 640 "$INBOX/.quiz.dump.part"
 mv "$INBOX/.quiz.dump.part" "$INBOX/quiz.dump"
 
 # The images belong to the containers' `node` (a sub-uid on the host): read
 # through a container, streamed out as the calling user.
 docker run --rm -v "$PWD/assets:/from:ro" alpine tar -C /from -cf - . > "$INBOX/.assets.tar.part"
+chmod 640 "$INBOX/.assets.tar.part"
 mv "$INBOX/.assets.tar.part" "$INBOX/assets.tar"
 
-chmod 640 "$INBOX/quiz.dump" "$INBOX/assets.tar"
 echo "staging-export: $(du -h "$INBOX/quiz.dump" | cut -f1) dump and $(du -h "$INBOX/assets.tar" | cut -f1) of images in $INBOX"

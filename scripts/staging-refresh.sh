@@ -54,7 +54,8 @@ SQL
 
 # The question images, content-addressed. The staging directory belongs to
 # the container's `node` (a sub-uid on the host): unpacked through a container.
-if [ -s "$INBOX/assets.tar" ]; then
+# A dump named on the command line leaves the images as they are.
+if [ -z "${1:-}" ] && [ -s "$INBOX/assets.tar" ]; then
   docker run --rm -i -v "$PWD/assets:/to" alpine \
     sh -c 'tar -C /to -xf - && chown -R 1000:1000 /to' < "$INBOX/assets.tar"
 fi
