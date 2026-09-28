@@ -344,7 +344,7 @@ describe("notify fans out", () => {
     await service.setPreference(db, lena, { kind: "pool_shared", channel: "email", enabled: false });
     // A preference on ANOTHER kind changes nothing here.
     await service.setPreference(db, judy, { kind: "pool_ownership", channel: "email", enabled: false });
-    await linkChat(lena);
+    await linkTeams(lena);
     const { queue, sent } = recordingQueue();
     openOutbox({ queue, teams: true, log });
     const hints: string[][] = [];
