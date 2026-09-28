@@ -42,8 +42,9 @@ export const hint = "text-[13px] text-fg-muted";
 
 /**
  * A quiet aside that only supports what is around it: the instruction under a
- * question in a player ("Choose one answer."), "no answer" in a review, a
- * count under a chart. 12 px in `fg-faint`, which DESIGN.md holds to 4.5:1.
+ * question in a player ("Choose one answer."), "no answer" in a review, the
+ * note beside a field in a dense row. 12 px in `fg-faint`, which DESIGN.md
+ * holds to 4.5:1.
  * An explanation of a control is a {@link hint}, never a caption.
  */
 export const caption = "text-xs text-fg-faint";

@@ -852,7 +852,7 @@ of the question surfaces, one token per role and never two dialects of it:
 | --- | --- | --- |
 | `label` | 13 px, 500, `fg`, a row | the label of a field, the caption of a group of fields (the app's `FieldLabel` row) |
 | `hint` | 13 px, `fg-muted` | the sentence that explains a control or a section of an editor (the app's `SettingRow` description) |
-| `caption` | 12 px, `fg-faint` | a quiet aside that only supports its surroundings: the instruction under a player's question, "no answer" in a review, a count under a chart |
+| `caption` | 12 px, `fg-faint` | a quiet aside that only supports its surroundings: the instruction under a player's question, "no answer" in a review, the note beside a field in a dense row |
 | `sectionTitle` | 16 px, 700, tight | the title of a card or section (the app's `SectionHeading`) |
 | `sectionClass` | column, 8 px | a section of an editor laid out as a plain form |
 | `card` | `surface`, hairline, card radius | the cards of the code and circuit editors (`EditorSection`) |
