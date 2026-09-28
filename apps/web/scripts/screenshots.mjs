@@ -740,6 +740,15 @@ const scenes = [
 
   // Settings and administration
   { name: "settings", role: "teacher", path: "/settings" },
+  // The App channel's toast (ADR-030 §a): `?notify=1` makes a student join
+  // PRG1-2026 a moment after the page loads, and the bell's toast shows it.
+  {
+    name: "notification-toast",
+    role: "teacher",
+    path: "/?notify=1",
+    fold: true,
+    act: (p) => p.getByText(/students joined PRG1-2026|étudiants ont rejoint PRG1-2026/).waitFor({ timeout: 5000 }),
+  },
   { name: "settings-avatar", role: "teacher", path: "/settings", act: (p) => p.getByRole("button", { name: /change picture/i }).first().click() },
   { name: "settings-tokens-empty", role: "teacher", path: "/settings?empty=1" },
   // ADR-023: the consent page an assistant sends the teacher to.

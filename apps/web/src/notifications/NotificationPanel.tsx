@@ -25,10 +25,12 @@ import { notificationsKey } from "../queryKeys";
 
 /**
  * The inbox: what happened to this account while it was away — a pool
- * shared or inherited (F-POOL-05), results released (F-GRADE-09). It lives in the account menu — an
+ * shared or inherited (F-POOL-05), results released (F-GRADE-09), students
+ * who joined a classroom and roster entries to decide (#198). It lives in the account menu — an
  * item "Notifications" and a count on the avatar — rather than behind a bell
  * of its own, which sat beside the account row and truncated the e-mail.
- * Unlike a toast, a notification survives a reload, so the list is a query and not a state.
+ * A notification survives a reload, so the list is a query and not a state;
+ * the toast of one arriving is read off the same query (`toasts.ts`).
  *
  * It refreshes by itself: the API sends a `notifications` hint on the user's
  * own SSE topic and `useLiveUpdates` invalidates every active query on any
@@ -61,7 +63,7 @@ const PANEL_MAX_HEIGHT = 420;
  * closed union, and this is the one place that turns a kind into words, in
  * either language.
  */
-function notificationSentence(payload: NotificationPayload, t: TFunction): string {
+export function notificationSentence(payload: NotificationPayload, t: TFunction): string {
   switch (payload.kind) {
     case "pool_shared":
       return t("notif.poolShared", {
@@ -76,12 +78,23 @@ function notificationSentence(payload: NotificationPayload, t: TFunction): strin
       });
     case "results_released":
       return t("notif.resultsReleased", { evaluationTitle: payload.evaluationTitle });
+    case "student_joined":
+      return t(payload.count === 1 ? "notif.studentJoined.one" : "notif.studentJoined", {
+        n: payload.count,
+        classroom: payload.classroomName,
+      });
+    case "roster_conflict":
+      return t(payload.count === 1 ? "notif.rosterConflict.one" : "notif.rosterConflict", {
+        n: payload.count,
+        classroom: payload.classroomName,
+      });
   }
 }
 
 /**
- * Where a notification takes the reader: the pool it is about, or the
- * feedback page of the attempt whose results were released. The e-mail and
+ * Where a notification takes the reader: the pool it is about, the
+ * feedback page of the attempt whose results were released, or the roster
+ * of the classroom. The e-mail and
  * the Teams message link to the same page (`templates.ts` on the server).
  */
 function notificationRoute(payload: NotificationPayload): Route {
@@ -91,6 +104,9 @@ function notificationRoute(payload: NotificationPayload): Route {
       return { view: "pool", id: payload.poolId };
     case "results_released":
       return { view: "feedback", attemptId: payload.attemptId };
+    case "student_joined":
+    case "roster_conflict":
+      return { view: "classroom", id: payload.classroomId, tab: "roster" };
   }
 }
 

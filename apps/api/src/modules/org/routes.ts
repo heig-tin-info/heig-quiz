@@ -49,7 +49,7 @@ import {
 import { invalid, notFound, teacherRoute } from "../http.js";
 import { studentJoined } from "../realtime/bus.js";
 import { poolsOfCourse, setCoursePools } from "../pool/service.js";
-import { claimForExistingUsers, importRoster, rosterView } from "./roster.js";
+import { claimForExistingUsers, importRoster, rosterView, tellStaff } from "./roster.js";
 import * as service from "./service.js";
 
 const RowsBody = z.object({
@@ -501,11 +501,14 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
       }
       if (outcome.status === "joined") {
         await trace(req, "roster.join", "classroom", row.room.id, { email: me.email });
-        studentJoined({
+        studentJoined({ courseId: row.course.id, userId: me.id });
+        await tellStaff(app.db, {
+          kind: "student_joined",
           courseId: row.course.id,
+          classroomId: row.room.id,
           classroomName: row.room.name,
-          userId: me.id,
-          name: `${me.givenName} ${me.familyName}`.trim(),
+          count: 1,
+          actorId: me.id,
         });
       }
       const result: JoinResult = {

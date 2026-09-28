@@ -93,7 +93,8 @@ export async function notify(
 /**
  * Delivers notifications to many accounts at once — a release tells a whole
  * class — with the reads grouped: the preferences in one query, the Teams
- * links in one, the bell rows in one multi-row insert. Each recipient still
+ * links in one, the bell rows in one multi-row insert (a folded kind, §e:
+ * one atomic upsert per row). Each recipient still
  * gets its own hint and its own jobs, exactly as {@link notify} would.
  *
  * The payload is parsed on the way IN as well as on the way out: a caller
@@ -132,13 +133,20 @@ export async function notifyMany(
           userId: d.userId,
           poolId: "poolId" in d.payload ? d.payload.poolId : null,
           evaluationId: "evaluationId" in d.payload ? d.payload.evaluationId : null,
+          classroomId: "classroomId" in d.payload ? d.payload.classroomId : null,
           payload: d.payload,
         }
       : null,
   );
   const values = bells.filter((b) => b !== null);
-  const rows = values.length === 0 ? [] : await db.insert(notifications).values(values).returning();
+  const plain = values.filter((b) => FOLD_TARGETS[b.payload.kind] === undefined);
+  const rows = plain.length === 0 ? [] : await db.insert(notifications).values(plain).returning();
+  // Keyed by the id each delivery was GIVEN: a fold answers with the id of
+  // the unread row it bumped, which is the one the caller must get back.
   const byId = new Map(rows.map((r) => [r.id, r]));
+  for (const value of values) {
+    if (FOLD_TARGETS[value.payload.kind] !== undefined) byId.set(value.id, await fold(db, value));
+  }
   for (const row of values) hint("notifications", [userTopic(row.userId)]);
 
   for (const d of planned) {
@@ -148,6 +156,52 @@ export async function notifyMany(
     if (external.length > 0) await enqueueDeliveries(d.userId, d.payload, external);
   }
   return bells.map((b) => (b ? notificationJson(byId.get(b.id)!) : null));
+}
+
+/**
+ * The kinds folded into one unread row per recipient and target (ADR-030
+ * §e), and the column that names the target. Each has its partial unique
+ * index, `notifications_<kind>_fold_uq` (`db/notifications.ts`), which the
+ * fold's ON CONFLICT infers from the same columns and predicate.
+ */
+const FOLD_TARGETS: Partial<Record<NotificationKind, "classroomId">> = {
+  student_joined: "classroomId",
+  roster_conflict: "classroomId",
+};
+
+/**
+ * One folded delivery, as ONE atomic statement: an insert that, when the
+ * recipient already holds an unread row of this kind for this target,
+ * conflicts on the kind's partial unique index and bumps that row instead —
+ * its count, its payload (the latest name), its `created_at` (so the client
+ * toasts it again, §a). It never reads then writes, so two concurrent events
+ * cannot both insert, and a row being marked read at the same moment no
+ * longer matches the index predicate: the event then starts a new row.
+ */
+async function fold(
+  db: Db,
+  value: typeof notifications.$inferInsert & { payload: NotificationPayload },
+): Promise<NotificationRow> {
+  const kind = value.payload.kind;
+  const target = FOLD_TARGETS[kind]!;
+  // A literal, never a bind parameter: Postgres infers the arbiter index by
+  // proving this predicate implies the index's, which a `$1` cannot do.
+  // `kind` has been parsed against the closed catalogue.
+  const kindLiteral = sql.raw(`'${kind}'`);
+  const count = sql`(${notifications.payload}->>'count')::int + (excluded.payload->>'count')::int`;
+  const [row] = await db
+    .insert(notifications)
+    .values(value)
+    .onConflictDoUpdate({
+      target: [notifications.userId, notifications[target]],
+      targetWhere: sql`${notifications.payload}->>'kind' = ${kindLiteral} and ${notifications.readAt} is null`,
+      set: {
+        payload: sql`excluded.payload || jsonb_build_object('count', ${count})`,
+        createdAt: sql`now()`,
+      },
+    })
+    .returning();
+  return row!;
 }
 
 /**

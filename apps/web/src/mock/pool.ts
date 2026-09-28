@@ -221,6 +221,19 @@ const notifications: Notification[] = [
     readAt: null,
   },
   {
+    // Folded per classroom (ADR-030 §e): one entry that counts, no names.
+    id: "n3",
+    payload: { kind: "student_joined", classroomId: "r1", classroomName: "PRG1-2026", count: 3 },
+    createdAt: iso(-40 * 60_000),
+    readAt: null,
+  },
+  {
+    id: "n4",
+    payload: { kind: "roster_conflict", classroomId: "r1", classroomName: "PRG1-2026", count: 1 },
+    createdAt: iso(-5 * D),
+    readAt: iso(-4 * D),
+  },
+  {
     id: "n2",
     payload: {
       kind: "pool_ownership",
@@ -232,6 +245,8 @@ const notifications: Notification[] = [
     readAt: iso(-8 * D),
   },
 ];
+// Newest first, as the API lists them.
+notifications.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
 export const categories: MockCategory[] = [
   { id: "k1", poolId: "p1", parentId: null, name: "Pointeurs", position: 0 },
@@ -1172,6 +1187,25 @@ function stripPool() {
   for (const key of Object.keys(poolMembers)) delete poolMembers[key];
   notifications.length = 0;
   for (const key of Object.keys(coursePools)) coursePools[key] = [];
+}
+
+/**
+ * `?notify=1`: a student joins PRG1-2026 shortly after the page loads — the
+ * folded entry is bumped (count + 1, a fresh `createdAt`, unread again), and
+ * the fake stream sends the `notifications` hint, so the toast of the App
+ * channel can be seen without a backend (`index.ts`).
+ */
+export function arriveNotification(): void {
+  const index = notifications.findIndex((n) => n.id === "n3");
+  if (index < 0) return;
+  const [entry] = notifications.splice(index, 1);
+  if (entry?.payload.kind !== "student_joined") return;
+  notifications.unshift({
+    ...entry,
+    payload: { ...entry.payload, count: entry.payload.count + 1 },
+    createdAt: new Date().toISOString(),
+    readAt: null,
+  });
 }
 
 /** `?many=1`: an inbox the badge cannot count on one hand. */

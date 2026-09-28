@@ -18,7 +18,6 @@ import { z } from "zod";
 import { EvaluationState } from "./evaluation.js";
 import { Verdict } from "./grading.js";
 import { AttemptState, CellStatus, ClosedBy } from "./live.js";
-import { AppNotice } from "./notifications.js";
 
 /** The audiences an event can be addressed to. */
 export const Topic = z.union([
@@ -202,8 +201,9 @@ export type GradingProgressEvent = z.infer<typeof GradingProgressEvent>;
 
 /**
  * The inherited refresh hint (ADR-005), for everything that is not the live
- * path. `notice` keeps the catalogue of `./notifications.ts`, which is what
- * the web app already renders as a toast.
+ * path. It carries no data: what a user is told arrives as a notification
+ * (`./notifications.ts`), which the `notifications` hint makes the client
+ * re-read, and toast (ADR-030, addendum §a).
  */
 export const HintEvent = z.object({
   type: z.literal("hint"),
@@ -221,7 +221,6 @@ export const HintEvent = z.object({
       "mutation",
     ]),
   ),
-  notice: AppNotice.nullish(),
 });
 export type HintEvent = z.infer<typeof HintEvent>;
 

@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { GraduationCap, MessageSquare, School, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { GraduationCap, School, ShieldCheck, SlidersHorizontal } from "lucide-react";
 
 import { ApiTokensCard, ConnectionsCard } from "./ApiTokensCard";
 import { AvatarEditor } from "./AvatarEditor";
@@ -11,11 +11,10 @@ import {
   McqPolicy,
   type DateFormat,
   type Me,
-  type NoticeKind,
 } from "@quiz/contracts";
 
 import { NotificationSettingsSection } from "./notifications/NotificationSettings";
-import { NOTICE_KINDS, notifyPrefs, setNotifyPref, useToast } from "./notify";
+import { useToast } from "./notify";
 import { meKey } from "./queryKeys";
 import { setThemeChoice, useThemeChoice } from "./theme";
 import {
@@ -177,40 +176,6 @@ function PreferencesCard({ me }: { me: Me }) {
   );
 }
 
-/**
- * Per-kind toggles for the real-time toasts; stored in this browser. Not the
- * notifications of the account (`NotificationSettingsSection`): a toast is
- * gone once read, and says what happens in this tab right now.
- */
-function ToastsCard() {
-  const { t } = useI18n();
-  const [prefs, setPrefs] = useState(notifyPrefs);
-  const toggle = (kind: NoticeKind, next: boolean) => {
-    setNotifyPref(kind, next);
-    setPrefs({ ...prefs, [kind]: next });
-  };
-  return (
-    <section className="space-y-3">
-      <SectionHeading
-        icon={MessageSquare}
-        title={t("settings.toasts")}
-        description={t("settings.notificationsBrowser")}
-      />
-      <Card className="divide-y divide-line px-5">
-        {NOTICE_KINDS.map((kind) => (
-          <SettingRow key={kind} title={t(`notify.${kind}` as Parameters<typeof t>[0])} className="py-2.5">
-            <Switch
-              checked={prefs[kind]}
-              onChange={(v) => toggle(kind, v)}
-              label={t(`notify.${kind}` as Parameters<typeof t>[0])}
-            />
-          </SettingRow>
-        ))}
-      </Card>
-    </section>
-  );
-}
-
 export function SettingsPage({ me }: { me: Me }) {
   const { t } = useI18n();
   const [editingAvatar, setEditingAvatar] = useState(false);
@@ -259,7 +224,6 @@ export function SettingsPage({ me }: { me: Me }) {
       <NotificationSettingsSection me={me} />
       {me.role === "student" ? null : (
         <>
-          <ToastsCard />
           <ConnectionsCard />
           <ApiTokensCard />
         </>

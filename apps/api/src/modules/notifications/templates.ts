@@ -30,6 +30,16 @@ const en = {
   "pool_ownership.subject": "You now own the pool {poolName}",
   "pool_ownership.body": "You are now the owner of the pool “{poolName}” (from {fromName}).",
   "pool_ownership.action": "Open the pool",
+  "student_joined.subject": "{count} students joined {classroomName}",
+  "student_joined.subject.one": "A student joined {classroomName}",
+  "student_joined.body": "{count} students took their seat in {classroomName}.",
+  "student_joined.body.one": "A student took their seat in {classroomName}.",
+  "student_joined.action": "Open the roster",
+  "roster_conflict.subject": "{count} roster entries of {classroomName} need your decision",
+  "roster_conflict.subject.one": "A roster entry of {classroomName} needs your decision",
+  "roster_conflict.body": "{count} entries of the roster of {classroomName} could not be matched to an account on their own and need your decision.",
+  "roster_conflict.body.one": "An entry of the roster of {classroomName} could not be matched to an account on its own and needs your decision.",
+  "roster_conflict.action": "Open the roster",
   "role.reader": "reader",
   "role.contributor": "contributor",
   "role.owner": "owner",
@@ -43,7 +53,7 @@ const en = {
   "app.name.full": "HEIG Quiz notifications",
   "app.description.short": "Your HEIG Quiz notifications, in your Teams activity feed.",
   "app.description.full":
-    "HEIG Quiz sends its notifications to your Teams activity feed: released results, pools shared with you. Open the app once and link it to your Quiz account, then choose in the platform's settings which notifications reach you in Teams.",
+    "HEIG Quiz sends its notifications to your Teams activity feed: released results, pools shared with you, news of your classrooms and your evaluations. Open the app once and link it to your Quiz account, then choose in the platform's settings which notifications reach you in Teams.",
   "app.tab.name": "Home",
   "activity.results_released.description": "The results of an evaluation you took are released",
   "activity.results_released.template": "Results available: {evaluationTitle}",
@@ -51,6 +61,25 @@ const en = {
   "activity.pool_shared.template": "{byName} shared the pool {poolName} with you",
   "activity.pool_ownership.description": "You become the owner of a pool",
   "activity.pool_ownership.template": "You now own the pool {poolName}",
+  "activity.student_joined.description": "Students join one of your classrooms",
+  "activity.student_joined.template": "New in {classroomName}: {count} student(s)",
+  "activity.roster_conflict.description": "Roster entries of one of your classrooms need your decision",
+  "activity.roster_conflict.template": "Roster of {classroomName}: {count} entry(ies) to decide",
+  // Declared ahead of the kinds that will use them (ADR-030 §f): the app is
+  // re-uploaded once for all of them. Their placeholders are the template
+  // parameters those kinds will carry.
+  "activity.grading_ready.description": "Automatic grading finished and proposals await your validation",
+  "activity.grading_ready.template": "Grading to validate: {evaluationTitle}",
+  "activity.pool_question_added.description": "A colleague publishes questions in a pool you share",
+  "activity.pool_question_added.template": "{poolName}: {count} new question(s)",
+  "activity.activity_scheduled.description": "Exercises are scheduled in your classroom",
+  "activity.activity_scheduled.template": "{classroomName}: {count} exercise(s) scheduled",
+  "activity.activity_available.description": "An exercise opens",
+  "activity.activity_available.template": "Exercise open: {evaluationTitle}",
+  "activity.deadline_approaching.description": "An evaluation you have not submitted closes within 24 hours",
+  "activity.deadline_approaching.template": "Closes within 24 hours: {evaluationTitle}",
+  "activity.results_updated.description": "Your grade of a released evaluation changes",
+  "activity.results_updated.template": "Results updated: {evaluationTitle}",
 } as const;
 
 type Key = keyof typeof en;
@@ -65,6 +94,16 @@ const fr: Record<Key, string> = {
   "pool_ownership.subject": "Vous êtes propriétaire de la banque {poolName}",
   "pool_ownership.body": "Vous êtes désormais propriétaire de la banque « {poolName} » (de {fromName}).",
   "pool_ownership.action": "Ouvrir la banque",
+  "student_joined.subject": "{count} étudiants ont rejoint {classroomName}",
+  "student_joined.subject.one": "Un étudiant a rejoint {classroomName}",
+  "student_joined.body": "{count} étudiants ont pris leur place dans {classroomName}.",
+  "student_joined.body.one": "Un étudiant a pris sa place dans {classroomName}.",
+  "student_joined.action": "Ouvrir la liste",
+  "roster_conflict.subject": "{count} entrées de la liste de {classroomName} demandent votre décision",
+  "roster_conflict.subject.one": "Une entrée de la liste de {classroomName} demande votre décision",
+  "roster_conflict.body": "{count} entrées de la liste de {classroomName} n'ont pas pu être rattachées d'elles-mêmes à un compte et demandent votre décision.",
+  "roster_conflict.body.one": "Une entrée de la liste de {classroomName} n'a pas pu être rattachée d'elle-même à un compte et demande votre décision.",
+  "roster_conflict.action": "Ouvrir la liste",
   "role.reader": "lecteur",
   "role.contributor": "contributeur",
   "role.owner": "propriétaire",
@@ -74,7 +113,7 @@ const fr: Record<Key, string> = {
   "app.name.full": "Notifications HEIG Quiz",
   "app.description.short": "Vos notifications HEIG Quiz, dans le flux d'activité de Teams.",
   "app.description.full":
-    "HEIG Quiz envoie ses notifications dans votre flux d'activité Teams : résultats publiés, banques partagées avec vous. Ouvrez l'application une fois et liez-la à votre compte Quiz, puis choisissez dans les réglages de la plateforme quelles notifications vous parviennent dans Teams.",
+    "HEIG Quiz envoie ses notifications dans votre flux d'activité Teams : résultats publiés, banques partagées avec vous, nouvelles de vos classes et de vos évaluations. Ouvrez l'application une fois et liez-la à votre compte Quiz, puis choisissez dans les réglages de la plateforme quelles notifications vous parviennent dans Teams.",
   "app.tab.name": "Accueil",
   "activity.results_released.description": "Les résultats d'une évaluation que vous avez passée sont publiés",
   "activity.results_released.template": "Résultats disponibles : {evaluationTitle}",
@@ -82,6 +121,22 @@ const fr: Record<Key, string> = {
   "activity.pool_shared.template": "{byName} a partagé la banque {poolName} avec vous",
   "activity.pool_ownership.description": "Vous devenez propriétaire d'une banque",
   "activity.pool_ownership.template": "Vous êtes propriétaire de la banque {poolName}",
+  "activity.student_joined.description": "Des étudiants rejoignent l'une de vos classes",
+  "activity.student_joined.template": "Nouveau dans {classroomName} : {count} étudiant(s)",
+  "activity.roster_conflict.description": "Des entrées de la liste d'une de vos classes demandent votre décision",
+  "activity.roster_conflict.template": "Liste de {classroomName} : {count} entrée(s) à trancher",
+  "activity.grading_ready.description": "La correction automatique est terminée et des propositions attendent votre validation",
+  "activity.grading_ready.template": "Correction à valider : {evaluationTitle}",
+  "activity.pool_question_added.description": "Un collègue publie des questions dans une banque que vous partagez",
+  "activity.pool_question_added.template": "{poolName} : {count} nouvelle(s) question(s)",
+  "activity.activity_scheduled.description": "Des exercices sont planifiés dans votre classe",
+  "activity.activity_scheduled.template": "{classroomName} : {count} exercice(s) planifié(s)",
+  "activity.activity_available.description": "Un exercice s'ouvre",
+  "activity.activity_available.template": "Exercice ouvert : {evaluationTitle}",
+  "activity.deadline_approaching.description": "Une évaluation que vous n'avez pas rendue se termine dans les 24 heures",
+  "activity.deadline_approaching.template": "Se termine dans les 24 heures : {evaluationTitle}",
+  "activity.results_updated.description": "Votre note d'une évaluation publiée change",
+  "activity.results_updated.template": "Résultats mis à jour : {evaluationTitle}",
 };
 
 const DICTS: Record<MailLocale, Record<Key, string>> = { en, fr };
@@ -129,7 +184,20 @@ function varsOf(payload: NotificationPayload, t: Record<Key, string>): Record<st
       return { poolName: payload.poolName, byName: payload.byName, role: t[`role.${payload.role}`] };
     case "pool_ownership":
       return { poolName: payload.poolName, fromName: payload.fromName };
+    case "student_joined":
+    case "roster_conflict":
+      return { classroomName: payload.classroomName, count: String(payload.count) };
   }
+}
+
+/**
+ * The key of a kind's subject or body: a kind that counts has a singular
+ * sentence of its own (`.one`), since "1 students" is not a sentence in
+ * either language.
+ */
+function sentenceKey(payload: NotificationPayload, part: "subject" | "body"): Key {
+  const one = "count" in payload && payload.count === 1 ? ".one" : "";
+  return `${payload.kind}.${part}${one}` as Key;
 }
 
 /**
@@ -143,6 +211,9 @@ export function notificationPath(payload: NotificationPayload): string {
     case "pool_shared":
     case "pool_ownership":
       return `/pools/${payload.poolId}`;
+    case "student_joined":
+    case "roster_conflict":
+      return `/classrooms/${payload.classroomId}?tab=roster`;
   }
 }
 
@@ -189,13 +260,13 @@ export function renderNotification(
   const link = `${base}${notificationPath(payload)}`;
   const settings = `${base}/settings`;
 
-  const subject = oneLine(fill(t[`${kind}.subject`], vars, plain));
-  const body = fill(t[`${kind}.body`], vars, plain);
+  const subject = oneLine(fill(t[sentenceKey(payload, "subject")], vars, plain));
+  const body = fill(t[sentenceKey(payload, "body")], vars, plain);
   const action = t[`${kind}.action`];
 
   const text = [body, "", `${action}: ${link}`, "", "--", `${t.footer} ${settings}`].join("\n");
 
-  const bodyHtml = fill(t[`${kind}.body`], vars, escapeHtml);
+  const bodyHtml = fill(t[sentenceKey(payload, "body")], vars, escapeHtml);
   const html = `<div style="font-family:system-ui,-apple-system,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#18181b">
   <p style="font-size:13px;font-weight:600;letter-spacing:.02em;color:#71717a;margin:0 0 16px">HEIG Quiz</p>
   <p style="font-size:15px;line-height:1.6;margin:0 0 20px">${bodyHtml}</p>
@@ -203,7 +274,8 @@ export function renderNotification(
   <p style="font-size:12px;line-height:1.5;color:#71717a;border-top:1px solid #e4e4e7;padding-top:12px;margin:0">${escapeHtml(t.footer)} <a href="${escapeHtml(settings)}" style="color:#71717a">${escapeHtml(t["footer.link"])}</a></p>
 </div>`;
 
-  const topic = teamsLine(vars.evaluationTitle ?? vars.poolName ?? "") || t["app.name.short"];
+  const topic =
+    teamsLine(vars.evaluationTitle ?? vars.poolName ?? vars.classroomName ?? "") || t["app.name.short"];
   const preview = teamsLine(body);
 
   return { subject, text, html, topic, preview };

@@ -36,7 +36,6 @@ import {
   publishClose,
   publishData,
   type Audience,
-  type AppNotice,
   type EventType,
 } from "../../events.js";
 import { Coalescer } from "./coalesce.js";
@@ -80,8 +79,8 @@ export function emit(event: ServerEvent, topics: Topic[], audience: Audience = "
  * The inherited refresh hint, for everything that is not the live path.
  * `except` names a user whose streams skip it.
  */
-export function hint(type: EventType, topics: Topic[], notice?: AppNotice, except?: string): void {
-  publishHint(type, topics, notice, except);
+export function hint(type: EventType, topics: Topic[], except?: string): void {
+  publishHint(type, topics, except);
 }
 
 /**
@@ -97,49 +96,25 @@ export function accessRevoked(userIds: readonly (string | null | undefined)[]): 
 
 /**
  * A student took their seat in a classroom (join code, or a roster line
- * claimed at login). The name is personal data: the notice goes to the
- * course's staff only — `course:` is a topic no student connection holds —
- * never on `classroom:`, where every classmate listens (#198). The joiner
- * gets a bare refresh hint on their own topic, for their list of classrooms.
+ * claimed at login): the roster screens of the course's staff refresh —
+ * `course:` is a topic no student connection holds, never `classroom:`,
+ * where every classmate listens (#198) — and the joiner's own list of
+ * classrooms. A bare hint: what the staff are TOLD is a `student_joined`
+ * notification (`org/roster.ts`, ADR-030 addendum).
  */
-export function studentJoined(input: {
-  courseId: string;
-  classroomName: string;
-  userId: string;
-  name: string;
-}): void {
-  hint("roster", [`course:${input.courseId}`], {
-    kind: "student_joined",
-    name: input.name,
-    classroomName: input.classroomName,
-  });
+export function studentJoined(input: { courseId: string; userId: string }): void {
+  hint("roster", [`course:${input.courseId}`]);
   hint("roster", [userTopic(input.userId)]);
 }
 
 /**
- * One claim pass flagged roster lines of a classroom (AU-21): ONE notice per
- * classroom and per pass, with the count, no name and no address (#198). To
- * the course's staff, never to the person whose action raised it — a
- * teacher's own import does not tell them what the roster already shows.
+ * One claim pass flagged roster lines (AU-21): the roster screens of the
+ * course's staff refresh, except the stream of the person whose action
+ * raised it — it refreshes from its own request. The staff are told by a
+ * `roster_conflict` notification (`org/roster.ts`).
  */
-export function rosterConflict(input: {
-  courseId: string;
-  classroomId: string;
-  classroomName: string;
-  count: number;
-  actorId: string;
-}): void {
-  hint(
-    "roster",
-    [`course:${input.courseId}`],
-    {
-      kind: "roster_conflict",
-      classroomId: input.classroomId,
-      classroomName: input.classroomName,
-      count: input.count,
-    },
-    input.actorId,
-  );
+export function rosterConflict(input: { courseId: string; actorId: string }): void {
+  hint("roster", [`course:${input.courseId}`], input.actorId);
 }
 
 const cells = new Coalescer<DashboardCellEvent>(CELL_WINDOW_MS, (event) =>

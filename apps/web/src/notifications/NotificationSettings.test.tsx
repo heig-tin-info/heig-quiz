@@ -25,7 +25,13 @@ const LINKED = {
 
 function settings(teams: NotificationSettings["teams"]): NotificationSettings {
   return {
-    matrix: { results_released: ALL_ON, pool_shared: { ...ALL_ON, email: false }, pool_ownership: ALL_ON },
+    matrix: {
+      results_released: ALL_ON,
+      pool_shared: { ...ALL_ON, email: false },
+      pool_ownership: ALL_ON,
+      student_joined: { bell: true, email: false, teams: false },
+      roster_conflict: ALL_ON,
+    },
     email: "lea@heig.test",
     teams,
   };
@@ -56,7 +62,7 @@ describe("the notification settings", () => {
     renderWithProviders(<SettingsPage me={makeMe({ role: "teacher" })} />);
 
     const grid = await screen.findByRole("table", { name: "Notifications" });
-    expect(within(grid).getAllByRole("rowheader")).toHaveLength(3);
+    expect(within(grid).getAllByRole("rowheader")).toHaveLength(5);
     const shared = within(grid).getByRole("switch", { name: "Pool shared with you: Email" });
     expect(shared).toHaveAttribute("aria-checked", "false");
     await user.click(shared);
@@ -99,6 +105,34 @@ describe("the notification settings", () => {
     await user.click(screen.getByRole("button", { name: "Disconnect" }));
     await waitFor(() => expect(calls.some((c) => c.method === "DELETE")).toBe(true));
     expect(await screen.findByRole("link", { name: "Download the Teams app" })).toBeVisible();
+  });
+
+  /*
+   * #198: ONE place for everything a user is told. The App channel is the
+   * bell and the toast; the per-browser "Pop-up alerts" card is gone, and
+   * the two kinds it held are rows of the grid, with their own defaults.
+   */
+  it("lists App, Email and Teams, the roster kinds as rows, and no pop-up alerts card", async () => {
+    mockFetch({ [GET]: ok(settings(LINKED)) });
+    renderWithProviders(<SettingsPage me={makeMe({ role: "teacher" })} />);
+    const grid = await screen.findByRole("table", { name: "Notifications" });
+    expect(within(grid).getAllByRole("columnheader").map((h) => h.textContent)).toEqual([
+      "Notifications",
+      "App",
+      "Email",
+      "Teams",
+    ]);
+    const joined = (channel: string) =>
+      within(grid).getByRole("switch", { name: `Student joined: ${channel}` });
+    expect(joined("App")).toHaveAttribute("aria-checked", "true");
+    expect(joined("Email")).toHaveAttribute("aria-checked", "false");
+    expect(joined("Teams")).toHaveAttribute("aria-checked", "false");
+    expect(within(grid).getByRole("switch", { name: "Roster entry to decide: Email" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    expect(screen.queryByText(/pop-up alerts/i)).toBeNull();
+    expect(screen.queryByText(/this browser only/i)).toBeNull();
   });
 
   it("offers a retry when the settings cannot be read", async () => {

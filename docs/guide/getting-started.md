@@ -77,7 +77,7 @@ The topics are short and describe one screen each. This guide is the longer vers
 
 ## Notifications
 
-The bell beside the account row collects what happened to you while you were elsewhere. Today two things arrive there: a colleague shared a pool with you, naming the role they gave you; and the ownership of a pool was transferred to you. An unread count sits on the bell, **Mark all as read** clears it, and a notification is a link to the pool it talks about.
+The bell beside the account row collects what happened to you while you were elsewhere: a colleague shared a pool with you, naming the role they gave you; the ownership of a pool was transferred to you; students joined one of your classrooms; roster entries need your decision. Events of one classroom are counted in one entry ("3 students joined PRG1-2026") until you read it. An unread count sits on the bell, **Mark all as read** clears it, and a notification is a link to the pool or the roster it talks about.
 
 <figure markdown="span">
   ![The notifications panel](../assets/screenshots/notifications-light.png#only-light)
@@ -85,7 +85,7 @@ The bell beside the account row collects what happened to you while you were els
   <figcaption>The notifications panel, here with nothing new.</figcaption>
 </figure>
 
-Two other events are not stored but shown as a brief toast in the corner while you are signed in: a student joining a classroom, and a roster entry that needs your attention. Both can be switched off in the settings.
+A notification that arrives while the platform is open also shows as a brief toast in the corner, except on a full-screen page (an exam, a projection) and on the live dashboard, which may be on a beamer. The bell still counts it.
 
 ## Settings
 
@@ -99,10 +99,10 @@ Two other events are not stored but shown as a brief toast in the corner while y
 <figure markdown="span">
   ![The settings page](../assets/screenshots/settings-light.png#only-light)
   ![The settings page](../assets/screenshots/settings-dark.png#only-dark)
-  <figcaption>Settings: profile, language, appearance, date format, the default scoring policy and the toast switches.</figcaption>
+  <figcaption>Settings: profile, language, appearance, date format, the default scoring policy and where each notification reaches you.</figcaption>
 </figure>
 
-The **Notifications** card holds one switch per toast kind. These switches are stored in the browser you are using, not on your account.
+The **Notifications** card is a grid of the kinds you receive against three channels: **App** (the bell and its toast), **Email** and **Teams**. The switches are stored on your account. A student joining is in the app only by default; a roster entry to decide also goes by e-mail and Teams.
 
 ## Keyboard shortcuts
 

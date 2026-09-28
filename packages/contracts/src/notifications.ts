@@ -1,44 +1,29 @@
 /**
- * Notification catalogue shared by the API (emitters) and the web app
- * (toasts). One definition: adding a kind on one side without the other is
- * a compile error.
+ * Notification catalogue shared by the API (emitters) and the web app (the
+ * bell and its toasts). One definition: adding a kind on one side without
+ * the other is a compile error.
  */
 
 import { z } from "zod";
 
 /**
- * What a hint's notice carries: facts, never a sentence. The web app renders
- * the sentence through `t()` in the reader's language (N-I18N-01). Both kinds
- * go to the course's staff only (#198).
+ * Persistent, per-account notifications (the App channel: the bell, and a
+ * toast in every open tab when one arrives — ADR-030, addendum §a): stored
+ * by the API, listed and marked read over HTTP, refreshed through a
+ * `notifications` hint on the user's own topic.
  */
-export const AppNotice = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal("student_joined"),
-    /** The joiner, as displayed on the roster. */
-    name: z.string(),
-    classroomName: z.string(),
-  }),
-  z.object({
-    /**
-     * Roster lines of one classroom were flagged in one claim pass (AU-21):
-     * a count, no name and no address — the roster itself says which.
-     */
-    kind: z.literal("roster_conflict"),
-    classroomId: z.uuid(),
-    classroomName: z.string(),
-    count: z.number().int().positive(),
-  }),
-]);
-export type AppNotice = z.infer<typeof AppNotice>;
-
-/** Real-time toast kinds carried by SSE notices: the union above is the source. */
-export type NoticeKind = AppNotice["kind"];
 
 /**
- * Persistent, per-account notifications (the bell): stored by the API,
- * listed and marked read over HTTP, refreshed through a `notifications`
- * hint on the user's own topic. Unlike a toast, one survives a reload.
+ * The payload of the kinds folded per classroom (ADR-030 §e): a count, no
+ * name and no address — once folded the names are lost anyway, and the bell
+ * opens the roster, where they are.
  */
+const classroomCount = {
+  classroomId: z.uuid(),
+  classroomName: z.string(),
+  count: z.number().int().positive(),
+};
+
 /** What each kind carries; the web app renders the sentence from it. */
 export const NotificationPayload = z.discriminatedUnion("kind", [
   z.object({
@@ -69,6 +54,10 @@ export const NotificationPayload = z.discriminatedUnion("kind", [
     /** The attempt that counts, whose feedback page the notification opens. */
     attemptId: z.uuid(),
   }),
+  /** Students took their seat in a classroom (join code, or a roster claim). */
+  z.object({ kind: z.literal("student_joined"), ...classroomCount }),
+  /** Roster lines of a classroom were flagged for the teacher's decision (AU-21). */
+  z.object({ kind: z.literal("roster_conflict"), ...classroomCount }),
 ]);
 export type NotificationPayload = z.infer<typeof NotificationPayload>;
 
@@ -96,12 +85,19 @@ export type NotificationQuery = z.infer<typeof NotificationQuery>;
 // --- Delivery channels and preferences (ADR-030) ---------------------------
 
 /** Every kind of persistent notification, in the order the settings list them. */
-export const NOTIFICATION_KINDS = ["results_released", "pool_shared", "pool_ownership"] as const;
+export const NOTIFICATION_KINDS = [
+  "results_released",
+  "student_joined",
+  "roster_conflict",
+  "pool_shared",
+  "pool_ownership",
+] as const;
 export const NotificationKind = z.enum(NOTIFICATION_KINDS);
 export type NotificationKind = z.infer<typeof NotificationKind>;
 
 /**
- * Where one notification may go: the bell (the inbox of the app), an e-mail
+ * Where one notification may go: the app (`bell`: the inbox, plus a toast in
+ * every open tab as it arrives), an e-mail
  * to the account's address, a Microsoft Teams chat message once the account
  * has linked Teams.
  */
@@ -121,6 +117,8 @@ export const DEFAULT_CHANNEL_ENABLED: Readonly<
   Record<NotificationKind, Readonly<Record<NotificationChannel, boolean>>>
 > = {
   results_released: { bell: true, email: true, teams: true },
+  student_joined: { bell: true, email: false, teams: false },
+  roster_conflict: { bell: true, email: true, teams: true },
   pool_shared: { bell: true, email: true, teams: true },
   pool_ownership: { bell: true, email: true, teams: true },
 };

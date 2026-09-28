@@ -12,6 +12,7 @@ import { describe, expect, it, vi } from "vitest";
 import { NOTIFICATION_KINDS, type NotificationPayload } from "@quiz/contracts";
 
 import {
+  TEAMS_ACTIVITY_KINDS,
   TEAMS_ACTIVITY_TYPES,
   TEAMS_APP_VERSION,
   teamsActivity,
@@ -34,6 +35,7 @@ const APP_ID = "31583357-0d89-48ab-8eeb-e9bc49f9e243";
 const OPTS = { appId: APP_ID, publicUrl: "https://quiz.chevallier.io" };
 const POOL = "11111111-1111-4111-8111-111111111111";
 const ATTEMPT = "33333333-3333-4333-8333-333333333333";
+const CLASSROOM = "44444444-4444-4444-8444-444444444444";
 
 const PAYLOADS: NotificationPayload[] = [
   {
@@ -44,6 +46,8 @@ const PAYLOADS: NotificationPayload[] = [
   },
   { kind: "pool_shared", poolId: POOL, poolName: "Programmation C", role: "reader", byName: "Ada Lovelace" },
   { kind: "pool_ownership", poolId: POOL, poolName: "Électronique", fromName: "Grace Hopper" },
+  { kind: "student_joined", classroomId: CLASSROOM, classroomName: "PRG1-2026", count: 3 },
+  { kind: "roster_conflict", classroomId: CLASSROOM, classroomName: "PRG1-2026", count: 1 },
 ];
 
 function unpack() {
@@ -89,10 +93,27 @@ describe("the Teams app package", () => {
     expect(pngSize(files["outline.png"]!)).toEqual([32, 32]);
   });
 
-  it("declares one activity type per kind of notification, in the kinds' order", () => {
+  it("declares an activity type for every kind of the catalogue, and the ones to come (ADR-030 §f)", () => {
     const { manifest } = unpack();
     const types = manifest.activities.activityTypes as { type: string; description: string; templateText: string }[];
-    expect(types.map((a) => a.type)).toEqual(NOTIFICATION_KINDS.map((k) => TEAMS_ACTIVITY_TYPES[k]));
+    expect(types.map((a) => a.type)).toEqual(TEAMS_ACTIVITY_KINDS.map((k) => TEAMS_ACTIVITY_TYPES[k]));
+    // The list runs ahead of the catalogue, never behind it.
+    for (const kind of NOTIFICATION_KINDS) expect(TEAMS_ACTIVITY_KINDS, kind).toContain(kind);
+    // The one bump of #198 step 4: every kind of steps 4 to 8 is declared.
+    expect(TEAMS_ACTIVITY_KINDS).toEqual(
+      expect.arrayContaining([
+        "student_joined",
+        "roster_conflict",
+        "grading_ready",
+        "pool_question_added",
+        "activity_scheduled",
+        "activity_available",
+        "deadline_approaching",
+        "results_updated",
+      ]),
+    );
+    expect(TEAMS_APP_VERSION).toBe("2.1.0");
+    expect(new Set(types.map((a) => a.type)).size).toBe(types.length);
     for (const a of types) {
       expect(a.type).toMatch(/^[a-z][A-Za-z]+$/);
       expect(a.description.length).toBeLessThanOrEqual(128);
@@ -121,7 +142,7 @@ describe("the Teams app package", () => {
   });
 
   it("uses the same template parameters in both languages", () => {
-    for (const kind of NOTIFICATION_KINDS) {
+    for (const kind of TEAMS_ACTIVITY_KINDS) {
       const key = `activity.${kind}.template` as const;
       expect(placeholders(serverText("fr")[key]).sort(), kind).toEqual(placeholders(serverText("en")[key]).sort());
     }

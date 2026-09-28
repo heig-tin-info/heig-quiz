@@ -8,6 +8,7 @@
  * of `events.ts`. The stream only carries a `notifications` hint, and the
  * client re-reads its own inbox (ADR-005).
  */
+import { sql } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -24,6 +25,7 @@ import { NOTIFICATION_CHANNELS, NOTIFICATION_KINDS } from "@quiz/contracts";
 
 import { users } from "./auth.js";
 import { evaluations } from "./evaluation.js";
+import { classrooms } from "./org.js";
 import { pools } from "./pool.js";
 
 /**
@@ -35,6 +37,13 @@ import { pools } from "./pool.js";
  * `pool_id` is the payload's `poolId`, lifted into a column so the relation
  * is a foreign key: deleting a pool deletes the bells that point at it, and
  * no reader is ever walked to a 404. Null for a kind that names no pool.
+ *
+ * A FOLDED kind (ADR-030 §e) keeps ONE unread row per recipient and target:
+ * the next event bumps its count and refreshes `created_at` instead of
+ * writing a row. The guard is one partial unique index per folded kind
+ * (the target column is nullable, and a plain unique index treats two NULLs
+ * as distinct), which the fold's `INSERT … ON CONFLICT` names by its
+ * columns and predicate (`FOLD_TARGETS`, `service.ts`).
  */
 export const notifications = pgTable(
   "notifications",
@@ -47,6 +56,8 @@ export const notifications = pgTable(
     poolId: uuid("pool_id").references(() => pools.id, { onDelete: "cascade" }),
     /** Same rule for a kind about an evaluation (`results_released`). */
     evaluationId: uuid("evaluation_id").references(() => evaluations.id, { onDelete: "cascade" }),
+    /** Same rule for a kind about a classroom (`student_joined`, `roster_conflict`). */
+    classroomId: uuid("classroom_id").references(() => classrooms.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     /** null = unread; the count of the bell is a count of nulls. */
     readAt: timestamp("read_at", { withTimezone: true }),
@@ -55,6 +66,13 @@ export const notifications = pgTable(
     index("notifications_user_idx").on(t.userId, t.readAt),
     index("notifications_pool_idx").on(t.poolId),
     index("notifications_evaluation_idx").on(t.evaluationId),
+    index("notifications_classroom_idx").on(t.classroomId),
+    uniqueIndex("notifications_student_joined_fold_uq")
+      .on(t.userId, t.classroomId)
+      .where(sql`${t.payload}->>'kind' = 'student_joined' and ${t.readAt} is null`),
+    uniqueIndex("notifications_roster_conflict_fold_uq")
+      .on(t.userId, t.classroomId)
+      .where(sql`${t.payload}->>'kind' = 'roster_conflict' and ${t.readAt} is null`),
   ],
 );
 

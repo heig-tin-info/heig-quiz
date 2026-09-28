@@ -74,6 +74,7 @@ import type {
 import {
   FLAG_NAMES,
   MockError,
+  params,
   MockPayload,
   MockValidation,
   flags,
@@ -84,7 +85,7 @@ import {
 } from "./runtime";
 import "./session";
 import "./org";
-import "./pool";
+import { arriveNotification } from "./pool";
 import {
   dashboardView,
   evaluations,
@@ -185,9 +186,10 @@ window.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Res
 // because the browser has one too: `realtime/useEventStream` shares a single
 // socket between the shell and whichever screen is watching something.
 //
-//   - no `watch`    the shell's hint stream. The mock never sends a hint —
-//                   every mutation here mutates the store synchronously, so
-//                   there is nothing to re-fetch — but it does send the
+//   - no `watch`    the shell's hint stream. The mock sends no hint — every
+//                   mutation here mutates the store synchronously, so there
+//                   is nothing to re-fetch — except the `notifications` one
+//                   of `?notify=1` (a notification arriving); it does send the
 //                   `clock`, because thirty seconds without one is how the
 //                   client decides a socket is dead and reopens it;
 //   - `evaluation:` the teacher's dashboard (section 3): a `snapshot` seeding
@@ -267,7 +269,16 @@ class MockEventSource {
     const tick = () => this.emit({ type: "clock", serverNow: new Date().toISOString() });
     tick();
     this.every(beat, tick);
-    if (watch === null) return;
+    if (watch === null) {
+      // `?notify=1`: a notification arrives, as a hint and nothing more (ADR-005).
+      if (params.get("notify") === "1") {
+        this.after(1_500, () => {
+          arriveNotification();
+          this.onmessage?.(new MessageEvent("message", { data: JSON.stringify({ type: "hint", kinds: ["notifications"] }) }));
+        });
+      }
+      return;
+    }
     const id = watch.slice(watch.indexOf(":") + 1);
     if (watch.startsWith("attempt:") || id === STUDENT_EVAL) {
       this.student(watch);

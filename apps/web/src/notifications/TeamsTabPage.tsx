@@ -35,10 +35,15 @@ export function TeamsTabPage({ connect = connectTeams }: { connect?: () => Promi
  * the app bar. The `subEntityId` is never followed as given: it is parsed
  * into a route of the router (anything unknown is the home) and the path is
  * written back from that route, to be opened under the page's own origin —
- * so a crafted deep link cannot become an open redirect.
+ * so a crafted deep link cannot become an open redirect. Its query string
+ * (the roster tab of a classroom, `?tab=roster`) is re-encoded and kept: a
+ * query cannot change the origin.
  */
 export function tabTargetPath(subPageId: string | undefined): string | null {
-  return subPageId ? routeToPath(parsePath(subPageId)) : null;
+  if (!subPageId) return null;
+  const [path = "", query = ""] = subPageId.split("?", 2);
+  const search = new URLSearchParams(query).toString();
+  return routeToPath(parsePath(path)) + (search ? `?${search}` : "");
 }
 
 /** Why the tab could not ask the server: Teams gave no token, or the server refused. */

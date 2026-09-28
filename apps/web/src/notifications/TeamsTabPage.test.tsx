@@ -107,6 +107,8 @@ describe("the target of a notification", () => {
     expect(tabTargetPath(`/attempts/${ATTEMPT}/feedback`)).toBe(`/attempts/${ATTEMPT}/feedback`);
     const pool = "11111111-1111-4111-8111-111111111111";
     expect(tabTargetPath(`/pools/${pool}`)).toBe(`/pools/${pool}`);
+    // The roster of a classroom (`student_joined`, `roster_conflict`) keeps its tab.
+    expect(tabTargetPath(`/classrooms/${pool}?tab=roster`)).toBe(`/classrooms/${pool}?tab=roster`);
     expect(tabTargetPath(undefined)).toBeNull();
     expect(tabTargetPath("")).toBeNull();
   });
