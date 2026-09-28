@@ -23,7 +23,6 @@ import {
   ParentLink,
   Switch,
   useFullscreen,
-  useNow,
 } from "../ui";
 import { anonymousNumbers } from "./cells";
 import { InspectModal } from "./InspectModal";
@@ -65,10 +64,10 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   );
 
   const { query, clock, connected } = useDashboard(id, toggles.answers, toggles.results);
-  // One tick a second drives every countdown on the page; the clock itself is
-  // the server's, so they all agree (DESIGN.md, Countdown).
-  useNow(1000);
-  const now = clock.now();
+  // The server's time, as a stable function: every countdown on the page
+  // re-reads it on the one shared tick of `useNow`, so they all agree
+  // (DESIGN.md, Countdown) and the page itself does not re-render per second.
+  const serverNow = clock.now;
 
   // The title and the classroom are the evaluation's, not the grid's read
   // model — one extra cached request, shared with the configuration screen.
@@ -195,6 +194,26 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
     setSelected({ attemptId: row.attemptId, seatId: row.seatId, itemId });
   }, []);
 
+  // The row actions, stable: the grid's rows are memoised, and a callback
+  // rebuilt on every render would re-render all of them.
+  const mutateControl = control.mutate;
+  const extendRow = useCallback(
+    (row: DashboardRow) =>
+      mutateControl({
+        path: "extend",
+        body: { minutes: 5, scope: "attempt", attemptId: row.attemptId },
+      }),
+    [mutateControl],
+  );
+  const closeRow = useCallback(
+    (row: DashboardRow) => confirmAttempt(row, "close", nameOf(row)),
+    [confirmAttempt, nameOf],
+  );
+  const reopenRow = useCallback(
+    (row: DashboardRow) => confirmAttempt(row, "reopen", nameOf(row)),
+    [confirmAttempt, nameOf],
+  );
+
   useLiveCommands({ t, state: evaluationState, controls, navigate, id });
 
   useEffect(() => {
@@ -277,7 +296,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
         }
         state={evaluationState}
         closesAt={view.evaluation.closesAt}
-        now={now}
+        clock={serverNow}
         controls={controls}
         fullscreen={fullscreen}
         onToggleFullscreen={toggleFullscreen}
@@ -324,21 +343,16 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
           <Card className="min-w-0 overflow-hidden">
             <StudentGrid
               state={state}
-              now={now}
+              clock={serverNow}
               paused={evaluationState === "paused"}
               nameOf={nameOf}
               showAnswers={toggles.answers}
               showResults={toggles.results}
               selected={selected}
               onInspect={selectCell}
-              onExtend={(row) =>
-                control.mutate({
-                  path: "extend",
-                  body: { minutes: 5, scope: "attempt", attemptId: row.attemptId },
-                })
-              }
-              onClose={(row) => confirmAttempt(row, "close", nameOf(row))}
-              onReopen={(row) => confirmAttempt(row, "reopen", nameOf(row))}
+              onExtend={extendRow}
+              onClose={closeRow}
+              onReopen={reopenRow}
             />
           </Card>
           {selectedRow && selected ? (

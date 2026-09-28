@@ -4,7 +4,8 @@ import type { EvaluationState } from "@quiz/contracts";
 
 import { evaluationStateLabel, isGraded, stateTone } from "../evaluation/common";
 import { useT } from "../i18n";
-import { Badge, Button, Countdown, IconButton, Menu, PageHeader } from "../ui";
+import { Badge, Button, IconButton, Menu, PageHeader } from "../ui";
+import { ClockCountdown } from "./ClockCountdown";
 
 /**
  * The band a teacher watches from the back of the room: where we are, how
@@ -41,7 +42,7 @@ export function LiveHeader({
   eyebrow,
   state,
   closesAt,
-  now,
+  clock,
   controls,
   fullscreen,
   onToggleFullscreen,
@@ -51,8 +52,8 @@ export function LiveHeader({
   eyebrow?: React.ReactNode;
   state: EvaluationState;
   closesAt: string | null;
-  /** Server time in epoch ms. */
-  now: number;
+  /** Server time, stable; the countdown re-reads it on its own tick. */
+  clock: () => number;
   controls: LiveControls;
   fullscreen: boolean;
   onToggleFullscreen: () => void;
@@ -79,9 +80,9 @@ export function LiveHeader({
         <span className="flex flex-wrap items-center gap-3">
           <Badge tone={stateTone(state)}>{evaluationStateLabel(state, t)}</Badge>
           {closesAt && live ? (
-            <Countdown
+            <ClockCountdown
               deadlineAt={Date.parse(closesAt)}
-              now={now}
+              clock={clock}
               paused={paused}
               className="text-[20px]"
             />

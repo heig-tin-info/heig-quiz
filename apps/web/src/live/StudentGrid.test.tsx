@@ -45,7 +45,7 @@ function setup(view: DashboardView, over: Partial<Parameters<typeof StudentGrid>
   const rendered = renderWithProviders(
     <StudentGrid
       state={initialGrid(view)}
-      now={NOW}
+      clock={() => NOW}
       paused={view.evaluation.state === "paused"}
       nameOf={(row) => row.displayName}
       showAnswers
