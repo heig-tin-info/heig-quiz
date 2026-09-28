@@ -51,11 +51,10 @@ export function ClosedScreen({
   title: string;
   onHome: () => void;
   /**
-   * WP10: where the student's own feedback lives. Absent for a teacher
-   * preview, which has no attempt to show. It is offered even before the
-   * grades are out: the page asks the server, which answers `available:
-   * false` with a reason, and that reading is the reassurance the student
-   * came for.
+   * WP10: where the student's own feedback lives. Given only when that page
+   * has something to show (issue #203) — the body already says the result
+   * comes once released, so a page repeating it is a detour. Without it,
+   * Back to home is the one primary action.
    */
   onResults?: () => void;
 }) {

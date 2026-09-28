@@ -72,7 +72,7 @@ if (typeof window.fetch !== "function") {
 
 await import("./index");
 const { routes } = await import("./runtime");
-const { STUDENT_RETAKE_ATTEMPT } = await import("./student");
+const { STUDENT_ATTEMPT, STUDENT_RETAKE_ATTEMPT } = await import("./student");
 
 interface Issue {
   code: string;
@@ -323,6 +323,12 @@ const CHECKED: Case[] = [
   one(
     `/app/api/attempts/${STUDENT_RETAKE_ATTEMPT}/feedback`,
     `/app/api/attempts/${STUDENT_RETAKE_ATTEMPT}/feedback`,
+    StudentFeedback,
+  ),
+  // Issue #203: the player's attempt, not released — the Handed-in screen asks.
+  one(
+    `/app/api/attempts/${STUDENT_ATTEMPT}/feedback`,
+    `/app/api/attempts/${STUDENT_ATTEMPT}/feedback`,
     StudentFeedback,
   ),
 ];

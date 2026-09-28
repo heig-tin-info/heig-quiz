@@ -398,6 +398,13 @@ export const EvaluationCard = z.object({
   grade: z.number().nullable(),
   /** F-EVAL-15: set only on an exercise that allows several attempts. */
   retakes: CardRetakes.nullable(),
+  /**
+   * Issue #203: whether the feedback page of the attempt that counts (the
+   * kept one with retakes) answers `available: true` right now — the server's
+   * feedback policy, evaluated for this student. The card offers "See my
+   * results" only then.
+   */
+  resultsAvailable: z.boolean(),
   /** ADR-027: sat in Safe Exam Browser only; the card downloads the `.seb` instead of opening. */
   safeExamBrowser: z.boolean().optional(),
 });

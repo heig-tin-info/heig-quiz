@@ -329,6 +329,9 @@ const scenes = [
   { name: "player-codeimage-diff", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 6); await p.getByRole("button", { name: /^(run|exécuter)$/i }).click(); await p.getByText(/pixels (correct|corrects)/).waitFor(); await p.getByRole("radio", { name: /^(difference|différence)$/i }).check({ force: true }); } },
   { name: "player-codeimage-single", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 6); await p.getByRole("button", { name: /^(run|exécuter)$/i }).click(); await p.getByText(/pixels (correct|corrects)/).waitFor(); await p.getByRole("radio", { name: /^(single|seule)$/i }).check({ force: true }); await p.getByRole("radio", { name: /^(difference|différence)$/i }).check({ force: true }); } },
   { name: "player-submit", role: "student", path: `${TAKE}?scene=running`, fold: true, act: (p) => p.getByRole("button", { name: /hand in/i }).first().click() },
+  // Issue #203: the Handed-in screen of an `on_release` exam — Back to home
+  // alone, since the results page would only say "not published yet".
+  { name: "player-handed-in", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await p.getByRole("button", { name: /hand in/i }).first().click(); await p.getByRole("dialog").getByRole("button", { name: /hand in/i }).click(); await p.getByRole("heading", { name: /handed in/i }).waitFor(); } },
   // A ONE-question evaluation: no progress strip and no previous / next,
   // and, once the question holds an answer, "Hand in" takes the accent
   // (issue #89: answered with no click). "Clear my selection" takes it back.

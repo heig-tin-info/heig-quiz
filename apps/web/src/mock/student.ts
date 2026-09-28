@@ -66,6 +66,9 @@ export const STUDENT_PAST_ATTEMPT = "22222222-2222-4222-8222-222222222223";
 /** F-EVAL-15: an exercise the student already sat twice and may sit again. */
 export const STUDENT_EVAL_RETAKE = "11111111-1111-4111-8111-111111111114";
 export const STUDENT_RETAKE_ATTEMPT = "22222222-2222-4222-8222-222222222224";
+/** Issue #203: a quiz handed in while it still runs, results not out yet. */
+const STUDENT_EVAL_HANDED_IN = "11111111-1111-4111-8111-111111111115";
+const STUDENT_HANDED_IN_ATTEMPT = "22222222-2222-4222-8222-222222222225";
 const studentItem = (n: number) => `aaaaaaaa-0000-4000-8000-00000000000${n}`;
 
 /** The evaluation's state follows the scene; everything else is fixed. */
@@ -409,6 +412,7 @@ on("GET", "/app/api/student/home", (): StudentHomeData => {
         grade: null,
         deadlineAt: scene === "lobby" ? null : new Date(studentDeadline).toISOString(),
         retakes: null,
+        resultsAvailable: false,
       },
       {
         id: STUDENT_EVAL_RETAKE,
@@ -435,6 +439,8 @@ on("GET", "/app/api/student/home", (): StudentHomeData => {
             score: { points: 7.5, totalPoints: 10, pending: false },
           },
         },
+        // Between two attempts the page is score only (ADR-025).
+        resultsAvailable: false,
       },
     ],
     upcoming: [
@@ -453,9 +459,29 @@ on("GET", "/app/api/student/home", (): StudentHomeData => {
         grade: null,
         deadlineAt: null,
         retakes: null,
+        resultsAvailable: false,
       },
     ],
     past: [
+      // Issue #203: handed in, the quiz still running, `on_release`. Past for
+      // the student (nothing left to do), and no button: nothing to read yet.
+      {
+        id: STUDENT_EVAL_HANDED_IN,
+        title: "Quiz 3bis — Allocation dynamique",
+        mode: "exam",
+        state: "running",
+        ...room,
+        opensAt: iso(-40 * 60_000),
+        closesAt: iso(20 * 60_000),
+        durationS: 30 * 60,
+        attemptId: STUDENT_HANDED_IN_ATTEMPT,
+        attemptState: "submitted",
+        attemptStartedAt: iso(-35 * 60_000),
+        grade: null,
+        deadlineAt: iso(-5 * 60_000),
+        retakes: null,
+        resultsAvailable: false,
+      },
       {
         id: STUDENT_EVAL_PAST,
         title: "Quiz 2 — Tableaux et chaînes",
@@ -471,6 +497,7 @@ on("GET", "/app/api/student/home", (): StudentHomeData => {
         grade: null,
         deadlineAt: null,
         retakes: null,
+        resultsAvailable: true,
       },
     ],
     serverNow: new Date().toISOString(),
@@ -498,6 +525,14 @@ on("GET", `/app/api/attempts/${STUDENT_RETAKE_ATTEMPT}/feedback`, () => ({
     attemptCount: 2,
     refusal: null,
   },
+}));
+
+// Issue #203: the player's own attempt is `on_release` and never released in
+// the mock, so the Handed-in screen offers Back to home alone.
+on("GET", `/app/api/attempts/${STUDENT_ATTEMPT}/feedback`, () => ({
+  available: false,
+  reason: "results_pending",
+  evaluation: { id: STUDENT_EVAL, title: "Quiz 3 — Pointeurs et lois fondamentales" },
 }));
 
 on("POST", "/app/api/evaluations/:id/attempt", () =>

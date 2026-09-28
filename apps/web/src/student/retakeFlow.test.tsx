@@ -15,6 +15,7 @@ import type {
 import { attemptEntryKey, attemptKey } from "../queryKeys";
 import type { Route } from "../router";
 import { makeQueryClient, mockFetch, noContent, ok, renderWithProviders } from "../test/render";
+import { buttonClass } from "../ui";
 import { AttemptPage } from "./Attempt";
 import { Feedback } from "./Feedback";
 import { StudentHome } from "./StudentHome";
@@ -148,6 +149,7 @@ function card(canRetake: boolean, keep: Keep = "best"): EvaluationCard {
       canRetake,
       kept: { attemptId: FIRST, attemptNumber: 1, score: { points: 1, totalPoints: 1, pending: false } },
     },
+    resultsAvailable: false,
   };
 }
 
@@ -342,9 +344,11 @@ describe("retakes on an exercise (issues #120, #121)", () => {
     expect(routes.at(-1)).toEqual({ view: "attempt", evaluationId: EVAL });
   });
 
-  it("keeps the hand-in screen of an exam", async () => {
+  // Issue #203: the hand-in screen offers the results only when the feedback
+  // page has something to show; otherwise Back to home is the one action.
+  async function handInExam(feedbackReply: StudentFeedback) {
     const exam = (state: AttemptView["attempt"]["state"]) => view(FIRST, state, { mode: "exam" });
-    mockFetch({
+    const { calls } = mockFetch({
       [`POST /app/api/evaluations/${EVAL}/attempt`]: ok(attempt(exam("in_progress"))),
       [`GET /app/api/attempts/${FIRST}`]: ok(attempt(exam("in_progress"))),
       [`POST /app/api/attempts/${FIRST}/submit`]: ok({
@@ -352,15 +356,45 @@ describe("retakes on an exercise (issues #120, #121)", () => {
         submittedAt: "2026-09-20T10:05:00.000Z",
         serverNow: "2026-09-20T10:05:00.000Z",
       }),
+      [`GET /app/api/attempts/${FIRST}/feedback`]: ok(feedbackReply),
       ...playerRoutes(FIRST),
     });
-    const { routes } = mount({ view: "attempt", evaluationId: EVAL });
+    const mounted = { ...mount({ view: "attempt", evaluationId: EVAL }), calls };
     await userEvent.click(await screen.findByRole("button", { name: "Rendre" }));
     await userEvent.click(
       within(await screen.findByRole("dialog")).getByRole("button", { name: "Rendre" }),
     );
     expect(await screen.findByText("Rendu")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Voir mes résultats" })).toBeInTheDocument();
+    return mounted;
+  }
+
+  it("keeps the hand-in screen of an exam, with Back to home alone before the release", async () => {
+    const { routes, calls } = await handInExam({
+      available: false,
+      reason: "results_pending",
+      evaluation: { id: EVAL, title: "Série 3 — Entraînement" },
+    });
+    // The screen asked the feedback route, and took its answer.
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith(`${FIRST}/feedback`))).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByRole("button", { name: "Voir mes résultats" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Retour à l'accueil" }).className).toBe(
+      buttonClass("primary", "md", ""),
+    );
     expect(routes).toEqual([]);
+  });
+
+  it("offers the results on the hand-in screen under the immediate policy", async () => {
+    const { routes } = await handInExam({
+      available: true,
+      evaluation: { id: EVAL, title: "Série 3 — Entraînement", releasedAt: null },
+      attemptId: FIRST,
+      points: 1,
+      totalPoints: 1,
+      grade: 6,
+      items: [],
+    });
+    await userEvent.click(await screen.findByRole("button", { name: "Voir mes résultats" }));
+    expect(routes).toContainEqual({ view: "feedback", attemptId: FIRST });
   });
 });

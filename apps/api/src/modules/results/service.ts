@@ -477,8 +477,18 @@ function scoreOnly(evaluation: EvaluationRecord): boolean {
  * feedback page would.
  */
 export function scoreVisible(evaluation: EvaluationRecord, attemptState: string): boolean {
-  return feedbackAvailable(feedbackOf(evaluation), evaluation, attemptState).ok
+  return resultsAvailable(evaluation, attemptState)
     || (scoreOnly(evaluation) && attemptState !== "in_progress" && attemptState !== "not_started");
+}
+
+/**
+ * Whether the feedback page of an attempt in this state answers
+ * `available: true` right now (issue #203): the student home offers "See my
+ * results" only then, so the button never leads to "not published yet".
+ * {@link feedbackAvailable} stays the one rule; this only names its verdict.
+ */
+export function resultsAvailable(evaluation: EvaluationRecord, attemptState: string): boolean {
+  return feedbackAvailable(feedbackOf(evaluation), evaluation, attemptState).ok;
 }
 
 /** Whether a student may see anything at all right now. */

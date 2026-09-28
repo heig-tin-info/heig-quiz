@@ -39,6 +39,7 @@ const card = (over: Partial<EvaluationCard>): EvaluationCard => ({
   grade: null,
   deadlineAt: null,
   retakes: null,
+  resultsAvailable: false,
   ...over,
 });
 
@@ -55,6 +56,7 @@ const home: StudentHomeData = {
       state: "released",
       attemptId: "a3",
       attemptState: "submitted",
+      resultsAvailable: true,
     }),
   ],
   serverNow: "2026-09-20T10:00:00.000Z",
@@ -137,8 +139,37 @@ describe("the student home", () => {
       "GET /app/api/student/classrooms": ok([]),
     });
     const { navigate } = render();
-    await userEvent.click(await screen.findByRole("button", { name: "Voir" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Voir mes résultats" }));
     expect(navigate).toHaveBeenCalledWith({ view: "feedback", attemptId: "a3" });
+  });
+
+  // Issue #203: no button that leads to "not published yet".
+  it("says the results are not out, with no button, when the server has none to show", async () => {
+    mockFetch({
+      "GET /app/api/student/home": ok({
+        ...home,
+        open: [],
+        past: [
+          // Handed in while the quiz still runs, `on_release`.
+          card({ id: "e5", title: "Quiz 4", attemptId: "a5", attemptState: "submitted" }),
+          // Its time ran out, and the teacher closed it without releasing.
+          card({ id: "e6", title: "Quiz 5", state: "closed", attemptId: "a6", attemptState: "expired" }),
+          // Released under `none`: nothing will ever be published, so no "yet".
+          card({ id: "e7", title: "Quiz 6", state: "released", attemptId: "a7", attemptState: "submitted" }),
+        ],
+      }),
+      "GET /app/api/student/classrooms": ok([]),
+    });
+    render();
+    const row = async (title: string) =>
+      (await screen.findByText(title)).closest("div.rounded-card") as HTMLElement;
+    expect(within(await row("Quiz 4")).getByText("rendue · résultats pas encore publiés")).toBeInTheDocument();
+    expect(within(await row("Quiz 5")).getByText("temps écoulé · résultats pas encore publiés")).toBeInTheDocument();
+    expect(within(await row("Quiz 6")).getByText("rendue")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Voir mes résultats" })).toBeNull();
+    // The open section is empty: nothing to do, no Start for a handed-in quiz.
+    expect(screen.queryByRole("button", { name: "Commencer" })).toBeNull();
+    expect(screen.getByText("Rien à faire pour l'instant")).toBeInTheDocument();
   });
 
   // Issue #163: a running poll of the classroom, answered on its own page.
@@ -246,11 +277,23 @@ describe("the student home", () => {
       );
     });
 
-    it("offers the kept attempt's score once no attempt is left", async () => {
+    // Issue #203: with none left the server lists it under Past, and the
+    // button follows `resultsAvailable`.
+    it("shows the kept score under Past once no attempt is left, results only when available", async () => {
       mockFetch({
         "GET /app/api/student/home": ok({
           ...home,
-          open: [retaking({ canRetake: false, attemptCount: 3, keep: "last" })],
+          open: [],
+          past: [
+            retaking({ canRetake: false, attemptCount: 3, keep: "last" }),
+            {
+              ...retaking({ canRetake: false, attemptCount: 3 }),
+              id: "e10",
+              title: "Série 2 — Tableaux",
+              state: "closed",
+              resultsAvailable: true,
+            },
+          ],
         }),
         "GET /app/api/student/classrooms": ok([]),
       });
@@ -259,8 +302,10 @@ describe("the student home", () => {
         await screen.findByText("Dernier score 7.5 / 10 · tentatives : 3 sur 3"),
       ).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "Recommencer" })).toBeNull();
-      const row = screen.getByText("Série 3 — Entraînement").closest("div.rounded-card")!;
-      await userEvent.click(within(row as HTMLElement).getByRole("button", { name: "Voir" }));
+      const running = screen.getByText("Série 3 — Entraînement").closest("div.rounded-card")!;
+      expect(within(running as HTMLElement).queryByRole("button")).toBeNull();
+      const closed = screen.getByText("Série 2 — Tableaux").closest("div.rounded-card")!;
+      await userEvent.click(within(closed as HTMLElement).getByRole("button", { name: "Voir mes résultats" }));
       expect(navigate).toHaveBeenCalledWith({ view: "feedback", attemptId: "a8" });
     });
 
@@ -302,7 +347,9 @@ describe("the student home", () => {
         "GET /app/api/student/classrooms": ok([]),
       });
       render();
-      expect(await screen.findByText("tentatives : 2 sur 3")).toBeInTheDocument();
+      expect(
+        await screen.findByText("tentatives : 2 sur 3 · résultats pas encore publiés"),
+      ).toBeInTheDocument();
       expect(screen.queryByText(/score/)).toBeNull();
     });
 

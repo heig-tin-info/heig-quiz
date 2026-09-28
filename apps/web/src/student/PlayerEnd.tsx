@@ -1,9 +1,17 @@
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 
-import { retakesOf, type AttemptClosed, type AttemptView } from "@quiz/contracts";
+import {
+  retakesOf,
+  type AttemptClosed,
+  type AttemptView,
+  type StudentFeedback,
+} from "@quiz/contracts";
 import { retakesOn } from "@quiz/domain";
 
+import { api } from "../api";
 import { useT } from "../i18n";
+import { attemptFeedbackKey } from "../queryKeys";
 import { Spinner } from "../ui";
 import { ClosedScreen } from "./ClosedScreen";
 import type { OnResults } from "./Player";
@@ -43,15 +51,27 @@ export function PlayerEnd({
     onResults(initial.attempt.id, { replace: true });
   }, [toResults, onResults, initial.attempt.id]);
 
+  // Issue #203: "See my results" only when the feedback page has something
+  // to show (`immediate`). The page's own route answers, so the rule stays
+  // the server's one; the answer also warms the page it leads to. A teacher
+  // preview has no attempt of its own, so nothing is asked for it.
+  const asked = !preview && onResults !== undefined && !toResults;
+  const feedback = useQuery<StudentFeedback>({
+    queryKey: attemptFeedbackKey(initial.attempt.id),
+    queryFn: () => api(`/app/api/attempts/${initial.attempt.id}/feedback`),
+    enabled: asked,
+    retry: false,
+  });
+
   if (toResults) return <Spinner label={t("player.loading")} className="py-24" />;
   return (
     <ClosedScreen
       reason={reason}
       title={initial.evaluation.title}
       onHome={onHome}
-      // A teacher preview has no attempt of its own, so there is nothing to
-      // show them; every real attempt has a feedback page (WP10).
-      {...(preview || !onResults ? {} : { onResults: () => onResults(initial.attempt.id) })}
+      {...(asked && feedback.data?.available === true
+        ? { onResults: () => onResults(initial.attempt.id) }
+        : {})}
     />
   );
 }
