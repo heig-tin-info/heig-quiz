@@ -26,6 +26,7 @@ import {
   users,
 } from "../../db/schema.js";
 import { emailIn, knownEmails } from "../../identity.js";
+import { accessRevoked } from "../realtime/bus.js";
 
 export { claimEnrollments } from "./roster.js";
 
@@ -229,10 +230,12 @@ export async function staffSeatCount(db: Db, courseId: string): Promise<number> 
   return seats?.count ?? 0;
 }
 
+/** Takes a seat away; the user's open streams are closed with it (#248). */
 export async function removeStaff(db: Db, courseId: string, userId: string): Promise<void> {
   await db
     .delete(courseStaff)
     .where(and(eq(courseStaff.courseId, courseId), eq(courseStaff.userId, userId)));
+  accessRevoked([userId]);
 }
 
 // --- Classrooms -------------------------------------------------------------
@@ -343,7 +346,7 @@ export async function selfEnroll(
  */
 export async function updateEnrollment(
   db: Db,
-  entryId: string,
+  entry: Pick<EnrollmentRecord, "id" | "userId">,
   patch: EnrollmentPatch,
   email: string | undefined,
   emailChanged: boolean,
@@ -360,22 +363,35 @@ export async function updateEnrollment(
       ...(patch.note !== undefined ? { note: patch.note } : {}),
       ...(emailChanged ? { userId: null, claimedAt: null, conflictFlag: false } : {}),
     })
-    .where(eq(enrollments.id, entryId))
+    .where(eq(enrollments.id, entry.id))
     .returning();
+  if (emailChanged) accessRevoked([entry.userId]);
   return updated;
 }
 
-export async function unclaimEnrollment(db: Db, entryId: string): Promise<EnrollmentRecord | undefined> {
+/**
+ * Detaches a roster line from its account, or removes it: either way its
+ * student loses the classroom, and their open streams are closed (#248).
+ */
+export async function unclaimEnrollment(
+  db: Db,
+  entry: Pick<EnrollmentRecord, "id" | "userId">,
+): Promise<EnrollmentRecord | undefined> {
   const [updated] = await db
     .update(enrollments)
     .set({ userId: null, claimedAt: null, conflictFlag: false })
-    .where(eq(enrollments.id, entryId))
+    .where(eq(enrollments.id, entry.id))
     .returning();
+  accessRevoked([entry.userId]);
   return updated;
 }
 
-export async function removeEnrollment(db: Db, entryId: string): Promise<void> {
-  await db.delete(enrollments).where(eq(enrollments.id, entryId));
+export async function removeEnrollment(
+  db: Db,
+  entry: Pick<EnrollmentRecord, "id" | "userId">,
+): Promise<void> {
+  await db.delete(enrollments).where(eq(enrollments.id, entry.id));
+  accessRevoked([entry.userId]);
 }
 
 // --- Join code (F-ORG-06) -------------------------------------------------------

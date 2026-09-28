@@ -21,6 +21,7 @@ import type { Db } from "./db/client.js";
 import { courseStaff, teacherGrants, userEmails, userIdpClaims, users } from "./db/schema.js";
 import { knownEmails, normalizeEmail, ownersOf } from "./identity.js";
 import { transferOnLoss } from "./modules/pool/service.js";
+import { accessRevoked } from "./modules/realtime/bus.js";
 
 type UserRole = (typeof users.$inferSelect)["role"];
 
@@ -217,7 +218,10 @@ async function storeRole(
   await db.update(users).set({ role }).where(eq(users.id, userId));
   const was = before?.role === "teacher" || before?.role === "admin";
   const is = role === "teacher" || role === "admin";
-  if (succession && was && !is) await transferOnLoss(db, userId);
+  if (!was || is) return;
+  // Every `teacher:`/`course:`/`pool:` topic went with the role (#248).
+  accessRevoked([userId]);
+  if (succession) await transferOnLoss(db, userId);
 }
 
 /**
