@@ -11,6 +11,15 @@
  *   - the stream, which is how a deadline change, a pause and a closure
  *     reach a student who is typing (§4.8).
  *
+ * The rest lives beside it, one concern per file: the state writes
+ * (`writes.ts`), the run (`run.ts`), the journal and the position
+ * (`signals.ts`).
+ *
+ * The clock is handed out, never ticked here: `clock` is the server's time
+ * as a stable function, and the countdown that shows it re-reads it once a
+ * second by itself. A hook that ticked would re-render the whole player —
+ * the code editor, the circuit canvas — every second, for one number.
+ *
  * Nothing here decides anything the server has not: a lock, a deadline and a
  * closure all come from the API. The client's job is to never offer what the
  * server would refuse, and to never lose what the student wrote.
@@ -18,25 +27,15 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 
-import {
-  FlagBody,
-  FlagResponse,
-  MarkDoneBody,
-  MarkDoneResponse,
-  SkipBody,
-  SkipResponse,
-  type AttemptClosed,
-  type AttemptEventKind,
-  type AttemptOrLobby,
-  type AttemptView,
-  type AutosaveResponse,
-  type RunAccepted,
-  type RunnerResultEvent,
-  type SubmitResponse,
+import type {
+  AttemptClosed,
+  AttemptOrLobby,
+  AttemptView,
+  AutosaveResponse,
+  EvaluationState,
 } from "@quiz/contracts";
-import type { RunnerOutcome } from "@quiz/core/server";
 
-import { ApiError, api } from "../api";
+import { api } from "../api";
 import { useEventStream } from "../realtime/useEventStream";
 import { useServerClock } from "../realtime/useServerClock";
 import { Autosave, type SyncState } from "./autosave";
@@ -46,31 +45,28 @@ import {
   type PlayerAction,
   type PlayerState,
 } from "./playerReducer";
+import { useAttemptRun, type RunFn } from "./run";
+import { useBrowserSignals, useJournal, usePosition, type Report } from "./signals";
+import { useStateWrites, type StateWrites } from "./writes";
 import { attemptKey } from "../queryKeys";
 
-/**
- * A write that depends on the answer (a validation, a skip) was not sent:
- * the latest answer is not on the server yet. The player says so and keeps
- * the question open (issue #89).
- */
-export class UnsavedAnswer extends Error {
-  constructor() {
-    super("the latest answer is not saved yet");
-  }
-}
+export { UnsavedAnswer } from "./writes";
 
 /** Why the attempt stopped accepting writes. `null` while it is running. */
 interface ClosedInfo {
   reason: AttemptClosed["reason"];
 }
 
-export interface UseAttempt {
+export interface UseAttempt extends StateWrites {
   state: PlayerState;
   view: AttemptView | null;
   query: UseQueryResult<AttemptOrLobby>;
   sync: SyncState;
-  /** The server's time, re-read every second. */
-  now: number;
+  /**
+   * The server's time as best the client knows it — a stable function, read
+   * by the countdown on its own tick (`useNow`), never a ticking value.
+   */
+  clock: () => number;
   deadlineAt: number | null;
   /** Non-null once the attempt is over: the player turns read-only. */
   closed: ClosedInfo | null;
@@ -82,23 +78,9 @@ export interface UseAttempt {
    * caller knows the type; an answer takes back an "I won't answer".
    */
   setAnswer: (itemId: string, payload: unknown, answered?: boolean) => void;
-  /** F-LIVE-08: validate — "Validate and continue", crossing a checkpoint. */
-  markDone: (itemId: string, done: boolean) => Promise<void>;
-  /** Issue #89: "I won't answer this question", or taking it back. */
-  skip: (itemId: string, skipped: boolean) => Promise<void>;
-  /** Issue #89: the review flag. */
-  flag: (itemId: string, flagged: boolean) => Promise<void>;
-  submit: () => Promise<void>;
-  run: (
-    itemId: string,
-    regions: string[],
-    /** The free try of §4.7; absent, the server runs the VISIBLE cases. */
-    manual?: { args: string[]; stdin: string },
-    /** `compileOnly`: the Compile button — build, run nothing, no input. */
-    options?: { compileOnly?: boolean | undefined },
-  ) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
+  run: RunFn;
   /** F-EVAL-13: the journal. Never blocks, never surfaces an error. */
-  report: (kind: AttemptEventKind, details?: unknown) => void;
+  report: Report;
   /**
    * Issue #125: sends every pending answer now. `saved` once the server
    * holds them all; otherwise why not — `unsaved` (a failed write: the
@@ -111,28 +93,11 @@ export interface UseAttempt {
 
 export type FlushResult = "saved" | "unsaved" | "paused" | "closed";
 
-/** The SSE result shape is not the runner's; the player speaks the latter. */
-function toOutcome(result: RunnerResultEvent["result"]): RunnerOutcome | "unavailable" {
-  if (result.status === "unavailable" || result.status === "busy") return "unavailable";
-  if (result.status === "error") throw new Error(result.message);
-  return {
-    compile: { ok: result.compile.ok, stdout: "", stderr: result.compile.stderr, ms: 0 },
-    // The server sends the VISIBLE cases in their published order, which is
-    // the order the player's table walks (deviation W5-12).
-    cases: result.cases.map((c) => ({
-      exitCode: c.exitCode,
-      stdout: c.stdout,
-      stderr: c.stderr,
-      ms: c.ms,
-      timedOut: c.timedOut,
-      oom: c.oom,
-      truncated: c.truncated,
-    })),
-  };
-}
-
 const reasonOfState = (state: AttemptView["attempt"]["state"]): AttemptClosed["reason"] | null =>
   state === "submitted" ? "submitted" : state === "expired" ? "deadline" : null;
+
+/** An evaluation in one of these states takes no more writes from anyone. */
+const evaluationOver = (state: EvaluationState) => state === "closed" || state === "grading";
 
 export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt {
   const [state, dispatch] = useReducer(playerReducer, emptyPlayerState);
@@ -140,10 +105,7 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
   const [closed, setClosed] = useState<ClosedInfo | null>(null);
   const [paused, setPaused] = useState(false);
   const [deadlineAt, setDeadlineAt] = useState<number | null>(null);
-  const clock = useServerClock();
-  const sample = clock.sample;
-  const serverNow = clock.now;
-  const [now, setNow] = useState(() => serverNow());
+  const { sample, now: clock } = useServerClock();
   const autosave = useRef<Autosave | null>(null);
   const preview = initial?.attempt.preview === true;
 
@@ -192,6 +154,16 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
     return () => saver.stop(false);
   }, [saver]);
 
+  /** The attempt is over: read-only, and the autosave stops for good. */
+  const end = useCallback(
+    (reason: AttemptClosed["reason"]) => {
+      setClosed({ reason });
+      saver.stop();
+    },
+    [saver],
+  );
+  const pause = useCallback(() => setPaused(true), []);
+
   // --- Adopting a fresh view ----------------------------------------------
   useEffect(() => {
     if (!view) return;
@@ -201,35 +173,11 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
     setDeadlineAt(view.attempt.deadlineAt === null ? null : Date.parse(view.attempt.deadlineAt));
     setPaused(view.evaluation.state === "paused");
     const reason = reasonOfState(view.attempt.state);
-    if (reason !== null) {
-      setClosed({ reason });
-      saver.stop();
-    } else if (view.evaluation.state === "closed" || view.evaluation.state === "grading") {
-      setClosed({ reason: "evaluation_closed" });
-      saver.stop();
-    }
-  }, [view, saver, sample]);
+    if (reason !== null) end(reason);
+    else if (evaluationOver(view.evaluation.state)) end("evaluation_closed");
+  }, [view, saver, sample, end]);
 
-  // --- The ticking clock ---------------------------------------------------
-  useEffect(() => {
-    setNow(serverNow());
-    const id = setInterval(() => setNow(serverNow()), 1_000);
-    return () => clearInterval(id);
-  }, [serverNow]);
-
-  // --- The journal (F-EVAL-13) --------------------------------------------
-  const report = useCallback(
-    (kind: AttemptEventKind, details?: unknown) => {
-      if (preview) return;
-      void api(`/app/api/attempts/${attemptId}/events`, {
-        method: "POST",
-        body: JSON.stringify(details === undefined ? { kind } : { kind, details }),
-      }).catch(() => {
-        // A journal entry is never worth interrupting an attempt for.
-      });
-    },
-    [attemptId, preview],
-  );
+  const report = useJournal(attemptId, preview);
 
   // --- The stream ----------------------------------------------------------
   useEventStream({
@@ -238,11 +186,10 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
     onEvent: (event) => {
       switch (event.type) {
         case "clock":
-          sample(event.serverNow);
-          break;
         case "snapshot":
-          // Metadata only: a snapshot arriving while the student types must
-          // not replace what they typed. The answers come back on a reload.
+          // A snapshot is metadata only: arriving while the student types,
+          // it must not replace what they typed. The answers come back on a
+          // reload.
           sample(event.serverNow);
           break;
         case "attempt.deadline":
@@ -251,15 +198,13 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
           break;
         case "attempt.closed":
           sample(event.serverNow);
-          setClosed({
-            reason:
-              event.closedBy === "student"
-                ? "submitted"
-                : event.closedBy === "teacher"
-                  ? "evaluation_closed"
-                  : "deadline",
-          });
-          saver.stop();
+          end(
+            event.closedBy === "student"
+              ? "submitted"
+              : event.closedBy === "teacher"
+                ? "evaluation_closed"
+                : "deadline",
+          );
           break;
         case "evaluation.state":
           sample(event.serverNow);
@@ -269,9 +214,8 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
             setPaused(false);
             // D17: what was buffered during the pause goes out now.
             saver.resume();
-          } else if (event.state === "closed" || event.state === "grading") {
-            setClosed({ reason: "evaluation_closed" });
-            saver.stop();
+          } else if (evaluationOver(event.state)) {
+            end("evaluation_closed");
           }
           break;
         default:
@@ -289,36 +233,8 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
     },
   });
 
-  // --- Browser signals -----------------------------------------------------
-  useEffect(() => {
-    if (preview) return;
-    const onVisibility = () => report("visibility", { state: document.visibilityState });
-    const onBlur = () => report("focus", { focused: false });
-    const onOnline = () => saver.resume();
-    document.addEventListener("visibilitychange", onVisibility);
-    window.addEventListener("blur", onBlur);
-    window.addEventListener("online", onOnline);
-    return () => {
-      document.removeEventListener("visibilitychange", onVisibility);
-      window.removeEventListener("blur", onBlur);
-      window.removeEventListener("online", onOnline);
-    };
-  }, [report, saver, preview]);
-
-  // --- The position (F-LIVE-06) -------------------------------------------
-  const current = state.items[state.index]?.id ?? null;
-  const lastPosted = useRef<string | null>(null);
-  useEffect(() => {
-    if (preview || current === null || closed !== null) return;
-    if (lastPosted.current === current) return;
-    lastPosted.current = current;
-    void api(`/app/api/attempts/${attemptId}/position`, {
-      method: "POST",
-      body: JSON.stringify({ itemId: current }),
-    }).catch(() => {
-      // Losing the bookmark costs a student one click after a reload.
-    });
-  }, [attemptId, current, closed, preview]);
+  useBrowserSignals(report, saver, preview);
+  usePosition(attemptId, state.items[state.index]?.id ?? null, !preview && closed === null);
 
   const setAnswer = useCallback(
     (itemId: string, payload: unknown, answered?: boolean) => {
@@ -329,162 +245,17 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
     [closed, saver, preview],
   );
 
-  /**
-   * A `410` on one of the state writes below means what it means on the
-   * autosave: a pause keeps the attempt (D17), the three other reasons end
-   * it. The error is rethrown either way, so the button that asked can say
-   * its write did not land.
-   */
-  const gate = useCallback(
-    async <T,>(write: () => Promise<T>): Promise<T> => {
-      try {
-        return await write();
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 410) {
-          const body = error.body as AttemptClosed | null;
-          if (body?.reason === "paused") setPaused(true);
-          else {
-            setClosed({ reason: body?.reason ?? "deadline" });
-            saver.stop();
-          }
-        }
-        throw error;
-      }
-    },
-    [saver],
-  );
-
-  const markDone = useCallback(
-    async (itemId: string, done: boolean) => {
-      if (closed !== null || preview) {
-        dispatch({ type: "done", itemId, done });
-        return;
-      }
-      // Validation locks the question: what the student typed last must be
-      // on the server before it closes. If it is not — a failed write whose
-      // retry is still pending — the question stays open and the caller says
-      // so, rather than locking an older answer for good.
-      if (!(await saver.settle(itemId))) throw new UnsavedAnswer();
-      const response = await gate(() =>
-        api<MarkDoneResponse>(`/app/api/attempts/${attemptId}/answers/${itemId}/done`, {
-          method: "POST",
-          body: JSON.stringify(MarkDoneBody.parse({ done })),
-        }),
-      );
-      sample(MarkDoneResponse.parse(response).serverNow);
-      dispatch({ type: "done", itemId, done: response.done });
-    },
-    [attemptId, closed, preview, sample, saver, gate],
-  );
-
-  const skip = useCallback(
-    async (itemId: string, skipped: boolean) => {
-      if (closed !== null) return;
-      if (preview) {
-        dispatch({ type: "skip", itemId, skipped });
-        return;
-      }
-      // The empty payload that made the question skippable must land BEFORE
-      // the skip, or the server still sees the answer it held and refuses.
-      if (!(await saver.settle(itemId))) throw new UnsavedAnswer();
-      const response = SkipResponse.parse(
-        await gate(() =>
-          api(`/app/api/attempts/${attemptId}/answers/${itemId}/skip`, {
-            method: "POST",
-            body: JSON.stringify(SkipBody.parse({ skipped })),
-          }),
-        ),
-      );
-      sample(response.serverNow);
-      dispatch({ type: "skip", itemId, skipped: response.skipped });
-    },
-    [attemptId, closed, preview, sample, saver, gate],
-  );
-
-  const flag = useCallback(
-    async (itemId: string, flagged: boolean) => {
-      if (closed !== null) return;
-      // Optimistic: a flag is a note to self, and a toggle that lags a round
-      // trip behind the click reads as a missed click. Put back on failure.
-      dispatch({ type: "flag", itemId, flagged });
-      if (preview) return;
-      try {
-        const response = FlagResponse.parse(
-          await gate(() =>
-            api(`/app/api/attempts/${attemptId}/answers/${itemId}/flag`, {
-              method: "POST",
-              body: JSON.stringify(FlagBody.parse({ flagged })),
-            }),
-          ),
-        );
-        sample(response.serverNow);
-      } catch (error) {
-        dispatch({ type: "flag", itemId, flagged: !flagged });
-        throw error;
-      }
-    },
-    [attemptId, closed, preview, sample, gate],
-  );
-
-  const submit = useCallback(async () => {
-    if (preview) {
-      setClosed({ reason: "submitted" });
-      return;
-    }
-    const response = await api<SubmitResponse>(
-      `/app/api/attempts/${attemptId}/submit`,
-      { method: "POST", body: JSON.stringify({ confirm: true }) },
-    );
-    sample(response.serverNow);
-    setClosed({ reason: "submitted" });
-    saver.stop();
-  }, [attemptId, preview, sample, saver]);
-
-  /*
-   * The BACKEND half of a student's "Run" (ADR-015). Which runner serves the
-   * run is decided one level up, in `src/runner/`: `student/Player.tsx` hands
-   * this function to `runCode` as the backend path, and the browser runner
-   * takes over when the question asks for it or when this one answers 503.
-   * Nothing about the call below changed, and nothing about it should: a
-   * graded run is this one.
-   */
-  const run = useCallback(
-    async (
-      itemId: string,
-      regions: string[],
-      manual?: { args: string[]; stdin: string },
-      options?: { compileOnly?: boolean | undefined },
-    ): Promise<RunnerOutcome | "unavailable" | "rate_limited"> => {
-      try {
-        const response = await api<RunAccepted>(
-          `/app/api/attempts/${attemptId}/run`,
-          {
-            method: "POST",
-            // A `stdin` — even an empty one — is what tells the server this is
-            // the free try rather than the visible cases (`RunBody`);
-            // `compileOnly` is the Compile button, which takes no input.
-            body: JSON.stringify(
-              options?.compileOnly === true
-                ? { itemId, regions, compileOnly: true }
-                : manual === undefined
-                  ? { itemId, regions }
-                  : { itemId, regions, stdin: manual.stdin, args: manual.args },
-            ),
-          },
-        );
-        return toOutcome(response.result);
-      } catch (error) {
-        // 503 is a configuration, not a failure (decision D14): the player
-        // says so in one line and the answer is still saved and still graded.
-        if (error instanceof ApiError && error.status === 503) return "unavailable";
-        // 429 is the per-attempt budget (N-SEC-07) — the tests', or the
-        // compilations' own: the player says to wait, not that running is off.
-        if (error instanceof ApiError && error.status === 429) return "rate_limited";
-        throw error;
-      }
-    },
-    [attemptId],
-  );
+  const { markDone, skip, flag, submit } = useStateWrites({
+    attemptId,
+    preview,
+    closed: closed !== null,
+    saver,
+    sample,
+    dispatch,
+    end,
+    pause,
+  });
+  const run = useAttemptRun(attemptId);
 
   const flush = useCallback(async (): Promise<FlushResult> => {
     if (await saver.settleAll()) return "saved";
@@ -498,7 +269,7 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
       view,
       query,
       sync,
-      now,
+      clock,
       deadlineAt,
       closed,
       paused,
@@ -517,7 +288,7 @@ export function useAttempt(attemptId: string, initial?: AttemptView): UseAttempt
       view,
       query,
       sync,
-      now,
+      clock,
       deadlineAt,
       closed,
       paused,

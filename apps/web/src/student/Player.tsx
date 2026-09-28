@@ -32,84 +32,40 @@
  * (the strip is a map of a paper that has one page) and no previous / next
  * buttons — absent, not disabled. Two dead controls are worse than none.
  *
- * What this component owns, beyond the layout:
- *   - the keyboard: `Alt + ←/→` moves, `Ctrl + Enter` validates where
- *     validating exists. Alt and Ctrl, not bare arrows: every question type
- *     has a field, and a player that steals the arrow keys cannot be used to
- *     write;
- *   - the navigation rules, mirrored from the server (`playerReducer`, and
- *     the shared `@quiz/domain` rules), so a student is never offered a move
- *     the API would refuse with `409`.
+ * What this component owns, beyond the layout, is the navigation rules,
+ * mirrored from the server (`playerReducer`, and the shared `@quiz/domain`
+ * rules), so a student is never offered a move the API would refuse with
+ * `409`. What the buttons and the keyboard DO is `usePlayerControls`; the
+ * question itself is `PlayerQuestion`, memoised — the countdown ticks in
+ * its own leaf, so nothing here re-renders once a second.
  *
  * It never decides that the attempt is over: `useAttempt` does, from a `410`
- * or from an `attempt.closed` frame, and then this renders `ClosedScreen` —
- * or, on an exercise that takes retakes, forwards to the score, where the
- * student decides to try again (ADR-025 addendum, issue #121).
+ * or from an `attempt.closed` frame, and then this renders `PlayerEnd` — the
+ * closed screen or, on an exercise that takes retakes, the way to the score,
+ * where the student decides to try again (ADR-025 addendum, issue #121).
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Check, CircleSlash, Eraser, Flag, Lock, Minus } from "lucide-react";
 
-import { retakesOf, type AttemptView } from "@quiz/contracts";
-import { answerMark, mayValidate, maySkip, retakesOn } from "@quiz/domain";
-import type { RunnerOutcome } from "@quiz/core/server";
+import type { AttemptView } from "@quiz/contracts";
+import { answerMark, mayValidate } from "@quiz/domain";
 
-import { UnsavedAnswer, useAttempt, type UseAttempt } from "../attempt/useAttempt";
+import { postSimulate } from "../attempt/run";
+import { useAttempt, type UseAttempt } from "../attempt/useAttempt";
 import { currentItem, isLocked, neighbour, segmentsOf } from "../attempt/playerReducer";
 import { useConfirm } from "../confirm";
 import { useT } from "../i18n";
-import { useToast } from "../notify";
-import { useShortcuts } from "../shortcuts";
-import { Badge, Button, Card, cx, modKey, Spinner, ToggleChip, useMinWidth } from "../ui";
-import { ClosedScreen } from "./ClosedScreen";
+import { Button, Card, useMinWidth } from "../ui";
 import { OfflineBanner } from "./OfflineBanner";
 import { PausedOverlay } from "./PausedOverlay";
 import { PlayerActions } from "./PlayerActions";
+import { PlayerEnd } from "./PlayerEnd";
+import { PlayerQuestion, QuestionHeading } from "./PlayerQuestion";
 import { PlayerShell } from "./PlayerShell";
-import type {
-  CodeAnswer,
-  CodeImageAnswer,
-  CodeImageStudent,
-  CodeRunOptions,
-  CodeRunStage,
-  CodeStudent,
-} from "@quiz/qt-code/client";
-
-import { api, ApiError } from "../api";
-import { runCode, runCodeImage } from "../runner/codeRun";
-import { emptyAnswerOf, isAnswered, QuestionHost } from "./QuestionHost";
+import { isAnswered } from "./QuestionHost";
+import { QuestionTools } from "./QuestionTools";
 import { SubmitDialog } from "./SubmitDialog";
 import { usePlayerCommands } from "./usePlayerCommands";
-
-/**
- * `POST /attempts/:id/simulate`: the student's own button of a type that
- * builds its own request (ADR-019) — the `circuit` player's "Simulate", and
- * the backend half of a `codeimage` "Run" (ADR-021).
- *
- * For a circuit it is the only path: only the server may turn a schematic
- * into a SPICE netlist (invariant 14), so this is one call and its answer is
- * read here rather than by the package.
- *
- * Three of the four outcomes are not errors and must not read as one:
- * `503 runner_unavailable` is the default deployment (decision D14),
- * `429` is the per-attempt budget of N-SEC-07, and anything else is a real
- * failure the player shows in red.
- */
-async function simulateAnswer(
-  attemptId: string,
-  itemId: string,
-  answer: unknown,
-): Promise<RunnerOutcome | "unavailable" | "rate_limited"> {
-  try {
-    return await api<RunnerOutcome>(`/app/api/attempts/${attemptId}/simulate`, {
-      method: "POST",
-      body: JSON.stringify({ itemId, answer }),
-    });
-  } catch (error) {
-    if (error instanceof ApiError && error.status === 503) return "unavailable";
-    if (error instanceof ApiError && error.status === 429) return "rate_limited";
-    throw error;
-  }
-}
+import { usePlayerControls } from "./usePlayerControls";
 
 /**
  * What the player drives: the attempt hook's state and actions, plus the one
@@ -123,7 +79,7 @@ export type PlayerSession = Pick<
   UseAttempt,
   | "state"
   | "dispatch"
-  | "now"
+  | "clock"
   | "deadlineAt"
   | "closed"
   | "paused"
@@ -136,14 +92,13 @@ export type PlayerSession = Pick<
 > & {
   /** Absent when nothing is saved as one types (the preview): no badge at all. */
   sync?: UseAttempt["sync"];
-  simulate: (itemId: string, answer: unknown) => ReturnType<typeof simulateAnswer>;
+  /**
+   * `POST …/simulate`: the `circuit` player's "Simulate", and the backend
+   * half of a `codeimage` "Run" (ADR-019, ADR-021).
+   */
+  simulate: (itemId: string, answer: unknown) => ReturnType<typeof postSimulate>;
 };
 
-/**
- * Opens the student's feedback on an attempt. `replace` when the player sends
- * the student there by itself, so Back does not land on a player that would
- * only forward again.
- */
 /**
  * How long Home waits for the pending answers (issue #125) before asking the
  * student whether to leave anyway: two autosave backoffs, and short enough
@@ -151,6 +106,11 @@ export type PlayerSession = Pick<
  */
 const LEAVE_FLUSH_TIMEOUT_MS = 6_000;
 
+/**
+ * Opens the student's feedback on an attempt. `replace` when the player sends
+ * the student there by itself, so Back does not land on a player that would
+ * only forward again.
+ */
 export type OnResults = (attemptId: string, options?: { replace?: boolean }) => void;
 
 export function Player({
@@ -229,13 +189,13 @@ export function Player({
       if (mounted.current) setLeaving(false);
     }
   }, [closed, flush, onHome, confirm, t]);
-  const session = useMemo<PlayerSession>(
-    () => ({
-      ...attempt,
-      simulate: (itemId: string, answer: unknown) => simulateAnswer(attemptId, itemId, answer),
-    }),
-    [attempt, attemptId],
+  // Stable, like every callback the question receives: it is memoised.
+  const simulate = useCallback(
+    (itemId: string, answer: unknown) =>
+      postSimulate(`/app/api/attempts/${attemptId}/simulate`, { itemId, answer }),
+    [attemptId],
   );
+  const session = useMemo<PlayerSession>(() => ({ ...attempt, simulate }), [attempt, simulate]);
   return (
     <PlayerView
       initial={initial}
@@ -270,24 +230,7 @@ export function PlayerView({
   banner?: ReactNode;
 }) {
   const t = useT();
-  const toast = useToast();
-  const confirm = useConfirm();
-  const {
-    state,
-    dispatch,
-    sync,
-    now,
-    deadlineAt,
-    closed,
-    paused,
-    setAnswer,
-    markDone,
-    skip,
-    flag,
-    submit,
-    run,
-  } = session;
-  const [submitting, setSubmitting] = useState(false);
+  const { state, dispatch, sync, closed, paused } = session;
   const item = currentItem(state);
   const total = state.items.length;
   const locked = item ? isLocked(state, item.id) : true;
@@ -295,7 +238,7 @@ export function PlayerView({
   // On a phone the three actions live in a sticky footer under the thumb;
   // on a desktop they sit right under the question, where the mouse already
   // is — a footer at the bottom of a 900 px window is a trip per question.
-  // A hook, so it stays above the early returns below.
+  // A hook, so it stays above the early return below.
   const desktop = useMinWidth(640);
   const segments = useMemo(() => segmentsOf(state, isAnswered), [state]);
   const unanswered = state.items.filter(
@@ -309,151 +252,28 @@ export function PlayerView({
   // and is offered while it can still be pressed.
   const canValidate =
     item !== undefined && !readOnly && !validated && mayValidate(state.navigation, item);
-
-  const validate = useCallback(async () => {
-    // The same condition as the button, so `Ctrl+Enter` can never ask for
-    // what the screen does not offer.
-    if (!item || !canValidate) return;
-    // Irreversible, so it asks first: in `forward_only` the question closes
-    // for good, at a checkpoint everything before it does too.
-    const ok = await confirm({
-      title: t("player.validate.title"),
-      message:
-        state.navigation === "milestones"
-          ? t("lobby.nav.milestones.body")
-          : t("player.validate.body"),
-      confirmLabel: t("player.validate"),
-      // Irreversible: Enter right after Ctrl+Enter must not validate for good.
-      focusCancel: true,
-    });
-    if (!ok) return;
-    try {
-      await markDone(item.id, true);
-    } catch (error) {
-      toast(
-        t(error instanceof UnsavedAnswer ? "player.validateUnsaved" : "player.validateFailed"),
-        "error",
-      );
-    }
-  }, [item, canValidate, state.navigation, confirm, t, markDone, toast]);
-
-  const toggleSkip = useCallback(async () => {
-    if (!item || readOnly) return;
-    try {
-      await skip(item.id, !item.skipped);
-    } catch {
-      toast(t("player.saveFailed"), "error");
-    }
-  }, [item, readOnly, skip, toast, t]);
-
-  const toggleFlag = useCallback(async () => {
-    if (!item || readOnly) return;
-    try {
-      await flag(item.id, !item.flagged);
-    } catch {
-      toast(t("player.saveFailed"), "error");
-    }
-  }, [item, readOnly, flag, toast, t]);
-
-  // The two shortcuts of the DoD. `Alt` and `Ctrl` are held on purpose: the
-  // bare keys belong to whatever field the student is typing in.
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (submitting) return;
-      if (e.altKey && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
-        e.preventDefault();
-        dispatch({ type: "move", delta: e.key === "ArrowRight" ? 1 : -1 });
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-        e.preventDefault();
-        void validate();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [dispatch, validate, submitting]);
-
-  // The same three, for the sidebar strip. The zen player runs outside the
-  // Shell and therefore shows no strip of its own; registering them anyway
-  // costs nothing and keeps the day the frame comes back one line of work.
-  useShortcuts([
-    // A one-question attempt has nowhere to move: offering the two arrows
-    // would teach a shortcut that does nothing.
-    ...(total > 1
-      ? [
-          { keys: "Alt+←", label: t("player.command.prev") },
-          { keys: "Alt+→", label: t("player.command.next") },
-        ]
-      : []),
-    // Only where there is something to validate: a shortcut that does
-    // nothing on this paper is one the student learns for nothing.
-    ...(state.navigation === "free"
-      ? []
-      : [{ keys: `${modKey()}+Enter`, label: t("player.validate") }]),
-  ]);
+  const controls = usePlayerControls({ session, item, readOnly, canValidate });
+  const move = useCallback((delta: 1 | -1) => dispatch({ type: "move", delta }), [dispatch]);
 
   const previous = neighbour(state, -1);
   const next = neighbour(state, 1);
   // The palette of the exam screen (W15): only what the footer and the bar
   // already carry.
-  /*
-   * F-EVAL-15 (issues #121, ADR-025): on an exercise that takes retakes, the
-   * end of an attempt — handed in, or its time up — opens the score at once.
-   * The hand-in screen's "your answers are with your teacher" is wrong there:
-   * the student reads the score now and decides whether to try again, and
-   * that page carries the Retake. A teacher's close is not such an end (no
-   * retake follows it), and an exam keeps its hand-in screen.
-   */
-  const retakes =
-    !initial.attempt.preview &&
-    retakesOn(initial.evaluation.mode, retakesOf(initial.evaluation.settings));
-  const toResults =
-    retakes &&
-    onResults !== undefined &&
-    (closed?.reason === "submitted" || closed?.reason === "deadline");
-  const forwarded = useRef(false);
-  useEffect(() => {
-    if (!toResults || forwarded.current) return;
-    forwarded.current = true;
-    onResults(initial.attempt.id, { replace: true });
-  }, [toResults, onResults, initial.attempt.id]);
-
   const commands = usePlayerCommands({
     next,
     previous,
-    onMove: (delta) => dispatch({ type: "move", delta }),
-    onSubmit: () => setSubmitting(true),
+    onMove: move,
+    onSubmit: controls.openSubmit,
     onHome,
     onExitStudentView,
   });
 
   if (closed !== null) {
-    if (toResults) return <Spinner label={t("player.loading")} className="py-24" />;
     return (
-      <ClosedScreen
-        reason={closed.reason}
-        title={initial.evaluation.title}
-        onHome={onHome}
-        // A teacher preview has no attempt of its own, so there is nothing
-        // to show them; every real attempt has a feedback page (WP10).
-        {...(initial.attempt.preview || !onResults
-          ? {}
-          : { onResults: () => onResults(initial.attempt.id) })}
-      />
+      <PlayerEnd reason={closed.reason} initial={initial} onHome={onHome} onResults={onResults} />
     );
   }
 
-  // Only a rule worth reading under the question: a locked question, or an
-  // irreversible validation ahead. That answers are saved as one types is
-  // said once, in the lobby, and the free player stays bare.
-  const hint = locked
-    ? t("player.hint.locked")
-    : canValidate
-      ? state.navigation === "milestones"
-        ? t("player.hint.milestone")
-        : t("player.hint.forward")
-      : null;
   /*
    * Who wears the accent, and therefore what the other two tiers are. Where
    * the navigation asks for a validation, that is the thing to do; once the
@@ -462,13 +282,12 @@ export function PlayerView({
    */
   const settled = mark !== "unanswered" || validated;
   const handInIsPrimary = !canValidate && settled && next === null;
-  const nextIsPrimary = !canValidate && settled && next !== null;
   // A single question has no neighbours to walk to: the two buttons are
   // absent rather than disabled, and so is the strip above (F-LIVE-09 draws
-  // the questions, and one question is not a progression).
+  // the questions, and one question is not a progression). Nothing to show
+  // at all — one question, nothing to validate — means no bar, not an empty
+  // one.
   const manyItems = total > 1;
-  // Nothing to show at all — one question, nothing to validate — means no
-  // footer bar, not an empty one.
   const actions =
     manyItems || canValidate ? (
       <PlayerActions
@@ -476,68 +295,18 @@ export function PlayerView({
         canValidate={canValidate}
         hasPrevious={previous !== null}
         hasNext={next !== null}
-        nextIsPrimary={nextIsPrimary}
-        onValidate={() => void validate()}
-        onMove={(delta) => dispatch({ type: "move", delta })}
+        nextIsPrimary={!canValidate && settled && next !== null}
+        onValidate={() => void controls.validate()}
+        onMove={move}
       />
-    ) : null;
-  // The question's tools (issue #128): the flag, and the one tool of the
-  // answer — exactly one of Clear and I-won't-answer can apply at a time,
-  // because they read the same two facts.
-  const clearable = item?.type === "mcq" && answered && !readOnly;
-  const skippable = item !== undefined && !readOnly && maySkip({ answered });
-  // A closed question keeps a flag that is ON (it still means something in
-  // the list), disabled; an unflagged one has nothing to say.
-  const flaggable = item !== undefined && (!readOnly || item.flagged);
-  const tools =
-    item && (flaggable || clearable || skippable) ? (
-      <div
-        role="group"
-        aria-label={t("player.tools")}
-        className="mt-3 flex flex-wrap items-center gap-2"
-      >
-        {flaggable ? (
-          <ToggleChip
-            tone="neutral"
-            icon={Flag}
-            // One label, on or off: `aria-pressed` carries the state, and a
-            // label that changed with it would be read twice.
-            label={t("player.flag")}
-            pressed={item.flagged}
-            disabled={readOnly}
-            onToggle={() => void toggleFlag()}
-            // Filled when on, in the chip's own text colour: `warning` on
-            // the pressed fill falls under 3:1 in the dark theme.
-            className={cx(item.flagged && "[&_svg]:fill-current")}
-          />
-        ) : null}
-        {clearable ? (
-          <ToggleChip
-            tone="neutral"
-            icon={Eraser}
-            label={t("player.clear")}
-            onToggle={() => setAnswer(item.id, emptyAnswerOf(item.type, item.student), false)}
-          />
-        ) : skippable ? (
-          <ToggleChip
-            tone="neutral"
-            icon={CircleSlash}
-            // One label, on or off: the badge above already says "Won't
-            // answer", and the pressed chip is how it is taken back.
-            label={t("player.skip")}
-            pressed={item.skipped}
-            onToggle={() => void toggleSkip()}
-          />
-        ) : null}
-      </div>
     ) : null;
 
   return (
     <>
       <PlayerShell
         title={initial.evaluation.title}
-        deadlineAt={deadlineAt}
-        now={now}
+        deadlineAt={session.deadlineAt}
+        clock={session.clock}
         paused={paused}
         {...(sync === undefined ? {} : { sync })}
         segments={manyItems ? segments : []}
@@ -553,7 +322,7 @@ export function PlayerView({
           <Button
             variant={handInIsPrimary ? "primary" : "secondary"}
             size="sm"
-            onClick={() => setSubmitting(true)}
+            onClick={controls.openSubmit}
           >
             {t("player.finish")}
           </Button>
@@ -568,123 +337,72 @@ export function PlayerView({
       >
         {item ? (
           <>
-            <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-              {/* Not a heading: "Question 2 of 4" names a position, not a
-                  section, and as an `h1` it renamed the document on every
-                  move (W5). It is announced instead — politely, because the
-                  student is reading, not waiting. */}
-              <p
-                aria-live="polite"
-                className="text-[13px] font-semibold uppercase tracking-wide text-fg-muted"
-              >
-                {/* "Question 2", not "2 of 4": the strip above already counts,
-                    and one question per page needs no second counter. */}
-                {t("player.question", { n: state.index + 1 })}
-              </p>
-              {/* The state of the question in a word AND a symbol, the
-                  same symbols as the list above. Nothing for "not answered
-                  yet": that is what a question is until it is not. */}
-              {validated ? (
-                <Badge tone="zinc" icon={Lock}>
-                  {t("player.validated")}
-                </Badge>
-              ) : mark === "answered" ? (
-                <Badge tone="zinc" icon={Check}>
-                  {t("player.answered")}
-                </Badge>
-              ) : mark === "skipped" ? (
-                <Badge tone="zinc" icon={Minus}>
-                  {t("player.skipped")}
-                </Badge>
-              ) : null}
-              <span className="ml-auto text-[13px] text-fg-muted">
-                {item.points === 1 ? t("player.point") : t("player.points", { n: item.points })}
-              </span>
-            </div>
+            <QuestionHeading
+              index={state.index}
+              points={item.points}
+              validated={validated}
+              mark={mark}
+            />
             <Card className="p-5 sm:p-6">
-              <QuestionHost
+              <PlayerQuestion
                 key={item.id}
+                itemId={item.id}
                 type={item.type}
                 student={item.student}
                 answer={state.answers[item.id] ?? null}
-                onChange={(payload) =>
-                  setAnswer(item.id, payload, isAnswered(item.type, payload))
-                }
                 readOnly={readOnly}
-                {...(item.type === "code"
-                  ? {
-                      // `POST /attempts/:id/run` takes a free stdin and a
-                      // command line, and so does the browser runner: the box
-                      // is offered whichever one ends up serving it.
-                      allowManualRun: true,
-                      onRun: (answer: unknown, options?: unknown) =>
-                        runCode({
-                          student: item.student as CodeStudent,
-                          answer: answer as CodeAnswer,
-                          // The backend path is the API call it always was. It
-                          // sends the regions and, if there is one, the free
-                          // input or the compile-only flag: the program itself
-                          // is rebuilt server-side (invariant 14).
-                          backend: (manual, backendOptions) =>
-                            run(
-                              item.id,
-                              (answer as { regions?: string[] }).regions ?? [],
-                              manual,
-                              backendOptions,
-                            ),
-                          options: options as CodeRunOptions | undefined,
-                        }),
-                    }
-                  : {})}
-                {...(item.type === "circuit"
-                  ? {
-                      onSimulate: (answer: unknown) => session.simulate(item.id, answer),
-                    }
-                  : {})}
-                {...(item.type === "codeimage"
-                  ? {
-                      // Where it runs is `code`'s rule (ADR-015): the browser
-                      // for `runtime: "runno"`, else the server, which
-                      // rebuilds the program from the stored template
-                      // (invariant 14) behind the generic simulate route.
-                      onRun: (answer: unknown, options?: unknown) =>
-                        runCodeImage({
-                          student: item.student as CodeImageStudent,
-                          answer: answer as CodeImageAnswer,
-                          backend: () => session.simulate(item.id, answer),
-                          options: options as
-                            | { onStage?: (stage: CodeRunStage) => void }
-                            | undefined,
-                        }),
-                    }
-                  : {})}
+                setAnswer={session.setAnswer}
+                run={session.run}
+                simulate={session.simulate}
               />
             </Card>
-            {tools}
+            <QuestionTools
+              item={item}
+              answered={answered}
+              readOnly={readOnly}
+              onFlag={() => void controls.toggleFlag()}
+              onClear={controls.clear}
+              onSkip={() => void controls.toggleSkip()}
+            />
             {desktop && actions ? (
               <div className="mt-4 flex flex-wrap items-center gap-2">{actions}</div>
             ) : null}
-            {hint ? (
-              <p className="mt-3 text-[13px] leading-relaxed text-fg-muted">{hint}</p>
-            ) : null}
+            <PlayerHint locked={locked} canValidate={canValidate} navigation={state.navigation} />
           </>
         ) : null}
       </PlayerShell>
       <PausedOverlay show={paused} />
       <SubmitDialog
-        open={submitting}
+        open={controls.submitting}
         unanswered={unanswered}
-        onCancel={() => setSubmitting(false)}
-        onConfirm={async () => {
-          try {
-            await submit();
-          } catch {
-            toast(t("player.submitFailed"), "error");
-          } finally {
-            setSubmitting(false);
-          }
-        }}
+        onCancel={controls.cancelSubmit}
+        onConfirm={controls.handIn}
       />
     </>
   );
+}
+
+/**
+ * Only a rule worth reading under the question: a locked question, or an
+ * irreversible validation ahead. That answers are saved as one types is said
+ * once, in the lobby, and the free player stays bare.
+ */
+function PlayerHint({
+  locked,
+  canValidate,
+  navigation,
+}: {
+  locked: boolean;
+  canValidate: boolean;
+  navigation: PlayerSession["state"]["navigation"];
+}) {
+  const t = useT();
+  const hint = locked
+    ? t("player.hint.locked")
+    : !canValidate
+      ? null
+      : navigation === "milestones"
+        ? t("player.hint.milestone")
+        : t("player.hint.forward");
+  return hint ? <p className="mt-3 text-[13px] leading-relaxed text-fg-muted">{hint}</p> : null;
 }

@@ -1,13 +1,30 @@
 import axe from "axe-core";
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { StrictMode, useState } from "react";
+import { createElement, StrictMode, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { AttemptOrLobby, AttemptView } from "@quiz/contracts";
 
 import { fail, mockFetch, noContent, ok, renderWithProviders } from "../test/render";
 import { AttemptPage } from "./Attempt";
+
+/*
+ * Every render of the question host is counted, so a test can prove that the
+ * one-second clock of the countdown does not re-render the question under it
+ * (Monaco, the circuit canvas…). The wrapper renders the real host unchanged.
+ */
+const hostRenders = vi.hoisted(() => ({ count: 0 }));
+vi.mock("./QuestionHost", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./QuestionHost")>();
+  return {
+    ...actual,
+    QuestionHost: (props: Parameters<typeof actual.QuestionHost>[0]) => {
+      hostRenders.count += 1;
+      return createElement(actual.QuestionHost, props);
+    },
+  };
+});
 
 /*
  * The player, end to end in jsdom: what a reload brings back (F-LIVE-06), the
@@ -827,6 +844,69 @@ describe("the zen player", () => {
       rules: { "color-contrast": { enabled: false } },
     });
     expect(results.violations.map((v) => `${v.id}: ${v.nodes.length}`)).toEqual([]);
+  });
+});
+
+/*
+ * The countdown of the bar (invariant 5): it counts down to the SERVER's
+ * deadline on the server's clock, once a second, and it closes nothing by
+ * itself at zero — the ticker does, and its `attempt.closed` frame is what
+ * turns the player read-only. The clock ticks in the countdown alone: the
+ * question under it must not re-render with every second.
+ */
+describe("the zen player's clock", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Three seconds left, on a server whose clock the browser does not share. */
+  const nearDeadline = () =>
+    attemptView({
+      serverNow: "2026-09-20T10:00:00.000Z",
+      deadlineAt: "2026-09-20T10:00:03.000Z",
+    });
+
+  const timer = () => screen.getByRole("timer");
+
+  it("counts down to the server's deadline and stops at zero without closing anything", async () => {
+    // The browser is an hour off: only the server's time may count.
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: Date.parse("2026-09-20T11:00:00.000Z") });
+    const view = nearDeadline();
+    const { calls } = stubs(view);
+    render(view);
+    await screen.findByText("Question 2");
+    expect(timer()).toHaveTextContent("0:03");
+
+    act(() => void vi.advanceTimersByTime(1_000));
+    expect(timer()).toHaveTextContent("0:02");
+
+    act(() => void vi.advanceTimersByTime(5_000));
+    expect(timer()).toHaveTextContent("0:00");
+    expect(timer()).toHaveAccessibleName("Le temps est écoulé.");
+    // Zero is a display, not a decision: the player is still there, and it
+    // asked the server nothing.
+    expect(screen.getByText("Question 2")).toBeInTheDocument();
+    expect(screen.queryByText("Temps écoulé")).toBeNull();
+    expect(calls.some((c) => c.url.endsWith("/submit"))).toBe(false);
+  });
+
+  it("does not re-render the question on a tick", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, now: Date.parse("2026-09-20T10:00:00.000Z") });
+    const view = attemptView();
+    stubs(view);
+    render(view);
+    await screen.findByLabelText("Votre réponse");
+    // Let the mount settle (the position post, the first autosave state).
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    const before = hostRenders.count;
+    const shown = timer().textContent;
+
+    // One `act` per second: each tick is its own commit, as in a browser.
+    for (let tick = 0; tick < 3; tick++) act(() => void vi.advanceTimersByTime(1_000));
+    expect(timer().textContent).not.toBe(shown);
+    expect(hostRenders.count).toBe(before);
   });
 });
 

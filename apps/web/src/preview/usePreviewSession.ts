@@ -14,38 +14,13 @@
  *   - Run and Simulate go to the preview's own routes with the seed, and the
  *     server rebuilds the program from the stored template (invariant 14).
  */
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 
-import {
-  PreviewRunBody,
-  PreviewSimulateBody,
-  type EvaluationPreview,
-  type RunAccepted,
-  type RunnerResultEvent,
-} from "@quiz/contracts";
-import type { RunnerOutcome } from "@quiz/core/server";
+import { PreviewRunBody, PreviewSimulateBody, type EvaluationPreview } from "@quiz/contracts";
 
-import { ApiError, api } from "../api";
+import { postRun, postSimulate, runBody } from "../attempt/run";
 import { emptyPlayerState, playerReducer } from "../attempt/playerReducer";
 import type { PlayerSession } from "../student/Player";
-
-/** The run result of the API, in the shape the player's runner speaks. */
-function toOutcome(result: RunnerResultEvent["result"]): RunnerOutcome | "unavailable" {
-  if (result.status === "unavailable" || result.status === "busy") return "unavailable";
-  if (result.status === "error") throw new Error(result.message);
-  return {
-    compile: { ok: result.compile.ok, stdout: "", stderr: result.compile.stderr, ms: 0 },
-    cases: result.cases.map((c) => ({
-      exitCode: c.exitCode,
-      stdout: c.stdout,
-      stderr: c.stderr,
-      ms: c.ms,
-      timedOut: c.timedOut,
-      oom: c.oom,
-      truncated: c.truncated,
-    })),
-  };
-}
 
 export function usePreviewSession({
   evaluationId,
@@ -61,18 +36,12 @@ export function usePreviewSession({
   onSubmit: (answers: Record<string, unknown>) => Promise<void>;
 }): PlayerSession {
   const [state, dispatch] = useReducer(playerReducer, emptyPlayerState);
-  const [now, setNow] = useState(() => Date.now());
   const base = `/app/api/evaluations/${evaluationId}/preview`;
   const seed = preview.seed;
 
   useEffect(() => {
     dispatch({ type: "load", view: preview.view });
   }, [preview.view]);
-
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1_000);
-    return () => clearInterval(id);
-  }, []);
 
   const deadlineAt = preview.durationS === null ? null : startedAt + preview.durationS * 1000;
 
@@ -93,17 +62,23 @@ export function usePreviewSession({
   }, [onSubmit]);
 
   // Reaching zero hands the paper in, as the ticker does for a student —
-  // ONCE. A failed automatic hand-in is not retried every second (the clock
-  // keeps ticking past zero): the page says the grading failed, and "Hand in"
-  // is how the teacher tries again.
+  // ONCE, from one timer set for the deadline: nothing here ticks, so the
+  // screen does not re-render every second for it. A failed automatic
+  // hand-in is not retried (not even when `submit` changes and the timer is
+  // set again): the page says the grading failed, and "Hand in" is how the
+  // teacher tries again.
   const autoFired = useRef(false);
   useEffect(() => {
-    if (deadlineAt === null || now < deadlineAt || autoFired.current) return;
-    autoFired.current = true;
-    void submit().catch(() => {
-      // The page says what went wrong.
-    });
-  }, [deadlineAt, now, submit]);
+    if (deadlineAt === null) return;
+    const timer = setTimeout(() => {
+      if (autoFired.current) return;
+      autoFired.current = true;
+      void submit().catch(() => {
+        // The page says what went wrong.
+      });
+    }, Math.max(0, deadlineAt - Date.now()));
+    return () => clearTimeout(timer);
+  }, [deadlineAt, submit]);
 
   const setAnswer = useCallback((itemId: string, payload: unknown, answered?: boolean) => {
     dispatch({ type: "answer", itemId, payload, ...(answered === undefined ? {} : { answered }) });
@@ -123,45 +98,15 @@ export function usePreviewSession({
     dispatch({ type: "flag", itemId, flagged });
   }, []);
 
+  // No runner, or its budget spent: the player says so in one line.
   const run = useCallback<PlayerSession["run"]>(
-    async (itemId, regions, manual, options) => {
-      const body = PreviewRunBody.parse(
-        options?.compileOnly === true
-          ? { seed, itemId, regions, compileOnly: true }
-          : manual === undefined
-            ? { seed, itemId, regions }
-            : { seed, itemId, regions, stdin: manual.stdin, args: manual.args },
-      );
-      try {
-        const response = await api<RunAccepted>(`${base}/run`, {
-          method: "POST",
-          body: JSON.stringify(body),
-        });
-        return toOutcome(response.result);
-      } catch (error) {
-        // No runner, or its budget spent: the player says so in one line.
-        if (error instanceof ApiError && error.status === 503) return "unavailable";
-        if (error instanceof ApiError && error.status === 429) return "rate_limited";
-        throw error;
-      }
-    },
+    (itemId, regions, manual, options) =>
+      postRun(`${base}/run`, PreviewRunBody.parse({ seed, ...runBody(itemId, regions, manual, options) })),
     [base, seed],
   );
 
   const simulate = useCallback<PlayerSession["simulate"]>(
-    async (itemId, answer) => {
-      const body = PreviewSimulateBody.parse({ seed, itemId, answer });
-      try {
-        return await api<RunnerOutcome>(`${base}/simulate`, {
-          method: "POST",
-          body: JSON.stringify(body),
-        });
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 503) return "unavailable";
-        if (error instanceof ApiError && error.status === 429) return "rate_limited";
-        throw error;
-      }
-    },
+    (itemId, answer) => postSimulate(`${base}/simulate`, PreviewSimulateBody.parse({ seed, itemId, answer })),
     [base, seed],
   );
 
@@ -169,7 +114,8 @@ export function usePreviewSession({
     () => ({
       state,
       dispatch,
-      now,
+      // The browser's: there is no attempt for the server to own a deadline on.
+      clock: Date.now,
       deadlineAt,
       closed: null,
       paused: false,
@@ -181,6 +127,6 @@ export function usePreviewSession({
       run,
       simulate,
     }),
-    [state, now, deadlineAt, setAnswer, markDone, skip, flag, submit, run, simulate],
+    [state, deadlineAt, setAnswer, markDone, skip, flag, submit, run, simulate],
   );
 }

@@ -33,11 +33,11 @@ import { Home, Moon, Sun } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { CommandPalette } from "../CommandPalette";
+import { ClockCountdown } from "../live/ClockCountdown";
 import type { Command } from "../commands";
 import { useT } from "../i18n";
 import { setThemeChoice, useResolvedTheme } from "../theme";
 import {
-  Countdown,
   cx,
   IconButton,
   ProgressSegments,
@@ -50,7 +50,7 @@ export function PlayerShell({
   title,
   subtitle,
   deadlineAt,
-  now,
+  clock = Date.now,
   paused = false,
   sync,
   segments = [],
@@ -68,7 +68,12 @@ export function PlayerShell({
   subtitle?: string;
   /** Epoch ms on the server's clock; `null` in a `manual` evaluation. */
   deadlineAt: number | null;
-  now: number;
+  /**
+   * The time the countdown counts against, re-read once a second by the
+   * countdown itself: the server's for an attempt. Stable, never a ticking
+   * value — the shell and the question under it do not re-render per tick.
+   */
+  clock?: () => number;
   /** The teacher paused the evaluation: the countdown freezes with it (W16). */
   paused?: boolean;
   /**
@@ -173,7 +178,7 @@ export function PlayerShell({
               {theme === "dark" ? <Sun /> : <Moon />}
             </IconButton>
             {deadlineAt === null ? null : (
-              <Countdown deadlineAt={deadlineAt} now={now} paused={paused} />
+              <ClockCountdown deadlineAt={deadlineAt} clock={clock} paused={paused} />
             )}
             {sync === undefined ? null : <SyncBadge state={sync} />}
             {headerAction}
