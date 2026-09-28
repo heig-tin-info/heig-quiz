@@ -49,7 +49,7 @@ import {
   PollNotImplemented,
 } from "./shared.js";
 import { assertStaysScheduled } from "./stateMachine.js";
-import { settingsOf, feedbackOf, preferredMcqPolicy } from "./reads.js";
+import { byId, settingsOf, feedbackOf, preferredMcqPolicy } from "./reads.js";
 import { latestPublished, type CopyHome } from "./items.js";
 
 /**
@@ -201,11 +201,6 @@ export async function createPollEvaluation(
   return { evaluation: (await byId(db, id))!, item: item! };
 }
 
-export async function byId(db: DbOrTx, id: string): Promise<EvaluationRecord | null> {
-  const [row] = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
-  return row ?? null;
-}
-
 /**
  * What a patch may still touch is `configLock`'s to say (`@quiz/domain`):
  * everything while nothing locks the configuration; the title, the access
@@ -279,7 +274,7 @@ export async function patchEvaluation(
     (patch.opensAt !== undefined ||
       patch.closesAt !== undefined ||
       patch.durationS !== undefined ||
-      patch.settings !== undefined)
+      patch.settings?.timing !== undefined)
   ) {
     assertStaysScheduled({ ...row, ...next } as EvaluationRecord, ctx.now);
   }

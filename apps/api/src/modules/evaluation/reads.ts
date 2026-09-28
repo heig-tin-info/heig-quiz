@@ -583,3 +583,8 @@ export async function listEvaluations(
     templateRevision: templateRevisions.get(r.id) ?? null,
   }));
 }
+
+export async function byId(db: DbOrTx, id: string): Promise<EvaluationRecord | null> {
+  const [row] = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
+  return row ?? null;
+}

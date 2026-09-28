@@ -6,10 +6,11 @@
  * off an `Evaluation` and says where each missing field sits on the screen, so
  * "Go to launch" can put the focus on it and the launch step can name it.
  */
-import type { Evaluation } from "@quiz/contracts";
+import { TransitionRefusal, type Evaluation } from "@quiz/contracts";
 import { missingTimingFields, type TimingField } from "@quiz/domain";
 
-import type { Dict } from "../i18n";
+import { ApiError } from "../api";
+import type { Dict, TFunction } from "../i18n";
 
 export type { TimingField };
 
@@ -49,4 +50,27 @@ export function fromLocalInput(value: string): string | null {
   if (!value) return null;
   const d = new Date(value);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/**
+ * What a refused state change says, in the teacher's language (#76). The
+ * server's `message` is English for logs and API clients; the screen reads
+ * the machine half of the refusal instead: a missing question, the timing
+ * fields still to fill, a schedule without its opening time (#152), a time
+ * already past by the server's clock (#178), or a move the evaluation no longer allows because it changed elsewhere.
+ * Anything else is the ordinary "server did not answer".
+ */
+export function transitionErrorMessage(error: unknown, t: TFunction): string {
+  if (!(error instanceof ApiError)) return t("error.server");
+  const refusal = TransitionRefusal.safeParse(error.body);
+  if (!refusal.success) return t("error.server");
+  const { reason, missing } = refusal.data;
+  if (reason === "no_items") return t("eval.launch.needQuestions");
+  if (reason === "opens_at_missing") return t("eval.launch.opensAtMissing");
+  if (reason === "opens_at_past") return t("launch.schedule.past");
+  if (reason === "closes_at_past") return t("eval.launch.closesAtPast");
+  if (reason === "timing_incomplete" && missing && missing.length > 0) {
+    return missing.map((field) => t(missingTimingKey(field))).join(" ");
+  }
+  return t("eval.launch.stale");
 }

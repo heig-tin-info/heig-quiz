@@ -17,8 +17,7 @@ import {
   refusePastTiming,
   PollNotImplemented,
 } from "./shared.js";
-import { settingsOf, attemptCount } from "./reads.js";
-import { byId } from "./writes.js";
+import { byId, settingsOf, attemptCount } from "./reads.js";
 
 /**
  * The legal moves. `closed → draft` is the "reopen" arrow of §5.1 and is

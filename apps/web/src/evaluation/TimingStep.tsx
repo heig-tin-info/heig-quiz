@@ -6,7 +6,7 @@ import { configLock, isConfigFieldWritable } from "@quiz/domain";
 
 import { ApiError } from "../api";
 import type { Dict } from "../i18n";
-import { useT, type TFunction } from "../i18n";
+import { useT } from "../i18n";
 import {
   Alert,
   Badge,
@@ -21,7 +21,6 @@ import {
   SettingRow,
 } from "../ui";
 import { AccessCodeRow, AdvancedDisclosure } from "./AdvancedDisclosure";
-import { transitionErrorMessage } from "./LaunchStep";
 import type { ConfigPatch, ConfigView } from "./editTarget";
 import { RetakesSetting } from "./RetakesSetting";
 import { matchPreset, presetPatch, type PresetId } from "./presets";
@@ -32,6 +31,7 @@ import {
   missingTimingKey,
   TIMING_FIELD_ID,
   toLocalInput,
+  transitionErrorMessage,
   type TimingField,
 } from "./timing";
 import type { ConfigWriter } from "./usePatch";
@@ -158,21 +158,6 @@ function DateField({
       }}
     />
   );
-}
-
-/**
- * A refused patch that would leave a scheduled evaluation unable to start
- * (#178, #254), in the teacher's words: a time already past, or a time
- * cleared. Null for any other error, which `FormError` says.
- */
-function scheduleRefusal(error: unknown, t: TFunction): string | null {
-  if (!(error instanceof ApiError)) return null;
-  const reason = TransitionRefusal.safeParse(error.body).data?.reason;
-  if (reason === "opens_at_past" || reason === "closes_at_past") return t("launch.schedule.past");
-  if (reason === "timing_incomplete" || reason === "opens_at_missing") {
-    return transitionErrorMessage(error, t);
-  }
-  return null;
 }
 
 /**
@@ -341,7 +326,12 @@ export function TimingStep({
   const lock = configLock(state, detail.attemptCount);
   const summary = presetSummary(detail.evaluation, t, isoDateTime);
   const missing = new Set(showMissing ? missingTiming(detail.evaluation) : []);
-  const refusal = scheduleRefusal(patch.error, t);
+  // A refused date (#178, #254) in the teacher's words; any other error is FormError's.
+  const refusal = TransitionRefusal.safeParse(
+    patch.error instanceof ApiError ? patch.error.body : undefined,
+  ).success
+    ? transitionErrorMessage(patch.error, t)
+    : null;
 
   return (
     <div className="space-y-5">
