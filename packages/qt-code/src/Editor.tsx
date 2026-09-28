@@ -11,7 +11,7 @@
  * first line of a row panel, the fold — are `@quiz/ui`'s (audit P-15); what
  * is written here is what only a code question has.
  */
-import { useId, useState, type ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 
 import { fmt, issuesAt, plural, resolveStrings, rootIssues } from "@quiz/core/client";
 import type { ConfigIssue, EditorProps, MarkdownRenderer } from "@quiz/core/client";
@@ -48,7 +48,9 @@ import {
   RowListHeader,
   setting,
   TryPanel,
-  type TryStatus,
+  tryStatusOf,
+  useReferenceTry,
+  type TryState as UiTryState,
 } from "@quiz/ui";
 
 export interface CodeEditorProps extends EditorProps<CodeConfig> {
@@ -108,18 +110,15 @@ export type CodeTryOutcome =
       };
     };
 
-type TryState =
-  | { status: "idle" }
-  | { status: "running" }
-  | { status: "unavailable" }
-  /**
-   * `compile`: the reference solution does not build. `regions`: it does not
-   * MATCH the template — the two are different mistakes and the teacher fixes
-   * them in different places, so they never share a sentence.
-   */
-  | { status: "failed"; reason: "compile" | "regions" }
-  /** `diverged`: cases on which the browser runner disagreed with the server. */
-  | { status: "done"; passed: number; total: number; diverged?: number };
+/**
+ * `compile`: the reference solution does not build. `regions`: it does not
+ * MATCH the template — the two are different mistakes and the teacher fixes
+ * them in different places, so they never share a sentence. `diverged`:
+ * cases on which the browser runner disagreed with the server.
+ */
+type TryDone = { passed: number; total: number; diverged?: number };
+type TryReason = "compile" | "regions";
+type TryState = UiTryState<TryDone, TryReason>;
 
 const NEW_CASE: CodeCase = {
   name: "",
@@ -135,26 +134,6 @@ const NEW_CASE: CodeCase = {
 
 /** The top-level settings "Advanced options" holds, as zod paths. */
 const ADVANCED_PATHS = [...PROGRAM_ADVANCED_PATHS, "allOrNothing"] as const;
-
-/** What the try panel says after a run, in one line; nothing before the first. */
-function tryStatusOf(tryState: TryState, s: CodeEditorStrings): TryStatus | null {
-  switch (tryState.status) {
-    case "unavailable":
-      return { tone: "hint", text: s.tryUnavailable };
-    case "failed":
-      return {
-        tone: "danger",
-        text: tryState.reason === "regions" ? s.tryRegionsMismatch : s.tryCompileFailed,
-      };
-    case "done":
-      return {
-        tone: "hint",
-        text: fmt(s.tryResult, { passed: tryState.passed, total: tryState.total }),
-      };
-    default:
-      return null;
-  }
-}
 
 /**
  * How many cases the browser runner judges differently from the server, or
@@ -231,7 +210,7 @@ export function CodeEditor({
 }: CodeEditorProps) {
   const s = resolveStrings(EDITOR_STRINGS, strings);
   const ids = useId();
-  const [tryState, setTryState] = useState<TryState>({ status: "idle" });
+  const { state: tryState, run: runTry } = useReferenceTry<TryDone, TryReason>("compile");
 
   const patch = (next: Partial<CodeConfig>) => onChange({ ...config, ...next });
   const patchTests = (next: Partial<CodeConfig["tests"]>) =>
@@ -249,7 +228,7 @@ export function CodeEditor({
     (issue) => !(issue.path[1] === "cases" && typeof issue.path[2] === "number"),
   );
 
-  async function runReference() {
+  function runReference() {
     if (onTry === undefined) return;
     /*
      * The split is checked HERE, before anything leaves: a reference solution
@@ -257,16 +236,9 @@ export function CodeEditor({
      * mistake in the text on this screen, and the teacher must read it as one
      * — not as a compiler error from a program that was never assembled.
      */
-    if (referenceRegions(config) === null) {
-      setTryState({ status: "failed", reason: "regions" });
-      return;
-    }
-    setTryState({ status: "running" });
-    try {
-      setTryState(await tryReference(config, onTry, onTryInBrowser));
-    } catch {
-      setTryState({ status: "failed", reason: "compile" });
-    }
+    void runTry(referenceRegions(config) === null ? "regions" : null, () =>
+      tryReference(config, onTry, onTryInBrowser),
+    );
   }
 
   return (
@@ -307,8 +279,12 @@ export function CodeEditor({
             runningLabel={s.trying}
             running={tryState.status === "running"}
             disabled={disabled}
-            onTry={() => void runReference()}
-            status={tryStatusOf(tryState, s)}
+            onTry={runReference}
+            status={tryStatusOf(tryState, {
+              unavailable: s.tryUnavailable,
+              failed: (reason) => (reason === "regions" ? s.tryRegionsMismatch : s.tryCompileFailed),
+              done: ({ passed, total }) => fmt(s.tryResult, { passed, total }),
+            })}
           />
         )}
         {tryState.status === "done" && tryState.diverged !== undefined ? (

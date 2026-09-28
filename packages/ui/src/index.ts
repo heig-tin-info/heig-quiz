@@ -44,7 +44,14 @@ export {
 export { breakdownOf, isLocked, markdown } from "./content.js";
 export { CheckboxField, FieldCell, NumberField, Segmented } from "./fields.js";
 export { IssueList } from "./issues.js";
-export { AsideSection, TryPanel, type TryStatus } from "./panels.js";
+export {
+  AsideSection,
+  TryPanel,
+  tryStatusOf,
+  useReferenceTry,
+  type TryState,
+  type TryStatus,
+} from "./panels.js";
 export { patchAt, RemoveRowButton, removeAt, RowHead, RowList, RowListHeader } from "./rows.js";
 export { AdvancedDisclosure, EditorSection, PromptSection } from "./sections.js";
 export { PromptField } from "./PromptField.js";

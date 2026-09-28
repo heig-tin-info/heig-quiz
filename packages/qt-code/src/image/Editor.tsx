@@ -10,7 +10,7 @@
  * The target is stored in the config, in the compact encoding of
  * `./pixels.ts`; publication refuses a question without one (decision D16).
  */
-import { useId, useMemo, useState, type ReactNode } from "react";
+import { useId, useMemo, type ReactNode } from "react";
 
 import { fmt, issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import type { ConfigIssue, EditorProps, MarkdownRenderer } from "@quiz/core/client";
@@ -24,7 +24,9 @@ import {
   NumberField,
   Segmented,
   TryPanel,
-  type TryStatus,
+  tryStatusOf,
+  useReferenceTry,
+  type TryState as UiTryState,
 } from "@quiz/ui";
 
 import {
@@ -75,13 +77,10 @@ export interface CodeImageEditorProps extends EditorProps<CodeImageConfig> {
   monaco?: boolean | undefined;
 }
 
-type TryState =
-  | { status: "idle" }
-  | { status: "running" }
-  | { status: "unavailable" }
-  | { status: "failed"; reason: "compile" | "regions" }
-  /** `spec` is the size and palette the image was read with: a later change makes it stale. */
-  | { status: "done"; pixels: Int16Array; spec: ImageSpec };
+/** `spec` is the size and palette the image was read with: a later change makes it stale. */
+type TryDone = { pixels: Int16Array; spec: ImageSpec };
+type TryReason = "compile" | "regions";
+type TryState = UiTryState<TryDone, TryReason>;
 
 const sameSpec = (a: ImageSpec, b: ImageSpec): boolean =>
   a.width === b.width && a.height === b.height && a.palette === b.palette;
@@ -134,7 +133,7 @@ export function CodeImageEditor({
 }: CodeImageEditorProps) {
   const s = resolveStrings(CODEIMAGE_EDITOR_DEFAULTS, strings);
   const ids = useId();
-  const [tryState, setTryState] = useState<TryState>({ status: "idle" });
+  const { state: tryState, run: runTry } = useReferenceTry<TryDone, TryReason>("compile");
 
   const patch = (next: Partial<CodeImageConfig>) => onChange({ ...config, ...next });
   const patchImage = (next: Partial<ImageSpec>) => patch({ image: { ...config.image, ...next } });
@@ -147,18 +146,11 @@ export function CodeImageEditor({
   );
   const targetValid = target !== null;
 
-  async function runReference() {
+  function runReference() {
     if (onTry === undefined || !specOk) return;
-    if (referenceRegions(config) === null) {
-      setTryState({ status: "failed", reason: "regions" });
-      return;
-    }
-    setTryState({ status: "running" });
-    try {
-      setTryState(await tryReference(config, onTry));
-    } catch {
-      setTryState({ status: "failed", reason: "compile" });
-    }
+    void runTry(referenceRegions(config) === null ? "regions" : null, () =>
+      tryReference(config, onTry),
+    );
   }
 
   const advancedIssues = ADVANCED_PATHS.flatMap((key) => issuesAt(issues, key));
@@ -262,8 +254,13 @@ export function CodeImageEditor({
               runningLabel={s.trying}
               running={tryState.status === "running"}
               disabled={disabled || !specOk}
-              onTry={() => void runReference()}
-              status={tryStatusOf(tryState, s)}
+              onTry={runReference}
+              status={tryStatusOf(tryState, {
+                unavailable: s.tryUnavailable,
+                failed: (reason) =>
+                  reason === "regions" ? s.tryRegionsMismatch : s.tryCompileFailed,
+                done: () => s.tryDrawn,
+              })}
             />
             {tryState.status === "done" ? (
               <ReferenceImage
@@ -312,22 +309,6 @@ function paletteLabel(palette: Palette, s: CodeImageEditorStrings): string {
       return s.paletteColor16;
     case "gray256":
       return s.paletteGray256;
-  }
-}
-
-function tryStatusOf(tryState: TryState, s: CodeImageEditorStrings): TryStatus | null {
-  switch (tryState.status) {
-    case "unavailable":
-      return { tone: "hint", text: s.tryUnavailable };
-    case "failed":
-      return {
-        tone: "danger",
-        text: tryState.reason === "regions" ? s.tryRegionsMismatch : s.tryCompileFailed,
-      };
-    case "done":
-      return { tone: "hint", text: s.tryDrawn };
-    default:
-      return null;
   }
 }
 

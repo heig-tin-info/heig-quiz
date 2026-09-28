@@ -12,7 +12,7 @@
  * how it is marked. Everything a teacher touches once a term — the ground
  * convention, the simulation budget — folds into "Advanced options".
  */
-import { useId, useState, type ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 
 import { fmt, issuesAt, plural, resolveStrings, rootIssues } from "@quiz/core/client";
 import type { ConfigIssue, EditorProps, MarkdownRenderer } from "@quiz/core/client";
@@ -58,7 +58,9 @@ import {
   Segmented,
   setting,
   TryPanel,
-  type TryStatus,
+  tryStatusOf,
+  useReferenceTry,
+  type TryState as UiTryState,
 } from "@quiz/ui";
 
 import { chip, selectSm } from "./styles.js";
@@ -100,12 +102,9 @@ export interface CircuitEditorProps extends EditorProps<CircuitConfig> {
   renderMarkdown?: MarkdownRenderer | undefined;
 }
 
-type TryState =
-  | { status: "idle" }
-  | { status: "running" }
-  | { status: "unavailable" }
-  | { status: "failed"; reason: "runner" | "reference" | "stimulus" }
-  | { status: "done"; details: CircuitDetails };
+type TryDone = { details: CircuitDetails };
+type TryReason = "runner" | "reference" | "stimulus";
+type TryState = UiTryState<TryDone, TryReason>;
 
 /**
  * The palette, grouped the way a teacher thinks about it rather than in the
@@ -155,34 +154,6 @@ function defaultLoad(kind: Load["kind"]): Load {
   }
 }
 
-/** What the try panel says after a simulation, in one line; nothing before the first. */
-function tryStatusOf(tryState: TryState, s: CircuitEditorStrings): TryStatus | null {
-  switch (tryState.status) {
-    case "unavailable":
-      return { tone: "hint", text: s.tryUnavailable };
-    case "failed":
-      return {
-        tone: "danger",
-        text:
-          tryState.reason === "reference"
-            ? s.tryNeedsReference
-            : tryState.reason === "stimulus"
-              ? s.tryNeedsStimulus
-              : s.tryFailed,
-      };
-    case "done":
-      return {
-        tone: "hint",
-        // The stimuli that produced a WAVEFORM, not the ones
-        // that were sent: a count the plots below do not back
-        // up is a count the teacher has to distrust.
-        text: plural(s, "tryDone", tryState.details.stimuli.filter((d) => d.series !== null).length),
-      };
-    default:
-      return null;
-  }
-}
-
 /** What one simulation of the reference came back with, as a try state. */
 async function simulate(
   config: CircuitConfig,
@@ -220,7 +191,7 @@ export function CircuitEditor({
   const s = resolveStrings(EDITOR_STRINGS, strings);
   const kinds = resolveStrings(KIND_LABELS, kindLabels);
   const ids = useId();
-  const [tryState, setTryState] = useState<TryState>({ status: "idle" });
+  const { state: tryState, run: runTry } = useReferenceTry<TryDone, TryReason>("runner");
 
   const patch: Patch = (next) => onChange({ ...config, ...next });
   const patchStimulus = (index: number, next: Partial<Stimulus>) =>
@@ -233,27 +204,16 @@ export function CircuitEditor({
     patch({ palette: { ...config.palette, kinds: [...kinds] } });
   };
 
-  async function simulateReference() {
+  function simulateReference() {
     if (onTry === undefined) return;
     /*
      * The two things that make a simulation impossible are read HERE, before
      * anything leaves: they are mistakes in the text on this screen, and a
      * teacher must read them as such rather than as a simulator failure.
      */
-    if (config.reference === null) {
-      setTryState({ status: "failed", reason: "reference" });
-      return;
-    }
-    if (config.stimuli.length === 0) {
-      setTryState({ status: "failed", reason: "stimulus" });
-      return;
-    }
-    setTryState({ status: "running" });
-    try {
-      setTryState(await simulate(config, onTry));
-    } catch {
-      setTryState({ status: "failed", reason: "runner" });
-    }
+    const blocked =
+      config.reference === null ? "reference" : config.stimuli.length === 0 ? "stimulus" : null;
+    void runTry(blocked, () => simulate(config, onTry));
   }
 
   return (
@@ -417,8 +377,21 @@ export function CircuitEditor({
             runningLabel={s.trying}
             running={tryState.status === "running"}
             disabled={disabled}
-            onTry={() => void simulateReference()}
-            status={tryStatusOf(tryState, s)}
+            onTry={simulateReference}
+            status={tryStatusOf(tryState, {
+              unavailable: s.tryUnavailable,
+              failed: (reason) =>
+                reason === "reference"
+                  ? s.tryNeedsReference
+                  : reason === "stimulus"
+                    ? s.tryNeedsStimulus
+                    : s.tryFailed,
+              // The stimuli that produced a WAVEFORM, not the ones that were
+              // sent: a count the plots below do not back up is a count the
+              // teacher has to distrust.
+              done: ({ details }) =>
+                plural(s, "tryDone", details.stimuli.filter((d) => d.series !== null).length),
+            })}
           />
         )}
         {tryState.status === "done" ? (
