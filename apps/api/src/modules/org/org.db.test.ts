@@ -14,6 +14,7 @@ import {
   userEmails,
 } from "../../db/schema.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
+import { claimEnrollments } from "./roster.js";
 
 let server: TestServer;
 let teacher: Awaited<ReturnType<TestServer["signIn"]>>;
@@ -167,6 +168,105 @@ describe("join code (F-ORG-06)", () => {
       headers: outsider.headers,
     });
     expect(res.statusCode).toBe(404);
+  });
+});
+
+/** Opens the inherited SSE stream and collects what it receives. */
+async function openStream(headers: Record<string, string>) {
+  const res = await server.app.inject({
+    method: "GET",
+    url: "/app/api/events",
+    headers,
+    payloadAsStream: true,
+  });
+  expect(res.statusCode).toBe(200);
+  let text = "";
+  res.stream().on("data", (chunk: Buffer) => (text += chunk.toString("utf8")));
+  return {
+    get text() {
+      return text;
+    },
+    close: () => res.stream().destroy(),
+  };
+}
+
+/** Lets the event loop deliver what the handler wrote. */
+const settle = async () => {
+  for (let i = 0; i < 6; i++) await new Promise((resolve) => setImmediate(resolve));
+};
+
+/**
+ * #198: the notice named the joiner on `classroom:<id>` and on the joiner's
+ * own topic, so every classmate with a tab open — and the joiner — was told.
+ * It reaches the course's staff only, as facts the web app translates.
+ */
+describe("the student_joined notice", () => {
+  async function watchers() {
+    const classmate = await server.signIn("student");
+    await server.app.db.insert(enrollments).values({
+      id: randomUUID(),
+      classroomId,
+      nom: "Pair",
+      prenom: "Classmate",
+      email: `classmate-${randomUUID().slice(0, 8)}@heig.test`,
+      userId: classmate.id,
+      claimedAt: new Date(),
+    });
+    return {
+      staff: await openStream(teacher.headers),
+      classmate: await openStream(classmate.headers),
+      outsider: await openStream(outsider.headers),
+    };
+  }
+
+  function expectStaffOnly(
+    streams: Awaited<ReturnType<typeof watchers>> & { joiner: { text: string } },
+    name: string,
+  ) {
+    const notice = { kind: "student_joined", name, classroomName: "PRG1-A" };
+    expect(streams.staff.text).toContain(JSON.stringify(notice));
+    for (const who of ["classmate", "joiner", "outsider"] as const) {
+      expect(streams[who].text).not.toContain("student_joined");
+      expect(streams[who].text).not.toContain(name);
+    }
+    // The joiner still gets a bare refresh hint for their own screens.
+    expect(streams.joiner.text).toContain('"kinds":["roster"]');
+  }
+
+  it("reaches the staff only when a student joins by code", async () => {
+    const code = await enableJoinCode();
+    const streams = await watchers();
+    const student = await signInStudent(`joiner-${randomUUID().slice(0, 8)}@heig.test`);
+    const joiner = await openStream(student.headers);
+    await settle();
+
+    const joined = await server.app.inject({
+      method: "POST",
+      url: `/app/api/join/${code}`,
+      headers: student.headers,
+    });
+    expect(joined.statusCode).toBe(201);
+    await settle();
+
+    expectStaffOnly({ ...streams, joiner }, "Test student");
+    for (const s of [...Object.values(streams), joiner]) s.close();
+  });
+
+  it("reaches the staff only when a roster line is claimed at login", async () => {
+    const email = `grace-${randomUUID().slice(0, 8)}@heig.test`;
+    await server.app.db
+      .insert(enrollments)
+      .values({ id: randomUUID(), classroomId, nom: "Hopper", prenom: "Grace", email });
+    const streams = await watchers();
+    const student = await signInStudent(email);
+    const joiner = await openStream(student.headers);
+    await settle();
+
+    expect(await claimEnrollments(server.app.db, { id: student.id })).toBe(1);
+    await settle();
+
+    expectStaffOnly({ ...streams, joiner }, "Grace Hopper");
+    for (const s of [...Object.values(streams), joiner]) s.close();
   });
 });
 

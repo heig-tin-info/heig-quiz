@@ -1,7 +1,7 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { AttemptOrLobby, LobbyView, Me, StudentHome } from "@quiz/contracts";
+import type { AppNotice, AttemptOrLobby, LobbyView, Me, StudentHome } from "@quiz/contracts";
 
 import App from "./App";
 import { resetEventStream } from "./realtime/useEventStream";
@@ -84,10 +84,10 @@ class FakeStream {
   }
   close() {}
   /** The inherited hint: unnamed, so `onmessage` is the only way in (W5-7). */
-  hint() {
+  hint(notice: AppNotice | null = null) {
     act(() => {
       this.onmessage?.({
-        data: JSON.stringify({ type: "hint", kinds: ["mutation"], notice: null }),
+        data: JSON.stringify({ type: "hint", kinds: ["mutation"], notice }),
       } as MessageEvent);
     });
   }
@@ -145,5 +145,14 @@ describe("the blanket hint refresh", () => {
     streams[0]!.hint();
 
     await waitFor(() => expect(countOf(calls, "GET", "/app/api/me")).toBe(2));
+  });
+});
+
+describe("a hint's notice", () => {
+  it("is a toast whose sentence the client writes, in the reader's language", async () => {
+    render("/");
+    expect(await screen.findByText("Bonjour, Léa")).toBeInTheDocument();
+    streams[0]!.hint({ kind: "student_joined", name: "Ada Lovelace", classroomName: "PRG1-2026" });
+    expect(await screen.findByText("Ada Lovelace a rejoint PRG1-2026")).toBeInTheDocument();
   });
 });

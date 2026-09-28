@@ -355,6 +355,7 @@ export const en = {
   "oauth.invalid.invalid_redirect_uri": "The assistant asked to send the answer to an address it did not register. The portal refused, for your safety.",
   "oauth.invalid.invalid_client_metadata": "The assistant's description could not be read. Try again in a moment.",
   "notify.student_joined": "A student joins a classroom",
+  "notify.student_joined.toast": "{name} joined {classroom}",
   "notify.roster_conflict": "A roster entry needs attention",
 
   "palette.open": "Search",

@@ -352,6 +352,7 @@ export const fr: Record<keyof Dict, string> = {
   "oauth.invalid.invalid_redirect_uri": "L'assistant a demandé d'envoyer la réponse à une adresse qu'il n'a pas déclarée. Le portail a refusé, par sécurité.",
   "oauth.invalid.invalid_client_metadata": "La description de l'assistant n'a pas pu être lue. Réessayez dans un instant.",
   "notify.student_joined": "Un étudiant rejoint une classe",
+  "notify.student_joined.toast": "{name} a rejoint {classroom}",
   "notify.roster_conflict": "Une entrée de liste demande une décision",
 
   "palette.open": "Rechercher",

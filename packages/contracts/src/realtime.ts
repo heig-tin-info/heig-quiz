@@ -18,7 +18,7 @@ import { z } from "zod";
 import { EvaluationState } from "./evaluation.js";
 import { Verdict } from "./grading.js";
 import { AttemptState, CellStatus, ClosedBy } from "./live.js";
-import type { NoticeKind } from "./notifications.js";
+import { AppNotice } from "./notifications.js";
 
 /** The audiences an event can be addressed to. */
 export const Topic = z.union([
@@ -221,9 +221,7 @@ export const HintEvent = z.object({
       "mutation",
     ]),
   ),
-  notice: z
-    .object({ kind: z.custom<NoticeKind>((v) => typeof v === "string"), message: z.string() })
-    .nullish(),
+  notice: AppNotice.nullish(),
 });
 export type HintEvent = z.infer<typeof HintEvent>;
 

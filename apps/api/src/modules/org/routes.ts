@@ -44,6 +44,7 @@ import {
   teacherGuard,
 } from "../guards.js";
 import { invalid, teacherRoute } from "../http.js";
+import { studentJoined } from "../realtime/bus.js";
 import { poolsOfCourse, setCoursePools } from "../pool/service.js";
 import { claimForExistingUsers, importRoster, rosterView } from "./roster.js";
 import * as service from "./service.js";
@@ -483,11 +484,12 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
       }
       if (outcome.status === "joined") {
         await trace(req, "roster.join", "classroom", row.room.id, { email: me.email });
-        publish(
-          "roster",
-          [`classroom:${row.room.id}`, `user:${me.id}`],
-          { kind: "student_joined", message: `${me.givenName} ${me.familyName}`.trim() },
-        );
+        studentJoined({
+          courseId: row.course.id,
+          classroomName: row.room.name,
+          userId: me.id,
+          name: `${me.givenName} ${me.familyName}`.trim(),
+        });
       }
       const result: JoinResult = {
         classroomId: row.room.id,
