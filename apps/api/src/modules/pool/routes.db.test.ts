@@ -264,7 +264,7 @@ describe("the draft and publication routes", () => {
   });
 
   it("refuses a category that is not one of the pool's: the 404 of a move", async () => {
-    const post = (user: typeof owner, url: string, payload: unknown) =>
+    const post = (user: typeof owner, url: string, payload: Payload) =>
       server.app.inject({ method: "POST", url, headers: user.headers, payload });
     const categoryIn = async (user: typeof owner, name: string) => {
       const pool = await post(user, "/app/api/pools", { name });
