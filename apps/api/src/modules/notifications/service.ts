@@ -36,10 +36,10 @@ import {
 } from "@quiz/contracts";
 
 import type { Db } from "../../db/client.js";
-import { notificationPreferences, notifications, teamsLinks, users } from "../../db/schema.js";
+import { notificationPreferences, notifications, users } from "../../db/schema.js";
 import { hint, userTopic } from "../realtime/bus.js";
 import { enqueueDeliveries, teamsOpen, type ExternalChannel } from "./outbox.js";
-import { teamsLinkOf } from "./teamsLink.js";
+import { teamsLinkedUsers, teamsLinkOf } from "./teamsLink.js";
 
 const DEFAULT_LIMIT = 30;
 
@@ -120,18 +120,9 @@ export async function notifyMany(
   const planned = parsed.map((d) => ({ ...d, wanted: wantedBy(d.userId, d.payload.kind) }));
 
   // A Teams job needs a link; without one it would only be dropped later.
-  const teamsWanted = teamsOpen()
-    ? [...new Set(planned.filter((d) => d.wanted.teams).map((d) => d.userId))]
-    : [];
-  const linked = new Set(
-    teamsWanted.length === 0
-      ? []
-      : (
-          await db
-            .select({ userId: teamsLinks.userId })
-            .from(teamsLinks)
-            .where(inArray(teamsLinks.userId, teamsWanted))
-        ).map((r) => r.userId),
+  const linked = await teamsLinkedUsers(
+    db,
+    teamsOpen() ? [...new Set(planned.filter((d) => d.wanted.teams).map((d) => d.userId))] : [],
   );
 
   const bells = planned.map((d) =>

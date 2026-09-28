@@ -168,6 +168,16 @@ export async function teamsLinkOf(
   return row ?? null;
 }
 
+/** Which of `userIds` have linked Teams: {@link teamsLinkOf} by account, for many accounts in one query. */
+export async function teamsLinkedUsers(db: Db, userIds: readonly string[]): Promise<Set<string>> {
+  if (userIds.length === 0) return new Set();
+  const rows = await db
+    .select({ userId: teamsLinks.userId })
+    .from(teamsLinks)
+    .where(inArray(teamsLinks.userId, [...userIds]));
+  return new Set(rows.map((r) => r.userId));
+}
+
 /** Forgets an account's link (Disconnect). Returns the account; null when there was none. */
 export async function unlinkTeams(db: Db, key: { userId: string }): Promise<string | null> {
   const [row] = await db

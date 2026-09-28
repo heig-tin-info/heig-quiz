@@ -532,8 +532,10 @@ async function loadQueueContext(
     history,
     roster,
     staffAttempts,
+    // Only when some cell will show them: an empty panel never parsed a
+    // config, and must not start failing on one that no longer loads.
     configs: new Map(
-      selection.items.map((i) => [
+      (selection.attempts.length === 0 ? [] : selection.items).map((i) => [
         i.item.id,
         loadConfig(i.question.type, {
           config: i.version.config,
