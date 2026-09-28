@@ -21,6 +21,7 @@ import type { ComponentProps, ReactNode } from "react";
 import { useT } from "../i18n";
 import { cx, useNow, type IconType } from "./layers";
 import { rovingIndex } from "./menu";
+import { useScrollFade } from "./page";
 
 // --- Live primitives (PLAN-MVP §6.4) ---
 //
@@ -323,15 +324,14 @@ const MIN_SEGMENT = 14;
 
 /**
  * How often a number is shown, from the strip's measured width. `1` is "every
- * one of them"; `5` is the compressed mode (under {@link MIN_SEGMENT} the
- * strip scrolls, and shows them all again). A width of 0 is "not
+ * one of them"; `5` is the compressed mode. (Under {@link MIN_SEGMENT} the
+ * strip scrolls instead, and shows them all.) A width of 0 is "not
  * measured yet" (first paint, or a test with no layout) and shows everything:
  * the strip must never come up thinned out on a screen that had the room.
  */
 function segmentLabelStep(width: number, count: number): 1 | 5 {
   if (width <= 0 || count <= 1) return 1;
-  const per = width / count;
-  return per >= 22 || per < MIN_SEGMENT ? 1 : 5;
+  return width / count >= 22 ? 1 : 5;
 }
 
 /**
@@ -405,13 +405,16 @@ export function ProgressSegments({
   }, []);
   const per = width / segments.length;
   const scrolls = width > 0 && per < MIN_SEGMENT;
-  const step = segmentLabelStep(width, segments.length);
+  const step = scrolls ? 1 : segmentLabelStep(width, segments.length);
   // The glyph inside a circle (the check, the dash) needs room around it;
   // compressed, the circles drop to dots and the SHAPE — solid, hollow,
   // dashed — is what is left to tell the marks apart.
   const roomy = width === 0 || scrolls || per >= ROOMY_SEGMENT;
-  // Scrolling, the current question is kept in the middle of the strip. The
-  // strip scrolls itself, never the page (which `scrollIntoView` would).
+  // Scrolling, the current question is kept in the middle of the strip, and
+  // back there after a rotation. The strip scrolls itself, never the page
+  // (which `scrollIntoView` would). The first centring is a jump: a strip
+  // sliding from question 1 on every load would be noise.
+  const centred = useRef(false);
   useEffect(() => {
     const el = strip.current;
     const button = el?.querySelectorAll("button")[current];
@@ -419,9 +422,11 @@ export function ProgressSegments({
     const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     el.scrollTo?.({
       left: button.offsetLeft - (el.clientWidth - button.offsetWidth) / 2,
-      behavior: reduce ? "auto" : "smooth",
+      behavior: reduce || !centred.current ? "auto" : "smooth",
     });
-  }, [scrolls, current]);
+    centred.current = true;
+  }, [scrolls, current, width]);
+  const fade = useScrollFade(strip, scrolls ? `${segments.length}` : "");
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     const buttons = Array.from(strip.current?.querySelectorAll("button") ?? []);
@@ -437,9 +442,15 @@ export function ProgressSegments({
       ref={strip}
       aria-label={label}
       onKeyDown={onKeyDown}
+      style={fade}
       className={cx(
         "relative flex w-full items-start",
-        scrolls && "overflow-x-auto overscroll-x-contain [scrollbar-width:thin]",
+        // The padding keeps the global focus ring (2 px + 2 px offset) inside
+        // the scroller, which clips both axes; it counts in `clientWidth`,
+        // so the measured width, and the mode, stay the same. The negative
+        // margin gives the row its height back. `overflow-y-hidden`: no
+        // vertical scrollbar on hosts that draw them.
+        scrolls && "-my-1 overflow-x-auto overflow-y-hidden overscroll-x-contain p-1 [scrollbar-width:thin]",
         className,
       )}
     >

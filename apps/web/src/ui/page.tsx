@@ -1,6 +1,6 @@
 import { PenLine } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { ReactNode, RefObject } from "react";
+import type { CSSProperties, ReactNode, RefObject } from "react";
 
 import { cx, HelpIcon, Tip, type IconType } from "./layers";
 import { rovingIndex } from "./menu";
@@ -329,7 +329,7 @@ export function Stat({
   );
 }
 
-/** Width of the fade drawn over a scrollable edge of a tab strip. */
+/** Width of the fade drawn over a scrollable edge of a strip. */
 const TAB_FADE = "36px";
 
 /**
@@ -346,6 +346,44 @@ export function scrollEdges(
     left: scrollLeft > 1,
     right: scrollLeft + clientWidth < scrollWidth - 1,
   };
+}
+
+/**
+ * Fades whichever edge of a horizontal scroller still hides content, so a
+ * strip never simply stops at the screen edge (Tabs, the player's stepper).
+ * `shape` is anything that changes when the content does: the edges are
+ * measured from the rendered strip, not from a count.
+ */
+export function useScrollFade(
+  strip: RefObject<HTMLElement | null>,
+  shape: string,
+): CSSProperties | undefined {
+  const [edges, setEdges] = useState({ left: false, right: false });
+  // Layout effect: measuring after paint would show one unfaded frame.
+  useLayoutEffect(() => {
+    const el = strip.current;
+    if (!el) return;
+    const update = () =>
+      setEdges((prev) => {
+        const next = scrollEdges(el.scrollLeft, el.scrollWidth, el.clientWidth);
+        // Same edges, same object: a fresh one would re-render on every scroll.
+        return prev.left === next.left && prev.right === next.right ? prev : next;
+      });
+    update();
+    el.addEventListener("scroll", update, { passive: true });
+    if (typeof ResizeObserver === "undefined") return () => el.removeEventListener("scroll", update);
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => {
+      el.removeEventListener("scroll", update);
+      observer.disconnect();
+    };
+  }, [strip, shape]);
+  if (!edges.left && !edges.right) return undefined;
+  // A mask, not an overlay: it fades whatever the strip holds without laying a
+  // canvas-coloured rectangle over it, which would be wrong in dark mode.
+  const mask = `linear-gradient(to right, transparent 0, #000 ${edges.left ? TAB_FADE : "0px"}, #000 calc(100% - ${edges.right ? TAB_FADE : "0px"}), transparent 100%)`;
+  return { maskImage: mask, WebkitMaskImage: mask };
 }
 
 /**
@@ -381,7 +419,6 @@ export function Tabs<V extends string>({
 }) {
   const refs = useRef<Partial<Record<V, HTMLButtonElement | null>>>({});
   const strip = useRef<HTMLDivElement>(null);
-  const [edges, setEdges] = useState({ left: false, right: false });
   const selected = items.findIndex((it) => it.value === value);
   /**
    * Which tab holds the roving tabindex. A `value` matching no item (a hand
@@ -391,32 +428,10 @@ export function Tabs<V extends string>({
   const roving = selected >= 0 ? selected : 0;
   // The fade is measured from the rendered strip, so it has to be recomputed
   // whenever the labels or the counts change, not only their number.
-  const shape = items.map((it) => `${it.value}\u0000${it.label}\u0000${it.count ?? ""}`).join("|");
-  // Layout effect: measuring after paint would show one unfaded frame.
-  useLayoutEffect(() => {
-    const el = strip.current;
-    if (!el) return;
-    const update = () =>
-      setEdges((prev) => {
-        const next = scrollEdges(el.scrollLeft, el.scrollWidth, el.clientWidth);
-        // Same edges, same object: a fresh one would re-render on every scroll.
-        return prev.left === next.left && prev.right === next.right ? prev : next;
-      });
-    update();
-    el.addEventListener("scroll", update, { passive: true });
-    const observer = new ResizeObserver(update);
-    observer.observe(el);
-    return () => {
-      el.removeEventListener("scroll", update);
-      observer.disconnect();
-    };
-  }, [shape]);
-  // A mask, not an overlay: it fades whatever the strip holds without laying a
-  // canvas-coloured rectangle over it, which would be wrong in dark mode.
-  const mask =
-    edges.left || edges.right
-      ? `linear-gradient(to right, transparent 0, #000 ${edges.left ? TAB_FADE : "0px"}, #000 calc(100% - ${edges.right ? TAB_FADE : "0px"}), transparent 100%)`
-      : undefined;
+  const mask = useScrollFade(
+    strip,
+    items.map((it) => `${it.value}\u0000${it.label}\u0000${it.count ?? ""}`).join("|"),
+  );
   const onKeyDown = (e: React.KeyboardEvent) => {
     const next = rovingIndex(e.key, roving, items.length);
     if (next === null) return;
@@ -440,7 +455,7 @@ export function Tabs<V extends string>({
         // the hairline), and an `overflow-x-auto` strip alone answers that
         // pixel with a vertical scrollbar on hosts that draw them.
         className="flex snap-x snap-proximity gap-1 overflow-x-auto overflow-y-hidden"
-        style={mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined}
+        style={mask}
       >
         {items.map((it, i) => {
           const Icon = it.icon;
