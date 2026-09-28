@@ -8,7 +8,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, InjectOptions } from "fastify";
 
 import { buildApp } from "../app.js";
 import { TestClock } from "../clock.js";
@@ -17,6 +17,14 @@ import { loadConfig } from "../config.js";
 import { createDb } from "../db/client.js";
 import { users } from "../db/schema.js";
 import { MIGRATIONS_DIR } from "../paths.js";
+
+/**
+ * A request body `app.inject` accepts. The inject helpers of the route tests
+ * take `payload?: Payload` and spread it only when present: under
+ * `exactOptionalPropertyTypes`, neither `unknown` nor an explicit `undefined`
+ * fits `InjectOptions`.
+ */
+export type Payload = NonNullable<InjectOptions["payload"]>;
 
 export interface TestServer {
   app: FastifyInstance;

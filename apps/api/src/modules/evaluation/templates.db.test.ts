@@ -33,7 +33,7 @@ import {
   ownedPollSql,
   pools,
 } from "../../db/schema.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { seedLive, type Seeded } from "../../test/live.js";
 import { findManagedEvaluation, findReachableEvaluation } from "../guards.js";
@@ -57,13 +57,13 @@ const call = (
   who: Caller,
   method: "GET" | "POST" | "DELETE" | "PATCH",
   url: string,
-  payload?: unknown,
+  payload?: Payload,
 ) =>
   server.app.inject({
     method,
     url,
     headers: who.headers,
-    ...(payload === undefined ? {} : { payload: payload as object }),
+    ...(payload === undefined ? {} : { payload }),
   });
 
 /** A course with an exam of two questions, its teacher signed in. */

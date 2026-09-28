@@ -3,16 +3,15 @@
  * statements, and the supersede chain `writeGradings` builds for many cells
  * at once. The behaviour of the pass itself is `grading.db.test.ts`.
  */
+import type { PGlite } from "@electric-sql/pglite";
 import { and, eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/pglite";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
-import * as schema from "../../db/schema.js";
 import { attempts, gradings } from "../../db/schema.js";
-import { testApp, testDb, type TestDb } from "../../test/db.js";
+import { pgliteDb, testApp, testDatabase } from "../../test/db.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { applyState, joinedItems } from "../evaluation/service.js";
@@ -20,14 +19,13 @@ import * as live from "../live/service.js";
 import { runEvaluationGrading } from "./jobs.js";
 import { writeGradings } from "./service.js";
 
-let raw: TestDb;
+let client: PGlite;
 let db: Db;
 const restores: (() => void)[] = [];
 
 beforeAll(async () => {
   restores.push(registerForTests(fakeShort));
-  raw = await testDb();
-  db = raw as unknown as Db;
+  ({ db, client } = await testDatabase());
 });
 afterAll(() => {
   for (const restore of restores) restore();
@@ -66,11 +64,8 @@ describe("the grading pass writes in batches (D-01)", () => {
     // The same database, seen through a drizzle handle that logs every
     // statement, and the driver's transactions counted underneath.
     const statements: string[] = [];
-    const logged = drizzle(raw.$client, {
-      schema,
-      logger: { logQuery: (query) => statements.push(query) },
-    });
-    const transactions = vi.spyOn(raw.$client, "transaction");
+    const logged = pgliteDb(client, { logQuery: (query) => statements.push(query) });
+    const transactions = vi.spyOn(client, "transaction");
     const app = await testApp(logged);
     app.clock.set(NOW.toISOString());
 

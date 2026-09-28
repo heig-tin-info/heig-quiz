@@ -26,7 +26,7 @@ import {
   questions,
   questionVersions,
 } from "../../db/schema.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import { FORBIDDEN_STUDENT_KEYS } from "../live/studentView.js";
 import * as poolService from "../pool/service.js";
@@ -61,7 +61,7 @@ afterAll(async () => {
 
 const get = (url: string, headers: Record<string, string> = {}) =>
   server.app.inject({ method: "GET", url, headers });
-const post = (url: string, headers: Record<string, string> = {}, payload?: unknown) =>
+const post = (url: string, headers: Record<string, string> = {}, payload?: Payload) =>
   server.app.inject({
     method: "POST",
     url,

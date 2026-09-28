@@ -14,7 +14,7 @@ import { registerForTests } from "@quiz/registry/server";
 
 import { attempts, auditLog, evaluations, gradings } from "../../db/schema.js";
 import { subscribe, type Topic } from "../../events.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { applyState } from "../evaluation/service.js";
@@ -45,7 +45,7 @@ afterAll(async () => {
 
 const get = (url: string, headers: Record<string, string>) =>
   server.app.inject({ method: "GET", url, headers });
-const post = (url: string, headers: Record<string, string>, payload?: unknown) =>
+const post = (url: string, headers: Record<string, string>, payload?: Payload) =>
   server.app.inject({ method: "POST", url, headers, ...(payload === undefined ? {} : { payload }) });
 
 describe("the teacher's authoring surface (§4.3)", () => {
@@ -146,7 +146,7 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
       if (m.kind === "hint") hints.push({ type: m.type, topics: m.topics });
     });
     try {
-      const writes: [string, unknown][] = [
+      const writes: [string, Payload][] = [
         [`/app/api/evaluations/${seed.evaluationId}/attempt`, {}],
         [`/app/api/attempts/${attemptId}/position`, { itemId }],
         [`/app/api/attempts/${attemptId}/events`, { kind: "reconnect" }],

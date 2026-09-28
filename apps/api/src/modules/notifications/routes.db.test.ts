@@ -14,7 +14,7 @@ import { NotificationSettings, TeamsLinkPreview, TeamsTabState } from "@quiz/con
 
 import { auditLog, teamsLinks, teamsLinkTokens } from "../../db/schema.js";
 import { ENTRA_TENANT, fakeEntra, type FakeEntra } from "../../test/entra.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { issueLinkToken } from "./teamsLink.js";
 
 const APP_ID = "31583357-0d89-48ab-8eeb-e9bc49f9e243";
@@ -46,7 +46,7 @@ describe("without a Teams application", () => {
 
   it("stores one toggle and refuses a kind or channel it does not know", async () => {
     const { headers } = await server.signIn("teacher");
-    const put = (payload: unknown) =>
+    const put = (payload: Payload) =>
       server.app.inject({ method: "PUT", url: "/app/api/notifications/preferences", headers, payload });
     const ok = await put({ kind: "pool_shared", channel: "email", enabled: false });
     expect(ok.statusCode).toBe(200);

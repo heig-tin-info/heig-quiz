@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 
 import { questions } from "../../db/schema.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import * as poolService from "../pool/service.js";
 
@@ -60,8 +60,8 @@ async function question(
 
 const get = (url: string, headers: Record<string, string>) =>
   server.app.inject({ method: "GET", url, headers });
-const post = (url: string, headers: Record<string, string>, payload: unknown) =>
-  server.app.inject({ method: "POST", url, headers, payload: payload as object });
+const post = (url: string, headers: Record<string, string>, payload: Payload) =>
+  server.app.inject({ method: "POST", url, headers, payload });
 
 const ids = (body: { items: { id: string }[] }) => body.items.map((i) => i.id).sort();
 

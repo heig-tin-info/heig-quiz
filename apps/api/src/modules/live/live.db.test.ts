@@ -43,7 +43,7 @@ let clock: TestClock;
 
 beforeAll(async () => {
   restores.push(registerForTests(fakeShort), registerForTests(fakeRunnableCode));
-  db = (await testDb()) as unknown as Db;
+  db = await testDb();
 });
 afterAll(() => {
   for (const restore of restores) restore();
@@ -1570,7 +1570,7 @@ describe("dashboard read model (F-DASH-01..04)", () => {
     const seatId = randomUUID();
     await db.insert(enrollments).values({
       id: seatId,
-      classroomId: evaluation.classroomId,
+      classroomId: evaluation.classroomId!,
       nom: "Zwick",
       prenom: "Arnaud",
       email: `arnaud-${seatId.slice(0, 6)}@heig.test`,

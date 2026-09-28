@@ -3,11 +3,12 @@ import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 
+import type { Db } from "../../db/client.js";
 import { classrooms, courses, enrollments, userEmails, users } from "../../db/schema.js";
-import { testDb, type TestDb } from "../../test/db.js";
+import { testDb } from "../../test/db.js";
 import { claimEnrollments, claimForExistingUsers } from "./roster.js";
 
-async function seedClassroom(db: TestDb) {
+async function seedClassroom(db: Db) {
   const courseId = randomUUID();
   const classroomId = randomUUID();
   await db
@@ -18,7 +19,7 @@ async function seedClassroom(db: TestDb) {
 }
 
 /** An account and its address set, as a login writes them (GH-11). */
-async function seedUser(db: TestDb, login: string, ...institutional: string[]) {
+async function seedUser(db: Db, login: string, ...institutional: string[]) {
   const id = randomUUID();
   await db
     .insert(users)
@@ -35,19 +36,19 @@ async function seedUser(db: TestDb, login: string, ...institutional: string[]) {
   return id;
 }
 
-async function seedEntry(db: TestDb, classroomId: string, email: string, nom = "Lovelace") {
+async function seedEntry(db: Db, classroomId: string, email: string, nom = "Lovelace") {
   const id = randomUUID();
   await db.insert(enrollments).values({ id, classroomId, nom, prenom: "Ada", email });
   return id;
 }
 
-async function entry(db: TestDb, id: string) {
+async function entry(db: Db, id: string) {
   const [row] = await db.select().from(enrollments).where(eq(enrollments.id, id));
   return row!;
 }
 
 describe("claimEnrollments (AU-18/AU-21)", () => {
-  let db: TestDb;
+  let db: Db;
   beforeAll(async () => {
     db = await testDb();
   });
@@ -137,7 +138,7 @@ describe("claimEnrollments (AU-18/AU-21)", () => {
 });
 
 describe("claimForExistingUsers (reverse claim)", () => {
-  let db: TestDb;
+  let db: Db;
   beforeAll(async () => {
     db = await testDb();
   });

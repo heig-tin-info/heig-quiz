@@ -3,16 +3,17 @@ import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import type { AppConfig } from "./config.js";
+import type { Db } from "./db/client.js";
 import { teacherGrants, users } from "./db/schema.js";
 import { roleForIdentity, syncUserRole } from "./roles.js";
-import { testDb, type TestDb } from "./test/db.js";
+import { testDb } from "./test/db.js";
 
 const config = {
   SUPER_ADMIN_EMAIL: "boss@heig.test",
   STAFF_AFFILIATION_DOMAINS: ["heig-vd.ch", "hes-so.ch"],
 } as AppConfig;
 
-let db: TestDb;
+let db: Db;
 
 beforeAll(async () => {
   db = await testDb();

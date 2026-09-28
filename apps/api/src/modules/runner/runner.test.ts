@@ -25,7 +25,7 @@ const REQUEST: RunnerRequest = {
   compileArgs: "",
   action: "run",
   limits: { timeMs: 1000, memoryMb: 64, outputKb: 16 },
-  cases: [{ name: "one", stdin: "" }],
+  cases: [{ name: "one", args: [], stdin: "" }],
   priority: "grading",
 };
 

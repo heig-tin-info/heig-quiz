@@ -1,8 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
-  // `typecheck` still runs on this file, not on tsconfig.test.json: the test
-  // files carry ~540 latent type errors (mostly the `inject` helpers under
-  // exactOptionalPropertyTypes). Until they are fixed, the helpers of
-  // `src/test` stay in this program so that at least they are checked.
+  // The build leaves the tests out of dist/; `typecheck` runs on
+  // tsconfig.test.json, which puts them back.
   "exclude": ["${configDir}/src/**/*.test.ts"]
 }

@@ -18,7 +18,7 @@ import { registerForTests } from "@quiz/registry/server";
 import type { Db } from "../../db/client.js";
 import { answers, attempts, gradings, guestParticipants } from "../../db/schema.js";
 import { subscribe } from "../../events.js";
-import { testApp, testDb, type TestDb } from "../../test/db.js";
+import { testApp, testDb } from "../../test/db.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
 import { seedCodeEvaluation } from "../../test/codeFixture.js";
 import { reload, seedLive } from "../../test/live.js";
@@ -27,14 +27,12 @@ import * as live from "../live/service.js";
 import { runEvaluationGrading } from "./jobs.js";
 import * as service from "./service.js";
 
-let raw: TestDb;
 let db: Db;
 const restores: (() => void)[] = [];
 
 beforeAll(async () => {
   restores.push(registerForTests(fakeShort));
-  raw = await testDb();
-  db = raw as unknown as Db;
+  db = await testDb();
 });
 afterAll(() => {
   for (const restore of restores) restore();
@@ -42,7 +40,7 @@ afterAll(() => {
 
 /** An app whose db is the shared one; `boss` is null, so jobs run inline. */
 async function appFor() {
-  const app = await testApp(raw);
+  const app = await testApp(db);
   app.clock.set("2026-09-20T09:00:00.000Z");
   return app;
 }
@@ -396,7 +394,7 @@ describe("the supersede chain (F-GRADE-05)", () => {
       db,
       { ...cell, answerId: answer!.id, maxPoints: items[0]!.item.points },
       { points: 0.5, comment: "half a point for the idea" },
-      rows[0]!.userId,
+      rows[0]!.userId!,
       app.clock.now(),
     );
 
@@ -420,7 +418,7 @@ describe("the supersede chain (F-GRADE-05)", () => {
           maxPoints: 1,
         },
         { points: 1, comment: "   " },
-        rows[0]!.userId,
+        rows[0]!.userId!,
         app.clock.now(),
       ),
     ).rejects.toThrow(service.CommentRequired);
@@ -490,7 +488,7 @@ describe("batch validation (F-GRADE-04)", () => {
       db,
       evaluation.id,
       { itemId: items[0]!.item.id },
-      rows[0]!.userId,
+      rows[0]!.userId!,
       now,
     );
     expect(byItem).toBe(1);
@@ -499,13 +497,13 @@ describe("batch validation (F-GRADE-04)", () => {
       db,
       evaluation.id,
       { confidence: "high" },
-      rows[0]!.userId,
+      rows[0]!.userId!,
       now,
     );
     // The high-confidence one is already validated; nothing is left.
     expect(byConfidence).toBe(0);
 
-    const rest = await service.batchValidate(db, evaluation.id, {}, rows[0]!.userId, now);
+    const rest = await service.batchValidate(db, evaluation.id, {}, rows[0]!.userId!, now);
     expect(rest).toBe(1);
   });
 
@@ -528,7 +526,7 @@ describe("batch validation (F-GRADE-04)", () => {
       });
     const [clicked, batched] = [await propose(rows[0]!.id), await propose(rows[1]!.id)];
     app.clock.advance(1000);
-    const teacher = rows[0]!.userId;
+    const teacher = rows[0]!.userId!;
     await service.validateGrading(db, clicked, {}, teacher, app.clock.now());
     expect(
       await service.batchValidate(db, evaluation.id, { itemId: items[1]!.item.id }, teacher, app.clock.now()),

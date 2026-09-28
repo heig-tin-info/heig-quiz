@@ -24,7 +24,7 @@ import {
   questions,
 } from "../../db/schema.js";
 import { testDb } from "../../test/db.js";
-import { testServer } from "../../test/http.js";
+import { type Payload, testServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { loadConfig, typeOf } from "../pool/config.js";
@@ -41,7 +41,7 @@ const points = (type: string, version: { config: unknown; configVersion: number 
 
 beforeAll(async () => {
   restore = registerForTests(fakeShort);
-  db = (await testDb()) as unknown as Db;
+  db = await testDb();
 });
 afterAll(() => restore());
 
@@ -451,7 +451,7 @@ describe("the item list freezes once the evaluation is opened (issue #79)", () =
         error: "items_frozen",
         message: "the evaluation has been opened: its questions are frozen",
       };
-      const writes: [string, "POST" | "PATCH" | "PUT" | "DELETE", string, unknown][] = [
+      const writes: [string, "POST" | "PATCH" | "PUT" | "DELETE", string, Payload | undefined][] = [
         ["add items", "POST", `${base}/items`, { questionIds: mine.questionIds.slice(0, 1) }],
         ["patch item", "PATCH", itemUrl, { points: 3 }],
         ["reorder", "PUT", `${base}/items/order`, { itemIds: [...mine.itemIds].reverse() }],
@@ -737,7 +737,7 @@ describe("patch and duplicate", () => {
       const teacher = await server.signIn("teacher");
       const seed = await seedLive(server.app.db, { teacherId: teacher.id, mode: "exercise" });
       const url = `/app/api/evaluations/${seed.evaluationId}`;
-      const send = (payload: unknown) =>
+      const send = (payload: Payload) =>
         server.app.inject({ method: "PATCH", url, headers: teacher.headers, payload });
 
       // The take-home preset: a common end, no waiting room, feedback right away.
@@ -853,7 +853,7 @@ describe("the order of the refusals, over HTTP", () => {
       const stranger = await server.signIn("teacher");
       const mine = await seedLive(server.app.db, { teacherId: teacher.id });
       const itemUrl = `/app/api/evaluations/${mine.evaluationId}/items/${mine.itemIds[0]}`;
-      const patch = (url: string, headers: Record<string, string>, payload: unknown) =>
+      const patch = (url: string, headers: Record<string, string>, payload: Payload) =>
         server.app.inject({ method: "PATCH", url, headers, payload });
       const badBody = { points: "many" };
 
@@ -888,7 +888,7 @@ describe("the order of the refusals, over HTTP", () => {
         .values({ id: randomUUID(), evaluationId: mine.evaluationId, userId: mine.studentIds[0]!, seed: 1 });
       const base = `/app/api/evaluations/${mine.evaluationId}`;
       const locked = { error: "locked", message: "an attempt exists: the structure is frozen" };
-      const writes: [string, "POST" | "PATCH" | "PUT" | "DELETE", string, unknown, unknown][] = [
+      const writes: [string, "POST" | "PATCH" | "PUT" | "DELETE", string, Payload | undefined, unknown][] = [
         ["patch evaluation", "PATCH", base, { durationS: 600 }, locked],
         ["add items", "POST", `${base}/items`, { questionIds: mine.questionIds.slice(0, 1) }, locked],
         ["patch item", "PATCH", itemUrl, { points: 3 }, locked],

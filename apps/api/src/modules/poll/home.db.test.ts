@@ -16,7 +16,7 @@ import { eq } from "drizzle-orm";
 import { StudentHome } from "@quiz/contracts";
 
 import { evaluations, questions } from "../../db/schema.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import * as poolService from "../pool/service.js";
 
@@ -48,7 +48,7 @@ afterAll(async () => {
 
 const get = (url: string, headers: Record<string, string>) =>
   server.app.inject({ method: "GET", url, headers });
-const post = (url: string, headers: Record<string, string>, payload?: unknown) =>
+const post = (url: string, headers: Record<string, string>, payload?: Payload) =>
   server.app.inject({
     method: "POST",
     url,

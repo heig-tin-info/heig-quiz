@@ -44,7 +44,7 @@ import {
   gradings,
   questions,
 } from "../../db/schema.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import * as evaluationService from "../evaluation/service.js";
@@ -69,7 +69,7 @@ beforeAll(async () => {
   restores.push(registerForTests(fakeShort), registerForTests(fakeRunnableCode));
   server = await testServer();
   server.clock.set("2026-09-20T09:00:00.000Z");
-  db = server.app.db as unknown as Db;
+  db = server.app.db;
   defaultRunner = (server.app as unknown as { runner: unknown }).runner;
   teacher = await server.signIn("teacher");
   stranger = await server.signIn("teacher");
@@ -81,7 +81,7 @@ afterAll(async () => {
 });
 beforeEach(() => setRunner(defaultRunner));
 
-const post = (url: string, headers: Record<string, string>, payload?: unknown) =>
+const post = (url: string, headers: Record<string, string>, payload?: Payload) =>
   server.app.inject({ method: "POST", url, headers, ...(payload === undefined ? {} : { payload }) });
 
 // --- The world ----------------------------------------------------------------
@@ -580,7 +580,7 @@ describe("grading a preview", () => {
     const colleague = await server.signIn("teacher");
     const [row] = await db.select().from(evaluations).where(eq(evaluations.id, w.evaluationId));
     // A colleague on the same course's staff: the budget is per teacher.
-    const [room] = await db.select().from(classrooms).where(eq(classrooms.id, row!.classroomId));
+    const [room] = await db.select().from(classrooms).where(eq(classrooms.id, row!.classroomId!));
     await db.insert(courseStaff).values({ courseId: room!.courseId, userId: colleague.id });
     const grade = () => post(`${w.url}/grade`, colleague.headers, { seed: 3, answers: {} });
     for (let i = 0; i < service.GRADES_PER_MINUTE; i++) expect((await grade()).statusCode).toBe(200);

@@ -21,7 +21,7 @@ import {
   enrollments,
   gradings,
 } from "../../db/schema.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { applyState, joinedItems } from "../evaluation/service.js";
@@ -49,7 +49,7 @@ afterAll(async () => {
 
 const get = (url: string, headers: Record<string, string>) =>
   server.app.inject({ method: "GET", url, headers });
-const post = (url: string, headers: Record<string, string>, payload?: unknown) =>
+const post = (url: string, headers: Record<string, string>, payload?: Payload) =>
   server.app.inject({ method: "POST", url, headers, ...(payload === undefined ? {} : { payload }) });
 const del = (url: string, headers: Record<string, string>) =>
   server.app.inject({ method: "DELETE", url, headers });

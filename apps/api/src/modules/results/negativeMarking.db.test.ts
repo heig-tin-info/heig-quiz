@@ -26,7 +26,7 @@ import { registerForTests } from "@quiz/registry/server";
 
 import { answers, attempts, evaluations, gradings, questions } from "../../db/schema.js";
 import { fakeShort } from "../../test/fakeType.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { reload, seedLive } from "../../test/live.js";
 import * as evaluationService from "../evaluation/service.js";
 import { applyState, joinedItems, type EvaluationRecord } from "../evaluation/service.js";
@@ -58,8 +58,8 @@ const send = (
   method: "POST" | "PATCH",
   url: string,
   headers: Record<string, string>,
-  payload: unknown = {},
-) => server.app.inject({ method, url, headers, payload: payload as object });
+  payload: Payload = {},
+) => server.app.inject({ method, url, headers, payload });
 
 /** A single-answer question with four choices, the key second: a distractor costs a third. */
 const SINGLE = {
@@ -501,7 +501,7 @@ describe("retakes keep the best or the last FLOORED total (ADR-025)", () => {
 });
 
 describe("the setting", () => {
-  const patch = (id: string, body: unknown) =>
+  const patch = (id: string, body: Payload) =>
     send("PATCH", `/app/api/evaluations/${id}`, teacher.headers, body);
 
   it("is set in a settings patch while nothing is frozen", async () => {

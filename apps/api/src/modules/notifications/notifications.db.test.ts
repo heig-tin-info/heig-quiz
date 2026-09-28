@@ -77,7 +77,7 @@ async function sharedPool(name: string) {
 }
 
 beforeAll(async () => {
-  db = (await testDb()) as unknown as Db;
+  db = await testDb();
   alice = await seedUser("alice@heig.test");
   bob = await seedUser("bob@heig.test");
 });
