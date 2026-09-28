@@ -921,7 +921,7 @@ describe("running code (POST /attempts/:id/run)", () => {
     const seed = await seedLive(db, { questions: 0 });
     const draft = await reload(db, seed.evaluationId);
     const { createQuestion, putDraft, publishQuestion } = await import("../pool/service.js");
-    const questionId = await createQuestion(db, {
+    const { id: questionId } = await createQuestion(db, {
       poolId: seed.poolId,
       type: "code",
       internalName: "runnable",

@@ -64,12 +64,13 @@ async function seedPool(): Promise<string> {
 
 /** A question with its draft, through the real creation path. */
 async function seedQuestion(name: string, poolOverride = poolId): Promise<string> {
-  return service.createQuestion(db, {
+  const { id } = await service.createQuestion(db, {
     poolId: poolOverride,
     type: "short",
     internalName: name,
     createdBy: ownerId,
   });
+  return id;
 }
 
 async function questionRow(id: string) {
@@ -458,7 +459,7 @@ describe("categories and copies", () => {
     await writeDraft(id, { statement: "Copied", answer: "yes" });
     await service.patchQuestion(db, await questionRow(id), { tags: ["shared"] });
 
-    const copyId = await service.copyQuestion(db, await questionRow(id), {
+    const { id: copyId } = await service.copyQuestion(db, await questionRow(id), {
       targetPoolId: target.valueOf(),
       userId: ownerId,
     });
@@ -472,7 +473,7 @@ describe("categories and copies", () => {
     expect(detail.versions).toEqual([]);
 
     // Copying next to the original picks a free name rather than failing.
-    const sibling = await service.copyQuestion(db, await questionRow(id), {
+    const { id: sibling } = await service.copyQuestion(db, await questionRow(id), {
       targetPoolId: poolId,
       userId: ownerId,
     });

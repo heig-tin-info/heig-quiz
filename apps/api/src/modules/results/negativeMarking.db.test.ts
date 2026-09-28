@@ -92,7 +92,7 @@ const MULTIPLE = {
 };
 
 async function publishMcq(poolId: string, name: string, config: object): Promise<string> {
-  const id = await pool.createQuestion(db(), {
+  const { id } = await pool.createQuestion(db(), {
     poolId,
     type: "mcq",
     internalName: name,

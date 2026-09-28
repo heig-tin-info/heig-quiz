@@ -230,19 +230,18 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     }
     const pool = await poolService.ensurePersonalPool(app.db, req.user!.id);
     try {
-      const id = await poolService.createQuestion(app.db, {
+      const created = await poolService.createQuestion(app.db, {
         poolId: pool.id,
         type: body.data.type,
         internalName: body.data.internalName,
         createdBy: req.user!.id,
       });
-      const [created] = await app.db.select().from(questions).where(eq(questions.id, id));
-      await trace(req, "question.create", "question", id, {
+      await trace(req, "question.create", "question", created.id, {
         poolId: pool.id,
         type: body.data.type,
         internalName: body.data.internalName,
       });
-      return reply.code(201).send(await poolService.questionDetail(app.db, created!));
+      return reply.code(201).send(await poolService.questionDetail(app.db, created));
     } catch {
       return reply
         .code(409)

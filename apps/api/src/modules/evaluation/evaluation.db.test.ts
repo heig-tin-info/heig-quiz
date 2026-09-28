@@ -303,7 +303,7 @@ describe("items (F-EVAL-02, F-EVAL-03)", () => {
   it("refuses a question that has no published version, and one from another course", async () => {
     const seed = await seedLive(db, { questions: 0 });
     const row = await reload(db, seed.evaluationId);
-    const draftOnly = await poolService.createQuestion(db, {
+    const { id: draftOnly } = await poolService.createQuestion(db, {
       poolId: seed.poolId,
       type: "short",
       internalName: "never-published",

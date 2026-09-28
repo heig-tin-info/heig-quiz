@@ -1476,13 +1476,13 @@ export async function createQuestion(
     categoryId?: string | null;
     createdBy: string;
   },
-): Promise<string> {
+): Promise<QuestionRecord> {
   const t = typeOf(input.type);
   const { row: config } = saveDraftConfig(input.type, t.emptyDraft());
   const id = randomUUID();
   const now = new Date();
-  await db.transaction(async (tx) => {
-    await tx.insert(questions).values({
+  return db.transaction(async (tx) => {
+    const [created] = await tx.insert(questions).values({
       id,
       poolId: input.poolId,
       type: input.type,
@@ -1492,7 +1492,7 @@ export async function createQuestion(
       shuffleable: t.shuffleable(config.config),
       createdAt: now,
       updatedAt: now,
-    });
+    }).returning();
     await tx.insert(questionVersions).values({
       id: randomUUID(),
       questionId: id,
@@ -1503,8 +1503,8 @@ export async function createQuestion(
       updatedAt: now,
       createdAt: now,
     });
+    return created!;
   });
-  return id;
 }
 
 /**
@@ -2113,14 +2113,14 @@ export async function copyQuestion(
   db: Db,
   question: QuestionRecord,
   input: { targetPoolId: string; categoryId?: string | null; userId: string },
-): Promise<string> {
+): Promise<QuestionRecord> {
   const draft = await draftOf(db, question.id);
   const tags = (await tagsOf(db, [question.id])).get(question.id) ?? [];
   const id = randomUUID();
   const now = new Date();
   const name = await freeName(db, input.targetPoolId, question.internalName);
-  await db.transaction(async (tx) => {
-    await tx.insert(questions).values({
+  return db.transaction(async (tx) => {
+    const [created] = await tx.insert(questions).values({
       id,
       poolId: input.targetPoolId,
       type: question.type,
@@ -2133,7 +2133,7 @@ export async function copyQuestion(
       originQuestionId: question.id,
       createdAt: now,
       updatedAt: now,
-    });
+    }).returning();
     await tx.insert(questionVersions).values({
       id: randomUUID(),
       questionId: id,
@@ -2150,8 +2150,8 @@ export async function copyQuestion(
       // The copy may land in another pool, whose vocabulary learns the tags.
       await ensurePoolTags(tx, input.targetPoolId, tags);
     }
+    return created!;
   });
-  return id;
 }
 
 /**

@@ -91,7 +91,7 @@ const post = (url: string, headers: Record<string, string>, payload?: unknown) =
 /** One published question of `type`, with the config above. */
 async function publish(poolId: string, type: string): Promise<string> {
   const db = server.app.db;
-  const id = await poolService.createQuestion(db, {
+  const { id } = await poolService.createQuestion(db, {
     poolId,
     type,
     internalName: `feedback-${type}`,

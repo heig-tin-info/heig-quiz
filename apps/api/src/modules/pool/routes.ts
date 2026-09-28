@@ -577,21 +577,20 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       { params: IdParam, body: QuestionCreate, load: inPool("contributor") },
       async ({ req, reply, body, scope: pool }) => {
         try {
-          const id = await service.createQuestion(app.db, {
+          const created = await service.createQuestion(app.db, {
             poolId: pool.id,
             type: body.type,
             internalName: body.internalName,
             categoryId: body.categoryId ?? null,
             createdBy: req.user!.id,
           });
-          const [created] = await app.db.select().from(questions).where(eq(questions.id, id));
-          await trace(req, "question.create", "question", id, {
+          await trace(req, "question.create", "question", created.id, {
             poolId: pool.id,
             type: body.type,
             internalName: body.internalName,
           });
           poolChanged(pool.id);
-          return reply.code(201).send(await service.questionDetail(app.db, created!));
+          return reply.code(201).send(await service.questionDetail(app.db, created));
         } catch (error) {
           const handled = coreFailure(reply, error);
           if (handled) return handled;
@@ -806,18 +805,17 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
         // Reading the source is enough to copy FROM it; writing the copy needs a
         // contributor's seat on the TARGET.
         if (!(await requirePoolRole(app, req, reply, target, "contributor"))) return reply;
-        const id = await service.copyQuestion(app.db, scope.question, {
+        const created = await service.copyQuestion(app.db, scope.question, {
           targetPoolId: target.id,
           categoryId: body.categoryId ?? null,
           userId: req.user!.id,
         });
-        await trace(req, "question.copy", "question", id, {
+        await trace(req, "question.copy", "question", created.id, {
           from: scope.question.id,
           targetPoolId: target.id,
         });
         poolChanged(target.id);
-        const [created] = await app.db.select().from(questions).where(eq(questions.id, id));
-        return reply.code(201).send(await service.questionDetail(app.db, created!));
+        return reply.code(201).send(await service.questionDetail(app.db, created));
       },
     ),
   );
