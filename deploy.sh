@@ -16,6 +16,12 @@
 # credential is ever stored on the VM. A token alone (a manual deploy)
 # deploys the head of origin/main, still by its sha.
 #
+# Production refuses to restart under a live evaluation (exit 3, nothing
+# pulled, nothing restarted; scripts/live-evaluations.sql says what "live"
+# means) unless the command starts with the word "force": "force <sha>
+# <token>". The CI sends it only for the sha named by the repository
+# variable DEPLOY_FORCE_SHA (deploy.md §5, *The live-evaluation guard*).
+#
 # NEVER build here: an on-VM build starves PostgreSQL and fills the disk.
 # This only pulls a prebuilt image and restarts. The code runner is deployed
 # the same way on ITS VM by apps/runner/deploy/deploy.sh (ADR-016).
@@ -61,9 +67,18 @@ if [ -z "${QUIZ_DEPLOY_REEXEC:-}" ]; then
 fi
 trap '[ -z "${DOCKER_CONFIG:-}" ] || rm -rf "$DOCKER_CONFIG"' EXIT
 
-# "<sha> <token>" or "<token>": matched strictly, never eval'd. The sha
-# travels to the re-exec through the environment.
+# "[force] <sha> <token>" or "[force] <token>": matched strictly, never
+# eval'd. The sha and the force travel to the re-exec through the
+# environment; a first run takes the force from the request and nowhere else.
 request="${SSH_ORIGINAL_COMMAND:-}"
+if [ -z "${QUIZ_DEPLOY_REEXEC:-}" ]; then
+  QUIZ_DEPLOY_FORCE=
+fi
+if [[ "$request" =~ ^force[[:space:]]+(.+)$ ]]; then
+  QUIZ_DEPLOY_FORCE=1
+  request="${BASH_REMATCH[1]}"
+fi
+export QUIZ_DEPLOY_FORCE
 token="$request"
 if [[ "$request" =~ ^([0-9a-f]{40})[[:space:]]+(.+)$ ]]; then
   export QUIZ_DEPLOY_SHA="${BASH_REMATCH[1]}"
@@ -86,7 +101,50 @@ before=$(git rev-parse HEAD)
 git fetch --quiet origin main
 git checkout --quiet --detach "${QUIZ_DEPLOY_SHA:-origin/main}"
 if [ "$before" != "$(git rev-parse HEAD)" ] && [ -z "${QUIZ_DEPLOY_REEXEC:-}" ]; then
-  QUIZ_DEPLOY_REEXEC=1 SSH_ORIGINAL_COMMAND= exec "$0" "$@"
+  QUIZ_DEPLOY_REEXEC=1 SSH_ORIGINAL_COMMAND='' exec "$0" "$@"
+fi
+
+# The guard (docs/spec/05-architecture.md §5.9): production is never restarted
+# under a live evaluation. scripts/live-evaluations.sql says what "live"
+# means; it runs in the RUNNING database, before anything is pulled or
+# restarted. On a refusal the checkout goes back to the running commit and
+# the job fails, so the operator re-runs it once the room is empty, or with
+# "force" (deploy.md §5, *The live-evaluation guard*). Staging is not
+# guarded: nobody sits an exam there, its data is a copy of production's
+# (live rows included, frozen at the copy), and a refused staging deploy
+# would hold back every promotion.
+if [ "$environment" = production ] && [ -f .env.image ]; then
+  # An assignment, so that a failing `ps` stops the deploy (set -e) instead
+  # of reading as "no database".
+  postgres=$("${COMPOSE[@]}" ps --status running -q postgres)
+  live=
+  # No database running, no evaluation running: nothing to guard.
+  if [ -n "$postgres" ]; then
+    # Fail closed: a query that cannot run refuses the deploy like a live row.
+    live=$("${COMPOSE[@]}" exec -T postgres \
+      psql -XAtq -v ON_ERROR_STOP=1 -F $'\t' -U quiz -d quiz < scripts/live-evaluations.sql) \
+      || live="(the live-evaluation query failed: see the error above)"
+  fi
+  if [ -n "$live" ]; then
+    {
+      echo "deploy: production has a live evaluation (title | state | mode | opens | closes):"
+      printf '%s\n' "$live" | sed 's/\t/ | /g; s/^/  /'
+    } >&2
+    if [ -z "${QUIZ_DEPLOY_FORCE:-}" ]; then
+      echo "deploy: REFUSED. Re-run the deploy job once it has closed, or force it (deploy.md §5)." >&2
+      # Back to the commit actually running: .env.image names it, whichever
+      # copy of this script (old or new) did the checkout.
+      # Only a full sha reaches git: never an option-like value.
+      running=$(sed -n 's/^IMAGE_TAG=//p' .env.image)
+      if [[ "$running" =~ ^[0-9a-f]{40}$ ]]; then
+        git checkout --quiet --detach "$running"
+      else
+        echo "deploy: warning: .env.image names no sha ('$running'), checkout left at $(git rev-parse --short HEAD)." >&2
+      fi
+      exit 3
+    fi
+    echo "deploy: FORCED, restarting anyway." >&2
+  fi
 fi
 
 # The image tag is the sha, kept in .env.image so that a later manual

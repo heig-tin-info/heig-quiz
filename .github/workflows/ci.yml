@@ -194,7 +194,18 @@ jobs:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # No fallback account: an unset variable fails the deploy loudly.
           DEPLOY_USER: ${{ vars.DEPLOY_USER }}
-        run: ssh -i ~/.ssh/id_ed25519 "${DEPLOY_USER:?vars.DEPLOY_USER is not set}"@"$DEPLOY_HOST" "$GITHUB_SHA $GHCR_TOKEN"
+          # deploy.sh refuses to restart production under a live evaluation
+          # (exit 3, the job fails, the runner step is skipped). Setting this
+          # variable to THIS run's sha, then re-running the job, forces it;
+          # any other value forces nothing (deploy.md §5).
+          DEPLOY_FORCE_SHA: ${{ vars.DEPLOY_FORCE_SHA }}
+        run: |
+          force=
+          if [ "$DEPLOY_FORCE_SHA" = "$GITHUB_SHA" ]; then
+            force="force "
+            echo "::warning::DEPLOY_FORCE_SHA names this sha: the live-evaluation guard is overridden."
+          fi
+          ssh -i ~/.ssh/id_ed25519 "${DEPLOY_USER:?vars.DEPLOY_USER is not set}"@"$DEPLOY_HOST" "${force}$GITHUB_SHA $GHCR_TOKEN"
       - name: Deploy the runner (forced command runs apps/runner/deploy/deploy.sh on the code VM)
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != '' && env.DEPLOY_RUNNER_HOST != ''
         env:

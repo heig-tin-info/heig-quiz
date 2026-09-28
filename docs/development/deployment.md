@@ -289,7 +289,9 @@ done). Then they diverge:
   image; `--ignore-pull-failures` is deliberately not used, a missing image
   must stop the deploy rather than half-restart the stack), `up -d`, remove
   the older sha-tagged images, print the deployed commit. When not root it
-  defaults `DOCKER_HOST` to the rootless socket.
+  defaults `DOCKER_HOST` to the rootless socket. In production, before the
+  pull, it refuses to restart under a live evaluation (§5, *The
+  live-evaluation guard*).
 - **runner VM** (`apps/runner/deploy/deploy.sh`): `podman pull` of the
   sha-tagged runner image and retag it `:latest` (the tag the quadlet runs),
   install the seccomp profile, the quadlet and the Caddy fragment from the
@@ -337,6 +339,59 @@ ssh root@code.chevallier.io 'journalctl -u quiz-runner -n 30'   # "podman engine
 `/healthz` reports the runner `down` when it is unreachable or refuses the
 token, and `disabled` when `RUNNER_MODE` is left at `stub`; neither degrades
 the platform (see *Without the runner* in §10).
+
+### The live-evaluation guard
+
+Production is never restarted under students' feet. Before it pulls
+anything, `deploy.sh production` runs `scripts/live-evaluations.sql` in the
+running database (`docker compose exec -T postgres psql`: no endpoint, no
+secret) and REFUSES the deploy while it returns a row: it prints each live
+evaluation (title, state, mode, opening and closing time), moves the checkout
+back to the deployed commit and exits 3. Nothing is pulled or restarted, the
+`deploy-production` job fails, and the runner VM is not touched either (its
+step comes after).
+
+Live means:
+
+- `lobby`, `running` or `paused`: students connected, or waiting to start;
+- `scheduled` and opening within the next 15 minutes, or opened less than
+  12 hours ago (while the app is down the ticker opens nothing);
+
+except a take-home exercise (an `exercise` whose waiting room is `skip`: it
+may stay open for days, and a restart costs its students a few seconds of
+reconnection) and a session untouched for 12 hours (left
+open by mistake: it must not freeze every deploy). The guard fails closed: a
+query that cannot run refuses the deploy like a live row. It is skipped, by
+design, when `.env.image` is missing (a first deploy: nothing is running yet)
+and when PostgreSQL is not running (no database, no evaluation in progress).
+On a refusal it moves the checkout back only when `.env.image` names a full
+sha; otherwise it warns and leaves the checkout where it is.
+`apps/api/src/deployGuard.db.test.ts` runs the same file against the real
+migrations on every CI run.
+
+**When it refuses**: wait for the evaluation to close (the message says
+when), then Actions → the run → *Re-run failed jobs*. The approval is asked
+again. A session left open by mistake is better closed from the app than
+forced.
+
+**Forcing it** (an urgent fix during an exam, a session that will not close):
+
+```bash
+gh variable set DEPLOY_FORCE_SHA --repo heig-tin-info/heig-quiz --body <the run's full sha>
+# re-run the deploy-production job, then:
+gh variable delete DEPLOY_FORCE_SHA --repo heig-tin-info/heig-quiz
+```
+
+(or Settings → Secrets and variables → Actions → Variables). The job sends
+`force <sha> <token>` only when the variable equals the sha it deploys, and
+prints a warning when it does: a forgotten value forces nothing but that one
+sha. By hand, on the VM: `SSH_ORIGINAL_COMMAND="force <sha> <PAT>"
+./deploy.sh production`.
+
+Staging is not guarded. Nobody sits an exam there; its data is a copy of
+production's, live rows included and frozen at the copy; and a refused
+staging deploy would hold back every promotion. Its restart still takes the
+shared vCPU: on an exam day, stop it (§8, *Exam days*).
 
 ### Manually (if CI is unavailable)
 
