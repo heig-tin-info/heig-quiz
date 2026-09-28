@@ -70,12 +70,6 @@ export function isWritable(deadline: Date | null, now: Date): boolean {
   return now.getTime() <= deadline.getTime() + GRACE_MS;
 }
 
-/** Seconds left before the deadline, floored at 0. `null` when there is no deadline. */
-export function remainingSeconds(deadline: Date | null, now: Date): number | null {
-  if (deadline === null) return null;
-  return Math.max(0, (deadline.getTime() - now.getTime()) / 1000);
-}
-
 /**
  * How long a teacher's stateless preview of an evaluation lasts, in seconds
  * (issue #75, ADR-018 fourth addendum). `null` means no countdown.
