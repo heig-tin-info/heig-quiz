@@ -32,7 +32,7 @@ import {
   inputClass,
   inputSize,
   IssueList,
-  labelClass,
+  label,
   NumberField,
   PromptField,
   removeAt,
@@ -344,7 +344,7 @@ function ConstraintFields({
   s: Strings;
   onPatch: (next: ShortConstraints) => void;
 }) {
-  const field = { labelClassName: labelClass, size: "md" } as const;
+  const field = { size: "md" } as const;
 
   switch (kind) {
     case "text":
@@ -406,7 +406,7 @@ function ConstraintFields({
     case "date":
       return (
         <>
-          <FieldCell labelClassName={labelClass} label={s.from} htmlFor="short-from">
+          <FieldCell label={s.from} htmlFor="short-from">
             <input
               id="short-from"
               type="date"
@@ -416,7 +416,7 @@ function ConstraintFields({
               onChange={(e) => onPatch(withBound(constraints, "from", e.target.value || undefined))}
             />
           </FieldCell>
-          <FieldCell labelClassName={labelClass} label={s.to} htmlFor="short-to">
+          <FieldCell label={s.to} htmlFor="short-to">
             <input
               id="short-to"
               type="date"
@@ -473,7 +473,7 @@ export function ShortEditor({
           disabled={disabled}
           RichText={RichText}
           uploadImage={uploadAsset}
-          labelClassName={labelClass}
+          labelClassName={label}
           textareaClassName={cx(textareaClass, "w-full resize-y font-mono text-[13px]")}
         />
         <IssueList issues={issuesAt(issues, "prompt")} />
@@ -488,7 +488,7 @@ export function ShortEditor({
       <section className={sectionClass}>
         <div className="flex flex-wrap items-end gap-x-4 gap-y-3">
           <div className="flex flex-col gap-1.5">
-            <span className={labelClass} id="short-kind-label">
+            <span className={label} id="short-kind-label">
               {s.kind}
             </span>
             <Segmented
@@ -516,7 +516,7 @@ export function ShortEditor({
         <IssueList issues={issuesAt(issues, "constraints")} />
 
         <div className="flex flex-col gap-1.5">
-          <label className={labelClass} htmlFor="short-placeholder">
+          <label className={label} htmlFor="short-placeholder">
             {s.placeholder}
           </label>
           <input
@@ -539,7 +539,7 @@ export function ShortEditor({
           none (`EditorProps.ungraded`): its tally folds spellings by itself. */}
       {ungraded ? null : (
         <section className={sectionClass}>
-          <h3 className={labelClass}>{s.prefilters}</h3>
+          <h3 className={label}>{s.prefilters}</h3>
           <p className={helpClass}>{s.prefiltersHint}</p>
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
             <CheckboxField
@@ -559,7 +559,7 @@ export function ShortEditor({
       )}
 
       <section className={sectionClass}>
-        <h3 className={labelClass}>{s.matchers}</h3>
+        <h3 className={label}>{s.matchers}</h3>
         <p className={helpClass}>{s.matchersHint}</p>
         <ol className="flex flex-col gap-2">
           {config.matchers.map((matcher, index) => {

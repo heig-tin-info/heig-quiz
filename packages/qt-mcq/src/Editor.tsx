@@ -60,7 +60,7 @@ import {
   inputClass,
   inputSize,
   IssueList,
-  labelClass,
+  label,
   patchAt,
   PromptField,
   removeAt,
@@ -277,7 +277,7 @@ export function McqEditor({
    */
   const scoring = (
     <AsideSection aside={aside}>
-      <h3 className={aside ? cardTitleClass : labelClass}>{s.scoring}</h3>
+      <h3 className={aside ? cardTitleClass : label}>{s.scoring}</h3>
 
       {/*
        * The policy, and only in `multiple` mode: with one key there is
@@ -294,7 +294,7 @@ export function McqEditor({
       {multiple ? (
         <div className="flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className={labelClass} id="mcq-policy-label">
+            <span className={label} id="mcq-policy-label">
               {s.policy}
             </span>
             {renderHelp ? renderHelp("mcq-policies") : null}
@@ -319,7 +319,7 @@ export function McqEditor({
 
       {multiple ? (
         <div className="flex flex-col gap-1.5">
-          <label className={labelClass} htmlFor="mcq-max">
+          <label className={label} htmlFor="mcq-max">
             {s.maxSelections}
           </label>
           <input
@@ -412,14 +412,14 @@ export function McqEditor({
           disabled={disabled}
           RichText={RichText}
           uploadImage={uploadAsset}
-          labelClassName={labelClass}
+          labelClassName={label}
           textareaClassName={cx(textareaClass, "w-full resize-y font-mono text-[13px]")}
         />
         <IssueList issues={issuesAt(issues, "prompt")} />
       </section>
 
       <section className={sectionClass}>
-        <h3 className={labelClass}>{s.choices}</h3>
+        <h3 className={label}>{s.choices}</h3>
         {/* A poll's key is optional, and the launcher says so once
             (ADR-014, addendum 2026-09-23): "Tick the correct answers" would
             contradict it. */}

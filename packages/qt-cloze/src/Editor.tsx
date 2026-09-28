@@ -24,7 +24,7 @@ import {
   cx,
   helpClass,
   IssueList,
-  labelClass,
+  label,
   PromptField,
   sectionClass,
   textareaClass,
@@ -74,7 +74,7 @@ export function ClozeEditor({
           // save.
           holes
           rows={8}
-          labelClassName={labelClass}
+          labelClassName={label}
           textareaClassName={cx(textareaClass, "w-full resize-y font-mono text-[13px]")}
         />
         <p className={helpClass}>{s.textHint}</p>
@@ -102,7 +102,7 @@ export function ClozeEditor({
       </section>
 
       <section className={sectionClass}>
-        <h3 className={labelClass}>{s.blanks}</h3>
+        <h3 className={label}>{s.blanks}</h3>
         <p className={helpClass}>{s.blanksHint}</p>
         {parse.blanks.length === 0 ? (
           <p className={helpClass}>{s.noBlank}</p>

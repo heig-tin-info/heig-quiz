@@ -32,7 +32,6 @@ export {
   inputClass,
   inputSize,
   label,
-  labelClass,
   lockedBlock,
   sectionClass,
   sectionTitle,

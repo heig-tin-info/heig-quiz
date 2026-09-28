@@ -2,7 +2,7 @@ import { Check, ChevronDown, Loader2, Search } from "lucide-react";
 import { useId } from "react";
 import type { ReactNode } from "react";
 
-import { cx, inputClass, inputSize, textareaClass } from "@quiz/ui";
+import { cx, inputClass, inputSize, label as fieldLabel, textareaClass } from "@quiz/ui";
 
 import { HelpIcon, type IconType } from "./layers";
 
@@ -113,7 +113,7 @@ export function FieldLabel({
   hint?: ReactNode;
 }) {
   return (
-    <div className="flex items-center gap-1 text-[13px] font-medium text-fg">
+    <div className={fieldLabel}>
       <label htmlFor={htmlFor}>{children}</label>
       {help ? <HelpIcon topic={help} /> : null}
       {hint ? <span className="ml-auto font-normal text-fg-faint">{hint}</span> : null}

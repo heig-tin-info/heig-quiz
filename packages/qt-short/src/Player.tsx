@@ -22,7 +22,7 @@ import {
   type ShortStudent,
 } from "./schema.js";
 import { shortPlayerStrings, type ShortPlayerStringKey } from "./strings.js";
-import { cx, helpClass, inputClass, inputSize, isLocked, labelClass, markdown } from "@quiz/ui";
+import { cx, helpClass, inputClass, inputSize, isLocked, label, markdown } from "@quiz/ui";
 
 type ShortPlayerProps = PlayerProps<ShortStudent, ShortAnswer> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
@@ -103,7 +103,7 @@ export function ShortPlayer({
         {markdown(renderMarkdown, student.prompt)}
       </p>
       <div className="flex flex-col gap-1.5">
-        <label className={labelClass} htmlFor="short-answer">
+        <label className={label} htmlFor="short-answer">
           {s.label}
         </label>
         <input

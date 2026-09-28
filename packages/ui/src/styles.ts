@@ -18,6 +18,11 @@ export const card = "rounded-card border border-line bg-surface";
 
 export const sectionTitle = "text-base font-semibold text-fg";
 
+/**
+ * The label above a field, and the caption of a group of fields: 13 px, 500,
+ * `fg`, a row so a help "?" can sit beside the word. `apps/web`'s
+ * `FieldLabel` is this row.
+ */
 export const label = "flex items-center gap-1 text-[13px] font-medium text-fg";
 
 export const hint = "text-[13px] text-fg-muted";
@@ -118,7 +123,6 @@ export const table = {
  * a literal `rounded-xl` (audit P-01, divergence 1).
  */
 
-export const labelClass = "text-[13px] font-medium text-fg";
 export const helpClass = "text-xs text-fg-faint";
 export const sectionClass = "flex flex-col gap-2";
 
