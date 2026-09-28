@@ -52,6 +52,8 @@ export async function evaluationPlugin(app: FastifyInstance) {
 
   /** Everything this module refuses carries its own status and machine code; the rest is a 500. */
   function failure(reply: FastifyReply, error: unknown): FastifyReply {
+    // Exactly the loader's 404 (invariant 6), not an error envelope with a message.
+    if (error instanceof templates.TemplateGone) return notFound(reply);
     if (error instanceof service.EvaluationError) {
       return reply
         .code(error.status)

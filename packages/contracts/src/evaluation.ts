@@ -445,9 +445,11 @@ export type TemplateNew = z.infer<typeof TemplateNew>;
 
 /**
  * `PATCH /templates/:id` (F-EVAL-25): the evaluation patch without anything
- * of a run. STRICT: `opensAt`, `closesAt`, `accessCode` or `ipAllowlist` —
- * or any unknown key — is a `400`, never silently stripped (ADR-031,
- * addendum c). The title is patchable and does not move the revision.
+ * of a run. STRICT at the top level: `opensAt`, `closesAt`, `accessCode` or
+ * `ipAllowlist` — or any unknown top-level key — is a `400`, never silently
+ * stripped (ADR-031, addendum c). The nested `settings` and `feedbackPolicy`
+ * patches are the evaluation's, which strip an unknown key as they always
+ * have. The title is patchable and does not move the revision.
  */
 export const TemplatePatch = EvaluationPatchFields.omit({
   opensAt: true,

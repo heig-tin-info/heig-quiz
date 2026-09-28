@@ -12,7 +12,7 @@
  */
 import { isDeepStrictEqual } from "node:util";
 
-import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, sql } from "drizzle-orm";
 
 import type {
   EvaluationMode,
@@ -22,7 +22,7 @@ import type {
 } from "@quiz/contracts";
 
 import type { Db } from "../../db/client.js";
-import { evaluationItems, evaluations, questions } from "../../db/schema.js";
+import { evaluationItems, evaluations } from "../../db/schema.js";
 import {
   EvaluationError,
   byId,
@@ -52,8 +52,11 @@ class TemplatePoll extends EvaluationError {
   }
 }
 
-/** The template went between its load and the lock of a write: the 404 of a missing one. */
-class TemplateGone extends EvaluationError {
+/**
+ * The template went between its load and the lock of a write. The routes
+ * answer it with the loader's own 404 body (`notFound`), nothing more.
+ */
+export class TemplateGone extends EvaluationError {
   constructor() {
     super("not_found", 404);
   }
@@ -146,21 +149,15 @@ export async function templateDetail(
   row: EvaluationRecord,
   viewer: { id: string; role: string },
 ): Promise<TemplateDetail> {
-  const rows = await itemRows(db, row.id);
-  const [linked, pooled] = await Promise.all([
+  const [rows, joined, linked] = await Promise.all([
+    itemRows(db, row.id),
+    joinedItems(db, row.id),
     coursePoolIds(db, { courseId: row.courseId! }),
-    rows.length === 0
-      ? []
-      : db
-          .select({ id: questions.id, poolId: questions.poolId })
-          .from(questions)
-          .where(inArray(questions.id, [...new Set(rows.map((r) => r.questionId))])),
   ]);
-  const poolOf = new Map(pooled.map((q) => [q.id, q.poolId]));
-  const items = rows.map((r) => {
-    const poolId = poolOf.get(r.questionId) ?? null;
-    return { ...r, poolUnlinked: !inLinkedPool({ poolId }, linked) };
-  });
+  const unlinked = new Set(
+    joined.filter((j) => !inLinkedPool(j.question, linked)).map((j) => j.item.id),
+  );
+  const items = rows.map((r) => ({ ...r, poolUnlinked: unlinked.has(r.id) }));
   const totalPoints = totalPointsOf(items);
   return {
     template: {
@@ -213,7 +210,7 @@ async function contentOf(db: DbOrTx, row: EvaluationRecord) {
  * never read-modify-write, inside the transaction of the write it records.
  * Only {@link editTemplate} calls it.
  */
-export async function bumpTemplateRevision(tx: DbOrTx, templateId: string): Promise<void> {
+async function bumpTemplateRevision(tx: DbOrTx, templateId: string): Promise<void> {
   await tx
     .update(evaluations)
     .set({ revision: sql`${evaluations.revision} + 1`, updatedAt: new Date() })
@@ -240,7 +237,8 @@ export async function editTemplate(
     await write(tx, locked, { attemptCount: 0 });
     const written = (await byId(tx, locked.id))!;
     const revised = !isDeepStrictEqual(before, await contentOf(tx, written));
-    if (revised) await bumpTemplateRevision(tx, locked.id);
+    if (!revised) return { row: written, revised };
+    await bumpTemplateRevision(tx, locked.id);
     return { row: (await byId(tx, locked.id))!, revised };
   });
 }

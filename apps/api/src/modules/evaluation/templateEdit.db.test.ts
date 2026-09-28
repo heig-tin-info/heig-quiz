@@ -29,6 +29,7 @@ import { fakeShort } from "../../test/fakeType.js";
 import { seedLive, type Seeded } from "../../test/live.js";
 import * as poolService from "../pool/service.js";
 import * as service from "./service.js";
+import * as templates from "./templates.js";
 
 let server: TestServer;
 let restore: () => void;
@@ -325,6 +326,20 @@ describe("the template patch (ADR-031, addendum c)", () => {
   });
 });
 
+describe("a template deleted under a write", () => {
+  it("is refused as a missing template, and bumps nothing", async () => {
+    const { teacher, seed } = await world();
+    const t = await savedTemplate(teacher, seed);
+    const row = (await service.byId(server.app.db, t.template.id))!;
+    await templates.deleteTemplate(server.app.db, row);
+    await expect(
+      templates.editTemplate(server.app.db, row, (tx, locked, ctx) =>
+        service.patchEvaluation(tx, locked, { durationS: 60 }, ctx),
+      ),
+    ).rejects.toBeInstanceOf(templates.TemplateGone);
+  });
+});
+
 describe("the item flags of the editor", () => {
   it("names a stale version, a deprecated one and a pool no longer linked", async () => {
     const { teacher, seed } = await world();
@@ -444,10 +459,19 @@ describe("access (invariant 6)", () => {
       ["POST", `/app/api/evaluations/${id}/resume`],
       ["POST", `/app/api/evaluations/${id}/close`],
       ["POST", `/app/api/evaluations/${id}/extend`],
-      ["GET", `/app/api/evaluations/${id}/attempt`],
       ["POST", `/app/api/evaluations/${id}/attempt`],
       ["DELETE", `/app/api/evaluations/${id}/attempt`],
+      ["POST", `/app/api/evaluations/${id}/retake`],
+      ["GET", `/app/api/evaluations/${id}/seb`],
       ["GET", `/app/api/evaluations/${id}/attempts/${attemptId}`],
+      ["POST", `/app/api/evaluations/${id}/attempts/${attemptId}/close`],
+      ["POST", `/app/api/evaluations/${id}/attempts/${attemptId}/reopen`],
+      // Poll.
+      ["GET", `/app/api/evaluations/${id}/poll`],
+      ["POST", `/app/api/evaluations/${id}/poll/reveal`],
+      ["POST", `/app/api/evaluations/${id}/poll/end`],
+      ["POST", `/app/api/evaluations/${id}/poll/again`],
+      ["POST", `/app/api/evaluations/${id}/poll/keep`],
       // Grading.
       ["GET", `/app/api/evaluations/${id}/grading`],
       ["POST", `/app/api/evaluations/${id}/grading/run`],
@@ -473,6 +497,14 @@ describe("access (invariant 6)", () => {
       const body = method === "GET" || method === "DELETE" ? undefined : (bodies[method] ?? {});
       const res = await call(teacher, method, url, body);
       expect([method, url, res.statusCode]).toEqual([method, url, 404]);
+    }
+    // The live stream: watching a template is refused like watching nothing.
+    for (const kind of ["evaluation", "lobby"]) {
+      const watch = (subject: string) =>
+        call(teacher, "GET", `/app/api/events?watch=${encodeURIComponent(`${kind}:${subject}`)}`);
+      const [hit, miss] = [await watch(id), await watch(randomUUID())];
+      expect([kind, hit.statusCode]).toEqual([kind, 404]);
+      expect(hit.json()).toEqual(miss.json());
     }
     expect((await detail(teacher, id)).template).toMatchObject({ title: "Exam template", revision: 1 });
   });
