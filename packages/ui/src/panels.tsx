@@ -6,7 +6,7 @@
 import { useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { button, card, cx, hint } from "./styles.js";
+import { buttonClass, card, cx, hint } from "./styles.js";
 
 /**
  * The block an editor lets the host move (`EditorProps.aside`).
@@ -61,7 +61,7 @@ export function TryPanel({
     <div className="flex flex-wrap items-center gap-3">
       <button
         type="button"
-        className={button("secondary", "sm")}
+        className={buttonClass("secondary", "sm")}
         disabled={disabled || running}
         onClick={onTry}
       >

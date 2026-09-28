@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { badge, button, buttonClass, cx, inputClass, textareaClass } from "./styles.js";
+import { badge, buttonClass, cx, inputClass, textareaClass } from "./styles.js";
 
 describe("cx", () => {
   it("joins the truthy parts and skips the rest", () => {
@@ -8,16 +8,16 @@ describe("cx", () => {
   });
 });
 
-describe("button", () => {
+describe("buttonClass", () => {
   it("defaults to the primary medium pill", () => {
-    const classes = button().split(" ");
+    const classes = buttonClass().split(" ");
     expect(classes).toContain("rounded-full");
     expect(classes).toContain("bg-accent");
     expect(classes).toContain("h-8.5");
   });
 
   it("appends the caller's extra classes last", () => {
-    expect(button("ghost", "sm", "ml-auto").endsWith(" ml-auto")).toBe(true);
+    expect(buttonClass("ghost", "sm", "ml-auto").endsWith(" ml-auto")).toBe(true);
   });
 });
 
@@ -36,7 +36,7 @@ describe("inputClass", () => {
 
 describe("tokens", () => {
   it("never carries a dark: variant or a raw radius", () => {
-    for (const cls of [inputClass, textareaClass, button(), badge(), buttonClass]) {
+    for (const cls of [inputClass, textareaClass, buttonClass(), buttonClass("secondary", "lg"), badge()]) {
       expect(cls).not.toMatch(/\bdark:/);
       expect(cls).not.toMatch(/\brounded-(xl|lg|md)\b/);
     }

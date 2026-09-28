@@ -1,6 +1,6 @@
 /**
  * The class lists only this package uses. The shared table — `card`,
- * `label`, `inputClass`, `button()`, `badge()`… — lives in `@quiz/ui`; what is left
+ * `label`, `inputClass`, `buttonClass()`, `badge()`… — lives in `@quiz/ui`; what is left
  * here is the circuit's own chrome, in the same semantic tokens (DESIGN.md).
  */
 import { cx, inputClass, inputSize } from "@quiz/ui";

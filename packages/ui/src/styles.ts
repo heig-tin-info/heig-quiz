@@ -83,8 +83,10 @@ export const codeArea =
 export const lockedBlock =
   "overflow-x-auto rounded-field border border-line bg-surface-2 px-3 py-2 font-mono text-[13px] leading-[1.55] text-fg-muted";
 
+// disabled:pointer-events-none: hovering a disabled button must hit the
+// wrapping Tip span (disabled controls swallow mouse events).
 const BUTTON_BASE =
-  "inline-flex shrink-0 select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-medium transition-[background-color,color,border-color,opacity] duration-150 disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex shrink-0 select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-medium transition-[background-color,color,border-color,opacity,transform] duration-150 ease-out-emphasized active:scale-97 disabled:pointer-events-none disabled:opacity-50";
 
 const BUTTON_VARIANT = {
   primary: "bg-accent text-on-fill hover:bg-accent-hover",
@@ -94,14 +96,25 @@ const BUTTON_VARIANT = {
   danger: "bg-danger text-on-fill hover:opacity-90",
 } as const;
 
+/** The button heights of DESIGN.md: 28, 34 and 40 px. */
 const BUTTON_SIZE = {
   sm: "h-7 px-3 text-[13px] [&_svg]:size-3.5",
   md: "h-8.5 px-4 text-sm [&_svg]:size-4",
+  lg: "h-10 px-5 text-sm [&_svg]:size-4",
 } as const;
 
-export function button(
-  variant: keyof typeof BUTTON_VARIANT = "primary",
-  size: keyof typeof BUTTON_SIZE = "md",
+export type ButtonVariant = keyof typeof BUTTON_VARIANT;
+export type ButtonSize = keyof typeof BUTTON_SIZE;
+
+/**
+ * The class list of a button: a pill in one of five variants and three
+ * sizes, pressed to 0.97. `apps/web`'s `Button` and `LinkButton` are this
+ * list on a `<button>` and an `<a>`; a question type, which cannot import
+ * them, writes it on its own `<button>`.
+ */
+export function buttonClass(
+  variant: ButtonVariant = "primary",
+  size: ButtonSize = "md",
   extra = "",
 ): string {
   return cx(BUTTON_BASE, BUTTON_VARIANT[variant], BUTTON_SIZE[size], extra);
@@ -141,7 +154,3 @@ export const table = {
  * their sections are many and long; the tokens inside are the same.
  */
 export const sectionClass = "flex flex-col gap-2";
-
-/** Secondary button chrome (pill, hairline), for the editor's add/remove actions. */
-export const buttonClass =
-  "inline-flex h-7 shrink-0 select-none items-center justify-center gap-1.5 rounded-full border border-line-strong bg-surface px-3 text-[13px] font-medium text-fg transition-colors hover:bg-surface-2 disabled:opacity-50";

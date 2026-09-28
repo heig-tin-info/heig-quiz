@@ -17,7 +17,7 @@ import type { ConfigIssue, EditorProps, MarkdownRenderer } from "@quiz/core/clie
 import type { RunnerOutcome } from "@quiz/core/server";
 import {
   AdvancedDisclosure,
-  button,
+  buttonClass,
   EditorSection,
   hint,
   IssueList,
@@ -357,7 +357,7 @@ function ReferenceImage({
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
-          className={button("secondary", "sm")}
+          className={buttonClass("secondary", "sm")}
           disabled={disabled || stale || encoded === null || isTarget}
           onClick={() => {
             // The dimensions travel with the pixels (ADR-021).

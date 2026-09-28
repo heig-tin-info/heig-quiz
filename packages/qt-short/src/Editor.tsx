@@ -640,7 +640,7 @@ export function ShortEditor({
                 </div>
                 <button
                   type="button"
-                  className={cx(buttonClass, "mt-6 w-7 px-0 text-fg-muted hover:text-danger")}
+                  className={buttonClass("secondary", "sm", "mt-6 w-7 px-0 text-fg-muted hover:text-danger")}
                   aria-label={`${s.removeMatcher} ${index + 1}`}
                   // A graded question keeps one accepted answer; a poll may
                   // have none (an opinion poll, `keylessConfigSchema`).
@@ -657,7 +657,7 @@ export function ShortEditor({
         <div>
           <button
             type="button"
-            className={buttonClass}
+            className={buttonClass("secondary", "sm")}
             disabled={disabled || config.matchers.length >= SHORT_MAX_MATCHERS}
             onClick={() => setMatchers([...config.matchers, blankMatcher("exact")])}
           >

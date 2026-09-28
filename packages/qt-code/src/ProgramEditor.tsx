@@ -34,7 +34,7 @@ import { joinReference, referenceEditorView } from "./reference.js";
 import type { CodeEditorStrings } from "./strings.js";
 import {
   badge,
-  button,
+  buttonClass,
   cx,
   EditorSection,
   FieldCell,
@@ -234,7 +234,7 @@ export function TemplateSection({
   const lockButton = (floating: boolean) => (
     <button
       type="button"
-      className={button("secondary", "sm", floating ? "absolute top-2 right-4 z-10" : "ml-auto")}
+      className={buttonClass("secondary", "sm", floating ? "absolute top-2 right-4 z-10" : "ml-auto")}
       title={unlocking ? s.unlockLines : s.lockLines}
       aria-label={unlocking ? s.unlockLines : s.lockLines}
       disabled={disabled || selection === null}

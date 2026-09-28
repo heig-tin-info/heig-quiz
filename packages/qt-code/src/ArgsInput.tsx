@@ -19,7 +19,7 @@
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "react";
 
 import { fmt } from "@quiz/core/client";
-import { button, cx, inputClass, inputSize, lockedBlock } from "@quiz/ui";
+import { buttonClass, cx, inputClass, inputSize, lockedBlock } from "@quiz/ui";
 
 import { PlusIcon, TrashIcon } from "./icons.js";
 import type { CodeLanguage } from "./schema.js";
@@ -166,7 +166,7 @@ export function ArgsInput({
             <button
               type="button"
               // `px-0!`: the sm size sets `px-3`, which would leave the icon 4 px wide.
-              className={button("ghost", "sm", "w-7 px-0!")}
+              className={buttonClass("ghost", "sm", "w-7 px-0!")}
               aria-label={fmt(s.removeArgument, { n: i + 1 })}
               title={fmt(s.removeArgument, { n: i + 1 })}
               disabled={disabled}
@@ -182,7 +182,7 @@ export function ArgsInput({
           <button
             ref={addButton}
             type="button"
-            className={button("ghost", "sm")}
+            className={buttonClass("ghost", "sm")}
             disabled={disabled}
             onClick={() => insertAfter(-1)}
           >

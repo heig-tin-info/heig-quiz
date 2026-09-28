@@ -2,39 +2,27 @@ import { Check, ChevronDown, Loader2, Search } from "lucide-react";
 import { useId } from "react";
 import type { ReactNode } from "react";
 
-import { cx, inputClass, inputSize, label as fieldLabel, textareaClass } from "@quiz/ui";
+import {
+  buttonClass,
+  cx,
+  inputClass,
+  inputSize,
+  label as fieldLabel,
+  textareaClass,
+  type ButtonSize,
+  type ButtonVariant,
+} from "@quiz/ui";
 
 import { HelpIcon, type IconType } from "./layers";
 
 // --- Buttons ---
 
-type ButtonVariant = "primary" | "secondary" | "subtle" | "ghost" | "danger";
-type ButtonSize = "sm" | "md" | "lg";
-
-const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
-  primary: "bg-accent text-on-fill hover:bg-accent-hover",
-  secondary: "border border-line-strong bg-surface text-fg hover:bg-surface-2",
-  subtle: "bg-surface-3 text-fg hover:bg-line-strong/70",
-  ghost: "text-fg-muted hover:bg-surface-2 hover:text-fg",
-  danger: "bg-danger text-on-fill hover:opacity-90",
-};
-const BUTTON_SIZES: Record<ButtonSize, string> = {
-  sm: "h-7 px-3 text-[13px] [&_svg]:size-3.5",
-  md: "h-8.5 px-4 text-sm [&_svg]:size-4",
-  lg: "h-10 px-5 text-sm [&_svg]:size-4",
-};
-
-/** Class list of a button; shared by <Button>, <LinkButton> and raw anchors. */
-export function buttonClass(variant: ButtonVariant = "primary", size: ButtonSize = "md", extra = "") {
-  return cx(
-    // disabled:pointer-events-none: hovering a disabled button must hit the
-    // wrapping Tip span (disabled controls swallow mouse events).
-    "inline-flex shrink-0 select-none items-center justify-center gap-1.5 whitespace-nowrap rounded-full font-medium transition-[background-color,color,border-color,opacity,transform] duration-150 ease-out-emphasized active:scale-97 disabled:pointer-events-none disabled:opacity-50",
-    BUTTON_VARIANTS[variant],
-    BUTTON_SIZES[size],
-    extra,
-  );
-}
+/*
+ * The class list of a button (`buttonClass`, five variants, three sizes) is
+ * written once, in `@quiz/ui`, where the question types read it too; <Button>,
+ * <LinkButton> and the raw anchors of the app wear the same list.
+ */
+export { buttonClass };
 
 export function Button({
   children,
