@@ -29,6 +29,8 @@ const linked: NotificationSettings = {
     pool_ownership: { bell: true, email: true, teams: true },
     student_joined: { bell: true, email: false, teams: false },
     roster_conflict: { bell: true, email: true, teams: true },
+    grading_ready: { bell: true, email: true, teams: true },
+    pool_question_added: { bell: true, email: false, teams: false },
   },
   email: "marie.dupont@heig-vd.ch",
   teams: {

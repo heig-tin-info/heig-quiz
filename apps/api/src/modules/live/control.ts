@@ -219,7 +219,7 @@ async function afterClose(
     .returning({ id: attempts.id });
   for (const attempt of open) events.attemptClosed(next.id, attempt, closedBy, now);
   events.stateChanged(next, now);
-  if (app) await enqueueEvaluationGrading(app, { evaluationId: next.id });
+  if (app) await enqueueEvaluationGrading(app, { evaluationId: next.id, announce: true });
   return next;
 }
 

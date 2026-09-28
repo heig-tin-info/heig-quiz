@@ -31,6 +31,8 @@ function settings(teams: NotificationSettings["teams"]): NotificationSettings {
       pool_ownership: ALL_ON,
       student_joined: { bell: true, email: false, teams: false },
       roster_conflict: ALL_ON,
+      grading_ready: ALL_ON,
+      pool_question_added: { bell: true, email: false, teams: false },
     },
     email: "lea@heig.test",
     teams,
@@ -62,7 +64,7 @@ describe("the notification settings", () => {
     renderWithProviders(<SettingsPage me={makeMe({ role: "teacher" })} />);
 
     const grid = await screen.findByRole("table", { name: "Notifications" });
-    expect(within(grid).getAllByRole("rowheader")).toHaveLength(5);
+    expect(within(grid).getAllByRole("rowheader")).toHaveLength(7);
     const shared = within(grid).getByRole("switch", { name: "Pool shared with you: Email" });
     expect(shared).toHaveAttribute("aria-checked", "false");
     await user.click(shared);

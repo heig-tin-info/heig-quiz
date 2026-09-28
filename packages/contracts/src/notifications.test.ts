@@ -26,4 +26,13 @@ describe("DEFAULT_CHANNEL_ENABLED — the defaults per kind (ADR-030, #198)", ()
     expect(DEFAULT_CHANNEL_ENABLED.pool_shared).toEqual(allOn);
     expect(DEFAULT_CHANNEL_ENABLED.pool_ownership).toEqual(allOn);
   });
+
+  it("keeps grading_ready on everywhere and pool_question_added in the app only (§c)", () => {
+    expect(DEFAULT_CHANNEL_ENABLED.grading_ready).toEqual({ bell: true, email: true, teams: true });
+    expect(DEFAULT_CHANNEL_ENABLED.pool_question_added).toEqual({
+      bell: true,
+      email: false,
+      teams: false,
+    });
+  });
 });

@@ -39,6 +39,7 @@ import {
   assertCategoryOf,
   questionWriteError,
 } from "./shared.js";
+import { tellPoolOfPublication } from "./members.js";
 import { ensurePersonalPool } from "./pools.js";
 import { normalizeTag, ensurePoolTags } from "./tags.js";
 import { tagsOf, isKeyless, metaJson, versionJson, draftJson } from "./questionList.js";
@@ -451,7 +452,7 @@ export async function publishQuestion(
   question: QuestionRecord,
   input: { userId: string; changeNote?: string },
 ): Promise<VersionRow> {
-  return db.transaction(async (tx) => {
+  const version = await db.transaction(async (tx) => {
     const [draft] = await tx
       .select()
       .from(questionVersions)
@@ -529,6 +530,9 @@ export async function publishQuestion(
     }
     return versionJson(published!);
   });
+  // After the commit, never inside it (ADR-030 §f); best-effort.
+  if (question.poolId !== null) await tellPoolOfPublication(db, question.poolId, input.userId);
+  return version;
 }
 
 /**

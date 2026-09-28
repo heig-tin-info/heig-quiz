@@ -55,7 +55,30 @@ describe("renderNotification", () => {
       count: 3,
     };
     const conflict: NotificationPayload = { ...joined, kind: "roster_conflict", count: 1 };
-    for (const payload of [shared, released, ownership, joined, conflict, { ...joined, count: 1 }]) {
+    const ready: NotificationPayload = {
+      kind: "grading_ready",
+      evaluationId: EVAL,
+      evaluationTitle: "Test 0",
+      count: 4,
+    };
+    const added: NotificationPayload = {
+      kind: "pool_question_added",
+      poolId: POOL,
+      poolName: "Programmation C",
+      count: 2,
+    };
+    for (const payload of [
+      shared,
+      released,
+      ownership,
+      joined,
+      conflict,
+      { ...joined, count: 1 },
+      ready,
+      { ...ready, count: 1 },
+      added,
+      { ...added, count: 1 },
+    ]) {
       for (const locale of ["en", "fr"] as const) {
         const out = renderNotification(payload, locale, "https://quiz.test");
         for (const part of [out.subject, out.text, out.html, out.preview]) {
@@ -132,5 +155,33 @@ describe("helpers", () => {
 
   it("escapes the five characters", () => {
     expect(escapeHtml(`&<>"'`)).toBe("&amp;&lt;&gt;&quot;&#39;");
+  });
+});
+
+describe("the teacher kinds of step 5 (#198)", () => {
+  it("sends grading_ready to the grading page, with the count of proposals", () => {
+    const ready = {
+      kind: "grading_ready",
+      evaluationId: EVAL,
+      evaluationTitle: "Test 0",
+    } as const;
+    expect(notificationPath({ ...ready, count: 3 })).toBe(`/evaluations/${EVAL}/grading`);
+    expect(renderNotification({ ...ready, count: 3 }, "en", "https://quiz.test").subject).toBe(
+      "3 proposals to validate: Test 0",
+    );
+    expect(renderNotification({ ...ready, count: 1 }, "fr", "https://quiz.test").subject).toBe(
+      "Une proposition à valider : Test 0",
+    );
+  });
+
+  it("sends pool_question_added to the pool, counted", () => {
+    const added = { kind: "pool_question_added", poolId: POOL, poolName: "PRG" } as const;
+    expect(notificationPath({ ...added, count: 5 })).toBe(`/pools/${POOL}`);
+    expect(renderNotification({ ...added, count: 5 }, "en", "https://quiz.test").subject).toBe(
+      "5 questions published in PRG",
+    );
+    expect(renderNotification({ ...added, count: 1 }, "fr", "https://quiz.test").subject).toBe(
+      "Une question publiée dans PRG",
+    );
   });
 });

@@ -36,7 +36,14 @@ import {
 } from "@quiz/contracts";
 
 import type { Db } from "../../db/client.js";
-import { notificationPreferences, notifications, users } from "../../db/schema.js";
+import {
+  foldKindLiteral,
+  NOTIFICATION_FOLD_TARGETS,
+  notificationPreferences,
+  notifications,
+  users,
+  type FoldedKind,
+} from "../../db/schema.js";
 import { hint, userTopic } from "../realtime/bus.js";
 import { enqueueDeliveries, teamsOpen, type ExternalChannel } from "./outbox.js";
 import { teamsLinkedUsers, teamsLinkOf } from "./teamsLink.js";
@@ -139,13 +146,13 @@ export async function notifyMany(
       : null,
   );
   const values = bells.filter((b) => b !== null);
-  const plain = values.filter((b) => FOLD_TARGETS[b.payload.kind] === undefined);
+  const plain = values.filter((b) => !isFolded(b.payload.kind));
   const rows = plain.length === 0 ? [] : await db.insert(notifications).values(plain).returning();
   // Keyed by the id each delivery was GIVEN: a fold answers with the id of
   // the unread row it bumped, which is the one the caller must get back.
   const byId = new Map(rows.map((r) => [r.id, r]));
   for (const value of values) {
-    if (FOLD_TARGETS[value.payload.kind] !== undefined) byId.set(value.id, await fold(db, value));
+    if (isFolded(value.payload.kind)) byId.set(value.id, await fold(db, value));
   }
   for (const row of values) hint("notifications", [userTopic(row.userId)]);
 
@@ -158,16 +165,8 @@ export async function notifyMany(
   return bells.map((b) => (b ? notificationJson(byId.get(b.id)!) : null));
 }
 
-/**
- * The kinds folded into one unread row per recipient and target (ADR-030
- * §e), and the column that names the target. Each has its partial unique
- * index, `notifications_<kind>_fold_uq` (`db/notifications.ts`), which the
- * fold's ON CONFLICT infers from the same columns and predicate.
- */
-const FOLD_TARGETS: Partial<Record<NotificationKind, "classroomId">> = {
-  student_joined: "classroomId",
-  roster_conflict: "classroomId",
-};
+/** A kind folded per target (ADR-030 §e), per `NOTIFICATION_FOLD_TARGETS` (`db/notifications.ts`). */
+const isFolded = (kind: NotificationKind): kind is FoldedKind => kind in NOTIFICATION_FOLD_TARGETS;
 
 /**
  * One folded delivery, as ONE atomic statement: an insert that, when the
@@ -182,22 +181,18 @@ async function fold(
   db: Db,
   value: typeof notifications.$inferInsert & { payload: NotificationPayload },
 ): Promise<NotificationRow> {
-  const kind = value.payload.kind;
-  const target = FOLD_TARGETS[kind]!;
-  // A literal, never a bind parameter: Postgres infers the arbiter index by
-  // proving this predicate implies the index's, which a `$1` cannot do. The
-  // kind is a key of the closed FOLD_TARGETS (so parsed against the
-  // catalogue), and checked to be a bare identifier all the same before it
-  // is spliced into SQL.
-  if (!/^[a-z_]+$/.test(kind)) throw new Error(`not a foldable kind: ${kind}`);
-  const kindLiteral = sql.raw(`'${kind}'`);
+  const kind = value.payload.kind as FoldedKind;
+  const target = NOTIFICATION_FOLD_TARGETS[kind];
   const count = sql`(${notifications.payload}->>'count')::int + (excluded.payload->>'count')::int`;
   const [row] = await db
     .insert(notifications)
     .values(value)
     .onConflictDoUpdate({
       target: [notifications.userId, notifications[target]],
-      targetWhere: sql`${notifications.payload}->>'kind' = ${kindLiteral} and ${notifications.readAt} is null`,
+      // The kind as a literal, never a bind parameter: Postgres infers the
+      // arbiter index by proving this predicate implies the index's, which a
+      // `$1` cannot do. The same expression the index is built from.
+      targetWhere: sql`${notifications.payload}->>'kind' = ${foldKindLiteral(kind)} and ${notifications.readAt} is null`,
       set: {
         payload: sql`excluded.payload || jsonb_build_object('count', ${count})`,
         createdAt: sql`now()`,

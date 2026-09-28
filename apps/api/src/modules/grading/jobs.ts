@@ -24,7 +24,7 @@
  * the code answers simply arrive in the panel as proposals a teacher settles.
  */
 import type { FastifyInstance } from "fastify";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 
 import type { GradeContext, GradeResult, RunnerRequest } from "@quiz/core/server";
 import { RunnerBusy, RunnerUnavailable, isGraded, isPendingRunner } from "@quiz/core/server";
@@ -47,6 +47,7 @@ import {
 } from "../evaluation/service.js";
 import { hasKey, loadConfig, typeOf } from "../pool/config.js";
 import * as events from "./events.js";
+import { announceGradingReady } from "./ready.js";
 import {
   pairKey,
   standingGradings,
@@ -102,6 +103,12 @@ interface EvaluationGradingJob {
   attemptIds?: string[];
   /** Stamped on every grading this pass writes (F-GRADE-06). */
   regradeNote?: string;
+  /**
+   * The pass of the evaluation's close: it tells the staff the grading is
+   * ready (`ready.ts`) even when it fills no cell — every attempt of an
+   * exercise with retakes may have been graded, alone, while it ran.
+   */
+  announce?: boolean;
 }
 
 interface RunnerGradingJob {
@@ -238,8 +245,10 @@ function readConfig(app: FastifyInstance, item: JoinedItem): unknown {
 }
 
 /**
- * One cell that no teacher has settled yet: the grading to write, or `null`
- * when it went to the runner. The pass writes the gradings in one batch.
+ * One cell that no teacher has settled yet: the grading to write, or the
+ * runner job it needs. The pass writes the gradings in one batch, and
+ * enqueues the runner jobs only once that batch is written, so the job
+ * that fills the last cell sees every other one (`ready.ts`).
  */
 async function gradeCell(
   app: FastifyInstance,
@@ -251,7 +260,7 @@ async function gradeCell(
     attempt: AttemptRecord;
     answer: typeof answers.$inferSelect | null;
   },
-): Promise<WriteGradingInput | null> {
+): Promise<{ write: WriteGradingInput } | { runner: RunnerGradingJob }> {
   const { evaluation, job, item, config, attempt, answer } = cell;
   const base = {
     attemptId: attempt.id,
@@ -262,7 +271,7 @@ async function gradeCell(
     ...(job.regradeNote === undefined ? {} : { regradeNote: job.regradeNote }),
   };
 
-  if (config === null) return { ...base, ...failedProposal("config_unreadable") };
+  if (config === null) return { write: { ...base, ...failedProposal("config_unreadable") } };
   if (answer === null) {
     // F-GRADE-01: an absent answer is worth zero, and it is settled.
     //
@@ -271,7 +280,7 @@ async function gradeCell(
     // handed to that type's `Review` further down the line, which is how
     // a feedback page dies on `details.cases.filter`. The record of what
     // happened is `answerId: null` beside the zero.
-    return { ...base, points: 0, source: "auto", state: "validated", details: null };
+    return { write: { ...base, points: 0, source: "auto", state: "validated", details: null } };
   }
 
   const outcome = await gradeOne(app, {
@@ -290,16 +299,17 @@ async function gradeCell(
       defaults: gradeDefaults(evaluation),
     },
   });
-  if (outcome.kind === "written") return { ...base, ...outcome.grading };
-  await enqueueRunnerGrading(app, {
-    evaluationId: evaluation.id,
-    attemptId: attempt.id,
-    itemId: item.item.id,
-    answerId: answer.id,
-    request: outcome.request,
-    ...(job.regradeNote === undefined ? {} : { regradeNote: job.regradeNote }),
-  });
-  return null;
+  if (outcome.kind === "written") return { write: { ...base, ...outcome.grading } };
+  return {
+    runner: {
+      evaluationId: evaluation.id,
+      attemptId: attempt.id,
+      itemId: item.item.id,
+      answerId: answer.id,
+      request: outcome.request,
+      ...(job.regradeNote === undefined ? {} : { regradeNote: job.regradeNote }),
+    },
+  };
 }
 
 /**
@@ -321,7 +331,7 @@ export async function runEvaluationGrading(
     pass.teacherIds,
     pass.items.length * pass.attempts.length,
   );
-  let queuedRunner = 0;
+  const runnerJobs: RunnerGradingJob[] = [];
   // Every grading of the pass, written at the end by ONE batched writer
   // (D-01): a transaction per 500 cells instead of one per cell. A pass that
   // dies half-way writes nothing and is simply run again (idempotency).
@@ -341,15 +351,25 @@ export async function runEvaluationGrading(
       // touched again, so running the job twice changes nothing.
       if (pass.standing.get(key)?.state !== "validated") {
         const answer = pass.answers.get(key) ?? null;
-        const grading = await gradeCell(app, { evaluation, job, item, config, attempt, answer });
-        if (grading) writes.push(grading);
-        else queuedRunner += 1;
+        const graded = await gradeCell(app, { evaluation, job, item, config, attempt, answer });
+        if ("write" in graded) writes.push(graded.write);
+        else runnerJobs.push(graded.runner);
       }
       progress.tick();
     }
   }
   await writeGradings(app.db, writes);
-  progress.finish(queuedRunner > 0 ? "runner" : "done");
+  progress.finish(runnerJobs.length > 0 ? "runner" : "done");
+  for (const runnerJob of runnerJobs) await enqueueRunnerGrading(app, runnerJob);
+  // With runner jobs out for empty cells, the grading is not finished: the
+  // job that fills the last one says so. Otherwise the pass does, if it
+  // filled a cell that had no grading at all (a run with nothing new tells
+  // nobody), or if it is the pass of the close.
+  const empty = (cell: { attemptId: string; itemId: string }) =>
+    !pass.standing.has(pairKey(cell.attemptId, cell.itemId));
+  if (!runnerJobs.some(empty) && (writes.some(empty) || job.announce)) {
+    await announceGradingReady(app, evaluation);
+  }
 }
 
 type GradeOutcome =
@@ -446,7 +466,21 @@ async function runRunnerGrading(
   const db = app.db;
   const evaluation = await byId(db, job.evaluationId);
   if (!evaluation) return;
-  if (await hasValidated(db, job.attemptId, job.itemId)) return;
+  const standing = await standingState(db, job.attemptId, job.itemId);
+  if (standing === "validated") return;
+  await gradeWithRunner(app, evaluation, job);
+  // The cell had no grading at all: this job may be the one that completes
+  // the grid. A cell re-sent with a proposal already on it completes nothing.
+  if (standing === null) await announceGradingReady(app, evaluation);
+}
+
+/** The runner half proper: whatever happens, the cell ends with a grading (or the job is retried). */
+async function gradeWithRunner(
+  app: FastifyInstance,
+  evaluation: EvaluationRecord,
+  job: RunnerGradingJob,
+): Promise<void> {
+  const db = app.db;
 
   const item = await joinedItem(db, job.evaluationId, job.itemId);
   if (!item) return;
@@ -522,17 +556,22 @@ async function runRunnerGrading(
   }
 }
 
-async function hasValidated(db: Db, attemptId: string, itemId: string): Promise<boolean> {
-  const [row] = await db
-    .select({ id: gradings.id })
+/** What stands on one cell: `validated` outranks a proposal; null when it holds no grading. */
+async function standingState(
+  db: Db,
+  attemptId: string,
+  itemId: string,
+): Promise<"validated" | "proposed" | null> {
+  const rows = await db
+    .select({ state: gradings.state })
     .from(gradings)
     .where(
       and(
         eq(gradings.attemptId, attemptId),
         eq(gradings.itemId, itemId),
-        eq(gradings.state, "validated"),
+        ne(gradings.state, "superseded"),
       ),
-    )
-    .limit(1);
-  return row !== undefined;
+    );
+  if (rows.some((r) => r.state === "validated")) return "validated";
+  return rows.length > 0 ? "proposed" : null;
 }

@@ -1,12 +1,20 @@
 import { randomUUID } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { DEFAULT_CHANNEL_ENABLED, type NotificationPayload } from "@quiz/contracts";
 
 import type { Db } from "../../db/client.js";
-import { classrooms, courses, notifications, pools, teamsLinks, users } from "../../db/schema.js";
+import {
+  classrooms,
+  courses,
+  NOTIFICATION_FOLD_TARGETS,
+  notifications,
+  pools,
+  teamsLinks,
+  users,
+} from "../../db/schema.js";
 import { subscribe } from "../../events.js";
 import type { JobQueue } from "../../jobs.js";
 import { testDb } from "../../test/db.js";
@@ -185,6 +193,35 @@ describe("a folded kind", () => {
     const unread = await unreadOf(ann, room.classroomId);
     expect(unread).toHaveLength(1);
     expect(unread[0]!.payload).toMatchObject({ count: 8 });
+  });
+
+  it("has one partial unique index per folded kind in the MIGRATED database, and no other", async () => {
+    // The schema generates its indexes from NOTIFICATION_FOLD_TARGETS; this
+    // holds the migrations to the same list, so neither can drift.
+    const { rows } = (await db.execute(
+      sql`select indexname, indexdef from pg_indexes where tablename = 'notifications' and indexname like '%_fold_uq'`,
+    )) as unknown as { rows: { indexname: string; indexdef: string }[] };
+    const column = { classroomId: "classroom_id", poolId: "pool_id", evaluationId: "evaluation_id" };
+    expect(rows.map((r) => r.indexname).sort()).toEqual(
+      Object.keys(NOTIFICATION_FOLD_TARGETS).map((k) => `notifications_${k}_fold_uq`).sort(),
+    );
+    for (const [kind, target] of Object.entries(NOTIFICATION_FOLD_TARGETS)) {
+      const def = rows.find((r) => r.indexname === `notifications_${kind}_fold_uq`)!.indexdef;
+      expect(def).toContain(`(user_id, ${column[target]})`);
+      expect(def).toContain(`'${kind}'`);
+      expect(def).toMatch(/read_at IS NULL/i);
+    }
+  });
+
+  it("folds pool_question_added per pool", async () => {
+    const poolId = await seedPool("Réseaux");
+    const added = { kind: "pool_question_added", poolId, poolName: "Réseaux", count: 1 } as const;
+    const first = await bell(db, ann, added);
+    const second = await bell(db, ann, added);
+    expect(second.id).toBe(first.id);
+    expect(second.payload).toMatchObject({ count: 2 });
+    const otherPool = await seedPool("Réseaux 2");
+    expect((await bell(db, ann, { ...added, poolId: otherPool })).payload).toMatchObject({ count: 1 });
   });
 
   it("goes with its classroom: the foreign key cascades", async () => {

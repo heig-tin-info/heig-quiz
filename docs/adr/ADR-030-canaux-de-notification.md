@@ -629,3 +629,36 @@ type the user's installed manifest does not declare) is a permanent Teams
 failure, like a 403 or a 404, and is not retried. The manifest was
 bumped once, to 2.1.0, declaring the activity types of every kind of steps 4
 to 8.
+
+Step 5 (`grading_ready`, `pool_question_added`) settled:
+
+- **`grading_ready` is sent when the grid is complete**: every (attempt ×
+  item) cell holds a validated or proposed grading, so no runner job is still
+  out. A pass that sends empty cells to the runner says nothing (its runner
+  jobs are enqueued once its batch is written), and the runner job that fills
+  the last empty cell does. The guard against duplicates: the pass announces only
+  when it filled a cell that had no grading at all, or when it is the pass of
+  the close (`announce` on the job — an exercise with retakes may have
+  graded every attempt, alone, while it ran); a runner job only when its own
+  cell had none. A pass run again with nothing new tells nobody; a re-grade
+  empties its item's cells, so its pass tells again if proposals remain.
+  Nothing is sent while the evaluation is `running` or `paused` — its state
+  re-read at the moment of telling, not the row the job loaded, since a
+  runner job picked up during the run may complete the grid after the close
+  — nor for a poll. The count is every proposal standing on the evaluation, placeholders
+  included (they need the teacher too). Recipients are `staffOf`, the course's
+  staff seats: the pass is asynchronous, so the teacher who closed the
+  evaluation is told too. Not folded. Best-effort: a failure is logged and
+  never fails the job.
+- **`pool_question_added` counts every publication**, the first version of a
+  question or a new one: "a colleague published a question" either way. It
+  is sent from `publishQuestion` after its transaction commits, so every
+  path — the editor, the MCP `create_question`, an importer over the API —
+  goes through it, and fifty publications fold into one entry counting
+  fifty. Best-effort, as `tellStaff`: a publication never fails because the
+  notification did.
+- **The folded kinds are ONE constant**, `NOTIFICATION_FOLD_TARGETS`
+  (`db/notifications.ts`): the partial unique indexes are generated from it,
+  the fold reads it, and a test holds the migrated database to it.
+  `pool_question_added` folds on `(user_id, pool_id)`, migration
+  `0028_notification_pool_fold`.

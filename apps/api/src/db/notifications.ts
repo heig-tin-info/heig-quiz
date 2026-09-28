@@ -21,12 +21,34 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import { NOTIFICATION_CHANNELS, NOTIFICATION_KINDS } from "@quiz/contracts";
+import { NOTIFICATION_CHANNELS, NOTIFICATION_KINDS, type NotificationKind } from "@quiz/contracts";
 
 import { users } from "./auth.js";
 import { evaluations } from "./evaluation.js";
 import { classrooms } from "./org.js";
 import { pools } from "./pool.js";
+
+/**
+ * The kinds folded into one unread row per recipient and target (ADR-030
+ * §e), and the column that names the target. THE list: the partial unique
+ * indexes below are generated from it, and the fold of
+ * `modules/notifications/service.ts` reads it to pick its arbiter.
+ */
+export const NOTIFICATION_FOLD_TARGETS = {
+  student_joined: "classroomId",
+  roster_conflict: "classroomId",
+  pool_question_added: "poolId",
+} as const satisfies Partial<Record<NotificationKind, "classroomId" | "poolId" | "evaluationId">>;
+
+export type FoldedKind = keyof typeof NOTIFICATION_FOLD_TARGETS;
+
+/** The kind as an SQL literal: a bind parameter could not prove an index predicate. */
+export function foldKindLiteral(kind: FoldedKind) {
+  // A key of the closed NOTIFICATION_FOLD_TARGETS, checked to be a bare identifier all
+  // the same before it is spliced into SQL.
+  if (!/^[a-z_]+$/.test(kind)) throw new Error(`not a foldable kind: ${kind}`);
+  return sql.raw(`'${kind}'`);
+}
 
 /**
  * `payload` is a `NotificationPayload` of `@quiz/contracts`, a discriminated
@@ -43,7 +65,8 @@ import { pools } from "./pool.js";
  * writing a row. The guard is one partial unique index per folded kind
  * (the target column is nullable, and a plain unique index treats two NULLs
  * as distinct), which the fold's `INSERT … ON CONFLICT` names by its
- * columns and predicate (`FOLD_TARGETS`, `service.ts`).
+ * columns and predicate. Both are derived from {@link NOTIFICATION_FOLD_TARGETS}, so the
+ * indexes and the fold cannot drift apart.
  */
 export const notifications = pgTable(
   "notifications",
@@ -67,12 +90,11 @@ export const notifications = pgTable(
     index("notifications_pool_idx").on(t.poolId),
     index("notifications_evaluation_idx").on(t.evaluationId),
     index("notifications_classroom_idx").on(t.classroomId),
-    uniqueIndex("notifications_student_joined_fold_uq")
-      .on(t.userId, t.classroomId)
-      .where(sql`${t.payload}->>'kind' = 'student_joined' and ${t.readAt} is null`),
-    uniqueIndex("notifications_roster_conflict_fold_uq")
-      .on(t.userId, t.classroomId)
-      .where(sql`${t.payload}->>'kind' = 'roster_conflict' and ${t.readAt} is null`),
+    ...(Object.keys(NOTIFICATION_FOLD_TARGETS) as FoldedKind[]).map((kind) =>
+      uniqueIndex(`notifications_${kind}_fold_uq`)
+        .on(t.userId, t[NOTIFICATION_FOLD_TARGETS[kind]])
+        .where(sql`${t.payload}->>'kind' = ${foldKindLiteral(kind)} and ${t.readAt} is null`),
+    ),
   ],
 );
 
