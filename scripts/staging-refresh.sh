@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Replace the staging data with a copy of production's (ADR-028). Run on the
-# application VM, as `srv`, from the staging checkout:
+# application VM, as `srvstg`, from the staging checkout, AFTER production
+# pushed a copy into the inbox (scripts/staging-export.sh, as `srv`):
 #
-#   /srv/quiz-staging/scripts/staging-refresh.sh            # last night's dump
-#   /srv/quiz-staging/scripts/staging-refresh.sh --fresh    # a dump taken now
-#   /srv/quiz-staging/scripts/staging-refresh.sh <file>     # that dump
+#   ~/quiz-staging/scripts/staging-refresh.sh            # the inbox's copy
+#   ~/quiz-staging/scripts/staging-refresh.sh <file>     # that dump (images unchanged)
+#
+# Staging cannot read production's directory: the copy only ever travels
+# from production into /srv/staging-inbox, never the other way.
 #
 # Never run by a deploy: a refresh wipes whatever a test had prepared.
 # The data is NOT anonymized (a decision of ADR-028): staging is closed by
@@ -17,25 +20,14 @@
 set -euo pipefail
 
 cd "$(dirname "$(readlink -f "$0")")/.."
-PROD_DIR="${QUIZ_PROD_DIR:-/srv/quiz}"
+INBOX="${QUIZ_STAGING_INBOX:-/srv/staging-inbox}"
 
 if [ "$(id -u)" != 0 ] && [ -z "${DOCKER_HOST:-}" ]; then
   export DOCKER_HOST="unix:///run/user/$(id -u)/docker.sock"
 fi
 STAGING=(docker compose -f compose.staging.yml --env-file .env.staging --env-file .env.image)
 
-case "${1:-}" in
-  --fresh)
-    # Here, not in production's backups/: that directory belongs to a
-    # container's sub-uid, and this dump is staging's to throw away.
-    dump="$PWD/.refresh.dump"
-    trap 'rm -f "$dump"' EXIT
-    (cd "$PROD_DIR" && docker compose -f compose.prod.yml --env-file .env.prod \
-      exec -T postgres pg_dump -Fc -U quiz quiz) > "$dump"
-    ;;
-  "") dump="$(ls -1t "$PROD_DIR"/backups/quiz-*.dump | head -n1)" ;;
-  *) dump="$1" ;;
-esac
+dump="${1:-$INBOX/quiz.dump}"
 [ -s "$dump" ] || { echo "staging-refresh: no dump at '$dump'" >&2; exit 1; }
 echo "staging-refresh: restoring $dump"
 
@@ -60,10 +52,13 @@ BEGIN
 END $$;
 SQL
 
-# The question images, content-addressed. Both directories belong to the
-# containers' `node` (a sub-uid on the host): copied through a container.
-docker run --rm -v "$PROD_DIR/assets:/from:ro" -v "$PWD/assets:/to" alpine \
-  sh -c 'cp -a /from/. /to/'
+# The question images, content-addressed. The staging directory belongs to
+# the container's `node` (a sub-uid on the host): unpacked through a container.
+# A dump named on the command line leaves the images as they are.
+if [ -z "${1:-}" ] && [ -s "$INBOX/assets.tar" ]; then
+  docker run --rm -i -v "$PWD/assets:/to" alpine \
+    sh -c 'tar -C /to -xf - && chown -R 1000:1000 /to' < "$INBOX/assets.tar"
+fi
 
 # The app migrates on start: a dump older than the staging code is brought
 # forward here, which is exactly the migration production will run next.

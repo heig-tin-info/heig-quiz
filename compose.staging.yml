@@ -1,4 +1,6 @@
-# Staging -- quiz.dev.chevallier.io, on the SAME VM as production (ADR-028).
+# Staging -- quiz.dev.chevallier.io, on the SAME VM as production (ADR-028),
+# but as its own account, `srvstg`, with its own rootless Docker: checkout
+# /home/srvstg/quiz-staging (docs/development/deployment.md, section 8).
 # It runs the image CI just built, before that same image is promoted to
 # production. Caddy imports its fragment (Caddyfile.staging) next to the
 # production one; only a loopback port is published, 3003 (3000-3002 are the
@@ -11,8 +13,8 @@
 # staging, never the neighbours. The production containers carry no cap. On
 # an exam day, stop it: `docker compose -f compose.staging.yml stop`.
 #
-# The data is a copy of production's, refreshed on demand by
-# scripts/staging-refresh.sh -- never on deploy, so a test being prepared
+# The data is a copy of production's, pushed by scripts/staging-export.sh (as
+# srv) and restored by scripts/staging-refresh.sh (as srvstg) -- never on deploy, so a test being prepared
 # survives the next push. There is no backup service: staging data is
 # disposable by definition.
 name: quiz-staging

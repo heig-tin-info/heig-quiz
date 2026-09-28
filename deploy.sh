@@ -2,9 +2,11 @@
 # Deploy target for the CI's forced-command SSH keys. The VM's authorized_keys
 # pins each key to this script and to ONE environment (ADR-028):
 #   command="/srv/quiz/deploy.sh production",restrict ssh-ed25519 AAAA… ci-deploy
-#   command="/srv/quiz-staging/deploy.sh staging",restrict ssh-ed25519 AAAA… ci-deploy-staging
-# so the CI can ONLY deploy — never open a shell, even if a key leaks — and
-# the staging key can never touch production.
+#   command="/home/srvstg/quiz-staging/deploy.sh staging",restrict ssh-ed25519 AAAA… ci-deploy-staging
+# so the CI can ONLY deploy — never open a shell, even if a key leaks. The
+# staging key lands on its own account (`srvstg`, its own rootless Docker):
+# the commit it runs has not been approved yet, and that account can read
+# nothing of production's.
 #
 # The CI passes "<commit sha> <ephemeral GHCR token>" as the SSH "command";
 # it lands in $SSH_ORIGINAL_COMMAND. The sha is the commit to deploy: the
@@ -19,9 +21,10 @@
 # the same way on ITS VM by apps/runner/deploy/deploy.sh (ADR-016).
 set -euo pipefail
 
-# The script's own checkout: /srv/quiz (production) or /srv/quiz-staging on
-# the Hetzner VM, run as the `srv` account with rootless Docker. No path is
-# hard-coded, so a root checkout with rootful Docker works the same.
+# The script's own checkout: /srv/quiz (production, account `srv`) or
+# /home/srvstg/quiz-staging (staging, account `srvstg`) on the Hetzner VM,
+# each account with its own rootless Docker. No path is hard-coded, so a root
+# checkout with rootful Docker works the same.
 cd "$(dirname "$(readlink -f "$0")")"
 
 environment="${1:-production}"
@@ -37,8 +40,10 @@ if [ "$(id -u)" != 0 ] && [ -z "${DOCKER_HOST:-}" ]; then
   export DOCKER_HOST="unix:///run/user/$(id -u)/docker.sock"
 fi
 
-# Staging and production deploy on the same Docker daemon: one at a time, so
-# the image clean-up below never removes an image the other one just pulled.
+# One deploy at a time per account (the lock lives in its runtime directory),
+# so the image clean-up below never removes an image a concurrent deploy on
+# the same daemon just pulled. Staging and production no longer share a
+# daemon; the lock still guards a manual deploy racing the CI's.
 # The descriptor survives the re-exec, and so does the lock.
 if [ -z "${QUIZ_DEPLOY_REEXEC:-}" ]; then
   exec 9>"${XDG_RUNTIME_DIR:-/tmp}/quiz-deploy.lock"
