@@ -199,7 +199,7 @@ export const en = {
   "admin.empty.body": "Grant the teacher role to an address to get started.",
   "admin.users": "Users",
   "admin.usersHint":
-    "Every account that has signed in, and why each teacher is one. To make someone a teacher, grant their address above.",
+    "Every account, and why each teacher is one. To make someone a teacher, grant their address above.",
   "admin.users.search": "Search a name or an e-mail",
   "admin.users.filter.all": "All",
   "admin.users.filter.teachers": "Teachers",

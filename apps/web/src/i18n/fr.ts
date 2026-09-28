@@ -196,7 +196,7 @@ export const fr: Record<keyof Dict, string> = {
   "admin.empty.body": "Autorisez une adresse pour commencer.",
   "admin.users": "Utilisateurs",
   "admin.usersHint":
-    "Chaque compte qui s'est connecté, et pourquoi chaque enseignant l'est. Pour faire de quelqu'un un enseignant, autorisez son adresse ci-dessus.",
+    "Chaque compte, et pourquoi chaque enseignant l'est. Pour faire de quelqu'un un enseignant, autorisez son adresse ci-dessus.",
   "admin.users.search": "Rechercher un nom ou une adresse",
   "admin.users.filter.all": "Tous",
   "admin.users.filter.teachers": "Enseignants",

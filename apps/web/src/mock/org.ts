@@ -393,8 +393,9 @@ function buildAdminUsers(): AdminUser[] {
       ...teaching(0, 0, 2),
     }),
     account("u-hoare", "Tony", "Hoare", "tony.hoare@hes-so.ch", {
+      // The affiliation is read at sign-in: this account has signed in.
       reason: "staff_affiliation",
-      lastLoginAt: null,
+      lastLoginAt: iso(-6 * D),
     }),
     account("u-knuth", "Donald", "Knuth", "donald.knuth@heig-vd.ch", teaching(2, 48, 0)),
   ];

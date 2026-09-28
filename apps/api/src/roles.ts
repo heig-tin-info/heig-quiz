@@ -87,21 +87,23 @@ export async function roleForIdentity(
   identity: Identity,
 ): Promise<RoleDecision> {
   const emails = normalizedSet(identity.emails);
-  const [grant] =
+  // Both lookups at once: this runs at every sign-in.
+  const [[grant], [seat]] = await Promise.all([
     emails.length > 0
-      ? await db
+      ? db
           .select({ id: teacherGrants.id })
           .from(teacherGrants)
           .where(inArray(teacherGrants.email, emails))
           .limit(1)
-      : [];
-  const [seat] = identity.userId
-    ? await db
-        .select({ courseId: courseStaff.courseId })
-        .from(courseStaff)
-        .where(eq(courseStaff.userId, identity.userId))
-        .limit(1)
-    : [];
+      : [],
+    identity.userId
+      ? db
+          .select({ courseId: courseStaff.courseId })
+          .from(courseStaff)
+          .where(eq(courseStaff.userId, identity.userId))
+          .limit(1)
+      : [],
+  ]);
   return decideRole(config, {
     emails,
     affiliations: identity.affiliations ?? [],
@@ -113,7 +115,8 @@ export async function roleForIdentity(
 /**
  * The decision for EVERY non-anonymized account, keyed by id: the facts of
  * `roleForUser` (verified addresses, stored affiliations, grants, seats)
- * loaded in four queries whatever the number of accounts, then the same
+ * loaded in five queries whatever the number of accounts — the addresses
+ * and claims of anonymized accounts left out — then the same
  * `decideRole`. For the administration list, which shows why each account
  * is what it is.
  */
@@ -126,12 +129,15 @@ export async function roleDecisionsOfAll(
     db
       .select({ userId: userEmails.userId, email: userEmails.email })
       .from(userEmails)
-      .where(eq(userEmails.verified, true)),
+      .innerJoin(users, eq(users.id, userEmails.userId))
+      .where(and(eq(userEmails.verified, true), isNull(users.anonymizedAt))),
     db.select({ email: teacherGrants.email }).from(teacherGrants),
     db.selectDistinct({ userId: courseStaff.userId }).from(courseStaff),
     db
       .select({ userId: userIdpClaims.userId, affiliations: userIdpClaims.affiliations })
-      .from(userIdpClaims),
+      .from(userIdpClaims)
+      .innerJoin(users, eq(users.id, userIdpClaims.userId))
+      .where(isNull(users.anonymizedAt)),
   ]);
   const emailsOf = new Map<string, string[]>();
   for (const a of addresses) emailsOf.set(a.userId, [...(emailsOf.get(a.userId) ?? []), a.email]);

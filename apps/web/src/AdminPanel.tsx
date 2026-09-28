@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Library, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { useState } from "react";
 
-import type { AdminTeacher } from "@quiz/contracts";
+import type { AdminTeacher, TeacherGrantCreate } from "@quiz/contracts";
 
 import { api, apiErrorMessage } from "./api";
 import { useConfirm } from "./confirm";
@@ -52,7 +52,10 @@ export function AdminPage() {
   const invalidate = () => qc.invalidateQueries({ queryKey: adminTeachersKey });
   const grant = useMutation({
     mutationFn: () =>
-      api("/app/api/admin/teachers", { method: "POST", body: JSON.stringify({ email }) }),
+      api("/app/api/admin/teachers", {
+        method: "POST",
+        body: JSON.stringify({ email } satisfies TeacherGrantCreate),
+      }),
     onSuccess: () => {
       setEmail("");
       invalidate();
