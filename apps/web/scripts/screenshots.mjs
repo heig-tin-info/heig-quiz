@@ -273,6 +273,9 @@ const scenes = [
   // The banner the walk comes back through: the student view, entered from an
   // evaluation, with "Back to teacher view" pointing at it.
   { name: "student-view-banner", role: "teacher", path: "/", ss: { "quiz-view-as": "student", "quiz-view-as-return": "/evaluations/closed" } },
+  // The same banner above the full-screen attempt, which has no frame (#200):
+  // it sticks over the player's own top bar, and the fold shows both.
+  { name: "student-view-attempt", role: "teacher", path: `${TAKE}?scene=running`, fold: true, ss: { "quiz-view-as": "student", "quiz-view-as-return": "/evaluations/running/live" } },
   // The frame's teacher/student switch (ADR-018 addendum), both ways round.
   { name: "view-switch-teacher", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, settle: 3000 },
   { name: "view-switch-student", role: "teacher", path: "/", fold: true, settle: 3000, ss: { "quiz-view-as": "student", "quiz-view-as-return": "/evaluations/running/live" } },

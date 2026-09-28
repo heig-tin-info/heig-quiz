@@ -28,6 +28,7 @@ export const en = {
   "menu.lightTheme": "Light theme",
   "menu.darkTheme": "Dark theme",
   "menu.studentViewBanner": "You are viewing the portal as a student.",
+  "menu.studentViewBannerShort": "Student view",
   // The frame's teacher/student switch (ADR-018 addendum). `view.label` names
   // the group for a screen reader: the two pills have no visible caption.
   "view.label": "View as",

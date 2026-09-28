@@ -127,8 +127,8 @@ export function PlayerShell({
     return () => window.removeEventListener("keydown", onKey);
   }, [hasPalette]);
   return (
-    <div className="flex min-h-dvh flex-col bg-canvas">
-      <header className="sticky top-0 z-20 border-b border-line bg-surface">
+    <div className="flex min-h-[calc(100dvh-var(--banner-h))] flex-col bg-canvas">
+      <header className="sticky top-(--banner-h) z-20 border-b border-line bg-surface">
         <div
           className={cx(
             "mx-auto w-full max-w-190 px-4 pt-2.5 sm:px-6",

@@ -160,7 +160,8 @@ Two pairs stay below their target, on purpose:
   flow. Shadows exist only on floating layers (menu, popover, sheet, dialog,
   toast), because those genuinely sit above the page.
 - Focus: 2 px accent ring at 2 px offset, on every interactive element. It is
-  declared once in `style.css` on `:focus-visible`; no component restyles it.
+  declared once in `style.css` on `:focus-visible`; no component restyles it,
+  except the mode banner (below), whose dark fill would swallow a red ring.
 
 ## Keyboard and focus
 
@@ -329,6 +330,23 @@ live in `ui/state.ts`, each written once.
   Pressed to 0.97. The class list is `buttonClass` in `@quiz/ui`, which the
   app's `Button` and `LinkButton` and the question types all wear.
 - Icon button: round, ghost; `danger` turns red on hover only.
+- Mode banner (`ModeBanner` in `Shell.tsx`, #200): a mode of the whole
+  application — the student view today, acting as someone else later — is
+  stated above everything, not as a page notice. Full width over the sidebar,
+  sticky at the top (`Z.banner`, above the sticky bars, under the coach and
+  every dialog), 32 px high, 12 px medium text, a message (a short one under
+  `sm`, so a phone still reads the word that names the mode; truncation is the
+  fallback) and one compact 24 px outline pill for the way out. A fixed
+  overlay of the page under it (the paused attempt) starts at `--banner-h`, so
+  the way out stays reachable. Solid **`fg` fill with
+  `canvas` ink** (about 16:1 in both themes, since both tokens swap):
+  inverted rather than red, because the one red element of a screen is the
+  thing to click, and a mode is not something to click. The pill's focus
+  ring is `canvas` instead of the accent — the one exception to the focus
+  rule, because the accent on `fg` is about 2.5:1 in light mode, under the
+  3:1 a ring needs. The banner hands its frame `--banner-h` (0 elsewhere, in
+  `style.css`); the sidebar, the phone top bar and the player's header stick
+  at that offset, and the full-height columns subtract it.
 - Badge: pill, soft background, 12 px, tones green / amber / red / zinc /
   accent. Status is a badge; a count is plain text. A badge that is also the door to
   its own fix — "template rev. 1 → 3" on a classroom's evaluation row

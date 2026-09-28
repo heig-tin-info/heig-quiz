@@ -12,7 +12,7 @@ import {
   Vote,
   X,
 } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import type { CourseSummary, Me, PoolSummary } from "@quiz/contracts";
 import { isCurrent } from "@quiz/domain";
@@ -485,12 +485,12 @@ export function Shell({
       />
     ) : null;
 
-  return (
-    <div className="min-h-dvh lg:flex">
+  const frame = (
+    <div className="min-h-[calc(100dvh-var(--banner-h))] lg:flex">
       {/* Desktop sidebar */}
       <aside
         aria-label={t("aside.sidebar")}
-        className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-line bg-canvas lg:flex"
+        className="sticky top-(--banner-h) hidden h-[calc(100dvh-var(--banner-h))] w-60 shrink-0 flex-col border-r border-line bg-canvas lg:flex"
       >
         {/* The mark takes the sidebar's full width, with the air a wordmark
             needs: it is the only thing above the navigation. */}
@@ -562,7 +562,7 @@ export function Shell({
 
       <div className="min-w-0 flex-1">
         {/* Mobile top bar */}
-        <div className="sticky top-0 z-20 flex h-14 items-center gap-2 border-b border-line bg-canvas/90 px-3 backdrop-blur lg:hidden">
+        <div className="sticky top-(--banner-h) z-20 flex h-14 items-center gap-2 border-b border-line bg-canvas/90 px-3 backdrop-blur lg:hidden">
           <IconButton
             label={t("menu.openMenu")}
             aria-haspopup="dialog"
@@ -579,8 +579,6 @@ export function Shell({
           </IconButton>
           {userMenu(true)}
         </div>
-
-        {studentView ? <StudentViewBanner onLeave={onToggleStudentView} /> : null}
 
         <main
           className={cx(
@@ -623,6 +621,76 @@ export function Shell({
 
     </div>
   );
+  return studentView ? (
+    <StudentViewBanner onLeave={onToggleStudentView}>{frame}</StudentViewBanner>
+  ) : (
+    frame
+  );
+}
+
+/** The height of a mode banner, published to the frame as `--banner-h`. */
+const BANNER_HEIGHT = "2rem";
+
+/**
+ * A mode of the whole application, stated above everything: full width,
+ * sticky at the top, over the sidebar. Solid `fg` on `canvas` ink — inverted
+ * rather than red, because the one red element of a screen is the thing to
+ * click, and a mode is not that. It wraps the frame it sits on and hands it
+ * `--banner-h`, so the sidebar, the phone top bar and the player's header
+ * stick below it instead of under it.
+ *
+ * Generic on purpose: the student view says one thing and offers the way
+ * back; another mode (acting as someone else) says another and offers its
+ * own way out. `short` is what a phone shows, where the full sentence would
+ * be cut before the word that names the mode; `message` names the region.
+ */
+export function ModeBanner({
+  icon,
+  message,
+  short,
+  action,
+  children,
+}: {
+  icon?: ReactNode;
+  message: string;
+  short?: string | undefined;
+  action?: { label: string; onClick: () => void } | undefined;
+  children: ReactNode;
+}) {
+  return (
+    <div style={{ "--banner-h": BANNER_HEIGHT } as CSSProperties}>
+      <div
+        role="region"
+        aria-label={message}
+        className={cx(
+          "sticky top-0 flex h-(--banner-h) items-center gap-2 bg-fg px-4 text-xs font-medium text-canvas [&>svg]:size-3.5 [&>svg]:shrink-0",
+          Z.banner,
+        )}
+      >
+        {icon}
+        <span className="min-w-0 flex-1 truncate">
+          {short ? (
+            <>
+              <span className="sm:hidden">{short}</span>
+              <span className="hidden sm:inline">{message}</span>
+            </>
+          ) : (
+            message
+          )}
+        </span>
+        {action ? (
+          <button
+            type="button"
+            onClick={action.onClick}
+            className="h-6 shrink-0 whitespace-nowrap rounded-full border border-canvas/40 px-2.5 text-xs font-medium text-canvas transition-colors hover:bg-canvas/15 focus-visible:outline-canvas"
+          >
+            {action.label}
+          </button>
+        ) : null}
+      </div>
+      {children}
+    </div>
+  );
 }
 
 /**
@@ -631,19 +699,22 @@ export function Shell({
  * an exam has no sidebar, and without it the only way out of the student
  * view was to hand the attempt in.
  */
-export function StudentViewBanner({ onLeave }: { onLeave?: (() => void) | undefined }) {
+export function StudentViewBanner({
+  onLeave,
+  children,
+}: {
+  onLeave?: (() => void) | undefined;
+  children: ReactNode;
+}) {
   const t = useT();
   return (
-    <div className="border-b border-accent/20 bg-accent-soft px-4 py-2 text-[13px] text-accent">
-      <div className="mx-auto flex max-w-280 items-center gap-2 sm:px-2">
-        <Eye className="size-4" />
-        <span className="flex-1">{t("menu.studentViewBanner")}</span>
-        {onLeave ? (
-          <Button size="sm" variant="secondary" onClick={onLeave}>
-            {t("menu.teacherView")}
-          </Button>
-        ) : null}
-      </div>
-    </div>
+    <ModeBanner
+      icon={<Eye />}
+      message={t("menu.studentViewBanner")}
+      short={t("menu.studentViewBannerShort")}
+      action={onLeave ? { label: t("menu.teacherView"), onClick: onLeave } : undefined}
+    >
+      {children}
+    </ModeBanner>
   );
 }
