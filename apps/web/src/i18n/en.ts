@@ -2753,6 +2753,20 @@ export const en = {
   "activities.week.showPast.one": "Show the earlier week",
   "activities.week.hidePast": "Hide the earlier weeks",
   "activities.week.nothingAhead": "Nothing from this week on.",
+  "activities.timeline.hint": "Wheel or drag to pan · Ctrl/⌘ + wheel to zoom",
+  "activities.timeline.zoomIn": "Zoom in",
+  "activities.timeline.zoomOut": "Zoom out",
+  "activities.timeline.focus": "Focus on what is in progress",
+  "activities.timeline.empty.title": "Nothing dated yet",
+  "activities.timeline.empty.body": "Activities appear on the timeline once they have an opening date or have started.",
+  "activities.timeline.legend.live": "in the room",
+  "activities.timeline.legend.waiting": "waiting room or paused",
+  "activities.timeline.legend.scheduled": "scheduled",
+  "activities.timeline.legend.draft": "draft",
+  "activities.timeline.legend.ended": "over",
+  "activities.timeline.legend.now": "now",
+  "activities.timeline.undated": "{n} undated drafts are not on the timeline",
+  "activities.timeline.undated.one": "One undated draft is not on the timeline",
 };
 
 export type Dict = typeof en;

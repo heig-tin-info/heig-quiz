@@ -192,13 +192,11 @@ export function ActivityCards({ rows, navigate, onEnd }: ViewProps) {
 // --- Schedule --------------------------------------------------------------------
 
 /**
- * Week by week, Monday first: a semester of weekly series reads as sixteen
- * short lists instead of one long one. What is open sits in this week,
- * whenever it opened. The weeks behind that hold nothing but ended rows fold under
- * one button, so the page opens on this week; a draft with no date sits
- * last, under "Not scheduled". heig-classroom draws a pannable gantt here;
- * a list per week says the same for activities that mostly last an hour or
- * a week, and it survives a phone.
+ * The schedule on a phone, where the gantt of `Timeline.tsx` has no width to
+ * pan in: week by week, Monday first, a semester of weekly series as sixteen
+ * short lists. What is open sits in this week, whenever it opened. The weeks
+ * behind that hold nothing but ended rows fold under one button, so the page
+ * opens on this week; a draft with no date sits last, under "Not scheduled".
  */
 export function ActivitySchedule({ rows, navigate, onEnd, now }: ViewProps & { now: number }) {
   const t = useT();

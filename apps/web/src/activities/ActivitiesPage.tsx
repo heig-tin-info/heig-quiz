@@ -23,11 +23,13 @@ import {
   Segmented,
   Skeleton,
   ToggleChip,
+  useMinWidth,
   useNow,
   usePersistentChoice,
 } from "../ui";
 import { endable, useEndPoll } from "./actions";
 import { activityOrder, BUCKETS, matches, MODES, type Bucket } from "./model";
+import { ActivityTimeline } from "./Timeline";
 import {
   ActivityCards,
   ActivitySchedule,
@@ -76,6 +78,7 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
   const [modes, setModes] = useState<ReadonlySet<EvaluationMode>>(new Set());
   const [buckets, setBuckets] = useState<ReadonlySet<Bucket>>(new Set());
   const { end, pending } = useEndPoll();
+  const wide = useMinWidth(640);
 
   const ordered = useMemo(() => activityOrder(list.data ?? []), [list.data]);
   const live = ordered.filter((row) => isLiveNow(row, now));
@@ -148,7 +151,12 @@ export function ActivitiesPage({ navigate }: { navigate: (r: Route) => void }) {
   } else if (view === "cards") {
     body = <ActivityCards {...props} />;
   } else if (view === "schedule") {
-    body = <ActivitySchedule {...props} now={now} />;
+    // The gantt needs width; below `sm` it is the week list (views.tsx).
+    body = wide ? (
+      <ActivityTimeline rows={shown} navigate={navigate} now={now} />
+    ) : (
+      <ActivitySchedule {...props} now={now} />
+    );
   } else {
     body = <ActivityTable {...props} />;
   }

@@ -2,7 +2,8 @@
  * `GET /app/api/activities` (issue #190): who sees what. The scope is the
  * access predicate of the evaluations the caller manages — a staff seat on
  * the classroom's course, or the ownership of an anonymous poll — loaded,
- * never filtered afterwards (invariant 6). An admin reaches every one.
+ * never filtered afterwards (invariant 6). An admin sees their own, like
+ * any teacher: the admin override does not apply to this page.
  */
 import { randomUUID } from "node:crypto";
 
@@ -138,7 +139,7 @@ describe("GET /app/api/activities", () => {
   });
 
   it("leaves out templates and the evaluations of an archived classroom", async () => {
-    const list = titles(await activitiesOf(admin));
+    const list = titles(await activitiesOf(alice));
     expect(list).not.toContain("alice template");
     expect(list).not.toContain("archived exam");
   });
@@ -150,17 +151,16 @@ describe("GET /app/api/activities", () => {
     expect(list).toContain("old class poll");
   });
 
-  it("gives an admin every activity, anonymous polls included", async () => {
-    expect(titles(await activitiesOf(admin))).toEqual([
-      "alice exam",
-      "alice poll",
-      "alice series",
-      "bob exam",
-      "bob poll",
-      "old class poll",
-      "recent poll",
-      "shared exam",
-    ]);
+  it("gives an admin their own activities only, like any teacher", async () => {
+    // The admin sits on no staff and owns no poll: nothing, not everything.
+    expect(await activitiesOf(admin)).toEqual([]);
+    const course = randomUUID();
+    await server.app.db.insert(courses).values({ id: course, name: "ADM", code: "ADM" });
+    await server.app.db.insert(courseStaff).values({ courseId: course, userId: admin.id });
+    const room = await classroom(course, "ADM-2026");
+    await evaluation("admin exam", { classroomId: room });
+    await evaluation("admin poll", { owner: admin.id }, { mode: "poll", state: "running" });
+    expect(titles(await activitiesOf(admin))).toEqual(["admin exam", "admin poll"]);
   });
 
   it("names the classroom, or none for an anonymous poll, and flags a take-home series", async () => {
