@@ -326,6 +326,56 @@ describe("state machine (§5.1)", () => {
     }
   });
 
+  it("keeps a scheduled evaluation startable when a time is cleared (#254)", async () => {
+    const server = await testServer();
+    try {
+      const teacher = await server.signIn("teacher");
+      const now = server.clock.now();
+      const hour = 3_600_000;
+      const scheduled = async (overrides: Parameters<typeof seedLive>[1]) => {
+        const seed = await seedLive(server.app.db, { teacherId: teacher.id, ...overrides });
+        await service.applyState(server.app.db, await reload(server.app.db, seed.evaluationId), "scheduled", now);
+        return (payload: Record<string, unknown>) =>
+          server.app.inject({
+            method: "PATCH",
+            url: `/app/api/evaluations/${seed.evaluationId}`,
+            headers: teacher.headers,
+            payload,
+          });
+      };
+
+      const deadline = await scheduled({
+        durationS: null,
+        settings: { timing: "deadline" },
+        opensAt: new Date(now.getTime() + hour),
+        closesAt: new Date(now.getTime() + 2 * hour),
+      });
+      for (const field of ["opensAt", "closesAt"] as const) {
+        const cleared = await deadline({ [field]: null });
+        expect(cleared.statusCode).toBe(409);
+        expect(TransitionRefusal.parse(cleared.json())).toMatchObject({
+          reason: "timing_incomplete",
+          missing: [field],
+        });
+      }
+      // Switching to a per-student timing without a duration is as incomplete.
+      const noDuration = await deadline({ settings: { timing: "duration" } });
+      expect(TransitionRefusal.parse(noDuration.json())).toMatchObject({
+        reason: "timing_incomplete",
+        missing: ["durationS"],
+      });
+
+      // Per student, the opening time is what the ticker opens it at (#152).
+      const duration = await scheduled({ durationS: 1800, opensAt: new Date(now.getTime() + hour) });
+      const cleared = await duration({ opensAt: null });
+      expect(cleared.statusCode).toBe(409);
+      expect(TransitionRefusal.parse(cleared.json()).reason).toBe("opens_at_missing");
+      expect((await duration({ closesAt: null })).statusCode).toBe(200);
+    } finally {
+      await server.close();
+    }
+  });
+
   it("refuses to pause anything but an exam", async () => {
     const seed = await seedLive(db, { mode: "exercise" });
     const row = await service.applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
