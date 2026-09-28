@@ -13,7 +13,6 @@ import {
   ORIENTATIONS,
   ORIENT_0,
   ORIENT_90,
-  ROTATE,
   clampToBox,
   clampView,
   directionOf,
@@ -59,7 +58,7 @@ describe("orientations", () => {
 
   it("is closed under the three the toolbar applies", () => {
     for (const m of ORIENTATIONS) {
-      for (const t of [ROTATE, MIRROR_X, MIRROR_Y]) {
+      for (const t of [ORIENT_90, MIRROR_X, MIRROR_Y]) {
         const product = multiply(t, m).join(",");
         expect(ORIENTATIONS.map((o) => o.join(","))).toContain(product);
       }
@@ -68,7 +67,7 @@ describe("orientations", () => {
 
   it("comes back to the identity after four quarter turns", () => {
     let m: Orientation = ORIENT_0;
-    for (let i = 0; i < 4; i += 1) m = multiply(ROTATE, m);
+    for (let i = 0; i < 4; i += 1) m = multiply(ORIENT_90, m);
     expect(m).toEqual(ORIENT_0);
   });
 

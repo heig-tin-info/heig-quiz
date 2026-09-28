@@ -38,8 +38,8 @@ export const Presentation = z.enum(["zen", "continuous", "student_choice"]);
 export type Presentation = z.infer<typeof Presentation>;
 
 /** F-EVAL-06. */
-export const LobbyMode = z.enum(["skip", "auto", "manual"]);
-export type LobbyMode = z.infer<typeof LobbyMode>;
+const LobbyMode = z.enum(["skip", "auto", "manual"]);
+type LobbyMode = z.infer<typeof LobbyMode>;
 
 /** F-EVAL-04. `manual` has no deadline at all: only the teacher closes. */
 export const Timing = z.enum(["duration", "deadline", "manual"]);
@@ -97,7 +97,7 @@ export const safeExamBrowserOf = (settings: { safeExamBrowser?: boolean | undefi
   settings.safeExamBrowser === true;
 
 /** A stored evaluation without the field: one attempt, as before #92. */
-export const defaultRetakes = (): RetakeSettings => ({
+const defaultRetakes = (): RetakeSettings => ({
   enabled: false,
   keep: "best",
   maxAttempts: null,
@@ -345,7 +345,7 @@ export const EvaluationSettingsPatch = z.object({
 export type EvaluationSettingsPatch = z.infer<typeof EvaluationSettingsPatch>;
 
 /** `PATCH` of the feedback policy: only the fields sent. */
-export const FeedbackPolicyPatch = z.object({
+const FeedbackPolicyPatch = z.object({
   when: FeedbackPolicy.shape.when.unwrap().optional(),
   showAnswer: z.boolean().optional(),
   showKey: z.boolean().optional(),
@@ -353,7 +353,7 @@ export const FeedbackPolicyPatch = z.object({
   showHiddenCaseNames: z.boolean().optional(),
   showTeacherComment: z.boolean().optional(),
 });
-export type FeedbackPolicyPatch = z.infer<typeof FeedbackPolicyPatch>;
+type FeedbackPolicyPatch = z.infer<typeof FeedbackPolicyPatch>;
 
 // A field added to the full body and forgotten here would be silently
 // stripped from every patch: the two key sets must stay equal, both ways.

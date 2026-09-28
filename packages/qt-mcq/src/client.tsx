@@ -42,10 +42,6 @@ export {
   mcqPlayerStrings,
   mcqReviewStrings,
   mcqStatsStrings,
-  type McqEditorStringKey,
-  type McqPlayerStringKey,
-  type McqReviewStringKey,
-  type McqStatsStringKey,
 } from "./strings.js";
 /*
  * The empty configuration is a VALUE a host needs to write a question with no

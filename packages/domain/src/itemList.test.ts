@@ -2,14 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import {
   EVALUATION_STATES,
-  isItemListEditable,
   itemListLock,
   type EvaluationStateName,
 } from "./itemList.js";
 
 describe("itemListLock (issue #79)", () => {
   it("leaves the list editable only before the evaluation is opened, with no attempt", () => {
-    const editable = EVALUATION_STATES.filter((s) => isItemListEditable(s, 0));
+    const editable = EVALUATION_STATES.filter((s) => itemListLock(s, 0) === null);
     expect(editable).toEqual(["draft", "scheduled"]);
   });
 
@@ -24,14 +23,13 @@ describe("itemListLock (issue #79)", () => {
     ];
     for (const state of opened) {
       expect(itemListLock(state, 0), state).toBe("opened");
-      expect(isItemListEditable(state, 0), state).toBe(false);
     }
   });
 
   it("freezes it as soon as an attempt exists, whatever the state", () => {
     for (const state of EVALUATION_STATES) {
       expect(itemListLock(state, 1), state).toBe("attempts");
-      expect(isItemListEditable(state, 3), state).toBe(false);
+      expect(itemListLock(state, 3), state).toBe("attempts");
     }
   });
 

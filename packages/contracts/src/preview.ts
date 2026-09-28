@@ -25,8 +25,8 @@ import { Verdict } from "./grading.js";
 import { AttemptView, RunBody, SimulateBody } from "./live.js";
 
 /** The seed of a preview: the range `attempts.seed` is drawn in. */
-export const PreviewSeed = z.number().int().min(0).max(0x7fffffff);
-export type PreviewSeed = z.infer<typeof PreviewSeed>;
+const PreviewSeed = z.number().int().min(0).max(0x7fffffff);
+type PreviewSeed = z.infer<typeof PreviewSeed>;
 
 /** `POST /evaluations/:id/preview` — the start of one preview. */
 export const EvaluationPreview = z.object({

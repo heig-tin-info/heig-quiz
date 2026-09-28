@@ -53,15 +53,8 @@ export const clozeClient: ClozeClient = {
  * this module, undoing the `lazy` above (rollup: INEFFECTIVE_DYNAMIC_IMPORT).
  * A host that genuinely needs one imports the file directly. Types only here.
  */
-export { ClozeFallbackText, splitBlocks, type ClozeTextRenderer } from "./text.js";
-export {
-  clozeEditorStrings,
-  clozePlayerStrings,
-  clozeReviewStrings,
-  type ClozeEditorStringKey,
-  type ClozePlayerStringKey,
-  type ClozeReviewStringKey,
-} from "./strings.js";
+export type { ClozeTextRenderer } from "./text.js";
+export { clozeEditorStrings, clozePlayerStrings, clozeReviewStrings } from "./strings.js";
 export type {
   ClozeAnswer,
   ClozeConfig,

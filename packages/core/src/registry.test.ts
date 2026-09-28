@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isGraded, isPendingLlm, isPendingRunner, isQuestionTypeId, QUESTION_TYPE_IDS } from "./contract.js";
+import { isGraded, isPendingLlm, isPendingRunner, QUESTION_TYPE_IDS } from "./contract.js";
 import type { GradeResult } from "./contract.js";
 import { ConfigMigrationError, RunnerBusy, RunnerUnavailable, UnknownQuestionType } from "./errors.js";
 import { defineClientRegistry, defineServerRegistry, makeLookup, registeredIds } from "./registry.js";
@@ -9,11 +9,6 @@ const fake = { id: "mcq" } as const;
 describe("question type ids", () => {
   it("lists the four MVP types, the circuit type and the codeimage type", () => {
     expect(QUESTION_TYPE_IDS).toEqual(["mcq", "short", "cloze", "code", "circuit", "codeimage"]);
-  });
-
-  it("narrows a raw string", () => {
-    expect(isQuestionTypeId("cloze")).toBe(true);
-    expect(isQuestionTypeId("rich")).toBe(false);
   });
 });
 

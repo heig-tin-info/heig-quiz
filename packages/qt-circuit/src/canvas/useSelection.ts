@@ -18,7 +18,7 @@ import type { Orientation, Schematic, SchematicComponent, Wire, WireEnd } from "
 import {
   MIRROR_X,
   MIRROR_Y,
-  ROTATE,
+  ORIENT_90,
   clampPoint,
   clampToBox,
   extentOf,
@@ -388,8 +388,8 @@ const CHORDS = new Map<string, (a: KeyActions, shift: boolean) => void>([
 
 /** Plain letters, by lower-cased key. */
 const LETTERS = new Map<string, KeyBinding>([
-  [" ", bind((a) => a.transform(ROTATE), true)],
-  ["r", bind((a) => a.transform(ROTATE), true)],
+  [" ", bind((a) => a.transform(ORIENT_90), true)],
+  ["r", bind((a) => a.transform(ORIENT_90), true)],
   ["h", bind((a) => a.transform(MIRROR_X))],
   ["v", bind((a) => a.transform(MIRROR_Y))],
   ["w", bind((a) => a.toggleWire(), false, true)],

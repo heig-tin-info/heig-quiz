@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hashSeed, pick, rng, seededShuffle, shuffle, streamSeed } from "./rng.js";
+import { hashSeed, pick, rng, shuffle, streamSeed } from "./rng.js";
 
 /**
  * GOLDEN TABLE. These numbers are the contract, not an implementation detail:
@@ -93,11 +93,6 @@ describe("shuffle", () => {
 
   it("gives different permutations for different seeds", () => {
     expect(shuffle(TWELVE, 1)).not.toEqual(shuffle(TWELVE, 2));
-  });
-
-  it("is exposed under both names", () => {
-    expect(seededShuffle).toBe(shuffle);
-    expect(seededShuffle(TWELVE, 42)).toEqual(shuffle(TWELVE, 42));
   });
 });
 

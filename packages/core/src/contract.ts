@@ -30,10 +30,6 @@ export const ANSWER_SUMMARY_MAX = 24;
 export const QUESTION_TYPE_IDS = ["mcq", "short", "cloze", "code", "circuit", "codeimage"] as const;
 export type QuestionTypeId = (typeof QUESTION_TYPE_IDS)[number];
 
-export function isQuestionTypeId(id: string): id is QuestionTypeId {
-  return (QUESTION_TYPE_IDS as readonly string[]).includes(id);
-}
-
 // ---------------------------------------------------------------------------
 // GradeResult
 // ---------------------------------------------------------------------------

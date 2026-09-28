@@ -222,5 +222,3 @@ export function CodeArea({
     </div>
   );
 }
-
-export default CodeArea;

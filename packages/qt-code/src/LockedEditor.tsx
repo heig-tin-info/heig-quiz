@@ -632,5 +632,3 @@ export function LockedEditor(props: LockedEditorProps): ReactNode {
     </div>
   );
 }
-
-export default LockedEditor;

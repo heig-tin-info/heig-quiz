@@ -42,11 +42,6 @@ export function answerMark(input: { answered: boolean; skipped: boolean }): Answ
   return input.skipped ? "skipped" : "unanswered";
 }
 
-/** A question the student has decided about: answered, or deliberately left. */
-export function isSettled(input: { answered: boolean; skipped: boolean }): boolean {
-  return answerMark(input) !== "unanswered";
-}
-
 /**
  * "I won't answer" is offered only on a question that holds nothing: on an
  * answered one it would mean "throw my answer away", which is a different

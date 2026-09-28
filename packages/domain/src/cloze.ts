@@ -14,7 +14,7 @@
  * Decision D4: a `select` blank stores the CANONICAL option index as a decimal
  * string, so shuffling never changes a stored answer.
  */
-import { seededShuffle, streamSeed } from "@quiz/core/rng";
+import { shuffle as seededShuffle, streamSeed } from "@quiz/core/rng";
 import {
   ALLOWED_REGEX_FLAGS,
   applyTextOptions,
@@ -458,9 +458,4 @@ export function describeBlank(blank: ClozeBlank): string {
     case "regex":
       return `/${blank.pattern}/${blank.flags}`;
   }
-}
-
-/** Sum of the weights; 0 when the text holds no blank. */
-export function clozeTotalWeight(parse: ClozeParse): number {
-  return parse.blanks.reduce((s, b) => s + b.weight, 0);
 }

@@ -51,35 +51,13 @@ export const codeClient: QuestionTypeClient<
   isAnswered: isCodeAnswered,
 };
 
-export { CodeIcon };
 /*
  * The reference solution read as regions (docs/spec/04 §4.7) — the pure rule
  * behind the editor's "try" button. A plain function, so it costs the bundle
  * nothing and stays out of the lazy chunks.
  */
-export { referenceRegionCount, referenceRegions } from "./reference.js";
-/*
- * "Did this case pass?" — the one rule (audit R-06), the same function the
- * grade applies. Pure, so it too costs the bundle nothing.
- */
-export {
-  caseVerdict,
-  type CaseFailure,
-  type CaseRun,
-  type CaseSpec,
-  type CaseVerdict,
-} from "./verdict.js";
-export type {
-  CodeAnswer,
-  CodeCase,
-  CodeConfig,
-  CodeDetails,
-  CodeLimits,
-  CodeRuntime,
-  CodeSegment,
-  CodeSolution,
-  CodeStudent,
-} from "./schema.js";
+export { referenceRegions } from "./reference.js";
+export type { CodeAnswer, CodeConfig, CodeDetails, CodeRuntime, CodeStudent } from "./schema.js";
 /*
  * The three surfaces are deliberately NOT re-exported here: a static
  * `export ... from "./Editor.js"` would pull them (and Monaco's loader) back
@@ -88,14 +66,7 @@ export type {
  */
 export type { CodeEditorProps } from "./Editor.js";
 export type { CodeRunOptions, CodeRunStage } from "./Player.js";
-export {
-  EDITOR_STRINGS,
-  PLAYER_STRINGS,
-  REVIEW_STRINGS,
-  type CodeEditorStrings,
-  type CodePlayerStrings,
-  type CodeReviewStrings,
-} from "./strings.js";
+export { EDITOR_STRINGS, PLAYER_STRINGS, REVIEW_STRINGS } from "./strings.js";
 /** The program half both player views share: what a browser request is built from. */
 export type { ProgramConfig, ProgramStudent } from "./schema.js";
 
@@ -105,25 +76,15 @@ export type { ProgramConfig, ProgramStudent } from "./schema.js";
  * program half reads `code`'s), the one case of its run and the pure pixel
  * rules the host and the mocks read.
  */
-export { codeimageClient, CodeImageIcon } from "./image/client.js";
+export { codeimageClient } from "./image/client.js";
 export { IMAGE_CASE } from "./image/schema.js";
 export type {
   CodeImageAnswer,
   CodeImageConfig,
   CodeImageDetails,
-  CodeImageSolution,
   CodeImageStudent,
   ImageSpec,
-  Palette,
 } from "./image/schema.js";
-export { encodeImage, parseImageOutput, PASTEL_16 } from "./image/pixels.js";
-export type { CodeImageEditorProps, CodeImageTryOutcome } from "./image/Editor.js";
-export type { CodeImagePlayerProps } from "./image/Player.js";
-export {
-  IMAGE_EDITOR_STRINGS,
-  IMAGE_PLAYER_STRINGS,
-  IMAGE_REVIEW_STRINGS,
-  type CodeImageEditorStrings,
-  type CodeImagePlayerStrings,
-  type CodeImageReviewStrings,
-} from "./image/strings.js";
+export { encodeImage } from "./image/pixels.js";
+export type { CodeImageEditorProps } from "./image/Editor.js";
+export { IMAGE_EDITOR_STRINGS, IMAGE_PLAYER_STRINGS, IMAGE_REVIEW_STRINGS } from "./image/strings.js";

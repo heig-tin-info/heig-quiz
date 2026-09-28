@@ -107,7 +107,7 @@ export const NotificationMatrix = z.record(
 export type NotificationMatrix = z.infer<typeof NotificationMatrix>;
 
 /** The Teams link as the settings card shows it. */
-export const TeamsLinkStatus = z.object({
+const TeamsLinkStatus = z.object({
   /** The platform has its Teams application configured (`TEAMS_*` env). */
   available: z.boolean(),
   /** When this account linked Teams; null when it did not. */
@@ -120,7 +120,7 @@ export const TeamsLinkStatus = z.object({
    */
   teamsUsername: z.string().nullable(),
 });
-export type TeamsLinkStatus = z.infer<typeof TeamsLinkStatus>;
+type TeamsLinkStatus = z.infer<typeof TeamsLinkStatus>;
 
 /** `GET /app/api/notifications/settings`. */
 export const NotificationSettings = z.object({
@@ -186,9 +186,9 @@ export type TeamsTabState = z.infer<typeof TeamsTabState>;
  * the union and not to {@link NOTIFICATION_KINDS} (or the reverse) makes this
  * type `false`, and the assignment below a compile error.
  */
-export type KindsMatchPayloads = [NotificationPayload["kind"]] extends [NotificationKind]
+type KindsMatchPayloads = [NotificationPayload["kind"]] extends [NotificationKind]
   ? [NotificationKind] extends [NotificationPayload["kind"]]
     ? true
     : false
   : false;
-export const KINDS_MATCH_PAYLOADS: KindsMatchPayloads = true;
+const KINDS_MATCH_PAYLOADS: KindsMatchPayloads = true;

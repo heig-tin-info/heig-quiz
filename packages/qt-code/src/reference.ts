@@ -44,11 +44,6 @@ const NEXT_LINE: Record<CodeLanguage, string> = {
 const templateRegions = (config: Pick<ProgramConfig, "template" | "language">): CodeSegment[] =>
   editableSegments(splitTemplate(config.template, config.language));
 
-/** How many regions this template expects — the count the player fills. */
-export function referenceRegionCount(config: ReferenceSource): number {
-  return templateRegions(config).length;
-}
-
 /** A region ends with a line break exactly when its template region does. */
 const endsWithBreak = (segment: CodeSegment): boolean => segment.text.endsWith("\n");
 

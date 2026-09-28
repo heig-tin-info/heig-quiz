@@ -74,41 +74,22 @@ export const circuitClient: QuestionTypeClient<
   },
 };
 
-export { CircuitIcon };
 
 /*
- * The component table and the engineering-notation pair: `summarize` above
- * already puts `library.js` in this module's graph, so naming them here costs
- * the bundle nothing.
- *
- * `extractNets` and `parseSimulation` are NOT re-exported, and neither are the
- * `schema.js` builders. A static `export … from` of a VALUE is an edge, and
- * this module is reached from every page through `@quiz/registry/client`: the
- * four lines that used to sit here dragged `netlist.ts`, `grade.ts`,
- * `spice.ts` and `schema.ts` — the whole grading path, and zod with it — into
+ * Types only, beside the dictionaries. A static `export … from` of a VALUE is
+ * an edge, and this module is reached from every page through
+ * `@quiz/registry/client`: re-exports of `netlist.ts`, `grade.ts`, `spice.ts`
+ * and `schema.ts` once dragged the whole grading path, and zod with it, into
  * the initial chunk of a quiz that may hold no circuit at all (N-PERF-05).
- * The lazy `Player` imports both functions directly; a host that grades reads
- * them from `@quiz/qt-circuit/server`, which is where ADR-019 §3 puts the
- * netlist anyway.
+ * A host that grades reads them from `@quiz/qt-circuit/server`, which is
+ * where ADR-019 §3 puts the netlist anyway.
  */
-export type { NetlistIssue } from "./netlist.js";
-export type { SimulationResult } from "./grade.js";
-export { COMPONENT_KINDS, LIBRARY, formatValue, parseValue, valueIssue } from "./library.js";
-export type { ComponentKind, ComponentSpec, PortId } from "./library.js";
 export type {
-  Analysis,
-  CircuitAnswer,
   CircuitConfig,
   CircuitDetails,
-  CircuitSolution,
   CircuitStudent,
-  Load,
   Schematic,
-  SeriesSet,
-  Source,
-  Stimulus,
   StimulusDetail,
-  StudentStimulus,
 } from "./schema.js";
 
 /*
@@ -117,8 +98,7 @@ export type {
  * into whatever imports this module, undoing the `lazy` above. A host that
  * genuinely needs one imports the file directly.
  */
-export type { CircuitEditorProps, CircuitTryOutcome } from "./Editor.js";
-export type { CircuitSimulateOutcome } from "./Player.js";
+export type { CircuitEditorProps } from "./Editor.js";
 export {
   CANVAS_STRINGS,
   EDITOR_STRINGS,
@@ -126,8 +106,5 @@ export {
   PLAYER_STRINGS,
   REVIEW_STRINGS,
   type CanvasStrings,
-  type CircuitEditorStrings,
-  type CircuitPlayerStrings,
-  type CircuitReviewStrings,
   type KindLabels,
 } from "./strings.js";

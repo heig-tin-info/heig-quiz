@@ -139,29 +139,11 @@ export const circuitServer: QuestionTypeServer<
   fromCanonical,
 };
 
-export { fromCanonical, toCanonical } from "./canonical.js";
 /*
- * The pure parts of the grader. `parseSimulation` reads the outcome of the
- * student's own Simulate button, so the browser half needs it; the rest of
- * `grade.ts` is server work but carries no Node import, which is why the
- * whole module sits on one side of the fence and only these names cross it.
+ * The pure parts a host reads beside `circuitServer`: `parseSimulation` reads
+ * the outcome of the student's own Simulate button, and `extractNets` the
+ * netlist the grade is computed from (ADR-019 §3, invariant 14) — a server
+ * concern, so it leaves the package here and not through `./client`.
  */
-export {
-  buildRunnerRequest,
-  caseLayout,
-  compareSeries,
-  finalizeRunnerCircuit,
-  gradeCircuit,
-  interactiveRequest,
-  isEmptyAnswer,
-  parseSimulation,
-  studentDetails,
-  SPICE_LIMITS,
-} from "./grade.js";
-export type { BuildRequestOptions, CaseLayout, SimulationResult } from "./grade.js";
-/*
- * The netlist the grade is computed from (ADR-019 §3, invariant 14). It is a
- * server concern, so it leaves the package here and not through `./client`.
- */
+export { parseSimulation } from "./grade.js";
 export { extractNets } from "./netlist.js";
-export type { Netlist, NetlistIssue } from "./netlist.js";

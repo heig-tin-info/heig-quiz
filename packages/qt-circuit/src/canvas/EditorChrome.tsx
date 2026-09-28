@@ -43,7 +43,7 @@ import {
   toolbarGroup,
   crosshair,
 } from "./canvasStyles.js";
-import { MIRROR_X, MIRROR_Y, ROTATE, type PinTarget } from "./geometry.js";
+import { MIRROR_X, MIRROR_Y, ORIENT_90, type PinTarget } from "./geometry.js";
 import { pathOf } from "./router.js";
 import {
   ComponentGlyph,
@@ -136,7 +136,7 @@ export function Toolbar({
           </div>
           <span className={separator} aria-hidden="true" />
           <div className={toolbarGroup}>
-            <IconButton label={s.rotate} name="rotate" onClick={() => transform(ROTATE)} disabled={nothingToTurn} />
+            <IconButton label={s.rotate} name="rotate" onClick={() => transform(ORIENT_90)} disabled={nothingToTurn} />
             <IconButton label={s.mirrorHorizontal} name="mirrorH" onClick={() => transform(MIRROR_X)} disabled={nothingToTurn} />
             <IconButton label={s.mirrorVertical} name="mirrorV" onClick={() => transform(MIRROR_Y)} disabled={nothingToTurn} />
             <IconButton label={s.duplicate} name="duplicate" onClick={duplicate} disabled={![...selection].some((x) => x.startsWith("c"))} />

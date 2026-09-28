@@ -136,7 +136,7 @@ export type GradingQuery = z.infer<typeof GradingQuery>;
 export const GradingStepsQuery = GradingQuery.pick({ by: true, anonymous: true });
 export type GradingStepsQuery = z.infer<typeof GradingStepsQuery>;
 
-export const GradingStepSummary = z.object({
+const GradingStepSummary = z.object({
   /** The item id by question, the attempt id by student. */
   key: z.uuid(),
   /**
@@ -150,7 +150,7 @@ export const GradingStepSummary = z.object({
   validated: z.number().int(),
   proposed: z.number().int(),
 });
-export type GradingStepSummary = z.infer<typeof GradingStepSummary>;
+type GradingStepSummary = z.infer<typeof GradingStepSummary>;
 
 export const GradingSteps = z.object({
   order: z.enum(["question", "student"]),

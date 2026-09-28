@@ -53,7 +53,7 @@ export {
   type TryState,
   type TryStatus,
 } from "./panels.js";
-export { patchAt, RemoveRowButton, removeAt, RowHead, RowList, RowListHeader } from "./rows.js";
+export { patchAt, removeAt, RowHead, RowList, RowListHeader } from "./rows.js";
 export { AdvancedDisclosure, EditorSection, PromptSection } from "./sections.js";
 export { PromptField } from "./PromptField.js";
 export { pointsOrDash, ScoreHeader, Verdict, verdictTone } from "./verdict.js";

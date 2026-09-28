@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const HealthStatus = z.enum(["ok", "degraded"]);
+const HealthStatus = z.enum(["ok", "degraded"]);
 
 export const HealthResponse = z.object({
   status: HealthStatus,

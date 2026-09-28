@@ -457,8 +457,8 @@ export const VersionParam = z.object({
 export type VersionParam = z.infer<typeof VersionParam>;
 
 /** `"draft"` or a published version number. */
-export const VersionSource = z.union([z.literal("draft"), z.coerce.number().int().min(1)]);
-export type VersionSource = z.infer<typeof VersionSource>;
+const VersionSource = z.union([z.literal("draft"), z.coerce.number().int().min(1)]);
+type VersionSource = z.infer<typeof VersionSource>;
 
 export const PreviewBody = z.object({ source: VersionSource.default("draft") });
 export type PreviewBody = z.infer<typeof PreviewBody>;

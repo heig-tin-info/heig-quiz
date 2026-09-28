@@ -10,7 +10,7 @@ import {
   type QuestionTypeServer,
   type StudentView,
 } from "@quiz/core/server";
-import { seededShuffle, streamSeed } from "@quiz/core/rng";
+import { shuffle, streamSeed } from "@quiz/core/rng";
 import { gradeMcq, negativeMarkingOf } from "./grade.js";
 import { toCanonical } from "./canonical.js";
 import {
@@ -65,7 +65,7 @@ function migrateV1(config: unknown): McqConfig {
 export function choiceOrder(config: McqConfig, view: StudentView): number[] {
   const canonical = config.choices.map((_, index) => index);
   if (!(view.shuffle && config.shuffleChoices)) return canonical;
-  return seededShuffle(canonical, streamSeed(view.seed, view.itemId, "choices"));
+  return shuffle(canonical, streamSeed(view.seed, view.itemId, "choices"));
 }
 
 export const mcqServer: QuestionTypeServer<
