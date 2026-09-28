@@ -6,7 +6,7 @@ import { ApiError } from "./api";
 import App from "./App";
 import { ConfirmProvider } from "./confirm";
 import { HelpProvider } from "./help";
-import { I18nProvider } from "./i18n";
+import { I18nProvider, loadLocale, storedLocale } from "./i18n";
 import { ToastProvider } from "./notify";
 import { applyTheme, getThemeChoice } from "./theme";
 // KaTeX ships its own stylesheet and its own fonts, self-hosted through the
@@ -21,6 +21,10 @@ async function boot() {
   if (import.meta.env.VITE_MOCK === "1") await import("./mock");
 
   applyTheme(getThemeChoice());
+  // French is a chunk of its own: when it is the stored choice, the first
+  // paint waits for it rather than flashing English. A failed load paints
+  // English, the fallback.
+  await loadLocale(storedLocale()).catch(() => {});
 
   // One retry, and none on a 4xx: the default three retries kept an error
   // state seven seconds away, which reads as a hang rather than a failure.

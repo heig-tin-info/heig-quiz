@@ -1,0 +1,80 @@
+import type { QueryClient } from "@tanstack/react-query";
+
+import type { HintEvent } from "@quiz/contracts";
+
+/**
+ * What a refresh hint (ADR-005) invalidates: the roots of the query keys of
+ * `queryKeys.ts` each hint family can have made stale. Invalidation still
+ * matches by prefix, so a root reaches every key under it.
+ *
+ * Generous by design — a root too many costs one refetch of an active query,
+ * a root too few is a stale screen. `mutation` is the server's catch-all
+ * (`app.ts`: any write under a pool, a course, a classroom, or on the
+ * actor's own account) and names no family, so it refreshes everything, as
+ * does a kind this table does not know: a server newer than the SPA must not
+ * leave a screen stale.
+ */
+type HintKind = HintEvent["kinds"][number];
+
+const EVALUATION_ROOTS = [
+  "evaluations",
+  "evaluation",
+  "dashboard",
+  "attempt-inspect",
+  "attempt",
+  "grading",
+  "results",
+  "student",
+  "poll",
+  "classroom",
+  // Templates are evaluations filed under their course (ADR-031).
+  "course",
+] as const;
+
+export const HINT_ROOTS: Record<HintKind, readonly string[] | "all"> = {
+  // A seat added or removed on a course's staff changes what that teacher
+  // reaches: every open evaluation, grading or results screen of it too.
+  courses: [...EVALUATION_ROOTS, "courses", "pools", "pool", "admin-teachers"],
+  classrooms: ["courses", "course", "classroom", "student"],
+  roster: ["courses", "course", "classroom", "evaluations", "evaluation", "dashboard", "student"],
+  pool: [
+    "pools",
+    "pool",
+    "pool-members",
+    "pool-candidates",
+    "question",
+    "poll-questions",
+    "poll-pool-questions",
+    "evaluation",
+    "course",
+    // A newly published version is a regrade target (`gradingItemVersionsKey`).
+    "grading",
+  ],
+  evaluations: EVALUATION_ROOTS,
+  grading: EVALUATION_ROOTS,
+  results: EVALUATION_ROOTS,
+  admin: ["admin-teachers", "me"],
+  notifications: ["notifications", "notification-settings"],
+  mutation: "all",
+};
+
+/** The roots to invalidate for these kinds, or `"all"`. */
+export function hintRoots(kinds: readonly string[]): ReadonlySet<string> | "all" {
+  if (kinds.length === 0) return "all";
+  const roots = new Set<string>();
+  for (const kind of kinds) {
+    const entry = Object.hasOwn(HINT_ROOTS, kind) ? HINT_ROOTS[kind as HintKind] : "all";
+    if (entry === "all") return "all";
+    for (const root of entry) roots.add(root);
+  }
+  return roots;
+}
+
+/** Invalidate what a hint of these kinds may have made stale. */
+export function invalidateHint(qc: QueryClient, kinds: readonly string[]): Promise<void> {
+  const roots = hintRoots(kinds);
+  if (roots === "all") return qc.invalidateQueries();
+  return qc.invalidateQueries({
+    predicate: (query) => roots.has(String(query.queryKey[0])),
+  });
+}

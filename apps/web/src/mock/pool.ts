@@ -2119,15 +2119,6 @@ on("POST", "/app/api/questions/:id/publish", (m, body) => {
   q.versions.push(version);
   return versionRow(version);
 });
-on("GET", "/app/api/questions/:id/versions", (m) =>
-  questionOr404(m.groups!.id!).versions.map(versionRow),
-);
-on("GET", "/app/api/questions/:id/versions/:number", (m) => {
-  const q = questionOr404(m.groups!.id!);
-  const version = q.versions.find((v) => v.number === Number(m.groups!.number));
-  if (!version) throw new MockError(404, "Version not found");
-  return { ...versionRow(version), config: version.config, explanation: version.explanation, configVersion: 1 };
-});
 on("POST", "/app/api/questions/:id/versions/:number/restore", (m) => {
   const q = questionOr404(m.groups!.id!);
   const version = q.versions.find((v) => v.number === Number(m.groups!.number));

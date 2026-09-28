@@ -2,7 +2,7 @@ import { act, render, renderHook, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import { TableHead, useSortableTable, type Column, type SortState } from "./page";
+import { TableHead, useSortableTable, type Column, type SortState } from "./table";
 
 /*
  * The one motif every table of the app sorts through: the hook that holds the

@@ -6,7 +6,7 @@ import type { VersionRow, ZodIssueLite } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useT } from "../i18n";
-import { Alert, Button, FormError, Modal, Textarea } from "../ui";
+import { Alert, FormDialog, FormError, Textarea } from "../ui";
 import { issueMessage, issuesOfError } from "./issues";
 
 /**
@@ -45,48 +45,38 @@ export function PublishDialog({
   const blocked = issues.length > 0;
 
   return (
-    <Modal
+    <FormDialog
       title={t("question.publishTitle")}
       onClose={onClose}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            {t("common.cancel")}
-          </Button>
-          <Button onClick={() => publish.mutate()} loading={publish.isPending}>
-            {t("question.publishAction")}
-          </Button>
-        </>
-      }
+      onSubmit={() => publish.mutate()}
+      submitLabel={t("question.publishAction")}
+      submitting={publish.isPending}
+      error={<FormError error={blocked ? null : publish.error} fallback={t("question.publishFailed")} />}
     >
-      <div className="space-y-4">
-        {blocked ? (
-          <Alert tone="danger" icon={AlertTriangle} title={t("question.publishIssues")}>
-            <p>{t("question.publishIssuesBody")}</p>
-            <ul className="mt-2 space-y-1">
-              {issues.map((issue, i) => (
-                <li key={`${issue.path.join(".")}-${i}`} className="text-[13px]">
-                  {issue.path.length > 0 ? (
-                    <span className="font-mono text-fg">{issue.path.join(".")} — </span>
-                  ) : null}
-                  {issueMessage(t, issue.message)}
-                </li>
-              ))}
-            </ul>
-          </Alert>
-        ) : null}
+      {blocked ? (
+        <Alert tone="danger" icon={AlertTriangle} title={t("question.publishIssues")}>
+          <p>{t("question.publishIssuesBody")}</p>
+          <ul className="mt-2 space-y-1">
+            {issues.map((issue, i) => (
+              <li key={`${issue.path.join(".")}-${i}`} className="text-[13px]">
+                {issue.path.length > 0 ? (
+                  <span className="font-mono text-fg">{issue.path.join(".")} — </span>
+                ) : null}
+                {issueMessage(t, issue.message)}
+              </li>
+            ))}
+          </ul>
+        </Alert>
+      ) : null}
 
-        <FormError error={blocked ? null : publish.error} fallback={t("question.publishFailed")} />
-
-        <Textarea
-          label={t("question.changeNote")}
-          placeholder={t("question.changeNoteHint")}
-          rows={3}
-          autoFocus
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-        />
-      </div>
-    </Modal>
+      <Textarea
+        label={t("question.changeNote")}
+        placeholder={t("question.changeNoteHint")}
+        rows={3}
+        autoFocus
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+      />
+    </FormDialog>
   );
 }

@@ -10,7 +10,7 @@ import { useT } from "../i18n";
 import { categoryPaths } from "./categories";
 import { useMoveQuestions } from "./move";
 import { useErrorToast, useToast } from "../notify";
-import { Button, Field, IconButton, Modal, Select, Spinner, Z } from "../ui";
+import { Button, Field, FormDialog, IconButton, Select, Spinner, Z } from "../ui";
 import { anyPoolKey, poolKey, poolsKey } from "../queryKeys";
 
 /**
@@ -223,19 +223,13 @@ export function BulkBar({
       </div>
 
       {dialog === "tag" ? (
-        <Modal
+        <FormDialog
           title={t(ids.length === 1 ? "pool.bulk.tagTitle.one" : "pool.bulk.tagTitle", { n: ids.length })}
           onClose={() => setDialog(null)}
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => setDialog(null)}>
-                {t("common.cancel")}
-              </Button>
-              <Button onClick={addTag} loading={busy} disabled={tag.trim() === ""}>
-                {t("pool.bulk.tag")}
-              </Button>
-            </>
-          }
+          onSubmit={addTag}
+          submitLabel={t("pool.bulk.tag")}
+          submitting={busy}
+          canSubmit={tag.trim() !== ""}
         >
           <Field
             label={t("question.meta.tagAdd")}
@@ -244,115 +238,95 @@ export function BulkBar({
             value={tag}
             onChange={(e) => setTag(e.target.value)}
           />
-        </Modal>
+        </FormDialog>
       ) : null}
 
       {dialog === "move" ? (
-        <Modal
+        <FormDialog
           title={t(ids.length === 1 ? "pool.bulk.moveTitle.one" : "pool.bulk.moveTitle", { n: ids.length })}
           onClose={() => setDialog(null)}
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => setDialog(null)}>
-                {t("common.cancel")}
-              </Button>
-              <Button
-                onClick={() => void move()}
-                loading={busy}
-                disabled={categoryId === NEW_CATEGORY && newName.trim() === ""}
-              >
-                {t("pool.bulk.move")}
-              </Button>
-            </>
-          }
+          onSubmit={() => void move()}
+          submitLabel={t("pool.bulk.move")}
+          submitting={busy}
+          canSubmit={categoryId !== NEW_CATEGORY || newName.trim() !== ""}
         >
-          <div className="space-y-3">
-            <Select
-              label={t("question.meta.category")}
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-            >
-              <option value="">{t("pool.bulk.root")}</option>
-              {categoryPaths(categories).map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-              {/* Last, and named with an ellipsis: it is the one entry that
-                  asks a question instead of answering one. */}
-              <option value={NEW_CATEGORY}>{t("pool.bulk.newCategory")}</option>
-            </Select>
-            {categoryId === NEW_CATEGORY ? (
-              <Field
-                label={t("pool.categoryName")}
-                fullWidth
-                autoFocus
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-              />
-            ) : null}
-          </div>
-        </Modal>
+          <Select
+            label={t("question.meta.category")}
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+          >
+            <option value="">{t("pool.bulk.root")}</option>
+            {categoryPaths(categories).map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label}
+              </option>
+            ))}
+            {/* Last, and named with an ellipsis: it is the one entry that
+                asks a question instead of answering one. */}
+            <option value={NEW_CATEGORY}>{t("pool.bulk.newCategory")}</option>
+          </Select>
+          {categoryId === NEW_CATEGORY ? (
+            <Field
+              label={t("pool.categoryName")}
+              fullWidth
+              autoFocus
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+            />
+          ) : null}
+        </FormDialog>
       ) : null}
 
-      {/* Two fields, so a Modal and not a Sheet (DESIGN.md › layers). The
+      {/* Two fields, so a dialog and not a Sheet (DESIGN.md › layers). The
           category select only appears once a pool is chosen AND that pool has
           folders: an empty select is a question with no answers. */}
       {dialog === "pool" ? (
-        <Modal
+        <FormDialog
           title={t(ids.length === 1 ? "pool.move.title.one" : "pool.move.title", {
             n: ids.length,
           })}
           onClose={() => setDialog(null)}
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => setDialog(null)}>
-                {t("common.cancel")}
-              </Button>
-              <Button onClick={() => void moveToPool()} loading={moving} disabled={targetPoolId === ""}>
-                {t("pool.move.action")}
-              </Button>
-            </>
-          }
+          onSubmit={() => void moveToPool()}
+          submitLabel={t("pool.move.action")}
+          submitting={moving}
+          canSubmit={targetPoolId !== ""}
         >
-          <div className="space-y-3">
-            {pools.isLoading ? (
-              <Spinner className="py-4" />
-            ) : targets.length === 0 ? (
-              <p className="text-[13px] text-fg-muted">{t("pool.move.noTarget")}</p>
-            ) : (
-              <Select
-                label={t("pool.move.pool")}
-                value={targetPoolId}
-                onChange={(e) => {
-                  setTargetPoolId(e.target.value);
-                  setTargetCategoryId("");
-                }}
-              >
-                <option value="">{t("pool.move.choosePool")}</option>
-                {targets.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
-            )}
-            {targetPoolId !== "" && (target.data?.categories.length ?? 0) > 0 ? (
-              <Select
-                label={t("question.meta.category")}
-                value={targetCategoryId}
-                onChange={(e) => setTargetCategoryId(e.target.value)}
-              >
-                <option value="">{t("pool.bulk.root")}</option>
-                {categoryPaths(target.data!.categories).map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.label}
-                  </option>
-                ))}
-              </Select>
-            ) : null}
-          </div>
-        </Modal>
+          {pools.isLoading ? (
+            <Spinner className="py-4" />
+          ) : targets.length === 0 ? (
+            <p className="text-[13px] text-fg-muted">{t("pool.move.noTarget")}</p>
+          ) : (
+            <Select
+              label={t("pool.move.pool")}
+              value={targetPoolId}
+              onChange={(e) => {
+                setTargetPoolId(e.target.value);
+                setTargetCategoryId("");
+              }}
+            >
+              <option value="">{t("pool.move.choosePool")}</option>
+              {targets.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </Select>
+          )}
+          {targetPoolId !== "" && (target.data?.categories.length ?? 0) > 0 ? (
+            <Select
+              label={t("question.meta.category")}
+              value={targetCategoryId}
+              onChange={(e) => setTargetCategoryId(e.target.value)}
+            >
+              <option value="">{t("pool.bulk.root")}</option>
+              {categoryPaths(target.data!.categories).map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.label}
+                </option>
+              ))}
+            </Select>
+          ) : null}
+        </FormDialog>
       ) : null}
     </>
   );

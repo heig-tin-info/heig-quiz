@@ -284,19 +284,6 @@ html.dark {
   animation: menu-in 0.16s var(--ease-out-emphasized);
 }
 
-/* Indeterminate progress bar (ui/page.tsx Progress). */
-@keyframes progress-slide {
-  0% {
-    margin-left: -33%;
-  }
-  100% {
-    margin-left: 100%;
-  }
-}
-.progress-bar {
-  animation: progress-slide 1.2s ease-in-out infinite;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .toast-enter,
   .toast-leave,

@@ -4,13 +4,18 @@
 //   layers    the base: cx, Z, the layer stack (useLayer), Tip, IconButton,
 //             HelpIcon, Modal, Sheet, Menu. Imports no sibling.
 //   controls  buttons and form controls.
-//   page      tables, identity, dates, feedback, surfaces and page structure.
+//   table     sortable tables: useSortableTable, the styles `T`, TableHead.
+//   identity  a person as a picture or initials (PersonAvatar, Avatar).
+//   dates     the account's date format, absolute and relative times.
+//   feedback  Spinner, Skeleton, Kbd, Badge, Alert, EmptyState.
+//   page      surfaces and page structure: Card, PageHeader, Tabs…
+//             The five above are on layers and import no other sibling.
 //   actions   the actions of one record: icon buttons or a menu, decided
 //             by their number (Actions), on layers.
 //   popover   the small floating card anchored on a trigger (Popover), on
 //             layers.
 //   people    a person as a disc, and a row of them (PersonPill,
-//             PeopleStack), on actions, popover and page.
+//             PeopleStack), on actions, popover and identity.
 //   live      the live primitives (PLAN-MVP §6.4).
 //   forms     the short form in a dialog (FormDialog), on layers + controls.
 //   combobox  the ARIA combobox with virtual focus (useCombobox,
@@ -23,6 +28,10 @@
 // `ApiError`), so that nothing under `ui/` imports the HTTP client.
 export * from "./layers";
 export * from "./controls";
+export * from "./table";
+export * from "./identity";
+export * from "./dates";
+export * from "./feedback";
 export * from "./page";
 export * from "./actions";
 export * from "./popover";

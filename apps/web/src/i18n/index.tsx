@@ -1,9 +1,16 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { api } from "../api";
 import { readStored, writeStored } from "../ui/state";
 import { type Dict, en } from "./en";
-import { fr } from "./fr";
 
 /**
  * Lightweight i18n: a flat key -> string dictionary per locale, a `t(key,
@@ -18,7 +25,12 @@ import { fr } from "./fr";
  * English without its French twin is a compile error. Keep it that way.
  *
  * The two dictionaries live next door, in `en.ts` and `fr.ts`: this file is
- * the machinery that reads them.
+ * the machinery that reads them. English is in the entry chunk, as the
+ * fallback it is; French is a chunk of its own, loaded by `loadLocale` before
+ * it is shown — before the first render when it is the stored choice
+ * (`main.tsx`), before the switch when it is picked — so no screen paints in
+ * English and then flips. `fr.ts` keeps its `Record<keyof Dict, string>`
+ * type: the dynamic import changes when it loads, not what it must contain.
  */
 export type Locale = "en" | "fr";
 
@@ -31,7 +43,25 @@ const STORE_KEY = "quiz-locale";
 
 export type { Dict };
 
-export const DICTS: Record<Locale, Record<string, string>> = { en, fr };
+/** The loaded dictionaries: English always, French once `loadLocale` resolved. */
+export const DICTS: { en: Record<string, string> } & Partial<Record<Locale, Record<string, string>>> =
+  { en };
+
+const loaders: Record<Exclude<Locale, "en">, () => Promise<Record<string, string>>> = {
+  fr: () => import("./fr").then((m) => m.fr),
+};
+
+/** Resolves once `locale`'s dictionary is in `DICTS`; at once for English. */
+export async function loadLocale(locale: Locale): Promise<void> {
+  if (DICTS[locale]) return;
+  if (locale === "en") return;
+  DICTS[locale] = await loaders[locale]();
+}
+
+/** The language this browser last chose, English when none. */
+export function storedLocale(): Locale {
+  return readStored(STORE_KEY) === "fr" ? "fr" : "en";
+}
 
 export type TFunction = (key: keyof Dict, vars?: Record<string, string | number>) => string;
 
@@ -56,22 +86,42 @@ const I18nContext = createContext<I18nValue>({
 });
 
 export function I18nProvider({ children }: { children: ReactNode }) {
+  // The stored language when its dictionary is already here (`main.tsx`
+  // waits for it); otherwise English until the effect below has loaded it.
   const [locale, setLocaleState] = useState<Locale>(() => {
-    const stored = readStored(STORE_KEY);
-    return stored === "fr" || stored === "en" ? stored : "en";
+    const stored = storedLocale();
+    return DICTS[stored] ? stored : "en";
   });
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
+  // The last language asked for: a slower load of an earlier choice (French,
+  // then English at once) must not land after it and win.
+  const requested = useRef<Locale | null>(null);
+  const switchTo = useCallback((l: Locale) => {
+    requested.current = l;
+    // Switched once the words are here: never a frame of the old language
+    // under the new `lang`. A failed load keeps the current language.
+    void loadLocale(l).then(
+      () => {
+        if (requested.current === l) setLocaleState(l);
+      },
+      () => {},
+    );
+  }, []);
+  useEffect(() => {
+    const stored = storedLocale();
+    if (!DICTS[stored]) switchTo(stored);
+  }, [switchTo]);
   const setLocale = useCallback((l: Locale, persist = true) => {
-    setLocaleState(l);
+    switchTo(l);
     writeStored(STORE_KEY, l);
     if (persist) {
       void api("/app/api/me", { method: "PATCH", body: JSON.stringify({ locale: l }) }).catch(
         () => {},
       );
     }
-  }, []);
+  }, [switchTo]);
   const t = useCallback<TFunction>((key, vars) => translate(locale, key, vars), [locale]);
   return <I18nContext.Provider value={{ locale, setLocale, t }}>{children}</I18nContext.Provider>;
 }

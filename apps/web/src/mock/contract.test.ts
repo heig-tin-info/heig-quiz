@@ -59,8 +59,6 @@ import {
   ResultsView,
   StudentFeedback,
   StudentHome,
-  VersionDetail,
-  VersionRow,
 } from "@quiz/contracts";
 import { describe, expect, it } from "vitest";
 
@@ -113,10 +111,6 @@ for (const pool of pools) {
   const page = (await get(`/app/api/pools/${pool.id}/questions`)) as { items: Ref[] };
   questionIds.push(...page.items.map((q) => q.id));
 }
-const firstQuestion = (await get(`/app/api/questions/${questionIds[0]}`)) as {
-  versions: { number: number }[];
-};
-const versionNumber = firstQuestion.versions[0]!.number;
 
 const courses = (await get("/app/api/courses")) as (Ref & { classrooms: Ref[] })[];
 const classroomId = courses[0]!.classrooms[0]!.id;
@@ -199,18 +193,6 @@ const CHECKED: Case[] = [
   // Every question: the payload of a `circuit` is not the payload of an
   // `mcq`, and only the type that drifted would fail.
   ...questionIds.map((id) => one("/app/api/questions/:id", `/app/api/questions/${id}`, QuestionDetail)),
-  // The version list and the version detail carry no type-specific field, so
-  // one question is enough for them.
-  each(
-    "/app/api/questions/:id/versions",
-    `/app/api/questions/${questionIds[0]}/versions`,
-    VersionRow,
-  ),
-  one(
-    "/app/api/questions/:id/versions/:number",
-    `/app/api/questions/${questionIds[0]}/versions/${versionNumber}`,
-    VersionDetail,
-  ),
   one("/app/api/notifications", "/app/api/notifications", NotificationList),
   one("/app/api/notifications/settings", "/app/api/notifications/settings", NotificationSettings),
   each("/app/api/me/tokens", "/app/api/me/tokens", ApiToken),

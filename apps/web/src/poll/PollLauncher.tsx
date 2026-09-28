@@ -2,12 +2,13 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { FileQuestion } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import type {
-  CourseSummary,
-  PollAudience,
-  PollQuestionPick,
-  PollTeacherView,
-  ZodIssueLite,
+import {
+  PollQuestionType,
+  type CourseSummary,
+  type PollAudience,
+  type PollQuestionPick,
+  type PollTeacherView,
+  type ZodIssueLite,
 } from "@quiz/contracts";
 import { emptyMcqDraft } from "@quiz/qt-mcq/client";
 import { emptyShortDraft } from "@quiz/qt-short/client";
@@ -78,9 +79,9 @@ import { coursesKey, pollQuestionsKey } from "../queryKeys";
  * type picker says so; nothing blocks on it.
  */
 
-/** A poll runs these two types; the picker is limited to them. */
-const POLL_TYPES = ["mcq", "short"] as const;
-type PollType = (typeof POLL_TYPES)[number];
+/** A poll runs the types of `PollQuestionType`; the picker is limited to them. */
+const POLL_TYPES = PollQuestionType.options;
+type PollType = PollQuestionType;
 
 /**
  * The blank question of each type: what the editor starts from — with NO
@@ -184,7 +185,7 @@ export function PollLauncher({ navigate }: { navigate: (r: Route) => void }) {
   // from the other, where it is not on screen.
   const [poolQuestionId, setPoolQuestionId] = useState<string | null>(null);
   const [room, setRoom] = usePersistentChoice<string>(ROOM_KEY, anyRoom, ANYONE);
-  const [type, setType] = useState<PollType>(POLL_TYPES[0]);
+  const [type, setType] = useState<PollType>("mcq");
   // One working copy per type, so a switch back and forth loses nothing.
   const [drafts, setDrafts] = useState<Partial<Record<PollType, unknown>>>({});
   const config = drafts[type] ?? EMPTY[type]();

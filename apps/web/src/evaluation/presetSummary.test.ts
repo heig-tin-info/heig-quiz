@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 
-import { DICTS, type Locale, type TFunction } from "../i18n";
+import { DICTS, loadLocale, type Locale, type TFunction } from "../i18n";
 import { makeEvaluationDetail } from "../test/live-fixtures";
 import { presetSummary } from "./presetSummary";
+
+await loadLocale("fr");
 
 /** The real dictionaries: a missing `fr` fragment fails here, not silently. */
 function makeT(locale: Locale): TFunction {
   return (key, vars) => {
-    const raw = DICTS[locale][key as string] ?? String(key);
+    const raw = DICTS[locale]![key as string] ?? String(key);
     return vars ? raw.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? `{${k}}`)) : raw;
   };
 }

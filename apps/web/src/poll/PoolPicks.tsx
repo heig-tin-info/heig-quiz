@@ -2,7 +2,7 @@ import { keepPreviousData, useInfiniteQuery } from "@tanstack/react-query";
 import { Library } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-import type { PollPoolPage } from "@quiz/contracts";
+import { PollQuestionType, type PollPoolPage } from "@quiz/contracts";
 
 import { api } from "../api";
 import { useT } from "../i18n";
@@ -12,9 +12,6 @@ import { QuestionSearchBar } from "../pool/QuestionSearchBar";
 import { pollPoolQuestionsKey } from "../queryKeys";
 import { Button, EmptyState, QueryError, Segmented, Skeleton } from "../ui";
 import { PickRow } from "./PickRow";
-
-/** The two types a poll runs: the only ones the sheet and `type:` offer here. */
-const POLL_TYPES = ["mcq", "short"] as const;
 
 /** Where "From pools" searches when the audience is a classroom. */
 export type PoolScope = "room" | "all";
@@ -79,7 +76,7 @@ export function PoolPicks({
         filters={filters}
         onChange={setFilters}
         tags={first?.tags ?? []}
-        types={POLL_TYPES}
+        types={PollQuestionType.options}
         deleted={false}
       >
         <div className="flex flex-wrap items-center gap-2">

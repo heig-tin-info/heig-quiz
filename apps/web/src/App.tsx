@@ -349,8 +349,8 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
   // Persisted, with the route to come back to (`studentView.ts`, ADR-018).
   const studentView = useStudentView();
   const { setLocale } = useI18n();
-  // The hint stream drives a blanket `invalidateQueries()`, which is right on
-  // a teacher screen and wrong during an exam: `/take/:id` runs on a POST
+  // The hint stream invalidates queries (`realtime/hints.ts`), which is right
+  // on a teacher screen and wrong during an exam: `/take/:id` runs on a POST
   // behind a query (`AttemptPage`), and invalidating it mid-flight cancels the
   // in-flight refetch — the lobby then never advances to the player, however
   // many 200s the server sends. The player and the lobby carry their own watch
@@ -367,7 +367,7 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
     if (serverLocale) setLocale(serverLocale, false);
   }, [serverLocale, setLocale]);
   // Same for the date format, but synchronously: it must be set before the
-  // first view renders a date (module-level store in ui/page.tsx, idempotent).
+  // first view renders a date (module-level store in ui/dates.tsx, idempotent).
   setDateFormat(me.data?.dateFormat);
 
   // The role computation, once: a teacher (or an admin) in the teacher UI,

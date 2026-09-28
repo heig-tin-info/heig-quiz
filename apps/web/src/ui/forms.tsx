@@ -25,6 +25,7 @@ export function FormDialog({
   submitLabel,
   submitting,
   canSubmit = true,
+  danger,
   error,
   dense,
   children,
@@ -38,6 +39,8 @@ export function FormDialog({
   submitting?: boolean;
   /** False while a required field is empty. */
   canSubmit?: boolean;
+  /** The action destroys or retires something: the submit button is `danger`. */
+  danger?: boolean;
   /** What went wrong on submit, shown under the fields (`<FormError>`). */
   error?: ReactNode;
   /** 12 px between the rows instead of 16, for a body that is one row. */
@@ -54,7 +57,12 @@ export function FormDialog({
           <Button variant="secondary" onClick={onClose}>
             {t("common.cancel")}
           </Button>
-          <Button onClick={onSubmit} loading={submitting} disabled={!canSubmit}>
+          <Button
+            variant={danger ? "danger" : "primary"}
+            onClick={onSubmit}
+            loading={submitting}
+            disabled={!canSubmit}
+          >
             {submitLabel}
           </Button>
         </>

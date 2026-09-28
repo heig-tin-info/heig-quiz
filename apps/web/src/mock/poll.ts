@@ -1,8 +1,9 @@
 /** Section 6 of the mock — see `index.ts` for the layout. */
-import type {
-  PollPoolPage,
-  PollPublicView,
-  PollQuestionPick,
+import {
+  PollQuestionType,
+  type PollPoolPage,
+  type PollPublicView,
+  type PollQuestionPick,
 } from "@quiz/contracts";
 import { pollOutcome, type PollRunCounts } from "@quiz/domain";
 import {
@@ -100,7 +101,7 @@ interface MockPoll {
   revealed: boolean;
   /** The distribution is on the wall (#157); absent means hidden. */
   votes?: boolean;
-  type: "mcq" | "short";
+  type: PollQuestionType;
   student: unknown;
   solution: unknown;
   /** This browser's guest cookie, in memory: a join is what sets it. */
@@ -851,11 +852,11 @@ on("GET", "/app/api/polls/questions", (): PollQuestionPick[] => {
   return [...rows.values()]
     .filter(
       ({ question: q }) =>
-        q.deletedAt === null && q.versions.length > 0 && (q.type === "mcq" || q.type === "short"),
+        q.deletedAt === null && q.versions.length > 0 && PollQuestionType.safeParse(q.type).success,
     )
     .map(({ question: q, runs: its }) => ({
       id: q.id,
-      type: q.type as "mcq" | "short",
+      type: q.type as PollQuestionType,
       internalName: q.internalName,
       prompt: String(frozenConfig(q).prompt ?? ""),
       lastUsedAt: its[0]?.at ?? null,
@@ -912,7 +913,7 @@ on("GET", "/app/api/polls/pool-questions", (_m, _body, url): PollPoolPage => {
       poolIds.includes(q.poolId) &&
       q.deletedAt === null &&
       q.versions.length > 0 &&
-      (q.type === "mcq" || q.type === "short"),
+      PollQuestionType.safeParse(q.type).success,
   );
   const matching = searchQuestions(scope, params);
   const limit = Number(params.get("limit") ?? 25);
@@ -922,7 +923,7 @@ on("GET", "/app/api/polls/pool-questions", (_m, _body, url): PollPoolPage => {
   return {
     items: page.map((q) => ({
       id: q.id,
-      type: q.type as "mcq" | "short",
+      type: q.type as PollQuestionType,
       internalName: q.internalName,
       prompt: String(frozenConfig(q).prompt ?? ""),
       pool: { id: q.poolId, name: pools.find((p) => p.id === q.poolId)?.name ?? "" },

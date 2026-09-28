@@ -1,12 +1,14 @@
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useNotify } from "./notify";
+import { invalidateHint } from "./realtime/hints";
 import { useEventStream } from "./realtime/useEventStream";
 
 /**
  * Live updates over SSE (no WebSocket — ADR-005). The hint frame is a refresh
- * hint, never data: on any hint we invalidate the active queries and TanStack
- * Query refetches through the authorized endpoints. Reconnection (native to
+ * hint, never data: a hint invalidates the queries its kinds may have made
+ * stale (`realtime/hints.ts`) and TanStack Query refetches the active ones
+ * through the authorized endpoints. Reconnection (native to
  * EventSource) also triggers a full refetch — no replay needed.
  *
  * Hints may carry a typed notice; those surface as toasts, filtered by the
@@ -23,7 +25,7 @@ export function useLiveUpdates(enabled: boolean) {
   useEventStream({
     enabled,
     onHint: (hint) => {
-      void qc.invalidateQueries();
+      void invalidateHint(qc, hint.kinds);
       if (hint.notice) notify(hint.notice.kind, hint.notice.message);
     },
     // On (re)connection everything is refetched: the same full refresh the
