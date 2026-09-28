@@ -97,6 +97,8 @@ Revealing is reversible: switch back to **Show votes** or **Hide votes** and the
   <figcaption>The poll ended: the code and the QR leave the screen, the tally stays, and Run again is offered.</figcaption>
 </figure>
 
+A poll you forget to end ends on its own: once twelve hours have gone by without an answer (counted from the last answer, or from the start or the last reveal step when nobody answered), the server ends it exactly as **End poll** would.
+
 The code keeps working for two hours after the end. A phone that reloads the page still gets the question and the revealed answer, so the room keeps the result in hand while you comment on it. After two hours the code is free again.
 
 !!! warning

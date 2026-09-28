@@ -185,10 +185,37 @@ export async function closeEvaluation(
   // retake is left `in_progress` on a closed evaluation — either the retake
   // commits first and is expired below, or it reads `closed` and refuses.
   const next = await applyState(db, evaluation, "closed", now);
+  return afterClose(db, next, now, closedBy, app);
+}
+
+/**
+ * {@link closeEvaluation} for a caller that must know whether IT closed:
+ * null when the compare-and-set was lost (somebody else moved the row since
+ * `evaluation` was read), and then nothing is expired, emitted or enqueued.
+ */
+export async function tryCloseEvaluation(
+  db: Db,
+  evaluation: EvaluationRecord,
+  now: Date,
+  closedBy: ClosedBy,
+  app?: FastifyInstance,
+): Promise<EvaluationRecord | null> {
+  const next = await tryApplyState(db, evaluation, "closed", now);
+  return next && afterClose(db, next, now, closedBy, app);
+}
+
+/** What follows the flip to `closed`: the attempts, the frames, the grading. */
+async function afterClose(
+  db: Db,
+  next: EvaluationRecord,
+  now: Date,
+  closedBy: ClosedBy,
+  app?: FastifyInstance,
+): Promise<EvaluationRecord> {
   const open = await db
     .update(attempts)
     .set({ state: "expired", closedAt: now, closedBy, updatedAt: now })
-    .where(and(eq(attempts.evaluationId, evaluation.id), eq(attempts.state, "in_progress")))
+    .where(and(eq(attempts.evaluationId, next.id), eq(attempts.state, "in_progress")))
     .returning({ id: attempts.id });
   for (const attempt of open) events.attemptClosed(next.id, attempt, closedBy, now);
   events.stateChanged(next, now);

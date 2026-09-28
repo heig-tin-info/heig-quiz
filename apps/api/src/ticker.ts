@@ -18,6 +18,7 @@ import type { AppConfig } from "./config.js";
 import { purgeOAuth } from "./auth/oauth/service.js";
 import { purgeExpiredSessions } from "./auth/session.js";
 import { LIVE_TASKS } from "./modules/live/jobs.js";
+import { POLL_TASKS } from "./modules/poll/jobs.js";
 
 export interface TickTask {
   name: string;
@@ -32,6 +33,7 @@ export interface TickTask {
  * The live half (`LIVE_TASKS`) is what makes the one-second period
  * worthwhile: expiring attempts past `deadline + GRACE_MS`, opening the
  * evaluations whose `opens_at` has come and closing those past `closes_at`.
+ * `POLL_TASKS` ends the polls left without an answer for 12 hours.
  * A module contributes its tasks as a list, so the order stays readable and
  * the ticker itself stays ignorant of the domain.
  */
@@ -53,6 +55,7 @@ export const CORE_TASKS: TickTask[] = [
     },
   },
   ...LIVE_TASKS,
+  ...POLL_TASKS,
 ];
 
 export function startTicker(

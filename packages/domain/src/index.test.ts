@@ -7,6 +7,7 @@ describe("@quiz/domain public surface", () => {
       "GRACE_MS",
       "allowedFeedbackWhen",
       "assembleSource",
+      "announcedWindowS",
       "attemptDeadline",
       "clozeStudentTemplate",
       "compareOutput",
