@@ -118,6 +118,11 @@ function noticeSentence(t: TFunction, notice: AppNotice): string {
         name: notice.name,
         classroom: notice.classroomName,
       });
+    case "roster_conflict":
+      return t(
+        notice.count === 1 ? "notify.roster_conflict.toast.one" : "notify.roster_conflict.toast",
+        { n: notice.count, classroom: notice.classroomName },
+      );
   }
 }
 

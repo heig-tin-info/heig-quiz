@@ -8,7 +8,7 @@ import { publish } from "../../events.js";
 import type { Db } from "../../db/client.js";
 import { avatars, classrooms, enrollments, userEmails, users } from "../../db/schema.js";
 import { emailIn, knownEmails, normalizeEmail, sharedWithOthers } from "../../identity.js";
-import { studentJoined } from "../realtime/bus.js";
+import { rosterConflict, studentJoined } from "../realtime/bus.js";
 
 interface RosterImportSummary {
   inserted: number;
@@ -65,6 +65,83 @@ export async function importRoster(
   return { parse, summary: { inserted, updated } };
 }
 
+/** A pending roster line, and the account a claim pass would attach it to. */
+interface Match {
+  entryId: string;
+  userId: string;
+  classroomId: string;
+  classroomName: string;
+  courseId: string;
+  /** Another account, or another line of the classroom, could claim it too. */
+  ambiguous: boolean;
+}
+
+/**
+ * Settles one claim pass. The login claim and the reverse claim both end
+ * here, so every conflict ends the same way (AU-21): an ambiguous match is
+ * flagged; any other is attached, and flagged instead when the account
+ * already holds a line of that classroom (UNIQUE(classroom_id, user_id)).
+ *
+ * A flag newly raised is audited, and the course's staff hear of it once per
+ * classroom, with a count (#198) — never `actorId`, whose action ran the
+ * pass. A line already flagged waits for a teacher: it is not said again.
+ */
+async function settleClaims<M extends Match>(
+  db: Db,
+  matches: M[],
+  actorId: string,
+  onClaimed: (match: M) => void,
+): Promise<number> {
+  const conflicts = new Map<string, Match & { count: number }>();
+
+  async function flagConflict(match: M) {
+    const [raised] = await db
+      .update(enrollments)
+      .set({ conflictFlag: true })
+      .where(and(eq(enrollments.id, match.entryId), eq(enrollments.conflictFlag, false)))
+      .returning({ id: enrollments.id });
+    if (!raised) return;
+    await audit(db, {
+      actorUserId: match.userId,
+      actorType: "system",
+      action: "roster.claim_conflict",
+      subjectType: "enrollment",
+      subjectId: match.entryId,
+    });
+    const room = conflicts.get(match.classroomId) ?? { ...match, count: 0 };
+    room.count += 1;
+    conflicts.set(match.classroomId, room);
+  }
+
+  let claimed = 0;
+  for (const match of matches) {
+    if (match.ambiguous) {
+      await flagConflict(match);
+      continue;
+    }
+    try {
+      await db
+        .update(enrollments)
+        .set({ userId: match.userId, claimedAt: new Date() })
+        .where(and(eq(enrollments.id, match.entryId), isNull(enrollments.userId)));
+    } catch {
+      await flagConflict(match);
+      continue;
+    }
+    claimed += 1;
+    await audit(db, {
+      actorUserId: match.userId,
+      actorType: "system",
+      action: "roster.claim",
+      subjectType: "enrollment",
+      subjectId: match.entryId,
+    });
+    onClaimed(match);
+  }
+  for (const room of conflicts.values()) rosterConflict({ ...room, actorId });
+  return claimed;
+}
+
 /**
  * Automatic claim at login (AU-18, H3): every `pending` entry whose e-mail
  * is one of the account's known addresses (GH-11 — the login address, or an
@@ -82,7 +159,7 @@ export async function claimEnrollments(db: Db, user: { id: string }) {
 
   const pending = await db
     .select({
-      id: enrollments.id,
+      entryId: enrollments.id,
       classroomId: enrollments.classroomId,
       nom: enrollments.nom,
       prenom: enrollments.prenom,
@@ -105,67 +182,38 @@ export async function claimEnrollments(db: Db, user: { id: string }) {
     perClassroom.set(entry.classroomId, (perClassroom.get(entry.classroomId) ?? 0) + 1);
   }
 
-  async function flagConflict(entryId: string) {
-    await db
-      .update(enrollments)
-      .set({ conflictFlag: true })
-      .where(eq(enrollments.id, entryId));
-    await audit(db, {
-      actorUserId: user.id,
-      actorType: "system",
-      action: "roster.claim_conflict",
-      subjectType: "enrollment",
-      subjectId: entryId,
-    });
-  }
-
-  let claimed = 0;
-  for (const entry of pending) {
-    if (shared.has(normalizeEmail(entry.email)) || perClassroom.get(entry.classroomId)! > 1) {
-      await flagConflict(entry.id);
-      continue;
-    }
-    try {
-      await db
-        .update(enrollments)
-        .set({ userId: user.id, claimedAt: new Date() })
-        .where(and(eq(enrollments.id, entry.id), isNull(enrollments.userId)));
-      claimed += 1;
-      studentJoined({
-        courseId: entry.courseId,
-        classroomName: entry.classroomName,
-        userId: user.id,
-        name: `${entry.prenom} ${entry.nom}`.trim(),
-      });
-      await audit(db, {
-        actorUserId: user.id,
-        actorType: "system",
-        action: "roster.claim",
-        subjectType: "enrollment",
-        subjectId: entry.id,
-      });
-    } catch {
-      // UNIQUE(classroom_id, user_id): the user already has an entry in
-      // this classroom; a conflict for the teacher to resolve (AU-21).
-      await flagConflict(entry.id);
-    }
-  }
-  return claimed;
+  const matches = pending.map((entry) => ({
+    ...entry,
+    userId: user.id,
+    ambiguous:
+      shared.has(normalizeEmail(entry.email)) || perClassroom.get(entry.classroomId)! > 1,
+  }));
+  return settleClaims(db, matches, user.id, (entry) =>
+    studentJoined({
+      courseId: entry.courseId,
+      classroomName: entry.classroomName,
+      userId: user.id,
+      name: `${entry.prenom} ${entry.nom}`.trim(),
+    }),
+  );
 }
 
 /**
- * Reverse claim (after an import or an e-mail edit): attaches a classroom's
- * `pending` entries to existing accounts, on the same address set and the
- * same ambiguity rules as the login claim.
+ * Reverse claim (after an import or an e-mail edit, by `actorId`): attaches
+ * a classroom's `pending` entries to existing accounts, on the same address
+ * set and the same ambiguity rules as the login claim.
  */
-export async function claimForExistingUsers(db: Db, classroomId: string) {
-  const matches = await db
+export async function claimForExistingUsers(db: Db, classroomId: string, actorId: string) {
+  const rows = await db
     .select({
-      enrollmentId: enrollments.id,
-      enrollmentEmail: enrollments.email,
+      entryId: enrollments.id,
       userId: userEmails.userId,
+      classroomId: enrollments.classroomId,
+      classroomName: classrooms.name,
+      courseId: classrooms.courseId,
     })
     .from(enrollments)
+    .innerJoin(classrooms, eq(classrooms.id, enrollments.classroomId))
     .innerJoin(
       userEmails,
       and(
@@ -184,51 +232,18 @@ export async function claimForExistingUsers(db: Db, classroomId: string) {
     set.add(value);
     map.set(key, set);
   };
-  for (const m of matches) {
-    link(usersPerEntry, m.enrollmentId, m.userId);
-    link(entriesPerUser, m.userId, m.enrollmentId);
+  for (const m of rows) {
+    link(usersPerEntry, m.entryId, m.userId);
+    link(entriesPerUser, m.userId, m.entryId);
   }
 
-  let claimed = 0;
-  for (const m of matches) {
-    const ambiguous =
-      usersPerEntry.get(m.enrollmentId)!.size > 1 || entriesPerUser.get(m.userId)!.size > 1;
-    if (ambiguous) {
-      await db
-        .update(enrollments)
-        .set({ conflictFlag: true })
-        .where(eq(enrollments.id, m.enrollmentId));
-      await audit(db, {
-        actorUserId: m.userId,
-        actorType: "system",
-        action: "roster.claim_conflict",
-        subjectType: "enrollment",
-        subjectId: m.enrollmentId,
-      });
-      continue;
-    }
-    try {
-      await db
-        .update(enrollments)
-        .set({ userId: m.userId, claimedAt: new Date() })
-        .where(and(eq(enrollments.id, m.enrollmentId), isNull(enrollments.userId)));
-      claimed += 1;
-      await audit(db, {
-        actorUserId: m.userId,
-        actorType: "system",
-        action: "roster.claim",
-        subjectType: "enrollment",
-        subjectId: m.enrollmentId,
-      });
-      publish("roster", [`classroom:${classroomId}`, `user:${m.userId}`]);
-    } catch {
-      await db
-        .update(enrollments)
-        .set({ conflictFlag: true })
-        .where(eq(enrollments.id, m.enrollmentId));
-    }
-  }
-  return claimed;
+  const matches = rows.map((m) => ({
+    ...m,
+    ambiguous: usersPerEntry.get(m.entryId)!.size > 1 || entriesPerUser.get(m.userId)!.size > 1,
+  }));
+  return settleClaims(db, matches, actorId, (m) =>
+    publish("roster", [`classroom:${classroomId}`, `user:${m.userId}`]),
+  );
 }
 
 /** Teacher's roster table: identity, claim status, accommodation. */
