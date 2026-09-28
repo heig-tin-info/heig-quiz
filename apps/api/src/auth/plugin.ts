@@ -11,8 +11,8 @@ import { publish } from "../events.js";
 import { CoachSeenPatch, MePatch, type PublicConfig, type SessionKind } from "@quiz/contracts";
 
 import { claimEnrollments } from "../modules/org/service.js";
-import { roleForIdentity } from "../roles.js";
-import { affiliationsOf, recordIdpClaims, syncUserEmails, verifiedAddressesOf } from "./claims.js";
+import { roleAtLogin } from "../roles.js";
+import { recordIdpClaims, syncUserEmails, verifiedAddressesOf } from "./claims.js";
 import { devLoginRoutes } from "./dev.js";
 import { OidcProvider, type OidcClaims } from "./oidc.js";
 import { returnToOf, safeReturnTo } from "./returnTo.js";
@@ -77,13 +77,7 @@ async function upsertUser(
   config: AppConfig,
   claims: OidcClaims,
 ): Promise<SessionUser> {
-  // The role is computed on every VERIFIED address the IdP revealed, and on
-  // the affiliations it asserts — a grant issued on an institutional address
-  // must reach someone signing in under a private one.
-  const role = await roleForIdentity(app.db, config, {
-    emails: verifiedAddressesOf(claims.raw, claims.emailVerified),
-    affiliations: affiliationsOf(claims.raw),
-  });
+  const role = await roleAtLogin(app.db, config, claims);
   const now = new Date();
   const [row] = await app.db
     .insert(users)

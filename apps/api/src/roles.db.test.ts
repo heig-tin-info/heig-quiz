@@ -4,8 +4,8 @@ import { beforeAll, describe, expect, it } from "vitest";
 
 import { verifiedAddressesOf } from "./auth/claims.js";
 import type { AppConfig } from "./config.js";
-import { teacherGrants, users } from "./db/schema.js";
-import { roleForIdentity, syncUserRole } from "./roles.js";
+import { courseStaff, courses, teacherGrants, users } from "./db/schema.js";
+import { roleAtLogin, roleForIdentity, syncUserRole } from "./roles.js";
 import { testDb, type TestDb } from "./test/db.js";
 
 const config = {
@@ -126,6 +126,23 @@ describe("the role at login, on the addresses of the claims", () => {
   it("honours the same addresses once verified", async () => {
     expect(await login("boss@heig.test", true)).toBe("admin");
     expect(await login("granted@heig.test", true)).toBe("teacher");
+  });
+});
+
+describe("roleAtLogin", () => {
+  it("keeps a teacher by course seat alone a teacher at the next login", async () => {
+    const id = randomUUID();
+    const courseId = randomUUID();
+    await db.insert(users).values({ id, oidcSub: `u-${id}`, email: "seated@gmail.test", role: "teacher" });
+    await db.insert(courses).values({ id: courseId, name: "Seated", code: `S-${courseId}` });
+    await db.insert(courseStaff).values({ courseId, userId: id });
+    expect(
+      await roleAtLogin(db, config, {
+        sub: `u-${id}`,
+        raw: { email: "seated@gmail.test", eduPersonScopedAffiliation: ["member@hes-so.ch"] },
+        emailVerified: true,
+      }),
+    ).toBe("teacher");
   });
 });
 
