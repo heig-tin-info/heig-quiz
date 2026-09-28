@@ -433,6 +433,8 @@ on("GET", "/app/api/student/home", (): StudentHomeData => {
         deadlineAt: scene === "lobby" ? null : new Date(studentDeadline).toISOString(),
         retakes: null,
         results: "pending",
+        // Issue #270: `?seb=1` makes this exam a Safe Exam Browser one.
+        ...(flags.seb ? { safeExamBrowser: true } : {}),
       },
       {
         id: STUDENT_EVAL_RETAKE,
