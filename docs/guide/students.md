@@ -20,9 +20,9 @@ Your home shows what your classrooms have opened for you, in three sections.
   <figcaption>The home: what is open now, what is coming up, what is past, and your classrooms.</figcaption>
 </figure>
 
-**Open now** lists the evaluations you can enter, each with one button: **Start**, **Resume** if you already began, or **Enter the waiting room** when the teacher has opened one. The badge says whether it is a **Graded quiz** or an **Exercise**, and the card shows how long you have or when it is due.
+**Open now** lists what you can still do, each with one button: **Start**, **Resume** if you already began, or **Enter the waiting room** when the teacher has opened one. The badge says whether it is a **Graded quiz** or an **Exercise**, and the card shows how long you have or when it is due.
 
-**Coming up** shows what is scheduled and when it starts. **Past evaluations** keeps what is over, with its state: **handed in**, **time was up** or **not started**, and a **View** button that opens your results.
+**Coming up** shows what is scheduled and when it starts. **Past evaluations** keeps what is over for you, with its state: **handed in**, **time was up** or **not started**. A quiz you handed in moves there at once, even while the others are still writing. Its **See my results** button appears only once there are results to read; until then the card says **results not published yet**.
 
 **My classrooms** lists your classrooms with their teachers. If you were granted extra time, the card shows it, for instance **Extra time: +25%**. It applies automatically to every timed evaluation of that classroom; there is nothing to ask for at the start.
 
@@ -120,11 +120,11 @@ Press **Hand in** in the header when you are done. The confirmation names how ma
   <figcaption>The confirmation counts the unanswered questions before you hand in.</figcaption>
 </figure>
 
-Once handed in, the player is replaced by a card that says **Handed in**, with **See my results** and **Back to home**.
+Once handed in, the player is replaced by a card that says **Handed in**, with **Back to home**. When your teacher shows the results right after hand-in, the card also offers **See my results**.
 
 <figure markdown="span">
-  ![The Handed in card: Your answers are with your teacher, with See my results and Back to home](../assets/screenshots/player-done-light.png#only-light)
-  ![The Handed in card: Your answers are with your teacher, with See my results and Back to home](../assets/screenshots/player-done-dark.png#only-dark)
+  ![The Handed in card: Your answers are with your teacher, with Back to home](../assets/screenshots/player-done-light.png#only-light)
+  ![The Handed in card: Your answers are with your teacher, with Back to home](../assets/screenshots/player-done-dark.png#only-dark)
   <figcaption>After handing in.</figcaption>
 </figure>
 
@@ -134,7 +134,7 @@ You do not have to hand in. When your time is up, the attempt closes by itself a
 
 ## Your results
 
-**See my results**, or **View** on a past evaluation, opens your results page. What it shows depends on what your teacher decided.
+**See my results**, on the Handed in card or on a past evaluation, opens your results page. What it shows depends on what your teacher decided.
 
 <figure markdown="span">
   ![The results page before publication: Results not published yet, and a sentence saying they will appear here as soon as the teacher publishes](../assets/screenshots/feedback-pending-light.png#only-light)

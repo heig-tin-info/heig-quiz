@@ -127,6 +127,26 @@ function retakeLine(card: EvaluationCardData, t: TFunction): string | null {
   return parts.join(" · ");
 }
 
+/**
+ * The line of a past card: how the attempt ended (or the retake count), and,
+ * issue #203, that the results are still to come when the server says so
+ * (`results: "pending"`) — the card has no button for them then, so the
+ * student reads it here instead of on an empty page. A score already on the
+ * line (between two attempts) needs no such note.
+ */
+function pastLine(card: EvaluationCardData, t: TFunction): string {
+  const base =
+    card.retakes !== null && card.attemptId !== null
+      ? retakeLine(card, t)!
+      : card.attemptState === "submitted"
+        ? t("shome.state.submitted")
+        : card.attemptState === "expired"
+          ? t("shome.state.expired")
+          : t("shome.state.notStarted");
+  const waiting = finished(card) && card.results === "pending" && !card.retakes?.kept?.score;
+  return waiting ? `${base} · ${t("shome.resultsPending")}` : base;
+}
+
 function upcomingLine(card: EvaluationCardData, now: number, t: TFunction): string {
   if (card.opensAt === null) return t("shome.upcoming.empty");
   const wait = Date.parse(card.opensAt) - now;
@@ -297,24 +317,16 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
   /** The one button of an open card. */
   const openAction = (card: EvaluationCardData) => {
     const r = card.retakes;
-    if (r !== null && finished(card)) {
-      if (r.canRetake) {
-        return {
-          label: t("shome.retake"),
-          primary: true,
-          loading: retake.pendingFor === card.id,
-          onClick: () => retake.start(card.id, r.keep),
-        };
-      }
-      // No attempt left: what remains to do is to read the score.
-      const reviewed = r.kept?.attemptId ?? card.attemptId;
-      if (reviewed) {
-        return {
-          label: t("shome.review"),
-          onClick: () => navigate(feedbackLink(reviewed).route),
-        };
-      }
+    if (r !== null && finished(card) && r.canRetake) {
+      return {
+        label: t("shome.retake"),
+        primary: true,
+        loading: retake.pendingFor === card.id,
+        onClick: () => retake.start(card.id, r.keep),
+      };
     }
+    // Issue #203: a finished attempt that cannot be retaken is never here —
+    // the server lists it under Past, where the results are.
     // ADR-027: sat in Safe Exam Browser only — the card hands out the file.
     if (card.safeExamBrowser) {
       return {
@@ -404,23 +416,15 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
                 <EvaluationRow
                   key={card.id}
                   card={card}
-                  line={
-                    card.retakes !== null && card.attemptId !== null
-                      ? retakeLine(card, t)
-                      : card.attemptState === "submitted"
-                      ? t("shome.state.submitted")
-                      : card.attemptState === "expired"
-                        ? t("shome.state.expired")
-                        : t("shome.state.notStarted")
-                  }
-                  {...(card.attemptId
+                  line={pastLine(card, t)}
+                  {...(card.results === "available" && card.attemptId
                     ? {
                         action: {
                           label: t("shome.review"),
-                          // WP10: the ONE student results page. The API says
-                          // `available: false` while the grades are not out,
-                          // and the page renders that on its own.
-                          // With retakes, the attempt that counts (F-EVAL-15).
+                          // WP10: the ONE student results page, offered only
+                          // when the server says it has something to show
+                          // (issue #203). With retakes, the attempt that
+                          // counts (F-EVAL-15).
                           onClick: () =>
                             navigate(
                               feedbackLink(card.retakes?.kept?.attemptId ?? card.attemptId!).route,

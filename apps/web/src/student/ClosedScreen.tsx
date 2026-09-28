@@ -45,19 +45,25 @@ export function ClosedScreen({
   title,
   onHome,
   onResults,
+  actionsHeld = false,
 }: {
   reason: AttemptClosed["reason"];
   /** The evaluation's own title, so the page still says what ended. */
   title: string;
   onHome: () => void;
   /**
-   * WP10: where the student's own feedback lives. Absent for a teacher
-   * preview, which has no attempt to show. It is offered even before the
-   * grades are out: the page asks the server, which answers `available:
-   * false` with a reason, and that reading is the reassurance the student
-   * came for.
+   * WP10: where the student's own feedback lives. Given only when that page
+   * has something to show (issue #203) — the body already says the result
+   * comes once released, so a page repeating it is a detour. Without it,
+   * Back to home is the one primary action.
    */
   onResults?: () => void;
+  /**
+   * The row waits (kept in place, not shown) while the player asks whether
+   * results exist, so a primary Back to home never flips to secondary
+   * under the student's cursor when See my results arrives.
+   */
+  actionsHeld?: boolean;
 }) {
   const t = useT();
   const copy = COPY[reason];
@@ -72,7 +78,10 @@ export function ClosedScreen({
           // heading of any level (W4).
           titleAs="h1"
           action={
-            <div className="flex flex-wrap items-center justify-center gap-2">
+            <div
+              className={`flex flex-wrap items-center justify-center gap-2${actionsHeld ? " invisible" : ""}`}
+              aria-hidden={actionsHeld || undefined}
+            >
               {onResults ? (
                 <Button variant="primary" onClick={onResults}>
                   <BarChart3 /> {t("player.closed.results")}

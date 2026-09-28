@@ -63,7 +63,13 @@ import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
 import { scoreOf, studentAttempts, tallyByAttempt } from "../grading/service.js";
 import { presence } from "../realtime/presence.js";
-import { countedAttemptId, releasedGradesOf, scoreVisible } from "../results/service.js";
+import {
+  countedAttempt,
+  countedAttemptId,
+  releasedGradesOf,
+  resultsState,
+  scoreVisible,
+} from "../results/service.js";
 import { isShuffleable, studentView } from "./studentView.js";
 
 export type AttemptRecord = typeof attempts.$inferSelect;
@@ -1403,6 +1409,9 @@ export async function studentHome(db: Db, userId: string, now: Date): Promise<St
     deadlineAt: isoOrNull(row.attempt?.deadlineAt ?? null),
     grade: grades.get(row.evaluation.id)?.grade ?? null,
     retakes: retakesOf(row),
+    // Issue #203: what "See my results" would lead to, for the attempt
+    // that counts — the results service's own rule.
+    results: resultsState(row.evaluation, countedAttempt(perEvaluation, row)?.state ?? null),
     safeExamBrowser: sebRequired(row.evaluation),
   });
 
@@ -1411,9 +1420,17 @@ export async function studentHome(db: Db, userId: string, now: Date): Promise<St
   const past: EvaluationCard[] = [];
   for (const row of rows) {
     const state = row.evaluation.state;
-    if (state === "lobby" || state === "running" || state === "paused") open.push(card(row));
-    else if (state === "scheduled") upcoming.push(card(row));
-    else if (state !== "draft") past.push(card(row));
+    if (state === "draft") continue;
+    const c = card(row);
+    if (state === "scheduled") upcoming.push(c);
+    else if (state !== "lobby" && state !== "running" && state !== "paused") past.push(c);
+    // Issue #203: "Open now" is what the student can still DO. A finished
+    // attempt that cannot be retaken has nothing left to do, whatever the
+    // evaluation's state: it is past. A reopened attempt is `in_progress`
+    // again, and comes back here on its own.
+    else if (c.attemptState !== null && isFinishedAttempt(c.attemptState) && !c.retakes?.canRetake) {
+      past.push(c);
+    } else open.push(c);
   }
   return { polls, open, upcoming, past, serverNow: iso(now) };
 }
