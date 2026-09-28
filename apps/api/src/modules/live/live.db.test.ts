@@ -1055,6 +1055,52 @@ describe("teacher controls (F-LIVE-11, F-LIVE-12)", () => {
   });
 });
 
+/*
+ * #252: a shift common to everybody used to land both on `closes_at` and on
+ * the attempt's `extraS`, and a reopening, which recomputes from the two,
+ * counted it twice. A reopened attempt gets exactly the time it had.
+ */
+describe.each([
+  { timing: "deadline" as const, shift: "an extension to all" },
+  { timing: "deadline" as const, shift: "a pause" },
+  { timing: "duration" as const, shift: "an extension to all" },
+  { timing: "duration" as const, shift: "a pause" },
+])("reopening after $shift, in $timing timing (#252)", ({ timing, shift }) => {
+  it("gives back the deadline the attempt had, individual extension included", async () => {
+    const { evaluation, attempt } = await running(
+      timing === "deadline"
+        ? {
+            settings: { timing: "deadline" },
+            durationS: null,
+            opensAt: clock.now(),
+            closesAt: new Date(clock.now().getTime() + 3_600_000),
+          }
+        : { durationS: 1800 },
+    );
+    // One minute to this student alone, which must survive the reopening.
+    await service.extendTime(db, evaluation, { minutes: 1, attemptId: attempt.id }, clock.now());
+    clock.advance(60_000);
+    if (shift === "a pause") {
+      const paused = await service.pauseEvaluation(db, evaluation, clock.now());
+      clock.advance(120_000);
+      await service.resumeEvaluation(db, paused, clock.now());
+    } else {
+      await service.extendTime(db, evaluation, { minutes: 5 }, clock.now());
+    }
+    const shifted = (await service.attemptById(db, attempt.id))!;
+    const common = shift === "a pause" ? 120_000 : 5 * 60_000;
+    expect(shifted.deadlineAt!.getTime()).toBe(attempt.deadlineAt!.getTime() + 60_000 + common);
+
+    const current = await reload(db, evaluation.id);
+    const submitted = await service.submitAttempt(db, current, shifted, clock.now());
+    expect(submitted.state).toBe("submitted");
+    clock.advance(60_000);
+    const reopened = await service.reopenAttempt(db, current, submitted, clock.now());
+    expect(reopened.state).toBe("in_progress");
+    expect(reopened.deadlineAt!.getTime()).toBe(shifted.deadlineAt!.getTime());
+  });
+});
+
 describe("restoring an attempt (F-LIVE-06)", () => {
   it("gives back the answers, the position and a stable item order", async () => {
     const { evaluation, attempt, items } = await running({
