@@ -203,7 +203,7 @@ const scenes = [
     caption: "A pool: its categories in the sidebar, its questions in the table.",
     persona: "teacher",
     path: (w) => `/pools/${w.pool.id}`,
-    state: "As seeded: ten published questions of the four types.",
+    state: "As seeded: eleven published questions of five types.",
   },
   {
     name: "pool-filters",
