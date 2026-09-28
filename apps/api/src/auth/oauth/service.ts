@@ -15,6 +15,7 @@ import { and, desc, eq, gt, isNotNull, isNull, lt, notExists, or } from "drizzle
 
 import { OAUTH_SCOPE, OAUTH_SCOPES_SUPPORTED, type OAuthConnection, type OAuthRequestView } from "@quiz/contracts";
 
+import { audit } from "../../audit.js";
 import type { Db } from "../../db/client.js";
 import { apiTokens, oauthClients, oauthGrants, oauthRequests } from "../../db/schema.js";
 import { hashToken, newToken } from "../session.js";
@@ -243,13 +244,19 @@ export async function exchangeCode(
 /**
  * A refresh: the presented token is swapped for a new one in the same
  * statement that invalidates it (rotation, OAuth 2.1 §4.3.1). The one before
- * it is remembered so a replay is recognised: `invalid_grant`, like any other
- * dead refresh token, which is the code clients react to.
+ * it is remembered so a replay is recognised: someone holds a copy of a token
+ * that was already used, so the whole grant is revoked with its access tokens
+ * (RFC 9700 §4.14.2), audited, and the answer is `invalid_grant`, like any
+ * other dead refresh token.
+ *
+ * `client_id` is required (RFC 6749 §3.2.1: a public client identifies
+ * itself), so a token is only ever refreshed by the client it was issued to.
  */
 export async function refresh(
   db: Db,
   input: { refreshToken: string; clientId: string | undefined; resource: string | undefined; now: Date },
 ): Promise<TokenResponse> {
+  if (input.clientId === undefined) throw new OAuthError("invalid_request", "client_id is required");
   const presented = hashToken(input.refreshToken);
   const next = `${REFRESH_PREFIX}${newToken()}`;
   const [grant] = await db
@@ -265,17 +272,37 @@ export async function refresh(
         eq(oauthGrants.refreshHash, presented),
         isNull(oauthGrants.revokedAt),
         gt(oauthGrants.expiresAt, input.now),
-        ...(input.clientId === undefined ? [] : [eq(oauthGrants.clientId, input.clientId)]),
+        eq(oauthGrants.clientId, input.clientId),
       ),
     )
     .returning();
-  if (!grant) throw new OAuthError("invalid_grant", "Unknown, expired or revoked refresh token");
+  if (!grant) {
+    await revokeReplayed(db, presented, input.now);
+    throw new OAuthError("invalid_grant", "Unknown, expired or revoked refresh token");
+  }
   if (input.resource !== undefined && !sameResource(input.resource, grant.resource)) {
     throw new OAuthError("invalid_target", "The grant is for another resource");
   }
   const [client] = await db.select().from(oauthClients).where(eq(oauthClients.id, grant.clientId));
   const access = await issueAccess(db, grant, client?.name ?? "MCP client", input.now);
   return { access_token: access, token_type: "Bearer", expires_in: ACCESS_TTL_S, refresh_token: next, scope: grant.scope };
+}
+
+/** A rotated-out refresh token came back: its grant, if still live, dies. */
+async function revokeReplayed(db: Db, presentedHash: string, now: Date) {
+  const [replayed] = await db
+    .select({ id: oauthGrants.id, userId: oauthGrants.userId, clientId: oauthGrants.clientId })
+    .from(oauthGrants)
+    .where(and(eq(oauthGrants.previousRefreshHash, presentedHash), isNull(oauthGrants.revokedAt)));
+  if (!replayed) return;
+  if (!(await revokeConnection(db, replayed.userId, replayed.id, now))) return;
+  await audit(db, {
+    actorType: "system",
+    action: "oauth.refresh_replay",
+    subjectType: "oauth_grant",
+    subjectId: replayed.id,
+    payload: { clientId: replayed.clientId, userId: replayed.userId },
+  });
 }
 
 // --- The teacher's list of connected assistants ----------------------------

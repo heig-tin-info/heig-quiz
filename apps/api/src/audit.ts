@@ -57,6 +57,7 @@ export type AuditAction =
   | "grading.run"
   | "grading.validate"
   | "oauth.grant"
+  | "oauth.refresh_replay"
   | "oauth.revoke"
   | "poll.create"
   | "poll.end"

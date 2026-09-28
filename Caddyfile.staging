@@ -10,8 +10,21 @@ quiz.dev.chevallier.io {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
+		# No framing by another site (click-jacking), no plugin content, no
+		# <base> rewriting every relative URL. The SPA frames nothing of its own.
+		X-Frame-Options "SAMEORIGIN"
+		Content-Security-Policy "frame-ancestors 'self'; object-src 'none'; base-uri 'self'"
 		# Staging is never a search result a student could land on.
 		X-Robots-Tag "noindex, nofollow"
+	}
+
+	# ADR-030: Teams frames the tab `/teams` on its own origins. That page has
+	# no session (SameSite=Lax cookies never reach it), so there is nothing on
+	# it to click-jack: framing is allowed there, and only there.
+	@teamsTab path /teams
+	header @teamsTab {
+		-X-Frame-Options
+		Content-Security-Policy "object-src 'none'; base-uri 'self'"
 	}
 
 	handle /app/api/events {

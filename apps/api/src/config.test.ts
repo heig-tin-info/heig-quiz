@@ -122,4 +122,14 @@ describe("notification channels (ADR-030)", () => {
     expect(listed.TEAMS_ALLOWED_TENANTS).toEqual([heig, "other"]);
     expect(loadConfig({}).TEAMS_ALLOWED_TENANTS).toEqual([]);
   });
+
+  it("refuses Teams open to every tenant in production (ADR-030)", () => {
+    const teams = { ...PROD, TEAMS_CLIENT_ID: "c", TEAMS_CLIENT_SECRET: "s" };
+    expect(() => loadConfig(teams)).toThrow(/TEAMS_ALLOWED_TENANTS/);
+    expect(() => loadConfig({ ...teams, TEAMS_ALLOWED_TENANTS: " , " })).toThrow(/TEAMS_ALLOWED_TENANTS/);
+    expect(() => loadConfig({ ...teams, TEAMS_ALLOWED_TENANTS: "a372f724-c0b2-4ea0-abfb-0eb8c6f84e40" })).not.toThrow();
+    // Teams off, or outside production: nothing to refuse.
+    expect(() => loadConfig(PROD)).not.toThrow();
+    expect(() => loadConfig({ TEAMS_CLIENT_ID: "c", TEAMS_CLIENT_SECRET: "s" })).not.toThrow();
+  });
 });

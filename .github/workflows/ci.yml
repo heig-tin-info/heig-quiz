@@ -135,7 +135,9 @@ jobs:
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != ''
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ssh -i ~/.ssh/id_ed25519 ${{ vars.DEPLOY_USER || 'srv' }}@"$DEPLOY_HOST" "$GITHUB_SHA $GHCR_TOKEN"
+          # No fallback account: an unset variable fails the deploy loudly.
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+        run: ssh -i ~/.ssh/id_ed25519 "${DEPLOY_USER:?vars.DEPLOY_USER is not set}"@"$DEPLOY_HOST" "$GITHUB_SHA $GHCR_TOKEN"
       # The gate: a staging that does not come up healthy (a migration that
       # fails on production-shaped data, a crash at boot) stops the promotion.
       - name: Staging answers healthy
@@ -186,7 +188,9 @@ jobs:
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != ''
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ssh -i ~/.ssh/id_ed25519 ${{ vars.DEPLOY_USER || 'srv' }}@"$DEPLOY_HOST" "$GITHUB_SHA $GHCR_TOKEN"
+          # No fallback account: an unset variable fails the deploy loudly.
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+        run: ssh -i ~/.ssh/id_ed25519 "${DEPLOY_USER:?vars.DEPLOY_USER is not set}"@"$DEPLOY_HOST" "$GITHUB_SHA $GHCR_TOKEN"
       - name: Deploy the runner (forced command runs apps/runner/deploy/deploy.sh on the code VM)
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != '' && env.DEPLOY_RUNNER_HOST != ''
         env:

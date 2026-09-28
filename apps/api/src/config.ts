@@ -269,6 +269,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     if (pgliteDir(parsed.data.DATABASE_URL)) {
       throw new Error("Invalid configuration: dev DATABASE_URL (pglite) forbidden in production");
     }
+    // An empty tenant list admits every Microsoft 365 organization: fine for
+    // a test app, never in production (ADR-030, consent phishing).
+    if (
+      parsed.data.TEAMS_CLIENT_ID.trim() !== "" &&
+      parsed.data.TEAMS_CLIENT_SECRET.trim() !== "" &&
+      parsed.data.TEAMS_ALLOWED_TENANTS.length === 0
+    ) {
+      throw new Error("Invalid configuration: TEAMS_ALLOWED_TENANTS is required in production when Teams is on");
+    }
   }
   // `http` without an address is a runner that is silently never called: the
   // process refuses to start rather than grade every code question by hand
