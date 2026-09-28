@@ -39,7 +39,7 @@ import { useQuestionActions } from "../question/useQuestionActions";
 import { poolKey, poolQuestionsKey } from "../queryKeys";
 
 /**
- * The pool screen (mockup `08-pool.html`): the questions across the full
+ * The pool screen: the questions across the full
  * content width. Clicking a row opens the question; the row also carries its
  * three actions (edit, duplicate, delete) at its end.
  *

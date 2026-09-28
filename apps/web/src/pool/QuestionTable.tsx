@@ -23,7 +23,7 @@ import type { QuestionGroup } from "./QuestionGroups";
 import type { QuestionSort, SortDir } from "./filters";
 
 /**
- * The questions of a pool (mockup `08-pool.html`).
+ * The questions of a pool, as the table of the pool screen.
  *
  * The internal name is dominant and monospaced (it is what a teacher types in
  * the palette), the type is the ICON in front of it, the difficulty is five

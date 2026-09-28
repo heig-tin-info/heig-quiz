@@ -9,12 +9,12 @@
  * the first lines of a program. It is read from the same payload the
  * inspection modal renders (`AttemptInspect`), so the two can never disagree.
  *
- * No type exposes a full textual rendering through the registry — the
- * client's `summarize` is a count or a letter, like the server's — so the
+ * No type exposes a full textual rendering through the registry, so the
  * shapes are read here, DEFENSIVELY: the payload is `unknown` on the wire,
- * and a shape this function does not recognise gives `null`, which the caller
- * turns into the type's own `summarize` or the cell's summary. A tooltip is
- * never worth an exception.
+ * and a shape this function does not recognise gives `null`. The caller then
+ * falls back on the type's optional client `summarize` — only a type whose
+ * answer cannot be read as text implements it (the circuit, a schematic) —
+ * and else on the cell's summary. A tooltip is never worth an exception.
  *
  * Nothing here decides whether an answer is right: no solution is read.
  */

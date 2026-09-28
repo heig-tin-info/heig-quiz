@@ -13,7 +13,7 @@ import { poolKey, questionKey } from "../queryKeys";
 
 /**
  * What a question IS, next to what it says: name, category, difficulty, tags
- * and the shuffle switch (mockup `01-editeur-qcm.html`, "Propriétés").
+ * and the shuffle switch, in the editor's side panel.
  *
  * These are metadata, not content: each one is a `PATCH /questions/:id` of
  * its own, applied when the control is left, and none of them touches the

@@ -19,8 +19,7 @@ import type { Step } from "./useGradingTraversal";
  * question's type, points and answers, a student's answers and total.
  *
  * Never red. Red on this screen means "the thing to press", and an
- * advancement bar is not an action — mockup `04-correction.html` makes the
- * same point in its own comment.
+ * advancement bar is not an action (DESIGN.md › Color).
  */
 export function GradingHeader({
   order,

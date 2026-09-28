@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { applyOrder, moveFolder, neighbourMoves, subtreeIds } from "./categories";
+import { applyOrder, dropTarget, moveFolder, neighbourMoves, subtreeIds } from "./categories";
 
 /*
  * The moves of the categories page, as pure functions over the tree: what a
@@ -99,5 +99,22 @@ describe("subtreeIds", () => {
   it("is the folder and everything under it", () => {
     expect([...subtreeIds(tree(), "a")].sort()).toEqual(["a", "a1", "a2"]);
     expect([...subtreeIds(tree(), "b")]).toEqual(["b"]);
+  });
+});
+
+describe("dropTarget", () => {
+  it("files a folder dropped on the middle of another inside it, last", () => {
+    expect(dropTarget(tree(), "c", "a", "inside")).toEqual({ parentId: "a", index: 2 });
+  });
+
+  it("places it before or after a sibling, counted without itself", () => {
+    expect(dropTarget(tree(), "c", "a", "before")).toEqual({ parentId: null, index: 0 });
+    expect(dropTarget(tree(), "a", "c", "after")).toEqual({ parentId: null, index: 2 });
+    expect(dropTarget(tree(), "b", "a1", "after")).toEqual({ parentId: "a", index: 1 });
+  });
+
+  it("is no move on itself or on a folder that is not there", () => {
+    expect(dropTarget(tree(), "a", "a", "inside")).toBeNull();
+    expect(dropTarget(tree(), "a", "zz", "before")).toBeNull();
   });
 });

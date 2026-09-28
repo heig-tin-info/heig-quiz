@@ -1,33 +1,20 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Eye, EyeOff, LayoutGrid, Library, List, Plus, School } from "lucide-react";
+import { Eye, EyeOff, LayoutGrid, Library, List, Plus } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
 import type { CourseSummary } from "@quiz/contracts";
 
-import { api } from "./api";
-import {
-  ArchivedClassrooms,
-  ClassroomRow,
-  CoursePools,
-  HiddenBadge,
-  useCourseActions,
-  useCourses,
-} from "./course/parts";
+import { CourseCard, CourseRow } from "./course/CourseSummary";
+import { NewCourseModal } from "./course/modals";
+import { useCourses } from "./course/parts";
 import { inNavigation } from "./CourseNav";
 import { useT } from "./i18n";
 import type { Route } from "./router";
 import {
-  Actions,
   Button,
   Card,
   EmptyState,
-  Field,
-  FormDialog,
-  FormError,
   PageHeader,
-  PeopleStack,
   QueryError,
-  SectionHeading,
   Segmented,
   Skeleton,
   Spinner,
@@ -38,7 +25,6 @@ import {
   usePersistentChoice,
   useSortableTable,
 } from "./ui";
-import { coursesKey } from "./queryKeys";
 
 /**
  * Teacher home: the courses.
@@ -76,181 +62,6 @@ const VIEWS = ["cards", "list"] as const;
 
 /** What the table may be sorted on: the identity column and the two counts. */
 type CourseSortKey = "name" | "classrooms" | "staff";
-
-function NewCourseModal({ onClose }: { onClose: () => void }) {
-  const t = useT();
-  const qc = useQueryClient();
-  const [form, setForm] = useState({ name: "", code: "" });
-  const create = useMutation({
-    mutationFn: () =>
-      api("/app/api/courses", { method: "POST", body: JSON.stringify(form) }),
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: coursesKey });
-      onClose();
-    },
-  });
-  return (
-    <FormDialog
-      title={t("courses.new")}
-      onClose={onClose}
-      onSubmit={() => create.mutate()}
-      submitLabel={t("courses.newAction")}
-      submitting={create.isPending}
-      canSubmit={form.name.trim() !== "" && form.code.trim() !== ""}
-      error={<FormError error={create.error} fallback={t("courses.createFailed")} />}
-    >
-      <Field
-        label={t("courses.name")}
-        required
-        fullWidth
-        autoFocus
-        placeholder={t("courses.namePlaceholder")}
-        value={form.name}
-        onChange={(e) => setForm({ ...form, name: e.target.value })}
-      />
-      <Field
-        label={t("courses.code")}
-        required
-        fullWidth
-        placeholder={t("courses.codePlaceholder")}
-        value={form.code}
-        onChange={(e) => setForm({ ...form, code: e.target.value })}
-      />
-    </FormDialog>
-  );
-}
-
-/**
- * The course's name, as the way into its page: the card and the table row
- * are summaries, the page is where the whole course is read. The name keeps
- * the weight of the heading it sits in and underlines on hover, like a
- * `ParentLink`: the grey of a link at rest is not a signal on its own.
- */
-function CourseLink({ course, navigate }: { course: CourseSummary; navigate: (r: Route) => void }) {
-  return (
-    <button
-      type="button"
-      onClick={() => navigate({ view: "course", id: course.id })}
-      className="text-left transition-colors hover:underline"
-    >
-      {course.name}
-    </button>
-  );
-}
-
-function CourseCard({
-  course,
-  navigate,
-}: {
-  course: CourseSummary;
-  navigate: (r: Route) => void;
-}) {
-  const t = useT();
-  const { items, staffActions, newClassroom, dialogs } = useCourseActions(course);
-
-  return (
-    <Card className="p-5">
-      {/* The staff belongs to the title line and not to a row of its own: who
-          teaches a course is part of naming it, and the hairline-separated
-          strip it used to live in said "STAFF" to announce three discs. */}
-      <SectionHeading
-        icon={Library}
-        title={
-          <span className="flex flex-wrap items-center gap-2">
-            <CourseLink course={course} navigate={navigate} />
-            <span className="text-[13px] font-normal text-fg-faint">{course.code}</span>
-            <HiddenBadge course={course} />
-            <PeopleStack people={course.staff} actions={staffActions} className="ml-2" />
-          </span>
-        }
-        actions={
-          <>
-            <Button size="sm" variant="secondary" onClick={newClassroom}>
-              <Plus /> {t("classrooms.new")}
-            </Button>
-            <Actions items={items} label={t("common.actions")} />
-          </>
-        }
-      />
-
-      <div className="mt-4 space-y-1.5">
-        {course.classrooms.length === 0 ? (
-          <p className="text-sm text-fg-muted">{t("classrooms.empty")}</p>
-        ) : (
-          course.classrooms.map((room) => (
-            <ClassroomRow key={room.id} room={room} students={room.students} navigate={navigate} />
-          ))
-        )}
-        <ArchivedClassrooms course={course} navigate={navigate} />
-      </div>
-
-      <CoursePools course={course} navigate={navigate} />
-
-      {dialogs}
-    </Card>
-  );
-}
-
-/**
- * One course as a table row: its identity — the name opens the course page,
- * as on the card — the classrooms it holds — each a link, because that is
- * what a teacher came for — and its staff. The pools of a course are a card
- * and page affair, and so are its archived classrooms ("Show archived"); the
- * table answers "which live classroom, where".
- */
-function CourseRow({
-  course,
-  navigate,
-}: {
-  course: CourseSummary;
-  navigate: (r: Route) => void;
-}) {
-  const t = useT();
-  const { items, staffActions, dialogs } = useCourseActions(course);
-  return (
-    <tr className={T.row}>
-      <td className={T.td}>
-        <span className="flex flex-wrap items-baseline gap-2">
-          <span className="font-semibold">
-            <CourseLink course={course} navigate={navigate} />
-          </span>
-          <span className="text-xs text-fg-faint">{course.code}</span>
-          <HiddenBadge course={course} />
-        </span>
-      </td>
-      <td className={T.td}>
-        {course.classrooms.length === 0 ? (
-          <span className="text-fg-faint">—</span>
-        ) : (
-          <span className="flex flex-wrap items-center gap-x-1 gap-y-1">
-            {course.classrooms.map((room) => (
-              <button
-                key={room.id}
-                type="button"
-                onClick={() => navigate({ view: "classroom", id: room.id })}
-                className="rounded-field px-1.5 py-0.5 font-medium transition-colors hover:bg-surface-2 hover:underline"
-              >
-                <School className="mr-1 inline size-3.5 text-fg-faint" />
-                {room.name}
-              </button>
-            ))}
-          </span>
-        )}
-      </td>
-      <td className={T.td}>
-        {course.staff.length === 0 ? (
-          <span className="text-fg-faint">—</span>
-        ) : (
-          <PeopleStack people={course.staff} actions={staffActions} />
-        )}
-      </td>
-      <td className={`${T.td} w-10 text-right`}>
-        <Actions items={items} label={t("common.actions")} />
-        {dialogs}
-      </td>
-    </tr>
-  );
-}
 
 export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
   const t = useT();

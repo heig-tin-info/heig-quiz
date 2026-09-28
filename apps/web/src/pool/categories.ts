@@ -125,6 +125,30 @@ export function neighbourMoves(
   };
 }
 
+/** Where on a row a dragged folder lands: above it, inside it, or below it. */
+export type DropWhere = "before" | "inside" | "after";
+
+/**
+ * The target of `dragged` dropped `where` on the row of `targetId`: inside
+ * it as its last child, or before / after it among its siblings (counted
+ * without the dragged folder, which leaves its place). `null` on itself or
+ * on a folder that is not in the tree.
+ */
+export function dropTarget(
+  nodes: readonly Folder[],
+  dragged: string,
+  targetId: string,
+  where: DropWhere,
+): FolderTarget | null {
+  if (dragged === targetId) return null;
+  const target = findCategory(nodes, targetId);
+  if (!target) return null;
+  if (where === "inside") return { parentId: target.id, index: target.children.length };
+  const siblings = childrenOf(nodes, target.parentId).filter((s) => s.id !== dragged);
+  const index = siblings.findIndex((s) => s.id === targetId);
+  return { parentId: target.parentId, index: where === "before" ? index : index + 1 };
+}
+
 /**
  * The tree as it will be once `items` is applied: what the categories page
  * draws the moment a folder is dropped, before the server has answered. The

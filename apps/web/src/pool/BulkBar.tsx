@@ -14,7 +14,7 @@ import { Button, Field, FormDialog, IconButton, Select, Spinner, Z } from "../ui
 import { anyPoolKey, poolKey, poolsKey } from "../queryKeys";
 
 /**
- * What to do with the ticked questions (mockup `08-pool.html`): a floating
+ * What to do with the ticked questions, on the pool screen: a floating
  * bar that only exists while a selection does. It is the one place in the
  * screen allowed a shadow — it genuinely sits above the table.
  *

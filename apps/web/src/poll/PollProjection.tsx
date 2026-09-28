@@ -25,7 +25,7 @@ import { useStageFit } from "./useStageFit";
 import { anyPoolKey, pollKey, pollQuestionsKey, poolsKey } from "../queryKeys";
 
 /**
- * The projection of a running poll (mockup 10, F-LIVE-13 / F-LIVE-14).
+ * The projection of a running poll (F-LIVE-13 / F-LIVE-14).
  *
  * It is the one screen of the product that is not a page: no sidebar, no
  * header, no content column. `App.tsx` renders it outside the Shell because
@@ -66,7 +66,7 @@ import { anyPoolKey, pollKey, pollQuestionsKey, poolsKey } from "../queryKeys";
  * widest layout the band can be drawn at, then draws it through one transform
  * (see `fit.ts`). Nothing is ever truncated and no scrollbar ever appears.
  *
- * Dark by default, like the mockup: a beamer throws light, so a white page
+ * Dark by default: a beamer throws light, so a white page
  * is the room's lighting. Only an explicit "light" already stored in this
  * browser keeps it light, and the toggle here writes that same choice.
  */

@@ -197,7 +197,7 @@ move and select with wrap, Home/End jump. A `value` matching no item still
 leaves the first tab reachable, so a hand-edited URL cannot take the whole
 strip out of the Tab order.
 
-The index arithmetic behind those keys is written once, in `ui/layers.tsx`:
+The index arithmetic behind those keys is written once, in `ui/menu.tsx`:
 `listboxIndex` for a vertical list (the menu, the palette, and the tag,
 teacher and filter comboboxes through `useCombobox` — arrows wrap, and
 Home/End only where the list owns them, since in a text field they move the
@@ -869,7 +869,7 @@ nothing else on it leaves the system.
   at 1920 × 1080, against 11 px and 16 px for the same fit without widening.
 - **The way in is TOP right, and it is the only thing in that corner.** The
   host, the session code and the QR tile travel together, in the first band of
-  the stage (mockup 10 has them in the footer; the product does not). The
+  the stage (the original design had them in the footer; the product does not). The
   reason is the toaster: `notify.tsx` pins the toast stack to `fixed bottom-4
   right-4`, and a "student joined" notice arriving mid-lecture landed straight
   on the code the back rows were scanning. The two corners are opposite ones

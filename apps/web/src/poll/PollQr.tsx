@@ -5,7 +5,7 @@ import { useT } from "../i18n";
 import { cx } from "../ui";
 
 /**
- * The QR a room scans, on a white tile (mockup 10).
+ * The QR a room scans, on a white tile, on the poll's projection.
  *
  * Two things about it are deliberate. The tile does NOT follow the theme —
  * it is white with near-black modules in both, because a camera needs the

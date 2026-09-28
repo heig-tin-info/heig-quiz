@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { renderWithProviders } from "../test/render";
 import { Actions } from "./actions";
-import type { MenuItem } from "./layers";
+import type { MenuItem } from "./menu";
 
 /*
  * The shape is the component's decision, not the call site's: the same list

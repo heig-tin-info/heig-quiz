@@ -11,7 +11,8 @@ import {
 import type { ReactElement, ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { cx, menuPosition, useLayer, Z, type MenuPlacement } from "./layers";
+import { cx, useLayer, Z } from "./layers";
+import { menuPosition, type MenuPlacement } from "./menu";
 
 /**
  * A small card hung on a trigger: what a disc, a chip or an abbreviation
