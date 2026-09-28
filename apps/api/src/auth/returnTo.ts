@@ -28,7 +28,9 @@ export function safeReturnTo(raw: unknown): string {
     return "/";
   }
   // Dot segments may collapse to `//` (`/..//evil.example`): the result is
-  // checked again, since it is what the Location header will carry.
+  // checked again, since it is what the Location header will carry. The
+  // origin check is belt and braces: the filters above already leave no
+  // input that resolves elsewhere.
   const path = url.pathname + url.search + url.hash;
   if (url.origin !== PROBE_ORIGIN || path.startsWith("//")) return "/";
   return path;

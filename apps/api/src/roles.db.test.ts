@@ -2,10 +2,9 @@ import { randomUUID } from "node:crypto";
 
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { verifiedAddressesOf } from "./auth/claims.js";
 import type { AppConfig } from "./config.js";
-import { courseStaff, courses, teacherGrants, users } from "./db/schema.js";
-import { roleAtLogin, roleForIdentity, syncUserRole } from "./roles.js";
+import { teacherGrants, users } from "./db/schema.js";
+import { roleForIdentity, syncUserRole } from "./roles.js";
 import { testDb, type TestDb } from "./test/db.js";
 
 const config = {
@@ -112,35 +111,13 @@ describe("roleForIdentity (GH-11)", () => {
       }),
     ).toBe("student");
   });
-});
 
-describe("the role at login, on the addresses of the claims", () => {
-  const login = (email: string, emailVerified: boolean) =>
-    roleForIdentity(db, config, { emails: verifiedAddressesOf({ email }, emailVerified) });
-
-  it("ignores an unverified address, be it the administrator's or a granted one", async () => {
-    expect(await login("boss@heig.test", false)).toBe("student");
-    expect(await login("granted@heig.test", false)).toBe("student");
-  });
-
-  it("honours the same addresses once verified", async () => {
-    expect(await login("boss@heig.test", true)).toBe("admin");
-    expect(await login("granted@heig.test", true)).toBe("teacher");
-  });
-});
-
-describe("roleAtLogin", () => {
-  it("keeps a teacher by course seat alone a teacher at the next login", async () => {
-    const id = randomUUID();
-    const courseId = randomUUID();
-    await db.insert(users).values({ id, oidcSub: `u-${id}`, email: "seated@gmail.test", role: "teacher" });
-    await db.insert(courses).values({ id: courseId, name: "Seated", code: `S-${courseId}` });
-    await db.insert(courseStaff).values({ courseId, userId: id });
+  it("lets only a student of our institutions block the staff one", async () => {
+    // A HES-SO employee studying at another university remains staff here.
     expect(
-      await roleAtLogin(db, config, {
-        sub: `u-${id}`,
-        raw: { email: "seated@gmail.test", eduPersonScopedAffiliation: ["member@hes-so.ch"] },
-        emailVerified: true,
+      await roleForIdentity(db, config, {
+        emails: ["nobody@heig.test"],
+        affiliations: ["student@unil.ch", "staff@hes-so.ch"],
       }),
     ).toBe("teacher");
   });

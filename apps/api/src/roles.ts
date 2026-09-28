@@ -13,8 +13,7 @@
  */
 import { and, eq, inArray } from "drizzle-orm";
 
-import { affiliationKindsIn, affiliationsOf, verifiedAddressesOf } from "./auth/claims.js";
-import type { OidcClaims } from "./auth/oidc.js";
+import { affiliationKindsIn } from "./auth/claims.js";
 import type { AppConfig } from "./config.js";
 import type { Db } from "./db/client.js";
 import { courseStaff, teacherGrants, userIdpClaims, users } from "./db/schema.js";
@@ -25,7 +24,7 @@ type UserRole = (typeof users.$inferSelect)["role"];
 
 /** What the rule needs: the addresses of the account, and its affiliations. */
 export interface Identity {
-  /** Verified addresses only (`knownEmails`, `verifiedAddressesOf`). */
+  /** Verified addresses only (`knownEmails`). */
   emails: readonly string[];
   /** edu-ID affiliations, scoped or not (`student@hes-so.ch`, `staff`). */
   affiliations?: readonly string[];
@@ -69,30 +68,6 @@ export async function roleForIdentity(
   const kinds = affiliationKindsIn(identity.affiliations ?? [], config.STAFF_AFFILIATION_DOMAINS);
   if (kinds.includes("staff") && !kinds.includes("student")) return "teacher";
   return "student";
-}
-
-/**
- * The role of a login, from what the IdP released: its VERIFIED addresses —
- * a grant issued on an institutional address must reach someone signing in
- * under a private one — its affiliations, and the course seats of the
- * account when it already exists, so a teacher by seat alone is not demoted
- * at each login.
- */
-export async function roleAtLogin(
-  db: Db,
-  config: AppConfig,
-  claims: Pick<OidcClaims, "sub" | "raw" | "emailVerified">,
-): Promise<UserRole> {
-  const [existing] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.oidcSub, claims.sub))
-    .limit(1);
-  return roleForIdentity(db, config, {
-    emails: verifiedAddressesOf(claims.raw, claims.emailVerified),
-    affiliations: affiliationsOf(claims.raw),
-    ...(existing ? { userId: existing.id } : {}),
-  });
 }
 
 /** The stored identity of an existing account. */

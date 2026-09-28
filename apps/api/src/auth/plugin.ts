@@ -1,19 +1,18 @@
-import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 import { eq, sql } from "drizzle-orm";
 
 import { audit } from "../audit.js";
-import { loginAllowed, type AppConfig } from "../config.js";
+import type { AppConfig } from "../config.js";
 import { avatars, users } from "../db/schema.js";
 import { publish } from "../events.js";
 import { CoachSeenPatch, MePatch, type PublicConfig, type SessionKind } from "@quiz/contracts";
 
 import { claimEnrollments } from "../modules/org/service.js";
-import { roleAtLogin } from "../roles.js";
-import { recordIdpClaims, syncUserEmails, verifiedAddressesOf } from "./claims.js";
 import { devLoginRoutes } from "./dev.js";
+import { loginAdmits, signIn } from "./login.js";
 import { OidcProvider, type OidcClaims } from "./oidc.js";
 import { returnToOf, safeReturnTo } from "./returnTo.js";
 import { MCP_PATH } from "./oauth/service.js";
@@ -67,49 +66,6 @@ const BEARER = /^Bearer\s+(\S+)$/i;
  * accept it, and nothing outside the process can produce it.
  */
 export const INTERNAL_CALL_HEADER = "x-quiz-internal-call";
-
-/**
- * User upsert at login (key: oidc_sub). The role is recomputed on every
- * login through the single rule of roles.ts.
- */
-async function upsertUser(
-  app: FastifyInstance,
-  config: AppConfig,
-  claims: OidcClaims,
-): Promise<SessionUser> {
-  const role = await roleAtLogin(app.db, config, claims);
-  const now = new Date();
-  const [row] = await app.db
-    .insert(users)
-    .values({
-      id: randomUUID(),
-      oidcSub: claims.sub,
-      email: claims.email,
-      emailVerified: claims.emailVerified,
-      givenName: claims.givenName,
-      familyName: claims.familyName,
-      swissEduId: claims.swissEduId,
-      pictureUrl: claims.picture,
-      role,
-      lastLoginAt: now,
-    })
-    .onConflictDoUpdate({
-      target: users.oidcSub,
-      set: {
-        email: claims.email,
-        emailVerified: claims.emailVerified,
-        givenName: claims.givenName,
-        familyName: claims.familyName,
-        swissEduId: claims.swissEduId,
-        pictureUrl: claims.picture,
-        role,
-        lastLoginAt: now,
-      },
-    })
-    .returning();
-  if (!row) throw new Error("User upsert returned no row");
-  return row;
-}
 
 async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
@@ -274,24 +230,14 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
 
     // The staging allowlist (ADR-028) is checked before any row is written:
     // a refused login leaves no user behind.
-    if (!loginAllowed(config, verifiedAddressesOf(claims.raw, claims.emailVerified))) {
+    if (!loginAdmits(config, claims)) {
       req.log.warn({ sub: claims.sub }, "Login refused by LOGIN_ALLOWLIST");
       return reply
         .code(403)
         .send({ error: "login_not_allowed", message: "This environment is restricted" });
     }
 
-    const user = await upsertUser(app, config, claims);
-    // Snapshot of what the IdP released: diagnostic material, and never a
-    // reason to refuse a session.
-    try {
-      await recordIdpClaims(app.db, user.id, claims.raw);
-    } catch (err) {
-      req.log.warn({ err }, "Could not record the IdP claims");
-    }
-    // The address set, on the other hand, IS load-bearing: the roster
-    // matching below reads it, so a failure here must surface.
-    await syncUserEmails(app.db, user.id, claims.raw, claims.emailVerified);
+    const user = await signIn(app.db, config, claims);
     if (claims.emailVerified) await claimEnrollments(app.db, { id: user.id });
     await app.openSession(reply, user);
     await audit(app.db, {

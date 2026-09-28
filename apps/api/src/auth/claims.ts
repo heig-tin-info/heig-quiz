@@ -116,9 +116,9 @@ export function addressesOf(
 }
 
 /**
- * The addresses a login may act on — role, staging allowlist — by the same
- * rule `knownEmails` applies to a stored account, so the role computed at
- * login and the one recomputed later cannot diverge.
+ * The addresses a login may act on BEFORE anything is stored (the staging
+ * allowlist). Everything after reads the stored set (`knownEmails`), whose
+ * `verified` flag follows the same `addressesOf`.
  */
 export function verifiedAddressesOf(
   claims: Record<string, unknown>,
@@ -153,7 +153,8 @@ export function persistableClaims(claims: Record<string, unknown>): Record<strin
 
 /**
  * One row per user, overwritten at each login: the point is to know what
- * the IdP says *now*, not to build a history nobody would read.
+ * the IdP says *now*, not to build a history nobody would read. The
+ * affiliations it stores drive the role (roles.ts).
  */
 export async function recordIdpClaims(
   db: Db,
@@ -183,7 +184,9 @@ export async function recordIdpClaims(
 /**
  * Records the addresses a login revealed. Purely additive: an address seen
  * once is never removed, and `first_seen_at` keeps the date of the login
- * that revealed it. `verified` follows `addressesOf`.
+ * that revealed it. `verified` follows `addressesOf` and only ever rises: a
+ * login address verified later becomes verified, never the reverse.
+ * Returns the number of addresses added or newly verified.
  */
 export async function syncUserEmails(
   db: Db,
@@ -196,7 +199,11 @@ export async function syncUserEmails(
   const inserted = await db
     .insert(userEmails)
     .values(addresses.map((a) => ({ userId, ...a })))
-    .onConflictDoNothing({ target: [userEmails.userId, userEmails.email] })
+    .onConflictDoUpdate({
+      target: [userEmails.userId, userEmails.email],
+      set: { verified: true },
+      setWhere: sql`excluded.verified and not ${userEmails.verified}`,
+    })
     .returning({ email: userEmails.email });
   return inserted.length;
 }
