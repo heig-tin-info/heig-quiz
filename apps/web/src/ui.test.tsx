@@ -1323,12 +1323,22 @@ describe("ProgressSegments", () => {
     // Nothing yet: hollow, no symbol.
     expect(bars[2]).toHaveClass("bg-surface");
     expect(bars[2]!.querySelector("svg")).toBeNull();
-    // Where the student is: the accent outline, whatever the mark.
-    expect(bars[2]).toHaveClass("outline-accent");
+    // Where the student is: the accent ring, whatever the mark.
+    expect(bars[2]).toHaveClass("border-accent!", "ring-accent-soft");
     // The flag sits by the number, and only on the flagged one.
     const labels = Array.from(container.querySelectorAll("button > span:last-child"));
     expect(labels[1]!.querySelector("svg")).not.toBeNull();
     expect(labels[0]!.querySelector("svg")).toBeNull();
+  });
+
+  it("draws the path covered: a solid connector between two questions dealt with (issue #219)", () => {
+    const { container } = renderWithProviders(
+      <ProgressSegments segments={segments} label="Progress" onSelect={() => {}} />,
+    );
+    const links = Array.from(container.querySelectorAll("[data-part=link]"));
+    // Three links for four questions; answered -> skipped is covered, the rest is not yet.
+    expect(links).toHaveLength(3);
+    expect(links.map((l) => l.classList.contains("bg-fg"))).toEqual([true, false, false]);
   });
 
   it("moves with the arrows, wraps, and jumps with Home and End", async () => {
