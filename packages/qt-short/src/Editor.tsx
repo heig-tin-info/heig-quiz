@@ -25,6 +25,7 @@ import { explainMatcher } from "./explain.js";
 import { shortEditorStrings, type ShortEditorStringKey } from "./strings.js";
 import {
   buttonClass,
+  caption,
   CheckboxField,
   cx,
   FieldCell,
@@ -624,7 +625,9 @@ export function ShortEditor({
                               replace(index, { ...matcher, points: Number(e.target.value) })
                             }
                           />
-                          <span id={`${rowId}-points-hint`} className={hint}>
+                          {/* An aside in a dense row whose labels are 12 px:
+                              a caption, not a 13 px hint. */}
+                          <span id={`${rowId}-points-hint`} className={caption}>
                             {s.pointsHint}
                           </span>
                         </div>
