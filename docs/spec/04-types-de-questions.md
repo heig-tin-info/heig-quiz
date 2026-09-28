@@ -333,4 +333,4 @@ config:
 
 ## 4.12 Poll `poll`, phase 2
 
-This is not a question type but a single-item evaluation mode, which accepts `mcq`, `short` and a `scale` variant from 1 to N. The live projection screen draws the answers with the host's own `PollBars` (`apps/web/src/poll`), tallied by `pollTally`, whatever the type. There is no per-type `Stats` component: that optional hook of `QuestionTypeClient` was never mounted and was removed on 2026-09-28.
+This is not a question type but a single-item evaluation mode, which accepts `mcq`, `short` and a `scale` variant from 1 to N. The live projection screen draws the answers with the host's own `PollBars` (`apps/web/src/poll`), counted server-side by `pollTally` in `@quiz/domain`, for `mcq` and `short` alike. There is no per-type `Stats` component: that optional hook of `QuestionTypeClient` was never mounted and was removed on 2026-09-28.
