@@ -1,5 +1,6 @@
 /** The reads of the `evaluation` module: views, items, rosters, lists. */
 import { and, asc, count, desc, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import {
   DEFAULT_MCQ_POLICY,
@@ -118,7 +119,40 @@ export function toEvaluation(row: EvaluationRecord): Evaluation {
     releasedAt: isoOrNull(row.releasedAt),
     modifiedAfterRelease: row.modifiedAfterRelease,
     createdAt: iso(row.createdAt),
+    originRevision: row.originRevision,
   };
+}
+
+const originTemplate = alias(evaluations, "origin_template");
+
+/**
+ * The CURRENT revision of each evaluation's template (F-EVAL-26), in one
+ * query: absent from the map when the evaluation has no origin, or when its
+ * template is gone — or belongs to another course than the evaluation's
+ * classroom: for an instance, a template of another course is no template at
+ * all (ADR-031, invariant 6 in depth). The pull reads a template by the
+ * same rule, locked, in `originTemplate` (`templates.ts`): a change to the
+ * same-course rule changes both.
+ */
+export async function templateRevisionsOf(
+  db: DbOrTx,
+  rows: readonly EvaluationRecord[],
+): Promise<Map<string, number>> {
+  const ids = rows.filter((r) => r.originTemplateId !== null).map((r) => r.id);
+  if (ids.length === 0) return new Map();
+  const found = await db
+    .select({ id: evaluations.id, revision: originTemplate.revision })
+    .from(evaluations)
+    .innerJoin(classrooms, eq(classrooms.id, evaluations.classroomId))
+    .innerJoin(
+      originTemplate,
+      and(
+        eq(originTemplate.id, evaluations.originTemplateId),
+        eq(originTemplate.courseId, classrooms.courseId),
+      ),
+    )
+    .where(inArray(evaluations.id, ids));
+  return new Map(found.flatMap((r) => (r.revision === null ? [] : [[r.id, r.revision] as const])));
 }
 
 /**
@@ -162,7 +196,7 @@ export async function preferredMcqPolicy(db: Db, userId: string): Promise<McqPol
   return row?.policy ?? DEFAULT_MCQ_POLICY;
 }
 
-export async function attemptCount(db: Db, evaluationId: string): Promise<number> {
+export async function attemptCount(db: DbOrTx, evaluationId: string): Promise<number> {
   const [row] = await db
     .select({ n: count() })
     .from(attempts)
@@ -497,6 +531,7 @@ export async function evaluationDetail(
     self: await selfOf(db, row, viewer.id),
     editableQuestionIds: await editableQuestionIdsOf(db, items, viewer),
     roster: await rosterOf(db, row, enrolled),
+    templateRevision: (await templateRevisionsOf(db, [row])).get(row.id) ?? null,
   };
 }
 
@@ -531,6 +566,7 @@ export async function listEvaluations(
     .groupBy(attempts.evaluationId);
   const items = new Map(itemStats.map((s) => [s.evaluationId, s]));
   const tries = new Map(attemptStats.map((s) => [s.evaluationId, s.n]));
+  const templateRevisions = await templateRevisionsOf(db, rows);
   return rows.map((r) => ({
     id: r.id,
     classroomId,
@@ -543,5 +579,7 @@ export async function listEvaluations(
     opensAt: isoOrNull(r.opensAt),
     closesAt: isoOrNull(r.closesAt),
     createdAt: iso(r.createdAt),
+    originRevision: r.originRevision,
+    templateRevision: templateRevisions.get(r.id) ?? null,
   }));
 }

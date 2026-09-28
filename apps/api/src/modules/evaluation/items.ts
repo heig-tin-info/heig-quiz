@@ -27,6 +27,7 @@ import {
   PoolUnlinked,
 } from "./shared.js";
 import { classroomIdOf, type JoinedItem, joinedItems, itemRows } from "./reads.js";
+import type { ItemRecord } from "./shared.js";
 import { byId } from "./writes.js";
 
 /**
@@ -260,6 +261,69 @@ export function itemRef(j: JoinedItem): TemplateItemRef {
   return { position: j.item.position, questionId: j.question.id, internalName: j.question.internalName };
 }
 
+/** The items frozen on a version since marked deprecated: a copy's warning, never a refusal. */
+export const deprecatedRefs = (joined: readonly JoinedItem[]): TemplateItemRef[] =>
+  joined.filter((j) => j.version.deprecatedAt !== null).map(itemRef);
+
+/** The items whose question sits in no pool of `linked` (F-EVAL-01). */
+export const unlinkedRefs = (joined: readonly JoinedItem[], linked: Set<string>): TemplateItemRef[] =>
+  joined.filter((j) => !inLinkedPool(j.question, linked)).map(itemRef);
+
+/**
+ * F-EVAL-01, the rule `addItems` enforces, for every copy of items INTO A
+ * CLASSROOM — a duplicate, an instance, a pull: its course must link the pool
+ * of every question, or the copy is refused and names them. The course's
+ * links are read, not locked: a pool unlinked in that instant leaves one copy
+ * still playing it, like an item added just before.
+ */
+export async function assertPoolsLinked(
+  db: DbOrTx,
+  home: { classroomId: string },
+  joined: readonly JoinedItem[],
+): Promise<void> {
+  const unlinked = unlinkedRefs(joined, await coursePoolIds(db, home));
+  if (unlinked.length > 0) throw new PoolUnlinked(unlinked);
+}
+
+/**
+ * A template pull (F-EVAL-26): the evaluation's items REPLACED by copies of
+ * `items`. The old items go, and with them — by cascade — any answer or
+ * grading on them, which is why the caller holds the evaluation's row lock
+ * and has seen no attempt under it (`assertItemListEditable`).
+ */
+export async function replaceItems(
+  tx: DbOrTx,
+  evaluationId: string,
+  items: readonly ItemRecord[],
+): Promise<void> {
+  await tx.delete(evaluationItems).where(eq(evaluationItems.evaluationId, evaluationId));
+  await copyItems(tx, evaluationId, items);
+}
+
+/**
+ * THE copy of an item list into `evaluationId`: the SAME frozen versions,
+ * points, order and milestones, under new ids — copying must never silently
+ * upgrade a question. Written by `copyEvaluation` and by a template pull
+ * (F-EVAL-26), inside the caller's transaction.
+ */
+export async function copyItems(
+  tx: DbOrTx,
+  evaluationId: string,
+  items: readonly ItemRecord[],
+): Promise<void> {
+  if (items.length === 0) return;
+  await tx.insert(evaluationItems).values(
+    items.map((item) => ({
+      id: randomUUID(),
+      evaluationId,
+      position: item.position,
+      questionVersionId: item.questionVersionId,
+      points: item.points,
+      milestone: item.milestone,
+    })),
+  );
+}
+
 /**
  * Where a copy lives: a classroom (a duplicate, F-EVAL-14, or an instance of
  * a template) or a course (a template, ADR-031).
@@ -288,15 +352,9 @@ export async function copyEvaluation(
 ): Promise<EvaluationRecord> {
   const id = randomUUID();
   const joined = await joinedItems(db, row.id);
-  if ("classroomId" in target.home) {
-    // F-EVAL-01, the rule `addItems` enforces: a copy into a classroom —
-    // of this course or of another — draws only from the pools its course
-    // links. Checked outside the transaction, like an item added just before.
-    const linked = await coursePoolIds(db, target.home);
-    const unlinked = joined.filter((j) => !inLinkedPool(j.question, linked));
-    if (unlinked.length > 0) throw new PoolUnlinked(unlinked.map(itemRef));
-  }
-  const items = joined.map((j) => j.item);
+  // A copy into a classroom — of this course or of another — draws only from
+  // the pools its course links.
+  if ("classroomId" in target.home) await assertPoolsLinked(db, target.home, joined);
   const home =
     "courseId" in target.home
       ? { courseId: target.home.courseId, revision: 1 }
@@ -323,20 +381,7 @@ export async function copyEvaluation(
       durationS: row.durationS,
       createdBy: target.createdBy,
     });
-    if (items.length > 0) {
-      await tx.insert(evaluationItems).values(
-        items.map((item) => ({
-          id: randomUUID(),
-          evaluationId: id,
-          position: item.position,
-          // The copy points at the SAME frozen versions: copying an
-          // evaluation must not silently upgrade its questions.
-          questionVersionId: item.questionVersionId,
-          points: item.points,
-          milestone: item.milestone,
-        })),
-      );
-    }
+    await copyItems(tx, id, joined.map((j) => j.item));
   });
   return (await byId(db, id))!;
 }

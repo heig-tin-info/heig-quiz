@@ -95,6 +95,8 @@ export const questionPreviewKey = (id: string, source: "draft" | number | undefi
 
 export const evaluationsKey = (classroomId: string) => ["evaluations", classroomId] as const;
 export const evaluationKey = (id: string) => ["evaluation", id] as const;
+/** The summary of a template pull (F-EVAL-26): under the evaluation, so its refresh reaches it. */
+export const templatePullKey = (id: string) => ["evaluation", id, "pull-template"] as const;
 /** `GET /templates/:id`, the editor of one template (F-EVAL-25). */
 export const templateKey = (id: string) => ["template", id] as const;
 /**

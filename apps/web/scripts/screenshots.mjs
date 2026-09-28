@@ -55,6 +55,8 @@ const TAKE = "/take/11111111-1111-4111-8111-111111111111";
  */
 const ATTEMPT_OPEN = "22222222-2222-4222-8222-222222222222";
 const ATTEMPT_PAST = "22222222-2222-4222-8222-222222222223";
+/** The mock's draft made from a template that has moved since (F-EVAL-26). */
+const TEMPLATE_INSTANCE = "eeeeeeee-0000-4000-8000-000000000026";
 
 const scenes = [
   // Teacher home (the courses)
@@ -113,6 +115,12 @@ const scenes = [
     } },
   { name: "template-editor-not-found", role: "teacher", path: "/templates/nope", act: skipCoach },
   { name: "eval-new-from-template", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /new evaluation|nouvelle évaluation/i }).first().click() },
+  // F-EVAL-26: an instance behind its template — the list's badge, the
+  // confirmation it opens, and the launch checklist's warning.
+  { name: "classroom-template-behind", role: "teacher", path: "/classrooms/r1", act: skipCoach },
+  { name: "template-pull-confirm", role: "teacher", path: "/classrooms/r1", fold: true, act: async (p) => { await skipCoach(p); await p.getByRole("button", { name: /from its template|depuis son modèle/i }).first().click(); } },
+  { name: "launch-template-behind", role: "teacher", path: `/evaluations/${TEMPLATE_INSTANCE}?step=launch`, act: skipCoach },
+  { name: "launch-template-pull-confirm", role: "teacher", path: `/evaluations/${TEMPLATE_INSTANCE}?step=launch`, fold: true, act: async (p) => { await skipCoach(p); await p.getByRole("button", { name: /^(update…|mettre à jour…)$/i }).first().click(); } },
   { name: "eval-save-template", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: async (p) => { await p.getByRole("button", { name: /^actions$/i }).first().click(); await p.getByRole("menuitem", { name: /save as template|enregistrer comme modèle/i }).click(); } },
   // #155: a hidden course brought back by "Show hidden", the course menu with
   // "Hide for me", and a course's archived classrooms behind "Show archived".

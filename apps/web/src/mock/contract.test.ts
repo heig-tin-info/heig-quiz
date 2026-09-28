@@ -60,6 +60,7 @@ import {
   StudentFeedback,
   StudentHome,
   TemplateDetail,
+  TemplatePullPreview,
 } from "@quiz/contracts";
 import { describe, expect, it } from "vitest";
 
@@ -118,6 +119,7 @@ const classroomId = courses[0]!.classrooms[0]!.id;
 const evaluations = (await get(`/app/api/classrooms/${classroomId}/evaluations`)) as {
   id: string;
   state: string;
+  templateRevision: number | null;
 }[];
 const byState = (state: string): string => {
   const found = evaluations.find((e) => e.state === state);
@@ -227,6 +229,16 @@ const CHECKED: Case[] = [
   ...evaluations.map((e) =>
     one("/app/api/evaluations/:id", `/app/api/evaluations/${e.id}`, EvaluationDetail),
   ),
+  // F-EVAL-26: the pull's summary, for every evaluation that still has its template.
+  ...evaluations
+    .filter((e) => e.templateRevision !== null)
+    .map((e) =>
+      one(
+        "/app/api/evaluations/:id/pull-template",
+        `/app/api/evaluations/${e.id}/pull-template`,
+        TemplatePullPreview,
+      ),
+    ),
   each(
     "/app/api/evaluations/:id/pools",
     `/app/api/evaluations/${runningId}/pools`,

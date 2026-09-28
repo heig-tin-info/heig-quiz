@@ -12,6 +12,7 @@ import {
 import { useState } from "react";
 
 import type { ClassroomDetail, EvaluationSummary } from "@quiz/contracts";
+import { templatePullable } from "@quiz/domain";
 
 import { api } from "../api";
 import { useConfirm } from "../confirm";
@@ -51,6 +52,7 @@ import {
   useDuplicateErrorToast,
   useInstantiate,
 } from "./templates";
+import { PullTemplateDialog, TemplateBehindBadge } from "./templatePull";
 
 /**
  * The evaluations of one classroom, under its roster.
@@ -187,6 +189,8 @@ export function EvaluationList({
   const qc = useQueryClient();
   const confirm = useConfirm();
   const [creating, setCreating] = useState(false);
+  /** The row whose template pull is being confirmed (F-EVAL-26). */
+  const [pulling, setPulling] = useState<string | null>(null);
 
   const list = useQuery<EvaluationSummary[]>({
     queryKey: evaluationsKey(classroomId),
@@ -301,6 +305,16 @@ export function EvaluationList({
                     <span className="flex flex-wrap items-center gap-2">
                       <span className="font-semibold">{row.title}</span>
                       <Badge tone={stateTone(row.state)}>{evaluationStateLabel(row.state, t)}</Badge>
+                      {/* Its template moved (F-EVAL-26): shown only where the
+                          pull would be accepted, as the pull's own door. */}
+                      {templatePullable(row) ? (
+                        <TemplateBehindBadge
+                          from={row.originRevision!}
+                          to={row.templateRevision!}
+                          title={row.title}
+                          onOpen={() => setPulling(row.id)}
+                        />
+                      ) : null}
                     </span>
                   </td>
                   <td className={`${T.td} text-fg-muted`}>
@@ -401,6 +415,13 @@ export function EvaluationList({
           </table>
         </Card>
       )}
+      {pulling ? (
+        <PullTemplateDialog
+          evaluationId={pulling}
+          classroomId={classroomId}
+          onClose={() => setPulling(null)}
+        />
+      ) : null}
       {creating ? (
         <NewEvaluationModal
           classroomId={classroomId}

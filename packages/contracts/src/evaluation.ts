@@ -212,8 +212,22 @@ export const Evaluation = z.object({
   releasedAt: z.iso.datetime().nullable(),
   modifiedAfterRelease: z.boolean(),
   createdAt: z.iso.datetime(),
+  /**
+   * The template revision this evaluation's questions were last copied at
+   * (ADR-031) — null for an evaluation not made from a template; it stays,
+   * as a record, when the template is deleted. A teacher's shape: no student
+   * view carries it.
+   */
+  originRevision: z.number().int().nullable(),
 });
 export type Evaluation = z.infer<typeof Evaluation>;
+
+/**
+ * The CURRENT revision of an evaluation's template, when it still has one
+ * in its own course (ADR-031, F-EVAL-26); null otherwise. With the origin
+ * revision, it says whether the template moved since (`templateBehind`).
+ */
+const TemplateRevision = z.number().int().nullable();
 
 export const EvaluationSummary = z.object({
   id: z.uuid(),
@@ -227,6 +241,9 @@ export const EvaluationSummary = z.object({
   opensAt: z.iso.datetime().nullable(),
   closesAt: z.iso.datetime().nullable(),
   createdAt: z.iso.datetime(),
+  /** As {@link Evaluation}: the template revision the questions came from. */
+  originRevision: z.number().int().nullable(),
+  templateRevision: TemplateRevision,
 });
 export type EvaluationSummary = z.infer<typeof EvaluationSummary>;
 
@@ -301,6 +318,8 @@ export const EvaluationDetail = z.object({
       conflicts: z.number().int(),
     })
     .nullable(),
+  /** The template's current revision, for the launch checklist's pull (F-EVAL-26). */
+  templateRevision: TemplateRevision,
 });
 export type EvaluationDetail = z.infer<typeof EvaluationDetail>;
 
@@ -536,6 +555,53 @@ export const TemplatePoolUnlinked = z.object({
   items: z.array(TemplateItemRef),
 });
 export type TemplatePoolUnlinked = z.infer<typeof TemplatePoolUnlinked>;
+
+// --- Pulling a template revision (F-EVAL-26) ----------------------------------
+
+/** One item, as the summary of a pull names it: which question, where, and how. */
+export const TemplatePullItem = TemplateItemRef.extend({
+  versionNumber: z.number().int(),
+  points: z.number(),
+  milestone: z.boolean(),
+});
+export type TemplatePullItem = z.infer<typeof TemplatePullItem>;
+
+/**
+ * `GET /evaluations/:id/pull-template` — what pulling the template's current
+ * revision would do to the evaluation's QUESTIONS, the only thing a pull
+ * replaces: items `added` (in the template only), `removed` (in the
+ * evaluation only), `changed` (another version, points or milestone),
+ * whether the order moves, and "rev. `from` → `to`". `unlinkedItems` would
+ * refuse the pull (`422 template_pool_unlinked`); `deprecatedItems` only warn.
+ */
+export const TemplatePullPreview = z.object({
+  templateId: z.uuid(),
+  templateTitle: z.string(),
+  from: z.number().int().nullable(),
+  to: z.number().int(),
+  added: z.array(TemplatePullItem),
+  removed: z.array(TemplatePullItem),
+  changed: z.array(z.object({ from: TemplatePullItem, to: TemplatePullItem })),
+  reordered: z.boolean(),
+  deprecatedItems: z.array(TemplateItemRef),
+  unlinkedItems: z.array(TemplateItemRef),
+});
+export type TemplatePullPreview = z.infer<typeof TemplatePullPreview>;
+
+/**
+ * `POST /evaluations/:id/pull-template` — the revision the teacher confirmed.
+ * A template that moved again since the preview is `409 template_moved`:
+ * the pull never copies a revision nobody looked at.
+ */
+export const TemplatePull = z.object({ revision: z.number().int().min(1) });
+export type TemplatePull = z.infer<typeof TemplatePull>;
+
+/** The answer of a pull: the evaluation as it now stands, and the deprecated versions it took. */
+export const TemplatePullResult = z.object({
+  detail: EvaluationDetail,
+  deprecatedItems: z.array(TemplateItemRef),
+});
+export type TemplatePullResult = z.infer<typeof TemplatePullResult>;
 
 /** The authoring transitions. `running`, `paused` and `closed` are `live` routes. */
 export const EvaluationStateBody = z.object({

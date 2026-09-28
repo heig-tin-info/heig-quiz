@@ -56,9 +56,26 @@ export function guardTransition(
 ): void {
   const from = row.state;
   if (!isLegalTransition(from, to)) throw new IllegalTransition(from, to);
+  assertReady(row, to, ctx.itemCount);
+  if (to === "paused" && row.mode !== "exam") {
+    throw new IllegalTransition(from, to, "only an exam can be paused");
+  }
+  if (to === "draft" && ctx.attemptCount > 0) {
+    throw new IllegalTransition(from, to, "an attempt exists: the evaluation cannot be reopened");
+  }
+}
 
+/**
+ * The half of {@link guardTransition} that says whether the evaluation, as
+ * it stands, is READY to be in `to`: questions, a complete timing, and an
+ * opening time for `scheduled`. Also what a pull of a template revision
+ * re-checks on a scheduled evaluation (F-EVAL-26), whose questions it
+ * replaces while it stays scheduled — with the same refusal.
+ */
+export function assertReady(row: EvaluationRecord, to: EvaluationState, itemCount: number): void {
+  const from = row.state;
   if (to === "scheduled" || to === "lobby" || to === "running") {
-    if (ctx.itemCount === 0) {
+    if (itemCount === 0) {
       throw new IllegalTransition(from, to, "an evaluation needs at least one question", {
         reason: "no_items",
       });
@@ -88,12 +105,6 @@ export function guardTransition(
     throw new IllegalTransition(from, to, "a scheduled evaluation needs an opening time", {
       reason: "opens_at_missing",
     });
-  }
-  if (to === "paused" && row.mode !== "exam") {
-    throw new IllegalTransition(from, to, "only an exam can be paused");
-  }
-  if (to === "draft" && ctx.attemptCount > 0) {
-    throw new IllegalTransition(from, to, "an attempt exists: the evaluation cannot be reopened");
   }
 }
 /**

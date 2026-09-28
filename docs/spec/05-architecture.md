@@ -200,6 +200,7 @@ Common columns omitted: `id uuid pk`, `created_at`, `updated_at`.
 - Publishing a version: in one transaction, check the draft, compute `number = max + 1`, insert, reset the draft. The unique index protects against double publication.
 - Starting an attempt: `INSERT ... ON CONFLICT DO NOTHING` then read, which makes a double click idempotent. `deadline_at` is computed at insertion from `duration_s`, the bonus and the mode.
 - Releasing the results: one transaction computes every grade, writes `released_grades` and `released_at`, logs to the audit.
+- Pulling a template revision into an instance (F-EVAL-26): one transaction locks the TEMPLATE first (`FOR SHARE`, read only as a template of the instance's own course), then the instance (`FOR UPDATE`) — the order `deleteTemplate` takes through its foreign key, so neither deadlocks — re-reads the origin, the state and the attempt count under that lock, and only then replaces the items (`evaluation/templates.ts`, `pullTemplate`). New item ids cascade to answers and gradings, which is why the gate is read inside the lock and never before it.
 
 ## 5.4 Real time
 

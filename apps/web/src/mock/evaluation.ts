@@ -4,6 +4,7 @@ import { countsAsCompleted,
   isConfigEditable,
   isConfigFieldWritable,
   isFeedbackAllowed,
+  itemListDiff,
   itemListLock,
   missingTimingFields,
   parseCloze,
@@ -306,6 +307,9 @@ export interface MockEvaluation {
   releasedAt: string | null;
   modifiedAfterRelease: boolean;
   createdAt: string;
+  /** The template it was made from, and the revision its questions came from (ADR-031). */
+  originTemplateId: string | null;
+  originRevision: number | null;
   items: MockItem[];
   rows: MockRowState[];
   present: number;
@@ -469,6 +473,8 @@ export function makeEvaluation(
     releasedAt: null,
     modifiedAfterRelease: false,
     createdAt: iso(-10 * D),
+    originTemplateId: null,
+    originRevision: null,
     items: [],
     rows: [],
     present: 0,
@@ -493,6 +499,8 @@ export function makeEvaluation(
 export const evaluations: MockEvaluation[] = [];
 /** The draft exercise with retakes (F-EVAL-15), addressable by id. */
 export const RETAKE_DRAFT_ID = "eeeeeeee-0000-4000-8000-000000000015";
+/** The draft made from a template that has moved since (F-EVAL-26), addressable by id. */
+export const TEMPLATE_INSTANCE_ID = "eeeeeeee-0000-4000-8000-000000000026";
 /** The classroom every seeded evaluation belongs to (`r1`, emptied or not). */
 export const EVAL_ROOM = "r1";
 
@@ -692,7 +700,30 @@ export const toEvaluation = (e: MockEvaluation) => ({
   releasedAt: e.releasedAt,
   modifiedAfterRelease: e.modifiedAfterRelease,
   createdAt: e.createdAt,
+  originRevision: e.originRevision,
 });
+
+/**
+ * THE template of an instance, as the server reads it (F-EVAL-26): its
+ * origin, provided it is a template of the classroom's own course — what the
+ * badge's revision and the pull both go through.
+ */
+function templateOfInstance(e: MockEvaluation): MockTemplate | null {
+  const courseId = rooms.find((r) => r.id === e.classroomId)?.courseId;
+  return templates.find((x) => x.id === e.originTemplateId && x.courseId === courseId) ?? null;
+}
+
+const templateRevisionOf = (e: MockEvaluation): number | null => templateOfInstance(e)?.revision ?? null;
+
+/**
+ * The server's `inLinkedPool` (F-EVAL-01): the item's question sits in a pool
+ * the course links. A question with no pool left is as unlinked as one whose
+ * pool left the course.
+ */
+function inLinkedPool(item: MockItem, courseId: string): boolean {
+  const poolId = itemQuestion(item)?.poolId ?? null;
+  return poolId !== null && (coursePools[courseId] ?? []).includes(poolId);
+}
 
 const evaluationSummary = (e: MockEvaluation) => ({
   id: e.id,
@@ -706,6 +737,8 @@ const evaluationSummary = (e: MockEvaluation) => ({
   opensAt: e.opensAt,
   closesAt: e.closesAt,
   createdAt: e.createdAt,
+  originRevision: e.originRevision,
+  templateRevision: templateRevisionOf(e),
 });
 
 /**
@@ -760,6 +793,7 @@ const evaluationDetail = (e: MockEvaluation) => ({
   editable: isConfigEditable(e.state, attemptCountOf(e)),
   self: selfOf(e),
   roster: rosterOf(e),
+  templateRevision: templateRevisionOf(e),
 });
 
 export const dashboardView = (e: MockEvaluation, includeAnswers: boolean) => {
@@ -1035,7 +1069,6 @@ const templateSummary = (x: MockTemplate) => ({
  */
 export const templateDetail = (x: MockTemplate) => {
   const e = x.shell;
-  const linked = coursePools[x.courseId] ?? [];
   return {
     template: {
       ...templateSummary(x),
@@ -1045,12 +1078,7 @@ export const templateDetail = (x: MockTemplate) => {
       mcqPolicy: e.mcqPolicy,
       durationS: e.durationS,
     },
-    items: e.items.map((i) => {
-      const poolId = itemQuestion(i)?.poolId ?? null;
-      // The server's rule: a question with no pool left is as unlinked as one
-      // whose pool left the course.
-      return { ...i, poolUnlinked: poolId === null || !linked.includes(poolId) };
-    }),
+    items: e.items.map((i) => ({ ...i, poolUnlinked: !inLinkedPool(i, x.courseId) })),
     ...itemListFacts(e),
   };
 };
@@ -1075,6 +1103,24 @@ if (!flags.empty) {
       }),
     );
     templates.push(exam, series);
+    // F-EVAL-26: this classroom's series was made from the template at rev. 1,
+    // and the template has moved twice since — the question whose pool left
+    // the course dropped, a weight changed, a question moved to its latest
+    // version — so the list's badge, the launch checklist's warning and the
+    // confirmation's summary can be seen without editing anything. (The
+    // exam template keeps its unlinked question: its editor shows the flag.)
+    instantiate(series, room.id, "Série d'exercices — pointeurs, classe A", {
+      id: TEMPLATE_INSTANCE_ID,
+      createdAt: iso(-20 * D),
+      // The instance's own timing, which a pull never touches.
+      durationS: 45 * 60,
+    });
+    series.shell.items = series.shell.items.filter((i) => inLinkedPool(i, room.courseId));
+    series.shell.items.forEach((i, index) => (i.position = index + 1));
+    series.shell.items[0]!.points += 1;
+    const stale = series.shell.items.find((i) => (i.latestVersionNumber ?? 0) > i.versionNumber);
+    if (stale) stale.versionNumber = stale.latestVersionNumber!;
+    series.revision = 3;
   }
 }
 
@@ -1094,24 +1140,119 @@ on("POST", "/app/api/evaluations/:id/template", (m, body) => {
 on("DELETE", "/app/api/templates/:id", (m) => {
   const i = templates.findIndex((x) => x.id === m.groups!.id);
   if (i >= 0) templates.splice(i, 1);
+  // The instances keep running and lose their link (`ON DELETE SET NULL`).
+  for (const e of evaluations) if (e.originTemplateId === m.groups!.id) e.originTemplateId = null;
   return undefined;
 });
-on("POST", "/app/api/templates/:id/instances", (m, body) => {
-  const template = templateOr404(m.groups!.id!);
-  const room = roomOr404(String(body.classroomId));
-  if (room.courseId !== template.courseId) throw new MockError(404, "Classroom not found");
-  const made = makeEvaluation(room.id, String(body.title ?? template.shell.title), "draft", 0, {
+/** "Instantiate": a draft of the template in `roomId`, recording where it came from. */
+function instantiate(
+  template: MockTemplate,
+  roomId: string,
+  title: string,
+  extra: Partial<MockEvaluation> = {},
+) {
+  const made = makeEvaluation(roomId, title, "draft", 0, {
+    createdAt: iso(0),
     mode: template.shell.mode,
     settings: template.shell.settings,
     gradingScale: template.shell.gradingScale,
     feedbackPolicy: template.shell.feedbackPolicy,
     mcqPolicy: template.shell.mcqPolicy,
     durationS: template.shell.durationS,
-    createdAt: iso(0),
+    originTemplateId: template.id,
+    originRevision: template.revision,
+    ...extra,
   });
   made.items = template.shell.items.map((item) => ({ ...item, id: uuid() }));
   evaluations.push(made);
+  return made;
+}
+
+on("POST", "/app/api/templates/:id/instances", (m, body) => {
+  const template = templateOr404(m.groups!.id!);
+  const room = roomOr404(String(body.classroomId));
+  if (room.courseId !== template.courseId) throw new MockError(404, "Classroom not found");
+  const made = instantiate(template, room.id, String(body.title ?? template.shell.title));
   return { evaluation: toEvaluation(made), deprecatedItems: [] };
+});
+
+// --- Pulling a template revision (F-EVAL-26) ----------------------------------
+
+/** The instance's template, as the server reads it: of the classroom's course, or none. */
+function pullSource(e: MockEvaluation): MockTemplate {
+  const template = templateOfInstance(e);
+  if (!template) {
+    throw new MockPayload(409, { error: "no_template", message: "the evaluation has no template to pull from" });
+  }
+  return template;
+}
+
+const itemRefOf = (i: MockItem) => ({
+  position: i.position,
+  questionId: i.questionId,
+  internalName: i.internalName,
+});
+
+/** A copy's warning: the items frozen on a version marked deprecated. */
+const deprecatedRefs = (items: readonly MockItem[]) => items.filter((i) => i.deprecated).map(itemRefOf);
+
+/** A copy's refusal: the items whose pool the course no longer links. */
+const unlinkedRefs = (template: MockTemplate) =>
+  template.shell.items.filter((i) => !inLinkedPool(i, template.courseId)).map(itemRefOf);
+
+on("GET", "/app/api/evaluations/:id/pull-template", (m) => {
+  const e = evaluationOr404(m.groups!.id!);
+  const template = pullSource(e);
+  const pullItem = (i: MockItem) => ({
+    ...itemRefOf(i),
+    versionNumber: i.versionNumber,
+    points: i.points,
+    milestone: i.milestone,
+  });
+  return {
+    templateId: template.id,
+    templateTitle: template.shell.title,
+    from: e.originRevision,
+    to: template.revision,
+    ...itemListDiff(e.items.map(pullItem), template.shell.items.map(pullItem)),
+    deprecatedItems: deprecatedRefs(template.shell.items),
+    unlinkedItems: unlinkedRefs(template),
+  };
+});
+
+on("POST", "/app/api/evaluations/:id/pull-template", (m, body) => {
+  const e = evaluationOr404(m.groups!.id!);
+  const template = pullSource(e);
+  if (body.revision !== template.revision) {
+    throw new MockPayload(409, {
+      error: "template_moved",
+      message: "the template has a newer revision than the one confirmed",
+      revision: template.revision,
+    });
+  }
+  assertItemListEditable(e);
+  const unlinked = unlinkedRefs(template);
+  if (unlinked.length > 0) {
+    throw new MockPayload(422, {
+      error: "template_pool_unlinked",
+      message: "some questions are in a pool not linked to the target course",
+      items: unlinked,
+    });
+  }
+  if (e.state === "scheduled" && template.shell.items.length === 0) {
+    throw new MockPayload(409, {
+      error: "illegal_transition",
+      message: "an evaluation needs at least one question",
+      reason: "no_items",
+    });
+  }
+  // The questions only: everything else of the instance stays its own.
+  e.items = template.shell.items.map((item) => ({ ...item, id: uuid() }));
+  e.originRevision = template.revision;
+  return {
+    detail: evaluationDetail(e),
+    deprecatedItems: deprecatedRefs(template.shell.items),
+  };
 });
 
 /**

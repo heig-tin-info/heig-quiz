@@ -23,6 +23,7 @@ import type { Route } from "../router";
 import { Alert, Button, Card, cx, Field, FormDialog, isoDateTime, useNow, type IconType } from "../ui";
 import { launchChecks, lobbyKey, readiness, type LaunchCheck } from "./launchChecks";
 import { LobbyPreviewColumn, LobbyPreviewRow } from "./LobbyPreview";
+import { PullTemplateDialog } from "./templatePull";
 import { fromLocalInput, missingTimingKey, toLocalInput } from "./timing";
 import { evaluationKey } from "../queryKeys";
 
@@ -137,6 +138,7 @@ function Checklist({
   const id = evaluation.id;
   const now = useNow();
   const [scheduling, setScheduling] = useState(false);
+  const [pulling, setPulling] = useState(false);
   const checks = launchChecks(detail, t, now, isoDateTime);
   const { blockers, warnings } = readiness(checks);
   const blocked = blockers > 0;
@@ -202,7 +204,8 @@ function Checklist({
     if (check.fix.kind === "step") onStep(check.fix.step);
     else if (check.fix.kind === "roster") {
       navigate({ view: "classroom", id: evaluation.classroomId, tab: "roster" });
-    } else updateVersions.mutate();
+    } else if (check.fix.kind === "pullTemplate") setPulling(true);
+    else updateVersions.mutate();
   };
 
   const error = open.error ?? unschedule.error;
@@ -288,6 +291,13 @@ function Checklist({
         </div>
       </div>
 
+      {pulling ? (
+        <PullTemplateDialog
+          evaluationId={id}
+          classroomId={evaluation.classroomId}
+          onClose={() => setPulling(false)}
+        />
+      ) : null}
       {scheduling ? (
         <ScheduleDialog
           evaluation={evaluation}
@@ -320,7 +330,8 @@ function Checklist({
  * One line of the checklist. A row that leads somewhere is a button across
  * its whole width — on a phone the chevron is its only affordance, on a
  * desktop the name of the step it opens stands beside it. The stale-version
- * row fixes itself in place instead, so it carries a real button.
+ * row fixes itself in place instead, so it carries a real button; so does
+ * the template row, whose button opens the pull's confirmation (F-EVAL-26).
  */
 function CheckRow({
   check,
@@ -346,12 +357,20 @@ function CheckRow({
     </>
   );
 
-  if (check.fix?.kind === "updateVersions") {
+  if (check.fix?.kind === "updateVersions" || check.fix?.kind === "pullTemplate") {
+    const inPlace = check.fix.kind === "updateVersions";
     return (
       <div className={cx("flex flex-wrap items-start gap-x-3 gap-y-2 px-4 py-3.5 sm:flex-nowrap sm:items-center sm:px-5", tint)}>
         <span className="flex min-w-0 flex-1 basis-full items-start gap-3 sm:basis-auto">{body}</span>
-        <Button variant="secondary" size="sm" className="ml-7.5 sm:ml-0" loading={updating} onClick={onFix}>
-          {updating ? null : <RefreshCw />} {t("launch.update")}
+        <Button
+          variant="secondary"
+          size="sm"
+          className="ml-7.5 sm:ml-0"
+          loading={inPlace && updating}
+          onClick={onFix}
+        >
+          {inPlace && updating ? null : <RefreshCw />}{" "}
+          {t(inPlace ? "launch.update" : "launch.template.fix")}
         </Button>
       </div>
     );

@@ -56,6 +56,16 @@ the settings moves its revision (**rev. 3**); renaming does not. A question
 whose pool is no longer linked to the course is flagged there: using the
 template is refused until the pool is linked again or the question removed.
 
+An evaluation made from a template does not follow it by itself. When the
+template has moved since, the evaluation's row in the classroom wears a
+**template rev. 1 → 3** badge, and its launch checklist a warning; both open
+the same confirmation, which lists the questions added, removed and changed
+and whether the order moves. Confirming replaces the evaluation's QUESTIONS
+with the template's — changes made to them in this evaluation are lost — and
+keeps everything else: title, dates, access code, settings. It is offered
+only while the evaluation is a draft or scheduled and nobody, you included,
+has taken it.
+
 ## Deleting
 
 Deleting a course takes its classrooms, their rosters and their results with
