@@ -1,10 +1,10 @@
 /**
- * The two config helpers a type whose schema stamps its own `configVersion`
- * shares — `code`, `codeimage` and `circuit` — instead of writing them out
- * three times.
+ * The config helpers of the contract: the migrate and the canonical parse
+ * that the types whose schema stamps its own `configVersion` share — `code`,
+ * `codeimage` and `circuit` — and the one reader of a canonical mapping.
  */
 import type { z } from "zod";
-import type { QuestionTypeId } from "./contract.js";
+import type { QuestionTypeId, QuestionTypeServer } from "./contract.js";
 import { ConfigMigrationError } from "./errors.js";
 
 const asRecord = (raw: unknown): object => (typeof raw === "object" && raw !== null ? raw : {});
@@ -51,4 +51,15 @@ export function reparseMigrate<T>(
  */
 export function canonicalParse<T>(schema: z.ZodType<T>, version: number): (raw: unknown) => T {
   return (raw) => schema.parse({ ...asRecord(raw), configVersion: version });
+}
+
+/**
+ * The way back from a canonical mapping for `type`: its own `fromCanonical`,
+ * or `configSchema.parse` when it has none — the one place that default is
+ * applied, so every importer reads a canonical file the same way.
+ */
+export function fromCanonicalOf<T>(
+  type: Pick<QuestionTypeServer<T>, "configSchema" | "fromCanonical">,
+): (raw: unknown) => T {
+  return type.fromCanonical?.bind(type) ?? ((raw) => type.configSchema.parse(raw));
 }

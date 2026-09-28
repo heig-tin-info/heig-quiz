@@ -406,6 +406,6 @@ export interface QuestionTypeServer<
 
   /** Canonical YAML mapping; identity when omitted. */
   toCanonical?(config: TConfig): unknown;
-  /** Back from the canonical mapping; `configSchema.parse` when omitted. */
+  /** Back from the canonical mapping; `configSchema.parse` when omitted (`fromCanonicalOf`). */
   fromCanonical?(raw: unknown): TConfig;
 }
