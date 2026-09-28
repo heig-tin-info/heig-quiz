@@ -267,17 +267,16 @@ export type SegmentMark = "unanswered" | "answered" | "skipped";
 
 /**
  * Each mark is a SHAPE before it is a tint, so the three read apart in grey,
- * to a colour-blind student and on a washed-out projector: a hollow outline
- * (nothing yet), a solid bar carrying a check (answered), a dashed outline on
- * a recessed fill carrying a dash (won't answer). The hollow one draws in
- * `fg-faint` and not `line-strong`: a 1.5 px outline is a graphic object and
- * needs 3:1 against the bar behind it, which `line-strong` does not reach in
- * dark mode.
+ * to a colour-blind student and on a washed-out projector: a hollow circle
+ * (nothing yet), a solid one carrying a check (answered), a dashed one on a
+ * recessed fill carrying a dash (won't answer). The hollow one draws in
+ * `fg-faint` and not `line-strong`: its outline is a graphic object and needs
+ * 3:1 against the canvas, which `line-strong` does not reach in dark mode.
  */
-const SEGMENT_BAR: Record<SegmentMark, string> = {
-  unanswered: "border-[1.5px] border-fg-faint bg-surface",
-  answered: "border-[1.5px] border-fg bg-fg text-surface",
-  skipped: "border-[1.5px] border-dashed border-fg-muted bg-surface-3 text-fg-muted",
+const SEGMENT_DOT: Record<SegmentMark, string> = {
+  unanswered: "border-fg-faint bg-surface",
+  answered: "border-fg bg-fg text-surface",
+  skipped: "border-dashed border-fg-muted bg-surface-3 text-fg-muted",
 };
 
 const SEGMENT_GLYPH: Record<SegmentMark, IconType | null> = {
@@ -299,7 +298,7 @@ export interface Segment {
   /** Stable key, and what the caller gets back from `onSelect`. */
   id: string;
   mark: SegmentMark;
-  /** Where the student is: the accent outline and the bold accent number. */
+  /** Where the student is: the accent ring and the bold accent number. */
   current?: boolean;
   /** Flagged for review by the student (issue #89): a flag over the number. */
   flagged?: boolean;
@@ -307,8 +306,12 @@ export interface Segment {
   locked?: boolean;
 }
 
-/** The `gap-1` between two bars, in px: part of what the numbers compete for. */
-const SEGMENT_GAP = 4;
+/**
+ * Under this width a question gets a plain 10 px dot instead of the 20 px
+ * circle with its glyph: the circle needs a stretch of connector on each side
+ * to read as a step of a path rather than a row of beads.
+ */
+const ROOMY_SEGMENT = 28;
 
 /**
  * How often a number is shown, from the strip's measured width. `1` is "every
@@ -318,13 +321,14 @@ const SEGMENT_GAP = 4;
  */
 function segmentLabelStep(width: number, count: number): 1 | 5 | 10 {
   if (width <= 0 || count <= 1) return 1;
-  const per = (width - SEGMENT_GAP * (count - 1)) / count;
+  const per = width / count;
   if (per >= 22) return 1;
   return per >= 11 ? 5 : 10;
 }
 
 /**
- * One bar per question in the zen player (mockup 07, issue #89): what the
+ * A stepper in the zen player, one circle per question (mockup 07, issues
+ * #89 and #219): what the
  * student did with it (a {@link SegmentMark}), whether they flagged it for
  * review, whether it is closed, and where they are. "Opened and left" is not
  * a state of its own: for the reader it is the same decision as "never
@@ -332,19 +336,23 @@ function segmentLabelStep(width: number, count: number): 1 | 5 | 10 {
  *
  * Roving tabindex like `Tabs`: twenty questions must not be twenty stops on
  * the way to the answer field. Arrows move with wrap, Home and End jump, and
- * the accessible name of each bar carries its state in words — the height and
- * the tone are the same information for everyone else.
+ * the accessible name of each circle carries its state in words — the shape
+ * and the tone are the same information for everyone else.
  *
- * It spans the WHOLE width it is given and the bars share it equally
- * (`flex-1 basis-0`, no cap): three questions are three wide bars over the
- * question column, not a stub at its left edge — the strip is a map of the
- * paper, and a map that covers a tenth of the page maps nothing.
+ * The circles are joined by a hairline, and the stretch between two
+ * questions already dealt with (answered or declined) is drawn solid: the
+ * path covered, and the holes left in it, read at a glance.
  *
- * Every bar carries its number, so the student can aim at "question 7"
+ * It spans the WHOLE width it is given and the questions share it equally
+ * (`flex-1 basis-0`, no cap): three questions spread over the question
+ * column, not a stub at its left edge — the strip is a map of the paper, and
+ * a map that covers a tenth of the page maps nothing.
+ *
+ * Every question carries its number, so the student can aim at "question 7"
  * without counting. When there are enough questions for the numbers to stop
- * fitting, the strip COMPRESSES rather than wraps or scrolls: the bars stay,
- * the numbers thin out to anchors. The rule, from the measured width of the
- * strip (`segmentLabelStep`, gaps included):
+ * fitting, the strip COMPRESSES rather than wraps or scrolls: the circles
+ * shrink to dots, the numbers thin out to anchors. The rule, from the
+ * measured width of the strip (`segmentLabelStep`):
  *
  *   - a segment at least 22 px wide holds two digits and its breathing room:
  *     every number is shown (up to ~30 questions over the player's 760 px);
@@ -386,10 +394,10 @@ export function ProgressSegments({
     return () => observer.disconnect();
   }, []);
   const step = segmentLabelStep(width, segments.length);
-  // The glyph inside a bar (the check, the dash) needs the room a number
-  // needs; compressed, the bars drop to a thin line and the SHAPE — solid,
-  // hollow, dashed — is what is left to tell the marks apart.
-  const roomy = step === 1;
+  // The glyph inside a circle (the check, the dash) needs room around it;
+  // compressed, the circles drop to dots and the SHAPE — solid, hollow,
+  // dashed — is what is left to tell the marks apart.
+  const roomy = width === 0 || width / segments.length >= ROOMY_SEGMENT;
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     const buttons = Array.from(strip.current?.querySelectorAll("button") ?? []);
@@ -405,15 +413,7 @@ export function ProgressSegments({
       ref={strip}
       aria-label={label}
       onKeyDown={onKeyDown}
-      className={cx(
-        "flex w-full items-start",
-        // Compressed, the 4 px gaps are what the bars are losing: forty of
-        // them spend 156 px on air. Halving the gap is measured against the
-        // wider one, so the bars only ever come out wider than the rule
-        // assumed, never thinner.
-        step === 1 ? "gap-1" : "gap-0.5",
-        className,
-      )}
+      className={cx("isolate flex w-full items-start", className)}
     >
       {segments.map((segment, i) => {
         const facts = [
@@ -430,6 +430,8 @@ export function ProgressSegments({
           i === last ||
           i === current ||
           ((i + 1) % step === 0 && last - i >= 2);
+        const next = segments[i + 1];
+        const covered = segment.mark !== "unanswered" && next !== undefined && next.mark !== "unanswered";
         const Glyph = roomy ? SEGMENT_GLYPH[segment.mark] : null;
         return (
           <button
@@ -441,27 +443,42 @@ export function ProgressSegments({
             title={name}
             aria-current={segment.current ? "true" : undefined}
             onClick={() => onSelect?.(segment.id, i)}
-            className="min-w-0.5 flex-1 basis-0 rounded-full px-0 py-1.5 disabled:cursor-default"
+            className="relative flex min-w-0 flex-1 basis-0 flex-col items-center rounded-full px-0 py-1.5 disabled:cursor-default"
           >
             <span
               className={cx(
-                "flex items-center justify-center rounded-full transition-colors duration-150",
-                roomy ? "h-3.5" : "h-2",
-                SEGMENT_BAR[segment.mark],
+                "relative z-1 flex items-center justify-center rounded-full border transition-colors duration-150",
+                roomy ? "size-5 border-2" : "size-2.5 border-[1.5px]",
+                SEGMENT_DOT[segment.mark],
                 segment.locked && !segment.current && "opacity-45",
-                segment.current && "outline-2 outline-offset-1 outline-accent",
+                segment.current && "border-accent! ring-accent-soft",
+                segment.current && (roomy ? "ring-4" : "ring-3 bg-accent!"),
               )}
             >
               {Glyph ? <Glyph className="size-2.5 stroke-3" aria-hidden /> : null}
+              {roomy && segment.current && segment.mark === "unanswered" ? (
+                <span className="size-2 rounded-full bg-accent" aria-hidden />
+              ) : null}
             </span>
+            {/* From this circle's centre to the next one's, under both. */}
+            {next ? (
+              <span
+                className={cx(
+                  "absolute left-1/2 w-full -translate-y-1/2",
+                  roomy ? "top-4" : "top-2.75",
+                  covered ? "h-0.5 bg-fg" : "h-px bg-line-strong",
+                )}
+                aria-hidden
+              />
+            ) : null}
             {/* The row keeps its height whether or not it holds a number, so
-                the bars stay on one line. The number overflows its own bar
+                the circles stay on one line. The number overflows its own slot
                 when compressed — its neighbours are empty, so there is room.
                 The flag is never thinned out: it is the one mark the student
                 set to find the question again. */}
             <span
               className={cx(
-                "mt-0.5 flex h-2.75 items-center justify-center gap-0.5 overflow-visible whitespace-nowrap text-[11px] leading-none tabular-nums",
+                "mt-1 flex h-2.75 items-center justify-center gap-0.5 overflow-visible whitespace-nowrap text-[11px] leading-none tabular-nums",
                 segment.current ? "font-semibold text-accent" : "font-medium text-fg-faint",
               )}
               aria-hidden
