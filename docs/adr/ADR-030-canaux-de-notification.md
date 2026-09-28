@@ -801,4 +801,11 @@ Step 8 (`results_updated`) settled:
   validated, so a PROPOSAL still pending when the regrade stood it down
   counts in that "before" as if it had been validated. It only concerns an
   item regraded while some of its cells were still proposals on a released
-  evaluation.
+  evaluation. The same gap works the other way: a validated grading stood
+  down by a regrade BEFORE the release, whose proposal was still pending at
+  the release (the page counted 0), counts as that old validated value once
+  the teacher validates the proposal; a student whose grade really changed
+  is then not told if the new points equal the old ones. A missed notice,
+  never a wrong one. The successor lookup is scoped to the attempt
+  (`successor.attempt_id = gradings.attempt_id`) so it uses
+  `gradings_attempt_idx` rather than scanning the table.

@@ -1005,7 +1005,7 @@ export function pointsAcrossRegrade(
             eq(gradings.state, "validated"),
             and(
               eq(gradings.state, "superseded"),
-              sql`not exists (select 1 from ${gradings} as successor where successor.supersedes_id = ${gradings.id})`,
+              sql`not exists (select 1 from ${gradings} as successor where successor.attempt_id = ${gradings.attemptId} and successor.supersedes_id = ${gradings.id})`,
             ),
           ),
         ),
