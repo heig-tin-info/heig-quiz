@@ -184,12 +184,15 @@ export function PlayerShell({
             {headerAction}
           </div>
           {segments.length === 0 ? null : (
-            <ProgressSegments
-              segments={segments}
-              {...(onSelectSegment ? { onSelect: onSelectSegment } : {})}
-              label={progressLabel ?? ""}
-              className="mt-1"
-            />
+            // The margin sits on a wrapper: the strip sets its own vertical
+            // margin when it scrolls, and `cx` does not merge classes.
+            <div className="mt-1">
+              <ProgressSegments
+                segments={segments}
+                {...(onSelectSegment ? { onSelect: onSelectSegment } : {})}
+                label={progressLabel ?? ""}
+              />
+            </div>
           )}
         </div>
       </header>

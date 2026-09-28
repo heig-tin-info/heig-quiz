@@ -1379,6 +1379,34 @@ describe("ProgressSegments", () => {
     expect(numbers).toEqual(["1", "2", "3", "4"]);
   });
 
+  it("scrolls instead of overlapping once a dot no longer fits, and follows the current one (issue #223)", () => {
+    // 358 px (a phone) over 40 segments is ~9 px each: under the 14 px a dot needs.
+    const width = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(358);
+    const scrollTo = vi.fn();
+    HTMLElement.prototype.scrollTo = scrollTo;
+    try {
+      const many = (current: number): Segment[] =>
+        Array.from({ length: 40 }, (_, i) => ({ id: `q${i + 1}`, mark: "unanswered", current: i === current }));
+      const { container, rerender } = renderWithProviders(
+        <ProgressSegments segments={many(6)} label="Progress" onSelect={() => {}} />,
+      );
+      expect(screen.getByRole("navigation", { name: "Progress" })).toHaveClass("overflow-x-auto");
+      // Every question is back in a full slot, with its number.
+      const numbers = Array.from(container.querySelectorAll("button > span:last-child")).filter(
+        (s) => s.textContent,
+      );
+      expect(numbers).toHaveLength(40);
+      const calls = scrollTo.mock.calls.length;
+      expect(calls).toBeGreaterThan(0);
+      // Moving on scrolls again, to keep the new current question in view.
+      rerender(<ProgressSegments segments={many(30)} label="Progress" onSelect={() => {}} />);
+      expect(scrollTo.mock.calls.length).toBeGreaterThan(calls);
+    } finally {
+      width.mockRestore();
+      delete (HTMLElement.prototype as { scrollTo?: unknown }).scrollTo;
+    }
+  });
+
   it("thins the numbers down to anchors when the segments get too narrow", () => {
     // jsdom runs no layout, so the strip is asked for its width directly.
     // 800 px over 40 segments is ~16 px each: numbers every fifth.

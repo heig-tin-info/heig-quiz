@@ -329,6 +329,18 @@ export function DevGallery() {
             label="Progress: question 8 of 20, at 360 px"
           />
         </div>
+        <div className="w-[312px] rounded-card border border-dashed border-line p-3">
+          <ProgressSegments
+            segments={Array.from({ length: 40 }, (_, i) => ({
+              id: `s${i}`,
+              mark: (i < 20 || i % 3 === 0 ? "answered" : i % 7 === 0 ? "skipped" : "unanswered") as SegmentMark,
+              current: i === 23,
+              flagged: i === 17,
+            }))}
+            label="Progress: question 24 of 40, scrolling"
+            onSelect={() => {}}
+          />
+        </div>
       </Row>
 
       <Row title={t("dev.ui.verdicts")}>
