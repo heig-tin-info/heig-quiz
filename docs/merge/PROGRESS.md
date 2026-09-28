@@ -23,14 +23,14 @@ Status values: `todo` · `in progress` · `review` (PR open, ready) ·
 
 | ID | Task | Status | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- |
-| PLAN | Merge plan: ADR-035 (proposed), `docs/merge/` | review | `plan/merge-classroom` | — | Five read-only analyses (data, GitHub, journal+web, codespace+infra, spec fit) condensed into these files |
+| PLAN | Merge plan: ADR-035 (proposed), `docs/merge/` | review | `plan/merge-classroom` | #268 | Five read-only analyses (data, GitHub, journal+web, codespace+infra, spec fit) condensed into these files |
 
 ## M0 — Decisions and paper
 
 | ID | Task | Status | Depends | Branch | PR | Handoff |
 | --- | --- | --- | --- | --- | --- | --- |
 | M0-01 | Settle blocking decisions | in progress | — | | | D01, D02, D04, D08, D16 settled 2026-09-28; D09 awaits confirmation |
-| M0-02 | Measure production (read-only) | done | PO go | `plan/merge-classroom` | — | `measures-2026-09-28.md`: pairwise edu-ID subs (login adoption needed), workspace unused by real classes, 3 classes to merge into existing Quiz classrooms, 0 pending staff; App permissions not checked |
+| M0-02 | Measure production (read-only) | done | PO go | `plan/merge-classroom` | #268 | `measures-2026-09-28.md`: pairwise edu-ID subs (login adoption needed), workspace unused by real classes, 3 classes to merge into existing Quiz classrooms, 0 pending staff; App permissions not checked |
 | M0-03 | ADRs (035 accepted, imports, amendments) | todo | M0-01 | | | |
 | M0-04 | Spec amendments | todo | M0-01 | | | |
 | M0-05 | `CLAUDE.md`, `AGENTS.md`, reviewer prompts | todo | M0-03 | | | |
