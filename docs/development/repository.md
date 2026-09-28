@@ -33,7 +33,8 @@ docs/
   assets/     the screenshots of the guide, light and dark
 infra/
   keycloak/   the development realm imported by docker-compose.dev.yml
-scripts/      smoke.sh, the end-to-end HTTP walk; staging-refresh.sh
+scripts/      smoke.sh, the end-to-end HTTP walk; staging-export.sh and
+              staging-refresh.sh
 ```
 
 `CLAUDE.md` keeps the authoritative version of this map, with a paragraph on

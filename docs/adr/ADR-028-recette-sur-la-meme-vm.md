@@ -3,7 +3,8 @@
 ## Status
 
 Accepted (2026-09-26, asked for by the product owner after the move to
-Hetzner).
+Hetzner). Amended 2026-09-28: staging runs as its own account (see *Update
+2026-09-28*).
 
 ## Context
 
@@ -31,7 +32,9 @@ carries a memory cap.
 A second checkout, `/srv/quiz-staging`, runs `compose.staging.yml` (compose
 project `quiz-staging`, port `127.0.0.1:3003`) behind one more Caddy fragment
 (`Caddyfile.staging` → `/etc/caddy/conf.d/quiz-staging.caddy`). Same account
-(`srv`), same rootless Docker, same IP and host key.
+(`srv`), same rootless Docker, same IP and host key. (Superseded on
+2026-09-28: staging moved to its own account, `srvstg`, with its own rootless
+Docker, in `/home/srvstg/quiz-staging`; see the update below.)
 
 Staging must never cost production anything, so every staging container is
 capped — app 256 MB and 0.5 CPU, PostgreSQL 160 MB and 0.5 CPU, a CPU weight
@@ -61,12 +64,14 @@ deployed image rather than whatever `:latest` has become. The runner's
 quadlet runs. Rollback is a re-run of an older run's `deploy-production` job.
 
 Staging and production deploys on the VM are serialized by a lock, since they
-share one Docker daemon.
+share one Docker daemon. (Since 2026-09-28 they no longer do; the lock is per
+account.)
 
 ### 3. Production's data, not anonymized, behind a login allowlist
 
-`scripts/staging-refresh.sh` restores a production dump (last night's, or
-one taken now) into the staging database, copies the question images, and
+`scripts/staging-refresh.sh` restores a production dump (since 2026-09-28,
+the one `scripts/staging-export.sh` pushed into `/srv/staging-inbox`) into
+the staging database, copies the question images, and
 empties every credential production issued: sessions, launch tickets, API
 tokens, OAuth requests and grants. It runs on demand, never on deploy — a
 deploy must not wipe a test being prepared. Each refresh is also a restore
@@ -74,7 +79,8 @@ test of the production dump.
 
 The data is not anonymized, by the product owner's decision: staging is on
 the same VM, under the same account, as the data it copies, so a copy adds no
-exposure a compromise of the VM would not already give. Staging is closed
+exposure a compromise of the VM would not already give. (The account is no
+longer the same since 2026-09-28; the decision stands, see the update.) Staging is closed
 instead: `LOGIN_ALLOWLIST` (addresses and `@domain` entries) is checked in
 the OIDC callback before any row is written; the super administrator is
 always admitted; empty, the default, admits everyone, as production does.
@@ -117,3 +123,33 @@ ADR-027 (a delegated session), not a development login turned back on.
   production during an exam without someone choosing it.
 - **The development login on staging.** It would need a flag that, set by
   mistake in production, opens every account. Rejected with invariant 3.
+
+## Update 2026-09-28
+
+Staging runs every commit of `main` before anyone approves it, and it ran as
+`srv`, the account that owns production's secrets, volumes and nightly dumps
+(and heig-classroom's and evaluation-tb's). A commit that misbehaved on
+staging could read or change all of them. Staging therefore moved to an
+account of its own:
+
+- `srvstg`, with its own rootless Docker (lingering enabled), checkout
+  `/home/srvstg/quiz-staging`, still port `127.0.0.1:3003` and the same Caddy
+  fragment, which `srv` installs; staging cannot write `/etc/caddy/conf.d/`.
+- `/srv/quiz`, `/srv/heig-classroom` and `/srv/evaluation-tb` are
+  `chmod o-rwx`: they were world-readable, production dumps included.
+- The data travels one way. As `srv`, `scripts/staging-export.sh` writes a
+  fresh `quiz.dump` and `assets.tar` into `/srv/staging-inbox` (owner `srv`,
+  group `srvstg`, mode 2750); as `srvstg`, `scripts/staging-refresh.sh`
+  restores them. Staging no longer reads production's directory, nor reaches
+  it through a container.
+- The CI connects as `vars.STAGING_DEPLOY_USER` (`srvstg`) with
+  `STAGING_DEPLOY_SSH_KEY`, a secret of the `staging` environment; the
+  production key is a secret of the `production` environment. Neither is a
+  repository secret any more.
+- Staging and production no longer share a Docker daemon or an image store.
+
+The copy is still not anonymized (§3 stands, by the product owner's
+decision): staging stays closed by `LOGIN_ALLOWLIST`. Staging still uses
+production's edu-ID client and key, copied once by root; registering a
+separate client with its own key is the follow-up that leaves `srvstg`
+holding nothing of production's.

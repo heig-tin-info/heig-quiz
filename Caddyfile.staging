@@ -1,8 +1,9 @@
 # Vhost of quiz.dev.chevallier.io, the staging environment (ADR-028).
 #
 # Same VM, same native Caddy as production (Caddyfile): one more fragment.
-# As `srv`:
-#   cp Caddyfile.staging /etc/caddy/conf.d/quiz-staging.caddy && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && sudo systemctl reload caddy
+# Installed as `srv`, from production's checkout -- never by staging's own
+# account (`srvstg`), which cannot write /etc/caddy/conf.d/:
+#   cp /srv/quiz/Caddyfile.staging /etc/caddy/conf.d/quiz-staging.caddy && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && sudo systemctl reload caddy
 quiz.dev.chevallier.io {
 	encode gzip
 

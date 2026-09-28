@@ -26,10 +26,10 @@ ADR-016.
 | --- | --- | --- |
 | Size | Hetzner CPX12, 1 vCPU, 2 GB + 2 GB swap, `128.140.71.35` | Hetzner, 2 CPU, 4 GB |
 | Already runs | heig-classroom on `:3000`, evaluation-tb on `:3001`, a native Caddy | heig-codespace, rootful Podman 5.7, a native Caddy |
-| Gets | `/srv/quiz`: the compose stack `app`, `postgres`, `backup`, on the `srv` account's rootless Docker; and staging, `/srv/quiz-staging` (§8) | `/opt/quiz-runner`: the runner as a Podman quadlet |
+| Gets | `/srv/quiz`: the compose stack `app`, `postgres`, `backup`, on the `srv` account's rootless Docker; and staging, `/home/srvstg/quiz-staging` on the `srvstg` account's own rootless Docker (§8) | `/opt/quiz-runner`: the runner as a Podman quadlet |
 | Listens on | `app` on `127.0.0.1:3002` (staging `127.0.0.1:3003`) | the runner on `127.0.0.1:3200` |
 | Vhost | `/etc/caddy/conf.d/quiz.caddy` → `quiz.chevallier.io` | `/etc/caddy/conf.d/quiz-runner.caddy` → `code.chevallier.io:8443` |
-| Deploys through | `/srv/quiz/deploy.sh production` and `/srv/quiz-staging/deploy.sh staging`, forced commands, user `srv` | `/opt/quiz-runner/apps/runner/deploy/deploy.sh`, forced command |
+| Deploys through | `/srv/quiz/deploy.sh production` (user `srv`) and `/home/srvstg/quiz-staging/deploy.sh staging` (user `srvstg`), forced commands | `/opt/quiz-runner/apps/runner/deploy/deploy.sh`, forced command |
 
 Until 2026-09-25 the application VM was a DigitalOcean droplet
 (`165.245.246.213`, root, rootful Docker, everything under `/opt`); the three
@@ -83,7 +83,7 @@ sets the security headers (HSTS, `nosniff`, referrer policy) and it proxies
 
 ### The `srv` account
 
-Everything runs as the service account `srv`, which owns `/srv` and runs
+Production runs as the service account `srv`, which owns `/srv` and runs
 **rootless Docker** in its systemd user session (socket
 `/run/user/1000/docker.sock`, lingering enabled so the containers restart at
 boot; there is no root Docker daemon). A human reaches it with
@@ -95,6 +95,12 @@ In rootless Docker, uid 1000 inside a container (`node` in the image) is host
 uid 100999, so a host-side `chown 1000:1000` is wrong: ownership the
 container must see is set through a container, and a file it owns is read
 the same way.
+
+Staging does NOT run as `srv`: it has an account of its own, `srvstg`, with
+its own rootless Docker (§8). `srv`'s directories that hold production data
+(`/srv/quiz`, `/srv/heig-classroom`, `/srv/evaluation-tb`) are
+`chmod o-rwx`, so `srvstg` reads none of them, the dumps in
+`/srv/quiz/backups` included. Keep them that way when adding a service.
 
 ### Setting up the application VM
 
@@ -215,16 +221,20 @@ runner's own image, never the sandbox ones.
    `docker/build-push-action` and pushed to GHCR twice each, as `:latest` and
    as `:<commit sha>`.
 3. **deploy-staging**: one SSH call to the application VM with the
-   `STAGING_DEPLOY_SSH_KEY` key, then a wait of up to 150 s for
+   `STAGING_DEPLOY_SSH_KEY` key (a secret of the `staging` environment), as
+   `vars.STAGING_DEPLOY_USER` (`srvstg`), then a wait of up to 150 s for
    `https://quiz.dev.chevallier.io/healthz` to answer 200. A staging that
    does not come up healthy (a migration that fails on production-shaped
    data, a crash at boot) stops the promotion.
 4. **deploy-production**, in the `production` environment: it waits for a
    required reviewer's approval (Actions → the run → *Review deployments*),
-   then deploys the SAME sha with the `DEPLOY_SSH_KEY` key, one SSH call per
-   VM.
+   then deploys the SAME sha with the `DEPLOY_SSH_KEY` key (a secret of the
+   `production` environment), one SSH call per VM.
 
-Each deploy job has its own concurrency group. Without its key a job prints
+Each deploy job has its own concurrency group, and each key is an
+ENVIRONMENT secret, not a repository one: a job only ever sees the key of
+its own environment. The workflow's default token is read-only, and `main`
+is protected by a ruleset (a pull request and the `checks` job required). Without its key a job prints
 a notice and does nothing, so the pipeline stays green until the keys are
 provisioned; without `DEPLOY_RUNNER_HOST` only the application is deployed.
 
@@ -236,16 +246,19 @@ and `restrict`:
 ```text
 # /home/srv/.ssh/authorized_keys on the application VM
 command="/srv/quiz/deploy.sh production",restrict ssh-ed25519 AAAA… ci-deploy@quiz
-command="/srv/quiz-staging/deploy.sh staging",restrict ssh-ed25519 AAAA… ci-deploy-staging@quiz
+# /home/srvstg/.ssh/authorized_keys on the application VM
+command="/home/srvstg/quiz-staging/deploy.sh staging",restrict ssh-ed25519 AAAA… ci-deploy-staging@quiz
 # /root/.ssh/authorized_keys on the runner VM
 command="/opt/quiz-runner/apps/runner/deploy/deploy.sh",restrict ssh-ed25519 AAAA… ci-deploy@quiz
 ```
 
 Whatever command the client asks for, the server runs the pinned script
 instead, so a key can only deploy and never open a shell, even if it leaks,
-and the staging key can never touch production. The workflow connects as
-`${{ vars.DEPLOY_USER || 'srv' }}` to the application VM and as `root` to the
-runner VM.
+and the staging key, landing on another account, can never touch
+production. The workflow connects to the application VM as
+`vars.STAGING_DEPLOY_USER` (`srvstg`) for staging and `vars.DEPLOY_USER`
+(`srv`) for production, with no fallback (an unset variable fails the job
+rather than pick an account), and as `root` to the runner VM.
 
 The CI sends `<commit sha> <ephemeral GHCR token>` as the SSH command; it
 arrives in `$SSH_ORIGINAL_COMMAND`, is matched strictly and never evaluated.
@@ -269,8 +282,9 @@ and, when it moved, hands over to the new copy exactly once (`exec "$0"` with
 `QUIZ_DEPLOY_REEXEC=1` set and the token cleared, the login being already
 done). Then they diverge:
 
-- **application VM** (`deploy.sh`): serialise with the other environment
-  through a `flock` (staging and production share one Docker daemon), write
+- **application VM** (`deploy.sh`): serialise with any other deploy of the
+  same account through a `flock` (per account since staging moved to
+  `srvstg`: staging and production no longer share a daemon), write
   the sha to `.env.image` as `IMAGE_TAG`, `docker compose pull app` (only our
   image; `--ignore-pull-failures` is deliberately not used, a missing image
   must stop the deploy rather than half-restart the stack), `up -d`, remove
@@ -291,7 +305,7 @@ a workflow artifact to `gh run download` and `docker load` on the VM.
 
 ```bash
 ssh-keygen -t ed25519 -f ci_deploy -N "" -C ci-deploy@quiz
-gh secret set DEPLOY_SSH_KEY --repo heig-tin-info/heig-quiz < ci_deploy          # PRIVATE key, an Actions secret
+gh secret set DEPLOY_SSH_KEY --env production --repo heig-tin-info/heig-quiz < ci_deploy   # PRIVATE key, an environment secret
 gh variable set DEPLOY_HOST --repo heig-tin-info/heig-quiz --body classroom.chevallier.io   # a CNAME to the application VM
 gh variable set DEPLOY_USER --repo heig-tin-info/heig-quiz --body srv
 gh variable set DEPLOY_HOST_KEY --repo heig-tin-info/heig-quiz --body "$(ssh-keyscan -t ed25519 classroom.chevallier.io | awk '{print $2" "$3}')"
@@ -304,7 +318,7 @@ printf 'command="/opt/quiz-runner/apps/runner/deploy/deploy.sh",restrict %s\n' "
 shred -u ci_deploy
 ```
 
-The staging key is set up in §8. The application VM carries the previous
+The staging key and `STAGING_DEPLOY_USER` are set up in §8. The application VM carries the previous
 VM's SSH host keys, copied over, so `DEPLOY_HOST_KEY` did not change with the
 2026-09-25 move.
 
@@ -434,42 +448,69 @@ Logs are `docker compose logs -f app` on one VM and
 
 ## 8. Staging (`quiz.dev.chevallier.io`, ADR-028)
 
-Staging runs on the application VM, next to production, as `srv`: its own
-checkout (`/srv/quiz-staging`), compose project (`quiz-staging`),
-PostgreSQL, port (`3003`) and secrets, every container capped
-(`compose.staging.yml`). It is production configured: `NODE_ENV=production`,
-the edu-ID login, no development login. Only the addresses in
-`LOGIN_ALLOWLIST` (and the super administrator) may sign in, because its
-data is a copy of production's.
+Staging runs on the application VM, next to production, but NOT as `srv`:
+it has its own account, `srvstg`, with its own rootless Docker (lingering
+enabled), checkout (`/home/srvstg/quiz-staging`), compose project
+(`quiz-staging`), PostgreSQL, port (`127.0.0.1:3003`) and secrets, every
+container capped (`compose.staging.yml`). Staging executes every commit of
+`main` before anyone approves it, so it must not share the account that owns
+production's secrets, volumes and backups: `srvstg` can read nothing under
+`/srv/quiz`, `/srv/heig-classroom` or `/srv/evaluation-tb` (§2, *The `srv`
+account*). Its Caddy fragment, `/etc/caddy/conf.d/quiz-staging.caddy`, is
+installed by `srv` (or an administrator), never by staging.
 
-### Setting up staging
+It is production configured: `NODE_ENV=production`, the edu-ID login, no
+development login. Only the addresses in `LOGIN_ALLOWLIST` (and the super
+administrator) may sign in, because its data is a copy of production's, not
+anonymized (ADR-028, §3).
+
+Until 2026-09-28 staging ran as `srv` in `/srv/quiz-staging`, on production's
+Docker daemon.
+
+### Setting up staging (once)
 
 ```bash
 # DNS at Gandi: quiz.dev.chevallier.io CNAME portal.heig.chevallier.io, TTL 300.
 # SWITCH Resource Registry: add the redirect URI
-#   https://quiz.dev.chevallier.io/app/auth/callback   (or register a client of its own)
+#   https://quiz.dev.chevallier.io/app/auth/callback
 
-# On the application VM, as srv. Rootless Docker applies `cpus`/`cpu_shares`
-# only when systemd delegates the cpu controller: this must list `cpu`.
+# On the application VM, as an administrator (sudo).
+sudo useradd --create-home --shell /bin/bash srvstg     # also allocates its /etc/subuid and /etc/subgid ranges
+grep -E '^(srv|srvstg):' /etc/subuid /etc/subgid        # two ranges, not overlapping
+sudo loginctl enable-linger srvstg                      # its containers restart at boot
+sudo chmod o-rwx /srv/quiz /srv/heig-classroom /srv/evaluation-tb
+sudo install -d -o srv -g srvstg -m 2750 /srv/staging-inbox   # production writes, staging reads (below)
+
+# As srvstg (sudo machinectl shell srvstg@): its own rootless Docker.
+dockerd-rootless-setuptool.sh install                   # socket /run/user/$(id -u)/docker.sock
+ls /srv/quiz                                            # must fail: Permission denied
+# Rootless Docker applies `cpus`/`cpu_shares` only when systemd delegates the
+# cpu controller: this must list `cpu`.
 cat /sys/fs/cgroup/user.slice/user-$(id -u).slice/user@$(id -u).service/cgroup.controllers
 #   Without it (as root): mkdir -p /etc/systemd/system/user@.service.d && printf \
 #     '[Service]\nDelegate=cpu cpuset io memory pids\n' > /etc/systemd/system/user@.service.d/delegate.conf \
 #     && systemctl daemon-reload,
-#   then restart the srv user session (or reboot).
-
-cd /srv && git clone https://github.com/heig-tin-info/heig-quiz.git quiz-staging && cd quiz-staging
+#   then restart the srvstg user session (or reboot).
+cd ~ && git clone https://github.com/heig-tin-info/heig-quiz.git quiz-staging && cd quiz-staging
 mkdir -p secrets assets
-# The production key belongs to its container's `node`: read it through a container.
-docker run --rm -v /srv/quiz/secrets:/s:ro alpine cat /s/eduid-private-key.pem > secrets/eduid-private-key.pem
-docker run --rm -v "$PWD":/w alpine sh -c 'chown -R 1000:1000 /w/secrets /w/assets && chmod 600 /w/secrets/*.pem'
 cp .env.staging.example .env.staging && chmod 600 .env.staging
 nano .env.staging   # POSTGRES_PASSWORD, COOKIE_SECRET (new values), OIDC_CLIENT_ID, LOGIN_ALLOWLIST
-cp Caddyfile.staging /etc/caddy/conf.d/quiz-staging.caddy && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && sudo systemctl reload caddy
 
-# A second CI key, pinned to staging: the production key never reaches it.
+# As root: the edu-ID key, copied once (srvstg cannot read production's copy).
+sudo install -o srvstg -g srvstg -m 600 /srv/quiz/secrets/eduid-private-key.pem /home/srvstg/quiz-staging/secrets/
+# Back as srvstg: hand secrets/ and assets/ to the container's `node` (a sub-uid of srvstg).
+docker run --rm -v "$PWD":/w alpine sh -c 'chown -R 1000:1000 /w/secrets /w/assets && chmod 600 /w/secrets/*.pem'
+
+# As srv (the fragment directory is srv's, not staging's).
+cp /srv/quiz/Caddyfile.staging /etc/caddy/conf.d/quiz-staging.caddy && sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && sudo systemctl reload caddy
+
+# A second CI key, pinned to staging's account: the production key never reaches it.
 ssh-keygen -t ed25519 -f ci_staging -N "" -C ci-deploy-staging@quiz
-gh secret set STAGING_DEPLOY_SSH_KEY --repo heig-tin-info/heig-quiz < ci_staging
-printf 'command="/srv/quiz-staging/deploy.sh staging",restrict %s\n' "$(cat ci_staging.pub)" >> /home/srv/.ssh/authorized_keys
+gh secret set STAGING_DEPLOY_SSH_KEY --env staging --repo heig-tin-info/heig-quiz < ci_staging
+gh variable set STAGING_DEPLOY_USER --repo heig-tin-info/heig-quiz --body srvstg
+# on the application VM, as srvstg
+install -d -m 700 ~/.ssh
+printf 'command="/home/srvstg/quiz-staging/deploy.sh staging",restrict %s\n' "$(cat ci_staging.pub)" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
 shred -u ci_staging
 
 # The approval: Settings → Environments → production → Required reviewers.
@@ -479,26 +520,39 @@ shred -u ci_staging
 The first staging deploy starts an empty database; fill it with
 production's data (below).
 
+Follow-up: staging still signs its edu-ID requests with production's key and
+client. Register a separate edu-ID client for staging, with a key of its own,
+and replace `secrets/eduid-private-key.pem`, `OIDC_CLIENT_ID` and
+`OIDC_PRIVATE_KEY_KID` in `.env.staging`; `srvstg` then holds nothing of
+production's.
+
 ### Refreshing the data
 
+The copy travels one way, from production into `/srv/staging-inbox`, which
+`srvstg` can read and not write:
+
 ```bash
-/srv/quiz-staging/scripts/staging-refresh.sh            # last night's dump
-/srv/quiz-staging/scripts/staging-refresh.sh --fresh    # a dump taken now
+# 1. As srv: a dump taken now and the question images, into the inbox.
+/srv/quiz/scripts/staging-export.sh
+# 2. As srvstg: restore them.
+~/quiz-staging/scripts/staging-refresh.sh              # the inbox's copy
+~/quiz-staging/scripts/staging-refresh.sh <file>       # that dump, images unchanged
 ```
 
 Never on deploy: a refresh wipes whatever a test had prepared. It restores
 the dump into a recreated database, empties sessions, launch tickets, API
-tokens and OAuth grants (nothing production issued works here), copies the
+tokens and OAuth grants (nothing production issued works here), unpacks the
 question images, and starts the app, which migrates the copy forward: the
 very migration production will run next. It doubles as the restore test of
-§6.
+§6. The inbox keeps only the latest copy; each export overwrites it.
 
 ### Exam days
 
-Staging shares the vCPU. Stop it for the duration of an exam:
+Staging shares the vCPU. Stop it for the duration of an exam, as `srvstg`
+(`sudo machinectl shell srvstg@`):
 
 ```bash
-cd /srv/quiz-staging && docker compose -f compose.staging.yml --env-file .env.staging --env-file .env.image stop
+cd ~/quiz-staging && docker compose -f compose.staging.yml --env-file .env.staging --env-file .env.image stop
 ```
 
 A deploy restarts it (`up -d`); so does `start`.
