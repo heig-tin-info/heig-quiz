@@ -8,7 +8,7 @@
  * The order of the matchers is the grading order — the first match wins — so
  * the list is reorderable and numbered.
  */
-import { useId, type ReactNode } from "react";
+import { useId } from "react";
 import type { ConfigIssue, EditorProps, MarkdownRenderer, StringOverrides } from "@quiz/core/client";
 import { issuesAt, resolveStrings, rootIssues } from "@quiz/core/client";
 import {
@@ -32,6 +32,7 @@ import {
   inputClass,
   IssueList,
   labelClass,
+  NumberField,
   PromptField,
   removeAt,
   sectionClass,
@@ -82,35 +83,16 @@ const MATCHER_LABEL: Record<ShortMatcher["kind"], ShortEditorStringKey> = {
 };
 
 /**
- * The label of a field of an accepted answer. The word is visible; the row
- * number is for a screen reader only, so that "Value" of row 2 is announced
- * "Value 2" and never confused with the one of row 1.
+ * The chrome of a field of an accepted answer (`FieldCell`). The word is
+ * visible; the row number is for a screen reader only, so that "Value" of
+ * row 2 is announced "Value 2" and never confused with the one of row 1.
  */
-const cellLabelClass = "text-xs font-medium text-fg-muted";
-
-function Cell({
-  id,
-  label,
-  index,
-  className,
-  children,
-}: {
-  id: string;
-  label: string;
-  index: number;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className={cx("flex min-w-0 flex-col gap-1", className)}>
-      <label className={cellLabelClass} htmlFor={id}>
-        {label}
-        <span className="sr-only"> {index + 1}</span>
-      </label>
-      {children}
-    </div>
-  );
-}
+const rowCell = (index: number, className?: string) => ({
+  labelClassName: "text-xs font-medium text-fg-muted",
+  gap: "gap-1",
+  srSuffix: index + 1,
+  className: cx("min-w-0", className),
+});
 
 /**
  * A relative tolerance is stored as a FRACTION (0.01, as `@quiz/domain`
@@ -141,7 +123,7 @@ function MatcherFields({
 }) {
   const id = (name: string) => `${idBase}-${name}`;
   const wide = "col-span-2 sm:min-w-48 sm:flex-1";
-  const narrow = cx(inputClass, "w-full tabular-nums sm:w-28");
+  const narrow = { inputClassName: inputClass, width: "w-full sm:w-28" };
 
   switch (matcher.kind) {
     /*
@@ -150,7 +132,7 @@ function MatcherFields({
      */
     case "exact":
       return (
-        <Cell id={id("value")} label={s.value} index={index} className={wide}>
+        <FieldCell label={s.value} htmlFor={id("value")} {...rowCell(index, wide)}>
           <input
             id={id("value")}
             type="text"
@@ -159,12 +141,12 @@ function MatcherFields({
             disabled={disabled}
             onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
           />
-        </Cell>
+        </FieldCell>
       );
     case "regex":
       return (
         <>
-          <Cell id={id("pattern")} label={s.pattern} index={index} className={wide}>
+          <FieldCell label={s.pattern} htmlFor={id("pattern")} {...rowCell(index, wide)}>
             <input
               id={id("pattern")}
               type="text"
@@ -173,8 +155,8 @@ function MatcherFields({
               disabled={disabled}
               onChange={(e) => onPatch({ ...matcher, pattern: e.target.value })}
             />
-          </Cell>
-          <Cell id={id("flags")} label={s.flags} index={index}>
+          </FieldCell>
+          <FieldCell label={s.flags} htmlFor={id("flags")} {...rowCell(index)}>
             <input
               id={id("flags")}
               type="text"
@@ -183,44 +165,37 @@ function MatcherFields({
               disabled={disabled}
               onChange={(e) => onPatch({ ...matcher, flags: e.target.value })}
             />
-          </Cell>
+          </FieldCell>
         </>
       );
     case "number": {
       const relative = matcher.toleranceMode === "rel";
       return (
         <>
-          <Cell id={id("value")} label={s.value} index={index}>
-            <input
-              id={id("value")}
-              type="number"
-              step="any"
-              className={narrow}
-              value={matcher.value}
-              disabled={disabled}
-              onChange={(e) => onPatch({ ...matcher, value: Number(e.target.value) })}
-            />
-          </Cell>
-          <Cell
+          <NumberField
+            id={id("value")}
+            label={s.value}
+            {...rowCell(index)}
+            {...narrow}
+            step="any"
+            value={matcher.value}
+            disabled={disabled}
+            onChange={(value) => onPatch({ ...matcher, value })}
+          />
+          <NumberField
             id={id("tolerance")}
             label={relative ? s.tolerancePercent : s.tolerance}
-            index={index}
-          >
-            <input
-              id={id("tolerance")}
-              type="number"
-              min={0}
-              step="any"
-              className={narrow}
-              value={relative ? toPercent(matcher.tolerance) : matcher.tolerance}
-              disabled={disabled}
-              onChange={(e) => {
-                const typed = Number(e.target.value);
-                onPatch({ ...matcher, tolerance: relative ? fromPercent(typed) : typed });
-              }}
-            />
-          </Cell>
-          <Cell id={id("mode")} label={s.toleranceMode} index={index}>
+            {...rowCell(index)}
+            {...narrow}
+            min={0}
+            step="any"
+            value={relative ? toPercent(matcher.tolerance) : matcher.tolerance}
+            disabled={disabled}
+            onChange={(typed) =>
+              onPatch({ ...matcher, tolerance: relative ? fromPercent(typed) : typed })
+            }
+          />
+          <FieldCell label={s.toleranceMode} htmlFor={id("mode")} {...rowCell(index)}>
             <select
               id={id("mode")}
               className={cx(inputClass, "w-full sm:w-36")}
@@ -233,8 +208,8 @@ function MatcherFields({
               <option value="abs">{s.toleranceAbs}</option>
               <option value="rel">{s.toleranceRel}</option>
             </select>
-          </Cell>
-          <Cell id={id("unit")} label={s.unit} index={index}>
+          </FieldCell>
+          <FieldCell label={s.unit} htmlFor={id("unit")} {...rowCell(index)}>
             <input
               id={id("unit")}
               type="text"
@@ -248,7 +223,7 @@ function MatcherFields({
                 onPatch(next);
               }}
             />
-          </Cell>
+          </FieldCell>
           <div className="col-span-2 flex items-end sm:col-span-1">
             <CheckboxField
               label={s.unitRequired}
@@ -264,7 +239,11 @@ function MatcherFields({
     case "date":
       return (
         <>
-          <Cell id={id("value")} label={s.value} index={index} className="col-span-2 sm:col-span-1">
+          <FieldCell
+            label={s.value}
+            htmlFor={id("value")}
+            {...rowCell(index, "col-span-2 sm:col-span-1")}
+          >
             <input
               id={id("value")}
               type="date"
@@ -273,25 +252,28 @@ function MatcherFields({
               disabled={disabled}
               onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
             />
-          </Cell>
-          <Cell id={id("tolerance")} label={s.toleranceDays} index={index}>
-            <input
-              id={id("tolerance")}
-              type="number"
-              min={0}
-              step={1}
-              className={narrow}
-              value={matcher.toleranceDays}
-              disabled={disabled}
-              onChange={(e) => onPatch({ ...matcher, toleranceDays: Number(e.target.value) })}
-            />
-          </Cell>
+          </FieldCell>
+          <NumberField
+            id={id("tolerance")}
+            label={s.toleranceDays}
+            {...rowCell(index)}
+            {...narrow}
+            min={0}
+            step={1}
+            value={matcher.toleranceDays}
+            disabled={disabled}
+            onChange={(toleranceDays) => onPatch({ ...matcher, toleranceDays })}
+          />
         </>
       );
     case "time":
       return (
         <>
-          <Cell id={id("value")} label={s.value} index={index} className="col-span-2 sm:col-span-1">
+          <FieldCell
+            label={s.value}
+            htmlFor={id("value")}
+            {...rowCell(index, "col-span-2 sm:col-span-1")}
+          >
             <input
               id={id("value")}
               type="time"
@@ -300,24 +282,23 @@ function MatcherFields({
               disabled={disabled}
               onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
             />
-          </Cell>
-          <Cell id={id("tolerance")} label={s.toleranceMinutes} index={index}>
-            <input
-              id={id("tolerance")}
-              type="number"
-              min={0}
-              step={1}
-              className={narrow}
-              value={matcher.toleranceMinutes}
-              disabled={disabled}
-              onChange={(e) => onPatch({ ...matcher, toleranceMinutes: Number(e.target.value) })}
-            />
-          </Cell>
+          </FieldCell>
+          <NumberField
+            id={id("tolerance")}
+            label={s.toleranceMinutes}
+            {...rowCell(index)}
+            {...narrow}
+            min={0}
+            step={1}
+            value={matcher.toleranceMinutes}
+            disabled={disabled}
+            onChange={(toleranceMinutes) => onPatch({ ...matcher, toleranceMinutes })}
+          />
         </>
       );
     case "llm":
       return (
-        <Cell id={id("rubric")} label={s.rubric} index={index} className={wide}>
+        <FieldCell label={s.rubric} htmlFor={id("rubric")} {...rowCell(index, wide)}>
           <textarea
             id={id("rubric")}
             rows={2}
@@ -327,7 +308,7 @@ function MatcherFields({
             onChange={(e) => onPatch({ ...matcher, rubric: e.target.value })}
           />
           <span className="text-xs text-warning">{s.llmWarning}</span>
-        </Cell>
+        </FieldCell>
       );
   }
 }
@@ -337,26 +318,14 @@ function MatcherFields({
  * control opens. An empty number or date field means UNBOUNDED, which is why
  * the key is deleted rather than set to 0 or to "".
  */
-function withOptionalNumber(
+function withBound<K extends "min" | "max" | "from" | "to">(
   constraints: ShortConstraints,
-  key: "min" | "max",
-  raw: string,
+  key: K,
+  value: ShortConstraints[K] | undefined,
 ): ShortConstraints {
   const next = { ...constraints };
-  const value = Number(raw);
-  if (raw.trim() === "" || !Number.isFinite(value)) delete next[key];
+  if (value === undefined) delete next[key];
   else next[key] = value;
-  return next;
-}
-
-function withOptionalDate(
-  constraints: ShortConstraints,
-  key: "from" | "to",
-  raw: string,
-): ShortConstraints {
-  const next = { ...constraints };
-  if (raw === "") delete next[key];
-  else next[key] = raw;
   return next;
 }
 
@@ -373,63 +342,57 @@ function ConstraintFields({
   s: Strings;
   onPatch: (next: ShortConstraints) => void;
 }) {
-  const numberField = cx(inputClass, "w-28 tabular-nums");
+  const field = { labelClassName: labelClass, inputClassName: inputClass };
 
   switch (kind) {
     case "text":
       return (
         <>
-          <FieldCell labelClassName={labelClass} label={s.minLength} htmlFor="short-min-length">
-            <input
-              id="short-min-length"
-              type="number"
-              min={0}
-              max={SHORT_MAX_ANSWER_LENGTH}
-              className={numberField}
-              value={constraints.minLength}
-              disabled={disabled}
-              onChange={(e) => onPatch({ ...constraints, minLength: Number(e.target.value) })}
-            />
-          </FieldCell>
-          <FieldCell labelClassName={labelClass} label={s.maxLength} htmlFor="short-max-length">
-            <input
-              id="short-max-length"
-              type="number"
-              min={1}
-              max={SHORT_MAX_ANSWER_LENGTH}
-              className={numberField}
-              value={constraints.maxLength}
-              disabled={disabled}
-              onChange={(e) => onPatch({ ...constraints, maxLength: Number(e.target.value) })}
-            />
-          </FieldCell>
+          <NumberField
+            id="short-min-length"
+            label={s.minLength}
+            {...field}
+            min={0}
+            max={SHORT_MAX_ANSWER_LENGTH}
+            value={constraints.minLength}
+            disabled={disabled}
+            onChange={(minLength) => onPatch({ ...constraints, minLength })}
+          />
+          <NumberField
+            id="short-max-length"
+            label={s.maxLength}
+            {...field}
+            min={1}
+            max={SHORT_MAX_ANSWER_LENGTH}
+            value={constraints.maxLength}
+            disabled={disabled}
+            onChange={(maxLength) => onPatch({ ...constraints, maxLength })}
+          />
         </>
       );
     case "number":
       return (
         <>
-          <FieldCell labelClassName={labelClass} label={s.min} htmlFor="short-min">
-            <input
-              id="short-min"
-              type="number"
-              step="any"
-              className={numberField}
-              value={constraints.min ?? ""}
-              disabled={disabled}
-              onChange={(e) => onPatch(withOptionalNumber(constraints, "min", e.target.value))}
-            />
-          </FieldCell>
-          <FieldCell labelClassName={labelClass} label={s.max} htmlFor="short-max">
-            <input
-              id="short-max"
-              type="number"
-              step="any"
-              className={numberField}
-              value={constraints.max ?? ""}
-              disabled={disabled}
-              onChange={(e) => onPatch(withOptionalNumber(constraints, "max", e.target.value))}
-            />
-          </FieldCell>
+          <NumberField
+            id="short-min"
+            label={s.min}
+            {...field}
+            step="any"
+            value={constraints.min ?? null}
+            disabled={disabled}
+            onChange={(min) => onPatch(withBound(constraints, "min", min))}
+            onClear={() => onPatch(withBound(constraints, "min", undefined))}
+          />
+          <NumberField
+            id="short-max"
+            label={s.max}
+            {...field}
+            step="any"
+            value={constraints.max ?? null}
+            disabled={disabled}
+            onChange={(max) => onPatch(withBound(constraints, "max", max))}
+            onClear={() => onPatch(withBound(constraints, "max", undefined))}
+          />
           <CheckboxField
             label={s.integer}
             checked={constraints.integer}
@@ -448,7 +411,7 @@ function ConstraintFields({
               className={cx(inputClass, "w-40")}
               value={constraints.from ?? ""}
               disabled={disabled}
-              onChange={(e) => onPatch(withOptionalDate(constraints, "from", e.target.value))}
+              onChange={(e) => onPatch(withBound(constraints, "from", e.target.value || undefined))}
             />
           </FieldCell>
           <FieldCell labelClassName={labelClass} label={s.to} htmlFor="short-to">
@@ -458,7 +421,7 @@ function ConstraintFields({
               className={cx(inputClass, "w-40")}
               value={constraints.to ?? ""}
               disabled={disabled}
-              onChange={(e) => onPatch(withOptionalDate(constraints, "to", e.target.value))}
+              onChange={(e) => onPatch(withBound(constraints, "to", e.target.value || undefined))}
             />
           </FieldCell>
         </>
@@ -611,11 +574,10 @@ export function ShortEditor({
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col gap-2">
                   <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:flex sm:flex-wrap sm:items-end">
-                    <Cell
-                      id={`${rowId}-kind`}
+                    <FieldCell
                       label={s.matcherKind}
-                      index={index}
-                      className="col-span-2 sm:col-span-1"
+                      htmlFor={`${rowId}-kind`}
+                      {...rowCell(index, "col-span-2 sm:col-span-1")}
                     >
                       <select
                         id={`${rowId}-kind`}
@@ -632,7 +594,7 @@ export function ShortEditor({
                           </option>
                         ))}
                       </select>
-                    </Cell>
+                    </FieldCell>
                     <MatcherFields
                       matcher={matcher}
                       index={index}
@@ -642,11 +604,10 @@ export function ShortEditor({
                       onPatch={(next) => replace(index, next)}
                     />
                     {ungraded ? null : (
-                      <Cell
-                        id={`${rowId}-points`}
+                      <FieldCell
                         label={s.points}
-                        index={index}
-                        className="col-span-2 sm:col-span-1"
+                        htmlFor={`${rowId}-points`}
+                        {...rowCell(index, "col-span-2 sm:col-span-1")}
                       >
                         <div className="flex items-center gap-2">
                           <input
@@ -667,7 +628,7 @@ export function ShortEditor({
                             {s.pointsHint}
                           </span>
                         </div>
-                      </Cell>
+                      </FieldCell>
                     )}
                   </div>
                   {explanation === null ? null : (
