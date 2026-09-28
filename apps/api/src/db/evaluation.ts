@@ -103,6 +103,15 @@ export const evaluations = pgTable(
       .default("all_or_nothing"),
     opensAt: timestamp("opens_at", { withTimezone: true }),
     closesAt: timestamp("closes_at", { withTimezone: true }),
+    /**
+     * How far the live controls (an extension to all, a resume after a pause)
+     * have moved `closes_at` since the teacher last set the timing, in whole
+     * seconds. `closes_at - opens_at - closes_at_shift_s` is the ANNOUNCED
+     * window, the base of the accommodation in `deadline` timing (decision D8,
+     * #253, `announcedWindowS`). Written by `extendClosesAt` only; a timing
+     * edit from the configuration puts it back to 0.
+     */
+    closesAtShiftS: integer("closes_at_shift_s").notNull().default(0),
     durationS: integer("duration_s"),
     accessCode: text("access_code"),
     /** Prefix list (F-EVAL-12); empty = no restriction. */
