@@ -107,9 +107,8 @@ export type NotificationChannel = z.infer<typeof NotificationChannel>;
  * so "on" there costs nothing until then. A kind added to
  * {@link NOTIFICATION_KINDS} without its row here is a compile error.
  */
-export const DEFAULT_CHANNEL_ENABLED: Record<
-  NotificationKind,
-  Readonly<Record<NotificationChannel, boolean>>
+export const DEFAULT_CHANNEL_ENABLED: Readonly<
+  Record<NotificationKind, Readonly<Record<NotificationChannel, boolean>>>
 > = {
   results_released: { bell: true, email: true, teams: true },
   pool_shared: { bell: true, email: true, teams: true },

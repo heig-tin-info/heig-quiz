@@ -146,7 +146,7 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 
 ## F-NOTIF Notifications
 
-What a user is told, and where (ADR-030 and its addendum of #198). Every kind carries ids, titles and counts only, never a grade, a name, an e-mail or question content.
+What a user is told, and where (ADR-030 and its addendum of #198). A notification never carries a grade, a student's name, an e-mail or question content.
 
 | Id | Requirement | Phase | Prio |
 |---|---|---|---|
@@ -155,12 +155,12 @@ What a user is told, and where (ADR-030 and its addendum of #198). Every kind ca
 | F-NOTIF-03 | A toast is shown only for a notification that arrived while the tab was open: the first read after a connect or a reconnect toasts nothing, and nothing toasts while the student is in an attempt. | P2 | S |
 | F-NOTIF-04 | `activity_scheduled`: the students of a classroom are told when an exercise is scheduled, with its opening time. It is sent once, never again when the exercise is rescheduled, and never for an exam. | P2 | S |
 | F-NOTIF-05 | `activity_available`: the students of a classroom are told when an exercise starts running, by the clock or by hand. Not for an exam, not for a poll. | P2 | S |
-| F-NOTIF-06 | `deadline_approaching`: 24 h before `closesAt`, each student who has not submitted is reminded once per evaluation. There is no reminder when the evaluation opens less than 24 h before it closes, or when it has no `closesAt`. A late scan catches up; a moved `closesAt` does not send it again. | P2 | S |
+| F-NOTIF-06 | `deadline_approaching`: 24 h before `closesAt`, each student who has not submitted is reminded once per evaluation. There is no reminder when the evaluation actually started running (`startedAt`, not `opensAt`) less than 24 h before it closes, or when it has no `closesAt`. A late scan catches up; a moved `closesAt` does not send it again. | P2 | S |
 | F-NOTIF-07 | `results_updated`: a student is told when a grade changes after release, only when the grade actually differs from the released one, as one entry per evaluation. | P2 | S |
-| F-NOTIF-08 | `student_joined` and `roster_conflict`: the classroom's staff are told, as one entry per classroom with a count ("3 students joined PRG1-2026"). The entry opens the roster. | P2 | S |
-| F-NOTIF-09 | `grading_ready`: the course's staff are told when an evaluation's automatic grading has finished and proposals remain to validate. | P2 | S |
+| F-NOTIF-08 | `student_joined` and `roster_conflict`: the course's staff seats are told, as one entry per classroom with a count ("3 students joined PRG1-2026"). The entry opens the roster. | P2 | S |
+| F-NOTIF-09 | `grading_ready`: the course's staff seats are told when an evaluation's automatic grading has finished and proposals remain to validate. | P2 | S |
 | F-NOTIF-10 | `pool_question_added`: the owner and the contributors of a shared pool are told when a colleague publishes a question in it, as one entry per pool with a count. Never its readers. | P2 | S |
-| F-NOTIF-11 | The staff of a teacher kind are the course's staff seats, admins without a seat excluded. Nobody is notified of their own action. | P2 | M |
+| F-NOTIF-11 | The recipients of a teacher kind about a classroom are the course's staff seats, admins without a seat excluded. Nobody is notified of their own action. | P2 | M |
 | F-NOTIF-12 | An entry that folds events (F-NOTIF-07, -08, -10) is the unread one of the same kind and target. Once it is read, the next event starts a new entry. | P2 | S |
 
 ## F-STAT Question statistics

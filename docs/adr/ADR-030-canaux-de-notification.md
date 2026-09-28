@@ -465,7 +465,7 @@ the change made no difference a user could see.
 | Student | `deadline_approaching` | on | on | 24 h before `closesAt` (§d) |
 | Student | `results_updated` | on | off | a grade differs from the released one |
 | Teacher | `student_joined` | on | off | a student joined the classroom, folded per classroom |
-| Teacher | `roster_conflict` | on | on | a roster entry needs the teacher's attention |
+| Teacher | `roster_conflict` | on | on | a roster entry needs the teacher's attention, folded per classroom |
 | Teacher | `grading_ready` | on | on | automatic grading finished and proposals remain |
 | Teacher | `pool_question_added` | on | off | a colleague published a question in a shared pool, folded per pool |
 | Teacher | `pool_shared`, `pool_ownership` | on | on | unchanged |
@@ -492,10 +492,12 @@ the change made no difference a user could see.
   grading pass that settled everything has nothing to ask for.
 - **`pool_question_added`** goes to the pool's owner and its `contributor`
   and `owner` shares, never to `reader`s, never to the author.
-- **Payloads carry ids, titles and counts, never a grade, a name or an
-  e-mail** (§6, invariant 4). `student_joined` and `roster_conflict` carry
-  `{ classroomId, classroomName, count }`. Once folded, the names are lost
-  anyway, and the bell opens the roster, where they are. `pool_question_added`
+- **Payloads never carry a grade, a student's name, an e-mail or question
+  content** (§6, invariant 4). The teacher who acted may be named, as
+  `pool_shared` (`byName`) and `pool_ownership` (`fromName`) already do.
+  `student_joined` and `roster_conflict` carry
+  `{ classroomId, classroomName, count }` (question 6): once folded, the
+  names are lost anyway, and the bell opens the roster, where they are. `pool_question_added`
   carries `{ poolId, poolName, count }`. Each kind has its sentence in `en`
   and `fr`, in `templates.ts` (e-mail, Teams) and in the web dictionary
   (bell, toast). This includes the hard-coded English sentence `roster.ts`
@@ -510,8 +512,11 @@ student of the classroom who has not submitted, when all of these hold:
 
 - `now >= closesAt - 24 h`;
 - the evaluation is `running`;
-- `opensAt <= closesAt - 24 h`, so a window shorter than a day (a two-hour
-  exam, a ten-minute exercise) gets no reminder;
+- `startedAt <= closesAt - 24 h`, so a window shorter than a day (a two-hour
+  exam, a ten-minute exercise) gets no reminder. The window is measured from
+  `startedAt`, the moment the evaluation actually started running, not from
+  `opensAt`: an evaluation opened by hand has no `opensAt`, and one opened
+  early or late did not open at `opensAt`;
 - no sent marker exists for that (evaluation, student).
 
 A late scan, after a restart or a missed tick, therefore catches up, and
@@ -536,6 +541,12 @@ evaluation (§c).
   same moment. The fold is therefore one atomic statement: an insert that
   conflicts on a unique index over (user, kind, target) limited to unread
   rows, and updates the count on conflict. It never reads and then writes.
+- The target spans nullable columns (`classroom_id`, `pool_id`,
+  `evaluation_id`), and a plain unique index treats two NULLs as distinct.
+  The guard is therefore ONE PARTIAL UNIQUE INDEX PER FOLDED KIND, on
+  `(user_id, <its target column>) WHERE kind = '<kind>' AND read_at IS NULL`
+  (or one index declared `NULLS NOT DISTINCT`), never a single index across
+  all three columns.
 
 ### f. Fan-out, Teams, order of the work
 
@@ -546,6 +557,13 @@ evaluation (§c).
 - Every new Teams `activityType` goes into **one** manifest version bump.
   Each user has to re-upload the app for a new version, so this must not
   happen once per kind.
+- A kind joins `NOTIFICATION_KINDS` (and so the settings grid) in the step
+  that emits it, never earlier: a toggle for a kind that sends nothing is a
+  lie. The manifest's `activityType` list alone may run ahead of the
+  catalogue, so that the single bump of step 4 already declares the types of
+  the kinds of steps 5 to 8. It is then no longer derived from
+  `NOTIFICATION_KINDS` alone, and a test keeps every kind of the catalogue
+  in it.
 - The work is split into steps, in this order: the privacy leak of
   `student_joined` and its hard-coded English (#246); `roster_conflict`
   actually emitted from every conflict path; the per-kind defaults and this
