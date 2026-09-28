@@ -87,4 +87,4 @@ as before; `quiz.chevallier.io` is a CNAME to it. The stack lives in
 `/srv/quiz` and runs as the `srv` account on rootless Docker, and the CI key is
 pinned in `/home/srv/.ssh/authorized_keys` (`DEPLOY_USER=srv`). The runner's
 Caddy allowlist names the new address, `128.140.71.35`. The runner VM is
-unchanged. `deploy.md` holds the current layout.
+unchanged. The [deployment runbook](../development/deployment.md) holds the current layout.

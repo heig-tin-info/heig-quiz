@@ -299,7 +299,7 @@ database and passes nothing of its own environment into a container.
 
 ## In production
 
-`deploy/` holds the whole of it (ADR-016, `deploy.md` § Runner): a Podman
+`deploy/` holds the whole of it (ADR-016, `docs/development/deployment.md` §3): a Podman
 quadlet (`quiz-runner.container`) that runs this image on the code VM against
 its rootful socket — with the seccomp profile installed on the host at
 `/etc/quiz-runner/seccomp.json`, since a `--remote` client hands the server a

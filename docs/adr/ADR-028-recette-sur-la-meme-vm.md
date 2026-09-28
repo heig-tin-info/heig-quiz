@@ -97,7 +97,7 @@ ADR-027 (a delegated session), not a development login turned back on.
 - The VM carries one more app and one more PostgreSQL, about 200 MB when
   idle, hard-capped at 416 MB.
 - Rootless Docker applies `cpus`/`cpu_shares` only if systemd delegates the
-  `cpu` controller to the user session (deploy.md §8 checks it).
+  `cpu` controller to the user session (the deployment runbook, §8, checks it).
 - Staging cannot measure performance: it is capped and shares a vCPU.
 - Staging holds real personal data; its access list is part of its
   configuration and is reviewed like a secret.

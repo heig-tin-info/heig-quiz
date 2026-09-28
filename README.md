@@ -2,7 +2,8 @@
 
 A quiz platform for HEIG-VD teachers. Question pools, evaluations run live
 with a server-side clock, automatic grading — multiple choice, short answer,
-cloze, and code executed in a sandboxed container — and results.
+cloze, code executed in a sandboxed container, code judged by the picture it
+draws, and circuits graded by simulation — results, and live polls.
 
 Built from the same stack as its sibling project
 [heig-classroom](https://github.com/heig-tin-info/heig-classroom): TypeScript
@@ -35,8 +36,10 @@ Open <http://localhost:5173>, click **Dev login** and pick a persona:
 
 `pnpm seed` is idempotent — run it as often as you like. It builds a course
 `PRG1`, the classroom `PRG1-2026`, six students, a pool *Programmation C*
-(three categories, ten published questions: multiple choice, short answer,
-cloze and code) and a second pool *Électronique*, then four evaluations in the
+(three categories, eleven published questions: multiple choice, short
+answer, cloze, code and code image) and a second pool *Électronique* (five
+more, a circuit among them), sixteen questions of all six types in all, then
+four evaluations in the
 classroom: one `draft`, one `scheduled` two days out, one exercise waiting in
 its `lobby`, and one that has already run — **Test 0 — bases du C** is closed,
 its five students are graded and its results are deliberately **not released**,
@@ -81,7 +84,6 @@ refuses a `pglite://` URL there, and refuses `AUTH_DEV_LOGIN=1` outright.
 | `packages/contracts`, `packages/domain` | shared schemas, pure business rules |
 | `docs/spec` | the product specification |
 | `docs/adr` | inherited architecture decisions |
-| `mockups` | HTML mockups of the main screens |
 
 `CLAUDE.md` holds the working conventions and the invariants.
 
@@ -93,20 +95,24 @@ heig-classroom, with the code runner on the codespace VM behind
 checks, builds the two images on GitHub Actions, pushes them to GHCR and
 deploys that sha to staging (<https://quiz.dev.chevallier.io>, same VM,
 ADR-028); once approved, the same sha goes to both production VMs, where a
-forced-command key can only run `deploy.sh`. Nothing is ever built on a VM. `deploy.md` has the whole of it: the two
-machines, the secrets, the DNS records, the CI key, backups and rollback.
+forced-command key can only run `deploy.sh`. Nothing is ever built on a VM.
+The runbook, [`docs/development/deployment.md`](docs/development/deployment.md),
+has the whole of it: the two machines, the secrets, the DNS records, the CI
+keys, backups, staging and rollback.
 
 ## Status
 
-Phase one is complete: identity, courses, classrooms and rosters, question
-pools with four question types, evaluations run live, grading, results and
-the sandboxed code runner all work, and live polls are in. The user guide and
-the specification are published at
-<https://heig-tin-info.github.io/heig-quiz/>; the plan is `docs/PLAN-MVP.md`.
+Phase one is complete and the platform is in production: identity, courses,
+classrooms and rosters, shared question pools with six question types
+(`mcq`, `short`, `cloze`, `code`, `codeimage`, `circuit`), evaluations run
+live, grading, results, the sandboxed code runner, live polls, and API tokens
+with an MCP server for AI assistants. The user guide and the specification
+are published at <https://heig-tin-info.github.io/heig-quiz/>; the phase-1
+plan, now archived, is `docs/PLAN-MVP.md`.
 
 ## Documentation
 
-The specification, the architecture decision records and the plan are
+The user guide, the specification and the architecture decision records are
 published at <https://heig-tin-info.github.io/heig-quiz/> from `docs/` on
 every push to `main` (`.github/workflows/docs.yml`, site generator
 [zensical](https://zensical.org), configuration in `zensical.toml`).
