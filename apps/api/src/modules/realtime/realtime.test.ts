@@ -166,11 +166,13 @@ afterAll(async () => {
 
 /** Opens an SSE connection and collects the frames it receives. */
 async function openStream(headers: Record<string, string>, watch?: string) {
+  const hangUp = new AbortController();
   const res = await server.app.inject({
     method: "GET",
     url: `/app/api/events${watch === undefined ? "" : `?watch=${encodeURIComponent(watch)}`}`,
     headers,
     payloadAsStream: true,
+    signal: hangUp.signal,
   });
   let text = "";
   if (res.statusCode === 200) {
@@ -184,6 +186,8 @@ async function openStream(headers: Record<string, string>, watch?: string) {
       return text;
     },
     destroy: () => res.stream().destroy(),
+    /** The browser goes away: the server sees the request close. */
+    hangUp: () => hangUp.abort(),
   };
   opened.push(handle);
   return handle;
@@ -627,7 +631,7 @@ describe("lobby count", () => {
       server.clock.now(),
     );
     const watcher = await openStream(teacher.headers, `evaluation:${room.evaluationId}`);
-    await Promise.all(
+    const streams = await Promise.all(
       seats.map((s) => openStream(s.headers, `lobby:${room.evaluationId}`)),
     );
     await settle();
@@ -642,6 +646,16 @@ describe("lobby count", () => {
       () => {
         bus.flushCoalescers();
         expect(last()).toMatchObject({ present: 3, enrolled: 3 });
+      },
+      { timeout: 3000 },
+    );
+
+    // One leaves: the next window counts two.
+    streams[0]!.hangUp();
+    await vi.waitFor(
+      () => {
+        bus.flushCoalescers();
+        expect(last()).toMatchObject({ present: 2, enrolled: 3 });
       },
       { timeout: 3000 },
     );

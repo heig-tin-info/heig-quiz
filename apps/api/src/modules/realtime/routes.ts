@@ -41,10 +41,12 @@ const IDLE_CLOSE_MS = 60_000;
 const IDLE_SWEEP_MS = 5_000;
 /**
  * How often a fast (attempt) stream re-reads its evaluation's state instead
- * of trusting the `evaluation.state` frames it receives. Every transition the
- * code knows of is announced (`live/events.ts`, `evaluation/events.ts`), and
- * the snapshot seeds the state after the stream is indexed, so a frame cannot
- * fall between the two. But `applyState` itself publishes nothing: a writer
+ * of trusting the `evaluation.state` frames it receives. Every transition
+ * into or out of `running`/`paused` is announced by a frame (`live/events.ts`,
+ * `live/control.ts`); `draft`/`scheduled`/`lobby` moves may send only a hint,
+ * which leaves a stream not running, as it should be. The snapshot seeds the
+ * state after the stream is indexed, so a frame cannot fall between the
+ * two. But `applyState` itself publishes nothing: a writer
  * that forgot to announce would otherwise freeze the cadence for the life of
  * the stream. What is at stake is the cadence of `clock` frames only — the
  * deadline is the ticker's, never the stream's (invariant 5) — so a stale

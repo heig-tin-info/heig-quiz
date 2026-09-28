@@ -97,9 +97,13 @@ type LobbyCount = Omit<LobbyCountEvent, "type">;
  * sweep) waits as a thunk that returns it.
  */
 const lobbyCounts = new Coalescer<() => Promise<LobbyCount | null>>(PRESENCE_WINDOW_MS, (count) => {
-  void count().then((input) => {
-    if (input) emit({ type: "lobby.count", ...input }, [evaluationTopic(input.evaluationId)], "all");
-  });
+  void count()
+    .then((input) => {
+      if (input) emit({ type: "lobby.count", ...input }, [evaluationTopic(input.evaluationId)], "all");
+    })
+    // The bus has no logger; a count that throws is a lost frame, never a
+    // crash (the next window repairs it).
+    .catch((err: unknown) => console.error("lobby.count: count failed", err));
 });
 
 const pollTallies = new Coalescer<PollTallyEvent>(POLL_WINDOW_MS, (event) =>
