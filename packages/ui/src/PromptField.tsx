@@ -76,10 +76,12 @@ export function PromptField({
       <label className={labelToken} htmlFor={id}>
         {label}
       </label>
+      {/* Markdown SOURCE, so the code face; `!` because `textareaClass`
+          already sets `text-sm` and cx does not merge. */}
       <textarea
         id={id}
         rows={rows}
-        className={cx(textareaClass, "w-full resize-y")}
+        className={cx(textareaClass, "w-full resize-y font-mono text-[13px]!")}
         aria-label={label}
         value={value}
         disabled={disabled}

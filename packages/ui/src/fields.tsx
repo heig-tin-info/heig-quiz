@@ -70,7 +70,7 @@ export function Segmented<T extends string>({
         // draws two half-circles the height of both rows. It becomes what it
         // now is — a recessed panel — and keeps the card radius of the design
         // scale, while the pills inside stay pills.
-        wrap ? "flex w-full flex-wrap rounded-card" : "inline-flex shrink-0 flex-wrap rounded-full",
+        wrap ? "flex w-full flex-wrap rounded-card" : "inline-flex shrink-0 rounded-full",
         disabled && "opacity-60",
       )}
     >

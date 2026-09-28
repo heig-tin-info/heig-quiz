@@ -641,7 +641,7 @@ export function ShortEditor({
                 </div>
                 <button
                   type="button"
-                  className={buttonClass("secondary", "sm", "mt-6 w-7 px-0 text-fg-muted hover:text-danger")}
+                  className={buttonClass("secondary", "sm", "mt-6 w-7 px-0! text-fg-muted! hover:text-danger!")}
                   aria-label={`${s.removeMatcher} ${index + 1}`}
                   // A graded question keeps one accepted answer; a poll may
                   // have none (an opinion poll, `keylessConfigSchema`).
