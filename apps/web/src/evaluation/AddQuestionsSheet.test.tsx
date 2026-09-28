@@ -217,6 +217,22 @@ describe("AddQuestionsSheet — the filters", () => {
     await waitFor(() => expect(lastQuestionQuery(calls)).toEqual([["difficulty", "3"]]));
   });
 
+  // FF-11: an <option> holds text only, so the level is said in words — the
+  // words `DifficultyDots` gives a screen reader — never as a row of "●".
+  it("names each difficulty in words, as the rows do", async () => {
+    setup();
+    await screen.findByText("ptr-arith-01");
+    const options = within(difficultySelect()).getAllByRole("option");
+    expect(options.map((o) => o.textContent)).toEqual([
+      "Any difficulty",
+      "Difficulty 1 of 5",
+      "Difficulty 2 of 5",
+      "Difficulty 3 of 5",
+      "Difficulty 4 of 5",
+      "Difficulty 5 of 5",
+    ]);
+  });
+
   /*
    * The ORDER of the parameters is part of what is pinned: the query string
    * is also the cache key (`poolQuestionsKey(poolId, search)`), so a

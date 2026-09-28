@@ -246,7 +246,7 @@ export function AddQuestionsSheet({
               <option value="">{t("picker.allDifficulties")}</option>
               {[1, 2, 3, 4, 5].map((d) => (
                 <option key={d} value={String(d)}>
-                  {"●".repeat(d)}
+                  {t("pool.difficultyOf", { n: d })}
                 </option>
               ))}
             </Select>
