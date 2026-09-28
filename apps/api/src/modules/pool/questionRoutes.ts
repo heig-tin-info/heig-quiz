@@ -16,16 +16,15 @@ import {
   VersionParam,
 } from "@quiz/contracts";
 
-import { pools, questions } from "../../db/schema.js";
+import { questions } from "../../db/schema.js";
 import { findAccessiblePool, requirePoolRole } from "../guards.js";
 import { invalid } from "../http.js";
-import { publish } from "../../events.js";
 import { poolChanged } from "./events.js";
 import * as service from "./service.js";
 import { coreFailure, type PoolRouteContext } from "./routeContext.js";
 
 export function questionRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
-  const { config, requireTeacher, trace, teacher, inPool, onQuestion } = ctx;
+  const { requireTeacher, trace, teacher, inPool, onQuestion } = ctx;
 
   app.get(
     "/app/api/pools/:id/questions",

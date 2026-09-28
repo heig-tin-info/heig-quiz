@@ -3,7 +3,6 @@ import type { FastifyInstance } from "fastify";
 
 import { IdParam, PoolCreate, PoolListQuery, PoolPatch, type PoolInUse } from "@quiz/contracts";
 
-import { pools } from "../../db/schema.js";
 import { managedEvaluationAccess, poolAccess, poolRoleOf, requirePoolRole } from "../guards.js";
 import { invalid } from "../http.js";
 import { publish } from "../../events.js";

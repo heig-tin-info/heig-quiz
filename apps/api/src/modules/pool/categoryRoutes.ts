@@ -4,7 +4,7 @@ import type { FastifyInstance } from "fastify";
 
 import { CategoryCreate, CategoryOrder, CategoryPatch, IdParam } from "@quiz/contracts";
 
-import { categories, pools } from "../../db/schema.js";
+import { categories } from "../../db/schema.js";
 import { poolChanged } from "./events.js";
 import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";

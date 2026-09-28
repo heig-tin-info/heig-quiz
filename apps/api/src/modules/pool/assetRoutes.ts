@@ -1,11 +1,11 @@
 /** The image store of the pools: upload, and serving an asset. */
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import { IdParam, type Asset } from "@quiz/contracts";
 
-import { assets, pools } from "../../db/schema.js";
+import { assets } from "../../db/schema.js";
 import { INERT_IMAGE_HEADERS, isAllowedMime, readAsset, sniffImage, storeAsset } from "./assets.js";
 import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";

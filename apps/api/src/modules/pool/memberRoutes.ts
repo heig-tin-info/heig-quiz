@@ -11,7 +11,6 @@ import {
   TagPatch,
 } from "@quiz/contracts";
 
-import { pools } from "../../db/schema.js";
 import { requirePoolRole } from "../guards.js";
 import { invalid } from "../http.js";
 import { notify } from "../notifications/service.js";

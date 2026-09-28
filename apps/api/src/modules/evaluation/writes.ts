@@ -48,7 +48,7 @@ import {
   QuestionNotInCourse,
   PollNotImplemented,
 } from "./shared.js";
-import { settingsOf, feedbackOf, preferredMcqPolicy, attemptCount } from "./reads.js";
+import { settingsOf, feedbackOf, preferredMcqPolicy } from "./reads.js";
 import { latestPublished, type CopyHome } from "./items.js";
 
 /**

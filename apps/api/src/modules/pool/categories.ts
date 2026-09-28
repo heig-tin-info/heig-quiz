@@ -7,7 +7,6 @@ import type { Category, CategoryCountNode, CategoryNode, PoolCategories } from "
 
 import type { Db } from "../../db/client.js";
 import { categories, questions } from "../../db/schema.js";
-import { questionCount } from "./pools.js";
 
 function categoryJson(row: typeof categories.$inferSelect): Category {
   return {

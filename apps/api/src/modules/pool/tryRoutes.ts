@@ -19,7 +19,7 @@ import * as service from "./service.js";
 import type { PoolRouteContext } from "./routeContext.js";
 
 export function tryRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
-  const { config, requireTeacher, teacher, onQuestion } = ctx;
+  const { requireTeacher, teacher, onQuestion } = ctx;
 
   /** The config of `"draft"` or of a published number, migrated and parsed. */
   async function configOf(

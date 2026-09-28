@@ -21,7 +21,7 @@ import type { PoolRouteContext } from "./routeContext.js";
 type BlockingCourse = service.UsingCourse & { mayLink: boolean };
 
 export function moveRoutes(app: FastifyInstance, ctx: PoolRouteContext): void {
-  const { requireTeacher, trace, mine, teacher } = ctx;
+  const { requireTeacher, trace, mine } = ctx;
 
   /**
    * `POST /questions/move` — the question changes pool and KEEPS its id.

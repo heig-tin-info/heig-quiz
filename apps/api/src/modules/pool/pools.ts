@@ -8,7 +8,6 @@ import { displayName, effectivePoolRole } from "@quiz/domain";
 
 import { isForeignKeyViolation, type Db } from "../../db/client.js";
 import {
-  categories,
   classrooms,
   coursePools,
   courseStaff,

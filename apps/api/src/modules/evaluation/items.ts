@@ -26,7 +26,7 @@ import {
   QuestionNotInCourse,
   PoolUnlinked,
 } from "./shared.js";
-import { classroomIdOf, attemptCount, type JoinedItem, joinedItems, itemRows } from "./reads.js";
+import { classroomIdOf, type JoinedItem, joinedItems, itemRows } from "./reads.js";
 import { byId } from "./writes.js";
 
 /**

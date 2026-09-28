@@ -6,10 +6,8 @@ import type { EvaluationState, TemplateItemRef } from "@quiz/contracts";
 import { EVALUATION_STATES, itemListLock, type EvaluationStateName } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
-import { attempts, evaluationItems, evaluations, questions } from "../../db/schema.js";
+import { evaluationItems, evaluations } from "../../db/schema.js";
 import { DomainError } from "../http.js";
-import { transition } from "./stateMachine.js";
-import { attemptCount } from "./reads.js";
 
 export type EvaluationRecord = typeof evaluations.$inferSelect;
 
