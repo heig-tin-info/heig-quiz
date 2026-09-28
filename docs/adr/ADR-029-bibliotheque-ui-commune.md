@@ -6,6 +6,11 @@ Accepted (2026-09-26, asked for by the product owner in issue #143). This ADR
 settles the direction and the boundaries; the extraction itself has not
 started, and nothing in this repository changes until the package exists.
 
+**Proposed to be superseded by [ADR-035](ADR-035-fusion-de-classroom.md)**
+(2026-09-28): classroom is merged into this repository, so the shared npm
+package loses its reason to exist. The extraction stays paused until
+ADR-035 is settled.
+
 ## Context
 
 Quiz started as a pruned copy of heig-classroom
