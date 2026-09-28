@@ -7,7 +7,9 @@ un nom et un code court. Il survit à une classe : le même cours porte les
 classes de 2026, puis celles de 2027.
 
 Une carte par cours. Ses classes y sont listées avec leur période et leur
-effectif ; un clic en ouvre une.
+effectif ; un clic en ouvre une. Le nom du cours ouvre sa page, qui le
+réunit tout entier : ses classes (les archivées derrière **Afficher les
+archivées**), ses banques et ses modèles d'évaluation.
 
 ## Classes
 
@@ -37,6 +39,14 @@ sont liées. **Lier une banque** en ajoute une ; **Délier de ce cours** retire
 le lien et rien d'autre — la banque et ses questions restent en place. Une
 banque liée à aucun cours reste la vôtre, elle n'est simplement pas proposée
 au moment de remplir une évaluation.
+
+## Modèles d'évaluation
+
+Un modèle est une évaluation gardée par le cours plutôt que par une classe :
+ses questions, ses points et ses réglages, sans dates, code d'accès ni
+adresses IP. **Enregistrer comme modèle**, dans le menu d'une évaluation, en
+crée un ; la page du cours les liste, et **Utiliser dans une classe** part
+de l'un d'eux pour une nouvelle évaluation.
 
 ## Supprimer
 

@@ -10,6 +10,12 @@ export type Route =
   | { view: "settings" }
   | { view: "admin" }
   /**
+   * One course: its classrooms, its linked pools and its evaluation
+   * templates (F-ORG-12). The Courses row stays lit: it is a page of that
+   * section, as a pool is one of the pools'.
+   */
+  | { view: "course"; id: string }
+  /**
    * `tab`: the section to open on (the launch checklist's "Roster" link,
    * #152), carried in `?tab=` like the page's own tabs; `parsePath` never
    * sees it, the page reads it off the query string.
@@ -159,6 +165,12 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
   home: { path: () => "/", match: () => null, studentSafe: true, section: "home" },
   settings: fixed("settings", { view: "settings" }, true),
   admin: { ...fixed("admin", { view: "admin" }), section: "admin" },
+  course: {
+    path: (r) => `/courses/${r.id}`,
+    match: ([head, id]) => (head === "courses" && id ? { view: "course", id } : null),
+    studentSafe: false,
+    section: "home",
+  },
   classroom: {
     path: (r) => `/classrooms/${r.id}${r.tab ? `?tab=${r.tab}` : ""}`,
     match: ([head, id]) => (head === "classrooms" && id ? { view: "classroom", id } : null),

@@ -290,7 +290,7 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
       <PageHeader
         help="classroom"
         eyebrow={
-          <ParentLink onClick={() => navigate({ view: "home" })}>
+          <ParentLink onClick={() => navigate({ view: "course", id: data.course.id })}>
             {data.course.code} — {data.course.name}
           </ParentLink>
         }

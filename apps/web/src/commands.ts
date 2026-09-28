@@ -87,6 +87,9 @@ export interface CommandContext {
 /** Id prefix of the per-classroom commands; the cap below recognizes them by it. */
 export const CLASSROOM_COMMAND_PREFIX = "classroom:";
 
+/** Id prefix of the per-course commands. */
+const COURSE_COMMAND_PREFIX = "course:";
+
 /** Id prefix of the per-pool commands (WP7). */
 const POOL_COMMAND_PREFIX = "pool:";
 
@@ -171,8 +174,21 @@ export function buildCommands(ctx: CommandContext): Command[] {
       });
     }
     // A course the teacher hid is out of their navigation, the palette
-    // included (#155); its classrooms stay one click away on the course list.
+    // included (#155); it and its classrooms stay one click away on the
+    // course list.
     for (const course of ctx.courses.filter((c) => inNavigation(c))) {
+      // "Go to the course" (08 §8.4): the course page, where its classrooms,
+      // pools and templates are. The code rides in the hint, where the fuzzy
+      // match sees it: it is what the sidebar row shows and what a teacher
+      // types.
+      commands.push({
+        id: `${COURSE_COMMAND_PREFIX}${course.id}`,
+        label: t("palette.openCourse", { name: course.name }),
+        hint: course.code,
+        icon: Library,
+        group: "navigate",
+        run: () => navigate({ view: "course", id: course.id }),
+      });
       for (const room of course.classrooms) {
         commands.push({
           id: `${CLASSROOM_COMMAND_PREFIX}${room.id}`,

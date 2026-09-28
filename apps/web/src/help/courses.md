@@ -7,7 +7,9 @@ a short code. It outlives a class: the same course carries the classrooms of
 2026, then those of 2027.
 
 One card per course. Its classrooms are listed with their period and their
-headcount; a click opens one.
+headcount; a click opens one. The course's name opens its page, which holds
+all of it: its classrooms (archived ones behind **Show archived**), its pools
+and its evaluation templates.
 
 ## Classrooms
 
@@ -37,6 +39,14 @@ it. **Link a pool** adds one; **Unlink from this course** removes the link
 and nothing else — the pool and its questions stay where they are. A pool
 that is not linked to any course is still yours, it is simply not offered
 when you fill an evaluation.
+
+## Evaluation templates
+
+A template is an evaluation kept by the course rather than by one classroom:
+its questions, points and settings, without dates, access code or IP
+addresses. **Save as template**, in an evaluation's menu, makes one; the
+course page lists them, and **Use in a classroom** starts a new evaluation
+from one.
 
 ## Deleting
 

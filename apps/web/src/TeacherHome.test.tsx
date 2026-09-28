@@ -45,6 +45,18 @@ describe("TeacherHome", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r1" });
   });
 
+  it("opens the course page from the card's title, and lists no template there (F-ORG-12)", async () => {
+    const { calls } = mockFetch({ [`GET ${COURSES}`]: ok([makeCourseSummary()]) });
+    const navigate = vi.fn();
+    renderWithProviders(<TeacherHome navigate={navigate} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Programmation C" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "course", id: "c1" });
+    // The course page is the one surface of templates: the card neither
+    // shows a section for them nor asks for them.
+    expect(screen.queryByText("Evaluation templates")).toBeNull();
+    expect(calls.some((c) => c.url.endsWith("/templates"))).toBe(false);
+  });
+
   it("offers the one action from the empty state, and creates a course with it", async () => {
     const { calls } = mockFetch({
       [`GET ${COURSES}`]: ok([]),
@@ -85,6 +97,9 @@ describe("TeacherHome", () => {
     const row = screen.getByRole("row", { name: /Programmation C/ });
     await userEvent.click(within(row).getByRole("button", { name: /PRG1-2026/ }));
     expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "r1" });
+    // The course's name is the way into its page, as on the card.
+    await userEvent.click(within(row).getByRole("button", { name: "Programmation C" }));
+    expect(navigate).toHaveBeenCalledWith({ view: "course", id: "c1" });
     expect(localStorage.getItem("quiz-courses-view")).toBe("list");
 
     // A habit, not a state of the data: the next visit opens the same way.

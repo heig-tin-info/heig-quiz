@@ -31,6 +31,9 @@ const AttemptPage = lazy(() =>
   import("./student/Attempt").then((m) => ({ default: m.AttemptPage })),
 );
 const Feedback = lazy(() => import("./student/Feedback").then((m) => ({ default: m.Feedback })));
+const CoursePage = lazy(() =>
+  import("./course/CoursePage").then((m) => ({ default: m.CoursePage })),
+);
 const ClassroomView = lazy(() =>
   import("./ClassroomView").then((m) => ({ default: m.ClassroomView })),
 );
@@ -198,6 +201,7 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   // route parses in every build; this is what refuses to render it.
   devUi: (_, c) => (import.meta.env.DEV ? <DevGallery /> : <TeacherHome navigate={c.navigate} />),
   admin: (_, c) => (c.me.role === "admin" ? <AdminPage /> : <TeacherHome navigate={c.navigate} />),
+  course: (r, c) => <CoursePage id={r.id} navigate={c.navigate} />,
   classroom: (r, c) => <ClassroomView id={r.id} navigate={c.navigate} />,
   polls: (_, c) => <PollLauncher navigate={c.navigate} />,
   // The projection is for a beamer: no sidebar, no chrome (mockup 10).

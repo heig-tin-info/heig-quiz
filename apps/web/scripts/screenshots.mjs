@@ -72,10 +72,18 @@ const scenes = [
   { name: "course-link-pool", role: "teacher", path: "/", fold: true, act: (p) => p.getByRole("button", { name: /link a pool|lier une banque/i }).first().click() },
   { name: "course-new", role: "teacher", path: "/", act: (p) => p.getByRole("button", { name: /new course/i }).first().click() },
   { name: "classroom-new", role: "teacher", path: "/", act: (p) => p.getByRole("button", { name: /new classroom/i }).first().click() },
-  // ADR-031: the course's evaluation templates, under its pools, and the
-  // dialog that makes a classroom's evaluation from one.
-  { name: "course-templates", role: "teacher", path: "/", fold: true },
-  { name: "course-template-use", role: "teacher", path: "/", fold: true, act: (p) => p.getByRole("button", { name: /use in a classroom|utiliser dans une classe/i }).first().click() },
+  // F-ORG-12: the page of one course — classrooms, pools, templates. PRG1
+  // holds the mock's two templates, EMB none (the empty state), and an id
+  // nobody reaches is the not-found state.
+  { name: "course-page", role: "teacher", path: "/courses/c1", act: skipCoach },
+  { name: "course-page-no-templates", role: "teacher", path: "/courses/c2", act: skipCoach },
+  { name: "course-page-actions", role: "teacher", path: "/courses/c1", fold: true, act: async (p) => { await skipCoach(p); await p.getByRole("button", { name: /^actions$/i }).first().click(); } },
+  { name: "course-page-not-found", role: "teacher", path: "/courses/nope" },
+  { name: "course-page-error", role: "teacher", path: "/courses/c1?fail=1", settle: 2500 },
+  { name: "course-page-loading", role: "teacher", path: "/courses/c1?slow=1", settle: 300 },
+  // ADR-031: the course's evaluation templates, on its page, and the dialog
+  // that makes a classroom's evaluation from one.
+  { name: "course-template-use", role: "teacher", path: "/courses/c1", fold: true, act: (p) => p.getByRole("button", { name: /use in a classroom|utiliser dans une classe/i }).first().click() },
   { name: "eval-new-from-template", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /new evaluation|nouvelle évaluation/i }).first().click() },
   { name: "eval-save-template", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: async (p) => { await p.getByRole("button", { name: /^actions$/i }).first().click(); await p.getByRole("menuitem", { name: /save as template|enregistrer comme modèle/i }).click(); } },
   // #155: a hidden course brought back by "Show hidden", the course menu with
@@ -97,18 +105,15 @@ const scenes = [
       await p.waitForTimeout(400);
     } },
   // #154: the course → classroom tree under "Courses", in its three states,
-  // and a second course unfolded in "all" with its code's tip.
+  // and a second course's row in "all" with its code's tip. The rows open the
+  // course page (F-ORG-12), so the tip is hovered, not clicked.
   ...["collapsed", "active", "all"].map((state) => ({
     name: `sidebar-courses-${state}`, role: "teacher", path: "/classrooms/r4", fold: true,
     ls: { "quiz-courses-nav": state }, act: skipCoach,
   })),
   { name: "sidebar-courses-all-tip", role: "teacher", path: "/classrooms/r4", fold: true, ls: { "quiz-courses-nav": "all" }, act: async (p) => {
       await skipCoach(p);
-      const emb = p.getByRole("button", { name: "EMB", exact: true }).first();
-      await emb.click();
-      // A click dismisses a tip: leave the row, then come back to it.
-      await p.mouse.move(700, 600);
-      await emb.hover();
+      await p.getByRole("button", { name: "EMB", exact: true }).first().hover();
       await p.waitForTimeout(400);
     } },
   { name: "classroom-roster", role: "teacher", path: "/classrooms/r1?tab=roster" },
