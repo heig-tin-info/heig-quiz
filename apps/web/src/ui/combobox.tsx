@@ -1,6 +1,7 @@
 import { useEffect, useId, useState, type KeyboardEvent, type ReactNode } from "react";
 
-import { cx, listboxIndex, Z } from "./layers";
+import { cx, Z } from "./layers";
+import { listboxIndex } from "./menu";
 
 /**
  * How long a picker's list outlives the blur of its input: a click on a row

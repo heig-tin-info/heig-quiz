@@ -1,5 +1,6 @@
 import { useT } from "../i18n";
-import { cx, IconButton, Menu, type MenuItem } from "./layers";
+import { cx, IconButton } from "./layers";
+import { Menu, type MenuItem } from "./menu";
 
 /**
  * The actions of one record — a course, a pool, a row — as the shape they

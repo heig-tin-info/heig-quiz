@@ -19,7 +19,8 @@ import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 
 import { useT } from "../i18n";
-import { cx, rovingIndex, useNow, type IconType } from "./layers";
+import { cx, useNow, type IconType } from "./layers";
+import { rovingIndex } from "./menu";
 
 // --- Live primitives (PLAN-MVP §6.4) ---
 //

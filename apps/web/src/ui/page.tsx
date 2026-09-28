@@ -2,7 +2,8 @@ import { PenLine } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
 
-import { cx, HelpIcon, rovingIndex, Tip, type IconType } from "./layers";
+import { cx, HelpIcon, Tip, type IconType } from "./layers";
+import { rovingIndex } from "./menu";
 
 // Surfaces and page structure.
 

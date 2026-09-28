@@ -197,7 +197,7 @@ move and select with wrap, Home/End jump. A `value` matching no item still
 leaves the first tab reachable, so a hand-edited URL cannot take the whole
 strip out of the Tab order.
 
-The index arithmetic behind those keys is written once, in `ui/layers.tsx`:
+The index arithmetic behind those keys is written once, in `ui/menu.tsx`:
 `listboxIndex` for a vertical list (the menu, the palette, and the tag,
 teacher and filter comboboxes through `useCombobox` — arrows wrap, and
 Home/End only where the list owns them, since in a text field they move the
