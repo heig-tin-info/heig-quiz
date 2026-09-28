@@ -89,6 +89,8 @@ export function notificationSentence(payload: NotificationPayload, t: TFunction)
       return t("notif.activityAvailable", { evaluationTitle: payload.evaluationTitle });
     case "deadline_approaching":
       return t("notif.deadlineApproaching", { evaluationTitle: payload.evaluationTitle });
+    case "results_updated":
+      return t("notif.resultsUpdated", { evaluationTitle: payload.evaluationTitle });
     case "student_joined":
       return t(payload.count === 1 ? "notif.studentJoined.one" : "notif.studentJoined", {
         n: payload.count,
@@ -114,7 +116,7 @@ export function notificationSentence(payload: NotificationPayload, t: TFunction)
 
 /**
  * Where a notification takes the reader: the pool it is about, the
- * feedback page of the attempt whose results were released, the roster
+ * feedback page of the attempt whose results were released or updated, the roster
  * of the classroom, the grading panel of the evaluation, the student home
  * (exercises scheduled) or the attempt of an exercise that opened or of an
  * evaluation about to close. The e-mail and
@@ -127,6 +129,7 @@ function notificationRoute(payload: NotificationPayload): Route {
     case "pool_question_added":
       return { view: "pool", id: payload.poolId };
     case "results_released":
+    case "results_updated":
       return { view: "feedback", attemptId: payload.attemptId };
     case "student_joined":
     case "roster_conflict":

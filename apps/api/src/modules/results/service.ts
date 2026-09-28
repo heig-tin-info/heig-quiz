@@ -97,6 +97,8 @@ import { answeredBy } from "../live/service.js";
 import { solutionView, stripKeys, studentView } from "../live/studentView.js";
 import { typeOf } from "../pool/config.js";
 
+export { watchReleasedGrades, type GradeWatch } from "./updated.js";
+
 export class ResultsError extends DomainError {
   override name = "ResultsError";
 }
@@ -369,7 +371,8 @@ export async function unreleaseResults(
     await clearRelease(tx, evaluation.id, now);
     await applyState(tx, evaluation, "closed", now);
   });
-  // The bells that announced it would open a page that shows nothing now.
+  // The bells that announced it, or a correction of it, would open a page
+  // that shows nothing now.
   await withdrawResultsReleased(db, evaluation.id);
 }
 
@@ -759,9 +762,9 @@ export interface ReleasedGrade {
  * The grade frozen at release is served as long as it is still true
  * (`cachedGrade`, D-06). F-GRADE-09 is explicit: a re-correction after the
  * release UPDATES the grades, so once `modified_after_release` is set they
- * are recomputed from the validated gradings of the counted attempt. Two
- * grouped queries for the rows that need it, not two per row — and none when
- * every row is cached.
+ * are recomputed from the validated gradings of the counted attempt
+ * ({@link gradeShown}). Two grouped queries for the rows that need it, not two
+ * per row — and none when every row is cached.
  */
 export async function releasedGradesOf(
   db: Db,
@@ -770,29 +773,102 @@ export async function releasedGradesOf(
   retaking: ReadonlyMap<string, StudentAttempts>,
 ): Promise<Map<string, ReleasedGrade>> {
   const released = rows.filter((row) => row.evaluation.releasedAt !== null);
-  const cached = new Map(
+  const live = released.filter(
+    (row) => cachedGrade(row.evaluation, userId, countedAttemptId(retaking, row)) === null,
+  );
+  const tallies = await liveTallies(
+    db,
+    [...new Set(live.map((r) => r.evaluation.id))],
+    live.map((row) => countedAttemptId(retaking, row)),
+  );
+  return new Map(
     released.map((row) => [
       row.evaluation.id,
-      cachedGrade(row.evaluation, userId, countedAttemptId(retaking, row)),
+      gradeShown(row.evaluation, userId, countedAttemptId(retaking, row), tallies),
     ]),
   );
-  const live = released.filter((row) => cached.get(row.evaluation.id) === null);
-  const [totals, pointsPerAttempt] = await Promise.all([
-    totalPointsByEvaluation(db, [...new Set(live.map((r) => r.evaluation.id))]),
+}
+
+/** What {@link gradeShown} needs of a grade that is not frozen any more. */
+interface LiveTallies {
+  totals: ReadonlyMap<string, number>;
+  points: ReadonlyMap<string, number>;
+}
+
+/** The totals of `evaluationIds` and the points of `attemptIds`: two grouped queries. */
+async function liveTallies(
+  db: Db,
+  evaluationIds: readonly string[],
+  attemptIds: readonly (string | null)[],
+): Promise<LiveTallies> {
+  const [totals, points] = await Promise.all([
+    totalPointsByEvaluation(db, [...evaluationIds]),
     pointsByAttempt(
       db,
-      live.map((row) => countedAttemptId(retaking, row)).filter((id): id is string => id !== null),
+      attemptIds.filter((id): id is string => id !== null),
     ),
   ]);
+  return { totals, points };
+}
+
+/**
+ * THE grade a student is shown for a released evaluation — the student home,
+ * the results cards and `results_updated` all read it here: the frozen one
+ * while it still holds (`cachedGrade`), otherwise the live one, from the
+ * validated gradings of the attempt that counts.
+ */
+function gradeShown(
+  evaluation: EvaluationRecord,
+  userId: string,
+  attemptId: string | null,
+  live: LiveTallies,
+): ReleasedGrade {
+  const hit = cachedGrade(evaluation, userId, attemptId);
+  if (hit) return { attemptId, ...hit };
+  const totalPoints = live.totals.get(evaluation.id) ?? 0;
+  const points = attemptId ? (live.points.get(attemptId) ?? 0) : 0;
+  const grade = gradeFromPoints(points, totalPoints, scaleOf(evaluation));
+  return { attemptId, points, totalPoints, grade };
+}
+
+/** {@link ReleasedGrade}, and whether the feedback page would show it now. */
+export interface ShownGrade extends ReleasedGrade {
+  visible: boolean;
+}
+
+/**
+ * {@link gradeShown} for several students of ONE released evaluation, in a
+ * handful of queries whatever their number (the kept attempts, the total,
+ * the points): what `results_updated` compares before and after a grading
+ * write. `visible` is {@link resultsState}'s `available`, so a student under
+ * the policy `none`, or with no attempt, is never told of a grade they cannot
+ * read.
+ */
+export async function shownGrades(
+  db: Db,
+  evaluation: EvaluationRecord,
+  userIds: readonly string[],
+): Promise<Map<string, ShownGrade>> {
+  const kept = await keptAttempts(db, evaluation);
+  const attemptOf = (userId: string) => kept.get(userId) ?? null;
+  const live = userIds.filter(
+    (userId) => cachedGrade(evaluation, userId, attemptOf(userId)?.id ?? null) === null,
+  );
+  const tallies = await liveTallies(
+    db,
+    live.length === 0 ? [] : [evaluation.id],
+    live.map((userId) => attemptOf(userId)?.id ?? null),
+  );
   return new Map(
-    released.map((row) => {
-      const attemptId = countedAttemptId(retaking, row);
-      const hit = cached.get(row.evaluation.id) ?? null;
-      if (hit) return [row.evaluation.id, { attemptId, ...hit }];
-      const totalPoints = totals.get(row.evaluation.id) ?? 0;
-      const points = attemptId ? (pointsPerAttempt.get(attemptId) ?? 0) : 0;
-      const grade = gradeFromPoints(points, totalPoints, scaleOf(row.evaluation));
-      return [row.evaluation.id, { attemptId, points, totalPoints, grade }];
+    userIds.map((userId) => {
+      const attempt = attemptOf(userId);
+      return [
+        userId,
+        {
+          ...gradeShown(evaluation, userId, attempt?.id ?? null, tallies),
+          visible: resultsState(evaluation, attempt?.state ?? null) === "available",
+        },
+      ];
     }),
   );
 }

@@ -32,7 +32,8 @@ the same change; the rest lands in the steps the addendum lists. Step 4 made the
 channel the bell and the toast, and moved `student_joined` and
 `roster_conflict` into the catalogue (the column `notifications.classroom_id`
 and the fold indexes, migration `0027_notification_folds`; Teams app 2.1.0);
-§h records the decisions taken after the review.
+§h records the decisions taken after the review. Step 8, `results_updated`
+(migration `0031_results_updated_fold`), closed the list.
 
 ## Context
 
@@ -577,7 +578,8 @@ evaluation (§c).
   addendum; the App channel and the migration of the two SSE kinds, with the
   manifest bump; `grading_ready` and `pool_question_added`;
   `activity_scheduled` and `activity_available`; `deadline_approaching`, with
-  its scan, marker table and migration; `results_updated`, last.
+  its scan, marker table and migration; `results_updated`, last. All eight
+  have shipped; the list is closed.
 
 ### g. Out of scope
 
@@ -736,3 +738,53 @@ Step 7 (`deadline_approaching`) settled:
   logged, the other evaluations of the pass are still told, and the scan
   never throws at the ticker. The markers of a failed fan-out stay claimed
   and are not retried.
+
+Step 8 (`results_updated`) settled:
+
+- **The hook is the single grading writer**, `writeGradings`
+  (`modules/grading/service.ts`), not `flagReleasedEvaluationsOf`, which
+  runs inside the writer's transaction. Every path that validates a
+  grading goes through it — a click, an override, a batch, the automatic
+  pass, a runner job, the pass of a regrade — so none can be forgotten. It
+  calls `watchReleasedGrades` (`modules/results/updated.ts`) before its
+  transactions and `announce()` after the last one has committed: once per
+  WRITE, never once per cell. A write of proposals only does nothing.
+- **"The final grade" is the grade the results page shows**, read by ONE
+  rule, `gradeShown` in `modules/results/service.ts`, which the student
+  home, the results cards and this comparison all use: the frozen grade of
+  `released_grades` while `modified_after_release` is false, the live one
+  from the validated gradings of the kept attempt otherwise. Before the
+  first correction the comparison is therefore against the grade the
+  student was told about at the release; after, against the grade shown
+  just before the write. Nothing is stored for it (§h.4).
+- **The cost**: one query finds the released evaluations the written
+  attempts belong to (none: nothing more is read, the ordinary case of a
+  grading session). For a released one, `shownGrades` reads the kept
+  attempts, the total and the points of the students concerned, before and
+  after — a handful of queries per write whatever the number of cells.
+- **Who is told**: the owners of the written attempts whose shown grade
+  differs, only when the feedback page would show it now (`resultsState`
+  answers `available`: not under the policy `none`, not without an
+  attempt), never for a teacher's own test (ADR-018). The evaluation is
+  read again after the commit: a release withdrawn in between tells nobody.
+- **The payload is `{ evaluationId, evaluationTitle, attemptId, count }`**,
+  never a grade (invariant 4). `attemptId` is there for the link: the
+  student's feedback page is `/attempts/<id>/feedback`, as for
+  `results_released`; `count` is what the fold adds up. The sentence does
+  not use the count ("Your grade for … changed after a correction"): how
+  many corrections were folded is not news to a student, so the kind has no
+  `.one` sentence and `sentenceKey` falls back to the plain one.
+- **Folded per evaluation** on `(user_id, evaluation_id)`, migration
+  `0031_results_updated_fold`. App on, e-mail and Teams off by default, no
+  delay (§h.5). `unreleaseResults` withdraws the `results_updated` bells of
+  the evaluation with its `results_released` ones.
+- **Best-effort**: a failure while reading the grades before, or while
+  telling after, is logged and never fails the grading write.
+- **Known limit, the regrade**: `regradeItem` stands the item's gradings
+  down and the route raises `modified_after_release` at once, so until the
+  pass re-grades the item the page shows the grade without it. The pass (or
+  the teacher's validation of its proposals) then compares against that
+  intermediate grade, and a student whose points on the item come back
+  unchanged may be told of an update. Carrying the grade from before the
+  regrade across to the pass would need a stored snapshot, which §h.4
+  rules out.

@@ -1,7 +1,8 @@
 /**
  * The notifications a user's action raises are BEST-EFFORT (ADR-030 §h,
- * #198 steps 5 to 7): when `notifyMany` fails, the publication, the grading
- * and the move of an exercise it would have announced are still written, and
+ * #198 steps 5 to 8): when `notifyMany` fails, the publication, the grading,
+ * the move of an exercise and the correction of a released grade it would
+ * have announced are still written, and
  * nothing is thrown at the caller — the ticker included, and its deadline
  * scan, whose markers stay claimed (not retried).
  */
@@ -28,6 +29,8 @@ import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive, type Seeded } from "../../test/live.js";
 import * as evaluationService from "../evaluation/service.js";
 import { runEvaluationGrading } from "../grading/jobs.js";
+import * as grading from "../grading/service.js";
+import { releaseResults } from "../results/service.js";
 import * as live from "../live/service.js";
 import * as poolService from "../pool/service.js";
 import { sendDeadlineReminders } from "./deadline.js";
@@ -141,5 +144,40 @@ describe("a failing notification", () => {
     vi.mocked(notifyMany).mockClear();
     const again = await sendDeadlineReminders(db, due);
     expect(again.filter((c) => seeds.some((s) => s.evaluationId === c.evaluationId))).toEqual([]);
+  });
+
+  it("never fails a correction after the release: the override is written", async () => {
+    const app = await testApp(db);
+    const seed = await seedLive(db, { students: 1, questions: 1 });
+    let evaluation = await evaluationService.applyState(
+      db,
+      await reload(db, seed.evaluationId),
+      "running",
+      app.clock.now(),
+    );
+    const participant = (await live.participantOf(db, evaluation, seed.studentIds[0]!))!;
+    const created = await live.ensureAttempt(db, evaluation, participant, app.clock.now());
+    const attempt = await live.beginAttempt(db, evaluation, created, participant, app.clock.now());
+    evaluation = await live.closeEvaluation(db, evaluation, app.clock.now());
+    const [item] = await evaluationService.joinedItems(db, evaluation.id);
+    const cell = { attemptId: attempt.id, itemId: item!.item.id, answerId: null, maxPoints: item!.item.points };
+    await grading.manualOverride(db, cell, { points: 0, comment: "blank" }, seed.teacherId, app.clock.now());
+    // The release's own `results_released` is not under test here.
+    vi.mocked(notifyMany).mockResolvedValueOnce([]);
+    await releaseResults(db, await reload(db, evaluation.id), app.clock.now());
+
+    vi.mocked(notifyMany).mockClear();
+    const row = await grading.manualOverride(
+      db,
+      cell,
+      { points: item!.item.points, comment: "re-read" },
+      seed.teacherId,
+      app.clock.now(),
+    );
+    expect(vi.mocked(notifyMany).mock.calls.map(([, d]) => d[0]?.payload.kind)).toEqual([
+      "results_updated",
+    ]);
+    const [standing] = await db.select().from(gradings).where(eq(gradings.id, row.id));
+    expect(standing).toMatchObject({ state: "validated", points: item!.item.points });
   });
 });

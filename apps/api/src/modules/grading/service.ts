@@ -57,6 +57,7 @@ import {
 } from "../evaluation/service.js";
 import { solutionViewOf, studentViewOf } from "../live/studentView.js";
 import { loadConfig } from "../pool/config.js";
+import { watchReleasedGrades } from "../results/service.js";
 import { tallyByAttempt } from "./kept.js";
 
 export type GradingRecord = typeof gradings.$inferSelect;
@@ -173,10 +174,18 @@ export async function writeGradings(
     }
     seen.add(key);
   }
+  // `results_updated` (ADR-030 §h.4): the grade each student is shown on a
+  // RELEASED evaluation, read before the write and compared after the
+  // commit — once per write, not per cell, and never inside the transaction
+  // (§1). Only a validated grading counts towards a grade.
+  const watch = await watchReleasedGrades(db, [
+    ...new Set(inputs.filter((i) => i.state === "validated").map((i) => i.attemptId)),
+  ]);
   const out: GradingRecord[] = [];
   for (let start = 0; start < inputs.length; start += WRITE_CHUNK) {
     out.push(...(await writeChunk(db, inputs.slice(start, start + WRITE_CHUNK))));
   }
+  await watch.announce();
   return out;
 }
 
