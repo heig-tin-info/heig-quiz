@@ -269,7 +269,11 @@ describe("AddQuestionsSheet — the filters", () => {
     // No request ever carried an empty `type`: the "any" option removes the
     // parameter rather than sending it blank, which is also what keeps the
     // unfiltered list on ONE cache entry.
-    expect(questionQueries(calls).flat().filter(([k, v]) => k === "type" && v === "")).toEqual([]);
+    expect(
+      questionQueries(calls)
+        .flat()
+        .filter(([k, v]) => k === "type" && v === ""),
+    ).toEqual([]);
   });
 
   /*
@@ -286,7 +290,9 @@ describe("AddQuestionsSheet — the filters", () => {
     ) as HTMLOptionElement[];
     const values = options.map((o) => o.value);
     expect(values[0]).toBe("");
-    expect(values).toEqual(expect.arrayContaining(["mcq", "short", "cloze", "code", "circuit", "codeimage"]));
+    expect(values).toEqual(
+      expect.arrayContaining(["mcq", "short", "cloze", "code", "circuit", "codeimage"]),
+    );
     // FC-04: the label is the registry's own, so the type that used to fall
     // through the hand-written list reads as a word and not as its id.
     expect(options.find((o) => o.value === "circuit")?.textContent).toBe("Circuit");
@@ -364,9 +370,9 @@ describe("AddQuestionsSheet — the cache it shares with the pool screen", () =>
   it("caches the list under the pool screen's key", async () => {
     const { queryClient } = setup();
     await screen.findByText("ptr-arith-01");
-    expect(
-      queryClient.getQueryData(poolQuestionsKey("p1", `?limit=${PAGE_SIZE}`)),
-    ).toMatchObject({ pages: [PAGE] });
+    expect(queryClient.getQueryData(poolQuestionsKey("p1", `?limit=${PAGE_SIZE}`))).toMatchObject({
+      pages: [PAGE],
+    });
   });
 
   it("refetches when the pool is invalidated, as a question created there does", async () => {
@@ -511,5 +517,138 @@ describe("AddQuestionsSheet — adding", () => {
 
     expect(await screen.findByText("This question has no published version.")).toBeVisible();
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * Looking at a question before adding it (issue #207). Ticking and looking
+ * are two gestures: the checkbox ticks, the rest of the row previews. The
+ * preview is the student's rendering of the version "Add" would freeze —
+ * the latest published one, or the draft of a question never published.
+ */
+describe("AddQuestionsSheet — the preview", () => {
+  const VIEW = {
+    type: "mcq",
+    student: {
+      prompt: "Que vaut un pointeur non initialisé ?",
+      choices: [
+        { id: 0, text: "NULL" },
+        { id: 1, text: "Une valeur indéterminée" },
+      ],
+      mode: "single",
+    },
+    itemPoints: 2,
+  };
+  const withPreviews = () =>
+    setup({
+      "POST /app/api/questions/q1/preview": ok(VIEW),
+      "POST /app/api/questions/q2/preview": ok(VIEW),
+      "POST /app/api/questions/q3/preview": ok(VIEW),
+    });
+  const previewCalls = (calls: RecordedCall[]) =>
+    calls.filter((c) => c.method === "POST" && c.url.endsWith("/preview"));
+
+  it("previews the latest published version of a clicked row, without ticking it", async () => {
+    const user = userEvent.setup();
+    const { calls } = withPreviews();
+    await screen.findByText("ptr-arith-01");
+
+    await user.click(screen.getByRole("button", { name: "Preview ptr-arith-01" }));
+    expect(await screen.findByText("Que vaut un pointeur non initialisé ?")).toBeVisible();
+    expect(previewCalls(calls)).toEqual([
+      expect.objectContaining({ url: "/app/api/questions/q1/preview", body: { source: 1 } }),
+    ]);
+    expect(screen.getByText("2 points")).toBeVisible();
+    expect(screen.getByRole("link", { name: /Open in the editor/ })).toHaveAttribute(
+      "target",
+      "_blank",
+    );
+    // Looking is not ticking.
+    expect(screen.getByRole("button", { name: "Add questions" })).toBeDisabled();
+  });
+
+  it("previews the draft of a question never published, and says so", async () => {
+    const user = userEvent.setup();
+    const { calls } = withPreviews();
+    await screen.findByText("ptr-null-check");
+
+    // Its checkbox is out of reach; looking at it is not.
+    await user.click(screen.getByRole("button", { name: "Preview ptr-null-check" }));
+    expect(await screen.findByText("Never published — this is its draft")).toBeVisible();
+    expect(previewCalls(calls)[0]).toMatchObject({ body: { source: "draft" } });
+  });
+
+  it("shows the server's refusal instead of the question when the draft cannot render", async () => {
+    const user = userEvent.setup();
+    setup({
+      "POST /app/api/questions/q2/preview": {
+        status: 422,
+        body: { error: "config_invalid", message: "This version cannot be rendered" },
+      },
+    });
+    await screen.findByText("ptr-null-check");
+    await user.click(screen.getByRole("button", { name: "Preview ptr-null-check" }));
+    expect(await screen.findByText("This version cannot be rendered")).toBeVisible();
+  });
+
+  it("replaces the list on a narrow window, and Back returns to it with the ticks kept", async () => {
+    const user = userEvent.setup();
+    withPreviews();
+    await screen.findByText("ptr-arith-01");
+    await user.click(within(rowOf("array-decay")).getByRole("checkbox"));
+    await user.click(screen.getByRole("button", { name: "Preview ptr-arith-01" }));
+
+    expect(await screen.findByText("Que vaut un pointeur non initialisé ?")).toBeVisible();
+    expect(screen.queryByText("array-decay")).toBeNull();
+    // The footer stays: the selection is still one click from being added.
+    expect(screen.getByRole("button", { name: "Add 1 question" })).toBeEnabled();
+
+    expect(screen.getByRole("button", { name: "Back to the list" })).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(within(rowOf("array-decay")).getByRole("checkbox")).toBeChecked();
+    // The focus is back on the row it left, not at the top of the sheet.
+    expect(screen.getByRole("button", { name: "Preview ptr-arith-01" })).toHaveFocus();
+  });
+
+  it("docks the preview beside the list on a wide window, and ↓ walks it", async () => {
+    const matchMedia = window.matchMedia;
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      ...matchMedia(query),
+      matches: query === "(min-width: 1280px)",
+    }));
+    try {
+      const user = userEvent.setup();
+      const { calls } = withPreviews();
+      await screen.findByText("ptr-arith-01");
+      // No empty pane before the first look.
+      expect(screen.queryByRole("complementary")).toBeNull();
+
+      await user.click(screen.getByRole("button", { name: "Preview ptr-arith-01" }));
+      const pane = await screen.findByRole("complementary");
+      expect(await within(pane).findByText("ptr-arith-01")).toBeVisible();
+      // The list is still there, the row marked as the one looked at.
+      expect(screen.getByRole("button", { name: "Preview ptr-arith-01" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+
+      await user.keyboard("{ArrowDown}");
+      expect(screen.getByRole("button", { name: "Preview ptr-null-check" })).toHaveFocus();
+      expect(await within(pane).findByText("ptr-null-check")).toBeVisible();
+      // Space takes the row the preview is on; ptr-null-check is never
+      // published, so it stays out of reach — ↓ once more to array-decay.
+      await user.keyboard(" ");
+      expect(screen.getByRole("button", { name: "Add questions" })).toBeDisabled();
+      await user.keyboard("{ArrowDown} ");
+      // By its accessible name: the name is printed twice now, row and pane.
+      expect(screen.getByRole("checkbox", { name: "array-decay" })).toBeChecked();
+      expect(previewCalls(calls).map((c) => c.url)).toEqual([
+        "/app/api/questions/q1/preview",
+        "/app/api/questions/q2/preview",
+        "/app/api/questions/q3/preview",
+      ]);
+    } finally {
+      vi.stubGlobal("matchMedia", matchMedia);
+    }
   });
 });

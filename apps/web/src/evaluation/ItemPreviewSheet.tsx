@@ -1,15 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Eye } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Eye } from "lucide-react";
 
 import type { ItemPreview, ItemRow } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { api } from "../api";
 import { useT } from "../i18n";
 import { itemPreviewKey } from "../queryKeys";
-import { emptyAnswerOf, QuestionHost } from "../student/QuestionHost";
 import { typeLabel } from "../questionTypes";
-import { Alert, Card, Sheet, Skeleton } from "../ui";
+import { Alert, Sheet } from "../ui";
+import { PreviewedQuestion } from "./PreviewedQuestion";
 
 /**
  * The Preview of a row of the question list (issue #127): ONE item, as a
@@ -25,10 +24,8 @@ import { Alert, Card, Sheet, Skeleton } from "../ui";
  *   - it is loaded through the EVALUATION: a colleague of the course previews
  *     an item whatever pool it was drawn from.
  *
- * The teacher may type in the fields — a preview one cannot touch does not
- * answer "does this read right?" — and the answer lives in this component
- * and dies with the sheet. Nothing is saved, run or graded: the whole-exam
- * preview (#75) is where an evaluation is rehearsed end to end.
+ * Nothing is saved, run or graded: the whole-exam preview (#75) is where an
+ * evaluation is rehearsed end to end.
  */
 export function ItemPreviewSheet({
   evaluationId,
@@ -61,43 +58,8 @@ export function ItemPreviewSheet({
         <Alert icon={Eye} title={t("eval.questions.preview.banner")}>
           {t("eval.questions.preview.bannerBody")}
         </Alert>
-        {preview.isLoading ? (
-          <Card className="space-y-3 p-5 sm:p-6">
-            <Skeleton className="h-5 w-2/3" />
-            <Skeleton className="h-24 w-full" />
-          </Card>
-        ) : preview.isError || !preview.data ? (
-          <Alert tone="warning" icon={AlertTriangle} title={t("question.previewFailed")}>
-            {apiErrorMessage(preview.error, t("error.server"))}
-          </Alert>
-        ) : (
-          <PreviewedItem preview={preview.data} />
-        )}
+        <PreviewedQuestion query={preview} />
       </div>
     </Sheet>
-  );
-}
-
-function PreviewedItem({ preview }: { preview: ItemPreview }) {
-  const t = useT();
-  const [answer, setAnswer] = useState<unknown>(() =>
-    emptyAnswerOf(preview.type, preview.student),
-  );
-  useEffect(() => setAnswer(emptyAnswerOf(preview.type, preview.student)), [preview]);
-  return (
-    <>
-      <p className="text-right text-[13px] text-fg-muted">
-        {preview.points === 1 ? t("player.point") : t("player.points", { n: preview.points })}
-      </p>
-      <Card className="p-5 sm:p-6">
-        <QuestionHost
-          type={preview.type}
-          student={preview.student}
-          answer={answer}
-          onChange={setAnswer}
-          readOnly={false}
-        />
-      </Card>
-    </>
   );
 }

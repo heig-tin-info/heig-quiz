@@ -148,6 +148,9 @@ const scenes = [
   { name: "eval-config-item-preview", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: (p) => p.getByRole("button", { name: /^preview /i }).first().click() },
   { name: "eval-config-item-edit", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: (p) => p.getByRole("button", { name: /^edit /i }).first().click() },
   { name: "eval-config-picker", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { name: /add questions/i }).first().click() },
+  // The picker with a question looked at (issue #207): docked beside the list
+  // from 1280 px, in place of the list below.
+  { name: "eval-config-picker-preview", role: "teacher", path: "/evaluations/draft?step=questions", fold: true, act: async (p) => { await p.getByRole("button", { name: /add questions/i }).first().click(); await p.getByRole("dialog").getByRole("button", { name: /^(Preview|Aperçu de) / }).nth(1).click(); await p.waitForTimeout(800); } },
   { name: "eval-config-milestone-gap", role: "teacher", path: "/evaluations/draft?step=questions", act: (p) => p.getByRole("button", { name: /^reorder /i }).first().hover() },
   { name: "eval-config-timing", role: "teacher", path: "/evaluations/draft?step=timing" },
   { name: "eval-config-advanced", role: "teacher", path: "/evaluations/draft?step=timing", act: (p) => p.getByRole("button", { name: /^advanced options$/i }).first().click() },
