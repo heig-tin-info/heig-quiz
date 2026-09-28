@@ -24,7 +24,7 @@
  *     signed in, and by nobody else (the route loads the viewer through
  *     `findReachableEvaluation` before joining or answering).
  */
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomInt } from "node:crypto";
 
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
@@ -121,10 +121,9 @@ const ENDED_GRACE_MS = 2 * 60 * 60 * 1000;
 
 /** One uniformly drawn session code. Six characters is 32^6 ≈ 10^9 codes. */
 export function drawCode(): string {
-  const bytes = randomBytes(CODE_LENGTH);
-  let out = "";
-  for (const byte of bytes) out += CODE_ALPHABET[byte % CODE_ALPHABET.length];
-  return out;
+  // `randomInt`, not `byte % length`: uniform whatever the alphabet's size.
+  const draw = () => CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
+  return Array.from({ length: CODE_LENGTH }, draw).join("");
 }
 
 /** How many codes `createPoll` draws before giving up; one collision is already rare. */
@@ -664,7 +663,7 @@ export async function publicView(
  * because a poll run before it may still carry a classroom and the stored
  * flag is gone — `anonymous` is derived from the classroom.
  */
-export function rosterOfRun(
+function rosterOfRun(
   anonymous: boolean,
   classroomId: string | null,
   rosters: ReadonlyMap<string, number>,
