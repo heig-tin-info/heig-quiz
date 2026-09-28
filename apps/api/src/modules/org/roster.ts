@@ -92,7 +92,10 @@ async function settleClaims<M extends Match>(
   actorId: string,
   onClaimed: (match: M) => void,
 ): Promise<number> {
-  const conflicts = new Map<string, Match & { count: number }>();
+  const conflicts = new Map<
+    string,
+    { courseId: string; classroomId: string; classroomName: string; count: number }
+  >();
 
   async function flagConflict(match: M) {
     const [raised] = await db
@@ -108,9 +111,10 @@ async function settleClaims<M extends Match>(
       subjectType: "enrollment",
       subjectId: match.entryId,
     });
-    const room = conflicts.get(match.classroomId) ?? { ...match, count: 0 };
+    const { courseId, classroomId, classroomName } = match;
+    const room = conflicts.get(classroomId) ?? { courseId, classroomId, classroomName, count: 0 };
     room.count += 1;
-    conflicts.set(match.classroomId, room);
+    conflicts.set(classroomId, room);
   }
 
   let claimed = 0;
@@ -119,15 +123,19 @@ async function settleClaims<M extends Match>(
       await flagConflict(match);
       continue;
     }
+    let attached: { id: string } | undefined;
     try {
-      await db
+      [attached] = await db
         .update(enrollments)
         .set({ userId: match.userId, claimedAt: new Date() })
-        .where(and(eq(enrollments.id, match.entryId), isNull(enrollments.userId)));
+        .where(and(eq(enrollments.id, match.entryId), isNull(enrollments.userId)))
+        .returning({ id: enrollments.id });
     } catch {
       await flagConflict(match);
       continue;
     }
+    // Claimed in the meantime by someone else: nothing happened here.
+    if (!attached) continue;
     claimed += 1;
     await audit(db, {
       actorUserId: match.userId,
