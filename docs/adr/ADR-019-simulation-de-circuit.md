@@ -101,7 +101,7 @@ reads a netlist on the command line and writes a table on stdout.
 - `tolerance` is the teacher's single knob, and it is a *relative* one: 5 % of
   the reference's swing means the same thing on a 100 mV divider and on a 20 V
   square wave.
-- The runner VM gains one image to build (`deploy.md`). Without it,
+- The runner VM gains one image to build (deployment runbook §3). Without it,
   `GET /health` does not list `spice` and every `simulation` grading degrades
   to a proposal — visible, not silent.
 - A question whose reference is ambiguous under the chosen stimuli grades

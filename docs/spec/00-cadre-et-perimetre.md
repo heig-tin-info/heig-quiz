@@ -80,7 +80,7 @@ MoSCoW priority: M = must, S = should, C = could.
 | Code | TAP unit tests, additional files, locked regions, further languages | S |
 | Plugins | External question packages, loaded at build time | C |
 | Generation | "Generate 10 min quiz" by tags and difficulty | C |
-| Integrations | MCP server to author from an LLM client | C |
+| Integrations | MCP server to author from an LLM client. Brought forward and shipped with the personal API tokens (ADR-022, ADR-023) | C |
 
 ## 0.6 Out of scope
 

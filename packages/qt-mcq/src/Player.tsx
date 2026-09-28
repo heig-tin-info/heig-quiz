@@ -1,5 +1,5 @@
 /**
- * The `mcq` player (mockup `mockups/07-etudiant-zen.html`).
+ * The `mcq` player (in the zen player, `apps/web/src/student/Player.tsx`).
  *
  * Controlled: it renders exactly what `toStudent` sent — an order already
  * shuffled by the server — and reports every change through `onChange`. It

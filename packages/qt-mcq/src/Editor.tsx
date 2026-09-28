@@ -1,5 +1,5 @@
 /**
- * The `mcq` editor (mockup `mockups/01-editeur-qcm.html`, docs/04 §4.4).
+ * The `mcq` editor (docs/04 §4.4).
  *
  * Controlled and offline: it reads `config`, emits a whole new config through
  * `onChange`, and never fetches anything — the host autosaves the draft and

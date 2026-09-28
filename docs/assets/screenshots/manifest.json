@@ -196,7 +196,7 @@
         "dark"
       ],
       "action": "Nothing: the page as it loads.",
-      "state": "As seeded: ten published questions of the four types.",
+      "state": "As seeded: eleven published questions of five types.",
       "phase": "seeded",
       "files": {
         "light": "pool-light.png",

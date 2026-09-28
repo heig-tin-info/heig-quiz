@@ -74,12 +74,12 @@ What gets built:
 - the course **PRG1** with the classroom **PRG1-2026**, a roster of six
   students already claimed, and Léa's time accommodation so the extra-time
   path is always exercised;
-- the pool **Programmation C**, attached to PRG1, three categories, ten
-  published questions covering the four types (multiple choice, short
-  answer, cloze, code);
-- the pool **Électronique**, stand-alone, four published questions, shared
-  with the admin persona as a contributor so the demo shows a pool from the
-  colleague's side too;
+- the pool **Programmation C**, attached to PRG1, three categories, eleven
+  published questions (multiple choice, short answer, cloze, code, code
+  image);
+- the pool **Électronique**, stand-alone, five published questions (a
+  circuit among them), shared with the admin persona as a contributor so the
+  demo shows a pool from the colleague's side too;
 - four evaluations in PRG1-2026:
 
 | Evaluation | Mode | State after the seed |
@@ -201,7 +201,7 @@ podman.socket` on most distributions). Then build the language images once
 and point the API at the runner:
 
 ```bash
-pnpm --filter @quiz/runner images        # apps/runner/images/build.sh: c cpp python js
+pnpm --filter @quiz/runner images        # apps/runner/images/build.sh: c cpp python js spice
 # in .env
 RUNNER_MODE=http
 RUNNER_URL=http://localhost:3200
@@ -219,8 +219,9 @@ on. The images are Alpine-based, one toolchain each, no network client;
 `images/build.sh rust` builds the large one that is never built by default.
 
 The hardening flags, the closed environment list and the request lifecycle
-are in `apps/runner/README.md`; the invariants they implement are listed on
-the [repository page](repository.md#runner-invariants).
+are in `apps/runner/README.md`; the invariants they implement are
+invariants 10 to 14 of
+[`CLAUDE.md`](https://github.com/heig-tin-info/heig-quiz/blob/main/CLAUDE.md#runner-invariants-appsrunner-from-the-sibling-codespace-project).
 
 ```bash
 pnpm --filter @quiz/runner test                # unit: a fake engine, no container

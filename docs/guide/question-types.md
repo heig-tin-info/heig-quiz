@@ -1,6 +1,6 @@
 # Question types
 
-Four types are available today: multiple choice, short answer, fill in the blanks and code. All are graded automatically and written in the editor described in [Question pools](pools.md). This chapter covers what each form asks for, how the answer is scored and what the student gets.
+Six types are available today: multiple choice, short answer, fill in the blanks, code, code with image and circuit. This chapter walks through the first four; the last two are summed up under [More types](#more-types). All are graded automatically and written in the editor described in [Question pools](pools.md). This chapter covers what each form asks for, how the answer is scored and what the student gets.
 
 ## Multiple choice
 
@@ -270,13 +270,20 @@ After **Run**, the table shows for each visible case its stdin, the expected out
 | Fill in the blanks | yes | yes, per blank | yes, with short blanks | complete a sentence, a formula or a line of code |
 | Code | yes, on the server | yes, per case | not comfortably | write or complete a function against test cases |
 
+## More types
+
+Two more types are available, each with its editor, player and grading:
+
+- **Code with image**: a code question whose program prints a picture, compared pixel by pixel with the target you produce by running your reference solution. It shares the code question's editor for the program half.
+- **Circuit**: the student wires components inside a two-port box on a grid, and the schematic is graded by simulating it with ngspice and comparing its output with the one you expect.
+
+Their full rules are in the specification, [4.9 Code image](../spec/04-types-de-questions.md#49-code-image-codeimage) and [4.11 Schematic](../spec/04-types-de-questions.md#411-schematic-circuit).
+
 ## Planned types
 
 The specification announces more types for later phases. None is available today:
 
 - **Rich answer**: a free text graded against a rubric, with your validation.
 - **Drawing**: a small canvas with shapes and freehand strokes, graded with a rubric.
-- **Code with image**: a code question whose program writes an image, compared pixel by pixel to yours.
-- **Circuit**: components placed on a grid and wired, graded with a rubric.
 
 Random values in a statement, announced for phase 2, are not available either.

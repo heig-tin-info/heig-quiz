@@ -18,23 +18,31 @@ packages/
   registry/   the two static question-type registries (./server, ./client)
   contracts/  zod schemas and payload types shared api <-> web
   domain/     pure business rules: grade scale, deadlines, policies, cloze, roster
+  ui/         the shared primitives of the question-type surfaces (@quiz/ui)
   qt-mcq/     question type: multiple choice
   qt-short/   question type: short answer
   qt-cloze/   question type: fill in the blanks
-  qt-code/    question type: code, graded by the runner
+  qt-code/    question types: code graded by the runner, and its variant
+              codeimage graded pixel by pixel
+  qt-circuit/ question type: two-port schematic, graded by ngspice simulation
 docs/
+  guide/      the user guide
   spec/       the product specification
   adr/        the architecture decision records
   development/  these pages
+  assets/     the screenshots of the guide, light and dark
 infra/
   keycloak/   the development realm imported by docker-compose.dev.yml
-mockups/      HTML mockups of the target screens, with mockups/BRIEF.md
-scripts/      smoke.sh, the end-to-end HTTP walk
+scripts/      smoke.sh, the end-to-end HTTP walk; staging-refresh.sh
 ```
 
+`CLAUDE.md` keeps the authoritative version of this map, with a paragraph on
+each package that needs one.
+
 At the root: `Dockerfile` (the application image), `apps/runner/Dockerfile`
-(the runner image), `compose.prod.yml`, `Caddyfile`, `deploy.sh` and
-`deploy.md` for production; `docker-compose.dev.yml` for the optional
+(the runner image), `compose.prod.yml`, `compose.staging.yml`, `Caddyfile`,
+`Caddyfile.staging` and `deploy.sh` for production and staging (the runbook
+is the [deployment page](deployment.md); the root `deploy.md` points to it); `docker-compose.dev.yml` for the optional
 development services; `zensical.toml` for this site; `CLAUDE.md` for the
 working conventions and the invariants.
 
@@ -50,7 +58,7 @@ and the jobs. The modules live under `src/modules/`, the schema under
 `src/db/`, the migrations under `drizzle/`, the seed under `src/seed/`.
 
 `src/app.ts` also serves `/healthz` and `/metrics`, described on the
-[deployment page](deployment.md#health-and-metrics).
+[deployment page](deployment.md#7-monitoring).
 
 ### `apps/web`
 
@@ -58,8 +66,10 @@ The React single-page application ([ADR-008](../adr/ADR-008-frontend-spa-react.m
 built with Vite. `src/router.ts` is the route union, `src/api.ts` the typed
 client over the contracts, `src/i18n/` the dictionaries, `src/mock/` the
 in-browser API used by `pnpm dev:mock`. Feature directories (`pool`,
-`evaluation`, `live`, `grading`, `results`, `student`, `poll`, `question`,
-`realtime`, `runner`, `markdown`) hold the screens and their tests. The
+`question`, `evaluation`, `live`, `attempt`, `grading`, `results`,
+`student`, `poll`, `preview`, `notifications`, `oauth`, `coach`, `help`,
+`realtime`, `runner`, `markdown`) hold the screens and their tests;
+`src/ui/` holds the generic primitives. The
 design rules are in `apps/web/DESIGN.md`, and `.claude/skills/quiz-ui/SKILL.md`
 is the checklist a screen goes through before it is declared finished.
 
@@ -80,7 +90,10 @@ the flags of every container, the request lifecycle, the images under
 | `@quiz/registry` | `./server`, `./client` | the two static maps from a question-type id to its implementation |
 | `@quiz/contracts` | `.` | one zod schema per route and per SSE event, and the payload types both sides import |
 | `@quiz/domain` | `.`, `./<file>` | pure functions with unit tests: the Swiss grade scale, deadlines and time bonus, the MCQ scoring policies, the cloze parser, the roster import, output comparison, stats, pseudonyms |
-| `@quiz/qt-mcq`, `qt-short`, `qt-cloze`, `qt-code` | `./server`, `./client` | one question type each: config schema, canonical form, grading on the server; Editor, Player, Review (and Stats) components on the client |
+| `@quiz/ui` | `.` | the shared primitives of the question-type surfaces (React as a peer, `@quiz/core` its only dependency; it never imports a `qt-*` package nor `apps/web`) |
+| `@quiz/qt-mcq`, `qt-short`, `qt-cloze` | `./server`, `./client` | one question type each: config schema, canonical form, grading on the server; Editor, Player, Review (and Stats) components on the client |
+| `@quiz/qt-code` | `./server`, `./client` | two types sharing one program half: `code`, graded by the runner's test cases, and `codeimage`, judged by the picture its stdout draws ([ADR-021](../adr/ADR-021-codeimage-variante-de-code.md)) |
+| `@quiz/qt-circuit` | `./server`, `./client`, `./canvas` | `circuit`, a two-port schematic graded by simulating it with ngspice through the runner's `spice` language ([ADR-019](../adr/ADR-019-simulation-de-circuit.md)); `./canvas` is the schematic editor |
 
 ### Server and client halves
 
@@ -94,8 +107,8 @@ projection, `client.tsx` exports the lazy components.
 ### The registries
 
 `packages/registry` is the one place the API and the web app learn which
-question types exist. `src/server.ts` maps `mcq`, `short`, `cloze` and
-`code` to their `*Server` objects; `src/client.ts` does the same for the
+question types exist. `src/server.ts` maps `mcq`, `short`, `cloze`,
+`code`, `circuit` and `codeimage` to their `*Server` objects; `src/client.ts` does the same for the
 components. Registering a type is an import and an entry in each map. The
 registry depends on `core` and on the `qt-*` packages; nothing inside `core`
 may depend on the registry, or the package graph would cycle (decision D1
@@ -105,8 +118,9 @@ in the [MVP plan](../PLAN-MVP.md)).
 
 ### Modules
 
-A module is a directory `apps/api/src/modules/<name>/` with at most four
-files:
+A module is a directory `apps/api/src/modules/<name>/` built around four
+files (a module may split its service into cohesive files under its
+directory; `service.ts` stays the entry other modules import):
 
 | File | Role |
 | --- | --- |
@@ -120,10 +134,13 @@ A module never imports another module's `routes.ts`; it calls its
 the demo world through the services, so every row it writes is one the
 application would have written.
 
-Two things that are not modules: `src/modules/guards.ts`, the access
-predicates every route loads an entity through, and `src/modules/runner/`,
-the API-side client of the runner (`http.ts`) and the stub that stands in
-for it (`unavailable.ts`).
+Beside the module directories sit a few shared files that are not modules:
+`src/modules/guards.ts`, the access predicates every route loads an entity
+through; `src/modules/http.ts`, the common replies and the guarded-route
+wrappers `studentRoute`/`teacherRoute`; and two small plugins, `admin.ts`
+and `avatar.ts`. `src/modules/runner/` is not a module either: it holds the
+API-side client of the runner (`http.ts`) and the stub that stands in for it
+(`unavailable.ts`).
 
 ### Schema and migrations
 
@@ -173,62 +190,17 @@ this documentation, is in English.
 
 ## The invariants
 
-`CLAUDE.md` at the root is the normative text; this is the short form. A
-change that needs one of these relaxed is a change to discuss first, not a
-`// temporarily` comment.
-
-1. **English everywhere except UI strings**, and every UI string has an
-   `en` and a `fr` entry through `t()`.
-2. **One primary action per screen.** If the single thing a screen is for
-   cannot be named, the flow is wrong, not the styling.
-3. **The development login never exists in production.** `config.ts`
-   refuses to start with `AUTH_DEV_LOGIN=1` or a `pglite://` database under
-   `NODE_ENV=production`; the OIDC path stays intact in every environment.
-4. **Question content reaches a student only through `toStudent`.** One
-   exit point, the `studentView` service of the `live` module: it strips the
-   internal name, the tags, the difficulty and the explanation, then applies
-   the feedback policy. Every question type is tested with a full
-   configuration passed through it, by forbidden-key list and by searching
-   the serialized output for the answer-key values.
-5. **The server owns the clock.** A deadline is closed by the ticker, never
-   by a client; the receipt time of a write is the server's; a write after
-   `deadline + 3 s` is refused with `410 attempt_closed`.
-6. **Access is loaded, never checked afterwards.** One predicate,
-   `staffAccess` in `apps/api/src/modules/guards.ts`: an entity is loaded
-   only if the user holds a seat on its course's staff (or is an admin), and
-   otherwise the answer is a 404 indistinguishable from a missing entity.
-7. **Every HTTP input is validated by a schema from `packages/contracts`**,
-   and the client uses the same schema, so a route change breaks both sides
-   at compile time.
-8. **Pure rules live in `packages/domain`**, with no database access and
-   unit tests.
-9. **The audit log is a closed TypeScript union** (`apps/api/src/audit.ts`);
-   a typo at a trigger site is a compile error.
-
-### Runner invariants
-
-These are proven in the sibling project the runner was lifted from, and
-`apps/runner` implements them as they stand.
-
-10. **No secret inside a container.** The environment passed at
-    `podman run` is a closed list of two variables, asserted by a test.
-11. **The network is closed by construction**, `--network none`. There is
-    no channel to open and nothing to punch through.
-12. **Hardening from the first run**: `--userns=auto --cap-drop=ALL
-    --security-opt no-new-privileges --security-opt seccomp=<profile>
-    --read-only --pids-limit --memory --cpus`, a tmpfs work directory and
-    a wall-clock timeout enforced by the service. The list is
-    `containerArgs` in `apps/runner/src/engine.ts`, asserted flag for flag
-    by `src/engine.test.ts`. Nothing from the host is mounted: sources
-    travel in on `podman exec`'s stdin, and a file name from a request is
-    sanitized to a name, never a path.
-13. **Podman in `--remote`**, always `podman --remote --url unix://<socket>`.
-    Without it the binary silently falls back to local rootless mode and
-    every isolation test measures something else. Production uses the
-    rootful socket; a workstation uses the user one, where `--userns=auto`
-    is probed once at startup.
-14. **The source sent to the runner is rebuilt server-side** from the
-    template and the student's editable regions, never taken as-is.
+The invariants a change must respect (English everywhere but the UI, one
+primary action per screen, no development login in production, `toStudent`
+as the only exit of question content, the server's clock, access loaded
+through `staffAccess`, contract schemas on every input, pure rules in
+`@quiz/domain`, the closed audit union, and the five runner invariants) are
+written once, in
+[`CLAUDE.md`](https://github.com/heig-tin-info/heig-quiz/blob/main/CLAUDE.md#invariants)
+at the root of the repository. A change that needs one of them relaxed is a
+change to discuss first, not a `// temporarily` comment. The runner's
+hardening flags are documented in
+[`apps/runner/README.md`](https://github.com/heig-tin-info/heig-quiz/blob/main/apps/runner/README.md).
 
 ## Related reading
 
@@ -237,5 +209,5 @@ These are proven in the sibling project the runner was lifted from, and
 - [7. Reuse of heig-classroom](../spec/07-reutilisation-heig-classroom.md):
   what was kept, adapted or dropped from the sibling project this
   repository started from.
-- [The MVP plan](../PLAN-MVP.md): the work packages and the decisions
-  numbered D1, D3, D14 that the code comments refer to.
+- [The MVP plan](../PLAN-MVP.md), archived: the phase-1 work packages and
+  the decisions numbered D1 to D20 that the code comments refer to.

@@ -39,7 +39,7 @@ The platform serves two profiles of teachers with the same interface. The novice
 | Process in bulk | Multiple selection in the pool: add a tag, move to a category, export, add to an evaluation. |
 | Inspect | Version history with diff, LLM call log, event log of an attempt, raw export of an evaluation as JSON. |
 | Plug in one's own LLM | Personal API key, model choice per purpose, prompt templates editable per teacher, phase 3. |
-| Write from one's own tool | MCP server, phase 3: create and read drafts from Claude Desktop or Claude Code. |
+| Write from one's own tool | MCP server: create and read drafts from Claude Desktop or Claude Code. Planned for phase 3, shipped early with the personal API tokens (ADR-022, ADR-023). |
 
 ## 8.4 Command palette
 
