@@ -6,8 +6,9 @@ import { parseRosterCsv, rosterFromRows, type Cell, type RosterParse } from "@qu
 import { audit } from "../../audit.js";
 import { publish } from "../../events.js";
 import type { Db } from "../../db/client.js";
-import { avatars, enrollments, userEmails, users } from "../../db/schema.js";
+import { avatars, classrooms, enrollments, userEmails, users } from "../../db/schema.js";
 import { emailIn, knownEmails, normalizeEmail, sharedWithOthers } from "../../identity.js";
+import { studentJoined } from "../realtime/bus.js";
 
 interface RosterImportSummary {
   inserted: number;
@@ -86,8 +87,11 @@ export async function claimEnrollments(db: Db, user: { id: string }) {
       nom: enrollments.nom,
       prenom: enrollments.prenom,
       email: enrollments.email,
+      courseId: classrooms.courseId,
+      classroomName: classrooms.name,
     })
     .from(enrollments)
+    .innerJoin(classrooms, eq(classrooms.id, enrollments.classroomId))
     .where(and(isNull(enrollments.userId), emailIn(enrollments.email, emails)));
   if (pending.length === 0) return 0;
 
@@ -127,9 +131,11 @@ export async function claimEnrollments(db: Db, user: { id: string }) {
         .set({ userId: user.id, claimedAt: new Date() })
         .where(and(eq(enrollments.id, entry.id), isNull(enrollments.userId)));
       claimed += 1;
-      publish("roster", [`classroom:${entry.classroomId}`, `user:${user.id}`], {
-        kind: "student_joined",
-        message: `${entry.prenom} ${entry.nom} joined the classroom`,
+      studentJoined({
+        courseId: entry.courseId,
+        classroomName: entry.classroomName,
+        userId: user.id,
+        name: `${entry.prenom} ${entry.nom}`.trim(),
       });
       await audit(db, {
         actorUserId: user.id,

@@ -1,18 +1,19 @@
 import { AlertTriangle, CheckCircle2, Loader2, TriangleAlert, UserPlus, X } from "lucide-react";
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
 
-import type { NoticeKind } from "@quiz/contracts";
+import type { AppNotice, NoticeKind } from "@quiz/contracts";
 
 import { apiErrorMessage } from "./api";
-import { useT, type Dict } from "./i18n";
+import { useT, type Dict, type TFunction } from "./i18n";
 import { readStored, writeStored, Z } from "./ui";
 
 /**
  * Toasts, bottom right, slide-in/out (see `toast-*` keyframes in style.css).
  * Two entry points share the stack:
- * - `useNotify()(kind, message)` — real-time SSE notices (NoticeKind, shared
- *   with the server via @quiz/contracts), gated by the per-browser
- *   preferences (localStorage);
+ * - `useNotify()(notice)` — real-time SSE notices (AppNotice, shared with the
+ *   server via @quiz/contracts), gated by the per-browser preferences
+ *   (localStorage). A notice carries facts; its sentence is rendered here,
+ *   in the reader's language;
  * - `useToast()(message, tone?)` — one-shot flow feedback, never gated: the
  *   user just did the action.
  */
@@ -82,7 +83,7 @@ interface Toast {
 }
 
 const ToastContext = createContext<{
-  notify: (kind: NoticeKind, message: string) => void;
+  notify: (notice: AppNotice) => void;
   toast: (message: string, tone?: ToastTone) => void;
 }>({
   notify: () => {},
@@ -107,6 +108,17 @@ export function useErrorToast(): (fallback: keyof Dict) => (error: unknown) => v
   const toast = useToast();
   const t = useT();
   return (fallback) => (error) => toast(apiErrorMessage(error, t(fallback)), "error");
+}
+
+/** The sentence of a notice, in the reader's language (N-I18N-01). */
+function noticeSentence(t: TFunction, notice: AppNotice): string {
+  switch (notice.kind) {
+    case "student_joined":
+      return t("notify.student_joined.toast", {
+        name: notice.name,
+        classroom: notice.classroomName,
+      });
+  }
 }
 
 const AUTO_DISMISS_MS = 6000;
@@ -134,11 +146,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 
   const notify = useCallback(
-    (kind: NoticeKind, message: string) => {
-      if (!notifyPrefs()[kind]) return;
-      push(ICONS[kind], "text-accent", message);
+    (notice: AppNotice) => {
+      if (!notifyPrefs()[notice.kind]) return;
+      push(ICONS[notice.kind], "text-accent", noticeSentence(translate, notice));
     },
-    [push],
+    [push, translate],
   );
 
   const toast = useCallback(

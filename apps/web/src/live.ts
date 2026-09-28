@@ -26,7 +26,7 @@ export function useLiveUpdates(enabled: boolean) {
     enabled,
     onHint: (hint) => {
       void invalidateHint(qc, hint.kinds);
-      if (hint.notice) notify(hint.notice.kind, hint.notice.message);
+      if (hint.notice) notify(hint.notice);
     },
     // On (re)connection everything is refetched: the same full refresh the
     // previous `onopen` did, and the reason no event has to be replayed.

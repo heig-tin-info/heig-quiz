@@ -4,10 +4,25 @@
  * a compile error.
  */
 
-/** Real-time toast kinds carried by SSE notices (events.ts AppNotice). */
+import { z } from "zod";
+
+/** Real-time toast kinds carried by SSE notices (`AppNotice` below). */
 export type NoticeKind = "student_joined" | "roster_conflict";
 
-import { z } from "zod";
+/**
+ * What a hint's notice carries: facts, never a sentence. The web app renders
+ * the sentence through `t()` in the reader's language (N-I18N-01). Only
+ * `student_joined` is emitted today, to the classroom's staff only (#198).
+ */
+export const AppNotice = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("student_joined"),
+    /** The joiner, as displayed on the roster. */
+    name: z.string(),
+    classroomName: z.string(),
+  }),
+]);
+export type AppNotice = z.infer<typeof AppNotice>;
 
 /**
  * Persistent, per-account notifications (the bell): stored by the API,

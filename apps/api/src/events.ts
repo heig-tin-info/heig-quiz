@@ -18,13 +18,10 @@
  */
 import { EventEmitter } from "node:events";
 
-import type { NoticeKind, ServerEvent, Topic } from "@quiz/contracts";
+import type { AppNotice, ServerEvent, Topic } from "@quiz/contracts";
 
 /** Real-time notification attached to an event (toast in the UI). */
-export interface AppNotice {
-  kind: NoticeKind;
-  message: string;
-}
+export type { AppNotice };
 
 /** Refresh-hint families the client knows how to react to. */
 export type EventType =

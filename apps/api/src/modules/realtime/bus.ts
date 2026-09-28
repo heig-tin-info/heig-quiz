@@ -80,6 +80,27 @@ export function hint(type: EventType, topics: Topic[], notice?: AppNotice): void
   publishHint(type, topics, notice);
 }
 
+/**
+ * A student took their seat in a classroom (join code, or a roster line
+ * claimed at login). The name is personal data: the notice goes to the
+ * course's staff only — `course:` is a topic no student connection holds —
+ * never on `classroom:`, where every classmate listens (#198). The joiner
+ * gets a bare refresh hint on their own topic, for their list of classrooms.
+ */
+export function studentJoined(input: {
+  courseId: string;
+  classroomName: string;
+  userId: string;
+  name: string;
+}): void {
+  hint("roster", [`course:${input.courseId}`], {
+    kind: "student_joined",
+    name: input.name,
+    classroomName: input.classroomName,
+  });
+  hint("roster", [userTopic(input.userId)]);
+}
+
 const cells = new Coalescer<DashboardCellEvent>(CELL_WINDOW_MS, (event) =>
   emit(event, [evaluationTopic(event.evaluationId)], "staff"),
 );
