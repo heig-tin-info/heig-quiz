@@ -41,6 +41,7 @@ export {
   IpNotAllowed,
   ipAllowed,
   ACCESS_CODE_MAX_FAILURES,
+  ACCESS_CODE_WINDOW_MS,
   participantOf,
   sebSeat,
   resetOwnStaffAttempt,

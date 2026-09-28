@@ -8,7 +8,7 @@ import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
 
-import { and, asc, count, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, inArray, isNull } from "drizzle-orm";
 
 import {
   EvaluationSettings,
@@ -1016,10 +1016,13 @@ export async function lobbyView(
 
 /**
  * F-EVAL-12: the wrong access codes a student may type into ONE evaluation
- * before it refuses them for good. Counted from the audit log, where each
- * failure is written anyway: no counter to keep in step.
+ * within a sliding window before it refuses them. Counted from the audit
+ * log, where each failure is written anyway: no counter to keep in step.
+ * The lock lifts by itself: a student who mistypes during an exam is held
+ * back ten minutes, never locked out of it.
  */
 export const ACCESS_CODE_MAX_FAILURES = 10;
+export const ACCESS_CODE_WINDOW_MS = 10 * 60_000;
 
 const ACCESS_CODE_FAILED = "evaluation.access_code_failed" satisfies AuditAction;
 
@@ -1034,9 +1037,11 @@ async function assertAccessCode(
   evaluation: EvaluationRecord,
   userId: string | null,
   given: string | undefined,
+  now: Date,
 ): Promise<void> {
   if (evaluation.accessCode === null) return;
   const failed = and(
+    gt(auditLog.createdAt, new Date(now.getTime() - ACCESS_CODE_WINDOW_MS)),
     eq(auditLog.subjectType, "evaluation"),
     eq(auditLog.subjectId, evaluation.id),
     eq(auditLog.action, ACCESS_CODE_FAILED),
@@ -1054,6 +1059,7 @@ async function assertAccessCode(
       action: ACCESS_CODE_FAILED,
       subjectType: "evaluation",
       subjectId: evaluation.id,
+      at: now,
     });
   }
   throw new AccessCodeInvalid();
@@ -1079,7 +1085,7 @@ export async function enterEvaluation(
 ): Promise<EnterResult> {
   const { evaluation, participant, now } = input;
   if (evaluation.mode === "poll") throw new LiveError("not_implemented", 501, "poll is phase 2");
-  await assertAccessCode(db, evaluation, participant.userId, input.accessCode);
+  await assertAccessCode(db, evaluation, participant.userId, input.accessCode, now);
   if (!ipAllowed(evaluation.ipAllowlist, input.ip)) throw new IpNotAllowed();
 
   const open = evaluation.state === "lobby" || evaluation.state === "running" ||

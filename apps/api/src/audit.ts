@@ -111,6 +111,8 @@ export async function audit(
     subjectType: string;
     subjectId: string;
     payload?: unknown;
+    /** The server's instant, when a rule reads the entry back by time. */
+    at?: Date;
   },
 ) {
   await db.insert(auditLog).values({
@@ -120,6 +122,7 @@ export async function audit(
     subjectType: entry.subjectType,
     subjectId: entry.subjectId,
     payload: entry.payload ?? null,
+    ...(entry.at ? { createdAt: entry.at } : {}),
   });
 }
 

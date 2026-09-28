@@ -168,7 +168,7 @@ describe("entering an evaluation (F-LIVE-01)", () => {
     expect(ok.kind).toBe("attempt");
   });
 
-  it("locks the access code after ten wrong ones, each audited (F-EVAL-12)", async () => {
+  it("locks the access code after ten wrong ones, each audited, for ten minutes (F-EVAL-12)", async () => {
     const seed = await seedLive(db);
     await db
       .update(evaluations)
@@ -195,6 +195,9 @@ describe("entering an evaluation (F-LIVE-01)", () => {
     await expect(enter(first!, "OPEN")).rejects.toMatchObject({ code: "access_code_locked", status: 429 });
     // The lock is this student's, not the room's.
     expect((await enter(second!, "OPEN")).kind).toBe("attempt");
+    // And it lifts by itself once the failures leave the window.
+    clock.advance(service.ACCESS_CODE_WINDOW_MS);
+    expect((await enter(first!, "OPEN")).kind).toBe("attempt");
   });
 
   it("gives the accommodation its extra seconds (F-ORG-07, F-EVAL-05)", async () => {

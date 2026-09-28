@@ -1605,7 +1605,7 @@ export const en = {
   "player.accessCode": "Access code",
   "player.accessCodeHint": "Your teacher gives it out at the start.",
   "player.accessCodeInvalid": "This code is not the right one.",
-  "player.accessCodeLocked": "Too many wrong codes: ask your teacher.",
+  "player.accessCodeLocked": "Too many wrong codes. Wait ten minutes before trying again, or ask your teacher.",
   "player.enter": "Enter",
 
   "qt.mcq.chooseOne": "Choose one answer.",

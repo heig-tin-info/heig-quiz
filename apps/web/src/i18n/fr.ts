@@ -1597,7 +1597,7 @@ export const fr: Record<keyof Dict, string> = {
   "player.accessCode": "Code d'accès",
   "player.accessCodeHint": "Votre enseignant le donne au démarrage.",
   "player.accessCodeInvalid": "Ce code n'est pas le bon.",
-  "player.accessCodeLocked": "Trop de codes erronés : adressez-vous à votre enseignant.",
+  "player.accessCodeLocked": "Trop de codes erronés. Attendez dix minutes avant de réessayer, ou adressez-vous à votre enseignant.",
   "player.enter": "Entrer",
 
   "qt.mcq.chooseOne": "Choisissez une réponse.",
