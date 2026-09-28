@@ -24,8 +24,11 @@ import {
   ItemsOrder,
   TemplateCreate,
   TemplateInstantiate,
+  TemplateNew,
+  TemplatePatch,
   UpdateVersions,
   type EvaluationDetail,
+  type TemplateDetail,
   type TemplateInstance,
 } from "@quiz/contracts";
 
@@ -69,6 +72,16 @@ export async function evaluationPlugin(app: FastifyInstance) {
   ): Promise<EvaluationDetail> =>
     // The lobby ring's denominator, a rule of the `live` module (#152).
     service.evaluationDetail(app.db, row, req.user!, await live.enrolledCount(app.db, row));
+
+  // F-EVAL-02: the type decides an item's default weight, from the config it
+  // owns — this module never looks inside a config. And a question kept after
+  // an opinion poll has no key: polls only. Shared by evaluations and templates.
+  const versionConfig = (type: string, version: service.JoinedItem["version"]) =>
+    loadConfig(type, { config: version.config, configVersion: version.configVersion });
+  const defaultPoints = (type: string, version: service.JoinedItem["version"]) =>
+    typeOf(type).defaultPoints(versionConfig(type, version));
+  const keyed = (type: string, version: service.JoinedItem["version"]) =>
+    hasKey(type, versionConfig(type, version));
 
   // The loaders of invariant 6, each answering its own 404.
   const staffClassroom = async (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => {
@@ -147,7 +160,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
     "/app/api/evaluations/:id/pools",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: staffEvaluation }, ({ req, scope }) =>
-      service.listCoursePools(app.db, scope.classroom.id, req.user!),
+      service.listCoursePools(app.db, { classroomId: scope.classroom.id }, req.user!),
     ),
   );
 
@@ -230,24 +243,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
           "evaluation.items_update",
           { added: body.questionIds.length },
           (ctx) =>
-            service.addItems(
-              app.db,
-              scope.evaluation,
-              body.questionIds,
-              // F-EVAL-02: the type decides the default weight, from the config it
-              // owns — this module never looks inside a config.
-              (type, version) =>
-                typeOf(type).defaultPoints(
-                  loadConfig(type, { config: version.config, configVersion: version.configVersion }),
-                ),
-              ctx,
-              // A question kept after an opinion poll has no key: polls only.
-              (type, version) =>
-                hasKey(
-                  type,
-                  loadConfig(type, { config: version.config, configVersion: version.configVersion }),
-                ),
-            ),
+            service.addItems(app.db, scope.evaluation, body.questionIds, defaultPoints, ctx, keyed),
         ),
     ),
   );
@@ -370,6 +366,147 @@ export async function evaluationPlugin(app: FastifyInstance) {
     ),
   );
 
+  /** F-EVAL-24: a new, empty template of the course, at revision 1. */
+  app.post(
+    "/app/api/courses/:id/templates",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: TemplateNew, load: (req, reply) => accessibleCourse(app, req, reply) },
+      async ({ req, reply, body, scope }) => {
+        const row = await templates.createTemplate(app.db, {
+          courseId: scope.id,
+          title: body.title,
+          mode: body.mode,
+          preset: body.preset,
+          createdBy: req.user!.id,
+        });
+        // No `from`: an empty template copies nothing (ADR-031, addendum b).
+        await trace(req, "template.create", "evaluation", row.id, {
+          courseId: scope.id,
+          title: row.title,
+          mode: row.mode,
+        });
+        return reply.code(201).send(await templates.templateOf(app.db, row));
+      },
+    ),
+  );
+
+  // --- Editing a template in place (F-EVAL-25) ------------------------------
+  //
+  // Parallel to the evaluation routes above, loaded by `loadTemplate` only
+  // (ADR-031, addendum c), and sharing their SERVICE functions: every write
+  // goes through `templates.editTemplate`, which runs it under the template's
+  // row lock and moves the revision once when the content moved. A template
+  // has no classroom, hence no SSE topic: nothing is published.
+
+  const templateDetail = (req: FastifyRequest, row: service.EvaluationRecord): Promise<TemplateDetail> =>
+    templates.templateDetail(app.db, row, req.user!);
+
+  /** One audited write to a template; `change` says what the request did. */
+  async function templateWrite(
+    req: FastifyRequest,
+    template: service.EvaluationRecord,
+    change: Record<string, unknown>,
+    write: Parameters<typeof templates.editTemplate>[2],
+  ): Promise<TemplateDetail> {
+    const { row, revised } = await templates.editTemplate(app.db, template, write);
+    await trace(req, "template.update", "evaluation", row.id, {
+      ...change,
+      revised,
+      revision: row.revision,
+    });
+    return templateDetail(req, row);
+  }
+
+  app.get(
+    "/app/api/templates/:id",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: staffTemplate }, ({ req, scope }) =>
+      templateDetail(req, scope.template),
+    ),
+  );
+
+  /** The pools the question picker offers: the course's own (F-EVAL-01). */
+  app.get(
+    "/app/api/templates/:id/pools",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: staffTemplate }, ({ req, scope }) =>
+      service.listCoursePools(app.db, { courseId: scope.course.id }, req.user!),
+    ),
+  );
+
+  app.patch(
+    "/app/api/templates/:id",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: TemplatePatch, load: staffTemplate },
+      ({ req, body, scope }) =>
+        templateWrite(req, scope.template, { fields: Object.keys(body) }, (tx, row, ctx) =>
+          service.patchEvaluation(tx, row, body, ctx),
+        ),
+    ),
+  );
+
+  app.post(
+    "/app/api/templates/:id/items",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: ItemsAdd, load: staffTemplate },
+      ({ req, body, scope }) =>
+        templateWrite(req, scope.template, { added: body.questionIds.length }, (tx, row, ctx) =>
+          service.addItems(tx, row, body.questionIds, defaultPoints, ctx, keyed),
+        ),
+    ),
+  );
+
+  app.patch(
+    "/app/api/templates/:id/items/:itemId",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: ItemParam, body: ItemPatch, load: staffTemplate },
+      ({ req, params, body, scope }) =>
+        templateWrite(req, scope.template, { itemId: params.itemId, fields: Object.keys(body) }, (tx, row, ctx) =>
+          service.patchItem(tx, row, params.itemId, body, ctx),
+        ),
+    ),
+  );
+
+  app.put(
+    "/app/api/templates/:id/items/order",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: ItemsOrder, load: staffTemplate },
+      ({ req, body, scope }) =>
+        templateWrite(req, scope.template, { reordered: true }, (tx, row, ctx) =>
+          service.reorderItems(tx, row, body.itemIds, ctx),
+        ),
+    ),
+  );
+
+  /** Unlike an evaluation's (204), answers the detail: the revision may have moved. */
+  app.delete(
+    "/app/api/templates/:id/items/:itemId",
+    { preHandler: requireTeacher },
+    teacher({ params: ItemParam, load: staffTemplate }, ({ req, params, scope }) =>
+      templateWrite(req, scope.template, { removed: params.itemId }, (tx, row, ctx) =>
+        service.deleteItem(tx, row, params.itemId, ctx),
+      ),
+    ),
+  );
+
+  /** F-EVAL-03's "use the latest version", on a template: one revision for the lot. */
+  app.post(
+    "/app/api/templates/:id/items/update-versions",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: UpdateVersions, optionalBody: true, load: staffTemplate },
+      ({ req, body, scope }) =>
+        templateWrite(req, scope.template, { versions: body.itemIds ?? "all" }, (tx, row, ctx) =>
+          service.updateVersions(tx, row, body.itemIds, ctx),
+        ),
+    ),
+  );
+
   /** Its instances keep running and lose their link to it. */
   app.delete(
     "/app/api/templates/:id",
@@ -404,7 +541,8 @@ export async function evaluationPlugin(app: FastifyInstance) {
         });
         await trace(req, "template.instantiate", "evaluation", made.evaluation.id, {
           templateId: scope.template.id,
-          revision: scope.template.revision,
+          // The revision copied, read under the template's lock (ADR-031, addendum e).
+          revision: made.evaluation.originRevision,
           classroomId: room.room.id,
         });
         evaluationChanged(room.room.id, made.evaluation.id);

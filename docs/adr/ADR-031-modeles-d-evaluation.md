@@ -139,7 +139,8 @@ pull request.)
 - "Start from a template" appears at evaluation creation only when the
   course has at least one template: the novice path (08) is unchanged.
 - Audit: `template.create`, `template.instantiate`, `template.delete` join
-  the closed union of `audit.ts` (invariant 9).
+  the closed union of `audit.ts` (invariant 9), then `template.update` with
+  editing in place (A2).
 
 ### 7. Delivery
 
@@ -156,7 +157,10 @@ pull request.)
 Items 1 and 2 are merged. Items 3 and 4 were re-split on 2026-09-28 into
 A1 (the course page), A2 (creating an empty template and editing one in
 place) and B (pulling a revision, with the "behind template" badge); the
-addendum below is the current plan.
+addendum below is the current plan. A1 is merged; the API half of A2
+(F-EVAL-24, F-EVAL-25: the routes, `TemplatePatch`, `TemplateDetail`, the
+revision helper, the lock of *Instantiate*, `template.update`) is done, its
+web half follows. B is not started.
 
 ## Consequences
 
@@ -264,7 +268,9 @@ evaluation patch minus `opensAt`, `closesAt`, `accessCode` and
 `ipAllowlist`, declared `.strict()` so that an unknown key is refused rather
 than stripped: sending a run field is a 400 from the schema, never a silent
 no-op nor a 500 from `evaluations_template_ck`. The pools a template may draw from are the
-course's linked pools: `coursePoolIds` takes a course id, not a classroom.
+course's linked pools: `coursePoolIds` takes a home — a course, for a
+template, or a classroom — and stays the one source of the rule, beside
+the one test `inLinkedPool`.
 
 ### d. One helper bumps the revision
 
