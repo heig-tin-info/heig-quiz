@@ -315,16 +315,23 @@ export interface Segment {
 const ROOMY_SEGMENT = 28;
 
 /**
+ * Under this width a dot and its two stretches of connector no longer fit:
+ * the strip stops compressing and scrolls instead (issue #223), each question
+ * back in a full {@link ROOMY_SEGMENT} slot.
+ */
+const MIN_SEGMENT = 14;
+
+/**
  * How often a number is shown, from the strip's measured width. `1` is "every
- * one of them"; `5` and `10` are the compressed modes. A width of 0 is "not
+ * one of them"; `5` is the compressed mode (under {@link MIN_SEGMENT} the
+ * strip scrolls, and shows them all again). A width of 0 is "not
  * measured yet" (first paint, or a test with no layout) and shows everything:
  * the strip must never come up thinned out on a screen that had the room.
  */
-function segmentLabelStep(width: number, count: number): 1 | 5 | 10 {
+function segmentLabelStep(width: number, count: number): 1 | 5 {
   if (width <= 0 || count <= 1) return 1;
   const per = width / count;
-  if (per >= 22) return 1;
-  return per >= 11 ? 5 : 10;
+  return per >= 22 || per < MIN_SEGMENT ? 1 : 5;
 }
 
 /**
@@ -351,14 +358,16 @@ function segmentLabelStep(width: number, count: number): 1 | 5 | 10 {
  *
  * Every question carries its number, so the student can aim at "question 7"
  * without counting. When there are enough questions for the numbers to stop
- * fitting, the strip COMPRESSES rather than wraps or scrolls: the circles
- * shrink to dots, the numbers thin out to anchors. The rule, from the
- * measured width of the strip (`segmentLabelStep`):
+ * fitting, the strip first COMPRESSES rather than wraps: the circles shrink
+ * to dots, the numbers thin out to anchors. The rule, from the measured
+ * width of the strip (`segmentLabelStep`):
  *
  *   - a segment at least 22 px wide holds two digits and its breathing room:
  *     every number is shown (up to ~30 questions over the player's 760 px);
- *   - at least 11 px: the first, the last, the current and every 5th;
- *   - under that: the first, the last, the current and every 10th.
+ *   - at least 14 px: the first, the last, the current and every 5th;
+ *   - under that (40 questions on a phone), the strip SCROLLS: every question
+ *     is back in a full 28 px slot with its number, the student swipes it,
+ *     and it brings the current question to the middle whenever it changes.
  *
  * A multiple that lands within two slots of the last one is dropped, so "30"
  * and "32" never collide. Nothing is lost for a screen reader: the number and
@@ -394,11 +403,25 @@ export function ProgressSegments({
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
+  const per = width / segments.length;
+  const scrolls = width > 0 && per < MIN_SEGMENT;
   const step = segmentLabelStep(width, segments.length);
   // The glyph inside a circle (the check, the dash) needs room around it;
   // compressed, the circles drop to dots and the SHAPE — solid, hollow,
   // dashed — is what is left to tell the marks apart.
-  const roomy = width === 0 || width / segments.length >= ROOMY_SEGMENT;
+  const roomy = width === 0 || scrolls || per >= ROOMY_SEGMENT;
+  // Scrolling, the current question is kept in the middle of the strip. The
+  // strip scrolls itself, never the page (which `scrollIntoView` would).
+  useEffect(() => {
+    const el = strip.current;
+    const button = el?.querySelectorAll("button")[current];
+    if (!scrolls || !el || !button) return;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    el.scrollTo?.({
+      left: button.offsetLeft - (el.clientWidth - button.offsetWidth) / 2,
+      behavior: reduce ? "auto" : "smooth",
+    });
+  }, [scrolls, current]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     const buttons = Array.from(strip.current?.querySelectorAll("button") ?? []);
@@ -414,7 +437,11 @@ export function ProgressSegments({
       ref={strip}
       aria-label={label}
       onKeyDown={onKeyDown}
-      className={cx("flex w-full items-start", className)}
+      className={cx(
+        "relative flex w-full items-start",
+        scrolls && "overflow-x-auto overscroll-x-contain [scrollbar-width:thin]",
+        className,
+      )}
     >
       {segments.map((segment, i) => {
         const facts = [
@@ -444,7 +471,10 @@ export function ProgressSegments({
             title={name}
             aria-current={segment.current ? "true" : undefined}
             onClick={() => onSelect?.(segment.id, i)}
-            className="relative flex min-w-0 flex-1 basis-0 flex-col items-center rounded-full px-0 py-1.5 disabled:cursor-default"
+            className={cx(
+              "relative flex flex-col items-center rounded-full px-0 py-1.5 disabled:cursor-default",
+              scrolls ? "w-7 flex-none" : "min-w-0 flex-1 basis-0",
+            )}
           >
             <span
               className={cx(

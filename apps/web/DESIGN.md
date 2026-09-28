@@ -677,17 +677,21 @@ live in `ui/state.ts`, each written once.
   Roving tabindex like `Tabs`, because twenty questions must not be twenty
   stops on the way to the answer field; the state is in the accessible
   name, not only in the shape.
-  Past a certain count the strip COMPRESSES rather than wrapping or
-  scrolling, measured on the strip's own width (a `ResizeObserver`, never
+  Past a certain count the strip COMPRESSES rather than wrapping, measured on the strip's own width (a `ResizeObserver`, never
   the viewport: the same strip is 760 px in the player and 358 px on a
   phone). Under 28 px per question the 20 px circles drop to 10 px dots
   without glyph — the shape stays — and the current one becomes a solid
   accent dot with a 3 px halo (its mark is then only in its name). The
   numbers thin out on their own rule: 22 px or more holds two digits and
   its air, so everything is numbered (about 30 questions over 760 px); from
-  11 px, the first, the last, the current and every 5th; under that, every
-  10th. A multiple landing within two slots of the last one is dropped, so
-  "30" and "32" never collide. Nothing is lost: the number and the state
+  14 px, the first, the last, the current and every 5th. A multiple landing
+  within two slots of the last one is dropped, so "30" and "32" never
+  collide. Under 14 px a dot and its connectors no longer fit (40 questions
+  on a phone), and the strip SCROLLS instead (issue #223): every question is
+  back in a full 28 px slot with its glyph and number, the student swipes
+  the strip, and it brings the current question to its middle whenever it
+  changes — scrolling itself, never the page, and without the smooth motion
+  under `prefers-reduced-motion`. Nothing is lost: the number and the state
   live in each circle's accessible name, which never thins out.
 - Pastille (`packages/qt-mcq/src/ui.tsx`): the letter of a choice IS its
   checkbox — a circle, 32 px in the teacher's editor, 40 px under a student's
