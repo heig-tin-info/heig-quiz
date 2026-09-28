@@ -1,15 +1,25 @@
 node_modules
 **/node_modules
 **/dist
+**/*.tsbuildinfo
+**/.data
+**/coverage
 .git
-.data
-build
+.claude
 secrets
 .env
 .env.*
 docs
+site
 mockups
 *.xlsx
+# The exam corpus lives outside this (public) repository; a local copy must
+# never reach an image.
+corpus
+# Downloaded by fetch-runtimes.mjs in a layer of its own (Dockerfile); a local
+# copy would only bust the cache of the layers after `COPY . .`.
+apps/web/public/runtimes
 # apps/runner IS part of the build context: apps/runner/Dockerfile builds it
-# from the repository root. The root Dockerfile simply never copies it.
+# from the repository root. The language images are built on the runner VM
+# by apps/runner/images/build.sh, never from this context.
 apps/runner/images
