@@ -241,7 +241,7 @@ export function AddQuestionsSheet({
               label={t("picker.difficulty")}
               value={difficulty === null ? "" : String(difficulty)}
               onChange={(e) => setDifficulty(e.target.value === "" ? null : Number(e.target.value))}
-              width="w-40"
+              width="w-44"
             >
               <option value="">{t("picker.allDifficulties")}</option>
               {[1, 2, 3, 4, 5].map((d) => (
