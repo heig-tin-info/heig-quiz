@@ -116,7 +116,7 @@ function CoachRow({ me }: { me: Me }) {
 
 /** Language, appearance, date format — and, for a teacher, MCQ scoring. */
 function PreferencesCard({ me }: { me: Me }) {
-  const { t, locale, setLocale } = useI18n();
+  const { t, choice, setLocale } = useI18n();
   // Shared store: the account menu toggle reads the same value.
   const theme = useThemeChoice();
   const saveDate = useMePatch();
@@ -129,9 +129,12 @@ function PreferencesCard({ me }: { me: Me }) {
         <SettingRow title={t("settings.language")} desc={t("settings.languageHint")}>
           <Segmented
             name="locale"
-            value={locale}
+            value={choice}
             onChange={setLocale}
-            options={LOCALES.map((l) => ({ value: l.code, label: l.label }))}
+            options={[
+              { value: "browser", label: t("settings.language.browser") },
+              ...LOCALES.map((l) => ({ value: l.code, label: l.label })),
+            ]}
           />
         </SettingRow>
         <SettingRow title={t("settings.appearance")} desc={t("settings.appearanceHint")}>

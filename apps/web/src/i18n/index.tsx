@@ -31,8 +31,16 @@ import { type Dict, en } from "./en";
  * (`main.tsx`), before the switch when it is picked — so no screen paints in
  * English and then flips. `fr.ts` keeps its `Record<keyof Dict, string>`
  * type: the dynamic import changes when it loads, not what it must contain.
+ *
+ * What the user picks is a `LocaleChoice`: a language, or "browser" — the
+ * default, `locale = null` on the account — which follows `navigator.languages`.
+ * A French Chrome therefore gets the French UI rather than an English page it
+ * offers to machine-translate: Chrome's translation rewrites React's text
+ * nodes and crashes the next render (#228), and an exam statement must read
+ * as the teacher wrote it. `index.html` also forbids that translation outright.
  */
 export type Locale = "en" | "fr";
+export type LocaleChoice = Locale | "browser";
 
 export const LOCALES: { code: Locale; label: string }[] = [
   { code: "en", label: "English" },
@@ -58,9 +66,29 @@ export async function loadLocale(locale: Locale): Promise<void> {
   DICTS[locale] = await loaders[locale]();
 }
 
-/** The language this browser last chose, English when none. */
+/** The first of the browser's preferred languages the app speaks, English when none. */
+export function browserLocale(): Locale {
+  const preferred = navigator.languages?.length ? navigator.languages : [navigator.language];
+  for (const tag of preferred) {
+    const base = tag?.toLowerCase().split("-")[0];
+    if (base === "fr" || base === "en") return base;
+  }
+  return "en";
+}
+
+export function resolveLocale(choice: LocaleChoice): Locale {
+  return choice === "browser" ? browserLocale() : choice;
+}
+
+/** What this browser last chose, "browser" when nothing. */
+export function storedChoice(): LocaleChoice {
+  const raw = readStored(STORE_KEY);
+  return raw === "fr" || raw === "en" ? raw : "browser";
+}
+
+/** The language to paint in: the stored choice, resolved. */
 export function storedLocale(): Locale {
-  return readStored(STORE_KEY) === "fr" ? "fr" : "en";
+  return resolveLocale(storedChoice());
 }
 
 export type TFunction = (key: keyof Dict, vars?: Record<string, string | number>) => string;
@@ -74,13 +102,17 @@ function translate(locale: Locale, key: string, vars?: Record<string, string | n
 }
 
 interface I18nValue {
+  /** The language shown. */
   locale: Locale;
-  setLocale: (l: Locale, persist?: boolean) => void;
+  /** What the user picked, "browser" included. */
+  choice: LocaleChoice;
+  setLocale: (choice: LocaleChoice, persist?: boolean) => void;
   t: TFunction;
 }
 
 const I18nContext = createContext<I18nValue>({
   locale: "en",
+  choice: "browser",
   setLocale: () => {},
   t: (k) => translate("en", k),
 });
@@ -92,6 +124,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     const stored = storedLocale();
     return DICTS[stored] ? stored : "en";
   });
+  const [choice, setChoice] = useState<LocaleChoice>(storedChoice);
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
@@ -113,17 +146,19 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     const stored = storedLocale();
     if (!DICTS[stored]) switchTo(stored);
   }, [switchTo]);
-  const setLocale = useCallback((l: Locale, persist = true) => {
-    switchTo(l);
-    writeStored(STORE_KEY, l);
+  const setLocale = useCallback((c: LocaleChoice, persist = true) => {
+    switchTo(resolveLocale(c));
+    setChoice(c);
+    writeStored(STORE_KEY, c);
     if (persist) {
-      void api("/app/api/me", { method: "PATCH", body: JSON.stringify({ locale: l }) }).catch(
+      const locale = c === "browser" ? null : c;
+      void api("/app/api/me", { method: "PATCH", body: JSON.stringify({ locale }) }).catch(
         () => {},
       );
     }
   }, [switchTo]);
   const t = useCallback<TFunction>((key, vars) => translate(locale, key, vars), [locale]);
-  return <I18nContext.Provider value={{ locale, setLocale, t }}>{children}</I18nContext.Provider>;
+  return <I18nContext.Provider value={{ locale, choice, setLocale, t }}>{children}</I18nContext.Provider>;
 }
 
 export function useI18n() {

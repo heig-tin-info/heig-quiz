@@ -365,8 +365,8 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
   const confinedTo = me.data?.session?.evaluationId ?? null;
   useLiveUpdates(me.data != null && confinedTo === null && route.view !== "attempt");
   // The account's saved language wins on load, so the choice follows the user
-  // across devices (no re-persist: adopt only).
-  const serverLocale = me.data?.locale ?? null;
+  // across devices (no re-persist: adopt only). Unset means "the browser's".
+  const serverLocale = me.data ? (me.data.locale ?? "browser") : null;
   useEffect(() => {
     if (serverLocale) setLocale(serverLocale, false);
   }, [serverLocale, setLocale]);
