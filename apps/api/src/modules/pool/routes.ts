@@ -81,7 +81,7 @@ import {
   teacherGuard,
 } from "../guards.js";
 import { INERT_IMAGE_HEADERS, isAllowedMime, readAsset, sniffImage, storeAsset } from "./assets.js";
-import { invalid, teacherRoute } from "../http.js";
+import { invalid, notFound, teacherRoute } from "../http.js";
 import { studentViewOf } from "../live/studentView.js";
 import { loadConfig, tryLoadConfig, typeOf } from "./config.js";
 import { publish } from "../../events.js";
@@ -124,14 +124,22 @@ function coreFailure(reply: FastifyReply, error: unknown): FastifyReply | null {
   return null;
 }
 
+/**
+ * The module's own arms: `coreFailure`, and a category outside the pool as
+ * the bare 404 a missing entity gets (the one `POST /questions/move` sends).
+ */
+function poolFailure(reply: FastifyReply, error: unknown): FastifyReply | null {
+  if (error instanceof service.CategoryNotInPool) return notFound(reply);
+  return coreFailure(reply, error);
+}
+
 export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
   const requireTeacher = teacherGuard(app);
   const trace = tracer(app);
   const mine = (req: FastifyRequest) => accessWhere(req.user!, poolAccess(req.user!.id));
 
-  /** The module's own arm: a refusal of the question-type layer is the `422` of `coreFailure`. */
-  const teacher = teacherRoute(app, coreFailure);
+  const teacher = teacherRoute(app, poolFailure);
 
   /**
    * The loaders of this module: the entity under `poolAccess` (404 when it
@@ -575,11 +583,9 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     teacher(
       { params: IdParam, body: QuestionCreate, load: inPool("contributor") },
       async ({ req, reply, body, scope: pool }) => {
-        if (!(await isCategoryOf(pool.id, body.categoryId ?? null))) {
-          return reply.code(404).send({ error: "not_found" });
-        }
-        // A name the pool already holds is `NameTaken`'s 409, a type the
-        // registry refuses the 422 of `coreFailure`: both the shared tail's.
+        // A name the pool already holds is `NameTaken`'s 409, a category of
+        // another pool the 404 of `poolFailure`, a type the registry refuses
+        // the 422 of `coreFailure`.
         const created = await service.createQuestion(app.db, {
           poolId: pool.id,
           type: body.type,
@@ -612,16 +618,8 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     teacher(
       { params: IdParam, body: QuestionPatch, load: onQuestion("contributor") },
       async ({ req, reply, body, scope }) => {
-        if (!(await isCategoryOf(scope.pool.id, body.categoryId ?? null))) {
-          return reply.code(404).send({ error: "not_found" });
-        }
-        try {
-          await service.patchQuestion(app.db, scope.question, body);
-        } catch {
-          return reply
-            .code(409)
-            .send({ error: "duplicate_name", message: "This pool already has a question by that name" });
-        }
+        // `NameTaken`'s 409 and `poolFailure`'s 404, like the create route.
+        await service.patchQuestion(app.db, scope.question, body);
         await trace(req, "question.update", "question", scope.question.id, body);
         poolChanged(scope.pool.id);
         const [fresh] = await app.db
@@ -799,9 +797,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
         // Reading the source is enough to copy FROM it; writing the copy needs a
         // contributor's seat on the TARGET.
         if (!(await requirePoolRole(app, req, reply, target, "contributor"))) return reply;
-        if (!(await isCategoryOf(target.id, body.categoryId ?? null))) {
-          return reply.code(404).send({ error: "not_found" });
-        }
+        // A category of another pool is `CategoryNotInPool`, `poolFailure`'s 404.
         const created = await service.copyQuestion(app.db, scope.question, {
           targetPoolId: target.id,
           categoryId: body.categoryId ?? null,
@@ -856,7 +852,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     }
 
     const categoryId = body.data.categoryId ?? null;
-    if (!(await isCategoryOf(target.id, categoryId))) {
+    if (!(await service.isCategoryOf(app.db, target.id, categoryId))) {
       return reply.code(404).send({ error: "not_found" });
     }
 
@@ -907,21 +903,6 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       .from(questions)
       .innerJoin(pools, eq(questions.poolId, pools.id))
       .where(and(inArray(questions.id, ids), mine(req)));
-  }
-
-  /**
-   * A category is a category OF THE TARGET; one belonging to another pool is
-   * as good as missing. No category at all is fine. Every route that files a
-   * question in a category (create, patch, copy, move) asks this first.
-   */
-  async function isCategoryOf(poolId: string, categoryId: string | null): Promise<boolean> {
-    if (categoryId === null) return true;
-    const [category] = await app.db
-      .select({ id: categories.id })
-      .from(categories)
-      .where(and(eq(categories.id, categoryId), eq(categories.poolId, poolId)))
-      .limit(1);
-    return category !== undefined;
   }
 
   /**

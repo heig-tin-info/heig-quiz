@@ -262,6 +262,56 @@ describe("the draft and publication routes", () => {
       message: "This pool already has a question by that name",
     });
   });
+
+  it("refuses a category that is not one of the pool's: the 404 of a move", async () => {
+    const post = (user: typeof owner, url: string, payload: unknown) =>
+      server.app.inject({ method: "POST", url, headers: user.headers, payload });
+    const categoryIn = async (user: typeof owner, name: string) => {
+      const pool = await post(user, "/app/api/pools", { name });
+      expect(pool.statusCode).toBe(201);
+      const category = await post(user, `/app/api/pools/${pool.json().id}/categories`, {
+        name: "Loops",
+      });
+      expect(category.statusCode).toBe(201);
+      return category.json().id as string;
+    };
+    const foreign = {
+      // Another pool of the same teacher, which they can see and write.
+      mine: await categoryIn(owner, "other pool of the owner"),
+      // A pool the teacher cannot reach at all.
+      theirs: await categoryIn(stranger, "stranger's pool"),
+      missing: "00000000-0000-4000-8000-00000000cafe",
+    };
+    for (const [label, categoryId] of Object.entries(foreign)) {
+      const created = await post(owner, `/app/api/pools/${poolId}/questions`, {
+        type: "short",
+        internalName: `in a foreign category ${label}`,
+        categoryId,
+      });
+      expect(created.statusCode, label).toBe(404);
+      expect(created.json(), label).toEqual({ error: "not_found" });
+
+      const id = await createQuestion(`to patch ${label}`);
+      const patched = await server.app.inject({
+        method: "PATCH",
+        url: `/app/api/questions/${id}`,
+        headers: owner.headers,
+        payload: { categoryId },
+      });
+      expect(patched.statusCode, label).toBe(404);
+      expect(patched.json(), label).toEqual({ error: "not_found" });
+
+      const copied = await post(owner, `/app/api/questions/${id}/copy`, {
+        targetPoolId: poolId,
+        categoryId,
+      });
+      expect(copied.statusCode, label).toBe(404);
+      expect(copied.json(), label).toEqual({ error: "not_found" });
+    }
+    // Nothing was written: no question of the pool sits in a foreign category.
+    const rows = await server.app.db.select().from(questions).where(eq(questions.poolId, poolId));
+    expect(rows.every((q) => q.categoryId === null)).toBe(true);
+  });
 });
 
 describe("POST /questions/:id/try (F-QST-09)", () => {

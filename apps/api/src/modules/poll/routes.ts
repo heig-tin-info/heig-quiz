@@ -225,7 +225,7 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
       return invalid(reply, body.error);
     }
     const pool = await poolService.ensurePersonalPool(app.db, req.user!.id);
-    let created;
+    let created: poolService.QuestionRecord;
     try {
       created = await poolService.createQuestion(app.db, {
         poolId: pool.id,
