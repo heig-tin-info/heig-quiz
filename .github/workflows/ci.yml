@@ -34,6 +34,8 @@ jobs:
           path: apps/web/public/runtimes
           key: web-runtimes-${{ hashFiles('apps/web/scripts/fetch-runtimes.mjs') }}
       - run: pnpm install --frozen-lockfile
+      # Strict, so a partial download fails here instead of being cached.
+      - run: node apps/web/scripts/fetch-runtimes.mjs --strict
       - run: pnpm build
       - run: pnpm typecheck
       # Every package's `test`, the runner's unit suite included. Its

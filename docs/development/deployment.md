@@ -244,8 +244,8 @@ command="/opt/quiz-runner/apps/runner/deploy/deploy.sh",restrict ssh-ed25519 AAA
 Whatever command the client asks for, the server runs the pinned script
 instead, so a key can only deploy and never open a shell, even if it leaks,
 and the staging key can never touch production. The workflow connects as
-`${{ vars.DEPLOY_USER || 'root' }}` to the application VM (`DEPLOY_USER` is
-`srv`) and as `root` to the runner VM.
+`${{ vars.DEPLOY_USER || 'srv' }}` to the application VM and as `root` to the
+runner VM.
 
 The CI sends `<commit sha> <ephemeral GHCR token>` as the SSH command; it
 arrives in `$SSH_ORIGINAL_COMMAND`, is matched strictly and never evaluated.

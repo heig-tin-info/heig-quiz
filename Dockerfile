@@ -21,11 +21,12 @@ RUN pnpm fetch --frozen-lockfile
 COPY . .
 RUN pnpm install --offline --frozen-lockfile --filter @quiz/api... --filter @quiz/web...
 # The deployed commit, shown in the user menu (#179). The context has no .git.
-ARG COMMIT_SHA COMMIT_DATE
+ARG COMMIT_SHA
+ARG COMMIT_DATE
 RUN pnpm --filter @quiz/api... --filter @quiz/web... build
 # Self-contained production tree for the API (pruned node_modules + workspaces)
 RUN pnpm --filter @quiz/api deploy --prod --legacy /out \
-  && cp -r apps/api/drizzle /out/drizzle \
+  && cp -r apps/api/drizzle/. /out/drizzle \
   && cp -r apps/web/dist /out/web
 
 FROM node:24-slim
