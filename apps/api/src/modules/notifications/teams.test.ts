@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 
-import { allowedServiceUrl, createTeamsClient, TeamsError } from "./teams.js";
+import { createTeamsClient, TeamsError, type ActivityNotification } from "./teams.js";
 
-const config = {
-  TEAMS_CLIENT_ID: "client-id",
-  TEAMS_CLIENT_SECRET: "client-secret",
-  TEAMS_BOT_TENANT: "botframework.com",
+const config = { TEAMS_CLIENT_ID: "client-id", TEAMS_CLIENT_SECRET: "client-secret" };
+const HEIG = "a372f724-c0b2-4ea0-abfb-0eb8c6f84e40";
+const OTHER = "96412a41-a2a2-422e-8438-f29c95c02686";
+const LEA = { tenantId: HEIG, aadObjectId: "0f1e2d3c-0000-4000-8000-00000000a1d1" };
+const ACTIVITY: ActivityNotification = {
+  topic: "Test 0 — bases du C",
+  webUrl: "https://teams.microsoft.com/l/entity/app/home?context=%7B%7D",
+  activityType: "resultsReleased",
+  previewText: "The results of “Test 0” are available.",
+  templateParameters: { evaluationTitle: "Test 0 — bases du C" },
 };
-const CHAT = { serviceUrl: "https://smba.trafficmanager.net/emea/", conversationId: "a:1/b?c" };
-const MESSAGE = { type: "message", text: "<p>Hi</p>", textFormat: "xml" } as const;
 
 interface Call {
   method: string;
@@ -37,95 +41,110 @@ function microsoft(routes: [string, () => Response][]) {
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
-const TOKEN = "https://login.microsoftonline.com/";
-const SMBA = "https://smba.trafficmanager.net/";
+const LOGIN = "https://login.microsoftonline.com/";
+const GRAPH = "https://graph.microsoft.com/";
 
-describe("the serviceUrl allowlist", () => {
-  it("admits the Teams hosts over https only", () => {
-    for (const url of [
-      "https://smba.trafficmanager.net/teams/",
-      "https://smba.trafficmanager.net/emea/",
-      "https://smba.trafficmanager.net/amer",
-      "https://SMBA.trafficmanager.net/apac/",
-    ]) {
-      expect(allowedServiceUrl(url), url).toBe(true);
-    }
-    for (const url of [
-      "http://smba.trafficmanager.net/teams/",
-      "https://smba.trafficmanager.net:8443/teams/",
-      "https://evil.example/teams/",
-      "https://smba.trafficmanager.net.evil.example/",
-      "https://user:pw@smba.trafficmanager.net/teams/",
-      "https://smba.trafficmanager.net/teams/?x=1",
-      "not a url",
-    ]) {
-      expect(allowedServiceUrl(url), url).toBe(false);
-    }
-  });
-});
-
-describe("sending", () => {
-  it("takes a Bot Connector token from the bot's tenant, then posts the activity", async () => {
+describe("the Graph client", () => {
+  it("takes an app token in the recipient's tenant, then sends the activity", async () => {
     const { fetchImpl, calls } = microsoft([
-      [TOKEN, () => json({ access_token: "bot-token", expires_in: 3600 })],
-      [SMBA, () => json({ id: "1" }, 201)],
+      [LOGIN, () => json({ access_token: "graph-token", expires_in: 3600 })],
+      [GRAPH, () => new Response(null, { status: 204 })],
     ]);
-    const client = createTeamsClient({ ...config, TEAMS_BOT_TENANT: "tenant-home" }, fetchImpl);
-    await client.send(CHAT, MESSAGE);
-    await client.send(CHAT, MESSAGE);
+    const client = createTeamsClient(config, fetchImpl);
+    await client.notify(LEA, ACTIVITY);
+    await client.notify(LEA, ACTIVITY);
 
     const token = calls[0]!;
-    expect(token.url).toBe("https://login.microsoftonline.com/tenant-home/oauth2/v2.0/token");
+    expect(token.url).toBe(`https://login.microsoftonline.com/${HEIG}/oauth2/v2.0/token`);
     const form = new URLSearchParams(token.body!);
     expect(form.get("grant_type")).toBe("client_credentials");
-    expect(form.get("scope")).toBe("https://api.botframework.com/.default");
+    expect(form.get("scope")).toBe("https://graph.microsoft.com/.default");
     expect(form.get("client_id")).toBe("client-id");
+    expect(form.get("client_secret")).toBe("client-secret");
 
-    // The token is cached: two posts, one token.
-    expect(calls.map((c) => c.url.startsWith(TOKEN))).toEqual([true, false, false]);
+    // Cached for the tenant: two sends, one token.
+    expect(calls.map((c) => c.url.startsWith(LOGIN))).toEqual([true, false, false]);
     const post = calls[1]!;
-    expect(post.url).toBe("https://smba.trafficmanager.net/emea/v3/conversations/a%3A1%2Fb%3Fc/activities");
-    expect(post.auth).toBe("Bearer bot-token");
-    expect(JSON.parse(post.body!)).toEqual(MESSAGE);
+    expect(post.method).toBe("POST");
+    expect(post.url).toBe(
+      `https://graph.microsoft.com/v1.0/users/${LEA.aadObjectId}/teamwork/sendActivityNotification`,
+    );
+    expect(post.auth).toBe("Bearer graph-token");
+    expect(JSON.parse(post.body!)).toEqual({
+      topic: { source: "text", value: "Test 0 — bases du C", webUrl: ACTIVITY.webUrl },
+      activityType: "resultsReleased",
+      previewText: { content: "The results of “Test 0” are available." },
+      templateParameters: [{ name: "evaluationTitle", value: "Test 0 — bases du C" }],
+    });
   });
 
-  it("never sends the token to a serviceUrl outside the allowlist", async () => {
-    const { fetchImpl, calls } = microsoft([[TOKEN, () => json({ access_token: "bot-token" })]]);
+  it("keeps one token per tenant", async () => {
+    let issued = 0;
+    const { fetchImpl, calls } = microsoft([
+      [LOGIN, () => json({ access_token: `token-${++issued}`, expires_in: 3600 })],
+      [GRAPH, () => new Response(null, { status: 204 })],
+    ]);
     const client = createTeamsClient(config, fetchImpl);
-    const err = await client
-      .send({ serviceUrl: "https://evil.example/teams/", conversationId: "c" }, MESSAGE)
-      .catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(TeamsError);
-    expect((err as TeamsError).permanent).toBe(true);
-    expect(calls).toHaveLength(0);
+    await client.notify(LEA, ACTIVITY);
+    await client.notify({ tenantId: OTHER, aadObjectId: "someone" }, ACTIVITY);
+    await client.notify(LEA, ACTIVITY);
+    const tokens = calls.filter((c) => c.url.startsWith(LOGIN)).map((c) => c.url);
+    expect(tokens).toEqual([
+      `https://login.microsoftonline.com/${HEIG}/oauth2/v2.0/token`,
+      `https://login.microsoftonline.com/${OTHER}/oauth2/v2.0/token`,
+    ]);
+    expect(calls.filter((c) => c.url.startsWith(GRAPH)).map((c) => c.auth)).toEqual([
+      "Bearer token-1",
+      "Bearer token-2",
+      "Bearer token-1",
+    ]);
   });
 
-  it("marks 403 and 404 permanent, anything else retryable", async () => {
+  it("escapes the object id in the path", async () => {
+    const { fetchImpl, calls } = microsoft([
+      [LOGIN, () => json({ access_token: "t" })],
+      [GRAPH, () => new Response(null, { status: 204 })],
+    ]);
+    await createTeamsClient(config, fetchImpl).notify({ tenantId: HEIG, aadObjectId: "../me?x" }, ACTIVITY);
+    expect(calls[1]!.url).toBe(
+      "https://graph.microsoft.com/v1.0/users/..%2Fme%3Fx/teamwork/sendActivityNotification",
+    );
+  });
+
+  it("marks 403 and 404 permanent, with Graph's error code, anything else retryable", async () => {
     for (const [status, permanent] of [
       [403, true],
       [404, true],
-      [500, false],
+      [400, false],
       [429, false],
+      [500, false],
     ] as const) {
       const { fetchImpl } = microsoft([
-        [TOKEN, () => json({ access_token: "bot-token" })],
-        [SMBA, () => new Response("no", { status })],
+        [LOGIN, () => json({ access_token: "t" })],
+        [GRAPH, () => json({ error: { code: "Forbidden", message: "no" } }, status)],
       ]);
       const err = await createTeamsClient(config, fetchImpl)
-        .send(CHAT, MESSAGE)
+        .notify(LEA, ACTIVITY)
         .catch((e: unknown) => e);
       expect(err).toBeInstanceOf(TeamsError);
       expect((err as TeamsError).status).toBe(status);
+      expect((err as TeamsError).code).toBe("Forbidden");
       expect((err as TeamsError).permanent).toBe(permanent);
     }
   });
 
-  it("fails retryably when the bot cannot get a token (a lapsed secret)", async () => {
-    const { fetchImpl } = microsoft([[TOKEN, () => json({ error: "invalid_client" }, 401)]]);
-    const err = await createTeamsClient(config, fetchImpl)
-      .send(CHAT, MESSAGE)
-      .catch((e: unknown) => e);
-    expect(err).toBeInstanceOf(TeamsError);
-    expect((err as TeamsError).permanent).toBe(false);
+  it("fails retryably when no token can be had (a lapsed secret, the app unknown to the tenant)", async () => {
+    for (const status of [400, 401, 403]) {
+      const { fetchImpl, calls } = microsoft([
+        [LOGIN, () => json({ error: "unauthorized_client", error_description: "AADSTS700016" }, status)],
+      ]);
+      const err = await createTeamsClient(config, fetchImpl)
+        .notify(LEA, ACTIVITY)
+        .catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(TeamsError);
+      expect((err as TeamsError).permanent).toBe(false);
+      expect((err as TeamsError).code).toBe("unauthorized_client");
+      expect(calls.some((c) => c.url.startsWith(GRAPH))).toBe(false);
+    }
   });
 });

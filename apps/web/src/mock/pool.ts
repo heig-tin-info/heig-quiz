@@ -2,6 +2,7 @@
 import {
   clozeStudentTemplate,
   describeBlank,
+  displayName,
   matchBlank,
   mcqFraction,
   parseCloze,
@@ -36,17 +37,20 @@ import {
   type Notification,
   type NotificationSettings,
   type TeamsLinkPreview,
+  type TeamsTabState,
 } from "@quiz/contracts";
 import {
   D,
   H,
   MockError,
+  MockPayload,
   MockValidation,
   flags,
   iso,
   nextId,
   on,
   params,
+  teamsScene,
 } from "./runtime";
 import {
   ME_TEACHER,
@@ -1809,7 +1813,8 @@ on("POST", "/app/api/notifications/read-all", () => {
  * configured and not linked: the settings show the app to download and the
  * steps. `/teams/link?token=<43 characters>` is the link page of a pending
  * link; confirming it links Teams here. A token that starts with `expired`
- * has expired.
+ * has expired. `/teams?teams=<scene>` is the tab inside a fake Teams
+ * (`teams.ts`), whose endpoint answers below.
  */
 const notificationSettings: NotificationSettings = {
   matrix: {
@@ -1818,7 +1823,7 @@ const notificationSettings: NotificationSettings = {
     pool_ownership: { bell: true, email: true, teams: true },
   },
   email: me?.email ?? "",
-  teams: { available: true, linkedAt: null, teamsName: null },
+  teams: { available: true, linkedAt: null, teamsName: null, teamsUsername: null },
 };
 
 on("GET", "/app/api/notifications/settings", () => notificationSettings);
@@ -1828,21 +1833,36 @@ on("PUT", "/app/api/notifications/preferences", (_m, body) => {
   return notificationSettings;
 });
 const TEAMS_NAME = "Léa Rochat (HEIG-VD)";
+const TEAMS_USERNAME = "lea.rochat@heig-vd.ch";
 on("POST", "/app/api/notifications/teams/link/preview", (_m, body): TeamsLinkPreview => {
   if (String(body.token ?? "").startsWith("expired")) throw new MockError(404, "link_invalid");
   return {
     teamsName: TEAMS_NAME,
+    teamsUsername: TEAMS_USERNAME,
     tenantId: "a372f724-c0b2-4ea0-abfb-0eb8c6f84e40",
     expiresAt: iso(15 * 60_000),
   };
 });
 on("POST", "/app/api/notifications/teams/link", () => {
-  notificationSettings.teams = { available: true, linkedAt: iso(0), teamsName: TEAMS_NAME };
+  notificationSettings.teams = {
+    available: true,
+    linkedAt: iso(0),
+    teamsName: TEAMS_NAME,
+    teamsUsername: TEAMS_USERNAME,
+  };
   return notificationSettings;
 });
 on("DELETE", "/app/api/notifications/teams", () => {
-  notificationSettings.teams = { available: true, linkedAt: null, teamsName: null };
+  notificationSettings.teams = { available: true, linkedAt: null, teamsName: null, teamsUsername: null };
   return notificationSettings;
+});
+// The tab inside Teams, for the fake Teams of `teams.ts` (`?teams=`).
+on("POST", "/app/api/notifications/teams/tab", (): TeamsTabState => {
+  if (teamsScene === "refused") throw new MockPayload(403, { error: "tenant_not_allowed" });
+  if (teamsScene === "linked" || teamsScene === "target") {
+    return { state: "linked", accountName: me ? displayName(me) : "Léa Rochat" };
+  }
+  return { state: "unlinked", linkUrl: `${window.location.origin}/teams/link?token=${"T".repeat(43)}` };
 });
 on("GET", "/app/api/pools/:id/tags", (m) => poolTagDetails(poolOr404(m.groups!.id!).id));
 on("PATCH", "/app/api/pools/:id/tags/:tag", (m, body) => {

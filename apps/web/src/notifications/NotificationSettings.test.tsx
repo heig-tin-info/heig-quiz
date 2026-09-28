@@ -14,9 +14,14 @@ import { mockFetch, ok, renderWithProviders } from "../test/render";
  */
 
 const ALL_ON = { bell: true, email: true, teams: true };
-const OFF = { available: false, linkedAt: null, teamsName: null };
-const UNLINKED = { available: true, linkedAt: null, teamsName: null };
-const LINKED = { available: true, linkedAt: "2026-09-20T08:00:00.000Z", teamsName: "Léa Rochat (HEIG-VD)" };
+const OFF = { available: false, linkedAt: null, teamsName: null, teamsUsername: null };
+const UNLINKED = { available: true, linkedAt: null, teamsName: null, teamsUsername: null };
+const LINKED = {
+  available: true,
+  linkedAt: "2026-09-20T08:00:00.000Z",
+  teamsName: "Léa Rochat (HEIG-VD)",
+  teamsUsername: "lea.rochat@heig-vd.ch",
+};
 
 function settings(teams: NotificationSettings["teams"]): NotificationSettings {
   return {
@@ -74,7 +79,8 @@ describe("the notification settings", () => {
     expect(download).toHaveAttribute("download");
     const steps = within(screen.getByRole("list")).getAllByRole("listitem");
     expect(steps).toHaveLength(3);
-    expect(steps[0]).toHaveTextContent("Upload a customised app");
+    expect(steps[0]).toHaveTextContent("Download the Teams app");
+    expect(steps[1]).toHaveTextContent("Upload a customised app");
     expect(steps[2]).toHaveTextContent("Link to my Quiz account");
   });
 
@@ -88,7 +94,7 @@ describe("the notification settings", () => {
 
     const grid = await screen.findByRole("table", { name: "Notifications" });
     expect(within(grid).getByRole("switch", { name: "Results released: Teams" })).toBeEnabled();
-    expect(screen.getByText(/Linked to Léa Rochat \(HEIG-VD\) since/)).toBeVisible();
+    expect(screen.getByText(/Linked to Léa Rochat \(HEIG-VD\) \(lea\.rochat@heig-vd\.ch\) since/)).toBeVisible();
     expect(screen.queryByRole("link", { name: "Download the Teams app" })).toBeNull();
     await user.click(screen.getByRole("button", { name: "Disconnect" }));
     await waitFor(() => expect(calls.some((c) => c.method === "DELETE")).toBe(true));

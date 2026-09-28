@@ -150,6 +150,9 @@ const OAuthConsent = lazy(() => import("./oauth/OAuthConsent").then((m) => ({ de
 const TeamsLinkPage = lazy(() =>
   import("./notifications/TeamsLinkPage").then((m) => ({ default: m.TeamsLinkPage })),
 );
+const TeamsTabPage = lazy(() =>
+  import("./notifications/TeamsTabPage").then((m) => ({ default: m.TeamsTabPage })),
+);
 const PollLauncher = lazy(() =>
   import("./poll/PollLauncher").then((m) => ({ default: m.PollLauncher })),
 );
@@ -190,6 +193,9 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   join: (r, c) => <PollJoin code={r.code} me={c.me} navigate={c.navigate} />,
   oauthConsent: (r, c) => <OAuthConsent id={r.id} me={c.me} />,
   teamsLink: (_, c) => <TeamsLinkPage me={c.me} onSettings={() => c.navigate({ view: "settings" })} />,
+  // Rendered by `App` before any session is asked for; this entry only keeps
+  // the table whole.
+  teamsTab: () => <TeamsTabPage />,
   // Invariant 3: the gallery exists in development only. The
   // route parses in every build; this is what refuses to render it.
   devUi: (_, c) => (import.meta.env.DEV ? <DevGallery /> : <TeacherHome navigate={c.navigate} />),
@@ -237,6 +243,7 @@ const FULL_SCREEN: ReadonlySet<Route["view"]> = new Set([
   "join",
   "oauthConsent",
   "teamsLink",
+  "teamsTab",
 ]);
 
 /**
@@ -321,8 +328,23 @@ function toggleStudentView(inStudentView: boolean, route: Route, navigate: (r: R
 }
 
 export default function App() {
-  const me = useMe();
   const [route, navigate] = useRoute();
+  // ADR-030: the HEIG Quiz tab inside Teams has no Quiz session (Teams
+  // frames it, the cookies stay behind) and must never be sent to a login
+  // inside that frame, nor wait on `/me`: it is drawn before either.
+  if (route.view === "teamsTab") {
+    return (
+      <Suspense fallback={<Spinner className="py-24" />}>
+        <TeamsTabPage />
+      </Suspense>
+    );
+  }
+  return <SessionApp route={route} navigate={navigate} />;
+}
+
+/** Every other page: the session decides between the landing, SEB's confinement and the app. */
+function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
+  const me = useMe();
   // Persisted, with the route to come back to (`studentView.ts`, ADR-018).
   const studentView = useStudentView();
   const { setLocale } = useI18n();

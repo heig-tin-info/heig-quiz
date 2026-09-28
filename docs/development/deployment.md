@@ -124,9 +124,9 @@ Notifications ([ADR-030](../adr/ADR-030-canaux-de-notification.md)):
 e-mails go out through Scaleway TEM once `SCW_SECRET_KEY` and
 `SCW_DEFAULT_PROJECT_ID` are set in `.env.prod` (the classroom's project and
 sender domain; without them every e-mail is only logged). The Microsoft Teams
-channel stays off until the Azure Bot and its Entra application exist and
+channel stays off until its multi-tenant Entra application exists and
 `TEAMS_CLIENT_ID` and `TEAMS_CLIENT_SECRET` (plus `TEAMS_ALLOWED_TENANTS`,
-HEIG-VD's tenant, and `TEAMS_BOT_TENANT` for a single-tenant bot) are set:
+HEIG-VD's tenant) are set:
 the whole setup, the secret's rotation included, is
 [Microsoft Teams setup](teams.md). Staging sets neither.
 
@@ -549,7 +549,7 @@ configuration.
 | `OAUTH_CIMD_HOSTS` | default `claude.ai,claude.com,chatgpt.com` | the only hosts whose OAuth Client ID Metadata Documents the server fetches ([ADR-023](../adr/ADR-023-serveur-oauth-pour-mcp.md)); `PUBLIC_URL` is the OAuth issuer, so it must be the exact public origin |
 | `METRICS_TOKEN` | a bearer token for Prometheus | empty leaves `/metrics` to an admin session; the endpoint is never public |
 | `SCW_SECRET_KEY`, `SCW_DEFAULT_PROJECT_ID` | the classroom's Scaleway project | empty: e-mails are logged, never sent |
-| `TEAMS_CLIENT_ID`, `TEAMS_CLIENT_SECRET`, `TEAMS_ALLOWED_TENANTS`, `TEAMS_BOT_TENANT` | see [Microsoft Teams setup](teams.md) | empty: the Teams channel is off |
+| `TEAMS_CLIENT_ID`, `TEAMS_CLIENT_SECRET`, `TEAMS_ALLOWED_TENANTS` | see [Microsoft Teams setup](teams.md) | empty: the Teams channel is off |
 | `RUNNER_MODE`, `RUNNER_URL` | `http`, `https://code.chevallier.io:8443` | `http` without a URL is refused; `stub` disables the runner, see below |
 | `RUNNER_TOKEN` | `openssl rand -hex 32`, the same value as `/etc/quiz-runner/env` on the runner VM | sent as `Authorization: Bearer` on every call; required when `RUNNER_MODE=http`, the process does not start without it |
 | `RUNNER_TIMEOUT_MS` | default `30000` | wall-clock budget of one runner call |

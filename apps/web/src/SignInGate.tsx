@@ -10,7 +10,7 @@ import { Button, Card, GateFrame } from "./ui";
 
 /**
  * The sign-in of a page reached from outside the app with no session — a
- * poll that asks for an account, an assistant's consent, the Teams bot's
+ * poll that asks for an account, an assistant's consent, the Teams
  * link. ONE primary action, and the development door beside it exactly as
  * `Landing` offers it; both carry a `next` back to the very page, which the
  * server validates (`auth/returnTo.ts`).

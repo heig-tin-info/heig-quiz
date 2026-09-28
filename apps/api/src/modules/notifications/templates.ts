@@ -1,7 +1,10 @@
 /**
  * The words of a notification that leaves the platform (ADR-030): the e-mail
- * and the Teams message, rendered on the server in the RECIPIENT's language
- * (`users.locale`, English when unset), never the sender's.
+ * and the preview line of a Teams activity, rendered on the server in the
+ * RECIPIENT's language (`users.locale`, English when unset), never the
+ * sender's — and every user-facing string of the Teams app package (its
+ * name, descriptions, tab and activity types), whose French half becomes the
+ * package's `fr.json`.
  *
  * One typed dictionary, the web app's rule mirrored: `fr` is
  * `Record<keyof typeof en, string>`, so a missing French sentence is a
@@ -32,13 +35,22 @@ const en = {
   "role.owner": "owner",
   footer: "You receive this message from HEIG Quiz. Choose which notifications reach you, and where, in your settings:",
   "footer.link": "Notification settings",
-  "bot.welcome":
-    "Hello! I send you the notifications of HEIG Quiz. Link this chat to your Quiz account to receive them here. The link is valid for 15 minutes and works once.",
-  "bot.link.action": "Link to my Quiz account",
-  "bot.linked": "This chat is linked to the HEIG Quiz account of {name}. Choose what reaches you here in your settings: {settings}",
-  "bot.confirmed": "Done: this chat is now linked to the HEIG Quiz account of {name}. Your notifications will arrive here.",
-  "bot.tenantRefused":
-    "Sorry, HEIG Quiz only links Teams accounts of the HEIG-VD organization. Sign in to Teams with your HEIG-VD account and try again.",
+  // The Teams app package (`teamsApp.ts`). Teams caps: name.short 30,
+  // name.full 100, description.short 80, an activity's description and
+  // templateText 128. The `{…}` of a templateText are the activity's
+  // template parameters (`activityParameters`), filled by Teams.
+  "app.name.short": "HEIG Quiz",
+  "app.name.full": "HEIG Quiz notifications",
+  "app.description.short": "Your HEIG Quiz notifications, in your Teams activity feed.",
+  "app.description.full":
+    "HEIG Quiz sends its notifications to your Teams activity feed: released results, pools shared with you. Open the app once and link it to your Quiz account, then choose in the platform's settings which notifications reach you in Teams.",
+  "app.tab.name": "Home",
+  "activity.results_released.description": "The results of an evaluation you took are released",
+  "activity.results_released.template": "Results available: {evaluationTitle}",
+  "activity.pool_shared.description": "A pool is shared with you",
+  "activity.pool_shared.template": "{byName} shared the pool {poolName} with you",
+  "activity.pool_ownership.description": "You become the owner of a pool",
+  "activity.pool_ownership.template": "You now own the pool {poolName}",
 } as const;
 
 type Key = keyof typeof en;
@@ -58,16 +70,26 @@ const fr: Record<Key, string> = {
   "role.owner": "propriétaire",
   footer: "Vous recevez ce message de HEIG Quiz. Choisissez quelles notifications vous parviennent, et où, dans vos réglages :",
   "footer.link": "Réglages des notifications",
-  "bot.welcome":
-    "Bonjour ! Je vous transmets les notifications de HEIG Quiz. Liez cette conversation à votre compte Quiz pour les recevoir ici. Le lien est valable 15 minutes et ne sert qu'une fois.",
-  "bot.link.action": "Lier à mon compte Quiz",
-  "bot.linked": "Cette conversation est liée au compte HEIG Quiz de {name}. Choisissez ce qui vous parvient ici dans vos réglages : {settings}",
-  "bot.confirmed": "C'est fait : cette conversation est liée au compte HEIG Quiz de {name}. Vos notifications arriveront ici.",
-  "bot.tenantRefused":
-    "Désolé, HEIG Quiz ne lie que des comptes Teams de l'organisation HEIG-VD. Connectez-vous à Teams avec votre compte HEIG-VD et réessayez.",
+  "app.name.short": "HEIG Quiz",
+  "app.name.full": "Notifications HEIG Quiz",
+  "app.description.short": "Vos notifications HEIG Quiz, dans le flux d'activité de Teams.",
+  "app.description.full":
+    "HEIG Quiz envoie ses notifications dans votre flux d'activité Teams : résultats publiés, banques partagées avec vous. Ouvrez l'application une fois et liez-la à votre compte Quiz, puis choisissez dans les réglages de la plateforme quelles notifications vous parviennent dans Teams.",
+  "app.tab.name": "Accueil",
+  "activity.results_released.description": "Les résultats d'une évaluation que vous avez passée sont publiés",
+  "activity.results_released.template": "Résultats disponibles : {evaluationTitle}",
+  "activity.pool_shared.description": "Une banque est partagée avec vous",
+  "activity.pool_shared.template": "{byName} a partagé la banque {poolName} avec vous",
+  "activity.pool_ownership.description": "Vous devenez propriétaire d'une banque",
+  "activity.pool_ownership.template": "Vous êtes propriétaire de la banque {poolName}",
 };
 
 const DICTS: Record<MailLocale, Record<Key, string>> = { en, fr };
+
+/** The whole dictionary of one language (the Teams app package reads it). */
+export function serverText(locale: MailLocale): Record<Key, string> {
+  return DICTS[locale];
+}
 
 /** The five characters that matter in text and in a quoted attribute. */
 export function escapeHtml(s: string): string {
@@ -130,9 +152,12 @@ export interface RenderedNotification {
   text: string;
   /** The HTML part of the e-mail. */
   html: string;
-  /** The Teams message, in the small HTML subset Teams renders (`textFormat: xml`). */
-  teams: string;
+  /** One plain line, at most {@link PREVIEW_MAX} characters: the Teams activity's preview. */
+  preview: string;
 }
+
+/** What Teams shows of an activity's preview text; longer is cut with an ellipsis. */
+export const PREVIEW_MAX = 150;
 
 /** Narrows `users.locale` (null, or a value this dictionary lacks) to a language. */
 export function mailLocale(locale: string | null | undefined): MailLocale {
@@ -169,53 +194,26 @@ export function renderNotification(
   <p style="font-size:12px;line-height:1.5;color:#71717a;border-top:1px solid #e4e4e7;padding-top:12px;margin:0">${escapeHtml(t.footer)} <a href="${escapeHtml(settings)}" style="color:#71717a">${escapeHtml(t["footer.link"])}</a></p>
 </div>`;
 
-  const teams = `<p>${bodyHtml}</p><p><a href="${escapeHtml(link)}">${escapeHtml(action)}</a></p>`;
+  const line = oneLine(body);
+  const preview = line.length > PREVIEW_MAX ? `${line.slice(0, PREVIEW_MAX - 1)}…` : line;
 
-  return { subject, text, html, teams };
+  return { subject, text, html, preview };
 }
 
-// --- The bot's own messages (ADR-030) ----------------------------------------
-
-/**
- * The language of a Teams activity (`fr-CH`, `en-US`, …), for the bot's
- * replies: French for any French variant, English otherwise.
- */
-export function botLocale(locale: string | null | undefined): MailLocale {
-  return /^fr(\b|[-_])/i.test(locale ?? "") ? "fr" : "en";
-}
-
-/** A plain-text message of the bot; `vars` are never interpreted as markup. */
-export function botText(
-  locale: MailLocale,
-  key: "bot.linked" | "bot.confirmed" | "bot.tenantRefused",
-  vars: Record<string, string> = {},
-): { type: "message"; textFormat: "plain"; text: string } {
-  return { type: "message", textFormat: "plain", text: fill(DICTS[locale][key], vars, plain) };
+/** The `{name}` placeholders of a template, in order. */
+export function placeholders(template: string): string[] {
+  return [...template.matchAll(/\{(\w+)\}/g)].map((m) => m[1]!);
 }
 
 /**
- * The link card: the welcome sentence and ONE button that opens
- * `/teams/link?token=…` in the browser (an Adaptive Card, which Teams renders
- * in a personal chat on every client).
+ * The template parameters of a Teams activity: exactly the placeholders of
+ * the kind's `templateText` (the same in both languages — a test holds them
+ * to it), valued from the payload. Teams fills the text in the language of
+ * the recipient's client, so no value here is a translated word.
  */
-export function linkCard(
-  locale: MailLocale,
-  linkUrl: string,
-): { type: "message"; attachments: { contentType: string; content: unknown }[] } {
-  const t = DICTS[locale];
-  return {
-    type: "message",
-    attachments: [
-      {
-        contentType: "application/vnd.microsoft.card.adaptive",
-        content: {
-          type: "AdaptiveCard",
-          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
-          version: "1.4",
-          body: [{ type: "TextBlock", text: t["bot.welcome"], wrap: true }],
-          actions: [{ type: "Action.OpenUrl", title: t["bot.link.action"], url: linkUrl }],
-        },
-      },
-    ],
-  };
+export function activityParameters(payload: NotificationPayload): Record<string, string> {
+  const vars = varsOf(payload, en);
+  return Object.fromEntries(
+    placeholders(en[`activity.${payload.kind}.template`]).map((name) => [name, oneLine(vars[name] ?? "")]),
+  );
 }

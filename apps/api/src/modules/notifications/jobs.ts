@@ -7,7 +7,7 @@
  * backoff (pg-boss; the in-process development queue only logs). What is
  * not a failure returns quietly: an account gone or anonymized, an empty
  * address, a Teams link removed since — there is nobody left to retry for.
- * So does a Teams answer that a retry cannot change (403, 404): logged.
+ * So does a Graph answer that a retry cannot change (403, 404): logged.
  */
 import type { FastifyInstance } from "fastify";
 
@@ -26,6 +26,7 @@ import {
 } from "./outbox.js";
 import { teamsLinkOf } from "./service.js";
 import { createTeamsClient, TeamsError, type TeamsClient } from "./teams.js";
+import { teamsActivity } from "./teamsApp.js";
 import { tenantAllowed, type AllowedTenants } from "./teamsLink.js";
 import { mailLocale, renderNotification } from "./templates.js";
 
@@ -36,6 +37,8 @@ export interface DeliveryDeps {
   mailer: Mailer;
   /** Null when Teams is not configured on this platform. */
   teams: TeamsClient | null;
+  /** The Teams app's id (`TEAMS_CLIENT_ID`): the deep links of its activities. */
+  teamsAppId: string;
   /** `TEAMS_ALLOWED_TENANTS`: a link of a tenant no longer listed is not delivered to. */
   tenants: AllowedTenants;
   log: { info(obj: object, msg: string): void; warn(obj: object, msg: string): void };
@@ -72,17 +75,18 @@ export async function deliver(deps: DeliveryDeps, job: DeliveryJob): Promise<voi
     return;
   }
   try {
-    await deps.teams.send(
-      { serviceUrl: link.serviceUrl, conversationId: link.conversationId },
-      { type: "message", textFormat: "xml", text: message.teams },
+    await deps.teams.notify(
+      { tenantId: link.tenantId, aadObjectId: link.aadObjectId },
+      teamsActivity(deps.teamsAppId, job.payload, message),
     );
   } catch (err) {
-    // The bot was blocked, the chat is gone, or the stored serviceUrl is no
-    // longer allowed: a retry would meet the same answer. Logged, dropped;
-    // the link stays (the uninstall event, or the user, removes it).
+    // The app is not installed for that user (or its permission was not
+    // granted, or a policy forbids it), or the user is gone: a retry would
+    // meet the same answer. Logged, dropped; the link STAYS — reinstalling
+    // the app is the user's fix, and nothing tells us they removed it.
     if (err instanceof TeamsError && err.permanent) {
       deps.log.warn(
-        { userId: job.userId, kind: job.payload.kind, status: err.status },
+        { userId: job.userId, kind: job.payload.kind, status: err.status, code: err.code },
         "teams notification refused for good, not retried",
       );
       return;
@@ -109,6 +113,7 @@ export async function registerNotificationJobs(
     webUrl: config.WEB_URL,
     mailer: createMailer(config, app.log),
     teams: teams ? createTeamsClient(config) : null,
+    teamsAppId: config.TEAMS_CLIENT_ID,
     tenants: config.TEAMS_ALLOWED_TENANTS,
     log: app.log,
   };

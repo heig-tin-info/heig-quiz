@@ -637,7 +637,7 @@ export function EmptyState({
 /**
  * A page of one narrow card centered on the screen, with no shell around it:
  * the doors reached from outside the app — a poll's QR code, an assistant's
- * consent, the Teams bot's link.
+ * consent, the Teams link and the Teams tab.
  */
 export function GateFrame({ children }: { children: ReactNode }) {
   return (

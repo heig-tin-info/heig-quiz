@@ -266,6 +266,7 @@ export async function notificationSettings(
       available: teamsAvailable,
       linkedAt: shown?.linkedAt.toISOString() ?? null,
       teamsName: shown?.teamsName ?? null,
+      teamsUsername: shown ? shown.teamsUsername : null,
     },
   };
 }

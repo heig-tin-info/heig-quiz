@@ -108,12 +108,14 @@ export type NotificationMatrix = z.infer<typeof NotificationMatrix>;
 
 /** The Teams link as the settings card shows it. */
 export const TeamsLinkStatus = z.object({
-  /** The platform has a Teams bot configured (`TEAMS_*` env). */
+  /** The platform has its Teams application configured (`TEAMS_*` env). */
   available: z.boolean(),
   /** When this account linked Teams; null when it did not. */
   linkedAt: z.string().nullable(),
-  /** The Teams display name of the linked chat; null when not linked. */
+  /** The display name of the linked Teams account; null when not linked. */
   teamsName: z.string().nullable(),
+  /** Its sign-in name (the Microsoft account's e-mail); null when not linked. */
+  teamsUsername: z.string().nullable(),
 });
 export type TeamsLinkStatus = z.infer<typeof TeamsLinkStatus>;
 
@@ -135,15 +137,20 @@ export const NotificationPreferencePut = z.object({
 export type NotificationPreferencePut = z.infer<typeof NotificationPreferencePut>;
 
 /**
- * The one-time secret of a pending Teams link, as the bot's link card puts it
- * in `/teams/link?token=`: 32 random bytes, base64url.
+ * The one-time secret of a pending Teams link, as the HEIG Quiz tab in Teams
+ * puts it in `/teams/link?token=`: 32 random bytes, base64url.
  */
 export const TeamsLinkToken = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 
 /** `POST /app/api/notifications/teams/link/preview`: what linking would do, not done yet. */
 export const TeamsLinkPreview = z.object({
-  /** The display name Teams gave the bot for the person in the chat. */
+  /** The display name of the Teams account (the SSO token's `name`). */
   teamsName: z.string(),
+  /**
+   * Its sign-in name, usually the Microsoft account's e-mail (the token's
+   * `preferred_username`). Shown, never compared with the Quiz account's.
+   */
+  teamsUsername: z.string(),
   /** The Microsoft Entra tenant of that Teams account. */
   tenantId: z.string(),
   expiresAt: z.string(),
@@ -159,38 +166,39 @@ export const TeamsLinkBody = z.object({ token: TeamsLinkToken });
 export type TeamsLinkBody = z.infer<typeof TeamsLinkBody>;
 
 /**
- * A Bot Framework activity, as Microsoft Teams posts it to the messaging
- * endpoint (`POST /app/api/notifications/teams/messages`). Only the fields
- * the bot reads are named; every object is LOOSE, because Microsoft adds
- * fields without notice and an unknown one must never turn a delivery into a
- * 400 that Teams would retry.
+ * `POST /app/api/notifications/teams/tab`: what the HEIG Quiz tab in Teams
+ * shows, for the Teams account its SSO token names. Linked: to which Quiz
+ * account. Not linked: a fresh single-use link to open in the browser, where
+ * the Quiz session lives (`/teams/link?token=…`).
  */
-const TeamsAccount = z.looseObject({
-  id: z.string().max(512),
-  name: z.string().max(512).optional(),
-  aadObjectId: z.string().max(128).optional(),
-});
-export const TeamsActivity = z.looseObject({
-  type: z.string().max(64),
-  channelId: z.string().max(64),
-  serviceUrl: z.string().max(2048),
-  locale: z.string().max(32).optional(),
-  from: TeamsAccount.optional(),
-  recipient: TeamsAccount.optional(),
-  conversation: z.looseObject({
-    id: z.string().min(1).max(1024),
-    conversationType: z.string().max(64).optional(),
-    tenantId: z.string().max(128).optional(),
-  }),
-  channelData: z
-    .looseObject({ tenant: z.looseObject({ id: z.string().max(128) }).optional() })
-    .optional(),
-  /** `installationUpdate`: `add`, `remove`, `add-upgrade`, `remove-upgrade`. */
-  action: z.string().max(64).optional(),
-  membersAdded: z.array(TeamsAccount).max(100).optional(),
-  text: z.string().max(28_000).optional(),
-});
-export type TeamsActivity = z.infer<typeof TeamsActivity>;
+export const TeamsTabState = z.discriminatedUnion("state", [
+  z.object({ state: z.literal("linked"), accountName: z.string() }),
+  z.object({ state: z.literal("unlinked"), linkUrl: z.string() }),
+]);
+export type TeamsTabState = z.infer<typeof TeamsTabState>;
+
+/**
+ * Where a Teams activity-feed notification leads (ADR-030): the tab's
+ * `subEntityId`, as JSON. A STRUCTURED target, never a path or a URL: the
+ * tab parses it with this schema and asks the router for the path, so a
+ * crafted deep link cannot send anybody to another site.
+ */
+export const TeamsTabTarget = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("feedback"), attemptId: z.uuid() }),
+  z.object({ kind: z.literal("pool"), poolId: z.uuid() }),
+]);
+export type TeamsTabTarget = z.infer<typeof TeamsTabTarget>;
+
+/** The page a notification opens, as a tab target (the page the bell opens). */
+export function teamsTabTarget(payload: NotificationPayload): TeamsTabTarget {
+  switch (payload.kind) {
+    case "results_released":
+      return { kind: "feedback", attemptId: payload.attemptId };
+    case "pool_shared":
+    case "pool_ownership":
+      return { kind: "pool", poolId: payload.poolId };
+  }
+}
 
 /**
  * The catalogue of kinds and the payload union are one list: a kind added to
