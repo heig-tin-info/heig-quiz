@@ -15,7 +15,14 @@ import { registerForTests } from "@quiz/registry/server";
 
 import { TestClock } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { attempts, enrollments, evaluationItems, evaluations, questions } from "../../db/schema.js";
+import {
+  attempts,
+  coursePools,
+  enrollments,
+  evaluationItems,
+  evaluations,
+  questions,
+} from "../../db/schema.js";
 import { testDb } from "../../test/db.js";
 import { testServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
@@ -812,8 +819,19 @@ describe("duplicate into another classroom, over HTTP (invariant 6)", () => {
       const denied = await duplicate(theirs.classroomId);
       expect(denied.statusCode).toBe(404);
       expect(denied.json()).toEqual({ error: "not_found" });
-      // Into a second classroom of their OWN, the same call goes through.
+      // Into a classroom of another course of their OWN, the questions must
+      // come from pools that course links (F-EVAL-01), as `addItems` asks.
       const other = await seedLive(server.app.db, { teacherId: teacher.id });
+      const unlinked = await duplicate(other.classroomId);
+      expect(unlinked.statusCode).toBe(422);
+      expect(unlinked.json().error).toBe("template_pool_unlinked");
+      expect(unlinked.json().items.map((i: { questionId: string }) => i.questionId)).toEqual(
+        mine.questionIds,
+      );
+      // Once that course draws from the pool, the same call goes through.
+      await server.app.db
+        .insert(coursePools)
+        .values({ courseId: other.courseId, poolId: mine.poolId });
       expect((await duplicate(other.classroomId)).statusCode).toBe(201);
     } finally {
       await server.close();

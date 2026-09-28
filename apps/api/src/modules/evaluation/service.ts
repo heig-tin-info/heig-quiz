@@ -47,6 +47,7 @@ import {
   safeExamBrowserOf,
   retakesOf,
   type RetakeSettings,
+  type TemplateItemRef,
 } from "@quiz/contracts";
 
 import {
@@ -244,6 +245,23 @@ class QuestionKeyless extends EvaluationError {
 class QuestionNotInCourse extends EvaluationError {
   constructor(readonly questionId: string) {
     super("question_not_in_course", 422, `question ${questionId} is not in a pool of this course`);
+  }
+}
+
+/**
+ * A copy into a classroom would play questions whose pool that classroom's
+ * course does not link (F-EVAL-01): the draft could not have been authored
+ * with them, so the copy is refused and names them. The code predates the
+ * duplicate's use of it — an instance of a template was the first copy.
+ */
+class PoolUnlinked extends EvaluationError {
+  constructor(items: TemplateItemRef[]) {
+    super(
+      "template_pool_unlinked",
+      422,
+      "some questions are in a pool not linked to the target course",
+      { items },
+    );
   }
 }
 
@@ -1531,6 +1549,11 @@ export async function updateVersions(
   return itemRows(db, row.id);
 }
 
+/** An item as a refusal names it: where it sits and which question it plays. */
+export function itemRef(j: JoinedItem): TemplateItemRef {
+  return { position: j.item.position, questionId: j.question.id, internalName: j.question.internalName };
+}
+
 /**
  * Where a copy lives: a classroom (a duplicate, F-EVAL-14, or an instance of
  * a template) or a course (a template, ADR-031).
@@ -1558,11 +1581,24 @@ export async function copyEvaluation(
   },
 ): Promise<EvaluationRecord> {
   const id = randomUUID();
-  const items = await db
-    .select()
-    .from(evaluationItems)
-    .where(eq(evaluationItems.evaluationId, row.id))
-    .orderBy(asc(evaluationItems.position));
+  const joined = await joinedItems(db, row.id);
+  if ("classroomId" in target.home) {
+    // F-EVAL-01, the rule `addItems` enforces: a copy into a classroom —
+    // of this course or of another — draws only from the pools its course
+    // links. Checked outside the transaction, like an item added just before.
+    const linked = new Set(
+      (
+        await db
+          .select({ poolId: coursePools.poolId })
+          .from(classrooms)
+          .innerJoin(coursePools, eq(coursePools.courseId, classrooms.courseId))
+          .where(eq(classrooms.id, target.home.classroomId))
+      ).map((r) => r.poolId),
+    );
+    const unlinked = joined.filter((j) => j.question.poolId === null || !linked.has(j.question.poolId));
+    if (unlinked.length > 0) throw new PoolUnlinked(unlinked.map(itemRef));
+  }
+  const items = joined.map((j) => j.item);
   const home =
     "courseId" in target.home
       ? { courseId: target.home.courseId, revision: 1 }

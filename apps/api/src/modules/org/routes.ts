@@ -48,7 +48,7 @@ import {
   teacherGuard,
 } from "../guards.js";
 import { teacherRoute } from "../http.js";
-import { poolsOfCourse, setCoursePools } from "../pool/service.js";
+import { PoolLinkForbidden, poolsOfCourse, setCoursePools } from "../pool/service.js";
 import { claimForExistingUsers, importRoster, rosterView } from "./roster.js";
 import * as service from "./service.js";
 
@@ -199,8 +199,9 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
 
   /**
    * The whole set of pools the course draws from, replaced in one call.
-   * Only pools the caller can already reach are linked — the write goes
-   * through `pool/service.ts`, which owns `course_pools`.
+   * Only pools the caller can already reach are linked, and a NEW link needs
+   * contributor access to the pool (ADR-013) — the write goes through
+   * `pool/service.ts`, which owns `course_pools`.
    */
   app.put(
     "/app/api/courses/:id/pools",
@@ -208,12 +209,24 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
     teacher(onCourse, async ({ req, reply, scope: course }) => {
       const body = CoursePoolsPut.safeParse(req.body);
       if (!body.success) return invalidIssues(reply, body.error);
-      const linked = await setCoursePools(
-        app.db,
-        course.id,
-        body.data.poolIds,
-        accessWhere(req.user!, poolAccess(req.user!.id)),
-      );
+      let linked;
+      try {
+        linked = await setCoursePools(
+          app.db,
+          course.id,
+          body.data.poolIds,
+          accessWhere(req.user!, poolAccess(req.user!.id)),
+          req.user!,
+        );
+      } catch (error) {
+        if (!(error instanceof PoolLinkForbidden)) throw error;
+        // The caller sees these pools, so a 403 leaks nothing (ADR-013).
+        return reply.code(403).send({
+          error: "pool_link_forbidden",
+          message: `Linking the pool "${error.pools[0]!.name}" needs contributor access to it`,
+          poolIds: error.pools.map((p) => p.id),
+        });
+      }
       await trace(req, "course.pools_update", "course", course.id, {
         poolIds: linked.map((p) => p.id),
       });

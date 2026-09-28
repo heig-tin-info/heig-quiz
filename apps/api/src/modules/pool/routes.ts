@@ -576,6 +576,9 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     teacher(
       { params: IdParam, body: QuestionCreate, load: inPool("contributor") },
       async ({ req, reply, body, scope: pool }) => {
+        if (!(await isCategoryOf(pool.id, body.categoryId ?? null))) {
+          return reply.code(404).send({ error: "not_found" });
+        }
         try {
           const created = await service.createQuestion(app.db, {
             poolId: pool.id,
@@ -616,6 +619,9 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     teacher(
       { params: IdParam, body: QuestionPatch, load: onQuestion("contributor") },
       async ({ req, reply, body, scope }) => {
+        if (!(await isCategoryOf(scope.pool.id, body.categoryId ?? null))) {
+          return reply.code(404).send({ error: "not_found" });
+        }
         try {
           await service.patchQuestion(app.db, scope.question, body);
         } catch {
@@ -805,6 +811,9 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
         // Reading the source is enough to copy FROM it; writing the copy needs a
         // contributor's seat on the TARGET.
         if (!(await requirePoolRole(app, req, reply, target, "contributor"))) return reply;
+        if (!(await isCategoryOf(target.id, body.categoryId ?? null))) {
+          return reply.code(404).send({ error: "not_found" });
+        }
         const created = await service.copyQuestion(app.db, scope.question, {
           targetPoolId: target.id,
           categoryId: body.categoryId ?? null,
@@ -924,7 +933,8 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
 
   /**
    * A category is a category OF THE TARGET; one belonging to another pool is
-   * as good as missing. No category at all is fine.
+   * as good as missing. No category at all is fine. Every route that files a
+   * question in a category (create, patch, copy, move) asks this first.
    */
   async function isCategoryOf(poolId: string, categoryId: string | null): Promise<boolean> {
     if (categoryId === null) return true;
@@ -945,7 +955,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     req: FastifyRequest,
     ids: string[],
     targetPoolId: string,
-  ): Promise<MoveBlockingCourse[]> {
+  ): Promise<(service.UsingCourse & { mayLink: boolean })[]> {
     const using = await service.coursesUsingQuestions(app.db, ids);
     const linked = await service.coursesLinkedToPool(
       app.db,
@@ -969,7 +979,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
    * link. Null when the move may go on (linking every blocking course).
    */
   function linkRefusal(
-    named: MoveBlockingCourse[],
+    named: (service.UsingCourse & { mayLink: boolean })[],
     linkCourses: boolean | undefined,
     target: typeof pools.$inferSelect,
   ): MoveConflict | null {
@@ -978,7 +988,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       return {
         error: "pool_not_linked",
         message: `This question is used by ${named[0]!.courseCode}; the pool "${target.name}" is not one of that course's pools`,
-        courses: named,
+        courses: named.map(asSeen),
         names: [],
       };
     }
@@ -987,11 +997,22 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       return {
         error: "course_forbidden",
         message: `You are not on the teaching staff of ${forbidden[0]!.courseCode}, so this pool cannot be added to it`,
-        courses: forbidden,
+        courses: forbidden.map(asSeen),
         names: [],
       };
     }
     return null;
+  }
+
+  /**
+   * A blocking course as the caller may see it: in full when they hold a
+   * seat on it, by its code alone otherwise — no id, no name, no classroom
+   * of a course they cannot open (invariant 6).
+   */
+  function asSeen(course: service.UsingCourse & { mayLink: boolean }): MoveBlockingCourse {
+    return course.mayLink
+      ? course
+      : { courseId: null, courseName: null, courseCode: course.courseCode, classrooms: [], mayLink: false };
   }
 
   /** The audit rows and the refresh hints of a move that went through. */

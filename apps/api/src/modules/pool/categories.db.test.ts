@@ -170,3 +170,38 @@ describe("PUT /pools/:id/categories/order", () => {
     expect(shape(theirs.categories)).toEqual([["Foreign", 0]]);
   });
 });
+
+describe("filing a question in a category", () => {
+  it("refuses a category of another pool on create, patch and copy, like a missing one", async () => {
+    const foreign = await newCategory(otherPoolId, "Not this pool's");
+    const created = await server.app.inject({
+      method: "POST",
+      url: `/app/api/pools/${poolId}/questions`,
+      headers: owner.headers,
+      payload: { type: "short", internalName: "filed abroad", categoryId: foreign },
+    });
+    expect(created.statusCode).toBe(404);
+
+    const id = await newQuestion("filed at home", chapter);
+    const patched = await server.app.inject({
+      method: "PATCH",
+      url: `/app/api/questions/${id}`,
+      headers: owner.headers,
+      payload: { categoryId: foreign },
+    });
+    expect(patched.statusCode).toBe(404);
+
+    // A copy is filed in the TARGET pool: the source's folder is foreign there.
+    const copy = (categoryId: string) =>
+      server.app.inject({
+        method: "POST",
+        url: `/app/api/questions/${id}/copy`,
+        headers: owner.headers,
+        payload: { targetPoolId: otherPoolId, categoryId },
+      });
+    expect((await copy(chapter)).statusCode).toBe(404);
+    const filed = await copy(foreign);
+    expect(filed.statusCode).toBe(201);
+    expect(filed.json().meta.categoryId).toBe(foreign);
+  });
+});

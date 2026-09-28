@@ -14,11 +14,12 @@ import { desc, eq } from "drizzle-orm";
 import type { EvaluationTemplate, TemplateItemRef } from "@quiz/contracts";
 
 import type { Db } from "../../db/client.js";
-import { coursePools, evaluations } from "../../db/schema.js";
+import { evaluations } from "../../db/schema.js";
 import {
   EvaluationError,
   copyEvaluation,
   itemCountsByEvaluation,
+  itemRef,
   joinedItems,
   totalPointsByEvaluation,
   type EvaluationRecord,
@@ -28,22 +29,6 @@ import {
 class TemplatePoll extends EvaluationError {
   constructor() {
     super("template_poll", 422, "a poll cannot be saved as a template");
-  }
-}
-
-/**
- * Some items of the template play a question whose pool is no longer linked
- * to the course: the instance could not have been authored with them
- * (F-EVAL-01), so instantiation is refused and names them.
- */
-class TemplatePoolUnlinked extends EvaluationError {
-  constructor(items: TemplateItemRef[]) {
-    super(
-      "template_pool_unlinked",
-      422,
-      "some questions of the template are in a pool no longer linked to the course",
-      { items },
-    );
   }
 }
 
@@ -117,25 +102,7 @@ export async function instantiateTemplate(
   template: EvaluationRecord,
   input: { classroomId: string; title: string; createdBy: string },
 ): Promise<{ evaluation: EvaluationRecord; deprecatedItems: TemplateItemRef[] }> {
-  const items = await joinedItems(db, template.id);
-  const linked = new Set(
-    (
-      await db
-        .select({ poolId: coursePools.poolId })
-        .from(coursePools)
-        .where(eq(coursePools.courseId, template.courseId!))
-    ).map((r) => r.poolId),
-  );
-  const ref = (j: (typeof items)[number]): TemplateItemRef => ({
-    position: j.item.position,
-    questionId: j.question.id,
-    internalName: j.question.internalName,
-  });
-  const unlinked = items.filter((j) => j.question.poolId === null || !linked.has(j.question.poolId));
-  if (unlinked.length > 0) throw new TemplatePoolUnlinked(unlinked.map(ref));
-
-  // Checked outside the copy's transaction: a pool unlinked in that instant
-  // leaves one draft still playing it, like one authored just before.
+  // The copy refuses a question whose pool the course no longer links.
   const evaluation = await copyEvaluation(db, template, {
     home: { classroomId: input.classroomId },
     origin: { templateId: template.id, revision: template.revision! },
@@ -144,6 +111,8 @@ export async function instantiateTemplate(
   });
   return {
     evaluation,
-    deprecatedItems: items.filter((j) => j.version.deprecatedAt !== null).map(ref),
+    deprecatedItems: (await joinedItems(db, template.id))
+      .filter((j) => j.version.deprecatedAt !== null)
+      .map(itemRef),
   };
 }

@@ -75,6 +75,10 @@ every teacher. Two facts shape the design:
   the one not listening to it yet.
 - A pool survives the departure of its owner without an administrator being involved, and
   the inheriting teacher learns about it from a notification that survives a reload.
+- Because rule 3 makes the staff of a linked course `contributor`, linking a pool to a
+  course is itself a write on the pool: a NEW link needs the caller's effective role to be
+  at least `contributor` (`403 pool_link_forbidden` otherwise). A link already there
+  survives a `PUT` that keeps it, and unlinking needs only the course.
 - The 403 is a new answer on pool routes. It is only ever returned to a caller who already
   passed `poolAccess`, so no 404 became a 403.
 

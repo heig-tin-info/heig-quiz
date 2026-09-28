@@ -414,8 +414,13 @@ export type MoveBody = z.infer<typeof MoveBody>;
  * question is used somewhere".
  */
 export const MoveBlockingCourse = z.object({
-  courseId: z.uuid(),
-  courseName: z.string(),
+  /**
+   * Null, like `courseName`, and `classrooms` empty, for a course the caller
+   * is not on the staff of: the 409 names it by its code and says no more
+   * about a course they cannot open (invariant 6).
+   */
+  courseId: z.uuid().nullable(),
+  courseName: z.string().nullable(),
   courseCode: z.string(),
   classrooms: z.array(z.object({ id: z.uuid(), name: z.string() })),
   /** The caller holds a staff seat, so `linkCourses: true` can cover it. */
