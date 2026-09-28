@@ -158,6 +158,8 @@ describe("ActivitiesPage", () => {
 
     await user.click(screen.getByRole("radio", { name: "Schedule" }));
     expect(screen.getByText(/This week/)).toBeInTheDocument();
+    // The open series (opened days ago) is this week's, never behind the fold.
+    expect(screen.getByText("Série 5 — UART")).toBeInTheDocument();
     expect(screen.getByText(/Next week/)).toBeInTheDocument();
     // The weeks already over fold under one button.
     expect(screen.queryByText("Test 0")).not.toBeInTheDocument();
@@ -186,5 +188,23 @@ describe("ActivitiesPage", () => {
     renderWithProviders(<ActivitiesPage navigate={vi.fn()} />, { locale: "fr" });
     expect(await screen.findByRole("heading", { name: "Activités" })).toBeInTheDocument();
     expect(await screen.findByRole("region", { name: "En direct" })).toBeInTheDocument();
+  });
+
+  it("keeps a two-week take-home opened last week in view on the schedule", async () => {
+    const user = userEvent.setup();
+    const twoWeeks = activity(6, {
+      title: "Série 4 — deux semaines",
+      mode: "exercise",
+      takeHome: true,
+      state: "running",
+      opensAt: liveAt(-9 * 24 * 60 * MIN),
+      startedAt: liveAt(-9 * 24 * 60 * MIN),
+      closesAt: liveAt(5 * 24 * 60 * MIN),
+    });
+    render([twoWeeks, DONE]);
+    await screen.findByRole("table");
+    await user.click(screen.getByRole("radio", { name: "Schedule" }));
+    expect(screen.getByText("Série 4 — deux semaines")).toBeInTheDocument();
+    expect(screen.queryByText("Test 0")).not.toBeInTheDocument();
   });
 });

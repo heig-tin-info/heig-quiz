@@ -13,6 +13,7 @@
  *
  * Pure: the instant is the caller's.
  */
+import { isInClass, type EvaluationModeName, type LobbyName } from "./evaluationConfig.js";
 
 /** A `scheduled` activity is live this long before it opens. */
 export const LIVE_LEAD_MS = 15 * 60_000;
@@ -20,13 +21,13 @@ export const LIVE_LEAD_MS = 15 * 60_000;
 export const LIVE_STALE_MS = 12 * 3_600_000;
 
 /**
- * An `exercise` whose waiting room is `skip`: the glossary's exercise, done
- * at home over days (docs/spec/01 §5; `isInClass` in `evaluationConfig.ts`
- * is the same fact seen from the feedback policy). An absent `lobby` is the
- * contract's default, `manual`: in class.
+ * An `exercise` not sat in class: the glossary's exercise, done at home over
+ * days (docs/spec/01 §5). ONE rule, `isInClass`, seen from the other side —
+ * an exercise without a waiting room. An absent `lobby` is the contract's
+ * default, `manual`: in class.
  */
-export function isTakeHome(row: { mode: string; lobby: string | null | undefined }): boolean {
-  return row.mode === "exercise" && row.lobby === "skip";
+export function isTakeHome(row: { mode: EvaluationModeName; lobby: string | null | undefined }): boolean {
+  return row.mode === "exercise" && !isInClass({ mode: row.mode, lobby: (row.lobby ?? "manual") as LobbyName });
 }
 
 export interface LiveFacts {

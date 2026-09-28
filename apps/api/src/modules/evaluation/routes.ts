@@ -120,7 +120,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
    * scope IS the access predicate (invariant 6); no input, so no schema.
    */
   app.get("/app/api/activities", { preHandler: requireTeacher }, async (req) =>
-    service.listActivities(app.db, managedEvaluationAccess(req.user!)),
+    service.listActivities(app.db, managedEvaluationAccess(req.user!), app.clock.now()),
   );
 
   app.get(

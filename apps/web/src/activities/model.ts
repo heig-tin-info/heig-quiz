@@ -99,14 +99,27 @@ export interface Week {
 }
 
 /**
- * The rows by the week their anchor falls in, oldest week first, each week
- * in time order; the undated drafts last, in a week of their own.
+ * Where the schedule files a row: an OPEN one is filed under now — it is
+ * this week's business, whenever it opened (a two-week series opened last
+ * Monday, an exam in its lobby with no date at all) — anything else under
+ * {@link anchorOf}.
  */
-export function weeksOf(rows: readonly ActivitySummary[]): Week[] {
+export function scheduleAnchorOf(a: ActivitySummary, now: number): number | null {
+  return bucketOf(a.state) === "open" ? now : time(anchorOf(a));
+}
+
+const shownTime = (a: ActivitySummary, now: number): number =>
+  time(anchorOf(a)) ?? scheduleAnchorOf(a, now)!;
+
+/**
+ * The rows by the week of their schedule anchor, oldest week first, each
+ * week in time order; the undated drafts last, in a week of their own.
+ */
+export function weeksOf(rows: readonly ActivitySummary[], now: number): Week[] {
   const byWeek = new Map<number, ActivitySummary[]>();
   const undated: ActivitySummary[] = [];
   for (const row of rows) {
-    const anchor = time(anchorOf(row));
+    const anchor = scheduleAnchorOf(row, now);
     if (anchor === null) {
       undated.push(row);
       continue;
@@ -118,10 +131,25 @@ export function weeksOf(rows: readonly ActivitySummary[]): Week[] {
     .sort(([a], [b]) => a - b)
     .map(([start, list]) => ({
       start,
-      rows: list.sort((a, b) => time(anchorOf(a))! - time(anchorOf(b))!),
+      // Inside a week, by the time the row shows (an open series opened
+      // last Monday leads this week); an undated lobby by now.
+      rows: list.sort((a, b) => shownTime(a, now) - shownTime(b, now) || a.title.localeCompare(b.title)),
     }));
   if (undated.length > 0) {
     weeks.push({ start: null, rows: undated.sort((a, b) => a.title.localeCompare(b.title)) });
   }
   return weeks;
+}
+
+/**
+ * A week the schedule may fold away: before this one, and holding nothing
+ * but ended rows. A week with something open or still to come never folds —
+ * it is exactly what the teacher must not lose behind a button.
+ */
+export function foldable(week: Week, now: number): boolean {
+  return (
+    week.start !== null &&
+    week.start < mondayOf(now) &&
+    week.rows.every((row) => bucketOf(row.state) === "ended")
+  );
 }

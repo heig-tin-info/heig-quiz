@@ -92,6 +92,13 @@ beforeAll(async () => {
   await evaluation("alice template", { courseId: aliceCourse, owner: alice.id });
   await evaluation("alice poll", { owner: alice.id }, { mode: "poll", state: "running" });
   await evaluation("bob poll", { owner: bob.id }, { mode: "poll", state: "running" });
+  // Bounded (#190 review): an anonymous poll ended 121 days ago is out, one
+  // ended 119 days ago stays, and so does an old ended CLASSROOM poll.
+  const DAY = 86_400_000;
+  const ago = (days: number) => new Date(server.clock.now().getTime() - days * DAY);
+  await evaluation("old poll", { owner: alice.id }, { mode: "poll", state: "closed", closedAt: ago(121), createdAt: ago(121) });
+  await evaluation("recent poll", { owner: alice.id }, { mode: "poll", state: "closed", closedAt: ago(119), createdAt: ago(119) });
+  await evaluation("old class poll", { classroomId: a1, owner: alice.id }, { mode: "poll", state: "closed", closedAt: ago(200) });
 });
 
 afterAll(async () => {
@@ -117,6 +124,8 @@ describe("GET /app/api/activities", () => {
       "alice exam",
       "alice poll",
       "alice series",
+      "old class poll",
+      "recent poll",
       "shared exam",
     ]);
   });
@@ -134,6 +143,13 @@ describe("GET /app/api/activities", () => {
     expect(list).not.toContain("archived exam");
   });
 
+  it("leaves out an anonymous poll that ended more than 120 days ago, and only that", async () => {
+    const list = titles(await activitiesOf(alice));
+    expect(list).not.toContain("old poll");
+    expect(list).toContain("recent poll");
+    expect(list).toContain("old class poll");
+  });
+
   it("gives an admin every activity, anonymous polls included", async () => {
     expect(titles(await activitiesOf(admin))).toEqual([
       "alice exam",
@@ -141,6 +157,8 @@ describe("GET /app/api/activities", () => {
       "alice series",
       "bob exam",
       "bob poll",
+      "old class poll",
+      "recent poll",
       "shared exam",
     ]);
   });

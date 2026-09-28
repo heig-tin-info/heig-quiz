@@ -52,8 +52,12 @@ import {
  *
  * The data is one read, refreshed by the SSE hints that already refresh a
  * classroom's list (`activities` is an evaluation root in `realtime/hints.ts`).
- * The filters are client-side: a teacher has a few hundred rows at most, and
- * a filter that answers without a round trip is worth more than the bytes.
+ * The filters are client-side. What bounds the list is the server: the
+ * evaluations of the classrooms not archived, and the anonymous polls ended
+ * in the last 120 days (older ones stay in the launcher's history) — the
+ * weekly series of a few classrooms, their exams and a term of polls, a few
+ * hundred rows at most. A filter that answers without a round trip is worth
+ * more than those bytes.
  */
 
 type View = "cards" | "list" | "schedule";

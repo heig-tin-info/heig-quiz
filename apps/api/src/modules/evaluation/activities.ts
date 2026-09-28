@@ -9,20 +9,32 @@
  * (invariant 6). Out of the list by construction: templates (`course_id`
  * set, never run) and the evaluations of an archived classroom, like
  * everywhere else in the navigation.
+ *
+ * The list is bounded by one more rule: an anonymous poll that ended more
+ * than {@link OLD_POLL_DAYS} days ago is left out. A teacher who polls every
+ * lecture piles them up by the hundred, and the launcher's "Recent polls"
+ * already keeps that history; an evaluation of a classroom stays, since its
+ * classroom being archived is what retires it.
  */
-import { and, desc, eq, isNull, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, isNull, not, sql, type SQL } from "drizzle-orm";
 
 import type { ActivitySummary } from "@quiz/contracts";
 import { isTakeHome } from "@quiz/domain";
 
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { classrooms, courses, evaluations } from "../../db/schema.js";
+import { classrooms, courses, evaluations, ownedPollSql } from "../../db/schema.js";
+
+/** How long an ended anonymous poll stays in the list. */
+export const OLD_POLL_DAYS = 120;
 
 export async function listActivities(
   db: Db,
   access: SQL | undefined,
+  now: Date,
 ): Promise<ActivitySummary[]> {
+  const cutoff = new Date(now.getTime() - OLD_POLL_DAYS * 86_400_000);
+  const oldPoll = sql`(${ownedPollSql()} and ${evaluations.state} in ('closed', 'grading', 'released') and coalesce(${evaluations.closedAt}, ${evaluations.createdAt}) < ${cutoff.toISOString()}::timestamptz)`;
   const rows = await db
     .select({
       id: evaluations.id,
@@ -41,7 +53,7 @@ export async function listActivities(
     .from(evaluations)
     .leftJoin(classrooms, eq(classrooms.id, evaluations.classroomId))
     .leftJoin(courses, eq(courses.id, classrooms.courseId))
-    .where(and(isNull(evaluations.courseId), isNull(classrooms.archivedAt), access))
+    .where(and(isNull(evaluations.courseId), isNull(classrooms.archivedAt), not(oldPoll), access))
     .orderBy(desc(evaluations.createdAt));
   return rows.map((r) => ({
     id: r.id,

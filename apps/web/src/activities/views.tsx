@@ -21,7 +21,7 @@ import {
   type IconType,
 } from "../ui";
 import { ActivityMenu } from "./actions";
-import { anchorOf, isoWeek, mondayOf, weeksOf } from "./model";
+import { anchorOf, foldable, isoWeek, mondayOf, weeksOf } from "./model";
 
 /*
  * The three views of the Activities section (#190), after heig-classroom's
@@ -118,6 +118,12 @@ export function ActivityTable({ rows, navigate, onEnd }: ViewProps) {
                     <span className="font-semibold">{row.title}</span>
                     <StateBadge row={row} />
                   </span>
+                  {/* Where the classroom column has left (a phone, a narrow
+                      card), its label rides under the title: two series of
+                      the same name in two classrooms must still read apart. */}
+                  <span className="mt-0.5 block pl-6 text-fg-muted @2xl:hidden">
+                    {classroomLabel(row, t)}
+                  </span>
                 </td>
                 <td className={`${T.td} ${T.colMid} text-fg-muted`}>{modeLabel(row, t)}</td>
                 <td className={`${T.td} ${T.colHigh} text-fg-muted`}>{classroomLabel(row, t)}</td>
@@ -187,7 +193,8 @@ export function ActivityCards({ rows, navigate, onEnd }: ViewProps) {
 
 /**
  * Week by week, Monday first: a semester of weekly series reads as sixteen
- * short lists instead of one long one. The weeks already over fold under
+ * short lists instead of one long one. What is open sits in this week,
+ * whenever it opened. The weeks behind that hold nothing but ended rows fold under
  * one button, so the page opens on this week; a draft with no date sits
  * last, under "Not scheduled". heig-classroom draws a pannable gantt here;
  * a list per week says the same for activities that mostly last an hour or
@@ -198,8 +205,8 @@ export function ActivitySchedule({ rows, navigate, onEnd, now }: ViewProps & { n
   const { locale } = useI18n();
   const [showPast, setShowPast] = useState(false);
   const thisWeek = mondayOf(now);
-  const weeks = weeksOf(rows);
-  const past = weeks.filter((w) => w.start !== null && w.start < thisWeek);
+  const weeks = weeksOf(rows, now);
+  const past = weeks.filter((w) => foldable(w, now));
   const shown = showPast ? weeks : weeks.filter((w) => !past.includes(w));
   // "Mon 28" / "lun. 28": the weekday first in both languages (Intl alone
   // writes "28 Mon" in English).

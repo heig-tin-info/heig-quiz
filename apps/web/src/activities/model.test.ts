@@ -2,7 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import type { ActivitySummary } from "@quiz/contracts";
 
-import { activityOrder, anchorOf, bucketOf, isoWeek, matches, mondayOf, weeksOf } from "./model";
+import {
+  activityOrder,
+  anchorOf,
+  bucketOf,
+  foldable,
+  isoWeek,
+  matches,
+  mondayOf,
+  weeksOf,
+} from "./model";
 
 let n = 0;
 function row(over: Partial<ActivitySummary> = {}): ActivitySummary {
@@ -93,8 +102,41 @@ describe("weeks", () => {
     const b = row({ title: "b", opensAt: new Date(2026, 8, 30, 8).toISOString() });
     const c = row({ title: "c", opensAt: new Date(2026, 8, 28, 8).toISOString() });
     const d = row({ title: "d" });
-    const weeks = weeksOf([a, d, b, c]);
+    const weeks = weeksOf([a, d, b, c], new Date(2026, 8, 28, 12).getTime());
     expect(weeks.map((w) => w.rows.map((r) => r.title))).toEqual([["c", "b"], ["a"], ["d"]]);
     expect(weeks.at(-1)!.start).toBeNull();
+  });
+
+  it("files an open row under this week, whenever it opened, and never folds it", () => {
+    const now = new Date(2026, 9, 7, 10).getTime(); // Wednesday of week 41
+    // A two-week take-home series opened last Monday, still open.
+    const series = row({
+      title: "series",
+      mode: "exercise",
+      takeHome: true,
+      state: "running",
+      opensAt: new Date(2026, 8, 28, 8).toISOString(),
+      startedAt: new Date(2026, 8, 28, 8).toISOString(),
+      closesAt: new Date(2026, 9, 11, 23, 59).toISOString(),
+    });
+    // An exam in its lobby with no date: this week too, not "Not scheduled".
+    const lobby = row({ title: "lobby", state: "lobby" });
+    const done = row({ title: "done", state: "released", startedAt: new Date(2026, 8, 29).toISOString() });
+    const weeks = weeksOf([series, lobby, done], now);
+    const thisWeek = weeks.find((w) => w.start === mondayOf(now))!;
+    expect(thisWeek.rows.map((r) => r.title).sort()).toEqual(["lobby", "series"]);
+    expect(weeks.some((w) => w.start === null)).toBe(false);
+    // Last week holds only the ended one, and folds; this week never does.
+    expect(weeks.filter((w) => foldable(w, now)).flatMap((w) => w.rows.map((r) => r.title))).toEqual(["done"]);
+    expect(foldable(thisWeek, now)).toBe(false);
+  });
+
+  it("never folds a past week that still holds something to come", () => {
+    const now = new Date(2026, 9, 7, 10).getTime();
+    // Its opening passed and the ticker has not moved it yet.
+    const late = row({ title: "late", state: "scheduled", opensAt: new Date(2026, 8, 29).toISOString() });
+    const [week] = weeksOf([late], now);
+    expect(week!.start).toBeLessThan(mondayOf(now));
+    expect(foldable(week!, now)).toBe(false);
   });
 });
