@@ -88,9 +88,19 @@ const presenceEvents = new Coalescer<DashboardPresenceEvent>(PRESENCE_WINDOW_MS,
   emit(event, [evaluationTopic(event.evaluationId)], "staff"),
 );
 
-const lobbyCounts = new Coalescer<LobbyCountEvent>(PRESENCE_WINDOW_MS, (event) =>
-  emit(event, [evaluationTopic(event.evaluationId)], "all"),
-);
+type LobbyCount = Omit<LobbyCountEvent, "type">;
+
+/**
+ * What waits in a lobby window is not a count but the way to GET it: a
+ * connect or a disconnect only marks the room dirty, and the count is taken
+ * once, when the window closes. A count computed elsewhere (the ticker's
+ * sweep) waits as a thunk that returns it.
+ */
+const lobbyCounts = new Coalescer<() => Promise<LobbyCount | null>>(PRESENCE_WINDOW_MS, (count) => {
+  void count().then((input) => {
+    if (input) emit({ type: "lobby.count", ...input }, [evaluationTopic(input.evaluationId)], "all");
+  });
+});
 
 const pollTallies = new Coalescer<PollTallyEvent>(POLL_WINDOW_MS, (event) =>
   emit(event, [evaluationTopic(event.evaluationId)], "staff"),
@@ -233,12 +243,20 @@ export function dashboardAttempt(input: {
 }
 
 /** Coalesced 1 s; everyone watching the evaluation receives it (F-LIVE-02). */
-export function lobbyCount(input: {
-  evaluationId: string;
-  present: number;
-  enrolled: number;
-}): void {
-  lobbyCounts.push(input.evaluationId, { type: "lobby.count", ...input });
+export function lobbyCount(input: LobbyCount): void {
+  lobbyCounts.push(input.evaluationId, () => Promise.resolve(input));
+}
+
+/**
+ * The same frame, counted by `count` when the window closes — once per
+ * window however many connections pushed it. `count` must not reject; it
+ * answers `null` when there is nothing to announce.
+ */
+export function lobbyRecount(
+  evaluationId: string,
+  count: () => Promise<LobbyCount | null>,
+): void {
+  lobbyCounts.push(evaluationId, count);
 }
 
 /**

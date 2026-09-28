@@ -16,7 +16,7 @@ import { reload, seedLive } from "../../test/live.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import * as bus from "./bus.js";
 import { Coalescer, type TimerApi } from "./coalesce.js";
-import { CLOCK_MS, FAST_CLOCK_MS } from "./routes.js";
+import { CLOCK_MS, FAST_CLOCK_MS, STATE_RECHECK_MS } from "./routes.js";
 import { PresenceMap } from "./presence.js";
 
 // --- The coalescer, on a clock the test owns -----------------------------
@@ -452,6 +452,32 @@ describe("what a student is allowed to receive (§4.8)", () => {
     }
   });
 
+  it("reaches a stream through its own topics only", async () => {
+    const other = await seedLive(server.app.db, { teacherId: teacher.id, students: 1, questions: 1 });
+    const stream = await openStream(student.headers, `evaluation:${seed.evaluationId}`);
+    await settle();
+
+    // Somebody else's user topic, a classroom the student is not in, and
+    // another evaluation: none of it is theirs.
+    bus.hint("notifications", [`user:${stranger.id}`]);
+    bus.hint("evaluations", [`classroom:${other.classroomId}`]);
+    bus.evaluationState({
+      evaluationId: other.evaluationId,
+      state: "running",
+      pausedAt: null,
+      closesAt: null,
+      now: server.clock.now(),
+    });
+    await settle();
+    expect(stream.text).not.toContain('"type":"hint"');
+    expect(names(stream.text)).not.toContain("evaluation.state");
+
+    // Their own user topic AND their classroom, in ONE message: one frame.
+    bus.hint("notifications", [`user:${student.id}`, `classroom:${seed.classroomId}`]);
+    await settle();
+    expect(stream.text.match(/"type":"hint"/g)).toHaveLength(1);
+  });
+
   it("carries the inherited hint as an UNNAMED frame, for the shipped client", async () => {
     const stream = await openStream(teacher.headers);
     await settle();
@@ -509,5 +535,129 @@ describe("clock", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  /** An attempt stream of a lobby evaluation, and a way to count its beats. */
+  async function lobbyAttemptStream() {
+    const other = await server.signIn("student");
+    const own = await seedLive(server.app.db, {
+      teacherId: teacher.id,
+      studentIds: [other.id],
+      questions: 1,
+    });
+    const lobby = await applyState(
+      server.app.db,
+      await reload(server.app.db, own.evaluationId),
+      "lobby",
+      server.clock.now(),
+    );
+    const live = await import("../live/service.js");
+    const participant = (await live.participantOf(server.app.db, lobby, other.id))!;
+    const attempt = await live.ensureAttempt(server.app.db, lobby, participant, server.clock.now());
+    const stream = await openStream(other.headers, `attempt:${attempt.id}`);
+    await settle();
+    const beats = () => names(stream.text).filter((n) => n === "clock").length;
+    /** One fast period, then how many beats it produced. */
+    const tick = async () => {
+      const before = beats();
+      await vi.advanceTimersByTimeAsync(FAST_CLOCK_MS);
+      await settle();
+      return beats() - before;
+    };
+    return { evaluationId: own.evaluationId, lobby, tick };
+  }
+
+  it("follows the evaluation.state frames, without reading the state each second", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    try {
+      const { evaluationId, tick } = await lobbyAttemptStream();
+      // In the lobby the fast stream stays quiet between its 10 s beats.
+      expect(await tick()).toBe(0);
+
+      // The frame alone — the database still says `lobby` — switches it on.
+      const frame = (state: "running" | "paused") =>
+        bus.evaluationState({
+          evaluationId,
+          state,
+          pausedAt: null,
+          closesAt: null,
+          now: server.clock.now(),
+        });
+      frame("running");
+      await settle();
+      expect(await tick()).toBe(1);
+      expect(await tick()).toBe(1);
+
+      frame("paused");
+      await settle();
+      expect(await tick()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("catches a transition nobody announced on its rare re-read", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    try {
+      const { lobby, tick } = await lobbyAttemptStream();
+      // Straight through the service, with no `evaluation.state` frame.
+      await applyState(server.app.db, lobby, "running", server.clock.now());
+      expect(await tick()).toBe(0);
+      await vi.advanceTimersByTimeAsync(STATE_RECHECK_MS);
+      await settle();
+      expect(await tick()).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe("lobby count", () => {
+  it("is right after a burst of connections, counted once the window closes", async () => {
+    const seats = await Promise.all([1, 2, 3].map(() => server.signIn("student")));
+    const room = await seedLive(server.app.db, {
+      teacherId: teacher.id,
+      studentIds: seats.map((s) => s.id),
+      questions: 1,
+    });
+    await applyState(
+      server.app.db,
+      await reload(server.app.db, room.evaluationId),
+      "lobby",
+      server.clock.now(),
+    );
+    const watcher = await openStream(teacher.headers, `evaluation:${room.evaluationId}`);
+    await Promise.all(
+      seats.map((s) => openStream(s.headers, `lobby:${room.evaluationId}`)),
+    );
+    await settle();
+    /** The count the room reads now: the last `lobby.count` received. */
+    const last = () => {
+      const counts = [...watcher.text.matchAll(/^event: lobby\.count\ndata: (.+)$/gm)];
+      return counts.length === 0 ? null : (JSON.parse(counts.at(-1)![1]!) as unknown);
+    };
+    // Whatever windows the burst spanned, the count is taken when the last
+    // one closes, so it holds everybody.
+    await vi.waitFor(
+      () => {
+        bus.flushCoalescers();
+        expect(last()).toMatchObject({ present: 3, enrolled: 3 });
+      },
+      { timeout: 3000 },
+    );
+  });
+
+  it("counts once per window, however many connections pushed it", async () => {
+    const counted: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      bus.lobbyRecount(seed.evaluationId, async () => {
+        counted.push(`count ${i}`);
+        return { evaluationId: seed.evaluationId, present: i, enrolled: 5 };
+      });
+    }
+    bus.flushCoalescers();
+    await settle();
+    // Only the last push is asked to count; the four before it never run.
+    expect(counted).toEqual(["count 4"]);
   });
 });
