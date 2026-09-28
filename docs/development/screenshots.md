@@ -97,7 +97,9 @@ contain the identifiers of that run's seed; the script discovers them over
 the API, so they change from one seed to the next.
 
 <!-- scenes:start -->
-Last full run: 2026-09-21, commit `828d8d8`, 67 scenes.
+Last full run: 2026-09-21, commit `828d8d8`. The `live-*` and `grading*`
+scenes were retaken on their own (`--only`) on 2026-09-28, on a fresh seed,
+which is why their ids differ from the other rows.
 
 | Scene | Persona | Path | Phase | Action after load | Viewport |
 | --- | --- | --- | --- | --- | --- |

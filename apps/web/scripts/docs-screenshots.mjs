@@ -734,7 +734,7 @@ const scenes = [
       await p.waitForTimeout(3000);
     },
     action: "Moved to question 5 through the progress strip.",
-    state: "“Quiz d'entraînement” running; Léa's region holds a solution, not yet marked done.",
+    state: "“Quiz d'entraînement” running; Léa's region holds a solution.",
   },
   {
     name: "player-run",
