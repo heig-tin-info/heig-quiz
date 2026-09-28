@@ -35,6 +35,9 @@ const en = {
   "deadline_approaching.subject": "Closes within 24 hours: {evaluationTitle}",
   "deadline_approaching.body": "“{evaluationTitle}” closes in less than 24 hours, and you have not submitted it yet.",
   "deadline_approaching.action": "Open the evaluation",
+  "results_updated.subject": "Results updated: {evaluationTitle}",
+  "results_updated.body": "Your grade for “{evaluationTitle}” changed after a correction.",
+  "results_updated.action": "See my results",
   "pool_shared.subject": "A pool was shared with you: {poolName}",
   "pool_shared.body": "{byName} shared the pool “{poolName}” with you as {role}.",
   "pool_shared.action": "Open the pool",
@@ -120,6 +123,9 @@ const fr: Record<Key, string> = {
   "deadline_approaching.subject": "Se termine dans les 24 heures : {evaluationTitle}",
   "deadline_approaching.body": "« {evaluationTitle} » se termine dans moins de 24 heures et vous n'avez pas encore rendu votre travail.",
   "deadline_approaching.action": "Ouvrir l'évaluation",
+  "results_updated.subject": "Résultats mis à jour : {evaluationTitle}",
+  "results_updated.body": "Votre note de « {evaluationTitle} » a changé après une correction.",
+  "results_updated.action": "Voir mes résultats",
   "pool_shared.subject": "Une banque a été partagée avec vous : {poolName}",
   "pool_shared.body": "{byName} a partagé la banque « {poolName} » avec vous comme {role}.",
   "pool_shared.action": "Ouvrir la banque",
@@ -232,6 +238,7 @@ function varsOf(payload: NotificationPayload, t: Record<Key, string>): Record<st
       return { classroomName: payload.classroomName, count: String(payload.count) };
     case "activity_available":
     case "deadline_approaching":
+    case "results_updated":
       return { evaluationTitle: payload.evaluationTitle };
     case "grading_ready":
       return { evaluationTitle: payload.evaluationTitle, count: String(payload.count) };
@@ -241,12 +248,20 @@ function varsOf(payload: NotificationPayload, t: Record<Key, string>): Record<st
 }
 
 /**
+ * The kinds whose `count` only serves the fold (§e) and never the sentence:
+ * how many corrections were folded into a `results_updated` is not news to a
+ * student. They have no `.one` sentence.
+ */
+const UNCOUNTED_KINDS: ReadonlySet<NotificationKind> = new Set(["results_updated"]);
+
+/**
  * The key of a kind's subject or body: a kind that counts has a singular
  * sentence of its own (`.one`), since "1 students" is not a sentence in
  * either language.
  */
 function sentenceKey(payload: NotificationPayload, part: "subject" | "body"): Key {
-  const one = "count" in payload && payload.count === 1 ? ".one" : "";
+  const one =
+    "count" in payload && payload.count === 1 && !UNCOUNTED_KINDS.has(payload.kind) ? ".one" : "";
   return `${payload.kind}.${part}${one}` as Key;
 }
 
@@ -257,6 +272,7 @@ function sentenceKey(payload: NotificationPayload, part: "subject" | "body"): Ke
 export function notificationPath(payload: NotificationPayload): string {
   switch (payload.kind) {
     case "results_released":
+    case "results_updated":
       return `/attempts/${payload.attemptId}/feedback`;
     case "pool_shared":
     case "pool_ownership":

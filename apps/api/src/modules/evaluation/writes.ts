@@ -369,7 +369,7 @@ export async function clearRelease(db: DbOrTx, id: string, now: Date): Promise<v
 }
 
 /** A grade read from the frozen snapshot rather than recomputed. */
-interface CachedGrade {
+export interface CachedGrade {
   points: number;
   totalPoints: number;
   grade: number;
@@ -390,12 +390,28 @@ export function cachedGrade(
   userId: string,
   attemptId: string | null,
 ): CachedGrade | null {
-  if (evaluation.releasedAt === null || evaluation.modifiedAfterRelease) return null;
+  return cachedGrades(evaluation)(userId, attemptId);
+}
+
+/**
+ * {@link cachedGrade} for many students of one evaluation: the snapshot is
+ * parsed and indexed ONCE, and each lookup is then a map read.
+ */
+export function cachedGrades(
+  evaluation: Pick<EvaluationRecord, "releasedAt" | "releasedGrades" | "modifiedAfterRelease">,
+): (userId: string, attemptId: string | null) => CachedGrade | null {
+  const none = () => null;
+  if (evaluation.releasedAt === null || evaluation.modifiedAfterRelease) return none;
   const snapshot = ReleasedGrades.safeParse(evaluation.releasedGrades);
-  if (!snapshot.success) return null;
-  const row = snapshot.data.rows.find((r) => r.userId === userId && r.attemptId === attemptId);
-  if (!row) return null;
-  return { points: row.points, totalPoints: snapshot.data.totalPoints, grade: row.grade };
+  if (!snapshot.success) return none;
+  const { totalPoints } = snapshot.data;
+  const rows = new Map(
+    snapshot.data.rows.map((r) => [`${r.userId}:${r.attemptId}`, r] as const),
+  );
+  return (userId, attemptId) => {
+    const row = rows.get(`${userId}:${attemptId}`);
+    return row ? { points: row.points, totalPoints, grade: row.grade } : null;
+  };
 }
 
 /**

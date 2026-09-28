@@ -88,6 +88,8 @@ export {
   setRelease,
   clearRelease,
   cachedGrade,
+  cachedGrades,
+  type CachedGrade,
   setModifiedAfterRelease,
   flagReleasedEvaluationsOf,
   retargetItemVersion,

@@ -81,6 +81,22 @@ export const NotificationPayload = z.discriminatedUnion("kind", [
     evaluationId: z.uuid(),
     evaluationTitle: z.string(),
   }),
+  z.object({
+    /**
+     * The final grade of a RELEASED evaluation the recipient took changed
+     * (F-GRADE-09, ADR-030 addendum §c and §h.4): a correction moved it to
+     * another grade on the evaluation's scale. Folded per evaluation (§e),
+     * hence `count`, the corrections folded into the entry. Never the grade,
+     * old or new: it is read on the feedback page, behind the student's own
+     * session, exactly as for `results_released`.
+     */
+    kind: z.literal("results_updated"),
+    evaluationId: z.uuid(),
+    evaluationTitle: z.string(),
+    /** The attempt that counts, whose feedback page the notification opens. */
+    attemptId: z.uuid(),
+    count: z.number().int().positive(),
+  }),
   /** Students took their seat in a classroom (join code, or a roster claim). */
   z.object({ kind: z.literal("student_joined"), ...classroomCount }),
   /** Roster lines of a classroom were flagged for the teacher's decision (AU-21). */
@@ -138,6 +154,7 @@ export const NOTIFICATION_KINDS = [
   "activity_scheduled",
   "activity_available",
   "deadline_approaching",
+  "results_updated",
   "student_joined",
   "roster_conflict",
   "grading_ready",
@@ -178,6 +195,9 @@ export const DEFAULT_CHANNEL_ENABLED: Readonly<
   activity_available: { bell: true, email: true, teams: true },
   // A reminder a student must not miss (§c).
   deadline_approaching: { bell: true, email: true, teams: true },
+  // A correction after the release: the bell, folded per evaluation; the
+  // student already had the e-mail of the release (§h.5).
+  results_updated: { bell: true, email: false, teams: false },
   student_joined: { bell: true, email: false, teams: false },
   roster_conflict: { bell: true, email: true, teams: true },
   grading_ready: { bell: true, email: true, teams: true },
@@ -192,6 +212,7 @@ const STUDENT_KINDS: readonly NotificationKind[] = [
   "activity_scheduled",
   "activity_available",
   "deadline_approaching",
+  "results_updated",
 ];
 
 /** The kinds a role receives, as the settings grid lists them. */

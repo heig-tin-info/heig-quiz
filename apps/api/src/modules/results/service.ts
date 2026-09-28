@@ -59,6 +59,7 @@ import { DomainError } from "../http.js";
 import {
   applyState,
   cachedGrade,
+  cachedGrades,
   clearRelease,
   feedbackOf,
   gradeDefaults,
@@ -76,10 +77,11 @@ import {
   studentEvaluationRows,
   totalPointsByEvaluation,
   totalPointsOf,
+  type CachedGrade,
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
-import { notifyMany, withdrawResultsReleased } from "../notifications/service.js";
+import { notifyMany, withdrawResultsNotifications } from "../notifications/service.js";
 import {
   keptAttempts,
   pairKey,
@@ -96,6 +98,8 @@ import {
 import { answeredBy } from "../live/service.js";
 import { solutionView, stripKeys, studentView } from "../live/studentView.js";
 import { typeOf } from "../pool/config.js";
+
+export { watchReleasedGrades, type GradeWatch } from "./updated.js";
 
 export class ResultsError extends DomainError {
   override name = "ResultsError";
@@ -326,25 +330,33 @@ export async function releaseResults(
   // re-release keeps the original `released_at`, the date they were told
   // about, and telling them twice would announce nothing new. Only a student
   // with an attempt has a feedback page to open; an absent one is not told.
+  //
+  // Best-effort (ADR-030 §h): the release has committed, and a notification
+  // that fails is logged, never thrown at the teacher who released.
   if (evaluation.releasedAt === null) {
-    await notifyMany(
-      db,
-      snapshot.rows.flatMap((row) =>
-        row.attemptId === null
-          ? []
-          : [
-              {
-                userId: row.userId,
-                payload: {
-                  kind: "results_released" as const,
-                  evaluationId: evaluation.id,
-                  evaluationTitle: evaluation.title,
-                  attemptId: row.attemptId,
+    try {
+      await notifyMany(
+        db,
+        snapshot.rows.flatMap((row) =>
+          row.attemptId === null
+            ? []
+            : [
+                {
+                  userId: row.userId,
+                  payload: {
+                    kind: "results_released" as const,
+                    evaluationId: evaluation.id,
+                    evaluationTitle: evaluation.title,
+                    attemptId: row.attemptId,
+                  },
                 },
-              },
-            ],
-      ),
-    );
+              ],
+        ),
+      );
+    } catch (err) {
+      // The service layer has no logger (as `realtime/bus.ts`): stderr.
+      console.error(`results: telling the students of the release of ${evaluation.id} failed`, err);
+    }
   }
   return { releasedAt, rows: snapshot.rows.length };
 }
@@ -369,8 +381,9 @@ export async function unreleaseResults(
     await clearRelease(tx, evaluation.id, now);
     await applyState(tx, evaluation, "closed", now);
   });
-  // The bells that announced it would open a page that shows nothing now.
-  await withdrawResultsReleased(db, evaluation.id);
+  // The bells that announced it, or a correction of it, would open a page
+  // that shows nothing now.
+  await withdrawResultsNotifications(db, evaluation.id);
 }
 
 /**
@@ -759,9 +772,9 @@ export interface ReleasedGrade {
  * The grade frozen at release is served as long as it is still true
  * (`cachedGrade`, D-06). F-GRADE-09 is explicit: a re-correction after the
  * release UPDATES the grades, so once `modified_after_release` is set they
- * are recomputed from the validated gradings of the counted attempt. Two
- * grouped queries for the rows that need it, not two per row — and none when
- * every row is cached.
+ * are recomputed from the validated gradings of the counted attempt
+ * ({@link gradeShown}). Two grouped queries for the rows that need it, not two
+ * per row — and none when every row is cached.
  */
 export async function releasedGradesOf(
   db: Db,
@@ -769,31 +782,115 @@ export async function releasedGradesOf(
   rows: readonly StudentRow[],
   retaking: ReadonlyMap<string, StudentAttempts>,
 ): Promise<Map<string, ReleasedGrade>> {
-  const released = rows.filter((row) => row.evaluation.releasedAt !== null);
-  const cached = new Map(
+  const released = rows
+    .filter((row) => row.evaluation.releasedAt !== null)
+    .map((row) => {
+      const attemptId = countedAttemptId(retaking, row);
+      return { evaluation: row.evaluation, attemptId, hit: cachedGrade(row.evaluation, userId, attemptId) };
+    });
+  const live = released.filter((row) => row.hit === null);
+  const tallies = await liveTallies(
+    db,
+    [...new Set(live.map((r) => r.evaluation.id))],
+    live.map((row) => row.attemptId),
+  );
+  return new Map(
     released.map((row) => [
       row.evaluation.id,
-      cachedGrade(row.evaluation, userId, countedAttemptId(retaking, row)),
+      gradeShown(row.evaluation, row.attemptId, row.hit, tallies),
     ]),
   );
-  const live = released.filter((row) => cached.get(row.evaluation.id) === null);
-  const [totals, pointsPerAttempt] = await Promise.all([
-    totalPointsByEvaluation(db, [...new Set(live.map((r) => r.evaluation.id))]),
-    pointsByAttempt(
+}
+
+/** What {@link gradeShown} needs of a grade that is not frozen any more. */
+interface LiveTallies {
+  totals: ReadonlyMap<string, number>;
+  points: ReadonlyMap<string, number>;
+}
+
+/**
+ * Reads the total points (`attemptTotal`) of attempts: `pointsByAttempt`,
+ * the validated gradings, unless a caller has a reason to read them
+ * otherwise (`results_updated`'s "before" across a regrade, `updated.ts`).
+ */
+export type PointsReader = (db: Db, attemptIds: readonly string[]) => Promise<Map<string, number>>;
+
+/** The totals of `evaluationIds` and the points of `attemptIds`: two grouped queries. */
+async function liveTallies(
+  db: Db,
+  evaluationIds: readonly string[],
+  attemptIds: readonly (string | null)[],
+  readPoints: PointsReader = pointsByAttempt,
+): Promise<LiveTallies> {
+  const [totals, points] = await Promise.all([
+    totalPointsByEvaluation(db, [...evaluationIds]),
+    readPoints(
       db,
-      live.map((row) => countedAttemptId(retaking, row)).filter((id): id is string => id !== null),
+      attemptIds.filter((id): id is string => id !== null),
     ),
   ]);
+  return { totals, points };
+}
+
+/**
+ * THE grade a student is shown for a released evaluation — the student home,
+ * the results cards and `results_updated` all read it here: the frozen one
+ * while it still holds (`hit`, from `cachedGrade`), otherwise the live one,
+ * from the validated gradings of the attempt that counts.
+ */
+function gradeShown(
+  evaluation: EvaluationRecord,
+  attemptId: string | null,
+  hit: CachedGrade | null,
+  live: LiveTallies,
+): ReleasedGrade {
+  if (hit) return { attemptId, ...hit };
+  const totalPoints = live.totals.get(evaluation.id) ?? 0;
+  const points = attemptId ? (live.points.get(attemptId) ?? 0) : 0;
+  const grade = gradeFromPoints(points, totalPoints, scaleOf(evaluation));
+  return { attemptId, points, totalPoints, grade };
+}
+
+/** {@link ReleasedGrade}, and whether the feedback page would show it now. */
+export interface ShownGrade extends ReleasedGrade {
+  visible: boolean;
+}
+
+/**
+ * {@link gradeShown} for several students of ONE released evaluation, in a
+ * handful of queries whatever their number (the kept attempts, the total,
+ * the points) and one parse of the frozen snapshot: what `results_updated`
+ * compares before and after a grading write. `visible` is
+ * {@link resultsState}'s `available`, so a student under the policy `none`,
+ * or with no attempt, is never told of a grade they cannot read.
+ */
+export async function shownGrades(
+  db: Db,
+  evaluation: EvaluationRecord,
+  userIds: readonly string[],
+  readPoints?: PointsReader,
+): Promise<Map<string, ShownGrade>> {
+  const kept = await keptAttempts(db, evaluation);
+  const frozen = cachedGrades(evaluation);
+  const students = userIds.map((userId) => {
+    const attempt = kept.get(userId) ?? null;
+    return { userId, attempt, hit: frozen(userId, attempt?.id ?? null) };
+  });
+  const live = students.filter((s) => s.hit === null);
+  const tallies = await liveTallies(
+    db,
+    live.length === 0 ? [] : [evaluation.id],
+    live.map((s) => s.attempt?.id ?? null),
+    readPoints,
+  );
   return new Map(
-    released.map((row) => {
-      const attemptId = countedAttemptId(retaking, row);
-      const hit = cached.get(row.evaluation.id) ?? null;
-      if (hit) return [row.evaluation.id, { attemptId, ...hit }];
-      const totalPoints = totals.get(row.evaluation.id) ?? 0;
-      const points = attemptId ? (pointsPerAttempt.get(attemptId) ?? 0) : 0;
-      const grade = gradeFromPoints(points, totalPoints, scaleOf(row.evaluation));
-      return [row.evaluation.id, { attemptId, points, totalPoints, grade }];
-    }),
+    students.map(({ userId, attempt, hit }) => [
+      userId,
+      {
+        ...gradeShown(evaluation, attempt?.id ?? null, hit, tallies),
+        visible: resultsState(evaluation, attempt?.state ?? null) === "available",
+      },
+    ]),
   );
 }
 

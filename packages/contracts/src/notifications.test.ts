@@ -54,6 +54,7 @@ describe("notificationKindsFor", () => {
       "activity_scheduled",
       "activity_available",
       "deadline_approaching",
+      "results_updated",
     ]);
     expect(notificationKindsFor("teacher")).toEqual([...NOTIFICATION_KINDS]);
   });

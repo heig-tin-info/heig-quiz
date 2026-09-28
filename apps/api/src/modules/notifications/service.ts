@@ -306,16 +306,17 @@ export async function markAllRead(db: Db, userId: string): Promise<number> {
 
 /**
  * A release withdrawn (`results.unreleaseResults`): the bells that announced
- * it go, since the page they open no longer shows anything. An e-mail or a
- * Teams message already sent cannot be taken back, and is not pretended to.
+ * it, or a correction after it (`results_updated`), go, since the page they
+ * open no longer shows anything. An e-mail or a Teams message already sent
+ * cannot be taken back, and is not pretended to.
  */
-export async function withdrawResultsReleased(db: Db, evaluationId: string): Promise<number> {
+export async function withdrawResultsNotifications(db: Db, evaluationId: string): Promise<number> {
   const deleted = await db
     .delete(notifications)
     .where(
       and(
         eq(notifications.evaluationId, evaluationId),
-        sql`${notifications.payload}->>'kind' = 'results_released'`,
+        sql`${notifications.payload}->>'kind' in ('results_released', 'results_updated')`,
       ),
     )
     .returning({ userId: notifications.userId });

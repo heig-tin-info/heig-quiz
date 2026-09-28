@@ -39,6 +39,7 @@ export const NOTIFICATION_FOLD_TARGETS = {
   student_joined: "classroomId",
   roster_conflict: "classroomId",
   pool_question_added: "poolId",
+  results_updated: "evaluationId",
 } as const satisfies Partial<Record<NotificationKind, "classroomId" | "poolId" | "evaluationId">>;
 
 export type FoldedKind = keyof typeof NOTIFICATION_FOLD_TARGETS;
@@ -78,7 +79,7 @@ export const notifications = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     payload: jsonb("payload").notNull(),
     poolId: uuid("pool_id").references(() => pools.id, { onDelete: "cascade" }),
-    /** Same rule for a kind about an evaluation (`results_released`). */
+    /** Same rule for a kind about an evaluation (`results_released`, `results_updated`, …). */
     evaluationId: uuid("evaluation_id").references(() => evaluations.id, { onDelete: "cascade" }),
     /** Same rule for a kind about a classroom (`student_joined`, `roster_conflict`, `activity_scheduled`). */
     classroomId: uuid("classroom_id").references(() => classrooms.id, { onDelete: "cascade" }),
