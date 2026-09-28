@@ -26,10 +26,11 @@
  */
 import { randomBytes, randomInt } from "node:crypto";
 
-import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, inArray, isNotNull, isNull, lte, notExists, or, sql, type SQL } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 
 import {
+  type ClosedBy,
   POLL_SHORT_CAP,
   type PollAudience,
   type PollPoolPage,
@@ -43,6 +44,7 @@ import {
 } from "@quiz/contracts";
 import { pollOutcome, pollTally, type PollRunCounts, type PollType } from "@quiz/domain";
 
+import { audit } from "../../audit.js";
 import { iso } from "../../clock.js";
 import { isUniqueViolation, type Db } from "../../db/client.js";
 import {
@@ -380,11 +382,71 @@ export async function endPoll(
   app: FastifyInstance,
   evaluation: EvaluationRecord,
   now: Date,
-): Promise<EvaluationRecord> {
-  if (evaluation.state !== "running") return evaluation;
-  const closed = await live.closeEvaluation(app.db, evaluation, now, "teacher", app);
+  closedBy: ClosedBy = "teacher",
+): Promise<{ evaluation: EvaluationRecord; ended: boolean }> {
+  if (evaluation.state !== "running") return { evaluation, ended: false };
+  const closed = await live.tryCloseEvaluation(app.db, evaluation, now, closedBy, app);
+  // Lost to a concurrent End (the teacher's, or another process's pass):
+  // that one emitted and audited, so this one does neither.
+  if (!closed) return { evaluation: (await byId(app.db, evaluation.id))!, ended: false };
   await emitTally(app.db, closed, now);
-  return closed;
+  return { evaluation: closed, ended: true };
+}
+
+/**
+ * How long a running poll may go without an answer before the server ends it
+ * (#190, ADR-014 addendum 2026-09-28). The same 12 hours as the deploy guard's
+ * "left open, nobody is waiting on it" (`scripts/live-evaluations.sql`): a
+ * sitting in a room lasts hours, a poll a few minutes.
+ */
+export const POLL_IDLE_MS = 12 * 60 * 60 * 1000;
+
+/**
+ * The poll left open by mistake: `running`, and neither the poll nor any of
+ * its answers moved for {@link POLL_IDLE_MS}. The poll's own `updated_at` is
+ * its start (created and started in one call) and every reveal step, so a
+ * poll nobody answered counts from the last thing its teacher did; an answer
+ * written or changed counts from its server receipt time. A join without an
+ * answer is not activity: a QR scanned the next morning keeps nothing alive.
+ *
+ * Each one ends through {@link endPoll}, the path of the teacher's End — the
+ * same events, the same grading pass, the same `poll.end` entry, whose actor
+ * is the system. A second pass finds nothing: the poll is no longer running;
+ * a pass that loses the race to a manual End writes and emits nothing.
+ */
+export async function endIdlePolls(app: FastifyInstance, now: Date): Promise<EvaluationRecord[]> {
+  const cutoff = new Date(now.getTime() - POLL_IDLE_MS);
+  const recentAnswer = app.db
+    .select({ id: answers.id })
+    .from(answers)
+    .innerJoin(attempts, eq(attempts.id, answers.attemptId))
+    .where(and(eq(attempts.evaluationId, evaluations.id), gt(answers.updatedAt, cutoff)));
+  const idle = await app.db
+    .select()
+    .from(evaluations)
+    .where(
+      and(
+        eq(evaluations.mode, "poll"),
+        eq(evaluations.state, "running"),
+        lte(evaluations.updatedAt, cutoff),
+        notExists(recentAnswer),
+      ),
+    );
+  const ended: EvaluationRecord[] = [];
+  for (const row of idle) {
+    const { evaluation: closed, ended: byThisPass } = await endPoll(app, row, now, "server");
+    if (!byThisPass) continue;
+    await audit(app.db, {
+      actorType: "system",
+      action: "poll.end",
+      subjectType: "evaluation",
+      subjectId: closed.id,
+      payload: { reason: "idle", idleMs: POLL_IDLE_MS },
+      at: now,
+    });
+    ended.push(closed);
+  }
+  return ended;
 }
 
 // --- Participation --------------------------------------------------------
