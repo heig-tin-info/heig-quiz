@@ -11,8 +11,9 @@ import { mockFetch, ok, renderWithProviders } from "./test/render";
  * Where the blanket refresh applies, decided at the one place that knows which
  * screen is on: `App`.
  *
- * `useLiveUpdates` answers ANY hint with `invalidateQueries()` — every active
- * query of the page, at once. That is the right reflex on a teacher screen,
+ * `useLiveUpdates` answers a hint by invalidating what its kinds may have made
+ * stale — and a `mutation` hint, the one pushed below, every active query of
+ * the page, at once. That is the right reflex on a teacher screen,
  * whose data is other people's. It is the wrong one during an exam:
  * `/take/:id` is a POST behind a query (`AttemptPage`), and an invalidation
  * arriving while that POST is in flight cancels the refetch, throws the answer

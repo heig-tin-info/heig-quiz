@@ -41,6 +41,7 @@ import {
   Tip,
 } from "./ui";
 import { classroomKey, evaluationsKey } from "./queryKeys";
+import { invalidateHint } from "./realtime/hints";
 
 /**
  * One classroom: its roster and its evaluations, one tab each.
@@ -79,8 +80,8 @@ function ClassroomName({ room }: { room: ClassroomDetail }) {
     mutationFn: (name: string) =>
       api(`/app/api/classrooms/${room.id}`, { method: "PATCH", body: JSON.stringify({ name }) }),
     // The name is on the course page and in the classroom list too, so
-    // everything that carries it is dropped, exactly as the modal did.
-    onSuccess: () => qc.invalidateQueries(),
+    // everything that carries a classroom is dropped.
+    onSuccess: () => invalidateHint(qc, ["classrooms"]),
     onError: toastError("classrooms.renameFailed"),
   });
 
@@ -172,7 +173,7 @@ function PeriodModal({ room, onClose }: { room: ClassroomDetail; onClose: () => 
         body: JSON.stringify(body.data),
       }),
     onSuccess: async () => {
-      await qc.invalidateQueries();
+      await invalidateHint(qc, ["classrooms"]);
       onClose();
     },
     onError: toastError("error.save"),
@@ -220,7 +221,7 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
     queryFn: () => api(`/app/api/classrooms/${id}/evaluations`),
   });
 
-  const invalidate = () => qc.invalidateQueries();
+  const invalidate = () => invalidateHint(qc, ["classrooms"]);
   /**
    * The teacher takes a (staff) seat in their own classroom, to walk the
    * student flow without a second account. It stays out of the headcount.

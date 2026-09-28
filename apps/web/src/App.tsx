@@ -349,8 +349,8 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
   // Persisted, with the route to come back to (`studentView.ts`, ADR-018).
   const studentView = useStudentView();
   const { setLocale } = useI18n();
-  // The hint stream drives a blanket `invalidateQueries()`, which is right on
-  // a teacher screen and wrong during an exam: `/take/:id` runs on a POST
+  // The hint stream invalidates queries (`realtime/hints.ts`), which is right
+  // on a teacher screen and wrong during an exam: `/take/:id` runs on a POST
   // behind a query (`AttemptPage`), and invalidating it mid-flight cancels the
   // in-flight refetch — the lobby then never advances to the player, however
   // many 200s the server sends. The player and the lobby carry their own watch
