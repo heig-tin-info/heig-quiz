@@ -282,7 +282,10 @@ export const TOOLS: Tool[] = [
     name: "link_pool_to_course",
     title: "Link a pool to a course",
     description:
-      "Makes a pool's questions available to a course's evaluations. Keeps the pools already linked. Idempotent.",
+      "Makes a pool's questions available to a course's evaluations. Keeps the pools already linked. Idempotent. " +
+      "Linking needs the contributor or owner role on the pool, because it makes the whole course staff " +
+      "contributors of it: a pool the teacher only reads (a colleague's public pool, a reader seat) is " +
+      "refused with 403 `pool_link_forbidden`.",
     input: z.object({ courseId: Id, poolId: Id }),
     annotations: { ...WRITE, idempotentHint: true },
     run: async (api, a) => {

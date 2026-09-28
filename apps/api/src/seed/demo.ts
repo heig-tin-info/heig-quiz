@@ -395,9 +395,12 @@ export async function seedDemoContent(
     if (spec.courseCode === ctx.courseCode) linked.push(poolId);
   }
   // F-EVAL-01: an evaluation may only draw from the pools of its course.
-  // `undefined` as the reachability predicate is the seed's privilege: it
-  // runs as the owner of every pool it just created.
-  await poolService.setCoursePools(db, ctx.courseId, linked, undefined);
+  // `undefined` as the reachability predicate is the seed's privilege; it
+  // links as the teacher who owns every pool it just created.
+  await poolService.setCoursePools(db, ctx.courseId, linked, undefined, {
+    id: ctx.teacherId,
+    role: "teacher",
+  });
 
   for (const spec of EVALUATIONS) {
     await ensureEvaluation(app, db, spec, { ...ctx, questionIds }, now, counts);

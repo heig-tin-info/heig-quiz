@@ -1657,6 +1657,7 @@ export const en = {
   "eval.rename.of": "Rename evaluation: {title}",
   "eval.duplicate": "Duplicate",
   "eval.duplicateTitle": "{title} (copy)",
+  "eval.duplicateFailed": "The evaluation could not be duplicated.",
   "templates.title": "Evaluation templates",
   "templates.meta": "{n} questions · {points} pts · rev. {revision}",
   "templates.meta.one": "1 question · {points} pts · rev. {revision}",

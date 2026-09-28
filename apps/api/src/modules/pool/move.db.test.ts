@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { registerForTests } from "@quiz/registry/server";
 
-import { auditLog, coursePools, poolMembers, questions } from "../../db/schema.js";
+import { auditLog, coursePools, courses, poolMembers, questions } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { seedLive } from "../../test/live.js";
@@ -305,7 +305,20 @@ describe("POST /questions/move", () => {
       targetPoolId: target,
     });
     expect(asked.statusCode).toBe(409);
-    expect(asked.json().courses[0]).toMatchObject({ courseId: seeded.courseId, mayLink: false });
+    // A course the caller cannot open is named by its code, and nothing more:
+    // no id, no name, no classroom (invariant 6).
+    const [course] = await server.app.db
+      .select()
+      .from(courses)
+      .where(eq(courses.id, seeded.courseId));
+    const unseen = {
+      courseId: null,
+      courseName: null,
+      courseCode: course!.code,
+      classrooms: [],
+      mayLink: false,
+    };
+    expect(asked.json().courses).toEqual([unseen]);
 
     const forced = await move(mover, {
       questionIds: [seeded.questionIds[0]!],
@@ -314,7 +327,8 @@ describe("POST /questions/move", () => {
     });
     expect(forced.statusCode).toBe(409);
     expect(forced.json().error).toBe("course_forbidden");
-    expect(forced.json().courses[0].courseId).toBe(seeded.courseId);
+    expect(forced.json().courses).toEqual([unseen]);
+    expect(JSON.stringify(forced.json())).not.toContain(seeded.classroomId);
     const links = await server.app.db
       .select()
       .from(coursePools)

@@ -9,6 +9,7 @@ import {
   type EvaluationTemplate,
   type PoolSummary,
 } from "@quiz/contracts";
+import { poolRoleAllows } from "@quiz/domain";
 
 import { api } from "../api";
 import { newPeriodDraft, PeriodFields, periodBody, periodInvalid } from "../ClassroomPeriod";
@@ -265,7 +266,11 @@ export function CoursePools({
   });
 
   const linked = detail.data?.pools ?? [];
-  const available = (pools.data ?? []).filter((p) => !linked.some((l) => l.id === p.id));
+  // Linking makes the whole staff contributors of the pool, so the server
+  // refuses a pool the caller only reads (ADR-013): it is not offered.
+  const available = (pools.data ?? []).filter(
+    (p) => poolRoleAllows(p.role, "contributor") && !linked.some((l) => l.id === p.id),
+  );
 
   const setLinks = useMutation({
     mutationFn: (poolIds: string[]) =>

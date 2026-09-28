@@ -45,7 +45,12 @@ import {
   stateTone,
 } from "./common";
 import { classroomKey, evaluationsKey } from "../queryKeys";
-import { InstantiateError, useCourseTemplates, useInstantiate } from "./templates";
+import {
+  InstantiateError,
+  useCourseTemplates,
+  useDuplicateErrorToast,
+  useInstantiate,
+} from "./templates";
 
 /**
  * The evaluations of one classroom, under its roster.
@@ -221,6 +226,7 @@ export function EvaluationList({
   ];
 
   const invalidate = () => qc.invalidateQueries({ queryKey: evaluationsKey(classroomId) });
+  const duplicateFailed = useDuplicateErrorToast();
   const duplicate = useMutation({
     mutationFn: (row: EvaluationSummary) =>
       api(`/app/api/evaluations/${row.id}/duplicate`, {
@@ -228,6 +234,7 @@ export function EvaluationList({
         body: JSON.stringify({ title: t("eval.duplicateTitle", { title: row.title }) }),
       }),
     onSuccess: invalidate,
+    onError: duplicateFailed,
   });
   const remove = useMutation({
     mutationFn: (row: EvaluationSummary) =>

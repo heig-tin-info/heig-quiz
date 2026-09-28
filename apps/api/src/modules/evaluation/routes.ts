@@ -147,7 +147,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
     "/app/api/evaluations/:id/pools",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: staffEvaluation }, ({ req, scope }) =>
-      service.listCoursePools(app.db, scope.evaluation.id, req.user!),
+      service.listCoursePools(app.db, scope.classroom.id, req.user!),
     ),
   );
 

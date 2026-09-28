@@ -588,7 +588,7 @@ describe("question counts", () => {
 
     const courseId = randomUUID();
     await db.insert(courses).values({ id: courseId, name: "Counting", code: `C-${courseId.slice(0, 8)}` });
-    await service.setCoursePools(db, courseId, [counted], undefined);
+    await service.setCoursePools(db, courseId, [counted], undefined, viewer());
     const ofCourse = await service.poolsOfCourse(db, courseId);
     expect(ofCourse.map((p) => p.questionCount)).toEqual([3]);
   });

@@ -885,6 +885,68 @@ describe("pool sharing", () => {
     expect(row.memberCount).toBe(0);
   });
 
+  it("links a pool to a course only for a contributor of it, and keeps a link already made", async () => {
+    const courseOf = async (...staff: Actor[]) => {
+      const courseId = crypto.randomUUID();
+      await server.app.db
+        .insert(courses)
+        .values({ id: courseId, name: "Linking", code: `L${crypto.randomUUID().slice(0, 8)}` });
+      await server.app.db
+        .insert(courseStaff)
+        .values(staff.map((who) => ({ courseId, userId: who.id })));
+      return courseId;
+    };
+    const link = (courseId: string, who: Actor, poolIds: string[]) =>
+      server.app.inject({
+        method: "PUT",
+        url: `/app/api/courses/${courseId}/pools`,
+        headers: who.headers,
+        payload: { poolIds },
+      });
+
+    // A colleague's PUBLIC pool: readable, but linking it would make the
+    // outsider's whole course its contributors.
+    const open = (
+      await server.app.inject({
+        method: "POST",
+        url: "/app/api/pools",
+        headers: poolOwner.headers,
+        payload: { name: "Public, not linkable", visibility: "public" },
+      })
+    ).json().id as string;
+    const question = (await writeQuestion(open, poolOwner, "public question")).json().meta.id;
+    const own = await courseOf(outsider);
+    const refused = await link(own, outsider, [open]);
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json()).toMatchObject({ error: "pool_link_forbidden", poolIds: [open] });
+    const rewrite = await server.app.inject({
+      method: "PATCH",
+      url: `/app/api/questions/${question}`,
+      headers: outsider.headers,
+      payload: { internalName: "rewritten" },
+    });
+    expect(rewrite.statusCode).toBe(403);
+
+    // A named reader may not link the shared pool either; a contributor may.
+    const readers = await courseOf(reader);
+    expect((await link(readers, reader, [shared])).statusCode).toBe(403);
+    const contributors = await courseOf(contributor);
+    const linked = await link(contributors, contributor, [shared]);
+    expect(linked.statusCode).toBe(200);
+    expect(linked.json().map((p: { id: string }) => p.id)).toEqual([shared]);
+    // Taken back: the tests below count on the contributor's seat alone.
+    expect((await link(contributors, contributor, [])).json()).toEqual([]);
+
+    // A link the owner made survives a PUT by a reader that keeps it, and a
+    // reader may still take it away: unlinking only needs the course.
+    const mixed = await courseOf(poolOwner, reader);
+    expect((await link(mixed, poolOwner, [shared])).statusCode).toBe(200);
+    const kept = await link(mixed, reader, [shared]);
+    expect(kept.statusCode).toBe(200);
+    expect(kept.json().map((p: { id: string }) => p.id)).toEqual([shared]);
+    expect((await link(mixed, reader, [])).json()).toEqual([]);
+  });
+
   it("lists every reachable pool with its role and its member count", async () => {
     const listed = await server.app.inject({
       method: "GET",

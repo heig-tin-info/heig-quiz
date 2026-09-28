@@ -47,6 +47,7 @@ import {
   safeExamBrowserOf,
   retakesOf,
   type RetakeSettings,
+  type TemplateItemRef,
 } from "@quiz/contracts";
 
 import {
@@ -244,6 +245,23 @@ class QuestionKeyless extends EvaluationError {
 class QuestionNotInCourse extends EvaluationError {
   constructor(readonly questionId: string) {
     super("question_not_in_course", 422, `question ${questionId} is not in a pool of this course`);
+  }
+}
+
+/**
+ * A copy into a classroom would play questions whose pool that classroom's
+ * course does not link (F-EVAL-01): the draft could not have been authored
+ * with them, so the copy is refused and names them. The code predates the
+ * duplicate's use of it — an instance of a template was the first copy.
+ */
+class PoolUnlinked extends EvaluationError {
+  constructor(items: TemplateItemRef[]) {
+    super(
+      "template_pool_unlinked",
+      422,
+      "some questions are in a pool not linked to the target course",
+      { items },
+    );
   }
 }
 
@@ -1320,15 +1338,19 @@ export async function transition(
 
 // --- Items ----------------------------------------------------------------
 
-/** The pools this evaluation may draw questions from (F-EVAL-01). */
-async function coursePoolIds(db: Db, evaluationId: string): Promise<Set<string>> {
+/** The pools an evaluation of this classroom may draw questions from (F-EVAL-01). */
+async function coursePoolIds(db: Db, classroomId: string): Promise<Set<string>> {
   const rows = await db
     .select({ poolId: coursePools.poolId })
-    .from(evaluations)
-    .innerJoin(classrooms, eq(evaluations.classroomId, classrooms.id))
+    .from(classrooms)
     .innerJoin(coursePools, eq(coursePools.courseId, classrooms.courseId))
-    .where(eq(evaluations.id, evaluationId));
+    .where(eq(classrooms.id, classroomId));
   return new Set(rows.map((r) => r.poolId));
+}
+
+/** THE test of F-EVAL-01: the question sits in one of the course's pools. */
+function inLinkedPool(question: { poolId: string | null }, linked: Set<string>): boolean {
+  return question.poolId !== null && linked.has(question.poolId);
 }
 
 /**
@@ -1339,10 +1361,10 @@ async function coursePoolIds(db: Db, evaluationId: string): Promise<Set<string>>
  */
 export async function listCoursePools(
   db: Db,
-  evaluationId: string,
+  classroomId: string,
   viewer: { id: string; role: string },
 ): Promise<PoolSummary[]> {
-  const ids = await coursePoolIds(db, evaluationId);
+  const ids = await coursePoolIds(db, classroomId);
   if (ids.size === 0) return [];
   return listPools(db, inArray(pools.id, [...ids]), viewer);
 }
@@ -1389,7 +1411,7 @@ export async function addItems(
   keyed: (type: string, version: typeof questionVersions.$inferSelect) => boolean = () => true,
 ): Promise<ItemRow[]> {
   assertItemListEditable(row, ctx);
-  const allowed = await coursePoolIds(db, row.id);
+  const allowed = await coursePoolIds(db, classroomIdOf(row));
   const found = await db.select().from(questions).where(inArray(questions.id, questionIds));
   const byQuestion = new Map(found.map((q) => [q.id, q]));
   const versions = await latestPublished(db, questionIds);
@@ -1398,12 +1420,7 @@ export async function addItems(
   const values: (typeof evaluationItems.$inferInsert)[] = [];
   for (const questionId of questionIds) {
     const question = byQuestion.get(questionId);
-    if (
-      !question ||
-      question.deletedAt !== null ||
-      question.poolId === null ||
-      !allowed.has(question.poolId)
-    ) {
+    if (!question || question.deletedAt !== null || !inLinkedPool(question, allowed)) {
       throw new QuestionNotInCourse(questionId);
     }
     const version = versions.get(questionId);
@@ -1531,6 +1548,11 @@ export async function updateVersions(
   return itemRows(db, row.id);
 }
 
+/** An item as a refusal names it: where it sits and which question it plays. */
+export function itemRef(j: JoinedItem): TemplateItemRef {
+  return { position: j.item.position, questionId: j.question.id, internalName: j.question.internalName };
+}
+
 /**
  * Where a copy lives: a classroom (a duplicate, F-EVAL-14, or an instance of
  * a template) or a course (a template, ADR-031).
@@ -1558,11 +1580,16 @@ export async function copyEvaluation(
   },
 ): Promise<EvaluationRecord> {
   const id = randomUUID();
-  const items = await db
-    .select()
-    .from(evaluationItems)
-    .where(eq(evaluationItems.evaluationId, row.id))
-    .orderBy(asc(evaluationItems.position));
+  const joined = await joinedItems(db, row.id);
+  if ("classroomId" in target.home) {
+    // F-EVAL-01, the rule `addItems` enforces: a copy into a classroom —
+    // of this course or of another — draws only from the pools its course
+    // links. Checked outside the transaction, like an item added just before.
+    const linked = await coursePoolIds(db, target.home.classroomId);
+    const unlinked = joined.filter((j) => !inLinkedPool(j.question, linked));
+    if (unlinked.length > 0) throw new PoolUnlinked(unlinked.map(itemRef));
+  }
+  const items = joined.map((j) => j.item);
   const home =
     "courseId" in target.home
       ? { courseId: target.home.courseId, revision: 1 }

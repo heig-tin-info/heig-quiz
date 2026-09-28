@@ -126,6 +126,17 @@ describe("TeacherHome", () => {
           isPersonal: true,
           createdAt: "2026-01-01T08:00:00.000Z",
           questionCount: 7,
+          role: "owner",
+        },
+        {
+          id: "p2",
+          name: "Colleague's public pool",
+          visibility: "public",
+          ownerId: "u-2",
+          isPersonal: false,
+          createdAt: "2026-01-01T08:00:00.000Z",
+          questionCount: 3,
+          role: "reader",
         },
       ]),
       "PUT /app/api/courses/c1/pools": ok(undefined),
@@ -133,6 +144,8 @@ describe("TeacherHome", () => {
     renderWithProviders(<TeacherHome navigate={vi.fn()} />);
 
     await userEvent.click(await screen.findByRole("button", { name: "Link a pool" }));
+    // A pool the teacher only reads is not offered: linking it is refused (ADR-013).
+    expect(screen.queryByRole("menuitem", { name: "Colleague's public pool" })).toBeNull();
     await userEvent.click(screen.getByRole("menuitem", { name: "Pointers" }));
     // `PUT` replaces the WHOLE set, which is the only route there is.
     expect(calls.filter((c) => c.method === "PUT")).toEqual([

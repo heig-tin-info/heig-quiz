@@ -1646,6 +1646,7 @@ export const fr: Record<keyof Dict, string> = {
   "eval.rename.of": "Renommer l'évaluation : {title}",
   "eval.duplicate": "Dupliquer",
   "eval.duplicateTitle": "{title} (copie)",
+  "eval.duplicateFailed": "L'évaluation n'a pas pu être dupliquée.",
   "templates.title": "Modèles d'évaluation",
   "templates.meta": "{n} questions · {points} pts · rév. {revision}",
   "templates.meta.one": "1 question · {points} pts · rév. {revision}",

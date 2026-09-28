@@ -12,7 +12,7 @@ import {
   type TemplateItemRef,
 } from "@quiz/contracts";
 
-import { api, ApiError } from "../api";
+import { api, ApiError, apiErrorMessage } from "../api";
 import { useConfirm } from "../confirm";
 import { useT, type TFunction } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
@@ -45,7 +45,10 @@ export function useCourseTemplates(courseId: string | null) {
 const itemNames = (items: readonly TemplateItemRef[]) =>
   items.map((i) => i.internalName).join(", ");
 
-/** What an "Instantiate" that failed says, translated from its machine half. */
+/**
+ * What a copy refused for its unlinked pools says (`422 template_pool_unlinked`),
+ * translated from its machine half — an "Instantiate" or a "Duplicate".
+ */
 function instantiateError(error: unknown, t: TFunction): string | null {
   if (!(error instanceof ApiError)) return null;
   const parsed = TemplatePoolUnlinked.safeParse(error.body);
@@ -78,6 +81,17 @@ export function useInstantiate(onCreated: (evaluationId: string) => void) {
       onCreated(made.evaluation.id);
     },
   });
+}
+
+/**
+ * The toast of a "Duplicate" that failed. The menu that started it is closed
+ * by then, so the refusal has nowhere else to render.
+ */
+export function useDuplicateErrorToast(): (error: unknown) => void {
+  const t = useT();
+  const toast = useToast();
+  return (error) =>
+    toast(instantiateError(error, t) ?? apiErrorMessage(error, t("eval.duplicateFailed")), "error");
 }
 
 /** The error slot of a dialog that instantiates. */
