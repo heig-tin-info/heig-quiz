@@ -604,7 +604,11 @@ async function latestNumbers(db: DbOrTx, questionIds: string[]): Promise<Map<str
 }
 
 export async function itemRows(db: DbOrTx, evaluationId: string): Promise<ItemRow[]> {
-  const joined = await joinedItems(db, evaluationId);
+  return itemRowsOf(db, await joinedItems(db, evaluationId));
+}
+
+/** `itemRows` for a caller that already holds the joined items. */
+export async function itemRowsOf(db: DbOrTx, joined: readonly JoinedItem[]): Promise<ItemRow[]> {
   const latest = await latestNumbers(db, [...new Set(joined.map((j) => j.question.id))]);
   return joined.map((j) => ({
     id: j.item.id,

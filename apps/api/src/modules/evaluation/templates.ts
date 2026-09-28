@@ -34,7 +34,7 @@ import {
   itemCountsByEvaluation,
   inLinkedPool,
   itemRef,
-  itemRows,
+  itemRowsOf,
   joinedItems,
   scaleOf,
   settingsOf,
@@ -149,11 +149,11 @@ export async function templateDetail(
   row: EvaluationRecord,
   viewer: { id: string; role: string },
 ): Promise<TemplateDetail> {
-  const [rows, joined, linked] = await Promise.all([
-    itemRows(db, row.id),
+  const [joined, linked] = await Promise.all([
     joinedItems(db, row.id),
     coursePoolIds(db, { courseId: row.courseId! }),
   ]);
+  const rows = await itemRowsOf(db, joined);
   const unlinked = new Set(
     joined.filter((j) => !inLinkedPool(j.question, linked)).map((j) => j.item.id),
   );

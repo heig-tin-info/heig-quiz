@@ -1764,7 +1764,7 @@ export const fr: Record<keyof Dict, string> = {
   "picker.preview.version": "{type} · version {n}, celle qui serait ajoutée",
   "picker.preview.openEditor": "Ouvrir dans l'éditeur",
   "picker.preview.draftTitle": "Jamais publiée — voici son brouillon",
-  "picker.preview.draftBody": "Publiez-la depuis l'éditeur pour l'ajouter à une évaluation.",
+  "picker.preview.draftBody": "Publiez-la depuis l'éditeur pour pouvoir l'ajouter ici.",
   "eval.preset.classroom": "Évaluation en classe",
   "eval.preset.homework": "Exercice à la maison",
   "eval.preset.custom": "Sur mesure",

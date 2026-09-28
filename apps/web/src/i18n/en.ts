@@ -1775,7 +1775,7 @@ export const en = {
   "picker.preview.version": "{type} · version {n}, the one that would be added",
   "picker.preview.openEditor": "Open in the editor",
   "picker.preview.draftTitle": "Never published — this is its draft",
-  "picker.preview.draftBody": "Publish it from the editor to add it to an evaluation.",
+  "picker.preview.draftBody": "Publish it from the editor to add it here.",
   "eval.preset.classroom": "In-class evaluation",
   "eval.preset.homework": "Homework exercise",
   "eval.preset.custom": "Custom",

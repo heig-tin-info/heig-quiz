@@ -372,7 +372,7 @@ export function AddQuestionsSheet({
 
 /**
  * One question of the picker as a student will read it: the latest PUBLISHED
- * version — the one "Add" would freeze into the evaluation — or the draft of
+ * version — the one "Add" would freeze into the list — or the draft of
  * a question never published, said so. Same request and cache entry as the
  * editor's own preview (`questionPreviewKey`), through `studentView` on the
  * server (invariant 4). The editor opens in a new tab: leaving would close
