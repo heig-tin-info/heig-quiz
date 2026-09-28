@@ -207,7 +207,8 @@ export function CourseNavTree({
 
   if (state === "active") {
     // Nothing to show off a course or classroom page, or once the list says
-    // the page is in no course of the caller's.
+    // the page is in no course of the caller's. Not `inCourseSection`: the
+    // course list is in the section, but it is no ONE course to unfold.
     if ((route.view !== "course" && route.view !== "classroom") || (courses.data && !activeId)) {
       return null;
     }

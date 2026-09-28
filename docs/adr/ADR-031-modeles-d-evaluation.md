@@ -258,9 +258,10 @@ keeps its inner join on `classrooms`, so no generic evaluation route —
 items, settings, dashboard, grading, preview, results, and the MCP tools
 built on them — ever sees a template; the code is shared at the service
 level, not by widening a loader. A `TemplatePatch` contract is the
-evaluation patch minus `opensAt`, `closesAt`, `accessCode`, `ipAllowlist`
-and `strict`, so sending a run field is a 400 from the schema, never a 500
-from `evaluations_template_ck`. The pools a template may draw from are the
+evaluation patch minus `opensAt`, `closesAt`, `accessCode` and
+`ipAllowlist`, declared `.strict()` so that an unknown key is refused rather
+than stripped: sending a run field is a 400 from the schema, never a silent
+no-op nor a 500 from `evaluations_template_ck`. The pools a template may draw from are the
 course's linked pools: `coursePoolIds` takes a course id, not a classroom.
 
 ### d. One helper bumps the revision

@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff, LayoutGrid, Library, List, Plus, School } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
@@ -11,6 +11,7 @@ import {
   CoursePools,
   HiddenBadge,
   useCourseActions,
+  useCourses,
 } from "./course/parts";
 import { inNavigation } from "./CourseNav";
 import { useT } from "./i18n";
@@ -256,10 +257,7 @@ export function TeacherHome({ navigate }: { navigate: (r: Route) => void }) {
   const [creating, setCreating] = useState(false);
   const [view, setView] = usePersistentChoice(VIEW_KEY, VIEWS, "cards");
   const [showHidden, setShowHidden] = useState(false);
-  const courses = useQuery<CourseSummary[]>({
-    queryKey: coursesKey,
-    queryFn: () => api("/app/api/courses"),
-  });
+  const courses = useCourses();
   const all = courses.data ?? [];
   const hiddenCount = all.filter((c) => c.hidden).length;
   const rows = showHidden ? all : all.filter((c) => inNavigation(c));

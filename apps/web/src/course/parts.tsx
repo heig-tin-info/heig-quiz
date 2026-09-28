@@ -125,6 +125,18 @@ function AddStaffModal({ course, onClose }: { course: CourseSummary; onClose: ()
 }
 
 /**
+ * The caller's courses (`GET /courses`): every course of their staff, each
+ * with its staff, its classrooms and whether they hid it. The key and the URL
+ * in one place, for the pages that read the list.
+ */
+export function useCourses() {
+  return useQuery<CourseSummary[]>({
+    queryKey: coursesKey,
+    queryFn: () => api("/app/api/courses"),
+  });
+}
+
+/**
  * The course detail (`GET /courses/:id`): its pools for `CoursePools`, its
  * archived classrooms for `ArchivedClassrooms`. One query key, one request.
  */

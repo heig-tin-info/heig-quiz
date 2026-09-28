@@ -1,9 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
 import { Library, Plus, School } from "lucide-react";
 
 import type { CourseSummary } from "@quiz/contracts";
 
-import { api } from "../api";
 import { CourseTemplates } from "../evaluation/templates";
 import { useT } from "../i18n";
 import type { Route } from "../router";
@@ -19,8 +17,7 @@ import {
   SectionHeading,
   Skeleton,
 } from "../ui";
-import { coursesKey } from "../queryKeys";
-import { ArchivedClassrooms, ClassroomRow, CoursePools, HiddenBadge, useCourseActions } from "./parts";
+import { ArchivedClassrooms, ClassroomRow, CoursePools, HiddenBadge, useCourseActions, useCourses } from "./parts";
 
 /**
  * The page of one course (F-ORG-12): what the course holds, in the order a
@@ -42,10 +39,7 @@ import { ArchivedClassrooms, ClassroomRow, CoursePools, HiddenBadge, useCourseAc
  */
 export function CoursePage({ id, navigate }: { id: string; navigate: (r: Route) => void }) {
   const t = useT();
-  const courses = useQuery<CourseSummary[]>({
-    queryKey: coursesKey,
-    queryFn: () => api("/app/api/courses"),
-  });
+  const courses = useCourses();
 
   if (courses.isLoading) {
     return (
