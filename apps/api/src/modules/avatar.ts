@@ -7,7 +7,7 @@ import { AvatarMime } from "@quiz/contracts";
 import { audit } from "../audit.js";
 import { avatars } from "../db/schema.js";
 import { publish } from "../events.js";
-import { sniffImage } from "./pool/assets.js";
+import { INERT_IMAGE_HEADERS, sniffImage } from "./pool/assets.js";
 
 /** `AvatarMime` is the one list (B-19); `app.ts` parses the same set. */
 const ACCEPTED: ReadonlySet<string> = new Set<string>(AvatarMime.options);
@@ -101,10 +101,7 @@ export async function avatarPlugin(app: FastifyInstance) {
       return reply
         .type(row.contentType)
         .header("cache-control", "private, max-age=86400")
-        // Served like a question asset (pool/routes.ts): never sniffed into
-        // something executable, never a document with an origin of its own.
-        .header("x-content-type-options", "nosniff")
-        .header("content-security-policy", "default-src 'none'; sandbox")
+        .headers(INERT_IMAGE_HEADERS)
         .send(row.data);
     },
   );

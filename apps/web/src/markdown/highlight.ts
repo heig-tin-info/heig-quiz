@@ -71,6 +71,10 @@ function languageFamily(lang: string | undefined | null): keyof typeof KEYWORDS 
   return FAMILY[tag] ?? null;
 }
 
+/** The four token kinds; each is styled as `.tok-<kind>` under `.md-body`. */
+export const TOKEN_KINDS = ["com", "str", "kw", "num"] as const;
+export type TokenKind = (typeof TOKEN_KINDS)[number];
+
 /**
  * One coloured run inside a fenced block: OFFSETS INTO THE RAW TEXT, and the
  * class the stylesheet already styles under `.md-body` (`tok-com`, `tok-str`,
@@ -88,7 +92,7 @@ export interface CodeToken {
   /** Offset one past its last character. */
   to: number;
   /** `tok-com` | `tok-str` | `tok-kw` | `tok-num`. */
-  cls: string;
+  cls: `tok-${TokenKind}`;
 }
 
 /**
@@ -105,7 +109,7 @@ export function tokenize(code: string, lang?: string | null): CodeToken[] {
   const lineComment = LINE_COMMENT[family];
   const blockComments = family !== "python" && family !== "sql";
   const out: CodeToken[] = [];
-  const token = (cls: string, from: number, to: number) => {
+  const token = (cls: TokenKind, from: number, to: number) => {
     if (to > from) out.push({ from, to, cls: `tok-${cls}` });
   };
 

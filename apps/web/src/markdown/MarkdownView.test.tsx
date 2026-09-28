@@ -155,6 +155,8 @@ describe("MarkdownView — content", () => {
     expect(code.querySelector(".tok-kw")?.textContent).toBe("int");
     expect(code.querySelector(".tok-num")?.textContent).toBe("3");
     expect(code.querySelector(".tok-com")?.textContent).toBe("// note");
+    // The token classes pass the class allow-list, strings included.
+    expect(view('```c\nputs("hi");\n```').querySelector("pre code .tok-str")?.textContent).toBe('"hi"');
   });
 
   /*

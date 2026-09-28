@@ -288,7 +288,12 @@ export async function refresh(
   return { access_token: access, token_type: "Bearer", expires_in: ACCESS_TTL_S, refresh_token: next, scope: grant.scope };
 }
 
-/** A rotated-out refresh token came back: its grant, if still live, dies. */
+/**
+ * A rotated-out refresh token came back: its grant, if still live, dies. By
+ * design (RFC 9700 §4.14.2) this also kills the grant of a client that merely
+ * retried a refresh whose answer it lost; and only the immediately previous
+ * token is recognised, older ones are simply unknown.
+ */
 async function revokeReplayed(db: Db, presentedHash: string, now: Date) {
   const [replayed] = await db
     .select({ id: oauthGrants.id, userId: oauthGrants.userId, clientId: oauthGrants.clientId })

@@ -4,7 +4,7 @@ import { Marked, type Tokens } from "marked";
 
 import { CLOZE_SENTINEL_PATTERN } from "@quiz/domain/cloze";
 
-import { escapeHtml, highlight } from "./highlight";
+import { TOKEN_KINDS, escapeHtml, highlight } from "./highlight";
 
 /*
  * Markdown -> sanitised HTML for content a student reads: question prompts,
@@ -120,15 +120,12 @@ const ALLOWED_URI_REGEXP = /^(?:https?:|mailto:|[^a-z]|[a-z+.\-]+(?:[^a-z+:.\-]|
 
 /** A class the pipeline emits before sanitisation: code fence, token, image width. */
 const OWN_CLASS = new RegExp(
-  `^(?:language-[a-z0-9_+#.-]+|tok-(?:com|str|kw|num)|md-img-(?:${IMAGE_WIDTHS.join("|")}))$`,
+  `^(?:language-[a-z0-9_+#.-]+|tok-(?:${TOKEN_KINDS.join("|")})|md-img-(?:${IMAGE_WIDTHS.join("|")}))$`,
 );
 
-/**
- * A private instance, so the class hook never leaks into another sanitiser.
- * Without a DOM (a node-only test that imports this module for its helpers)
- * DOMPurify returns a stub with neither `addHook` nor `sanitize`.
- */
+/** A private instance, so the class hook never leaks into another sanitiser. */
 const purify = DOMPurify();
+// Without a DOM (a node-only test importing the helpers) DOMPurify is a stub.
 if (purify.isSupported) purify.addHook("uponSanitizeAttribute", (_node, data) => {
   if (data.attrName !== "class") return;
   const tokens = data.attrValue.split(/\s+/).filter(Boolean);

@@ -206,8 +206,8 @@ const EnvSchema = z.object({
    * The channel exists only when both are set; otherwise the settings say
    * Teams is not available and its routes answer 404 or 503.
    */
-  TEAMS_CLIENT_ID: z.string().default(""),
-  TEAMS_CLIENT_SECRET: z.string().default(""),
+  TEAMS_CLIENT_ID: z.string().trim().default(""),
+  TEAMS_CLIENT_SECRET: z.string().trim().default(""),
   /**
    * The Microsoft 365 organizations (Entra tenant ids, comma-separated)
    * whose Teams accounts may be linked: the tab mints no link for anyone
@@ -271,11 +271,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     }
     // An empty tenant list admits every Microsoft 365 organization: fine for
     // a test app, never in production (ADR-030, consent phishing).
-    if (
-      parsed.data.TEAMS_CLIENT_ID.trim() !== "" &&
-      parsed.data.TEAMS_CLIENT_SECRET.trim() !== "" &&
-      parsed.data.TEAMS_ALLOWED_TENANTS.length === 0
-    ) {
+    if (teamsEnabled(parsed.data) && parsed.data.TEAMS_ALLOWED_TENANTS.length === 0) {
       throw new Error("Invalid configuration: TEAMS_ALLOWED_TENANTS is required in production when Teams is on");
     }
   }
@@ -306,8 +302,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     RUNNER_TOKEN: parsed.data.RUNNER_TOKEN.trim(),
     SCW_SECRET_KEY: parsed.data.SCW_SECRET_KEY.trim(),
     SCW_DEFAULT_PROJECT_ID: parsed.data.SCW_DEFAULT_PROJECT_ID.trim(),
-    TEAMS_CLIENT_ID: parsed.data.TEAMS_CLIENT_ID.trim(),
-    TEAMS_CLIENT_SECRET: parsed.data.TEAMS_CLIENT_SECRET.trim(),
     SUPER_ADMIN_EMAIL: parsed.data.SUPER_ADMIN_EMAIL.trim().toLowerCase(),
     LOGIN_ALLOWLIST: parsed.data.LOGIN_ALLOWLIST.split(",")
       .map((e) => e.trim().toLowerCase())
