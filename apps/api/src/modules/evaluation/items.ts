@@ -26,9 +26,8 @@ import {
   QuestionNotInCourse,
   PoolUnlinked,
 } from "./shared.js";
-import { classroomIdOf, type JoinedItem, joinedItems, itemRows } from "./reads.js";
+import { byId, classroomIdOf, type JoinedItem, joinedItems, itemRows } from "./reads.js";
 import type { ItemRecord } from "./shared.js";
-import { byId } from "./writes.js";
 
 /**
  * THE pools a home may draw questions from (F-EVAL-01, ADR-031 addendum c):

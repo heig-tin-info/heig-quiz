@@ -23,7 +23,6 @@ import {
   isConfigFieldWritable,
   isFeedbackAllowed,
   negativeMarkingAllowedFor,
-  pastTiming,
   retakesAllowedFor,
 } from "@quiz/domain";
 
@@ -48,9 +47,9 @@ import {
   NoPublishedVersion,
   QuestionNotInCourse,
   PollNotImplemented,
-  refusePastTiming,
 } from "./shared.js";
-import { settingsOf, feedbackOf, preferredMcqPolicy } from "./reads.js";
+import { assertStaysScheduled } from "./stateMachine.js";
+import { byId, settingsOf, feedbackOf, preferredMcqPolicy } from "./reads.js";
 import { latestPublished, type CopyHome } from "./items.js";
 
 /**
@@ -202,11 +201,6 @@ export async function createPollEvaluation(
   return { evaluation: (await byId(db, id))!, item: item! };
 }
 
-export async function byId(db: DbOrTx, id: string): Promise<EvaluationRecord | null> {
-  const [row] = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
-  return row ?? null;
-}
-
 /**
  * What a patch may still touch is `configLock`'s to say (`@quiz/domain`):
  * everything while nothing locks the configuration; the title, the access
@@ -272,18 +266,17 @@ export async function patchEvaluation(
     }
   }
 
-  // A scheduled evaluation stays one the guard would schedule (#178): moved
-  // into the past, the ticker would open it, or close it, at its next pass.
+  // A scheduled evaluation stays one the guard would schedule (#178, #254):
+  // cleared, the ticker would never open it; moved into the past, it would
+  // open it, or close it, at its next pass.
   if (
     row.state === "scheduled" &&
-    (patch.opensAt !== undefined || patch.closesAt !== undefined || patch.settings !== undefined)
+    (patch.opensAt !== undefined ||
+      patch.closesAt !== undefined ||
+      patch.durationS !== undefined ||
+      patch.settings?.timing !== undefined)
   ) {
-    const timing = {
-      timing: ((next.settings ?? settingsOf(row)) as EvaluationSettings).timing,
-      opensAt: next.opensAt !== undefined ? next.opensAt : row.opensAt,
-      closesAt: next.closesAt !== undefined ? next.closesAt : row.closesAt,
-    };
-    refusePastTiming("scheduled", "scheduled", pastTiming(timing, "scheduled", "scheduled", ctx.now));
+    assertStaysScheduled({ ...row, ...next } as EvaluationRecord, ctx.now);
   }
 
   await db.update(evaluations).set(next).where(eq(evaluations.id, row.id));

@@ -20,6 +20,7 @@ import {
   type RouteHandler,
 } from "../test/render";
 import { EvaluationConfig } from "./EvaluationConfig";
+import { toLocalInput } from "./timing";
 
 /*
  * The three-step flow of docs/spec/08 §8.2, asserted where it touches the
@@ -177,6 +178,36 @@ describe("EvaluationConfig", () => {
     fireEvent.blur(opensAt);
     expect(await screen.findByText(/this time has passed/i)).toBeInTheDocument();
     expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(1);
+    // #254: the refused time does not stay on screen as if it were saved.
+    await waitFor(() => expect(opensAt).toHaveValue(toLocalInput(scheduled.evaluation.opensAt)));
+    expect(screen.getByText(/this time has passed/i)).toBeInTheDocument();
+  });
+
+  it("puts a cleared time back when the server keeps it, and says why (#254)", async () => {
+    const base = makeEvaluationDetail().evaluation;
+    const opens = "2030-10-01T08:00:00.000Z";
+    const scheduled = makeEvaluationDetail({
+      evaluation: { ...base, state: "scheduled", opensAt: opens },
+    });
+    mockFetch(
+      routes(scheduled, {
+        [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: fail(409, {
+          error: "illegal_transition",
+          message: "a scheduled evaluation needs an opening time",
+          reason: "opens_at_missing",
+        }),
+      }),
+    );
+    renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+      route: "/evaluations/x?step=timing",
+    });
+
+    const opensAt = await screen.findByLabelText(/^opens at$/i);
+    expect(opensAt).toHaveValue(toLocalInput(opens));
+    fireEvent.change(opensAt, { target: { value: "" } });
+    fireEvent.blur(opensAt);
+    expect(await screen.findByText(/choose when it opens/i)).toBeInTheDocument();
+    await waitFor(() => expect(opensAt).toHaveValue(toLocalInput(opens)));
   });
 
   it("the matched preset's card says the values in force, the other what it would set (#87)", async () => {

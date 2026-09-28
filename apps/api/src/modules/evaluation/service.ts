@@ -71,11 +71,11 @@ export {
   editableQuestionIdsOf,
   evaluationDetail,
   listEvaluations,
+  byId,
 } from "./reads.js";
 export {
   createEvaluation,
   createPollEvaluation,
-  byId,
   patchEvaluation,
   deleteEvaluation,
   extendClosesAt,

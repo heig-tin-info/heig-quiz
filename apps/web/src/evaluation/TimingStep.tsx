@@ -31,6 +31,7 @@ import {
   missingTimingKey,
   TIMING_FIELD_ID,
   toLocalInput,
+  transitionErrorMessage,
   type TimingField,
 } from "./timing";
 import type { ConfigWriter } from "./usePatch";
@@ -124,7 +125,8 @@ function invalid(missing: ReadonlySet<TimingField>, field: TimingField) {
  * A `datetime-local` reports a complete value at every keystroke of the year
  * — 0002, 0020, 0202 — each one a past time the server refuses on a
  * scheduled evaluation. Keyed on the stored value by its caller, so a write
- * from elsewhere replaces what the field shows.
+ * from elsewhere replaces what the field shows; a refused write puts the
+ * stored value back (#254), so no field shows a time the server never took.
  */
 function DateField({
   value,
@@ -137,7 +139,8 @@ function DateField({
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
   value: string | null;
-  onCommit: (value: string | null) => void;
+  /** Writes the value; `reset` is for a refusal, to show the stored value again. */
+  onCommit: (value: string | null, reset: () => void) => void;
 }) {
   const [local, setLocal] = useState(() => toLocalInput(value));
   return (
@@ -149,17 +152,12 @@ function DateField({
       value={local}
       onChange={(e) => setLocal(e.target.value)}
       onBlur={() => {
-        if (local !== toLocalInput(value)) onCommit(fromLocalInput(local));
+        if (local !== toLocalInput(value)) {
+          onCommit(fromLocalInput(local), () => setLocal(toLocalInput(value)));
+        }
       }}
     />
   );
-}
-
-/** A refused patch that would leave a scheduled evaluation in the past (#178). */
-function pastRefusal(error: unknown): boolean {
-  if (!(error instanceof ApiError)) return false;
-  const reason = TransitionRefusal.safeParse(error.body).data?.reason;
-  return reason === "opens_at_past" || reason === "closes_at_past";
 }
 
 /**
@@ -328,6 +326,12 @@ export function TimingStep({
   const lock = configLock(state, detail.attemptCount);
   const summary = presetSummary(detail.evaluation, t, isoDateTime);
   const missing = new Set(showMissing ? missingTiming(detail.evaluation) : []);
+  // A refused date (#178, #254) in the teacher's words; any other error is FormError's.
+  const refusal = TransitionRefusal.safeParse(
+    patch.error instanceof ApiError ? patch.error.body : undefined,
+  ).success
+    ? transitionErrorMessage(patch.error, t)
+    : null;
 
   return (
     <div className="space-y-5">
@@ -356,9 +360,9 @@ export function TimingStep({
       ) : locked ? (
         <Alert tone="warning" title={t("eval.locked")} />
       ) : null}
-      {pastRefusal(patch.error) ? (
+      {refusal ? (
         <Alert tone="danger" title={t("eval.saveFailed")}>
-          {t("launch.schedule.past")}
+          {refusal}
         </Alert>
       ) : (
         <FormError error={patch.error} title={t("eval.saveFailed")} />
@@ -383,7 +387,7 @@ export function TimingStep({
                 label={t("eval.opensAt")}
                 disabled={locked}
                 value={opensAt}
-                onCommit={(value) => patch.mutate({ opensAt: value })}
+                onCommit={(value, reset) => patch.mutate({ opensAt: value }, { onError: reset })}
               />
               {missing.has("opensAt") ? <MissingNote field="opensAt" /> : null}
             </div>
@@ -396,7 +400,7 @@ export function TimingStep({
                   label={t("eval.closesAt")}
                   disabled={locked}
                   value={closesAt}
-                  onCommit={(value) => patch.mutate({ closesAt: value })}
+                  onCommit={(value, reset) => patch.mutate({ closesAt: value }, { onError: reset })}
                 />
                 {missing.has("closesAt") ? <MissingNote field="closesAt" /> : null}
               </div>
