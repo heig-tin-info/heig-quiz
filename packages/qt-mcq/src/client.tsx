@@ -7,28 +7,14 @@
  */
 import { lazy } from "react";
 import type { QuestionTypeClient } from "@quiz/core/client";
+import { typeIcon } from "@quiz/ui";
 import { isMcqAnswered } from "./schema.js";
 import type { McqAnswer, McqConfig, McqDetails, McqSolution, McqStudent } from "./schema.js";
 
 type McqClient = QuestionTypeClient<McqConfig, McqAnswer, McqStudent, McqSolution, McqDetails>;
 
 /** A ticked list: the mark of a multiple-choice question in a type picker. */
-function McqIcon({ className = "size-4" }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden
-    >
-      <path d="m3 7 2 2 3-3M3 17l2 2 3-3M12 8h9M12 18h9" />
-    </svg>
-  );
-}
+const McqIcon = typeIcon(<path d="m3 7 2 2 3-3M3 17l2 2 3-3M12 8h9M12 18h9" />, "size-4");
 
 export const mcqClient: McqClient = {
   id: "mcq",

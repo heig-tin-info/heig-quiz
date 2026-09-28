@@ -9,6 +9,7 @@
 import { lazy } from "react";
 
 import type { QuestionTypeClient } from "@quiz/core/client";
+import { typeIcon } from "@quiz/ui";
 import { isCodeAnswered } from "./schema.js";
 
 import type { CodeAnswer, CodeConfig, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
@@ -20,22 +21,7 @@ import type { CodeAnswer, CodeConfig, CodeDetails, CodeSolution, CodeStudent } f
  */
 export { RUNNO_LANGUAGES } from "./schema.js";
 
-function CodeIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="m16 18 6-6-6-6M8 6l-6 6 6 6" />
-    </svg>
-  );
-}
+const CodeIcon = typeIcon(<path d="m16 18 6-6-6-6M8 6l-6 6 6 6" />);
 
 export const codeClient: QuestionTypeClient<
   CodeConfig,

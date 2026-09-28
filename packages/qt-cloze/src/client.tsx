@@ -6,6 +6,7 @@
  */
 import { lazy } from "react";
 import type { QuestionTypeClient } from "@quiz/core/client";
+import { typeIcon } from "@quiz/ui";
 import { isClozeAnswered } from "./schema.js";
 import type {
   ClozeAnswer,
@@ -24,23 +25,13 @@ type ClozeClient = QuestionTypeClient<
 >;
 
 /** A line of text with a hole in it. */
-function ClozeIcon({ className = "size-4" }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden
-    >
-      <path d="M3 7h6M15 7h6M3 17h18" />
-      <rect x="10.5" y="4.5" width="3" height="5" rx="1" strokeDasharray="2 2" />
-    </svg>
-  );
-}
+const ClozeIcon = typeIcon(
+  <>
+    <path d="M3 7h6M15 7h6M3 17h18" />
+    <rect x="10.5" y="4.5" width="3" height="5" rx="1" strokeDasharray="2 2" />
+  </>,
+  "size-4",
+);
 
 export const clozeClient: ClozeClient = {
   id: "cloze",

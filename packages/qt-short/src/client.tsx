@@ -6,6 +6,7 @@
  */
 import { lazy } from "react";
 import type { QuestionTypeClient } from "@quiz/core/client";
+import { typeIcon } from "@quiz/ui";
 import { isShortAnswered } from "./schema.js";
 import type {
   ShortAnswer,
@@ -24,22 +25,10 @@ type ShortClient = QuestionTypeClient<
 >;
 
 /** A caret in a field: the mark of a typed answer. */
-function ShortIcon({ className = "size-4" }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden
-    >
-      <path d="M3 6.5h18v11H3zM7 10v4M10.5 10h-3M10.5 14h-3" />
-    </svg>
-  );
-}
+const ShortIcon = typeIcon(
+  <path d="M3 6.5h18v11H3zM7 10v4M10.5 10h-3M10.5 14h-3" />,
+  "size-4",
+);
 
 export const shortClient: ShortClient = {
   id: "short",
