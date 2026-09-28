@@ -81,12 +81,10 @@ export function pressable(onActivate: () => void, role: string = "button") {
 }
 
 /**
- * True from `px` wide up, following the window as it resizes. False where
- * `matchMedia` does not exist (a test), so a component defaults to its
- * phone layout there — the one that also renders inside a narrow window.
+ * True when `query` matches, following the window as it changes. False
+ * where `matchMedia` does not exist (a test).
  */
-export function useMinWidth(px: number): boolean {
-  const query = `(min-width: ${px}px)`;
+function useMediaQuery(query: string): boolean {
   const supported = typeof window !== "undefined" && typeof window.matchMedia === "function";
   return useSyncExternalStore(
     (onChange) => {
@@ -98,6 +96,25 @@ export function useMinWidth(px: number): boolean {
     () => (supported ? window.matchMedia(query).matches : false),
     () => false,
   );
+}
+
+/**
+ * True from `px` wide up, following the window as it resizes. False where
+ * `matchMedia` does not exist (a test), so a component defaults to its
+ * phone layout there — the one that also renders inside a narrow window.
+ */
+export function useMinWidth(px: number): boolean {
+  return useMediaQuery(`(min-width: ${px}px)`);
+}
+
+/**
+ * True on a coarse pointer (touch, no hover) — a phone or tablet, where the
+ * soft keyboard has to fight the on-screen content for space. False where
+ * `matchMedia` does not exist (a test) or the pointer is fine (mouse,
+ * trackpad).
+ */
+export function useCoarsePointer(): boolean {
+  return useMediaQuery("(pointer: coarse)");
 }
 
 /** One shared timer per interval, and who listens to it. */
