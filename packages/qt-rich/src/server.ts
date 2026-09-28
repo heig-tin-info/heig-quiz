@@ -101,8 +101,9 @@ export const richServer: QuestionTypeServer<
    * count says whether they are writing.
    */
   summarizeAnswer(config, answer) {
+    // Figures only: the cell is not translated, and "412/1500" reads the same in both languages.
     const chars = countChars(answer.text);
-    return config.maxChars === undefined ? `${chars} chars` : `${chars} / ${config.maxChars} chars`;
+    return config.maxChars === undefined ? String(chars) : `${chars}/${config.maxChars}`;
   },
 
   /** Teacher-facing (`question_versions.search`): the rubric and the model answer belong in it. */

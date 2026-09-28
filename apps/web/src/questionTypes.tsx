@@ -576,7 +576,7 @@ interface PlayerHostProps {
   renderMarkdown?: (source: string) => ReactNode;
   /** `cloze` only: its text with the blanks in place (`ClozeMarkdownText`). */
   renderText?: ClozeTextRenderer;
-  /** `rich` only: the formatted answer field (`PlayerProps.RichText`). */
+  /** The formatted answer field (`PlayerProps.RichText`); a player without one ignores it. */
   RichText?: RichTextComponent;
   onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
   allowManualRun?: boolean;
@@ -632,7 +632,7 @@ export function QuestionPlayerHost({
           {...(client.id === "circuit" ? { canvasStrings: circuitCanvasStrings(t) } : {})}
           renderMarkdown={renderInline}
           {...(client.id === "cloze" ? { renderText: ClozeMarkdownText } : {})}
-          {...(client.id === "rich" ? { RichText: LazyRichText } : {})}
+          RichText={LazyRichText}
           {...(onRun === undefined ? {} : { onRun })}
           {...(allowManualRun === undefined ? {} : { allowManualRun })}
           {...(testsPrimary === undefined ? {} : { testsPrimary })}

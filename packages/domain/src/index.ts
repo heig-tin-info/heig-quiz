@@ -4,6 +4,7 @@
  * No database, no HTTP, no `Date.now()`: every function is total, deterministic
  * and unit-tested, and the current instant is always injected by the caller.
  */
+export * from "./batchable.js";
 export * from "./cloze.js";
 export * from "./compareOutput.js";
 export * from "./cooldown.js";

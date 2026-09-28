@@ -134,7 +134,7 @@ export function QuestionHost({
           {...(type === "circuit" ? { canvasStrings: circuitCanvasStringsFor(t) } : {})}
           renderMarkdown={renderMarkdown}
           {...(type === "cloze" ? { renderText: ClozeMarkdownText } : {})}
-          {...(type === "rich" ? { RichText: LazyRichText } : {})}
+          RichText={LazyRichText}
           {...(onRun ? { onRun } : {})}
           {...(allowManualRun === undefined ? {} : { allowManualRun })}
           {...(onSimulate ? { onSimulate } : {})}

@@ -45,15 +45,21 @@ export function RichPlayer({
   const locked = isLocked(readOnly, disabled);
   const id = useId();
   const limit = charLimit(student.maxChars);
-  /** What the formatted editor holds beyond the limit, and that is not sent. */
-  const [unsent, setUnsent] = useState<string | null>(null);
-  const text = unsent ?? answer?.text ?? "";
+  const stored = answer?.text ?? "";
+  /**
+   * What the formatted editor holds beyond the limit, and that is not sent —
+   * pinned to the stored answer it was typed over. When the answer changes
+   * from OUTSIDE (the server's newer copy adopted, another item, a reset),
+   * the pin no longer matches and the stored answer shows again.
+   */
+  const [unsent, setUnsent] = useState<{ text: string; over: string } | null>(null);
+  const text = unsent !== null && unsent.over === stored ? unsent.text : stored;
   const count = countChars(text);
   const over = count - limit;
 
   const change = (next: string) => {
     if (countChars(next) > limit) {
-      setUnsent(next);
+      setUnsent({ text: next, over: stored });
       return;
     }
     setUnsent(null);

@@ -4,6 +4,7 @@ import {
   debrief,
   describe,
   histogram,
+  isBatchable,
   negativeMarkingOn,
   parseCloze,
   round2,
@@ -691,7 +692,8 @@ on("POST", "/app/api/evaluations/:id/grading/validate-batch", (m, body) => {
   let validated = 0;
   for (const [key, chain] of e.gradings) {
     const g = chain.find((x) => x.state === "proposed");
-    if (!g) continue;
+    // The API's rule: a 0-point placeholder (an essay) waits for a person.
+    if (!g || !isBatchable(g)) continue;
     if (body.itemId && !key.endsWith(`:${String(body.itemId)}`)) continue;
     if (body.source && g.source !== body.source) continue;
     if (body.confidence && g.confidence !== body.confidence) continue;

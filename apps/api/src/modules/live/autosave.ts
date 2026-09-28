@@ -186,7 +186,10 @@ export function liveGrader(
         runner,
         defaults,
       });
-      if (!isGraded(result)) return null;
+      // A proposal is a placeholder for a person's grade (an essay, a
+      // manual circuit): shown as a verdict it would paint every written
+      // answer red. No preview, the cell keeps its progress colour.
+      if (!isGraded(result) || result.state === "proposed") return null;
       const points = round2(result.points);
       const maxPoints = result.maxPoints;
       return {

@@ -56,6 +56,18 @@ describe("RichPlayer", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
+  it("drops the unsent excess when the answer changes from outside", () => {
+    const small: RichStudent = { ...student, maxChars: 5 };
+    const props = { student: small, onChange: () => {}, readOnly: false, RichText: FakeRichText };
+    const { rerender } = render(<RichPlayer {...props} answer={{ text: "ab" }} />);
+    fireEvent.change(screen.getByTestId("rich-text"), { target: { value: "abcdefg" } });
+    expect(screen.getByRole("alert")).toBeInTheDocument();
+    // The server's newer copy is adopted (or the host resets the item).
+    rerender(<RichPlayer {...props} answer={{ text: "xyz" }} />);
+    expect(screen.getByTestId("rich-text")).toHaveValue("xyz");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("is a textarea with a native limit for a plain question", async () => {
     const onChange = vi.fn();
     render(

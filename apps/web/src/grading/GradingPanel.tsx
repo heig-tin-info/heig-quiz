@@ -1,6 +1,8 @@
 import { BarChart3, CheckCheck } from "lucide-react";
 import { useState, type CSSProperties } from "react";
 
+import { isBatchable } from "@quiz/domain";
+
 import { useT } from "../i18n";
 import type { Route } from "../router";
 import { Button, Card, EmptyState, PageError, PageHeader } from "../ui";
@@ -201,7 +203,9 @@ export function GradingPanel({
             <BatchBar
               evaluationId={evaluationId}
               scope={scope}
-              count={entries.filter((e) => e.grading?.state === "proposed").length}
+              // The batch's own rule (`isBatchable`): a 0-point placeholder
+              // (an essay) is validated one by one, after it is read.
+              count={entries.filter((e) => e.grading !== null && isBatchable(e.grading)).length}
               scoped={source !== ANY || confidence !== ANY}
               primary={!runPrimary}
             />

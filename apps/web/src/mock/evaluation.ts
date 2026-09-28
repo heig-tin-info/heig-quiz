@@ -233,7 +233,7 @@ export function summaryOf(q: MockQuestion, seedValue: number): string {
     case "rich": {
       const chars = (answer as { text: string }).text.length;
       const max = frozenConfig(q).maxChars as number | undefined;
-      return max === undefined ? `${chars} chars` : `${chars} / ${max} chars`;
+      return max === undefined ? String(chars) : `${chars}/${max}`;
     }
   }
 }

@@ -44,8 +44,8 @@ describe("answerMisfit", () => {
 
 describe("the dashboard and the list", () => {
   it("summarises by the count, never by the text", () => {
-    expect(richServer.summarizeAnswer?.(config(), { text: "Secret first line" })).toBe("17 chars");
-    expect(richServer.summarizeAnswer?.(config({ maxChars: 3000 }), { text: "abc" })).toBe("3 / 3000 chars");
+    expect(richServer.summarizeAnswer?.(config(), { text: "Secret first line" })).toBe("17");
+    expect(richServer.summarizeAnswer?.(config({ maxChars: 3000 }), { text: "abc" })).toBe("3/3000");
   });
 
   it("counts a blank answer as not answered", () => {

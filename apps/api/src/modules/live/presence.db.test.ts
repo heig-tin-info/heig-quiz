@@ -253,6 +253,34 @@ describe("the Results switch colours a cell from the answer (ADR-020)", () => {
     expect(db).toBeTruthy();
   });
 
+  it("leaves a PROPOSED grade uncoloured: an essay waits for a person, it is not wrong", async () => {
+    // The same type, graded like `rich` or a manual `circuit`: a 0-point
+    // placeholder a teacher must settle (issue #192).
+    const undo = registerForTests({
+      ...fakeShort,
+      grade: (_config, _answer, ctx) => ({
+        kind: "graded",
+        points: 0,
+        maxPoints: ctx.itemPoints,
+        details: null,
+        state: "proposed",
+      }),
+    });
+    try {
+      const { evaluation, items } = await world("running", 1);
+      const entered = await post(`/app/api/evaluations/${evaluation.id}/attempt`, student.headers);
+      await save(entered.json().view.attempt.id, items[0]!.item.id, "a whole essay");
+      const view = (
+        await get(`/app/api/evaluations/${evaluation.id}/dashboard?results=1`, teacher.headers)
+      ).json();
+      const cell = view.rows.find((r: { userId: string }) => r.userId === student.id).cells[0];
+      expect(cell.verdict).toBe(null);
+      expect(view.totals[0].successRate).toBe(null);
+    } finally {
+      undo();
+    }
+  });
+
   it("leaves an unanswered cell blank rather than calling it wrong", async () => {
     const { evaluation, items } = await world("running", 2);
     await post(`/app/api/evaluations/${evaluation.id}/attempt`, student.headers);
