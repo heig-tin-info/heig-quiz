@@ -39,6 +39,21 @@ export const FAST_CLOCK_MS = 1_000;
 /** A stream whose writes stopped reaching the socket is closed (WP5 brief). */
 const IDLE_CLOSE_MS = 60_000;
 const IDLE_SWEEP_MS = 5_000;
+/**
+ * How often a fast (attempt) stream re-reads its evaluation's state instead
+ * of trusting the `evaluation.state` frames it receives. Every transition
+ * into or out of `running`/`paused` is announced by a frame (`live/events.ts`,
+ * `live/control.ts`); `draft`/`scheduled`/`lobby` moves may send only a hint,
+ * which leaves a stream not running, as it should be. The snapshot seeds the
+ * state after the stream is indexed, so a frame cannot fall between the
+ * two. But `applyState` itself publishes nothing: a writer
+ * that forgot to announce would otherwise freeze the cadence for the life of
+ * the stream. What is at stake is the cadence of `clock` frames only — the
+ * deadline is the ticker's, never the stream's (invariant 5) — so a stale
+ * state for up to 30 s is harmless, and 200 students cost ~7 reads a second
+ * instead of ~180.
+ */
+export const STATE_RECHECK_MS = 30_000;
 
 type Watch =
   | { kind: "evaluation"; evaluationId: string }
@@ -62,10 +77,24 @@ interface Stream {
   res: ServerResponse;
   /** Last write the socket actually accepted; drives the idle close. */
   lastWriteAt: number;
+  /**
+   * The watched evaluation is `running`: drives the 1 s clock of an attempt
+   * stream. Seeded by the snapshot, then kept by the `evaluation.state`
+   * frames the stream receives, and re-read every {@link STATE_RECHECK_MS}.
+   */
+  running: boolean;
+  /**
+   * Bumped by every `evaluation.state` frame: a database read of the state
+   * applies only if no frame arrived while it was in flight, so a stale read
+   * never overwrites a fresher frame.
+   */
+  stateSeq: number;
   close: () => void;
 }
 
 const open = new Set<Stream>();
+/** The applications whose realtime plugin is shutting down. */
+const closing = new WeakSet<FastifyInstance>();
 
 function write(stream: Stream, chunk: string, now: number): void {
   const flushed = stream.res.write(chunk);
@@ -74,17 +103,82 @@ function write(stream: Stream, chunk: string, now: number): void {
   if (flushed) stream.lastWriteAt = now;
 }
 
+const namedFrame = (event: ServerEvent): string =>
+  `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
+
 function sendNamed(stream: Stream, event: ServerEvent, now: number): void {
-  write(stream, `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`, now);
+  write(stream, namedFrame(event), now);
 }
 
 /** The inherited hint frame: unnamed, so `EventSource.onmessage` gets it. */
-function sendHint(stream: Stream, message: Extract<BusMessage, { kind: "hint" }>, now: number): void {
-  write(
-    stream,
-    `data: ${JSON.stringify({ type: "hint", kinds: [message.type], notice: message.notice ?? null })}\n\n`,
-    now,
-  );
+const hintFrame = (message: Extract<BusMessage, { kind: "hint" }>): string =>
+  `data: ${JSON.stringify({ type: "hint", kinds: [message.type], notice: message.notice ?? null })}\n\n`;
+
+/**
+ * Whether a data message may reach this stream — the second half of the
+ * routing table: a student never receives `dashboard.*`, whatever topic
+ * carried it.
+ */
+function admits(stream: Stream, message: Extract<BusMessage, { kind: "data" }>): boolean {
+  if (message.audience === "staff" && !stream.staff) return false;
+  return stream.staff || !isStaffOnly(message.event);
+}
+
+/** Records the evaluation's state as the stream now knows it. */
+function learnState(stream: Stream, state: string): void {
+  stream.running = state === "running";
+  stream.stateSeq++;
+}
+
+/**
+ * `topic → streams`, the in-memory table of docs/spec/05 §5.4: a bus message
+ * reaches the streams of its topics only, and is serialised once whatever
+ * their number.
+ */
+class TopicIndex {
+  private readonly byTopic = new Map<string, Set<Stream>>();
+
+  add(stream: Stream): void {
+    for (const topic of stream.topics) {
+      let streams = this.byTopic.get(topic);
+      if (!streams) this.byTopic.set(topic, (streams = new Set()));
+      streams.add(stream);
+    }
+  }
+
+  delete(stream: Stream): void {
+    for (const topic of stream.topics) {
+      const streams = this.byTopic.get(topic);
+      if (!streams) continue;
+      streams.delete(stream);
+      if (streams.size === 0) this.byTopic.delete(topic);
+    }
+  }
+
+  /** Delivers one bus message: one serialisation, one write per admitted stream. */
+  dispatch(message: BusMessage): void {
+    // Every stream holding at least one of the message's topics, each once.
+    const reached = new Set<Stream>();
+    for (const topic of message.topics) {
+      for (const stream of this.byTopic.get(topic) ?? []) reached.add(stream);
+    }
+    if (reached.size === 0) return;
+    const at = Date.now();
+    if (message.kind === "hint") {
+      const chunk = hintFrame(message);
+      for (const stream of reached) write(stream, chunk, at);
+      return;
+    }
+    const event = message.event;
+    const chunk = namedFrame(event);
+    for (const stream of reached) {
+      if (!admits(stream, message)) continue;
+      if (event.type === "evaluation.state" && stream.watch?.evaluationId === event.evaluationId) {
+        learnState(stream, event.state);
+      }
+      write(stream, chunk, at);
+    }
+  }
 }
 
 /**
@@ -187,6 +281,7 @@ async function snapshotOf(
   watch: Watch,
   now: Date,
 ): Promise<ServerEvent | null> {
+  const seq = stream.stateSeq;
   const evaluation = await app.db
     .select()
     .from(evaluations)
@@ -194,6 +289,9 @@ async function snapshotOf(
     .limit(1);
   const row = evaluation[0];
   if (!row) return null;
+  // The stream is already indexed: a frame that arrived during this read is
+  // fresher than the row, and wins.
+  if (stream.stateSeq === seq) learnState(stream, row.state);
   const subject =
     watch.kind === "attempt"
       ? `attempt:${watch.attemptId}`
@@ -238,6 +336,11 @@ async function snapshotOf(
 }
 
 export async function realtimePlugin(app: FastifyInstance) {
+  // ONE bus listener for the whole plugin, routing by topic, rather than one
+  // per stream that each tests every message.
+  const index = new TopicIndex();
+  const unsubscribe = subscribe((message) => index.dispatch(message));
+
   // One sweep for the whole process: a stream whose writes stopped reaching
   // the socket is dropped, so a dead browser cannot hold a slot for ever.
   const sweep = setInterval(() => {
@@ -247,9 +350,15 @@ export async function realtimePlugin(app: FastifyInstance) {
     }
   }, IDLE_SWEEP_MS);
   sweep.unref();
+  // `preClose` runs before EVERY `onClose`, the one that flushes the
+  // coalescers included: a lobby window flushed at shutdown counts nothing.
+  app.addHook("preClose", async () => {
+    closing.add(app);
+  });
   app.addHook("onClose", async () => {
     clearInterval(sweep);
     for (const stream of [...open]) stream.close();
+    unsubscribe();
   });
 
   const handler = async (req: FastifyRequest, reply: FastifyReply) => {
@@ -310,36 +419,27 @@ export async function realtimePlugin(app: FastifyInstance) {
       watch,
       res,
       lastWriteAt: Date.now(),
+      running: false,
+      stateSeq: 0,
       close: () => {
         if (closed) return;
         closed = true;
         open.delete(stream);
+        index.delete(stream);
         clearInterval(ping);
         clearInterval(clock);
-        unsubscribe();
         if (watch !== null && participant) {
           const change = presence.leave(watch.evaluationId, me.id, app.clock.now());
           if (change) {
             bus.dashboardPresence(change);
-            void announceLobby(app, watch.evaluationId);
+            announceLobby(app, watch.evaluationId);
           }
         }
         res.end();
       },
     };
     open.add(stream);
-
-    const unsubscribe = subscribe((message) => {
-      if (closed) return;
-      if (!message.topics.some((t) => stream.topics.has(t))) return;
-      const at = Date.now();
-      if (message.kind === "hint") return sendHint(stream, message, at);
-      // The second half of the routing table: a student never receives
-      // `dashboard.*`, whatever topic carried it.
-      if (message.audience === "staff" && !stream.staff) return;
-      if (!stream.staff && isStaffOnly(message.event)) return;
-      sendNamed(stream, message.event, at);
-    });
+    index.add(stream);
 
     const ping = setInterval(() => write(stream, ":ping\n\n", Date.now()), PING_MS);
     ping.unref();
@@ -348,28 +448,30 @@ export async function realtimePlugin(app: FastifyInstance) {
     // evaluation is running (docs/07 §7.3). The fast stream still only emits
     // once every 10 s when the evaluation is not running, so a lobby left
     // open overnight costs one frame per ten seconds.
+    // Whether it is running is what the stream KNOWS (`stream.running`), not
+    // a query per beat; a rare re-read guards that knowledge (STATE_RECHECK_MS).
     const fast = watch?.kind === "attempt";
     let sinceClock = 0;
+    let sinceRecheck = 0;
     const clock = setInterval(
       () => {
-        void (async () => {
-          if (closed) return;
-          const now = app.clock.now();
-          sinceClock += fast ? FAST_CLOCK_MS : CLOCK_MS;
-          let due = !fast || sinceClock >= CLOCK_MS;
-          if (fast && !due) {
-            const [row] = await app.db
-              .select({ state: evaluations.state })
-              .from(evaluations)
-              .where(eq(evaluations.id, watch!.evaluationId))
-              .limit(1);
-            due = row?.state === "running";
+        if (closed) return;
+        const now = app.clock.now();
+        sinceClock += fast ? FAST_CLOCK_MS : CLOCK_MS;
+        if (fast) {
+          sinceRecheck += FAST_CLOCK_MS;
+          if (sinceRecheck >= STATE_RECHECK_MS) {
+            sinceRecheck = 0;
+            void recheckState(app, stream).catch((err: unknown) =>
+              app.log.warn({ err }, "sse: state re-read failed"),
+            );
           }
-          if (!due) return;
-          sinceClock = 0;
-          sendNamed(stream, { type: "clock", serverNow: iso(now) }, Date.now());
-          if (watch !== null && stream.participant) presence.touch(watch.evaluationId, me.id, now);
-        })();
+        }
+        const due = !fast || sinceClock >= CLOCK_MS || stream.running;
+        if (!due) return;
+        sinceClock = 0;
+        sendNamed(stream, { type: "clock", serverNow: iso(now) }, Date.now());
+        if (watch !== null && stream.participant) presence.touch(watch.evaluationId, me.id, now);
       },
       fast ? FAST_CLOCK_MS : CLOCK_MS,
     );
@@ -383,7 +485,7 @@ export async function realtimePlugin(app: FastifyInstance) {
       const now = app.clock.now();
       const change = presence.join(watch.evaluationId, me.id, now);
       if (change) bus.dashboardPresence(change);
-      await announceLobby(app, watch.evaluationId);
+      announceLobby(app, watch.evaluationId);
     }
     if (watch !== null) {
       const snapshot = await snapshotOf(app, stream, watch, app.clock.now());
@@ -399,17 +501,43 @@ export async function realtimePlugin(app: FastifyInstance) {
   app.get("/app/api/events", guarded, handler);
 }
 
-/** F-LIVE-02: the ring everybody in the lobby watches. Coalesced 1 s. */
-async function announceLobby(app: FastifyInstance, evaluationId: string): Promise<void> {
+/** The rare re-read of {@link STATE_RECHECK_MS}; a frame that lands meanwhile wins. */
+async function recheckState(app: FastifyInstance, stream: Stream): Promise<void> {
+  if (stream.watch === null) return;
+  const seq = stream.stateSeq;
   const [row] = await app.db
-    .select()
+    .select({ state: evaluations.state })
     .from(evaluations)
-    .where(eq(evaluations.id, evaluationId))
+    .where(eq(evaluations.id, stream.watch.evaluationId))
     .limit(1);
-  if (!row) return;
-  bus.lobbyCount({
-    evaluationId,
-    present: presence.count(evaluationId),
-    enrolled: await live.enrolledCount(app.db, row),
+  if (row && stream.stateSeq === seq) learnState(stream, row.state);
+}
+
+/**
+ * F-LIVE-02: the ring everybody in the lobby watches. Coalesced 1 s, and
+ * COUNTED when the window closes: a lobby filling with 200 students costs one
+ * count per second, not three queries per connection.
+ */
+function announceLobby(app: FastifyInstance, evaluationId: string): void {
+  bus.lobbyRecount(evaluationId, async () => {
+    // A room nobody can watch any more is not worth a query, and at shutdown
+    // the window may close on a database that is going away.
+    if (closing.has(app)) return null;
+    try {
+      const [row] = await app.db
+        .select()
+        .from(evaluations)
+        .where(eq(evaluations.id, evaluationId))
+        .limit(1);
+      if (!row) return null;
+      return {
+        evaluationId,
+        present: presence.count(evaluationId),
+        enrolled: await live.enrolledCount(app.db, row),
+      };
+    } catch (err) {
+      app.log.warn({ err }, "sse: lobby count failed");
+      return null;
+    }
   });
 }
