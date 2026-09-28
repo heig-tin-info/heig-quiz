@@ -5,10 +5,11 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 
-import { eq, lt } from "drizzle-orm";
+import { eq, lt, type SQL } from "drizzle-orm";
 
 import type { SessionKind } from "@quiz/contracts";
 
+import { audit } from "../audit.js";
 import type { Db } from "../db/client.js";
 import { sessions, users } from "../db/schema.js";
 
@@ -27,7 +28,8 @@ export function newToken(): string {
 /**
  * What a session is, as the rest of the API sees it (ADR-027); modules read
  * this, never the columns. `actorUserId` is null when the user acts for
- * themself; `evaluationId` is set on a `seb` session only.
+ * themself (set on an `impersonation` session, ADR-034); `evaluationId` is
+ * set on a `seb` session only.
  */
 export interface SessionAuth {
   kind: SessionKind;
@@ -39,12 +41,23 @@ export const PORTAL: SessionAuth = { kind: "portal", actorUserId: null, evaluati
 
 /**
  * The lifetime of each kind: fixed hours, never renewed — or null for
- * SESSION_TTL_HOURS with sliding renewal. A `seb` session outlives any sitting.
+ * SESSION_TTL_HOURS with sliding renewal. A `seb` session outlives any sitting;
+ * an `impersonation` one is an hour of looking over a student's shoulder (ADR-034).
  */
-const FIXED_HOURS: Record<SessionKind, number | null> = { portal: null, seb: 6 };
+const FIXED_HOURS: Record<SessionKind, number | null> = { portal: null, seb: 6, impersonation: 1 };
 
 /** The route config of the routes a `seb` session may call: sitting its evaluation. */
 export const SITTING = { sessions: ["portal", "seb"] } as const;
+
+/**
+ * Whether a route declaring `routeKinds` (absent: `portal` only) serves a
+ * session of `kind`. An `impersonation` session is the student's portal, seen
+ * by somebody else (ADR-034): it reaches the `portal` routes, and whether it
+ * may WRITE through them is the read-only rule of `plugin.ts`, not this.
+ */
+export function serves(routeKinds: readonly SessionKind[] | undefined, kind: SessionKind): boolean {
+  return (routeKinds ?? ["portal"]).includes(kind === "impersonation" ? "portal" : kind);
+}
 
 export async function createSession(
   db: Db,
@@ -75,7 +88,7 @@ export async function findSessionUser(db: Db, token: string, opts?: { renewTtlHo
   const row = rows[0];
   if (!row) return null;
   if (row.expiresAt.getTime() <= Date.now()) {
-    await db.delete(sessions).where(eq(sessions.sidHash, row.sidHash));
+    await dropSessions(db, eq(sessions.sidHash, row.sidHash), "expired");
     return null;
   }
   // Sliding renewal: once less than half the TTL remains, push the expiry
@@ -95,11 +108,34 @@ export async function findSessionUser(db: Db, token: string, opts?: { renewTtlHo
   return { user: row.user, auth: row.auth, renewedTo };
 }
 
+/**
+ * THE way a session row goes: signed out, or found expired (on use or by the
+ * purge). An `impersonation` session leaves an `impersonation.ended` entry
+ * whichever way it ends (ADR-034), the admin as actor, the student as subject.
+ */
+async function dropSessions(db: Db, where: SQL, reason: "logout" | "expired") {
+  const gone = await db
+    .delete(sessions)
+    .where(where)
+    .returning({ kind: sessions.kind, userId: sessions.userId, actorUserId: sessions.actorUserId });
+  for (const session of gone) {
+    if (session.kind !== "impersonation") continue;
+    await audit(db, {
+      actorUserId: session.actorUserId,
+      actorType: reason === "logout" ? "user" : "system",
+      action: "impersonation.ended",
+      subjectType: "user",
+      subjectId: session.userId,
+      payload: { reason },
+    });
+  }
+}
+
 export async function deleteSession(db: Db, token: string) {
-  await db.delete(sessions).where(eq(sessions.sidHash, hashToken(token)));
+  await dropSessions(db, eq(sessions.sidHash, hashToken(token)), "logout");
 }
 
 /** Purge of expired sessions, run by the ticker (`ticker.ts`). */
 export async function purgeExpiredSessions(db: Db) {
-  await db.delete(sessions).where(lt(sessions.expiresAt, new Date()));
+  await dropSessions(db, lt(sessions.expiresAt, new Date()), "expired");
 }

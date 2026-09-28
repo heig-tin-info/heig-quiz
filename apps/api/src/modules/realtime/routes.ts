@@ -391,7 +391,9 @@ export async function realtimePlugin(app: FastifyInstance) {
       }
       watch = resolved.watch;
       staff = resolved.staff;
-      participant = resolved.participant;
+      // Somebody acting as the student is not the student in the room: the
+      // dashboard must not show them present (ADR-034).
+      participant = resolved.participant && req.auth?.kind !== "impersonation";
     }
 
     const topics = await topicsOf(app, req);

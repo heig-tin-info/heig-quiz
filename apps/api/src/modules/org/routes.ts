@@ -23,6 +23,7 @@ import {
   EnrollmentPatch,
   IdParam,
   JoinParams,
+  RosterEntryParams,
   type CourseDetail,
   type JoinResult,
   type StudentClassroom,
@@ -58,7 +59,6 @@ const RowsBody = z.object({
 
 const StaffBody = z.object({ email: z.email() });
 const StaffParam = z.object({ id: z.uuid(), uid: z.uuid() });
-const EntryParam = z.object({ id: z.uuid(), eid: z.uuid() });
 
 export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
@@ -76,7 +76,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
       accessibleClassroom(app, req, reply, p),
   };
   const onEntry = {
-    params: EntryParam,
+    params: RosterEntryParams,
     load: (req: FastifyRequest, reply: FastifyReply, p: { id: string; eid: string }) =>
       accessibleEnrollment(app, req, reply, p),
   };

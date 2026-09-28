@@ -105,7 +105,7 @@ describe("a Safe Exam Browser session (ADR-027)", () => {
   it("shows its own evaluation and nothing else of the portal", async () => {
     vi.stubGlobal("EventSource", FakeStream);
     const { calls } = mockFetch({
-      "GET /app/api/me": ok(makeMe({ session: { kind: "seb", evaluationId: EVAL } })),
+      "GET /app/api/me": ok(makeMe({ session: { kind: "seb", evaluationId: EVAL, actorUserId: null, readOnly: false } })),
       [`POST /app/api/evaluations/${EVAL}/attempt`]: ok(lobby),
     });
     // Another evaluation's address still opens the one the session is for.
@@ -119,5 +119,27 @@ describe("a Safe Exam Browser session (ADR-027)", () => {
     expect(await screen.findByText("You have left the exam")).toBeVisible();
     await userEvent.click(screen.getByRole("button", { name: "Back to the exam" }));
     expect(await screen.findByText("Quiz 3 — Pointers")).toBeVisible();
+  });
+});
+
+describe("an impersonation session (ADR-034)", () => {
+  it("says whom the admin acts as, on every page, and ends by signing out", async () => {
+    vi.stubGlobal("EventSource", FakeStream);
+    const { calls } = mockFetch({
+      "GET /app/api/me": ok(
+        makeMe({
+          role: "student",
+          givenName: "Léa",
+          familyName: "Rochat",
+          session: { kind: "impersonation", evaluationId: null, actorUserId: "u-admin", readOnly: true },
+        }),
+      ),
+      "GET /app/api/student/classrooms": ok([]),
+      "POST /app/auth/logout": ok(undefined),
+    });
+    renderWithProviders(<App />, { route: "/" });
+    const banner = await screen.findByRole("region", { name: "Acting as Léa Rochat, read only." });
+    await userEvent.click(within(banner).getByRole("button", { name: "End" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "POST" && c.url === "/app/auth/logout")).toBe(true));
   });
 });

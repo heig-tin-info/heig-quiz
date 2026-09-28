@@ -131,8 +131,8 @@ describe("the launch ticket", () => {
       now,
     );
     const both = await Promise.all([
-      consumeLaunchTicket(server.app.db, secret, now),
-      consumeLaunchTicket(server.app.db, secret, now),
+      consumeLaunchTicket(server.app.db, "seb", secret, now),
+      consumeLaunchTicket(server.app.db, "seb", secret, now),
     ]);
     expect(both.filter(Boolean)).toHaveLength(1);
   });
@@ -174,7 +174,12 @@ describe("the seb session (ADR-027)", () => {
 
   it("sits its own evaluation", async () => {
     const me = await call("GET", "/app/api/me", seb);
-    expect(me.json().session).toEqual({ kind: "seb", evaluationId: exam.evaluationId });
+    expect(me.json().session).toEqual({
+      kind: "seb",
+      evaluationId: exam.evaluationId,
+      actorUserId: null,
+      readOnly: false,
+    });
     const entered = await call("POST", `/app/api/evaluations/${exam.evaluationId}/attempt`, seb);
     expect(entered.statusCode).toBe(200);
     attemptId = entered.json().view.attempt.id;

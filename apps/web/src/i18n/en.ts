@@ -12,6 +12,7 @@ export const en = {
   "landing.devHint": "Development only: pick a persona, no identity provider.",
   "landing.footer": "HEIG-VD — TIN Department",
   "seb.invalid": "This exam file is invalid or has expired, or it was not opened in Safe Exam Browser. Quit Safe Exam Browser and download the file again from the portal.",
+  "impersonation.invalid": "This link has expired or was already used. Ask for a new one.",
   "seb.elsewhere.title": "You have left the exam",
   "seb.elsewhere.body": "You may now quit Safe Exam Browser.",
   "seb.elsewhere.back": "Back to the exam",
@@ -29,6 +30,10 @@ export const en = {
   "menu.darkTheme": "Dark theme",
   "menu.studentViewBanner": "You are viewing the portal as a student.",
   "menu.studentViewBannerShort": "Student view",
+  "impersonation.banner": "Acting as {name}. Your actions are recorded under your own name.",
+  "impersonation.bannerReadOnly": "Acting as {name}, read only.",
+  "impersonation.bannerShort": "Acting as {name}",
+  "impersonation.end": "End",
   // The frame's teacher/student switch (ADR-018 addendum). `view.label` names
   // the group for a screen reader: the two pills have no visible caption.
   "view.label": "View as",
@@ -158,6 +163,9 @@ export const en = {
   "roster.removeConfirm": "Remove {name}?",
   "roster.removeBody": "The student leaves the roster. Their past results are kept.",
   "roster.removeFailed": "Could not remove this student.",
+  "roster.impersonate": "Copy link as this student",
+  "roster.impersonateCopied": "Link copied. Open it in a private window: it works once, within 5 minutes.",
+  "roster.impersonateFailed": "Could not copy the link.",
   "roster.revokeFailed": "Could not revoke this claim.",
   "roster.updateFailed": "Update failed",
   "roster.join": "Join as student",

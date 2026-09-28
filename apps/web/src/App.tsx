@@ -10,7 +10,7 @@ import { useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
 import { CoachLayer } from "./coach/CoachLayer";
 import { useRoute, type Navigate, type Route, type RouteOf } from "./router";
-import { Shell, StudentViewBanner } from "./Shell";
+import { ImpersonationBanner, Shell, StudentViewBanner } from "./Shell";
 import {
   enterStudentView,
   leaveStudentView,
@@ -103,6 +103,8 @@ const DevGallery = import.meta.env.DEV
  */
 function Landing() {
   const t = useT();
+  const search = new URLSearchParams(window.location.search);
+  const refused = search.has("seb") ? "seb.invalid" : search.has("impersonation") ? "impersonation.invalid" : null;
   // The one unauthenticated endpoint. A failure is not an error state here:
   // the OIDC button is the real door and it is always there.
   const config = useQuery<PublicConfig>({
@@ -119,10 +121,11 @@ function Landing() {
           <Logo className="mx-auto w-55" />
         </h1>
         <p className="mt-6 text-base leading-relaxed text-fg-muted">{t("landing.tagline")}</p>
-        {/* ADR-027: a SEB launch that was refused lands here, in SEB. */}
-        {new URLSearchParams(window.location.search).has("seb") ? (
+        {/* ADR-027: a SEB launch that was refused lands here, in SEB; and
+            ADR-034: so does a used or expired impersonation link. */}
+        {refused ? (
           <p role="alert" className="mt-4 text-sm text-danger">
-            {t("seb.invalid")}
+            {t(refused)}
           </p>
         ) : null}
         <LinkButton href="/app/auth/login" variant="primary" size="lg" className="mt-8 w-full">
@@ -415,17 +418,25 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
   const toggleView = teacher
     ? () => toggleStudentView(inStudentView, route, navigate)
     : undefined;
+  // ADR-034: an admin acting as this student says so on every page, the
+  // full-screen ones included — a student account has no student view.
+  const framed = (node: ReactNode) =>
+    me.data?.session?.kind === "impersonation" ? (
+      <ImpersonationBanner me={me.data}>{node}</ImpersonationBanner>
+    ) : (
+      node
+    );
   if (FULL_SCREEN.has(shown.view)) {
     // The attempt has no frame, and so no Teacher | Student switch: the
     // banner carries the way back, which leaves the attempt open (ADR-018).
     return inStudentView && shown.view === "attempt" ? (
       <StudentViewBanner onLeave={toggleView}>{page}</StudentViewBanner>
     ) : (
-      page
+      framed(page)
     );
   }
 
-  return (
+  return framed(
     <>
     <Shell
       me={me.data}
@@ -441,6 +452,6 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
     {/* Inside the frame only: a full-screen view (an exam, a projection)
         returned above and never gets a bubble. */}
     <CoachLayer me={me.data} view={shown.view} teacherUi={teacherUi} />
-    </>
+    </>,
   );
 }

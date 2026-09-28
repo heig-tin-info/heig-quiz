@@ -12,6 +12,7 @@ import { CoachSeenPatch, MePatch, type PublicConfig, type SessionKind } from "@q
 
 import { invalid } from "../modules/http.js";
 import { devLoginRoutes } from "./dev.js";
+import { impersonationRoutes } from "./impersonation.js";
 import { loginAdmits, signIn } from "./login.js";
 import { OidcProvider, type OidcClaims } from "./oidc.js";
 import { returnToOf, safeReturnTo } from "./returnTo.js";
@@ -27,12 +28,14 @@ import {
   SESSION_COOKIE,
   SITTING,
   createSession,
+  serves,
   deleteSession,
   findSessionUser,
   type SessionAuth,
 } from "./session.js";
 
 const LOGIN_STASH_COOKIE = "quiz_login";
+const LOGOUT_PATH = "/app/auth/logout";
 
 export type SessionUser = typeof users.$inferSelect;
 
@@ -51,6 +54,7 @@ declare module "fastify" {
     /**
      * The session kinds this route serves (ADR-027). Absent means `portal`
      * only: a new route is closed to a `seb` session until it says otherwise.
+     * An `impersonation` session is served wherever `portal` is (ADR-034).
      */
     sessions?: readonly SessionKind[];
   }
@@ -58,6 +62,9 @@ declare module "fastify" {
 
 
 const BEARER = /^Bearer\s+(\S+)$/i;
+
+/** The methods that change nothing: CSRF lets them through, and so does a read-only session. */
+const SAFE_METHODS: readonly string[] = ["GET", "HEAD", "OPTIONS"];
 
 /**
  * Carried by the in-process calls of the MCP tools (`app.inject`), with a
@@ -71,6 +78,9 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   const { config } = opts;
   const provider = new OidcProvider(config, app.log);
   const secure = config.NODE_ENV === "production";
+  // Development, and never production (invariant 3): the persona picker, and
+  // an impersonation session that may write (ADR-034). One test, one place.
+  const development = config.AUTH_DEV_LOGIN && config.NODE_ENV !== "production";
 
   // --- Session resolution on every request ---
   app.decorateRequest("user", null);
@@ -116,7 +126,21 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     // Default deny (ADR-027): on a route that does not serve its kind, the
     // session is not there at all — anonymous, so a 401 wherever a session
     // is required, and public routes and static files unaffected.
-    if (!(req.routeOptions.config.sessions ?? ["portal"]).includes(found.auth.kind)) return;
+    if (!serves(req.routeOptions.config.sessions, found.auth.kind)) return;
+    // ADR-034: outside development, a session acting as a student reads and
+    // never writes — every route, by construction, whether or not it calls
+    // `requireSession`. Signing out is the one write it keeps.
+    if (
+      found.auth.kind === "impersonation" &&
+      !development &&
+      !SAFE_METHODS.includes(req.method) &&
+      req.routeOptions.url !== LOGOUT_PATH
+    ) {
+      return reply.code(403).send({
+        error: "impersonation_read_only",
+        message: "This session acts as a student and is read-only",
+      });
+    }
     req.user = found.user;
     req.authVia = "session";
     req.auth = found.auth;
@@ -141,7 +165,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     if (!req.user) return reply.code(401).send({ error: "unauthenticated" });
     // Double-submit anti-CSRF on every mutation. A bearer token is exempt:
     // a browser never attaches one on its own, which is the whole attack.
-    if (req.authVia === "session" && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+    if (req.authVia === "session" && !SAFE_METHODS.includes(req.method)) {
       const cookie = req.cookies[CSRF_COOKIE];
       const header = req.headers[CSRF_HEADER];
       if (!cookie || cookie !== header) {
@@ -180,9 +204,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
    * The only unauthenticated endpoint: what the sign-in screen must know
    * before anyone has a session. No personal data, no secret.
    */
-  app.get("/app/api/config", async (): Promise<PublicConfig> => ({
-    devLogin: config.AUTH_DEV_LOGIN && config.NODE_ENV !== "production",
-  }));
+  app.get("/app/api/config", async (): Promise<PublicConfig> => ({ devLogin: development }));
 
   // --- Routes ---
 
@@ -252,21 +274,24 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   await apiTokenRoutes(app);
   await sebRoutes(app, config);
   await oauthRoutes(app, config);
+  await impersonationRoutes(app, config);
 
   // Development persona picker. Registered only when explicitly enabled, and
   // config.ts refuses the flag under NODE_ENV=production.
-  if (config.AUTH_DEV_LOGIN && config.NODE_ENV !== "production") {
+  if (development) {
     app.log.warn("AUTH_DEV_LOGIN is on: /app/auth/dev opens sessions without an IdP");
     await devLoginRoutes(app, config);
   }
 
   app.post(
-    "/app/auth/logout",
+    LOGOUT_PATH,
     { preHandler: (req, reply) => app.requireSession(req, reply) },
     async (req, reply) => {
       const token = req.cookies[SESSION_COOKIE];
+      // Ending an impersonation writes its own `impersonation.ended`
+      // (`deleteSession`); the student did not sign out of anything.
       if (token) await deleteSession(app.db, token);
-      await audit(app.db, {
+      if (req.auth?.kind !== "impersonation") await audit(app.db, {
         actorUserId: req.user?.id ?? null,
         actorType: "user",
         action: "auth.logout",
@@ -306,7 +331,12 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
         dateFormat: u.dateFormat,
         mcqPolicy: u.mcqPolicy,
         coach: { enabled: u.coachEnabled, seen: u.coachSeen },
-        session: { kind: req.auth?.kind ?? "portal", evaluationId: req.auth?.evaluationId ?? null },
+        session: {
+          kind: req.auth?.kind ?? "portal",
+          evaluationId: req.auth?.evaluationId ?? null,
+          actorUserId: req.auth?.actorUserId ?? null,
+          readOnly: req.auth?.kind === "impersonation" && !development,
+        },
       };
     },
   );

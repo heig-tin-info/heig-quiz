@@ -29,3 +29,12 @@ Edit a row to fix a name, an address or the extra time. Changing the address
 revokes the claim: the seat goes back to pending and the holder of the new
 address claims it. Removing a student takes them off the list; their past
 results are kept.
+
+## Seeing the platform as a student
+
+An administrator can **Copy link as this student** on a claimed student row.
+The link opens the platform as that student for an hour, once, within five
+minutes: paste it into a **private window**, because a session belongs to the
+whole browser and opening it here would sign you out of your own. It reads
+only — it cannot answer, submit or change anything — and the banner's **End**
+closes it. Both its start and its end are written to the audit log.

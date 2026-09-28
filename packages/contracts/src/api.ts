@@ -25,10 +25,13 @@ export interface PublicConfig {
 /**
  * What a browser session is (ADR-027). `portal`: the ordinary sign-in, the
  * whole application. `seb`: opened by a one-time launch ticket inside Safe
- * Exam Browser, confined to ONE evaluation. A route accepts `portal` only
- * unless it declares otherwise.
+ * Exam Browser, confined to ONE evaluation. `impersonation`: an admin acting
+ * as a student (ADR-034), opened by a one-time link, reaching what a
+ * `portal` session of that student reaches, read-only in production. A
+ * route accepts `portal` (and so `impersonation`) only unless it declares
+ * otherwise.
  */
-export const SESSION_KINDS = ["portal", "seb"] as const;
+export const SESSION_KINDS = ["portal", "seb", "impersonation"] as const;
 export type SessionKind = (typeof SESSION_KINDS)[number];
 
 export interface Me {
@@ -55,8 +58,27 @@ export interface Me {
    * again on the classroom's PC.
    */
   coach: { enabled: boolean | null; seen: string[] };
-  /** The session this request rode on; `evaluationId` is set on a `seb` one only. Absent: `portal`. */
-  session?: { kind: SessionKind; evaluationId: string | null };
+  /**
+   * The session this request rode on; `evaluationId` is set on a `seb` one
+   * only. `actorUserId` is who acts through it when not the user themself
+   * (an `impersonation` session, ADR-034), and `readOnly` says the server
+   * refuses its writes. Absent: `portal`.
+   */
+  session?: {
+    kind: SessionKind;
+    evaluationId: string | null;
+    actorUserId: string | null;
+    readOnly: boolean;
+  };
+}
+
+/**
+ * `POST /app/api/classrooms/:id/roster/:eid/impersonation` (ADR-034): the
+ * one-time link that opens a session as this student, for an admin to paste
+ * into a private window. Valid five minutes, once.
+ */
+export interface ImpersonationLink {
+  url: string;
 }
 
 /** A coach mark's id: `<screen>.<step>`, lower case (`pool.new-question`). */

@@ -178,6 +178,13 @@ const scenes = [
   { name: "classroom-rename-hover", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /^rename classroom/i }).first().hover() },
   { name: "classroom-rename", role: "teacher", path: "/classrooms/r1", fold: true, act: (p) => p.getByRole("button", { name: /^rename classroom/i }).first().click() },
   { name: "classroom-row-menu", role: "teacher", path: "/classrooms/r1?tab=roster", fold: true, act: (p) => openRowMenu(p, /^Actions for /) },
+  // ADR-034: an admin's row menu offers the impersonation link; the private
+  // window it opens shows the student's portal under the mode banner.
+  { name: "classroom-row-menu-admin", role: "admin", path: "/classrooms/r1?tab=roster", fold: true, act: (p) => openRowMenu(p, /^Actions for /) },
+  { name: "impersonation-banner", role: "student", path: "/?impersonating=1", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^(Got it|Compris)$/ }).first().click({ timeout: 3000 }).catch(() => {});
+      await p.evaluate(() => window.scrollTo(0, 0));
+    } },
 
   // WP8: evaluation + dashboard. The mock addresses an evaluation by its
   // state as well as by its id, so these URLs are stable across reloads.

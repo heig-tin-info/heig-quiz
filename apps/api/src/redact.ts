@@ -5,6 +5,8 @@
  *
  *  - `/app/auth/seb/<secret>`: the one-time ticket of a Safe Exam Browser
  *    launch (ADR-027), in the path;
+ *  - `/app/auth/as/<secret>`: the one-time link of an impersonation
+ *    (ADR-034), in the path;
  *  - `/teams/link?token=…`: the single-use token of a pending Teams link
  *    (ADR-030), in the query — the SPA page as the server serves it;
  *  - and either of them as the `next=` (or `returnTo=`) of a login round
@@ -12,10 +14,11 @@
  */
 import type { FastifyRequest } from "fastify";
 
+import { IMPERSONATION_PATH } from "./auth/impersonation.js";
 import { LAUNCH_PATH } from "./auth/seb.js";
 
 /** Everything after one of these prefixes is a secret. */
-const SECRET_PREFIXES: readonly string[] = [LAUNCH_PATH, "/teams/link"];
+const SECRET_PREFIXES: readonly string[] = [LAUNCH_PATH, IMPERSONATION_PATH, "/teams/link"];
 
 /** The query parameters that hold another URL of the app. */
 const RETURN_PARAMS: readonly string[] = ["next", "returnTo"];

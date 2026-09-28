@@ -9,6 +9,7 @@ import {
   School,
   Search,
   ShieldCheck,
+  VenetianMask,
   Vote,
   X,
 } from "lucide-react";
@@ -625,6 +626,28 @@ export function Shell({
     <StudentViewBanner onLeave={onToggleStudentView}>{frame}</StudentViewBanner>
   ) : (
     frame
+  );
+}
+
+/**
+ * ADR-034: an admin acting as this student, in a private window. Every page
+ * says so, with the way out: "End" signs this session out — which is what
+ * ends the impersonation, audit entry included — and leaves the window on
+ * the landing page. The admin's own session lives in another browser.
+ */
+export function ImpersonationBanner({ me, children }: { me: Me; children: ReactNode }) {
+  const t = useT();
+  const signOut = useSignOut();
+  const name = `${me.givenName} ${me.familyName}`.trim();
+  return (
+    <ModeBanner
+      icon={<VenetianMask />}
+      message={t(me.session?.readOnly ? "impersonation.bannerReadOnly" : "impersonation.banner", { name })}
+      short={t("impersonation.bannerShort", { name })}
+      action={{ label: t("impersonation.end"), onClick: signOut }}
+    >
+      {children}
+    </ModeBanner>
   );
 }
 

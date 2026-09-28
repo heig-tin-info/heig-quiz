@@ -56,6 +56,10 @@ export type AuditAction =
   | "grading.regrade"
   | "grading.run"
   | "grading.validate"
+  /** An admin opened a session as a student (ADR-034): actor the admin, subject the student. */
+  | "impersonation.started"
+  /** That session ended: signed out, or expired (`payload.reason`). */
+  | "impersonation.ended"
   | "oauth.grant"
   | "oauth.refresh_replay"
   | "oauth.revoke"

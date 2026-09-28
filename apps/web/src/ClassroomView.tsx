@@ -411,7 +411,11 @@ export function ClassroomView({ id, navigate }: { id: string; navigate: (r: Rout
                   {t("roster.empty.body")}
                 </EmptyState>
               ) : (
-                <RosterTable classroomId={id} roster={data.roster} />
+                <RosterTable
+                  classroomId={id}
+                  roster={data.roster}
+                  canImpersonate={me.data?.role === "admin"}
+                />
               )}
             </Card>
           </section>
