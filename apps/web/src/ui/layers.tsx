@@ -493,6 +493,7 @@ function LayerShell({
   headerClass,
   bodyClass,
   footerClass,
+  aside,
   children,
 }: {
   title: string;
@@ -504,12 +505,35 @@ function LayerShell({
   headerClass: string;
   bodyClass: string;
   footerClass: string;
+  /**
+   * A pane docked BEFORE the header/body/footer column, inside the same
+   * dialog: it shares the focus trap and the Escape, and a click in it stays
+   * in the layer. `panelClass` then lays the two out in a row. The column is
+   * wrapped whether or not the pane is there, so the pane coming and going
+   * never remounts the column — and never drops the focus held inside it.
+   */
+  aside?: { node: ReactNode; className: string; columnClass: string };
   children: ReactNode;
 }) {
   useScrollLock();
   const panel = useRef<HTMLDivElement>(null);
   const titleId = useId();
   useLayer(panel, onClose);
+  const column = (
+    <>
+      <div className={headerClass}>
+        <div className="min-w-0 flex-1">
+          <h2 id={titleId} className="text-lg font-bold tracking-tight">
+            {title}
+          </h2>
+          {subtitle ? <p className="mt-0.5 text-sm text-fg-muted">{subtitle}</p> : null}
+        </div>
+        <LayerClose onClose={onClose} />
+      </div>
+      <div className={bodyClass}>{children}</div>
+      {footer ? <div className={footerClass}>{footer}</div> : null}
+    </>
+  );
   return createPortal(
     <div
       // The portal escapes the DOM but not the React tree: without this, a
@@ -526,17 +550,14 @@ function LayerShell({
         tabIndex={-1}
         className={panelClass}
       >
-        <div className={headerClass}>
-          <div className="min-w-0 flex-1">
-            <h2 id={titleId} className="text-lg font-bold tracking-tight">
-              {title}
-            </h2>
-            {subtitle ? <p className="mt-0.5 text-sm text-fg-muted">{subtitle}</p> : null}
-          </div>
-          <LayerClose onClose={onClose} />
-        </div>
-        <div className={bodyClass}>{children}</div>
-        {footer ? <div className={footerClass}>{footer}</div> : null}
+        {aside ? (
+          <>
+            {aside.node ? <aside className={aside.className}>{aside.node}</aside> : null}
+            <div className={aside.columnClass}>{column}</div>
+          </>
+        ) : (
+          column
+        )}
       </div>
     </div>,
     document.body,
@@ -600,10 +621,20 @@ export function Modal({
   );
 }
 
+/** The narrowest window that holds a docked `Sheet` aside beside a `lg` drawer. */
+export const ASIDE_MIN_WIDTH = 1280;
+
 /**
  * Right-hand drawer for anything longer than three fields (assignment form,
  * imports, histories). Header and footer stay put, the body scrolls.
  * Same closing rule as the dialog: Escape or the X, never the backdrop.
+ *
+ * `aside` docks a READING pane on the drawer's left edge, over the page the
+ * drawer would otherwise leave blurred and unused: the question picker shows
+ * the question last clicked there. It is part of the same dialog, never
+ * a second layer (a sheet never opens another sheet). The drawer keeps its
+ * width, so the caller passes an aside only when the window has room for
+ * both (`useMinWidth(ASIDE_MIN_WIDTH)`), and does without it otherwise.
  */
 export function Sheet({
   title,
@@ -613,6 +644,7 @@ export function Sheet({
   footer,
   width = "md",
   flush,
+  aside,
 }: {
   title: string;
   subtitle?: ReactNode;
@@ -622,7 +654,10 @@ export function Sheet({
   width?: "md" | "lg";
   /** Children own the padding (full-bleed sections separated by hairlines). */
   flush?: boolean;
+  /** The docked reading pane; it scrolls on its own and owns its padding. */
+  aside?: ReactNode;
 }) {
+  const docked = aside != null;
   return (
     <LayerShell
       title={title}
@@ -631,9 +666,17 @@ export function Sheet({
       footer={footer}
       backdropClass={`layer-backdrop fixed inset-0 ${Z.modal} flex justify-end bg-fg/30 backdrop-blur-[2px]`}
       panelClass={cx(
-        "sheet-panel flex h-full w-full flex-col border-l border-line bg-surface shadow-sheet focus:outline-none",
-        width === "lg" ? "sm:max-w-190" : "sm:max-w-150",
+        "sheet-panel flex h-full border-l border-line bg-surface shadow-sheet focus:outline-none",
+        docked ? "max-w-full" : cx("w-full", width === "lg" ? "sm:max-w-190" : "sm:max-w-150"),
       )}
+      aside={{
+        node: aside,
+        className: "min-h-0 w-120 overflow-y-auto border-r border-line bg-surface-2 2xl:w-160",
+        columnClass: cx(
+          "flex min-w-0 flex-col",
+          docked ? cx("shrink-0", width === "lg" ? "w-190" : "w-150") : "flex-1",
+        ),
+      }}
       headerClass="flex items-start gap-3 border-b border-line px-6 pb-4 pt-5"
       bodyClass={cx("min-h-0 flex-1 overflow-y-auto", !flush && "px-6 py-5")}
       footerClass="flex flex-wrap items-center justify-end gap-2 border-t border-line bg-surface px-6 py-3"

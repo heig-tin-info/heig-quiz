@@ -472,6 +472,14 @@ live in `ui/state.ts`, each written once.
 - Sheet: right drawer, 560 px, for every form longer than three fields.
   Dialog: centered, ≤ 480 px, for confirmations and one-field forms.
   A sheet never opens another sheet; a dialog may open over a sheet.
+  A sheet may dock ONE reading pane on its left edge (`Sheet aside`), part
+  of the same dialog — same focus trap, same Escape — never a second layer:
+  the question picker shows there the question last clicked, as a student
+  reads it. The drawer keeps its width and the pane (480 px, 640 px from
+  `2xl`) takes the blurred page beside it, so it exists only from 1280 px
+  (`ASIDE_MIN_WIDTH`); narrower, the caller shows the same content in place
+  of the sheet's body, with a Back button. No empty pane: it appears on the
+  first look.
   One exception, `size="xl" scroll`: a READING dialog, 920 px, whose body
   scrolls under a title and a footer that stay put. It is not a form — it is
   a document the reader walks through, today the whole of one student's

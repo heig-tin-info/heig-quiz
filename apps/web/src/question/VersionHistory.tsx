@@ -28,7 +28,8 @@ import {
   useSortableTable,
   type Column,
 } from "../ui";
-import { questionKey, questionPreviewKey } from "../queryKeys";
+import { questionKey } from "../queryKeys";
+import { questionPreviewQuery } from "./previewQuery";
 
 /**
  * Where a student view keeps its statement: `prompt`, or `template` for a
@@ -55,12 +56,7 @@ function statementOf(student: unknown): string {
 function VersionPreview({ questionId, number }: { questionId: string; number: number }) {
   const t = useT();
   const preview = useQuery<PreviewResult>({
-    queryKey: questionPreviewKey(questionId, number),
-    queryFn: () =>
-      api(`/app/api/questions/${questionId}/preview`, {
-        method: "POST",
-        body: JSON.stringify({ source: number }),
-      }),
+    ...questionPreviewQuery(questionId, number),
   });
   if (preview.isLoading) return <Skeleton className="h-24 w-full" />;
   if (preview.isError) {

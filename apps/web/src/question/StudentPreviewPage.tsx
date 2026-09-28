@@ -4,13 +4,13 @@ import { useState } from "react";
 
 import type { PreviewResult } from "@quiz/contracts";
 
-import { api, apiErrorMessage } from "../api";
+import { apiErrorMessage } from "../api";
 import { useT } from "../i18n";
 import { PlayerShell } from "../student/PlayerShell";
 import { QuestionHost } from "../student/QuestionHost";
 import { Alert, Button, Card, Skeleton } from "../ui";
 import { emptyAnswerOf } from "../questionTypes";
-import { questionPreviewKey } from "../queryKeys";
+import { questionPreviewQuery } from "./previewQuery";
 
 /**
  * "See what the student sees" for ONE question (docs/spec/08 §8.2), in a page
@@ -44,12 +44,7 @@ import { questionPreviewKey } from "../queryKeys";
 export function StudentPreviewPage({ id }: { id: string }) {
   const t = useT();
   const preview = useQuery<PreviewResult>({
-    queryKey: questionPreviewKey(id, "draft"),
-    queryFn: () =>
-      api(`/app/api/questions/${id}/preview`, {
-        method: "POST",
-        body: JSON.stringify({ source: "draft" }),
-      }),
+    ...questionPreviewQuery(id, "draft"),
     // Seed 0 and nothing stored: the same view on every open.
     staleTime: Infinity,
   });
