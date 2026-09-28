@@ -168,6 +168,23 @@ const EnvSchema = z.object({
    */
   LOGIN_ALLOWLIST: z.string().default(""),
 
+  /**
+   * The institutions whose `staff` affiliation makes a teacher without an
+   * invitation (roles.ts): the scopes of `eduPersonScopedAffiliation`,
+   * comma-separated. edu-ID lets any home organization assert `staff`, so
+   * an unlisted scope — and an unscoped `staff` — is not enough. HEIG-VD
+   * staff arrive as `staff@hes-so.ch` (observed on production).
+   */
+  STAFF_AFFILIATION_DOMAINS: z
+    .string()
+    .default("heig-vd.ch,hes-so.ch")
+    .transform((list) =>
+      list
+        .split(",")
+        .map((d) => d.trim().toLowerCase())
+        .filter((d) => d !== ""),
+    ),
+
   // --- Notification channels (ADR-030) ---
 
   /**

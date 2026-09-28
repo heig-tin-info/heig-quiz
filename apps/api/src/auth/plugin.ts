@@ -12,7 +12,7 @@ import { CoachSeenPatch, MePatch, type PublicConfig, type SessionKind } from "@q
 
 import { claimEnrollments } from "../modules/org/service.js";
 import { roleForIdentity } from "../roles.js";
-import { addressesOf, affiliationsOf, recordIdpClaims, syncUserEmails } from "./claims.js";
+import { affiliationsOf, recordIdpClaims, syncUserEmails, verifiedAddressesOf } from "./claims.js";
 import { devLoginRoutes } from "./dev.js";
 import { OidcProvider, type OidcClaims } from "./oidc.js";
 import { returnToOf, safeReturnTo } from "./returnTo.js";
@@ -77,11 +77,11 @@ async function upsertUser(
   config: AppConfig,
   claims: OidcClaims,
 ): Promise<SessionUser> {
-  // The role is computed on every address the IdP revealed, and on the
-  // affiliations it asserts — a grant issued on an institutional address
+  // The role is computed on every VERIFIED address the IdP revealed, and on
+  // the affiliations it asserts — a grant issued on an institutional address
   // must reach someone signing in under a private one.
   const role = await roleForIdentity(app.db, config, {
-    emails: addressesOf(claims.raw).map((a) => a.email),
+    emails: verifiedAddressesOf(claims.raw, claims.emailVerified),
     affiliations: affiliationsOf(claims.raw),
   });
   const now = new Date();
@@ -280,8 +280,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
 
     // The staging allowlist (ADR-028) is checked before any row is written:
     // a refused login leaves no user behind.
-    const emails = addressesOf(claims.raw).map((a) => a.email);
-    if (!loginAllowed(config, emails)) {
+    if (!loginAllowed(config, verifiedAddressesOf(claims.raw, claims.emailVerified))) {
       req.log.warn({ sub: claims.sub }, "Login refused by LOGIN_ALLOWLIST");
       return reply
         .code(403)

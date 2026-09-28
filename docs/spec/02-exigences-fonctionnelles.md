@@ -7,7 +7,7 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 | Id | Requirement | Phase | Prio |
 |---|---|---|---|
 | F-AUTH-01 | The user signs in through edu-ID with OpenID Connect. No local password. | P1 | M |
-| F-AUTH-02 | On first sign-in, the account is created with name, email and a role derived from the edu-ID affiliation: `staff` or `faculty` gives `teacher`, `student` gives `student`. | P1 | M |
+| F-AUTH-02 | On first sign-in, the account is created with name, email and a role derived from the edu-ID affiliation: a `staff` affiliation scoped to one of our institutions (`STAFF_AFFILIATION_DOMAINS`, e.g. `staff@hes-so.ch`) and no `student` one gives `teacher`; anything else — another institution's `staff`, an unscoped `staff` — gives `student`. | P1 | M |
 | F-AUTH-03 | The admin is identified by a list of edu-ID identifiers in the configuration. They may promote or demote a user to `teacher`. | P1 | M |
 | F-AUTH-04 | The session persists for 30 days. An explicit sign-out is available. A running exam never asks to sign in again. | P1 | M |
 | F-AUTH-05 | A participant without an account may join an evaluation in `poll` mode through a session code, anonymously: no pseudonym is asked for nor stored (see 06 no. 18). Only an anonymous poll, which belongs to no classroom, takes such a participant; a classroom's poll admits its roster and its staff, signed in (ADR-014, addendum 2026-09-27). | P2 | M |

@@ -3,17 +3,17 @@
  *
  * admin (SUPER_ADMIN_EMAIL) > teacher > student, where "teacher" means an
  * admin-managed `teacher_grants` row, a seat on the staff of at least one
- * course, or a `staff` affiliation at the IdP.
+ * course, or a `staff` affiliation scoped to one of STAFF_AFFILIATION_DOMAINS.
  *
- * The rule is keyed on the account's e-mail ADDRESSES (and, when the account
- * exists, its course seats), never on the current `users.role`, so
+ * The rule is keyed on the account's VERIFIED e-mail ADDRESSES (and, when
+ * the account exists, its course seats), never on the current `users.role`, so
  * recomputing is idempotent and can never demote an admin nor a teacher who
  * still holds a grant. It reads the whole address set: a grant issued on an
  * institutional address must apply to someone signing in under a private one.
  */
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
-import { affiliationKinds } from "./auth/claims.js";
+import { affiliationKindsIn } from "./auth/claims.js";
 import type { AppConfig } from "./config.js";
 import type { Db } from "./db/client.js";
 import { courseStaff, teacherGrants, userIdpClaims, users } from "./db/schema.js";
@@ -24,6 +24,7 @@ type UserRole = (typeof users.$inferSelect)["role"];
 
 /** What the rule needs: the addresses of the account, and its affiliations. */
 export interface Identity {
+  /** Verified addresses only (`knownEmails`, `verifiedAddressesOf`). */
   emails: readonly string[];
   /** edu-ID affiliations, scoped or not (`student@hes-so.ch`, `staff`). */
   affiliations?: readonly string[];
@@ -61,8 +62,10 @@ export async function roleForIdentity(
   // edu-ID tells us who is staff. A `staff` affiliation WITHOUT a `student`
   // one is an employee, and reaches the teacher UI without an invitation.
   // Their own courses only: the guards are unchanged, so this grants no
-  // access to anyone else's.
-  const kinds = affiliationKinds(identity.affiliations ?? []);
+  // access to anyone else's. Only affiliations scoped to OUR institutions
+  // count, both ways: a `staff@unige.ch` is somebody else's employee, and a
+  // bare `staff` names no institution at all — neither makes a teacher.
+  const kinds = affiliationKindsIn(identity.affiliations ?? [], config.STAFF_AFFILIATION_DOMAINS);
   if (kinds.includes("staff") && !kinds.includes("student")) return "teacher";
   return "student";
 }
@@ -121,10 +124,12 @@ export async function syncUserRole(db: Db, config: AppConfig, email: string): Pr
   const normalized = normalizeEmail(email);
   const owners = await ownersOf(db, normalized);
   if (owners.length === 0) {
+    // An account from before the address set: its login address, and only
+    // when the IdP verified it.
     const legacy = await db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.email, normalized));
+      .where(and(eq(users.email, normalized), eq(users.emailVerified, true)));
     owners.push(...legacy.map((u) => u.id));
   }
   for (const userId of owners) {
