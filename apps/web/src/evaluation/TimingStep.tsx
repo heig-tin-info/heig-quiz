@@ -1,7 +1,7 @@
 import { Check, Lock, MonitorPlay, Timer } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
-import type { EvaluationDetail } from "@quiz/contracts";
+import type { EvaluationDetail, EvaluationPatch } from "@quiz/contracts";
 import { configLock, isConfigFieldWritable } from "@quiz/domain";
 
 import type { Dict } from "../i18n";
@@ -32,7 +32,7 @@ import {
   toLocalInput,
   type TimingField,
 } from "./timing";
-import type { useEvaluationPatch } from "./usePatch";
+import type { ConfigWriter } from "./usePatch";
 
 /**
  * Step 2 of the novice flow: WHEN, and under what rules.
@@ -109,6 +109,13 @@ function MissingNote({ field }: { field: TimingField }) {
       {t(missingTimingKey(field))}
     </p>
   );
+}
+
+/** `aria-invalid` and the note's id, for a control whose field is missing (#76). */
+function invalid(missing: ReadonlySet<TimingField>, field: TimingField) {
+  return missing.has(field)
+    ? { "aria-invalid": true, "aria-describedby": `${TIMING_FIELD_ID[field]}-missing` }
+    : {};
 }
 
 /**
@@ -207,12 +214,7 @@ export function ConfigSettings({
             <div className="flex flex-col gap-1">
               <Field
                 id={TIMING_FIELD_ID.durationS}
-                {...(missing.has("durationS")
-                  ? {
-                      "aria-invalid": true,
-                      "aria-describedby": `${TIMING_FIELD_ID.durationS}-missing`,
-                    }
-                  : {})}
+                {...invalid(missing, "durationS")}
                 placeholder="45"
                 label={t("eval.duration")}
                 type="number"
@@ -263,7 +265,7 @@ export function TimingStep({
   onOpenDashboard,
 }: {
   detail: EvaluationDetail;
-  patch: ReturnType<typeof useEvaluationPatch>;
+  patch: ConfigWriter<EvaluationPatch>;
   /** Where time is added while the evaluation runs (#86). */
   onOpenDashboard?: () => void;
   /**
@@ -282,11 +284,6 @@ export function TimingStep({
   const lock = configLock(state, detail.attemptCount);
   const summary = presetSummary(detail.evaluation, t, isoDateTime);
   const missing = new Set(showMissing ? missingTiming(detail.evaluation) : []);
-  /** `aria-invalid` and the note's id, for a control whose field is missing. */
-  const invalid = (field: TimingField) =>
-    missing.has(field)
-      ? { "aria-invalid": true, "aria-describedby": `${TIMING_FIELD_ID[field]}-missing` }
-      : {};
 
   return (
     <div className="space-y-5">
@@ -331,7 +328,7 @@ export function TimingStep({
             <div className="flex flex-col gap-1">
               <Field
                 id={TIMING_FIELD_ID.opensAt}
-                {...invalid("opensAt")}
+                {...invalid(missing, "opensAt")}
                 label={t("eval.opensAt")}
                 type="datetime-local"
                 size="sm"
@@ -346,7 +343,7 @@ export function TimingStep({
               <div className="flex flex-col gap-1">
                 <Field
                   id={TIMING_FIELD_ID.closesAt}
-                  {...invalid("closesAt")}
+                  {...invalid(missing, "closesAt")}
                   label={t("eval.closesAt")}
                   type="datetime-local"
                   size="sm"

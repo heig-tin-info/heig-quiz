@@ -103,6 +103,19 @@ describe("TemplateEditor", () => {
     expect(screen.queryByLabelText("Access code")).toBeNull();
   });
 
+  it("opens a question with the way back to this template", async () => {
+    mockFetch(world());
+    const navigate = vi.fn();
+    renderWithProviders(<TemplateEditor id={T} navigate={navigate} />);
+
+    await userEvent.click(await screen.findByRole("button", { name: "Edit pointer-decl" }));
+    expect(navigate).toHaveBeenCalledWith({
+      view: "question",
+      id: stale.questionId,
+      fromTemplate: T,
+    });
+  });
+
   it("has one primary action, Use in a classroom, which opens the instantiate dialog", async () => {
     mockFetch(world());
     renderWithProviders(<TemplateEditor id={T} navigate={vi.fn()} />);

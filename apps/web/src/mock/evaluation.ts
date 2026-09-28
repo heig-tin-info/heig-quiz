@@ -16,6 +16,7 @@ import type {
   LobbyName,
   McqScorePolicy,
 } from "@quiz/domain";
+import { TemplatePatch } from "@quiz/contracts";
 import {
   D,
   H,
@@ -883,13 +884,15 @@ on("POST", "/app/api/classrooms/:id/evaluations", (m, body) => {
   return toEvaluation(e);
 });
 on("GET", "/app/api/evaluations/:id", (m) => evaluationDetail(evaluationOr404(m.groups!.id!)));
-// The picker's pools: the course's own, like the server (F-EVAL-01).
-on("GET", "/app/api/evaluations/:id/pools", (m) => {
-  const room = roomOr404(evaluationOr404(m.groups!.id!).classroomId);
-  return (coursePools[room.courseId] ?? [])
+/** The picker's pools: the course's own, like the server (F-EVAL-01), by name. */
+const coursePoolList = (courseId: string) =>
+  (coursePools[courseId] ?? [])
     .map((id) => poolSummary(poolOr404(id)))
     .sort((a, b) => a.name.localeCompare(b.name));
-});
+
+on("GET", "/app/api/evaluations/:id/pools", (m) =>
+  coursePoolList(roomOr404(evaluationOr404(m.groups!.id!).classroomId).courseId),
+);
 on("PATCH", "/app/api/evaluations/:id", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);
   // #86: what a patch may touch is the domain's `configLock`, as on the server.
@@ -1045,7 +1048,9 @@ export const templateDetail = (x: MockTemplate) => {
     },
     items: e.items.map((i) => {
       const poolId = itemQuestion(i)?.poolId ?? null;
-      return { ...i, poolUnlinked: poolId !== null && !linked.includes(poolId) };
+      // The server's rule: a question with no pool left is as unlinked as one
+      // whose pool left the course.
+      return { ...i, poolUnlinked: poolId === null || !linked.includes(poolId) };
     }),
     ...itemListFacts(e),
   };
@@ -1232,13 +1237,26 @@ on("DELETE", "/app/api/evaluations/:id/items/:itemId", (m) => {
 // `TemplateDetail`, and moving the revision by one when the content moved —
 // anything but the title, as on the server (ADR-031, addendum d).
 
-/** The run's own fields: a template's patch refuses them (strict schema, 400). */
-const RUN_FIELDS = ["opensAt", "closesAt", "accessCode", "ipAllowlist"];
+/**
+ * The content the revision follows: the items (order, points, milestones,
+ * versions) and every stored setting — everything but the title.
+ */
+const contentOf = (e: MockEvaluation) =>
+  JSON.stringify([
+    e.items.map((i) => [i.id, i.points, i.milestone, i.versionNumber]),
+    e.settings,
+    e.gradingScale,
+    e.feedbackPolicy,
+    e.mcqPolicy,
+    e.durationS,
+  ]);
 
-/** One write to a template: `edit` says whether the content moved. */
-function templateWrite(id: string, edit: (e: MockEvaluation) => boolean) {
+/** One write to a template, moving the revision once when the content moved. */
+function templateWrite(id: string, edit: (e: MockEvaluation) => void) {
   const template = templateOr404(id);
-  if (edit(template.shell)) template.revision += 1;
+  const before = contentOf(template.shell);
+  edit(template.shell);
+  if (contentOf(template.shell) !== before) template.revision += 1;
   return templateDetail(template);
 }
 
@@ -1261,50 +1279,35 @@ on("POST", "/app/api/courses/:id/templates", (m, body) => {
 });
 on("GET", "/app/api/templates/:id", (m) => templateDetail(templateOr404(m.groups!.id!)));
 on("GET", "/app/api/templates/:id/pools", (m) =>
-  (coursePools[templateOr404(m.groups!.id!).courseId] ?? [])
-    .map((id) => poolSummary(poolOr404(id)))
-    .sort((a, b) => a.name.localeCompare(b.name)),
+  coursePoolList(templateOr404(m.groups!.id!).courseId),
 );
 on("PATCH", "/app/api/templates/:id", (m, body) =>
   templateWrite(m.groups!.id!, (e) => {
-    const run = Object.keys(body).filter((k) => RUN_FIELDS.includes(k));
-    if (run.length > 0) throw new MockError(400, `Unrecognized keys: ${run.join(", ")}`);
+    // The route's own schema: strict, so a run field is a 400 (ADR-031, addendum c).
+    const parsed = TemplatePatch.safeParse(body);
+    if (!parsed.success) throw new MockError(400, parsed.error.message);
     assertConfigPatch(e, body);
     applyConfigPatch(e, body);
-    return Object.keys(body).some((k) => k !== "title");
   }),
 );
 on("POST", "/app/api/templates/:id/items/update-versions", (m, body) =>
-  templateWrite(m.groups!.id!, (e) => {
-    const before = e.items.map((i) => i.versionNumber).join();
-    updateVersionsOf(e, (body.itemIds as string[] | undefined) ?? null);
-    return e.items.map((i) => i.versionNumber).join() !== before;
-  }),
+  templateWrite(m.groups!.id!, (e) =>
+    updateVersionsOf(e, (body.itemIds as string[] | undefined) ?? null),
+  ),
 );
 on("POST", "/app/api/templates/:id/items", (m, body) =>
-  templateWrite(m.groups!.id!, (e) => {
-    const before = e.items.length;
-    addItemsTo(e, (body.questionIds as string[] | undefined) ?? []);
-    return e.items.length !== before;
-  }),
+  templateWrite(m.groups!.id!, (e) =>
+    addItemsTo(e, (body.questionIds as string[] | undefined) ?? []),
+  ),
 );
 on("PATCH", "/app/api/templates/:id/items/:itemId", (m, body) =>
-  templateWrite(m.groups!.id!, (e) => {
-    patchItemOf(e, m.groups!.itemId!, body);
-    return true;
-  }),
+  templateWrite(m.groups!.id!, (e) => void patchItemOf(e, m.groups!.itemId!, body)),
 );
 on("PUT", "/app/api/templates/:id/items/order", (m, body) =>
-  templateWrite(m.groups!.id!, (e) => {
-    reorderItemsOf(e, (body.itemIds as string[]) ?? []);
-    return true;
-  }),
+  templateWrite(m.groups!.id!, (e) => reorderItemsOf(e, (body.itemIds as string[]) ?? [])),
 );
 on("DELETE", "/app/api/templates/:id/items/:itemId", (m) =>
-  templateWrite(m.groups!.id!, (e) => {
-    removeItemOf(e, m.groups!.itemId!);
-    return true;
-  }),
+  templateWrite(m.groups!.id!, (e) => removeItemOf(e, m.groups!.itemId!)),
 );
 on("POST", "/app/api/evaluations/:id/state", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);

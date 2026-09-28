@@ -101,10 +101,10 @@ on("POST", "/app/api/evaluations/:id/preview", (m): EvaluationPreview => {
 });
 
 /**
- * One item at the version its evaluation froze (issue #127): that version's
- * config when the question still has it, through the same `studentView`.
+ * One item at the version its evaluation or template froze (issue #127,
+ * F-EVAL-25): that version's config when the question still has it, through
+ * the same `studentView`.
  */
-/** One item at its frozen version, from an evaluation or a template (#127, F-EVAL-25). */
 function itemPreview(e: MockEvaluation, itemId: string): ItemPreview {
   const item = e.items.find((i) => i.id === itemId);
   const q = item ? itemQuestion(item) : null;

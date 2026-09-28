@@ -1,14 +1,14 @@
 import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
-import { McqPolicy, negativeMarkingOf, safeExamBrowserOf, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
+import { McqPolicy, negativeMarkingOf, safeExamBrowserOf, type EvaluationPatch, type EvaluationSettings, type FeedbackPolicy } from "@quiz/contracts";
 import { allowedFeedbackWhen, feedbackWhenFor, isInClass } from "@quiz/domain";
 
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
 import { Button, Card, cx, inputClass, inputSize, Segmented, Select, SettingRow, Switch } from "../ui";
 import type { ConfigPatch, ConfigView } from "./editTarget";
-import type { useEvaluationPatch } from "./usePatch";
+import type { ConfigWriter } from "./usePatch";
 
 /**
  * Everything docs/spec/08 §8.2 puts under "Options avancées": the eight
@@ -315,7 +315,7 @@ export function AccessCodeRow({
   patch,
 }: {
   accessCode: string | null;
-  patch: ReturnType<typeof useEvaluationPatch>;
+  patch: ConfigWriter<EvaluationPatch>;
 }) {
   const t = useT();
   const [code, setCode] = useState(accessCode ?? "");

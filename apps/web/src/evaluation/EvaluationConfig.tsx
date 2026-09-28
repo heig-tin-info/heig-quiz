@@ -48,7 +48,7 @@ import { LaunchStep } from "./LaunchStep";
 import { missingTiming, TIMING_FIELD_ID } from "./timing";
 import { TimingStep } from "./TimingStep";
 import { SaveAsTemplateDialog, useDuplicateErrorToast } from "./templates";
-import { useEvaluationPatch } from "./usePatch";
+import { useConfigPatch } from "./usePatch";
 import { classroomKey, evaluationKey, evaluationsKey } from "../queryKeys";
 
 /**
@@ -99,7 +99,7 @@ export function EvaluationConfig({ id, navigate }: { id: string; navigate: (r: R
     queryKey: evaluationKey(id),
     queryFn: () => api(`/app/api/evaluations/${id}`),
   });
-  const patch = useEvaluationPatch(id);
+  const patch = useConfigPatch(evaluationTarget(id));
   const classroomId = detail.data?.evaluation.classroomId ?? null;
   const classroom = useQuery<ClassroomDetail>({
     queryKey: classroomKey(classroomId),

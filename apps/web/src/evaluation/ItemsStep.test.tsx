@@ -62,7 +62,7 @@ describe("ItemsStep — preview and edit (#127)", () => {
       within(rowOf("pointer-decl")).getByRole("button", { name: /preview pointer-decl/i }),
     );
     const sheet = await screen.findByRole("dialog");
-    expect(within(sheet).getByText(/version 2, the one this evaluation uses/i)).toBeInTheDocument();
+    expect(within(sheet).getByText(/version 2, the one frozen in this list/i)).toBeInTheDocument();
     expect(await within(sheet).findByText(/\(v2\)/)).toBeInTheDocument();
     // The student's own player: the choices are there to be clicked.
     expect(within(sheet).getByRole("radio", { name: "&x" })).toBeInTheDocument();

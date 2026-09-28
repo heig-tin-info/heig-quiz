@@ -34,7 +34,7 @@ import { presetSettings } from "./presets";
 import { presetSummary } from "./presetSummary";
 import { ConfigSettings } from "./TimingStep";
 import { UseTemplateDialog, useTemplateActions } from "./templates";
-import { useTemplatePatch } from "./usePatch";
+import { useConfigPatch } from "./usePatch";
 
 /**
  * The editor of one evaluation template (F-EVAL-25, ADR-031 addendum c): its
@@ -111,7 +111,7 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
   const course = useCourses().data?.find((c) => c.id === template.courseId) ?? null;
   const classrooms = course?.classrooms ?? [];
   const target = templateTarget(template.id, template.courseId);
-  const patch = useTemplatePatch(template.id, template.courseId);
+  const patch = useConfigPatch(target);
   const actions = useTemplateActions(template.courseId, classrooms, {
     onDeleted: () => navigate({ view: "course", id: template.courseId }),
   });
@@ -222,7 +222,7 @@ function Editor({ data, navigate }: { data: TemplateDetail; navigate: (r: Route)
               totalPoints={data.totalPoints}
               patch={patch}
               presetOf={(preset) => presetSettings(preset, template.mode)}
-              summary={presetSummary({ ...template, closesAt: null }, t, isoDateTime)}
+              summary={presetSummary(template, t, isoDateTime)}
               dates={
                 <p className="self-center text-[13px] text-fg-muted">{t("templates.datesLater")}</p>
               }

@@ -76,6 +76,9 @@ describe("routeToPath / parsePath", () => {
     // The evaluation the editor was opened from travels in the query string
     // (#127): the editor reads it there, the path stays the editor's.
     expect(routeToPath({ view: "question", id: "q-1", from: "e-1" })).toBe("/questions/q-1?from=e-1");
+    expect(routeToPath({ view: "question", id: "q-1", fromTemplate: "t-1" })).toBe(
+      "/questions/q-1?fromTemplate=t-1",
+    );
     expect(parsePath("/questions/q-1")).toEqual({ view: "question", id: "q-1" });
   });
 

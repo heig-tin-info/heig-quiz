@@ -604,7 +604,7 @@ export function ItemsStep({
                       canEdit={editable.has(item.questionId)}
                       onPreview={() => setPreviewing(item.id)}
                       onEdit={() =>
-                        navigate({ view: "question", id: item.questionId, from: target.questionFrom })
+                        navigate({ view: "question", id: item.questionId, ...target.questionFrom })
                       }
                     />
                   ))}

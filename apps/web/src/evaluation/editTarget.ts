@@ -13,7 +13,9 @@
  */
 import { useQueryClient } from "@tanstack/react-query";
 
-import type { Evaluation, TemplatePatch } from "@quiz/contracts";
+import type { Evaluation, EvaluationPatch, TemplatePatch } from "@quiz/contracts";
+
+import type { RouteOf } from "../router";
 
 import {
   courseTemplatesKey,
@@ -23,7 +25,21 @@ import {
   templatePoolsKey,
 } from "../queryKeys";
 
-export interface EditTarget {
+/** The run's own fields, which a template's patch must never carry. */
+type RunField = "opensAt" | "closesAt" | "accessCode" | "ipAllowlist";
+
+/**
+ * A template's patch body, closed to the run's fields at compile time: with
+ * them typed `never`, neither a literal carrying one nor an evaluation's
+ * patch (or a writer of one) is accepted where a template's is expected.
+ */
+export type TemplateBody = TemplatePatch & { readonly [K in RunField]?: never };
+
+/**
+ * `P` is the body its `PATCH` takes (`useConfigPatch`): an evaluation's
+ * whole patch, or a template's without the run.
+ */
+export interface EditTarget<P = unknown> {
   /** The API path the items, the pools and the item preview hang off. */
   readonly base: string;
   /** The detail every write refreshes, and the prefix of its item previews. */
@@ -32,26 +48,29 @@ export interface EditTarget {
   readonly poolsKey: readonly unknown[];
   /** What else a write changes: a template's row on its course page (count, points, revision). */
   readonly alsoKeys: readonly (readonly unknown[])[];
-  /** The evaluation the question editor leads back to (`?from=`), when there is one. */
-  readonly questionFrom?: string;
+  /** Where the question editor leads back to: `?from=` or `?fromTemplate=`. */
+  readonly questionFrom: Pick<RouteOf<"question">, "from" | "fromTemplate">;
+  /** Type only, never set: the body of this target's `PATCH`. */
+  readonly patchBody?: P;
 }
 
-export function evaluationTarget(id: string): EditTarget {
+export function evaluationTarget(id: string): EditTarget<EvaluationPatch> {
   return {
     base: `/app/api/evaluations/${id}`,
     detailKey: evaluationKey(id),
     poolsKey: evaluationPoolsKey(id),
     alsoKeys: [],
-    questionFrom: id,
+    questionFrom: { from: id },
   };
 }
 
-export function templateTarget(id: string, courseId: string): EditTarget {
+export function templateTarget(id: string, courseId: string): EditTarget<TemplateBody> {
   return {
     base: `/app/api/templates/${id}`,
     detailKey: templateKey(id),
     poolsKey: templatePoolsKey(id),
     alsoKeys: [courseTemplatesKey(courseId)],
+    questionFrom: { fromTemplate: id },
   };
 }
 
@@ -72,8 +91,8 @@ export type ConfigView = Pick<
 
 /**
  * What they write: a template's patch, which is exactly the part of an
- * evaluation's patch that has nothing to do with a run. An evaluation's
- * `useEvaluationPatch` is one, and so is a template's `useTemplatePatch`.
+ * evaluation's patch that has nothing to do with a run. `useConfigPatch`
+ * gives one for either target.
  */
 export interface ConfigPatch {
   mutate(body: TemplatePatch): void;

@@ -714,6 +714,26 @@ describe("QuestionEditor — opened from an evaluation (#127)", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "evaluation", id: EVAL });
   });
 
+  it("leads back to the template it was opened from, by name (F-EVAL-25)", async () => {
+    const user = userEvent.setup();
+    const TEMPLATE = "0f0e0d0c-0b0a-4908-8706-0504030201ff";
+    mockFetch(
+      routes(mcqDetail(), {
+        [`GET /app/api/templates/${TEMPLATE}`]: ok({
+          template: { id: TEMPLATE, title: "Examen final" },
+          items: [],
+        }),
+      }),
+    );
+    const navigate = vi.fn();
+    renderWithProviders(<QuestionEditor id="q1" navigate={navigate} />, {
+      route: `/questions/q1?fromTemplate=${TEMPLATE}`,
+    });
+
+    await user.click(await screen.findByRole("button", { name: /back to examen final/i }));
+    expect(navigate).toHaveBeenCalledWith({ view: "template", id: TEMPLATE });
+  });
+
   it("leads back to the pool without one", async () => {
     const user = userEvent.setup();
     mockFetch(routes(mcqDetail()));

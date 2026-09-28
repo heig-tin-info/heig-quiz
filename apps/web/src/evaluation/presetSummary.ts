@@ -13,7 +13,9 @@ import type { Evaluation } from "@quiz/contracts";
 
 import type { Dict, TFunction } from "../i18n";
 
-type SummaryInput = Pick<Evaluation, "settings" | "durationS" | "closesAt" | "feedbackPolicy">;
+/** `closesAt` is an evaluation's only: a template has no dates, so no common end yet. */
+type SummaryInput = Pick<Evaluation, "settings" | "durationS" | "feedbackPolicy"> &
+  Partial<Pick<Evaluation, "closesAt">>;
 
 export function timingFragment(e: SummaryInput, t: TFunction, formatDate: (iso: string) => string): string {
   switch (e.settings.timing) {
@@ -23,7 +25,7 @@ export function timingFragment(e: SummaryInput, t: TFunction, formatDate: (iso: 
       return n === 1 ? t("eval.summary.durationOne") : t("eval.summary.duration", { n });
     }
     case "deadline":
-      return e.closesAt === null
+      return e.closesAt == null
         ? t("eval.summary.deadlineUnset")
         : t("eval.summary.deadline", { date: formatDate(e.closesAt) });
     case "manual":
