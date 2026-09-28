@@ -122,7 +122,7 @@ export async function audit(
 }
 
 /** What {@link tracer} hands a route module: one line per audited write. */
-export type Trace = (
+type Trace = (
   req: FastifyRequest,
   action: AuditAction,
   subjectType: string,

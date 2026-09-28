@@ -88,7 +88,7 @@ export class CommentRequired extends GradingError {
  * F-GRADE-05 (ADR-026): a manual score outside what the item can be worth —
  * `[0, max]`, or `[-max, max]` for a choice question under negative marking.
  */
-export class PointsOutOfRange extends GradingError {
+class PointsOutOfRange extends GradingError {
   constructor(range: { min: number; max: number }) {
     super("points_out_of_range", 422, `the points must lie in [${range.min}, ${range.max}]`);
   }
@@ -721,7 +721,7 @@ export async function gradingSteps(
  * the evaluation uses negative marking (ADR-026). The grading panel receives
  * the lower bound (`GradingQueueItem.minPoints`), the routes enforce both.
  */
-export function pointsRangeOf(
+function pointsRangeOf(
   evaluation: EvaluationRecord,
   type: string,
   maxPoints: number,

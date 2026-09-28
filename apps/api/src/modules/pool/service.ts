@@ -1323,7 +1323,7 @@ async function pageWhere(db: Db, where: SQL[], search: QuestionSearch) {
 }
 
 /** One row of {@link searchReachableQuestions}: a published question and its pool. */
-export interface ReachableQuestion {
+interface ReachableQuestion {
   question: QuestionRecord;
   pool: { id: string; name: string };
   tags: string[];
@@ -2057,23 +2057,13 @@ export async function deprecateVersion(
 }
 
 /**
- * Is a published version referenced by an evaluation?
+ * True when ANY published version of the question is referenced (F-QST-11).
  *
  * This is what makes `409 in_use` real: a version an evaluation froze
  * (F-EVAL-03) must stay readable forever, because a student answered THAT
  * wording. `evaluation_items` belongs to the `evaluation` module; the `pool`
  * module reads it by join and never writes it (CLAUDE.md, Conventions).
  */
-export async function isVersionInUse(db: Db, versionId: string): Promise<boolean> {
-  const [row] = await db
-    .select({ id: evaluationItems.id })
-    .from(evaluationItems)
-    .where(eq(evaluationItems.questionVersionId, versionId))
-    .limit(1);
-  return row !== undefined;
-}
-
-/** True when ANY published version of the question is referenced (F-QST-11). */
 async function isQuestionInUse(db: Db, questionId: string): Promise<boolean> {
   const [row] = await db
     .select({ id: evaluationItems.id })

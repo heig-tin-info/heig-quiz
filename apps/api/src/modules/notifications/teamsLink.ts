@@ -110,7 +110,7 @@ export async function previewLinkToken(
   return row ?? null;
 }
 
-export interface LinkOutcome {
+interface LinkOutcome {
   link: TeamsLink;
   /** The account this Teams account was linked to before, now unlinked; null if none. */
   displaced: string | null;

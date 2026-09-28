@@ -19,7 +19,7 @@ export { HttpRunner, type FetchLike, type HttpRunnerOptions } from "./http.js";
 export { UnavailableRunner } from "./unavailable.js";
 
 /** What `/healthz` says about the runner. `stub` is a choice, not a failure. */
-export type RunnerCheck = "up" | "down" | "disabled";
+type RunnerCheck = "up" | "down" | "disabled";
 
 export function createRunner(config: AppConfig, fetchImpl?: FetchLike): RunnerService {
   if (config.RUNNER_MODE === "http") {

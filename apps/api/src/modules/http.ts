@@ -54,10 +54,10 @@ type Parsed<S> = S extends Schema ? z.output<S> : undefined;
  * 500. An unexpected error is logged through `reply.log`, the request-scoped
  * logger, so the line carries the `reqId` the global handler's `req.log` did.
  */
-export type Failure = (reply: FastifyReply, error: unknown, now: Date) => FastifyReply;
+type Failure = (reply: FastifyReply, error: unknown, now: Date) => FastifyReply;
 
 /** What a guarded handler receives: everything the preamble used to compute. */
-export interface RouteContext<P, B, Q, S> {
+interface RouteContext<P, B, Q, S> {
   req: FastifyRequest;
   reply: FastifyReply;
   /** The server's clock, read once per request before anything else (invariant 5). */

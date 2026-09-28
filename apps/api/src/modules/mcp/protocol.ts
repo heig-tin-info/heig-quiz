@@ -22,14 +22,14 @@ export const RPC = {
   internalError: -32603,
 } as const;
 
-export const SERVER_INFO = { name: "heig-quiz", title: "HEIG-VD Quiz", version: "0.1.0" } as const;
+const SERVER_INFO = { name: "heig-quiz", title: "HEIG-VD Quiz", version: "0.1.0" } as const;
 
 /**
  * Read by the model once, at the handshake: the domain in six sentences, so
  * that it does not have to discover by failing that an evaluation only takes
  * published questions from a pool linked to its course.
  */
-export const INSTRUCTIONS = [
+const INSTRUCTIONS = [
   "This server authors content on the HEIG-VD quiz platform, as the teacher who created the token.",
   "Model: a course has classrooms (one class of students for a period) and is linked to question pools.",
   "Questions live in pools. A question must be PUBLISHED to be used; create_question publishes by default.",
@@ -38,7 +38,7 @@ export const INSTRUCTIONS = [
   "Look before creating: list_courses, get_course and list_pools, so nothing is created twice. Evaluations are created as drafts; the teacher opens them from the web app. Give the teacher the returned `url` links.",
 ].join(" ");
 
-export interface RpcResponse {
+interface RpcResponse {
   jsonrpc: "2.0";
   id: JsonRpcId | null;
   result?: unknown;
