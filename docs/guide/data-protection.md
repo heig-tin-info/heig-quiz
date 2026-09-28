@@ -1,227 +1,223 @@
-# Protection des données
+# Data protection
 
-Cette page décrit ce que la plateforme fait des données personnelles de ses utilisateurs, étudiants et enseignants. Elle s'appuie sur le code tel qu'il est aujourd'hui : chaque affirmation renvoie à un fichier du [dépôt](https://github.com/heig-tin-info/heig-quiz), et ce qui n'a pas pu être établi depuis le code est signalé « À confirmer ».
+This page describes what the platform does with the personal data of its users, students and teachers. It is based on the code as it stands: every statement points to a file of the [repository](https://github.com/heig-tin-info/heig-quiz), and what could not be established from the code is marked **To be confirmed**.
 
-!!! info "Langue"
+## Framework and approach
 
-    Contrairement au reste de la documentation, cette page est rédigée en français : elle s'adresse d'abord aux étudiants et aux enseignants de la HEIG-VD.
+The platform is used by teachers of the HEIG-VD, a public institution of the canton of Vaud and a member of the HES-SO. The reference text is the Vaud law on the protection of personal data (Loi vaudoise sur la protection des données personnelles, LPrD, BLV 172.65), currently under revision.
 
-## Cadre et démarche
+This page does not say whether the processing meets that law; judging it is not the role of a piece of software's documentation. It describes, in good faith, what is in place, what is not yet, and what remains to be checked. The section [Known limits](#known-limits-and-planned-improvements) lists them; they are tracked in issue [#274](https://github.com/heig-tin-info/heig-quiz/issues/274).
 
-La plateforme est utilisée par des enseignants de la HEIG-VD, établissement de droit public vaudois membre de la HES-SO. Le texte de référence est la Loi vaudoise sur la protection des données personnelles (LPrD, BLV 172.65), actuellement en cours de révision.
+Who is formally responsible for the processing (the HEIG-VD, a department, the teacher), and whether the processing has been declared to an authority or to a data protection officer: **To be confirmed**.
 
-Cette page ne dit pas si le traitement satisfait à cette loi ; ce n'est pas à la documentation d'un logiciel d'en juger. Elle décrit, de bonne foi, ce qui est mis en œuvre, ce qui ne l'est pas encore et ce qui reste à vérifier. La section [Limites connues](#limites-connues-et-ameliorations-prevues) en fait la liste, suivie dans l'issue [#274](https://github.com/heig-tin-info/heig-quiz/issues/274).
+## Data collected and where it comes from
 
-Qui est formellement responsable du traitement (la HEIG-VD, un département, l'enseignant) et si ce traitement a été annoncé à une autorité ou à un délégué à la protection des données : **À confirmer**.
+The platform receives data from three sources: Switch edu-ID at sign-in, the class list imported by the teacher, and what the user does on the platform.
 
-## Données collectées et origine
+### At sign-in, from Switch edu-ID
 
-La plateforme reçoit des données de trois sources : Switch edu-ID à la connexion, la liste de classe importée par l'enseignant, et ce que l'utilisateur fait sur la plateforme.
+At every sign-in, edu-ID sends the identity of the account and the platform copies it (`apps/api/src/auth/oidc.ts`, `apps/api/src/auth/login.ts`):
 
-### À la connexion, depuis Switch edu-ID
-
-À chaque connexion, edu-ID transmet l'identité du compte et la plateforme la recopie (`apps/api/src/auth/oidc.ts`, `apps/api/src/auth/login.ts`) :
-
-| Donnée | Usage |
+| Data | Used for |
 | --- | --- |
-| Identifiant edu-ID (`sub`, `swissEduPersonUniqueID`) | Reconnaître le compte d'une connexion à l'autre |
-| Prénom, nom, adresse e-mail | Afficher la personne, la rattacher à sa place dans une classe |
-| Adresses e-mail supplémentaires (institutionnelle, privée, liées) | Rattacher une place créée avec une autre adresse du même compte |
-| Affiliations (`staff@heig-vd.ch`, `student@…`) | Décider du rôle enseignant ou étudiant |
-| Adresse d'une photo, si edu-ID en fournit une | Afficher un portrait |
+| edu-ID identifier (`sub`, `swissEduPersonUniqueID`) | Recognising the account from one sign-in to the next |
+| First name, last name, e-mail address | Showing the person, attaching them to their seat in a classroom |
+| Further e-mail addresses (institutional, private, linked) | Attaching a seat created with another address of the same account |
+| Affiliations (`staff@heig-vd.ch`, `student@…`) | Deciding between the teacher and student roles |
+| The address of a picture, if edu-ID provides one | Showing a portrait |
 
-Deux tables méritent une mention. `user_emails` garde toute adresse vue une fois pour un compte, même si l'affiliation correspondante a pris fin. `user_idp_claims` garde l'ensemble des informations transmises par edu-ID lors de la dernière connexion, sans tri : le code l'explique par le diagnostic des problèmes de connexion (`apps/api/src/auth/claims.ts`). Ces informations ne sont affichées nulle part et aucune route ne les expose.
+Two tables deserve a mention. `user_emails` keeps every address ever seen for an account, even once the matching affiliation has ended. `user_idp_claims` keeps everything edu-ID sent at the last sign-in, unfiltered; the code gives the diagnosis of sign-in problems as the reason (`apps/api/src/auth/claims.ts`). This information is displayed nowhere and no route exposes it.
 
-Les claims qu'edu-ID libère effectivement pour les comptes HEIG-VD, photo comprise : **À confirmer**.
+Which claims edu-ID actually releases for HEIG-VD accounts, the picture included: **To be confirmed**.
 
-### Depuis la liste de classe
+### From the class list
 
-L'enseignant importe un tableur avec, pour chaque étudiant, nom, prénom, adresse e-mail et, s'il y a lieu, un pourcentage de temps supplémentaire (`packages/domain/src/roster.ts`). Il peut ajouter une note libre sur un étudiant, que celui-ci ne voit jamais (`apps/api/src/db/org.ts`).
+The teacher imports a spreadsheet with, for each student, last name, first name, e-mail address and, where it applies, an extra-time percentage (`packages/domain/src/roster.ts`). The teacher may add a free-form note about a student, which the student never sees (`apps/api/src/db/org.ts`).
 
-### Pendant l'utilisation
+### While the platform is used
 
-| Donnée | Détail |
+| Data | Detail |
 | --- | --- |
-| Réponses | Enregistrées au fil de la saisie, avec les questions marquées « à revoir » |
-| Tentatives | Heure de début, échéance, remise, temps supplémentaire accordé, dernier signe de vie |
-| Journal de tentative | Changements d'onglet, pertes de focus de la fenêtre, reconnexions, pauses et prolongations (`apps/web/src/attempt/signals.ts`) |
-| Corrections | Points, commentaire de l'enseignant, historique des modifications |
-| Notes publiées | Un instantané des notes au moment de la publication |
-| Photo de profil | Si l'utilisateur en téléverse une |
-| Notifications | Messages de la plateforme, préférences, liaison avec un compte Microsoft Teams |
-| Sondages anonymes | Une empreinte du cookie du navigateur, sans identité |
+| Answers | Saved as they are typed, with the questions marked for review |
+| Attempts | Start time, deadline, hand-in, extra time granted, last sign of life |
+| Attempt journal | Tab changes, loss of window focus, reconnections, pauses and extensions (`apps/web/src/attempt/signals.ts`) |
+| Gradings | Points, the teacher's comment, the history of changes |
+| Released grades | A snapshot of the grades at the moment of release |
+| Profile picture | If the user uploads one |
+| Notifications | Platform messages, preferences, the link to a Microsoft Teams account |
+| Anonymous polls | A hash of the browser's cookie, with no identity |
 
-Le journal de tentative est tenu pour toute évaluation, que le réglage « Journaliser les changements d'onglet » soit activé ou non (voir [Limites connues](#limites-connues-et-ameliorations-prevues)).
+The attempt journal is kept for every evaluation, whether its **Log tab changes** setting is on or off (see [Known limits](#known-limits-and-planned-improvements)).
 
-L'adresse IP n'est pas enregistrée dans la base, à une exception près : un refus d'accès par Safe Exam Browser la note dans le journal d'audit. Elle figure en revanche dans le journal technique de chaque requête (`apps/api/src/redact.ts`). La plateforme n'enregistre ni le navigateur utilisé, ni la frappe au clavier, ni de mesure d'audience.
+The IP address is not stored in the database, with one exception: a refused Safe Exam Browser access writes it to the audit log. It does appear in the technical log of every request (`apps/api/src/redact.ts`). The platform records neither the browser in use, nor keystrokes, nor any audience measurement.
 
-## Finalités
+## Purposes
 
-Les données servent à :
+The data is used to:
 
-- identifier la personne et lui donner accès à ses classes ;
-- faire passer les évaluations : horloge, temps supplémentaire, sauvegarde des réponses ;
-- corriger, automatiquement ou par l'enseignant, et publier les résultats ;
-- permettre à l'enseignant de suivre le déroulement d'une évaluation, y compris le journal de tentative ;
-- envoyer des notifications, si elles sont activées ;
-- produire des statistiques par évaluation pour l'enseignant (voir [Statistiques](#statistiques-et-anonymisation)) ;
-- garder une trace des modifications (journal d'audit) et diagnostiquer les pannes (journal technique).
+- identify the person and give them access to their classrooms;
+- run evaluations: the clock, extra time, saving the answers;
+- grade, automatically or by the teacher, and release the results;
+- let the teacher follow an evaluation as it runs, the attempt journal included;
+- send notifications, when they are enabled;
+- produce per-evaluation statistics for the teacher (see [Statistics](#statistics-and-anonymisation));
+- keep a trace of changes (the audit log) and diagnose failures (the technical log).
 
-Le code ne contient aucun usage publicitaire ou commercial, et aucune donnée n'est envoyée à un modèle d'IA pour la correction : cette fonction n'est pas active (`apps/api/src/modules/grading/jobs.ts`).
+The code contains no advertising or commercial use, and no data is sent to an AI model for grading: that feature is not active (`apps/api/src/modules/grading/jobs.ts`).
 
-## Qui accède à quoi
+## Who reaches what
 
-### Les étudiants
+### Students
 
-Un étudiant voit ses classes, les évaluations qu'on y ouvre, ses propres réponses et, après publication, ses résultats et le retour prévu par l'enseignant. Il ne voit ni la liste de ses camarades ni leurs réponses : chaque accès est filtré sur son propre compte (`apps/api/src/modules/guards.ts`).
+A student sees their classrooms, the evaluations opened there, their own answers and, once released, their results and the feedback the teacher chose to give. They see neither the list of their classmates nor their answers: every access is filtered on their own account (`apps/api/src/modules/guards.ts`).
 
-### Les enseignants
+### Teachers
 
-Un enseignant accède aux données d'un cours uniquement s'il fait partie de l'équipe de ce cours. Le contrôle est fait au moment où les données sont chargées ; sans place dans l'équipe, la réponse est la même que si le cours n'existait pas (`apps/api/src/modules/guards.ts`, prédicat `staffAccess`).
+A teacher reaches the data of a course only if they are on that course's staff. The check is made when the data is loaded; without a staff seat, the answer is the same as if the course did not exist (`apps/api/src/modules/guards.ts`, the `staffAccess` predicate).
 
-Dans une équipe, tous les membres ont les mêmes droits, sur toutes les classes du cours, années précédentes comprises. Tout membre de l'équipe peut y ajouter un collègue. Un enseignant qui ne fait pas partie de l'équipe d'un cours ne voit rien de ses étudiants.
+Within a staff, every member has the same rights, over every classroom of the course, past years included. Any staff member may add a colleague to it. A teacher who is not on a course's staff sees nothing of its students.
 
-Un enseignant qui connecte un assistant IA à la plateforme (voir [AI assistants](assistants.md)) lui donne accès aux cours, pools et évaluations, y compris aux noms et adresses des membres de l'équipe d'un cours. Aucun outil de l'assistant ne donne accès à la liste d'une classe.
+A teacher who connects an AI assistant to the platform (see [AI assistants](assistants.md)) gives it access to courses, pools and evaluations, including the names and addresses of a course's staff. No tool of the assistant reaches a classroom's list of students.
 
-### L'administrateur de l'application
+### The application administrator
 
-Un seul compte, désigné dans la configuration du serveur, a le rôle d'administrateur (`apps/api/src/roles.ts`). Il atteint tous les cours et toutes les classes, voit la liste de tous les comptes, et peut ouvrir pendant une heure une vue en lecture seule du compte d'un étudiant pour l'aider (ADR-034). L'ouverture et la fin de cette vue sont inscrites au journal d'audit ; l'étudiant n'en est pas averti.
+One account, named in the server configuration, holds the administrator role (`apps/api/src/roles.ts`). It reaches every course and every classroom, sees the list of all accounts, and may open a one-hour read-only view of a student's account to help them (ADR-034). The start and the end of that view are written to the audit log; the student is not told.
 
-### L'administrateur système
+### The system administrator
 
-La personne qui administre les machines a accès à la base de données, aux sauvegardes et aux journaux, donc à toutes les données. Ces accès passent par les outils du système (SSH, `psql`) et ne sont pas tracés par la plateforme. Qui dispose de ces accès : **À confirmer**.
+Whoever administers the machines has access to the database, the backups and the logs, and therefore to all the data. These accesses go through system tools (SSH, `psql`) and are not traced by the platform. Who holds these accesses: **To be confirmed**.
 
-### Ce qui est tracé
+### What is traced
 
-Le journal d'audit (`apps/api/src/audit.ts`) enregistre les actions qui modifient quelque chose : connexions, imports et modifications de listes de classe, corrections, publication des résultats, ouverture d'une vue « en tant qu'étudiant », autorisations accordées par l'administrateur. Il ne trace pas les consultations : qui a regardé quelle copie ou quelle liste n'est enregistré nulle part.
+The audit log (`apps/api/src/audit.ts`) records the actions that change something: sign-ins, imports and edits of class lists, gradings, releases of results, opening a view as a student, grants made by the administrator. It does not trace reads: who looked at which paper or which class list is recorded nowhere.
 
-## Hébergement et localisation des données
+## Hosting and location of the data
 
-La plateforme fonctionne chez l'hébergeur Hetzner, sur deux machines virtuelles (`docs/development/deployment.md`) :
+The platform runs at the hosting provider Hetzner, on two virtual machines (`docs/development/deployment.md`):
 
-- la machine applicative porte le serveur de l'application, la base PostgreSQL et les sauvegardes quotidiennes de la base ; elle héberge aussi deux autres services (heig-classroom et evaluation-tb), avec leurs propres fichiers inaccessibles aux autres comptes ;
-- une seconde machine exécute le code soumis par les étudiants, dans des conteneurs isolés (ADR-016). Elle reçoit le programme à exécuter et ses données de test, sans nom ni identifiant d'étudiant (`packages/core/src/runner.ts`).
+- the application machine carries the application server, the PostgreSQL database and the daily database backups; it also hosts two other services (heig-classroom and evaluation-tb), whose files the other accounts cannot read;
+- a second machine runs the code submitted by students, in isolated containers (ADR-016). It receives the program to run and its test data, with no student name or identifier (`packages/core/src/runner.ts`).
 
-La spécification indique « un serveur en Europe » (`docs/spec/03-exigences-non-fonctionnelles.md`, N-DATA-01). Le pays et le centre de données de chaque machine : **À confirmer**. Une décision plus ancienne (ADR-009) mentionne un hébergement en Suisse ; elle date d'avant le passage chez Hetzner et ne décrit plus la situation.
+The specification says "a server in Europe" (`docs/spec/03-exigences-non-fonctionnelles.md`, N-DATA-01). The country and the datacenter of each machine: **To be confirmed**. An older decision (ADR-009) mentions hosting in Switzerland; it predates the move to Hetzner and no longer describes the situation.
 
-Un environnement de recette tourne sur la même machine et reçoit une copie **non anonymisée** des données de production, pour tester dans des conditions réelles (ADR-028). Son accès est limité à une liste de comptes, et sa configuration type coupe les e-mails et les notifications Teams (`.env.staging.example`).
+A staging environment runs on the same machine and receives a copy of the production data that is **not anonymised**, to test under real conditions (ADR-028). Its access is limited to a list of accounts, and its reference configuration turns off e-mail and Teams notifications (`.env.staging.example`).
 
-Services externes appelés :
+External services called:
 
-| Service | Ce qu'il reçoit |
+| Service | What it receives |
 | --- | --- |
-| Switch edu-ID | La connexion (c'est lui qui transmet l'identité) |
-| Scaleway Transactional Email (région Paris par défaut) | Adresse du destinataire, titre de l'évaluation ou nom du pool concerné ; pas de note selon le code (`apps/api/src/modules/notifications/`) |
-| Microsoft Teams | Pour un compte lié, une notification avec le titre concerné ; limité aux organisations autorisées |
-| Hôte de la photo edu-ID | Le navigateur qui affiche un portrait non téléversé le charge directement depuis l'adresse fournie par edu-ID |
+| Switch edu-ID | The sign-in (it is the one that sends the identity) |
+| Scaleway Transactional Email (Paris region by default) | The recipient's address, the title of the evaluation or the name of the pool concerned; no grade, according to the code (`apps/api/src/modules/notifications/`) |
+| Microsoft Teams | For a linked account, a notification with the title concerned; limited to the authorised organisations |
+| The host of the edu-ID picture | A browser showing a portrait that was not uploaded loads it directly from the address edu-ID provided |
 
-L'activation de l'e-mail et de Teams en production : **À confirmer**. La plateforme ne charge aucun script d'analyse d'audience, aucune police ni bibliothèque depuis un service tiers : tout est servi par le serveur lui-même.
+Whether e-mail and Teams are enabled in production: **To be confirmed**. The platform loads no analytics script, and no font or library from a third party: everything is served by the server itself.
 
-## Durées de conservation et sort des données après le cursus
+## Retention and what happens to the data after the studies
 
-**Aucune durée de conservation n'est définie ni appliquée aujourd'hui.** Les données restent tant qu'un enseignant ne les supprime pas (`docs/spec/03-exigences-non-fonctionnelles.md`, N-DATA-03). En particulier, rien ne se passe automatiquement quand un étudiant termine ou quitte ses études.
+**No retention period is defined or enforced today.** The data stays until a teacher deletes it (`docs/spec/03-exigences-non-fonctionnelles.md`, N-DATA-03). In particular, nothing happens automatically when a student completes or leaves their studies.
 
-Ce qui est supprimé, et quand :
+What is deleted, and when:
 
-| Action | Effet |
+| Action | Effect |
 | --- | --- |
-| Suppression d'une évaluation | Tentatives, réponses, journaux de tentative et corrections de cette évaluation sont supprimés |
-| Suppression d'une classe ou d'un cours | Idem pour toutes ses évaluations, plus la liste de classe |
-| Archivage d'une classe | Rien n'est supprimé : la classe est seulement masquée |
-| Retrait d'un étudiant de la liste de classe | Sa place disparaît ; ses tentatives, réponses et notes restent en base |
-| Sessions expirées | Supprimées automatiquement, toutes les dix minutes |
+| Deleting an evaluation | Its attempts, answers, attempt journals and gradings are deleted |
+| Deleting a classroom or a course | The same for all its evaluations, plus the class list |
+| Archiving a classroom | Nothing is deleted: the classroom is only hidden |
+| Removing a student from the class list | Their seat goes; their attempts, answers and grades stay in the database |
+| Expired sessions | Deleted automatically, every ten minutes |
 
-Ce qui n'est jamais supprimé automatiquement : les comptes (il n'existe pas de suppression de compte), les adresses e-mail et informations edu-ID conservées, le journal d'audit, qui garde notamment le nom et l'adresse d'un étudiant retiré d'une classe.
+What is never deleted automatically: the accounts (there is no account deletion), the e-mail addresses and edu-ID information kept, and the audit log, which in particular keeps the name and address of a student removed from a classroom.
 
-Après une suppression, la donnée reste dans les sauvegardes jusqu'à leur rotation : 30 jours pour les copies quotidiennes de la base, 7 jours pour les sauvegardes Hetzner de la machine (`compose.prod.yml`, `docs/development/deployment.md`). La copie de recette la garde jusqu'au prochain rafraîchissement.
+After a deletion, the data remains in the backups until they rotate: 30 days for the daily database copies, 7 days for the Hetzner backups of the machine (`compose.prod.yml`, `docs/development/deployment.md`). The staging copy keeps it until its next refresh.
 
-La durée de conservation que l'institution souhaite après le cursus : **À confirmer**.
+The retention period the institution wants after the studies: **To be confirmed**.
 
-## Statistiques et anonymisation
+## Statistics and anonymisation
 
-Les statistiques que la plateforme affiche sont calculées **par évaluation**, au moment de l'affichage, à partir des données nominatives : moyenne, répartition des notes, taux de réussite de chaque question, répartition des réponses (`apps/api/src/modules/results/service.ts`). Seule l'équipe du cours les voit. L'export CSV des résultats est nominatif.
+The statistics the platform shows are computed **per evaluation**, when they are displayed, from the nominative data: mean, grade distribution, success rate of each question, distribution of the answers (`apps/api/src/modules/results/service.ts`). Only the course's staff sees them. The CSV export of the results is nominative.
 
-Il n'existe pas de base statistique séparée ni anonymisée. Conséquences :
+There is no separate or anonymised statistics store. As a consequence:
 
-- supprimer une évaluation supprime aussi ses statistiques ;
-- tant qu'elles existent, les statistiques restent liées aux personnes ;
-- aucun seuil minimal d'effectif n'est appliqué : dans une petite classe, une répartition des notes ou un taux de réussite peut permettre de reconnaître un étudiant.
+- deleting an evaluation deletes its statistics too;
+- as long as they exist, the statistics stay linked to the people;
+- no minimum group size is applied: in a small classroom, a grade distribution or a success rate may let someone recognise a student.
 
-Les statistiques par question sur plusieurs années et les statistiques de pool agrégées prévues par la spécification (F-STAT-01, N-DATA-06) ne sont pas implémentées. La « difficulté » d'une question est une valeur choisie par son auteur, pas un calcul sur les résultats.
+Per-question statistics over several years and aggregated pool statistics, which the specification plans (F-STAT-01, N-DATA-06), are not implemented. The "difficulty" of a question is a value chosen by its author, not a computation over results.
 
-Pendant une évaluation, le tableau de bord de l'enseignant peut afficher un pseudonyme (adjectif et animal) au lieu du nom, par exemple pour une projection en classe (`packages/domain/src/pseudonym.ts`). C'est un choix d'affichage : les données en base restent nominatives.
+During an evaluation, the teacher's dashboard may show a pseudonym (an adjective and an animal) instead of the name, for instance when it is projected in class (`packages/domain/src/pseudonym.ts`). It is a display choice: the data in the database stays nominative.
 
-## Mesures de sécurité
+## Security measures
 
-Connexion et sessions :
+Sign-in and sessions:
 
-- pas de mot de passe propre à la plateforme : la connexion passe par Switch edu-ID (OIDC avec PKCE) ;
-- la session est une valeur aléatoire dont le serveur ne garde que l'empreinte ; le cookie est inaccessible au JavaScript de la page, transmis uniquement en HTTPS en production, et expire au plus tard 12 heures après la dernière activité avec la configuration type (`apps/api/src/auth/session.ts`, `.env.prod.example`) ;
-- les requêtes de modification sont protégées contre la falsification intersite (`apps/api/src/auth/plugin.ts`) ;
-- la connexion de développement, qui permet de choisir une identité fictive, empêche le serveur de démarrer en production (`apps/api/src/config.ts`) ;
-- les jetons API et les autorisations données aux assistants IA ne sont stockés que sous forme d'empreinte (ADR-022, ADR-023).
+- no password of the platform's own: sign-in goes through Switch edu-ID (OIDC with PKCE);
+- the session is a random value of which the server keeps only a hash; the cookie is out of reach of the page's JavaScript, sent over HTTPS only in production, and expires at most 12 hours after the last activity with the reference configuration (`apps/api/src/auth/session.ts`, `.env.prod.example`);
+- requests that change something are protected against cross-site request forgery (`apps/api/src/auth/plugin.ts`);
+- the development sign-in, which lets anyone pick a fictitious identity, stops the server from starting in production (`apps/api/src/config.ts`);
+- API tokens and the authorisations given to AI assistants are stored as hashes only (ADR-022, ADR-023).
 
-Réseau et stockage :
+Network and storage:
 
-- tout le trafic entre le navigateur et le serveur est chiffré (HTTPS, avec HSTS) ; le trafic vers la machine d'exécution du code aussi, et celle-ci n'accepte que la machine applicative (`Caddyfile`, `apps/runner/deploy/Caddyfile`) ;
-- la base de données n'est pas exposée sur le réseau : seule l'application y accède, par un réseau interne à la machine ;
-- les secrets (mots de passe, clés) sont dans des fichiers réservés au compte de service, jamais dans le dépôt ni dans la base (ADR-010) ;
-- le code des étudiants s'exécute dans des conteneurs sans réseau, sans secret, sans accès aux fichiers de la machine, avec des limites de mémoire, de processus et de temps (`apps/runner/README.md`).
+- all traffic between the browser and the server is encrypted (HTTPS, with HSTS); so is the traffic to the code execution machine, which accepts only the application machine (`Caddyfile`, `apps/runner/deploy/Caddyfile`);
+- the database is not exposed on the network: only the application reaches it, over a network internal to the machine;
+- secrets (passwords, keys) are in files reserved to the service account, never in the repository or the database (ADR-010);
+- students' code runs in containers with no network, no secret, no access to the machine's files, and limits on memory, processes and time (`apps/runner/README.md`).
 
-Ce qui n'est pas en place ou pas établi : le chiffrement des disques et des sauvegardes n'est pas décrit dans le dépôt (**À confirmer**) ; les copies quotidiennes de la base sont sur la machine même et ne sont pas chiffrées ; aucune durée de conservation des journaux techniques n'est configurée dans le dépôt (**À confirmer** sur la machine).
+What is not in place or not established: disk and backup encryption is not described in the repository (**To be confirmed**); the daily database copies sit on the machine itself and are not encrypted; no retention period for technical logs is configured in the repository (**To be confirmed** on the machine).
 
-## Droits des étudiants et interlocuteur
+## Students' rights and whom to contact
 
-Ce que la plateforme permet aujourd'hui à un étudiant :
+What the platform lets a student do today:
 
-| Besoin | Dans l'application |
+| Need | In the application |
 | --- | --- |
-| Consulter son profil | Oui : nom, adresse e-mail, rôle, dernière connexion (**Settings**) |
-| Consulter ses résultats et corrections | Oui, après publication par l'enseignant, dans la mesure prévue par l'évaluation |
-| Consulter son journal de tentative | Non : seul l'enseignant le voit |
-| Exporter ses données | Non : aucune fonction d'export pour l'étudiant |
-| Corriger son nom ou son adresse | Non dans la plateforme : ils viennent d'edu-ID et sont mis à jour à chaque connexion ; une erreur dans la liste de classe se corrige auprès de l'enseignant |
-| Supprimer ses données | Seulement sa photo de profil et sa liaison Teams |
+| See their profile | Yes: name, e-mail address, role, last sign-in (**Settings**) |
+| See their results and gradings | Yes, once the teacher has released them, as far as the evaluation allows |
+| See their attempt journal | No: only the teacher sees it |
+| Export their data | No: there is no export for students |
+| Correct their name or address | Not in the platform: they come from edu-ID and are updated at every sign-in; a mistake in the class list is corrected by the teacher |
+| Delete their data | Only their profile picture and their Teams link |
 
-Pour toute demande (consultation, copie, rectification ou effacement), l'étudiant s'adresse d'abord à l'enseignant du cours, qui peut corriger une liste de classe ou supprimer une évaluation. Extraire toutes les données d'un étudiant ou supprimer son compte n'est possible par aucune fonction de l'application : seul un accès direct à la base le permet.
+For any request (access, copy, correction or deletion), the student turns first to the course's teacher, who can correct a class list or delete an evaluation. Extracting all the data of a student or deleting their account is possible through no feature of the application: only direct access to the database allows it.
 
-L'interlocuteur institutionnel pour ces demandes, et l'autorité de surveillance à indiquer : **À confirmer**.
+The institutional contact for these requests, and the supervisory authority to name: **To be confirmed**.
 
-## Limites connues et améliorations prévues
+## Known limits and planned improvements
 
-Les points suivants sont connus et suivis dans l'issue [#274](https://github.com/heig-tin-info/heig-quiz/issues/274). Aucun n'est corrigé à la date de cette page ; ils ne sont pas planifiés tant que l'issue ne dit pas le contraire.
+The following points are known and tracked in issue [#274](https://github.com/heig-tin-info/heig-quiz/issues/274). None is fixed as of this page; none is scheduled unless the issue says otherwise.
 
-Conservation et effacement :
+Retention and deletion:
 
-- aucune durée de conservation, aucune purge après le départ d'un étudiant ;
-- aucune suppression ni anonymisation de compte : la colonne prévue pour marquer un compte anonymisé existe, mais aucun code ne la renseigne ;
-- retirer un étudiant d'une classe ne supprime pas ses tentatives ni ses notes ;
-- les informations edu-ID sont conservées sans tri et sans limite de durée ;
-- le journal d'audit n'est jamais purgé et contient des noms et adresses.
+- no retention period, no purge after a student leaves;
+- no deletion or anonymisation of accounts: the column meant to mark an account as anonymised exists, but no code sets it;
+- removing a student from a classroom does not delete their attempts or grades;
+- the edu-ID information is kept unfiltered and with no time limit;
+- the audit log is never purged and contains names and addresses.
 
-Statistiques :
+Statistics:
 
-- toutes les statistiques sont nominatives ; aucune version anonymisée ne subsiste ni n'est produite ;
-- pas de seuil d'effectif : les petites classes sont réidentifiables.
+- every statistic is nominative; no anonymised version is produced or kept;
+- no minimum group size: small classrooms are re-identifiable.
 
-Accès et traçabilité :
+Access and traceability:
 
-- les consultations ne sont pas tracées, ni celles des enseignants, ni celles de l'administrateur ;
-- les accès directs à la machine et à la base ne sont pas tracés par la plateforme ;
-- le journal d'audit est présenté comme non modifiable par l'application, mais la configuration de production ne l'impose pas ;
-- l'étudiant n'est pas averti qu'un administrateur a ouvert une vue de son compte ;
-- tout utilisateur connecté peut obtenir la photo téléversée d'un autre utilisateur s'il connaît son identifiant interne ;
-- un jeton API personnel donne tous les droits de son propriétaire et peut ne jamais expirer.
+- reads are not traced, neither the teachers' nor the administrator's;
+- direct access to the machine and the database is not traced by the platform;
+- the audit log is described as unmodifiable by the application, but the production configuration does not enforce it;
+- the student is not told that an administrator opened a view of their account;
+- any signed-in user can fetch another user's uploaded picture if they know that user's internal identifier;
+- a personal API token carries all its owner's rights and may never expire.
 
-Information de l'étudiant :
+Informing the student:
 
-- il n'existe pas encore, dans l'application, de page « Données et confidentialité » (N-DATA-07) ni d'export des données (N-DATA-04) ;
-- l'étudiant n'est pas informé dans l'interface que les changements d'onglet et pertes de focus sont enregistrés, et ne voit pas ce journal ;
-- le réglage « Journaliser les changements d'onglet » d'une évaluation n'a pas d'effet : le journal est toujours tenu.
+- the application has no "Data and privacy" page yet (N-DATA-07), and no data export (N-DATA-04);
+- the student is not told in the interface that tab changes and loss of focus are recorded, and does not see that journal;
+- an evaluation's **Log tab changes** setting has no effect: the journal is always kept.
 
-Hébergement et sécurité :
+Hosting and security:
 
-- les copies quotidiennes de la base sont sur la machine qu'elles protègent, non chiffrées ; la copie hors de la machine n'est pas en place ;
-- la recette contient une copie non anonymisée des données réelles ;
-- la politique de sécurité du contenu (CSP) du site ne restreint pas l'origine des scripts ;
-- la localisation des machines, le chiffrement des disques et la conservation des journaux techniques restent à confirmer.
+- the daily database copies sit on the machine they protect, unencrypted; the copy off the machine is not in place;
+- staging holds a copy of the real data that is not anonymised;
+- the site's content security policy (CSP) does not restrict where scripts come from;
+- the location of the machines, disk encryption and the retention of technical logs remain to be confirmed.
