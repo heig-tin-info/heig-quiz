@@ -575,13 +575,27 @@ export async function logAttemptEvent(
   details: unknown,
   now: Date,
 ): Promise<void> {
-  await db.insert(attemptEvents).values({
-    id: randomUUID(),
-    attemptId,
-    kind,
-    at: now,
-    details: details ?? null,
-  });
+  await logAttemptEvents(db, [attemptId], kind, details, now);
+}
+
+/** {@link logAttemptEvent} for many attempts at once: one multi-row insert. */
+export async function logAttemptEvents(
+  db: Db,
+  attemptIds: readonly string[],
+  kind: typeof attemptEvents.$inferInsert["kind"],
+  details: unknown,
+  now: Date,
+): Promise<void> {
+  if (attemptIds.length === 0) return;
+  await db.insert(attemptEvents).values(
+    attemptIds.map((attemptId) => ({
+      id: randomUUID(),
+      attemptId,
+      kind,
+      at: now,
+      details: details ?? null,
+    })),
+  );
 }
 
 /**

@@ -24,10 +24,9 @@ import { enqueueEvaluationGrading } from "../grading/jobs.js";
 import {
   type AttemptRecord,
   EvaluationFinished,
-  attemptById,
   beginAttempt,
 } from "./attempt.js";
-import { logAttemptEvent } from "./autosave.js";
+import { logAttemptEvent, logAttemptEvents } from "./autosave.js";
 
 // --- Teacher controls (§5.1, F-LIVE-11) -----------------------------------
 
@@ -212,11 +211,14 @@ export async function extendTime(
       updatedAt: now,
     })
     .where(where)
-    .returning({ id: attempts.id });
-  for (const row of updated) {
-    const attempt = (await attemptById(db, row.id))!;
-    await logAttemptEvent(db, row.id, "time_added", { minutes: input.minutes }, now);
-    events.deadlineChanged(evaluation, attempt, "teacher_extend", now);
-  }
+    .returning();
+  await logAttemptEvents(
+    db,
+    updated.map((attempt) => attempt.id),
+    "time_added",
+    { minutes: input.minutes },
+    now,
+  );
+  for (const attempt of updated) events.deadlineChanged(evaluation, attempt, "teacher_extend", now);
   return updated.length;
 }

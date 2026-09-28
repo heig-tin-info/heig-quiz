@@ -762,11 +762,35 @@ describe("teacher controls (F-LIVE-11, F-LIVE-12)", () => {
     }
     const [first, second] = started;
 
-    const all = await service.extendTime(db, row, { minutes: 5 }, clock.now());
+    const frames: Record<string, unknown>[] = [];
+    const unsubscribe = subscribe((message: BusMessage) => {
+      if (message.kind === "data" && message.event.type === "attempt.deadline") {
+        frames.push(message.event as unknown as Record<string, unknown>);
+      }
+    });
+    let all: number;
+    try {
+      all = await service.extendTime(db, row, { minutes: 5 }, clock.now());
+    } finally {
+      unsubscribe();
+    }
     expect(all).toBe(2);
     const afterAll_ = await service.attemptById(db, first!.id);
     expect(afterAll_!.deadlineAt!.getTime() - first!.deadlineAt!.getTime()).toBe(5 * 60_000);
     expect(afterAll_!.extraS).toBe(300);
+    // One journal line and one frame per attempt, each with its NEW deadline.
+    for (const attempt of started) {
+      const journal = await db.select().from(attemptEvents).where(eq(attemptEvents.attemptId, attempt!.id));
+      expect(journal.filter((e) => e.kind === "time_added").map((e) => e.details)).toEqual([{ minutes: 5 }]);
+      const moved = (await service.attemptById(db, attempt!.id))!;
+      expect(frames.filter((f) => f.attemptId === attempt!.id)).toEqual([
+        expect.objectContaining({
+          deadlineAt: moved.deadlineAt!.toISOString(),
+          bonusS: moved.bonusS,
+          reason: "teacher_extend",
+        }),
+      ]);
+    }
 
     const one = await service.extendTime(db, row, { minutes: 10, attemptId: second!.id }, clock.now());
     expect(one).toBe(1);
