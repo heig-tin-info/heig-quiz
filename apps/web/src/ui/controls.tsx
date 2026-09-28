@@ -8,6 +8,7 @@ import {
   inputClass,
   inputSize,
   label as fieldLabel,
+  Segmented,
   textareaClass,
   type ButtonSize,
   type ButtonVariant,
@@ -355,69 +356,12 @@ export function Switch({
   );
 }
 
-/**
- * Segmented control for a small set of mutually exclusive choices: the
- * selected chip is raised (surface + hairline) — selection is structure,
- * never color, the accent stays reserved for primary actions. Native radios
- * underneath (sr-only) keep it a keyboard-accessible radiogroup.
+/*
+ * The segmented control (`Segmented`) is written once, in `@quiz/ui`: the
+ * question editors use the very same one, their `wrap` and `labelledBy`
+ * beside the app's `size` and `label`.
  */
-export function Segmented<T extends string>({
-  name,
-  value,
-  options,
-  onChange,
-  disabled,
-  size = "md",
-  label,
-}: {
-  /** Groups the native radios (one form can hold several groups). */
-  name: string;
-  value: T;
-  options: { value: T; label: ReactNode }[];
-  onChange: (value: T) => void;
-  disabled?: boolean;
-  size?: "sm" | "md";
-  /**
-   * The name of the GROUP, for a radiogroup that has no visible caption of
-   * its own — two segmented controls side by side ("Group by", "Sort by")
-   * are otherwise two anonymous rows of pills to a screen reader.
-   */
-  label?: string;
-}) {
-  return (
-    <div
-      role="radiogroup"
-      {...(label === undefined ? {} : { "aria-label": label })}
-      className={cx(
-        "inline-flex shrink-0 gap-0.5 rounded-full bg-surface-3 p-0.75",
-        disabled && "opacity-60",
-      )}
-    >
-      {options.map((o) => (
-        <label
-          key={o.value}
-          className={cx(
-            "inline-flex items-center justify-center rounded-full px-3 font-medium transition-colors has-focus-visible:ring-2 has-focus-visible:ring-accent/50",
-            size === "sm" ? "h-6 text-xs" : "h-7 text-[13px]",
-            value === o.value
-              ? "bg-surface text-fg ring-1 ring-line-strong/70"
-              : cx("text-fg-muted", !disabled && "cursor-pointer hover:text-fg"),
-          )}
-        >
-          <input
-            type="radio"
-            name={name}
-            className="sr-only"
-            checked={value === o.value}
-            onChange={() => onChange(o.value)}
-            disabled={disabled}
-          />
-          {o.label}
-        </label>
-      ))}
-    </div>
-  );
-}
+export { Segmented };
 
 /**
  * Settings row: label + a description of the CURRENT choice on the left
