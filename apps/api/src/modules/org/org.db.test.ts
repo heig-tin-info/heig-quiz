@@ -283,12 +283,14 @@ describe("the student_joined notice", () => {
  * only what they may still reach.
  */
 describe("losing access closes the streams", () => {
-  it("ends a removed staff member's and a removed student's streams, and only theirs", async () => {
+  it("ends a removed staff member's, a removed and an unclaimed student's streams, and only theirs", async () => {
     const course = randomUUID();
     const room = randomUUID();
     const entry = randomUUID();
     const colleague = await server.signIn("teacher");
     const student = await server.signIn("student");
+    const detached = await server.signIn("student");
+    const detachedEntry = randomUUID();
     await server.app.db.insert(courses).values({ id: course, name: "Réseaux", code: `RES-${course.slice(0, 6)}` });
     await server.app.db.insert(courseStaff).values([
       { courseId: course, userId: teacher.id },
@@ -304,10 +306,20 @@ describe("losing access closes the streams", () => {
       userId: student.id,
       claimedAt: new Date(),
     });
+    await server.app.db.insert(enrollments).values({
+      id: detachedEntry,
+      classroomId: room,
+      nom: "Hamilton",
+      prenom: "Margaret",
+      email: `margaret-${detachedEntry.slice(0, 8)}@heig.test`,
+      userId: detached.id,
+      claimedAt: new Date(),
+    });
     const streams = {
       teacher: await openStream(teacher.headers),
       colleague: await openStream(colleague.headers),
       student: await openStream(student.headers),
+      detached: await openStream(detached.headers),
     };
     await settle();
 
@@ -336,6 +348,17 @@ describe("losing access closes the streams", () => {
     expect(removed.statusCode).toBe(204);
     await settle();
     expect(streams.student.ended).toBe(true);
+    expect(streams.detached.ended).toBe(false);
+
+    // Unclaiming a line detaches its student from the classroom just the same.
+    const unclaimed = await server.app.inject({
+      method: "POST",
+      url: `/app/api/classrooms/${room}/roster/${detachedEntry}/unclaim`,
+      headers: teacher.headers,
+    });
+    expect(unclaimed.statusCode).toBe(200);
+    await settle();
+    expect(streams.detached.ended).toBe(true);
     expect(streams.teacher.ended).toBe(false);
 
     for (const s of Object.values(streams)) s.close();
