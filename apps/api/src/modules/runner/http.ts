@@ -57,14 +57,12 @@ function isTimeout(err: unknown): boolean {
 }
 
 /**
- * The most a runner may answer, in bytes: every stream of the request at its
- * own `outputKb` cap (the build's two and two per case), doubled for JSON
- * escaping, plus room for the envelope. What a request allows is what the
- * API is willing to hold in memory; a runner sending more is misbehaving.
+ * The most a runner may answer, in bytes. Fixed and generous: a program's
+ * output is capped in bytes by the runner, but JSON escaping multiplies it
+ * (a control byte becomes `\u00XX`, six), so no tight bound derives from
+ * the request. This one only stops a runner that streams without end.
  */
-export function maxOutcomeBytes(req: RunnerRequest): number {
-  return (req.cases.length + 1) * 2 * req.limits.outputKb * 1024 * 2 + 64 * 1024;
-}
+const MAX_OUTCOME_BYTES = 32 * 1024 * 1024;
 
 /** A `/health` answer is a few hundred bytes. */
 const MAX_HEALTH_BYTES = 64 * 1024;
@@ -121,7 +119,7 @@ export class HttpRunner implements RunnerService {
     for (let attempt = 0; ; attempt++) {
       const res = await this.post(`${this.base}/run`, req);
 
-      if (res.ok) return await this.outcome(res, maxOutcomeBytes(req));
+      if (res.ok) return await this.outcome(res);
 
       // Read and drop the body: leaving it unconsumed keeps the socket busy.
       await res.text().catch(() => "");
@@ -168,10 +166,10 @@ export class HttpRunner implements RunnerService {
     }
   }
 
-  private async outcome(res: Response, maxBytes: number): Promise<RunnerOutcome> {
+  private async outcome(res: Response): Promise<RunnerOutcome> {
     let body: unknown;
     try {
-      body = await cappedJson(res, maxBytes);
+      body = await cappedJson(res, MAX_OUTCOME_BYTES);
     } catch (err) {
       throw err instanceof RunnerUnavailable ? err : new RunnerUnavailable("bad_response");
     }

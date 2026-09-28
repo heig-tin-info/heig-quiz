@@ -7,7 +7,7 @@
  * Nothing here reads the database or calls the runner.
  */
 import type { RunnerResultEvent } from "@quiz/contracts";
-import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
+import type { AnyQuestionTypeServer, RunnerOutcome, RunnerRequest } from "@quiz/core/server";
 import { caseVerdict } from "@quiz/qt-code/server";
 
 /** What `type.toStudent` exposes about running; read structurally, never cast. */
@@ -83,6 +83,21 @@ export function runnableView(student: unknown): RunnableStudentView {
   return out;
 }
 
+/**
+ * Which route a type's student button goes through — one route per button.
+ * A type whose student view publishes `visibleCases` is judged case by case
+ * by `/run` (`code`); any other type with an `interactiveRequest` has its own
+ * `/simulate` (`circuit`, `codeimage`). `null`: nothing to run at all.
+ */
+export function runButton(
+  type: AnyQuestionTypeServer,
+  student: RunnableStudentView,
+): "run" | "simulate" | null {
+  if (!type.interactiveRequest) return null;
+  if (student.visibleCases === undefined) return "simulate";
+  return type.finalizeRunner ? "run" : null;
+}
+
 /** The only check a free stdin try can make: the program exits 0. */
 const FREE_TRY = { expected: "", compareStdout: false, expectedExitCode: 0 };
 
@@ -126,14 +141,15 @@ export function visibleRunResult(
   request: RunnerRequest,
   outcome: RunnerOutcome,
   student: RunnableStudentView,
+  freeTry: boolean,
 ): RunnerResultEvent["result"] {
-  const specOf = new Map((student.visibleCases ?? []).map((c) => [c.name, c]));
   return {
     status: "ok",
     compile: { ok: outcome.compile.ok, stderr: outcome.compile.stderr },
     cases: request.cases.map((c, index) => {
       const run = outcome.cases[index];
-      const spec = specOf.get(c.name);
+      // `request.cases` are the visible cases in their order, or the free try.
+      const spec = freeTry ? undefined : student.visibleCases?.[index];
       // Nothing to compare when the case does not compare stdout, and
       // nothing to show either.
       const expected = spec === undefined || !spec.compareStdout ? "" : spec.expected;

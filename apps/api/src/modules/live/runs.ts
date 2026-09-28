@@ -25,6 +25,7 @@ import { gradeDefaults, joinedItem } from "../evaluation/service.js";
 import * as events from "./events.js";
 import { studentView } from "./studentView.js";
 import {
+  runButton,
   runnableView,
   visibleRunRequest,
   visibleRunResult,
@@ -61,7 +62,7 @@ async function attemptRunContext<T>(
     itemId: string;
     now: Date;
     /** The hook the button runs through; `undefined` is `not_runnable`. */
-    capability: (type: AnyQuestionTypeServer) => T | undefined;
+    capability: (type: AnyQuestionTypeServer, student: RunnableStudentView) => T | undefined;
     /** The per-minute budget the type publishes in its student view. */
     budget: (student: RunnableStudentView) => number | undefined;
     /**
@@ -83,13 +84,12 @@ async function attemptRunContext<T>(
   if (!joined) throw new LiveError("not_found", 404);
 
   const type = typeOf(joined.question.type);
-  const capability = input.capability(type);
-  if (capability === undefined) throw new NotRunnable();
-
   const version = { config: joined.version.config, configVersion: joined.version.configVersion };
   const student = runnableView(
     studentView({ type: joined.question.type, version, seed: attempt.seed, itemId, shuffle: false }),
   );
+  const capability = input.capability(type, student);
+  if (capability === undefined) throw new NotRunnable();
 
   // N-SEC-07: the budget is the question's own, counted from the journal
   // rather than from a table of its own. Both buttons count `run` events, so
@@ -141,13 +141,13 @@ async function oneAtATime<R>(attemptId: string, run: () => Promise<R>): Promise<
 }
 
 /** {@link runVisibleCasesNow}, one at a time per attempt. */
-export function runVisibleCases(...args: Parameters<typeof runVisibleCasesNow>) {
-  return oneAtATime(args[1].attempt.id, () => runVisibleCasesNow(...args));
+export function runVisibleCases(db: Db, input: RunInput) {
+  return oneAtATime(input.attempt.id, () => runVisibleCasesNow(db, input));
 }
 
 /** {@link simulateAnswerNow}, one at a time per attempt. */
-export function simulateAnswer(...args: Parameters<typeof simulateAnswerNow>) {
-  return oneAtATime(args[1].attempt.id, () => simulateAnswerNow(...args));
+export function simulateAnswer(db: Db, input: SimulateInput) {
+  return oneAtATime(input.attempt.id, () => simulateAnswerNow(db, input));
 }
 
 /**
@@ -180,9 +180,7 @@ async function runForStudent(
  * with Podman exists (decision D14) — this ends in `503 runner_unavailable`,
  * which is a configuration, not a failure.
  */
-async function runVisibleCasesNow(
-  db: Db,
-  input: {
+interface RunInput {
     runner: RunnerService;
     evaluation: EvaluationRecord;
     attempt: AttemptRecord;
@@ -199,23 +197,27 @@ async function runVisibleCasesNow(
      */
     compileOnly?: boolean | undefined;
     now: Date;
-  },
+}
+
+async function runVisibleCasesNow(
+  db: Db,
+  input: RunInput,
 ): Promise<{ requestId: string; result: RunnerResultEvent["result"] }> {
   const { attempt, itemId } = input;
   const prepared = await attemptRunContext(db, {
     ...input,
-    // A type with no second half has nothing a runner could finish.
-    capability: (type) => type.finalizeRunner,
+    // The button of a type judged case by case (`runButton`); a type with no
+    // second half has nothing a runner could finish.
+    capability: (type, student) =>
+      runButton(type, student) === "run" ? type.interactiveRequest?.bind(type) : undefined,
     budget: (student) => student.runsPerMinute,
     compileOnly: input.compileOnly,
     answer: { regions: input.regions },
   });
-  const { type, config, answer, ctx } = prepared;
-  const first = await type.grade(config, answer, { ...ctx, runner: input.runner });
-  // `grade` assembles the request server-side from the template and the
-  // regions (invariant 14); nothing the browser sent becomes a file name.
-  if (first.kind !== "pending" || first.via !== "runner") throw new NotRunnable();
-  const visible = type.interactiveRequest?.(config, answer, ctx) ?? null;
+  // The type assembles the request server-side from the template and the
+  // regions (invariant 14), the visible cases only; nothing the browser sent
+  // becomes a file name. `null`: an empty answer, or one that no longer fits.
+  const visible = prepared.capability(prepared.config, prepared.answer, prepared.ctx);
   if (visible === null) throw new NotRunnable();
 
   const request = visibleRunRequest(visible, input);
@@ -224,7 +226,7 @@ async function runVisibleCasesNow(
     { ...input, request },
     input.compileOnly === true ? { itemId, compileOnly: true } : { itemId },
   );
-  const result = visibleRunResult(request, outcome, prepared.student);
+  const result = visibleRunResult(request, outcome, prepared.student, input.stdin !== undefined);
 
   // The result travels on the student's own topic (§4.8) AND in the response,
   // so a client that lost its stream is not left waiting.
@@ -251,22 +253,22 @@ async function runVisibleCasesNow(
  * cares about; a simulation is a curve the student asked for, so the response
  * is the delivery.
  */
-async function simulateAnswerNow(
-  db: Db,
-  input: {
-    runner: RunnerService;
-    evaluation: EvaluationRecord;
-    attempt: AttemptRecord;
-    itemId: string;
-    answer: unknown;
-    now: Date;
-  },
-): Promise<RunnerOutcome> {
+interface SimulateInput {
+  runner: RunnerService;
+  evaluation: EvaluationRecord;
+  attempt: AttemptRecord;
+  itemId: string;
+  answer: unknown;
+  now: Date;
+}
+
+async function simulateAnswerNow(db: Db, input: SimulateInput): Promise<RunnerOutcome> {
   const prepared = await attemptRunContext(db, {
     ...input,
-    // A type with a button of its own. `code` has the hook too, for `/run`'s
-    // visible cases; its player keeps `/run`, which judges them for it.
-    capability: (type) => type.interactiveRequest?.bind(type),
+    // A type with a button of its own; one judged case by case goes through
+    // `/run` and nowhere else (`runButton`).
+    capability: (type, student) =>
+      runButton(type, student) === "simulate" ? type.interactiveRequest?.bind(type) : undefined,
     // The same budget as `/run`, under whichever name the type publishes it:
     // a circuit says `simulationsPerMinute`, a code question `runsPerMinute`.
     budget: (student) => student.simulationsPerMinute ?? student.runsPerMinute,

@@ -60,7 +60,12 @@ import {
 import { verdictOf } from "../grading/service.js";
 import * as live from "../live/service.js";
 import { solutionView, studentView } from "../live/studentView.js";
-import { runnableView, visibleRunRequest, visibleRunResult } from "../live/visibleRun.js";
+import {
+  runButton,
+  runnableView,
+  visibleRunRequest,
+  visibleRunResult,
+} from "../live/visibleRun.js";
 import { hasKey, loadConfig, typeOf } from "../pool/config.js";
 
 // --- Failures -------------------------------------------------------------
@@ -247,7 +252,7 @@ export async function runPreview(
 ): Promise<RunnerResultEvent["result"]> {
   const { evaluation, now } = input;
   const { joined, type, config, student } = await previewItem(db, evaluation, input.itemId, input.seed);
-  if (!type.finalizeRunner) throw notRunnable();
+  if (runButton(type, student) !== "run") throw notRunnable();
   // A compilation spends its own, larger budget, never a test run's
   // (ADR-024, addendum of 2026-09-25) — the attempt's rule, keyed apart.
   const runs = student.runsPerMinute ?? DEFAULT_RUNS_PER_MINUTE;
@@ -261,8 +266,6 @@ export async function runPreview(
     throw new PreviewError("answer_invalid", 422, { details: answer.error.issues });
   }
   const ctx = finalizeContext(evaluation, joined, input.seed, now);
-  const first = await type.grade(config, answer.data, { ...ctx, runner: input.runner });
-  if (first.kind !== "pending" || first.via !== "runner") throw notRunnable();
   const visible = type.interactiveRequest?.(config, answer.data, ctx) ?? null;
   if (visible === null) throw notRunnable();
   const request = visibleRunRequest(visible, input);
@@ -272,7 +275,7 @@ export async function runPreview(
   } catch (error) {
     throw runnerDown(error) ?? error;
   }
-  return visibleRunResult(request, outcome, student);
+  return visibleRunResult(request, outcome, student, input.stdin !== undefined);
 }
 
 /**
@@ -294,7 +297,7 @@ export async function simulatePreview(
 ): Promise<RunnerOutcome> {
   const { evaluation, now } = input;
   const { joined, type, config, student } = await previewItem(db, evaluation, input.itemId, input.seed);
-  if (!type.interactiveRequest) throw notRunnable();
+  if (runButton(type, student) !== "simulate" || !type.interactiveRequest) throw notRunnable();
   budget.spend(
     `run:${input.userId}:${evaluation.id}`,
     student.simulationsPerMinute ?? student.runsPerMinute ?? DEFAULT_RUNS_PER_MINUTE,

@@ -48,6 +48,8 @@ export interface QueueStats {
 interface Waiter {
   request: RunnerRequest;
   signal: AbortSignal | undefined;
+  /** Stops listening to `signal` once the request leaves the queue. */
+  detach: () => void;
   resolve: (outcome: RunnerOutcome) => void;
   reject: (error: unknown) => void;
 }
@@ -90,17 +92,19 @@ export class RunQueue {
     }
     return new Promise<RunnerOutcome>((resolve, reject) => {
       const queue = this.waiting[request.priority];
-      const waiter: Waiter = { request, signal, resolve, reject };
-      signal?.addEventListener(
-        "abort",
-        () => {
-          const index = queue.indexOf(waiter);
-          if (index === -1) return; // already running: `run` has the signal
-          queue.splice(index, 1);
-          reject(signal.reason);
-        },
-        { once: true },
-      );
+      const onAbort = (): void => {
+        queue.splice(queue.indexOf(waiter), 1);
+        reject(signal?.reason);
+      };
+      const waiter: Waiter = {
+        request,
+        signal,
+        resolve,
+        reject,
+        // Once running, the request is `run`'s to stop: it has the signal.
+        detach: () => signal?.removeEventListener("abort", onAbort),
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
       queue.push(waiter);
       this.pump();
     });
@@ -126,6 +130,7 @@ export class RunQueue {
     while (this.running < this.options.concurrency) {
       const waiter = this.next();
       if (waiter === undefined) return;
+      waiter.detach();
       this.running += 1;
       const started = Date.now();
       // The books are closed BEFORE the caller is told: whoever is woken by

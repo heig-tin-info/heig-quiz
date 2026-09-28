@@ -133,8 +133,9 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
       return await queue.submit(runnerRequest, gone.signal);
     } catch (error) {
       if (gone.signal.aborted) {
+        // Nobody left to answer: the socket is closed.
         request.log.info("client gone, run abandoned");
-        return reply.code(503).send({ error: "client_gone" });
+        return reply.hijack();
       }
       if (error instanceof QueueFull) {
         return reply

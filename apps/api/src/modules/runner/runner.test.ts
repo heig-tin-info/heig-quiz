@@ -118,9 +118,14 @@ describe("HttpRunner", () => {
     });
     server.post("/run", async (_req, reply) => reply.send(OUTCOME));
     server.post("/garbage/run", async (_req, reply) => reply.send({ nothing: "useful" }));
-    // Far more than the request's own caps allow: 16 KB per stream.
+    // Past the 32 MB cap: a runner that streams without end.
     server.post("/huge/run", async (_req, reply) =>
-      reply.send({ ...OUTCOME, compile: { ...OUTCOME.compile, stderr: "x".repeat(4 << 20) } }),
+      reply.send({ ...OUTCOME, compile: { ...OUTCOME.compile, stderr: "x".repeat(33 << 20) } }),
+    );
+    // The widest output a case may legitimately have: 256 KB of control
+    // bytes, each escaped to six in the JSON.
+    server.post("/control/run", async (_req, reply) =>
+      reply.send({ ...OUTCOME, cases: [{ ...OUTCOME.cases[0]!, stdout: "\x01".repeat(256 << 10) }] }),
     );
     server.post("/busy/run", async (_req, reply) =>
       reply.code(429).header("retry-after", "2").send({ error: "busy" }),
@@ -181,7 +186,12 @@ describe("HttpRunner", () => {
     });
   });
 
-  it("stops reading a body larger than the request's own caps allow", async () => {
+  it("reads a full output of control bytes, however the JSON escapes it", async () => {
+    const outcome = await runnerAt("/control").run(REQUEST);
+    expect(outcome.cases[0]!.stdout).toBe("\x01".repeat(256 << 10));
+  });
+
+  it("stops reading a body past its cap", async () => {
     await expect(runnerAt("/huge").run(REQUEST)).rejects.toMatchObject({
       code: "runner_unavailable",
       reason: "response_too_large",
