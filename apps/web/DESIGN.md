@@ -881,7 +881,7 @@ than turning red. Nobody in the room is being marked wrong.
 
 At most seven visible columns, one dominant identity column, numbers right
 aligned and tabular, status as a `Badge`, actions last, `—` for an empty
-cell. All of it lives in `T` in `ui/page.tsx`.
+cell. All of it lives in `T` in `ui/table.tsx`.
 
 Seven columns do not fit every width, and the width that matters is the
 TABLE's, never the viewport's: the same pool table is 1120 px wide on a
@@ -909,7 +909,7 @@ act on, and that was the bug the priorities were added for.
 
 Every table sorts by its column labels, through one motif. A head is
 declared as DATA — one `Column` per column, carrying its label, its
-priority class and its width — and `TableHead` (`ui/page.tsx`) draws it, so
+priority class and its width — and `TableHead` (`ui/table.tsx`) draws it, so
 the head and the priorities can no longer disagree and every table of the
 app sorts the same way: click a label to order by it, click it again to flip
 it. The affordance is the arrow, and it stays inside the hairline aesthetic:

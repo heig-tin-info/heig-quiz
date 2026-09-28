@@ -1,7 +1,7 @@
 import { useT } from "../i18n";
 import { Actions } from "./actions";
 import { cx, type MenuItem } from "./layers";
-import { PersonAvatar } from "./page";
+import { PersonAvatar } from "./identity";
 import { Popover } from "./popover";
 
 /**
