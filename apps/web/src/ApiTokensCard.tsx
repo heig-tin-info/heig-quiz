@@ -39,7 +39,7 @@ import {
 const mcpUrl = () => `${window.location.origin}/app/api/mcp`;
 
 /** A read-only value with a copy button: the token, the MCP address, a command line. */
-function CopyField({ label, value, mono = true }: { label: string; value: string; mono?: boolean }) {
+export function CopyField({ label, value, mono = true }: { label: string; value: string; mono?: boolean }) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const copy = async () => {

@@ -33,8 +33,10 @@ results are kept.
 ## Seeing the platform as a student
 
 An administrator can **Copy link as this student** on a claimed student row.
-The link opens the platform as that student for an hour, once, within five
-minutes: paste it into a **private window**, because a session belongs to the
-whole browser and opening it here would sign you out of your own. It reads
-only — it cannot answer, submit or change anything — and the banner's **End**
-closes it. Both its start and its end are written to the audit log.
+The link opens the platform as that student for an hour; it works once,
+within five minutes. Paste it only into a **private window**: a session
+belongs to the whole browser, and opening it here would sign you out of your
+own. Never paste it into a chat or an e-mail either — a link preview would
+use it up. It reads only — it cannot answer, submit or change anything — and
+the banner's **End** closes it. Its start and its end are written to the
+audit log.

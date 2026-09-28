@@ -60,16 +60,10 @@ export interface Me {
   coach: { enabled: boolean | null; seen: string[] };
   /**
    * The session this request rode on; `evaluationId` is set on a `seb` one
-   * only. `actorUserId` is who acts through it when not the user themself
-   * (an `impersonation` session, ADR-034), and `readOnly` says the server
-   * refuses its writes. Absent: `portal`.
+   * only, and `readOnly` says the server refuses its writes (an
+   * `impersonation` outside development, ADR-034). Absent: `portal`.
    */
-  session?: {
-    kind: SessionKind;
-    evaluationId: string | null;
-    actorUserId: string | null;
-    readOnly: boolean;
-  };
+  session?: { kind: SessionKind; evaluationId: string | null; readOnly: boolean };
 }
 
 /**
@@ -80,6 +74,12 @@ export interface Me {
 export interface ImpersonationLink {
   url: string;
 }
+
+/**
+ * The path parameter of a one-time link (`/app/auth/as/:secret`): 32 random
+ * bytes in base64url, nothing else reaches the database.
+ */
+export const LaunchSecretParams = z.object({ secret: z.string().regex(/^[A-Za-z0-9_-]{43}$/) });
 
 /** A coach mark's id: `<screen>.<step>`, lower case (`pool.new-question`). */
 const CoachId = z.string().regex(/^[a-z0-9-]+(\.[a-z0-9-]+)*$/).max(64);

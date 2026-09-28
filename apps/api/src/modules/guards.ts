@@ -176,12 +176,18 @@ export function teacherGuard(app: FastifyInstance) {
   };
 }
 
-/** Super admin only. */
-export function adminGuard(app: FastifyInstance) {
+/**
+ * Super admin only. `hidden`: anyone else gets the 404 of a missing entity
+ * rather than a 403, for a route on an entity a non-admin could reach
+ * otherwise (invariant 6: the refusal says nothing about the entity).
+ */
+export function adminGuard(app: FastifyInstance, { hidden = false } = {}) {
   return async (req: FastifyRequest, reply: FastifyReply) => {
     const denied = await app.requireSession(req, reply);
     if (denied) return denied;
-    if (req.user!.role !== "admin") return reply.code(403).send({ error: "forbidden" });
+    if (req.user!.role !== "admin") {
+      return reply.code(hidden ? 404 : 403).send({ error: hidden ? "not_found" : "forbidden" });
+    }
     return undefined;
   };
 }

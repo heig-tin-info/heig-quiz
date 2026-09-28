@@ -37,7 +37,7 @@ export let me: Me | null = {
   mcqPolicy: null,
   coach: { enabled: null, seen: [] },
   ...(flags.impersonating
-    ? { session: { kind: "impersonation", evaluationId: null, actorUserId: "u-admin", readOnly: true } }
+    ? { session: { kind: "impersonation", evaluationId: null, readOnly: true } }
     : {}),
 };
 

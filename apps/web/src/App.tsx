@@ -6,7 +6,7 @@ import type { Me, PublicConfig } from "@quiz/contracts";
 
 import { api, useMe } from "./api";
 import { Logo } from "./Header";
-import { useI18n, useT } from "./i18n";
+import { type Dict, useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
 import { CoachLayer } from "./coach/CoachLayer";
 import { useRoute, type Navigate, type Route, type RouteOf } from "./router";
@@ -101,10 +101,16 @@ const DevGallery = import.meta.env.DEV
  * - Finish: a sheet of paper (`surface` + hairline + card radius) on the warm
  *   canvas. No shadow: it sits in the page flow.
  */
+/** A one-time link that was refused lands on the landing page with its query parameter. */
+const REFUSALS: readonly (readonly [string, keyof Dict])[] = [
+  ["seb", "seb.invalid"], // ADR-027: a `.seb` launch, in SEB
+  ["impersonation", "impersonation.invalid"], // ADR-034: an impersonation link
+];
+
 function Landing() {
   const t = useT();
   const search = new URLSearchParams(window.location.search);
-  const refused = search.has("seb") ? "seb.invalid" : search.has("impersonation") ? "impersonation.invalid" : null;
+  const refused = REFUSALS.find(([param]) => search.has(param))?.[1] ?? null;
   // The one unauthenticated endpoint. A failure is not an error state here:
   // the OIDC button is the real door and it is always there.
   const config = useQuery<PublicConfig>({
@@ -418,26 +424,20 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
   const toggleView = teacher
     ? () => toggleStudentView(inStudentView, route, navigate)
     : undefined;
-  // ADR-034: an admin acting as this student says so on every page, the
-  // full-screen ones included — a student account has no student view.
-  const framed = (node: ReactNode) =>
-    me.data?.session?.kind === "impersonation" ? (
-      <ImpersonationBanner me={me.data}>{node}</ImpersonationBanner>
-    ) : (
-      node
-    );
   if (FULL_SCREEN.has(shown.view)) {
     // The attempt has no frame, and so no Teacher | Student switch: the
     // banner carries the way back, which leaves the attempt open (ADR-018).
     return inStudentView && shown.view === "attempt" ? (
       <StudentViewBanner onLeave={toggleView}>{page}</StudentViewBanner>
     ) : (
-      framed(page)
+      <ImpersonationBanner me={me.data}>{page}</ImpersonationBanner>
     );
   }
 
-  return framed(
-    <>
+  // ADR-034: an admin acting as this student says so on every page, the
+  // full-screen ones above included (the banner is a no-op otherwise).
+  return (
+    <ImpersonationBanner me={me.data}>
     <Shell
       me={me.data}
       route={route}
@@ -452,6 +452,6 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
     {/* Inside the frame only: a full-screen view (an exam, a projection)
         returned above and never gets a bubble. */}
     <CoachLayer me={me.data} view={shown.view} teacherUi={teacherUi} />
-    </>,
+    </ImpersonationBanner>
   );
 }

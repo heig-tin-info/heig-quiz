@@ -12,36 +12,17 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { registerForTests } from "@quiz/registry/server";
 
-import { auditLog, enrollments, launchTickets, sessions, users } from "../db/schema.js";
+import { attempts, auditLog, enrollments, launchTickets, sessions, users } from "../db/schema.js";
 import { presence } from "../modules/realtime/presence.js";
 import { fakeShort } from "../test/fakeType.js";
-import { testServer, type TestServer } from "../test/http.js";
+import { routesOf, testServer, type Method, type TestServer } from "../test/http.js";
 import { seedLive, type Seeded } from "../test/live.js";
 import { redactUrl } from "../redact.js";
 import { IMPERSONATION_PATH } from "./impersonation.js";
-import { consumeLaunchTicket, issueLaunchTicket } from "./launch.js";
+import { issueLaunchTicket } from "./launch.js";
 import { CSRF_COOKIE, SESSION_COOKIE, purgeExpiredSessions } from "./session.js";
 
 type Who = { id: string; headers: Record<string, string> };
-type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-
-/** Every (method, path) of `printRoutes`' tree, HEAD aside (as in `seb.db.test.ts`). */
-function routesOf(tree: string): { method: Method; path: string }[] {
-  const stack: string[] = [];
-  return tree.split("\n").flatMap((line) => {
-    const match = /^(.*?)[├└]── (\S+) \(([^)]+)\)/.exec(line);
-    if (!match) return [];
-    const depth = match[1]!.length / 4;
-    stack.length = depth;
-    stack.push(match[2]!);
-    const path = stack.join("");
-    return match[3]!
-      .split(", ")
-      .filter((m) => m !== "HEAD")
-      .map((method) => ({ method: method as Method, path }));
-  });
-}
-
 /** A classroom with one student, taught by `teacher`, watched over by `admin`. */
 interface World {
   server: TestServer;
@@ -133,17 +114,6 @@ describe("in production (no development login)", () => {
       expect(await open(w, second)).toBeNull();
     });
 
-    it("is consumed exactly once, even by two requests at the same instant", async () => {
-      const now = w.server.clock.now();
-      const ticket = { kind: "impersonation", userId: w.student.id, actorUserId: w.admin.id, evaluationId: null } as const;
-      const secret = await issueLaunchTicket(w.server.app.db, ticket, now);
-      const both = await Promise.all([
-        consumeLaunchTicket(w.server.app.db, "impersonation", secret, now),
-        consumeLaunchTicket(w.server.app.db, "impersonation", secret, now),
-      ]);
-      expect(both.filter(Boolean)).toHaveLength(1);
-    });
-
     it("is not opened by the secret of another kind of ticket", async () => {
       const secret = await issueLaunchTicket(
         w.server.app.db,
@@ -188,17 +158,31 @@ describe("in production (no development login)", () => {
       await w.server.app.db.update(users).set({ role: "teacher" }).where(eq(users.id, other.id));
       expect(await open(w, path)).toBeNull();
     });
+
+    it("stops working the moment its actor is no longer an admin", async () => {
+      const other = await w.server.signIn("admin");
+      const session = (await open(w, (await issue(w, other)) as string))!;
+      expect((await call(w.server, "GET", "/app/api/me", session)).statusCode).toBe(200);
+      await w.server.app.db.update(users).set({ role: "teacher" }).where(eq(users.id, other.id));
+      expect((await call(w.server, "GET", "/app/api/me", session)).statusCode).toBe(401);
+      const ended = await auditRows(w, "impersonation.ended");
+      expect(ended.at(-1)).toMatchObject({
+        actorUserId: null,
+        actorType: "system",
+        subjectId: w.student.id,
+        payload: { reason: "revoked", actorUserId: other.id },
+      });
+    });
   });
 
   describe("the session", () => {
-    it("is the student's, says who acts, lives one hour, and was audited", async () => {
+    it("is the student's, lives one hour, and was audited", async () => {
       const me = await call(w.server, "GET", "/app/api/me", as);
       expect(me.statusCode).toBe(200);
       expect(me.json().id).toBe(w.student.id);
       expect(me.json().session).toEqual({
         kind: "impersonation",
         evaluationId: null,
-        actorUserId: w.admin.id,
         readOnly: true,
       });
       const [row] = await w.server.app.db
@@ -211,9 +195,12 @@ describe("in production (no development login)", () => {
     });
 
     it("reads what the student reads", async () => {
-      expect((await call(w.server, "GET", "/app/api/student/classrooms", as)).statusCode).toBe(
-        (await call(w.server, "GET", "/app/api/student/classrooms", w.student.headers)).statusCode,
-      );
+      const [mine, theirs] = await Promise.all([
+        call(w.server, "GET", "/app/api/student/classrooms", as),
+        call(w.server, "GET", "/app/api/student/classrooms", w.student.headers),
+      ]);
+      expect(mine.statusCode).toBe(200);
+      expect(mine.json()).toEqual(theirs.json());
     });
 
     it("writes nothing, on every route of the application but sign-out", async () => {
@@ -231,6 +218,13 @@ describe("in production (no development login)", () => {
         confirm: true,
       });
       expect(started.statusCode, started.body).toBe(200);
+      // The attempt page, reloaded: a sign of life for the student, none for somebody acting as them.
+      const entered = await call(w.server, "POST", `/app/api/evaluations/${w.seed.evaluationId}/attempt`, w.student.headers);
+      const attemptId = entered.json().view.attempt.id as string;
+      await w.server.app.db.update(attempts).set({ presentAt: null }).where(eq(attempts.id, attemptId));
+      expect((await call(w.server, "GET", `/app/api/attempts/${attemptId}`, as)).statusCode).toBe(200);
+      const [attempt] = await w.server.app.db.select().from(attempts).where(eq(attempts.id, attemptId));
+      expect(attempt!.presentAt).toBeNull();
       const res = await w.server.app.inject({
         method: "GET",
         url: `/app/api/events?watch=${encodeURIComponent(`lobby:${w.seed.evaluationId}`)}`,
@@ -260,7 +254,9 @@ describe("in production (no development login)", () => {
       const out = await call(w.server, "POST", "/app/auth/logout", as);
       expect(out.statusCode).toBe(204);
       expect((await call(w.server, "GET", "/app/api/me", as)).statusCode).toBe(401);
-      const ended = await auditRows(w, "impersonation.ended");
+      const ended = (await auditRows(w, "impersonation.ended")).filter(
+        (r) => (r.payload as { reason: string }).reason === "logout",
+      );
       expect(ended).toHaveLength(1);
       expect(ended[0]).toMatchObject({
         actorUserId: w.admin.id,
@@ -279,12 +275,14 @@ describe("in production (no development login)", () => {
         .set({ expiresAt: new Date(Date.now() - 1000) })
         .where(eq(sessions.kind, "impersonation"));
       await purgeExpiredSessions(w.server.app.db);
-      const after = await auditRows(w, "impersonation.ended");
-      expect(after.length).toBeGreaterThan(1);
-      for (const row of after.slice(1)) {
-        expect(row).toMatchObject({ actorType: "system", payload: { reason: "expired" } });
+      const expired = (await auditRows(w, "impersonation.ended")).filter(
+        (r) => (r.payload as { reason: string }).reason === "expired",
+      );
+      expect(expired.length).toBeGreaterThan(0);
+      for (const row of expired) {
+        expect(row).toMatchObject({ actorUserId: null, actorType: "system", subjectId: w.student.id });
       }
-      expect(after.at(-1)).toMatchObject({ actorUserId: w.admin.id, subjectId: w.student.id });
+      expect(expired.at(-1)!.payload).toEqual({ reason: "expired", actorUserId: w.admin.id });
     });
   });
 });

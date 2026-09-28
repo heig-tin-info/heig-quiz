@@ -181,6 +181,12 @@ const scenes = [
   // ADR-034: an admin's row menu offers the impersonation link; the private
   // window it opens shows the student's portal under the mode banner.
   { name: "classroom-row-menu-admin", role: "admin", path: "/classrooms/r1?tab=roster", fold: true, act: (p) => openRowMenu(p, /^Actions for /) },
+  { name: "impersonation-link", role: "admin", path: "/classrooms/r1?tab=roster", fold: true, act: async (p) => {
+      await skipCoach(p);
+      await openRowMenu(p, /^Actions for /);
+      await p.getByRole("menuitem", { name: /as this student|en tant que cet étudiant/ }).first().click();
+      await p.getByRole("dialog").waitFor();
+    } },
   { name: "impersonation-banner", role: "student", path: "/?impersonating=1", fold: true, act: async (p) => {
       await p.getByRole("button", { name: /^(Got it|Compris)$/ }).first().click({ timeout: 3000 }).catch(() => {});
       await p.evaluate(() => window.scrollTo(0, 0));

@@ -37,7 +37,7 @@ import {
 } from "@quiz/contracts";
 
 import { tracer, type AuditAction } from "../../audit.js";
-import { SITTING } from "../../auth/session.js";
+import { SITTING, delegated } from "../../auth/session.js";
 import { iso } from "../../clock.js";
 import {
   loadEvaluation,
@@ -245,10 +245,11 @@ export async function livePlugin(app: FastifyInstance) {
   app.get(
     "/app/api/attempts/:id",
     sit,
-    student({ params: IdParam, load: own }, async ({ now, scope }) => {
+    student({ params: IdParam, load: own }, async ({ req, now, scope }) => {
       // A sign of life only counts while the attempt is live: a submitted
       // student refreshing this page must not show up as online on the grid.
-      if (service.isOpen(scope.evaluation, scope.attempt, now)) {
+      // Nor does somebody acting as the student (ADR-034).
+      if (!delegated(req.auth) && service.isOpen(scope.evaluation, scope.attempt, now)) {
         await service.markPresent(app.db, scope.attempt.id, now);
       }
       return service.attemptOrLobbyView(app.db, scope.evaluation, scope.attempt, now);
@@ -360,7 +361,7 @@ export async function livePlugin(app: FastifyInstance) {
     { ...sit, bodyLimit: 4096 },
     student(
       { params: IdParam, body: AttemptEventBody, load: own },
-      async ({ reply, now, body, scope }) => {
+      async ({ req, reply, now, body, scope }) => {
         // The journal follows the attempt: once it is over, it stops growing.
         service.assertOpen(scope.evaluation, scope.attempt, now);
         const used = await service.countRecentEvents(
@@ -380,7 +381,9 @@ export async function livePlugin(app: FastifyInstance) {
           now,
         );
         // A reconnection is also a sign of life for the dashboard.
-        if (body.kind === "reconnect") await service.markPresent(app.db, scope.attempt.id, now);
+        if (body.kind === "reconnect" && !delegated(req.auth)) {
+          await service.markPresent(app.db, scope.attempt.id, now);
+        }
         return reply.code(204).send();
       },
     ),

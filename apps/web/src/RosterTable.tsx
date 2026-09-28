@@ -19,14 +19,18 @@ import type { ImpersonationLink, RosterEntry } from "@quiz/contracts";
 import { api, ApiError, apiErrorMessage } from "./api";
 import { useConfirm } from "./confirm";
 import { useT } from "./i18n";
-import { useErrorToast, useToast } from "./notify";
+import { CopyField } from "./ApiTokensCard";
+import { useErrorToast } from "./notify";
 import {
+  Alert,
   Badge,
+  Button,
   cx,
   IconButton,
   inputClass,
   inputSize,
   Menu,
+  Modal,
   PersonAvatar,
   RelativeTime,
   T,
@@ -83,17 +87,14 @@ function Row({
     mutationFn: () => api(base, { method: "DELETE" }),
     onSuccess: invalidate,
   });
-  // ADR-034: an admin copies a one-time link that opens a session as this
+  // ADR-034: an admin gets a one-time link that opens a session as this
   // student — to paste into a PRIVATE window, since a session is one cookie
   // for the whole site and opening it here would replace the admin's own.
-  const toast = useToast();
+  // Shown in a dialog with its copy button: a clipboard write after the
+  // request's `await` is refused by Safari, a click on the button is not.
   const toastError = useErrorToast();
   const impersonate = useMutation({
-    mutationFn: async () => {
-      const link = await api<ImpersonationLink>(`${base}/impersonation`, { method: "POST" });
-      await navigator.clipboard.writeText(link.url);
-    },
-    onSuccess: () => toast(t("roster.impersonateCopied"), "success"),
+    mutationFn: () => api<ImpersonationLink>(`${base}/impersonation`, { method: "POST" }),
     onError: toastError("roster.impersonateFailed"),
   });
 
@@ -309,6 +310,20 @@ function Row({
             {failure}
           </td>
         </tr>
+      ) : null}
+      {impersonate.data ? (
+        <Modal
+          title={t("roster.impersonateTitle", { name: fullName })}
+          onClose={() => impersonate.reset()}
+          footer={<Button onClick={() => impersonate.reset()}>{t("common.done")}</Button>}
+        >
+          <div className="space-y-4">
+            <Alert tone="warning" icon={VenetianMask}>
+              {t("roster.impersonateBody")}
+            </Alert>
+            <CopyField label={t("roster.impersonateLink")} value={impersonate.data.url} />
+          </div>
+        </Modal>
       ) : null}
     </Fragment>
   );

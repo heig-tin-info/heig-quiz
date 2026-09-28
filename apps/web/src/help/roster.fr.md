@@ -38,8 +38,10 @@ en attente et le détenteur de la nouvelle adresse la reprend. Retirer un
 
 Un administrateur peut **Copier un lien en tant que cet étudiant** sur la
 ligne d'un étudiant rattaché. Le lien ouvre la plateforme comme cet étudiant
-pour une heure, une seule fois, dans les cinq minutes : collez-le dans une
-**fenêtre privée**, car une session vaut pour tout le navigateur et l'ouvrir
-ici vous déconnecterait de la vôtre. Il ne fait que lire — il ne peut ni
-répondre, ni rendre, ni rien modifier — et **Terminer**, dans le bandeau, le
-ferme. Son début et sa fin sont inscrits au journal d'audit.
+pour une heure ; il sert une fois, dans les cinq minutes. Collez-le
+uniquement dans une **fenêtre privée** : une session vaut pour tout le
+navigateur, et l'ouvrir ici vous déconnecterait de la vôtre. Ne le collez
+jamais non plus dans une discussion ni un e-mail — un aperçu du lien le
+consommerait. Il ne fait que lire — il ne peut ni répondre, ni rendre, ni rien
+modifier — et **Terminer**, dans le bandeau, le ferme. Son début et sa fin
+sont inscrits au journal d'audit.

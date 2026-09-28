@@ -82,7 +82,7 @@ describe("RosterTable pending actions", () => {
 });
 
 describe("RosterTable impersonation link (ADR-034)", () => {
-  it("is offered to an admin only, on a claimed student seat, and copied", async () => {
+  it("is offered to an admin only, on a claimed student seat, and shown to copy", async () => {
     const writeText = vi.fn(async () => {});
     Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
     const { calls } = mockFetch({
@@ -96,6 +96,13 @@ describe("RosterTable impersonation link (ADR-034)", () => {
     await userEvent.click(
       within(await openRowMenu()).getByRole("menuitem", { name: "Copy link as this student" }),
     );
+    // In a dialog, copied by a click of its own: Safari refuses a clipboard
+    // write that follows the request's await.
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("textbox", { name: "One-time link" })).toHaveValue(
+      "https://quiz.test/app/auth/as/s3cr3t",
+    );
+    await userEvent.click(within(dialog).getByRole("button", { name: /^Copy/ }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith("https://quiz.test/app/auth/as/s3cr3t"));
     expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
   });

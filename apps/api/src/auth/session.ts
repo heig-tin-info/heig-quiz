@@ -40,6 +40,14 @@ export interface SessionAuth {
 export const PORTAL: SessionAuth = { kind: "portal", actorUserId: null, evaluationId: null };
 
 /**
+ * THE predicate for "somebody else acts through this session" (ADR-034):
+ * read-only outside development, never a body in the room, never a `.seb`.
+ * Every site that treats a delegated session apart asks this, not the kind.
+ */
+export const delegated = (auth: Pick<SessionAuth, "actorUserId"> | null): boolean =>
+  (auth?.actorUserId ?? null) !== null;
+
+/**
  * The lifetime of each kind: fixed hours, never renewed — or null for
  * SESSION_TTL_HOURS with sliding renewal. A `seb` session outlives any sitting;
  * an `impersonation` one is an hour of looking over a student's shoulder (ADR-034).
@@ -91,6 +99,19 @@ export async function findSessionUser(db: Db, token: string, opts?: { renewTtlHo
     await dropSessions(db, eq(sessions.sidHash, row.sidHash), "expired");
     return null;
   }
+  // The right to act as somebody is the actor's role, read on every request:
+  // an admin demoted mid-hour loses the session at once (ADR-034).
+  if (delegated(row.auth)) {
+    const [actor] = await db
+      .select({ role: users.role })
+      .from(users)
+      .where(eq(users.id, row.auth.actorUserId!))
+      .limit(1);
+    if (actor?.role !== "admin") {
+      await dropSessions(db, eq(sessions.sidHash, row.sidHash), "revoked");
+      return null;
+    }
+  }
   // Sliding renewal: once less than half the TTL remains, push the expiry
   // back to a full TTL. Active users stay signed in indefinitely; an idle
   // session still dies after SESSION_TTL_HOURS. At most one UPDATE per
@@ -109,25 +130,32 @@ export async function findSessionUser(db: Db, token: string, opts?: { renewTtlHo
 }
 
 /**
- * THE way a session row goes: signed out, or found expired (on use or by the
- * purge). An `impersonation` session leaves an `impersonation.ended` entry
- * whichever way it ends (ADR-034), the admin as actor, the student as subject.
+ * THE way a session row goes, and the one owner of what the audit says about
+ * it. Signing out writes `auth.logout` — or, for a delegated session,
+ * `impersonation.ended`, the admin as actor and the student as subject: the
+ * student signed out of nothing (ADR-034). A delegated session that expires
+ * or loses its actor's right is ended by the system, the admin named in the
+ * payload. An ordinary session that expires leaves nothing, as before.
  */
-async function dropSessions(db: Db, where: SQL, reason: "logout" | "expired") {
+async function dropSessions(db: Db, where: SQL, reason: "logout" | "expired" | "revoked") {
   const gone = await db
     .delete(sessions)
     .where(where)
-    .returning({ kind: sessions.kind, userId: sessions.userId, actorUserId: sessions.actorUserId });
+    .returning({ userId: sessions.userId, actorUserId: sessions.actorUserId });
   for (const session of gone) {
-    if (session.kind !== "impersonation") continue;
-    await audit(db, {
-      actorUserId: session.actorUserId,
-      actorType: reason === "logout" ? "user" : "system",
-      action: "impersonation.ended",
-      subjectType: "user",
-      subjectId: session.userId,
-      payload: { reason },
-    });
+    const subject = { subjectType: "user", subjectId: session.userId } as const;
+    if (delegated(session)) {
+      const byActor = reason === "logout";
+      await audit(db, {
+        actorUserId: byActor ? session.actorUserId : null,
+        actorType: byActor ? "user" : "system",
+        action: "impersonation.ended",
+        ...subject,
+        payload: byActor ? { reason } : { reason, actorUserId: session.actorUserId },
+      });
+    } else if (reason === "logout") {
+      await audit(db, { actorUserId: session.userId, actorType: "user", action: "auth.logout", ...subject });
+    }
   }
 }
 

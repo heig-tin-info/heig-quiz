@@ -105,7 +105,7 @@ describe("a Safe Exam Browser session (ADR-027)", () => {
   it("shows its own evaluation and nothing else of the portal", async () => {
     vi.stubGlobal("EventSource", FakeStream);
     const { calls } = mockFetch({
-      "GET /app/api/me": ok(makeMe({ session: { kind: "seb", evaluationId: EVAL, actorUserId: null, readOnly: false } })),
+      "GET /app/api/me": ok(makeMe({ session: { kind: "seb", evaluationId: EVAL, readOnly: false } })),
       [`POST /app/api/evaluations/${EVAL}/attempt`]: ok(lobby),
     });
     // Another evaluation's address still opens the one the session is for.
@@ -131,7 +131,7 @@ describe("an impersonation session (ADR-034)", () => {
           role: "student",
           givenName: "Léa",
           familyName: "Rochat",
-          session: { kind: "impersonation", evaluationId: null, actorUserId: "u-admin", readOnly: true },
+          session: { kind: "impersonation", evaluationId: null, readOnly: true },
         }),
       ),
       "GET /app/api/student/classrooms": ok([]),

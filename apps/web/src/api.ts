@@ -3,6 +3,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { Me, MePatch } from "@quiz/contracts";
 
+import type { Dict } from "./i18n/en";
+import { translateNow } from "./i18n/current";
 import { meKey } from "./queryKeys";
 
 function csrfToken(): string {
@@ -50,11 +52,21 @@ export async function api<T>(
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 }
 
-/** Server-provided error message of a failed call, or the fallback. */
+/**
+ * The refusals the SPA words itself, by their `error` code: the server's
+ * `message` is English, and these reach a reader on any screen.
+ */
+const WORDED: Partial<Record<string, keyof Dict>> = {
+  // ADR-034: every write of an admin acting as a student, in production.
+  impersonation_read_only: "error.impersonationReadOnly",
+};
+
+/** Server-provided error message of a failed call (or its worded code), or the fallback. */
 export function apiErrorMessage(err: unknown, fallback: string): string {
-  return err instanceof ApiError
-    ? ((err.body as { message?: string })?.message ?? fallback)
-    : fallback;
+  if (!(err instanceof ApiError)) return fallback;
+  const body = err.body as { error?: string; message?: string } | null;
+  const worded = body?.error ? WORDED[body.error] : undefined;
+  return worded ? translateNow(worded) : (body?.message ?? fallback);
 }
 
 /** Current session, or null when signed out (401). */

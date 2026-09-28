@@ -10,6 +10,7 @@ import {
 
 import { api } from "../api";
 import { readStored, writeStored } from "../ui/state";
+import { setTranslator } from "./current";
 import { type Dict, en } from "./en";
 
 /**
@@ -158,6 +159,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     }
   }, [switchTo]);
   const t = useCallback<TFunction>((key, vars) => translate(locale, key, vars), [locale]);
+  // Idempotent, so safe in render: `apiErrorMessage` words the next refusal in this language.
+  setTranslator(t);
   return <I18nContext.Provider value={{ locale, choice, setLocale, t }}>{children}</I18nContext.Provider>;
 }
 

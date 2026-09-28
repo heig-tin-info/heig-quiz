@@ -31,6 +31,7 @@ import {
 import type { Cell } from "@quiz/domain";
 
 import { tracer } from "../../audit.js";
+import { issueImpersonationLink } from "../../auth/impersonation.js";
 import type { AppConfig } from "../../config.js";
 import { publish } from "../../events.js";
 import { ownersOf } from "../../identity.js";
@@ -40,11 +41,12 @@ import {
   accessibleClassroom,
   accessibleCourse,
   accessibleEnrollment,
+  adminGuard,
   poolAccess,
   staffAccess,
   teacherGuard,
 } from "../guards.js";
-import { invalid, teacherRoute } from "../http.js";
+import { invalid, notFound, teacherRoute } from "../http.js";
 import { studentJoined } from "../realtime/bus.js";
 import { poolsOfCourse, setCoursePools } from "../pool/service.js";
 import { claimForExistingUsers, importRoster, rosterView } from "./roster.js";
@@ -63,6 +65,7 @@ const StaffParam = z.object({ id: z.uuid(), uid: z.uuid() });
 export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
   const requireTeacher = teacherGuard(app);
+  const requireAdmin = adminGuard(app, { hidden: true });
   const trace = tracer(app);
 
   const teacher = teacherRoute(app);
@@ -453,6 +456,20 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
       });
       return reply.code(204).send();
     }),
+  );
+
+  /**
+   * ADR-034: the one-time link that opens a session as this student. Admins
+   * only in v1 — the session reads everything the student reads, beyond any
+   * staff seat — and anyone else gets the 404 of a missing entry, as does an
+   * entry that is not a claimed student seat.
+   */
+  app.post(
+    "/app/api/classrooms/:id/roster/:eid/impersonation",
+    { preHandler: requireAdmin },
+    teacher(onEntry, async ({ req, reply, now, scope: entry }) =>
+      (await issueImpersonationLink(app.db, config, entry, req.user!.id, now)) ?? notFound(reply),
+    ),
   );
 
   // --- Students ---

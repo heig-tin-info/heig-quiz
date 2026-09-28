@@ -28,6 +28,7 @@ import {
   SESSION_COOKIE,
   SITTING,
   createSession,
+  delegated,
   serves,
   deleteSession,
   findSessionUser,
@@ -131,7 +132,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     // never writes — every route, by construction, whether or not it calls
     // `requireSession`. Signing out is the one write it keeps.
     if (
-      found.auth.kind === "impersonation" &&
+      delegated(found.auth) &&
       !development &&
       !SAFE_METHODS.includes(req.method) &&
       req.routeOptions.url !== LOGOUT_PATH
@@ -274,7 +275,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
   await apiTokenRoutes(app);
   await sebRoutes(app, config);
   await oauthRoutes(app, config);
-  await impersonationRoutes(app, config);
+  await impersonationRoutes(app);
 
   // Development persona picker. Registered only when explicitly enabled, and
   // config.ts refuses the flag under NODE_ENV=production.
@@ -288,16 +289,8 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     { preHandler: (req, reply) => app.requireSession(req, reply) },
     async (req, reply) => {
       const token = req.cookies[SESSION_COOKIE];
-      // Ending an impersonation writes its own `impersonation.ended`
-      // (`deleteSession`); the student did not sign out of anything.
+      // The audit entry is `deleteSession`'s: `auth.logout`, or the end of an impersonation.
       if (token) await deleteSession(app.db, token);
-      if (req.auth?.kind !== "impersonation") await audit(app.db, {
-        actorUserId: req.user?.id ?? null,
-        actorType: "user",
-        action: "auth.logout",
-        subjectType: "user",
-        subjectId: req.user?.id ?? "unknown",
-      });
       reply.clearCookie(SESSION_COOKIE, { path: "/" });
       reply.clearCookie(CSRF_COOKIE, { path: "/" });
       return reply.code(204).send();
@@ -334,8 +327,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
         session: {
           kind: req.auth?.kind ?? "portal",
           evaluationId: req.auth?.evaluationId ?? null,
-          actorUserId: req.auth?.actorUserId ?? null,
-          readOnly: req.auth?.kind === "impersonation" && !development,
+          readOnly: delegated(req.auth) && !development,
         },
       };
     },
