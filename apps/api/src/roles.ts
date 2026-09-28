@@ -82,6 +82,7 @@ async function roleForUser(
     .where(eq(userIdpClaims.userId, userId))
     .limit(1);
   return roleForIdentity(db, config, {
+    // Every address the account ever had verified: the set never shrinks.
     emails: await knownEmails(db, userId),
     affiliations: stored?.affiliations ?? [],
     userId,

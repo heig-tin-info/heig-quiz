@@ -10,7 +10,6 @@ import { avatars, users } from "../db/schema.js";
 import { publish } from "../events.js";
 import { CoachSeenPatch, MePatch, type PublicConfig, type SessionKind } from "@quiz/contracts";
 
-import { claimEnrollments } from "../modules/org/service.js";
 import { devLoginRoutes } from "./dev.js";
 import { loginAdmits, signIn } from "./login.js";
 import { OidcProvider, type OidcClaims } from "./oidc.js";
@@ -238,7 +237,6 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     }
 
     const user = await signIn(app.db, config, claims);
-    if (claims.emailVerified) await claimEnrollments(app.db, { id: user.id });
     await app.openSession(reply, user);
     await audit(app.db, {
       actorUserId: user.id,

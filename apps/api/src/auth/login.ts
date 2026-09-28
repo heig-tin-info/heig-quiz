@@ -10,6 +10,7 @@ import { eq } from "drizzle-orm";
 import { loginAllowed, type AppConfig } from "../config.js";
 import type { Db } from "../db/client.js";
 import { users } from "../db/schema.js";
+import { claimEnrollments } from "../modules/org/service.js";
 import { syncRoleOfUser } from "../roles.js";
 import { recordIdpClaims, syncUserEmails, verifiedAddressesOf } from "./claims.js";
 import type { OidcClaims } from "./oidc.js";
@@ -50,10 +51,15 @@ export async function signIn(db: Db, config: AppConfig, claims: OidcClaims): Pro
     .returning({ id: users.id });
   if (!row) throw new Error("User upsert returned no row");
   // Both are load-bearing: the role reads the affiliations and the verified
-  // addresses, and the roster matching reads the addresses.
-  await recordIdpClaims(db, row.id, claims.raw);
+  // addresses, and the roster matching reads the addresses. A failed write
+  // therefore fails the login — nothing is demoted on a partial picture.
+  // Without userinfo the claims lack the affiliations: the previous snapshot
+  // is kept, or a transient edu-ID error would demote a teacher and hand
+  // their pools on. The address set only ever grows, so it is safe either way.
+  if (claims.complete) await recordIdpClaims(db, row.id, claims.raw);
   await syncUserEmails(db, row.id, claims.raw, claims.emailVerified);
   await syncRoleOfUser(db, config, row.id);
+  await claimEnrollments(db, row);
   const [user] = await db.select().from(users).where(eq(users.id, row.id));
   if (!user) throw new Error("Signed-in user vanished");
   return user;

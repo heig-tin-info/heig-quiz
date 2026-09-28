@@ -3,7 +3,9 @@ import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import type { AppConfig } from "../config.js";
-import { courseStaff, courses, teacherGrants, users } from "../db/schema.js";
+import { eq } from "drizzle-orm";
+
+import { courseStaff, courses, poolMembers, pools, teacherGrants, users } from "../db/schema.js";
 import { testDb, type TestDb } from "../test/db.js";
 import { loginAdmits, signIn } from "./login.js";
 import type { OidcClaims } from "./oidc.js";
@@ -29,7 +31,12 @@ beforeAll(async () => {
   });
 });
 
-function claims(sub: string, raw: Record<string, unknown>, emailVerified: boolean): OidcClaims {
+function claims(
+  sub: string,
+  raw: Record<string, unknown>,
+  emailVerified: boolean,
+  complete = true,
+): OidcClaims {
   return {
     sub,
     email: typeof raw.email === "string" ? raw.email : "",
@@ -39,6 +46,7 @@ function claims(sub: string, raw: Record<string, unknown>, emailVerified: boolea
     swissEduId: null,
     picture: null,
     raw,
+    complete,
   };
 }
 
@@ -86,6 +94,27 @@ describe("signIn", () => {
     await db.insert(courses).values({ id: courseId, name: "Seated", code: `S-${courseId}` });
     await db.insert(courseStaff).values({ courseId, userId: first.id });
     expect((await signIn(db, config, login)).role).toBe("teacher");
+  });
+
+  it("keeps the stored affiliations, the role and the pools when userinfo failed", async () => {
+    const sub = `s-${randomUUID()}`;
+    const email = `staff-${sub}@heig.test`;
+    const teacher = await signIn(
+      db,
+      config,
+      claims(sub, { email, eduPersonScopedAffiliation: ["staff@hes-so.ch"] }, true),
+    );
+    expect(teacher.role).toBe("teacher");
+    const member = await signIn(db, config, claims(`s-${randomUUID()}`, { email: `m-${sub}@heig.test` }, true));
+    const poolId = randomUUID();
+    await db.insert(pools).values({ id: poolId, name: `Kept ${poolId}`, ownerId: teacher.id });
+    await db.insert(poolMembers).values({ poolId, userId: member.id, role: "reader" });
+
+    // The ID token alone: no affiliation claim at all.
+    const again = await signIn(db, config, claims(sub, { email }, true, false));
+    expect(again.role).toBe("teacher");
+    const [pool] = await db.select().from(pools).where(eq(pools.id, poolId));
+    expect(pool!.ownerId).toBe(teacher.id);
   });
 
   it("verifies a stored login address once the IdP vouches for it", async () => {
