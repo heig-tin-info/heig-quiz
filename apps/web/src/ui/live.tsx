@@ -328,8 +328,8 @@ function segmentLabelStep(width: number, count: number): 1 | 5 | 10 {
 }
 
 /**
- * A stepper in the zen player, one circle per question (mockup 07, issues
- * #89 and #219): what the
+ * A stepper in the zen player, one circle per question (issues #89 and
+ * #219): what the
  * student did with it (a {@link SegmentMark}), whether they flagged it for
  * review, whether it is closed, and where they are. "Opened and left" is not
  * a state of its own: for the reader it is the same decision as "never
@@ -560,7 +560,7 @@ const VERDICTS: Record<VerdictState, { icon: IconType; tint: string; key: Verdic
 };
 
 /**
- * One cell of the live grid and of the grading list (mockup 03). Shape, icon
+ * One cell of the live grid and of the grading list. Shape, icon
  * and tint together, never the tint alone: a dashboard projected on a lecture
  * hall wall loses half its saturation, and one teacher in twelve cannot tell
  * the green from the amber at all. The word is in the accessible name, and
@@ -654,7 +654,7 @@ const SYNC: Record<SyncState, { icon: IconType; tone: string; key: SyncKey; spin
 };
 
 /**
- * Whether the student's work is safe, in the zen bar (mockup 07). Icon AND
+ * Whether the student's work is safe, in the zen player's bar. Icon AND
  * word, and the word is what survives: "hors ligne" in amber next to a
  * countdown in red is two reds to anyone who cannot separate them. The word
  * hides under `sm` where the bar has no room, and the accessible name keeps

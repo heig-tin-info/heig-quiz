@@ -1,5 +1,5 @@
 /**
- * The teacher's editor for a `code` question (mockup `02-editeur-code.html`).
+ * The teacher's editor for a `code` question.
  *
  * One primary path — statement, starting code, cases — with everything a
  * teacher rarely touches folded into "Advanced options". The reference

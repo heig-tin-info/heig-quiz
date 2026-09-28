@@ -1,5 +1,5 @@
 /**
- * The student's home (mockup `05-etudiant-accueil.html`).
+ * The student's home.
  *
  * Three questions, in the order a student asks them: what can I do NOW, what
  * is coming, what did I already hand in. The classrooms and the join code

@@ -147,7 +147,7 @@ export function pollRows(question: QuestionLike, tally: PollTally): PollRow[] {
 /**
  * How big the question may be drawn.
  *
- * The mockup's `clamp(30px, 4.6vw, 68px)` assumes the question of a poll is
+ * A single `clamp(30px, 4.6vw, 68px)` would assume the question of a poll is
  * one line of a lecture — and most are. A four-line one at that size eats the
  * screen and pushes the last bars off the wall, which is the one thing a
  * projection may not do. So the scale steps down with the LENGTH of the

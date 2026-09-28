@@ -6,7 +6,8 @@ import { presence } from "../realtime/grid";
 import { Badge, Card, cx, Ring, SectionHeading } from "../ui";
 
 /**
- * The waiting room, teacher side (F-LIVE-03, mockup 06 seen from the desk):
+ * The waiting room, teacher side (F-LIVE-03, the student's lobby seen from
+ * the desk):
  * who is here, who is not, and who has extra time — the three things worth
  * knowing in the ninety seconds before pressing Start.
  *

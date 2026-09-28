@@ -1,5 +1,5 @@
 /**
- * The waiting room (mockup `06-etudiant-attente.html`, F-EVAL-06).
+ * The waiting room (F-EVAL-06).
  *
  * This screen has NO primary action, which is the whole point: the student
  * has arrived, there is nothing left to do, and the page must say so without

@@ -58,7 +58,7 @@ function useOrigin(): { title: string; back: Route } | null {
 }
 
 /**
- * The question editor (mockups `01-editeur-qcm.html`, `02-editeur-code.html`).
+ * The question editor: what the question says, and beside it what it is.
  *
  * The ONE primary action is "Publish"; everything else is secondary (the
  * student preview, which opens `/questions/:id/preview` in a tab of its own)

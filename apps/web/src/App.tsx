@@ -208,7 +208,7 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   template: (r, c) => <TemplateEditor id={r.id} navigate={c.navigate} />,
   classroom: (r, c) => <ClassroomView id={r.id} navigate={c.navigate} />,
   polls: (_, c) => <PollLauncher navigate={c.navigate} />,
-  // The projection is for a beamer: no sidebar, no chrome (mockup 10).
+  // The projection is for a beamer: no sidebar, no chrome.
   poll: (r, c) => <PollProjection id={r.id} navigate={c.navigate} />,
   pools: (_, c) => <PoolsPage navigate={c.navigate} />,
   pool: (r, c) => <PoolView id={r.id} navigate={c.navigate} />,

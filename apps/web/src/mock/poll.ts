@@ -337,7 +337,7 @@ on("POST", "/app/api/p/:code/answer", (m, body) => {
 //
 // Three fixed uuids, and the alias table of section 3, so both a screenshot
 // script and a curious developer can type the URL:
-//   /evaluations/poll/poll        the running mcq (mockup 10)
+//   /evaluations/poll/poll        the running mcq
 //   /evaluations/poll-short/poll  a running short answer
 //   /evaluations/poll-ended/poll  one that is over
 //   /evaluations/poll-long/poll   a long statement and eight choices: the
@@ -456,7 +456,7 @@ if (!flags.empty && polls.length >= 5) {
       createdAt: iso(-4 * 60_000),
       joined: 61,
       answered: 52,
-      // The distribution of mockup 10: the key leads without winning.
+      // A typical distribution: the key leads without winning.
       counts: [27, 14, 8, 3],
       texts: [],
       // Kept in the Polls pool after an earlier lecture.

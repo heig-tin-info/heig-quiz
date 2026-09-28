@@ -179,7 +179,6 @@ function answerOf(q: MockQuestion, seedValue: number): unknown {
   }
 }
 
-/** One glyph or two for the grid cell (what `type.summarize` returns). */
 /**
  * The glyph a dashboard cell carries, the way the SERVER writes it: the
  * question type's own `summarizeAnswer` (`@quiz/core`), not a count. It is

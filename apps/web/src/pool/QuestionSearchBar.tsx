@@ -25,7 +25,7 @@ import {
 } from "./searchSyntax";
 
 /**
- * Search, then the filters behind one button (mockup `08-pool.html`): one
+ * Search, then the filters behind one button, over the pool's table: one
  * field and one secondary button, and the four lists — type, tag, difficulty,
  * deleted — live in a sheet, because more than three controls in a row is a
  * control panel, not a toolbar.

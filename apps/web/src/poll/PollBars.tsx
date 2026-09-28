@@ -6,7 +6,7 @@ import { cx } from "../ui";
 import type { PollRow } from "./pollTally";
 
 /**
- * The distribution, at beamer size (mockup 10).
+ * The distribution, at beamer size, on the poll's projection.
  *
  * One row is a line and a bar under it. The line carries the letter, the
  * label, the count and the percentage; the bar carries the same percentage
