@@ -9,7 +9,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { McqEditor } from "./Editor.js";
 import { McqPlayer } from "./Player.js";
 import { McqReview } from "./Review.js";
-import { McqStats } from "./Stats.js";
 import { multipleConfig, SECRET_CONFIG } from "./test/fixtures.js";
 import { emptyMcqDraft, MCQ_MAX_CHOICES } from "./schema.js";
 import { mcqServer } from "./server.js";
@@ -721,20 +720,5 @@ describe("McqReview", () => {
     );
     expect(screen.getByText(student.prompt)).toBeInTheDocument();
     expect(screen.getByText("Missed")).toBeInTheDocument();
-  });
-});
-
-describe("McqStats", () => {
-  it("draws one row per choice and counts the answers", () => {
-    render(
-      <McqStats student={student} answers={[{ selected: [1] }, { selected: [1] }, { selected: [0] }]} />,
-    );
-    expect(screen.getByText("2")).toBeInTheDocument();
-    expect(screen.getByText("3 answers")).toBeInTheDocument();
-  });
-
-  it("says so when nobody answered", () => {
-    render(<McqStats student={student} answers={[]} />);
-    expect(screen.getByText("No answer yet.")).toBeInTheDocument();
   });
 });

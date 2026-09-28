@@ -36,7 +36,6 @@ import {
   mcqEditorStrings,
   mcqPlayerStrings,
   mcqReviewStrings,
-  mcqStatsStrings,
 } from "@quiz/qt-mcq/client";
 import {
   shortEditorStrings,
@@ -251,11 +250,6 @@ export const reviewStrings = {
     ...translated(t, REVIEW_STRINGS, "qt.code.r"),
     ...translated(t, IMAGE_REVIEW_STRINGS, "qt.codeimage.r"),
   }),
-};
-
-/** `mcq` answer distribution (WP10 results screens). */
-export const statsStrings = {
-  mcq: (t: TFunction) => translated(t, mcqStatsStrings, "qt.mcq.s"),
 };
 
 // --- Hosts -----------------------------------------------------------------

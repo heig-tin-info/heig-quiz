@@ -199,11 +199,6 @@ export function showsSection(
   return sections?.[part] !== false;
 }
 
-export interface StatsProps<TStudent, TAnswer> {
-  student: TStudent;
-  answers: TAnswer[];
-}
-
 export interface QuestionTypeClient<
   TConfig = unknown,
   TAnswer = unknown,
@@ -221,7 +216,6 @@ export interface QuestionTypeClient<
   readonly Editor: LazyExoticComponent<ComponentType<EditorProps<TConfig>>>;
   readonly Player: LazyExoticComponent<ComponentType<PlayerProps<TStudent, TAnswer>>>;
   readonly Review: LazyExoticComponent<ComponentType<ReviewProps<TStudent, TAnswer, TSolution, TDetails>>>;
-  readonly Stats?: LazyExoticComponent<ComponentType<StatsProps<TStudent, TAnswer>>>;
 
   /** Empty answer for a fresh item (e.g. `{ selected: [] }`). */
   emptyAnswer(student: TStudent): TAnswer;
