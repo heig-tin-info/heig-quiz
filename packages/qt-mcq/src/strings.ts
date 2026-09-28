@@ -103,11 +103,3 @@ export const mcqReviewStrings = {
 } as const;
 
 export type McqReviewStringKey = keyof typeof mcqReviewStrings;
-
-export const mcqStatsStrings = {
-  title: "Answer distribution",
-  noAnswers: "No answer yet.",
-  respondents: "answers",
-} as const;
-
-export type McqStatsStringKey = keyof typeof mcqStatsStrings;

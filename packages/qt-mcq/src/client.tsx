@@ -25,7 +25,6 @@ export const mcqClient: McqClient = {
   Editor: lazy(async () => ({ default: (await import("./Editor.js")).McqEditor })),
   Player: lazy(async () => ({ default: (await import("./Player.js")).McqPlayer })),
   Review: lazy(async () => ({ default: (await import("./Review.js")).McqReview })),
-  Stats: lazy(async () => ({ default: (await import("./Stats.js")).McqStats })),
 
   emptyAnswer: () => ({ selected: [] }),
   isAnswered: isMcqAnswered,
@@ -41,7 +40,6 @@ export {
   mcqEditorStrings,
   mcqPlayerStrings,
   mcqReviewStrings,
-  mcqStatsStrings,
 } from "./strings.js";
 /*
  * The empty configuration is a VALUE a host needs to write a question with no

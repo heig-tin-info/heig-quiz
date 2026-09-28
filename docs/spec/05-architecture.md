@@ -95,7 +95,7 @@ qt-mcq/
   src/schema.ts     configSchema, answerSchema, configVersion, migrate()
   src/grade.ts      grade(), defaultPoints(), toStudent(), randomize()
   src/server.ts     export const mcqServer: QuestionTypeServer
-  src/Editor.tsx  src/Player.tsx  src/Review.tsx  src/Stats.tsx
+  src/Editor.tsx  src/Player.tsx  src/Review.tsx
   src/client.tsx    export const mcqClient: QuestionTypeClient
   src/canonical.ts  toCanonical(), fromCanonical()
   src/*.test.ts

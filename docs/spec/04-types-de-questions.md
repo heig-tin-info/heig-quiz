@@ -16,7 +16,6 @@ A type is a TypeScript package that exports a `QuestionType` object:
 | `Editor` | React component for editing the draft. |
 | `Player` | React component for answering. Receives the student configuration, the current answer, an `onChange` callback. |
 | `Review` | React component for review: answer, key, grading, for the teacher and for the student feedback. |
-| `Stats` | Optional. Component aggregating the answers of one item, e.g. the distribution of choices. |
 | `toCanonical` / `fromCanonical` | Conversion from and to the canonical format, if it differs from the raw configuration. |
 | `toDrillGrade(grading)` | Optional. Converts a grading into a recall rating from 1 to 4 for FSRS. |
 | `configVersion`, `migrate(config, from)` | Version of the configuration schema and upgrade on read. Lets a type evolve without an SQL migration, see 5.2. |
@@ -334,4 +333,4 @@ config:
 
 ## 4.12 Poll `poll`, phase 2
 
-This is not a question type but a single-item evaluation mode, which accepts `mcq`, `short` and a `scale` variant from 1 to N. The type's `Stats` feeds the live projection screen.
+This is not a question type but a single-item evaluation mode, which accepts `mcq`, `short` and a `scale` variant from 1 to N. The live projection screen draws the answers with the host's own `PollBars` (`apps/web/src/poll`), tallied by `pollTally`, whatever the type. There is no per-type `Stats` component: that optional hook of `QuestionTypeClient` was never mounted and was removed on 2026-09-28.

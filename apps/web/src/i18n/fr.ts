@@ -804,9 +804,6 @@ export const fr: Record<keyof Dict, string> = {
   "qt.mcq.r.wrongTicked": "Choix faux cochés",
   "qt.mcq.r.truncated": "Les sélections en trop ont été ignorées par la limite de réponses.",
   "qt.mcq.r.negativeMarking": "Points négatifs : une réponse fausse coûte des points.",
-  "qt.mcq.s.title": "Répartition des réponses",
-  "qt.mcq.s.noAnswers": "Aucune réponse.",
-  "qt.mcq.s.respondents": "réponses",
 
   // --- qt-short strings ---
   "qt.short.e.prompt": "Énoncé",

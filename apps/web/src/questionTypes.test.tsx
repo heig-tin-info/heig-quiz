@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { fmt, plural } from "@quiz/core/client";
 
-import { mcqEditorStrings, mcqPlayerStrings, mcqReviewStrings, mcqStatsStrings } from "@quiz/qt-mcq/client";
+import { mcqEditorStrings, mcqPlayerStrings, mcqReviewStrings } from "@quiz/qt-mcq/client";
 import { shortEditorStrings, shortPlayerStrings, shortReviewStrings } from "@quiz/qt-short/client";
 import { clozeEditorStrings, clozePlayerStrings, clozeReviewStrings } from "@quiz/qt-cloze/client";
 import {
@@ -54,7 +54,6 @@ const DICTIONARIES: [string, object][] = [
   ["qt.mcq.e", mcqEditorStrings],
   ["qt.mcq.p", mcqPlayerStrings],
   ["qt.mcq.r", mcqReviewStrings],
-  ["qt.mcq.s", mcqStatsStrings],
   ["qt.short.e", shortEditorStrings],
   ["qt.short.p", shortPlayerStrings],
   ["qt.short.r", shortReviewStrings],

@@ -820,9 +820,6 @@ export const en = {
   "qt.mcq.r.wrongTicked": "Wrong choices ticked",
   "qt.mcq.r.truncated": "Extra selections were dropped by the answer limit.",
   "qt.mcq.r.negativeMarking": "Negative marking: wrong answers cost points.",
-  "qt.mcq.s.title": "Answer distribution",
-  "qt.mcq.s.noAnswers": "No answer yet.",
-  "qt.mcq.s.respondents": "answers",
 
   // --- qt-short strings ---
   "qt.short.e.prompt": "Statement",
