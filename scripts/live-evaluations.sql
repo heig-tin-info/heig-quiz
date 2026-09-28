@@ -24,6 +24,8 @@
 --     row whose opening time passed 12 hours ago: while the app is down the
 --     ticker opens nothing, and such a row must not block the deploy that
 --     brings it back.
+-- The same 12 hours end a poll nobody answers (`POLL_IDLE_MS`, apps/api
+-- src/modules/poll/service.ts, ADR-014 addendum 2026-09-28).
 select
   title,
   state,

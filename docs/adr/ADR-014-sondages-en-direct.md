@@ -483,3 +483,34 @@ Rejected: restricting polls to the course's pools — a poll is often the questi
 colleague's pool or of last year's course, and nothing is graded; a second, client-side
 fuzzy search over a prefetched list — the grammar would drift from the pool screen's, and a
 teacher who reaches a few thousand questions would download them all.
+
+## Addendum (2026-09-28): a poll left without answers for 12 hours ends on its own (#190)
+
+Nothing ended a poll but its teacher's End, and a poll left running on a closed laptop stayed
+`running` for good: its code stayed taken, it stayed "live" for every screen that lists live
+sessions. The product owner accepted an automatic end after 12 hours without answers.
+
+1. **The rule.** A poll ends when it is `running` and neither the poll nor any of its answers
+   moved for `POLL_IDLE_MS` (12 h, `modules/poll/service.ts`): `evaluations.updated_at` is
+   at most `now − 12 h`, and no `answers.updated_at` of its attempts is later than that.
+   The poll's `updated_at` is its start (created and started in one call) and every reveal
+   step, so a poll nobody answered counts from the last thing its teacher did; an answer
+   counts from its server receipt time, a changed vote included. A join without an answer
+   does not count: a QR scanned the next morning keeps nothing alive. Exactly 12 hours ends
+   it; 11 h 59 does not.
+2. **Why 12 hours.** It is the deploy guard's "left open, nobody is waiting on it"
+   (`scripts/live-evaluations.sql`), for the same reason: a poll lasts minutes, a sitting in a
+   room hours, so half a day of silence is a poll left open by mistake — and a teacher who
+   polls the same room again next morning starts a new one anyway.
+3. **The same end.** The pass calls `endPoll`, the path of the End button: the attempts are
+   expired (`closed_by = server`), the state becomes `closed`, the grading pass is enqueued,
+   the tally and state frames go out, and `poll.end` is audited with the system as actor and
+   `{ reason: "idle" }` as payload. Nothing is released (8).
+4. **The ticker closes (invariant 5).** A tick task, `poll.end_idle` (`modules/poll/jobs.ts`,
+   part of `CORE_TASKS`), runs the pass once a minute: the condition is re-read every time, so
+   a restart catches up and an ended poll no longer matches — a second pass does nothing.
+
+Rejected: counting from the start alone — a long poll still being answered would end under
+its teacher; counting joins as activity — the one phone that reloads the page keeps a
+forgotten poll alive; a shorter threshold — a poll paused over lunch while the teacher
+comments must not vanish.
