@@ -24,6 +24,7 @@ The platform serves two profiles of teachers with the same interface. The novice
 | Configure a quiz without mistakes | Three screens: pick the questions, set the time, start. The start screen is a checklist that says what blocks the launch, what deserves a look and what happens when the button is pressed, beside a preview of the waiting room the students will read (F-EVAL-23). Named presets: "Graded quiz 20 min", "Exercise of the week", "Poll". Everything else under "Advanced options". |
 | Understand a setting | Every option has a help sentence under its label, not a tooltip. |
 | Grade effortlessly | Grading panel with the LLM proposals sorted by confidence. "Validate everything with high confidence" in one click, then review of the remaining cases. |
+| Reuse last year's evaluation | The course's own page (F-ORG-12), opened from its name, lists its evaluation templates; "Save as template" in an evaluation's menu puts one there. The Courses home card lists none, so the home a novice starts from carries no empty "Templates" block for a feature they may never use. On the course page the section shows even when empty: a teacher who opened one course asked to see all of it, and the empty state is where they learn how a template is made (ADR-031, addendum of 2026-09-28). |
 | See what the student sees | "Student preview" button wherever a question or an evaluation is displayed. For an evaluation it is a stateless walk in its own tab: a random seed, the student's player under a "Preview" banner, the countdown, and the full correction when it is handed in; nothing is stored (ADR-018, fourth addendum). |
 
 ## 8.3 Expert mode
@@ -47,7 +48,7 @@ The platform serves two profiles of teachers with the same interface. The novice
 
 | Group | Examples |
 |---|---|
-| Navigation | Go to the course, the classroom, the pool, the settings |
+| Navigation | Go to the course (its page, F-ORG-12), the classroom, the pool, the settings |
 | Questions | Full-text search and by tag `#pointers`, by type `type:code`, by difficulty `diff:3`; open, try, add to the evaluation being edited |
 | Contextual actions | On an evaluation: start, pause, add 5 minutes, close, release the results. On a question: publish, duplicate, generate a variant, export |
 | Creation | New question of type X, new evaluation, new pool |

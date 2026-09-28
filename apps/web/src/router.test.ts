@@ -16,6 +16,7 @@ describe("routeToPath / parsePath", () => {
     { view: "home" },
     { view: "settings" },
     { view: "admin" },
+    { view: "course", id: "k-1" },
     { view: "classroom", id: "c-1" },
     { view: "pools" },
     { view: "pool", id: "p-1" },
@@ -39,6 +40,13 @@ describe("routeToPath / parsePath", () => {
     expect(parsePath("/")).toEqual({ view: "home" });
     expect(parsePath("/nope")).toEqual({ view: "home" });
     expect(parsePath("/classrooms")).toEqual({ view: "home" });
+    expect(parsePath("/courses")).toEqual({ view: "home" });
+  });
+
+  it("parses the page of one course, a page of the Courses section (F-ORG-12)", () => {
+    expect(routeToPath({ view: "course", id: "k-1" })).toBe("/courses/k-1");
+    expect(parsePath("/courses/k-1")).toEqual({ view: "course", id: "k-1" });
+    expect(sectionOf({ view: "course", id: "k-1" })).toBe("home");
   });
 
   it("parses the pool routes, and /pools alone is the list", () => {
@@ -119,6 +127,7 @@ describe("ROUTES", () => {
     home: { view: "home" },
     settings: { view: "settings" },
     admin: { view: "admin" },
+    course: { view: "course", id: "k-1" },
     classroom: { view: "classroom", id: "c-1" },
     pools: { view: "pools" },
     poolCategories: { view: "poolCategories", id: "p-1" },
@@ -169,6 +178,7 @@ describe("ROUTES", () => {
     );
     expect(lit).toMatchObject({
       home: "home",
+      course: "home",
       pools: "pools",
       pool: "pools",
       question: "pools",

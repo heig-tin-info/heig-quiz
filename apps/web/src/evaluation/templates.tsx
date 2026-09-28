@@ -17,18 +17,20 @@ import { useConfirm } from "../confirm";
 import { useT, type TFunction } from "../i18n";
 import { useErrorToast, useToast } from "../notify";
 import type { Route } from "../router";
-import { Actions, Field, FormDialog, FormError, QueryError, Select } from "../ui";
+import { CoursePart } from "../course/parts";
+import { Actions, EmptyState, Field, FormDialog, FormError, QueryError, Select, Skeleton } from "../ui";
 import { courseTemplatesKey, evaluationsKey } from "../queryKeys";
 
 /**
- * Evaluation templates of a course (ADR-031): the list on the course card,
+ * Evaluation templates of a course (ADR-031): the section of the course page,
  * the dialog that makes a classroom's evaluation from one, and the dialog
  * that saves an evaluation as one.
  *
- * A course with no template shows NOTHING here — no heading, no empty state:
- * a teacher who never saved one keeps the course card they had (08, the
- * novice path), and "Save as template" in an evaluation's menu is the door
- * in.
+ * The course page is the ONE surface that lists them, and there the section
+ * shows even while it is empty (ADR-031, addendum of 2026-09-28): a teacher
+ * who opened a course has asked to see all of it, and the empty state is
+ * where they learn that "Save as template", in an evaluation's menu, is the
+ * door in. The novice home is spared: the course card lists no template.
  */
 
 export function useCourseTemplates(courseId: string | null) {
@@ -142,7 +144,7 @@ function UseTemplateDialog({
 }
 
 /**
- * The templates of one course, on its card, under its pools. Each row offers
+ * The templates of one course, as a section of its page. Each row offers
  * what a template is for — a new evaluation in one of the course's classrooms
  * — and its deletion; two actions, so two icon buttons (`Actions`).
  */
@@ -169,75 +171,73 @@ export function CourseTemplates({
     onError: toastError("error.save"),
   });
 
-  if (list.isError) {
-    return (
-      <div className="mt-4">
+  const templates = list.data ?? [];
+  return (
+    <CoursePart page icon={FileStack} title={t("templates.title")}>
+      {list.isLoading ? (
+        <Skeleton className="h-6 w-64" />
+      ) : list.isError ? (
         <QueryError
           title={t("templates.title")}
           error={list.error}
           onRetry={() => void list.refetch()}
           retrying={list.isFetching}
         />
-      </div>
-    );
-  }
-  // Loading and empty draw nothing: the section only exists once there is
-  // something in it, so a course without templates never flickers one in.
-  const templates = list.data ?? [];
-  if (templates.length === 0) return null;
-
-  return (
-    <div className="mt-4">
-      <span className="text-[11px] font-semibold uppercase tracking-wider text-fg-faint">
-        {t("templates.title")}
-      </span>
-      <ul className="mt-1 space-y-0.5">
-        {templates.map((template) => (
-          <li key={template.id} className="flex items-center gap-2 px-2 py-1 text-[13px]">
-            <FileStack className="size-3.5 shrink-0 text-fg-faint" />
-            <span className="min-w-0 flex-1 truncate font-medium">{template.title}</span>
-            {/* On a phone the title keeps the room: the mode leaves first,
-                the counts stay. */}
-            <span className="hidden shrink-0 text-xs text-fg-muted sm:inline">
-              {t(`eval.mode.${template.mode}`)}
-            </span>
-            <span className="shrink-0 text-xs tabular-nums text-fg-muted">
-              {t(template.itemCount === 1 ? "templates.meta.one" : "templates.meta", {
-                n: template.itemCount,
-                points: template.totalPoints,
-                revision: template.revision,
-              })}
-            </span>
-            <Actions
-              label={t("common.actions")}
-              size="sm"
-              items={[
-                ...(classrooms.length > 0
-                  ? [{ label: t("templates.use"), icon: CopyPlus, onSelect: () => setUsing(template) }]
-                  : []),
-                {
-                  label: t("templates.delete"),
-                  icon: Trash2,
-                  danger: true,
-                  onSelect: async () => {
-                    if (
-                      await confirm({
-                        title: t("templates.delete"),
-                        message: t("templates.deleteConfirm", { name: template.title }),
-                        confirmLabel: t("common.delete"),
-                        cancelLabel: t("common.cancel"),
-                        danger: true,
-                      })
-                    ) {
-                      remove.mutate(template);
-                    }
+      ) : templates.length === 0 ? (
+        // No button: until a template can be written here (A2), the one door
+        // is an evaluation's menu, and the empty state says where it is.
+        <EmptyState icon={FileStack} title={t("templates.empty.title")} className="py-8">
+          {t("templates.empty.body")}
+        </EmptyState>
+      ) : (
+        <ul className="space-y-0.5">
+          {templates.map((template) => (
+            <li key={template.id} className="flex items-center gap-2 px-2 py-1 text-[13px]">
+              <FileStack className="size-3.5 shrink-0 text-fg-faint" />
+              <span className="min-w-0 flex-1 truncate font-medium">{template.title}</span>
+              {/* On a phone the title keeps the room: the mode leaves first,
+                  the counts stay. */}
+              <span className="hidden shrink-0 text-xs text-fg-muted sm:inline">
+                {t(`eval.mode.${template.mode}`)}
+              </span>
+              <span className="shrink-0 text-xs tabular-nums text-fg-muted">
+                {t(template.itemCount === 1 ? "templates.meta.one" : "templates.meta", {
+                  n: template.itemCount,
+                  points: template.totalPoints,
+                  revision: template.revision,
+                })}
+              </span>
+              <Actions
+                label={t("common.actions")}
+                size="sm"
+                items={[
+                  ...(classrooms.length > 0
+                    ? [{ label: t("templates.use"), icon: CopyPlus, onSelect: () => setUsing(template) }]
+                    : []),
+                  {
+                    label: t("templates.delete"),
+                    icon: Trash2,
+                    danger: true,
+                    onSelect: async () => {
+                      if (
+                        await confirm({
+                          title: t("templates.delete"),
+                          message: t("templates.deleteConfirm", { name: template.title }),
+                          confirmLabel: t("common.delete"),
+                          cancelLabel: t("common.cancel"),
+                          danger: true,
+                        })
+                      ) {
+                        remove.mutate(template);
+                      }
+                    },
                   },
-                },
-              ]}
-            />
-          </li>
-        ))}
-      </ul>
+                ]}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
       {using ? (
         <UseTemplateDialog
           template={using}
@@ -246,7 +246,7 @@ export function CourseTemplates({
           navigate={navigate}
         />
       ) : null}
-    </div>
+    </CoursePart>
   );
 }
 

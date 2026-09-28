@@ -7,7 +7,8 @@ the issue). Delivered in several pull requests: this ADR and the spec first,
 then the smallest usable slice (migration `0019_evaluation_templates`, *Save
 as template*, the course's list with delete, *Instantiate*), then editing a
 template in place, then pulling a revision into an instance. The promote
-screen is deferred (06 no. 25).
+screen is deferred (06 no. 25). The rest of the delivery was re-split on
+2026-09-28: see the addendum at the end.
 
 ## Context
 
@@ -150,6 +151,11 @@ pull request.)
 5. The promote screen — deferred until a term of use of 2–4 shows what it
    must do.
 
+Items 1 and 2 are merged. Items 3 and 4 were re-split on 2026-09-28 into
+A1 (the course page), A2 (creating an empty template and editing one in
+place) and B (pulling a revision, with the "behind template" badge); the
+addendum below is the current plan.
+
 ## Consequences
 
 - The null of `classroom_id` no longer names one shape. Every site that
@@ -210,3 +216,68 @@ ordinary evaluations and stay.
 - **Polls as templates.** A poll is created and started in one call and
   lives minutes; its "template" is the question itself, which the pool
   already keeps. Rejected (422).
+
+## Addendum (2026-09-28)
+
+Settled with the product owner after the smallest slice shipped, for the rest
+of the work (issue #151). A teacher never discovered templates: a course was
+only a card on the Courses home, and the card hid its templates list while it
+was empty.
+
+### a. The course page is the one surface for templates
+
+Every course gets a page of its own, `/courses/:id` (F-ORG-12): its
+classrooms (the archived ones behind "Show archived"), its linked pools, and
+its evaluation templates. Its one primary action is *New classroom*. On that
+page the templates section is **always shown**, with an empty state that
+names the one door there is today — *Save as template* in an evaluation's
+menu. The card on the Courses home no longer lists templates at all: it is a
+summary whose title opens the page. This reverses the slice-2 rule "the list
+shows nothing while empty", and the novice home (08) stays as it was, since
+that list left the card instead of growing an empty block on it.
+
+### b. Delivery, re-split
+
+- **A1** — the course page (web only, no API change).
+- **A2** — creating an EMPTY template at course level together with editing
+  a template in place: `POST /courses/:id/templates` (a new F-EVAL-24),
+  taking a title, a mode (`exam` | `exercise`) and a preset; a `poll` is
+  `422 template_poll`; audited as `template.create` without `from`. The two
+  ship together because an empty template that cannot be filled is a dead
+  end, which is also why A1 has no *New template* button.
+- **B** — pulling a template revision into an instance. The "behind
+  template" badge ships with it, so the badge arrives with its fix rather
+  than as a warning nobody can act on.
+- The promote screen stays deferred (06 no. 25).
+
+### c. Editing a template goes through parallel routes
+
+Editing a template uses routes of its own under
+`/app/api/templates/:id/...`, loaded by `loadTemplate` only. `loadEvaluation`
+keeps its inner join on `classrooms`, so no generic evaluation route —
+items, settings, dashboard, grading, preview, results, and the MCP tools
+built on them — ever sees a template; the code is shared at the service
+level, not by widening a loader. A `TemplatePatch` contract is the
+evaluation patch minus `opensAt`, `closesAt`, `accessCode`, `ipAllowlist`
+and `strict`, so sending a run field is a 400 from the schema, never a 500
+from `evaluations_template_ck`. The pools a template may draw from are the
+course's linked pools: `coursePoolIds` takes a course id, not a classroom.
+
+### d. One helper bumps the revision
+
+The revision moves in ONE service helper, called by every template write
+inside that write's transaction, as `revision = revision + 1` in SQL (never
+read-modify-write). There is exactly one bump per request that changes at
+least one stored template-level value (items, points, order, settings); a
+title-only request, or one that changes nothing, does not bump. A database
+trigger was considered and rejected: it would be the first trigger of the
+repository, it puts the logic out of sight of the code that reads it, and it
+would need disabling at creation, where the items are written under
+revision 1.
+
+### e. Instantiate copies what it records
+
+*Instantiate* reads the revision and the items in one transaction that locks
+the template row (`SELECT … FOR UPDATE`), so the `origin_revision` recorded
+on the instance is the revision whose content was copied, even while a
+colleague edits the template.

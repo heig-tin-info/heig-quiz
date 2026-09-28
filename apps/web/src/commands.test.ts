@@ -126,6 +126,26 @@ describe("buildCommands: who sees what", () => {
     expect(navigate).toHaveBeenCalledWith({ view: "classroom", id: "c2" });
   });
 
+  it("goes to each course in the navigation, found by its code (08 §8.4)", () => {
+    const navigate = vi.fn();
+    const hidden = makeCourseSummary({ id: "k9", code: "ALG", name: "Algèbre", hidden: true });
+    const commands = buildCommands(makeContext({ navigate, courses: [...courses(1), hidden] }));
+    const courseIds = ids(commands).filter((id) => id.startsWith("course:"));
+    // A hidden course is out of the palette like the rest of the navigation.
+    expect(courseIds).toEqual(["course:c1"]);
+    const course = need(commands, "course:c1");
+    expect(course.label).toBe("Open the course Programmation C");
+    expect(course.hint).toBe("PRG1");
+    expect(ids(filterCommands("prg1", commands))).toContain("course:c1");
+    course.run();
+    expect(navigate).toHaveBeenCalledWith({ view: "course", id: "c1" });
+    // Teacher UI only.
+    const student = buildCommands(
+      makeContext({ me: makeMe({ role: "student" }), teacherUi: false }),
+    );
+    expect(ids(student).some((id) => id.startsWith("course:"))).toBe(false);
+  });
+
   it("hangs the course on the classroom row, as hint and as search material", () => {
     const commands = buildCommands(makeContext({ courses: courses(1) }));
     const room = need(commands, "classroom:c1");
