@@ -948,6 +948,58 @@ describe("teacher controls (F-LIVE-11, F-LIVE-12)", () => {
     expect((await reload(db, seed.evaluationId)).state).toBe("closed");
   });
 
+  /*
+   * #178: a student who has not begun yet takes the deadline from
+   * `closes_at` when they begin. Once "+10 min" has moved it, extra time on
+   * the attempt as well would count the minutes twice.
+   */
+  it("gives a student who begins after a deadline extension the new end, once", async () => {
+    const opensAt = clock.now();
+    const closesAt = new Date(opensAt.getTime() + 3_600_000);
+    const seed = await seedLive(db, {
+      settings: { timing: "deadline" },
+      durationS: null,
+      opensAt,
+      closesAt,
+      timeBonusPercent: 25,
+    });
+    const row = await applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
+    const waiting = [];
+    for (const userId of seed.studentIds) {
+      const participant = (await service.participantOf(db, row, userId))!;
+      waiting.push({ participant, attempt: await service.ensureAttempt(db, row, participant, clock.now()) });
+    }
+
+    await service.extendTime(db, row, { minutes: 10 }, clock.now());
+    const extended = await reload(db, seed.evaluationId);
+    const end = closesAt.getTime() + 10 * 60_000;
+    expect(extended.closesAt!.getTime()).toBe(end);
+
+    const [accommodated, ordinary] = await Promise.all(
+      waiting.map(async ({ participant, attempt }) =>
+        service.beginAttempt(db, extended, (await service.attemptById(db, attempt.id))!, participant, clock.now()),
+      ),
+    );
+    expect(ordinary!.extraS).toBe(0);
+    expect(ordinary!.deadlineAt!.getTime()).toBe(end);
+    // 25 % of the announced window, which the extension widened to 70 min.
+    expect(accommodated!.deadlineAt!.getTime()).toBe(end + 0.25 * 70 * 60_000);
+  });
+
+  it("still gives the minutes to a student who begins after a duration extension", async () => {
+    const seed = await seedLive(db, { students: 1, durationS: 1800 });
+    const row = await applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
+    const participant = (await service.participantOf(db, row, seed.studentIds[0]!))!;
+    const created = await service.ensureAttempt(db, row, participant, clock.now());
+
+    // No common end to carry them: they stay on the attempt.
+    await service.extendTime(db, row, { minutes: 10 }, clock.now());
+    const [stored] = await db.select().from(attempts).where(eq(attempts.id, created.id));
+    const begun = await service.beginAttempt(db, row, stored!, participant, clock.now());
+    expect(begun.extraS).toBe(600);
+    expect(begun.deadlineAt!.getTime()).toBe(clock.now().getTime() + (1800 + 600) * 1000);
+  });
+
   it("publishes the evaluation as committed, not as the extension request loaded it", async () => {
     const opensAt = clock.now();
     const closesAt = new Date(opensAt.getTime() + 3_600_000);

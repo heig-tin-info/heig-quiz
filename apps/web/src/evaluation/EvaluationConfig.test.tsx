@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -144,6 +144,39 @@ describe("EvaluationConfig", () => {
       expect(patch?.body).toHaveProperty("opensAt", expect.any(String));
       expect(patch?.body).toHaveProperty("closesAt", expect.any(String));
     });
+  });
+
+  /*
+   * #178: a `datetime-local` reports a complete value at every keystroke of
+   * the year, each a past time the server refuses on a scheduled evaluation.
+   * The date is written once, on leaving the field, and a refusal is said in
+   * the teacher's language.
+   */
+  it("writes a date on leaving the field, and translates a refused past time (#178)", async () => {
+    const scheduled = makeEvaluationDetail({
+      evaluation: { ...makeEvaluationDetail().evaluation, state: "scheduled" },
+    });
+    const { calls } = mockFetch(
+      routes(scheduled, {
+        [`PATCH /app/api/evaluations/${EVALUATION_ID}`]: fail(409, {
+          error: "illegal_transition",
+          message: "the opening time has already passed",
+          reason: "opens_at_past",
+        }),
+      }),
+    );
+    renderWithProviders(<EvaluationConfig id={EVALUATION_ID} navigate={navigate} />, {
+      route: "/evaluations/x?step=timing",
+    });
+
+    const opensAt = await screen.findByLabelText(/^opens at$/i);
+    for (const value of ["0002-10-01T10:00", "0020-10-01T10:00", "2020-10-01T10:00"]) {
+      fireEvent.change(opensAt, { target: { value } });
+    }
+    expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(0);
+    fireEvent.blur(opensAt);
+    expect(await screen.findByText(/this time has passed/i)).toBeInTheDocument();
+    expect(calls.filter((c) => c.method === "PATCH")).toHaveLength(1);
   });
 
   it("the matched preset's card says the values in force, the other what it would set (#87)", async () => {

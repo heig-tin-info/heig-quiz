@@ -1939,6 +1939,7 @@ export const fr: Record<keyof Dict, string> = {
   "launch.timing.incomplete": "Temps incomplet",
   "launch.timing.past": "La fin commune est passée",
   "launch.timing.past.detail": "C'était le {date} : l'évaluation se fermerait dès son ouverture.",
+  "launch.timing.past.scheduled": "C'était le {date}. Repassez en brouillon pour choisir de nouvelles dates.",
   "launch.feedback": "Correction : {when}",
   "launch.rules.shuffled": "questions mélangées",
   "launch.rules.fixedOrder": "questions dans un ordre fixe",

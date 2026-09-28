@@ -220,7 +220,7 @@ export async function patchEvaluation(
   db: DbOrTx,
   row: EvaluationRecord,
   patch: EvaluationPatch,
-  ctx: { attemptCount: number; now?: Date },
+  ctx: { attemptCount: number; now: Date },
 ): Promise<EvaluationRecord> {
   const lock = configLock(row.state, ctx.attemptCount);
   if (Object.keys(patch).some((k) => !isConfigFieldWritable(lock, k))) {
@@ -274,7 +274,6 @@ export async function patchEvaluation(
 
   // A scheduled evaluation stays one the guard would schedule (#178): moved
   // into the past, the ticker would open it, or close it, at its next pass.
-  // `ctx.now` is the route's clock; a caller without one reads the host's.
   if (
     row.state === "scheduled" &&
     (patch.opensAt !== undefined || patch.closesAt !== undefined || patch.settings !== undefined)
@@ -284,8 +283,7 @@ export async function patchEvaluation(
       opensAt: next.opensAt !== undefined ? next.opensAt : row.opensAt,
       closesAt: next.closesAt !== undefined ? next.closesAt : row.closesAt,
     };
-    const now = ctx.now ?? new Date();
-    refusePastTiming("scheduled", "scheduled", pastTiming(timing, "scheduled", "scheduled", now));
+    refusePastTiming("scheduled", "scheduled", pastTiming(timing, "scheduled", "scheduled", ctx.now));
   }
 
   await db.update(evaluations).set(next).where(eq(evaluations.id, row.id));

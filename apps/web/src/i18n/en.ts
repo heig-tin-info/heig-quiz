@@ -1950,6 +1950,7 @@ export const en = {
   "launch.timing.incomplete": "Timing incomplete",
   "launch.timing.past": "The common end has passed",
   "launch.timing.past.detail": "It was {date}: the evaluation would close as soon as it opens.",
+  "launch.timing.past.scheduled": "It was {date}. Go back to draft to choose new dates.",
   "launch.feedback": "Feedback: {when}",
   "launch.rules.shuffled": "questions shuffled",
   "launch.rules.fixedOrder": "questions in a fixed order",

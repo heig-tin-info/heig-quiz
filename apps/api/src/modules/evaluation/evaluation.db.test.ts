@@ -593,7 +593,7 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
       ];
       for (const patch of refused) {
         await expect(
-          service.patchEvaluation(db, row, patch, ctx),
+          service.patchEvaluation(db, row, patch, { ...ctx, now: clock.now() }),
           `${state} ${JSON.stringify(patch)}`,
         ).rejects.toMatchObject({ code: "running_locked", status: 409 });
       }
@@ -608,7 +608,7 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
       db,
       row,
       { title: "Renamed", accessCode: "open-sesame", ipAllowlist: ["10.0.0.0/8"] },
-      { attemptCount: 3 },
+      { attemptCount: 3, now: clock.now() },
     );
     expect(next.title).toBe("Renamed");
     expect(next.accessCode).toBe("open-sesame");
@@ -622,7 +622,7 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
         db,
         row,
         { feedbackPolicy: { when: "none", showKey: false } },
-        { attemptCount: 3 },
+        { attemptCount: 3, now: clock.now() },
       );
       expect(service.feedbackOf(next), state).toMatchObject({ when: "none", showKey: false });
     }
@@ -645,7 +645,7 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
         .where(eq(evaluations.id, seed.evaluationId));
       const row = await reload(db, seed.evaluationId);
       await expect(
-        service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, { attemptCount: 2 }),
+        service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, { attemptCount: 2, now: clock.now() }),
       ).rejects.toMatchObject({ code: "feedback_not_allowed", status: 422 });
       expect(service.feedbackOf(await reload(db, seed.evaluationId)).when).toBe("on_release");
 
@@ -653,7 +653,7 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
         db,
         row,
         { feedbackPolicy: { showKey: false } },
-        { attemptCount: 2 },
+        { attemptCount: 2, now: clock.now() },
       );
       expect(service.feedbackOf(hidden), state).toMatchObject({ when: "on_release", showKey: false });
     }
@@ -668,7 +668,7 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
         .where(eq(evaluations.id, seed.evaluationId));
       const row = await reload(db, seed.evaluationId);
       await expect(
-        service.patchEvaluation(db, row, { feedbackPolicy: { showKey: true } }, { attemptCount: 1 }),
+        service.patchEvaluation(db, row, { feedbackPolicy: { showKey: true } }, { attemptCount: 1, now: clock.now() }),
         state,
       ).rejects.toMatchObject({ code: "poll_feedback_locked", status: 409 });
       expect(await reload(db, seed.evaluationId), state).toEqual(row);
@@ -682,7 +682,7 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
 
   it("leaves the configuration open in the lobby, and the feedback policy open once closed", async () => {
     const { row: lobby } = await inState("lobby");
-    const moved = await service.patchEvaluation(db, lobby, { durationS: 600 }, { attemptCount: 0 });
+    const moved = await service.patchEvaluation(db, lobby, { durationS: 600 }, { attemptCount: 0, now: clock.now() });
     expect(moved.durationS).toBe(600);
 
     const { row: closed } = await inState("closed");
@@ -690,11 +690,11 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
       db,
       closed,
       { feedbackPolicy: { when: "none" } },
-      { attemptCount: 2 },
+      { attemptCount: 2, now: clock.now() },
     );
     expect(service.feedbackOf(released).when).toBe("none");
     await expect(
-      service.patchEvaluation(db, released, { durationS: 60 }, { attemptCount: 2 }),
+      service.patchEvaluation(db, released, { durationS: 60 }, { attemptCount: 2, now: clock.now() }),
     ).rejects.toMatchObject({ code: "locked", status: 409 });
   });
 
@@ -755,10 +755,10 @@ describe("patch and duplicate", () => {
     const seed = await seedLive(db);
     await addAttempt(seed.evaluationId, seed.studentIds[0]!);
     const row = await reload(db, seed.evaluationId);
-    const renamed = await service.patchEvaluation(db, row, { title: "New" }, { attemptCount: 1 });
+    const renamed = await service.patchEvaluation(db, row, { title: "New" }, { attemptCount: 1, now: clock.now() });
     expect(renamed.title).toBe("New");
     await expect(
-      service.patchEvaluation(db, renamed, { durationS: 60 }, { attemptCount: 1 }),
+      service.patchEvaluation(db, renamed, { durationS: 60 }, { attemptCount: 1, now: clock.now() }),
     ).rejects.toMatchObject({ code: "locked", status: 409 });
   });
 
@@ -766,7 +766,7 @@ describe("patch and duplicate", () => {
     const seed = await seedLive(db);
     const row = await reload(db, seed.evaluationId);
     await expect(
-      service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, { attemptCount: 0 }),
+      service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, { attemptCount: 0, now: clock.now() }),
     ).rejects.toMatchObject({ code: "feedback_not_allowed", status: 422 });
     // Nothing was written: the refusal is not a clamp.
     expect(service.feedbackOf(await reload(db, seed.evaluationId)).when).toBe("on_release");
@@ -783,25 +783,26 @@ describe("patch and duplicate", () => {
     // Take-home: allowed.
     row = await service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, {
       attemptCount: 0,
+      now: clock.now(),
     });
     expect(service.feedbackOf(row).when).toBe("immediate");
 
     // Adding a waiting room under `immediate` is refused…
     await expect(
-      service.patchEvaluation(db, row, { settings: { lobby: "manual" } }, { attemptCount: 0 }),
+      service.patchEvaluation(db, row, { settings: { lobby: "manual" } }, { attemptCount: 0, now: clock.now() }),
     ).rejects.toMatchObject({ code: "feedback_not_allowed", status: 422 });
     // …and accepted when the same patch brings the policy back, as the screen does.
     row = await service.patchEvaluation(
       db,
       row,
       { settings: { lobby: "manual" }, feedbackPolicy: { when: "on_release" } },
-      { attemptCount: 0 },
+      { attemptCount: 0, now: clock.now() },
     );
     expect(service.settingsOf(row).lobby).toBe("manual");
 
     // Asking for `immediate` under a waiting room is refused too.
     await expect(
-      service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, { attemptCount: 0 }),
+      service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, { attemptCount: 0, now: clock.now() }),
     ).rejects.toMatchObject({ code: "feedback_not_allowed" });
   });
 
@@ -815,7 +816,7 @@ describe("patch and duplicate", () => {
       db,
       await reload(db, seed.evaluationId),
       { title: "Renamed", feedbackPolicy: { showKey: true } },
-      { attemptCount: 0 },
+      { attemptCount: 0, now: clock.now() },
     );
     expect(renamed.title).toBe("Renamed");
   });

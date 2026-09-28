@@ -1,9 +1,10 @@
 import { Check, Lock, MonitorPlay, Timer } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
-import type { EvaluationDetail, EvaluationPatch } from "@quiz/contracts";
+import { TransitionRefusal, type EvaluationDetail, type EvaluationPatch } from "@quiz/contracts";
 import { configLock, isConfigFieldWritable } from "@quiz/domain";
 
+import { ApiError } from "../api";
 import type { Dict } from "../i18n";
 import { useT } from "../i18n";
 import {
@@ -116,6 +117,49 @@ function invalid(missing: ReadonlySet<TimingField>, field: TimingField) {
   return missing.has(field)
     ? { "aria-invalid": true, "aria-describedby": `${TIMING_FIELD_ID[field]}-missing` }
     : {};
+}
+
+/**
+ * A date of the timing, written when the teacher leaves the field (#178).
+ * A `datetime-local` reports a complete value at every keystroke of the year
+ * — 0002, 0020, 0202 — each one a past time the server refuses on a
+ * scheduled evaluation. Keyed on the stored value by its caller, so a write
+ * from elsewhere replaces what the field shows.
+ */
+function DateField({
+  value,
+  onCommit,
+  ...field
+}: {
+  id: string;
+  label: string;
+  disabled: boolean;
+  "aria-invalid"?: boolean;
+  "aria-describedby"?: string;
+  value: string | null;
+  onCommit: (value: string | null) => void;
+}) {
+  const [local, setLocal] = useState(() => toLocalInput(value));
+  return (
+    <Field
+      {...field}
+      type="datetime-local"
+      size="sm"
+      width="w-52"
+      value={local}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={() => {
+        if (local !== toLocalInput(value)) onCommit(fromLocalInput(local));
+      }}
+    />
+  );
+}
+
+/** A refused patch that would leave a scheduled evaluation in the past (#178). */
+function pastRefusal(error: unknown): boolean {
+  if (!(error instanceof ApiError)) return false;
+  const reason = TransitionRefusal.safeParse(error.body).data?.reason;
+  return reason === "opens_at_past" || reason === "closes_at_past";
 }
 
 /**
@@ -312,7 +356,13 @@ export function TimingStep({
       ) : locked ? (
         <Alert tone="warning" title={t("eval.locked")} />
       ) : null}
-      <FormError error={patch.error} title={t("eval.saveFailed")} />
+      {pastRefusal(patch.error) ? (
+        <Alert tone="danger" title={t("eval.saveFailed")}>
+          {t("launch.schedule.past")}
+        </Alert>
+      ) : (
+        <FormError error={patch.error} title={t("eval.saveFailed")} />
+      )}
 
       <ConfigSettings
         config={detail.evaluation}
@@ -326,31 +376,27 @@ export function TimingStep({
         dates={
           <>
             <div className="flex flex-col gap-1">
-              <Field
+              <DateField
+                key={opensAt ?? ""}
                 id={TIMING_FIELD_ID.opensAt}
                 {...invalid(missing, "opensAt")}
                 label={t("eval.opensAt")}
-                type="datetime-local"
-                size="sm"
-                width="w-52"
                 disabled={locked}
-                value={toLocalInput(opensAt)}
-                onChange={(e) => patch.mutate({ opensAt: fromLocalInput(e.target.value) })}
+                value={opensAt}
+                onCommit={(value) => patch.mutate({ opensAt: value })}
               />
               {missing.has("opensAt") ? <MissingNote field="opensAt" /> : null}
             </div>
             {settings.timing !== "manual" ? (
               <div className="flex flex-col gap-1">
-                <Field
+                <DateField
+                  key={closesAt ?? ""}
                   id={TIMING_FIELD_ID.closesAt}
                   {...invalid(missing, "closesAt")}
                   label={t("eval.closesAt")}
-                  type="datetime-local"
-                  size="sm"
-                  width="w-52"
                   disabled={locked}
-                  value={toLocalInput(closesAt)}
-                  onChange={(e) => patch.mutate({ closesAt: fromLocalInput(e.target.value) })}
+                  value={closesAt}
+                  onCommit={(value) => patch.mutate({ closesAt: value })}
                 />
                 {missing.has("closesAt") ? <MissingNote field="closesAt" /> : null}
               </div>

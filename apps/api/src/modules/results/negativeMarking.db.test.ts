@@ -527,6 +527,7 @@ describe("the setting", () => {
     const refused = await evaluationService
       .patchEvaluation(db(), await reload(db(), seed.evaluationId), { settings: { negativeMarking: true } }, {
         attemptCount: 0,
+        now: server.clock.now(),
       })
       .then(
         () => null,

@@ -5,12 +5,13 @@
  *
  * Four levels, and the line between them is the triage's, not taste:
  *   - `blocker`: exactly what the API refuses (`guardTransition`): no
- *     question, an incomplete timing. Nothing else may disable the launch —
+ *     question, an incomplete timing, a common end already past (#178).
+ *     Nothing else may disable the launch —
  *     a client-side refusal the server does not share is a lie in one
  *     direction or the other.
  *   - `warning`: legal, but probably not meant, and each one has a fix: stale
  *     question versions, a template that moved since (F-EVAL-26), an empty
- *     roster, roster conflicts, a common end already past.
+ *     roster, roster conflicts.
  *   - `ok`: a check that passed, said as a summary line.
  *   - `info`: a rule of the session that is never wrong in itself (feedback,
  *     navigation, access). Unlinked accounts are info too: before the first
@@ -180,13 +181,24 @@ function timingCheck(
     evaluation.closesAt !== null &&
     Date.parse(evaluation.closesAt) <= now
   ) {
-    return {
-      id: "timing",
-      level: "warning",
-      title: t("launch.timing.past"),
-      detail: t("launch.timing.past.detail", { date: formatDate(evaluation.closesAt) }),
-      fix,
-    };
+    // The server refuses to open it (#178). Scheduled, its opening has passed
+    // too and the server refuses a patch that leaves it there: the way out is
+    // the action bar's "Back to draft", not the timing step.
+    const date = formatDate(evaluation.closesAt);
+    return evaluation.state === "scheduled"
+      ? {
+          id: "timing",
+          level: "blocker",
+          title: t("launch.timing.past"),
+          detail: t("launch.timing.past.scheduled", { date }),
+        }
+      : {
+          id: "timing",
+          level: "blocker",
+          title: t("launch.timing.past"),
+          detail: t("launch.timing.past.detail", { date }),
+          fix,
+        };
   }
   return {
     id: "timing",
