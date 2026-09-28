@@ -79,7 +79,6 @@ export function pressable(onActivate: () => void, role: string = "button") {
   };
 }
 
-/** Ticking clock for countdowns; re-renders every `intervalMs`. */
 /**
  * True from `px` wide up, following the window as it resizes. False where
  * `matchMedia` does not exist (a test), so a component defaults to its
@@ -100,12 +99,44 @@ export function useMinWidth(px: number): boolean {
   );
 }
 
-export function useNow(intervalMs = 30_000): number {
-  const [now, setNow] = useState(() => Date.now());
+/** One shared timer per interval, and who listens to it. */
+const tickers = new Map<number, { timer: ReturnType<typeof setInterval>; listeners: Set<() => void> }>();
+
+function onTick(intervalMs: number, listener: () => void): () => void {
+  let ticker = tickers.get(intervalMs);
+  if (!ticker) {
+    const listeners = new Set<() => void>();
+    const timer = setInterval(() => {
+      for (const l of listeners) l();
+    }, intervalMs);
+    ticker = { timer, listeners };
+    tickers.set(intervalMs, ticker);
+  }
+  ticker.listeners.add(listener);
+  return () => {
+    ticker.listeners.delete(listener);
+    if (ticker.listeners.size > 0) return;
+    clearInterval(ticker.timer);
+    tickers.delete(intervalMs);
+  };
+}
+
+/**
+ * The app's one ticking clock: re-renders the caller every `intervalMs` with
+ * `read()` — the browser's time by default, the SERVER's on the live path
+ * (`useServerClock().now`, which must be stable). Every caller of an interval
+ * shares one timer and moves in the same tick, so two countdowns on a screen
+ * never disagree by a second. Call it in the LEAF that shows the time: the
+ * component that calls it re-renders with every tick, and so does everything
+ * under it.
+ */
+export function useNow(intervalMs = 30_000, read: () => number = Date.now): number {
+  const [now, setNow] = useState(read);
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(timer);
-  }, [intervalMs]);
+    // A new clock is read at once, not a tick later.
+    setNow(read());
+    return onTick(intervalMs, () => setNow(read()));
+  }, [intervalMs, read]);
   return now;
 }
 

@@ -48,16 +48,13 @@ export function StudentPreviewPage({ id }: { id: string }) {
     // Seed 0 and nothing stored: the same view on every open.
     staleTime: Infinity,
   });
-  // No deadline, so no countdown reads it; read once so every render hands
-  // the shell the same value instead of a new one (FF-26).
-  const [now] = useState(Date.now);
-
   return (
+    // No deadline, so no countdown: the shell's default clock is stable, and
+    // nothing here hands it a new value on every render (FF-26).
     <PlayerShell
       title={t("question.preview.pageTitle")}
       subtitle={t("question.preview.pageSubtitle")}
       deadlineAt={null}
-      now={now}
       banner={
         <Alert icon={Eye} title={t("question.preview.banner")}>
           {t("question.preview.bannerBody")}

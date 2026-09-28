@@ -641,7 +641,11 @@ live in `ui/state.ts`, each written once.
   threshold, `danger` under a minute whatever that threshold says, `0:00` and
   never a negative. The phase is also announced once, when it is crossed,
   through a polite live region: the colour change alone reaches neither a
-  screen reader nor a red-green reader.
+  screen reader nor a red-green reader. On a live screen use
+  `ClockCountdown`: it takes a stable `clock` function (the server's) instead
+  of `now` and ticks by itself on the one shared timer of `useNow`, so the
+  tick re-renders the digits and not the question or the grid around them.
+  Never tick a page to feed a countdown.
 - Ring: SVG progress ring for the lobby's "present / enrolled" and the
   dashboard's completion. `fg` and not the accent — on the waiting screen it
   is the only living element, and a red disc would read as an alarm on a page

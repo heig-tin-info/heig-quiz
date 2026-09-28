@@ -1,5 +1,6 @@
 import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { createElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -17,6 +18,7 @@ import { labelIssues } from "../test/labels";
 import {
   EVALUATION_ID,
   id,
+  LIVE_NOW,
   makeDashboard,
   makeEvaluationDetail,
 } from "../test/live-fixtures";
@@ -24,6 +26,23 @@ import { fail, makeQueryClient, mockFetch, ok, renderWithProviders } from "../te
 import { LiveDashboard } from "./LiveDashboard";
 import { LIVE_TOGGLES_KEY } from "./toggles";
 import { dashboardKey } from "../queryKeys";
+
+/*
+ * Every render of a cell's tooltip wrapper is counted: one per cell of the
+ * grid, so a test can prove that the one-second clock of the time column does
+ * not re-render the N x M cells beside it. The wrapper renders the real one.
+ */
+const cellRenders = vi.hoisted(() => ({ count: 0 }));
+vi.mock("./AnswerTip", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./AnswerTip")>();
+  return {
+    ...actual,
+    AnswerTip: (props: Parameters<typeof actual.AnswerTip>[0]) => {
+      cellRenders.count += 1;
+      return createElement(actual.AnswerTip, props);
+    },
+  };
+});
 
 /*
  * The dashboard, from the three angles the work package cares about: the grid
@@ -120,6 +139,44 @@ describe("LiveDashboard — the grid", () => {
     setup();
     expect(await screen.findByText(/3 students/i)).toBeInTheDocument();
     expect(labelIssues()).toEqual([]);
+  });
+});
+
+/*
+ * The page's clock is the server's, and it ticks where time is shown — the
+ * header's countdown and each running row's — not through the grid: a tick
+ * re-renders two dozen countdowns, not thirty by twelve cells.
+ */
+describe("LiveDashboard — the clock", () => {
+  /*
+   * Only the clock is faked — the interval every countdown shares, and the
+   * time itself — so a tick happens exactly when the test says, however
+   * loaded the machine. The fetches, the queries and Testing Library's
+   * waits keep their real timers.
+   */
+  const fakeClock = (now: number) =>
+    vi.useFakeTimers({ now, toFake: ["setInterval", "clearInterval", "Date"] });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("ticks the header and the rows once a second, and leaves the cells alone", async () => {
+    fakeClock(LIVE_NOW.getTime());
+    setup(makeDashboard(3, 4));
+    await screen.findByRole("table");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    const timers = () => screen.getAllByRole("timer").map((el) => el.textContent);
+    // The header (20 minutes to the close), then one per running row.
+    expect(timers()).toEqual(["20:00", "10:00", "10:00", "10:00"]);
+    const before = cellRenders.count;
+
+    // One `act` per second: each tick is its own commit, as in a browser.
+    for (let tick = 0; tick < 3; tick++) act(() => void vi.advanceTimersByTime(1_000));
+    expect(timers()).toEqual(["19:57", "9:57", "9:57", "9:57"]);
+    expect(cellRenders.count).toBe(before);
   });
 });
 
