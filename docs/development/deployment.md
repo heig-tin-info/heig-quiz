@@ -361,8 +361,11 @@ except a take-home exercise (an `exercise` whose waiting room is `skip`: it
 may stay open for days, and a restart costs its students a few seconds of
 reconnection) and a session untouched for 12 hours (left
 open by mistake: it must not freeze every deploy). The guard fails closed: a
-query that cannot run refuses the deploy like a live row. It does not run on
-a first deploy (no `.env.image`) nor when PostgreSQL is not running.
+query that cannot run refuses the deploy like a live row. It is skipped, by
+design, when `.env.image` is missing (a first deploy: nothing is running yet)
+and when PostgreSQL is not running (no database, no evaluation in progress).
+On a refusal it moves the checkout back only when `.env.image` names a full
+sha; otherwise it warns and leaves the checkout where it is.
 `apps/api/src/deployGuard.db.test.ts` runs the same file against the real
 migrations on every CI run.
 

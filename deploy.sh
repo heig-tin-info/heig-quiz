@@ -134,8 +134,13 @@ if [ "$environment" = production ] && [ -f .env.image ]; then
       echo "deploy: REFUSED. Re-run the deploy job once it has closed, or force it (deploy.md §5)." >&2
       # Back to the commit actually running: .env.image names it, whichever
       # copy of this script (old or new) did the checkout.
+      # Only a full sha reaches git: never an option-like value.
       running=$(sed -n 's/^IMAGE_TAG=//p' .env.image)
-      git checkout --quiet --detach "${running:-$before}"
+      if [[ "$running" =~ ^[0-9a-f]{40}$ ]]; then
+        git checkout --quiet --detach "$running"
+      else
+        echo "deploy: warning: .env.image names no sha ('$running'), checkout left at $(git rev-parse --short HEAD)." >&2
+      fi
       exit 3
     fi
     echo "deploy: FORCED, restarting anyway." >&2
