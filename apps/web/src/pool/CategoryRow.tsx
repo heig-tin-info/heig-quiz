@@ -130,7 +130,11 @@ function rowMenu(t: TFunction, props: RowProps): MenuItem[] {
   ];
 }
 
-/** F2 renames; Alt+arrows move the folder up, down, into the one above, out of its parent. */
+/**
+ * F2 renames; Alt+arrows move the folder up, down, into the one above, out of
+ * its parent. No read-only check: it is bound on the rename button only, which
+ * `CategoryName` never renders for a reader.
+ */
 function onNameKey(props: RowProps, event: KeyboardEvent<HTMLButtonElement>) {
   const { node } = props;
   if (event.key === "F2") {
