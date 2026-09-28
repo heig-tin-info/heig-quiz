@@ -868,9 +868,18 @@ describe("the zen player's clock", () => {
 
   const timer = () => screen.getByRole("timer");
 
+  /*
+   * Only the clock is faked — the interval every countdown shares, and the
+   * time itself — so a tick happens exactly when the test says, however
+   * loaded the machine. The fetches, the queries and Testing Library's
+   * waits keep their real timers.
+   */
+  const fakeClock = (now: number) =>
+    vi.useFakeTimers({ now, toFake: ["setInterval", "clearInterval", "Date"] });
+
   it("counts down to the server's deadline and stops at zero without closing anything", async () => {
     // The browser is an hour off: only the server's time may count.
-    vi.useFakeTimers({ shouldAdvanceTime: true, now: Date.parse("2026-09-20T11:00:00.000Z") });
+    fakeClock(Date.parse("2026-09-20T11:00:00.000Z"));
     const view = nearDeadline();
     const { calls } = stubs(view);
     render(view);
@@ -891,7 +900,7 @@ describe("the zen player's clock", () => {
   });
 
   it("does not re-render the question on a tick", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true, now: Date.parse("2026-09-20T10:00:00.000Z") });
+    fakeClock(Date.parse("2026-09-20T10:00:00.000Z"));
     const view = attemptView();
     stubs(view);
     render(view);

@@ -148,12 +148,21 @@ describe("LiveDashboard — the grid", () => {
  * re-renders two dozen countdowns, not thirty by twelve cells.
  */
 describe("LiveDashboard — the clock", () => {
+  /*
+   * Only the clock is faked — the interval every countdown shares, and the
+   * time itself — so a tick happens exactly when the test says, however
+   * loaded the machine. The fetches, the queries and Testing Library's
+   * waits keep their real timers.
+   */
+  const fakeClock = (now: number) =>
+    vi.useFakeTimers({ now, toFake: ["setInterval", "clearInterval", "Date"] });
+
   afterEach(() => {
     vi.useRealTimers();
   });
 
   it("ticks the header and the rows once a second, and leaves the cells alone", async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true, now: LIVE_NOW.getTime() });
+    fakeClock(LIVE_NOW.getTime());
     setup(makeDashboard(3, 4));
     await screen.findByRole("table");
     await act(async () => {
