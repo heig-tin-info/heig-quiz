@@ -96,8 +96,9 @@ the Podman socket. It was built from the material lifted from the sibling
 codespace project, which `apps/runner/README.md` credits and which the
 package now replaces — the seccomp profile lives at
 `apps/runner/infra/seccomp/runner.json`, the flag list is asserted by
-`src/engine.test.ts`, and `images/*/Containerfile` holds one image per
-language. Its unit tests need no container; `pnpm --filter @quiz/runner
+`src/engine.test.ts`, and the language images come from
+`images/Containerfile` (the Alpine ones, parameterised by `images/build.sh`)
+and `images/js/Containerfile`. Its unit tests need no container; `pnpm --filter @quiz/runner
 test:integration` really starts them and skips itself without Podman.
 
 ## Invariants

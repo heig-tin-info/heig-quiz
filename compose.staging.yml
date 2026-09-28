@@ -29,8 +29,10 @@ services:
       PUBLIC_URL: https://quiz.dev.chevallier.io
       NODE_ENV: production
       ASSETS_DIR: /app/assets
-      # The image sets 1536 MB for production: under the cap below, V8 would
-      # grow past it and be OOM-killed instead of collecting.
+      # The image sets no heap size (production runs uncapped). Pinned here
+      # rather than left to V8's own sizing: 192 MB keeps the heap under the
+      # 256 MB cap below with room for the rest of the process, so V8
+      # collects instead of the container being OOM-killed.
       NODE_OPTIONS: --max-old-space-size=192
     ports:
       - "127.0.0.1:3003:3000" # native Caddy -> reverse_proxy localhost:3003

@@ -17,10 +17,13 @@
  * is left alone, so the second run costs nothing. A download that cannot be
  * made (an offline build machine) is a WARNING and not an error: the app still
  * works, the browser runner simply refuses to load and the backend runner
- * takes over, which is the fallback rule of `src/runner/index.ts`.
+ * takes over, which is the fallback rule of `src/runner/index.ts`. The
+ * production image is the exception: the Dockerfile runs this with `--strict`,
+ * so an image never ships without its runtimes.
  *
- * Usage: node scripts/fetch-runtimes.mjs [--check]
- *   --check  verify only, download nothing, exit non-zero if anything is missing.
+ * Usage: node scripts/fetch-runtimes.mjs [--check | --strict]
+ *   --check   verify only, download nothing, exit non-zero if anything is missing.
+ *   --strict  download as usual, but exit non-zero if anything could not be fetched.
  */
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
@@ -74,6 +77,7 @@ async function download(file) {
 }
 
 const check = process.argv.includes("--check");
+const strict = process.argv.includes("--strict");
 await mkdir(OUT, { recursive: true });
 
 let missing = 0;
@@ -100,5 +104,5 @@ for (const file of FILES) {
   }
 }
 
-if (check && missing > 0) process.exit(1);
 if (fetched > 0) console.log(`runtimes: ${mb(fetched)} downloaded into public/runtimes/`);
+if ((check || strict) && missing > 0) process.exit(1);

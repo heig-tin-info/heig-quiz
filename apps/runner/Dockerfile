@@ -12,25 +12,14 @@
 FROM node:24-slim AS build
 RUN corepack enable pnpm
 WORKDIR /src
+# Every dependency of the lockfile into the store, keyed on the lockfile only
+# (no package.json listed, so a new workspace package changes nothing here);
+# the install then links offline, for the runner and its dependencies only.
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
-COPY packages/core/package.json packages/core/
-COPY packages/domain/package.json packages/domain/
-COPY packages/registry/package.json packages/registry/
-COPY packages/contracts/package.json packages/contracts/
-COPY packages/ui/package.json packages/ui/
-COPY packages/qt-code/package.json packages/qt-code/
-COPY packages/qt-mcq/package.json packages/qt-mcq/
-COPY packages/qt-short/package.json packages/qt-short/
-COPY packages/qt-cloze/package.json packages/qt-cloze/
-COPY packages/qt-circuit/package.json packages/qt-circuit/
-COPY apps/api/package.json apps/api/
-COPY apps/web/package.json apps/web/
-COPY apps/runner/package.json apps/runner/
-RUN pnpm install --frozen-lockfile --filter @quiz/runner...
-COPY tsconfig.base.json ./
-COPY packages/core ./packages/core
-COPY apps/runner ./apps/runner
-RUN pnpm --filter @quiz/core --filter @quiz/runner build \
+RUN pnpm fetch --frozen-lockfile
+COPY . .
+RUN pnpm install --offline --frozen-lockfile --filter @quiz/runner...
+RUN pnpm --filter @quiz/runner... build \
   && pnpm --filter @quiz/runner deploy --prod --legacy /out \
   && cp -r apps/runner/infra /out/infra
 

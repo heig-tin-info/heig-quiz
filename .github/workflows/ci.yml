@@ -5,6 +5,18 @@ on:
     branches: [main]
   pull_request:
 
+# Read-only by default; a job that needs more (the image push, the deploys)
+# declares it.
+permissions:
+  contents: read
+
+# A new push to a pull request cancels the run it supersedes. Every run on
+# main keeps a group of its own: it is never cancelled nor queued behind
+# another, since each carries its own deploy (and may wait for approval).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   checks:
     runs-on: ubuntu-latest
@@ -15,16 +27,21 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      # The browser runtimes `pnpm build` downloads (77 MB), keyed on the
+      # script whose pinned digests name them.
+      - uses: actions/cache@v6
+        with:
+          path: apps/web/public/runtimes
+          key: web-runtimes-${{ hashFiles('apps/web/scripts/fetch-runtimes.mjs') }}
       - run: pnpm install --frozen-lockfile
+      # Strict, so a partial download fails here instead of being cached.
+      - run: node apps/web/scripts/fetch-runtimes.mjs --strict
       - run: pnpm build
       - run: pnpm typecheck
+      # Every package's `test`, the runner's unit suite included. Its
+      # integration suite (`test:integration`, real containers) is deliberately
+      # NOT run on CI: it skips itself without a Podman socket anyway.
       - run: pnpm test
-      # `pnpm test` already covers it through `pnpm -r`, but the runner is the
-      # one package whose tests come in two suites: this step fails loudly if
-      # the unit one ever stops running here, and the integration one
-      # (`test:integration`, real containers) is deliberately NOT run on CI —
-      # it skips itself without a Podman socket anyway.
-      - run: pnpm --filter @quiz/runner test
 
   # Production images, built HERE and pushed to GHCR: the VM must never build.
   image:
@@ -118,7 +135,7 @@ jobs:
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != ''
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ssh -i ~/.ssh/id_ed25519 ${{ vars.DEPLOY_USER || 'root' }}@"$DEPLOY_HOST" "$GITHUB_SHA $GHCR_TOKEN"
+        run: ssh -i ~/.ssh/id_ed25519 ${{ vars.DEPLOY_USER || 'srv' }}@"$DEPLOY_HOST" "$GITHUB_SHA $GHCR_TOKEN"
       # The gate: a staging that does not come up healthy (a migration that
       # fails on production-shaped data, a crash at boot) stops the promotion.
       - name: Staging answers healthy
@@ -169,7 +186,7 @@ jobs:
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != ''
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ssh -i ~/.ssh/id_ed25519 ${{ vars.DEPLOY_USER || 'root' }}@"$DEPLOY_HOST" "$GITHUB_SHA $GHCR_TOKEN"
+        run: ssh -i ~/.ssh/id_ed25519 ${{ vars.DEPLOY_USER || 'srv' }}@"$DEPLOY_HOST" "$GITHUB_SHA $GHCR_TOKEN"
       - name: Deploy the runner (forced command runs apps/runner/deploy/deploy.sh on the code VM)
         if: env.DEPLOY_SSH_KEY != '' && env.DEPLOY_HOST != '' && env.DEPLOY_RUNNER_HOST != ''
         env:
