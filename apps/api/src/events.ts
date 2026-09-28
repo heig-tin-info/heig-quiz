@@ -50,6 +50,8 @@ interface AppEvent {
   type: EventType;
   topics: Topic[];
   notice?: AppNotice;
+  /** A user whose streams skip this hint: the one whose action raised it. */
+  except?: string;
 }
 
 /** `staff` drops the message for a student connection (PLAN-MVP §4.8). */
@@ -70,9 +72,14 @@ const bus = new EventEmitter();
 bus.setMaxListeners(0); // one SSE connection per tab
 
 /** A refresh hint: no data, just "something in these families changed". */
-export function publish(type: EventType, topics: Topic[], notice?: AppNotice) {
+export function publish(
+  type: EventType,
+  topics: Topic[],
+  notice?: AppNotice,
+  except?: string,
+) {
   if (topics.length === 0) return;
-  const event: AppEvent = notice ? { type, topics, notice } : { type, topics };
+  const event: AppEvent = { type, topics, ...(notice && { notice }), ...(except && { except }) };
   bus.emit("event", { kind: "hint", ...event } satisfies BusMessage);
 }
 

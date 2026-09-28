@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import type { NotificationPayload } from "@quiz/contracts";
+import { DEFAULT_CHANNEL_ENABLED, type NotificationKind, type NotificationPayload } from "@quiz/contracts";
 
 import type { Db } from "../../db/client.js";
 import { notifications, pools, teamsLinks, users } from "../../db/schema.js";
@@ -239,6 +239,25 @@ afterEach(() => {
   errors.length = 0;
 });
 
+/**
+ * Runs `body` while `kind` defaults to `row`. The kinds of today share one
+ * default, so a per-kind fallback is only observable with one of them moved.
+ */
+async function withDefault(
+  kind: NotificationKind,
+  row: (typeof DEFAULT_CHANNEL_ENABLED)[NotificationKind],
+  body: () => Promise<void>,
+): Promise<void> {
+  const defaults = DEFAULT_CHANNEL_ENABLED as Record<NotificationKind, typeof row>;
+  const saved = defaults[kind];
+  defaults[kind] = row;
+  try {
+    await body();
+  } finally {
+    defaults[kind] = saved;
+  }
+}
+
 describe("preferences", () => {
   it("defaults to every channel on, and stores only the toggles moved", async () => {
     const carol = await seedUser("carol@heig.test");
@@ -257,6 +276,27 @@ describe("preferences", () => {
     expect((await service.preferenceMatrix(db, carol)).pool_shared.email).toBe(true);
     // Somebody else's grid is untouched.
     expect((await service.preferenceMatrix(db, alice)).pool_shared.email).toBe(true);
+  });
+
+  it("fills an untouched kind with ITS OWN default, not a global one", async () => {
+    const erin = await seedUser("erin@heig.test");
+    expect(await service.preferenceMatrix(db, erin)).toEqual(DEFAULT_CHANNEL_ENABLED);
+
+    // A kind whose default differs from its neighbours' (as the background-
+    // noise kinds of #198 will): the grid shows that default, a moved toggle
+    // still wins over it, and the other kinds keep theirs.
+    await withDefault("pool_ownership", { bell: true, email: false, teams: false }, async () => {
+      const grid = await service.preferenceMatrix(db, erin);
+      expect(grid.pool_ownership).toEqual({ bell: true, email: false, teams: false });
+      expect(grid.pool_shared).toEqual(DEFAULT_CHANNEL_ENABLED.pool_shared);
+
+      await service.setPreference(db, erin, { kind: "pool_ownership", channel: "teams", enabled: true });
+      expect((await service.preferenceMatrix(db, erin)).pool_ownership).toEqual({
+        bell: true,
+        email: false,
+        teams: true,
+      });
+    });
   });
 
   it("reports the address and the Teams link, and hides a link when Teams is off", async () => {
@@ -323,6 +363,24 @@ describe("notify fans out", () => {
     await service.setPreference(db, grace, { kind: "pool_shared", channel: "email", enabled: false });
     await bell(db, grace, payload);
     expect(sent.map((j) => j.data.channel)).toEqual(["teams"]);
+  });
+
+  it("sends on the channels of the kind's own default when nothing was moved", async () => {
+    const iris = await seedUser("iris@heig.test");
+    await linkTeams(iris);
+    const { queue, sent } = recordingQueue();
+    openOutbox({ queue, teams: true, log });
+    const poolId = await seedPool("Défauts");
+    const ownership = { kind: "pool_ownership", poolId, poolName: "Défauts", fromName: "Prof Démo" } as const;
+
+    await withDefault("pool_ownership", { bell: true, email: false, teams: false }, async () => {
+      // Off by default outside the app: a bell row, no job at all.
+      await bell(db, iris, ownership);
+      expect(sent).toHaveLength(0);
+      // Another kind keeps its own default: both jobs.
+      await bell(db, iris, poolShared(poolId, "Défauts"));
+      expect(sent.map((j) => j.data.channel)).toEqual(["email", "teams"]);
+    });
   });
 
   it("sends no Teams job when the platform has no Teams application", async () => {

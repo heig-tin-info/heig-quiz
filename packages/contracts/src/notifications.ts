@@ -6,13 +6,10 @@
 
 import { z } from "zod";
 
-/** Real-time toast kinds carried by SSE notices (`AppNotice` below). */
-export type NoticeKind = "student_joined" | "roster_conflict";
-
 /**
  * What a hint's notice carries: facts, never a sentence. The web app renders
- * the sentence through `t()` in the reader's language (N-I18N-01). Only
- * `student_joined` is emitted today, to the classroom's staff only (#198).
+ * the sentence through `t()` in the reader's language (N-I18N-01). Both kinds
+ * go to the course's staff only (#198).
  */
 export const AppNotice = z.discriminatedUnion("kind", [
   z.object({
@@ -21,8 +18,21 @@ export const AppNotice = z.discriminatedUnion("kind", [
     name: z.string(),
     classroomName: z.string(),
   }),
+  z.object({
+    /**
+     * Roster lines of one classroom were flagged in one claim pass (AU-21):
+     * a count, no name and no address — the roster itself says which.
+     */
+    kind: z.literal("roster_conflict"),
+    classroomId: z.uuid(),
+    classroomName: z.string(),
+    count: z.number().int().positive(),
+  }),
 ]);
 export type AppNotice = z.infer<typeof AppNotice>;
+
+/** Real-time toast kinds carried by SSE notices: the union above is the source. */
+export type NoticeKind = AppNotice["kind"];
 
 /**
  * Persistent, per-account notifications (the bell): stored by the API,
@@ -100,13 +110,19 @@ export const NotificationChannel = z.enum(NOTIFICATION_CHANNELS);
 export type NotificationChannel = z.infer<typeof NotificationChannel>;
 
 /**
- * What a user who never touched a toggle gets: everything on. Teams only
- * applies once the account is linked, so "on" there costs nothing until then.
+ * What a user who never touched a toggle gets, per kind (ADR-030, addendum of
+ * #198). A kind a user must not miss is on everywhere; a background-noise kind
+ * (a student joined, a question added to a shared pool) stays in the app and
+ * is off by e-mail and Teams. Teams only applies once the account is linked,
+ * so "on" there costs nothing until then. A kind added to
+ * {@link NOTIFICATION_KINDS} without its row here is a compile error.
  */
-export const DEFAULT_CHANNEL_ENABLED: Record<NotificationChannel, boolean> = {
-  bell: true,
-  email: true,
-  teams: true,
+export const DEFAULT_CHANNEL_ENABLED: Readonly<
+  Record<NotificationKind, Readonly<Record<NotificationChannel, boolean>>>
+> = {
+  results_released: { bell: true, email: true, teams: true },
+  pool_shared: { bell: true, email: true, teams: true },
+  pool_ownership: { bell: true, email: true, teams: true },
 };
 
 /** The kinds a role receives, as the settings grid lists them. */

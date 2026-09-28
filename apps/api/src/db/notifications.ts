@@ -61,8 +61,9 @@ export const notifications = pgTable(
 /**
  * The channels a user chose, per kind (ADR-030). SPARSE: a row exists only
  * for a toggle the user actually moved, and a missing row means the default
- * of `DEFAULT_CHANNEL_ENABLED` — so a kind added later reaches everyone
- * without a backfill, and "back to the defaults" is a DELETE.
+ * of its kind in `DEFAULT_CHANNEL_ENABLED` — so a kind added later reaches
+ * everyone at its own default without a backfill, and "back to the defaults"
+ * is a DELETE.
  *
  * A row for a kind that was withdrawn is ignored when read, never an error.
  */

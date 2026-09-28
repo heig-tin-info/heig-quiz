@@ -403,7 +403,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
       }
       await trace(req, "roster.import", "classroom", scope.room.id, { rows: parse.rows.length });
       // Students already registered on the platform are attached immediately.
-      await claimForExistingUsers(app.db, scope.room.id);
+      await claimForExistingUsers(app.db, scope.room.id, req.user!.id);
       return reply.code(200).send({ rows: parse.rows.length, ...summary });
     }),
   );
@@ -423,7 +423,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
           emailChanged,
         );
         await trace(req, "roster.update", "enrollment", entry.id, { ...body, emailChanged });
-        if (emailChanged) await claimForExistingUsers(app.db, entry.classroomId);
+        if (emailChanged) await claimForExistingUsers(app.db, entry.classroomId, req.user!.id);
         return updated;
       } catch {
         // UNIQUE(classroom_id, email)

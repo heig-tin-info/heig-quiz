@@ -278,6 +278,194 @@ describe("the student_joined notice", () => {
 });
 
 /**
+ * #198: a roster line flagged as a conflict (AU-21) is a decision for the
+ * course's staff. Every claim pass that raises flags says so once per
+ * classroom, with a count and no name — and never to whoever ran the pass.
+ */
+describe("the roster_conflict notice", () => {
+  let colleague: Awaited<ReturnType<TestServer["signIn"]>>;
+  const course = randomUUID();
+  beforeAll(async () => {
+    colleague = await server.signIn("teacher");
+    await server.app.db
+      .insert(courses)
+      .values({ id: course, name: "Conflicts", code: `CONF-${course.slice(0, 6)}` });
+    await server.app.db.insert(courseStaff).values([
+      { courseId: course, userId: teacher.id },
+      { courseId: course, userId: colleague.id },
+    ]);
+  });
+
+  const tag = () => randomUUID().slice(0, 8);
+
+  /** A fresh classroom of the course, with a claimed classmate in it. */
+  async function room(name: string) {
+    const id = randomUUID();
+    await server.app.db.insert(classrooms).values({ id, courseId: course, name, period: "2026-A" });
+    const classmate = await server.signIn("student");
+    await server.app.db.insert(enrollments).values({
+      id: randomUUID(),
+      classroomId: id,
+      nom: "Pair",
+      prenom: "Classmate",
+      email: `classmate-${tag()}@heig.test`,
+      userId: classmate.id,
+      claimedAt: new Date(),
+    });
+    return { id, classmate };
+  }
+
+  async function line(classroomId: string, email: string, userId: string | null = null) {
+    const id = randomUUID();
+    await server.app.db.insert(enrollments).values({
+      id,
+      classroomId,
+      nom: "Doe",
+      prenom: "Jane",
+      email,
+      userId,
+      claimedAt: userId ? new Date() : null,
+    });
+    return id;
+  }
+
+  /** An account holding these verified addresses (GH-11). */
+  async function account(...emails: string[]) {
+    const student = await signInStudent(emails[0]!);
+    for (const email of emails.slice(1)) {
+      await server.app.db
+        .insert(userEmails)
+        .values({ userId: student.id, email, source: "swissEduIDLinkedAffiliationMail", verified: true });
+    }
+    return student;
+  }
+
+  const notices = (text: string) =>
+    text
+      .split("\n")
+      .filter((l) => l.startsWith("data: "))
+      .map((l) => (JSON.parse(l.slice(6)) as { notice?: { kind: string } | null }).notice)
+      .filter((n) => n?.kind === "roster_conflict");
+
+  const notice = (classroomId: string, classroomName: string, count: number) => ({
+    kind: "roster_conflict",
+    classroomId,
+    classroomName,
+    count,
+  });
+
+  it("from the login claim: one notice per classroom, ambiguous lines and a second seat alike", async () => {
+    const a = await room("CONF-A");
+    const b = await room("CONF-B");
+    const priv = `jane-${tag()}@gmail.test`;
+    const inst = `jane-${tag()}@heig.test`;
+    const student = await account(priv, inst);
+    // A: two lines of one classroom match the account.
+    await line(a.id, priv);
+    await line(a.id, inst);
+    // B: the account already holds a seat; the second line hits UNIQUE.
+    await line(b.id, `old-${tag()}@heig.test`, student.id);
+    const second = await line(b.id, inst);
+    const streams = {
+      teacher: await openStream(teacher.headers),
+      colleague: await openStream(colleague.headers),
+      classmate: await openStream(a.classmate.headers),
+      outsider: await openStream(outsider.headers),
+      student: await openStream(student.headers),
+    };
+    await settle();
+
+    expect(await claimEnrollments(server.app.db, { id: student.id })).toBe(0);
+    await settle();
+
+    for (const staff of [streams.teacher, streams.colleague]) {
+      expect(notices(staff.text)).toEqual(
+        expect.arrayContaining([notice(a.id, "CONF-A", 2), notice(b.id, "CONF-B", 1)]),
+      );
+      expect(notices(staff.text)).toHaveLength(2);
+    }
+    for (const who of ["classmate", "outsider", "student"] as const) {
+      expect(notices(streams[who].text)).toEqual([]);
+    }
+    // The UNIQUE branch is audited like the others.
+    const logged = await server.app.db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.action, "roster.claim_conflict"), eq(auditLog.subjectId, second)));
+    expect(logged).toHaveLength(1);
+
+    // A line already flagged waits for a teacher: the next login says nothing.
+    expect(await claimEnrollments(server.app.db, { id: student.id })).toBe(0);
+    await settle();
+    expect(notices(streams.colleague.text)).toHaveLength(2);
+    for (const s of Object.values(streams)) s.close();
+  });
+
+  it("from an import: one notice with the count, to the staff but not the importer", async () => {
+    const r = await room("CONF-C");
+    const shared = `twin-${tag()}@heig.test`;
+    await account(`twin-a-${tag()}@gmail.test`, shared);
+    await account(`twin-b-${tag()}@gmail.test`, shared);
+    const priv = `tom-${tag()}@gmail.test`;
+    const inst = `tom-${tag()}@heig.test`;
+    await account(priv, inst);
+    const streams = {
+      teacher: await openStream(teacher.headers),
+      colleague: await openStream(colleague.headers),
+      classmate: await openStream(r.classmate.headers),
+    };
+    await settle();
+
+    const rows = [
+      ["Nom", "Prénom", "E-mail"],
+      ["Twin", "Ann", shared],
+      ["Colau", "Tom", priv],
+      ["Colau", "Tom", inst],
+    ];
+    const imported = await server.app.inject({
+      method: "POST",
+      url: `/app/api/classrooms/${r.id}/roster`,
+      headers: teacher.headers,
+      payload: { rows },
+    });
+    expect(imported.statusCode).toBe(200);
+    await settle();
+
+    expect(notices(streams.colleague.text)).toEqual([notice(r.id, "CONF-C", 3)]);
+    expect(notices(streams.teacher.text)).toEqual([]);
+    expect(notices(streams.classmate.text)).toEqual([]);
+    expect(streams.colleague.text).not.toContain(shared);
+    for (const s of Object.values(streams)) s.close();
+  });
+
+  it("from an e-mail edit: one notice, to the staff but not the editor", async () => {
+    const r = await room("CONF-D");
+    const shared = `pair-${tag()}@heig.test`;
+    await account(`pair-a-${tag()}@gmail.test`, shared);
+    await account(`pair-b-${tag()}@gmail.test`, shared);
+    const entry = await line(r.id, `typo-${tag()}@heig.test`);
+    const streams = {
+      teacher: await openStream(teacher.headers),
+      colleague: await openStream(colleague.headers),
+    };
+    await settle();
+
+    const patched = await server.app.inject({
+      method: "PATCH",
+      url: `/app/api/classrooms/${r.id}/roster/${entry}`,
+      headers: teacher.headers,
+      payload: { email: shared },
+    });
+    expect(patched.statusCode).toBe(200);
+    await settle();
+
+    expect(notices(streams.colleague.text)).toEqual([notice(r.id, "CONF-D", 1)]);
+    expect(notices(streams.teacher.text)).toEqual([]);
+    for (const s of Object.values(streams)) s.close();
+  });
+});
+
+/**
  * #248: a stream's topics are computed once, at connection. Whoever loses a
  * seat or a roster line has their streams closed, so the reconnection holds
  * only what they may still reach.

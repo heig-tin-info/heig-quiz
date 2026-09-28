@@ -388,6 +388,8 @@ export const en = {
   "notify.student_joined": "A student joins a classroom",
   "notify.student_joined.toast": "{name} joined {classroom}",
   "notify.roster_conflict": "A roster entry needs attention",
+  "notify.roster_conflict.toast": "{n} roster entries of {classroom} need your decision",
+  "notify.roster_conflict.toast.one": "1 roster entry of {classroom} needs your decision",
 
   "palette.open": "Search",
   "palette.openClassroom": "Open classroom {name}",

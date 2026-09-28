@@ -385,6 +385,8 @@ export const fr: Record<keyof Dict, string> = {
   "notify.student_joined": "Un étudiant rejoint une classe",
   "notify.student_joined.toast": "{name} a rejoint {classroom}",
   "notify.roster_conflict": "Une entrée de liste demande une décision",
+  "notify.roster_conflict.toast": "{n} entrées de la liste de {classroom} demandent votre décision",
+  "notify.roster_conflict.toast.one": "1 entrée de la liste de {classroom} demande votre décision",
 
   "palette.open": "Rechercher",
   "palette.openClassroom": "Ouvrir la classe {name}",
