@@ -1898,6 +1898,7 @@ export const fr: Record<keyof Dict, string> = {
   "eval.launch.openLobby": "Ouvrir la salle d'attente",
   "eval.launch.schedule": "Planifier…",
   "eval.launch.opensAtMissing": "Choisissez quand elle ouvre avant de la planifier.",
+  "eval.launch.closesAtPast": "La fin commune est passée : repoussez-la dans Temps et mode.",
   "launch.open": "Ouvrir",
   "launch.lobby.manual": "Les étudiants attendent dans la salle ; vous donnez le départ depuis le tableau de bord.",
   "launch.lobby.auto": "Les étudiants attendent dans la salle ; l'évaluation démarre d'elle-même dès que tous les présents sont là.",

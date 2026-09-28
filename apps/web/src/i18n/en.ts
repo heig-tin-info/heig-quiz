@@ -1909,6 +1909,7 @@ export const en = {
   "eval.launch.openLobby": "Open the waiting room",
   "eval.launch.schedule": "Schedule…",
   "eval.launch.opensAtMissing": "Choose when it opens before scheduling it.",
+  "eval.launch.closesAtPast": "The common end has passed: move it later in Time and mode.",
   "launch.open": "Open",
   "launch.lobby.manual": "Students wait in the room; you start the evaluation from the dashboard.",
   "launch.lobby.auto": "Students wait in the room; the evaluation starts by itself once everyone present is in.",

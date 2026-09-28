@@ -178,7 +178,7 @@ describe("state machine (§5.1)", () => {
       .update(evaluations)
       .set({
         settings: { ...service.settingsOf(row), timing: "deadline" },
-        opensAt: clock.now(),
+        opensAt: new Date(clock.now().getTime() + 60_000),
         closesAt: new Date(clock.now().getTime() + 3_600_000),
       })
       .where(eq(evaluations.id, row.id));
@@ -232,11 +232,71 @@ describe("state machine (§5.1)", () => {
     }
   });
 
+  /*
+   * #178: a time already past, by the server's clock. A common end reached
+   * before the evaluation opens would close it at the ticker's next pass; a
+   * schedule for a past instant would open it there. The instant itself is
+   * past: `<=`, not `<`.
+   */
+  it("refuses to schedule or open once the common end has passed (#178)", async () => {
+    const seed = await seedLive(db, {
+      durationS: null,
+      settings: { timing: "deadline" },
+      opensAt: new Date(clock.now().getTime() - 3_600_000),
+      closesAt: clock.now(),
+    });
+    const row = await reload(db, seed.evaluationId);
+    for (const to of ["scheduled", "lobby", "running"] as const) {
+      expect(() =>
+        service.guardTransition(row, to, { itemCount: 2, attemptCount: 0, now: clock.now() }),
+      ).toThrow(expect.objectContaining({ details: { reason: "closes_at_past" } }));
+    }
+    const justBefore = new Date(clock.now().getTime() - 1);
+    for (const to of ["lobby", "running"] as const) {
+      expect(() =>
+        service.guardTransition(row, to, { itemCount: 2, attemptCount: 0, now: justBefore }),
+      ).not.toThrow();
+    }
+    // A resume is not a start: it moves the common end by the pause itself.
+    const paused = { ...row, state: "paused" as const };
+    expect(() =>
+      service.guardTransition(paused, "running", { itemCount: 2, attemptCount: 0, now: clock.now() }),
+    ).not.toThrow();
+  });
+
+  it("refuses to schedule at an opening time already past, and says so (#178)", async () => {
+    const server = await testServer();
+    try {
+      const teacher = await server.signIn("teacher");
+      const now = server.clock.now();
+      const seed = await seedLive(server.app.db, { teacherId: teacher.id, opensAt: now });
+      const schedule = () =>
+        server.app.inject({
+          method: "POST",
+          url: `/app/api/evaluations/${seed.evaluationId}/state`,
+          headers: teacher.headers,
+          payload: { to: "scheduled" },
+        });
+
+      const refused = await schedule();
+      expect(refused.statusCode).toBe(409);
+      expect(TransitionRefusal.parse(refused.json())).toMatchObject({
+        error: "illegal_transition",
+        reason: "opens_at_past",
+      });
+
+      server.clock.set(new Date(now.getTime() - 1));
+      expect((await schedule()).statusCode).toBe(200);
+    } finally {
+      await server.close();
+    }
+  });
+
   it("refuses to pause anything but an exam", async () => {
     const seed = await seedLive(db, { mode: "exercise" });
     const row = await service.applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
     expect(() =>
-      service.guardTransition(row, "paused", { itemCount: 2, attemptCount: 0 }),
+      service.guardTransition(row, "paused", { itemCount: 2, attemptCount: 0, now: clock.now() }),
     ).toThrow(service.IllegalTransition);
   });
 

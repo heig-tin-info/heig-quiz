@@ -283,4 +283,21 @@ describe("Schedule… (#152)", () => {
     await user.click(within(dialog).getByRole("button", { name: /^schedule$/i }));
     expect(await within(dialog).findByText(/choose when it opens/i)).toBeInTheDocument();
   });
+
+  it("translates the server's refusal of a common end its clock says has passed (#178)", async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      [`POST ${BASE}/state`]: fail(409, {
+        error: "illegal_transition",
+        message: "the common end has already passed",
+        reason: "closes_at_past",
+      }),
+    });
+    const opensAt = new Date(Date.now() + 24 * HOUR).toISOString();
+    render(withEvaluation({ opensAt }));
+    await user.click(screen.getByRole("button", { name: /schedule/i }));
+    const dialog = await screen.findByRole("dialog", { name: /schedule the opening/i });
+    await user.click(within(dialog).getByRole("button", { name: /^schedule$/i }));
+    expect(await within(dialog).findByText(/the common end has passed/i)).toBeInTheDocument();
+  });
 });

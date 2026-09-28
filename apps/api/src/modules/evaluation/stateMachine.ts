@@ -43,6 +43,8 @@ export function isLegalTransition(from: EvaluationState, to: EvaluationState): b
 interface TransitionContext {
   itemCount: number;
   attemptCount: number;
+  /** The server's clock: a time already past is refused against it (#178). */
+  now: Date;
 }
 
 /**
@@ -57,11 +59,38 @@ export function guardTransition(
   const from = row.state;
   if (!isLegalTransition(from, to)) throw new IllegalTransition(from, to);
   assertReady(row, to, ctx.itemCount);
+  assertNotPast(row, to, ctx.now);
   if (to === "paused" && row.mode !== "exam") {
     throw new IllegalTransition(from, to, "only an exam can be paused");
   }
   if (to === "draft" && ctx.attemptCount > 0) {
     throw new IllegalTransition(from, to, "an attempt exists: the evaluation cannot be reopened");
+  }
+}
+
+/**
+ * A time already past, against the server's clock (#178): a common end
+ * reached before the evaluation opens would close it at the ticker's next
+ * pass, and a schedule for a past instant would open it there. `paused →
+ * running` is not a start: the resume moves `closesAt` by the pause itself.
+ */
+function assertNotPast(row: EvaluationRecord, to: EvaluationState, now: Date): void {
+  const from = row.state;
+  if (from === "paused") return;
+  if (
+    (to === "scheduled" || to === "lobby" || to === "running") &&
+    settingsOf(row).timing === "deadline" &&
+    row.closesAt !== null &&
+    row.closesAt.getTime() <= now.getTime()
+  ) {
+    throw new IllegalTransition(from, to, "the common end has already passed", {
+      reason: "closes_at_past",
+    });
+  }
+  if (to === "scheduled" && row.opensAt !== null && row.opensAt.getTime() <= now.getTime()) {
+    throw new IllegalTransition(from, to, "the opening time has already passed", {
+      reason: "opens_at_past",
+    });
   }
 }
 
@@ -180,6 +209,7 @@ export async function transition(
   guardTransition(row, to, {
     itemCount: items[0]?.n ?? 0,
     attemptCount: await attemptCount(db, row.id),
+    now,
   });
   return applyState(db, row, to, now);
 }

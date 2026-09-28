@@ -1461,7 +1461,7 @@ on("DELETE", "/app/api/templates/:id/items/:itemId", (m) =>
 );
 on("POST", "/app/api/evaluations/:id/state", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);
-  // The server's two readiness refusals (`guardTransition`), with the same
+  // The server's readiness refusals (`guardTransition`), with the same
   // body, so the launch step's translated messages can be seen here (#76).
   if (body.to !== "draft") {
     if (e.items.length === 0) {
@@ -1492,6 +1492,21 @@ on("POST", "/app/api/evaluations/:id/state", (m, body) => {
       error: "illegal_transition",
       message: "a scheduled evaluation needs an opening time",
       reason: "opens_at_missing",
+    });
+  }
+  const past = (at: string | null) => at !== null && Date.parse(at) <= Date.now();
+  if (body.to !== "draft" && (e.settings as { timing: EvaluationTiming }).timing === "deadline" && past(e.closesAt)) {
+    throw new MockPayload(409, {
+      error: "illegal_transition",
+      message: "the common end has already passed",
+      reason: "closes_at_past",
+    });
+  }
+  if (body.to === "scheduled" && past(e.opensAt)) {
+    throw new MockPayload(409, {
+      error: "illegal_transition",
+      message: "the opening time has already passed",
+      reason: "opens_at_past",
     });
   }
   e.state = body.to as MockEvaluation["state"];

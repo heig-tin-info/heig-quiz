@@ -485,6 +485,7 @@ export async function livePlugin(app: FastifyInstance) {
           evaluationService.guardTransition(scope.evaluation, to, {
             itemCount: (await evaluationService.itemRows(app.db, scope.evaluation.id)).length,
             attemptCount: await evaluationService.attemptCount(app.db, scope.evaluation.id),
+            now,
           });
           const row = await move(scope.evaluation, now);
           await trace(req, action, "evaluation", row.id, { from: scope.evaluation.state, to });
