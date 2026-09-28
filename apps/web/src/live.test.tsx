@@ -1,7 +1,14 @@
 import { act, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { AppNotice, AttemptOrLobby, LobbyView, Me, StudentHome } from "@quiz/contracts";
+import type {
+  AttemptOrLobby,
+  LobbyView,
+  Me,
+  Notification,
+  NotificationList,
+  StudentHome,
+} from "@quiz/contracts";
 
 import App from "./App";
 import { resetEventStream } from "./realtime/useEventStream";
@@ -84,19 +91,23 @@ class FakeStream {
   }
   close() {}
   /** The inherited hint: unnamed, so `onmessage` is the only way in (W5-7). */
-  hint(notice: AppNotice | null = null) {
+  hint(kinds: string[] = ["mutation"]) {
     act(() => {
-      this.onmessage?.({
-        data: JSON.stringify({ type: "hint", kinds: ["mutation"], notice }),
-      } as MessageEvent);
+      this.onmessage?.({ data: JSON.stringify({ type: "hint", kinds }) } as MessageEvent);
     });
   }
 }
 
-function render(route: string) {
+/** The inbox the bell reads; a test pushes into it, then hints. */
+const inbox: Notification[] = [];
+const INBOX_URL = "GET /app/api/notifications?limit=30";
+
+function render(route: string, who: Me = me) {
   vi.stubGlobal("EventSource", FakeStream);
   const mock = mockFetch({
-    "GET /app/api/me": ok(me),
+    [INBOX_URL]: () =>
+      ok({ items: [...inbox], unread: inbox.filter((n) => n.readAt === null).length } satisfies NotificationList),
+    "GET /app/api/me": ok(who),
     "GET /app/api/student/home": ok(home),
     "GET /app/api/student/classrooms": ok([]),
     [`POST /app/api/evaluations/${EVAL}/attempt`]: ok(lobby),
@@ -110,6 +121,7 @@ const countOf = (calls: { url: string; method: string }[], method: string, url: 
 afterEach(() => {
   resetEventStream();
   streams.length = 0;
+  inbox.length = 0;
   // Only EventSource: `vi.unstubAllGlobals()` would also drop the stubs the
   // jsdom setup installs once per file (`matchMedia`, `ResizeObserver`), and
   // the next test in this file would render into a browser missing them.
@@ -148,25 +160,48 @@ describe("the blanket hint refresh", () => {
   });
 });
 
-describe("a hint's notice", () => {
-  it("is a toast whose sentence the client writes, in the reader's language", async () => {
-    render("/");
-    expect(await screen.findByText("Bonjour, Léa")).toBeInTheDocument();
-    streams[0]!.hint({ kind: "student_joined", name: "Ada Lovelace", classroomName: "PRG1-2026" });
-    expect(await screen.findByText("Ada Lovelace a rejoint PRG1-2026")).toBeInTheDocument();
+/*
+ * ADR-030 addendum §a: the App channel is the bell and the toast. A hint
+ * carries no data; the `notifications` hint makes the bell re-read its
+ * inbox, and what arrived in it toasts — never on a quiet page (§h).
+ */
+describe("a notification arriving", () => {
+  const released = (id: string): Notification => ({
+    id,
+    payload: {
+      kind: "results_released",
+      evaluationId: EVAL,
+      evaluationTitle: "Quiz 3 — Pointeurs",
+      attemptId: "44444444-4444-4444-8444-444444444444",
+    },
+    createdAt: new Date().toISOString(),
+    readAt: null,
   });
 
-  it("counts a classroom's roster conflicts, singular and plural from the dictionary", async () => {
-    render("/");
+  it("is a toast in the reader's language, and the unread inbox of the first read is not", async () => {
+    inbox.push(released("n0"));
+    const { calls } = render("/");
     expect(await screen.findByText("Bonjour, Léa")).toBeInTheDocument();
-    const notice = { kind: "roster_conflict", classroomId: EVAL, classroomName: "PRG1-2026" } as const;
-    streams[0]!.hint({ ...notice, count: 3 });
-    expect(
-      await screen.findByText("3 entrées de la liste de PRG1-2026 demandent votre décision"),
-    ).toBeInTheDocument();
-    streams[0]!.hint({ ...notice, count: 1 });
-    expect(
-      await screen.findByText("1 entrée de la liste de PRG1-2026 demande votre décision"),
-    ).toBeInTheDocument();
+    await waitFor(() => expect(countOf(calls, "GET", "/app/api/notifications?limit=30")).toBe(1));
+    expect(screen.queryByText(/Les résultats de/)).toBeNull();
+
+    inbox.unshift({ ...released("n1"), payload: { ...released("n1").payload, evaluationTitle: "Quiz 4" } } as Notification);
+    streams[0]!.hint(["notifications"]);
+    expect(await screen.findByText("Les résultats de « Quiz 4 » sont disponibles.")).toBeInTheDocument();
+    expect(screen.queryByText(/Quiz 3/)).toBeNull();
+  });
+
+  it("is no toast on the live dashboard, which may be on a beamer; the bell still counts it", async () => {
+    const teacher: Me = { ...me, role: "teacher", givenName: "Marie" };
+    const { calls } = render(`/evaluations/${EVAL}/live`, teacher);
+    await waitFor(() => expect(countOf(calls, "GET", "/app/api/notifications?limit=30")).toBe(1));
+
+    inbox.unshift(released("n1"));
+    streams[0]!.hint(["notifications"]);
+    await waitFor(() => expect(countOf(calls, "GET", "/app/api/notifications?limit=30")).toBe(2));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
+    expect(screen.queryByText(/Les résultats de/)).toBeNull();
   });
 });

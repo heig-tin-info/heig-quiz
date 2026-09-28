@@ -28,7 +28,11 @@ Amended (2026-09-28, issue #198): one notification system for everything a
 user is told. The App channel is the bell AND the toast, defaults are per
 kind, and eight kinds are added for students and teachers. The decisions
 are the addendum at the end. `DEFAULT_CHANNEL_ENABLED` became per kind in
-the same change; the rest lands in the steps the addendum lists.
+the same change; the rest lands in the steps the addendum lists. Step 4 made the App
+channel the bell and the toast, and moved `student_joined` and
+`roster_conflict` into the catalogue (the column `notifications.classroom_id`
+and the fold indexes, migration `0027_notification_folds`; Teams app 2.1.0);
+§h records the decisions taken after the review.
 
 ## Context
 
@@ -460,10 +464,10 @@ the change made no difference a user could see.
 | Role | Kind | App | E-mail / Teams | Trigger |
 |---|---|---|---|---|
 | Student | `results_released` | on | on | unchanged (§6) |
-| Student | `activity_scheduled` | on | on | an EXERCISE is scheduled for the student's classroom |
-| Student | `activity_available` | on | on | an EXERCISE moves to `running` |
+| Student | `activity_scheduled` | on | off | an EXERCISE is scheduled for the student's classroom, folded per classroom (§h) |
+| Student | `activity_available` | on | on for a take-home exercise, off in class (§h) | an EXERCISE moves to `running` |
 | Student | `deadline_approaching` | on | on | 24 h before `closesAt` (§d) |
-| Student | `results_updated` | on | off | a grade differs from the released one |
+| Student | `results_updated` | on | off | the final grade differs from the released one, folded per evaluation (§h) |
 | Teacher | `student_joined` | on | off | a student joined the classroom, folded per classroom |
 | Teacher | `roster_conflict` | on | on | a roster entry needs the teacher's attention, folded per classroom |
 | Teacher | `grading_ready` | on | on | automatic grading finished and proposals remain |
@@ -479,7 +483,8 @@ the change made no difference a user could see.
   for exercises only. The lobby and `opensAt` are not "open". Polls are
   excluded: they happen live in the room.
 - **`results_updated`: only when the grade actually differs** from the
-  released one. The only hook, `flagReleasedEvaluationsOf`, runs inside the
+  released one — the final grade on the evaluation's scale, compared before
+  and after the validation (§h). The only hook, `flagReleasedEvaluationsOf`, runs inside the
   grading transaction once per validated cell, even when nothing changes.
   Re-validating twenty cells without changing a grade therefore tells
   nobody. A change folds into the student's unread entry for that
@@ -527,8 +532,8 @@ no per-evaluation setting and no configurable delay.
 
 ### e. Aggregation
 
-`student_joined` and `roster_conflict` fold per classroom, and
-`pool_question_added` per pool. The event bumps the recipient's UNREAD
+`student_joined`, `roster_conflict` and `activity_scheduled` fold per
+classroom (§h), and `pool_question_added` per pool. The event bumps the recipient's UNREAD
 entry of the same kind and the same classroom or pool, and refreshes its
 `createdAt`, rather than writing a new row. Once that entry is read, the
 next event starts a new one. `results_updated` folds the same way per
@@ -576,3 +581,51 @@ evaluation (§c).
 
 E-mail digests, browser push notifications, muting per course, and
 configurable reminder delays.
+
+### h. Decisions of 2026-09-28 (evening)
+
+Five more decisions, settled with the product owner on issue #198 after the
+review above, and applied from step 4 on:
+
+1. **`activity_scheduled` folds per classroom** ("16 exercises scheduled in
+   PRG1-2026"), like `student_joined`, and is **off by e-mail and Teams by
+   default**: a teacher who schedules a term of exercises in one sitting
+   must not send a class sixteen e-mails. `activity_available` and
+   `deadline_approaching` keep e-mail on.
+2. **No toast on a full-screen page** — the poll projection, the live
+   dashboard, the correction projection — as for a student in an attempt:
+   what a teacher projects must not show a class a toast. The bell still
+   counts it. In the web app the quiet pages are the full-screen views plus
+   the live dashboard (`QUIET` in `App.tsx`), and leaving one sets a new
+   baseline, so what arrived meanwhile is not toasted late. **One folded
+   entry toasts at most once every 5 minutes**, however often it is bumped.
+3. **`activity_available` by e-mail and Teams only for a take-home
+   exercise** (`isTakeHome`). An in-class exercise opens with the students
+   in the room: it stays in the app.
+4. **`results_updated` compares the student's FINAL GRADE on the
+   evaluation's scale** before and after the validation. Points that move
+   without changing the rounded grade tell nobody. No snapshot of the
+   released grade is stored: the comparison is made inside the validation,
+   from what it is about to change.
+5. **`results_updated` is off by e-mail by default** (as §c already said),
+   its app entry folds per evaluation, and no delay is added before it is
+   sent.
+
+Step 4 also settled how the fold is written: the kind is read from the
+payload, so each partial unique index is on `(user_id, classroom_id) WHERE
+payload->>'kind' = '<kind>' AND read_at IS NULL`
+(`notifications_<kind>_fold_uq`, migration `0027_notification_folds`), and
+the fold's `INSERT … ON CONFLICT` names it by the same columns and predicate,
+the kind written as a literal (Postgres cannot prove that a bind parameter
+implies the index predicate). The count adds the incoming event's count, so
+a claim pass that flags three lines at once adds three. `student_joined` is sent when a student takes a seat
+themselves — by the join code, or by the claim at their own sign-in — and
+NOT by the reverse claim that a teacher's roster import or e-mail edit runs
+for accounts that already exist: the teacher who imported the list is
+looking at it, and the list itself says who is claimed. `tellStaff` is
+best-effort: a notification that fails is logged and never fails the
+sign-in, the join or the import that raised it. A Graph 400 (an activity
+type the user's installed manifest does not declare) is a permanent Teams
+failure, like a 403 or a 404, and is not retried. The manifest was
+bumped once, to 2.1.0, declaring the activity types of every kind of steps 4
+to 8.

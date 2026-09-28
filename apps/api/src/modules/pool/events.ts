@@ -6,11 +6,11 @@
  * requests (ADR-005). `pool:<id>` is subscribed to at connection time by
  * whoever `poolAccess` lets in — see `modules/events.ts`.
  */
-import { publish, type AppNotice, type Topic } from "../../events.js";
+import { publish, type Topic } from "../../events.js";
 
 /** One pool changed: its question list, its categories or its tags. */
-export function poolChanged(poolId: string, notice?: AppNotice): void {
-  publish("pool", [`pool:${poolId}`], notice);
+export function poolChanged(poolId: string): void {
+  publish("pool", [`pool:${poolId}`]);
 }
 
 /**
@@ -25,6 +25,6 @@ export function poolPeopleChanged(topics: Topic[]): void {
 }
 
 /** A question changed: same topic as its pool, which is what the UI watches. */
-function questionChanged(poolId: string, notice?: AppNotice): void {
-  poolChanged(poolId, notice);
+function questionChanged(poolId: string): void {
+  poolChanged(poolId);
 }

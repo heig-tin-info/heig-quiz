@@ -1,56 +1,20 @@
-import { AlertTriangle, CheckCircle2, Loader2, TriangleAlert, UserPlus, X } from "lucide-react";
+import { AlertTriangle, Bell, CheckCircle2, Loader2, X } from "lucide-react";
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from "react";
 
-import type { AppNotice, NoticeKind } from "@quiz/contracts";
-
 import { apiErrorMessage } from "./api";
-import { useT, type Dict, type TFunction } from "./i18n";
-import { readStored, writeStored, Z } from "./ui";
+import { useT, type Dict } from "./i18n";
+import { Z } from "./ui";
 
 /**
  * Toasts, bottom right, slide-in/out (see `toast-*` keyframes in style.css).
  * Two entry points share the stack:
- * - `useNotify()(notice)` — real-time SSE notices (AppNotice, shared with the
- *   server via @quiz/contracts), gated by the per-browser preferences
- *   (localStorage). A notice carries facts; its sentence is rendered here,
- *   in the reader's language;
+ * - `useNotify()(sentence)` — a notification arriving (ADR-030, addendum
+ *   §a): the App channel is the bell AND this toast. Which notifications
+ *   toast, and when, is decided by `notifications/toasts.ts`; the sentence
+ *   is the bell's, in the reader's language;
  * - `useToast()(message, tone?)` — one-shot flow feedback, never gated: the
  *   user just did the action.
  */
-
-/** Local default per kind — the Record enforces the catalogue is complete. */
-const NOTICE_DEFAULTS: Record<NoticeKind, boolean> = {
-  student_joined: true,
-  roster_conflict: true,
-};
-
-/** Settings order: labels come from i18n (`notify.<kind>`). */
-export const NOTICE_KINDS = Object.keys(NOTICE_DEFAULTS) as NoticeKind[];
-
-const PREFS_KEY = "quiz-notify-prefs";
-
-export function notifyPrefs(): Record<NoticeKind, boolean> {
-  const defaults = { ...NOTICE_DEFAULTS };
-  try {
-    const stored = JSON.parse(readStored(PREFS_KEY) ?? "{}") as Partial<
-      Record<NoticeKind, boolean>
-    >;
-    return { ...defaults, ...stored };
-  } catch {
-    return defaults;
-  }
-}
-
-export function setNotifyPref(kind: NoticeKind, enabled: boolean) {
-  const prefs = notifyPrefs();
-  prefs[kind] = enabled;
-  writeStored(PREFS_KEY, JSON.stringify(prefs));
-}
-
-const ICONS: Record<NoticeKind, typeof UserPlus> = {
-  student_joined: UserPlus,
-  roster_conflict: TriangleAlert,
-};
 
 /**
  * `progress` is the "this has started" tone: an action taken from an overflow
@@ -83,7 +47,7 @@ interface Toast {
 }
 
 const ToastContext = createContext<{
-  notify: (notice: AppNotice) => void;
+  notify: (sentence: string) => void;
   toast: (message: string, tone?: ToastTone) => void;
 }>({
   notify: () => {},
@@ -110,22 +74,6 @@ export function useErrorToast(): (fallback: keyof Dict) => (error: unknown) => v
   return (fallback) => (error) => toast(apiErrorMessage(error, t(fallback)), "error");
 }
 
-/** The sentence of a notice, in the reader's language (N-I18N-01). */
-function noticeSentence(t: TFunction, notice: AppNotice): string {
-  switch (notice.kind) {
-    case "student_joined":
-      return t("notify.student_joined.toast", {
-        name: notice.name,
-        classroom: notice.classroomName,
-      });
-    case "roster_conflict":
-      return t(
-        notice.count === 1 ? "notify.roster_conflict.toast.one" : "notify.roster_conflict.toast",
-        { n: notice.count, classroom: notice.classroomName },
-      );
-  }
-}
-
 const AUTO_DISMISS_MS = 6000;
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -150,13 +98,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     [dismiss],
   );
 
-  const notify = useCallback(
-    (notice: AppNotice) => {
-      if (!notifyPrefs()[notice.kind]) return;
-      push(ICONS[notice.kind], "text-accent", noticeSentence(translate, notice));
-    },
-    [push, translate],
-  );
+  const notify = useCallback((sentence: string) => push(Bell, "text-accent", sentence), [push]);
 
   const toast = useCallback(
     (message: string, tone: ToastTone = "success") => {

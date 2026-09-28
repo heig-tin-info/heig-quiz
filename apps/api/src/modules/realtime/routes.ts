@@ -114,7 +114,7 @@ function sendNamed(stream: Stream, event: ServerEvent, now: number): void {
 
 /** The inherited hint frame: unnamed, so `EventSource.onmessage` gets it. */
 const hintFrame = (message: Extract<BusMessage, { kind: "hint" }>): string =>
-  `data: ${JSON.stringify({ type: "hint", kinds: [message.type], notice: message.notice ?? null })}\n\n`;
+  `data: ${JSON.stringify({ type: "hint", kinds: [message.type] })}\n\n`;
 
 /**
  * Whether a data message may reach this stream — the second half of the

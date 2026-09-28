@@ -27,7 +27,7 @@
  */
 import { zipSync } from "fflate";
 
-import { NOTIFICATION_KINDS, type NotificationKind, type NotificationPayload } from "@quiz/contracts";
+import type { NotificationKind, NotificationPayload } from "@quiz/contracts";
 
 import type { ActivityNotification } from "./teams.js";
 import { TEAMS_COLOR_PNG, TEAMS_OUTLINE_PNG } from "./teamsIcons.js";
@@ -40,7 +40,7 @@ import {
 } from "./templates.js";
 
 /** Bump by hand on any change of the package below (semver, as Teams wants it). */
-export const TEAMS_APP_VERSION = "2.0.0";
+export const TEAMS_APP_VERSION = "2.1.0";
 const MANIFEST_VERSION = "1.17";
 const SCHEMAS = `https://developer.microsoft.com/en-us/json-schemas/teams/v${MANIFEST_VERSION}`;
 /** The red of the logo, as the icons use it. */
@@ -49,14 +49,44 @@ const ACCENT = "#D60008";
 export const TEAMS_TAB_ENTITY = "home";
 
 /**
- * The activity type of each kind of notification, as the manifest declares
- * it. A record keyed by every kind: a kind added to `@quiz/contracts` and
- * forgotten here is a compile error.
+ * The kinds the manifest declares an activity type for, in its order. It
+ * RUNS AHEAD of `NOTIFICATION_KINDS` (ADR-030 §f): every user re-uploads the
+ * app for a new version, so the one bump of #198 step 4 already declares the
+ * kinds its later steps emit. A kind of the catalogue missing here is a
+ * compile error below (and a test).
  */
-export const TEAMS_ACTIVITY_TYPES: Record<NotificationKind, string> = {
+export const TEAMS_ACTIVITY_KINDS = [
+  "results_released",
+  "pool_shared",
+  "pool_ownership",
+  "student_joined",
+  "roster_conflict",
+  "grading_ready",
+  "pool_question_added",
+  "activity_scheduled",
+  "activity_available",
+  "deadline_approaching",
+  "results_updated",
+] as const;
+type TeamsActivityKind = (typeof TEAMS_ACTIVITY_KINDS)[number];
+
+/** Every kind of the catalogue has its activity type: `true` or a compile error. */
+const CATALOGUE_DECLARED: [NotificationKind] extends [TeamsActivityKind] ? true : false = true;
+void CATALOGUE_DECLARED;
+
+/** The activity type of each kind, as the manifest declares it and a delivery names it. */
+export const TEAMS_ACTIVITY_TYPES: Record<TeamsActivityKind, string> = {
   results_released: "resultsReleased",
   pool_shared: "poolShared",
   pool_ownership: "poolOwnership",
+  student_joined: "studentJoined",
+  roster_conflict: "rosterConflict",
+  grading_ready: "gradingReady",
+  pool_question_added: "poolQuestionAdded",
+  activity_scheduled: "activityScheduled",
+  activity_available: "activityAvailable",
+  deadline_approaching: "deadlineApproaching",
+  results_updated: "resultsUpdated",
 };
 
 interface AppOptions {
@@ -80,7 +110,7 @@ export function teamsAppStrings(locale: MailLocale): Record<string, string> {
     "description.full": t["app.description.full"],
     "staticTabs[0].name": t["app.tab.name"],
   };
-  NOTIFICATION_KINDS.forEach((kind, i) => {
+  TEAMS_ACTIVITY_KINDS.forEach((kind, i) => {
     strings[`activities.activityTypes[${i}].description`] = t[`activity.${kind}.description`];
     strings[`activities.activityTypes[${i}].templateText`] = t[`activity.${kind}.template`];
   });
@@ -125,7 +155,7 @@ function teamsManifest(opts: AppOptions): Record<string, unknown> {
       permissions: { resourceSpecific: [{ type: "Application", name: "TeamsActivity.Send.User" }] },
     },
     activities: {
-      activityTypes: NOTIFICATION_KINDS.map((kind, i) => ({
+      activityTypes: TEAMS_ACTIVITY_KINDS.map((kind, i) => ({
         type: TEAMS_ACTIVITY_TYPES[kind],
         description: en[`activities.activityTypes[${i}].description`],
         templateText: en[`activities.activityTypes[${i}].templateText`],

@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto";
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { parseRosterCsv, rosterFromRows, type Cell, type RosterParse } from "@quiz/domain";
 
 import { audit } from "../../audit.js";
 import { publish } from "../../events.js";
 import type { Db } from "../../db/client.js";
-import { avatars, classrooms, enrollments, userEmails, users } from "../../db/schema.js";
+import { avatars, classrooms, courseStaff, enrollments, userEmails, users } from "../../db/schema.js";
 import { emailIn, knownEmails, normalizeEmail, sharedWithOthers } from "../../identity.js";
+import { notifyMany } from "../notifications/service.js";
 import { rosterConflict, studentJoined } from "../realtime/bus.js";
 
 interface RosterImportSummary {
@@ -65,6 +66,59 @@ export async function importRoster(
   return { parse, summary: { inserted, updated } };
 }
 
+/** What happened to a classroom's roster, as its staff are told of it. */
+interface RosterEvent {
+  kind: "student_joined" | "roster_conflict";
+  courseId: string;
+  classroomId: string;
+  classroomName: string;
+  count: number;
+  /** Whose action raised it: never told of it (ADR-030 addendum §c). */
+  actorId: string;
+}
+
+/**
+ * Tells the course's staff what happened to a classroom's roster: a
+ * notification to each STAFF SEAT (the rows `staffAccess` reads — an admin
+ * without a seat is not told), never to the person who acted, folded per
+ * classroom by the notifications module (ADR-030 §e). The payload is a count
+ * and the classroom: no name, no address. Call it after the write has
+ * committed.
+ *
+ * BEST-EFFORT: it runs inside a login (the claim at sign-in), a join and a
+ * roster import, none of which may fail because telling the staff did. A
+ * failure is logged and swallowed; the roster itself is already right.
+ */
+export async function tellStaff(db: Db, event: RosterEvent): Promise<void> {
+  const { kind, classroomId, classroomName, count } = event;
+  try {
+    const seats = await db
+      .select({ userId: courseStaff.userId })
+      .from(courseStaff)
+      .where(and(eq(courseStaff.courseId, event.courseId), ne(courseStaff.userId, event.actorId)));
+    await notifyMany(
+      db,
+      seats.map((seat) => ({ userId: seat.userId, payload: { kind, classroomId, classroomName, count } })),
+    );
+  } catch (err) {
+    // The service layer has no logger (as `realtime/bus.ts`): stderr, which
+    // the process log collects.
+    console.error(`roster: telling the staff of ${kind} in ${classroomId} failed`, err);
+  }
+}
+
+type RoomCount = Omit<RosterEvent, "kind" | "actorId">;
+
+/** One more event in its classroom's tally. */
+function countIn(
+  rooms: Map<string, RoomCount>,
+  { courseId, classroomId, classroomName }: Omit<RoomCount, "count">,
+) {
+  const room = rooms.get(classroomId) ?? { courseId, classroomId, classroomName, count: 0 };
+  room.count += 1;
+  rooms.set(classroomId, room);
+}
+
 /** A pending roster line, and the account a claim pass would attach it to. */
 interface Match {
   entryId: string;
@@ -92,10 +146,7 @@ async function settleClaims<M extends Match>(
   actorId: string,
   onClaimed: (match: M) => void,
 ): Promise<number> {
-  const conflicts = new Map<
-    string,
-    { courseId: string; classroomId: string; classroomName: string; count: number }
-  >();
+  const conflicts = new Map<string, RoomCount>();
 
   async function flagConflict(match: M) {
     const [raised] = await db
@@ -111,10 +162,7 @@ async function settleClaims<M extends Match>(
       subjectType: "enrollment",
       subjectId: match.entryId,
     });
-    const { courseId, classroomId, classroomName } = match;
-    const room = conflicts.get(classroomId) ?? { courseId, classroomId, classroomName, count: 0 };
-    room.count += 1;
-    conflicts.set(classroomId, room);
+    countIn(conflicts, match);
   }
 
   let claimed = 0;
@@ -146,7 +194,10 @@ async function settleClaims<M extends Match>(
     });
     onClaimed(match);
   }
-  for (const room of conflicts.values()) rosterConflict({ ...room, actorId });
+  for (const room of conflicts.values()) {
+    rosterConflict({ courseId: room.courseId, actorId });
+    await tellStaff(db, { kind: "roster_conflict", ...room, actorId });
+  }
   return claimed;
 }
 
@@ -196,14 +247,16 @@ export async function claimEnrollments(db: Db, user: { id: string }) {
     ambiguous:
       shared.has(normalizeEmail(entry.email)) || perClassroom.get(entry.classroomId)! > 1,
   }));
-  return settleClaims(db, matches, user.id, (entry) =>
-    studentJoined({
-      courseId: entry.courseId,
-      classroomName: entry.classroomName,
-      userId: user.id,
-      name: `${entry.prenom} ${entry.nom}`.trim(),
-    }),
-  );
+  // The student is the actor here, and holds no staff seat to exclude.
+  const joined = new Map<string, RoomCount>();
+  const claimed = await settleClaims(db, matches, user.id, (entry) => {
+    countIn(joined, entry);
+    studentJoined({ courseId: entry.courseId, userId: user.id });
+  });
+  for (const room of joined.values()) {
+    await tellStaff(db, { kind: "student_joined", ...room, actorId: user.id });
+  }
+  return claimed;
 }
 
 /**

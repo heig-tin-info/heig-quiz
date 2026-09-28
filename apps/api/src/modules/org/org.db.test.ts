@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import type { CourseDetail } from "@quiz/contracts";
+import type { CourseDetail, NotificationPayload } from "@quiz/contracts";
 
 import {
   auditLog,
@@ -11,6 +11,7 @@ import {
   courseStaff,
   courses,
   enrollments,
+  notifications,
   userEmails,
 } from "../../db/schema.js";
 import { type Payload, testServer, type TestServer } from "../../test/http.js";
@@ -202,12 +203,25 @@ const settle = async () => {
   for (let i = 0; i < 6; i++) await new Promise((resolve) => setImmediate(resolve));
 };
 
+/** The notifications of `kind` an account holds, as their payloads. */
+async function notificationsOf(userId: string, kind: string) {
+  const rows = await server.app.db
+    .select()
+    .from(notifications)
+    .where(eq(notifications.userId, userId))
+    .orderBy(notifications.createdAt);
+  return rows
+    .map((r) => ({ payload: r.payload as NotificationPayload, read: r.readAt !== null }))
+    .filter((r) => r.payload.kind === kind);
+}
+
 /**
- * #198: the notice named the joiner on `classroom:<id>` and on the joiner's
- * own topic, so every classmate with a tab open — and the joiner — was told.
- * It reaches the course's staff only, as facts the web app translates.
+ * #198: a student joining is told to the course's staff seats as a
+ * `student_joined` notification (ADR-030 addendum): a count per classroom,
+ * never a name, never on a stream a classmate holds, never to an admin who
+ * holds no seat.
  */
-describe("the student_joined notice", () => {
+describe("the student_joined notification", () => {
   async function watchers() {
     const classmate = await server.signIn("student");
     await server.app.db.insert(enrollments).values({
@@ -219,32 +233,48 @@ describe("the student_joined notice", () => {
       userId: classmate.id,
       claimedAt: new Date(),
     });
+    const admin = await server.signIn("admin");
     return {
-      staff: await openStream(teacher.headers),
-      classmate: await openStream(classmate.headers),
-      outsider: await openStream(outsider.headers),
+      ids: { classmate: classmate.id, admin: admin.id, outsider: outsider.id },
+      streams: {
+        staff: await openStream(teacher.headers),
+        classmate: await openStream(classmate.headers),
+        outsider: await openStream(outsider.headers),
+        admin: await openStream(admin.headers),
+      },
     };
   }
 
-  function expectStaffOnly(
-    streams: Awaited<ReturnType<typeof watchers>> & { joiner: { text: string } },
+  async function expectStaffOnly(
+    watched: Awaited<ReturnType<typeof watchers>>,
+    joiner: { id: string; stream: { text: string } },
     name: string,
   ) {
-    const notice = { kind: "student_joined", name, classroomName: "PRG1-A" };
-    expect(streams.staff.text).toContain(JSON.stringify(notice));
-    for (const who of ["classmate", "joiner", "outsider"] as const) {
-      expect(streams[who].text).not.toContain("student_joined");
-      expect(streams[who].text).not.toContain(name);
+    const told = await notificationsOf(teacher.id, "student_joined");
+    expect(told.at(-1)!.payload).toEqual({
+      kind: "student_joined",
+      classroomId,
+      classroomName: "PRG1-A",
+      count: expect.any(Number),
+    });
+    for (const id of [...Object.values(watched.ids), joiner.id]) {
+      expect(await notificationsOf(id, "student_joined")).toEqual([]);
+    }
+    // The staff's stream only hears "re-read your inbox"; nothing names the joiner.
+    expect(watched.streams.staff.text).toContain('"kinds":["notifications"]');
+    for (const stream of [...Object.values(watched.streams), joiner.stream]) {
+      expect(stream.text).not.toContain(name);
+      expect(stream.text).not.toContain("student_joined");
     }
     // The joiner still gets a bare refresh hint for their own screens.
-    expect(streams.joiner.text).toContain('"kinds":["roster"]');
+    expect(joiner.stream.text).toContain('"kinds":["roster"]');
   }
 
-  it("reaches the staff only when a student joins by code", async () => {
+  it("reaches the staff seats only when a student joins by code", async () => {
     const code = await enableJoinCode();
-    const streams = await watchers();
+    const watched = await watchers();
     const student = await signInStudent(`joiner-${randomUUID().slice(0, 8)}@heig.test`);
-    const joiner = await openStream(student.headers);
+    const joiner = { id: student.id, stream: await openStream(student.headers) };
     await settle();
 
     const joined = await server.app.inject({
@@ -255,34 +285,41 @@ describe("the student_joined notice", () => {
     expect(joined.statusCode).toBe(201);
     await settle();
 
-    expectStaffOnly({ ...streams, joiner }, "Test student");
-    for (const s of [...Object.values(streams), joiner]) s.close();
+    await expectStaffOnly(watched, joiner, "Test student");
+    for (const s of [...Object.values(watched.streams), joiner.stream]) s.close();
   });
 
-  it("reaches the staff only when a roster line is claimed at login", async () => {
+  it("reaches the staff seats only when a roster line is claimed at login, folded per classroom", async () => {
+    const before = await notificationsOf(teacher.id, "student_joined");
+    const unread = before.find((n) => !n.read);
     const email = `grace-${randomUUID().slice(0, 8)}@heig.test`;
     await server.app.db
       .insert(enrollments)
       .values({ id: randomUUID(), classroomId, nom: "Hopper", prenom: "Grace", email });
-    const streams = await watchers();
+    const watched = await watchers();
     const student = await signInStudent(email);
-    const joiner = await openStream(student.headers);
+    const joiner = { id: student.id, stream: await openStream(student.headers) };
     await settle();
 
     expect(await claimEnrollments(server.app.db, { id: student.id })).toBe(1);
     await settle();
 
-    expectStaffOnly({ ...streams, joiner }, "Grace Hopper");
-    for (const s of [...Object.values(streams), joiner]) s.close();
+    await expectStaffOnly(watched, joiner, "Grace Hopper");
+    // The unread entry of the classroom counts one more; no second row.
+    const after = await notificationsOf(teacher.id, "student_joined");
+    expect(after).toHaveLength(before.length);
+    const count = (unread?.payload as { count?: number } | undefined)?.count ?? 0;
+    expect((after.find((n) => !n.read)!.payload as { count: number }).count).toBe(count + 1);
+    for (const s of [...Object.values(watched.streams), joiner.stream]) s.close();
   });
 });
 
 /**
  * #198: a roster line flagged as a conflict (AU-21) is a decision for the
- * course's staff. Every claim pass that raises flags says so once per
- * classroom, with a count and no name — and never to whoever ran the pass.
+ * course's staff. Every claim pass that raises flags tells them once per
+ * classroom, with a count and no name — and never whoever ran the pass.
  */
-describe("the roster_conflict notice", () => {
+describe("the roster_conflict notification", () => {
   let colleague: Awaited<ReturnType<TestServer["signIn"]>>;
   const course = randomUUID();
   beforeAll(async () => {
@@ -340,21 +377,20 @@ describe("the roster_conflict notice", () => {
     return student;
   }
 
-  const notices = (text: string) =>
-    text
-      .split("\n")
-      .filter((l) => l.startsWith("data: "))
-      .map((l) => (JSON.parse(l.slice(6)) as { notice?: { kind: string } | null }).notice)
-      .filter((n) => n?.kind === "roster_conflict");
+  /** The roster_conflict entries of `userId` about these classrooms. */
+  const told = async (userId: string, ...rooms: string[]) =>
+    (await notificationsOf(userId, "roster_conflict"))
+      .map((n) => n.payload as { classroomId: string })
+      .filter((p) => rooms.includes(p.classroomId));
 
-  const notice = (classroomId: string, classroomName: string, count: number) => ({
+  const expected = (classroomId: string, classroomName: string, count: number) => ({
     kind: "roster_conflict",
     classroomId,
     classroomName,
     count,
   });
 
-  it("from the login claim: one notice per classroom, ambiguous lines and a second seat alike", async () => {
+  it("from the login claim: one entry per classroom, ambiguous lines and a second seat alike", async () => {
     const a = await room("CONF-A");
     const b = await room("CONF-B");
     const priv = `jane-${tag()}@gmail.test`;
@@ -366,26 +402,18 @@ describe("the roster_conflict notice", () => {
     // B: the account already holds a seat; the second line hits UNIQUE.
     await line(b.id, `old-${tag()}@heig.test`, student.id);
     const second = await line(b.id, inst);
-    const streams = {
-      teacher: await openStream(teacher.headers),
-      colleague: await openStream(colleague.headers),
-      classmate: await openStream(a.classmate.headers),
-      outsider: await openStream(outsider.headers),
-      student: await openStream(student.headers),
-    };
-    await settle();
 
     expect(await claimEnrollments(server.app.db, { id: student.id })).toBe(0);
-    await settle();
 
-    for (const staff of [streams.teacher, streams.colleague]) {
-      expect(notices(staff.text)).toEqual(
-        expect.arrayContaining([notice(a.id, "CONF-A", 2), notice(b.id, "CONF-B", 1)]),
+    for (const staff of [teacher.id, colleague.id]) {
+      const entries = await told(staff, a.id, b.id);
+      expect(entries).toEqual(
+        expect.arrayContaining([expected(a.id, "CONF-A", 2), expected(b.id, "CONF-B", 1)]),
       );
-      expect(notices(staff.text)).toHaveLength(2);
+      expect(entries).toHaveLength(2);
     }
-    for (const who of ["classmate", "outsider", "student"] as const) {
-      expect(notices(streams[who].text)).toEqual([]);
+    for (const who of [a.classmate.id, outsider.id, student.id]) {
+      expect(await told(who, a.id, b.id)).toEqual([]);
     }
     // The UNIQUE branch is audited like the others.
     const logged = await server.app.db
@@ -396,12 +424,12 @@ describe("the roster_conflict notice", () => {
 
     // A line already flagged waits for a teacher: the next login says nothing.
     expect(await claimEnrollments(server.app.db, { id: student.id })).toBe(0);
-    await settle();
-    expect(notices(streams.colleague.text)).toHaveLength(2);
-    for (const s of Object.values(streams)) s.close();
+    expect(await told(colleague.id, a.id, b.id)).toEqual(
+      expect.arrayContaining([expected(a.id, "CONF-A", 2), expected(b.id, "CONF-B", 1)]),
+    );
   });
 
-  it("from an import: one notice with the count, to the staff but not the importer", async () => {
+  it("from an import: one entry with the count, to the staff but not the importer", async () => {
     const r = await room("CONF-C");
     const shared = `twin-${tag()}@heig.test`;
     await account(`twin-a-${tag()}@gmail.test`, shared);
@@ -409,12 +437,6 @@ describe("the roster_conflict notice", () => {
     const priv = `tom-${tag()}@gmail.test`;
     const inst = `tom-${tag()}@heig.test`;
     await account(priv, inst);
-    const streams = {
-      teacher: await openStream(teacher.headers),
-      colleague: await openStream(colleague.headers),
-      classmate: await openStream(r.classmate.headers),
-    };
-    await settle();
 
     const rows = [
       ["Nom", "Prénom", "E-mail"],
@@ -429,26 +451,19 @@ describe("the roster_conflict notice", () => {
       payload: { rows },
     });
     expect(imported.statusCode).toBe(200);
-    await settle();
 
-    expect(notices(streams.colleague.text)).toEqual([notice(r.id, "CONF-C", 3)]);
-    expect(notices(streams.teacher.text)).toEqual([]);
-    expect(notices(streams.classmate.text)).toEqual([]);
-    expect(streams.colleague.text).not.toContain(shared);
-    for (const s of Object.values(streams)) s.close();
+    expect(await told(colleague.id, r.id)).toEqual([expected(r.id, "CONF-C", 3)]);
+    expect(await told(teacher.id, r.id)).toEqual([]);
+    expect(await told(r.classmate.id, r.id)).toEqual([]);
+    expect(JSON.stringify(await told(colleague.id, r.id))).not.toContain(shared);
   });
 
-  it("from an e-mail edit: one notice, to the staff but not the editor", async () => {
+  it("from an e-mail edit: one entry, to the staff but not the editor", async () => {
     const r = await room("CONF-D");
     const shared = `pair-${tag()}@heig.test`;
     await account(`pair-a-${tag()}@gmail.test`, shared);
     await account(`pair-b-${tag()}@gmail.test`, shared);
     const entry = await line(r.id, `typo-${tag()}@heig.test`);
-    const streams = {
-      teacher: await openStream(teacher.headers),
-      colleague: await openStream(colleague.headers),
-    };
-    await settle();
 
     const patched = await server.app.inject({
       method: "PATCH",
@@ -457,10 +472,32 @@ describe("the roster_conflict notice", () => {
       payload: { email: shared },
     });
     expect(patched.statusCode).toBe(200);
-    await settle();
 
-    expect(notices(streams.colleague.text)).toEqual([notice(r.id, "CONF-D", 1)]);
-    expect(notices(streams.teacher.text)).toEqual([]);
+    expect(await told(colleague.id, r.id)).toEqual([expected(r.id, "CONF-D", 1)]);
+    expect(await told(teacher.id, r.id)).toEqual([]);
+  });
+
+  it("refreshes the staff's rosters, except the stream of whoever raised it", async () => {
+    const r = await room("CONF-E");
+    const shared = `hint-${tag()}@heig.test`;
+    await account(`hint-a-${tag()}@gmail.test`, shared);
+    await account(`hint-b-${tag()}@gmail.test`, shared);
+    const entry = await line(r.id, `typo-${tag()}@heig.test`);
+    const streams = {
+      teacher: await openStream(teacher.headers),
+      colleague: await openStream(colleague.headers),
+    };
+    await settle();
+    await server.app.inject({
+      method: "PATCH",
+      url: `/app/api/classrooms/${r.id}/roster/${entry}`,
+      headers: teacher.headers,
+      payload: { email: shared },
+    });
+    await settle();
+    expect(streams.colleague.text).toContain('"kinds":["roster"]');
+    expect(streams.colleague.text).toContain('"kinds":["notifications"]');
+    expect(streams.colleague.text).not.toContain(shared);
     for (const s of Object.values(streams)) s.close();
   });
 });
@@ -522,11 +559,12 @@ describe("losing access closes the streams", () => {
     expect(streams.teacher.ended).toBe(false);
     expect(streams.student.ended).toBe(false);
 
-    // A notice on the course no longer reaches the removed colleague.
-    studentJoined({ courseId: course, classroomName: "RES-A", userId: randomUUID(), name: "Late Joiner" });
+    // A hint on the course no longer reaches the removed colleague.
+    const [teacherBefore, colleagueBefore] = [streams.teacher.text, streams.colleague.text];
+    studentJoined({ courseId: course, userId: randomUUID() });
     await settle();
-    expect(streams.teacher.text).toContain("Late Joiner");
-    expect(streams.colleague.text).not.toContain("Late Joiner");
+    expect(streams.teacher.text.slice(teacherBefore.length)).toContain('"kinds":["roster"]');
+    expect(streams.colleague.text).toBe(colleagueBefore);
 
     const removed = await server.app.inject({
       method: "DELETE",

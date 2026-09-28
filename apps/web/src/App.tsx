@@ -279,6 +279,14 @@ const FULL_SCREEN: ReadonlySet<Route["view"]> = new Set([
 const WIDE: ReadonlySet<Route["view"]> = new Set(["live"]);
 
 /**
+ * The views where a notification arriving never toasts (ADR-030 §h): every
+ * full-screen one — an attempt, a preview, a projection on a beamer — and
+ * the live dashboard, which a teacher may be projecting too. The bell still
+ * counts what arrives.
+ */
+const QUIET: ReadonlySet<Route["view"]> = new Set([...FULL_SCREEN, "live"]);
+
+/**
  * No session. The participant of an anonymous poll may have no account
  * (`settings.poll.anonymous`: the poll belongs to no classroom), and the page
  * itself sends to login for a classroom's poll.
@@ -382,7 +390,10 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
   // hints at all.
   // ADR-027: a `seb` session has one evaluation, and no other page.
   const confinedTo = me.data?.session?.evaluationId ?? null;
-  useLiveUpdates(me.data != null && confinedTo === null && route.view !== "attempt");
+  useLiveUpdates(
+    me.data != null && confinedTo === null && route.view !== "attempt",
+    confinedTo !== null || QUIET.has(route.view),
+  );
   // The account's saved language wins on load, so the choice follows the user
   // across devices (no re-persist: adopt only). Unset means "the browser's".
   const serverLocale = me.data ? (me.data.locale ?? "browser") : null;

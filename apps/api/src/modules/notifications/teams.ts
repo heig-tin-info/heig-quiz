@@ -13,7 +13,9 @@
  *
  * A 403 or 404 from Graph means the app is not installed for that user, its
  * permission was not consented (an older manifest), a policy blocks it, or
- * the user is gone: retrying cannot change that, so the error is `permanent`
+ * the user is gone; a 400 means the request does not fit the app the user
+ * installed (an activity type an older manifest does not declare, #198):
+ * retrying cannot change any of that, so the error is `permanent`
  * and the delivery is dropped — the link is KEPT (reinstalling the app is the
  * user's fix, and the link then works again). A token failure is our own
  * configuration (a lapsed secret) and is retried like any other failure.
@@ -64,11 +66,15 @@ export class TeamsError extends Error {
   }
 
   /**
-   * 403: the app is not installed for the user, its permission is missing,
-   * or a policy forbids it; 404: no such user. A retry meets the same answer.
+   * 400: the activity does not fit the manifest the user installed (a type
+   * an older version does not declare, until they re-upload the app); 403:
+   * the app is not installed for the user, its permission is missing, or a
+   * policy forbids it; 404: no such user. A retry meets the same answer.
+   * A token failure never carries a status (`fail(…, retryable)`), so a 400
+   * from the login endpoint stays retryable.
    */
   get permanent(): boolean {
-    return this.status === 403 || this.status === 404;
+    return this.status === 400 || this.status === 403 || this.status === 404;
   }
 }
 

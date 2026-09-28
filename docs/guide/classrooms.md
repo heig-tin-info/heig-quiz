@@ -74,7 +74,7 @@ Re-importing is safe. Existing seats keep their claim, names are refreshed, noth
 
 There is no invitation code. A seat is **pending** until a student signs in with an address that matches it; at that moment it becomes **claimed** and the classroom appears on their home. Matching runs against every address the identity provider reveals for the account, not only the one they typed, so a student registered under a private address at edu-ID still claims a seat listed with the school address. The classroom's card on their side names the course, the period, the staff and their extra time, if any: see [For students](students.md).
 
-When the matching is ambiguous, because the same student sits on two seats or an address belongs to two accounts, the seat is flagged **conflict** and nothing is attached on a guess. A toast tells you as it happens; edit or remove one of the rows to resolve it.
+When the matching is ambiguous, because the same student sits on two seats or an address belongs to two accounts, the seat is flagged **conflict** and nothing is attached on a guess. The course's teachers are told by a notification, counted per classroom, except the one whose import or edit raised it; edit or remove one of the rows to resolve it.
 
 ## Editing a row
 

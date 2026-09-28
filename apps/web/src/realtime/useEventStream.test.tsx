@@ -218,7 +218,7 @@ describe("useEventStream", () => {
         subject: `evaluation:${EVALUATION_ID}`,
         state: { hello: true },
       });
-      es.sendUnnamed({ type: "hint", kinds: ["evaluations"], notice: null });
+      es.sendUnnamed({ type: "hint", kinds: ["evaluations"] });
     });
     expect(onClock).toHaveBeenCalledWith(liveAt(0));
     expect(onSnapshot).toHaveBeenCalledWith({ hello: true }, liveAt(0));

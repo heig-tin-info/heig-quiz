@@ -3,10 +3,10 @@ import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import { DEFAULT_CHANNEL_ENABLED, type NotificationKind, type NotificationPayload } from "@quiz/contracts";
+import { DEFAULT_CHANNEL_ENABLED, type NotificationPayload } from "@quiz/contracts";
 
 import type { Db } from "../../db/client.js";
-import { notifications, pools, teamsLinks, users } from "../../db/schema.js";
+import { classrooms, courses, notifications, pools, teamsLinks, users } from "../../db/schema.js";
 import { subscribe } from "../../events.js";
 import type { JobQueue } from "../../jobs.js";
 import { testDb } from "../../test/db.js";
@@ -40,6 +40,15 @@ async function seedPool(name: string): Promise<string> {
   const id = randomUUID();
   await db.insert(pools).values({ id, name, ownerId: alice });
   return id;
+}
+
+/** A real classroom (and its course) for the kinds folded per classroom. */
+async function seedClassroom(name: string): Promise<{ classroomId: string; classroomName: string }> {
+  const courseId = randomUUID();
+  const classroomId = randomUUID();
+  await db.insert(courses).values({ id: courseId, name, code: `C-${courseId.slice(0, 8)}` });
+  await db.insert(classrooms).values({ id: classroomId, courseId, name });
+  return { classroomId, classroomName: name };
 }
 
 function poolShared(poolId: string, name: string) {
@@ -103,6 +112,86 @@ describe("notify", () => {
     await expect(
       service.notify(db, alice, { kind: "not_a_kind" } as never),
     ).rejects.toBeTruthy();
+  });
+});
+
+/**
+ * ADR-030 §e: a folded kind keeps ONE unread entry per recipient and
+ * classroom. The next event bumps its count and refreshes its `created_at`
+ * (so the client toasts it again); once read, the next one starts afresh.
+ */
+describe("a folded kind", () => {
+  const unreadOf = async (userId: string, classroomId: string) =>
+    (await db.select().from(notifications).where(eq(notifications.userId, userId))).filter(
+      (r) => r.classroomId === classroomId && r.readAt === null,
+    );
+  // Accounts of their own: the inbox tests below count ann's and ben's rows.
+  let ann: string;
+  let ben: string;
+  beforeAll(async () => {
+    ann = await seedUser("ann@heig.test");
+    ben = await seedUser("ben@heig.test");
+  });
+
+  it("folds two events into one unread entry that counts both, under the same id", async () => {
+    const room = await seedClassroom("PRG1-A");
+    const joined = { kind: "student_joined", ...room, count: 1 } as const;
+    const first = await bell(db, ann, joined);
+    await new Promise((r) => setTimeout(r, 5));
+    const second = await bell(db, ann, { ...joined, classroomName: "PRG1-A (renamed)" });
+
+    expect(second.id).toBe(first.id);
+    expect(second.payload).toEqual({ ...joined, classroomName: "PRG1-A (renamed)", count: 2 });
+    expect(Date.parse(second.createdAt)).toBeGreaterThan(Date.parse(first.createdAt));
+    expect(await unreadOf(ann, room.classroomId)).toHaveLength(1);
+    // A count of several (a claim pass flagging three lines) adds all of them.
+    const conflict = { kind: "roster_conflict", ...room, count: 3 } as const;
+    await bell(db, ann, conflict);
+    const both = await bell(db, ann, conflict);
+    expect(both.payload).toMatchObject({ kind: "roster_conflict", count: 6 });
+    // Kinds fold apart, and so do recipients and classrooms.
+    expect(await unreadOf(ann, room.classroomId)).toHaveLength(2);
+    expect((await bell(db, ben, joined)).payload).toMatchObject({ count: 1 });
+    const other = await seedClassroom("PRG1-B");
+    expect((await bell(db, ann, { ...joined, ...other })).payload).toMatchObject({ count: 1 });
+  });
+
+  it("starts a new entry once the folded one is read", async () => {
+    const room = await seedClassroom("PRG2-A");
+    const joined = { kind: "student_joined", ...room, count: 1 } as const;
+    const first = await bell(db, ann, joined);
+    await bell(db, ann, joined);
+    expect(await service.markRead(db, ann, first.id)).toBe(true);
+
+    const fresh = await bell(db, ann, joined);
+    expect(fresh.id).not.toBe(first.id);
+    expect(fresh.payload).toMatchObject({ count: 1 });
+    const rows = await db.select().from(notifications).where(eq(notifications.classroomId, room.classroomId));
+    expect(rows.map((r) => [(r.payload as { count: number }).count, r.readAt === null]).sort()).toEqual([
+      [1, true],
+      [2, false],
+    ]);
+  });
+
+  it("never duplicates the unread entry under concurrent events", async () => {
+    // PGlite runs one statement at a time, so this proves the fold is ONE
+    // statement that never reads-then-writes (a read-then-insert version
+    // interleaves here too, and duplicates) — not true parallelism. Under a
+    // real PostgreSQL the partial unique index is the arbiter of the race.
+    const room = await seedClassroom("PRG3-A");
+    const joined = { kind: "student_joined", ...room, count: 1 } as const;
+    const created = await Promise.all(Array.from({ length: 8 }, () => service.notify(db, ann, joined)));
+    expect(new Set(created.map((c) => c!.id)).size).toBe(1);
+    const unread = await unreadOf(ann, room.classroomId);
+    expect(unread).toHaveLength(1);
+    expect(unread[0]!.payload).toMatchObject({ count: 8 });
+  });
+
+  it("goes with its classroom: the foreign key cascades", async () => {
+    const room = await seedClassroom("PRG4-A");
+    await bell(db, ann, { kind: "roster_conflict", ...room, count: 1 });
+    await db.delete(classrooms).where(eq(classrooms.id, room.classroomId));
+    expect(await unreadOf(ann, room.classroomId)).toEqual([]);
   });
 });
 
@@ -239,25 +328,6 @@ afterEach(() => {
   errors.length = 0;
 });
 
-/**
- * Runs `body` while `kind` defaults to `row`. The kinds of today share one
- * default, so a per-kind fallback is only observable with one of them moved.
- */
-async function withDefault(
-  kind: NotificationKind,
-  row: (typeof DEFAULT_CHANNEL_ENABLED)[NotificationKind],
-  body: () => Promise<void>,
-): Promise<void> {
-  const defaults = DEFAULT_CHANNEL_ENABLED as Record<NotificationKind, typeof row>;
-  const saved = defaults[kind];
-  defaults[kind] = row;
-  try {
-    await body();
-  } finally {
-    defaults[kind] = saved;
-  }
-}
-
 describe("preferences", () => {
   it("defaults to every channel on, and stores only the toggles moved", async () => {
     const carol = await seedUser("carol@heig.test");
@@ -282,20 +352,19 @@ describe("preferences", () => {
     const erin = await seedUser("erin@heig.test");
     expect(await service.preferenceMatrix(db, erin)).toEqual(DEFAULT_CHANNEL_ENABLED);
 
-    // A kind whose default differs from its neighbours' (as the background-
-    // noise kinds of #198 will): the grid shows that default, a moved toggle
-    // still wins over it, and the other kinds keep theirs.
-    await withDefault("pool_ownership", { bell: true, email: false, teams: false }, async () => {
-      const grid = await service.preferenceMatrix(db, erin);
-      expect(grid.pool_ownership).toEqual({ bell: true, email: false, teams: false });
-      expect(grid.pool_shared).toEqual(DEFAULT_CHANNEL_ENABLED.pool_shared);
+    // A background-noise kind (#198): in the app only, while its neighbours
+    // are on everywhere. A moved toggle still wins over that default, and the
+    // other kinds keep theirs.
+    const grid = await service.preferenceMatrix(db, erin);
+    expect(grid.student_joined).toEqual({ bell: true, email: false, teams: false });
+    expect(grid.roster_conflict).toEqual({ bell: true, email: true, teams: true });
+    expect(grid.pool_shared).toEqual({ bell: true, email: true, teams: true });
 
-      await service.setPreference(db, erin, { kind: "pool_ownership", channel: "teams", enabled: true });
-      expect((await service.preferenceMatrix(db, erin)).pool_ownership).toEqual({
-        bell: true,
-        email: false,
-        teams: true,
-      });
+    await service.setPreference(db, erin, { kind: "student_joined", channel: "teams", enabled: true });
+    expect((await service.preferenceMatrix(db, erin)).student_joined).toEqual({
+      bell: true,
+      email: false,
+      teams: true,
     });
   });
 
@@ -370,17 +439,14 @@ describe("notify fans out", () => {
     await linkTeams(iris);
     const { queue, sent } = recordingQueue();
     openOutbox({ queue, teams: true, log });
-    const poolId = await seedPool("Défauts");
-    const ownership = { kind: "pool_ownership", poolId, poolName: "Défauts", fromName: "Prof Démo" } as const;
+    const joined = { kind: "student_joined", ...(await seedClassroom("Défauts")), count: 1 } as const;
 
-    await withDefault("pool_ownership", { bell: true, email: false, teams: false }, async () => {
-      // Off by default outside the app: a bell row, no job at all.
-      await bell(db, iris, ownership);
-      expect(sent).toHaveLength(0);
-      // Another kind keeps its own default: both jobs.
-      await bell(db, iris, poolShared(poolId, "Défauts"));
-      expect(sent.map((j) => j.data.channel)).toEqual(["email", "teams"]);
-    });
+    // Off by default outside the app: a bell row, no job at all.
+    await bell(db, iris, joined);
+    expect(sent).toHaveLength(0);
+    // Another kind keeps its own default: both jobs.
+    await bell(db, iris, await sharedPool("Défauts"));
+    expect(sent.map((j) => j.data.channel)).toEqual(["email", "teams"]);
   });
 
   it("sends no Teams job when the platform has no Teams application", async () => {

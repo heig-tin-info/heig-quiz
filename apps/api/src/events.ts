@@ -22,10 +22,7 @@
  */
 import { EventEmitter } from "node:events";
 
-import type { AppNotice, ServerEvent, Topic } from "@quiz/contracts";
-
-/** Real-time notification attached to an event (toast in the UI). */
-export type { AppNotice };
+import type { ServerEvent, Topic } from "@quiz/contracts";
 
 /** Refresh-hint families the client knows how to react to. */
 export type EventType =
@@ -49,7 +46,6 @@ export type { Topic };
 interface AppEvent {
   type: EventType;
   topics: Topic[];
-  notice?: AppNotice;
   /** A user whose streams skip this hint: the one whose action raised it. */
   except?: string;
 }
@@ -72,14 +68,9 @@ const bus = new EventEmitter();
 bus.setMaxListeners(0); // one SSE connection per tab
 
 /** A refresh hint: no data, just "something in these families changed". */
-export function publish(
-  type: EventType,
-  topics: Topic[],
-  notice?: AppNotice,
-  except?: string,
-) {
+export function publish(type: EventType, topics: Topic[], except?: string) {
   if (topics.length === 0) return;
-  const event: AppEvent = { type, topics, ...(notice && { notice }), ...(except && { except }) };
+  const event: AppEvent = { type, topics, ...(except && { except }) };
   bus.emit("event", { kind: "hint", ...event } satisfies BusMessage);
 }
 

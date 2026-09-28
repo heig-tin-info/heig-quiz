@@ -1,0 +1,5 @@
+ALTER TABLE "notifications" ADD COLUMN "classroom_id" uuid;--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_classroom_id_classrooms_id_fk" FOREIGN KEY ("classroom_id") REFERENCES "public"."classrooms"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "notifications_classroom_idx" ON "notifications" USING btree ("classroom_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "notifications_student_joined_fold_uq" ON "notifications" USING btree ("user_id","classroom_id") WHERE "notifications"."payload"->>'kind' = 'student_joined' and "notifications"."read_at" is null;--> statement-breakpoint
+CREATE UNIQUE INDEX "notifications_roster_conflict_fold_uq" ON "notifications" USING btree ("user_id","classroom_id") WHERE "notifications"."payload"->>'kind' = 'roster_conflict' and "notifications"."read_at" is null;

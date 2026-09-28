@@ -7,6 +7,7 @@ import { escapeHtml, mailLocale, notificationPath, renderNotification } from "./
 const POOL = "11111111-1111-4111-8111-111111111111";
 const EVAL = "22222222-2222-4222-8222-222222222222";
 const ATTEMPT = "33333333-3333-4333-8333-333333333333";
+const CLASSROOM = "44444444-4444-4444-8444-444444444444";
 
 const shared: NotificationPayload = {
   kind: "pool_shared",
@@ -47,7 +48,14 @@ describe("renderNotification", () => {
       poolName: "Électronique",
       fromName: "Grace Hopper",
     };
-    for (const payload of [shared, released, ownership]) {
+    const joined: NotificationPayload = {
+      kind: "student_joined",
+      classroomId: CLASSROOM,
+      classroomName: "PRG1-2026",
+      count: 3,
+    };
+    const conflict: NotificationPayload = { ...joined, kind: "roster_conflict", count: 1 };
+    for (const payload of [shared, released, ownership, joined, conflict, { ...joined, count: 1 }]) {
       for (const locale of ["en", "fr"] as const) {
         const out = renderNotification(payload, locale, "https://quiz.test");
         for (const part of [out.subject, out.text, out.html, out.preview]) {
@@ -56,6 +64,24 @@ describe("renderNotification", () => {
         }
       }
     }
+  });
+
+  it("counts a folded kind, with a singular sentence of its own, and names no student", () => {
+    const joined = { kind: "student_joined", classroomId: CLASSROOM, classroomName: "PRG1-2026" } as const;
+    expect(renderNotification({ ...joined, count: 3 }, "en", "https://quiz.test").subject).toBe(
+      "3 students joined PRG1-2026",
+    );
+    expect(renderNotification({ ...joined, count: 1 }, "fr", "https://quiz.test").subject).toBe(
+      "Un étudiant a rejoint PRG1-2026",
+    );
+    const conflict = renderNotification(
+      { ...joined, kind: "roster_conflict", count: 2 },
+      "fr",
+      "https://quiz.test",
+    );
+    expect(conflict.subject).toBe("2 entrées de la liste de PRG1-2026 demandent votre décision");
+    expect(conflict.text).toContain(`https://quiz.test/classrooms/${CLASSROOM}?tab=roster`);
+    expect(conflict.topic).toBe("PRG1-2026");
   });
 
   it("escapes every user-provided value in the HTML parts", () => {

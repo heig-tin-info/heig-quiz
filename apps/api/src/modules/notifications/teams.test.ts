@@ -111,11 +111,14 @@ describe("the Graph client", () => {
     );
   });
 
-  it("marks 403 and 404 permanent, with Graph's error code, anything else retryable", async () => {
+  it("marks 400, 403 and 404 permanent, with Graph's error code, anything else retryable", async () => {
     for (const [status, permanent] of [
       [403, true],
       [404, true],
-      [400, false],
+      // An activity type the user's installed manifest (2.0.0) does not
+      // declare: five retries would meet the same answer (#198).
+      [400, true],
+      [401, false],
       [429, false],
       [500, false],
     ] as const) {
