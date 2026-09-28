@@ -55,14 +55,14 @@ export function useCourseTemplates(courseId: string | null) {
 }
 
 /** The names of the items a refusal or a warning is about, in order. */
-const itemNames = (items: readonly TemplateItemRef[]) =>
+export const itemNames = (items: readonly TemplateItemRef[]) =>
   items.map((i) => i.internalName).join(", ");
 
 /**
  * What a copy refused for its unlinked pools says (`422 template_pool_unlinked`),
  * translated from its machine half — an "Instantiate" or a "Duplicate".
  */
-function instantiateError(error: unknown, t: TFunction): string | null {
+export function instantiateError(error: unknown, t: TFunction): string | null {
   if (!(error instanceof ApiError)) return null;
   const parsed = TemplatePoolUnlinked.safeParse(error.body);
   return parsed.success ? t("templates.unlinked", { names: itemNames(parsed.data.items) }) : null;

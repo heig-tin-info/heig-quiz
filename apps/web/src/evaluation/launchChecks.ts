@@ -9,8 +9,8 @@
  *     a client-side refusal the server does not share is a lie in one
  *     direction or the other.
  *   - `warning`: legal, but probably not meant, and each one has a fix: stale
- *     question versions, an empty roster, roster conflicts, a common end
- *     already past.
+ *     question versions, a template that moved since (F-EVAL-26), an empty
+ *     roster, roster conflicts, a common end already past.
  *   - `ok`: a check that passed, said as a summary line.
  *   - `info`: a rule of the session that is never wrong in itself (feedback,
  *     navigation, access). Unlinked accounts are info too: before the first
@@ -22,7 +22,7 @@ import {
   safeExamBrowserOf,
   type EvaluationDetail,
 } from "@quiz/contracts";
-import { negativeMarkingOn, retakesOn, safeExamBrowserOn } from "@quiz/domain";
+import { negativeMarkingOn, retakesOn, safeExamBrowserOn, templatePullable } from "@quiz/domain";
 
 import type { Dict, TFunction } from "../i18n";
 import { typeLabel } from "../questionTypes";
@@ -35,10 +35,11 @@ export type CheckLevel = "blocker" | "warning" | "ok" | "info";
 export type CheckFix =
   | { kind: "step"; step: "questions" | "timing" }
   | { kind: "roster" }
-  | { kind: "updateVersions" };
+  | { kind: "updateVersions" }
+  | { kind: "pullTemplate" };
 
 export interface LaunchCheck {
-  id: "items" | "stale" | "roster" | "conflicts" | "timing" | "feedback" | "rules" | "access";
+  id: "items" | "stale" | "template" | "roster" | "conflicts" | "timing" | "feedback" | "rules" | "access";
   level: CheckLevel;
   title: string;
   detail: string;
@@ -82,6 +83,32 @@ function itemsCheck(detail: EvaluationDetail, t: TFunction): LaunchCheck {
     detail: typeMix(detail, t),
     fix: { kind: "step", step: "questions" },
   };
+}
+
+/**
+ * The template moved since this evaluation's questions were copied from it
+ * (F-EVAL-26): a warning whose fix is the pull, offered exactly where the
+ * server accepts one — the item list still editable, the template still the
+ * course's.
+ */
+function templateChecks(detail: EvaluationDetail, t: TFunction): LaunchCheck[] {
+  const { evaluation } = detail;
+  const standing = {
+    originRevision: evaluation.originRevision,
+    templateRevision: detail.templateRevision,
+    state: evaluation.state,
+    attemptCount: detail.attemptCount,
+  };
+  if (!templatePullable(standing)) return [];
+  return [
+    {
+      id: "template",
+      level: "warning",
+      title: t("launch.template", { from: standing.originRevision!, to: standing.templateRevision! }),
+      detail: t("launch.template.detail"),
+      fix: { kind: "pullTemplate" },
+    },
+  ];
 }
 
 function rosterChecks(detail: EvaluationDetail, t: TFunction): LaunchCheck[] {
@@ -239,6 +266,7 @@ export function launchChecks(
           } satisfies LaunchCheck,
         ]
       : []),
+    ...templateChecks(detail, t),
     ...rosterChecks(detail, t),
     timingCheck(detail, t, now, formatDate),
     {

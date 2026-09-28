@@ -52,6 +52,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ],
     ["evaluationsKey", keys.evaluationsKey("r1"), ["evaluations", "r1"]],
     ["evaluationKey", keys.evaluationKey("e1"), ["evaluation", "e1"]],
+    ["templatePullKey", keys.templatePullKey("e1"), ["evaluation", "e1", "pull-template"]],
     ["templateKey", keys.templateKey("t1"), ["template", "t1"]],
     [
       "itemPreviewKey",
@@ -154,6 +155,7 @@ describe("queryKeys — the prefixes invalidations rely on", () => {
       keys.questionKey("q1"),
       keys.questionPreviewKey("q1", "draft"),
     ],
+    ["evaluationKey ⊂ templatePullKey", keys.evaluationKey("e1"), keys.templatePullKey("e1")],
     [
       "evaluationKey ⊂ itemPreviewKey",
       keys.evaluationKey("e1"),

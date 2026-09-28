@@ -26,6 +26,7 @@ export * from "./roster.js";
 export * from "./round.js";
 export * from "./short.js";
 export * from "./stats.js";
+export * from "./templatePull.js";
 
 /**
  * The seeded shuffle lives in `@quiz/core/rng` (the question types need it

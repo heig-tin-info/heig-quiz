@@ -29,6 +29,8 @@ function summary(over: Partial<EvaluationSummary> = {}): EvaluationSummary {
     opensAt: null,
     closesAt: null,
     createdAt: liveAt(-3600_000),
+    originRevision: null,
+    templateRevision: null,
     ...over,
   };
 }
@@ -236,6 +238,110 @@ describe("EvaluationList", () => {
       await waitFor(() => expect(navigate).toHaveBeenCalledWith({ view: "evaluation", id: created }));
       const post = calls.find((c) => c.method === "POST");
       expect(post?.body).toEqual({ classroomId: CLASSROOM, title: "Final exam" });
+    });
+  });
+
+  // F-EVAL-26: the badge is the pull's door, shown only where the pull is accepted.
+  describe("behind its template", () => {
+    const BEHIND = { originRevision: 1, templateRevision: 3 };
+    const PULL = `/app/api/evaluations/${EVALUATION_ID}/pull-template`;
+    const item = (position: number, name: string, extra: Record<string, unknown> = {}) => ({
+      position,
+      questionId: id("question", position),
+      internalName: name,
+      versionNumber: 1,
+      points: 2,
+      milestone: false,
+      ...extra,
+    });
+    const preview = {
+      templateId: id("template", 1),
+      templateTitle: "Final exam",
+      from: 1,
+      to: 3,
+      added: [item(3, "loops")],
+      removed: [item(4, "local-extra")],
+      changed: [{ from: item(0, "sizeof-ptr"), to: item(0, "sizeof-ptr", { points: 3, versionNumber: 2 }) }],
+      reordered: true,
+      deprecatedItems: [],
+      unlinkedItems: [],
+    };
+
+    it("shows the badge only on a pullable row that is behind", async () => {
+      mockFetch(
+        list([
+          summary({ title: "Behind draft", ...BEHIND }),
+          summary({ id: id("evaluation", 2), title: "Up to date", originRevision: 3, templateRevision: 3 }),
+          summary({ id: id("evaluation", 3), title: "Behind but taken", attemptCount: 1, ...BEHIND }),
+          summary({ id: id("evaluation", 4), title: "Behind but open", state: "lobby", ...BEHIND }),
+          summary({ id: id("evaluation", 5), title: "Scheduled behind", state: "scheduled", ...BEHIND }),
+        ]),
+      );
+      renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} />);
+      await screen.findByText("Behind draft");
+      const badges = screen.getAllByRole("button", { name: /from its template/i });
+      expect(badges.map((b) => b.getAttribute("aria-label"))).toEqual([
+        "Update “Behind draft” from its template (rev. 1 → 3)",
+        "Update “Scheduled behind” from its template (rev. 1 → 3)",
+      ]);
+      expect(badges[0]).toHaveTextContent("template rev. 1 → 3");
+    });
+
+    it("confirms with the two-way summary, pulls, and loses the badge", async () => {
+      const user = userEvent.setup();
+      const navigate = vi.fn();
+      let pulled = false;
+      const { calls } = mockFetch({
+        [`GET /app/api/classrooms/${CLASSROOM}/evaluations`]: () =>
+          ok([summary({ title: "Behind draft", ...BEHIND, ...(pulled ? { originRevision: 3 } : {}) })]),
+        [`GET ${PULL}`]: ok(preview),
+        [`POST ${PULL}`]: () => {
+          pulled = true;
+          return ok({ detail: {}, deprecatedItems: [] });
+        },
+      });
+      renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={navigate} />);
+
+      await user.click(await screen.findByRole("button", { name: /from its template/i }));
+      // The badge opens the confirmation, not the evaluation.
+      expect(navigate).not.toHaveBeenCalled();
+      const dialog = await screen.findByRole("dialog");
+      expect(within(dialog).getByText("rev. 1 → 3")).toBeInTheDocument();
+      expect(within(dialog).getByText("Added (1): loops")).toBeInTheDocument();
+      expect(within(dialog).getByText("Removed (1): local-extra")).toBeInTheDocument();
+      expect(within(dialog).getByText("Changed (1): sizeof-ptr (v1 → v2, 2 → 3 pts)")).toBeInTheDocument();
+      expect(within(dialog).getByText(/order of the questions changes/i)).toBeInTheDocument();
+      expect(within(dialog).getByText(/are replaced/i)).toBeInTheDocument();
+
+      await user.click(within(dialog).getByRole("button", { name: "Replace questions" }));
+      await waitFor(() =>
+        expect(calls.find((c) => c.method === "POST")).toMatchObject({ url: PULL, body: { revision: 3 } }),
+      );
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      await waitFor(() =>
+        expect(screen.queryByRole("button", { name: /from its template/i })).not.toBeInTheDocument(),
+      );
+    });
+
+    it("says only the revision is recorded when no question differs, and refuses an unlinked pool", async () => {
+      const user = userEvent.setup();
+      mockFetch({
+        ...list([summary({ title: "Behind draft", ...BEHIND })]),
+        [`GET ${PULL}`]: ok({
+          ...preview,
+          added: [],
+          removed: [],
+          changed: [],
+          reordered: false,
+          unlinkedItems: [{ position: 0, questionId: id("question", 0), internalName: "sizeof-ptr" }],
+        }),
+      });
+      renderWithProviders(<EvaluationList classroomId={CLASSROOM} navigate={vi.fn()} />);
+      await user.click(await screen.findByRole("button", { name: /from its template/i }));
+      const dialog = await screen.findByRole("dialog");
+      expect(await within(dialog).findByText(/only the new revision is recorded/i)).toBeInTheDocument();
+      expect(within(dialog).getByText(/no longer linked to the course: sizeof-ptr/i)).toBeInTheDocument();
+      expect(within(dialog).getByRole("button", { name: "Record revision" })).toBeDisabled();
     });
   });
 });

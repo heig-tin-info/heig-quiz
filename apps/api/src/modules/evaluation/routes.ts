@@ -26,10 +26,12 @@ import {
   TemplateInstantiate,
   TemplateNew,
   TemplatePatch,
+  TemplatePull,
   UpdateVersions,
   type EvaluationDetail,
   type TemplateDetail,
   type TemplateInstance,
+  type TemplatePullResult,
 } from "@quiz/contracts";
 
 import { tracer, type AuditAction } from "../../audit.js";
@@ -549,6 +551,49 @@ export async function evaluationPlugin(app: FastifyInstance) {
           deprecatedItems: made.deprecatedItems,
         };
         return reply.code(201).send(answer);
+      },
+    ),
+  );
+
+  // --- Pulling a template revision into an instance (F-EVAL-26) -------------
+  //
+  // On the EVALUATION, loaded by `loadEvaluation` (staff of the classroom's
+  // course, invariant 6); the template is read by the service only as a
+  // template of that same course. A template id here is a 404: the loader's
+  // classroom join cannot find one.
+
+  /** The confirmation's two-way summary: what the pull would change in the questions. */
+  app.get(
+    "/app/api/evaluations/:id/pull-template",
+    { preHandler: requireTeacher },
+    teacher({ params: IdParam, load: staffEvaluation }, ({ scope }) =>
+      templates.templatePullPreview(app.db, scope.evaluation, scope.classroom.courseId),
+    ),
+  );
+
+  app.post(
+    "/app/api/evaluations/:id/pull-template",
+    { preHandler: requireTeacher },
+    teacher(
+      { params: IdParam, body: TemplatePull, load: staffEvaluation },
+      async ({ req, body, scope }) => {
+        const pulled = await templates.pullTemplate(app.db, scope.evaluation, {
+          courseId: scope.classroom.courseId,
+          revision: body.revision,
+        });
+        await trace(req, "template.pull", "evaluation", scope.evaluation.id, {
+          templateId: pulled.templateId,
+          from: pulled.from,
+          to: pulled.to,
+        });
+        // A change of the evaluation's content, like any item write: open
+        // editors and dashboards refetch.
+        evaluationChanged(scope.classroom.id, scope.evaluation.id);
+        const answer: TemplatePullResult = {
+          detail: await detail(req, pulled.row),
+          deprecatedItems: pulled.deprecatedItems,
+        };
+        return answer;
       },
     ),
   );

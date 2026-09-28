@@ -159,6 +159,7 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
       releasedAt: null,
       modifiedAfterRelease: false,
       createdAt: "2026-09-01T08:00:00.000Z",
+      originRevision: null,
     },
     items: [
       {
@@ -195,6 +196,7 @@ export function makeEvaluationDetail(over: Partial<EvaluationDetail> = {}): Eval
     self: { seat: false, staffSeat: false, attemptId: null },
     editableQuestionIds: ["q1", "q2"],
     roster: { enrolled: 24, unlinked: 0, conflicts: 0 },
+    templateRevision: null,
     ...over,
   };
 }

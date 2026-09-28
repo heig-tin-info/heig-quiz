@@ -328,7 +328,11 @@ live in `ui/state.ts`, each written once.
   primary-styled elsewhere). Sizes `sm` 28 px, `md` 34 px, `lg` 40 px.
 - Icon button: round, ghost; `danger` turns red on hover only.
 - Badge: pill, soft background, 12 px, tones green / amber / red / zinc /
-  accent. Status is a badge; a count is plain text.
+  accent. Status is a badge; a count is plain text. A badge that is also the door to
+  its own fix — "template rev. 1 → 3" on a classroom's evaluation row
+  (F-EVAL-26) — is the same badge wrapped in a `button` with an accessible
+  name that says the action; it stops the row's click, and it is shown only
+  where the fix would be accepted.
 - Card: `surface` + hairline + 16 px radius; padding 16–20.
 - NotePanel: a note set INSIDE a card — an explanation, a teacher's comment,
   a reference solution — as a 12 px uppercase semibold eyebrow in `fg-faint`
@@ -1050,7 +1054,9 @@ waiting room — and "Schedule…" is its only secondary.
   the accent stays on the button.
 - A row that leads somewhere is a button across its width: the name of the
   step it opens, underlined, on a desktop; a chevron on a phone. A fix done in
-  place (updating stale versions) is a real secondary `sm` button instead.
+  place (updating stale versions) is a real secondary `sm` button instead, and
+  so is a fix that needs a confirmation first (pulling a template revision,
+  F-EVAL-26): its label ends in "…", and the button opens the dialog.
 - The action bar is a card in the flow on a desktop and a **sticky dock** on a
   phone (`sticky bottom-0`, a hairline over it, full bleed): one status line,
   then the primary at full width with the secondary as a 40 px round button

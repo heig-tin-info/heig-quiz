@@ -31,10 +31,11 @@
  *     `configLock`).
  */
 export type { EvaluationRecord, DbOrTx } from "./shared.js";
-export { EvaluationError, IllegalTransition, Locked } from "./shared.js";
+export { EvaluationError, IllegalTransition, Locked, assertItemListEditable } from "./shared.js";
 export {
   isLegalTransition,
   guardTransition,
+  assertReady,
   tryApplyState,
   applyState,
   transition,
@@ -50,6 +51,7 @@ export {
   feedbackOf,
   scaleOf,
   toEvaluation,
+  templateRevisionsOf,
   gradeDefaults,
   negativeMarkingEnabled,
   sebRequired,
@@ -94,5 +96,10 @@ export {
   reorderItems,
   updateVersions,
   itemRef,
+  deprecatedRefs,
+  unlinkedRefs,
+  assertPoolsLinked,
+  replaceItems,
+  copyItems,
   copyEvaluation,
 } from "./items.js";

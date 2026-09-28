@@ -94,6 +94,7 @@ export type AuditAction =
   | "template.create"
   | "template.delete"
   | "template.instantiate"
+  | "template.pull"
   | "template.update"
   | "teams.link"
   | "teams.unlink"

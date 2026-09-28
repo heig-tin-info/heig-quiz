@@ -41,6 +41,8 @@ const summary = (over: Partial<EvaluationSummary>): EvaluationSummary => ({
   opensAt: null,
   closesAt: null,
   createdAt: new Date(0).toISOString(),
+  originRevision: null,
+  templateRevision: null,
   ...over,
 });
 

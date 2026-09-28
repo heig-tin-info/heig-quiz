@@ -69,6 +69,42 @@ describe("LaunchStep checklist (#152)", () => {
     );
   });
 
+  // F-EVAL-26: a template that moved is a warning, and its fix is the pull.
+  it("warns that the template moved, and opens the pull's confirmation", async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      [`GET ${BASE}/pull-template`]: ok({
+        templateId: "t1",
+        templateTitle: "Final exam",
+        from: 1,
+        to: 2,
+        added: [],
+        removed: [],
+        changed: [],
+        reordered: false,
+        deprecatedItems: [],
+        unlinkedItems: [],
+      }),
+    });
+    render(withEvaluation({ originRevision: 1 }, { templateRevision: 2 }));
+    expect(screen.getByRole("heading", { name: /1 thing to look at/i })).toBeInTheDocument();
+    expect(screen.getByText("The template has a newer revision (rev. 1 → 2)")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /update…/i }));
+    const dialog = await screen.findByRole("dialog");
+    expect(await within(dialog).findByText(/only the new revision is recorded/i)).toBeInTheDocument();
+  });
+
+  it("offers no pull once an attempt exists, nor without a template", () => {
+    mockFetch({});
+    const { unmount } = render(
+      withEvaluation({ originRevision: 1 }, { templateRevision: 2, attemptCount: 1 }),
+    );
+    expect(screen.queryByText(/newer revision/i)).not.toBeInTheDocument();
+    unmount();
+    render(withEvaluation({ originRevision: 1 }, { templateRevision: null }));
+    expect(screen.queryByText(/newer revision/i)).not.toBeInTheDocument();
+  });
+
   it("names negative marking and SEB only in the modes the server honours them", () => {
     mockFetch({});
     const settings = {

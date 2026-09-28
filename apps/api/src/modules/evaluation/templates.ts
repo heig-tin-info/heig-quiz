@@ -6,7 +6,8 @@
  * table, the same items, the same copy ({@link copyEvaluation}) — so this
  * file holds only what is proper to a template: creating or saving one,
  * listing a course's, editing one in place under its revision counter,
- * deleting one, and instantiating one into a classroom. The routes
+ * deleting one, instantiating one into a classroom, and pulling a newer
+ * revision into an instance (F-EVAL-26). The routes
  * import it directly; `service.ts` does not re-export it, which keeps the
  * import one-way (this file needs `service.ts` at load time for its errors).
  */
@@ -19,16 +20,25 @@ import type {
   EvaluationTemplate,
   TemplateDetail,
   TemplateItemRef,
+  TemplatePullItem,
+  TemplatePullPreview,
 } from "@quiz/contracts";
+import { itemListDiff } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { evaluationItems, evaluations } from "../../db/schema.js";
 import {
   EvaluationError,
+  assertItemListEditable,
+  assertPoolsLinked,
+  assertReady,
+  attemptCount,
   byId,
+  classroomIdOf,
   copyEvaluation,
   coursePoolIds,
   createEvaluation,
+  deprecatedRefs,
   editableQuestionIdsOf,
   feedbackOf,
   itemCountsByEvaluation,
@@ -36,13 +46,16 @@ import {
   itemRef,
   itemRowsOf,
   joinedItems,
+  replaceItems,
   scaleOf,
   settingsOf,
   staleOf,
   totalPointsByEvaluation,
   totalPointsOf,
+  unlinkedRefs,
   type DbOrTx,
   type EvaluationRecord,
+  type JoinedItem,
 } from "./service.js";
 
 /** A poll is created and started in one call; it has nothing to keep (ADR-031 §2). */
@@ -286,11 +299,153 @@ export async function instantiateTemplate(
       title: input.title,
       createdBy: input.createdBy,
     });
+    return { evaluation, deprecatedItems: deprecatedRefs(await joinedItems(tx, locked.id)) };
+  });
+}
+
+// --- Pulling a revision into an instance (F-EVAL-26) -------------------------
+
+/**
+ * The instance has no template to pull from: none was recorded, it was
+ * deleted (the FK nulled the origin), or the row it names is not a template
+ * of the instance's own course. The evaluation exists — the loader found it —
+ * so this is a conflict of its state, not a 404.
+ */
+class NoTemplate extends EvaluationError {
+  constructor() {
+    super("no_template", 409, "the evaluation has no template to pull from");
+  }
+}
+
+/** The template moved again since the preview the teacher confirmed. */
+class TemplateMoved extends EvaluationError {
+  constructor(revision: number) {
+    super("template_moved", 409, "the template has a newer revision than the one confirmed", {
+      revision,
+    });
+  }
+}
+
+/**
+ * The template of an instance's origin, provided it is a template of
+ * `courseId` — the instance's classroom's course, as the route loaded it
+ * (defence in depth: a template of another course is no template). With
+ * `share`, the row is locked `FOR SHARE` for the rest of the transaction.
+ * The same same-course rule as `templateRevisionsOf` (`service.ts`), which
+ * the badge reads: a change to it changes both.
+ */
+async function originTemplate(
+  db: DbOrTx,
+  row: EvaluationRecord,
+  courseId: string,
+  lock?: "share",
+): Promise<EvaluationRecord> {
+  if (row.originTemplateId === null) throw new NoTemplate();
+  const query = db
+    .select()
+    .from(evaluations)
+    .where(and(eq(evaluations.id, row.originTemplateId), eq(evaluations.courseId, courseId)));
+  const [template] = lock === "share" ? await query.for("share") : await query;
+  if (!template || template.revision === null) throw new NoTemplate();
+  return template;
+}
+
+/** An item as the summary of a pull names it. */
+const pullItem = (j: JoinedItem): TemplatePullItem => ({
+  ...itemRef(j),
+  versionNumber: j.version.number ?? 0,
+  points: j.item.points,
+  milestone: j.item.milestone,
+});
+
+/**
+ * What pulling the template's current revision would do to the instance's
+ * questions — the confirmation's two-way summary — and what would refuse it
+ * (`unlinkedItems`) or only warn (`deprecatedItems`). A read: no lock, and
+ * no gate on the state, which the pull itself checks.
+ */
+export async function templatePullPreview(
+  db: Db,
+  row: EvaluationRecord,
+  courseId: string,
+): Promise<TemplatePullPreview> {
+  const template = await originTemplate(db, row, courseId);
+  const [mine, theirs, linked] = await Promise.all([
+    joinedItems(db, row.id),
+    joinedItems(db, template.id),
+    coursePoolIds(db, { classroomId: classroomIdOf(row) }),
+  ]);
+  return {
+    templateId: template.id,
+    templateTitle: template.title,
+    from: row.originRevision,
+    to: template.revision!,
+    ...itemListDiff(mine.map(pullItem), theirs.map(pullItem)),
+    deprecatedItems: deprecatedRefs(theirs),
+    unlinkedItems: unlinkedRefs(theirs, linked),
+  };
+}
+
+/**
+ * "Pull": the instance's QUESTIONS replaced by the template's current ones —
+ * frozen versions, points, order, milestones — and `origin_revision` moved to
+ * the revision copied. Nothing else of the instance changes: title, dates,
+ * access code, IP list, settings, scale, policies, duration and state stay
+ * (F-EVAL-26), so a template that moved only in its settings is pulled as a
+ * bare record of the revision.
+ *
+ * One transaction, and the locks in the order every other writer takes
+ * them — the TEMPLATE first (`FOR SHARE`: an edit or a delete of it waits),
+ * THEN the instance (`FOR UPDATE`: the ticker's `scheduled → lobby` waits) —
+ * which is the order `deleteTemplate` takes too (the template's row, then its
+ * instances' through the FK), so the two never deadlock. Everything the gate
+ * reads is re-read under the instance's lock: the origin (a delete may have
+ * nulled it), the state and the attempts. Replacing the items gives them new
+ * ids, and answers and gradings hang on an item id by cascade: a pull past
+ * the gate would silently delete a student's work.
+ */
+export async function pullTemplate(
+  db: Db,
+  row: EvaluationRecord,
+  input: { courseId: string; revision: number },
+): Promise<{
+  row: EvaluationRecord;
+  templateId: string;
+  from: number | null;
+  to: number;
+  deprecatedItems: TemplateItemRef[];
+}> {
+  return db.transaction(async (tx) => {
+    const template = await originTemplate(tx, row, input.courseId, "share");
+    const [locked] = await tx
+      .select()
+      .from(evaluations)
+      .where(eq(evaluations.id, row.id))
+      .for("update");
+    // The evaluation went since its load: the loader's 404 all the same.
+    if (!locked) throw new TemplateGone();
+    if (locked.originTemplateId !== template.id) throw new NoTemplate();
+    if (template.revision !== input.revision) throw new TemplateMoved(template.revision!);
+    // The item-list gate itself (issue #79): draft or scheduled, no attempt
+    // of anybody — a teacher's own test walk included (ADR-018).
+    assertItemListEditable(locked, { attemptCount: await attemptCount(tx, locked.id) });
+    const theirs = await joinedItems(tx, template.id);
+    await assertPoolsLinked(tx, { classroomId: classroomIdOf(locked) }, theirs);
+    // A scheduled evaluation stays scheduled: what it now holds must still
+    // pass the move to `scheduled` (no question is `no_items`). The timing is
+    // the instance's own and is not touched.
+    if (locked.state === "scheduled") assertReady(locked, "scheduled", theirs.length);
+    await replaceItems(tx, locked.id, theirs.map((j) => j.item));
+    await tx
+      .update(evaluations)
+      .set({ originRevision: template.revision, updatedAt: new Date() })
+      .where(eq(evaluations.id, locked.id));
     return {
-      evaluation,
-      deprecatedItems: (await joinedItems(tx, locked.id))
-        .filter((j) => j.version.deprecatedAt !== null)
-        .map(itemRef),
+      row: (await byId(tx, locked.id))!,
+      templateId: template.id,
+      from: locked.originRevision,
+      to: template.revision!,
+      deprecatedItems: deprecatedRefs(theirs),
     };
   });
 }

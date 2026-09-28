@@ -178,6 +178,7 @@ export function makeEvaluationDetail(overrides: Partial<EvaluationDetail> = {}):
       releasedAt: null,
       modifiedAfterRelease: false,
       createdAt: liveAt(-HOUR),
+      originRevision: null,
       ...overrides.evaluation,
     },
     items,
@@ -188,6 +189,7 @@ export function makeEvaluationDetail(overrides: Partial<EvaluationDetail> = {}):
     self: { seat: false, staffSeat: false, attemptId: null },
     editableQuestionIds: items.map((i) => i.questionId),
     roster: { enrolled: 24, unlinked: 2, conflicts: 0 },
+    templateRevision: null,
     ...overrides,
   };
 }
