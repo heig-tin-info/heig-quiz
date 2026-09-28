@@ -1,5 +1,20 @@
 # PLAN-MVP — Phase 1 implementation plan
 
+!!! warning "Archived — phase 1 complete"
+
+    This plan drove the phase-1 build (2026-09-20 → 2026-09-22) and is kept
+    unchanged because source comments cite its sections ("PLAN-MVP §x.y").
+    **The decisions D1–D20 of §9 remain authoritative** (except D18, rejected
+    by the supervisor override below, and D7, superseded when polls shipped —
+    ADR-014). Everything else is history: the current state of the code is in
+    `CLAUDE.md`, `docs/spec/` and the ADRs.
+
+    In particular §0 "MVP scope lock" is no longer accurate. Several items it
+    lists as out of the MVP have since shipped: live polls (ADR-014), shared
+    pools (ADR-013), several attempts on an exercise (ADR-025), API tokens and
+    the MCP server (ADR-022, ADR-023), and three more question types (`circuit`,
+    ADR-019; `codeimage`, ADR-021; beside `mcq`, `short`, `cloze`, `code`).
+
 Authored by the planning agent on 2026-09-20 from `docs/spec/*`, reviewed by the supervising session.
 
 **Supervisor overrides (binding):**

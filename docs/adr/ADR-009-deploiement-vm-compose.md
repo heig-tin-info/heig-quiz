@@ -2,7 +2,16 @@
 
 ## Status
 
-Accepted (2026-07-03, phase 3).
+Accepted (2026-07-03, phase 3). **Amended by ADR-016** (the runner is not in
+the application's compose file), **and ADR-028** (a staging environment on the
+same VM, promotion by sha); **host moved to Hetzner on 2026-09-25**
+(`docs/development/deployment.md` is the current runbook: Caddy runs natively
+on the host, backups are Hetzner Backups plus an on-VM `pg_dump`).
+
+ADR-011 of heig-classroom (its reconciliation handlers, which the restore
+runbook below cites) is deliberately not carried over: quiz has no GitHub
+webhooks to reconcile. The GitHub-specific metrics of decision 4 do not apply
+either.
 
 ## Context
 

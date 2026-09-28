@@ -10,9 +10,9 @@ Copyright &copy; 2026 HEIG-VD, TIN department
 
 # Everything on the site is in English (CLAUDE.md, invariant 1): the product
 # specification was translated from its French original and lives under
-# Development, next to the decision records and the plan. The Guide is the
-# user documentation of the platform; its screenshots come in a light and a
-# dark variant (docs/development/screenshots.md).
+# Development, next to the decision records and the archived MVP plan. The
+# Guide is the user documentation of the platform; its screenshots come in a
+# light and a dark variant (docs/development/screenshots.md).
 nav = [
   { "Home" = "index.md" },
   { "Guide" = [
@@ -64,24 +64,25 @@ nav = [
       { "ADR-014 Live polls" = "adr/ADR-014-sondages-en-direct.md" },
       { "ADR-015 Browser run, server grade" = "adr/ADR-015-execution-navigateur-correction-serveur.md" },
       { "ADR-016 Runner on a separate VM" = "adr/ADR-016-runner-sur-vm-separee.md" },
+      { "ADR-017 Moving a question" = "adr/ADR-017-deplacement-de-question.md" },
+      { "ADR-018 The real student view" = "adr/ADR-018-vue-etudiant-reelle.md" },
+      { "ADR-019 Circuit graded by simulation" = "adr/ADR-019-simulation-de-circuit.md" },
+      { "ADR-020 Presence and live verdicts" = "adr/ADR-020-presence-et-verdicts-en-direct.md" },
       { "ADR-021 Code image, a variant of code" = "adr/ADR-021-codeimage-variante-de-code.md" },
       { "ADR-022 API tokens and the MCP server" = "adr/ADR-022-jetons-api-et-serveur-mcp.md" },
       { "ADR-023 OAuth server for MCP" = "adr/ADR-023-serveur-oauth-pour-mcp.md" },
+      { "ADR-024 Locked editor, student tools" = "adr/ADR-024-editeur-verrouille-et-outils-etudiant.md" },
+      { "ADR-025 Several attempts on an exercise" = "adr/ADR-025-plusieurs-tentatives-exercice.md" },
+      { "ADR-026 Negative marking" = "adr/ADR-026-points-negatifs-par-evaluation.md" },
+      { "ADR-027 Launch tickets, typed sessions" = "adr/ADR-027-tickets-de-lancement-et-sessions-typees.md" },
+      { "ADR-028 Staging on the same VM" = "adr/ADR-028-recette-sur-la-meme-vm.md" },
+      { "ADR-029 Shared UI library" = "adr/ADR-029-bibliotheque-ui-commune.md" },
       { "ADR-030 Notification channels" = "adr/ADR-030-canaux-de-notification.md" },
+      { "ADR-031 Evaluation templates" = "adr/ADR-031-modeles-d-evaluation.md" },
+      { "ADR-032 Per-user course preferences" = "adr/ADR-032-preferences-de-cours-par-utilisateur.md" },
     ] },
-    { "MVP plan" = "PLAN-MVP.md" },
-    { "API review (2026-09-20)" = "API-REVIEW-2026-09-20.md" },
-    { "Code audit (2026-09-22)" = [
-      { "Synthesis and refactoring plan" = "CODE-AUDIT-2026-09-22.md" },
-      { "Backend" = "audit-2026-09-22/backend.md" },
-      { "Frontend core" = "audit-2026-09-22/frontend-core.md" },
-      { "Frontend feature screens" = "audit-2026-09-22/frontend-features.md" },
-      { "Runner" = "audit-2026-09-22/runner.md" },
-      { "Shared packages" = "audit-2026-09-22/packages.md" },
-      { "Database" = "audit-2026-09-22/database.md" },
-      { "Metrics: complexity" = "audit-2026-09-22/metrics-complexity.md" },
-      { "Metrics: clones" = "audit-2026-09-22/metrics-clones.md" },
-      { "Metrics: unused exports" = "audit-2026-09-22/metrics-knip.md" },
+    { "Archive" = [
+      { "MVP plan (phase 1)" = "PLAN-MVP.md" },
     ] },
   ] },
 ]

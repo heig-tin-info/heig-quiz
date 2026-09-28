@@ -7,7 +7,8 @@ same day by the two addenda at the end of this record: the first moves the
 switch into the application frame and makes it per WINDOW, the second removes
 the evaluation page's own button (and the read-only preview beside it) and
 makes the heading rename itself. Decisions 1 and 2 below are the ones they
-touch.
+touch. Decision 4 is further amended by ADR-020 (presence counts a body in
+the room).
 
 ## Context
 

@@ -2,7 +2,13 @@
 
 ## Status
 
-Accepted (2026-07-03, phase 3). Confirmation measurements expected from spike S3 (before M4,
+**Not applicable to quiz — see ADR-016 and `apps/runner`.** This record is
+inherited from heig-classroom, where grading runs on GitHub Actions. Quiz has
+no GitHub Actions grading: code is executed by its own runner service
+(`apps/runner`, hardened Podman containers), deployed as ADR-016 describes.
+Kept for the history of the inherited decisions.
+
+Original status in heig-classroom: accepted (2026-07-03, phase 3). Confirmation measurements expected from spike S3 (before M4,
 GH-44.3).
 
 ## Context

@@ -2,7 +2,14 @@
 
 ## Status
 
-Accepted (2026-07-03, phase 3).
+Accepted (2026-07-03, phase 3). **Amended for quiz:** the principle (secrets in
+the environment, never in the repository, an image or the database; no secret
+in the logs) applies as written, but the GitHub App private key, the GitHub
+OAuth and webhook secrets and the runner registration PAT (ADR-007) are
+heig-classroom's and do not exist here. Quiz's secrets are the OIDC client
+secret or private key (`OIDC_CLIENT_SECRET`, `OIDC_PRIVATE_KEY_PATH`), the cookie
+secret, the runner's shared token (`RUNNER_TOKEN`, ADR-016) and the metrics
+token (`apps/api/src/config.ts`).
 
 ## Context
 
