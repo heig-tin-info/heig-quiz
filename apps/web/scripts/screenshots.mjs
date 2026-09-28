@@ -341,6 +341,9 @@ const scenes = [
   // goes through the mock's `POST /attempts/:id/simulate`.
   { name: "player-circuit", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 5) },
   { name: "player-codeimage", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 6) },
+  // The essay (issue #192): the formatted field and its counter, then past the limit.
+  { name: "player-rich", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 7) },
+  { name: "player-rich-over", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 7); await p.locator("[contenteditable=true]").first().click(); await p.keyboard.press("Control+End"); await p.keyboard.insertText(" écrire bien au-delà de la limite.".repeat(40)); await p.waitForTimeout(300); } },
   { name: "player-codeimage-run", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 6); await p.getByRole("button", { name: /^(run|exécuter)$/i }).click(); await p.getByText(/pixels (correct|corrects)/).waitFor(); } },
   { name: "player-codeimage-diff", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 6); await p.getByRole("button", { name: /^(run|exécuter)$/i }).click(); await p.getByText(/pixels (correct|corrects)/).waitFor(); await p.getByRole("radio", { name: /^(difference|différence)$/i }).check({ force: true }); } },
   { name: "player-codeimage-single", role: "student", path: `${TAKE}?scene=running`, act: async (p) => { await openQuestion(p, 6); await p.getByRole("button", { name: /^(run|exécuter)$/i }).click(); await p.getByText(/pixels (correct|corrects)/).waitFor(); await p.getByRole("radio", { name: /^(single|seule)$/i }).check({ force: true }); await p.getByRole("radio", { name: /^(difference|différence)$/i }).check({ force: true }); } },
@@ -583,6 +586,7 @@ const scenes = [
   // through the mock's `POST /try`, whose details carry the reference image.
   { name: "editor-codeimage", role: "teacher", path: "/questions/q16", settle: 5000 },
   { name: "editor-circuit", role: "teacher", path: "/questions/q8" },
+  { name: "editor-rich", role: "teacher", path: "/questions/q17", settle: 3000 },
   { name: "editor-codeimage-try", role: "teacher", path: "/questions/q16", settle: 5000, act: async (p) => { await p.getByRole("button", { name: /try the reference solution|essayer la solution de référence/i }).click(); await p.getByRole("button", { name: /use as target|utiliser comme cible/i }).waitFor(); await p.getByRole("button", { name: /use as target|utiliser comme cible/i }).scrollIntoViewIfNeeded(); } },
   // "Student preview": a page of its own, opened by the editor in a new tab.
   { name: "question-preview", role: "teacher", path: "/questions/q2/preview", settle: 3000 },
@@ -620,6 +624,7 @@ const scenes = [
   { name: "grading-short", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 1) },
   { name: "grading-cloze", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 2) },
   { name: "grading-code", role: "teacher", path: "/evaluations/closed/grading", act: (p) => nextQuestion(p, 3) },
+  { name: "grading-rich", role: "teacher", path: "/evaluations/closed/grading", settle: 3000, act: (p) => nextQuestion(p, 4) },
   { name: "grading-by-student", role: "teacher", path: "/evaluations/closed/grading", act: (p) => p.locator("label").filter({ hasText: /^(By student|Par étudiant)$/ }).first().click() },
   // #102 / #107: one answer at a fixed place, walked in place, and the step
   // picker open — by question, and by student with its filter typed in.

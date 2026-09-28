@@ -198,7 +198,7 @@ delete it to start over. It is single-process: stop the API before `pnpm seed`.
 `pnpm seed` (`apps/api/src/seed.ts`, content in `apps/api/src/seed/`) is
 idempotent and builds everything through the ORDINARY SERVICES, never by raw
 inserts: course PRG1, classroom PRG1-2026, six students, two pools with
-sixteen published questions of all six types, and four evaluations — one
+seventeen published questions of all seven types, and four evaluations — one
 `draft`, one `scheduled`, one exercise in `lobby`, and `Test 0 — bases du C`
 closed, answered by five of the six students, graded by the real grading pass
 and left UNRELEASED so the panel has proposals to validate. Keyed on internal

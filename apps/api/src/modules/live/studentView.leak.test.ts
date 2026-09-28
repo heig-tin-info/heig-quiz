@@ -48,8 +48,10 @@ const SECRET_KEYS = new Set([
   "matcher",
   "pattern",
   "rationale",
+  "reference",
   "referenceSolution",
   "regex",
+  "rubric",
   "solution",
   "stdin",
   "value",
@@ -163,6 +165,11 @@ const DRAFT_COMPLETIONS: Record<string, (draft: unknown) => unknown> = {
     const { width, height } = config.image;
     return { ...config, target: { ...config.image, pixels: "0".repeat(width * height) } };
   },
+  /*
+   * `rich`'s draft leaves out the optional model answer; the grader's two
+   * texts are both sown, so the search covers each of them.
+   */
+  rich: (draft) => ({ ...(draft as object), reference: "" }),
 };
 
 function filledDraft(type: AnyQuestionTypeServer): unknown {
@@ -347,6 +354,11 @@ describe("studentView never leaks the key (invariant 4)", () => {
     );
     expect(hidden).toBeDefined();
     expect(markers.some((m) => hidden!.expected.startsWith(m))).toBe(true);
+  });
+
+  it("sows the rubric and the model answer of the real `rich` type", () => {
+    // An essay's whole key is two strings: both must be under the value search.
+    expect(sowSecrets(questionType("rich")).markers).toHaveLength(2);
   });
 
   it("keeps the key of the fake test type out too", () => {

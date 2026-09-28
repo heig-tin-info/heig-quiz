@@ -19,6 +19,7 @@ import {
 } from "@quiz/core/server";
 import { clozeServer } from "@quiz/qt-cloze/server";
 import { mcqServer } from "@quiz/qt-mcq/server";
+import { richServer } from "@quiz/qt-rich/server";
 import { shortServer } from "@quiz/qt-short/server";
 
 export const serverRegistry: Partial<Record<QuestionTypeId, AnyQuestionTypeServer>> =
@@ -29,12 +30,13 @@ export const serverRegistry: Partial<Record<QuestionTypeId, AnyQuestionTypeServe
     code: codeServer,
     circuit: circuitServer,
     codeimage: codeimageServer,
+    rich: richServer,
   });
 
 /** Total lookup; an unregistered id throws `UnknownQuestionType`. */
 export const questionType = makeLookup<AnyQuestionTypeServer>(serverRegistry);
 
-/** The ids that are actually wired up right now (the four MVP types, `circuit` and `codeimage`). */
+/** The ids that are actually wired up right now (the four MVP types, `circuit`, `codeimage` and `rich`). */
 export const registeredServerIds = (): string[] => registeredIds(serverRegistry);
 
 /**

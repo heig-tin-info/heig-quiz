@@ -25,9 +25,10 @@ export const ANSWER_SUMMARY_MAX = 24;
  * schematic of docs/spec/04 §4.11, brought forward from phase 3 with a
  * simulation path (`packages/qt-circuit`) — and `codeimage`, the variant of
  * `code` judged by the picture its program prints (§4.9, ADR-021), which
- * lives inside `packages/qt-code`.
+ * lives inside `packages/qt-code`, and `rich` — the essay of §4.8, graded
+ * by hand in v1 (`packages/qt-rich`, issue #192).
  */
-export const QUESTION_TYPE_IDS = ["mcq", "short", "cloze", "code", "circuit", "codeimage"] as const;
+export const QUESTION_TYPE_IDS = ["mcq", "short", "cloze", "code", "circuit", "codeimage", "rich"] as const;
 export type QuestionTypeId = (typeof QUESTION_TYPE_IDS)[number];
 
 // ---------------------------------------------------------------------------

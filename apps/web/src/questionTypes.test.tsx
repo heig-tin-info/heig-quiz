@@ -5,6 +5,7 @@ import { fmt, plural } from "@quiz/core/client";
 import { mcqEditorStrings, mcqPlayerStrings, mcqReviewStrings } from "@quiz/qt-mcq/client";
 import { shortEditorStrings, shortPlayerStrings, shortReviewStrings } from "@quiz/qt-short/client";
 import { clozeEditorStrings, clozePlayerStrings, clozeReviewStrings } from "@quiz/qt-cloze/client";
+import { richEditorStrings, richPlayerStrings, richReviewStrings } from "@quiz/qt-rich/client";
 import {
   EDITOR_STRINGS,
   IMAGE_EDITOR_STRINGS,
@@ -75,6 +76,9 @@ const DICTIONARIES: [string, object][] = [
   // translated the same way and must be just as complete.
   ["qt.circuit.c", CANVAS_STRINGS],
   ["qt.circuit.kind", KIND_LABELS],
+  ["qt.rich.e", richEditorStrings],
+  ["qt.rich.p", richPlayerStrings],
+  ["qt.rich.r", richReviewStrings],
 ];
 
 /**
@@ -146,6 +150,9 @@ describe("question type strings", () => {
     expect(editorStrings.code(t).template).toBe("Code de départ");
     expect(editorStrings.circuit(t).reference).toBe("Circuit de référence");
     expect(editorStrings.codeimage(t).useAsTarget).toBe("Utiliser comme cible");
+    expect(editorStrings.rich(t).rubric).toBe("Grille de correction");
+    // The page count's separator is a translation like any other.
+    expect(playerStrings.rich(t).decimal).toBe(",");
   });
 
   it("gives codeimage code's program sentences, with its own on top", () => {

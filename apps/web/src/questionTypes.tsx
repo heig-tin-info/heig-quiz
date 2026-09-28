@@ -42,6 +42,7 @@ import {
   shortPlayerStrings,
   shortReviewStrings,
 } from "@quiz/qt-short/client";
+import { richEditorStrings, richPlayerStrings, richReviewStrings } from "@quiz/qt-rich/client";
 import {
   clozeEditorStrings,
   clozePlayerStrings,
@@ -97,7 +98,7 @@ import { ScrollableCode, Skeleton, type IconType } from "./ui";
  * KaTeX into the chunk a student downloads to answer a question. It resolves
  * inside the `Suspense` the editor host already opens.
  */
-const LazyRichText = lazy(async () => ({
+export const LazyRichText = lazy(async () => ({
   default: (await import("./markdown/RichText")).RichText,
 })) as unknown as RichTextComponent;
 
@@ -202,6 +203,7 @@ export const editorStrings = {
     ...translated(t, EDITOR_STRINGS, "qt.code.e"),
     ...translated(t, IMAGE_EDITOR_STRINGS, "qt.codeimage.e"),
   }),
+  rich: (t: TFunction) => translated(t, richEditorStrings, "qt.rich.e"),
 };
 
 /**
@@ -236,6 +238,7 @@ export const playerStrings = {
     ...translated(t, PLAYER_STRINGS, "qt.code.p"),
     ...translated(t, IMAGE_PLAYER_STRINGS, "qt.codeimage.p"),
   }),
+  rich: (t: TFunction) => translated(t, richPlayerStrings, "qt.rich.p"),
 };
 
 export const reviewStrings = {
@@ -250,6 +253,7 @@ export const reviewStrings = {
     ...translated(t, REVIEW_STRINGS, "qt.code.r"),
     ...translated(t, IMAGE_REVIEW_STRINGS, "qt.codeimage.r"),
   }),
+  rich: (t: TFunction) => translated(t, richReviewStrings, "qt.rich.r"),
 };
 
 // --- Hosts -----------------------------------------------------------------
@@ -572,6 +576,8 @@ interface PlayerHostProps {
   renderMarkdown?: (source: string) => ReactNode;
   /** `cloze` only: its text with the blanks in place (`ClozeMarkdownText`). */
   renderText?: ClozeTextRenderer;
+  /** The formatted answer field (`PlayerProps.RichText`); a player without one ignores it. */
+  RichText?: RichTextComponent;
   onRun?: (answer: unknown, options?: unknown) => Promise<RunnerOutcome | "unavailable" | "rate_limited">;
   allowManualRun?: boolean;
   testsPrimary?: boolean;
@@ -626,6 +632,7 @@ export function QuestionPlayerHost({
           {...(client.id === "circuit" ? { canvasStrings: circuitCanvasStrings(t) } : {})}
           renderMarkdown={renderInline}
           {...(client.id === "cloze" ? { renderText: ClozeMarkdownText } : {})}
+          RichText={LazyRichText}
           {...(onRun === undefined ? {} : { onRun })}
           {...(allowManualRun === undefined ? {} : { allowManualRun })}
           {...(testsPrimary === undefined ? {} : { testsPrimary })}

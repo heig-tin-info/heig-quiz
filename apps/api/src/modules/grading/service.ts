@@ -33,6 +33,7 @@ import type {
   Verdict,
 } from "@quiz/contracts";
 import {
+  isBatchable,
   outcomeOf,
   overridePointsRange,
   round2,
@@ -821,7 +822,7 @@ interface BatchFilter {
 
 /**
  * F-GRADE-04, the "validate every high-confidence proposal of question 3"
- * button. Each proposal becomes the very write a click would make
+ * button — for the proposals `isBatchable` (`@quiz/domain`) accepts. Each proposal becomes the very write a click would make
  * ({@link validationOf}), and they all go through {@link writeGradings} at
  * once — one transaction per chunk, not one per cell — so a batch leaves the
  * same history a click would.
@@ -847,9 +848,12 @@ export async function batchValidate(
       ),
     )
     .orderBy(asc(gradings.gradedAt));
+  // The placeholders (0 points, no confidence: an essay, a manual circuit,
+  // no runner) are left to a person — the same rule the panel counts by, so
+  // it is read here in TypeScript rather than restated in SQL.
   const written = await writeGradings(
     db,
-    rows.map(({ grading }) => validationOf(grading, {}, userId, now)),
+    rows.filter(({ grading }) => isBatchable(grading)).map(({ grading }) => validationOf(grading, {}, userId, now)),
   );
   return written.length;
 }

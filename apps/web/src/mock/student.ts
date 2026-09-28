@@ -21,9 +21,12 @@ import {
 } from "./runtime";
 import {
   RC_STUDENT,
+  RICH_CONFIG,
   ngspiceOutcome,
 } from "./pool";
 import { codeimageConfig, codeimageRunOutcome, codeimageStudentView } from "./codeimage";
+import { richServer } from "@quiz/qt-rich/server";
+import type { RichConfig } from "@quiz/qt-rich/client";
 import { pollOfTeacher, teacherPolls } from "./poll";
 
 // --- 4. The student: home, lobby and player (WP9) --------------------------
@@ -235,6 +238,11 @@ const studentPayloads: Record<number, unknown> = {
    * draws the mock's own picture of the student's attempt.
    */
   6: codeimageStudentView(codeimageConfig()),
+  /*
+   * The `rich` item (issue #192): an essay, whose rubric and model answer the
+   * student view never carries — the pool question's own `toStudent`.
+   */
+  7: richServer.toStudent(RICH_CONFIG as RichConfig, { seed: 0, itemId: "7", shuffle: false }),
 };
 
 /** The attempt's mutable half: what the student typed, and where they are. */
@@ -252,6 +260,16 @@ const studentAnswers = new Map<string, StoredAnswer>();
  * nothing else, and the strip under the drawing is half of what this type IS.
  */
 studentAnswers.set(studentItem(5), { payload: { schematic: RC_STUDENT }, revision: 1, done: false });
+// The essay opens half written, so the counter under the field has something to count.
+studentAnswers.set(studentItem(7), {
+  payload: {
+    text:
+      "Chaque appel de fonction empile un **cadre** : l'adresse de retour et les variables locales.\n\n" +
+      "La pile a une taille fixe. Une récursion sans condition d'arrêt finit par",
+  },
+  revision: 1,
+  done: false,
+});
 let studentPosition: string | null = studentItem(1);
 if (scene === "marks" || scene === "forward") {
   // Q1 answered, Q2 left on purpose, Q3 flagged and still empty (where the
@@ -326,12 +344,12 @@ export const studentAttemptView = (): AttemptView => ({
     pausedAt: scene === "paused" ? iso(-30_000) : null,
     totalPoints: 10,
   },
-  items: (scene === "single" ? [1] : [1, 2, 3, 4, 5, 6]).map((n) => {
+  items: (scene === "single" ? [1] : [1, 2, 3, 4, 5, 6, 7]).map((n) => {
     const stored = studentAnswers.get(studentItem(n));
     return {
       id: studentItem(n),
       position: n,
-      points: n === 4 ? 5 : n === 5 ? 3 : n === 3 ? 1 : 2,
+      points: n === 4 ? 5 : n === 5 || n === 7 ? 3 : n === 3 ? 1 : 2,
       type:
         n === 1
           ? "mcq"
@@ -343,7 +361,9 @@ export const studentAttemptView = (): AttemptView => ({
                 ? "code"
                 : n === 5
                   ? "circuit"
-                  : "codeimage",
+                  : n === 6
+                    ? "codeimage"
+                    : "rich",
       milestone: n === 3,
       // ADR-026: what `toStudent` adds to a choice question under negative marking.
       student:

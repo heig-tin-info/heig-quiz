@@ -507,6 +507,33 @@ describe("batch validation (F-GRADE-04)", () => {
     expect(rest).toBe(1);
   });
 
+  it("leaves a 0-point placeholder without confidence to a person (#192)", async () => {
+    const { app, evaluation, items, attempts: rows } = await closedEvaluation();
+    const now = app.clock.now();
+    const propose = (attemptId: string, points: number) =>
+      service.writeGrading(db, {
+        attemptId,
+        itemId: items[0]!.item.id,
+        answerId: null,
+        points,
+        maxPoints: 1,
+        source: "auto",
+        state: "proposed",
+        details: { reason: "manual" },
+        now,
+      });
+    // An essay nobody has read yet, and a proposal a grader did score.
+    const placeholder = await propose(rows[0]!.id, 0);
+    await propose(rows[1]!.id, 0.5);
+
+    expect(await service.batchValidate(db, evaluation.id, {}, rows[0]!.userId!, now)).toBe(1);
+    const [standing] = await db
+      .select({ state: gradings.state })
+      .from(gradings)
+      .where(eq(gradings.id, placeholder.id));
+    expect(standing!.state).toBe("proposed");
+  });
+
   it("leaves the history a click by click validation would", async () => {
     const { app, evaluation, items, attempts: rows } = await closedEvaluation();
     const propose = (attemptId: string) =>
