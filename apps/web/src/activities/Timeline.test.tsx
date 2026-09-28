@@ -78,13 +78,19 @@ describe("the schedule view", () => {
     mockFetch({ "GET /app/api/activities": ok([SERIES, LOBBY, POLL, NEXT, DRAFT]) });
     renderWithProviders(<ActivitiesPage navigate={navigate} />);
 
-    // `Série 4` is also named in no other block: only its bar carries it.
-    const bar = await screen.findByRole("button", { name: "Série 4 — deux semaines" });
+    // Every lane is a button named by its title, reachable by keyboard; the
+    // bar beside it names its state and span, and stays out of the Tab order.
+    const lane = await screen.findByRole("button", { name: "Série 4 — deux semaines" });
+    const bar = screen.getByRole("button", { name: /^Série 4 — deux semaines — running, / });
+    expect(bar).toHaveAttribute("tabindex", "-1");
+    expect(lane).not.toHaveAttribute("tabindex");
     // Next week's series is outside the default frame (what is in progress);
     // zooming out brings it in.
-    expect(screen.queryByRole("button", { name: "Série 6 — SPI" })).not.toBeInTheDocument();
+    const nextBar = /^Série 6 — SPI — scheduled, /;
+    expect(screen.queryByRole("button", { name: nextBar })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Série 6 — SPI" })).toBeInTheDocument(); // its lane
     await user.click(screen.getByRole("button", { name: "Zoom out" }));
-    expect(screen.getByRole("button", { name: "Série 6 — SPI" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: nextBar })).toBeInTheDocument();
     expect(screen.getByTestId("timeline-now")).toBeInTheDocument();
     // The undated draft has no bar, and the legend says so.
     expect(screen.queryByRole("button", { name: "Quiz 1 — undated" })).not.toBeInTheDocument();
@@ -95,6 +101,9 @@ describe("the schedule view", () => {
 
     await user.click(bar);
     expect(navigate).toHaveBeenLastCalledWith({ view: "live", id: SERIES.id });
+    navigate.mockClear();
+    await user.click(screen.getByRole("button", { name: "Série 6 — SPI" }));
+    expect(navigate).toHaveBeenLastCalledWith({ view: "evaluation", id: NEXT.id });
   });
 
   it("falls back to the week list on a phone", async () => {

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { ActivitySummary } from "@quiz/contracts";
 
-import { evaluationHome } from "../evaluation/common";
+import { evaluationHome, evaluationStateLabel } from "../evaluation/common";
 import { useI18n, useT } from "../i18n";
 import type { Route } from "../router";
 import { Card, cx, EmptyState, IconButton, isoDateTime } from "../ui";
@@ -151,7 +151,7 @@ function barClass(a: ActivitySummary): string {
   if (a.state === "draft") return "border border-dashed border-fg-faint bg-surface text-fg-muted";
   if (a.state === "running") return "bg-success text-on-fill";
   if (bucketOf(a.state) === "open") return "bg-warning text-on-fill";
-  if (a.state === "scheduled") return "bg-info-soft text-info ring-1 ring-inset ring-info/40";
+  if (a.state === "scheduled") return "bg-info-soft text-info ring-1 ring-inset ring-info";
   return "bg-surface-3 text-fg-muted";
 }
 
@@ -286,6 +286,15 @@ export function ActivityTimeline({
       return next;
     });
 
+  /** What a bar says to a screen reader and on hover: the title, the state, the span. */
+  const barName = (row: ActivitySummary, s: Span) =>
+    t("activities.timeline.bar", {
+      title: row.title,
+      state: evaluationStateLabel(row.state, t),
+      from: isoDateTime(new Date(s.s).toISOString()),
+      to: isoDateTime(new Date(s.d).toISOString()),
+    });
+
   const bar = (row: ActivitySummary, s: Span, compact: boolean) => {
     const l = pct(s.s);
     const r = pct(s.d);
@@ -298,13 +307,17 @@ export function ActivityTimeline({
     const left =
       natural >= MIN_BAR ? Math.max(l, 0) : bucketOf(row.state) === "open" ? Math.max(r - width, 0) : Math.max(l, 0);
     const ongoing = s.s <= now && now <= s.d && bucketOf(row.state) === "open";
+    const name = barName(row, s);
     return (
       <button
         key={row.id}
         type="button"
         onClick={() => navigate(evaluationHome(row))}
-        title={`${row.title} — ${isoDateTime(new Date(s.s).toISOString())} → ${isoDateTime(new Date(s.d).toISOString())}`}
-        aria-label={row.title}
+        // Out of the Tab order: the lane's label before it is the keyboard's
+        // way in, and is there whatever the visible window.
+        tabIndex={-1}
+        title={name}
+        aria-label={name}
         className={cx(
           "absolute h-6 truncate rounded-full px-2.5 text-left text-xs font-medium leading-6",
           compact ? "top-1" : "top-1.5",
@@ -370,15 +383,19 @@ export function ActivityTimeline({
                     : room.lanes.map(({ row }) => {
                         const Icon = MODE_ICON[row.mode];
                         return (
-                          <div
+                          // A button, so every lane is reachable from the
+                          // keyboard, its bar in the window or not.
+                          <button
                             key={row.id}
-                            className={`flex ${LANE_H} items-center gap-1.5 truncate pl-5 pr-1 text-xs text-fg-muted`}
+                            type="button"
+                            onClick={() => navigate(evaluationHome(row))}
+                            className={`flex ${LANE_H} w-full items-center gap-1.5 truncate rounded-field pl-5 pr-1 text-left text-xs text-fg-muted hover:text-fg`}
                             title={row.title}
                           >
                             <span className={cx("inline-block size-2 shrink-0 rounded-full", dotClass(row))} />
                             <Icon aria-hidden className="size-3.5 shrink-0 text-fg-faint" />
                             <span className="truncate">{row.title}</span>
-                          </div>
+                          </button>
                         );
                       })}
                 </div>
@@ -454,7 +471,7 @@ export function ActivityTimeline({
           [
             ["bg-success", "activities.timeline.legend.live"],
             ["bg-warning", "activities.timeline.legend.waiting"],
-            ["bg-info-soft ring-1 ring-inset ring-info/40", "activities.timeline.legend.scheduled"],
+            ["bg-info-soft ring-1 ring-inset ring-info", "activities.timeline.legend.scheduled"],
             ["border border-dashed border-fg-faint", "activities.timeline.legend.draft"],
             ["bg-surface-3", "activities.timeline.legend.ended"],
           ] as const

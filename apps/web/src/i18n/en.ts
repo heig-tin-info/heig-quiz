@@ -2767,6 +2767,7 @@ export const en = {
   "activities.timeline.legend.now": "now",
   "activities.timeline.undated": "{n} undated drafts are not on the timeline",
   "activities.timeline.undated.one": "One undated draft is not on the timeline",
+  "activities.timeline.bar": "{title} — {state}, {from} → {to}",
 };
 
 export type Dict = typeof en;

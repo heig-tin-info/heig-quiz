@@ -2755,4 +2755,5 @@ export const fr: Record<keyof Dict, string> = {
   "activities.timeline.legend.now": "maintenant",
   "activities.timeline.undated": "{n} brouillons sans date ne sont pas sur la frise",
   "activities.timeline.undated.one": "Un brouillon sans date n'est pas sur la frise",
+  "activities.timeline.bar": "{title} — {state}, {from} → {to}",
 };
