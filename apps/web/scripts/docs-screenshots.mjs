@@ -905,6 +905,19 @@ async function login(ctx, persona) {
   return csrf;
 }
 
+/**
+ * Dismisses the first-visit coach mark when it is up. On a fresh seed every
+ * persona has seen nothing, and the bubble covers the page header. Skipping
+ * is remembered by the server, so it shows once per persona at most.
+ */
+async function skipCoach(page) {
+  const skip = page.getByRole("button", { name: /^(Skip|Passer)$/ }).locator("visible=true").first();
+  if (await skip.waitFor({ timeout: 1500 }).then(() => true, () => false)) {
+    await skip.click({ timeout: 3000, force: true }).catch(() => {});
+    await page.waitForTimeout(300);
+  }
+}
+
 /** A preparation step that may already have happened: logged, never fatal. */
 async function tolerant(what, fn) {
   try {
@@ -989,7 +1002,9 @@ async function enter(api, evaluationId) {
   return r.kind === "attempt" ? r.view : null;
 }
 
-async function answer(api, view, itemIndex, variant, { done = true } = {}) {
+// An answer counts as soon as it is written (F-LIVE-08): there is no "done"
+// step outside the locking navigations, and the server refuses one (409).
+async function answer(api, view, itemIndex, variant) {
   const item = view.items[itemIndex];
   if (!item) return;
   await api.put(`/app/api/attempts/${view.attempt.id}/answers/${item.id}`, {
@@ -997,9 +1012,6 @@ async function answer(api, view, itemIndex, variant, { done = true } = {}) {
     revision: revision(),
     clientTs: new Date().toISOString(),
   });
-  if (done) {
-    await api.post(`/app/api/attempts/${view.attempt.id}/answers/${item.id}/done`, { done: true });
-  }
 }
 
 /** Keeps a student's page open on a URL, so the dashboard sees them present. */
@@ -1040,7 +1052,7 @@ const prepare = {
       if (progress.pending.runner === 0) return;
       const health = await teacher.get("/healthz");
       if (health.checks?.runner !== "up") throw new Error(`runner is ${health.checks?.runner}`);
-      await teacher.post(`/app/api/evaluations/${closed.id}/grade`, {});
+      await teacher.post(`/app/api/evaluations/${closed.id}/grading/run`, {});
       for (let i = 0; i < 120; i += 1) {
         await new Promise((r) => setTimeout(r, 500));
         const p = await teacher.get(`/app/api/evaluations/${closed.id}/grading/progress`);
@@ -1104,7 +1116,7 @@ const prepare = {
       await answer(lea, view, 0, 1);
       await answer(lea, view, 1, 1);
       const code = view.items.findIndex((i) => i.type === "code");
-      if (code >= 0) await answer(lea, view, code, 0, { done: false });
+      if (code >= 0) await answer(lea, view, code, 0);
       // Back on the first question, so the player opens there.
       await lea.post(`/app/api/attempts/${view.attempt.id}/position`, { itemId: view.items[0].id });
     });
@@ -1221,6 +1233,7 @@ async function capture(world, scene, theme, phone) {
     // the settle delay is the guarantee.
     await page.waitForLoadState("networkidle", { timeout: 4000 }).catch(() => {});
     await page.waitForTimeout(scene.settle ?? 1500);
+    await skipCoach(page);
     if (scene.act) {
       await scene.act(page, world);
       // The click leaves the pointer over whatever took the button's place,

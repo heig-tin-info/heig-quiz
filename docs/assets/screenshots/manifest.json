@@ -555,7 +555,7 @@
       "name": "live-lobby",
       "caption": "The dashboard of an evaluation in its lobby: the class is gathering.",
       "persona": "teacher",
-      "path": "/evaluations/2d031274-da46-4a00-9f8d-f5056e933cb9/live",
+      "path": "/evaluations/3867ad1a-fdc3-4403-8000-faabd3b6dc8e/live",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -570,15 +570,15 @@
         "light": "live-lobby-light.png",
         "dark": "live-lobby-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-28T14:45:46.796Z",
+      "commit": "9bd6b57",
       "base": "http://localhost:3100"
     },
     {
       "name": "live-running",
       "caption": "The dashboard during the evaluation: one row per student, one cell per question.",
       "persona": "teacher",
-      "path": "/evaluations/2d031274-da46-4a00-9f8d-f5056e933cb9/live",
+      "path": "/evaluations/3867ad1a-fdc3-4403-8000-faabd3b6dc8e/live",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -593,15 +593,15 @@
         "light": "live-running-light.png",
         "dark": "live-running-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-28T14:45:46.796Z",
+      "commit": "9bd6b57",
       "base": "http://localhost:3100"
     },
     {
       "name": "live-inspect",
       "caption": "A cell opened: what the student wrote, live.",
       "persona": "teacher",
-      "path": "/evaluations/2d031274-da46-4a00-9f8d-f5056e933cb9/live",
+      "path": "/evaluations/3867ad1a-fdc3-4403-8000-faabd3b6dc8e/live",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -616,15 +616,15 @@
         "light": "live-inspect-light.png",
         "dark": "live-inspect-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-28T14:45:46.796Z",
+      "commit": "9bd6b57",
       "base": "http://localhost:3100"
     },
     {
       "name": "live-extend",
       "caption": "Giving more time: to the whole class or to one student.",
       "persona": "teacher",
-      "path": "/evaluations/2d031274-da46-4a00-9f8d-f5056e933cb9/live",
+      "path": "/evaluations/3867ad1a-fdc3-4403-8000-faabd3b6dc8e/live",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -639,15 +639,15 @@
         "light": "live-extend-light.png",
         "dark": "live-extend-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-28T14:45:46.796Z",
+      "commit": "9bd6b57",
       "base": "http://localhost:3100"
     },
     {
       "name": "live-closed",
       "caption": "The dashboard of a closed evaluation: verdicts and scores.",
       "persona": "teacher",
-      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/live",
+      "path": "/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/live",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -662,15 +662,15 @@
         "light": "live-closed-light.png",
         "dark": "live-closed-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-28T14:45:46.796Z",
+      "commit": "9bd6b57",
       "base": "http://localhost:3100"
     },
     {
       "name": "grading",
       "caption": "The grading panel, by question: the automatic gradings, validated or waiting for the teacher.",
       "persona": "teacher",
-      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading",
+      "path": "/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -685,15 +685,15 @@
         "light": "grading-light.png",
         "dark": "grading-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-28T14:45:46.796Z",
+      "commit": "9bd6b57",
       "base": "http://localhost:3100"
     },
     {
       "name": "grading-short",
       "caption": "Grading a short-answer question.",
       "persona": "teacher",
-      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading",
+      "path": "/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -708,15 +708,15 @@
         "light": "grading-short-light.png",
         "dark": "grading-short-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-28T14:45:46.796Z",
+      "commit": "9bd6b57",
       "base": "http://localhost:3100"
     },
     {
       "name": "grading-cloze",
       "caption": "Grading a fill-in-the-blanks question.",
       "persona": "teacher",
-      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading",
+      "path": "/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -731,15 +731,15 @@
         "light": "grading-cloze-light.png",
         "dark": "grading-cloze-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-28T14:45:46.796Z",
+      "commit": "9bd6b57",
       "base": "http://localhost:3100"
     },
     {
       "name": "grading-code",
       "caption": "Grading a code question: compilation and test cases per student.",
       "persona": "teacher",
-      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading",
+      "path": "/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -754,15 +754,15 @@
         "light": "grading-code-light.png",
         "dark": "grading-code-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-28T14:45:46.796Z",
+      "commit": "9bd6b57",
       "base": "http://localhost:3100"
     },
     {
       "name": "grading-by-student",
       "caption": "The same panel, by student.",
       "persona": "teacher",
-      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading",
+      "path": "/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading",
       "width": 1440,
       "height": 900,
       "fullPage": true,
@@ -777,15 +777,15 @@
         "light": "grading-by-student-light.png",
         "dark": "grading-by-student-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-28T14:45:46.796Z",
+      "commit": "9bd6b57",
       "base": "http://localhost:3100"
     },
     {
       "name": "grading-override",
       "caption": "Adjusting a grading by hand: points and a comment the student will read.",
       "persona": "teacher",
-      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading",
+      "path": "/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -800,15 +800,15 @@
         "light": "grading-override-light.png",
         "dark": "grading-override-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-28T14:45:46.796Z",
+      "commit": "9bd6b57",
       "base": "http://localhost:3100"
     },
     {
       "name": "grading-batch",
       "caption": "Validating every proposal of a question at once (here the code answers the seed could not run).",
       "persona": "teacher",
-      "path": "/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading",
+      "path": "/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading",
       "width": 1440,
       "height": 900,
       "fullPage": false,
@@ -823,8 +823,8 @@
         "light": "grading-batch-light.png",
         "dark": "grading-batch-dark.png"
       },
-      "takenAt": "2026-09-21T20:58:21.264Z",
-      "commit": "828d8d8",
+      "takenAt": "2026-09-28T14:45:46.796Z",
+      "commit": "9bd6b57",
       "base": "http://localhost:3100"
     },
     {
