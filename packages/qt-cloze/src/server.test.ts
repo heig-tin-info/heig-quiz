@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { ConfigMigrationError } from "@quiz/core/server";
 import { describe, expect, it } from "vitest";
-import { fromCanonical, toCanonical } from "./canonical.js";
+import { toCanonical } from "./canonical.js";
 import { config, SECRET_CONFIG } from "./test/fixtures.js";
 import { CLOZE_CONFIG_VERSION, ClozeConfigSchema, emptyClozeDraft } from "./schema.js";
 import { clozeServer, hasSelectBlank } from "./server.js";
@@ -68,7 +68,7 @@ describe("the contract", () => {
 describe("the canonical mapping", () => {
   it("round-trips a full config", () => {
     const cfg = config("{{=a|b}} {{k}}", { caseSensitive: true, shuffleOptions: false });
-    expect(fromCanonical(toCanonical(cfg))).toEqual(cfg);
+    expect(ClozeConfigSchema.parse(toCanonical(cfg))).toEqual(cfg);
   });
 
   it("omits the defaults", () => {
@@ -80,7 +80,7 @@ describe("the canonical mapping", () => {
 
   it("is what the type exposes to the exporter", () => {
     expect(clozeServer.toCanonical?.(SECRET_CONFIG)).toEqual(toCanonical(SECRET_CONFIG));
-    expect(clozeServer.fromCanonical?.(toCanonical(SECRET_CONFIG))).toEqual(SECRET_CONFIG);
+    expect(clozeServer.configSchema.parse(toCanonical(SECRET_CONFIG))).toEqual(SECRET_CONFIG);
   });
 });
 

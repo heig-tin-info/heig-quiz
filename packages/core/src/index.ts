@@ -7,6 +7,7 @@
 export * from "./contract.js";
 export * from "./errors.js";
 export * from "./llm.js";
+export * from "./migrate.js";
 export * from "./registry.js";
 export * from "./rng.js";
 export * from "./runner.js";

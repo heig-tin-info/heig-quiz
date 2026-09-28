@@ -8,7 +8,6 @@
 import {
   SHORT_CONFIG_VERSION,
   SHORT_DEFAULT_MAX_LENGTH,
-  ShortConfigSchema,
   type ShortConfig,
   type ShortMatcher,
 } from "./schema.js";
@@ -93,8 +92,4 @@ export function toCanonical(config: ShortConfig): ShortCanonical {
   if (Object.keys(prefilters).length > 0) out.prefilters = prefilters;
   if (config.placeholder !== undefined) out.placeholder = config.placeholder;
   return out;
-}
-
-export function fromCanonical(raw: unknown): ShortConfig {
-  return ShortConfigSchema.parse(raw);
 }

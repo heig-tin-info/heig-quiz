@@ -7,7 +7,7 @@
  * internal, because nothing outside the package reads them.
  */
 import type { FinalizeContext, GradeContext, QuestionTypeServer } from "@quiz/core/server";
-import { ConfigMigrationError, type RunnerOutcome } from "@quiz/core/server";
+import { reparseMigrate, type RunnerOutcome } from "@quiz/core/server";
 
 import { fromCanonical, toCanonical } from "./canonical.js";
 import {
@@ -47,32 +47,7 @@ export const circuitServer: QuestionTypeServer<
 
   emptyDraft: emptyCircuitConfig,
 
-  migrate(config: unknown, fromVersion: number): CircuitConfig {
-    if (fromVersion > CIRCUIT_CONFIG_VERSION) {
-      throw new ConfigMigrationError(
-        "circuit",
-        fromVersion,
-        CIRCUIT_CONFIG_VERSION,
-        "config written by a newer version of the platform",
-      );
-    }
-    // A config already at the current version is returned as it stands, like
-    // the other types do: a DRAFT may be invalid (decision D16 — the empty
-    // draft has no prompt), and the contract says `migrate` never throws on a
-    // config the type emitted. Parsing is for the versions that changed shape.
-    if (fromVersion === CIRCUIT_CONFIG_VERSION) return config as CircuitConfig;
-    const source = typeof config === "object" && config !== null ? config : {};
-    const parsed = CircuitConfig.safeParse({ ...source, configVersion: CIRCUIT_CONFIG_VERSION });
-    if (!parsed.success) {
-      throw new ConfigMigrationError(
-        "circuit",
-        fromVersion,
-        CIRCUIT_CONFIG_VERSION,
-        parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
-      );
-    }
-    return parsed.data;
-  },
+  migrate: reparseMigrate("circuit", CircuitConfig, CIRCUIT_CONFIG_VERSION),
 
   /** The stimuli carry the weight of the question; a teacher may still override it. */
   defaultPoints(config) {

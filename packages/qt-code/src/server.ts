@@ -5,7 +5,7 @@
  * `@quiz/registry/server`.
  */
 import type { FinalizeContext, GradeContext, QuestionTypeServer } from "@quiz/core/server";
-import { ConfigMigrationError, type RunnerOutcome } from "@quiz/core/server";
+import { reparseMigrate, type RunnerOutcome } from "@quiz/core/server";
 import { splitTemplate } from "@quiz/domain/lockedTemplate";
 
 import { fromCanonical, toCanonical } from "./canonical.js";
@@ -41,32 +41,7 @@ export const codeServer: QuestionTypeServer<
 
   emptyDraft: emptyCodeConfig,
 
-  migrate(config: unknown, fromVersion: number): CodeConfig {
-    if (fromVersion > CODE_CONFIG_VERSION) {
-      throw new ConfigMigrationError(
-        "code",
-        fromVersion,
-        CODE_CONFIG_VERSION,
-        "config written by a newer version of the platform",
-      );
-    }
-    // A config already at the current version is returned as it stands, like
-    // the other three types do: a DRAFT may be invalid (decision D16 — the
-    // empty draft is), and the contract says `migrate` never throws on a
-    // config the type emitted. Parsing is for the versions that changed shape.
-    if (fromVersion === CODE_CONFIG_VERSION) return config as CodeConfig;
-    const source = typeof config === "object" && config !== null ? config : {};
-    const parsed = CodeConfig.safeParse({ ...source, configVersion: CODE_CONFIG_VERSION });
-    if (!parsed.success) {
-      throw new ConfigMigrationError(
-        "code",
-        fromVersion,
-        CODE_CONFIG_VERSION,
-        parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
-      );
-    }
-    return parsed.data;
-  },
+  migrate: reparseMigrate("code", CodeConfig, CODE_CONFIG_VERSION),
 
   /** The cases carry the weight of the question; a teacher may still override it. */
   defaultPoints(config) {

@@ -12,7 +12,7 @@ import {
 } from "@quiz/core/server";
 import { seededShuffle, streamSeed } from "@quiz/core/rng";
 import { gradeMcq, negativeMarkingOf } from "./grade.js";
-import { fromCanonical, toCanonical } from "./canonical.js";
+import { toCanonical } from "./canonical.js";
 import {
   choiceLetter,
   correctIndices,
@@ -196,5 +196,4 @@ export const mcqServer: QuestionTypeServer<
   searchText: (config) => [config.prompt, ...config.choices.map((c) => c.text)].join("\n"),
 
   toCanonical,
-  fromCanonical,
 };

@@ -5,6 +5,7 @@
  * defaults left out — and the image half is three plain fields and the
  * target in its compact encoding, one string a teacher can diff.
  */
+import { canonicalParse } from "@quiz/core/server";
 import { DEFAULT_LIMITS } from "../schema.js";
 import { CODEIMAGE_CONFIG_VERSION, CodeImageConfig, DEFAULT_IMAGE_LIMITS } from "./schema.js";
 
@@ -33,7 +34,4 @@ export function toCanonicalImage(config: CodeImageConfig): Record<string, unknow
 }
 
 /** The canonical object → a validated config. Throws a `ZodError` on a bad file. */
-export function fromCanonicalImage(raw: unknown): CodeImageConfig {
-  const source = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
-  return CodeImageConfig.parse({ ...source, configVersion: CODEIMAGE_CONFIG_VERSION });
-}
+export const fromCanonicalImage = canonicalParse(CodeImageConfig, CODEIMAGE_CONFIG_VERSION);

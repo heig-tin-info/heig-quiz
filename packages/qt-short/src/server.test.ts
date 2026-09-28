@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { ConfigMigrationError } from "@quiz/core/server";
 import { describe, expect, it } from "vitest";
-import { fromCanonical, toCanonical } from "./canonical.js";
+import { toCanonical } from "./canonical.js";
 import { config, SECRET_CONFIG } from "./test/fixtures.js";
 import { emptyShortDraft, ShortConfigSchema } from "./schema.js";
 import { expectedAnswers, migrateShortV1, shortServer } from "./server.js";
@@ -116,7 +116,7 @@ describe("migrate v1 -> v2", () => {
 
 describe("the canonical mapping", () => {
   it("round-trips every matcher kind", () => {
-    expect(fromCanonical(toCanonical(SECRET_CONFIG))).toEqual(SECRET_CONFIG);
+    expect(ShortConfigSchema.parse(toCanonical(SECRET_CONFIG))).toEqual(SECRET_CONFIG);
   });
 
   it("writes the constraints and the prefilters only when they left their default", () => {
@@ -138,7 +138,7 @@ describe("the canonical mapping", () => {
 
   it("is what the type exposes to the exporter", () => {
     expect(shortServer.toCanonical?.(SECRET_CONFIG)).toEqual(toCanonical(SECRET_CONFIG));
-    expect(shortServer.fromCanonical?.(toCanonical(SECRET_CONFIG))).toEqual(SECRET_CONFIG);
+    expect(shortServer.configSchema.parse(toCanonical(SECRET_CONFIG))).toEqual(SECRET_CONFIG);
   });
 });
 

@@ -5,7 +5,7 @@
  */
 import { ConfigMigrationError, tallyKeys, type QuestionTypeServer } from "@quiz/core/server";
 import { describeMatcher } from "@quiz/domain/short";
-import { fromCanonical, toCanonical } from "./canonical.js";
+import { toCanonical } from "./canonical.js";
 import { gradeShort } from "./grade.js";
 import {
   defaultShortConstraints,
@@ -189,5 +189,4 @@ export const shortServer: QuestionTypeServer<
   searchText: (config) => [config.prompt, ...expectedAnswers(config)].join("\n"),
 
   toCanonical,
-  fromCanonical,
 };

@@ -11,6 +11,7 @@
  * it travel verbatim. They are coordinates, and rounding one would move a
  * pin off a wire.
  */
+import { canonicalParse } from "@quiz/core/server";
 import { DEFAULT_PALETTE } from "./library.js";
 import {
   CIRCUIT_CONFIG_VERSION,
@@ -83,7 +84,4 @@ export function toCanonical(config: CircuitConfig): Record<string, unknown> {
 }
 
 /** The canonical object → a validated config. Throws a `ZodError` on a bad file. */
-export function fromCanonical(raw: unknown): CircuitConfig {
-  const source = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
-  return CircuitConfig.parse({ ...source, configVersion: CIRCUIT_CONFIG_VERSION });
-}
+export const fromCanonical = canonicalParse(CircuitConfig, CIRCUIT_CONFIG_VERSION);
