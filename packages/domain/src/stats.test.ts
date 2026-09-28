@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describe as describeSeries, histogram, mcqDistribution } from "./stats.js";
+import { describe as describeSeries, histogram } from "./stats.js";
 
 describe("describe", () => {
   it("summarises a series", () => {
@@ -40,17 +40,5 @@ describe("histogram", () => {
 
   it("accepts another step", () => {
     expect(histogram([], 1).map((b) => b.bucket)).toEqual([1, 2, 3, 4, 5, 6]);
-  });
-});
-
-describe("mcqDistribution", () => {
-  it("counts the selections per canonical choice index", () => {
-    expect(
-      mcqDistribution([{ selected: [0, 1] }, { selected: [1] }, { selected: [] }], 3),
-    ).toEqual([1, 2, 0]);
-  });
-
-  it("ignores duplicates and out-of-range indices", () => {
-    expect(mcqDistribution([{ selected: [0, 0, 9, -1] }], 2)).toEqual([1, 0]);
   });
 });

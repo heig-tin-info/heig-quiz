@@ -62,17 +62,3 @@ export function histogram(grades: readonly number[], step = 0.5): HistogramBucke
   }
   return buckets;
 }
-
-/** How many students selected each choice of an MCQ, by canonical index. */
-export function mcqDistribution(
-  answers: readonly { selected: readonly number[] }[],
-  choiceCount: number,
-): number[] {
-  const counts = Array.from({ length: choiceCount }, () => 0);
-  for (const answer of answers) {
-    for (const index of new Set(answer.selected)) {
-      if (index >= 0 && index < choiceCount) counts[index]! += 1;
-    }
-  }
-  return counts;
-}
