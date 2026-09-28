@@ -326,6 +326,8 @@ live in `ui/state.ts`, each written once.
 - Button: `primary` (accent fill, white text, one per screen), `secondary`
   (surface, hairline), `ghost` (no chrome), `danger` (danger fill, never
   primary-styled elsewhere). Sizes `sm` 28 px, `md` 34 px, `lg` 40 px.
+  Pressed to 0.97. The class list is `buttonClass` in `@quiz/ui`, which the
+  app's `Button` and `LinkButton` and the question types all wear.
 - Icon button: round, ghost; `danger` turns red on hover only.
 - Badge: pill, soft background, 12 px, tones green / amber / red / zinc /
   accent. Status is a badge; a count is plain text. A badge that is also the door to
@@ -405,7 +407,12 @@ live in `ui/state.ts`, each written once.
   ring on focus. The `<label>` covers the text only and points at the control
   through `htmlFor`; the help "?" is its sibling, never inside it, or that
   button becomes the labelled control and the input loses its name. Two heights, from the button scale: `sm` 28 px for a control
-  inside a table row, `md` 34 px everywhere else (`inputSize` in `ui/controls.tsx`).
+  inside a table row, `md` 34 px everywhere else (`inputSize`). A textarea
+  is `textareaClass`: the same chrome, 8 px of vertical padding, the relaxed
+  line height, and its rows for a height. `inputClass`, `inputSize`,
+  `textareaClass` and the label row are written once, in `@quiz/ui`, and
+  `ui/controls.tsx` re-exports them: a field in a question editor IS the
+  field of every other form of the app, not a copy that may drift.
   Width is a prop, never a class beside `inputClass`: Tailwind settles two
   width or height utilities on one element by their order in the generated
   stylesheet, not by the order they were written in.
@@ -445,7 +452,11 @@ live in `ui/state.ts`, each written once.
   which is the wrong trade for a control the reader sets once and then reads.
   A track with no visible caption takes `label`, which becomes the
   `aria-label` of the radiogroup — two anonymous pill rows side by side are
-  indistinguishable to a screen reader.
+  indistinguishable to a screen reader; one with a caption points at it with
+  `labelledBy`. `size="sm"` (24 px chips) is for a dense toolbar; `wrap`
+  lets the chips fall on a second row, and the track then takes the card
+  radius, since a pill two rows tall is a lens. One component, in
+  `@quiz/ui`, for the app and the question editors alike.
 - Switch: `success` when on (a state, not an action, so not the accent),
   `line-strong` when off.
 - Tabs: text tabs with a 2 px ink (`fg`) underline, counts in `fg-faint`; red
@@ -827,6 +838,36 @@ live in `ui/state.ts`, each written once.
   already in the text, and by itself when `$$` on an empty line makes an empty
   one. MathLive is loaded on first open and dressed in the tokens through
   `markdown/formula.css`; its fonts are the KaTeX fonts the page already has.
+
+## The question-type surfaces (`@quiz/ui`)
+
+The editors, players and reviews of the question types live in `qt-*`
+packages, which cannot import `apps/web`. What they share with the app is
+therefore written in `packages/ui/src/styles.ts` and read by both sides, never
+copied: `cx`, `inputClass` / `inputSize` / `textareaClass`, the field
+label, `buttonClass` and `Segmented`. The rest of that file is the vocabulary
+of the question surfaces, one token per role and never two dialects of it:
+
+| Token | Value | Role |
+| --- | --- | --- |
+| `label` | 13 px, 500, `fg`, a row | the label of a field, the caption of a group of fields (the app's `FieldLabel` row) |
+| `hint` | 13 px, `fg-muted` | the sentence that explains a control or a section of an editor (the app's `SettingRow` description) |
+| `caption` | 12 px, `fg-faint` | a quiet aside that only supports its surroundings: the instruction under a player's question, "no answer" in a review, a count under a chart |
+| `sectionTitle` | 16 px, 700, tight | the title of a card or section (the app's `SectionHeading`) |
+| `sectionClass` | column, 8 px | a section of an editor laid out as a plain form |
+| `card` | `surface`, hairline, card radius | the cards of the code and circuit editors (`EditorSection`) |
+
+Two layouts use these tokens, on purpose. The mcq, short and cloze editors
+are short PLAIN FORMS — a few `sectionClass` sections, a `label` over each —
+and the code and circuit editors, whose sections are many and long, are
+CARDS (`EditorSection`, `PromptSection`, `AdvancedDisclosure`). The tokens
+inside are the same; the layout is the editor's.
+
+Likewise, a review states its score in one of two places. The mcq, short and
+cloze reviews end with `ScoreHeader`, a quiet line under an answer that is a
+line or two long; the code and circuit reviews open with it as a
+`sectionTitle`, runner badges beside it, over a long review. Both go
+through `pointsOrDash`: an answer nobody graded reads `—`, never `0`.
 
 ## Projection (the poll on a beamer)
 

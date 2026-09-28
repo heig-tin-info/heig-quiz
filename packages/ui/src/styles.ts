@@ -2,9 +2,11 @@
  * The class lists of the question-type surfaces, in one place.
  *
  * A package cannot import `apps/web/src/ui/`, so the primitives it would
- * have used are reduced to their class lists here, copied from there so
- * the two stay visually identical. `qt-code` and `qt-circuit` used to carry
- * this table twice, byte for byte (audit P-01a). Semantic tokens only
+ * have used are reduced to their class lists here. Where the app has the
+ * same thing — `cx`, `inputClass`, `inputSize`, `textareaClass`, `label`,
+ * `buttonClass` — it is not copied: `apps/web/src/ui/` imports it from here,
+ * so a field or a button in a question editor is the app's own. One token per
+ * role (apps/web/DESIGN.md, "The question-type surfaces"). Semantic tokens only
  * (`bg-surface`, `text-fg-muted`, `border-line`…): they swap under
  * `html.dark` by themselves, so nothing below carries a `dark:` variant
  * (DESIGN.md).
