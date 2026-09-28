@@ -199,3 +199,59 @@ describe("POST /run", () => {
     expect(res.json()).toMatchObject({ error: "engine_error" });
   });
 });
+
+describe("a client that goes away", () => {
+  it("frees its slot: dequeued while waiting, container destroyed while running", async () => {
+    // A case blocks until its container is removed — what `podman rm -f`
+    // does to a running `podman exec`.
+    const engine = createFakeEngine();
+    const gone = new Map<string, () => void>();
+    const blocking = {
+      ...engine,
+      exec: async (name: string, options: Parameters<typeof engine.exec>[1]) => {
+        if (options.argv[0] !== "timeout") return engine.exec(name, options);
+        await new Promise<void>((resolve) => gone.set(name, resolve));
+        return { ...(await engine.exec(name, options)), containerGone: true };
+      },
+      remove: async (name: string) => {
+        gone.get(name)?.();
+        return engine.remove(name);
+      },
+    };
+    const server = await start(blocking as FakeEngine, { RUNNER_CONCURRENCY: 1 });
+    const base = await server.listen({ port: 0, host: "127.0.0.1" });
+    const health = async () =>
+      (await (await fetch(`${base}/health`)).json()) as { queued: number; running: number };
+    const post = (signal: AbortSignal) =>
+      fetch(`${base}/run`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(REQUEST),
+        signal,
+      }).catch(() => undefined);
+    const until = async (predicate: () => Promise<boolean>) => {
+      for (let i = 0; i < 100 && !(await predicate()); i++) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    };
+
+    const running = new AbortController();
+    const waiting = new AbortController();
+    const requests = [post(running.signal), post(waiting.signal)];
+    await until(async () => (await health()).queued === 1);
+    expect(await health()).toMatchObject({ running: 1, queued: 1 });
+
+    waiting.abort();
+    await until(async () => (await health()).queued === 0);
+    expect(await health()).toMatchObject({ running: 1, queued: 0 });
+
+    running.abort();
+    await until(async () => (await health()).running === 0);
+    expect(await health()).toMatchObject({ running: 0, queued: 0 });
+    // One container only was ever created — the waiting request never ran —
+    // and it was removed, not left to its `sleep`.
+    expect(engine.created).toHaveLength(1);
+    expect(engine.removed).toContain(engine.created[0]!.name);
+    await Promise.all(requests);
+  });
+});

@@ -184,12 +184,24 @@ export function buildRunnerRequest(
   });
 }
 
-/** The request behind the student's Run button: the visible cases only. */
-export function buildInteractiveRequest(config: CodeConfig, answer: CodeAnswer): RunnerRequest {
-  return buildRunnerRequest(config, assembleCodeSource(config, answer), {
-    priority: "interactive",
-    cases: config.tests.cases.filter((c) => c.visible),
-  });
+/**
+ * The request behind the student's Run button: the visible cases only,
+ * picked by their `visible` flag — never by name, which two cases may share.
+ * `null` when the answer no longer fits the template or the request would be
+ * refused, exactly where {@link gradeCode} stops too.
+ */
+export function buildInteractiveRequest(
+  config: CodeConfig,
+  answer: CodeAnswer,
+): RunnerRequest | null {
+  try {
+    return buildRunnerRequest(config, assembleCodeSource(config, answer), {
+      priority: "interactive",
+      cases: config.tests.cases.filter((c) => c.visible),
+    });
+  } catch {
+    return null;
+  }
 }
 
 function zeroDetails(

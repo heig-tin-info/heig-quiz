@@ -1090,6 +1090,78 @@ describe("running code (POST /attempts/:id/run)", () => {
     return { evaluation: row, attempt, itemId: items[0]!.id };
   }
 
+  it("never runs a hidden case that shares its name with a visible one", async () => {
+    const { evaluation, attempt, itemId } = await codeAttempt([
+      { name: "same", args: ["visible-arg"], expected: "ok", visible: true },
+      { name: "same", args: ["HIDDEN-ARG"], expected: "secret-expected", visible: false },
+    ]);
+    const sent: { args: string[] }[][] = [];
+    const fakeRunner = {
+      run: async (req: { cases: { args: string[] }[] }) => {
+        sent.push(req.cases);
+        return {
+          compile: { ok: true, stdout: "", stderr: "", ms: 1 },
+          cases: req.cases.map(() => ({
+            exitCode: 0, stdout: "ok", stderr: "", ms: 1,
+            timedOut: false, oom: false, truncated: false,
+          })),
+        };
+      },
+      health: async () => ({ ok: true, languages: ["c"], queued: 0, avgMs: 1 }),
+    };
+    await service.runVisibleCases(db, {
+      runner: fakeRunner as never,
+      evaluation,
+      attempt,
+      itemId,
+      regions: ["return 0;"],
+      now: clock.now(),
+    });
+    expect(sent).toEqual([[{ name: "same", args: ["visible-arg"], stdin: "" }]]);
+  });
+
+  it("runs one request at a time per attempt, so a burst cannot outrun the budget", async () => {
+    const { evaluation, attempt, itemId } = await codeAttempt();
+    let calls = 0;
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const slowRunner = {
+      run: async (req: { cases: unknown[] }) => {
+        calls += 1;
+        await held;
+        return {
+          compile: { ok: true, stdout: "", stderr: "", ms: 1 },
+          cases: req.cases.map(() => ({
+            exitCode: 0, stdout: "ok", stderr: "", ms: 1,
+            timedOut: false, oom: false, truncated: false,
+          })),
+        };
+      },
+      health: async () => ({ ok: true, languages: ["c"], queued: 0, avgMs: 1 }),
+    };
+    const burst = Array.from({ length: 5 }, () =>
+      service.runVisibleCases(db, {
+        runner: slowRunner as never,
+        evaluation,
+        attempt,
+        itemId,
+        regions: ["return 0;"],
+        now: clock.now(),
+      }),
+    );
+    const settled = Promise.allSettled(burst);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    release();
+    const results = await settled;
+    expect(calls).toBe(1);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    for (const r of results.filter((r) => r.status === "rejected")) {
+      expect((r as PromiseRejectedResult).reason).toMatchObject({ code: "rate_limited" });
+    }
+  });
+
   it("answers 503 runner_unavailable with the stub runner (decision D14)", async () => {
     const { evaluation, attempt, itemId } = await codeAttempt();
     await expect(

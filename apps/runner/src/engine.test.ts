@@ -81,6 +81,8 @@ describe("containerArgs", () => {
       "--memory", "128m",
       "--memory-swap", "128m",
       "--cpus", "1",
+      "--ulimit", "core=0:0",
+      "--pull=never",
       "--network", "none",
       "-e", "HOME=/work",
       "-e", "LANG=C.UTF-8",

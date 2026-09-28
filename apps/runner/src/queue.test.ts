@@ -139,4 +139,45 @@ describe("RunQueue", () => {
     await queue.submit(request("grading", "a"));
     expect(queue.stats().avgMs).not.toBeNull();
   });
+
+  it("drops a waiting request whose caller has gone, and hands the signal to a running one", async () => {
+    const held = gate();
+    const signals: (AbortSignal | undefined)[] = [];
+    const ran: string[] = [];
+    const queue = new RunQueue({
+      concurrency: 1,
+      queueMax: 10,
+      run: (req, signal) => {
+        ran.push(req.files[0]!.content);
+        signals.push(signal);
+        return ran.length === 1 ? held.promise : Promise.resolve(EMPTY);
+      },
+    });
+
+    const first = new AbortController();
+    const second = new AbortController();
+    const running = queue.submit(request("grading", "running"), first.signal);
+    const waiting = queue.submit(request("interactive", "waiting"), second.signal);
+    const after = queue.submit(request("grading", "after"));
+    await Promise.resolve();
+    expect(queue.stats()).toMatchObject({ running: 1, queued: 2 });
+
+    second.abort(new Error("gone"));
+    await expect(waiting).rejects.toThrow("gone");
+    expect(queue.depth).toBe(1);
+
+    // A running request is not the queue's to stop: `run` got the signal.
+    first.abort();
+    expect(signals[0]!.aborted).toBe(true);
+
+    held.open();
+    await Promise.all([running, after]);
+    expect(ran).toEqual(["running", "after"]);
+  });
+
+  it("refuses at once a request whose caller has already gone", async () => {
+    const queue = new RunQueue({ concurrency: 1, queueMax: 4, run: () => Promise.resolve(EMPTY) });
+    await expect(queue.submit(request("grading", "a"), AbortSignal.abort())).rejects.toBeDefined();
+    expect(queue.stats()).toMatchObject({ running: 0, queued: 0 });
+  });
 });

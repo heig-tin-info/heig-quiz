@@ -9,7 +9,12 @@ import { reparseMigrate, type RunnerOutcome } from "@quiz/core/server";
 import { splitTemplate } from "@quiz/domain/lockedTemplate";
 
 import { fromCanonical, toCanonical } from "./canonical.js";
-import { finalizeRunnerCode, gradeCode, studentDetails } from "./grade.js";
+import {
+  buildInteractiveRequest,
+  finalizeRunnerCode,
+  gradeCode,
+  studentDetails,
+} from "./grade.js";
 import {
   CODE_CONFIG_VERSION,
   CodeAnswer,
@@ -140,6 +145,11 @@ export const codeServer: QuestionTypeServer<
 
   grade(config: CodeConfig, answer: CodeAnswer | null, ctx: GradeContext) {
     return gradeCode(config, answer, ctx);
+  },
+
+  /** The student's Run: the VISIBLE cases only, rebuilt server-side (invariant 14). */
+  interactiveRequest(config: CodeConfig, answer: CodeAnswer) {
+    return buildInteractiveRequest(config, answer);
   },
 
   finalizeRunner(

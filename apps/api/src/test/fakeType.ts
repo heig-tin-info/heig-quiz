@@ -242,6 +242,21 @@ export const fakeRunnableCode: QuestionTypeServer<
     };
   },
 
+  // The Run button's request: the visible cases, by their flag, like `qt-code`.
+  interactiveRequest(config, answer) {
+    return {
+      language: "c",
+      files: [{ name: "main.c", content: answer.regions.join("\n") }],
+      compileArgs: "",
+      action: "run",
+      limits: { timeMs: 1000, memoryMb: 64, outputKb: 8 },
+      cases: config.cases
+        .filter((c) => c.visible)
+        .map((c) => ({ name: c.name, args: [...c.args], stdin: "" })),
+      priority: "interactive",
+    };
+  },
+
   finalizeRunner(config, _answer, ctx, outcome) {
     const passed = outcome.cases.filter((c) => c.exitCode === 0).length;
     return {

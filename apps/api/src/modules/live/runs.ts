@@ -122,6 +122,35 @@ async function attemptRunContext<T>(
 }
 
 /**
+ * The attempts with a run in flight. The journal-counted budget is
+ * count-then-insert, so parallel requests of one attempt would all read the
+ * same count and all pass; one run at a time per attempt closes that race,
+ * and keeps one student from filling the runner's few slots. In memory: the
+ * API is one process (ADR-001), like the SSE bus and the preview budget.
+ */
+const inFlight = new Set<string>();
+
+async function oneAtATime<R>(attemptId: string, run: () => Promise<R>): Promise<R> {
+  if (inFlight.has(attemptId)) throw new RateLimited(1);
+  inFlight.add(attemptId);
+  try {
+    return await run();
+  } finally {
+    inFlight.delete(attemptId);
+  }
+}
+
+/** {@link runVisibleCasesNow}, one at a time per attempt. */
+export function runVisibleCases(...args: Parameters<typeof runVisibleCasesNow>) {
+  return oneAtATime(args[1].attempt.id, () => runVisibleCasesNow(...args));
+}
+
+/** {@link simulateAnswerNow}, one at a time per attempt. */
+export function simulateAnswer(...args: Parameters<typeof simulateAnswerNow>) {
+  return oneAtATime(args[1].attempt.id, () => simulateAnswerNow(...args));
+}
+
+/**
  * Journals a student's run (nothing student-supplied: the file names are the
  * type's, invariant 14), then runs it; a busy or absent runner is the 503.
  */
@@ -151,7 +180,7 @@ async function runForStudent(
  * with Podman exists (decision D14) — this ends in `503 runner_unavailable`,
  * which is a configuration, not a failure.
  */
-export async function runVisibleCases(
+async function runVisibleCasesNow(
   db: Db,
   input: {
     runner: RunnerService;
@@ -186,8 +215,10 @@ export async function runVisibleCases(
   // `grade` assembles the request server-side from the template and the
   // regions (invariant 14); nothing the browser sent becomes a file name.
   if (first.kind !== "pending" || first.via !== "runner") throw new NotRunnable();
+  const visible = type.interactiveRequest?.(config, answer, ctx) ?? null;
+  if (visible === null) throw new NotRunnable();
 
-  const request = visibleRunRequest(first.request, prepared.student, input);
+  const request = visibleRunRequest(visible, input);
   const { requestId, outcome } = await runForStudent(
     db,
     { ...input, request },
@@ -220,7 +251,7 @@ export async function runVisibleCases(
  * cares about; a simulation is a curve the student asked for, so the response
  * is the delivery.
  */
-export async function simulateAnswer(
+async function simulateAnswerNow(
   db: Db,
   input: {
     runner: RunnerService;
@@ -233,8 +264,8 @@ export async function simulateAnswer(
 ): Promise<RunnerOutcome> {
   const prepared = await attemptRunContext(db, {
     ...input,
-    // A type with no button of its own. `code` is not one of them: it keeps
-    // its older, case-filtering `/run` route.
+    // A type with a button of its own. `code` has the hook too, for `/run`'s
+    // visible cases; its player keeps `/run`, which judges them for it.
     capability: (type) => type.interactiveRequest?.bind(type),
     // The same budget as `/run`, under whichever name the type publishes it:
     // a circuit says `simulationsPerMinute`, a code question `runsPerMinute`.

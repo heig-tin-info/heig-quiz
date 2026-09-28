@@ -36,9 +36,33 @@ sibling project **`~/heig-codespace`** (same author, same stack), where they
 are in production: `images/c-dev/run-hardened.sh`, `infra/seccomp/codespace.json`
 and the engine module `src/engine/`. They arrived in this repository as
 `apps/runner/_from-codespace/`, which this package replaces; the seccomp
-profile now lives at `infra/seccomp/runner.json`, unchanged, and the
+profile now lives at `infra/seccomp/runner.json`, hardened since (below), and the
 `c-dev` image's structure is what `images/Containerfile` is derived from,
 with code-server, gdb, git and every network client dropped.
+
+### The seccomp profile, tightened (security audit, 2026-09-28)
+
+The inherited profile allowed, unconditionally, what a codespace needs and a
+quiz program never does: `unshare`, `setns`, `clone`/`clone3` with any flag,
+`mount`/`umount`/`umount2`/`pivot_root`, the new mount API (`fsopen`,
+`fsmount`, `fsconfig`, `fspick`, `move_mount`, `open_tree`,
+`mount_setattr`), `keyctl`, `ptrace` and `name_to_handle_at`. With them a
+student's program could create a user namespace, get a full set of
+capabilities over it, and add a network namespace to reach the netfilter and
+netlink surface of the host kernel. They are gone from the allow list, so the
+default action answers them (`ENOSYS`; `setns` keeps its `EPERM` rule), and,
+like Docker's default profile:
+
+- `clone` is allowed only when `(flags & 0x7E020000) == 0` — no
+  `CLONE_NEWNS`, `NEWCGROUP`, `NEWUTS`, `NEWIPC`, `NEWUSER`, `NEWPID` or
+  `NEWNET`; the flags are argument 0, argument 1 on s390;
+- `clone3` answers `ENOSYS`: its flags sit in a struct seccomp cannot read,
+  and glibc (threads, `fork`) falls back to `clone` on that answer.
+
+`src/podman.int.test.ts` asserts it from a C program: `unshare`,
+`clone(CLONE_NEWUSER)`, `setns`, `mount`, `fsopen`, `keyctl` and `ptrace` fail,
+`clone3` is `ENOSYS`, and `pthread_create` and `fork` still work. The whole
+integration suite (C, C++, Python, Node, ngspice) passes under it.
 
 What was deliberately *not* carried over:
 
@@ -66,6 +90,8 @@ podman --remote --url unix://<socket> run -d
   --pids-limit 64
   --memory <limits.memoryMb>m --memory-swap <same>   # no swap, or a memory bomb pages instead of dying
   --cpus 1
+  --ulimit core=0:0                   # no core dump
+  --pull=never                        # images are built on the host, never fetched
   --network none
   [--runtime runsc]                   # when the host has gVisor
   -e HOME=/work -e LANG=C.UTF-8       # the CLOSED list, asserted by a test
@@ -132,6 +158,12 @@ host whose Podman service is not running, not the normal path.
    service (`languages.ts`). `src/podman.int.test.ts` proves it against a real
    container, in C and in Python.
 6. The container is destroyed in a `finally`.
+
+A client that goes away before its answer (the API gives up after
+`RUNNER_TIMEOUT_MS`) takes its request with it: waiting, it leaves the queue;
+running, its container is removed at once — the same `remove` as a case past
+its deadline — and no further step starts. A slot never serves a run nobody
+will read.
 
 The container is NOT created with `--rm`: it has to outlive the process that
 ran in it, so a case that timed out can be inspected and the next case can

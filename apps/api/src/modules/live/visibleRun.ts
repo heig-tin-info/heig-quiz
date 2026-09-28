@@ -87,10 +87,12 @@ export function runnableView(student: unknown): RunnableStudentView {
 const FREE_TRY = { expected: "", compareStdout: false, expectedExitCode: 0 };
 
 /**
- * The request of a Run, from the FIRST half of a grading (`type.grade`, which
- * assembled it server-side from the template and the regions — invariant 14).
+ * The request of a Run, from the type's own `interactiveRequest`, which
+ * assembled it server-side from the template and the regions (invariant 14)
+ * and put in it the VISIBLE cases only — chosen by the type's own flag, never
+ * matched here by a name two cases may share.
  *
- * Only what the student may already see: their own stdin, or the VISIBLE
+ * Only what the student may already see: their own stdin, or those visible
  * cases. The hidden half never leaves the grading worker. A visible case
  * keeps the `args` the TYPE put in the request; only the free-stdin try takes
  * a command line from the browser. A compile-only request carries NO case:
@@ -98,23 +100,21 @@ const FREE_TRY = { expected: "", compareStdout: false, expectedExitCode: 0 };
  * also keeps its container TTL (and the journal) honest about what was asked.
  */
 export function visibleRunRequest(
-  first: RunnerRequest,
-  student: RunnableStudentView,
+  visible: RunnerRequest,
   input: {
     stdin?: string | undefined;
     args?: string[] | undefined;
     compileOnly?: boolean | undefined;
   },
 ): RunnerRequest {
-  const visibleNames = new Set((student.visibleCases ?? []).map((c) => c.name));
   const compileOnly = input.compileOnly === true;
   const cases = compileOnly
     ? []
     : input.stdin === undefined
-      ? first.cases.filter((c) => visibleNames.has(c.name))
+      ? visible.cases
       : [{ name: "stdin", args: input.args ?? [], stdin: input.stdin }];
   return {
-    ...first,
+    ...visible,
     ...(compileOnly ? { action: "check" as const } : {}),
     cases,
     priority: "interactive",

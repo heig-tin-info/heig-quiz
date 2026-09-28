@@ -64,7 +64,7 @@ export async function buildApp({ config, engine }: AppDeps): Promise<FastifyInst
   const queue = new RunQueue({
     concurrency: config.RUNNER_CONCURRENCY,
     queueMax: config.RUNNER_QUEUE_MAX,
-    run: (request) => executeRequest(request, { engine: theEngine, config }),
+    run: (request, signal) => executeRequest(request, { engine: theEngine, config, signal }),
   });
 
   registerRoutes(app, { config, engine: theEngine, queue });

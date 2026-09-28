@@ -263,7 +263,9 @@ export async function runPreview(
   const ctx = finalizeContext(evaluation, joined, input.seed, now);
   const first = await type.grade(config, answer.data, { ...ctx, runner: input.runner });
   if (first.kind !== "pending" || first.via !== "runner") throw notRunnable();
-  const request = visibleRunRequest(first.request, student, input);
+  const visible = type.interactiveRequest?.(config, answer.data, ctx) ?? null;
+  if (visible === null) throw notRunnable();
+  const request = visibleRunRequest(visible, input);
   let outcome: RunnerOutcome;
   try {
     outcome = await input.runner.run(request);

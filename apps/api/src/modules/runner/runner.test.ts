@@ -118,6 +118,10 @@ describe("HttpRunner", () => {
     });
     server.post("/run", async (_req, reply) => reply.send(OUTCOME));
     server.post("/garbage/run", async (_req, reply) => reply.send({ nothing: "useful" }));
+    // Far more than the request's own caps allow: 16 KB per stream.
+    server.post("/huge/run", async (_req, reply) =>
+      reply.send({ ...OUTCOME, compile: { ...OUTCOME.compile, stderr: "x".repeat(4 << 20) } }),
+    );
     server.post("/busy/run", async (_req, reply) =>
       reply.code(429).header("retry-after", "2").send({ error: "busy" }),
     );
@@ -174,6 +178,13 @@ describe("HttpRunner", () => {
     await expect(runnerAt("/garbage").run(REQUEST)).rejects.toMatchObject({
       code: "runner_unavailable",
       reason: "bad_response",
+    });
+  });
+
+  it("stops reading a body larger than the request's own caps allow", async () => {
+    await expect(runnerAt("/huge").run(REQUEST)).rejects.toMatchObject({
+      code: "runner_unavailable",
+      reason: "response_too_large",
     });
   });
 
