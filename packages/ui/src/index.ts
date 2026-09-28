@@ -25,7 +25,6 @@ export {
   buttonClass,
   caption,
   card,
-  cardTitleClass,
   codeArea,
   cx,
   hint,

@@ -16,7 +16,13 @@ export const cx = (...parts: (string | false | null | undefined)[]): string =>
 
 export const card = "rounded-card border border-line bg-surface";
 
-export const sectionTitle = "text-base font-semibold text-fg";
+/**
+ * The 16 px title of a card or of a section, as `apps/web`'s `SectionHeading`
+ * writes it: 700 with a tight tracking. It was 600 here while the app's was
+ * 700, so a card title in the code editor read lighter than the heading of
+ * the page around it.
+ */
+export const sectionTitle = "text-base font-bold tracking-tight text-fg";
 
 /**
  * The label above a field, and the caption of a group of fields: 13 px, 500,
@@ -128,18 +134,13 @@ export const table = {
   row: "border-t border-line",
 } as const;
 
-/*
- * The FORM family: the editors and players of mcq, short and cloze are
- * plain forms rather than the card-and-table screens of code and circuit,
- * and they speak in these seven class lists. They used to be copied in the
- * ui.tsx of each of the three packages — and short and cloze had drifted to
- * a literal `rounded-xl` (audit P-01, divergence 1).
+/**
+ * A section of an editor laid out as a plain form (mcq, short, cloze): its
+ * label, its hint and its fields, stacked 8 px apart. The code and circuit
+ * editors put the same content in an `EditorSection` card instead, because
+ * their sections are many and long; the tokens inside are the same.
  */
-
 export const sectionClass = "flex flex-col gap-2";
-
-/** The 16 px section title of a card, as `SectionHeading` writes it. */
-export const cardTitleClass = "text-base font-bold tracking-tight text-fg";
 
 /** Secondary button chrome (pill, hairline), for the editor's add/remove actions. */
 export const buttonClass =

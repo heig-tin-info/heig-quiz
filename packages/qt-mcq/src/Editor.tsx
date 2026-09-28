@@ -54,7 +54,6 @@ import {
 import { mcqEditorStrings, type McqEditorStringKey } from "./strings.js";
 import {
   AsideSection,
-  cardTitleClass,
   cx,
   hint,
   inputClass,
@@ -65,6 +64,7 @@ import {
   PromptField,
   removeAt,
   sectionClass,
+  sectionTitle,
   Segmented,
   textareaClass,
 } from "@quiz/ui";
@@ -277,7 +277,7 @@ export function McqEditor({
    */
   const scoring = (
     <AsideSection aside={aside}>
-      <h3 className={aside ? cardTitleClass : label}>{s.scoring}</h3>
+      <h3 className={aside ? sectionTitle : label}>{s.scoring}</h3>
 
       {/*
        * The policy, and only in `multiple` mode: with one key there is
