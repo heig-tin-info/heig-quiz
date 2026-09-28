@@ -214,6 +214,24 @@ describe("an authoring session", () => {
     expect((await ok("get_evaluation", { evaluationId: created.evaluation.id })).items).toHaveLength(1);
   });
 
+  it("refuses to link a colleague's public pool the teacher only reads (ADR-013)", async () => {
+    const colleague = await server.signIn("teacher");
+    const open = await server.app.inject({
+      method: "POST",
+      url: "/app/api/pools",
+      headers: colleague.headers,
+      payload: { name: "Publique", visibility: "public" },
+    });
+    const course = await ok("create_course", { name: "Emprunt", code: "BORROW-MCP" });
+    const { isError, data } = await call("link_pool_to_course", {
+      courseId: course.id,
+      poolId: open.json().id,
+    });
+    expect(isError).toBe(true);
+    expect(data).toMatchObject({ status: 403, body: { error: "pool_link_forbidden" } });
+    expect((await ok("get_course", { courseId: course.id })).pools).toEqual([]);
+  });
+
   it("refuses an invalid config with its issues, and creates nothing", async () => {
     const pool = await ok("create_pool", { name: "Brouillons" });
     const { isError, data } = await call("create_question", {
