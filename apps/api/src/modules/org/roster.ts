@@ -84,17 +84,27 @@ interface RosterEvent {
  * classroom by the notifications module (ADR-030 §e). The payload is a count
  * and the classroom: no name, no address. Call it after the write has
  * committed.
+ *
+ * BEST-EFFORT: it runs inside a login (the claim at sign-in), a join and a
+ * roster import, none of which may fail because telling the staff did. A
+ * failure is logged and swallowed; the roster itself is already right.
  */
 export async function tellStaff(db: Db, event: RosterEvent): Promise<void> {
-  const seats = await db
-    .select({ userId: courseStaff.userId })
-    .from(courseStaff)
-    .where(and(eq(courseStaff.courseId, event.courseId), ne(courseStaff.userId, event.actorId)));
   const { kind, classroomId, classroomName, count } = event;
-  await notifyMany(
-    db,
-    seats.map((seat) => ({ userId: seat.userId, payload: { kind, classroomId, classroomName, count } })),
-  );
+  try {
+    const seats = await db
+      .select({ userId: courseStaff.userId })
+      .from(courseStaff)
+      .where(and(eq(courseStaff.courseId, event.courseId), ne(courseStaff.userId, event.actorId)));
+    await notifyMany(
+      db,
+      seats.map((seat) => ({ userId: seat.userId, payload: { kind, classroomId, classroomName, count } })),
+    );
+  } catch (err) {
+    // The service layer has no logger (as `realtime/bus.ts`): stderr, which
+    // the process log collects.
+    console.error(`roster: telling the staff of ${kind} in ${classroomId} failed`, err);
+  }
 }
 
 type RoomCount = Omit<RosterEvent, "kind" | "actorId">;

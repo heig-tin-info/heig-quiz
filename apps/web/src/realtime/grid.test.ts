@@ -334,7 +334,7 @@ describe("applyGridEvent — what the grid does not read", () => {
     const before = state();
     for (const event of [
       { type: "clock", serverNow: liveAt(0) },
-      { type: "hint", kinds: ["evaluations"], notice: null },
+      { type: "hint", kinds: ["evaluations"] },
       { type: "grading.progress", evaluationId: EVALUATION_ID, done: 1, total: 2, phase: "auto" },
     ] as ServerEvent[]) {
       expect(applyGridEvent(before, event)).toBe(before);

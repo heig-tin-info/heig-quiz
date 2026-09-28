@@ -618,6 +618,14 @@ payload->>'kind' = '<kind>' AND read_at IS NULL`
 the fold's `INSERT … ON CONFLICT` names it by the same columns and predicate,
 the kind written as a literal (Postgres cannot prove that a bind parameter
 implies the index predicate). The count adds the incoming event's count, so
-a claim pass that flags three lines at once adds three. The manifest was
+a claim pass that flags three lines at once adds three. `student_joined` is sent when a student takes a seat
+themselves — by the join code, or by the claim at their own sign-in — and
+NOT by the reverse claim that a teacher's roster import or e-mail edit runs
+for accounts that already exist: the teacher who imported the list is
+looking at it, and the list itself says who is claimed. `tellStaff` is
+best-effort: a notification that fails is logged and never fails the
+sign-in, the join or the import that raised it. A Graph 400 (an activity
+type the user's installed manifest does not declare) is a permanent Teams
+failure, like a 403 or a 404, and is not retried. The manifest was
 bumped once, to 2.1.0, declaring the activity types of every kind of steps 4
 to 8.

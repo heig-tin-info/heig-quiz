@@ -174,6 +174,10 @@ describe("a folded kind", () => {
   });
 
   it("never duplicates the unread entry under concurrent events", async () => {
+    // PGlite runs one statement at a time, so this proves the fold is ONE
+    // statement that never reads-then-writes (a read-then-insert version
+    // interleaves here too, and duplicates) — not true parallelism. Under a
+    // real PostgreSQL the partial unique index is the arbiter of the race.
     const room = await seedClassroom("PRG3-A");
     const joined = { kind: "student_joined", ...room, count: 1 } as const;
     const created = await Promise.all(Array.from({ length: 8 }, () => service.notify(db, ann, joined)));

@@ -185,8 +185,11 @@ async function fold(
   const kind = value.payload.kind;
   const target = FOLD_TARGETS[kind]!;
   // A literal, never a bind parameter: Postgres infers the arbiter index by
-  // proving this predicate implies the index's, which a `$1` cannot do.
-  // `kind` has been parsed against the closed catalogue.
+  // proving this predicate implies the index's, which a `$1` cannot do. The
+  // kind is a key of the closed FOLD_TARGETS (so parsed against the
+  // catalogue), and checked to be a bare identifier all the same before it
+  // is spliced into SQL.
+  if (!/^[a-z_]+$/.test(kind)) throw new Error(`not a foldable kind: ${kind}`);
   const kindLiteral = sql.raw(`'${kind}'`);
   const count = sql`(${notifications.payload}->>'count')::int + (excluded.payload->>'count')::int`;
   const [row] = await db

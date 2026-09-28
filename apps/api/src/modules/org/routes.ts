@@ -414,23 +414,19 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
     teacher({ ...onEntry, body: EnrollmentPatch }, async ({ req, reply, body, scope: entry }) => {
       const email = body.email?.trim().toLowerCase();
       const emailChanged = email !== undefined && email !== entry.email;
+      let updated: Awaited<ReturnType<typeof service.updateEnrollment>>;
       try {
-        const updated = await service.updateEnrollment(
-          app.db,
-          entry,
-          body,
-          email,
-          emailChanged,
-        );
-        await trace(req, "roster.update", "enrollment", entry.id, { ...body, emailChanged });
-        if (emailChanged) await claimForExistingUsers(app.db, entry.classroomId, req.user!.id);
-        return updated;
+        updated = await service.updateEnrollment(app.db, entry, body, email, emailChanged);
       } catch {
-        // UNIQUE(classroom_id, email)
+        // UNIQUE(classroom_id, email) — and only that: the claim below runs
+        // after the update committed, and its failure is not a duplicate.
         return reply
           .code(409)
           .send({ error: "duplicate_email", message: "This e-mail is already in the roster" });
       }
+      await trace(req, "roster.update", "enrollment", entry.id, { ...body, emailChanged });
+      if (emailChanged) await claimForExistingUsers(app.db, entry.classroomId, req.user!.id);
+      return updated;
     }),
   );
 
