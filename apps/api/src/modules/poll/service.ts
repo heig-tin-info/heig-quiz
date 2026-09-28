@@ -383,11 +383,14 @@ export async function endPoll(
   evaluation: EvaluationRecord,
   now: Date,
   closedBy: ClosedBy = "teacher",
-): Promise<EvaluationRecord> {
-  if (evaluation.state !== "running") return evaluation;
-  const closed = await live.closeEvaluation(app.db, evaluation, now, closedBy, app);
+): Promise<{ evaluation: EvaluationRecord; ended: boolean }> {
+  if (evaluation.state !== "running") return { evaluation, ended: false };
+  const closed = await live.tryCloseEvaluation(app.db, evaluation, now, closedBy, app);
+  // Lost to a concurrent End (the teacher's, or another process's pass):
+  // that one emitted and audited, so this one does neither.
+  if (!closed) return { evaluation: (await byId(app.db, evaluation.id))!, ended: false };
   await emitTally(app.db, closed, now);
-  return closed;
+  return { evaluation: closed, ended: true };
 }
 
 /**
@@ -408,7 +411,8 @@ export const POLL_IDLE_MS = 12 * 60 * 60 * 1000;
  *
  * Each one ends through {@link endPoll}, the path of the teacher's End — the
  * same events, the same grading pass, the same `poll.end` entry, whose actor
- * is the system. A second pass finds nothing: the poll is no longer running.
+ * is the system. A second pass finds nothing: the poll is no longer running;
+ * a pass that loses the race to a manual End writes and emits nothing.
  */
 export async function endIdlePolls(app: FastifyInstance, now: Date): Promise<EvaluationRecord[]> {
   const cutoff = new Date(now.getTime() - POLL_IDLE_MS);
@@ -430,7 +434,8 @@ export async function endIdlePolls(app: FastifyInstance, now: Date): Promise<Eva
     );
   const ended: EvaluationRecord[] = [];
   for (const row of idle) {
-    const closed = await endPoll(app, row, now, "server");
+    const { evaluation: closed, ended: byThisPass } = await endPoll(app, row, now, "server");
+    if (!byThisPass) continue;
     await audit(app.db, {
       actorType: "system",
       action: "poll.end",

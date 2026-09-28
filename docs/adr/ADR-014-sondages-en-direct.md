@@ -493,8 +493,9 @@ sessions. The product owner accepted an automatic end after 12 hours without ans
 1. **The rule.** A poll ends when it is `running` and neither the poll nor any of its answers
    moved for `POLL_IDLE_MS` (12 h, `modules/poll/service.ts`): `evaluations.updated_at` is
    at most `now − 12 h`, and no `answers.updated_at` of its attempts is later than that.
-   The poll's `updated_at` is its start (created and started in one call) and every reveal
-   step, so a poll nobody answered counts from the last thing its teacher did; an answer
+   The poll's `updated_at` is its start (created and started in one call), every reveal
+   step and every edit of the row (a rename through `PATCH` included), so a poll nobody
+   answered counts from the last thing its teacher did; an answer
    counts from its server receipt time, a changed vote included. A join without an answer
    does not count: a QR scanned the next morning keeps nothing alive. Exactly 12 hours ends
    it; 11 h 59 does not.
@@ -505,7 +506,9 @@ sessions. The product owner accepted an automatic end after 12 hours without ans
 3. **The same end.** The pass calls `endPoll`, the path of the End button: the attempts are
    expired (`closed_by = server`), the state becomes `closed`, the grading pass is enqueued,
    the tally and state frames go out, and `poll.end` is audited with the system as actor and
-   `{ reason: "idle" }` as payload. Nothing is released (8).
+   `{ reason: "idle" }` as payload. Nothing is released (8). The close is a compare-and-set
+   (`tryCloseEvaluation`): a pass that loses the race to the teacher's End emits and audits
+   nothing, and neither does an End that loses to the pass.
 4. **The ticker closes (invariant 5).** A tick task, `poll.end_idle` (`modules/poll/jobs.ts`,
    part of `CORE_TASKS`), runs the pass once a minute: the condition is re-read every time, so
    a restart catches up and an ended poll no longer matches — a second pass does nothing.

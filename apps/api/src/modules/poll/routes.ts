@@ -353,8 +353,8 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
     "/app/api/evaluations/:id/poll/end",
     { preHandler: requireTeacher },
     teacher({ params: IdParam, load: staffPoll }, async ({ req, now, scope }) => {
-      const closed = await service.endPoll(app, scope.evaluation, now);
-      await trace(req, "poll.end", "evaluation", closed.id);
+      const { evaluation: closed, ended } = await service.endPoll(app, scope.evaluation, now);
+      if (ended) await trace(req, "poll.end", "evaluation", closed.id);
       return view(req, { ...scope, evaluation: closed });
     }),
   );

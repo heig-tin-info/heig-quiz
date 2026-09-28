@@ -84,6 +84,7 @@ export {
   pauseEvaluation,
   resumeEvaluation,
   closeEvaluation,
+  tryCloseEvaluation,
   extendTime,
 } from "./control.js";
 export {

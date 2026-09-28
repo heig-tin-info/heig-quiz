@@ -13,7 +13,7 @@ import { testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import { CORE_TASKS } from "../../ticker.js";
 import * as poolService from "../pool/service.js";
-import { answerPoll, createPoll, endIdlePolls, join, POLL_IDLE_MS } from "./service.js";
+import { answerPoll, createPoll, endIdlePolls, endPoll, join, POLL_IDLE_MS } from "./service.js";
 
 let server: TestServer;
 let teacher: { id: string; headers: Record<string, string> };
@@ -108,6 +108,39 @@ describe("a poll nobody answers", () => {
     expect(await passEnds(id, at(POLL_IDLE_MS + 2 * HOUR))).toBe(false);
     expect(await endEntries(id)).toHaveLength(1);
     expect((await stateOf(id)).closedAt).toEqual(at(POLL_IDLE_MS + HOUR));
+  });
+});
+
+describe("a poll nobody answers, in no classroom", () => {
+  it("ends at 12 h like a classroom's", async () => {
+    const scope = await createPoll(server.app.db, {
+      classroomId: null,
+      questionId,
+      createdBy: teacher.id,
+      now: T0,
+    });
+    expect(await passEnds(scope.evaluation.id, at(POLL_IDLE_MS - MINUTE))).toBe(false);
+    expect(await passEnds(scope.evaluation.id, at(POLL_IDLE_MS))).toBe(true);
+  });
+});
+
+describe("a race with the teacher's End", () => {
+  it("leaves the one that lost silent: no second audit entry", async () => {
+    const scope = await launch(T0);
+    const id = scope.evaluation.id;
+    const ended = await server.app.inject({
+      method: "POST",
+      url: `/app/api/evaluations/${id}/poll/end`,
+      headers: teacher.headers,
+    });
+    expect(ended.statusCode).toBe(200);
+    // The pass read the poll as running just before the teacher's End landed.
+    const late = await endPoll(server.app, scope.evaluation, at(POLL_IDLE_MS), "server");
+    expect(late.ended).toBe(false);
+    expect(late.evaluation.state).toBe("closed");
+    const entries = await endEntries(id);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({ actorType: "user", actorUserId: teacher.id });
   });
 });
 
