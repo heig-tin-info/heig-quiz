@@ -2,6 +2,8 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, configure } from "@testing-library/react";
 import { afterEach, beforeEach, vi } from "vitest";
 
+import { loadLocale } from "../i18n";
+
 /*
  * jsdom setup for the component suite (the `dom` project in vite.config.ts).
  * Kept as small as the components allow: every stub below exists because a
@@ -22,6 +24,13 @@ import { afterEach, beforeEach, vi } from "vitest";
  * broken expectation failing promptly.
  */
 configure({ asyncUtilTimeout: 5_000 });
+
+/*
+ * French is lazy in the app (`i18n/index.tsx`); `main.tsx` awaits it before
+ * the first render. Loaded once here for the same reason, so a test rendered
+ * with `locale: "fr"` reads French from its first frame.
+ */
+await loadLocale("fr");
 
 /**
  * jsdom runs no layout, so every element reports `offsetWidth`/`offsetHeight`

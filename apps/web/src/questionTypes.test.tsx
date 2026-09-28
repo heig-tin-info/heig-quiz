@@ -45,7 +45,7 @@ import {
 
 function makeT(locale: Locale): TFunction {
   return (key, vars) => {
-    const raw = DICTS[locale][key as string] ?? String(key);
+    const raw = DICTS[locale]![key as string] ?? String(key);
     return vars ? raw.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? `{${k}}`)) : raw;
   };
 }
@@ -96,7 +96,7 @@ describe("question type strings", () => {
       // must have one.
       const full = `${prefix}.${key}`;
       const exists = (locale: Locale) =>
-        DICTS[locale][full] !== undefined || typeof value === "function";
+        DICTS[locale]![full] !== undefined || typeof value === "function";
       expect(exists("en"), `${full} (en)`).toBe(true);
       expect(exists("fr"), `${full} (fr)`).toBe(true);
     }
@@ -112,7 +112,7 @@ describe("question type strings", () => {
     for (const [key, value] of Object.entries(defaults)) {
       if (typeof value !== "string" || MAPPED_ELSEWHERE[prefix]?.includes(key)) continue;
       for (const locale of ["en", "fr"] as const) {
-        const entry = DICTS[locale][`${prefix}.${key}`];
+        const entry = DICTS[locale]![`${prefix}.${key}`];
         expect(names(entry ?? ""), `${prefix}.${key} (${locale})`).toEqual(names(value));
       }
     }

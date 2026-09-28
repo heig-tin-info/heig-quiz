@@ -12,7 +12,7 @@ import {
   type Command,
   type CommandContext,
 } from "./commands";
-import { DICTS, type Locale, type TFunction } from "./i18n";
+import { DICTS, loadLocale, type Locale, type TFunction } from "./i18n";
 import { makeClassroomSummary, makeCourseSummary, makeMe } from "./test/fixtures";
 
 /*
@@ -22,11 +22,13 @@ import { makeClassroomSummary, makeCourseSummary, makeMe } from "./test/fixtures
  * context is that the context can be written down.
  */
 
+await loadLocale("fr");
+
 /** The real dictionaries, so a missing `fr` string fails a test instead of
  *  falling back silently. */
 function makeT(locale: Locale): TFunction {
   return (key, vars) => {
-    const raw = DICTS[locale][key as string] ?? String(key);
+    const raw = DICTS[locale]![key as string] ?? String(key);
     return vars ? raw.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? `{${k}}`)) : raw;
   };
 }
