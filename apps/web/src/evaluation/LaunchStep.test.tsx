@@ -122,21 +122,29 @@ describe("LaunchStep checklist (#152)", () => {
     expect(screen.queryByText(/safe exam browser/i)).toBeNull();
   });
 
-  it("warns on an empty roster and on a common end already past", async () => {
+  it("warns on an empty roster, and blocks on a common end already past (#178)", async () => {
     mockFetch({});
-    render(
-      withEvaluation(
-        {
-          settings: { ...makeEvaluationDetail().evaluation.settings, timing: "deadline" },
-          opensAt: new Date(Date.now() - 2 * HOUR).toISOString(),
-          closesAt: new Date(Date.now() - HOUR).toISOString(),
-        },
-        { roster: { enrolled: 0, unlinked: 0, conflicts: 0 } },
-      ),
+    const past = {
+      settings: { ...makeEvaluationDetail().evaluation.settings, timing: "deadline" as const },
+      opensAt: new Date(Date.now() - 2 * HOUR).toISOString(),
+      closesAt: new Date(Date.now() - HOUR).toISOString(),
+    };
+    const { unmount } = render(
+      withEvaluation(past, { roster: { enrolled: 0, unlinked: 0, conflicts: 0 } }),
     );
-    expect(screen.getByRole("heading", { name: /2 things to look at/i })).toBeInTheDocument();
+    // The server refuses to open it: a blocker, not a warning.
+    expect(screen.getByRole("heading", { name: /not ready yet/i })).toBeInTheDocument();
     expect(screen.getByText(/nobody in the classroom yet/i)).toBeInTheDocument();
     expect(screen.getByText(/the common end has passed/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open the waiting room/i })).toBeDisabled();
+    unmount();
+
+    // Scheduled, its dates cannot be moved one at a time: the row points to
+    // "Back to draft", not to the timing step.
+    render(withEvaluation({ ...past, state: "scheduled" }));
+    // In the row and in the status line of the action bar.
+    expect(screen.getAllByText(/go back to draft to choose new dates/i)).toHaveLength(2);
+    expect(screen.getByRole("button", { name: /^back to draft$/i })).toBeEnabled();
   });
 
   it("sends a row to the step or the roster that fixes it", async () => {
@@ -175,7 +183,7 @@ describe("LaunchStep checklist (#152)", () => {
     const { calls } = mockFetch({ [`POST ${BASE}/state`]: ok({}) });
     render(withEvaluation({ state: "scheduled", opensAt: new Date(Date.now() + 24 * HOUR).toISOString() }));
     expect(screen.getByRole("status")).toHaveTextContent(/opens by itself on/i);
-    await user.click(screen.getByRole("button", { name: /back to draft/i }));
+    await user.click(screen.getByRole("button", { name: /^back to draft$/i }));
     await waitFor(() =>
       expect(calls.find((c) => c.url.endsWith("/state"))).toMatchObject({ body: { to: "draft" } }),
     );
@@ -282,5 +290,22 @@ describe("Schedule… (#152)", () => {
     const dialog = await screen.findByRole("dialog", { name: /schedule the opening/i });
     await user.click(within(dialog).getByRole("button", { name: /^schedule$/i }));
     expect(await within(dialog).findByText(/choose when it opens/i)).toBeInTheDocument();
+  });
+
+  it("translates the server's refusal of a common end its clock says has passed (#178)", async () => {
+    const user = userEvent.setup();
+    mockFetch({
+      [`POST ${BASE}/state`]: fail(409, {
+        error: "illegal_transition",
+        message: "the common end has already passed",
+        reason: "closes_at_past",
+      }),
+    });
+    const opensAt = new Date(Date.now() + 24 * HOUR).toISOString();
+    render(withEvaluation({ opensAt }));
+    await user.click(screen.getByRole("button", { name: /schedule/i }));
+    const dialog = await screen.findByRole("dialog", { name: /schedule the opening/i });
+    await user.click(within(dialog).getByRole("button", { name: /^schedule$/i }));
+    expect(await within(dialog).findByText(/the common end has passed/i)).toBeInTheDocument();
   });
 });

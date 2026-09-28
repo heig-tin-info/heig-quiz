@@ -321,14 +321,15 @@ describe("a retake (F-EVAL-15)", () => {
 });
 
 describe("the settings (F-EVAL-15)", () => {
+  const SETTINGS_NOW = new Date("2026-09-25T09:00:00.000Z");
   it("refuses retakes on an exam and accepts them on an exercise", async () => {
     const examSeed = await seedLive(db, { mode: "exam" });
     const exam = await reload(db, examSeed.evaluationId);
     await expect(
-      patchEvaluation(db, exam, { settings: { retakes: { enabled: true, keep: "best", maxAttempts: null } } }, { attemptCount: 0 }),
+      patchEvaluation(db, exam, { settings: { retakes: { enabled: true, keep: "best", maxAttempts: null } } }, { attemptCount: 0, now: SETTINGS_NOW }),
     ).rejects.toMatchObject({ code: "retakes_not_allowed", status: 422 });
     // Switching them OFF on an exam always passes.
-    await patchEvaluation(db, exam, { settings: { retakes: { enabled: false, keep: "best", maxAttempts: null } } }, { attemptCount: 0 });
+    await patchEvaluation(db, exam, { settings: { retakes: { enabled: false, keep: "best", maxAttempts: null } } }, { attemptCount: 0, now: SETTINGS_NOW });
 
     const exSeed = await seedLive(db, { mode: "exercise" });
     const ex = await reload(db, exSeed.evaluationId);
@@ -336,7 +337,7 @@ describe("the settings (F-EVAL-15)", () => {
       db,
       ex,
       { settings: { retakes: { enabled: true, keep: "last", maxAttempts: 3 } } },
-      { attemptCount: 0 },
+      { attemptCount: 0, now: SETTINGS_NOW },
     );
     expect((next.settings as { retakes: RetakeSettings }).retakes).toEqual({
       enabled: true,
@@ -345,7 +346,7 @@ describe("the settings (F-EVAL-15)", () => {
     });
     // Frozen like every structural setting once an attempt exists.
     await expect(
-      patchEvaluation(db, next, { settings: { retakes: { enabled: false, keep: "best", maxAttempts: null } } }, { attemptCount: 1 }),
+      patchEvaluation(db, next, { settings: { retakes: { enabled: false, keep: "best", maxAttempts: null } } }, { attemptCount: 1, now: SETTINGS_NOW }),
     ).rejects.toMatchObject({ code: "locked" });
   });
 });

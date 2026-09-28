@@ -178,7 +178,7 @@ describe("state machine (§5.1)", () => {
       .update(evaluations)
       .set({
         settings: { ...service.settingsOf(row), timing: "deadline" },
-        opensAt: clock.now(),
+        opensAt: new Date(clock.now().getTime() + 60_000),
         closesAt: new Date(clock.now().getTime() + 3_600_000),
       })
       .where(eq(evaluations.id, row.id));
@@ -232,11 +232,105 @@ describe("state machine (§5.1)", () => {
     }
   });
 
+  /*
+   * #178: a time already past, by the server's clock. A common end reached
+   * before the evaluation opens would close it at the ticker's next pass; a
+   * schedule for a past instant would open it there. The instant itself is
+   * past: `<=`, not `<`.
+   */
+  it("refuses to schedule or open once the common end has passed (#178)", async () => {
+    const seed = await seedLive(db, {
+      durationS: null,
+      settings: { timing: "deadline" },
+      opensAt: new Date(clock.now().getTime() - 3_600_000),
+      closesAt: clock.now(),
+    });
+    const row = await reload(db, seed.evaluationId);
+    for (const to of ["scheduled", "lobby", "running"] as const) {
+      expect(() =>
+        service.guardTransition(row, to, { itemCount: 2, attemptCount: 0, now: clock.now() }),
+      ).toThrow(expect.objectContaining({ details: { reason: "closes_at_past" } }));
+    }
+    const justBefore = new Date(clock.now().getTime() - 1);
+    for (const to of ["lobby", "running"] as const) {
+      expect(() =>
+        service.guardTransition(row, to, { itemCount: 2, attemptCount: 0, now: justBefore }),
+      ).not.toThrow();
+    }
+    // A resume is not a start: it moves the common end by the pause itself.
+    const paused = { ...row, state: "paused" as const };
+    expect(() =>
+      service.guardTransition(paused, "running", { itemCount: 2, attemptCount: 0, now: clock.now() }),
+    ).not.toThrow();
+  });
+
+  it("refuses to schedule at an opening time already past, and says so (#178)", async () => {
+    const server = await testServer();
+    try {
+      const teacher = await server.signIn("teacher");
+      const now = server.clock.now();
+      const seed = await seedLive(server.app.db, { teacherId: teacher.id, opensAt: now });
+      const schedule = () =>
+        server.app.inject({
+          method: "POST",
+          url: `/app/api/evaluations/${seed.evaluationId}/state`,
+          headers: teacher.headers,
+          payload: { to: "scheduled" },
+        });
+
+      const refused = await schedule();
+      expect(refused.statusCode).toBe(409);
+      expect(TransitionRefusal.parse(refused.json())).toMatchObject({
+        error: "illegal_transition",
+        reason: "opens_at_past",
+      });
+
+      server.clock.set(new Date(now.getTime() - 1));
+      expect((await schedule()).statusCode).toBe(200);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("keeps a scheduled evaluation out of the past when it is patched (#178)", async () => {
+    const server = await testServer();
+    try {
+      const teacher = await server.signIn("teacher");
+      const now = server.clock.now();
+      const hour = 3_600_000;
+      const seed = await seedLive(server.app.db, {
+        teacherId: teacher.id,
+        durationS: null,
+        settings: { timing: "deadline" },
+        opensAt: new Date(now.getTime() + hour),
+        closesAt: new Date(now.getTime() + 2 * hour),
+      });
+      await service.applyState(server.app.db, await reload(server.app.db, seed.evaluationId), "scheduled", now);
+      const patch = (payload: Record<string, unknown>) =>
+        server.app.inject({
+          method: "PATCH",
+          url: `/app/api/evaluations/${seed.evaluationId}`,
+          headers: teacher.headers,
+          payload,
+        });
+
+      const opens = await patch({ opensAt: now.toISOString() });
+      expect(opens.statusCode).toBe(409);
+      expect(TransitionRefusal.parse(opens.json()).reason).toBe("opens_at_past");
+      const closes = await patch({ closesAt: now.toISOString() });
+      expect(closes.statusCode).toBe(409);
+      expect(TransitionRefusal.parse(closes.json()).reason).toBe("closes_at_past");
+      expect((await patch({ opensAt: new Date(now.getTime() + 1).toISOString() })).statusCode).toBe(200);
+    } finally {
+      await server.close();
+    }
+  });
+
   it("refuses to pause anything but an exam", async () => {
     const seed = await seedLive(db, { mode: "exercise" });
     const row = await service.applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
     expect(() =>
-      service.guardTransition(row, "paused", { itemCount: 2, attemptCount: 0 }),
+      service.guardTransition(row, "paused", { itemCount: 2, attemptCount: 0, now: clock.now() }),
     ).toThrow(service.IllegalTransition);
   });
 
@@ -499,7 +593,7 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
       ];
       for (const patch of refused) {
         await expect(
-          service.patchEvaluation(db, row, patch, ctx),
+          service.patchEvaluation(db, row, patch, { ...ctx, now: clock.now() }),
           `${state} ${JSON.stringify(patch)}`,
         ).rejects.toMatchObject({ code: "running_locked", status: 409 });
       }
@@ -514,7 +608,7 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
       db,
       row,
       { title: "Renamed", accessCode: "open-sesame", ipAllowlist: ["10.0.0.0/8"] },
-      { attemptCount: 3 },
+      { attemptCount: 3, now: clock.now() },
     );
     expect(next.title).toBe("Renamed");
     expect(next.accessCode).toBe("open-sesame");
@@ -528,7 +622,7 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
         db,
         row,
         { feedbackPolicy: { when: "none", showKey: false } },
-        { attemptCount: 3 },
+        { attemptCount: 3, now: clock.now() },
       );
       expect(service.feedbackOf(next), state).toMatchObject({ when: "none", showKey: false });
     }
@@ -551,7 +645,7 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
         .where(eq(evaluations.id, seed.evaluationId));
       const row = await reload(db, seed.evaluationId);
       await expect(
-        service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, { attemptCount: 2 }),
+        service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, { attemptCount: 2, now: clock.now() }),
       ).rejects.toMatchObject({ code: "feedback_not_allowed", status: 422 });
       expect(service.feedbackOf(await reload(db, seed.evaluationId)).when).toBe("on_release");
 
@@ -559,7 +653,7 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
         db,
         row,
         { feedbackPolicy: { showKey: false } },
-        { attemptCount: 2 },
+        { attemptCount: 2, now: clock.now() },
       );
       expect(service.feedbackOf(hidden), state).toMatchObject({ when: "on_release", showKey: false });
     }
@@ -574,7 +668,7 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
         .where(eq(evaluations.id, seed.evaluationId));
       const row = await reload(db, seed.evaluationId);
       await expect(
-        service.patchEvaluation(db, row, { feedbackPolicy: { showKey: true } }, { attemptCount: 1 }),
+        service.patchEvaluation(db, row, { feedbackPolicy: { showKey: true } }, { attemptCount: 1, now: clock.now() }),
         state,
       ).rejects.toMatchObject({ code: "poll_feedback_locked", status: 409 });
       expect(await reload(db, seed.evaluationId), state).toEqual(row);
@@ -588,7 +682,7 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
 
   it("leaves the configuration open in the lobby, and the feedback policy open once closed", async () => {
     const { row: lobby } = await inState("lobby");
-    const moved = await service.patchEvaluation(db, lobby, { durationS: 600 }, { attemptCount: 0 });
+    const moved = await service.patchEvaluation(db, lobby, { durationS: 600 }, { attemptCount: 0, now: clock.now() });
     expect(moved.durationS).toBe(600);
 
     const { row: closed } = await inState("closed");
@@ -596,11 +690,11 @@ describe("the configuration locks while the evaluation runs (#86)", () => {
       db,
       closed,
       { feedbackPolicy: { when: "none" } },
-      { attemptCount: 2 },
+      { attemptCount: 2, now: clock.now() },
     );
     expect(service.feedbackOf(released).when).toBe("none");
     await expect(
-      service.patchEvaluation(db, released, { durationS: 60 }, { attemptCount: 2 }),
+      service.patchEvaluation(db, released, { durationS: 60 }, { attemptCount: 2, now: clock.now() }),
     ).rejects.toMatchObject({ code: "locked", status: 409 });
   });
 
@@ -661,10 +755,10 @@ describe("patch and duplicate", () => {
     const seed = await seedLive(db);
     await addAttempt(seed.evaluationId, seed.studentIds[0]!);
     const row = await reload(db, seed.evaluationId);
-    const renamed = await service.patchEvaluation(db, row, { title: "New" }, { attemptCount: 1 });
+    const renamed = await service.patchEvaluation(db, row, { title: "New" }, { attemptCount: 1, now: clock.now() });
     expect(renamed.title).toBe("New");
     await expect(
-      service.patchEvaluation(db, renamed, { durationS: 60 }, { attemptCount: 1 }),
+      service.patchEvaluation(db, renamed, { durationS: 60 }, { attemptCount: 1, now: clock.now() }),
     ).rejects.toMatchObject({ code: "locked", status: 409 });
   });
 
@@ -672,7 +766,7 @@ describe("patch and duplicate", () => {
     const seed = await seedLive(db);
     const row = await reload(db, seed.evaluationId);
     await expect(
-      service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, { attemptCount: 0 }),
+      service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, { attemptCount: 0, now: clock.now() }),
     ).rejects.toMatchObject({ code: "feedback_not_allowed", status: 422 });
     // Nothing was written: the refusal is not a clamp.
     expect(service.feedbackOf(await reload(db, seed.evaluationId)).when).toBe("on_release");
@@ -689,25 +783,26 @@ describe("patch and duplicate", () => {
     // Take-home: allowed.
     row = await service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, {
       attemptCount: 0,
+      now: clock.now(),
     });
     expect(service.feedbackOf(row).when).toBe("immediate");
 
     // Adding a waiting room under `immediate` is refused…
     await expect(
-      service.patchEvaluation(db, row, { settings: { lobby: "manual" } }, { attemptCount: 0 }),
+      service.patchEvaluation(db, row, { settings: { lobby: "manual" } }, { attemptCount: 0, now: clock.now() }),
     ).rejects.toMatchObject({ code: "feedback_not_allowed", status: 422 });
     // …and accepted when the same patch brings the policy back, as the screen does.
     row = await service.patchEvaluation(
       db,
       row,
       { settings: { lobby: "manual" }, feedbackPolicy: { when: "on_release" } },
-      { attemptCount: 0 },
+      { attemptCount: 0, now: clock.now() },
     );
     expect(service.settingsOf(row).lobby).toBe("manual");
 
     // Asking for `immediate` under a waiting room is refused too.
     await expect(
-      service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, { attemptCount: 0 }),
+      service.patchEvaluation(db, row, { feedbackPolicy: { when: "immediate" } }, { attemptCount: 0, now: clock.now() }),
     ).rejects.toMatchObject({ code: "feedback_not_allowed" });
   });
 
@@ -721,7 +816,7 @@ describe("patch and duplicate", () => {
       db,
       await reload(db, seed.evaluationId),
       { title: "Renamed", feedbackPolicy: { showKey: true } },
-      { attemptCount: 0 },
+      { attemptCount: 0, now: clock.now() },
     );
     expect(renamed.title).toBe("Renamed");
   });

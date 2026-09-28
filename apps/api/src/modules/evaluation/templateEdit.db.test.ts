@@ -334,7 +334,7 @@ describe("a template deleted under a write", () => {
     await templates.deleteTemplate(server.app.db, row);
     await expect(
       templates.editTemplate(server.app.db, row, (tx, locked, ctx) =>
-        service.patchEvaluation(tx, locked, { durationS: 60 }, ctx),
+        service.patchEvaluation(tx, locked, { durationS: 60 }, { ...ctx, now: server.clock.now() }),
       ),
     ).rejects.toBeInstanceOf(templates.TemplateGone);
   });

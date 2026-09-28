@@ -208,16 +208,26 @@ export async function extendTime(
   // In `deadline` timing the attempts hang off `closes_at` (§5.2): extending
   // everybody without moving it would hand the minutes out and let the
   // ticker take them back at the old instant.
-  if (target === undefined && settingsOf(evaluation).timing === "deadline" && evaluation.closesAt) {
-    const committed = await extendClosesAt(db, evaluation.id, seconds, now);
+  const movesEnd =
+    target === undefined && settingsOf(evaluation).timing === "deadline" && evaluation.closesAt !== null;
+  if (movesEnd) {
+    // Before the start, from now if the end has passed: the way out of a
+    // waiting room whose common end went by (#178).
+    const started = evaluation.state !== "lobby" && evaluation.state !== "scheduled";
+    const committed = await extendClosesAt(db, evaluation.id, seconds, now, !started);
     // The dashboard and the players read the new end from this frame — the
     // row as committed, not `evaluation`, which a concurrent pause or resume
     // may have outdated since this request loaded it.
     if (committed) events.stateChanged(committed, now);
   }
+  // A `not_started` attempt takes its deadline from `closes_at` when it
+  // begins: once that has moved, extra time on it would count twice.
   const where =
     target === undefined
-      ? and(eq(attempts.evaluationId, evaluation.id), inArray(attempts.state, ["not_started", "in_progress"]))
+      ? and(
+          eq(attempts.evaluationId, evaluation.id),
+          inArray(attempts.state, movesEnd ? ["in_progress"] : ["not_started", "in_progress"]),
+        )
       : and(eq(attempts.id, target), eq(attempts.evaluationId, evaluation.id));
   const updated = await db
     .update(attempts)

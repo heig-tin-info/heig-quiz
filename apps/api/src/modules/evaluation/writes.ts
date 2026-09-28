@@ -23,6 +23,7 @@ import {
   isConfigFieldWritable,
   isFeedbackAllowed,
   negativeMarkingAllowedFor,
+  pastTiming,
   retakesAllowedFor,
 } from "@quiz/domain";
 
@@ -47,6 +48,7 @@ import {
   NoPublishedVersion,
   QuestionNotInCourse,
   PollNotImplemented,
+  refusePastTiming,
 } from "./shared.js";
 import { settingsOf, feedbackOf, preferredMcqPolicy } from "./reads.js";
 import { latestPublished, type CopyHome } from "./items.js";
@@ -218,7 +220,7 @@ export async function patchEvaluation(
   db: DbOrTx,
   row: EvaluationRecord,
   patch: EvaluationPatch,
-  ctx: { attemptCount: number },
+  ctx: { attemptCount: number; now: Date },
 ): Promise<EvaluationRecord> {
   const lock = configLock(row.state, ctx.attemptCount);
   if (Object.keys(patch).some((k) => !isConfigFieldWritable(lock, k))) {
@@ -270,6 +272,20 @@ export async function patchEvaluation(
     }
   }
 
+  // A scheduled evaluation stays one the guard would schedule (#178): moved
+  // into the past, the ticker would open it, or close it, at its next pass.
+  if (
+    row.state === "scheduled" &&
+    (patch.opensAt !== undefined || patch.closesAt !== undefined || patch.settings !== undefined)
+  ) {
+    const timing = {
+      timing: ((next.settings ?? settingsOf(row)) as EvaluationSettings).timing,
+      opensAt: next.opensAt !== undefined ? next.opensAt : row.opensAt,
+      closesAt: next.closesAt !== undefined ? next.closesAt : row.closesAt,
+    };
+    refusePastTiming("scheduled", "scheduled", pastTiming(timing, "scheduled", "scheduled", ctx.now));
+  }
+
   await db.update(evaluations).set(next).where(eq(evaluations.id, row.id));
   return (await byId(db, row.id))!;
 }
@@ -291,17 +307,24 @@ export async function deleteEvaluation(db: Db, row: EvaluationRecord): Promise<v
  * returned as committed — the caller publishes that, never the record it
  * loaded before (a pause or a resume may have landed in between). Null when
  * there was no `closes_at`.
+ *
+ * `fromNow`, before the start (#178): an end already past is moved from
+ * `now`, so "+10 min" on an end gone an hour ago means ten minutes from now.
  */
 export async function extendClosesAt(
   db: DbOrTx,
   id: string,
   seconds: number,
   now: Date,
+  fromNow = false,
 ): Promise<EvaluationRecord | null> {
+  const base = fromNow
+    ? sql`greatest(${evaluations.closesAt}, ${now.toISOString()}::timestamptz)`
+    : sql`${evaluations.closesAt}`;
   const [row] = await db
     .update(evaluations)
     .set({
-      closesAt: sql`${evaluations.closesAt} + make_interval(secs => ${seconds})`,
+      closesAt: sql`${base} + make_interval(secs => ${seconds})`,
       updatedAt: now,
     })
     .where(and(eq(evaluations.id, id), isNotNull(evaluations.closesAt)))

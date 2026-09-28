@@ -5,7 +5,7 @@
 import { and, count, eq } from "drizzle-orm";
 
 import type { EvaluationState } from "@quiz/contracts";
-import { missingTimingFields } from "@quiz/domain";
+import { missingTimingFields, pastTiming, type PastTiming } from "@quiz/domain";
 
 import { isUniqueViolation, type Db } from "../../db/client.js";
 import { evaluationItems, evaluations } from "../../db/schema.js";
@@ -14,6 +14,7 @@ import {
   type DbOrTx,
   IllegalTransition,
   CodeTaken,
+  refusePastTiming,
   PollNotImplemented,
 } from "./shared.js";
 import { settingsOf, attemptCount } from "./reads.js";
@@ -43,6 +44,8 @@ export function isLegalTransition(from: EvaluationState, to: EvaluationState): b
 interface TransitionContext {
   itemCount: number;
   attemptCount: number;
+  /** The server's clock: a time already past is refused against it (#178). */
+  now: Date;
 }
 
 /**
@@ -57,12 +60,22 @@ export function guardTransition(
   const from = row.state;
   if (!isLegalTransition(from, to)) throw new IllegalTransition(from, to);
   assertReady(row, to, ctx.itemCount);
+  refusePastTiming(from, to, pastTimingOf(row, to, ctx.now));
   if (to === "paused" && row.mode !== "exam") {
     throw new IllegalTransition(from, to, "only an exam can be paused");
   }
   if (to === "draft" && ctx.attemptCount > 0) {
     throw new IllegalTransition(from, to, "an attempt exists: the evaluation cannot be reopened");
   }
+}
+
+/**
+ * `pastTiming` (#178) for a move of `row` to `to`: what the guard refuses,
+ * and what the ticker's own openings leave where they are.
+ */
+export function pastTimingOf(row: EvaluationRecord, to: EvaluationState, now: Date): PastTiming | null {
+  const timing = { timing: settingsOf(row).timing, opensAt: row.opensAt, closesAt: row.closesAt };
+  return pastTiming(timing, row.state, to, now);
 }
 
 /**
@@ -180,6 +193,7 @@ export async function transition(
   guardTransition(row, to, {
     itemCount: items[0]?.n ?? 0,
     attemptCount: await attemptCount(db, row.id),
+    now,
   });
   return applyState(db, row, to, now);
 }

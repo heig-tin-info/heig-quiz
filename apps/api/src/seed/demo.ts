@@ -234,12 +234,13 @@ async function applyTiming(
         opensAt: opensAt.toISOString(),
         closesAt: closesAt.toISOString(),
       },
-      { attemptCount: 0 },
+      { attemptCount: 0, now },
     );
   }
   if (spec.durationS !== undefined) {
     return evaluationService.patchEvaluation(db, row, { durationS: spec.durationS }, {
       attemptCount: 0,
+      now,
     });
   }
   return row;

@@ -2,13 +2,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users, Wifi, WifiOff } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { DashboardRow, EvaluationDetail } from "@quiz/contracts";
+import { TransitionRefusal, type DashboardRow, type EvaluationDetail } from "@quiz/contracts";
 
-import { api } from "../api";
+import { ApiError, api } from "../api";
 import { useConfirm } from "../confirm";
 import { gradingLinks } from "../grading";
 import { useT } from "../i18n";
-import { useErrorToast } from "../notify";
+import { useErrorToast, useToast } from "../notify";
 import { presence } from "../realtime/grid";
 import type { Route } from "../router";
 import { useShortcuts } from "../shortcuts";
@@ -57,6 +57,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   const qc = useQueryClient();
   const confirm = useConfirm();
   const toastError = useErrorToast();
+  const toast = useToast();
   // The display switches (F-DASH-02), remembered per browser (#80).
   const [toggles, setToggles] = useLiveToggles();
   const [fullscreen, toggleFullscreen] = useFullscreen();
@@ -107,8 +108,14 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
       }),
     onSuccess: refresh,
     // A refused control (a 409 illegal transition, a lost session) must say
-    // so: a silent failure is a button that "has no effect" (#77).
-    onError: toastError("live.controlFailed"),
+    // so: a silent failure is a button that "has no effect" (#77). A start
+    // past the common end (#178) says what to press instead: the timing is
+    // locked in the waiting room, the extension is not.
+    onError: (error) =>
+      error instanceof ApiError &&
+      TransitionRefusal.safeParse(error.body).data?.reason === "closes_at_past"
+        ? toast(t("live.closesAtPast"), "error")
+        : toastError("live.controlFailed")(error),
   });
   const attemptControl = useMutation({
     mutationFn: (v: { attemptId: string; action: "close" | "reopen" }) =>
@@ -304,6 +311,12 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
         }
         state={evaluationState}
         closesAt={view.evaluation.closesAt}
+        endPassed={
+          lobby &&
+          detail.data?.evaluation.settings.timing === "deadline" &&
+          view.evaluation.closesAt !== null &&
+          Date.parse(view.evaluation.closesAt) <= serverNow()
+        }
         clock={serverNow}
         controls={controls}
         fullscreen={fullscreen}

@@ -10,7 +10,7 @@ import { GRACE_MS } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
 import { attempts, evaluations } from "../../db/schema.js";
-import { applyState, byId, settingsOf, type EvaluationRecord } from "../evaluation/service.js";
+import { applyState, byId, pastTimingOf, settingsOf, type EvaluationRecord } from "../evaluation/service.js";
 import * as events from "./events.js";
 import { presence } from "../realtime/presence.js";
 import { type AttemptRecord, enrolledCounts, gradeFinishedRetakes } from "./attempt.js";
@@ -88,6 +88,10 @@ export async function autoOpenScheduled(db: Db, now: Date): Promise<EvaluationRe
   const moved: EvaluationRecord[] = [];
   for (const row of due) {
     const settings = settingsOf(row);
+    // A common end already past (#178): opening would close it at the next
+    // pass, with nobody having sat it. It stays scheduled, where the launch
+    // step says so and the teacher can take it back to draft.
+    if (pastTimingOf(row, settings.lobby === "skip" ? "running" : "lobby", now)) continue;
     const next =
       settings.lobby === "skip"
         ? await startEvaluation(db, row, now)
@@ -113,6 +117,8 @@ export async function autoStartFullLobbies(db: Db, now: Date): Promise<Evaluatio
   for (const row of occupied) {
     const enrolled = enrolledOf.get(row.id) ?? 0;
     if (enrolled === 0 || presence.count(row.id) < enrolled) continue;
+    // Past its common end (#178), it waits for the teacher's "+N min".
+    if (pastTimingOf(row, "running", now)) continue;
     moved.push(await startEvaluation(db, row, now));
   }
   return moved;

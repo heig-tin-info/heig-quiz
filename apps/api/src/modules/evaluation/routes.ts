@@ -168,13 +168,13 @@ export async function evaluationPlugin(app: FastifyInstance) {
     { preHandler: requireTeacher },
     teacher(
       { params: IdParam, body: EvaluationPatch, load: staffEvaluation },
-      async ({ req, body, scope }) => {
+      async ({ req, now, body, scope }) => {
         const row = await contentWrite(
           req,
           scope.evaluation,
           "evaluation.update",
           { fields: Object.keys(body) },
-          (ctx) => service.patchEvaluation(app.db, scope.evaluation, body, ctx),
+          (ctx) => service.patchEvaluation(app.db, scope.evaluation, body, { ...ctx, now }),
         );
         return detail(req, row);
       },
@@ -440,9 +440,9 @@ export async function evaluationPlugin(app: FastifyInstance) {
     { preHandler: requireTeacher },
     teacher(
       { params: IdParam, body: TemplatePatch, load: staffTemplate },
-      ({ req, body, scope }) =>
+      ({ req, now, body, scope }) =>
         templateWrite(req, scope.template, { fields: Object.keys(body) }, (tx, row, ctx) =>
-          service.patchEvaluation(tx, row, body, ctx),
+          service.patchEvaluation(tx, row, body, { ...ctx, now }),
         ),
     ),
   );

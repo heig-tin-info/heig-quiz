@@ -617,12 +617,16 @@ export type EvaluationStateBody = z.infer<typeof EvaluationStateBody>;
  * printing `message`, which is for logs and API clients (#76).
  * `opens_at_missing` refuses `→ scheduled` without an opening time: the
  * ticker opens a scheduled evaluation at `opensAt`, and without one it would
- * stay scheduled forever (#152).
+ * stay scheduled forever (#152). `closes_at_past` refuses to schedule or open
+ * an evaluation whose common end has passed, and `opens_at_past` a schedule
+ * for a time already past, both against the server's clock (#178).
  */
 export const TransitionRefusal = z.object({
   error: z.literal("illegal_transition"),
   message: z.string(),
-  reason: z.enum(["no_items", "timing_incomplete", "opens_at_missing"]).optional(),
+  reason: z
+    .enum(["no_items", "timing_incomplete", "opens_at_missing", "closes_at_past", "opens_at_past"])
+    .optional(),
   missing: z.array(z.enum(["durationS", "opensAt", "closesAt", "timing"])).optional(),
 });
 export type TransitionRefusal = z.infer<typeof TransitionRefusal>;

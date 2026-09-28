@@ -7,6 +7,7 @@ import { countsAsCompleted,
   itemListDiff,
   itemListLock,
   missingTimingFields,
+  pastTiming,
   parseCloze,
   round2,
   splitTemplate,
@@ -1461,7 +1462,7 @@ on("DELETE", "/app/api/templates/:id/items/:itemId", (m) =>
 );
 on("POST", "/app/api/evaluations/:id/state", (m, body) => {
   const e = evaluationOr404(m.groups!.id!);
-  // The server's two readiness refusals (`guardTransition`), with the same
+  // The server's readiness refusals (`guardTransition`), with the same
   // body, so the launch step's translated messages can be seen here (#76).
   if (body.to !== "draft") {
     if (e.items.length === 0) {
@@ -1493,6 +1494,15 @@ on("POST", "/app/api/evaluations/:id/state", (m, body) => {
       message: "a scheduled evaluation needs an opening time",
       reason: "opens_at_missing",
     });
+  }
+  const past = pastTiming(
+    { timing: (e.settings as { timing: EvaluationTiming }).timing, opensAt: e.opensAt, closesAt: e.closesAt },
+    e.state,
+    body.to as MockEvaluation["state"],
+    new Date(),
+  );
+  if (past) {
+    throw new MockPayload(409, { error: "illegal_transition", message: past, reason: past });
   }
   e.state = body.to as MockEvaluation["state"];
   return toEvaluation(e);
