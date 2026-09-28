@@ -27,16 +27,17 @@
  */
 import { zipSync } from "fflate";
 
-import {
-  NOTIFICATION_KINDS,
-  teamsTabTarget,
-  type NotificationKind,
-  type NotificationPayload,
-} from "@quiz/contracts";
+import { NOTIFICATION_KINDS, type NotificationKind, type NotificationPayload } from "@quiz/contracts";
 
 import type { ActivityNotification } from "./teams.js";
 import { TEAMS_COLOR_PNG, TEAMS_OUTLINE_PNG } from "./teamsIcons.js";
-import { activityParameters, serverText, type MailLocale, type RenderedNotification } from "./templates.js";
+import {
+  activityParameters,
+  notificationPath,
+  serverText,
+  type MailLocale,
+  type RenderedNotification,
+} from "./templates.js";
 
 /** Bump by hand on any change of the package below (semver, as Teams wants it). */
 export const TEAMS_APP_VERSION = "2.0.0";
@@ -60,6 +61,7 @@ export const TEAMS_ACTIVITY_TYPES: Record<NotificationKind, string> = {
 
 interface AppOptions {
   appId: string;
+  /** `PUBLIC_URL`, without a trailing slash (`config.ts` normalizes it). */
   publicUrl: string;
 }
 
@@ -86,7 +88,7 @@ export function teamsAppStrings(locale: MailLocale): Record<string, string> {
 }
 
 export function teamsManifest(opts: AppOptions): Record<string, unknown> {
-  const site = opts.publicUrl.replace(/\/+$/, "");
+  const site = opts.publicUrl;
   const host = new URL(site).host;
   const en = teamsAppStrings("en");
   return {
@@ -159,32 +161,29 @@ export function teamsAppPackage(opts: AppOptions): Buffer {
 
 /**
  * The Teams deep link to the app's tab, carrying where the notification
- * leads as the tab's `subEntityId` — a `TeamsTabTarget` of
- * `@quiz/contracts`, as JSON, which the tab parses and turns into a path
- * through the router (never a path or a URL here).
+ * leads as the tab's `subEntityId`: the app path the bell and the e-mail
+ * open (`notificationPath`). The tab never follows it as given — it parses
+ * it into a route of the router and writes the path back from that route,
+ * under its own origin (`TeamsTabPage`).
  */
 export function teamsTabDeepLink(appId: string, payload: NotificationPayload): string {
-  const context = JSON.stringify({ subEntityId: JSON.stringify(teamsTabTarget(payload)) });
+  const context = JSON.stringify({ subEntityId: notificationPath(payload) });
   return `https://teams.microsoft.com/l/entity/${encodeURIComponent(appId)}/${TEAMS_TAB_ENTITY}?context=${encodeURIComponent(context)}`;
-}
-
-/** The first line of an activity: what the notification is about, by name. */
-function topicOf(payload: NotificationPayload): string {
-  return payload.kind === "results_released" ? payload.evaluationTitle : payload.poolName;
 }
 
 /**
  * The activity-feed notification of one payload, for one recipient:
  * `message` is the notification rendered in their platform language
- * (`renderNotification`), of which the activity takes the preview line.
+ * (`renderNotification`), of which the activity takes the topic and the
+ * preview line.
  */
 export function teamsActivity(
   appId: string,
   payload: NotificationPayload,
-  message: Pick<RenderedNotification, "preview">,
+  message: Pick<RenderedNotification, "topic" | "preview">,
 ): ActivityNotification {
   return {
-    topic: topicOf(payload).replace(/\s+/g, " ").trim().slice(0, 150) || serverText("en")["app.name.short"],
+    topic: message.topic,
     webUrl: teamsTabDeepLink(appId, payload),
     activityType: TEAMS_ACTIVITY_TYPES[payload.kind],
     previewText: message.preview,

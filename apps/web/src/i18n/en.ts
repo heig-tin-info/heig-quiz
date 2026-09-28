@@ -284,6 +284,7 @@ export const en = {
   "teamsTab.refused.title": "This organization cannot be linked",
   "teamsTab.refused.body": "HEIG Quiz only links Teams accounts of the HEIG-VD organization. Sign in to Teams with your HEIG-VD account.",
   "teamsTab.retry": "Try again",
+  "teamsTab.errorCode": "Server error {code}",
   "tokens.title": "API tokens",
   "tokens.description": "For scripts, and for MCP clients that cannot sign in by themselves. A token acts as you.",
   "tokens.new": "New token",

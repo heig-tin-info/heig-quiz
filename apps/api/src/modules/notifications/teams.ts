@@ -97,7 +97,8 @@ export function createTeamsClient(config: TeamsConfig, fetchImpl: typeof fetch =
     } catch {
       // Not JSON: the status says enough.
     }
-    throw new TeamsError(`${what}: ${res.status} ${body.slice(0, 300)}`, retryable ? undefined : res.status, code);
+    // Microsoft's own words stay out of the logs: the status and the code say it.
+    throw new TeamsError(`${what}: ${res.status}${code ? ` ${code}` : ""}`, retryable ? undefined : res.status, code);
   }
 
   async function graphToken(tenantId: string): Promise<string> {

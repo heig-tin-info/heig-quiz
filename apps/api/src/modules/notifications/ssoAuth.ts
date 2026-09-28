@@ -36,7 +36,7 @@
  */
 import { createRemoteJWKSet, customFetch, jwtVerify, type JWTPayload } from "jose";
 
-import { tenantAllowed, type AllowedTenants } from "./teamsLink.js";
+import { tenantAllowed, type AllowedTenants, type TeamsIdentity } from "./teamsLink.js";
 
 export const ENTRA_LOGIN = "https://login.microsoftonline.com";
 export const ENTRA_JWKS = `${ENTRA_LOGIN}/common/discovery/v2.0/keys`;
@@ -64,20 +64,9 @@ export class SsoAuthError extends Error {
   }
 }
 
-/** The Teams (Entra) account behind a verified token. */
-export interface SsoIdentity {
-  /** Lower-case, as `TEAMS_ALLOWED_TENANTS` is compared. */
-  tenantId: string;
-  aadObjectId: string;
-  /** The display name (`name`), or the username when there is none. */
-  teamsName: string;
-  /** The sign-in name (`preferred_username`), usually an e-mail; may be empty. */
-  teamsUsername: string;
-}
-
 export interface SsoTokenVerifier {
   /** Throws a {@link SsoAuthError}; never logs the token. */
-  verify(authorization: string | undefined): Promise<SsoIdentity>;
+  verify(authorization: string | undefined): Promise<TeamsIdentity>;
 }
 
 const text = (value: unknown): string => (typeof value === "string" ? value.trim() : "");

@@ -118,7 +118,8 @@ export async function notificationsPlugin(app: FastifyInstance, opts: { config: 
     const token = await issueLinkToken(app.db, who, app.clock.now());
     const unlinked: TeamsTabState = {
       state: "unlinked",
-      linkUrl: `${config.WEB_URL.replace(/\/+$/, "")}/teams/link?token=${token}`,
+      // `WEB_URL` has no trailing slash: `config.ts` normalizes it once.
+      linkUrl: `${config.WEB_URL}/teams/link?token=${token}`,
     };
     return unlinked;
   });
@@ -159,7 +160,7 @@ export async function notificationsPlugin(app: FastifyInstance, opts: { config: 
       if (!pending) return reply.code(404).send({ error: "link_invalid" });
       const preview: TeamsLinkPreview = {
         teamsName: pending.teamsName,
-        teamsUsername: pending.teamsUsername,
+        teamsUsername: pending.teamsUsername || null,
         tenantId: pending.tenantId,
         expiresAt: pending.expiresAt.toISOString(),
       };

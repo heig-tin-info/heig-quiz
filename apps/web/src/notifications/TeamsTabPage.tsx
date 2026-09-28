@@ -2,12 +2,12 @@ import type { ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CircleCheck, ExternalLink, Link2, MessagesSquare, ShieldAlert, TriangleAlert } from "lucide-react";
 
-import { TeamsTabState, TeamsTabTarget } from "@quiz/contracts";
+import { TeamsTabState } from "@quiz/contracts";
 
 import { api, ApiError } from "../api";
 import { useT } from "../i18n";
 import { teamsHostKey, teamsTabKey } from "../queryKeys";
-import { routeToPath, type Route } from "../router";
+import { parsePath, routeToPath } from "../router";
 import { Button, Card, GateFrame, Skeleton } from "../ui";
 import { connectTeams, type TeamsHost } from "./teamsHost";
 
@@ -20,9 +20,8 @@ import { connectTeams, type TeamsHost } from "./teamsHost";
  * Quiz session opens in the system browser.
  *
  * ONE primary action per state: link (not linked yet), or open the page a
- * notification leads to (linked, opened from the activity feed). The target
- * of a notification is the tab's `subEntityId`, parsed by `TeamsTabTarget`
- * and turned into a path by the router — never a URL taken as is.
+ * notification leads to (linked, opened from the activity feed). That page
+ * is the tab's `subEntityId`, an app path (`tabTargetPath`).
  */
 export function TeamsTabPage({ connect = connectTeams }: { connect?: () => Promise<TeamsHost | null> }) {
   const host = useQuery({ queryKey: teamsHostKey, queryFn: connect, retry: false, staleTime: Infinity });
@@ -31,20 +30,15 @@ export function TeamsTabPage({ connect = connectTeams }: { connect?: () => Promi
   return <InTeams host={host.data} />;
 }
 
-/** The page a notification leads to, or null when the tab was opened from the app bar. */
-export function tabTargetRoute(subPageId: string | undefined): Route | null {
-  if (!subPageId) return null;
-  let raw: unknown;
-  try {
-    raw = JSON.parse(subPageId);
-  } catch {
-    return null;
-  }
-  const target = TeamsTabTarget.safeParse(raw);
-  if (!target.success) return null;
-  return target.data.kind === "feedback"
-    ? { view: "feedback", attemptId: target.data.attemptId }
-    : { view: "pool", id: target.data.poolId };
+/**
+ * The app path a notification leads to, or null when the tab was opened from
+ * the app bar. The `subEntityId` is never followed as given: it is parsed
+ * into a route of the router (anything unknown is the home) and the path is
+ * written back from that route, to be opened under the page's own origin —
+ * so a crafted deep link cannot become an open redirect.
+ */
+export function tabTargetPath(subPageId: string | undefined): string | null {
+  return subPageId ? routeToPath(parsePath(subPageId)) : null;
 }
 
 /** Why the tab could not ask the server: Teams gave no token, or the server refused. */
@@ -52,9 +46,16 @@ class SsoFailure extends Error {}
 
 function InTeams({ host }: { host: TeamsHost }) {
   const t = useT();
+  // Each call mints a new link and voids the previous one: never refetched
+  // behind the user's back (a focus back from the browser, before they
+  // confirmed, would kill the link they are using). "Check again" is the
+  // one refresh.
   const state = useQuery({
     queryKey: teamsTabKey,
     retry: false,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     queryFn: async () => {
       let token: string;
       try {
@@ -86,7 +87,10 @@ function InTeams({ host }: { host: TeamsHost }) {
         </Frame>
       );
     }
-    const code = err instanceof SsoFailure ? err.message : err instanceof ApiError ? `HTTP ${err.status}` : err.message;
+    const code =
+      err instanceof SsoFailure
+        ? err.message
+        : t("teamsTab.errorCode", { code: err instanceof ApiError ? String(err.status) : err.message });
     const sso = err instanceof SsoFailure || (err instanceof ApiError && err.status === 401);
     return (
       <Frame
@@ -117,12 +121,12 @@ function InTeams({ host }: { host: TeamsHost }) {
     );
   }
 
-  const target = tabTargetRoute(host.subPageId);
+  const target = tabTargetPath(host.subPageId);
   if (target) {
     return (
       <Frame icon={<Badge icon={ExternalLink} />} title={t("teamsTab.target.title")}>
         <p className="mt-2 text-sm leading-relaxed text-fg-muted">{t("teamsTab.target.body")}</p>
-        <Button size="lg" className="mt-6 w-full" onClick={() => open(routeToPath(target))}>
+        <Button size="lg" className="mt-6 w-full" onClick={() => open(target)}>
           {t("teamsTab.target.action")}
         </Button>
         <p className="mt-4 text-xs text-fg-faint">{t("teamsTab.target.account", { name: data.accountName })}</p>

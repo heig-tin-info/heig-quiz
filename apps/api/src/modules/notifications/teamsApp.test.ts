@@ -9,7 +9,7 @@ import * as fs from "node:fs";
 import { unzipSync } from "fflate";
 import { describe, expect, it, vi } from "vitest";
 
-import { NOTIFICATION_KINDS, TeamsTabTarget, type NotificationPayload } from "@quiz/contracts";
+import { NOTIFICATION_KINDS, type NotificationPayload } from "@quiz/contracts";
 
 import {
   TEAMS_ACTIVITY_TYPES,
@@ -31,7 +31,7 @@ function pngSize(png: Uint8Array): [number, number] {
 }
 
 const APP_ID = "31583357-0d89-48ab-8eeb-e9bc49f9e243";
-const OPTS = { appId: APP_ID, publicUrl: "https://quiz.chevallier.io/" };
+const OPTS = { appId: APP_ID, publicUrl: "https://quiz.chevallier.io" };
 const POOL = "11111111-1111-4111-8111-111111111111";
 const ATTEMPT = "33333333-3333-4333-8333-333333333333";
 
@@ -167,17 +167,17 @@ describe("an activity of the app", () => {
     expect(cut.topic).toHaveLength(150);
   });
 
-  it("links to the tab with a structured target, never a path", () => {
+  it("links to the tab, carrying the path the bell opens", () => {
     const [released, shared] = PAYLOADS;
-    for (const [payload, target] of [
-      [released!, { kind: "feedback", attemptId: ATTEMPT }],
-      [shared!, { kind: "pool", poolId: POOL }],
+    for (const [payload, path] of [
+      [released!, `/attempts/${ATTEMPT}/feedback`],
+      [shared!, `/pools/${POOL}`],
     ] as const) {
       const url = new URL(teamsTabDeepLink(APP_ID, payload));
       expect(url.origin).toBe("https://teams.microsoft.com");
       expect(url.pathname).toBe(`/l/entity/${APP_ID}/home`);
       const context = JSON.parse(url.searchParams.get("context")!) as { subEntityId: string };
-      expect(TeamsTabTarget.parse(JSON.parse(context.subEntityId))).toEqual(target);
+      expect(context.subEntityId).toBe(path);
     }
   });
 });

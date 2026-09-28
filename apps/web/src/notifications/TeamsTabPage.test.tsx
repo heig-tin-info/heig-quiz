@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { TeamsTabState } from "@quiz/contracts";
 
 import { mockFetch, ok, renderWithProviders } from "../test/render";
-import { tabTargetRoute, TeamsTabPage } from "./TeamsTabPage";
+import { tabTargetPath, TeamsTabPage } from "./TeamsTabPage";
 import type { TeamsHost } from "./teamsHost";
 
 /*
@@ -68,7 +68,7 @@ describe("the Teams tab", () => {
 
   it("opens the page a notification leads to, from its structured target", async () => {
     mockFetch({ [TAB]: ok({ state: "linked", accountName: "Léa Rochat" } satisfies TeamsTabState) });
-    const { host, connect } = fakeHost({ subPageId: JSON.stringify({ kind: "feedback", attemptId: ATTEMPT }) });
+    const { host, connect } = fakeHost({ subPageId: `/attempts/${ATTEMPT}/feedback` });
     const user = userEvent.setup();
     renderWithProviders(<TeamsTabPage connect={connect} />, { route: "/teams" });
     expect(await screen.findByRole("heading", { name: "This notification opens in HEIG Quiz" })).toBeVisible();
@@ -103,24 +103,28 @@ describe("the Teams tab", () => {
 });
 
 describe("the target of a notification", () => {
-  it("becomes a path of the app, or nothing", () => {
-    expect(tabTargetRoute(JSON.stringify({ kind: "feedback", attemptId: ATTEMPT }))).toEqual({
-      view: "feedback",
-      attemptId: ATTEMPT,
-    });
+  it("is a path of the app, rewritten from the route it names", () => {
+    expect(tabTargetPath(`/attempts/${ATTEMPT}/feedback`)).toBe(`/attempts/${ATTEMPT}/feedback`);
     const pool = "11111111-1111-4111-8111-111111111111";
-    expect(tabTargetRoute(JSON.stringify({ kind: "pool", poolId: pool }))).toEqual({ view: "pool", id: pool });
+    expect(tabTargetPath(`/pools/${pool}`)).toBe(`/pools/${pool}`);
+    expect(tabTargetPath(undefined)).toBeNull();
+    expect(tabTargetPath("")).toBeNull();
+  });
+
+  it("never leaves the app's origin, whatever the deep link carries", () => {
     for (const hostile of [
-      undefined,
-      "",
-      "not json",
-      "/admin",
-      "https://evil.example/",
-      JSON.stringify({ kind: "feedback", attemptId: "../../admin" }),
-      JSON.stringify({ kind: "url", url: "https://evil.example/" }),
-      JSON.stringify({ kind: "pool", poolId: "//evil.example" }),
+      "//evil.com",
+      "https://evil.com",
+      "/\\evil.com",
+      "\\\\evil.com",
+      "javascript:alert(1)",
+      "not a path",
     ]) {
-      expect(tabTargetRoute(hostile), String(hostile)).toBeNull();
+      const path = tabTargetPath(hostile)!;
+      expect(path, hostile).toMatch(/^\/(?![/\\])/);
+      const url = new URL(path, "https://quiz.test");
+      expect(url.origin, hostile).toBe("https://quiz.test");
+      expect(path, hostile).not.toContain("evil");
     }
   });
 });

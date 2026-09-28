@@ -281,6 +281,7 @@ export const fr: Record<keyof Dict, string> = {
   "teamsTab.refused.title": "Cette organisation ne peut pas être liée",
   "teamsTab.refused.body": "HEIG Quiz ne lie que des comptes Teams de l'organisation HEIG-VD. Connectez-vous à Teams avec votre compte HEIG-VD.",
   "teamsTab.retry": "Réessayer",
+  "teamsTab.errorCode": "Erreur du serveur {code}",
   "tokens.title": "Jetons d'API",
   "tokens.description": "Pour les scripts, et pour les clients MCP qui ne savent pas se connecter eux-mêmes. Un jeton agit en votre nom.",
   "tokens.new": "Nouveau jeton",

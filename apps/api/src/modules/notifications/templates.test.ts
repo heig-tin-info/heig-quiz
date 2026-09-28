@@ -35,9 +35,8 @@ describe("renderNotification", () => {
     expect(fr.html).toContain("Réglages des notifications");
     expect(fr.preview).toBe("Les résultats de « Test 0 — bases du C » sont disponibles.");
 
-    const role = renderNotification(shared, "fr", "https://quiz.test/");
+    const role = renderNotification(shared, "fr", "https://quiz.test");
     expect(role.text).toContain("avec vous comme contributeur");
-    // A trailing slash on the base does not double in the link.
     expect(role.text).toContain("https://quiz.test/pools/" + POOL);
   });
 

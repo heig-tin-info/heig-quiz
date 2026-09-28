@@ -22,8 +22,7 @@ const RELEASED_ATTEMPT = "22222222-2222-4222-8222-222222222223";
 export function fakeTeamsHost(): TeamsHost | null {
   if (teamsScene === null) return null;
   return {
-    subPageId:
-      teamsScene === "target" ? JSON.stringify({ kind: "feedback", attemptId: RELEASED_ATTEMPT }) : undefined,
+    subPageId: teamsScene === "target" ? `/attempts/${RELEASED_ATTEMPT}/feedback` : undefined,
     getAuthToken: async () => {
       if (teamsScene === "sso") throw new Error("resourceRequiresConsent");
       return "header.payload.signature";

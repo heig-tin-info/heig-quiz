@@ -114,7 +114,10 @@ export const TeamsLinkStatus = z.object({
   linkedAt: z.string().nullable(),
   /** The display name of the linked Teams account; null when not linked. */
   teamsName: z.string().nullable(),
-  /** Its sign-in name (the Microsoft account's e-mail); null when not linked. */
+  /**
+   * Its sign-in name (the Microsoft account's e-mail); null when not linked,
+   * or when Teams did not give one (a link made before it was recorded).
+   */
   teamsUsername: z.string().nullable(),
 });
 export type TeamsLinkStatus = z.infer<typeof TeamsLinkStatus>;
@@ -148,9 +151,10 @@ export const TeamsLinkPreview = z.object({
   teamsName: z.string(),
   /**
    * Its sign-in name, usually the Microsoft account's e-mail (the token's
-   * `preferred_username`). Shown, never compared with the Quiz account's.
+   * `preferred_username`); null when the token carried none. Shown, never
+   * compared with the Quiz account's address.
    */
-  teamsUsername: z.string(),
+  teamsUsername: z.string().nullable(),
   /** The Microsoft Entra tenant of that Teams account. */
   tenantId: z.string(),
   expiresAt: z.string(),
@@ -176,29 +180,6 @@ export const TeamsTabState = z.discriminatedUnion("state", [
   z.object({ state: z.literal("unlinked"), linkUrl: z.string() }),
 ]);
 export type TeamsTabState = z.infer<typeof TeamsTabState>;
-
-/**
- * Where a Teams activity-feed notification leads (ADR-030): the tab's
- * `subEntityId`, as JSON. A STRUCTURED target, never a path or a URL: the
- * tab parses it with this schema and asks the router for the path, so a
- * crafted deep link cannot send anybody to another site.
- */
-export const TeamsTabTarget = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("feedback"), attemptId: z.uuid() }),
-  z.object({ kind: z.literal("pool"), poolId: z.uuid() }),
-]);
-export type TeamsTabTarget = z.infer<typeof TeamsTabTarget>;
-
-/** The page a notification opens, as a tab target (the page the bell opens). */
-export function teamsTabTarget(payload: NotificationPayload): TeamsTabTarget {
-  switch (payload.kind) {
-    case "results_released":
-      return { kind: "feedback", attemptId: payload.attemptId };
-    case "pool_shared":
-    case "pool_ownership":
-      return { kind: "pool", poolId: payload.poolId };
-  }
-}
 
 /**
  * The catalogue of kinds and the payload union are one list: a kind added to

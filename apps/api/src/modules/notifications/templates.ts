@@ -152,12 +152,20 @@ export interface RenderedNotification {
   text: string;
   /** The HTML part of the e-mail. */
   html: string;
-  /** One plain line, at most {@link PREVIEW_MAX} characters: the Teams activity's preview. */
+  /** What the notification is about, by name (the evaluation, the pool): the Teams activity's topic. */
+  topic: string;
+  /** The body as one line: the Teams activity's preview. */
   preview: string;
 }
 
-/** What Teams shows of an activity's preview text; longer is cut with an ellipsis. */
-export const PREVIEW_MAX = 150;
+/** What Teams shows of an activity's topic and preview; longer is cut with an ellipsis. */
+export const TEAMS_LINE_MAX = 150;
+
+/** One line of at most {@link TEAMS_LINE_MAX} characters, an ellipsis marking a cut. */
+function teamsLine(s: string): string {
+  const line = oneLine(s);
+  return line.length > TEAMS_LINE_MAX ? `${line.slice(0, TEAMS_LINE_MAX - 1)}…` : line;
+}
 
 /** Narrows `users.locale` (null, or a value this dictionary lacks) to a language. */
 export function mailLocale(locale: string | null | undefined): MailLocale {
@@ -166,7 +174,8 @@ export function mailLocale(locale: string | null | undefined): MailLocale {
 
 /**
  * Renders one notification for one recipient. `webUrl` is where a browser
- * reaches the SPA (`WEB_URL`, which defaults to `PUBLIC_URL`).
+ * reaches the SPA (`WEB_URL`, which defaults to `PUBLIC_URL`; `config.ts` strips its
+ * trailing slash, once for every caller).
  */
 export function renderNotification(
   payload: NotificationPayload,
@@ -176,7 +185,7 @@ export function renderNotification(
   const t = DICTS[locale];
   const kind: NotificationKind = payload.kind;
   const vars = varsOf(payload, t);
-  const base = webUrl.replace(/\/+$/, "");
+  const base = webUrl;
   const link = `${base}${notificationPath(payload)}`;
   const settings = `${base}/settings`;
 
@@ -194,10 +203,10 @@ export function renderNotification(
   <p style="font-size:12px;line-height:1.5;color:#71717a;border-top:1px solid #e4e4e7;padding-top:12px;margin:0">${escapeHtml(t.footer)} <a href="${escapeHtml(settings)}" style="color:#71717a">${escapeHtml(t["footer.link"])}</a></p>
 </div>`;
 
-  const line = oneLine(body);
-  const preview = line.length > PREVIEW_MAX ? `${line.slice(0, PREVIEW_MAX - 1)}…` : line;
+  const topic = teamsLine(vars.evaluationTitle ?? vars.poolName ?? "") || t["app.name.short"];
+  const preview = teamsLine(body);
 
-  return { subject, text, html, preview };
+  return { subject, text, html, topic, preview };
 }
 
 /** The `{name}` placeholders of a template, in order. */

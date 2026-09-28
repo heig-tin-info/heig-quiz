@@ -193,9 +193,7 @@ const PAGES: { readonly [V in Route["view"]]: Page<V> } = {
   join: (r, c) => <PollJoin code={r.code} me={c.me} navigate={c.navigate} />,
   oauthConsent: (r, c) => <OAuthConsent id={r.id} me={c.me} />,
   teamsLink: (_, c) => <TeamsLinkPage me={c.me} onSettings={() => c.navigate({ view: "settings" })} />,
-  // Rendered by `App` before any session is asked for; this entry only keeps
-  // the table whole.
-  teamsTab: () => <TeamsTabPage />,
+  teamsTab: () => null,
   // Invariant 3: the gallery exists in development only. The
   // route parses in every build; this is what refuses to render it.
   devUi: (_, c) => (import.meta.env.DEV ? <DevGallery /> : <TeacherHome navigate={c.navigate} />),
@@ -243,7 +241,6 @@ const FULL_SCREEN: ReadonlySet<Route["view"]> = new Set([
   "join",
   "oauthConsent",
   "teamsLink",
-  "teamsTab",
 ]);
 
 /**

@@ -130,6 +130,8 @@ describe("the Graph client", () => {
       expect((err as TeamsError).status).toBe(status);
       expect((err as TeamsError).code).toBe("Forbidden");
       expect((err as TeamsError).permanent).toBe(permanent);
+      // Graph's code and the status, never Microsoft's prose.
+      expect((err as TeamsError).message).toBe(`send the Teams activity: ${status} Forbidden`);
     }
   });
 
@@ -144,6 +146,7 @@ describe("the Graph client", () => {
       expect(err).toBeInstanceOf(TeamsError);
       expect((err as TeamsError).permanent).toBe(false);
       expect((err as TeamsError).code).toBe("unauthorized_client");
+      expect((err as TeamsError).message).not.toContain("AADSTS");
       expect(calls.some((c) => c.url.startsWith(GRAPH))).toBe(false);
     }
   });

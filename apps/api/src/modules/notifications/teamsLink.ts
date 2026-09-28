@@ -26,12 +26,14 @@ export const LINK_TOKEN_TTL_MS = 15 * 60 * 1000;
 export type TeamsLink = typeof teamsLinks.$inferSelect;
 type LinkTokenRow = typeof teamsLinkTokens.$inferSelect;
 
-/** A Teams (Entra) account, as its SSO token names it. */
+/** A Teams (Entra) account, as its SSO token names it (`ssoAuth.ts`). */
 export interface TeamsIdentity {
   /** Lower-case, as `TEAMS_ALLOWED_TENANTS` is compared. */
   tenantId: string;
   aadObjectId: string;
+  /** The display name (`name`), or the username, or the object id. */
   teamsName: string;
+  /** The sign-in name (`preferred_username`), usually an e-mail; '' when none. */
   teamsUsername: string;
 }
 
@@ -156,21 +158,22 @@ export async function consumeLinkToken(
   });
 }
 
-/** Which link: an account's, or a Teams account's — each is unique. */
-type LinkKey = { userId: string } | Pick<TeamsIdentity, "tenantId" | "aadObjectId">;
-
-function linkWhere(key: LinkKey): SQL {
-  return "userId" in key ? eq(teamsLinks.userId, key.userId) : identityWhere(teamsLinks, key);
-}
-
-export async function teamsLinkOf(db: Db, key: LinkKey): Promise<TeamsLink | null> {
-  const [row] = await db.select().from(teamsLinks).where(linkWhere(key)).limit(1);
+/** The link of a Quiz account (a delivery, the settings) or of a Teams account (the tab). */
+export async function teamsLinkOf(
+  db: Db,
+  key: { userId: string } | Pick<TeamsIdentity, "tenantId" | "aadObjectId">,
+): Promise<TeamsLink | null> {
+  const where = "userId" in key ? eq(teamsLinks.userId, key.userId) : identityWhere(teamsLinks, key);
+  const [row] = await db.select().from(teamsLinks).where(where).limit(1);
   return row ?? null;
 }
 
 /** Forgets an account's link (Disconnect). Returns the account; null when there was none. */
 export async function unlinkTeams(db: Db, key: { userId: string }): Promise<string | null> {
-  const [row] = await db.delete(teamsLinks).where(linkWhere(key)).returning({ userId: teamsLinks.userId });
+  const [row] = await db
+    .delete(teamsLinks)
+    .where(eq(teamsLinks.userId, key.userId))
+    .returning({ userId: teamsLinks.userId });
   return row?.userId ?? null;
 }
 

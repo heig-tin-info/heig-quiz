@@ -266,7 +266,8 @@ export async function notificationSettings(
       available: teamsAvailable,
       linkedAt: shown?.linkedAt.toISOString() ?? null,
       teamsName: shown?.teamsName ?? null,
-      teamsUsername: shown ? shown.teamsUsername : null,
+      // '' is "Teams gave none": null, as the contract says for unknown.
+      teamsUsername: shown?.teamsUsername || null,
     },
   };
 }

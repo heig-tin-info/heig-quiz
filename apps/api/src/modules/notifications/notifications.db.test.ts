@@ -280,6 +280,10 @@ describe("preferences", () => {
       teamsUsername: null,
     });
 
+    // A link made before the username was recorded: unknown, so null.
+    await db.update(teamsLinks).set({ teamsUsername: "" }).where(eq(teamsLinks.userId, dave));
+    expect((await service.notificationSettings(db, dave, true)).teams.teamsUsername).toBeNull();
+
     expect(await service.unlinkTeams(db, { userId: dave })).toBe(dave);
     expect(await service.unlinkTeams(db, { userId: dave })).toBeNull();
     expect(await service.teamsLinkOf(db, { userId: dave })).toBeNull();

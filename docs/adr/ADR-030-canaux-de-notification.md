@@ -243,12 +243,15 @@ allowed, calls the Graph client:
 In an application call Teams shows the app as the actor. The `webUrl` must
 be a Teams URL: it is the deep link to the tab,
 `https://teams.microsoft.com/l/entity/<appId>/home?context={"subEntityId":…}`,
-whose `subEntityId` is a STRUCTURED target, `TeamsTabTarget` of
-`@quiz/contracts` (`{kind:"feedback",attemptId}` or `{kind:"pool",poolId}`)
-serialized as JSON. The tab parses it with that schema and asks the router
-for the path (`routeToPath`), then opens `${origin}${path}`: never a path or
-a URL taken from the link, so a crafted deep link cannot become an open
-redirect.
+whose `subEntityId` is the app path the bell and the e-mail already open
+(`notificationPath`: `/attempts/<id>/feedback`, `/pools/<id>`). The tab
+never follows it as given: it parses it into a route of the router
+(`parsePath`, anything unknown being the home) and writes the path back from
+that route (`routeToPath`), then opens it under its OWN origin
+(`${location.origin}${path}`). A crafted deep link (`//evil.com`,
+`https://evil.com`, `/\evil.com`, `javascript:…`) therefore lands on a page
+of the platform, never elsewhere: no open redirect, and no second schema for
+targets.
 
 A 403 from Graph means the app is not installed for that user, its RSC
 permission was not granted (an app uploaded before version 2.0.0), or a
