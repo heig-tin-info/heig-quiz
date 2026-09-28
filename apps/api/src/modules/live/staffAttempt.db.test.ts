@@ -139,7 +139,10 @@ describe("resetting one's own test attempt (ADR-018)", () => {
       headers: teacher.headers,
       payload: { payload: "answer-q0", revision: 1, clientTs: "2026-09-20T09:00:00.000Z" },
     });
-    await post(`/app/api/attempts/${attemptId}/events`, teacher.headers, { kind: "focus" });
+    await post(`/app/api/attempts/${attemptId}/events`, teacher.headers, {
+      kind: "focus",
+      details: { focused: false },
+    });
     await gradingService.writeGrading(db, {
       attemptId,
       itemId: world.itemId,

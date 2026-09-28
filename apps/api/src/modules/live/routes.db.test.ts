@@ -254,7 +254,10 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
 
   it("journals an attempt event, and has nothing to validate in free navigation", async () => {
     expect(
-      (await post(`/app/api/attempts/${attemptId}/events`, student.headers, { kind: "visibility" }))
+      (await post(`/app/api/attempts/${attemptId}/events`, student.headers, {
+        kind: "visibility",
+        details: { state: "hidden" },
+      }))
         .statusCode,
     ).toBe(204);
     const done = await post(
@@ -433,6 +436,7 @@ describe("taking the evaluation (§4.4, §4.7)", () => {
     expect(moved.json().reason).toBe("submitted");
     const journalled = await post(`/app/api/attempts/${attemptId}/events`, student.headers, {
       kind: "visibility",
+      details: { state: "hidden" },
     });
     expect(journalled.statusCode).toBe(410);
   });
@@ -633,6 +637,64 @@ describe("the room restriction reads the address Caddy saw (H2)", () => {
     });
     expect(inRoom.statusCode).toBe(200);
     expect(inRoom.json().kind).toBe("attempt");
+  });
+
+  it("holds on every sitting route, not only at the entry", async () => {
+    const learner = await server.signIn("student");
+    const own = await seedLive(server.app.db, {
+      teacherId: teacher.id,
+      studentIds: [learner.id],
+      questions: 1,
+    });
+    await server.app.db
+      .update(evaluations)
+      .set({ ipAllowlist: ["10.20."] })
+      .where(eq(evaluations.id, own.evaluationId));
+    await post(`/app/api/evaluations/${own.evaluationId}/start`, teacher.headers, { confirm: true });
+    const inRoom = { ...learner.headers, "x-forwarded-for": "10.20.0.7" };
+    const away = { ...learner.headers, "x-forwarded-for": "203.0.113.9" };
+    const entered = await post(`/app/api/evaluations/${own.evaluationId}/attempt`, inRoom, {});
+    const attemptId = entered.json().view.attempt.id as string;
+
+    // The same session cookie, carried out of the room.
+    const refused = [
+      await get(`/app/api/attempts/${attemptId}`, away),
+      await post(`/app/api/attempts/${attemptId}/events`, away, { kind: "reconnect" }),
+      await post(`/app/api/attempts/${attemptId}/submit`, away, { confirm: true }),
+      await get(`/app/api/events?watch=attempt:${attemptId}`, away),
+    ];
+    expect(refused.map((r) => r.statusCode)).toEqual([403, 403, 403, 404]);
+    expect(refused[0]!.json().error).toBe("ip_not_allowed");
+    expect((await get(`/app/api/attempts/${attemptId}`, inRoom)).statusCode).toBe(200);
+  });
+});
+
+describe("the attempt journal takes only what a client may write (F-EVAL-13)", () => {
+  it("refuses a server kind, unknown details and an oversized body", async () => {
+    const learner = await server.signIn("student");
+    const own = await seedLive(server.app.db, {
+      teacherId: teacher.id,
+      studentIds: [learner.id],
+      questions: 1,
+    });
+    await post(`/app/api/evaluations/${own.evaluationId}/start`, teacher.headers, { confirm: true });
+    const entered = await post(`/app/api/evaluations/${own.evaluationId}/attempt`, learner.headers, {});
+    const url = `/app/api/attempts/${entered.json().view.attempt.id}/events`;
+
+    for (const forged of [
+      { kind: "time_added", details: { minutes: 60 } },
+      { kind: "paused" },
+      { kind: "run" },
+      { kind: "visibility", details: { state: "hidden", extra: "x" } },
+      { kind: "reconnect", details: { anything: true } },
+    ]) {
+      expect((await post(url, learner.headers, forged)).statusCode).toBe(400);
+    }
+    const huge = { kind: "focus", details: { focused: false, pad: "x".repeat(8_000) } };
+    expect((await post(url, learner.headers, huge)).statusCode).toBe(413);
+
+    expect((await post(url, learner.headers, { kind: "visibility", details: { state: "hidden" } })).statusCode).toBe(204);
+    expect((await post(url, learner.headers, { kind: "focus", details: { focused: false } })).statusCode).toBe(204);
   });
 });
 

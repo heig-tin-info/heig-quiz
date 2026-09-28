@@ -4,11 +4,11 @@
  * write gate every student write passes, submitting, and the per-attempt
  * close/reopen (PLAN-MVP §4.4, §4.7). Imported through `./service.ts`.
  */
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
 
-import { and, asc, count, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, isNull } from "drizzle-orm";
 
 import {
   EvaluationSettings,
@@ -35,9 +35,10 @@ import {
   type RetakeRefusal,
 } from "@quiz/domain";
 
+import { audit, type AuditAction } from "../../audit.js";
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { answers, attempts, enrollments, evaluations, guestParticipants } from "../../db/schema.js";
+import { answers, attempts, auditLog, enrollments, evaluations, guestParticipants } from "../../db/schema.js";
 import {
   feedbackOf,
   gradeDefaults,
@@ -163,7 +164,17 @@ class AccessCodeInvalid extends LiveError {
   }
 }
 
-class IpNotAllowed extends LiveError {
+/**
+ * F-EVAL-12: too many wrong access codes. Distinct from `access_code_invalid`
+ * so the player stops asking for a code it will refuse anyway.
+ */
+class AccessCodeLocked extends LiveError {
+  constructor() {
+    super("access_code_locked", 429, "too many wrong access codes");
+  }
+}
+
+export class IpNotAllowed extends LiveError {
   constructor() {
     super("ip_not_allowed", 403);
   }
@@ -452,7 +463,7 @@ export async function enrolledCounts(
 }
 
 /** F-EVAL-12: a prefix list, matched literally against the request address. */
-function ipAllowed(allowlist: readonly string[], ip: string | undefined): boolean {
+export function ipAllowed(allowlist: readonly string[], ip: string | undefined): boolean {
   if (allowlist.length === 0) return true;
   if (ip === undefined) return false;
   return allowlist.some((prefix) => ip.startsWith(prefix));
@@ -850,10 +861,13 @@ function attemptItems(
  * evaluation is over the items come back — the student payload carries no
  * key, and `readOnly` says the writes are done.
  */
-function contentVisible(state: EvaluationRecord["state"]): boolean {
+function contentVisible(evaluation: EvaluationRecord, attempt: AttemptRecord): boolean {
+  const { state } = evaluation;
+  // A live evaluation shows its questions to a STARTED attempt only: one that
+  // entered during a pause waits in the lobby until the resume begins it,
+  // or it would read the whole exam on a clock that has not started.
+  if (state === "running" || state === "paused") return attempt.state !== "not_started";
   return (
-    state === "running" ||
-    state === "paused" ||
     state === "closed" ||
     state === "grading" ||
     state === "released"
@@ -878,7 +892,7 @@ export async function attemptOrLobbyView(
   attempt: AttemptRecord,
   now: Date,
 ): Promise<AttemptOrLobby> {
-  if (!contentVisible(evaluation.state)) {
+  if (!contentVisible(evaluation, attempt)) {
     const participant = await participantOfAttempt(db, evaluation, attempt);
     return { kind: "lobby", view: await lobbyView(db, evaluation, participant, now) };
   }
@@ -1000,6 +1014,51 @@ export async function lobbyView(
 
 // --- Entering an evaluation ----------------------------------------------
 
+/**
+ * F-EVAL-12: the wrong access codes a student may type into ONE evaluation
+ * before it refuses them for good. Counted from the audit log, where each
+ * failure is written anyway: no counter to keep in step.
+ */
+export const ACCESS_CODE_MAX_FAILURES = 10;
+
+const ACCESS_CODE_FAILED = "evaluation.access_code_failed" satisfies AuditAction;
+
+/** Compares two codes in a time that does not depend on where they differ. */
+function sameCode(expected: string, given: string): boolean {
+  const digest = (code: string) => createHash("sha256").update(code).digest();
+  return timingSafeEqual(digest(expected), digest(given));
+}
+
+async function assertAccessCode(
+  db: Db,
+  evaluation: EvaluationRecord,
+  userId: string | null,
+  given: string | undefined,
+): Promise<void> {
+  if (evaluation.accessCode === null) return;
+  const failed = and(
+    eq(auditLog.subjectType, "evaluation"),
+    eq(auditLog.subjectId, evaluation.id),
+    eq(auditLog.action, ACCESS_CODE_FAILED),
+    userId === null ? isNull(auditLog.actorUserId) : eq(auditLog.actorUserId, userId),
+  );
+  const [row] = await db.select({ n: count() }).from(auditLog).where(failed);
+  if ((row?.n ?? 0) >= ACCESS_CODE_MAX_FAILURES) throw new AccessCodeLocked();
+  if (given !== undefined && sameCode(evaluation.accessCode, given)) return;
+  // No code at all is the question, not a guess: the player's first call
+  // sends none, and a reload must not count against the student.
+  if (given !== undefined) {
+    await audit(db, {
+      actorUserId: userId,
+      actorType: "user",
+      action: ACCESS_CODE_FAILED,
+      subjectType: "evaluation",
+      subjectId: evaluation.id,
+    });
+  }
+  throw new AccessCodeInvalid();
+}
+
 type EnterResult =
   | { kind: "attempt"; view: AttemptView; attempt: AttemptRecord }
   | { kind: "lobby"; view: LobbyView; attempt: AttemptRecord };
@@ -1020,9 +1079,7 @@ export async function enterEvaluation(
 ): Promise<EnterResult> {
   const { evaluation, participant, now } = input;
   if (evaluation.mode === "poll") throw new LiveError("not_implemented", 501, "poll is phase 2");
-  if (evaluation.accessCode !== null && evaluation.accessCode !== input.accessCode) {
-    throw new AccessCodeInvalid();
-  }
+  await assertAccessCode(db, evaluation, participant.userId, input.accessCode);
   if (!ipAllowed(evaluation.ipAllowlist, input.ip)) throw new IpNotAllowed();
 
   const open = evaluation.state === "lobby" || evaluation.state === "running" ||

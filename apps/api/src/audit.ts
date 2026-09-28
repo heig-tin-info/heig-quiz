@@ -38,6 +38,8 @@ export type AuditAction =
   | "course.pools_update"
   | "course.staff_remove"
   | "course.update"
+  /** A wrong access code typed by a student (F-EVAL-12), counted for the lockout. */
+  | "evaluation.access_code_failed"
   | "evaluation.close"
   | "evaluation.create"
   | "evaluation.delete"

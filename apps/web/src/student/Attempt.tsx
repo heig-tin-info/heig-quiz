@@ -125,6 +125,7 @@ export function AttemptPage({
      */
     if (
       code === "ip_not_allowed" ||
+      code === "access_code_locked" ||
       code === "not_open" ||
       code === "not_implemented" ||
       code === "not_found"
@@ -140,7 +141,9 @@ export function AttemptPage({
                   ? t("player.notAvailable")
                   : code === "ip_not_allowed"
                     ? t("player.ipBlocked")
-                    : t("player.notOpen")
+                    : code === "access_code_locked"
+                      ? t("player.accessCodeLocked")
+                      : t("player.notOpen")
               }
               action={
                 <Button variant="primary" onClick={home}>

@@ -262,6 +262,11 @@ async function resolveWatch(
     // A student watches their OWN attempt; a staff member watches any of
     // the evaluation's, which is what the dashboard's cell inspector needs.
     if (!scope.staff && attempt.userId !== req.user!.id) return null;
+    // Sitting it from outside the room reads nothing either (F-EVAL-12): the
+    // snapshot carries the questions, exactly as `GET /attempts/:id` does.
+    if (attempt.userId === req.user!.id && !live.ipAllowed(scope.evaluation.ipAllowlist, req.ip)) {
+      return null;
+    }
     return {
       watch: { kind: "attempt", attemptId: id, evaluationId: attempt.evaluationId },
       evaluation: scope.evaluation,

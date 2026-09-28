@@ -116,8 +116,19 @@ export async function livePlugin(app: FastifyInstance) {
     notFound(reply);
     return null;
   }
-  const own = async (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
-    sitting(req, reply, await ownAttempt(app, req, reply, p.id));
+  /**
+   * Every student route on an attempt loads it here, and so re-checks the IP
+   * allow-list (F-EVAL-12) on every call, not only at the entry: a session
+   * cookie carried out of the room must not keep reading or writing.
+   */
+  const own = async (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => {
+    const scope = sitting(req, reply, await ownAttempt(app, req, reply, p.id));
+    if (scope && !service.ipAllowed(scope.evaluation.ipAllowlist, req.ip)) {
+      failure(reply, new service.IpNotAllowed(), app.clock.now());
+      return null;
+    }
+    return scope;
+  };
   /** The routes a `seb` session may call: sitting its evaluation, nothing else. */
   const sit = { preHandler: requireSession, config: SITTING };
   const staffEvaluation = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
@@ -358,7 +369,8 @@ export async function livePlugin(app: FastifyInstance) {
   /** F-EVAL-13: the journal. Bounded, never blocking, never a 4xx storm. */
   app.post(
     "/app/api/attempts/:id/events",
-    sit,
+    // A journal entry is a few dozen bytes (`AttemptEventBody`).
+    { ...sit, bodyLimit: 4096 },
     student(
       { params: IdParam, body: AttemptEventBody, load: own },
       async ({ reply, now, body, scope }) => {
@@ -373,7 +385,13 @@ export async function livePlugin(app: FastifyInstance) {
         if (used >= EVENTS_PER_MINUTE) {
           return reply.header("retry-after", "60").code(429).send({ error: "rate_limited" });
         }
-        await service.logAttemptEvent(app.db, scope.attempt.id, body.kind, body.details ?? null, now);
+        await service.logAttemptEvent(
+          app.db,
+          scope.attempt.id,
+          body.kind,
+          "details" in body ? body.details : null,
+          now,
+        );
         // A reconnection is also a sign of life for the dashboard.
         if (body.kind === "reconnect") await service.markPresent(app.db, scope.attempt.id, now);
         return reply.code(204).send();

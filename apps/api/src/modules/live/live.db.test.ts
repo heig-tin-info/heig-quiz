@@ -22,6 +22,7 @@ import {
   answers,
   attemptEvents,
   attempts,
+  auditLog,
   enrollments,
   evaluationItems,
   evaluations,
@@ -165,6 +166,35 @@ describe("entering an evaluation (F-LIVE-01)", () => {
       now: clock.now(),
     });
     expect(ok.kind).toBe("attempt");
+  });
+
+  it("locks the access code after ten wrong ones, each audited (F-EVAL-12)", async () => {
+    const seed = await seedLive(db);
+    await db
+      .update(evaluations)
+      .set({ accessCode: "OPEN" })
+      .where(eq(evaluations.id, seed.evaluationId));
+    const row = await applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
+    const [first, second] = await Promise.all(
+      seed.studentIds.slice(0, 2).map(async (id) => (await service.participantOf(db, row, id))!),
+    );
+    const enter = (participant: service.Participant, accessCode?: string) =>
+      service.enterEvaluation(db, { evaluation: row, participant, accessCode, now: clock.now() });
+
+    // Asking for the code (no code sent: a reload) is not a guess.
+    await expect(enter(first!)).rejects.toMatchObject({ code: "access_code_invalid" });
+    for (let i = 0; i < service.ACCESS_CODE_MAX_FAILURES; i++) {
+      await expect(enter(first!, `WRONG${i}`)).rejects.toMatchObject({ code: "access_code_invalid" });
+    }
+    const failures = await db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.action, "evaluation.access_code_failed"));
+    expect(failures.filter((f) => f.subjectId === row.id)).toHaveLength(service.ACCESS_CODE_MAX_FAILURES);
+    // Locked: even the right code is refused now, with its own error.
+    await expect(enter(first!, "OPEN")).rejects.toMatchObject({ code: "access_code_locked", status: 429 });
+    // The lock is this student's, not the room's.
+    expect((await enter(second!, "OPEN")).kind).toBe("attempt");
   });
 
   it("gives the accommodation its extra seconds (F-ORG-07, F-EVAL-05)", async () => {
@@ -620,6 +650,27 @@ describe("navigation enforced server-side (F-EVAL-07, F-LIVE-08)", () => {
 });
 
 describe("teacher controls (F-LIVE-11, F-LIVE-12)", () => {
+  it("keeps a student who enters during a pause in the lobby, and starts them on the resume", async () => {
+    const { seed, evaluation } = await running();
+    const paused = await service.pauseEvaluation(db, evaluation, clock.now());
+    const late = (await service.participantOf(db, paused, seed.studentIds[1]!))!;
+
+    const entered = await service.enterEvaluation(db, { evaluation: paused, participant: late, now: clock.now() });
+    // No question content on a clock that has not started.
+    expect(entered.kind).toBe("lobby");
+    expect(entered.attempt.state).toBe("not_started");
+    expect((await service.attemptOrLobbyView(db, paused, entered.attempt, clock.now())).kind).toBe("lobby");
+
+    clock.advance(600_000);
+    const resumed = await service.resumeEvaluation(db, paused, clock.now());
+    const begun = (await service.attemptById(db, entered.attempt.id))!;
+    expect(begun.state).toBe("in_progress");
+    expect(begun.startedAt?.toISOString()).toBe(clock.now().toISOString());
+    // The duration runs from the resume, and the pause is not added on top.
+    expect(begun.deadlineAt!.getTime() - clock.now().getTime()).toBe(1800 * 1000);
+    expect((await service.attemptOrLobbyView(db, resumed, begun, clock.now())).kind).toBe("attempt");
+  });
+
   it("resuming pushes every deadline forward by the time spent paused", async () => {
     const { evaluation, attempt } = await running();
     const before = attempt.deadlineAt!;
