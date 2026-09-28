@@ -25,6 +25,7 @@ import { gradeDefaults, joinedItem } from "../evaluation/service.js";
 import * as events from "./events.js";
 import { studentView } from "./studentView.js";
 import {
+  runButton,
   runnableView,
   visibleRunRequest,
   visibleRunResult,
@@ -61,7 +62,7 @@ async function attemptRunContext<T>(
     itemId: string;
     now: Date;
     /** The hook the button runs through; `undefined` is `not_runnable`. */
-    capability: (type: AnyQuestionTypeServer) => T | undefined;
+    capability: (type: AnyQuestionTypeServer, student: RunnableStudentView) => T | undefined;
     /** The per-minute budget the type publishes in its student view. */
     budget: (student: RunnableStudentView) => number | undefined;
     /**
@@ -83,13 +84,12 @@ async function attemptRunContext<T>(
   if (!joined) throw new LiveError("not_found", 404);
 
   const type = typeOf(joined.question.type);
-  const capability = input.capability(type);
-  if (capability === undefined) throw new NotRunnable();
-
   const version = { config: joined.version.config, configVersion: joined.version.configVersion };
   const student = runnableView(
     studentView({ type: joined.question.type, version, seed: attempt.seed, itemId, shuffle: false }),
   );
+  const capability = input.capability(type, student);
+  if (capability === undefined) throw new NotRunnable();
 
   // N-SEC-07: the budget is the question's own, counted from the journal
   // rather than from a table of its own. Both buttons count `run` events, so
@@ -122,6 +122,35 @@ async function attemptRunContext<T>(
 }
 
 /**
+ * The attempts with a run in flight. The journal-counted budget is
+ * count-then-insert, so parallel requests of one attempt would all read the
+ * same count and all pass; one run at a time per attempt closes that race,
+ * and keeps one student from filling the runner's few slots. In memory: the
+ * API is one process (ADR-001), like the SSE bus and the preview budget.
+ */
+const inFlight = new Set<string>();
+
+async function oneAtATime<R>(attemptId: string, run: () => Promise<R>): Promise<R> {
+  if (inFlight.has(attemptId)) throw new RateLimited(1);
+  inFlight.add(attemptId);
+  try {
+    return await run();
+  } finally {
+    inFlight.delete(attemptId);
+  }
+}
+
+/** {@link runVisibleCasesNow}, one at a time per attempt. */
+export function runVisibleCases(db: Db, input: RunInput) {
+  return oneAtATime(input.attempt.id, () => runVisibleCasesNow(db, input));
+}
+
+/** {@link simulateAnswerNow}, one at a time per attempt. */
+export function simulateAnswer(db: Db, input: SimulateInput) {
+  return oneAtATime(input.attempt.id, () => simulateAnswerNow(db, input));
+}
+
+/**
  * Journals a student's run (nothing student-supplied: the file names are the
  * type's, invariant 14), then runs it; a busy or absent runner is the 503.
  */
@@ -141,6 +170,25 @@ async function runForStudent(
   }
 }
 
+interface RunInput {
+  runner: RunnerService;
+  evaluation: EvaluationRecord;
+  attempt: AttemptRecord;
+  itemId: string;
+  regions: string[];
+  stdin?: string | undefined;
+  /** The command line of the free-stdin try; a visible case keeps the teacher's. */
+  args?: string[] | undefined;
+  /**
+   * The Compile button: the runner builds the program (`action: "check"`)
+   * and runs no case at all. It spends its own budget, `compilesPerMinute`,
+   * never a test run's (ADR-024, addendum of 2026-09-25), and journals
+   * `compileOnly: true`, which is how the two budgets are told apart.
+   */
+  compileOnly?: boolean | undefined;
+  now: Date;
+}
+
 /**
  * `POST /attempts/:id/run` — the student's Run button.
  *
@@ -151,49 +199,34 @@ async function runForStudent(
  * with Podman exists (decision D14) — this ends in `503 runner_unavailable`,
  * which is a configuration, not a failure.
  */
-export async function runVisibleCases(
+async function runVisibleCasesNow(
   db: Db,
-  input: {
-    runner: RunnerService;
-    evaluation: EvaluationRecord;
-    attempt: AttemptRecord;
-    itemId: string;
-    regions: string[];
-    stdin?: string | undefined;
-    /** The command line of the free-stdin try; a visible case keeps the teacher's. */
-    args?: string[] | undefined;
-    /**
-     * The Compile button: the runner builds the program (`action: "check"`)
-     * and runs no case at all. It spends its own budget, `compilesPerMinute`,
-     * never a test run's (ADR-024, addendum of 2026-09-25), and journals
-     * `compileOnly: true`, which is how the two budgets are told apart.
-     */
-    compileOnly?: boolean | undefined;
-    now: Date;
-  },
+  input: RunInput,
 ): Promise<{ requestId: string; result: RunnerResultEvent["result"] }> {
   const { attempt, itemId } = input;
   const prepared = await attemptRunContext(db, {
     ...input,
-    // A type with no second half has nothing a runner could finish.
-    capability: (type) => type.finalizeRunner,
+    // The button of a type judged case by case (`runButton`); a type with no
+    // second half has nothing a runner could finish.
+    capability: (type, student) =>
+      runButton(type, student) === "run" ? type.interactiveRequest?.bind(type) : undefined,
     budget: (student) => student.runsPerMinute,
     compileOnly: input.compileOnly,
     answer: { regions: input.regions },
   });
-  const { type, config, answer, ctx } = prepared;
-  const first = await type.grade(config, answer, { ...ctx, runner: input.runner });
-  // `grade` assembles the request server-side from the template and the
-  // regions (invariant 14); nothing the browser sent becomes a file name.
-  if (first.kind !== "pending" || first.via !== "runner") throw new NotRunnable();
+  // The type assembles the request server-side from the template and the
+  // regions (invariant 14), the visible cases only; nothing the browser sent
+  // becomes a file name. `null`: an empty answer, or one that no longer fits.
+  const visible = prepared.capability(prepared.config, prepared.answer, prepared.ctx);
+  if (visible === null) throw new NotRunnable();
 
-  const request = visibleRunRequest(first.request, prepared.student, input);
+  const request = visibleRunRequest(visible, input);
   const { requestId, outcome } = await runForStudent(
     db,
     { ...input, request },
     input.compileOnly === true ? { itemId, compileOnly: true } : { itemId },
   );
-  const result = visibleRunResult(request, outcome, prepared.student);
+  const result = visibleRunResult(request, outcome, prepared.student, input.stdin !== undefined);
 
   // The result travels on the student's own topic (§4.8) AND in the response,
   // so a client that lost its stream is not left waiting.
@@ -201,6 +234,15 @@ export async function runVisibleCases(
   // is always an account here; a poll runs no code.
   if (attempt.userId !== null) events.runnerResult(attempt.userId, requestId, itemId, result);
   return { requestId, result };
+}
+
+interface SimulateInput {
+  runner: RunnerService;
+  evaluation: EvaluationRecord;
+  attempt: AttemptRecord;
+  itemId: string;
+  answer: unknown;
+  now: Date;
 }
 
 /**
@@ -220,22 +262,13 @@ export async function runVisibleCases(
  * cares about; a simulation is a curve the student asked for, so the response
  * is the delivery.
  */
-export async function simulateAnswer(
-  db: Db,
-  input: {
-    runner: RunnerService;
-    evaluation: EvaluationRecord;
-    attempt: AttemptRecord;
-    itemId: string;
-    answer: unknown;
-    now: Date;
-  },
-): Promise<RunnerOutcome> {
+async function simulateAnswerNow(db: Db, input: SimulateInput): Promise<RunnerOutcome> {
   const prepared = await attemptRunContext(db, {
     ...input,
-    // A type with no button of its own. `code` is not one of them: it keeps
-    // its older, case-filtering `/run` route.
-    capability: (type) => type.interactiveRequest?.bind(type),
+    // A type with a button of its own; one judged case by case goes through
+    // `/run` and nowhere else (`runButton`).
+    capability: (type, student) =>
+      runButton(type, student) === "simulate" ? type.interactiveRequest?.bind(type) : undefined,
     // The same budget as `/run`, under whichever name the type publishes it:
     // a circuit says `simulationsPerMinute`, a code question `runsPerMinute`.
     budget: (student) => student.simulationsPerMinute ?? student.runsPerMinute,

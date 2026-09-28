@@ -9,7 +9,7 @@
 import { randomUUID } from "node:crypto";
 
 import { eq, sql } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LobbyView } from "@quiz/contracts";
 import type { RunnerOutcome } from "@quiz/core/server";
@@ -1089,6 +1089,91 @@ describe("running code (POST /attempts/:id/run)", () => {
     const items = await itemRows(db, row.id);
     return { evaluation: row, attempt, itemId: items[0]!.id };
   }
+
+  /** A runner that answers "ok" to every case it is sent, once `hold` settles. */
+  function echoRunner(hold?: Promise<void>) {
+    const sent: { cases: { name: string; args: string[]; stdin: string }[] }[] = [];
+    return {
+      sent,
+      run: async (req: { cases: { name: string; args: string[]; stdin: string }[] }) => {
+        sent.push(req);
+        await hold;
+        return {
+          compile: { ok: true, stdout: "", stderr: "", ms: 1 },
+          cases: req.cases.map(() => ({
+            exitCode: 0, stdout: "ok", stderr: "", ms: 1,
+            timedOut: false, oom: false, truncated: false,
+          })),
+        };
+      },
+      health: async () => ({ ok: true, languages: ["c"], queued: 0, avgMs: 1 }),
+    };
+  }
+
+  it("never runs a hidden case that shares its name with a visible one", async () => {
+    const { evaluation, attempt, itemId } = await codeAttempt([
+      { name: "same", args: ["visible-arg"], expected: "ok", visible: true },
+      { name: "same", args: ["HIDDEN-ARG"], expected: "secret-expected", visible: false },
+    ]);
+    const runner = echoRunner();
+    await service.runVisibleCases(db, {
+      runner: runner as never,
+      evaluation,
+      attempt,
+      itemId,
+      regions: ["return 0;"],
+      now: clock.now(),
+    });
+    expect(runner.sent.map((r) => r.cases)).toEqual([
+      [{ name: "same", args: ["visible-arg"], stdin: "" }],
+    ]);
+  });
+
+  it("refuses /simulate for a type judged case by case: one route per button", async () => {
+    const { evaluation, attempt, itemId } = await codeAttempt();
+    const runner = echoRunner();
+    await expect(
+      service.simulateAnswer(db, {
+        runner: runner as never,
+        evaluation,
+        attempt,
+        itemId,
+        answer: { regions: ["return 0;"] },
+        now: clock.now(),
+      }),
+    ).rejects.toMatchObject({ code: "not_runnable" });
+    expect(runner.sent).toEqual([]);
+  });
+
+  it("runs one request at a time per attempt, so a burst cannot outrun the budget", async () => {
+    const { evaluation, attempt, itemId } = await codeAttempt();
+    let release = (): void => undefined;
+    const runner = echoRunner(
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+    );
+    const settled = Promise.allSettled(
+      Array.from({ length: 5 }, () =>
+        service.runVisibleCases(db, {
+          runner: runner as never,
+          evaluation,
+          attempt,
+          itemId,
+          regions: ["return 0;"],
+          now: clock.now(),
+        }),
+      ),
+    );
+    await vi.waitFor(() => expect(runner.sent).toHaveLength(1));
+    release();
+    const results = await settled;
+    expect(runner.sent).toHaveLength(1);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    for (const r of results.filter((r) => r.status === "rejected")) {
+      expect((r as PromiseRejectedResult).reason).toMatchObject({ code: "rate_limited" });
+    }
+  });
 
   it("answers 503 runner_unavailable with the stub runner (decision D14)", async () => {
     const { evaluation, attempt, itemId } = await codeAttempt();

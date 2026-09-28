@@ -13,6 +13,12 @@ import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
  * turns that into `RunnerBusy`, which the grading job lets pg-boss retry and
  * the interactive path shows as "try again in a moment". It is never retried
  * inside the runner: retrying a full queue is how a full queue stays full.
+ *
+ * A caller that goes away takes its request with it: the `signal` of
+ * `submit` removes a waiting request from its queue, and is handed to `run`
+ * for a running one, which destroys its container. Otherwise a client that
+ * gave up (the API stops waiting after `RUNNER_TIMEOUT_MS`) would still hold
+ * one of the few slots for a run nobody reads.
  */
 
 export class QueueFull extends Error {
@@ -27,7 +33,7 @@ export type Priority = RunnerRequest["priority"];
 export interface QueueOptions {
   concurrency: number;
   queueMax: number;
-  run: (request: RunnerRequest) => Promise<RunnerOutcome>;
+  run: (request: RunnerRequest, signal?: AbortSignal) => Promise<RunnerOutcome>;
 }
 
 export interface QueueStats {
@@ -41,6 +47,9 @@ export interface QueueStats {
 
 interface Waiter {
   request: RunnerRequest;
+  signal: AbortSignal | undefined;
+  /** Stops listening to `signal` once the request leaves the queue. */
+  detach: () => void;
   resolve: (outcome: RunnerOutcome) => void;
   reject: (error: unknown) => void;
 }
@@ -72,13 +81,31 @@ export class RunQueue {
     };
   }
 
-  /** Resolves with the outcome, or rejects with {@link QueueFull}. */
-  submit(request: RunnerRequest): Promise<RunnerOutcome> {
+  /**
+   * Resolves with the outcome, or rejects with {@link QueueFull}, or with the
+   * signal's reason once it aborts while the request is still waiting.
+   */
+  submit(request: RunnerRequest, signal?: AbortSignal): Promise<RunnerOutcome> {
+    if (signal?.aborted) return Promise.reject(signal.reason);
     if (this.depth >= this.options.queueMax) {
       return Promise.reject(new QueueFull(this.retryAfterSeconds()));
     }
     return new Promise<RunnerOutcome>((resolve, reject) => {
-      this.waiting[request.priority].push({ request, resolve, reject });
+      const queue = this.waiting[request.priority];
+      const onAbort = (): void => {
+        queue.splice(queue.indexOf(waiter), 1);
+        reject(signal?.reason);
+      };
+      const waiter: Waiter = {
+        request,
+        signal,
+        resolve,
+        reject,
+        // Once running, the request is `run`'s to stop: it has the signal.
+        detach: () => signal?.removeEventListener("abort", onAbort),
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
+      queue.push(waiter);
       this.pump();
     });
   }
@@ -103,6 +130,7 @@ export class RunQueue {
     while (this.running < this.options.concurrency) {
       const waiter = this.next();
       if (waiter === undefined) return;
+      waiter.detach();
       this.running += 1;
       const started = Date.now();
       // The books are closed BEFORE the caller is told: whoever is woken by
@@ -114,7 +142,7 @@ export class RunQueue {
         deliver();
         this.pump();
       };
-      void this.options.run(waiter.request).then(
+      void this.options.run(waiter.request, waiter.signal).then(
         (outcome) => settle(() => waiter.resolve(outcome)),
         (error: unknown) => settle(() => waiter.reject(error)),
       );

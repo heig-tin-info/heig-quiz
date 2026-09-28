@@ -120,9 +120,23 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
         .send({ error: "language_unavailable", language: runnerRequest.language });
     }
 
+    // The client going away before its answer — the API gave up, a student
+    // closed the tab — frees its slot: dequeued if waiting, container
+    // destroyed if running. `close` also fires after a reply was written,
+    // which `writableEnded` tells apart.
+    const gone = new AbortController();
+    const onClose = (): void => {
+      if (!reply.raw.writableEnded) gone.abort();
+    };
+    reply.raw.on("close", onClose);
     try {
-      return await queue.submit(runnerRequest);
+      return await queue.submit(runnerRequest, gone.signal);
     } catch (error) {
+      if (gone.signal.aborted) {
+        // Nobody left to answer: the socket is closed.
+        request.log.info("client gone, run abandoned");
+        return reply.hijack();
+      }
       if (error instanceof QueueFull) {
         return reply
           .code(429)
@@ -138,6 +152,8 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
         return reply.code(400).send({ error: reason });
       }
       return reply.code(503).send({ error: reason });
+    } finally {
+      reply.raw.off("close", onClose);
     }
   });
 }

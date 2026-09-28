@@ -299,6 +299,12 @@ export function createEngine(options: EngineOptions): Engine {
       `${create.memoryMb}m`,
       "--cpus",
       String(create.cpus),
+      // No core dump: a crashing program must not write its memory anywhere.
+      "--ulimit",
+      "core=0:0",
+      // The image is built on the host (`images/build.sh`), never fetched: a
+      // missing image fails the request instead of reaching a registry.
+      "--pull=never",
       // Invariant 11: closed by construction. `--dns=none` is not passed —
       // Podman refuses it together with `--network none`.
       "--network",

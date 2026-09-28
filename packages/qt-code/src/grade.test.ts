@@ -115,11 +115,26 @@ describe("gradeCode", () => {
 
   it("sends only the visible cases for an interactive run", () => {
     const config = codeConfig();
-    const request = buildInteractiveRequest(config, answerFor(config, "x"));
+    const request = buildInteractiveRequest(config, answerFor(config, "x"))!;
     expect(request.priority).toBe("interactive");
     expect(request.cases.map((c) => c.name)).toEqual(["three items", "empty array"]);
     // The hidden case's command line stays behind with its stdin.
     expect(JSON.stringify(request.cases)).not.toContain(SECRET_HIDDEN_ARG);
+  });
+
+  it("picks the visible cases by their flag, not by a name a hidden case may share", () => {
+    const config = CodeConfig.parse({
+      ...codeConfig(),
+      tests: {
+        mode: "io",
+        cases: [
+          { name: "same", stdin: "visible\n", expected: "", visible: true },
+          { name: "same", stdin: "HIDDEN\n", expected: "", visible: false },
+        ],
+      },
+    });
+    const request = buildInteractiveRequest(config, answerFor(config, "x"))!;
+    expect(request.cases).toEqual([{ name: "same", args: [], stdin: "visible\n" }]);
   });
 
   it("grades an unanswered question zero, without touching the runner", () => {

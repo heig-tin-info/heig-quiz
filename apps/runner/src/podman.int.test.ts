@@ -266,6 +266,39 @@ const PERF_EVENT_OPEN =
   'printf("%ld %d\\n",rc,errno);return 0;}\n';
 
 /**
+ * No new namespace, no mount, no keyring, no ptrace — and threads still work.
+ *
+ * A user namespace would hand the program a fresh set of capabilities over
+ * it, and with them the netfilter / netlink attack surface of the kernel. The
+ * profile allows `clone` only without any `CLONE_NEW*` flag and answers
+ * `clone3` with ENOSYS (its flags sit in a struct seccomp cannot read), so
+ * glibc falls back to `clone` — which the `pthread_create` line proves.
+ * Each line is `<name> <rc> <errno>`; a raw `syscall()` keeps glibc's own
+ * wrappers and fallbacks out of the measure.
+ */
+const NAMESPACES =
+  "#define _GNU_SOURCE\n" +
+  "#include <stdio.h>\n#include <errno.h>\n#include <sched.h>\n#include <signal.h>\n" +
+  "#include <pthread.h>\n#include <unistd.h>\n#include <sys/syscall.h>\n#include <sys/wait.h>\n" +
+  "#define TRY(n,e) do{errno=0;long rc=(e);printf(\"%s %ld %d\\n\",n,rc,errno);}while(0)\n" +
+  "static void*noop(void*a){return a;}\n" +
+  "int main(void){\n" +
+  ' TRY("unshare-user",syscall(SYS_unshare,CLONE_NEWUSER));\n' +
+  ' TRY("unshare-net",syscall(SYS_unshare,CLONE_NEWUSER|CLONE_NEWNET));\n' +
+  ' TRY("clone-user",syscall(SYS_clone,CLONE_NEWUSER|SIGCHLD,0,0,0,0));\n' +
+  ' TRY("clone3",syscall(SYS_clone3,(void*)0,0));\n' +
+  ' TRY("setns",syscall(SYS_setns,0,0));\n' +
+  ' TRY("mount",syscall(SYS_mount,"none","/tmp","tmpfs",0,(void*)0));\n' +
+  ' TRY("fsopen",syscall(SYS_fsopen,"tmpfs",0));\n' +
+  ' TRY("keyctl",syscall(SYS_keyctl,0,0,0,0,0));\n' +
+  ' TRY("ptrace",syscall(SYS_ptrace,0,0,0,0));\n' +
+  " pthread_t t;int prc=pthread_create(&t,0,noop,0);if(prc==0)pthread_join(t,0);\n" +
+  ' printf("pthread %d 0\\n",prc);\n' +
+  " pid_t p=fork();if(p==0)_exit(0);int st=0;waitpid(p,&st,0);\n" +
+  ' printf("fork %d 0\\n",p>0&&WIFEXITED(st)?0:-1);\n' +
+  " return 0;}\n";
+
+/**
  * The uid the program runs under, asked of the program itself.
  *
  * The `adduser` stanza lives in two files (`images/Containerfile` for the
@@ -310,6 +343,30 @@ describe.skipIf(!has("c"))("the container itself", () => {
     // removes the syscall outright answers. Anything else — EFAULT above all
     // — means the call reached the kernel and no profile was in the way.
     expect([1, 38]).toContain(errno);
+  });
+
+  it("cannot create a namespace, mount, use a keyring or ptrace — and still runs threads", async () => {
+    const outcome = await run(request("c", NAMESPACES));
+    expect(outcome.compile.ok, outcome.compile.stderr).toBe(true);
+    const results = Object.fromEntries(
+      outcome.cases[0]!.stdout
+        .trim()
+        .split("\n")
+        .map((line) => {
+          const [name, rc, errno] = line.split(" ");
+          return [name, { rc: Number(rc), errno: Number(errno) }];
+        }),
+    );
+    for (const name of [
+      "unshare-user", "unshare-net", "clone-user", "setns", "mount", "fsopen", "keyctl", "ptrace",
+    ]) {
+      // EPERM or ENOSYS: the filter answered; the kernel never saw the call.
+      expect(results[name], name).toMatchObject({ rc: -1 });
+      expect([1, 38], name).toContain(results[name]!.errno);
+    }
+    expect(results.clone3).toEqual({ rc: -1, errno: 38 });
+    expect(results.pthread).toEqual({ rc: 0, errno: 0 });
+    expect(results.fork).toEqual({ rc: 0, errno: 0 });
   });
 
   it("carries the closed list of environment variables and nothing else", async () => {

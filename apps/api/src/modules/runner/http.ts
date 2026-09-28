@@ -56,6 +56,43 @@ function isTimeout(err: unknown): boolean {
   );
 }
 
+/**
+ * The most a runner may answer, in bytes. Fixed and generous: a program's
+ * output is capped in bytes by the runner, but JSON escaping multiplies it
+ * (a control byte becomes `\u00XX`, six), so no tight bound derives from
+ * the request. This one only stops a runner that streams without end.
+ */
+const MAX_OUTCOME_BYTES = 32 * 1024 * 1024;
+
+/** A `/health` answer is a few hundred bytes. */
+const MAX_HEALTH_BYTES = 64 * 1024;
+
+/**
+ * The body as JSON, read chunk by chunk and abandoned past `maxBytes`, so a
+ * runner that streams without end cannot fill the API's memory.
+ */
+async function cappedJson(res: Response, maxBytes: number): Promise<unknown> {
+  if (res.body === null) throw new RunnerUnavailable("bad_response");
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      throw new RunnerUnavailable("response_too_large");
+    }
+    chunks.push(value);
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  } catch {
+    throw new RunnerUnavailable("bad_response");
+  }
+}
+
 function retryAfterMs(res: Response): number | null {
   const header = res.headers.get("retry-after");
   if (header === null) return null;
@@ -107,7 +144,7 @@ export class HttpRunner implements RunnerService {
         await res.text().catch(() => "");
         return down(`http_${res.status}`);
       }
-      const parsed = RunnerHealth.safeParse(await res.json());
+      const parsed = RunnerHealth.safeParse(await cappedJson(res, MAX_HEALTH_BYTES));
       return parsed.success ? parsed.data : down("bad_response");
     } catch (err) {
       // `health()` is called by /healthz and by the admin screen: it reports,
@@ -132,9 +169,9 @@ export class HttpRunner implements RunnerService {
   private async outcome(res: Response): Promise<RunnerOutcome> {
     let body: unknown;
     try {
-      body = await res.json();
-    } catch {
-      throw new RunnerUnavailable("bad_response");
+      body = await cappedJson(res, MAX_OUTCOME_BYTES);
+    } catch (err) {
+      throw err instanceof RunnerUnavailable ? err : new RunnerUnavailable("bad_response");
     }
     const parsed = RunnerOutcome.safeParse(body);
     // A runner answering 200 with something else is as useless as a dead one,

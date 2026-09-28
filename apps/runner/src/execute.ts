@@ -61,6 +61,12 @@ export interface ExecuteDeps {
   config: RunnerConfig;
   /** Injected by the tests; production uses a random name per request. */
   containerName?: () => string;
+  /**
+   * Aborts when the caller has gone: the container is destroyed at once —
+   * the same `remove` that ends a case past its deadline — and no further
+   * step starts.
+   */
+  signal?: AbortSignal | undefined;
 }
 
 interface PreparedFile {
@@ -163,9 +169,19 @@ export async function executeRequest(
     ttlSeconds: containerTtlSeconds(request, config),
   };
 
+  const { signal } = deps;
+  const stopIfAborted = (): void => {
+    if (signal?.aborted) throw new ExecuteError("the caller has gone", "aborted");
+  };
+  const onAbort = (): void => void engine.remove(name).catch(() => undefined);
+  signal?.addEventListener("abort", onAbort, { once: true });
+
   /** Creates the container and puts it back in the state a case expects. */
   const start = async (): Promise<{ ok: boolean; stdout: string; stderr: string; ms: number }> => {
+    stopIfAborted();
     await engine.create(create);
+    // An abort during `create` found no container to remove yet.
+    stopIfAborted();
     for (const file of files) {
       // `cp /dev/stdin <name>` and not a shell redirection: the file name is
       // an argument, so it cannot become part of a command line.
@@ -202,6 +218,7 @@ export async function executeRequest(
     const deadline = Date.now() + config.RUNNER_REQUEST_TIMEOUT_MS;
 
     for (const testCase of request.cases) {
+      stopIfAborted();
       if (Date.now() > deadline) {
         cases.push(dead(limits.timeMs));
         continue;
@@ -242,6 +259,7 @@ export async function executeRequest(
 
     return { compile: compiled, cases };
   } finally {
+    signal?.removeEventListener("abort", onAbort);
     await engine.remove(name).catch(() => undefined);
   }
 }

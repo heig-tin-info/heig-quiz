@@ -384,8 +384,9 @@ export interface QuestionTypeServer<
    *
    * `POST /attempts/:id/simulate` runs it with `priority: "interactive"` and
    * hands the `RunnerOutcome` back untouched; the client half of the type
-   * reads it. A type without this hook has no interactive run of its own
-   * (`code` keeps its older, case-filtering route).
+   * reads it. `POST /attempts/:id/run` takes its cases from it too, so which
+   * case is visible is the type's to say, never guessed from a case name.
+   * A type without this hook has no interactive run of its own.
    */
   interactiveRequest?(
     config: TConfig,

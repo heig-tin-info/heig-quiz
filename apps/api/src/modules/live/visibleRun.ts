@@ -7,7 +7,7 @@
  * Nothing here reads the database or calls the runner.
  */
 import type { RunnerResultEvent } from "@quiz/contracts";
-import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
+import type { AnyQuestionTypeServer, RunnerOutcome, RunnerRequest } from "@quiz/core/server";
 import { caseVerdict } from "@quiz/qt-code/server";
 
 /** What `type.toStudent` exposes about running; read structurally, never cast. */
@@ -83,14 +83,31 @@ export function runnableView(student: unknown): RunnableStudentView {
   return out;
 }
 
+/**
+ * Which route a type's student button goes through — one route per button.
+ * A type whose student view publishes `visibleCases` is judged case by case
+ * by `/run` (`code`); any other type with an `interactiveRequest` has its own
+ * `/simulate` (`circuit`, `codeimage`). `null`: nothing to run at all.
+ */
+export function runButton(
+  type: AnyQuestionTypeServer,
+  student: RunnableStudentView,
+): "run" | "simulate" | null {
+  if (!type.interactiveRequest) return null;
+  if (student.visibleCases === undefined) return "simulate";
+  return type.finalizeRunner ? "run" : null;
+}
+
 /** The only check a free stdin try can make: the program exits 0. */
 const FREE_TRY = { expected: "", compareStdout: false, expectedExitCode: 0 };
 
 /**
- * The request of a Run, from the FIRST half of a grading (`type.grade`, which
- * assembled it server-side from the template and the regions — invariant 14).
+ * The request of a Run, from the type's own `interactiveRequest`, which
+ * assembled it server-side from the template and the regions (invariant 14)
+ * and put in it the VISIBLE cases only — chosen by the type's own flag, never
+ * matched here by a name two cases may share.
  *
- * Only what the student may already see: their own stdin, or the VISIBLE
+ * Only what the student may already see: their own stdin, or those visible
  * cases. The hidden half never leaves the grading worker. A visible case
  * keeps the `args` the TYPE put in the request; only the free-stdin try takes
  * a command line from the browser. A compile-only request carries NO case:
@@ -98,23 +115,21 @@ const FREE_TRY = { expected: "", compareStdout: false, expectedExitCode: 0 };
  * also keeps its container TTL (and the journal) honest about what was asked.
  */
 export function visibleRunRequest(
-  first: RunnerRequest,
-  student: RunnableStudentView,
+  visible: RunnerRequest,
   input: {
     stdin?: string | undefined;
     args?: string[] | undefined;
     compileOnly?: boolean | undefined;
   },
 ): RunnerRequest {
-  const visibleNames = new Set((student.visibleCases ?? []).map((c) => c.name));
   const compileOnly = input.compileOnly === true;
   const cases = compileOnly
     ? []
     : input.stdin === undefined
-      ? first.cases.filter((c) => visibleNames.has(c.name))
+      ? visible.cases
       : [{ name: "stdin", args: input.args ?? [], stdin: input.stdin }];
   return {
-    ...first,
+    ...visible,
     ...(compileOnly ? { action: "check" as const } : {}),
     cases,
     priority: "interactive",
@@ -126,14 +141,15 @@ export function visibleRunResult(
   request: RunnerRequest,
   outcome: RunnerOutcome,
   student: RunnableStudentView,
+  freeTry: boolean,
 ): RunnerResultEvent["result"] {
-  const specOf = new Map((student.visibleCases ?? []).map((c) => [c.name, c]));
   return {
     status: "ok",
     compile: { ok: outcome.compile.ok, stderr: outcome.compile.stderr },
     cases: request.cases.map((c, index) => {
       const run = outcome.cases[index];
-      const spec = specOf.get(c.name);
+      // `request.cases` are the visible cases in their order, or the free try.
+      const spec = freeTry ? undefined : student.visibleCases?.[index];
       // Nothing to compare when the case does not compare stdout, and
       // nothing to show either.
       const expected = spec === undefined || !spec.compareStdout ? "" : spec.expected;
