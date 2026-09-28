@@ -31,7 +31,7 @@ const clock = new TestClock("2026-09-25T08:00:00.000Z");
 
 beforeAll(async () => {
   restore = registerForTests(fakeShort);
-  db = (await testDb()) as unknown as Db;
+  db = await testDb();
 });
 afterAll(() => restore());
 

@@ -3,11 +3,12 @@ import { randomUUID } from "node:crypto";
 import { beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 
+import type { Db } from "../db/client.js";
 import { userEmails, userIdpClaims, users } from "../db/schema.js";
-import { testDb, type TestDb } from "../test/db.js";
+import { testDb } from "../test/db.js";
 import { recordIdpClaims, syncUserEmails } from "./claims.js";
 
-let db: TestDb;
+let db: Db;
 let userId: string;
 
 beforeAll(async () => {

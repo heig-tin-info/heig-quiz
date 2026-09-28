@@ -7,6 +7,7 @@
  * conversion in `@quiz/domain` — rather than against `gradeFromPoints` alone,
  * which `packages/domain` already covers.
  */
+import type { PGlite } from "@electric-sql/pglite";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -21,7 +22,7 @@ import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
 import { evaluationItems, evaluations, notifications } from "../../db/schema.js";
-import { testApp, testDb, type TestDb } from "../../test/db.js";
+import { testApp, testDatabase } from "../../test/db.js";
 import { seedCodeEvaluation } from "../../test/codeFixture.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
@@ -33,19 +34,18 @@ import { listNotifications } from "../notifications/service.js";
 import { BOM, csvField, resultsCsv } from "./csv.js";
 import * as service from "./service.js";
 
-let raw: TestDb;
+let client: PGlite;
 let db: Db;
 let restore: () => void;
 
 beforeAll(async () => {
   restore = registerForTests(fakeShort);
-  raw = await testDb();
-  db = raw as unknown as Db;
+  ({ db, client } = await testDatabase());
 });
 afterAll(() => restore());
 
 async function appFor() {
-  const app = await testApp(raw);
+  const app = await testApp(db);
   app.clock.set("2026-09-20T09:00:00.000Z");
   return app;
 }
@@ -656,7 +656,7 @@ describe("the student's pages read in a fixed number of statements (audit D-05)"
     }
 
     // Every statement drizzle sends goes through the PGlite client's `query`.
-    const statements = vi.spyOn(raw.$client, "query");
+    const statements = vi.spyOn(client, "query");
     try {
       // One: every card is served from `released_grades` (D-06), so the two
       // grouped queries of the live computation have nothing to read.

@@ -7,23 +7,41 @@
 import { fileURLToPath } from "node:url";
 
 import { PGlite } from "@electric-sql/pglite";
+import type { Logger } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import type { FastifyInstance } from "fastify";
 
 import { TestClock } from "../clock.js";
+import type { Db } from "../db/client.js";
 import * as schema from "../db/schema.js";
 import { UnavailableRunner } from "../modules/runner/unavailable.js";
 
-export type TestDb = ReturnType<typeof drizzle<typeof schema>>;
+/**
+ * A PGlite client seen as the application's {@link Db}: the very view
+ * `createDb` gives a `pglite://` URL, so the modules under test receive the
+ * type they declare. `logger` lets a test see every statement a call sends.
+ */
+export function pgliteDb(client: PGlite, logger?: Logger): Db {
+  return drizzle(client, { schema, ...(logger ? { logger } : {}) }) as unknown as Db;
+}
 
-export async function testDb(): Promise<TestDb> {
+/**
+ * A migrated in-memory database, with its PGlite client for the tests that
+ * spy on the driver underneath (statements, transactions).
+ */
+export async function testDatabase(): Promise<{ db: Db; client: PGlite }> {
   const client = new PGlite();
-  const db = drizzle(client, { schema });
-  await migrate(db, {
+  const db = pgliteDb(client);
+  // The PGlite migrator on the handle it wraps, exactly as `createDb` does.
+  await migrate(db as never, {
     migrationsFolder: fileURLToPath(new URL("../../drizzle", import.meta.url)),
   });
-  return db;
+  return { db, client };
+}
+
+export async function testDb(): Promise<Db> {
+  return (await testDatabase()).db;
 }
 
 const silent = () => {};
@@ -35,9 +53,7 @@ const silent = () => {};
  * `app.clock.now()`, so a test drives a deadline by moving one object rather
  * than by sleeping (invariant 5).
  */
-export async function testApp(
-  existing?: TestDb,
-): Promise<FastifyInstance & { db: TestDb; clock: TestClock }> {
+export async function testApp(existing?: Db): Promise<FastifyInstance & { clock: TestClock }> {
   const db = existing ?? (await testDb());
   return {
     db,
@@ -49,5 +65,5 @@ export async function testApp(
     // outcomes assigns its own double to `app.runner`.
     runner: new UnavailableRunner("test"),
     log: { info: silent, warn: silent, error: silent, debug: silent },
-  } as unknown as FastifyInstance & { db: TestDb; clock: TestClock };
+  } as unknown as FastifyInstance & { clock: TestClock };
 }

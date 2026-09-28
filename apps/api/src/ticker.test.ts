@@ -30,7 +30,7 @@ let clock: TestClock;
 
 beforeAll(async () => {
   restore = registerForTests(fakeShort);
-  db = (await testDb()) as unknown as Db;
+  db = await testDb();
 });
 afterAll(() => restore());
 beforeEach(() => {

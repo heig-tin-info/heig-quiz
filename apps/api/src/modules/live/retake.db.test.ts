@@ -15,8 +15,8 @@ import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
 import { attempts, evaluations, gradings } from "../../db/schema.js";
-import { testApp, testDb, type TestDb } from "../../test/db.js";
-import { testServer } from "../../test/http.js";
+import { testApp, testDb } from "../../test/db.js";
+import { type Payload, testServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import {
@@ -32,19 +32,17 @@ import * as results from "../results/service.js";
 import { answersOf } from "./attempt.js";
 import * as live from "./service.js";
 
-let raw: TestDb;
 let db: Db;
 let restore: () => void;
 
 beforeAll(async () => {
   restore = registerForTests(fakeShort);
-  raw = await testDb();
-  db = raw as unknown as Db;
+  db = await testDb();
 });
 afterAll(() => restore());
 
 async function appFor() {
-  const app = await testApp(raw);
+  const app = await testApp(db);
   app.clock.set("2026-09-25T09:00:00.000Z");
   return app;
 }
@@ -649,7 +647,7 @@ describe("POST /evaluations/:id/retake", () => {
         },
       });
       await applyState(sdb, await reload(sdb, seed.evaluationId), "running", server.clock.now());
-      const post = (url: string, headers: Record<string, string>, payload?: unknown) =>
+      const post = (url: string, headers: Record<string, string>, payload?: Payload) =>
         server.app.inject({ method: "POST", url, headers, ...(payload === undefined ? {} : { payload }) });
 
       const entered = await post(`/app/api/evaluations/${seed.evaluationId}/attempt`, student.headers, {});

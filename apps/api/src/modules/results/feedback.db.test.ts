@@ -20,7 +20,7 @@ import { FeedbackPolicy } from "@quiz/contracts";
 import { finalizeRunnerCode, type CodeConfig, type CodeDetails } from "@quiz/qt-code/server";
 
 import { evaluations, questions } from "../../db/schema.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { seedLive } from "../../test/live.js";
 import { addItems, byId } from "../evaluation/service.js";
 import { writeGrading } from "../grading/service.js";
@@ -85,7 +85,7 @@ const ANSWERS: Record<string, unknown> = {
 
 const get = (url: string, headers: Record<string, string>) =>
   server.app.inject({ method: "GET", url, headers });
-const post = (url: string, headers: Record<string, string>, payload?: unknown) =>
+const post = (url: string, headers: Record<string, string>, payload?: Payload) =>
   server.app.inject({ method: "POST", url, headers, ...(payload === undefined ? {} : { payload }) });
 
 /** One published question of `type`, with the config above. */

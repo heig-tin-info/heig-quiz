@@ -29,7 +29,7 @@ async function seedUser(email: string, givenName = "Léa", familyName = "Rochat"
 }
 
 beforeAll(async () => {
-  db = (await testDb()) as unknown as Db;
+  db = await testDb();
 });
 
 /** A fresh Teams account of the HEIG tenant. */

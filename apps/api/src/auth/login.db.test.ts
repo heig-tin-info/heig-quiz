@@ -5,8 +5,9 @@ import { beforeAll, describe, expect, it } from "vitest";
 import type { AppConfig } from "../config.js";
 import { eq } from "drizzle-orm";
 
+import type { Db } from "../db/client.js";
 import { courseStaff, courses, poolMembers, pools, teacherGrants, users } from "../db/schema.js";
-import { testDb, type TestDb } from "../test/db.js";
+import { testDb } from "../test/db.js";
 import { loginAdmits, signIn } from "./login.js";
 import type { OidcClaims } from "./oidc.js";
 
@@ -16,7 +17,7 @@ const config = {
   LOGIN_ALLOWLIST: "",
 } as AppConfig;
 
-let db: TestDb;
+let db: Db;
 
 beforeAll(async () => {
   db = await testDb();

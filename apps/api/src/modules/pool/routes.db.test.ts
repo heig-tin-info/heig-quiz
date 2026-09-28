@@ -7,7 +7,7 @@ import { registerForTests } from "@quiz/registry/server";
 
 import { assets, coursePools, courseStaff, courses, pools, questions, users } from "../../db/schema.js";
 import { subscribe } from "../../events.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { fakeRunnerType, fakeShort } from "../../test/fakeType.js";
 import { seedLive } from "../../test/live.js";
 import { addItems, applyState, byId } from "../evaluation/service.js";
@@ -800,7 +800,7 @@ describe("pool sharing", () => {
   });
 
   it("invites the account picked, by id, and refuses a body naming both or neither", async () => {
-    const post = (payload: unknown) =>
+    const post = (payload: Payload) =>
       server.app.inject({
         method: "POST",
         url: `/app/api/pools/${shared}/members`,
@@ -1153,7 +1153,7 @@ describe("the order of the refusals, over HTTP", () => {
       payload: { name: "Refusal order private pool" },
     });
     const closed = hidden.json().id as string;
-    const patch = (url: string, headers: Record<string, string>, payload: unknown) =>
+    const patch = (url: string, headers: Record<string, string>, payload: Payload) =>
       server.app.inject({ method: "PATCH", url, headers, payload });
     const badBody = { name: 42 };
 

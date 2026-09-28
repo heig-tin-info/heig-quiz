@@ -13,7 +13,7 @@ import {
   enrollments,
   userEmails,
 } from "../../db/schema.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { type Payload, testServer, type TestServer } from "../../test/http.js";
 
 let server: TestServer;
 let teacher: Awaited<ReturnType<TestServer["signIn"]>>;
@@ -260,7 +260,7 @@ describe("dated period (F-ORG-03, #156)", () => {
 
   it("dates, then undates, a classroom by PATCH, and audits both periods", async () => {
     const id = (await create({ name: "Printemps" })).json().id as string;
-    const patch = (payload: unknown) =>
+    const patch = (payload: Payload) =>
       server.app.inject({
         method: "PATCH",
         url: `/app/api/classrooms/${id}`,
@@ -339,7 +339,7 @@ describe("the order of the refusals, over HTTP", () => {
       prenom: "Barbara",
       email: `barbara-${entryId.slice(0, 8)}@heig.test`,
     });
-    const patch = (url: string, headers: Record<string, string>, payload: unknown) =>
+    const patch = (url: string, headers: Record<string, string>, payload: Payload) =>
       server.app.inject({ method: "PATCH", url, headers, payload });
 
     for (const [url, badBody] of [

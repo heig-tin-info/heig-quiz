@@ -20,9 +20,8 @@ import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
 import { RunnerBusy, RunnerUnavailable } from "@quiz/core/server";
 import { registerForTests } from "@quiz/registry/server";
 
-import type { Db } from "../../db/client.js";
 import { attemptEvents, questions } from "../../db/schema.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { fakeShort, fakeSimulatable } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { addItems, applyState, itemRows } from "../evaluation/service.js";
@@ -99,7 +98,7 @@ beforeAll(async () => {
   student = await server.signIn("student");
   outsider = await server.signIn("student");
 
-  const db = server.app.db as unknown as Db;
+  const db = server.app.db;
   // One `short` question from the fixture (a type with no Simulate button),
   // plus one `circuit` question added through the real pool pipeline.
   seed = await seedLive(db, {
@@ -168,14 +167,14 @@ beforeEach(async () => {
   (server.app as unknown as { runner: unknown }).runner = defaultRunner;
   // The budget is counted from the journal, so each test starts with an empty
   // one rather than with a clock the previous test moved.
-  await (server.app.db as unknown as Db)
+  await server.app.db
     .delete(attemptEvents)
     .where(eq(attemptEvents.attemptId, attemptId));
 });
 
 const simulate = (
   id: string,
-  payload: unknown,
+  payload: Payload,
   headers: Record<string, string> = student.headers,
 ) => server.app.inject({ method: "POST", url: `/app/api/attempts/${id}/simulate`, headers, payload });
 
@@ -211,7 +210,7 @@ describe("POST /attempts/:id/simulate", () => {
     (server.app as unknown as { runner: unknown }).runner = fake.runner;
     await simulate(attemptId, { itemId: circuitItemId, answer });
 
-    const rows = await (server.app.db as unknown as Db)
+    const rows = await server.app.db
       .select()
       .from(attemptEvents)
       .where(eq(attemptEvents.attemptId, attemptId));
@@ -316,7 +315,7 @@ describe("POST /attempts/:id/simulate", () => {
    * stops with the attempt — exactly where an autosave stops.
    */
   it("answers 410 once the attempt is submitted", async () => {
-    const db = server.app.db as unknown as Db;
+    const db = server.app.db;
     const fake = recorder();
     (server.app as unknown as { runner: unknown }).runner = fake.runner;
 

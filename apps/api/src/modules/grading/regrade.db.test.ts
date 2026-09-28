@@ -23,7 +23,7 @@ import {
   questions,
 } from "../../db/schema.js";
 import { subscribe } from "../../events.js";
-import { testServer, type TestServer } from "../../test/http.js";
+import { type Payload, testServer, type TestServer } from "../../test/http.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { seedLive } from "../../test/live.js";
 import { applyState, joinedItems } from "../evaluation/service.js";
@@ -48,7 +48,7 @@ afterAll(async () => {
   restore();
 });
 
-const post = (url: string, headers: Record<string, string>, payload?: unknown) =>
+const post = (url: string, headers: Record<string, string>, payload?: Payload) =>
   server.app.inject({
     method: "POST",
     url,

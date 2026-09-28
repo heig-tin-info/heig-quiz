@@ -16,7 +16,7 @@ import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
 import { attempts, evaluations, gradings, questions, users } from "../../db/schema.js";
-import { testApp, testDb, type TestDb } from "../../test/db.js";
+import { testApp, testDb } from "../../test/db.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
 import { applyState, byId, createEvaluation, joinedItems } from "../evaluation/service.js";
@@ -26,14 +26,12 @@ import { loadConfig, typeOf } from "../pool/config.js";
 import * as evaluationService from "../evaluation/service.js";
 import { runEvaluationGrading } from "./jobs.js";
 
-let raw: TestDb;
 let db: Db;
 let restore: () => void;
 
 beforeAll(async () => {
   restore = registerForTests(fakeShort);
-  raw = await testDb();
-  db = raw as unknown as Db;
+  db = await testDb();
 });
 afterAll(() => restore());
 
@@ -109,7 +107,7 @@ describe("the grading pass applies the hierarchy", () => {
    * `true_false` gives (1 + 2) / 4 = 0.75, `ripkey` gives 1/2 = 0.5.
    */
   it("uses the evaluation's policy for inherit and the question's otherwise", async () => {
-    const app = await testApp(raw);
+    const app = await testApp(db);
     app.clock.set("2026-09-20T09:00:00.000Z");
     const seed = await seedLive(db, { students: 1, questions: 0 });
 

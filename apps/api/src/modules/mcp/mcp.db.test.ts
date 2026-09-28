@@ -156,7 +156,7 @@ describe("an authoring session", () => {
 
     const ids: string[] = [];
     for (const type of ["mcq", "short", "cloze"] as const) {
-      const guide = describeQuestionType(type) as { example: Record<string, unknown> };
+      const guide = describeQuestionType(type);
       const q = await ok("create_question", {
         poolId: pool.id,
         type,

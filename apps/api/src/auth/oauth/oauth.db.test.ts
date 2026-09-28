@@ -7,6 +7,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import { eq, like } from "drizzle-orm";
+import type { InjectOptions } from "fastify";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { auditLog, oauthClients, oauthGrants } from "../../db/schema.js";
@@ -27,7 +28,7 @@ beforeAll(async () => {
 afterAll(() => server.close());
 afterEach(() => vi.restoreAllMocks());
 
-const inject = (opts: Parameters<TestServer["app"]["inject"]>[0]) => server.app.inject(opts);
+const inject = (opts: InjectOptions) => server.app.inject(opts);
 
 function pkce() {
   const verifier = randomBytes(32).toString("base64url");

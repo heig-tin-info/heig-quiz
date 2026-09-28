@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { API_TOKEN_PREFIX, type ApiToken, type ApiTokenCreated } from "@quiz/contracts";
 
 import { apiTokens, auditLog } from "../db/schema.js";
-import { testServer, type TestServer } from "../test/http.js";
+import { type Payload, testServer, type TestServer } from "../test/http.js";
 
 let server: TestServer;
 let teacher: { id: string; headers: Record<string, string> };
@@ -22,8 +22,8 @@ afterAll(() => server.close());
 
 const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
 
-async function mint(headers: Record<string, string>, body: unknown = { name: "Claude" }) {
-  const res = await server.app.inject({ method: "POST", url: "/app/api/me/tokens", headers, payload: body as object });
+async function mint(headers: Record<string, string>, body: Payload = { name: "Claude" }) {
+  const res = await server.app.inject({ method: "POST", url: "/app/api/me/tokens", headers, payload: body });
   return { status: res.statusCode, body: res.json() as ApiTokenCreated };
 }
 

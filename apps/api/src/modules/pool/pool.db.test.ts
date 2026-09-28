@@ -85,7 +85,7 @@ async function writeDraft(id: string, config: unknown) {
 
 beforeAll(async () => {
   restore = registerForTests(fakeShort);
-  db = (await testDb()) as unknown as Db;
+  db = await testDb();
   ownerId = randomUUID();
   await db
     .insert(users)
