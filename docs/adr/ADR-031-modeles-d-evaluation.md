@@ -7,7 +7,7 @@ the issue). Delivered in several pull requests: this ADR and the spec first,
 then the smallest usable slice (migration `0019_evaluation_templates`, *Save
 as template*, the course's list with delete, *Instantiate*), then editing a
 template in place, then pulling a revision into an instance. The promote
-screen is deferred (06 no. 25). The rest of the delivery was re-split on
+screen is deferred (06 no. 25, issue #229). The rest of the delivery was re-split on
 2026-09-28: see the addendum at the end. The pull (PR B) is delivered; its
 decisions are the second addendum.
 
