@@ -1,17 +1,15 @@
 import {
   ChartPie,
   Check,
-  Circle,
   CircleCheck,
   Clock,
-  Ellipsis,
   Flag,
   Hourglass,
   Loader2,
   Lock,
   Minus,
   Pause,
-  PenLine,
+  Square,
   WifiOff,
   X,
 } from "lucide-react";
@@ -30,7 +28,7 @@ import { useScrollFade } from "./page";
 // dashboard grid and the save state that sits next to the countdown. They
 // share three rules. Time is tabular, always, or the last digit dances.
 // Nothing is carried by colour alone (N-A11Y): every state also has an icon
-// and a word, visible or in the accessible name. And none of them owns a
+// or a shape of its own, and a word, visible or in the accessible name. And none of them owns a
 // clock: the caller passes `now` — or, to `ClockCountdown`, the clock to
 // tick on — because on the live path that time is the SERVER's
 // (`useServerClock`), never the browser's.
@@ -569,11 +567,19 @@ type VerdictKey =
  * The PROGRESS half of the scale (`inProgress`, `answered`, `done`) is blue
  * and the VERDICT half (`correct`, `partial`, `wrong`) keeps the semantic
  * green / amber / red, so a teacher scanning a grid never mistakes "they
- * wrote something" for "it is right". The two blues are the same hue at two
- * strengths — `info-soft` for an answer that is still being written,
- * `info` filled for one the student has validated — because the progression
- * is a progression: a column darkening from left to right is a class moving
- * through the quiz, readable at squinting distance and on a projector.
+ * wrote something" for "it is right".
+ *
+ * The progress states are SHAPES, not pictograms (#227). A pencil or an
+ * ellipsis in a 64 px cell said nothing the tint did not, and thirty rows of
+ * them were noise on a projector. So: a faint hollow square glyph for a
+ * question never opened (`blank`), an empty outlined box for one opened and
+ * left empty (`inProgress`), the box filled `info-soft` once it holds an
+ * answer (`answered`), and filled `info` once validated (`done`). Empty
+ * versus filled is a difference of shape, which survives grey and a washed
+ * out projector (N-A11Y, nothing by colour alone); `answered` versus `done`
+ * would be two blues and nothing else, which is why `done` keeps its check.
+ * The two strengths are the progression itself: a column darkening downward
+ * is a class moving through the quiz, readable at squinting distance.
  *
  * `done` is the VALIDATED question of the locking navigations ("Validate and
  * continue", a crossed checkpoint). It and `skipped` — "I won't answer this
@@ -582,12 +588,22 @@ type VerdictKey =
  * `verdict.*` ones. `skipped` is not blue: it is not progress through the
  * answer, it is a decision to leave it, so it wears the neutral recessed
  * fill with a DASHED edge and a dash — the student's own list draws it the
- * same way.
+ * same way. The verdicts keep their icons: there the icon IS the meaning.
+ *
+ * `icon: null` is a cell whose shape says it all; `glyph` marks the one state
+ * (`blank`) whose icon is a small mark rather than a full-size pictogram.
  */
-const VERDICTS: Record<VerdictState, { icon: IconType; tint: string; key: VerdictKey }> = {
-  blank: { icon: Circle, tint: "text-line-strong", key: "verdict.blank" },
-  inProgress: { icon: Ellipsis, tint: "bg-surface-2 text-fg-faint", key: "verdict.inProgress" },
-  answered: { icon: PenLine, tint: "bg-info-soft text-info", key: "verdict.answered" },
+const VERDICTS: Record<
+  VerdictState,
+  { icon: IconType | null; tint: string; key: VerdictKey; glyph?: boolean }
+> = {
+  blank: { icon: Square, tint: "text-line-strong", key: "verdict.blank", glyph: true },
+  inProgress: {
+    icon: null,
+    tint: "border border-line-strong text-fg-muted",
+    key: "verdict.inProgress",
+  },
+  answered: { icon: null, tint: "bg-info-soft text-info", key: "verdict.answered" },
   skipped: {
     icon: Minus,
     tint: "border border-dashed border-fg-faint bg-surface-2 text-fg-muted",
@@ -606,7 +622,11 @@ const VERDICTS: Record<VerdictState, { icon: IconType; tint: string; key: Verdic
  * hall wall loses half its saturation, and one teacher in twelve cannot tell
  * the green from the amber at all. The word is in the accessible name, and
  * `value` — the student's answer in one glyph, "B", "NULL", "3/3" — sits next
- * to the icon for everyone else.
+ * to the icon (or alone in the shape) for everyone else.
+ *
+ * Its height is `--cell-h`, 28 px when nobody sets it: the live grid sets it
+ * from the row height it computed to fit the class on one screen (#227), and
+ * every other caller simply gets the default.
  */
 export function VerdictCell({
   state,
@@ -635,7 +655,7 @@ export function VerdictCell({
   className?: string;
 }) {
   const t = useT();
-  const { icon: Icon, tint, key } = VERDICTS[state];
+  const { icon: Icon, tint, key, glyph } = VERDICTS[state];
   const name = `${label ?? t(key)}${flagged ? ` · ${t("live.verdict.flagged")}` : ""}`;
   // The answer carries no colour of its own: it INHERITS the state's ink,
   // which is the only way it stays legible on every tint. `text-fg` on the
@@ -643,7 +663,7 @@ export function VerdictCell({
   // rows back needs; on the state's own ink every pair is 4.7:1 or better.
   const content = (
     <>
-      <Icon className="size-3.5 shrink-0" aria-hidden />
+      {Icon ? <Icon className={cx("shrink-0", glyph ? "size-2.5" : "size-3.5")} aria-hidden /> : null}
       {value != null && value !== "" ? (
         <span className="max-w-11.5 truncate text-xs font-medium">{value}</span>
       ) : null}
@@ -658,7 +678,7 @@ export function VerdictCell({
     </>
   );
   const chrome = cx(
-    "relative inline-flex h-7 w-full items-center justify-center gap-1 rounded-[7px] px-1",
+    "relative inline-flex h-[var(--cell-h,1.75rem)] w-full items-center justify-center gap-1 rounded-[7px] px-1",
     tint,
     className,
   );

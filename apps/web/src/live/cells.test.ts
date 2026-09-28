@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { initialGrid, presence, applyGridEvent } from "../realtime/grid";
 import { EVALUATION_ID, id, makeCell, makeDashboard, makeRow } from "../test/live-fixtures";
-import { cellState } from "./cells";
+import { cellState, ownDeadline } from "./cells";
 
 /*
  * The two things the live dashboard says about a cell and about the room.
@@ -117,5 +117,33 @@ describe("presence — n of m", () => {
       enrolled: 24,
     });
     expect(presence(state)).toEqual({ present: 2, enrolled: 24 });
+  });
+});
+
+/*
+ * F-DASH-03 as revised by #227: the header carries the common clock, and a
+ * row shows its own only when its deadline is a different INSTANT.
+ */
+describe("ownDeadline", () => {
+  const close = "2026-09-28T10:00:00.000Z";
+
+  it("is false for the common deadline, however it is written", () => {
+    expect(ownDeadline(close, close)).toBe(false);
+    expect(ownDeadline("2026-09-28T10:00:00Z", close)).toBe(false);
+    expect(ownDeadline("2026-09-28T12:00:00+02:00", close)).toBe(false);
+  });
+
+  it("is true for an extension, a bonus or a late start", () => {
+    expect(ownDeadline("2026-09-28T10:05:00.000Z", close)).toBe(true);
+    expect(ownDeadline("2026-09-28T09:59:59.000Z", close)).toBe(true);
+  });
+
+  it("is true for any deadline when there is no common close", () => {
+    expect(ownDeadline("2026-09-28T10:05:00.000Z", null)).toBe(true);
+  });
+
+  it("is false when the row has no deadline at all", () => {
+    expect(ownDeadline(null, close)).toBe(false);
+    expect(ownDeadline(null, null)).toBe(false);
   });
 });

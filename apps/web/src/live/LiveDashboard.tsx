@@ -33,6 +33,7 @@ import { StudentGrid } from "./StudentGrid";
 import { useLiveToggles } from "./toggles";
 import { useDashboard } from "./useDashboard";
 import { useLiveCommands } from "./useLiveCommands";
+import { useRowDensity } from "./useRowDensity";
 import { dashboardKey, evaluationKey } from "../queryKeys";
 
 /**
@@ -64,6 +65,11 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
   );
 
   const { query, clock, connected } = useDashboard(id, toggles.answers, toggles.results);
+  // The grid fits the class on one screen (#227): the row height is what the
+  // viewport leaves under the grid's top, minus the legend under it and the
+  // page's bottom padding, all measured by the hook.
+  const { rowHeight, gridRef, belowRef } = useRowDensity(query.data?.view.rows.length ?? 0);
+
   // The server's time, as a stable function: every countdown on the page
   // re-reads it on the one shared tick of `useNow`, so they all agree
   // (DESIGN.md, Countdown) and the page itself does not re-render per second.
@@ -305,6 +311,9 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
         onGoToGrading={() => navigate(gradingLinks(id).grading)}
       />
 
+      {/* The switches on the left, what the connection says on the right,
+          under the header's actions (#227): two different things, and the
+          status is the one a teacher glances at, not the one they press. */}
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <div className={cx("flex flex-wrap items-center gap-x-5 gap-y-2", lobby && "hidden")}>
           {(["names", "answers", "results"] as const).map((field) => (
@@ -320,7 +329,7 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
         </div>
         <span
           className={cx(
-            "flex items-center gap-1.5 text-[13px]",
+            "ml-auto flex items-center gap-1.5 text-[13px]",
             connected ? "text-fg-muted" : "text-warning",
           )}
         >
@@ -342,21 +351,23 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
         <LobbyPanel state={state} />
       ) : (
         <>
-          <Card className="min-w-0 overflow-hidden">
-            <StudentGrid
-              state={state}
-              clock={serverNow}
-              paused={evaluationState === "paused"}
-              nameOf={nameOf}
-              showAnswers={toggles.answers}
-              showResults={toggles.results}
-              selected={selected}
-              onInspect={selectCell}
-              onExtend={extendRow}
-              onClose={closeRow}
-              onReopen={reopenRow}
-            />
-          </Card>
+          <div ref={gridRef} style={{ "--row-h": `${rowHeight}px` } as React.CSSProperties}>
+            <Card className="min-w-0 overflow-hidden">
+              <StudentGrid
+                state={state}
+                clock={serverNow}
+                paused={evaluationState === "paused"}
+                nameOf={nameOf}
+                showAnswers={toggles.answers}
+                showResults={toggles.results}
+                selected={selected}
+                onInspect={selectCell}
+                onExtend={extendRow}
+                onClose={closeRow}
+                onReopen={reopenRow}
+              />
+            </Card>
+          </div>
           {selectedRow && selected ? (
             <InspectModal
               evaluationId={id}
@@ -371,7 +382,10 @@ export function LiveDashboard({ id, navigate }: { id: string; navigate: (r: Rout
         </>
       )}
 
-      <div className={cx("flex flex-wrap items-center justify-between gap-4", lobby && "hidden")}>
+      <div
+        ref={belowRef}
+        className={cx("flex flex-wrap items-center justify-between gap-4", lobby && "hidden")}
+      >
         <Legend showResults={toggles.results} />
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-faint">
           <span>{t("live.hint")}</span>

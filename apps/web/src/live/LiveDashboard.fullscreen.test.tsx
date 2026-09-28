@@ -7,6 +7,7 @@ import { resetEventStream } from "../realtime/useEventStream";
 import { EVALUATION_ID, makeDashboard, makeEvaluationDetail } from "../test/live-fixtures";
 import { makeQueryClient, mockFetch, ok, renderWithProviders } from "../test/render";
 import { LiveDashboard } from "./LiveDashboard";
+import { LIVE_TOGGLES_KEY } from "./toggles";
 import { dashboardKey } from "../queryKeys";
 
 /*
@@ -49,6 +50,9 @@ function setFullscreenElement(element: Element | null) {
 }
 
 function setup(state: "running" | "closed" = "running") {
+  // The switches start off on a first visit (#227); these tests find rows by
+  // name, so they open as a teacher who turned everything on.
+  localStorage.setItem(LIVE_TOGGLES_KEY, JSON.stringify({ names: true, answers: true, results: true }));
   const view = makeDashboard(2, 2);
   view.evaluation.state = state;
   const queryClient = makeQueryClient();

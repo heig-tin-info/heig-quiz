@@ -45,6 +45,22 @@ export function cellState(cell: DashboardCell, showResults: boolean): VerdictSta
   }
 }
 
+/**
+ * Whether a row's deadline is its own (F-DASH-03, #227): an individual
+ * extension, a time bonus, a late start in `duration` mode (F-LIVE-12). The
+ * header shows the common clock, so only such a row repeats a countdown.
+ * Compared as INSTANTS — the same moment may be serialised two ways — and,
+ * when the evaluation has no common close, any deadline is the row's own.
+ * Whether the row is still running is the caller's question, not this one.
+ */
+export function ownDeadline(
+  deadlineAt: string | null,
+  closesAt: string | null,
+): deadlineAt is string {
+  if (deadlineAt === null) return false;
+  return closesAt === null || Date.parse(deadlineAt) !== Date.parse(closesAt);
+}
+
 /** The glyph beside the icon, or nothing when the answers are hidden. */
 export function cellValue(cell: DashboardCell, showAnswers: boolean): string | undefined {
   if (!showAnswers) return undefined;
