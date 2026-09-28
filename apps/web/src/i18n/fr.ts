@@ -690,6 +690,7 @@ export const fr: Record<keyof Dict, string> = {
   "question.tag.describePlaceholder": "Ce que ce tag signifie, en une ligne",
   "question.tag.describeFailed": "Cette description n'a pas pu être enregistrée.",
   "question.explanation": "Explication",
+  "question.explanation.placeholder": "Expliquez la réponse ; les étudiants la lisent avec leur correction…",
   "question.duplicate": "Dupliquer",
   "question.duplicated": "Copie créée.",
   "question.delete": "Supprimer la question",

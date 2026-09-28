@@ -695,6 +695,7 @@ export const en = {
   "question.tag.describePlaceholder": "What this tag means, in one line",
   "question.tag.describeFailed": "This description could not be saved.",
   "question.explanation": "Explanation",
+  "question.explanation.placeholder": "Explain the answer; students read it with their feedback…",
   "question.duplicate": "Duplicate",
   "question.duplicated": "Copy created.",
   "question.delete": "Delete question",
