@@ -56,8 +56,13 @@ async function attemptsWithBonus(db: Db, evaluation: EvaluationRecord): Promise<
  * entered during a pause at the resume. Their clock starts now, never at
  * the entry.
  */
-async function beginWaitingAttempts(db: Db, evaluation: EvaluationRecord, now: Date): Promise<void> {
-  for (const attempt of await attemptsWithBonus(db, evaluation)) {
+async function beginWaitingAttempts(
+  db: Db,
+  evaluation: EvaluationRecord,
+  rows: readonly AttemptWithBonus[],
+  now: Date,
+): Promise<void> {
+  for (const attempt of rows) {
     if (attempt.state !== "not_started") continue;
     await beginAttempt(
       db,
@@ -80,7 +85,7 @@ export async function startEvaluation(
   now: Date,
 ): Promise<EvaluationRecord> {
   const next = await applyState(db, evaluation, "running", now);
-  await beginWaitingAttempts(db, next, now);
+  await beginWaitingAttempts(db, next, await attemptsWithBonus(db, next), now);
   events.stateChanged(next, now);
   return next;
 }
@@ -145,14 +150,15 @@ export async function resumeEvaluation(
     return next;
   });
   if (next === null) return (await evaluationById(db, evaluation.id))!;
-  for (const attempt of await attemptsWithBonus(db, next)) {
+  const rows = await attemptsWithBonus(db, next);
+  for (const attempt of rows) {
     if (attempt.state !== "in_progress") continue;
     await logAttemptEvent(db, attempt.id, "resumed", { pausedMs: pausedFor }, now);
     events.deadlineChanged(next, attempt, "pause_resume", now);
   }
   // Last: an attempt that entered during the pause starts on the resume. It
   // sat through no pause, so it gets neither the shift nor a `resumed` entry.
-  await beginWaitingAttempts(db, next, now);
+  await beginWaitingAttempts(db, next, rows, now);
   events.stateChanged(next, now);
   return next;
 }

@@ -11,6 +11,7 @@ export * from "./deadline.js";
 export * from "./evaluationConfig.js";
 export * from "./format.js";
 export * from "./grade.js";
+export * from "./ipAllowlist.js";
 export * from "./itemList.js";
 export * from "./lockedTemplate.js";
 export * from "./mcqScore.js";

@@ -43,7 +43,7 @@ import {
   loadEvaluation,
   ownAttempt,
   reachableEvaluation,
-  sits,
+  sitRefusal,
   staffAttempt,
   teacherGuard,
 } from "../guards.js";
@@ -105,30 +105,25 @@ export async function livePlugin(app: FastifyInstance) {
 
   // The loaders of invariant 6, each answering its own 404 — and, for the
   // routes that sit an evaluation, the same 404 when this session may not
-  // sit it (ADR-027).
-  function sitting<S extends { evaluation: Parameters<typeof sits>[1] }>(
+  // sit it (ADR-027), or the player's `403 ip_not_allowed` when the request
+  // comes from outside the room (F-EVAL-12). Every sitting route passes
+  // here, so a session cookie carried out of the room neither enters, nor
+  // reads, nor writes.
+  function sitting<S extends { evaluation: Parameters<typeof sitRefusal>[1] }>(
     req: FastifyRequest,
     reply: FastifyReply,
     scope: S | null,
   ): S | null {
+    if (!scope) return null;
     // `false`: a sitting route is never a staff watch, whoever calls it.
-    if (!scope || sits(req, scope.evaluation, false)) return scope;
-    notFound(reply);
+    const refusal = sitRefusal(req, scope.evaluation, false);
+    if (refusal === null) return scope;
+    if (refusal === "ip") reply.code(403).send({ error: "ip_not_allowed" });
+    else notFound(reply);
     return null;
   }
-  /**
-   * Every student route on an attempt loads it here, and so re-checks the IP
-   * allow-list (F-EVAL-12) on every call, not only at the entry: a session
-   * cookie carried out of the room must not keep reading or writing.
-   */
-  const own = async (req: FastifyRequest, reply: FastifyReply, p: { id: string }) => {
-    const scope = sitting(req, reply, await ownAttempt(app, req, reply, p.id));
-    if (scope && !service.ipAllowed(scope.evaluation.ipAllowlist, req.ip)) {
-      failure(reply, new service.IpNotAllowed(), app.clock.now());
-      return null;
-    }
-    return scope;
-  };
+  const own = async (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
+    sitting(req, reply, await ownAttempt(app, req, reply, p.id));
   /** The routes a `seb` session may call: sitting its evaluation, nothing else. */
   const sit = { preHandler: requireSession, config: SITTING };
   const staffEvaluation = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
@@ -174,7 +169,6 @@ export async function livePlugin(app: FastifyInstance) {
           evaluation: scope.evaluation,
           participant,
           accessCode: body.accessCode,
-          ip: req.ip,
           now,
         });
         events.lobbyChanged(
@@ -210,7 +204,6 @@ export async function livePlugin(app: FastifyInstance) {
         const attempt = await service.retakeAttempt(app.db, {
           evaluation: scope.evaluation,
           participant,
-          ip: req.ip,
           now,
         });
         await trace(req, "attempt.retake", "attempt", attempt.id, {

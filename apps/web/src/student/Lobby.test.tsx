@@ -126,6 +126,28 @@ describe("the lobby", () => {
     expect(onStart).toHaveBeenCalledTimes(1);
   });
 
+  it("starts at once when the snapshot already says running (a resume before the stream opened)", () => {
+    const { stream, onStart } = render();
+    stream.emit({
+      type: "snapshot",
+      serverNow: "2026-09-20T10:01:00.000Z",
+      subject: `lobby:${view.evaluation.id}`,
+      state: { ...view, evaluation: { ...view.evaluation, state: "running" } },
+    });
+    expect(onStart).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays when the snapshot says the lobby", () => {
+    const { stream, onStart } = render();
+    stream.emit({
+      type: "snapshot",
+      serverNow: "2026-09-20T10:01:00.000Z",
+      subject: `lobby:${view.evaluation.id}`,
+      state: view,
+    });
+    expect(onStart).not.toHaveBeenCalled();
+  });
+
   it("ignores a frame of the grammar that is not the lobby's", () => {
     const { stream, onStart } = render();
     stream.emit({

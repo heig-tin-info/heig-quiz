@@ -103,7 +103,7 @@ export type AuditAction =
  * role has neither UPDATE nor DELETE on this table.
  */
 export async function audit(
-  db: Db,
+  db: Db | Parameters<Parameters<Db["transaction"]>[0]>[0],
   entry: {
     actorUserId?: string | null;
     actorType: "user" | "system" | "api_key";

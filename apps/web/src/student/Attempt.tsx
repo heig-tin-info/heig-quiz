@@ -30,6 +30,11 @@ import { attemptEntryKey } from "../queryKeys";
 const errorCode = (error: unknown): string | null =>
   error instanceof ApiError ? ((error.body as { error?: string })?.error ?? null) : null;
 
+const codeRefused = (error: unknown): boolean => {
+  const code = errorCode(error);
+  return code === "access_code_invalid" || code === "access_code_locked";
+};
+
 export function AttemptPage({
   evaluationId,
   navigate,
@@ -56,6 +61,11 @@ export function AttemptPage({
     // that says "the server did not answer" over one lost packet.
     retry: (count, error) => !(error instanceof ApiError) && count < 3,
     retryDelay: (count) => Math.min(500 * 2 ** count, 4_000),
+    // A refused access code stays in the key: re-sending it on every focus or
+    // reconnection would burn the student's tries (each one is counted
+    // towards the lockout, F-EVAL-12). Only a new code sends again.
+    refetchOnWindowFocus: (query) => !codeRefused(query.state.error),
+    refetchOnReconnect: (query) => !codeRefused(query.state.error),
     // A POST behind a query: the route is idempotent by design, and this is
     // the only way the same refetch path serves the lobby and the player.
     queryFn: () =>

@@ -18,6 +18,8 @@
  *     in one statement, with no read-modify-write (§4.7).
  */
 import { sql } from "drizzle-orm";
+
+import { AttemptEventKind } from "@quiz/contracts";
 import {
   boolean,
   check,
@@ -183,17 +185,9 @@ export const attemptEvents = pgTable(
     attemptId: uuid("attempt_id")
       .notNull()
       .references(() => attempts.id, { onDelete: "cascade" }),
+    // A TypeScript enum only (no CHECK in the database): the contract's list.
     kind: text("kind", {
-      enum: [
-        "visibility",
-        "focus",
-        "ip_change",
-        "reconnect",
-        "time_added",
-        "paused",
-        "resumed",
-        "run",
-      ],
+      enum: AttemptEventKind.options as [AttemptEventKind, ...AttemptEventKind[]],
     }).notNull(),
     at: timestamp("at", { withTimezone: true }).notNull().defaultNow(),
     details: jsonb("details"),

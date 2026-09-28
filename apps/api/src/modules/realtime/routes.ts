@@ -27,7 +27,7 @@ import { iso } from "../../clock.js";
 import { classrooms, courses, enrollments, evaluations, pools } from "../../db/schema.js";
 import { subscribe, type BusMessage } from "../../events.js";
 import { SITTING } from "../../auth/session.js";
-import { accessWhere, findReachableEvaluation, poolAccess, sits, staffAccess } from "../guards.js";
+import { accessWhere, findReachableEvaluation, poolAccess, sitRefusal, staffAccess } from "../guards.js";
 import * as live from "../live/service.js";
 import * as bus from "./bus.js";
 import { presence } from "./presence.js";
@@ -262,11 +262,6 @@ async function resolveWatch(
     // A student watches their OWN attempt; a staff member watches any of
     // the evaluation's, which is what the dashboard's cell inspector needs.
     if (!scope.staff && attempt.userId !== req.user!.id) return null;
-    // Sitting it from outside the room reads nothing either (F-EVAL-12): the
-    // snapshot carries the questions, exactly as `GET /attempts/:id` does.
-    if (attempt.userId === req.user!.id && !live.ipAllowed(scope.evaluation.ipAllowlist, req.ip)) {
-      return null;
-    }
     return {
       watch: { kind: "attempt", attemptId: id, evaluationId: attempt.evaluationId },
       evaluation: scope.evaluation,
@@ -385,7 +380,7 @@ export async function realtimePlugin(app: FastifyInstance) {
       // An unreachable subject is a 404, exactly like a missing one — and so
       // is one this session may not sit (ADR-027); staff watching somebody
       // else's room is not sitting it.
-      if (!resolved || !sits(req, resolved.evaluation, resolved.staff && !resolved.participant)) {
+      if (!resolved || sitRefusal(req, resolved.evaluation, resolved.staff && !resolved.participant) !== null) {
         return reply.code(404).send({ error: "not_found" });
       }
       watch = resolved.watch;

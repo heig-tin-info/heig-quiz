@@ -21,7 +21,7 @@
 import { useState, type ReactNode } from "react";
 import { CheckCheck, CircleMinus, Save, ShieldCheck } from "lucide-react";
 
-import type { LobbyView } from "@quiz/contracts";
+import { LobbyView } from "@quiz/contracts";
 
 import { useT } from "../i18n";
 import { useEventStream } from "../realtime/useEventStream";
@@ -220,6 +220,14 @@ export function Lobby({
     watch: `lobby:${view.evaluation.id}`,
     onEvent: (event) => {
       if (event.type === "clock" || event.type === "snapshot") clock.sample(event.serverNow);
+      // A start (or a resume) that landed between the entry and this
+      // connection is only in the snapshot: no `evaluation.state` follows it.
+      if (
+        event.type === "snapshot" &&
+        LobbyView.safeParse(event.state).data?.evaluation.state === "running"
+      ) {
+        onStart();
+      }
       if (event.type === "lobby.count") {
         setCount({ present: event.present, enrolled: event.enrolled });
       }
