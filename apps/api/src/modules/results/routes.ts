@@ -29,17 +29,8 @@ export async function resultsPlugin(app: FastifyInstance) {
   const requireSession = (req: FastifyRequest, reply: FastifyReply) =>
     app.requireSession(req, reply);
 
-  /** Maps every failure of the module to its status; the rest is a 500. */
-  function failure(reply: FastifyReply, error: unknown): FastifyReply {
-    if (error instanceof service.ResultsError) {
-      return reply.code(error.status).send({ error: error.code, message: error.message });
-    }
-    reply.log.error({ err: error, cause: (error as Error)?.cause }, "results route failed");
-    return reply.code(500).send({ error: "internal_error" });
-  }
-
-  const teacher = teacherRoute(app, failure);
-  const student = studentRoute(app, failure);
+  const teacher = teacherRoute(app);
+  const student = studentRoute(app);
 
   const trace = tracer(app);
 

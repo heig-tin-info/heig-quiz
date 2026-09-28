@@ -36,12 +36,14 @@ import { overridePointsRange, round2, scoresNegatively, uniquePseudonyms } from 
 
 import { iso } from "../../clock.js";
 import type { Db } from "../../db/client.js";
-import { answers, attempts, gradings, users } from "../../db/schema.js";
+import { answers, attempts, gradings, questionVersions, users } from "../../db/schema.js";
+import { DomainError } from "../http.js";
 import {
   flagReleasedEvaluationsOf,
   joinedItem,
   joinedItems,
   negativeMarkingEnabled,
+  retargetItemVersion,
   staffAttemptIds,
   type EvaluationRecord,
   type JoinedItem,
@@ -66,15 +68,8 @@ const NEWEST_FIRST = [
 
 // --- Failures -------------------------------------------------------------
 
-export class GradingError extends Error {
-  constructor(
-    readonly code: string,
-    readonly status: number,
-    message?: string,
-  ) {
-    super(message ?? code);
-    this.name = "GradingError";
-  }
+export class GradingError extends DomainError {
+  override name = "GradingError";
 }
 
 /** F-GRADE-05: overriding a correction without saying why is not allowed. */
@@ -851,6 +846,44 @@ export async function batchValidate(
     rows.map(({ grading }) => validationOf(grading, {}, userId, now)),
   );
   return written.length;
+}
+
+/**
+ * Readies ONE item for a regrade (F-GRADE-06): repoints it at version
+ * `toVersionNumber` of its question when one is asked for, then stands down
+ * every standing grading of it — the pass skips a cell that already holds a
+ * validated grading, and nothing is deleted: the history of §4.5 is the whole
+ * chain. Returns the note the pass writes on every new grading, or `null`
+ * when the question has no such version (the route's 404).
+ */
+export async function regradeItem(
+  db: Db,
+  item: { itemId: string; questionId: string },
+  input: { note: string; toVersionNumber?: number | undefined },
+): Promise<string | null> {
+  return db.transaction(async (tx) => {
+    let note = input.note.trim();
+    if (input.toVersionNumber !== undefined) {
+      const [version] = await tx
+        .select({ id: questionVersions.id })
+        .from(questionVersions)
+        .where(
+          and(
+            eq(questionVersions.questionId, item.questionId),
+            eq(questionVersions.number, input.toVersionNumber),
+          ),
+        )
+        .limit(1);
+      if (!version) return null;
+      await retargetItemVersion(tx, item.itemId, version.id);
+      note = `${note} (re-graded with version ${input.toVersionNumber})`;
+    }
+    await tx
+      .update(gradings)
+      .set({ state: "superseded" })
+      .where(and(eq(gradings.itemId, item.itemId), ne(gradings.state, "superseded")));
+    return note;
+  });
 }
 
 /** The full history of one cell, newest first (F-GRADE-05, F-GRADE-06). */

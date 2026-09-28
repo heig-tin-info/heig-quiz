@@ -24,6 +24,7 @@ import {
   CopyBody,
   DeprecateBody,
   DraftPut,
+  BoolFlag,
   IdParam,
   MoveBody,
   PoolCreate,
@@ -72,13 +73,14 @@ import {
   accessibleCategory,
   accessiblePool,
   accessibleQuestion,
+  findAccessiblePool,
   managedEvaluationAccess,
   poolAccess,
   poolRoleOf,
   requirePoolRole,
   teacherGuard,
 } from "../guards.js";
-import { INERT_IMAGE_HEADERS, isAllowedMime, pathForHash, readAsset, sha256Of, sniffImage, writeAsset } from "./assets.js";
+import { INERT_IMAGE_HEADERS, isAllowedMime, readAsset, sniffImage, storeAsset } from "./assets.js";
 import { invalid, teacherRoute } from "../http.js";
 import { studentViewOf } from "../live/studentView.js";
 import { loadConfig, tryLoadConfig, typeOf } from "./config.js";
@@ -128,18 +130,8 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
   const trace = tracer(app);
   const mine = (req: FastifyRequest) => accessWhere(req.user!, poolAccess(req.user!.id));
 
-  /**
-   * The module's error tail: a refusal of the question-type layer is the
-   * `422` of `coreFailure`, anything else is logged and a 500.
-   */
-  function failure(reply: FastifyReply, error: unknown): FastifyReply {
-    const handled = coreFailure(reply, error);
-    if (handled) return handled;
-    reply.log.error({ err: error, cause: (error as Error)?.cause }, "pool route failed");
-    return reply.code(500).send({ error: "internal_error" });
-  }
-
-  const teacher = teacherRoute(app, failure);
+  /** The module's own arm: a refusal of the question-type layer is the `422` of `coreFailure`. */
+  const teacher = teacherRoute(app, coreFailure);
 
   /**
    * The loaders of this module: the entity under `poolAccess` (404 when it
@@ -148,23 +140,27 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
    * change it). Params, entity, role, then body: the order every route had.
    */
   function withRole<S>(
-    load: (req: FastifyRequest, reply: FastifyReply) => Promise<S | null>,
+    load: (req: FastifyRequest, reply: FastifyReply, params: { id: string }) => Promise<S | null>,
     poolOf: (scope: S) => typeof pools.$inferSelect,
     role: PoolRole | undefined,
   ) {
-    return async (req: FastifyRequest, reply: FastifyReply): Promise<S | null> => {
-      const scope = await load(req, reply);
+    return async (
+      req: FastifyRequest,
+      reply: FastifyReply,
+      params: { id: string },
+    ): Promise<S | null> => {
+      const scope = await load(req, reply, params);
       if (!scope) return null;
       if (role && !(await requirePoolRole(app, req, reply, poolOf(scope), role))) return null;
       return scope;
     };
   }
   const inPool = (role?: PoolRole) =>
-    withRole((req, reply) => accessiblePool(app, req, reply), (pool) => pool, role);
+    withRole((req, reply, p) => accessiblePool(app, req, reply, p), (pool) => pool, role);
   const onQuestion = (role?: PoolRole) =>
-    withRole((req, reply) => accessibleQuestion(app, req, reply), (scope) => scope.pool, role);
+    withRole((req, reply, p) => accessibleQuestion(app, req, reply, p), (scope) => scope.pool, role);
   const onCategory = (role?: PoolRole) =>
-    withRole((req, reply) => accessibleCategory(app, req, reply), (scope) => scope.pool, role);
+    withRole((req, reply, p) => accessibleCategory(app, req, reply, p), (scope) => scope.pool, role);
 
   await app.register(fastifyMultipart, {
     limits: { fileSize: config.ASSETS_MAX_BYTES, files: 1, fields: 4 },
@@ -582,28 +578,22 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
         if (!(await isCategoryOf(pool.id, body.categoryId ?? null))) {
           return reply.code(404).send({ error: "not_found" });
         }
-        try {
-          const created = await service.createQuestion(app.db, {
-            poolId: pool.id,
-            type: body.type,
-            internalName: body.internalName,
-            categoryId: body.categoryId ?? null,
-            createdBy: req.user!.id,
-          });
-          await trace(req, "question.create", "question", created.id, {
-            poolId: pool.id,
-            type: body.type,
-            internalName: body.internalName,
-          });
-          poolChanged(pool.id);
-          return reply.code(201).send(await service.questionDetail(app.db, created));
-        } catch (error) {
-          const handled = coreFailure(reply, error);
-          if (handled) return handled;
-          return reply
-            .code(409)
-            .send({ error: "duplicate_name", message: "This pool already has a question by that name" });
-        }
+        // A name the pool already holds is `NameTaken`'s 409, a type the
+        // registry refuses the 422 of `coreFailure`: both the shared tail's.
+        const created = await service.createQuestion(app.db, {
+          poolId: pool.id,
+          type: body.type,
+          internalName: body.internalName,
+          categoryId: body.categoryId ?? null,
+          createdBy: req.user!.id,
+        });
+        await trace(req, "question.create", "question", created.id, {
+          poolId: pool.id,
+          type: body.type,
+          internalName: body.internalName,
+        });
+        poolChanged(pool.id);
+        return reply.code(201).send(await service.questionDetail(app.db, created));
       },
     ),
   );
@@ -761,12 +751,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
     }),
   );
 
-  const DeleteQuery = z.object({
-    hard: z
-      .union([z.string(), z.boolean()])
-      .transform((v) => v === true || v === "1" || v === "true")
-      .optional(),
-  });
+  const DeleteQuery = z.object({ hard: BoolFlag.optional() });
 
   /**
    * Soft delete (F-QST-11). A question whose published version an evaluation
@@ -809,7 +794,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       async ({ req, reply, body, scope }) => {
         // The target pool must be reachable too, or a copy would be a way to
         // write into someone else's pool.
-        const target = await reachablePool(req, body.targetPoolId);
+        const target = await findAccessiblePool(app.db, req.user!, body.targetPoolId);
         if (!target) return reply.code(404).send({ error: "not_found" });
         // Reading the source is enough to copy FROM it; writing the copy needs a
         // contributor's seat on the TARGET.
@@ -862,7 +847,7 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
 
     const sources = await moveSources(req, ids);
     if (sources.length !== ids.length) return reply.code(404).send({ error: "not_found" });
-    const target = await reachablePool(req, body.data.targetPoolId);
+    const target = await findAccessiblePool(app.db, req.user!, body.data.targetPoolId);
     if (!target) return reply.code(404).send({ error: "not_found" });
 
     const sourcePools = new Map(sources.map((row) => [row.pool.id, row.pool]));
@@ -922,16 +907,6 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       .from(questions)
       .innerJoin(pools, eq(questions.poolId, pools.id))
       .where(and(inArray(questions.id, ids), mine(req)));
-  }
-
-  /** A pool named in a body, loaded under `poolAccess`; null when out of reach. */
-  async function reachablePool(req: FastifyRequest, poolId: string) {
-    const [pool] = await app.db
-      .select()
-      .from(pools)
-      .where(and(eq(pools.id, poolId), mine(req)))
-      .limit(1);
-    return pool ?? null;
   }
 
   /**
@@ -1174,7 +1149,11 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       async ({ req, reply, scope: pool }) => {
         const upload = await readImage(req, reply);
         if (!upload) return reply;
-        const { row, fresh } = await storeAsset(req, pool.id, upload);
+        const { row, fresh } = await storeAsset(app.db, config.ASSETS_DIR, {
+          ...upload,
+          ownerId: req.user!.id,
+          poolId: pool.id,
+        });
         if (!fresh) return reply.code(200).send(assetJson(row));
         await trace(req, "pool.asset_upload", "asset", row.id, {
           poolId: pool.id,
@@ -1217,43 +1196,6 @@ export async function poolPlugin(app: FastifyInstance, opts: { config: AppConfig
       return null;
     }
     return { bytes, facts };
-  }
-
-  /**
-   * Content-addressed storage: the same bytes as an earlier upload are one
-   * row and one file, whoever uploaded them first, and nothing is written a
-   * second time (`fresh: false`). A concurrent upload of the same bytes that
-   * wins the insert is read back the same way.
-   */
-  async function storeAsset(
-    req: FastifyRequest,
-    poolId: string,
-    upload: { bytes: Buffer; facts: NonNullable<ReturnType<typeof sniffImage>> },
-  ): Promise<{ row: typeof assets.$inferSelect; fresh: boolean }> {
-    const { bytes, facts } = upload;
-    const sha256 = sha256Of(bytes);
-    const path = pathForHash(sha256);
-    const [existing] = await app.db.select().from(assets).where(eq(assets.sha256, sha256)).limit(1);
-    if (existing) return { row: existing, fresh: false };
-    await writeAsset(config.ASSETS_DIR, path, bytes);
-    const [created] = await app.db
-      .insert(assets)
-      .values({
-        id: randomUUID(),
-        ownerId: req.user!.id,
-        poolId,
-        sha256,
-        mime: facts.mime,
-        bytes: bytes.length,
-        width: facts.width,
-        height: facts.height,
-        path,
-      })
-      .onConflictDoNothing({ target: assets.sha256 })
-      .returning();
-    if (created) return { row: created, fresh: true };
-    const [raced] = await app.db.select().from(assets).where(eq(assets.sha256, sha256)).limit(1);
-    return { row: raced!, fresh: false };
   }
 
   /**

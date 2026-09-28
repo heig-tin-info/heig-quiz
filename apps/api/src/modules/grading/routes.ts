@@ -7,7 +7,6 @@
  * `@quiz/contracts` (invariant 7) and every write is audited (invariant 9).
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
-import { and, eq, ne } from "drizzle-orm";
 
 import {
   AnswerIdParam,
@@ -26,10 +25,9 @@ import {
 } from "@quiz/contracts";
 
 import { tracer, type AuditAction } from "../../audit.js";
-import { gradings, questionVersions } from "../../db/schema.js";
 import { loadEvaluation, staffAnswer, staffGrading, teacherGuard } from "../guards.js";
 import { notFound, teacherRoute } from "../http.js";
-import { joinedItem, joinedItems, retargetItemVersion } from "../evaluation/service.js";
+import { joinedItem, joinedItems } from "../evaluation/service.js";
 import { listVersions } from "../pool/service.js";
 import { markModifiedAfterRelease } from "../results/service.js";
 import * as events from "./events.js";
@@ -39,17 +37,8 @@ import * as service from "./service.js";
 export async function gradingPlugin(app: FastifyInstance) {
   const requireTeacher = teacherGuard(app);
 
-  /** Maps every failure of the module to its status; the rest is a 500. */
-  function failure(reply: FastifyReply, error: unknown): FastifyReply {
-    if (error instanceof service.GradingError) {
-      return reply.code(error.status).send({ error: error.code, message: error.message });
-    }
-    reply.log.error({ err: error, cause: (error as Error)?.cause }, "grading route failed");
-    return reply.code(500).send({ error: "internal_error" });
-  }
-
   /** Params, scope, then body: access is loaded before anything else is checked (invariant 6). */
-  const teacher = teacherRoute(app, failure);
+  const teacher = teacherRoute(app);
 
   const trace = tracer(app);
 
@@ -286,31 +275,12 @@ export async function gradingPlugin(app: FastifyInstance) {
         const item = await joinedItem(app.db, scope.evaluation.id, params.itemId);
         if (!item) return notFound(reply);
 
-        let note = body.note.trim();
-        if (body.toVersionNumber !== undefined) {
-          const [version] = await app.db
-            .select({ id: questionVersions.id })
-            .from(questionVersions)
-            .where(
-              and(
-                eq(questionVersions.questionId, item.question.id),
-                eq(questionVersions.number, body.toVersionNumber),
-              ),
-            )
-            .limit(1);
-          if (!version) return notFound(reply);
-          await retargetItemVersion(app.db, item.item.id, version.id);
-          note = `${note} (re-graded with version ${body.toVersionNumber})`;
-        }
-
-        // The pass skips a cell that already holds a validated grading, so a
-        // regrade starts by standing everything down. Nothing is deleted: the
-        // history of §4.5 is the whole chain.
-        await app.db
-          .update(gradings)
-          .set({ state: "superseded" })
-          .where(and(eq(gradings.itemId, item.item.id), ne(gradings.state, "superseded")));
-
+        const note = await service.regradeItem(
+          app.db,
+          { itemId: item.item.id, questionId: item.question.id },
+          body,
+        );
+        if (note === null) return notFound(reply);
         const queued = await enqueueEvaluationGrading(app, {
           evaluationId: scope.evaluation.id,
           itemIds: [item.item.id],

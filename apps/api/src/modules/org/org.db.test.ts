@@ -325,8 +325,8 @@ describe("GET /courses/:id", () => {
 /**
  * The order of the refusals, which the org routes keep on `teacherRoute`
  * (audit B-02, B-12): session and role (preHandler) → params (404) → the
- * entity under `staffAccess` (404, invariant 6) → body (400). The 400 is
- * still the raw-`issues` shape of these routes (B-03's second shape).
+ * entity under `staffAccess` (404, invariant 6) → body (400), the
+ * `details` of `invalid()`.
  */
 describe("the order of the refusals, over HTTP", () => {
   it("refuses session, role, params, access, then body", async () => {
@@ -360,7 +360,7 @@ describe("the order of the refusals, over HTTP", () => {
       const malformed = await patch(url, teacher.headers, badBody);
       expect(malformed.statusCode).toBe(400);
       expect(malformed.json().error).toBe("validation");
-      expect(Array.isArray(malformed.json().issues)).toBe(true);
+      expect(Array.isArray(malformed.json().details)).toBe(true);
     }
 
     // A second parameter is checked with the first: a malformed staff id is

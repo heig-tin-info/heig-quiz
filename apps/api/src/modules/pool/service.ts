@@ -55,6 +55,7 @@ import { issuesOf } from "@quiz/contracts";
 import { displayName, effectivePoolRole, poolRoleAllows } from "@quiz/domain";
 
 import { isForeignKeyViolation, isUniqueViolation, type Db } from "../../db/client.js";
+import { DomainError } from "../http.js";
 import {
   assets,
   attempts,
@@ -131,6 +132,17 @@ export class VersionInUse extends Error {
   constructor() {
     super("a published version is in use");
     this.name = "VersionInUse";
+  }
+}
+
+/**
+ * A new question named like one its pool already holds
+ * (`questions_pool_name_uq`): `409 duplicate_name`, sent by the shared tail.
+ */
+export class NameTaken extends DomainError {
+  override name = "NameTaken";
+  constructor() {
+    super("duplicate_name", 409, "This pool already has a question by that name");
   }
 }
 
@@ -795,10 +807,16 @@ export async function poolsOfCourse(db: Db, courseId: string) {
  * link would hand the whole course staff `contributor` on it, a write access
  * the caller does not hold. Answered `403 pool_link_forbidden`.
  */
-export class PoolLinkForbidden extends Error {
+export class PoolLinkForbidden extends DomainError {
+  override name = "PoolLinkForbidden";
   constructor(readonly pools: { id: string; name: string }[]) {
-    super("linking a pool needs contributor access to it");
-    this.name = "PoolLinkForbidden";
+    // The caller sees these pools, so naming them leaks nothing (ADR-013).
+    super(
+      "pool_link_forbidden",
+      403,
+      `Linking the pool "${pools[0]!.name}" needs contributor access to it`,
+      { poolIds: pools.map((p) => p.id) },
+    );
   }
 }
 
@@ -1511,30 +1529,35 @@ export async function createQuestion(
   const { row: config } = saveDraftConfig(input.type, t.emptyDraft());
   const id = randomUUID();
   const now = new Date();
-  return db.transaction(async (tx) => {
-    const [created] = await tx.insert(questions).values({
-      id,
-      poolId: input.poolId,
-      type: input.type,
-      internalName: input.internalName,
-      categoryId: input.categoryId ?? null,
-      createdBy: input.createdBy,
-      shuffleable: t.shuffleable(config.config),
-      createdAt: now,
-      updatedAt: now,
-    }).returning();
-    await tx.insert(questionVersions).values({
-      id: randomUUID(),
-      questionId: id,
-      number: null,
-      config: config.config,
-      configVersion: config.configVersion,
-      searchText: searchTextOf(input.type, input.internalName, config.config),
-      updatedAt: now,
-      createdAt: now,
+  try {
+    return await db.transaction(async (tx) => {
+      const [created] = await tx.insert(questions).values({
+        id,
+        poolId: input.poolId,
+        type: input.type,
+        internalName: input.internalName,
+        categoryId: input.categoryId ?? null,
+        createdBy: input.createdBy,
+        shuffleable: t.shuffleable(config.config),
+        createdAt: now,
+        updatedAt: now,
+      }).returning();
+      await tx.insert(questionVersions).values({
+        id: randomUUID(),
+        questionId: id,
+        number: null,
+        config: config.config,
+        configVersion: config.configVersion,
+        searchText: searchTextOf(input.type, input.internalName, config.config),
+        updatedAt: now,
+        createdAt: now,
+      });
+      return created!;
     });
-    return created!;
-  });
+  } catch (error) {
+    if (isUniqueViolation(error, "questions_pool_name_uq")) throw new NameTaken();
+    throw error;
+  }
 }
 
 /**

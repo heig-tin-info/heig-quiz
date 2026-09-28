@@ -14,7 +14,6 @@ import {
   applyState,
   byId as evaluationById,
   extendClosesAt,
-  setClosesAt,
   seatsOf,
   settingsOf,
   tryApplyState,
@@ -126,10 +125,8 @@ export async function resumeEvaluation(
     // the teacher's countdown reads it, and a student who arrives after the
     // resume gets "until the common end" (F-LIVE-12) — none of them may lose
     // the time the evaluation stood still (#77).
-    if (pausedFor > 0 && settingsOf(next).timing === "deadline" && next.closesAt) {
-      const closesAt = new Date(next.closesAt.getTime() + pausedFor);
-      await setClosesAt(tx, next.id, closesAt, now);
-      next = { ...next, closesAt };
+    if (pausedFor > 0 && settingsOf(next).timing === "deadline") {
+      next = (await extendClosesAt(tx, next.id, pausedFor / 1000, now)) ?? next;
     }
     if (pausedFor > 0) {
       await tx

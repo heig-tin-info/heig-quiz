@@ -58,7 +58,7 @@ import {
   poolAccess,
   teacherGuard,
 } from "../guards.js";
-import { emptyBody, invalid, notFound, teacherRoute } from "../http.js";
+import { emptyBody, invalid, notFound, sendFailure, teacherRoute } from "../http.js";
 import * as live from "../live/service.js";
 import * as poolService from "../pool/service.js";
 import * as service from "./service.js";
@@ -70,22 +70,18 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
 
   const trace = tracer(app);
 
-  function failure(reply: FastifyReply, error: unknown, now: Date): FastifyReply {
+  /** The two failures of the `live` module answered in their own shape; the rest is the shared tail. */
+  function arms(reply: FastifyReply, error: unknown, now: Date): FastifyReply | null {
     if (error instanceof live.AttemptClosedError) return reply.code(410).send(error.body(now));
     if (error instanceof live.AnswerInvalid) {
-      return reply.code(422).send({ error: error.code, details: error.details });
+      return reply.code(422).send({ error: error.code, details: error.issues });
     }
-    if (error instanceof service.PollError) {
-      return reply.code(error.status).send({ error: error.code, message: error.message });
-    }
-    if (error instanceof live.LiveError) {
-      return reply.code(error.status).send({ error: error.code, message: error.message });
-    }
-    reply.log.error({ err: error, cause: (error as Error)?.cause }, "poll route failed");
-    return reply.code(500).send({ error: "internal_error" });
+    return null;
   }
+  const failure = (reply: FastifyReply, error: unknown, now: Date) =>
+    sendFailure(reply, error, now, arms);
 
-  const teacher = teacherRoute(app, failure);
+  const teacher = teacherRoute(app, arms);
 
   // =========================================================================
   // Teacher side
@@ -229,24 +225,24 @@ export async function pollPlugin(app: FastifyInstance, opts: { config: AppConfig
       return invalid(reply, body.error);
     }
     const pool = await poolService.ensurePersonalPool(app.db, req.user!.id);
+    let created;
     try {
-      const created = await poolService.createQuestion(app.db, {
+      created = await poolService.createQuestion(app.db, {
         poolId: pool.id,
         type: body.data.type,
         internalName: body.data.internalName,
         createdBy: req.user!.id,
       });
-      await trace(req, "question.create", "question", created.id, {
-        poolId: pool.id,
-        type: body.data.type,
-        internalName: body.data.internalName,
-      });
-      return reply.code(201).send(await poolService.questionDetail(app.db, created));
-    } catch {
-      return reply
-        .code(409)
-        .send({ error: "duplicate_name", message: "This pool already has a question by that name" });
+    } catch (error) {
+      // `NameTaken`'s `409 duplicate_name`, like `POST /pools/:id/questions`.
+      return failure(reply, error, app.clock.now());
     }
+    await trace(req, "question.create", "question", created.id, {
+      poolId: pool.id,
+      type: body.data.type,
+      internalName: body.data.internalName,
+    });
+    return reply.code(201).send(await poolService.questionDetail(app.db, created));
   });
 
   /** F-LIVE-13: create AND start, in one call. */

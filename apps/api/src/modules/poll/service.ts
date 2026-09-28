@@ -59,6 +59,7 @@ import {
   questionVersions,
   questions,
 } from "../../db/schema.js";
+import { DomainError } from "../http.js";
 import {
   byId,
   createPollEvaluation,
@@ -76,15 +77,8 @@ import * as events from "./events.js";
 
 // --- Failures -------------------------------------------------------------
 
-export class PollError extends Error {
-  constructor(
-    readonly code: string,
-    readonly status: number,
-    message?: string,
-  ) {
-    super(message ?? code);
-    this.name = "PollError";
-  }
+export class PollError extends DomainError {
+  override name = "PollError";
 }
 
 /** A poll runs `mcq` or `short` and nothing else (contract `PollQuestionType`). */

@@ -11,9 +11,11 @@
  *   - the file is served from the same origin with an immutable cache and
  *     `nosniff`, so a browser can never be talked into executing it.
  */
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
+
+import { eq } from "drizzle-orm";
 
 import { AssetMime } from "@quiz/contracts";
 
@@ -27,6 +29,9 @@ export const INERT_IMAGE_HEADERS = {
   "content-disposition": "inline",
   "content-security-policy": "default-src 'none'; sandbox",
 } as const;
+
+import type { Db } from "../../db/client.js";
+import { assets } from "../../db/schema.js";
 
 /** The only types a question may embed; `AssetMime` is the one list (B-19). */
 export function isAllowedMime(mime: string): mime is AssetMime {
@@ -146,4 +151,41 @@ function safeJoin(assetsDir: string, relativePath: string): string {
     throw new Error("asset path escapes the asset directory");
   }
   return full;
+}
+
+/**
+ * Content-addressed storage: the same bytes as an earlier upload are one
+ * row and one file, whoever uploaded them first, and nothing is written a
+ * second time (`fresh: false`). A concurrent upload of the same bytes that
+ * wins the insert is read back the same way.
+ */
+export async function storeAsset(
+  db: Db,
+  assetsDir: string,
+  upload: { bytes: Buffer; facts: ImageFacts; ownerId: string; poolId: string },
+): Promise<{ row: typeof assets.$inferSelect; fresh: boolean }> {
+  const { bytes, facts } = upload;
+  const sha256 = sha256Of(bytes);
+  const path = pathForHash(sha256);
+  const [existing] = await db.select().from(assets).where(eq(assets.sha256, sha256)).limit(1);
+  if (existing) return { row: existing, fresh: false };
+  await writeAsset(assetsDir, path, bytes);
+  const [created] = await db
+    .insert(assets)
+    .values({
+      id: randomUUID(),
+      ownerId: upload.ownerId,
+      poolId: upload.poolId,
+      sha256,
+      mime: facts.mime,
+      bytes: bytes.length,
+      width: facts.width,
+      height: facts.height,
+      path,
+    })
+    .onConflictDoNothing({ target: assets.sha256 })
+    .returning();
+  if (created) return { row: created, fresh: true };
+  const [raced] = await db.select().from(assets).where(eq(assets.sha256, sha256)).limit(1);
+  return { row: raced!, fresh: false };
 }

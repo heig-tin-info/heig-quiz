@@ -83,6 +83,7 @@ import {
   questions,
   users,
 } from "../../db/schema.js";
+import { DomainError } from "../http.js";
 import { listPools } from "../pool/service.js";
 
 export type EvaluationRecord = typeof evaluations.$inferSelect;
@@ -98,21 +99,9 @@ type ItemRecord = typeof evaluationItems.$inferSelect;
 
 // --- Failures -------------------------------------------------------------
 
-/**
- * Base of everything this module refuses; the routes map `code` to a status.
- * `details` travels in the body beside `error` and `message`: the machine
- * half of a refusal the screen translates rather than prints (#76).
- */
-export class EvaluationError extends Error {
-  constructor(
-    readonly code: string,
-    readonly status: number,
-    message?: string,
-    readonly details?: Readonly<Record<string, unknown>>,
-  ) {
-    super(message ?? code);
-    this.name = "EvaluationError";
-  }
+/** Base of everything this module refuses (`DomainError`, sent by `sendFailure`). */
+export class EvaluationError extends DomainError {
+  override name = "EvaluationError";
 }
 
 export class IllegalTransition extends EvaluationError {
@@ -1110,16 +1099,12 @@ export async function deleteEvaluation(db: Db, row: EvaluationRecord): Promise<v
 // on them goes through one of these, each carrying its own `updatedAt` bump,
 // rather than through an UPDATE of their own.
 
-/** `live.extendTime`: the shared deadline of a `deadline`-timed evaluation. */
-export async function setClosesAt(db: DbOrTx, id: string, closesAt: Date, now: Date): Promise<void> {
-  await db.update(evaluations).set({ closesAt, updatedAt: now }).where(eq(evaluations.id, id));
-}
-
 /**
- * `live.extendTime`: `closes_at` moved by `seconds` IN the statement, so two
- * concurrent extensions both count, and the row returned as committed — the
- * caller publishes that, never the record it loaded before (a pause or a
- * resume may have landed in between). Null when there was no `closes_at`.
+ * The shared deadline of a `deadline`-timed evaluation. `live.extendTime` and `live.resumeEvaluation`: `closes_at` moved by
+ * `seconds` IN the statement, so two concurrent moves both count, and the row
+ * returned as committed — the caller publishes that, never the record it
+ * loaded before (a pause or a resume may have landed in between). Null when
+ * there was no `closes_at`.
  */
 export async function extendClosesAt(
   db: DbOrTx,

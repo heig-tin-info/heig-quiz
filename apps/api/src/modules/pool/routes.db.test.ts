@@ -247,6 +247,21 @@ describe("the draft and publication routes", () => {
       expect(res.json().meta.type).toBe(type);
     }
   });
+
+  it("refuses a second question by the same name with 409 duplicate_name", async () => {
+    await createQuestion("twice");
+    const res = await server.app.inject({
+      method: "POST",
+      url: `/app/api/pools/${poolId}/questions`,
+      headers: owner.headers,
+      payload: { type: "short", internalName: "twice" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({
+      error: "duplicate_name",
+      message: "This pool already has a question by that name",
+    });
+  });
 });
 
 describe("POST /questions/:id/try (F-QST-09)", () => {
