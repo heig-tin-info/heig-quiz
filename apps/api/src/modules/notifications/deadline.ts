@@ -40,6 +40,14 @@ import { notifyMany } from "./service.js";
 /** How long before `closes_at` the reminder is due. Fixed: no setting (§d, §g). */
 export const DEADLINE_REMINDER_MS = 24 * 3_600_000;
 
+/** Where a failed fan-out is reported: the ticker passes `app.log`. */
+export interface ReminderLog {
+  error(obj: object, msg: string): void;
+}
+
+/** Outside the ticker (a script, a test), stderr. */
+const stderrLog: ReminderLog = { error: (obj, msg) => console.error(msg, obj) };
+
 /**
  * Claims and sends every reminder due at `now`. Returns the pairs this pass
  * claimed (the ones it told, or tried to).
@@ -47,6 +55,7 @@ export const DEADLINE_REMINDER_MS = 24 * 3_600_000;
 export async function sendDeadlineReminders(
   db: Db,
   now: Date,
+  log: ReminderLog = stderrLog,
 ): Promise<{ evaluationId: string; userId: string }[]> {
   const horizon = new Date(now.getTime() + DEADLINE_REMINDER_MS);
   const due = db
@@ -68,11 +77,10 @@ export async function sendDeadlineReminders(
       and(
         eq(evaluations.state, "running"),
         ne(evaluations.mode, "poll"),
-        isNotNull(evaluations.closesAt),
         lte(evaluations.closesAt, horizon),
         gt(evaluations.closesAt, now),
-        isNotNull(evaluations.startedAt),
-        sql`${evaluations.startedAt} <= ${evaluations.closesAt} - interval '24 hours'`,
+        // A null `closes_at` or `started_at` fails these comparisons.
+        sql`${evaluations.startedAt} <= ${evaluations.closesAt} - ${DEADLINE_REMINDER_MS}::bigint * interval '1 millisecond'`,
         notExists(
           db
             .select({ one: sql`1` })
@@ -131,8 +139,7 @@ export async function sendDeadlineReminders(
           })),
       );
     } catch (err) {
-      // The service layer has no logger (as `evaluation/announce.ts`): stderr.
-      console.error(`notifications: the deadline reminders of ${evaluationId} failed`, err);
+      log.error({ err, evaluationId }, "notifications: the deadline reminders failed");
     }
   }
   return claimed;

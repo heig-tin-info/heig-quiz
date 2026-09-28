@@ -145,7 +145,7 @@ export const NOTIFICATION_TASKS: TickTask[] = [
     name: "notifications.deadline_reminders",
     everyMs: 60_000,
     run: async (app) => {
-      await sendDeadlineReminders(app.db, app.clock.now());
+      await sendDeadlineReminders(app.db, app.clock.now(), app.log);
     },
   },
 ];
