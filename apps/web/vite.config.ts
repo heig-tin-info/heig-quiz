@@ -73,8 +73,12 @@ export default defineConfig({
               // entry reaches statically: the catalogue's other icons stay
               // lazy, one chunk each.
               name: "lucide-icons",
-              test: /lucide-react[\\/]dist[\\/]esm[\\/]icons[\\/]/,
+              test: /lucide-react[\\/]dist[\\/]esm[\\/]/,
               tags: ["$initial"],
+              // Lucide's modules only: an icon's dependencies are
+              // `createLucideIcon` (matched above) and React, which must stay
+              // in its own chunk rather than be dragged in here.
+              includeDependenciesRecursively: false,
             },
           ],
         },

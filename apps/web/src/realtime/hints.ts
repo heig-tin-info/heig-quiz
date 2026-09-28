@@ -32,7 +32,9 @@ const EVALUATION_ROOTS = [
 ] as const;
 
 export const HINT_ROOTS: Record<HintKind, readonly string[] | "all"> = {
-  courses: ["courses", "course", "classroom", "pools", "pool", "student"],
+  // A seat added or removed on a course's staff changes what that teacher
+  // reaches: every open evaluation, grading or results screen of it too.
+  courses: [...EVALUATION_ROOTS, "courses", "pools", "pool", "admin-teachers"],
   classrooms: ["courses", "course", "classroom", "student"],
   roster: ["courses", "course", "classroom", "evaluations", "evaluation", "dashboard", "student"],
   pool: [
@@ -45,6 +47,8 @@ export const HINT_ROOTS: Record<HintKind, readonly string[] | "all"> = {
     "poll-pool-questions",
     "evaluation",
     "course",
+    // A newly published version is a regrade target (`gradingItemVersionsKey`).
+    "grading",
   ],
   evaluations: EVALUATION_ROOTS,
   grading: EVALUATION_ROOTS,

@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { api } from "../api";
 import { readStored, writeStored } from "../ui/state";
@@ -87,24 +95,33 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
-  useEffect(() => {
-    const stored = storedLocale();
-    if (!DICTS[stored]) void loadLocale(stored).then(() => setLocaleState(stored));
-  }, []);
-  const setLocale = useCallback((l: Locale, persist = true) => {
+  // The last language asked for: a slower load of an earlier choice (French,
+  // then English at once) must not land after it and win.
+  const requested = useRef<Locale | null>(null);
+  const switchTo = useCallback((l: Locale) => {
+    requested.current = l;
     // Switched once the words are here: never a frame of the old language
     // under the new `lang`. A failed load keeps the current language.
     void loadLocale(l).then(
-      () => setLocaleState(l),
+      () => {
+        if (requested.current === l) setLocaleState(l);
+      },
       () => {},
     );
+  }, []);
+  useEffect(() => {
+    const stored = storedLocale();
+    if (!DICTS[stored]) switchTo(stored);
+  }, [switchTo]);
+  const setLocale = useCallback((l: Locale, persist = true) => {
+    switchTo(l);
     writeStored(STORE_KEY, l);
     if (persist) {
       void api("/app/api/me", { method: "PATCH", body: JSON.stringify({ locale: l }) }).catch(
         () => {},
       );
     }
-  }, []);
+  }, [switchTo]);
   const t = useCallback<TFunction>((key, vars) => translate(locale, key, vars), [locale]);
   return <I18nContext.Provider value={{ locale, setLocale, t }}>{children}</I18nContext.Provider>;
 }
