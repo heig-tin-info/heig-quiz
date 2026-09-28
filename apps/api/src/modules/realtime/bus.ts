@@ -76,9 +76,12 @@ export function emit(event: ServerEvent, topics: Topic[], audience: Audience = "
   publishData(event, topics, audience);
 }
 
-/** The inherited refresh hint, for everything that is not the live path. */
-export function hint(type: EventType, topics: Topic[], notice?: AppNotice): void {
-  publishHint(type, topics, notice);
+/**
+ * The inherited refresh hint, for everything that is not the live path.
+ * `except` names a user whose streams skip it.
+ */
+export function hint(type: EventType, topics: Topic[], notice?: AppNotice, except?: string): void {
+  publishHint(type, topics, notice, except);
 }
 
 /**
@@ -111,6 +114,32 @@ export function studentJoined(input: {
     classroomName: input.classroomName,
   });
   hint("roster", [userTopic(input.userId)]);
+}
+
+/**
+ * One claim pass flagged roster lines of a classroom (AU-21): ONE notice per
+ * classroom and per pass, with the count, no name and no address (#198). To
+ * the course's staff, never to the person whose action raised it — a
+ * teacher's own import does not tell them what the roster already shows.
+ */
+export function rosterConflict(input: {
+  courseId: string;
+  classroomId: string;
+  classroomName: string;
+  count: number;
+  actorId: string;
+}): void {
+  hint(
+    "roster",
+    [`course:${input.courseId}`],
+    {
+      kind: "roster_conflict",
+      classroomId: input.classroomId,
+      classroomName: input.classroomName,
+      count: input.count,
+    },
+    input.actorId,
+  );
 }
 
 const cells = new Coalescer<DashboardCellEvent>(CELL_WINDOW_MS, (event) =>

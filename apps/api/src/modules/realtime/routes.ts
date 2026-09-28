@@ -172,7 +172,9 @@ class TopicIndex {
     const at = Date.now();
     if (message.kind === "hint") {
       const chunk = hintFrame(message);
-      for (const stream of reached) write(stream, chunk, at);
+      for (const stream of reached) {
+        if (stream.userId !== message.except) write(stream, chunk, at);
+      }
       return;
     }
     const event = message.event;

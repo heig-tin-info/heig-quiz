@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  announcedWindowS,
   attemptDeadline,
   bonusSeconds,
   GRACE_MS,
@@ -17,6 +18,7 @@ const duration = {
   durationS: 1800,
   opensAt: null,
   closesAt: null,
+  closesAtShiftS: 0,
   timeBonusPercent: 0,
   extraS: 0,
 } as const;
@@ -32,11 +34,33 @@ describe("bonusSeconds", () => {
   });
 
   it("is a percentage of the announced window in `deadline` timing (D8)", () => {
-    const base = { timing: "deadline", durationS: null, opensAt, closesAt, timeBonusPercent: 50 } as const;
+    const base = {
+      timing: "deadline",
+      durationS: null,
+      opensAt,
+      closesAt,
+      closesAtShiftS: 0,
+      timeBonusPercent: 50,
+    } as const;
     expect(bonusSeconds(base)).toBe(1800);
     expect(bonusSeconds({ ...base, opensAt: null })).toBe(0);
     expect(bonusSeconds({ ...base, closesAt: null })).toBe(0);
     expect(bonusSeconds({ ...base, closesAt: opensAt })).toBe(0);
+  });
+
+  it("never grows with the time added to everybody (#253)", () => {
+    // 14:00-15:30 announced, started from the lobby at 16:00 with +10: the
+    // end moved to 16:10, a shift of 40 min. 33 % stays 33 % of 90 min.
+    const opens = new Date("2026-09-20T12:00:00Z");
+    const base = {
+      timing: "deadline",
+      durationS: null,
+      opensAt: opens,
+      closesAt: new Date("2026-09-20T14:10:00Z"),
+      closesAtShiftS: 40 * 60,
+      timeBonusPercent: 33,
+    } as const;
+    expect(bonusSeconds(base)).toBeCloseTo(0.33 * 90 * 60);
   });
 
   it("is zero in `manual` timing", () => {
@@ -66,6 +90,7 @@ describe("attemptDeadline", () => {
       durationS: null,
       opensAt,
       closesAt,
+      closesAtShiftS: 0,
       timeBonusPercent: 50,
       extraS: 60,
     } as const;
@@ -73,9 +98,41 @@ describe("attemptDeadline", () => {
     expect(attemptDeadline({ ...base, closesAt: null })).toBeNull();
   });
 
+  it("anchors on the moved `closesAt` and takes the bonus on the announced window", () => {
+    // Announced 08:00-09:00, extended by 10 min for everybody: the end is
+    // 09:10, and 50 % is still 30 min of the 60 announced.
+    const moved = {
+      timing: "deadline",
+      startedAt,
+      durationS: null,
+      opensAt,
+      closesAt: new Date("2026-09-20T09:10:00Z"),
+      closesAtShiftS: 600,
+      timeBonusPercent: 50,
+      extraS: 0,
+    } as const;
+    expect(attemptDeadline(moved)).toEqual(new Date("2026-09-20T09:40:00Z"));
+  });
+
   it("has no deadline in `manual` timing, nor without a duration", () => {
     expect(attemptDeadline({ ...duration, timing: "manual" })).toBeNull();
     expect(attemptDeadline({ ...duration, durationS: null })).toBeNull();
+  });
+});
+
+describe("announcedWindowS", () => {
+  it("is the window as set, the live shifts taken back out", () => {
+    expect(announcedWindowS({ opensAt, closesAt, closesAtShiftS: 0 })).toBe(3600);
+    expect(
+      announcedWindowS({ opensAt, closesAt: new Date("2026-09-20T09:25:00Z"), closesAtShiftS: 1500 }),
+    ).toBe(3600);
+  });
+
+  it("is null when an instant is missing or the window is empty", () => {
+    expect(announcedWindowS({ opensAt: null, closesAt, closesAtShiftS: 0 })).toBeNull();
+    expect(announcedWindowS({ opensAt, closesAt: null, closesAtShiftS: 0 })).toBeNull();
+    expect(announcedWindowS({ opensAt, closesAt: opensAt, closesAtShiftS: 0 })).toBeNull();
+    expect(announcedWindowS({ opensAt, closesAt, closesAtShiftS: 3600 })).toBeNull();
   });
 });
 
@@ -95,7 +152,7 @@ describe("isWritable", () => {
 });
 
 describe("previewDurationS", () => {
-  const none = { durationS: null, opensAt: null, closesAt: null };
+  const none = { durationS: null, opensAt: null, closesAt: null, closesAtShiftS: 0 };
 
   it("is the duration of a duration evaluation", () => {
     expect(previewDurationS({ ...none, timing: "duration", durationS: 1800 })).toBe(1800);
@@ -106,6 +163,16 @@ describe("previewDurationS", () => {
   it("is the announced window of a common-deadline evaluation", () => {
     expect(previewDurationS({ ...none, timing: "deadline", opensAt, closesAt })).toBe(3600);
     expect(previewDurationS({ ...none, timing: "deadline", closesAt })).toBeNull();
+    // Extended by 10 min for everybody: the rehearsal is still the hour announced.
+    expect(
+      previewDurationS({
+        timing: "deadline",
+        durationS: null,
+        opensAt,
+        closesAt: new Date("2026-09-20T09:10:00Z"),
+        closesAtShiftS: 600,
+      }),
+    ).toBe(3600);
     // A window that closes before it opens has no clock to rehearse.
     expect(
       previewDurationS({ ...none, timing: "deadline", opensAt: closesAt, closesAt: opensAt }),
@@ -114,7 +181,7 @@ describe("previewDurationS", () => {
 
   it("has no countdown in manual timing, whatever else is set", () => {
     expect(
-      previewDurationS({ timing: "manual", durationS: 1800, opensAt, closesAt }),
+      previewDurationS({ timing: "manual", durationS: 1800, opensAt, closesAt, closesAtShiftS: 0 }),
     ).toBeNull();
   });
 });

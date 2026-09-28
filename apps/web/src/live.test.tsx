@@ -155,4 +155,18 @@ describe("a hint's notice", () => {
     streams[0]!.hint({ kind: "student_joined", name: "Ada Lovelace", classroomName: "PRG1-2026" });
     expect(await screen.findByText("Ada Lovelace a rejoint PRG1-2026")).toBeInTheDocument();
   });
+
+  it("counts a classroom's roster conflicts, singular and plural from the dictionary", async () => {
+    render("/");
+    expect(await screen.findByText("Bonjour, Léa")).toBeInTheDocument();
+    const notice = { kind: "roster_conflict", classroomId: EVAL, classroomName: "PRG1-2026" } as const;
+    streams[0]!.hint({ ...notice, count: 3 });
+    expect(
+      await screen.findByText("3 entrées de la liste de PRG1-2026 demandent votre décision"),
+    ).toBeInTheDocument();
+    streams[0]!.hint({ ...notice, count: 1 });
+    expect(
+      await screen.findByText("1 entrée de la liste de PRG1-2026 demande votre décision"),
+    ).toBeInTheDocument();
+  });
 });
