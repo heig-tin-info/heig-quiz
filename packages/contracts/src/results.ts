@@ -161,7 +161,7 @@ export const StudentResultItem = z.object({
 });
 export type StudentResultItem = z.infer<typeof StudentResultItem>;
 
-export const StudentResults = z.object({
+const StudentResults = z.object({
   available: z.literal(true),
   evaluation: z.object({
     id: z.uuid(),
@@ -174,7 +174,7 @@ export const StudentResults = z.object({
   grade: z.number(),
   items: z.array(StudentResultItem),
 });
-export type StudentResults = z.infer<typeof StudentResults>;
+type StudentResults = z.infer<typeof StudentResults>;
 
 /**
  * The student's retake standing on an exercise that allows several attempts

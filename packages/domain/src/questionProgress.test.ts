@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   answerMark,
   countsAsCompleted,
-  isSettled,
   lockedItems,
   mayValidate,
   maySkip,
@@ -19,12 +18,6 @@ describe("answerMark", () => {
 
   it("lets an answer win over a stale skip", () => {
     expect(answerMark({ answered: true, skipped: true })).toBe("answered");
-  });
-
-  it("counts both answered and skipped as settled", () => {
-    expect(isSettled({ answered: true, skipped: false })).toBe(true);
-    expect(isSettled({ answered: false, skipped: true })).toBe(true);
-    expect(isSettled({ answered: false, skipped: false })).toBe(false);
   });
 });
 

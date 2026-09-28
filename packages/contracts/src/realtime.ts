@@ -54,22 +54,22 @@ export type WatchSubject = z.infer<typeof WatchSubject>;
 // --- Events ---------------------------------------------------------------
 
 /** Sent once, to the opening connection: `DashboardView`, `AttemptView` or `LobbyView`. */
-export const SnapshotEvent = z.object({
+const SnapshotEvent = z.object({
   type: z.literal("snapshot"),
   serverNow: z.iso.datetime(),
   subject: z.string(),
   state: z.unknown(),
 });
-export type SnapshotEvent = z.infer<typeof SnapshotEvent>;
+type SnapshotEvent = z.infer<typeof SnapshotEvent>;
 
 /** Every 10 s, or every second on an `attempt:` stream of a running evaluation. */
-export const ClockEvent = z.object({
+const ClockEvent = z.object({
   type: z.literal("clock"),
   serverNow: z.iso.datetime(),
 });
-export type ClockEvent = z.infer<typeof ClockEvent>;
+type ClockEvent = z.infer<typeof ClockEvent>;
 
-export const EvaluationStateEvent = z.object({
+const EvaluationStateEvent = z.object({
   type: z.literal("evaluation.state"),
   evaluationId: z.uuid(),
   state: EvaluationState,
@@ -77,7 +77,7 @@ export const EvaluationStateEvent = z.object({
   closesAt: z.iso.datetime().nullable(),
   serverNow: z.iso.datetime(),
 });
-export type EvaluationStateEvent = z.infer<typeof EvaluationStateEvent>;
+type EvaluationStateEvent = z.infer<typeof EvaluationStateEvent>;
 
 export const AttemptDeadlineEvent = z.object({
   type: z.literal("attempt.deadline"),

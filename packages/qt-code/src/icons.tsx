@@ -1,33 +1,17 @@
 /**
- * The few icons of the program surfaces, as inline SVG.
- *
- * `apps/web` draws its icons with lucide-react, which this package does not
- * depend on; five 24 px outlines do not justify a dependency (and a lockfile
- * change). The paths are lucide's own (ISC), so the icons match the app's.
- * Decorative: every one sits beside a word or inside a labelled button, so
- * it is hidden from assistive technology. Sized by the button (`[&_svg]:size-*`).
+ * The few icons of the program surfaces, on `@quiz/ui`'s `StrokeIcon`. The
+ * paths are lucide's own (ISC), so the icons match the app's. Sized by the
+ * button (`[&_svg]:size-*`).
  */
 import type { ReactNode } from "react";
 
-function Icon({ children }: { children: ReactNode }): ReactNode {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      focusable="false"
-    >
-      {children}
-    </svg>
-  );
-}
+import { StrokeIcon } from "@quiz/ui";
+
+const Icon = ({ children }: { children: ReactNode }): ReactNode => (
+  <StrokeIcon strokeWidth={2} size={16}>
+    {children}
+  </StrokeIcon>
+);
 
 /** Compile. */
 export const HammerIcon = (): ReactNode => (

@@ -5,7 +5,7 @@
  * `@quiz/registry/server`.
  */
 import type { FinalizeContext, GradeContext, QuestionTypeServer } from "@quiz/core/server";
-import { ConfigMigrationError, type RunnerOutcome } from "@quiz/core/server";
+import { reparseMigrate, type RunnerOutcome } from "@quiz/core/server";
 import { splitTemplate } from "@quiz/domain/lockedTemplate";
 
 import { fromCanonical, toCanonical } from "./canonical.js";
@@ -41,32 +41,7 @@ export const codeServer: QuestionTypeServer<
 
   emptyDraft: emptyCodeConfig,
 
-  migrate(config: unknown, fromVersion: number): CodeConfig {
-    if (fromVersion > CODE_CONFIG_VERSION) {
-      throw new ConfigMigrationError(
-        "code",
-        fromVersion,
-        CODE_CONFIG_VERSION,
-        "config written by a newer version of the platform",
-      );
-    }
-    // A config already at the current version is returned as it stands, like
-    // the other three types do: a DRAFT may be invalid (decision D16 — the
-    // empty draft is), and the contract says `migrate` never throws on a
-    // config the type emitted. Parsing is for the versions that changed shape.
-    if (fromVersion === CODE_CONFIG_VERSION) return config as CodeConfig;
-    const source = typeof config === "object" && config !== null ? config : {};
-    const parsed = CodeConfig.safeParse({ ...source, configVersion: CODE_CONFIG_VERSION });
-    if (!parsed.success) {
-      throw new ConfigMigrationError(
-        "code",
-        fromVersion,
-        CODE_CONFIG_VERSION,
-        parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
-      );
-    }
-    return parsed.data;
-  },
+  migrate: reparseMigrate("code", CodeConfig, CODE_CONFIG_VERSION),
 
   /** The cases carry the weight of the question; a teacher may still override it. */
   defaultPoints(config) {
@@ -192,31 +167,21 @@ export const codeServer: QuestionTypeServer<
  */
 export { finalizeRunnerCode } from "./grade.js";
 export { CodeConfig, CodeDetails } from "./schema.js";
-export { fromCanonical, toCanonical } from "./canonical.js";
 /*
  * The reference solution read as regions (docs/spec/04 §4.7). Exported from
  * BOTH entry points: the editor's "try" button cuts it in the browser, and a
  * server-side check of a config reads the same rule.
  */
-export { referenceRegionCount, referenceRegions } from "./reference.js";
+export { referenceRegions } from "./reference.js";
 /*
  * "Did this case pass?" — the one rule (audit R-06). Exported from BOTH entry
  * points: the grade and the API's run route read it here, the editor and the
  * player in the browser.
  */
-export {
-  caseVerdict,
-  type CaseFailure,
-  type CaseRun,
-  type CaseSpec,
-  type CaseVerdict,
-} from "./verdict.js";
+export { caseVerdict } from "./verdict.js";
 /*
  * `codeimage` (docs/spec/04 §4.9, ADR-021): a variant of `code` that lives
  * in this package — the same program half, judged by a picture instead of
  * cases. The registry wires it beside `codeServer`.
  */
 export { codeimageServer } from "./image/server.js";
-export { finalizeRunnerCodeImage } from "./image/grade.js";
-export { CodeImageConfig, CodeImageDetails } from "./image/schema.js";
-export { countCorrect, decodeImage, encodeImage, parseImageOutput } from "./image/pixels.js";

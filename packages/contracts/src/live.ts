@@ -324,7 +324,7 @@ export type AttemptScore = z.infer<typeof AttemptScore>;
  * The student's side of an exercise that allows several attempts (F-EVAL-15).
  * `null` on the card of any other evaluation.
  */
-export const CardRetakes = z.object({
+const CardRetakes = z.object({
   keep: RetakeKeep,
   maxAttempts: z.number().int().nullable(),
   /** How many attempts the student has taken, the one in progress included. */
@@ -345,7 +345,7 @@ export const CardRetakes = z.object({
     })
     .nullable(),
 });
-export type CardRetakes = z.infer<typeof CardRetakes>;
+type CardRetakes = z.infer<typeof CardRetakes>;
 
 export const EvaluationCard = z.object({
   id: z.uuid(),

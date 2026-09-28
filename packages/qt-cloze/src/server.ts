@@ -5,7 +5,7 @@
  */
 import { ConfigMigrationError, tallyKeys, type QuestionTypeServer } from "@quiz/core/server";
 import { clozeStudentTemplate, describeBlank, parseCloze } from "@quiz/domain/cloze";
-import { fromCanonical, toCanonical } from "./canonical.js";
+import { toCanonical } from "./canonical.js";
 import { gradeClozeAnswer } from "./grade.js";
 import {
   CLOZE_CONFIG_VERSION,
@@ -151,5 +151,4 @@ export const clozeServer: QuestionTypeServer<
   searchText: (config) => config.text,
 
   toCanonical,
-  fromCanonical,
 };

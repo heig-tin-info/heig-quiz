@@ -15,11 +15,16 @@
  * Server-only: `sha256` reads `node:crypto`.
  */
 import type { FinalizeContext, GradeContext, GradeResult, GradedResult } from "@quiz/core/server";
-import { RunnerRequest, type RunnerOutcome } from "@quiz/core/server";
-import { assembleSource, mainFileName, TemplateRegionMismatch } from "@quiz/domain/lockedTemplate";
+import type { RunnerOutcome, RunnerRequest } from "@quiz/core/server";
 import { round2 } from "@quiz/domain/round";
 
-import { isEmptyAnswer, sha256 } from "../grade.js";
+import {
+  assembleCodeSource,
+  compileDetail,
+  delegateToRunner,
+  programRequest,
+  sourceHashOf,
+} from "../grade.js";
 import {
   countCorrect,
   encodeImage,
@@ -35,17 +40,6 @@ import {
   type CodeImageDetails,
 } from "./schema.js";
 
-/** Compiler output kept in `gradings.details` is capped, as `code` caps it. */
-const DETAIL_CHARS = 4000;
-
-const truncate = (s: string, max = DETAIL_CHARS): string =>
-  s.length <= max ? s : `${s.slice(0, max)}…`;
-
-/** The source the runner compiles: the stored template around the student's regions. */
-export function assembleImageSource(config: CodeImageConfig, answer: CodeImageAnswer): string {
-  return assembleSource(config.template, config.language, answer.regions);
-}
-
 /**
  * The request of a `codeimage` run, for grading and for the student's own
  * button alike: the program, the teacher's files and flags, and one case with
@@ -56,10 +50,7 @@ export function buildImageRequest(
   source: string,
   priority: "grading" | "interactive",
 ): RunnerRequest {
-  return RunnerRequest.parse({
-    language: config.language,
-    files: [{ name: mainFileName(config.language), content: source }, ...config.files],
-    compileArgs: config.compileArgs,
+  return programRequest(config, source, {
     // Always a run: a picture that is only compiled draws nothing. The
     // shared `action` field is `code`'s, and the image editor hides it.
     action: "run",
@@ -80,7 +71,7 @@ export function interactiveImageRequest(
   answer: CodeImageAnswer,
 ): RunnerRequest | null {
   try {
-    return buildImageRequest(config, assembleImageSource(config, answer), "interactive");
+    return buildImageRequest(config, assembleCodeSource(config, answer), "interactive");
   } catch {
     return null;
   }
@@ -104,56 +95,19 @@ function zeroDetails(
   };
 }
 
-/** First half: assemble, then delegate. */
+/** First half: assemble, then delegate, as `code` does (`delegateToRunner`). */
 export function gradeCodeImage(
   config: CodeImageConfig,
   answer: CodeImageAnswer | null,
   ctx: GradeContext,
 ): GradeResult<CodeImageDetails> {
-  if (isEmptyAnswer(answer)) {
-    return {
-      kind: "graded",
-      points: 0,
-      maxPoints: ctx.itemPoints,
-      details: zeroDetails(config, "ok", "empty"),
-      state: "validated",
-    };
-  }
-
-  let source: string;
-  try {
-    source = assembleImageSource(config, answer as CodeImageAnswer);
-  } catch (err) {
-    // A stored answer that no longer fits the template: a human decides, as
-    // for `code`.
-    if (err instanceof TemplateRegionMismatch) {
-      return {
-        kind: "graded",
-        points: 0,
-        maxPoints: ctx.itemPoints,
-        details: zeroDetails(config, "error", err.code),
-        state: "proposed",
-        comment: err.code,
-      };
-    }
-    throw err;
-  }
-
-  let request: RunnerRequest;
-  try {
-    request = buildImageRequest(config, source, "grading");
-  } catch {
-    return {
-      kind: "graded",
-      points: 0,
-      maxPoints: ctx.itemPoints,
-      details: zeroDetails(config, "error", "runner_request_invalid"),
-      state: "proposed",
-      comment: "runner_request_invalid",
-    };
-  }
-
-  return { kind: "pending", via: "runner", request, details: { sourceSha256: sha256(source) } };
+  return delegateToRunner(
+    config,
+    answer,
+    ctx,
+    (runner, reason) => zeroDetails(config, runner, reason),
+    (source) => buildImageRequest(config, source, "grading"),
+  );
 }
 
 /**
@@ -171,19 +125,8 @@ export function finalizeRunnerCodeImage(
   outcome: RunnerOutcome,
 ): GradedResult<CodeImageDetails> {
   const pixelCount = pixelCountOf(config.image);
-  let sourceSha256: string | null = null;
-  if (answer !== null) {
-    try {
-      sourceSha256 = sha256(assembleImageSource(config, answer));
-    } catch {
-      sourceSha256 = null;
-    }
-  }
-  const compile = {
-    ok: outcome.compile.ok,
-    stderr: truncate(outcome.compile.stderr),
-    ms: outcome.compile.ms,
-  };
+  const sourceSha256 = sourceHashOf(config, answer);
+  const compile = compileDetail(outcome);
 
   if (!compile.ok) {
     return {

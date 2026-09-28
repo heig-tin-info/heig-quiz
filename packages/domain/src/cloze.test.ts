@@ -4,7 +4,6 @@ import {
   CLOZE_SENTINEL_OPEN,
   clozeSentinel,
   clozeStudentTemplate,
-  clozeTotalWeight,
   describeBlank,
   gradeCloze,
   matchBlank,
@@ -117,12 +116,12 @@ describe("parseCloze — the docs/04 §4.6 grammar table", () => {
     expect(parse.blanks).toHaveLength(1);
   });
 
-  it("numbers the blanks in order of appearance and sums their weights", () => {
+  it("numbers the blanks in order of appearance and reads their weights", () => {
     const parse = parseCloze("{{a}} puis {{2*b}} puis {{=c|d}}");
     expect(parse.blanks.map((b) => b.index)).toEqual([0, 1, 2]);
     expect(parse.template).toBe(`${s(0)} puis ${s(1)} puis ${s(2)}`);
-    expect(clozeTotalWeight(parse)).toBe(4);
-    expect(clozeTotalWeight(parseCloze("aucun trou"))).toBe(0);
+    expect(parse.blanks.map((b) => b.weight)).toEqual([1, 2, 1]);
+    expect(parseCloze("aucun trou").blanks).toEqual([]);
   });
 });
 

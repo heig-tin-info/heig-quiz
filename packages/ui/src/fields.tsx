@@ -86,26 +86,40 @@ export function Segmented<T extends string>({
   );
 }
 
+/** How a {@link FieldCell} is dressed, beyond its label and its control. */
+export interface FieldCellChrome {
+  /** The label token of the caller's family; `label` of the shared table by default. */
+  labelClassName?: string | undefined;
+  /** Added to the column (`min-w-40 flex-1`, …). */
+  className?: string | undefined;
+  /** The space between the label and the control; `gap-1.5` by default. */
+  gap?: string | undefined;
+  /**
+   * Read after the label by a screen reader only: the row number of a label
+   * several rows share, so "Value" of row 2 is announced "Value 2".
+   */
+  srSuffix?: ReactNode;
+}
+
 /** One cell of a row of labelled fields: the label above, the control below. */
 export function FieldCell({
   label,
   htmlFor,
   labelClassName = labelToken,
   className,
+  gap = "gap-1.5",
+  srSuffix,
   children,
-}: {
+}: FieldCellChrome & {
   label: ReactNode;
   htmlFor?: string | undefined;
-  /** The label token of the caller's family; `label` of the shared table by default. */
-  labelClassName?: string | undefined;
-  /** Added to the column (`min-w-40 flex-1`, …). */
-  className?: string | undefined;
   children: ReactNode;
 }): ReactNode {
   return (
-    <div className={cx("flex flex-col gap-1.5", className)}>
+    <div className={cx("flex flex-col", gap, className)}>
       <label className={labelClassName} {...(htmlFor === undefined ? {} : { htmlFor })}>
         {label}
+        {srSuffix === undefined ? null : <span className="sr-only"> {srSuffix}</span>}
       </label>
       {children}
     </div>
@@ -132,9 +146,10 @@ export function NumberField({
   step,
   placeholder,
   width = "w-28",
+  inputClassName = inputSm,
   "aria-label": ariaLabel,
-  className,
-}: {
+  ...chrome
+}: FieldCellChrome & {
   id: string;
   label: ReactNode;
   value: number | null;
@@ -146,16 +161,17 @@ export function NumberField({
   step?: number | string | undefined;
   placeholder?: string | undefined;
   width?: string;
+  /** The field chrome of the caller's family; `inputSm` by default. */
+  inputClassName?: string;
   /** When the visible label is shared by several rows ("Points" → "Points 2"). */
   "aria-label"?: string | undefined;
-  className?: string | undefined;
 }): ReactNode {
   return (
-    <FieldCell label={label} htmlFor={id} className={className}>
+    <FieldCell label={label} htmlFor={id} {...chrome}>
       <input
         id={id}
         type="number"
-        className={cx(inputSm, width, "text-right tabular-nums")}
+        className={cx(inputClassName, width, "text-right tabular-nums")}
         {...(ariaLabel === undefined ? {} : { "aria-label": ariaLabel })}
         disabled={disabled}
         {...(min === undefined ? {} : { min })}

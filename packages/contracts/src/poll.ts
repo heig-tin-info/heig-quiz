@@ -180,7 +180,7 @@ export const PollPoolSearch = QuestionSearch.omit({ categoryId: true, includeDel
 export type PollPoolSearch = z.infer<typeof PollPoolSearch>;
 
 /** One question of "From pools": what the row shows, and what it starts. */
-export const PollPoolQuestion = z.object({
+const PollPoolQuestion = z.object({
   id: z.uuid(),
   type: PollQuestionType,
   internalName: z.string(),
@@ -192,7 +192,7 @@ export const PollPoolQuestion = z.object({
   /** The published version a poll would freeze. */
   latestNumber: z.number().int().min(1),
 });
-export type PollPoolQuestion = z.infer<typeof PollPoolQuestion>;
+type PollPoolQuestion = z.infer<typeof PollPoolQuestion>;
 
 /**
  * One page of "From pools". `total` counts every match, and `tags` is every

@@ -7,29 +7,14 @@
  */
 import { lazy } from "react";
 import type { QuestionTypeClient } from "@quiz/core/client";
+import { typeIcon } from "@quiz/ui";
 import { isMcqAnswered } from "./schema.js";
 import type { McqAnswer, McqConfig, McqDetails, McqSolution, McqStudent } from "./schema.js";
-import { choiceLetter } from "./ui.js";
 
 type McqClient = QuestionTypeClient<McqConfig, McqAnswer, McqStudent, McqSolution, McqDetails>;
 
 /** A ticked list: the mark of a multiple-choice question in a type picker. */
-function McqIcon({ className = "size-4" }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden
-    >
-      <path d="m3 7 2 2 3-3M3 17l2 2 3-3M12 8h9M12 18h9" />
-    </svg>
-  );
-}
+const McqIcon = typeIcon(<path d="m3 7 2 2 3-3M3 17l2 2 3-3M12 8h9M12 18h9" />, "size-4");
 
 export const mcqClient: McqClient = {
   id: "mcq",
@@ -43,18 +28,7 @@ export const mcqClient: McqClient = {
   Stats: lazy(async () => ({ default: (await import("./Stats.js")).McqStats })),
 
   emptyAnswer: () => ({ selected: [] }),
-  isAnswered: (answer) => answer !== null && isMcqAnswered(answer),
-
-  /** One line for the dashboard cell: the letters of what was ticked. */
-  summarize: (answer, student) => {
-    const selected = answer?.selected ?? [];
-    if (selected.length === 0) return "—";
-    const position = new Map(student.choices.map((choice, index) => [choice.id, index]));
-    return selected
-      .map((id) => choiceLetter(position.get(id) ?? id))
-      .sort()
-      .join(", ");
-  },
+  isAnswered: isMcqAnswered,
 };
 
 /*
@@ -68,10 +42,6 @@ export {
   mcqPlayerStrings,
   mcqReviewStrings,
   mcqStatsStrings,
-  type McqEditorStringKey,
-  type McqPlayerStringKey,
-  type McqReviewStringKey,
-  type McqStatsStringKey,
 } from "./strings.js";
 /*
  * The empty configuration is a VALUE a host needs to write a question with no

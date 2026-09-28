@@ -45,10 +45,10 @@ export interface Harness {
  * has no answer, so a config with no supplies gets the textbook ±15 V. One
  * declared rail pulls the other to 0 V, which is the single-supply case.
  */
-export const DEFAULT_OPAMP_RAIL = 15;
+const DEFAULT_OPAMP_RAIL = 15;
 
 /** An "open" load is a very large resistor: ngspice has no floating node, and 1 TΩ draws nothing. */
-export const OPEN_LOAD_OHMS = 1e12;
+const OPEN_LOAD_OHMS = 1e12;
 
 /** The fixed names of the harness; a student designator may never take one. */
 const RESERVED_NAMES = ["Vin", "Rs", "Rload", "Cload", "Vmeas", "Vcc", "Vee"] as const;
@@ -100,7 +100,7 @@ export function spiceNumber(value: number): string {
 }
 
 /** The value of a component, in SI units; an unusable one falls back to the library default. */
-export function componentValue(component: SchematicComponent): number {
+function componentValue(component: SchematicComponent): number {
   const parsed = parseValue(component.value);
   if (parsed !== null) return parsed;
   // The value is already reported as `missing_value` / `invalid_value`; the

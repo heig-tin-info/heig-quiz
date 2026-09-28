@@ -124,22 +124,22 @@ export type EnrollmentPatch = z.infer<typeof EnrollmentPatch>;
 export const CoursePoolsPut = z.object({ poolIds: z.array(z.uuid()).max(50) });
 export type CoursePoolsPut = z.infer<typeof CoursePoolsPut>;
 
-export const CourseRef = z.object({
+const CourseRef = z.object({
   id: z.uuid(),
   name: z.string(),
   code: z.string(),
 });
-export type CourseRef = z.infer<typeof CourseRef>;
+type CourseRef = z.infer<typeof CourseRef>;
 
-export const StaffMember = z.object({
+const StaffMember = z.object({
   userId: z.uuid(),
   givenName: z.string(),
   familyName: z.string(),
   email: z.string(),
 });
-export type StaffMember = z.infer<typeof StaffMember>;
+type StaffMember = z.infer<typeof StaffMember>;
 
-export const ClassroomRef = z.object({
+const ClassroomRef = z.object({
   id: z.uuid(),
   name: z.string(),
   period: z.string(),
@@ -148,7 +148,7 @@ export const ClassroomRef = z.object({
   joinCode: z.string().nullable(),
   joinCodeEnabled: z.boolean(),
 });
-export type ClassroomRef = z.infer<typeof ClassroomRef>;
+type ClassroomRef = z.infer<typeof ClassroomRef>;
 
 /** `GET /courses/:id` (PLAN-MVP §4.1 `CourseDetail`). */
 export const CourseDetail = z.object({

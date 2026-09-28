@@ -28,9 +28,6 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const readStdoutFixture = (): string =>
   readFileSync(join(HERE, "ngspice-rc-lowpass.stdout.txt"), "utf8");
 
-/** The hand-verified deck the stdout fixture came from. */
-export const readDeckFixture = (): string => readFileSync(join(HERE, "rc-lowpass.cir"), "utf8");
-
 // ---------------------------------------------------------------------------
 // Builders
 // ---------------------------------------------------------------------------

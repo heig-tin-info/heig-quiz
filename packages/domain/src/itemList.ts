@@ -71,7 +71,3 @@ export function itemListLock(
   if (!ITEM_LIST_EDITABLE_STATES.includes(state)) return "opened";
   return null;
 }
-
-export function isItemListEditable(state: EvaluationStateName, attemptCount: number): boolean {
-  return itemListLock(state, attemptCount) === null;
-}

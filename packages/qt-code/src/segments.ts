@@ -7,9 +7,9 @@
  * source, so they stay in the stored template — but showing `// @@lock` to a
  * student is noise, so the player hides them (PLAN-MVP §2.4).
  */
-import { markerOf as domainMarkerOf, splitTemplate, type TemplateMarker } from "@quiz/domain/lockedTemplate";
+import { markerOf as domainMarkerOf, type TemplateMarker } from "@quiz/domain/lockedTemplate";
 
-import type { CodeLanguage, CodeSegment } from "./schema.js";
+import type { CodeSegment } from "./schema.js";
 
 /**
  * `@@lock` and `@@endlock` (or its synonym `@@unlock`) delimit the locked
@@ -60,18 +60,3 @@ export const editableSegments = (segments: readonly CodeSegment[]): CodeSegment[
 export const initialRegions = (segments: readonly CodeSegment[]): string[] =>
   editableSegments(segments).map((s) => s.text);
 
-export interface DisplaySegment extends CodeSegment {
-  /** The same text, without the marker lines and without a trailing blank row. */
-  display: string;
-}
-
-/**
- * The template as the player shows it: the authoritative split, plus the
- * marker-free text of each segment.
- */
-export function splitForDisplay(template: string, language: CodeLanguage): DisplaySegment[] {
-  return splitTemplate(template, language).map((segment) => ({
-    ...segment,
-    display: trimTrailingNewline(stripMarkerLines(segment.text)),
-  }));
-}

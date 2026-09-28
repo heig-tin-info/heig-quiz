@@ -8,7 +8,7 @@
  * React in this module graph.
  */
 import type { FinalizeContext, GradeContext, QuestionTypeServer } from "@quiz/core/server";
-import { ConfigMigrationError, tallyKeys, type RunnerOutcome } from "@quiz/core/server";
+import { reparseMigrate, tallyKeys, type RunnerOutcome } from "@quiz/core/server";
 import { splitTemplate } from "@quiz/domain/lockedTemplate";
 
 import { fromCanonicalImage, toCanonicalImage } from "./canonical.js";
@@ -63,28 +63,7 @@ export const codeimageServer: QuestionTypeServer<
   publicationIssues: codeimagePublicationIssues,
 
   /** `code`'s rule: identity at the current version, a parse for an older one. */
-  migrate(config: unknown, fromVersion: number): CodeImageConfig {
-    if (fromVersion > CODEIMAGE_CONFIG_VERSION) {
-      throw new ConfigMigrationError(
-        "codeimage",
-        fromVersion,
-        CODEIMAGE_CONFIG_VERSION,
-        "config written by a newer version of the platform",
-      );
-    }
-    if (fromVersion === CODEIMAGE_CONFIG_VERSION) return config as CodeImageConfig;
-    const source = typeof config === "object" && config !== null ? config : {};
-    const parsed = CodeImageConfig.safeParse({ ...source, configVersion: CODEIMAGE_CONFIG_VERSION });
-    if (!parsed.success) {
-      throw new ConfigMigrationError(
-        "codeimage",
-        fromVersion,
-        CODEIMAGE_CONFIG_VERSION,
-        parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
-      );
-    }
-    return parsed.data;
-  },
+  migrate: reparseMigrate("codeimage", CodeImageConfig, CODEIMAGE_CONFIG_VERSION),
 
   /** One picture, one point: the score is a fraction of it. */
   defaultPoints() {

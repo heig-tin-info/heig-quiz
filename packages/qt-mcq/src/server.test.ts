@@ -5,7 +5,7 @@
 import { readFileSync } from "node:fs";
 import { ConfigMigrationError } from "@quiz/core/server";
 import { describe, expect, it } from "vitest";
-import { fromCanonical, toCanonical } from "./canonical.js";
+import { toCanonical } from "./canonical.js";
 import { multipleConfig, SECRET_CONFIG } from "./test/fixtures.js";
 import { MCQ_CONFIG_VERSION, McqConfigSchema, emptyMcqDraft } from "./schema.js";
 import { choiceOrder, mcqServer } from "./server.js";
@@ -60,13 +60,13 @@ describe("the canonical mapping", () => {
       maxSelections: 3,
       shuffleChoices: false,
     });
-    expect(fromCanonical(toCanonical(config))).toEqual(config);
+    expect(McqConfigSchema.parse(toCanonical(config))).toEqual(config);
   });
 
   it("round-trips a question that inherits its policy", () => {
     const config = multipleConfig({ policy: "inherit" });
     expect(toCanonical(config)).not.toHaveProperty("policy");
-    expect(fromCanonical(toCanonical(config))).toEqual(config);
+    expect(McqConfigSchema.parse(toCanonical(config))).toEqual(config);
   });
 
   it("omits the defaults, so the YAML reads like the spec example", () => {
@@ -80,7 +80,7 @@ describe("the canonical mapping", () => {
 
   it("is what the type exposes to the exporter", () => {
     expect(mcqServer.toCanonical?.(SECRET_CONFIG)).toEqual(toCanonical(SECRET_CONFIG));
-    expect(mcqServer.fromCanonical?.(toCanonical(SECRET_CONFIG))).toEqual(SECRET_CONFIG);
+    expect(mcqServer.configSchema.parse(toCanonical(SECRET_CONFIG))).toEqual(SECRET_CONFIG);
   });
 });
 

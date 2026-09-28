@@ -12,10 +12,6 @@ import { McqPolicy } from "./evaluation.js";
 export const DATE_FORMATS = ["iso", "eu", "uk", "us"] as const;
 export type DateFormat = (typeof DATE_FORMATS)[number];
 
-export function isDateFormat(v: unknown): v is DateFormat {
-  return typeof v === "string" && (DATE_FORMATS as readonly string[]).includes(v);
-}
-
 /**
  * The single unauthenticated endpoint (`GET /app/api/config`): what the
  * sign-in screen needs to know before anyone has a session. It carries no
@@ -64,7 +60,7 @@ export interface Me {
 }
 
 /** A coach mark's id: `<screen>.<step>`, lower case (`pool.new-question`). */
-export const CoachId = z.string().regex(/^[a-z0-9-]+(\.[a-z0-9-]+)*$/).max(64);
+const CoachId = z.string().regex(/^[a-z0-9-]+(\.[a-z0-9-]+)*$/).max(64);
 
 /**
  * `POST /app/api/me/coach` — coach marks marked as seen (merged into the set,
@@ -97,7 +93,7 @@ export type MePatch = z.infer<typeof MePatch>;
 
 // --- Courses and classrooms (teacher) ---
 
-export interface CourseStaffMember {
+interface CourseStaffMember {
   userId: string;
   givenName: string;
   familyName: string;

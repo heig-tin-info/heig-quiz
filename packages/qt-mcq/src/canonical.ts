@@ -6,11 +6,7 @@
  * carries. A field left at its schema default is omitted, so the file a teacher
  * reads is the example of §2.1 and not a dump of every default.
  */
-import {
-  MCQ_CONFIG_VERSION,
-  McqConfigSchema,
-  type McqConfig,
-} from "./schema.js";
+import { MCQ_CONFIG_VERSION, type McqConfig } from "./schema.js";
 
 export interface McqCanonicalChoice {
   text: string;
@@ -42,9 +38,4 @@ export function toCanonical(config: McqConfig): McqCanonical {
   if (config.policy !== "inherit") out.policy = config.policy;
   if (!config.shuffleChoices) out.shuffleChoices = false;
   return out;
-}
-
-/** The defaults the writer omitted are restored by the schema itself. */
-export function fromCanonical(raw: unknown): McqConfig {
-  return McqConfigSchema.parse(raw);
 }

@@ -31,4 +31,4 @@ export * from "./stats.js";
  * without depending on the domain) and is re-exported here so that a rule and
  * its randomness come from one import (PLAN-MVP §7.5).
  */
-export { hashSeed, pick, rng, seededShuffle, shuffle, streamSeed } from "@quiz/core/rng";
+export { hashSeed, pick, rng, shuffle, streamSeed } from "@quiz/core/rng";

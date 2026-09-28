@@ -14,7 +14,7 @@
  * Decision D4: a `select` blank stores the CANONICAL option index as a decimal
  * string, so shuffling never changes a stored answer.
  */
-import { seededShuffle, streamSeed } from "@quiz/core/rng";
+import { shuffle, streamSeed } from "@quiz/core/rng";
 import {
   ALLOWED_REGEX_FLAGS,
   applyTextOptions,
@@ -356,22 +356,22 @@ export interface ClozeStudent {
  * cannot tell a regex blank from a plain one and no pattern, tolerance or
  * answer ever leaves the server.
  *
- * `shuffle` must already be the AND of the evaluation switch and the question's
- * `shuffleOptions` flag.
+ * `shuffleOptions` must already be the AND of the evaluation switch and the
+ * question's own `shuffleOptions` flag.
  */
 export function clozeStudentTemplate(
   parse: ClozeParse,
   seed: number,
   itemId: string,
-  shuffle: boolean,
+  shuffleOptions: boolean,
 ): ClozeStudent {
   const blanks = parse.blanks.map((blank): ClozeStudentBlank => {
     if (blank.kind !== "select") {
       return { index: blank.index, weight: blank.weight, kind: "input", numeric: blank.kind === "number" };
     }
     const canonical = blank.options.map((label, id) => ({ id, label }));
-    const options = shuffle
-      ? seededShuffle(canonical, streamSeed(seed, itemId, `options:${blank.index}`))
+    const options = shuffleOptions
+      ? shuffle(canonical, streamSeed(seed, itemId, `options:${blank.index}`))
       : canonical;
     return { index: blank.index, weight: blank.weight, kind: "select", options };
   });
@@ -458,9 +458,4 @@ export function describeBlank(blank: ClozeBlank): string {
     case "regex":
       return `/${blank.pattern}/${blank.flags}`;
   }
-}
-
-/** Sum of the weights; 0 when the text holds no blank. */
-export function clozeTotalWeight(parse: ClozeParse): number {
-  return parse.blanks.reduce((s, b) => s + b.weight, 0);
 }

@@ -7,7 +7,7 @@
  * internal, because nothing outside the package reads them.
  */
 import type { FinalizeContext, GradeContext, QuestionTypeServer } from "@quiz/core/server";
-import { ConfigMigrationError, type RunnerOutcome } from "@quiz/core/server";
+import { reparseMigrate, type RunnerOutcome } from "@quiz/core/server";
 
 import { fromCanonical, toCanonical } from "./canonical.js";
 import {
@@ -47,32 +47,7 @@ export const circuitServer: QuestionTypeServer<
 
   emptyDraft: emptyCircuitConfig,
 
-  migrate(config: unknown, fromVersion: number): CircuitConfig {
-    if (fromVersion > CIRCUIT_CONFIG_VERSION) {
-      throw new ConfigMigrationError(
-        "circuit",
-        fromVersion,
-        CIRCUIT_CONFIG_VERSION,
-        "config written by a newer version of the platform",
-      );
-    }
-    // A config already at the current version is returned as it stands, like
-    // the other types do: a DRAFT may be invalid (decision D16 — the empty
-    // draft has no prompt), and the contract says `migrate` never throws on a
-    // config the type emitted. Parsing is for the versions that changed shape.
-    if (fromVersion === CIRCUIT_CONFIG_VERSION) return config as CircuitConfig;
-    const source = typeof config === "object" && config !== null ? config : {};
-    const parsed = CircuitConfig.safeParse({ ...source, configVersion: CIRCUIT_CONFIG_VERSION });
-    if (!parsed.success) {
-      throw new ConfigMigrationError(
-        "circuit",
-        fromVersion,
-        CIRCUIT_CONFIG_VERSION,
-        parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
-      );
-    }
-    return parsed.data;
-  },
+  migrate: reparseMigrate("circuit", CircuitConfig, CIRCUIT_CONFIG_VERSION),
 
   /** The stimuli carry the weight of the question; a teacher may still override it. */
   defaultPoints(config) {
@@ -164,29 +139,11 @@ export const circuitServer: QuestionTypeServer<
   fromCanonical,
 };
 
-export { fromCanonical, toCanonical } from "./canonical.js";
 /*
- * The pure parts of the grader. `parseSimulation` reads the outcome of the
- * student's own Simulate button, so the browser half needs it; the rest of
- * `grade.ts` is server work but carries no Node import, which is why the
- * whole module sits on one side of the fence and only these names cross it.
+ * The pure parts a host reads beside `circuitServer`: `parseSimulation` reads
+ * the outcome of the student's own Simulate button, and `extractNets` the
+ * netlist the grade is computed from (ADR-019 §3, invariant 14) — a server
+ * concern, so it leaves the package here and not through `./client`.
  */
-export {
-  buildRunnerRequest,
-  caseLayout,
-  compareSeries,
-  finalizeRunnerCircuit,
-  gradeCircuit,
-  interactiveRequest,
-  isEmptyAnswer,
-  parseSimulation,
-  studentDetails,
-  SPICE_LIMITS,
-} from "./grade.js";
-export type { BuildRequestOptions, CaseLayout, SimulationResult } from "./grade.js";
-/*
- * The netlist the grade is computed from (ADR-019 §3, invariant 14). It is a
- * server concern, so it leaves the package here and not through `./client`.
- */
+export { parseSimulation } from "./grade.js";
 export { extractNets } from "./netlist.js";
-export type { Netlist, NetlistIssue } from "./netlist.js";

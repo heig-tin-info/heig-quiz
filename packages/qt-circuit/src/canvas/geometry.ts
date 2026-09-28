@@ -29,17 +29,18 @@ import type { Orientation, SchematicComponent, WireEnd } from "../schema.js";
 
 /**
  * The eight symmetries of the grid, as SVG matrices `[a, b, c, d]`. They are
- * the closed set the schema accepts, and the products of {@link ROTATE},
- * {@link MIRROR_X} and {@link MIRROR_Y} never leave it.
+ * the closed set the schema accepts, and the products of the three the
+ * toolbar applies — the quarter turn {@link ORIENT_90} and the two mirrors
+ * {@link MIRROR_X} and {@link MIRROR_Y} — never leave it.
  */
 export const ORIENT_0: Orientation = [1, 0, 0, 1];
 export const ORIENT_90: Orientation = [0, 1, -1, 0];
 export const ORIENT_180: Orientation = [-1, 0, 0, -1];
-export const ORIENT_270: Orientation = [0, -1, 1, 0];
-export const ORIENT_MIRROR_0: Orientation = [-1, 0, 0, 1];
-export const ORIENT_MIRROR_90: Orientation = [0, -1, -1, 0];
-export const ORIENT_MIRROR_180: Orientation = [1, 0, 0, -1];
-export const ORIENT_MIRROR_270: Orientation = [0, 1, 1, 0];
+const ORIENT_270: Orientation = [0, -1, 1, 0];
+export const MIRROR_X: Orientation = [-1, 0, 0, 1];
+const ORIENT_MIRROR_90: Orientation = [0, -1, -1, 0];
+export const MIRROR_Y: Orientation = [1, 0, 0, -1];
+const ORIENT_MIRROR_270: Orientation = [0, 1, 1, 0];
 
 /** The eight, in a stable order: four rotations, then the four reflections. */
 export const ORIENTATIONS: readonly Orientation[] = [
@@ -47,16 +48,11 @@ export const ORIENTATIONS: readonly Orientation[] = [
   ORIENT_90,
   ORIENT_180,
   ORIENT_270,
-  ORIENT_MIRROR_0,
+  MIRROR_X,
   ORIENT_MIRROR_90,
-  ORIENT_MIRROR_180,
+  MIRROR_Y,
   ORIENT_MIRROR_270,
 ];
-
-/** The three generators the toolbar applies: a quarter turn and two mirrors. */
-export const ROTATE: Orientation = ORIENT_90;
-export const MIRROR_X: Orientation = ORIENT_MIRROR_0;
-export const MIRROR_Y: Orientation = ORIENT_MIRROR_180;
 
 /** Every product of two grid symmetries has entries in {−1, 0, 1} — this narrows it. */
 const unit = (v: number): -1 | 0 | 1 => (v > 0 ? 1 : v < 0 ? -1 : 0);

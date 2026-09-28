@@ -43,12 +43,6 @@ export function shuffle<T>(items: readonly T[], seed: number): T[] {
   return out;
 }
 
-/**
- * Alias of {@link shuffle}, kept because the work-package brief names the
- * seeded shuffle `seededShuffle`. Both names denote the same function.
- */
-export const seededShuffle = shuffle;
-
 /** Deterministic pick of one element. Throws on an empty array. */
 export function pick<T>(items: readonly T[], seed: number): T {
   if (items.length === 0) throw new RangeError("pick: empty array");

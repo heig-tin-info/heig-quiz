@@ -43,6 +43,17 @@ describe("FieldCell", () => {
     expect(screen.getByLabelText("Name").id).toBe("n");
     expect(container.firstElementChild?.className).toBe("flex flex-col gap-1.5 flex-1");
   });
+
+  it("announces a row suffix a sighted reader does not see", () => {
+    const { container } = render(
+      <FieldCell label="Value" htmlFor="v" srSuffix={2} gap="gap-1">
+        <input id="v" />
+      </FieldCell>,
+    );
+    expect(screen.getByLabelText("Value 2").id).toBe("v");
+    expect(container.querySelector(".sr-only")?.textContent).toBe(" 2");
+    expect(container.firstElementChild?.className).toBe("flex flex-col gap-1");
+  });
 });
 
 describe("NumberField", () => {

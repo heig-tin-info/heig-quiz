@@ -6,6 +6,7 @@
  * is the storage's business, and a default value is left out rather than
  * written down. Round-tripping is exact for every field a teacher can set.
  */
+import { canonicalParse } from "@quiz/core/server";
 import { CODE_CONFIG_VERSION, CodeConfig, DEFAULT_COMPARE, DEFAULT_LIMITS } from "./schema.js";
 
 const isSameLimits = (l: CodeConfig["limits"]): boolean =>
@@ -55,7 +56,4 @@ export function toCanonical(config: CodeConfig): Record<string, unknown> {
 }
 
 /** The canonical object → a validated config. Throws a `ZodError` on a bad file. */
-export function fromCanonical(raw: unknown): CodeConfig {
-  const source = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
-  return CodeConfig.parse({ ...source, configVersion: CODE_CONFIG_VERSION });
-}
+export const fromCanonical = canonicalParse(CodeConfig, CODE_CONFIG_VERSION);

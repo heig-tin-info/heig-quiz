@@ -308,7 +308,7 @@ export function simplify(points: ReadonlyArray<readonly [number, number]>): Arra
 }
 
 /** Records the cells a finished route occupies, so the next one prefers to go elsewhere. */
-export function markUsed(points: ReadonlyArray<readonly [number, number]>, used: Map<string, number>): void {
+function markUsed(points: ReadonlyArray<readonly [number, number]>, used: Map<string, number>): void {
   for (let i = 0; i < points.length - 1; i += 1) {
     const a = points[i];
     const b = points[i + 1];
