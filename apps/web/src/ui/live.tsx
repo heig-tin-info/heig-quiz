@@ -413,7 +413,7 @@ export function ProgressSegments({
       ref={strip}
       aria-label={label}
       onKeyDown={onKeyDown}
-      className={cx("isolate flex w-full items-start", className)}
+      className={cx("flex w-full items-start", className)}
     >
       {segments.map((segment, i) => {
         const facts = [
@@ -447,7 +447,7 @@ export function ProgressSegments({
           >
             <span
               className={cx(
-                "relative z-1 flex items-center justify-center rounded-full border transition-colors duration-150",
+                "flex items-center justify-center rounded-full transition-colors duration-150",
                 roomy ? "size-5 border-2" : "size-2.5 border-[1.5px]",
                 SEGMENT_DOT[segment.mark],
                 segment.locked && !segment.current && "opacity-45",
@@ -460,14 +460,20 @@ export function ProgressSegments({
                 <span className="size-2 rounded-full bg-accent" aria-hidden />
               ) : null}
             </span>
-            {/* From this circle's centre to the next one's, under both. */}
+            {/* From this circle's edge to the next one's — never under a
+                circle, which a faded (closed) one would let show through.
+                The hairline may miss 3:1 in dark mode: it repeats what the
+                circles say and carries nothing of its own. */}
             {next ? (
               <span
                 className={cx(
-                  "absolute left-1/2 w-full -translate-y-1/2",
-                  roomy ? "top-4" : "top-2.75",
+                  "absolute -translate-y-1/2",
+                  roomy
+                    ? "top-4 left-[calc(50%+10px)] w-[calc(100%-20px)]"
+                    : "top-2.75 left-[calc(50%+5px)] w-[calc(100%-10px)]",
                   covered ? "h-0.5 bg-fg" : "h-px bg-line-strong",
                 )}
+                data-part="link"
                 aria-hidden
               />
             ) : null}

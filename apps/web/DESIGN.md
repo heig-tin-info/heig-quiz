@@ -651,40 +651,44 @@ live in `ui/state.ts`, each written once.
   is the only living element, and a red disc would read as an alarm on a page
   whose whole message is "there is nothing to do". `label` names the figure;
   the middle is `aria-hidden`, or the reader hears the numbers twice.
-- ProgressSegments: one bar per question in the zen player — the student's
-  question list (issue #89). Each bar carries FOUR independent facts. Its
-  mark is a SHAPE before it is a tint, so it reads in grey and to a
-  colour-blind student: answered is a solid `fg` bar with a check in
-  `surface` ink; "won't answer" a dashed `fg-muted` outline on `surface-3`
-  with a dash; nothing yet a hollow 1.5 px `fg-faint` outline (not
-  `line-strong`, which misses 3:1 against the bar behind it in dark mode).
-  The glyph needs a 14 px bar and is dropped with the numbers when the strip
-  compresses; the shape stays. A flagged question carries a solid `Flag` in
-  `warning` beside its number — never thinned out, it is the one mark the
-  student set to find the question again. The current question wears an
-  `accent` outline (2 px, 1 px offset) over whatever its mark is, and its
-  number in bold accent; a question the navigation closed drops to 45 %
-  opacity. It
-  spans the WHOLE width it is given and the bars share it equally, with no
-  cap: the strip is a map of the paper, and three questions drawn as three
-  stubs at the left edge map nothing. Every bar carries its NUMBER under it,
-  quiet (`fg-faint`, 11 px) except the current one, which is the accent and
-  bold — a student aims at "question 7" instead of counting bars. Roving
-  tabindex like `Tabs`, because twenty questions must not be twenty stops on
-  the way to the answer field; the state is in the accessible name, not only
-  in the height.
-  Past a certain count the numbers stop fitting, and the strip COMPRESSES
-  rather than wrapping or scrolling — the bars are what the strip is for, so
-  they stay and the numbers thin out to anchors. Measured on the strip's own
-  width (a `ResizeObserver`, never the viewport: the same strip is 760 px in
-  the player and 358 px on a phone): a segment of 22 px or more holds two
-  digits and its air, so everything is numbered (about 30 questions over
-  760 px); from 11 px, the first, the last, the current and every 5th; under
-  that, every 10th. A multiple landing within two slots of the last one is
-  dropped, so "30" and "32" never collide, and the gap halves to 2 px once
-  compressed to give the bars back what the air was taking. Nothing is lost:
-  the number and the state live in each bar's accessible name, which never
-  thins out.
+- ProgressSegments: a stepper in the zen player, one circle per question —
+  the student's question list (issues #89, #219). Each circle carries FOUR
+  independent facts. Its mark is a SHAPE before it is a tint, so it reads in
+  grey and to a colour-blind student: answered is a solid `fg` circle with a
+  check in `surface` ink; "won't answer" a dashed `fg-muted` circle on
+  `surface-3` with a dash; nothing yet a hollow `fg-faint` circle (not
+  `line-strong`, which misses 3:1 against the canvas in dark mode). A
+  flagged question carries a solid `Flag` in `warning` beside its number —
+  never thinned out, it is the one mark the student set to find the
+  question again. The current question wears an `accent` border and a 4 px
+  `accent-soft` halo over whatever its mark is, an accent dot inside when it
+  holds nothing yet, and its number in bold accent; a question the
+  navigation closed drops to 45 % opacity. The circles are joined edge to
+  edge (never under a circle, which a faded one would let show through): a
+  1 px `line-strong` hairline, drawn as a solid 2 px `fg` stroke between two
+  questions already dealt with (answered or declined), so the path covered
+  and its holes read at a glance. The hairline may miss 3:1 in dark mode on
+  purpose: it repeats what the circles say and carries nothing of its own.
+  It spans the WHOLE width it is given and the questions share it equally,
+  with no cap: the strip is a map of the paper, and three questions drawn as
+  three stubs at the left edge map nothing. Every circle carries its NUMBER
+  under it, quiet (`fg-faint`, 11 px) except the current one, which is the
+  accent and bold — a student aims at "question 7" instead of counting.
+  Roving tabindex like `Tabs`, because twenty questions must not be twenty
+  stops on the way to the answer field; the state is in the accessible
+  name, not only in the shape.
+  Past a certain count the strip COMPRESSES rather than wrapping or
+  scrolling, measured on the strip's own width (a `ResizeObserver`, never
+  the viewport: the same strip is 760 px in the player and 358 px on a
+  phone). Under 28 px per question the 20 px circles drop to 10 px dots
+  without glyph — the shape stays — and the current one becomes a solid
+  accent dot with a 3 px halo (its mark is then only in its name). The
+  numbers thin out on their own rule: 22 px or more holds two digits and
+  its air, so everything is numbered (about 30 questions over 760 px); from
+  11 px, the first, the last, the current and every 5th; under that, every
+  10th. A multiple landing within two slots of the last one is dropped, so
+  "30" and "32" never collide. Nothing is lost: the number and the state
+  live in each circle's accessible name, which never thins out.
 - Pastille (`packages/qt-mcq/src/ui.tsx`): the letter of a choice IS its
   checkbox — a circle, 32 px in the teacher's editor, 40 px under a student's
   finger. A hairline `line-strong` circle on `surface` with a bold `fg-muted`

@@ -324,6 +324,7 @@ export function DevGallery() {
               mark: (i < 7 || i % 3 === 0 ? "answered" : i % 4 === 0 ? "skipped" : "unanswered") as SegmentMark,
               current: i === 7,
               flagged: i === 4 || i === 12,
+              locked: i < 3,
             }))}
             label="Progress: question 8 of 20, at 360 px"
           />

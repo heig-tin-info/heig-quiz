@@ -1335,7 +1335,7 @@ describe("ProgressSegments", () => {
     const { container } = renderWithProviders(
       <ProgressSegments segments={segments} label="Progress" onSelect={() => {}} />,
     );
-    const links = Array.from(container.querySelectorAll("button > span:nth-child(2):not(:last-child)"));
+    const links = Array.from(container.querySelectorAll("[data-part=link]"));
     // Three links for four questions; answered -> skipped is covered, the rest is not yet.
     expect(links).toHaveLength(3);
     expect(links.map((l) => l.classList.contains("bg-fg"))).toEqual([true, false, false]);
