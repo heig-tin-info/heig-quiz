@@ -25,6 +25,7 @@
  *    is a failure.
  */
 import {
+  ActivitySummary,
   AdminUser,
   AttemptInspect,
   AttemptOrLobby,
@@ -311,6 +312,8 @@ const CHECKED: Case[] = [
   ]),
   each("/app/api/admin/users", "/app/api/admin/users", AdminUser),
   each("/app/api/polls", "/app/api/polls", PollSummary),
+  // The Activities section (#190).
+  each("/app/api/activities", "/app/api/activities", ActivitySummary),
   each("/app/api/polls/questions", "/app/api/polls/questions", PollQuestionPick),
   one("/app/api/polls/pool-questions", "/app/api/polls/pool-questions", PollPoolPage),
   ...polls.map((p) =>
