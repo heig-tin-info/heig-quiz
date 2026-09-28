@@ -4,6 +4,8 @@
  * their FINAL GRADE — the one the results page shows — changes, once per
  * grading write, folded per evaluation, never with the grade in it.
  */
+import { randomUUID } from "node:crypto";
+
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -11,7 +13,7 @@ import { FeedbackPolicy, type NotificationPayload } from "@quiz/contracts";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
-import { evaluationItems, evaluations, notifications } from "../../db/schema.js";
+import { enrollments, evaluationItems, evaluations, notifications } from "../../db/schema.js";
 import { testApp, testDb } from "../../test/db.js";
 import { fakeShort } from "../../test/fakeType.js";
 import { reload, seedLive } from "../../test/live.js";
@@ -38,6 +40,8 @@ interface Options {
   points: number | null;
   release?: boolean;
   policy?: Partial<FeedbackPolicy>;
+  /** The teacher holds a staff seat and takes the exam too (ADR-018). */
+  teacherTest?: boolean;
 }
 
 /**
@@ -59,15 +63,30 @@ async function releasedExam(options: Options) {
       .set({ feedbackPolicy: { ...FeedbackPolicy.parse(evaluation.feedbackPolicy), ...options.policy } })
       .where(eq(evaluations.id, evaluation.id));
   }
+  const takers = [...seed.studentIds];
+  if (options.teacherTest) {
+    await db.insert(enrollments).values({
+      id: randomUUID(),
+      classroomId: seed.classroomId,
+      nom: "Prof",
+      prenom: "Test",
+      email: `staff-${seed.classroomId.slice(0, 8)}@heig.test`,
+      userId: seed.teacherId,
+      staff: true,
+    });
+    takers.push(seed.teacherId);
+  }
   const attemptOf = new Map<string, string>();
-  for (const userId of seed.studentIds) {
+  for (const userId of takers) {
     const participant = (await live.participantOf(db, evaluation, userId))!;
     const created = await live.ensureAttempt(db, evaluation, participant, app.clock.now());
     const attempt = await live.beginAttempt(db, evaluation, created, participant, app.clock.now());
     attemptOf.set(userId, attempt.id);
   }
   evaluation = await live.closeEvaluation(db, await reload(db, evaluation.id), app.clock.now());
-  const itemIds = (await joinedItems(db, evaluation.id)).map((i) => i.item.id);
+  const joined = await joinedItems(db, evaluation.id);
+  const itemIds = joined.map((i) => i.item.id);
+  const questionIds = joined.map((i) => i.question.id);
   await grading.writeGradings(
     db,
     [...attemptOf.values()].flatMap((attemptId) =>
@@ -87,7 +106,7 @@ async function releasedExam(options: Options) {
   if (options.release !== false) {
     await service.releaseResults(db, await reload(db, evaluation.id), app.clock.now());
   }
-  return { app, seed, evaluationId: evaluation.id, itemIds, attemptOf };
+  return { app, seed, evaluationId: evaluation.id, itemIds, questionIds, attemptOf };
 }
 
 type Built = Awaited<ReturnType<typeof releasedExam>>;
@@ -198,5 +217,83 @@ describe("results_updated (F-NOTIF-07)", () => {
     told = await notices(built);
     expect(told).toHaveLength(5);
     expect(told.find((n) => n.userId === first)!.payload).toMatchObject({ count: 2 });
+  });
+
+  it("tells nobody of a correction of a teacher's own test (ADR-018)", async () => {
+    const built = await releasedExam({ students: 1, items: 2, points: 3, teacherTest: true });
+    await override(built, built.seed.teacherId, 0, 5);
+    expect(await notices(built)).toEqual([]);
+  });
+});
+
+describe("results_updated across a regrade (F-GRADE-06)", () => {
+  /**
+   * The regrade route's own steps: the item's gradings stood down, the flag
+   * raised at once; then the pass writes the new gradings through the one
+   * writer, as `runEvaluationGrading` does, with the points given here.
+   */
+  async function regrade(built: Built, item: number, points: (userId: string) => number) {
+    const now = built.app.clock.now();
+    const note = await grading.regradeItem(
+      db,
+      { itemId: built.itemIds[item]!, questionId: built.questionIds[item]! },
+      { note: "key fixed" },
+    );
+    await service.markModifiedAfterRelease(db, await reload(db, built.evaluationId), now);
+    await grading.writeGradings(
+      db,
+      built.seed.studentIds.map((userId) => ({
+        attemptId: built.attemptOf.get(userId)!,
+        itemId: built.itemIds[item]!,
+        answerId: null,
+        points: points(userId),
+        maxPoints: ITEM_POINTS,
+        source: "auto" as const,
+        state: "validated" as const,
+        regradeNote: note!,
+        now,
+      })),
+    );
+  }
+
+  it("tells nobody when the regrade gives the same points back", async () => {
+    const built = await releasedExam({ students: 3, items: 2, points: 3 });
+    await regrade(built, 0, () => 3);
+    expect(await notices(built)).toEqual([]);
+  });
+
+  it("tells the students whose final grade the regrade changed", async () => {
+    const built = await releasedExam({ students: 3, items: 2, points: 3 });
+    const [changed] = built.seed.studentIds as [string];
+    await regrade(built, 0, (userId) => (userId === changed ? 5 : 3));
+    expect((await notices(built)).map((n) => n.userId)).toEqual([changed]);
+  });
+
+  it("compares a proposal validated after the regrade with the grade before it", async () => {
+    const built = await releasedExam({ students: 2, items: 2, points: 3 });
+    const now = built.app.clock.now();
+    await grading.regradeItem(
+      db,
+      { itemId: built.itemIds[0]!, questionId: built.questionIds[0]! },
+      { note: "key fixed" },
+    );
+    await service.markModifiedAfterRelease(db, await reload(db, built.evaluationId), now);
+    // The pass leaves proposals; the teacher validates them all, unchanged.
+    await grading.writeGradings(
+      db,
+      built.seed.studentIds.map((userId) => ({
+        attemptId: built.attemptOf.get(userId)!,
+        itemId: built.itemIds[0]!,
+        answerId: null,
+        points: 3,
+        maxPoints: ITEM_POINTS,
+        source: "auto" as const,
+        state: "proposed" as const,
+        confidence: "high" as const,
+        now,
+      })),
+    );
+    await grading.batchValidate(db, built.evaluationId, {}, built.seed.teacherId, now);
+    expect(await notices(built)).toEqual([]);
   });
 });

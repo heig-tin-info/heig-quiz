@@ -248,16 +248,21 @@ function varsOf(payload: NotificationPayload, t: Record<Key, string>): Record<st
 }
 
 /**
+ * The kinds whose `count` only serves the fold (§e) and never the sentence:
+ * how many corrections were folded into a `results_updated` is not news to a
+ * student. They have no `.one` sentence.
+ */
+const UNCOUNTED_KINDS: ReadonlySet<NotificationKind> = new Set(["results_updated"]);
+
+/**
  * The key of a kind's subject or body: a kind that counts has a singular
  * sentence of its own (`.one`), since "1 students" is not a sentence in
  * either language.
  */
 function sentenceKey(payload: NotificationPayload, part: "subject" | "body"): Key {
-  const base = `${payload.kind}.${part}`;
-  const one = `${base}.one`;
-  // A kind whose sentence does not count (`results_updated`: how many
-  // corrections were folded is not news to a student) has no `.one`.
-  return ("count" in payload && payload.count === 1 && one in en ? one : base) as Key;
+  const one =
+    "count" in payload && payload.count === 1 && !UNCOUNTED_KINDS.has(payload.kind) ? ".one" : "";
+  return `${payload.kind}.${part}${one}` as Key;
 }
 
 /**

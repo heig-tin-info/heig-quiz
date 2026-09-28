@@ -1,8 +1,8 @@
 /**
  * The notifications a user's action raises are BEST-EFFORT (ADR-030 §h,
  * #198 steps 5 to 8): when `notifyMany` fails, the publication, the grading,
- * the move of an exercise and the correction of a released grade it would
- * have announced are still written, and
+ * the move of an exercise, a release and the correction of a released grade
+ * it would have announced are still written, and
  * nothing is thrown at the caller — the ticker included, and its deadline
  * scan, whose markers stay claimed (not retried).
  */
@@ -146,7 +146,7 @@ describe("a failing notification", () => {
     expect(again.filter((c) => seeds.some((s) => s.evaluationId === c.evaluationId))).toEqual([]);
   });
 
-  it("never fails a correction after the release: the override is written", async () => {
+  it("never fails a release, nor a correction after it", async () => {
     const app = await testApp(db);
     const seed = await seedLive(db, { students: 1, questions: 1 });
     let evaluation = await evaluationService.applyState(
@@ -162,9 +162,15 @@ describe("a failing notification", () => {
     const [item] = await evaluationService.joinedItems(db, evaluation.id);
     const cell = { attemptId: attempt.id, itemId: item!.item.id, answerId: null, maxPoints: item!.item.points };
     await grading.manualOverride(db, cell, { points: 0, comment: "blank" }, seed.teacherId, app.clock.now());
-    // The release's own `results_released` is not under test here.
-    vi.mocked(notifyMany).mockResolvedValueOnce([]);
-    await releaseResults(db, await reload(db, evaluation.id), app.clock.now());
+
+    vi.mocked(notifyMany).mockClear();
+    const released = await releaseResults(db, await reload(db, evaluation.id), app.clock.now());
+    expect(vi.mocked(notifyMany).mock.calls.map(([, d]) => d[0]?.payload.kind)).toEqual([
+      "results_released",
+    ]);
+    // The release committed all the same.
+    expect(released.rows).toBe(1);
+    expect((await reload(db, evaluation.id)).releasedAt).not.toBeNull();
 
     vi.mocked(notifyMany).mockClear();
     const row = await grading.manualOverride(

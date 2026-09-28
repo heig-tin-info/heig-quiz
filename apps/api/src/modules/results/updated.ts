@@ -22,6 +22,7 @@ import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import type { Db } from "../../db/client.js";
 import { attempts, evaluations } from "../../db/schema.js";
 import { byId, staffAttemptIds, type EvaluationRecord } from "../evaluation/service.js";
+import { pointsAcrossRegrade } from "../grading/service.js";
 import { notifyMany, type Delivery } from "../notifications/service.js";
 import { shownGrades, type ShownGrade } from "./service.js";
 
@@ -39,41 +40,44 @@ interface Watched {
 }
 
 /**
- * Reads, BEFORE a grading write, the grade each owner of `attemptIds` is
- * shown on every RELEASED evaluation those attempts belong to. One query
- * finds them; an unreleased evaluation — every write of an ordinary grading
- * session — costs nothing more.
+ * Reads, BEFORE a grading write, the grade each owner of the written `cells`
+ * is shown on every RELEASED evaluation those cells belong to. One query
+ * finds the pairs (evaluation, student), distinct; an unreleased evaluation
+ * — every write of an ordinary grading session — costs nothing more.
+ *
+ * On a written cell that a regrade stood down, the "before" is the grading
+ * the regrade replaced (`pointsAcrossRegrade`): the grade the student was
+ * shown before the regrade, not the one without the item the page showed
+ * while the pass ran.
  */
 export async function watchReleasedGrades(
   db: Db,
-  attemptIds: readonly string[],
+  cells: readonly { attemptId: string; itemId: string }[],
 ): Promise<GradeWatch> {
-  if (attemptIds.length === 0) return NOTHING;
+  if (cells.length === 0) return NOTHING;
   try {
-    const rows = await db
-      .select({ evaluation: evaluations, userId: attempts.userId })
+    const pairs = await db
+      .selectDistinct({ evaluationId: attempts.evaluationId, userId: attempts.userId })
       .from(attempts)
       .innerJoin(evaluations, eq(evaluations.id, attempts.evaluationId))
       .where(
         and(
-          inArray(attempts.id, [...attemptIds]),
+          inArray(attempts.id, [...new Set(cells.map((c) => c.attemptId))]),
           isNotNull(evaluations.releasedAt),
           isNotNull(attempts.userId),
         ),
       );
-    if (rows.length === 0) return NOTHING;
-    const owners = new Map<string, { evaluation: EvaluationRecord; userIds: Set<string> }>();
-    for (const row of rows) {
-      const entry = owners.get(row.evaluation.id) ?? {
-        evaluation: row.evaluation,
-        userIds: new Set<string>(),
-      };
-      entry.userIds.add(row.userId!);
-      owners.set(row.evaluation.id, entry);
+    if (pairs.length === 0) return NOTHING;
+    const owners = new Map<string, string[]>();
+    for (const { evaluationId, userId } of pairs) {
+      owners.set(evaluationId, [...(owners.get(evaluationId) ?? []), userId!]);
     }
+    const before = pointsAcrossRegrade(cells);
     const watched: Watched[] = [];
-    for (const { evaluation, userIds } of owners.values()) {
-      watched.push({ evaluation, before: await shownGrades(db, evaluation, [...userIds]) });
+    for (const [evaluationId, userIds] of owners) {
+      const evaluation = await byId(db, evaluationId);
+      if (!evaluation) continue;
+      watched.push({ evaluation, before: await shownGrades(db, evaluation, userIds, before) });
     }
     return { announce: () => announceChanges(db, watched) };
   } catch (err) {

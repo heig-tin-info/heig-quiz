@@ -757,11 +757,13 @@ Step 8 (`results_updated`) settled:
   first correction the comparison is therefore against the grade the
   student was told about at the release; after, against the grade shown
   just before the write. Nothing is stored for it (§h.4).
-- **The cost**: one query finds the released evaluations the written
-  attempts belong to (none: nothing more is read, the ordinary case of a
-  grading session). For a released one, `shownGrades` reads the kept
-  attempts, the total and the points of the students concerned, before and
-  after — a handful of queries per write whatever the number of cells.
+- **The cost**: one query finds the distinct (released evaluation,
+  student) pairs of the written attempts (none: nothing more is read, the
+  ordinary case of a grading session). For a released one, `shownGrades`
+  reads the kept attempts, the total and the points of the students
+  concerned, before and after, and parses the frozen snapshot once
+  (`cachedGrades`) — a handful of queries per write whatever the number of
+  cells.
 - **Who is told**: the owners of the written attempts whose shown grade
   differs, only when the feedback page would show it now (`resultsState`
   answers `available`: not under the policy `none`, not without an
@@ -772,19 +774,31 @@ Step 8 (`results_updated`) settled:
   student's feedback page is `/attempts/<id>/feedback`, as for
   `results_released`; `count` is what the fold adds up. The sentence does
   not use the count ("Your grade for … changed after a correction"): how
-  many corrections were folded is not news to a student, so the kind has no
-  `.one` sentence and `sentenceKey` falls back to the plain one.
+  many corrections were folded is not news to a student, so the kind is in
+  `UNCOUNTED_KINDS` (`templates.ts`) and has no `.one` sentence.
 - **Folded per evaluation** on `(user_id, evaluation_id)`, migration
   `0031_results_updated_fold`. App on, e-mail and Teams off by default, no
   delay (§h.5). `unreleaseResults` withdraws the `results_updated` bells of
-  the evaluation with its `results_released` ones.
+  the evaluation with its `results_released` ones
+  (`withdrawResultsNotifications`).
+- **The release itself is best-effort too**: a `results_released`
+  fan-out that fails is logged; the release has committed and is not
+  reported as failed.
 - **Best-effort**: a failure while reading the grades before, or while
   telling after, is logged and never fails the grading write.
-- **Known limit, the regrade**: `regradeItem` stands the item's gradings
-  down and the route raises `modified_after_release` at once, so until the
-  pass re-grades the item the page shows the grade without it. The pass (or
-  the teacher's validation of its proposals) then compares against that
-  intermediate grade, and a student whose points on the item come back
-  unchanged may be told of an update. Carrying the grade from before the
-  regrade across to the pass would need a stored snapshot, which §h.4
-  rules out.
+- **Across a regrade**: `regradeItem` stands the item's gradings down and
+  the route raises `modified_after_release` at once, so until the pass
+  re-grades the item the page shows the grade without it. Compared with that
+  intermediate grade, almost every student with points on the item would be
+  told of an update. The "before" of a written cell that holds no validated
+  grading is therefore the grading the regrade stood down
+  (`pointsAcrossRegrade`, `grading/service.ts`): the newest `superseded` row
+  of the cell that no row supersedes — every other supersession links a
+  successor, a regrade does not. Nothing new is stored; the history chain
+  is enough. A regrade that gives the points back tells nobody, whether the
+  pass validates them or the teacher validates its proposals later.
+  **Residual case**: a superseded row does not keep whether it was
+  validated, so a PROPOSAL still pending when the regrade stood it down
+  counts in that "before" as if it had been validated. It only concerns an
+  item regraded while some of its cells were still proposals on a released
+  evaluation.

@@ -310,7 +310,7 @@ export async function markAllRead(db: Db, userId: string): Promise<number> {
  * open no longer shows anything. An e-mail or a Teams message already sent
  * cannot be taken back, and is not pretended to.
  */
-export async function withdrawResultsReleased(db: Db, evaluationId: string): Promise<number> {
+export async function withdrawResultsNotifications(db: Db, evaluationId: string): Promise<number> {
   const deleted = await db
     .delete(notifications)
     .where(

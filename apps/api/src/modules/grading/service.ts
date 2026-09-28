@@ -33,6 +33,7 @@ import type {
   Verdict,
 } from "@quiz/contracts";
 import {
+  attemptTotal,
   isBatchable,
   outcomeOf,
   overridePointsRange,
@@ -178,9 +179,10 @@ export async function writeGradings(
   // RELEASED evaluation, read before the write and compared after the
   // commit — once per write, not per cell, and never inside the transaction
   // (§1). Only a validated grading counts towards a grade.
-  const watch = await watchReleasedGrades(db, [
-    ...new Set(inputs.filter((i) => i.state === "validated").map((i) => i.attemptId)),
-  ]);
+  const watch = await watchReleasedGrades(
+    db,
+    inputs.filter((i) => i.state === "validated"),
+  );
   const out: GradingRecord[] = [];
   for (let start = 0; start < inputs.length; start += WRITE_CHUNK) {
     out.push(...(await writeChunk(db, inputs.slice(start, start + WRITE_CHUNK))));
@@ -966,6 +968,65 @@ export async function pointsByAttempt(
 ): Promise<Map<string, number>> {
   const tallies = await tallyByAttempt(db, attemptIds);
   return new Map([...tallies].map(([id, tally]) => [id, tally.points]));
+}
+
+/**
+ * {@link pointsByAttempt} as the student saw it BEFORE a regrade touched
+ * `cells`: on each of those cells that holds no validated grading, the
+ * grading a regrade stood down counts instead — the newest `superseded` row
+ * of the cell that nothing supersedes (`regradeItem` stands a cell down
+ * without writing a successor; every other supersession links one). The
+ * cells outside `cells` count as they stand. `results_updated` reads its
+ * "before" through it, so a regrade that gives a student the same points
+ * back tells nobody (ADR-030 §h, step 8).
+ *
+ * The state a stood-down row had is not kept: a PROPOSAL a regrade stood
+ * down counts here as if it had been validated. It only matters for a cell
+ * still a proposal when it was regraded, which the page did not count.
+ */
+export function pointsAcrossRegrade(
+  cells: readonly { attemptId: string; itemId: string }[],
+): (db: Db, attemptIds: readonly string[]) => Promise<Map<string, number>> {
+  const touched = new Set(cells.map((c) => pairKey(c.attemptId, c.itemId)));
+  return async (db, attemptIds) => {
+    if (attemptIds.length === 0) return new Map();
+    const rows = await db
+      .select({
+        attemptId: gradings.attemptId,
+        itemId: gradings.itemId,
+        points: gradings.points,
+        state: gradings.state,
+      })
+      .from(gradings)
+      .where(
+        and(
+          inArray(gradings.attemptId, [...attemptIds]),
+          or(
+            eq(gradings.state, "validated"),
+            and(
+              eq(gradings.state, "superseded"),
+              sql`not exists (select 1 from ${gradings} as successor where successor.supersedes_id = ${gradings.id})`,
+            ),
+          ),
+        ),
+      )
+      .orderBy(asc(gradings.gradedAt));
+    // Per cell: a validated grading wins; otherwise, on a touched cell, the
+    // newest stood-down one (ascending order: the last one read).
+    const byCell = new Map<PairKey, { attemptId: string; points: number; validated: boolean }>();
+    for (const row of rows) {
+      const key = pairKey(row.attemptId, row.itemId);
+      const validated = row.state === "validated";
+      if (!validated && !touched.has(key)) continue;
+      if (byCell.get(key)?.validated) continue;
+      byCell.set(key, { attemptId: row.attemptId, points: row.points, validated });
+    }
+    const perAttempt = new Map<string, number[]>();
+    for (const cell of byCell.values()) {
+      perAttempt.set(cell.attemptId, [...(perAttempt.get(cell.attemptId) ?? []), cell.points]);
+    }
+    return new Map([...perAttempt].map(([id, points]) => [id, attemptTotal(points)]));
+  };
 }
 
 // The kept attempt of each student (F-EVAL-15, ADR-025), in `./kept.ts`.
