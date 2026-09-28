@@ -2237,7 +2237,6 @@ export const fr: Record<keyof Dict, string> = {
   "results.unrelease.confirm.ok": "Retirer",
   "results.unrelease.done": "Publication retirée.",
   "results.export": "Exporter en CSV",
-  "results.export.hint": "Une ligne par étudiant, séparateur point-virgule, pour Excel.",
   "results.empty.title": "Aucune note pour l'instant",
   "results.empty.body":
     "Clôturez l'évaluation et lancez la correction pour voir les notes ici.",

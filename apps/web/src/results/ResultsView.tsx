@@ -251,7 +251,6 @@ export function ResultsView({
               <Histogram buckets={view.stats.histogram} />
             </Card>
             <GradeTable rows={view.rows} />
-            <p className="text-xs text-fg-faint">{t("results.export.hint")}</p>
           </div>
         )
       ) : byQuestion.isLoading ? (

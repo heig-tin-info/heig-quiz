@@ -2248,7 +2248,6 @@ export const en = {
   "results.unrelease.confirm.ok": "Withdraw",
   "results.unrelease.done": "Publication withdrawn.",
   "results.export": "Export CSV",
-  "results.export.hint": "One row per student, semicolon separated, for Excel.",
   "results.empty.title": "No grade yet",
   "results.empty.body": "Close the evaluation and run the grading to see the grades here.",
   "results.grading": "Grading panel",
