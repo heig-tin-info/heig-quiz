@@ -123,8 +123,8 @@ Press **Hand in** in the header when you are done. The confirmation names how ma
 Once handed in, the player is replaced by a card that says **Handed in**, with **Back to home**. When your teacher shows the results right after hand-in, the card also offers **See my results**.
 
 <figure markdown="span">
-  ![The Handed in card: Your answers are with your teacher, with See my results and Back to home](../assets/screenshots/player-done-light.png#only-light)
-  ![The Handed in card: Your answers are with your teacher, with See my results and Back to home](../assets/screenshots/player-done-dark.png#only-dark)
+  ![The Handed in card: Your answers are with your teacher, with Back to home](../assets/screenshots/player-done-light.png#only-light)
+  ![The Handed in card: Your answers are with your teacher, with Back to home](../assets/screenshots/player-done-dark.png#only-dark)
   <figcaption>After handing in.</figcaption>
 </figure>
 

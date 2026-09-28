@@ -39,7 +39,7 @@ const card = (over: Partial<EvaluationCard>): EvaluationCard => ({
   grade: null,
   deadlineAt: null,
   retakes: null,
-  resultsAvailable: false,
+  results: "none",
   ...over,
 });
 
@@ -56,7 +56,7 @@ const home: StudentHomeData = {
       state: "released",
       attemptId: "a3",
       attemptState: "submitted",
-      resultsAvailable: true,
+      results: "available",
     }),
   ],
   serverNow: "2026-09-20T10:00:00.000Z",
@@ -151,11 +151,18 @@ describe("the student home", () => {
         open: [],
         past: [
           // Handed in while the quiz still runs, `on_release`.
-          card({ id: "e5", title: "Quiz 4", attemptId: "a5", attemptState: "submitted" }),
+          card({ id: "e5", title: "Quiz 4", attemptId: "a5", attemptState: "submitted", results: "pending" }),
           // Its time ran out, and the teacher closed it without releasing.
-          card({ id: "e6", title: "Quiz 5", state: "closed", attemptId: "a6", attemptState: "expired" }),
-          // Released under `none`: nothing will ever be published, so no "yet".
-          card({ id: "e7", title: "Quiz 6", state: "released", attemptId: "a7", attemptState: "submitted" }),
+          card({
+            id: "e6",
+            title: "Quiz 5",
+            state: "closed",
+            attemptId: "a6",
+            attemptState: "expired",
+            results: "pending",
+          }),
+          // Closed under `none`: nothing will ever be published, so no "yet".
+          card({ id: "e7", title: "Quiz 6", state: "closed", attemptId: "a7", attemptState: "submitted", results: "none" }),
         ],
       }),
       "GET /app/api/student/classrooms": ok([]),
@@ -278,7 +285,7 @@ describe("the student home", () => {
     });
 
     // Issue #203: with none left the server lists it under Past, and the
-    // button follows `resultsAvailable`.
+    // button follows `results`.
     it("shows the kept score under Past once no attempt is left, results only when available", async () => {
       mockFetch({
         "GET /app/api/student/home": ok({
@@ -291,7 +298,7 @@ describe("the student home", () => {
               id: "e10",
               title: "Série 2 — Tableaux",
               state: "closed",
-              resultsAvailable: true,
+              results: "available",
             },
           ],
         }),
@@ -341,6 +348,7 @@ describe("the student home", () => {
                 kept: { attemptId: "a8", attemptNumber: 1, score: null },
               }),
               state: "closed",
+              results: "pending",
             },
           ],
         }),

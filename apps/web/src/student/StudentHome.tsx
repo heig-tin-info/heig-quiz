@@ -129,10 +129,10 @@ function retakeLine(card: EvaluationCardData, t: TFunction): string | null {
 
 /**
  * The line of a past card: how the attempt ended (or the retake count), and,
- * issue #203, that the results are not out yet when the card has no button
- * for them — so the student reads it here instead of on an empty page. Not
- * on a released evaluation: there, no results means the teacher publishes
- * none (policy `none`), and "not yet" would be a promise.
+ * issue #203, that the results are still to come when the server says so
+ * (`results: "pending"`) — the card has no button for them then, so the
+ * student reads it here instead of on an empty page. A score already on the
+ * line (between two attempts) needs no such note.
  */
 function pastLine(card: EvaluationCardData, t: TFunction): string {
   const base =
@@ -143,11 +143,7 @@ function pastLine(card: EvaluationCardData, t: TFunction): string {
         : card.attemptState === "expired"
           ? t("shome.state.expired")
           : t("shome.state.notStarted");
-  const waiting =
-    finished(card) &&
-    !card.resultsAvailable &&
-    card.state !== "released" &&
-    !card.retakes?.kept?.score;
+  const waiting = finished(card) && card.results === "pending" && !card.retakes?.kept?.score;
   return waiting ? `${base} · ${t("shome.resultsPending")}` : base;
 }
 
@@ -421,7 +417,7 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
                   key={card.id}
                   card={card}
                   line={pastLine(card, t)}
-                  {...(card.resultsAvailable && card.attemptId
+                  {...(card.results === "available" && card.attemptId
                     ? {
                         action: {
                           label: t("shome.review"),

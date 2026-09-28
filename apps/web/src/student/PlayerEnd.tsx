@@ -69,6 +69,8 @@ export function PlayerEnd({
       reason={reason}
       title={initial.evaluation.title}
       onHome={onHome}
+      // Held until the answer settles; an error leaves Back to home alone.
+      actionsHeld={asked && feedback.isLoading}
       {...(asked && feedback.data?.available === true
         ? { onResults: () => onResults(initial.attempt.id) }
         : {})}

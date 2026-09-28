@@ -412,7 +412,7 @@ on("GET", "/app/api/student/home", (): StudentHomeData => {
         grade: null,
         deadlineAt: scene === "lobby" ? null : new Date(studentDeadline).toISOString(),
         retakes: null,
-        resultsAvailable: false,
+        results: "pending",
       },
       {
         id: STUDENT_EVAL_RETAKE,
@@ -440,7 +440,7 @@ on("GET", "/app/api/student/home", (): StudentHomeData => {
           },
         },
         // Between two attempts the page is score only (ADR-025).
-        resultsAvailable: false,
+        results: "pending",
       },
     ],
     upcoming: [
@@ -459,7 +459,7 @@ on("GET", "/app/api/student/home", (): StudentHomeData => {
         grade: null,
         deadlineAt: null,
         retakes: null,
-        resultsAvailable: false,
+        results: "none",
       },
     ],
     past: [
@@ -480,7 +480,7 @@ on("GET", "/app/api/student/home", (): StudentHomeData => {
         grade: null,
         deadlineAt: iso(-5 * 60_000),
         retakes: null,
-        resultsAvailable: false,
+        results: "pending",
       },
       {
         id: STUDENT_EVAL_PAST,
@@ -497,7 +497,7 @@ on("GET", "/app/api/student/home", (): StudentHomeData => {
         grade: null,
         deadlineAt: null,
         retakes: null,
-        resultsAvailable: true,
+        results: "available",
       },
     ],
     serverNow: new Date().toISOString(),

@@ -25,6 +25,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import type {
   AnswerDistributionEntry,
   ByQuestion,
+  CardResults,
   FeedbackPolicy,
   GradingScale,
   ReleasedGrades,
@@ -477,18 +478,30 @@ function scoreOnly(evaluation: EvaluationRecord): boolean {
  * feedback page would.
  */
 export function scoreVisible(evaluation: EvaluationRecord, attemptState: string): boolean {
-  return resultsAvailable(evaluation, attemptState)
+  return feedbackAvailable(feedbackOf(evaluation), evaluation, attemptState).ok
     || (scoreOnly(evaluation) && attemptState !== "in_progress" && attemptState !== "not_started");
 }
 
 /**
- * Whether the feedback page of an attempt in this state answers
- * `available: true` right now (issue #203): the student home offers "See my
- * results" only then, so the button never leads to "not published yet".
- * {@link feedbackAvailable} stays the one rule; this only names its verdict.
+ * What the feedback page of the attempt that counts would give the student
+ * (issue #203): `available` when it answers `available: true`; `none` when
+ * nothing will ever be published — no attempt, or the policy `none` (between
+ * two attempts `retakes_open` comes first, but the close will not change
+ * `none`); `pending` otherwise, the results still to come. The student home
+ * offers "See my results" only on `available`, so the button never leads to
+ * "not published yet". {@link feedbackAvailable} stays the one rule.
  */
-export function resultsAvailable(evaluation: EvaluationRecord, attemptState: string): boolean {
-  return feedbackAvailable(feedbackOf(evaluation), evaluation, attemptState).ok;
+export function resultsState(
+  evaluation: EvaluationRecord,
+  attemptState: string | null,
+): CardResults {
+  if (attemptState === null) return "none";
+  const policy = feedbackOf(evaluation);
+  const gate = feedbackAvailable(policy, evaluation, attemptState);
+  if (gate.ok) return "available";
+  if (gate.reason === "no_feedback") return "none";
+  if (gate.reason === "retakes_open" && policy.when === "none") return "none";
+  return "pending";
 }
 
 /** Whether a student may see anything at all right now. */
@@ -703,12 +716,17 @@ type StudentRow = Awaited<ReturnType<typeof studentEvaluationRows>>[number];
  * one (`retaking`, from `studentAttempts`); otherwise the student's only
  * attempt, which the row already holds.
  */
+export function countedAttempt(retaking: ReadonlyMap<string, StudentAttempts>, row: StudentRow) {
+  const mine = retaking.get(row.evaluation.id);
+  return mine ? mine.kept : (row.attempt ?? null);
+}
+
+/** {@link countedAttempt}'s id. */
 export function countedAttemptId(
   retaking: ReadonlyMap<string, StudentAttempts>,
   row: StudentRow,
 ): string | null {
-  const mine = retaking.get(row.evaluation.id);
-  return mine ? (mine.kept?.id ?? null) : (row.attempt?.id ?? null);
+  return countedAttempt(retaking, row)?.id ?? null;
 }
 
 export interface ReleasedGrade {

@@ -3,9 +3,10 @@
  * "See my results" only when the feedback page has something to show
  * (issue #203), against the real migrations.
  *
- * Every scenario ends with {@link agrees}: `resultsAvailable` on a card is
- * exactly what the feedback route (`studentFeedback`) answers for the attempt
- * the card points at — never true where the page says `available: false`.
+ * Every scenario ends with {@link agrees}: `results` on a card is exactly
+ * what the feedback route (`studentFeedback`) answers for the attempt the
+ * card points at — never `available` where the page says `available: false`,
+ * never `pending` where it says `no_feedback`.
  */
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -91,20 +92,23 @@ async function cardOf(app: App, userId: string, evaluationId: string) {
 }
 
 /**
- * `resultsAvailable` says exactly what the feedback route would answer for
- * the attempt the card links to (the kept one with retakes).
+ * `results` says exactly what the feedback route would answer for the
+ * attempt the card links to (the kept one with retakes).
  */
 async function agrees(app: App, home: StudentHome) {
   const cards: EvaluationCard[] = [...home.open, ...home.upcoming, ...home.past];
   for (const card of cards) {
     const linked = card.retakes ? (card.retakes.kept?.attemptId ?? null) : card.attemptId;
     if (linked === null) {
-      expect(card.resultsAvailable).toBe(false);
+      expect(card.results, card.title).toBe("none");
       continue;
     }
+    const evaluation = await reload(db, card.id);
     const attempt = (await live.attemptById(db, linked))!;
-    const feedback = await results.studentFeedback(db, await reload(db, card.id), attempt, app.clock.now());
-    expect(card.resultsAvailable, card.title).toBe(feedback.available);
+    const feedback = await results.studentFeedback(db, evaluation, attempt, app.clock.now());
+    if (feedback.available) expect(card.results, card.title).toBe("available");
+    else if (feedback.reason === "no_feedback") expect(card.results, card.title).toBe("none");
+    else expect(card.results, card.title).not.toBe("available");
   }
 }
 
@@ -113,27 +117,27 @@ describe("the student home after a hand-in (issue #203)", () => {
     const { app, evaluation, student } = await runningEvaluation("on_release");
     expect(await cardOf(app, student, evaluation.id)).toMatchObject({
       section: "open",
-      card: { attemptState: null, resultsAvailable: false },
+      card: { attemptState: null, results: "none" },
     });
 
     await handIn(app, evaluation, student);
     expect(await cardOf(app, student, evaluation.id)).toMatchObject({
       section: "past",
-      card: { state: "running", attemptState: "submitted", resultsAvailable: false },
+      card: { state: "running", attemptState: "submitted", results: "pending" },
     });
 
     // Closed, not released: still nothing to see.
     const closed = await live.closeEvaluation(db, await reload(db, evaluation.id), app.clock.now(), "teacher", app);
     expect(await cardOf(app, student, evaluation.id)).toMatchObject({
       section: "past",
-      card: { resultsAvailable: false },
+      card: { results: "pending" },
     });
 
     // Released: See my results.
     await results.releaseResults(db, closed, app.clock.now());
     expect(await cardOf(app, student, evaluation.id)).toMatchObject({
       section: "past",
-      card: { state: "released", resultsAvailable: true },
+      card: { state: "released", results: "available" },
     });
   });
 
@@ -142,7 +146,7 @@ describe("the student home after a hand-in (issue #203)", () => {
     await handIn(app, evaluation, student);
     expect(await cardOf(app, student, evaluation.id)).toMatchObject({
       section: "past",
-      card: { state: "running", attemptState: "submitted", resultsAvailable: true },
+      card: { state: "running", attemptState: "submitted", results: "available" },
     });
   });
 
@@ -153,7 +157,7 @@ describe("the student home after a hand-in (issue #203)", () => {
     await results.releaseResults(db, closed, app.clock.now());
     expect(await cardOf(app, student, evaluation.id)).toMatchObject({
       section: "past",
-      card: { resultsAvailable: false },
+      card: { results: "none" },
     });
   });
 
@@ -173,7 +177,7 @@ describe("the student home after a hand-in (issue #203)", () => {
     expect(await live.expireDueAttempts(db, app.clock.now())).toHaveLength(1);
     expect(await cardOf(app, student, evaluation.id)).toMatchObject({
       section: "past",
-      card: { attemptState: "expired", resultsAvailable: true },
+      card: { attemptState: "expired", results: "available" },
     });
   });
 
@@ -185,7 +189,7 @@ describe("the student home after a hand-in (issue #203)", () => {
     await live.reopenAttempt(db, await reload(db, evaluation.id), submitted, app.clock.now());
     expect(await cardOf(app, student, evaluation.id)).toMatchObject({
       section: "open",
-      card: { attemptState: "in_progress", resultsAvailable: false },
+      card: { attemptState: "in_progress", results: "pending" },
     });
   });
 
@@ -195,7 +199,7 @@ describe("the student home after a hand-in (issue #203)", () => {
     await live.pauseEvaluation(db, await reload(db, evaluation.id), app.clock.now());
     expect(await cardOf(app, student, evaluation.id)).toMatchObject({
       section: "past",
-      card: { state: "paused", resultsAvailable: false },
+      card: { state: "paused", results: "pending" },
     });
   });
 
@@ -204,7 +208,7 @@ describe("the student home after a hand-in (issue #203)", () => {
     await live.closeEvaluation(db, evaluation, app.clock.now(), "teacher", app);
     expect(await cardOf(app, student, evaluation.id)).toMatchObject({
       section: "past",
-      card: { attemptId: null, resultsAvailable: false },
+      card: { attemptId: null, results: "none" },
     });
   });
 
@@ -218,7 +222,7 @@ describe("the student home after a hand-in (issue #203)", () => {
     // Between two attempts the page is score only (ADR-025): not "available".
     expect(await cardOf(app, student, evaluation.id)).toMatchObject({
       section: "open",
-      card: { attemptState: "submitted", resultsAvailable: false, retakes: { canRetake: true } },
+      card: { attemptState: "submitted", results: "pending", retakes: { canRetake: true } },
     });
 
     const second = await live.retakeAttempt(db, {
@@ -231,14 +235,36 @@ describe("the student home after a hand-in (issue #203)", () => {
     await handIn(app, evaluation, student, second);
     expect(await cardOf(app, student, evaluation.id)).toMatchObject({
       section: "past",
-      card: { state: "running", resultsAvailable: false, retakes: { canRetake: false, attemptCount: 2 } },
+      card: { state: "running", results: "pending", retakes: { canRetake: false, attemptCount: 2 } },
     });
 
     // Closed, the teacher's policy decides again: immediate shows the kept one.
     await live.closeEvaluation(db, await reload(db, evaluation.id), app.clock.now(), "teacher", app);
     expect(await cardOf(app, student, evaluation.id)).toMatchObject({
       section: "past",
-      card: { resultsAvailable: true },
+      card: { results: "available" },
+    });
+  });
+
+  it("promises nothing under the none policy, closed or between two attempts", async () => {
+    const quiz = await runningEvaluation("none");
+    await handIn(quiz.app, quiz.evaluation, quiz.student);
+    await live.closeEvaluation(db, await reload(db, quiz.evaluation.id), quiz.app.clock.now(), "teacher", quiz.app);
+    expect(await cardOf(quiz.app, quiz.student, quiz.evaluation.id)).toMatchObject({
+      section: "past",
+      card: { state: "closed", results: "none" },
+    });
+
+    const drill = await runningEvaluation("none", {
+      mode: "exercise",
+      durationS: null,
+      retakes: {},
+    });
+    await handIn(drill.app, drill.evaluation, drill.student);
+    // Score only between attempts, and no correction after the close either.
+    expect(await cardOf(drill.app, drill.student, drill.evaluation.id)).toMatchObject({
+      section: "open",
+      card: { state: "running", results: "none", retakes: { canRetake: true } },
     });
   });
 });

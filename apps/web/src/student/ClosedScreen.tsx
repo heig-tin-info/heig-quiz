@@ -45,6 +45,7 @@ export function ClosedScreen({
   title,
   onHome,
   onResults,
+  actionsHeld = false,
 }: {
   reason: AttemptClosed["reason"];
   /** The evaluation's own title, so the page still says what ended. */
@@ -57,6 +58,12 @@ export function ClosedScreen({
    * Back to home is the one primary action.
    */
   onResults?: () => void;
+  /**
+   * The row waits (kept in place, not shown) while the player asks whether
+   * results exist, so a primary Back to home never flips to secondary
+   * under the student's cursor when See my results arrives.
+   */
+  actionsHeld?: boolean;
 }) {
   const t = useT();
   const copy = COPY[reason];
@@ -71,7 +78,10 @@ export function ClosedScreen({
           // heading of any level (W4).
           titleAs="h1"
           action={
-            <div className="flex flex-wrap items-center justify-center gap-2">
+            <div
+              className={`flex flex-wrap items-center justify-center gap-2${actionsHeld ? " invisible" : ""}`}
+              aria-hidden={actionsHeld || undefined}
+            >
               {onResults ? (
                 <Button variant="primary" onClick={onResults}>
                   <BarChart3 /> {t("player.closed.results")}

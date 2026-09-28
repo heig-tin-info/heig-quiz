@@ -64,9 +64,10 @@ import { enqueueEvaluationGrading } from "../grading/jobs.js";
 import { scoreOf, studentAttempts, tallyByAttempt } from "../grading/service.js";
 import { presence } from "../realtime/presence.js";
 import {
+  countedAttempt,
   countedAttemptId,
   releasedGradesOf,
-  resultsAvailable,
+  resultsState,
   scoreVisible,
 } from "../results/service.js";
 import { isShuffleable, studentView } from "./studentView.js";
@@ -1391,15 +1392,6 @@ export async function studentHome(db: Db, userId: string, now: Date): Promise<St
     };
   };
 
-  // Issue #203: what the feedback page of the attempt that counts (the kept
-  // one with retakes) would answer — the results service's own rule, so the
-  // card offers "See my results" only where the page has something to show.
-  const countedResultsAvailable = (row: (typeof rows)[number]): boolean => {
-    const mine = perEvaluation.get(row.evaluation.id);
-    const counted = mine ? mine.kept : row.attempt;
-    return counted !== null && counted !== undefined && resultsAvailable(row.evaluation, counted.state);
-  };
-
   const card = (row: (typeof rows)[number]): EvaluationCard => ({
     id: row.evaluation.id,
     title: row.evaluation.title,
@@ -1417,7 +1409,9 @@ export async function studentHome(db: Db, userId: string, now: Date): Promise<St
     deadlineAt: isoOrNull(row.attempt?.deadlineAt ?? null),
     grade: grades.get(row.evaluation.id)?.grade ?? null,
     retakes: retakesOf(row),
-    resultsAvailable: countedResultsAvailable(row),
+    // Issue #203: what "See my results" would lead to, for the attempt
+    // that counts — the results service's own rule.
+    results: resultsState(row.evaluation, countedAttempt(perEvaluation, row)?.state ?? null),
     safeExamBrowser: sebRequired(row.evaluation),
   });
 

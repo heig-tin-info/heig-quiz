@@ -149,7 +149,7 @@ function card(canRetake: boolean, keep: Keep = "best"): EvaluationCard {
       canRetake,
       kept: { attemptId: FIRST, attemptNumber: 1, score: { points: 1, totalPoints: 1, pending: false } },
     },
-    resultsAvailable: false,
+    results: "pending",
   };
 }
 
@@ -374,13 +374,11 @@ describe("retakes on an exercise (issues #120, #121)", () => {
       reason: "results_pending",
       evaluation: { id: EVAL, title: "Série 3 — Entraînement" },
     });
-    // The screen asked the feedback route, and took its answer.
-    await waitFor(() => expect(calls.some((c) => c.url.endsWith(`${FIRST}/feedback`))).toBe(true));
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    // The screen asked the feedback route; its row shows once the answer is in.
+    const home = await screen.findByRole("button", { name: "Retour à l'accueil" });
+    expect(calls.some((c) => c.url.endsWith(`${FIRST}/feedback`))).toBe(true);
+    expect(home.className).toBe(buttonClass("primary", "md", ""));
     expect(screen.queryByRole("button", { name: "Voir mes résultats" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Retour à l'accueil" }).className).toBe(
-      buttonClass("primary", "md", ""),
-    );
     expect(routes).toEqual([]);
   });
 
