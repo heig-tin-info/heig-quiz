@@ -48,10 +48,9 @@ export function StudentPreviewPage({ id }: { id: string }) {
     // Seed 0 and nothing stored: the same view on every open.
     staleTime: Infinity,
   });
-  // No deadline, so no countdown: the shell's default clock is stable, and
-  // nothing here hands it a new value on every render (FF-26).
-
   return (
+    // No deadline, so no countdown: the shell's default clock is stable, and
+    // nothing here hands it a new value on every render (FF-26).
     <PlayerShell
       title={t("question.preview.pageTitle")}
       subtitle={t("question.preview.pageSubtitle")}
