@@ -97,10 +97,9 @@ contain the identifiers of that run's seed; the script discovers them over
 the API, so they change from one seed to the next.
 
 <!-- scenes:start -->
-Last full run: 2026-09-21, commit `828d8d8`, 65 scenes. The `eval-rename`
-scene was added after that run and appears here on the next one; the
-`settings-token-created` and `oauth-consent` ones were taken on their own
-(`--only`).
+Last full run: 2026-09-21, commit `828d8d8`. The `live-*` and `grading*`
+scenes were retaken on their own (`--only`) on 2026-09-28, on a fresh seed,
+which is why their ids differ from the other rows.
 
 | Scene | Persona | Path | Phase | Action after load | Viewport |
 | --- | --- | --- | --- | --- | --- |
@@ -127,18 +126,18 @@ scene was added after that run and appears here on the next one; the
 | `eval-timing` | teacher | `/evaluations/ec1186d0-1d86-49e2-9d65-989a6a002dc7?step=timing` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `eval-launch` | teacher | `/evaluations/ec1186d0-1d86-49e2-9d65-989a6a002dc7?step=launch` | seeded | Nothing: the page as it loads. | 1440×900 |
 | `eval-scheduled` | teacher | `/evaluations/f259b01d-cdb0-4bc5-9484-4e74c186745a` | seeded | Nothing: the page as it loads. | 1440×900 |
-| `live-lobby` | teacher | `/evaluations/2d031274-da46-4a00-9f8d-f5056e933cb9/live` | lobby | Nothing: the page as it loads. | 1440×900 |
-| `live-running` | teacher | `/evaluations/2d031274-da46-4a00-9f8d-f5056e933cb9/live` | running | Nothing: the page as it loads. | 1440×900 |
-| `live-inspect` | teacher | `/evaluations/2d031274-da46-4a00-9f8d-f5056e933cb9/live` | running | Clicked the first student's cell of question 1. | 1440×900 |
-| `live-extend` | teacher | `/evaluations/2d031274-da46-4a00-9f8d-f5056e933cb9/live` | running | Clicked “Extend”. | 1440×900 |
-| `live-closed` | teacher | `/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/live` | graded | Nothing: the page as it loads. | 1440×900 |
-| `grading` | teacher | `/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading` | graded | Nothing: the page as it loads. | 1440×900, full page |
-| `grading-short` | teacher | `/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading` | graded | Moved to the next question (the short answer). | 1440×900, full page |
-| `grading-cloze` | teacher | `/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading` | graded | Moved three questions forward (the cloze). | 1440×900, full page |
-| `grading-code` | teacher | `/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading` | graded | Moved four questions forward (the code question). | 1440×900, full page |
-| `grading-by-student` | teacher | `/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading` | graded | Switched the order to “By student”. | 1440×900, full page |
-| `grading-override` | teacher | `/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading` | graded | Clicked “Adjust” on the first grading. | 1440×900 |
-| `grading-batch` | teacher | `/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/grading` | seeded | Moved to the code question; the batch bar offers to validate its proposals. | 1440×900 |
+| `live-lobby` | teacher | `/evaluations/3867ad1a-fdc3-4403-8000-faabd3b6dc8e/live` | lobby | Nothing: the page as it loads. | 1440×900 |
+| `live-running` | teacher | `/evaluations/3867ad1a-fdc3-4403-8000-faabd3b6dc8e/live` | running | Nothing: the page as it loads. | 1440×900 |
+| `live-inspect` | teacher | `/evaluations/3867ad1a-fdc3-4403-8000-faabd3b6dc8e/live` | running | Clicked the first student's cell of question 1. | 1440×900 |
+| `live-extend` | teacher | `/evaluations/3867ad1a-fdc3-4403-8000-faabd3b6dc8e/live` | running | Clicked “Extend”. | 1440×900 |
+| `live-closed` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/live` | graded | Nothing: the page as it loads. | 1440×900 |
+| `grading` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | graded | Nothing: the page as it loads. | 1440×900, full page |
+| `grading-short` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | graded | Moved to the next question (the short answer). | 1440×900, full page |
+| `grading-cloze` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | graded | Moved three questions forward (the cloze). | 1440×900, full page |
+| `grading-code` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | graded | Moved four questions forward (the code question). | 1440×900, full page |
+| `grading-by-student` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | graded | Switched the order to “By student”. | 1440×900, full page |
+| `grading-override` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | graded | Clicked “Adjust” on the first grading. | 1440×900 |
+| `grading-batch` | teacher | `/evaluations/8b0738bb-76a1-4bd8-885a-794d58a73791/grading` | seeded | Moved to the code question; the batch bar offers to validate its proposals. | 1440×900 |
 | `results` | teacher | `/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/results` | graded | Nothing: the page as it loads. | 1440×900, full page |
 | `results-questions` | teacher | `/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/results?tab=questions` | graded | Nothing: the page as it loads. | 1440×900, full page |
 | `results-release-confirm` | teacher | `/evaluations/606c9f70-0a92-4ebd-8958-0ade5a342da7/results` | graded | Clicked “Publish results”. | 1440×900 |
