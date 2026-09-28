@@ -100,13 +100,20 @@ export const NotificationChannel = z.enum(NOTIFICATION_CHANNELS);
 export type NotificationChannel = z.infer<typeof NotificationChannel>;
 
 /**
- * What a user who never touched a toggle gets: everything on. Teams only
- * applies once the account is linked, so "on" there costs nothing until then.
+ * What a user who never touched a toggle gets, per kind (ADR-030, addendum of
+ * #198). A kind a user must not miss is on everywhere; a background-noise kind
+ * (a student joined, a question added to a shared pool) stays in the app and
+ * is off by e-mail and Teams. Teams only applies once the account is linked,
+ * so "on" there costs nothing until then. A kind added to
+ * {@link NOTIFICATION_KINDS} without its row here is a compile error.
  */
-export const DEFAULT_CHANNEL_ENABLED: Record<NotificationChannel, boolean> = {
-  bell: true,
-  email: true,
-  teams: true,
+export const DEFAULT_CHANNEL_ENABLED: Record<
+  NotificationKind,
+  Readonly<Record<NotificationChannel, boolean>>
+> = {
+  results_released: { bell: true, email: true, teams: true },
+  pool_shared: { bell: true, email: true, teams: true },
+  pool_ownership: { bell: true, email: true, teams: true },
 };
 
 /** The kinds a role receives, as the settings grid lists them. */

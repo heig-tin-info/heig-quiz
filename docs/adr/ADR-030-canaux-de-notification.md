@@ -24,6 +24,12 @@ replaces `bot.ts` and `botAuth.ts`, the tab `/teams`, migration
 `0023_teams_graph_activity`, `TEAMS_BOT_TENANT` removed). The bot did not
 work for the product owner; §4 is rewritten for the new design and says why.
 
+Amended (2026-09-28, issue #198): one notification system for everything a
+user is told. The App channel is the bell AND the toast, defaults are per
+kind, and eight kinds are added for students and teachers. The decisions
+are the addendum at the end. `DEFAULT_CHANNEL_ENABLED` became per kind in
+the same change; the rest lands in the steps the addendum lists.
+
 ## Context
 
 The bell (F-POOL-05) tells an account what happened while it was away, but
@@ -299,8 +305,10 @@ could not be carried over (they know no chat).
 
 `notification_preferences(user_id, kind, channel, enabled)`, primary key on
 the three first columns, holding only the toggles a user actually moved. A
-missing row is `DEFAULT_CHANNEL_ENABLED` of `@quiz/contracts`: bell on, e-mail
-on, Teams on — which only takes effect once the account is linked, so
+missing row is the kind's row of `DEFAULT_CHANNEL_ENABLED` in
+`@quiz/contracts` (per kind since the addendum of #198). For the three kinds
+of this ADR it is bell on, e-mail on, Teams on. Teams only takes effect once
+the account is linked, so
 "linking Teams" is the whole opt-in. A table rather than a jsonb column on
 `users`: the `notifications` module owns it (a module never writes another's
 table, and `users` is `auth`'s), a toggle is an upsert of one row with no
@@ -401,3 +409,152 @@ the chat columns, and the links made since could not be carried back.
 - **A jsonb column of preferences on `users`** (heig-classroom's
   `email_prefs`): written by the `notifications` module into `auth`'s table,
   and one channel only. Rejected.
+
+## Addendum (2026-09-28): one system, per-kind defaults, eight new kinds (#198)
+
+Settled with the product owner on issue #198: the proposals of the issue and
+the seven answers of its review, all accepted. The settings page had two
+sections for one idea: the notifications of this ADR (bell, e-mail, Teams,
+per account on the server) and "Popup alerts" (SSE toasts, per browser in
+`localStorage`). A user could not tell why "a student joined" was a popup and
+"a pool was shared with you" a notification, every kind added later would
+have been e-mailed to everyone, and a student was told of nothing but a
+released result.
+
+### a. The App channel is the bell plus the toast
+
+- The `bell` channel is shown as **App**. It means an entry in the bell,
+  plus a toast in every tab that is open. `NoticeKind`, the `localStorage`
+  preferences and the "Popup alerts" card are removed. `student_joined` and
+  `roster_conflict` become `NotificationKind`s and go through `notifyMany`
+  like every other kind.
+- The toast is the live rendering of a notification arriving. The stream
+  still carries no data (ADR-005). On the `notifications` hint the client
+  re-reads its inbox and toasts what it had not seen:
+  - the FIRST read after a connect or a reconnect sets the baseline and
+    toasts nothing, so a reload never replays the unread inbox;
+  - after that, each new `(id, createdAt)` pair toasts once. A folded entry
+    keeps its id and refreshes `createdAt` (§e), so it toasts again;
+  - several open tabs each toast. The duplicate is accepted rather than
+    coordinated across tabs;
+  - nothing toasts while the student is in an attempt. The bell still
+    counts it.
+- App off for a kind means no row and no toast (§1: no row a user asked not
+  to see). `useToast()`, the feedback of an action the user just took, is not
+  a notification and is never gated.
+
+### b. Defaults per kind
+
+`DEFAULT_CHANNEL_ENABLED` is `Record<NotificationKind, Record<NotificationChannel,
+boolean>>` in `@quiz/contracts`: a kind without its row is a compile error.
+The table of §5 stays sparse, and a missing row means the kind's own
+default. App is on for every kind. A kind a user must not miss is on by
+e-mail and Teams too. A background-noise kind is **off by e-mail and Teams**,
+and a user who turns it on gets one message per event (the fold of §e is
+the bell's). `notificationKindsFor(role)` still decides which rows of the
+grid a role sees. The three kinds of this ADR keep bell, e-mail and Teams on:
+the change made no difference a user could see.
+
+### c. The kinds
+
+| Role | Kind | App | E-mail / Teams | Trigger |
+|---|---|---|---|---|
+| Student | `results_released` | on | on | unchanged (§6) |
+| Student | `activity_scheduled` | on | on | an EXERCISE is scheduled for the student's classroom |
+| Student | `activity_available` | on | on | an EXERCISE moves to `running` |
+| Student | `deadline_approaching` | on | on | 24 h before `closesAt` (§d) |
+| Student | `results_updated` | on | off | a grade differs from the released one |
+| Teacher | `student_joined` | on | off | a student joined the classroom, folded per classroom |
+| Teacher | `roster_conflict` | on | on | a roster entry needs the teacher's attention |
+| Teacher | `grading_ready` | on | on | automatic grading finished and proposals remain |
+| Teacher | `pool_question_added` | on | off | a colleague published a question in a shared pool, folded per pool |
+| Teacher | `pool_shared`, `pool_ownership` | on | on | unchanged |
+
+- **`activity_scheduled`: exercises only, sent once.** For an exam the
+  students are in the room, and e-mailing a whole class the moment an exam
+  is scheduled would leave the teacher no way to keep it a surprise. It is
+  sent the first time the evaluation is scheduled and never again when it is
+  rescheduled. The payload carries `opensAt`.
+- **`activity_available`: the move to `running`**, by the ticker or by hand,
+  for exercises only. The lobby and `opensAt` are not "open". Polls are
+  excluded: they happen live in the room.
+- **`results_updated`: only when the grade actually differs** from the
+  released one. The only hook, `flagReleasedEvaluationsOf`, runs inside the
+  grading transaction once per validated cell, even when nothing changes.
+  Re-validating twenty cells without changing a grade therefore tells
+  nobody. A change folds into the student's unread entry for that
+  evaluation. The payload carries no grade.
+- **Teacher recipients** are the staff seats of the course (the rows
+  `staffAccess` reads). Admins who hold no seat are not included, and the
+  person who acted is never notified: `roster_conflict` is triggered by the
+  teacher's own import.
+- **`grading_ready`** is sent only when proposals remain to validate. A
+  grading pass that settled everything has nothing to ask for.
+- **`pool_question_added`** goes to the pool's owner and its `contributor`
+  and `owner` shares, never to `reader`s, never to the author.
+- **Payloads carry ids, titles and counts, never a grade, a name or an
+  e-mail** (§6, invariant 4). `student_joined` and `roster_conflict` carry
+  `{ classroomId, classroomName, count }`. Once folded, the names are lost
+  anyway, and the bell opens the roster, where they are. `pool_question_added`
+  carries `{ poolId, poolName, count }`. Each kind has its sentence in `en`
+  and `fr`, in `templates.ts` (e-mail, Teams) and in the web dictionary
+  (bell, toast). This includes the hard-coded English sentence `roster.ts`
+  sent before #198.
+
+### d. `deadline_approaching`: keyed on `closesAt` alone
+
+The reminder does not depend on the timing mode. `duration` and `manual`
+evaluations can carry a `closesAt` too, and the ticker closes them on it.
+A server-side scan (the server owns the clock, invariant 5) sends it to each
+student of the classroom who has not submitted, when all of these hold:
+
+- `now >= closesAt - 24 h`;
+- the evaluation is `running`;
+- `opensAt <= closesAt - 24 h`, so a window shorter than a day (a two-hour
+  exam, a ten-minute exercise) gets no reminder;
+- no sent marker exists for that (evaluation, student).
+
+A late scan, after a restart or a missed tick, therefore catches up, and
+each student gets at most one reminder per evaluation. A `closesAt` moved
+after the reminder was sent does not send it again. Individual extensions
+are ignored. The marker is a table of its own, with its migration. There is
+no per-evaluation setting and no configurable delay.
+
+### e. Aggregation
+
+`student_joined` and `roster_conflict` fold per classroom, and
+`pool_question_added` per pool. The event bumps the recipient's UNREAD
+entry of the same kind and the same classroom or pool, and refreshes its
+`createdAt`, rather than writing a new row. Once that entry is read, the
+next event starts a new one. `results_updated` folds the same way per
+evaluation (§c).
+
+- `notifications` gains a `classroom_id` column, a foreign key that cascades
+  like `pool_id` and `evaluation_id` do.
+- Two races are guarded: two events that both find no unread entry and each
+  insert one, and a fold that bumps an entry the user is marking read at the
+  same moment. The fold is therefore one atomic statement: an insert that
+  conflicts on a unique index over (user, kind, target) limited to unread
+  rows, and updates the count on conflict. It never reads and then writes.
+
+### f. Fan-out, Teams, order of the work
+
+- Fan-out goes through `notifyMany`, which already exists: one query for the
+  preferences, then the jobs of the outbox. It is called after the write it
+  announces has committed, never inline in a delivery. An exercise opening
+  for eighty students is eighty rows and their jobs.
+- Every new Teams `activityType` goes into **one** manifest version bump.
+  Each user has to re-upload the app for a new version, so this must not
+  happen once per kind.
+- The work is split into steps, in this order: the privacy leak of
+  `student_joined` and its hard-coded English (#246); `roster_conflict`
+  actually emitted from every conflict path; the per-kind defaults and this
+  addendum; the App channel and the migration of the two SSE kinds, with the
+  manifest bump; `grading_ready` and `pool_question_added`;
+  `activity_scheduled` and `activity_available`; `deadline_approaching`, with
+  its scan, marker table and migration; `results_updated`, last.
+
+### g. Out of scope
+
+E-mail digests, browser push notifications, muting per course, and
+configurable reminder delays.
