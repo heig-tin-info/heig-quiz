@@ -462,8 +462,18 @@ function ownedPollAccess(userId: string): SQL {
  * pool-delete refusal), not for loading one entity.
  */
 export function managedEvaluationAccess(user: Caller): SQL | undefined {
+  return accessWhere(user, ownEvaluationAccess(user));
+}
+
+/**
+ * {@link managedEvaluationAccess} WITHOUT the admin override: what the
+ * caller manages in their own name — a staff seat, or a poll they own. The
+ * Activities section (#190) lists exactly this, for an admin as for any
+ * teacher: their page is their own work, not the whole platform's.
+ */
+export function ownEvaluationAccess(user: Caller): SQL {
   const course = sql`coalesce(${qualified(evaluations.courseId)}, ${qualified(classrooms.courseId)})`;
-  return accessWhere(user, sql`(${staffAccess(user.id, course)} OR ${ownedPollAccess(user.id)})`);
+  return sql`(${staffAccess(user.id, course)} OR ${ownedPollAccess(user.id)})`;
 }
 
 /**

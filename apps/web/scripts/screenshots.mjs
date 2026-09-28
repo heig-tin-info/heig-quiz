@@ -67,6 +67,12 @@ const ATTEMPT_PAST = "22222222-2222-4222-8222-222222222223";
 const TEMPLATE_INSTANCE = "eeeeeeee-0000-4000-8000-000000000026";
 
 const scenes = [
+  // The Activities section (#190): the three views, the states.
+  { name: "activities", role: "teacher", path: "/activities", act: skipCoach },
+  { name: "activities-cards", role: "teacher", path: "/activities", ls: { "quiz-activities-view": "cards" }, act: skipCoach },
+  { name: "activities-schedule", role: "teacher", path: "/activities", ls: { "quiz-activities-view": "schedule" }, act: skipCoach },
+  { name: "activities-empty", role: "teacher", path: "/activities?empty=1", act: skipCoach },
+  { name: "activities-error", role: "teacher", path: "/activities?fail=1", settle: 2500 },
   // Teacher home (the courses)
   { name: "teacher-home", role: "teacher", path: "/" },
   { name: "teacher-home-empty", role: "teacher", path: "/?empty=1" },

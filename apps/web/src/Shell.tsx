@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import {
+  CalendarRange,
   ChevronDown,
   ClipboardList,
   Eye,
@@ -247,6 +248,13 @@ function Nav({
         {teacherUi ? (
           <>
             <CourseNavTree state={courseNav.state} courses={courses} route={route} navigate={go} />
+            {/* Every activity across the classrooms (#190): a flat page, no tree. */}
+            <NavItem
+              icon={CalendarRange}
+              label={t("nav.activities")}
+              active={section === "activities"}
+              onClick={() => go({ view: "activities" })}
+            />
             <NavItem
               icon={FolderTree}
               label={t("pools.title")}

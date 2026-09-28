@@ -634,3 +634,33 @@ export type TransitionRefusal = z.infer<typeof TransitionRefusal>;
 /** `/evaluations/:id/items/:itemId` */
 export const ItemParam = z.object({ id: z.uuid(), itemId: z.uuid() });
 export type ItemParam = z.infer<typeof ItemParam>;
+
+/**
+ * One row of `GET /activities` (issue #190): an evaluation of a classroom the
+ * caller teaches, or one of their own anonymous polls, as the Activities
+ * section lists it. What it needs to tell "live" (`isLiveNow` in
+ * `@quiz/domain`: `state`, `takeHome`, `opensAt`, `updatedAt`) and to place
+ * the row in a week (`opensAt`, `startedAt`, `closesAt`), and nothing more:
+ * the counts of the classroom list cost a query each and the section does
+ * not show them. No template ever: it is never run.
+ */
+export const ActivitySummary = z.object({
+  id: z.uuid(),
+  title: z.string(),
+  mode: EvaluationMode,
+  state: EvaluationState,
+  /** Null for an anonymous poll, which belongs to no classroom (ADR-014). */
+  classroom: z
+    .object({ id: z.uuid(), name: z.string(), courseCode: z.string() })
+    .nullable(),
+  /** An exercise without a waiting room (`isTakeHome`): never "live". */
+  takeHome: z.boolean(),
+  opensAt: z.iso.datetime().nullable(),
+  closesAt: z.iso.datetime().nullable(),
+  startedAt: z.iso.datetime().nullable(),
+  updatedAt: z.iso.datetime(),
+});
+export type ActivitySummary = z.infer<typeof ActivitySummary>;
+
+export const ActivityList = z.array(ActivitySummary);
+export type ActivityList = z.infer<typeof ActivityList>;
