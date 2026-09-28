@@ -6,7 +6,7 @@
  * other module calls them and never inserts into `notifications` itself, nor
  * enqueues a delivery of its own. For each
  * channel the recipient's preference decides (`notification_preferences`,
- * sparse, defaults of `DEFAULT_CHANNEL_ENABLED`):
+ * sparse, the kind's defaults of `DEFAULT_CHANNEL_ENABLED`):
  *
  *  - the bell: a row, and the refresh hint on the recipient's own topic — the
  *    row without the hint is a notification nobody sees until their reload;
@@ -70,7 +70,7 @@ async function channelsFor(
     const key = `${row.userId}:${row.kind}`;
     moved.set(key, { ...moved.get(key), [row.channel]: row.enabled });
   }
-  return (userId, kind) => ({ ...DEFAULT_CHANNEL_ENABLED, ...moved.get(`${userId}:${kind}`) });
+  return (userId, kind) => ({ ...DEFAULT_CHANNEL_ENABLED[kind], ...moved.get(`${userId}:${kind}`) });
 }
 
 /**
@@ -262,7 +262,7 @@ export async function preferenceMatrix(db: Db, userId: string): Promise<Notifica
     .from(notificationPreferences)
     .where(eq(notificationPreferences.userId, userId));
   const matrix = Object.fromEntries(
-    NOTIFICATION_KINDS.map((kind) => [kind, { ...DEFAULT_CHANNEL_ENABLED }]),
+    NOTIFICATION_KINDS.map((kind) => [kind, { ...DEFAULT_CHANNEL_ENABLED[kind] }]),
   ) as NotificationMatrix;
   for (const row of rows) {
     // A row of a kind or channel that was withdrawn is ignored.

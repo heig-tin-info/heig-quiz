@@ -34,6 +34,7 @@ import type {
   StimulusDetail,
 } from "@quiz/qt-circuit/client";
 import {
+  DEFAULT_CHANNEL_ENABLED,
   NotificationPreferencePut,
   type Notification,
   type NotificationSettings,
@@ -1825,10 +1826,10 @@ on("POST", "/app/api/notifications/read-all", () => {
  * (`teams.ts`), whose endpoint answers below.
  */
 const notificationSettings: NotificationSettings = {
+  // The per-kind defaults, with one toggle moved: pool_shared by e-mail.
   matrix: {
-    results_released: { bell: true, email: true, teams: true },
-    pool_shared: { bell: true, email: false, teams: true },
-    pool_ownership: { bell: true, email: true, teams: true },
+    ...structuredClone(DEFAULT_CHANNEL_ENABLED),
+    pool_shared: { ...DEFAULT_CHANNEL_ENABLED.pool_shared, email: false },
   },
   email: me?.email ?? "",
   teams: { available: true, linkedAt: null, teamsName: null, teamsUsername: null },
