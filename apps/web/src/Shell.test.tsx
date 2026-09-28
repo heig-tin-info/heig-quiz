@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { CourseSummary, PoolDetail, PoolSummary } from "@quiz/contracts";
 
-import { Shell } from "./Shell";
+import { ModeBanner, Shell } from "./Shell";
 import { resetShortcuts, useShortcuts } from "./shortcuts";
 import { modKey } from "./ui";
 import { makeClassroomSummary, makeCourseSummary, makeMe } from "./test/fixtures";
@@ -497,13 +497,45 @@ describe("Shell student view banner", () => {
 
   it("says the teacher is in the student view and offers the way back", async () => {
     const { onToggleStudentView } = renderShell({ studentView: true, teacherUi: false });
-    const line = screen.getByText("You are viewing the portal as a student.");
-    expect(line).toBeVisible();
+    const banner = screen.getByRole("region", { name: "You are viewing the portal as a student." });
+    expect(banner).toBeVisible();
     // Scoped to the banner: the phone top bar carries a switch with the same
     // label, which is the point — the way out is never one surface only.
-    const banner = line.closest("div")!;
     await userEvent.click(within(banner).getByRole("button", { name: "Back to teacher view" }));
     expect(onToggleStudentView).toHaveBeenCalledTimes(1);
+  });
+
+  it("sits above the whole frame, sidebar included, not inside the content column", () => {
+    renderShell({ studentView: true, teacherUi: false });
+    const banner = screen.getByRole("region", { name: "You are viewing the portal as a student." });
+    const sidebar = screen.getByRole("complementary", { name: "Courses and classrooms" });
+    expect(banner.closest("main")).toBeNull();
+    expect(sidebar.contains(banner)).toBe(false);
+    // Before the sidebar in document order, and its frame is handed the
+    // banner's height so the sticky bars under it offset by it.
+    expect(banner.compareDocumentPosition(sidebar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(banner.parentElement!.style.getPropertyValue("--banner-h")).not.toBe("");
+    expect(banner.parentElement!.contains(sidebar)).toBe(true);
+  });
+});
+
+describe("ModeBanner", () => {
+  it("carries any message and any way out", async () => {
+    const onClick = vi.fn();
+    renderWithProviders(
+      <ModeBanner message="Acting as Ada" action={{ label: "End", onClick }}>
+        <p>frame</p>
+      </ModeBanner>,
+    );
+    const banner = screen.getByRole("region", { name: "Acting as Ada" });
+    await userEvent.click(within(banner).getByRole("button", { name: "End" }));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("frame")).toBeVisible();
+  });
+
+  it("draws no button without an action", () => {
+    renderWithProviders(<ModeBanner message="Read only">{null}</ModeBanner>);
+    expect(within(screen.getByRole("region", { name: "Read only" })).queryByRole("button")).toBeNull();
   });
 });
 

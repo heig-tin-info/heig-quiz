@@ -50,6 +50,10 @@
   --shadow-overlay: 0 16px 48px -16px rgb(28 25 20 / 0.28), 0 1px 3px rgb(0 0 0 / 0.06);
   --shadow-popover: 0 10px 32px -12px rgb(28 25 20 / 0.24), 0 1px 2px rgb(0 0 0 / 0.05);
   --shadow-sheet: -12px 0 48px -16px rgb(28 25 20 / 0.3);
+  /* The height a mode banner (`ModeBanner` in Shell.tsx) takes at the top of
+     the window. Zero without one; the banner sets it on the frame it wraps,
+     and every sticky bar and full-height column under it offsets by it. */
+  --banner-h: 0px;
 }
 html.dark {
   --canvas: #131211;

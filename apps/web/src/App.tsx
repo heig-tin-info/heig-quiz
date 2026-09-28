@@ -413,10 +413,7 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
     // The attempt has no frame, and so no Teacher | Student switch: the
     // banner carries the way back, which leaves the attempt open (ADR-018).
     return inStudentView && shown.view === "attempt" ? (
-      <>
-        <StudentViewBanner onLeave={toggleView} />
-        {page}
-      </>
+      <StudentViewBanner onLeave={toggleView}>{page}</StudentViewBanner>
     ) : (
       page
     );
