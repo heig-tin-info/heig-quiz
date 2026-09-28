@@ -36,12 +36,39 @@ export const PoolIcon = z
   .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
   .max(64);
 
+/**
+ * The colour a pool's icon is drawn in (#213). A closed set of NAMES, never a
+ * hex value: each theme resolves a name to its own token, so a pool stays
+ * legible in light and in dark. Grey, the default, is NOT a name: it is null,
+ * the way `icon: null` is the default icon, so it has one spelling only.
+ */
+export const POOL_COLORS = [
+  "red",
+  "orange",
+  "amber",
+  "yellow",
+  "lime",
+  "green",
+  "emerald",
+  "teal",
+  "cyan",
+  "sky",
+  "blue",
+  "indigo",
+  "violet",
+  "purple",
+  "pink",
+] as const;
+export const PoolColor = z.enum(POOL_COLORS);
+export type PoolColor = z.infer<typeof PoolColor>;
+
 // --- Pools ---------------------------------------------------------------
 
 export const Pool = z.object({
   id: z.uuid(),
   name: z.string(),
   icon: PoolIcon.nullable(),
+  color: PoolColor.nullable(),
   visibility: PoolVisibility,
   ownerId: z.uuid(),
   isPersonal: z.boolean(),
@@ -64,6 +91,7 @@ export type PoolSummary = z.infer<typeof PoolSummary>;
 export const PoolCreate = z.object({
   name: z.string().trim().min(1).max(200),
   icon: PoolIcon.nullable().optional(),
+  color: PoolColor.nullable().optional(),
   visibility: PoolVisibility.default("private"),
 });
 export type PoolCreate = z.infer<typeof PoolCreate>;
@@ -72,6 +100,7 @@ export const PoolPatch = z
   .object({
     name: z.string().trim().min(1).max(200).optional(),
     icon: PoolIcon.nullable().optional(),
+    color: PoolColor.nullable().optional(),
     visibility: PoolVisibility.optional(),
   })
   .refine((b) => Object.keys(b).length > 0, { message: "Nothing to update" });

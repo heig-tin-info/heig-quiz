@@ -2,6 +2,8 @@ import { iconNames, type IconName } from "lucide-react/dynamic";
 import { useMemo, useState } from "react";
 import aliases from "virtual:lucide-aliases";
 
+import type { PoolColor } from "@quiz/contracts";
+
 import { fuzzyFilter } from "../fuzzy";
 import { useT } from "../i18n";
 import { SearchInput } from "../ui";
@@ -38,9 +40,11 @@ export function searchIcons(query: string, limit = ICON_SEARCH_LIMIT): IconName[
 
 export default function IconCatalogue({
   value,
+  color,
   onPick,
 }: {
   value: string | null;
+  color: PoolColor | null;
   onPick: (icon: string) => void;
 }) {
   const t = useT();
@@ -71,6 +75,7 @@ export default function IconCatalogue({
                 key={name}
                 label={name}
                 icon={name}
+                color={color}
                 selected={selected === name}
                 onPick={() => onPick(name)}
               />

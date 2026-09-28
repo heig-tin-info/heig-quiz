@@ -16,6 +16,7 @@ const POOL: PoolSummary = {
   id: "p1",
   name: "Programmation C",
   icon: "code",
+  color: null,
   visibility: "shared",
   ownerId: "u-me",
   isPersonal: false,

@@ -365,9 +365,9 @@ const scenes = [
 
   // Pools, the question editors and the try panel (WP7). The mock question
   // ids are stable: q1 code, q2 mcq, q3 short, q4 cloze.
-  { name: "pools", role: "teacher", path: "/pools" },
+  { name: "pools", role: "teacher", path: "/pools", act: skipCoach },
   { name: "pools-admin-all", role: "admin", path: "/pools", act: (p) => p.getByRole("switch", { name: /other teachers/i }).click() },
-  { name: "pools-list", role: "teacher", path: "/pools", ls: { "quiz-pools-view": "list" } },
+  { name: "pools-list", role: "teacher", path: "/pools", ls: { "quiz-pools-view": "list" }, act: skipCoach },
   { name: "pools-empty", role: "teacher", path: "/pools?empty=1" },
   { name: "pools-error", role: "teacher", path: "/pools?fail=1", settle: 2500 },
   // The icon picker, reached the way a teacher reaches it: the New pool form
@@ -379,6 +379,18 @@ const scenes = [
       await p.getByRole("button", { name: /^(change the icon|changer l'icône)$/i }).first().click();
       // The click leaves the pointer over whichever icon took that spot, and
       // its tooltip then sits in the middle of the grid.
+      await p.mouse.move(0, 0);
+    } },
+  // #213: the same step with a colour picked — the swatch ringed, every tile
+  // previewing its icon in it.
+  { name: "pools-icon-color", role: "teacher", path: "/pools", fold: true, act: async (p) => {
+      await p.getByRole("button", { name: /^(new pool|nouvelle banque)$/i }).first().click();
+      await p.waitForTimeout(300);
+      await p.getByRole("button", { name: /^(change the icon|changer l'icône)$/i }).first().click();
+      await p.waitForTimeout(300);
+      // The radio is visually hidden: its swatch (the label) takes the click.
+      await p.getByRole("radio", { name: /^(teal|sarcelle)$/i }).locator("..").click();
+      await p.waitForTimeout(300);
       await p.mouse.move(0, 0);
     } },
   { name: "pool-share", role: "teacher", path: "/pools", fold: true, act: async (p) => {

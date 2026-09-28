@@ -588,6 +588,7 @@ function ensurePersonalPool() {
       id: "p0",
       name: "Polls",
       icon: "message-circle-question",
+      color: null,
       visibility: "private",
       ownerId: "u-me",
       isPersonal: true,

@@ -1,4 +1,5 @@
 /** Section 2 of the mock — see `index.ts` for the layout. */
+import { PoolColor } from "@quiz/contracts";
 import {
   clozeStudentTemplate,
   describeBlank,
@@ -104,6 +105,8 @@ interface MockPool {
   name: string;
   /** A lucide icon name (`poolIcons.ts`), or null for the default. */
   icon: string | null;
+  /** A `PoolColor` name (#213), or null for grey, the default. */
+  color: PoolColor | null;
   visibility: "private" | "shared" | "public";
   ownerId: string;
   isPersonal: boolean;
@@ -136,13 +139,13 @@ interface MockCategory {
  * owner's name, the role and the "Leave" item of the menu are ever on screen.
  */
 export const pools: MockPool[] = [
-  { id: "p1", name: "Programmation C", icon: "code", visibility: "shared", ownerId: "u-me", isPersonal: false, createdAt: iso(-300 * D), updatedAt: iso(-2 * H) },
-  { id: "p2", name: "Systèmes embarqués", icon: "cpu", visibility: "public", ownerId: "u-me", isPersonal: false, createdAt: iso(-120 * D), updatedAt: iso(-6 * D) },
-  { id: "p3", name: "Électronique analogique", icon: "circuit-board", visibility: "shared", ownerId: "t1", isPersonal: false, createdAt: iso(-60 * D), updatedAt: iso(-30 * 60_000) },
+  { id: "p1", name: "Programmation C", icon: "code", color: "blue", visibility: "shared", ownerId: "u-me", isPersonal: false, createdAt: iso(-300 * D), updatedAt: iso(-2 * H) },
+  { id: "p2", name: "Systèmes embarqués", icon: "cpu", color: "teal", visibility: "public", ownerId: "u-me", isPersonal: false, createdAt: iso(-120 * D), updatedAt: iso(-6 * D) },
+  { id: "p3", name: "Électronique analogique", icon: "circuit-board", color: null, visibility: "shared", ownerId: "t1", isPersonal: false, createdAt: iso(-60 * D), updatedAt: iso(-30 * 60_000) },
   // The personal pool (F-POOL-01): created by the first "Keep this
   // question" after a poll (ADR-014, addenda item 6); the launcher's "Pick a
   // question" tab lists it and nothing else.
-  { id: "p0", name: "Polls", icon: "message-circle-question", visibility: "private", ownerId: "u-me", isPersonal: true, createdAt: iso(-20 * D), updatedAt: iso(-2 * D) },
+  { id: "p0", name: "Polls", icon: "message-circle-question", color: null, visibility: "private", ownerId: "u-me", isPersonal: true, createdAt: iso(-20 * D), updatedAt: iso(-2 * D) },
 ];
 
 const ADA = { userId: "t1", email: "ada.lovelace@heig-vd.ch", givenName: "Ada", familyName: "Lovelace" };
@@ -1669,11 +1672,15 @@ on("GET", "/app/api/pools", (_m, _b, url) =>
     )
     .map(poolSummary),
 );
+/** A colour the real API would accept, or grey. */
+const poolColor = (value: unknown): PoolColor | null => PoolColor.safeParse(value).data ?? null;
+
 on("POST", "/app/api/pools", (_m, body) => {
   const pool: MockPool = {
     id: nextId("p"),
     name: String(body.name),
     icon: typeof body.icon === "string" ? body.icon : null,
+    color: poolColor(body.color),
     visibility: "private",
     ownerId: "u-me",
     isPersonal: false,
@@ -1700,6 +1707,7 @@ on("PATCH", "/app/api/pools/:id", (m, body) => {
   // `icon: null` is a real value (the default icon), so the key being THERE
   // is what decides, not its truthiness.
   if ("icon" in body) pool.icon = typeof body.icon === "string" ? body.icon : null;
+  if ("color" in body) pool.color = poolColor(body.color);
   if (typeof body.visibility === "string") {
     pool.visibility = body.visibility as MockPool["visibility"];
   }

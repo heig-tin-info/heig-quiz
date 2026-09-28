@@ -641,10 +641,53 @@ live in `ui/state.ts`, each written once.
   window: "more" is the same decision seen wider.
   Picking IS the action, so the dialog has no primary button; the footer only
   changes step. A tile is a value you switch on and wears the `ToggleChip`
-  language (hairline at rest, `accent-soft` on an `accent` border when it is
-  the current one). A tile's label is the RAW lucide name (`flask-conical`),
+  language at rest (a hairline), but its pressed state is an INK ring — `fg`
+  border plus a 1 px `fg` ring on `surface-2` — and not the accent: the tile
+  draws its icon in the pool's colour, and a red border around a red icon
+  says nothing. A tile's label is the RAW lucide name (`flask-conical`),
   untranslated on purpose: it is an identifier, like a SHA or a tag, and in
   the search step it is the very string the reader typed.
+- Pool colour (#213): the colour of the ICON, and of nothing else — never
+  the card, the name or a page header. Grey is the default and is `null`,
+  like the default icon, so a pool nobody coloured looks as it always did
+  (the call site's `fg-muted` / `fg-faint`). The fifteen others are a closed
+  set of NAMES (`PoolColor` in `@quiz/contracts`), each a `--pool-<name>`
+  token swapped under `html.dark`, never a stored hex, and set INLINE
+  (`color: var(--pool-teal)`) — it then wins over the call site's grey ink
+  without a class map for Tailwind to find. Decoration only
+  (N-A11Y-03): the name and the icon stay the identifiers. The colours come
+  first in the icon picker, as a row of round swatches — native radios, so
+  the arrow keys walk the row and Tab leaves it in one step, each named in
+  both languages — and every tile previews its icon in the colour being
+  chosen; no second button appears. The
+  chosen swatch is ringed in ink with a 2 px `surface` offset, and the
+  focused one outlined in ink too, for the same reason as the tile. The
+  colour is set in the form like the icon: a swatch changes it at once, so a
+  colour alone is picked and saved without touching the icon. Held to 3:1 (a graphic object) on `surface` and on
+  `surface-2`, the card's icon well. The values are hand-picked, not a
+  palette's one shade: at 20 px the stock 600/700 shades gave near-twins
+  (amber and yellow both brown, violet and purple at a CIE94 ΔE of 3), so each
+  neighbour is pulled apart in hue AND lightness — no two colours closer than
+  ΔE94 9.7 in light, 9.0 in dark — the yellow is a saturated gold that still
+  holds 3:1, and the three blues step down in lightness (sky, blue, indigo):
+
+  | Colour | Light | on `surface` / `surface-2` | Dark | on `surface` / `surface-2` |
+  | --- | --- | --- | --- | --- |
+  | red | `#d42424` | 5.15 / 4.57 | `#f87171` | 6.29 / 5.75 |
+  | orange | `#e05a00` | 3.73 / 3.31 | `#fb923c` | 7.68 / 7.02 |
+  | amber | `#b87000` | 3.92 / 3.48 | `#f5b000` | 9.19 / 8.40 |
+  | yellow | `#9e8800` | 3.51 / 3.12 | `#ede04a` | 12.72 / 11.63 |
+  | lime | `#5a8c00` | 4.05 / 3.59 | `#a3e635` | 11.53 / 10.54 |
+  | green | `#1f8a3a` | 4.42 / 3.92 | `#5ccf5c` | 8.72 / 7.97 |
+  | emerald | `#00876a` | 4.49 / 3.98 | `#34d399` | 9.05 / 8.27 |
+  | teal | `#00868e` | 4.37 / 3.88 | `#2dd4bf` | 9.34 / 8.54 |
+  | cyan | `#0086b3` | 4.15 / 3.68 | `#22d3ee` | 9.62 / 8.80 |
+  | sky | `#2f7fe6` | 3.96 / 3.51 | `#38bdf8` | 8.12 / 7.42 |
+  | blue | `#2244cc` | 7.59 / 6.73 | `#5b8dfa` | 5.49 / 5.02 |
+  | indigo | `#3f2a9e` | 10.31 / 9.14 | `#8f7cf0` | 5.22 / 4.78 |
+  | violet | `#8a3ce6` | 5.43 / 4.81 | `#c490f0` | 7.12 / 6.51 |
+  | purple | `#b0209e` | 5.92 / 5.25 | `#e070d8` | 6.19 / 5.66 |
+  | pink | `#e0306e` | 4.36 / 3.86 | `#f472b6` | 6.57 / 6.00 |
 - Kbd: a key cap for the places that teach a shortcut — 6 px radius, hairline,
   `surface-2`, 11 px / 500 in `fg-muted`, 6 px horizontal padding. `font-sans`,
   not mono: the mono face is reserved for SHAs, repository names and what a

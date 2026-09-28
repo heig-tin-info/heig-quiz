@@ -47,6 +47,26 @@
      `info-soft`, 5.98:1 on `surface`. */
   --info: #1268a0;
   --info-soft: #e8f2f9;
+  /* The colours a pool's icon may wear (#213), one per `PoolColor` name.
+     Decoration only (N-A11Y-03): the name stays the identifier. Each is held
+     to 3:1 on `surface` AND on `surface-2` (the card's icon well), the bar of
+     a graphic object, and pulled apart in hue AND lightness so no two read
+     as one at 20 px; DESIGN.md has the measured table. */
+  --pool-red: #d42424;
+  --pool-orange: #e05a00;
+  --pool-amber: #b87000;
+  --pool-yellow: #9e8800;
+  --pool-lime: #5a8c00;
+  --pool-green: #1f8a3a;
+  --pool-emerald: #00876a;
+  --pool-teal: #00868e;
+  --pool-cyan: #0086b3;
+  --pool-sky: #2f7fe6;
+  --pool-blue: #2244cc;
+  --pool-indigo: #3f2a9e;
+  --pool-violet: #8a3ce6;
+  --pool-purple: #b0209e;
+  --pool-pink: #e0306e;
   --shadow-overlay: 0 16px 48px -16px rgb(28 25 20 / 0.28), 0 1px 3px rgb(0 0 0 / 0.06);
   --shadow-popover: 0 10px 32px -12px rgb(28 25 20 / 0.24), 0 1px 2px rgb(0 0 0 / 0.05);
   --shadow-sheet: -12px 0 48px -16px rgb(28 25 20 / 0.3);
@@ -79,6 +99,22 @@ html.dark {
   /* 5.39:1 on `info-soft` over `surface`, 6.76:1 on `surface`. */
   --info: #58a9e0;
   --info-soft: rgb(88 169 224 / 0.14);
+  /* The same fifteen, lifted for the dark surfaces (≥ 4.7:1 on both). */
+  --pool-red: #f87171;
+  --pool-orange: #fb923c;
+  --pool-amber: #f5b000;
+  --pool-yellow: #ede04a;
+  --pool-lime: #a3e635;
+  --pool-green: #5ccf5c;
+  --pool-emerald: #34d399;
+  --pool-teal: #2dd4bf;
+  --pool-cyan: #22d3ee;
+  --pool-sky: #38bdf8;
+  --pool-blue: #5b8dfa;
+  --pool-indigo: #8f7cf0;
+  --pool-violet: #c490f0;
+  --pool-purple: #e070d8;
+  --pool-pink: #f472b6;
   --shadow-overlay: 0 16px 48px -16px rgb(0 0 0 / 0.7), 0 1px 3px rgb(0 0 0 / 0.4);
   --shadow-popover: 0 10px 32px -12px rgb(0 0 0 / 0.65), 0 1px 2px rgb(0 0 0 / 0.4);
   --shadow-sheet: -12px 0 48px -16px rgb(0 0 0 / 0.7);
