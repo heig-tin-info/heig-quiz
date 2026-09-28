@@ -9,22 +9,28 @@ import {
   Pencil,
   Trash2,
   UserRoundX,
+  VenetianMask,
   X,
 } from "lucide-react";
 import { Fragment, useState } from "react";
 
-import type { RosterEntry } from "@quiz/contracts";
+import type { ImpersonationLink, RosterEntry } from "@quiz/contracts";
 
 import { api, ApiError, apiErrorMessage } from "./api";
 import { useConfirm } from "./confirm";
 import { useT } from "./i18n";
+import { CopyField } from "./ApiTokensCard";
+import { useErrorToast } from "./notify";
 import {
+  Alert,
   Badge,
+  Button,
   cx,
   IconButton,
   inputClass,
   inputSize,
   Menu,
+  Modal,
   PersonAvatar,
   RelativeTime,
   T,
@@ -34,7 +40,15 @@ import {
 } from "./ui";
 import { classroomKey } from "./queryKeys";
 
-function Row({ classroomId, entry }: { classroomId: string; entry: RosterEntry }) {
+function Row({
+  classroomId,
+  entry,
+  canImpersonate,
+}: {
+  classroomId: string;
+  entry: RosterEntry;
+  canImpersonate: boolean;
+}) {
   const t = useT();
   const qc = useQueryClient();
   const confirm = useConfirm();
@@ -72,6 +86,16 @@ function Row({ classroomId, entry }: { classroomId: string; entry: RosterEntry }
   const remove = useMutation({
     mutationFn: () => api(base, { method: "DELETE" }),
     onSuccess: invalidate,
+  });
+  // ADR-034: an admin gets a one-time link that opens a session as this
+  // student — to paste into a PRIVATE window, since a session is one cookie
+  // for the whole site and opening it here would replace the admin's own.
+  // Shown in a dialog with its copy button: a clipboard write after the
+  // request's `await` is refused by Safari, a click on the button is not.
+  const toastError = useErrorToast();
+  const impersonate = useMutation({
+    mutationFn: () => api<ImpersonationLink>(`${base}/impersonation`, { method: "POST" }),
+    onError: toastError("roster.impersonateFailed"),
   });
 
   if (editing) {
@@ -153,7 +177,7 @@ function Row({ classroomId, entry }: { classroomId: string; entry: RosterEntry }
     );
   }
 
-  const busy = unclaim.isPending || remove.isPending;
+  const busy = unclaim.isPending || remove.isPending || impersonate.isPending;
 
   // A failed action from the row menu: one line under the row it came from.
   const failure = unclaim.isError
@@ -225,6 +249,16 @@ function Row({ classroomId, entry }: { classroomId: string; entry: RosterEntry }
             label={t("roster.rowActions", { name: fullName })}
             items={[
               { label: t("common.edit"), icon: Pencil, onSelect: () => setEditing(true) },
+              ...(canImpersonate && entry.status === "claimed" && !entry.staff
+                ? [
+                    {
+                      label: t("roster.impersonate"),
+                      icon: VenetianMask,
+                      disabled: impersonate.isPending,
+                      onSelect: () => impersonate.mutate(),
+                    },
+                  ]
+                : []),
               ...(entry.status === "claimed" || entry.conflictFlag
                 ? [
                     {
@@ -277,6 +311,20 @@ function Row({ classroomId, entry }: { classroomId: string; entry: RosterEntry }
           </td>
         </tr>
       ) : null}
+      {impersonate.data ? (
+        <Modal
+          title={t("roster.impersonateTitle", { name: fullName })}
+          onClose={() => impersonate.reset()}
+          footer={<Button onClick={() => impersonate.reset()}>{t("common.done")}</Button>}
+        >
+          <div className="space-y-4">
+            <Alert tone="warning" icon={VenetianMask}>
+              {t("roster.impersonateBody")}
+            </Alert>
+            <CopyField label={t("roster.impersonateLink")} value={impersonate.data.url} />
+          </div>
+        </Modal>
+      ) : null}
     </Fragment>
   );
 }
@@ -286,9 +334,12 @@ type SortKey = "nom" | "prenom" | "email" | "status" | "timeBonusPercent" | "las
 export function RosterTable({
   classroomId,
   roster,
+  canImpersonate = false,
 }: {
   classroomId: string;
   roster: RosterEntry[];
+  /** An admin: each claimed student row offers a link to act as them (ADR-034). */
+  canImpersonate?: boolean;
 }) {
   const t = useT();
   const { sorted, sort, toggle } = useSortableTable<RosterEntry, SortKey>(
@@ -328,7 +379,7 @@ export function RosterTable({
         <TableHead columns={columns} sort={sort} onToggle={toggle} />
         <tbody>
           {sorted.map((r) => (
-            <Row key={r.id} classroomId={classroomId} entry={r} />
+            <Row key={r.id} classroomId={classroomId} entry={r} canImpersonate={canImpersonate} />
           ))}
         </tbody>
       </table>

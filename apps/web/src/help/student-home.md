@@ -19,3 +19,10 @@ registered at the identity provider) the address your teacher used.
 
 If an accommodation was granted to you, the card shows it. It applies
 automatically to every timed evaluation of that classroom.
+
+## Who else can see this page
+
+To help you with a problem you report, an administrator of the platform can
+open a view of your account as you see it. It lasts at most an hour, it
+cannot answer or submit anything in your place, and each one is recorded in
+the audit log under the administrator's name.

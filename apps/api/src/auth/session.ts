@@ -5,10 +5,11 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 
-import { eq, lt } from "drizzle-orm";
+import { eq, lt, type SQL } from "drizzle-orm";
 
 import type { SessionKind } from "@quiz/contracts";
 
+import { audit } from "../audit.js";
 import type { Db } from "../db/client.js";
 import { sessions, users } from "../db/schema.js";
 
@@ -27,7 +28,8 @@ export function newToken(): string {
 /**
  * What a session is, as the rest of the API sees it (ADR-027); modules read
  * this, never the columns. `actorUserId` is null when the user acts for
- * themself; `evaluationId` is set on a `seb` session only.
+ * themself (set on an `impersonation` session, ADR-034); `evaluationId` is
+ * set on a `seb` session only.
  */
 export interface SessionAuth {
   kind: SessionKind;
@@ -38,13 +40,32 @@ export interface SessionAuth {
 export const PORTAL: SessionAuth = { kind: "portal", actorUserId: null, evaluationId: null };
 
 /**
- * The lifetime of each kind: fixed hours, never renewed — or null for
- * SESSION_TTL_HOURS with sliding renewal. A `seb` session outlives any sitting.
+ * THE predicate for "somebody else acts through this session" (ADR-034):
+ * read-only outside development, never a body in the room, never a `.seb`.
+ * Every site that treats a delegated session apart asks this, not the kind.
  */
-const FIXED_HOURS: Record<SessionKind, number | null> = { portal: null, seb: 6 };
+export const delegated = (auth: Pick<SessionAuth, "actorUserId"> | null): boolean =>
+  (auth?.actorUserId ?? null) !== null;
+
+/**
+ * The lifetime of each kind: fixed hours, never renewed — or null for
+ * SESSION_TTL_HOURS with sliding renewal. A `seb` session outlives any sitting;
+ * an `impersonation` one is an hour of looking over a student's shoulder (ADR-034).
+ */
+const FIXED_HOURS: Record<SessionKind, number | null> = { portal: null, seb: 6, impersonation: 1 };
 
 /** The route config of the routes a `seb` session may call: sitting its evaluation. */
 export const SITTING = { sessions: ["portal", "seb"] } as const;
+
+/**
+ * Whether a route declaring `routeKinds` (absent: `portal` only) serves a
+ * session of `kind`. An `impersonation` session is the student's portal, seen
+ * by somebody else (ADR-034): it reaches the `portal` routes, and whether it
+ * may WRITE through them is the read-only rule of `plugin.ts`, not this.
+ */
+export function serves(routeKinds: readonly SessionKind[] | undefined, kind: SessionKind): boolean {
+  return (routeKinds ?? ["portal"]).includes(kind === "impersonation" ? "portal" : kind);
+}
 
 export async function createSession(
   db: Db,
@@ -75,8 +96,21 @@ export async function findSessionUser(db: Db, token: string, opts?: { renewTtlHo
   const row = rows[0];
   if (!row) return null;
   if (row.expiresAt.getTime() <= Date.now()) {
-    await db.delete(sessions).where(eq(sessions.sidHash, row.sidHash));
+    await dropSessions(db, eq(sessions.sidHash, row.sidHash), "expired");
     return null;
+  }
+  // The right to act as somebody is the actor's role, read on every request:
+  // an admin demoted mid-hour loses the session at once (ADR-034).
+  if (delegated(row.auth)) {
+    const [actor] = await db
+      .select({ role: users.role })
+      .from(users)
+      .where(eq(users.id, row.auth.actorUserId!))
+      .limit(1);
+    if (actor?.role !== "admin") {
+      await dropSessions(db, eq(sessions.sidHash, row.sidHash), "revoked");
+      return null;
+    }
   }
   // Sliding renewal: once less than half the TTL remains, push the expiry
   // back to a full TTL. Active users stay signed in indefinitely; an idle
@@ -95,11 +129,41 @@ export async function findSessionUser(db: Db, token: string, opts?: { renewTtlHo
   return { user: row.user, auth: row.auth, renewedTo };
 }
 
+/**
+ * THE way a session row goes, and the one owner of what the audit says about
+ * it. Signing out writes `auth.logout` — or, for a delegated session,
+ * `impersonation.ended`, the admin as actor and the student as subject: the
+ * student signed out of nothing (ADR-034). A delegated session that expires
+ * or loses its actor's right is ended by the system, the admin named in the
+ * payload. An ordinary session that expires leaves nothing, as before.
+ */
+async function dropSessions(db: Db, where: SQL, reason: "logout" | "expired" | "revoked") {
+  const gone = await db
+    .delete(sessions)
+    .where(where)
+    .returning({ userId: sessions.userId, actorUserId: sessions.actorUserId });
+  for (const session of gone) {
+    const subject = { subjectType: "user", subjectId: session.userId } as const;
+    if (delegated(session)) {
+      const byActor = reason === "logout";
+      await audit(db, {
+        actorUserId: byActor ? session.actorUserId : null,
+        actorType: byActor ? "user" : "system",
+        action: "impersonation.ended",
+        ...subject,
+        payload: byActor ? { reason } : { reason, actorUserId: session.actorUserId },
+      });
+    } else if (reason === "logout") {
+      await audit(db, { actorUserId: session.userId, actorType: "user", action: "auth.logout", ...subject });
+    }
+  }
+}
+
 export async function deleteSession(db: Db, token: string) {
-  await db.delete(sessions).where(eq(sessions.sidHash, hashToken(token)));
+  await dropSessions(db, eq(sessions.sidHash, hashToken(token)), "logout");
 }
 
 /** Purge of expired sessions, run by the ticker (`ticker.ts`). */
 export async function purgeExpiredSessions(db: Db) {
-  await db.delete(sessions).where(lt(sessions.expiresAt, new Date()));
+  await dropSessions(db, lt(sessions.expiresAt, new Date()), "expired");
 }

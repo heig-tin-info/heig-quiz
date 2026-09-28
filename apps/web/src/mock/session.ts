@@ -36,6 +36,9 @@ export let me: Me | null = {
   dateFormat: null,
   mcqPolicy: null,
   coach: { enabled: null, seen: [] },
+  ...(flags.impersonating
+    ? { session: { kind: "impersonation", evaluationId: null, readOnly: true } }
+    : {}),
 };
 
 /**

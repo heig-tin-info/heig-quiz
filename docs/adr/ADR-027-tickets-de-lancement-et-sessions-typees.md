@@ -104,6 +104,14 @@ session, and `tracer` writes the actor. That is what a teacher
 acting as a student would need; nothing else of it exists, and its policy is
 an open question (06, row 24).
 
+*Built by ADR-034 (2026-09-28, #201):* an admin, never a teacher in v1,
+opens an `impersonation` session of a student from a one-time link pasted
+into a private window — one hour, fixed; read-only in production by one rule
+in the session hook, full write in development; never present in the room;
+`impersonation.started`/`ended` in the audit. Tickets are now consumed by
+kind, and revoked by `(user, actor, kind, evaluation)` with `IS NULL` for a
+null column.
+
 ## Consequences
 
 - A `seb` session reaches: `GET /me`, entering its evaluation, the routes of

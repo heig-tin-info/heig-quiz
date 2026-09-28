@@ -80,6 +80,7 @@ nav = [
       { "ADR-030 Notification channels" = "adr/ADR-030-canaux-de-notification.md" },
       { "ADR-031 Evaluation templates" = "adr/ADR-031-modeles-d-evaluation.md" },
       { "ADR-032 Per-user course preferences" = "adr/ADR-032-preferences-de-cours-par-utilisateur.md" },
+      { "ADR-034 Acting as a student" = "adr/ADR-034-agir-en-tant-qu-etudiant.md" },
     ] },
     { "Archive" = [
       { "MVP plan (phase 1)" = "PLAN-MVP.md" },

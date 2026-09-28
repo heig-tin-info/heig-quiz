@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { RosterTable } from "./RosterTable";
 import { makeRosterEntry } from "./test/fixtures";
-import { renderWithProviders } from "./test/render";
+import { mockFetch, ok, renderWithProviders } from "./test/render";
 
 /*
  * The roster rows. Revoking a claim and removing a student are the two
@@ -78,5 +78,32 @@ describe("RosterTable pending actions", () => {
       within(await openRowMenu()).getByRole("menuitem", { name: "Remove from roster" }),
     ).toBeDisabled();
     expect(urls).toHaveLength(1);
+  });
+});
+
+describe("RosterTable impersonation link (ADR-034)", () => {
+  it("is offered to an admin only, on a claimed student seat, and shown to copy", async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    const { calls } = mockFetch({
+      "POST /app/api/classrooms/c1/roster/e-1/impersonation": ok({ url: "https://quiz.test/app/auth/as/s3cr3t" }),
+    });
+    const { unmount } = renderWithProviders(<RosterTable classroomId="c1" roster={[makeRosterEntry()]} />);
+    expect(within(await openRowMenu()).queryByRole("menuitem", { name: "Copy link as this student" })).toBeNull();
+    unmount();
+
+    renderWithProviders(<RosterTable classroomId="c1" roster={[makeRosterEntry()]} canImpersonate />);
+    await userEvent.click(
+      within(await openRowMenu()).getByRole("menuitem", { name: "Copy link as this student" }),
+    );
+    // In a dialog, copied by a click of its own: Safari refuses a clipboard
+    // write that follows the request's await.
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByRole("textbox", { name: "One-time link" })).toHaveValue(
+      "https://quiz.test/app/auth/as/s3cr3t",
+    );
+    await userEvent.click(within(dialog).getByRole("button", { name: /^Copy/ }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith("https://quiz.test/app/auth/as/s3cr3t"));
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
   });
 });

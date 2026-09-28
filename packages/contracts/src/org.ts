@@ -7,6 +7,10 @@
  */
 import { z } from "zod";
 
+/** One roster entry of one classroom: `/classrooms/:id/roster/:eid`. */
+export const RosterEntryParams = z.object({ id: z.uuid(), eid: z.uuid() });
+export type RosterEntryParams = z.infer<typeof RosterEntryParams>;
+
 /** A course: the unit a staff, a pool and a set of classrooms hang off. */
 export const CourseCreate = z.object({
   name: z.string().min(1).max(200),

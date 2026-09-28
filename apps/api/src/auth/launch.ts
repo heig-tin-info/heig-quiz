@@ -6,7 +6,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, type AnyColumn } from "drizzle-orm";
 
 import type { SessionKind } from "@quiz/contracts";
 
@@ -22,14 +22,21 @@ interface LaunchTicket {
   /** Who acts through the session, when not the user themself (as on `sessions`). */
   actorUserId: string | null;
   /** The session it opens; a `portal` one is never launched. */
-  kind: Exclude<SessionKind, "portal">;
-  evaluationId: string;
+  kind: LaunchKind;
+  /** The evaluation a `seb` session is confined to; null for any other kind. */
+  evaluationId: string | null;
 }
+
+type LaunchKind = Exclude<SessionKind, "portal">;
+
+/** `column = value`, where a null value means IS NULL (SQL's `= NULL` matches nothing). */
+const same = (column: AnyColumn, value: string | null) =>
+  value === null ? isNull(column) : eq(column, value);
 
 /**
  * Issues a ticket and returns its plaintext secret. The earlier unconsumed
- * tickets of the same user, kind and evaluation are revoked first: one file
- * in circulation at a time.
+ * tickets of the same user, actor, kind and evaluation are revoked first: one
+ * file, or one link, in circulation at a time.
  */
 export async function issueLaunchTicket(db: Db, ticket: LaunchTicket, now: Date): Promise<string> {
   const secret = newToken();
@@ -40,8 +47,9 @@ export async function issueLaunchTicket(db: Db, ticket: LaunchTicket, now: Date)
       .where(
         and(
           eq(launchTickets.userId, ticket.userId),
+          same(launchTickets.actorUserId, ticket.actorUserId),
           eq(launchTickets.kind, ticket.kind),
-          eq(launchTickets.evaluationId, ticket.evaluationId),
+          same(launchTickets.evaluationId, ticket.evaluationId),
           isNull(launchTickets.consumedAt),
           isNull(launchTickets.revokedAt),
         ),
@@ -61,12 +69,15 @@ export async function issueLaunchTicket(db: Db, ticket: LaunchTicket, now: Date)
 }
 
 /**
- * Consumes a ticket: ONE conditional UPDATE, so of two concurrent requests
- * exactly one gets the row. Null for an unknown, expired, revoked or already
- * consumed secret — the caller cannot tell which, and does not need to.
+ * Consumes a ticket of `kind`: ONE conditional UPDATE, so of two concurrent
+ * requests exactly one gets the row. Null for an unknown, expired, revoked or
+ * already consumed secret, or one of another kind (a `.seb` secret opens no
+ * impersonation, and the reverse) — the caller cannot tell which, and does
+ * not need to.
  */
 export async function consumeLaunchTicket(
   db: Db,
+  kind: LaunchKind,
   secret: string,
   now: Date,
 ): Promise<{ id: string; userId: string; auth: SessionAuth } | null> {
@@ -76,6 +87,7 @@ export async function consumeLaunchTicket(
     .where(
       and(
         eq(launchTickets.secretHash, hashToken(secret)),
+        eq(launchTickets.kind, kind),
         isNull(launchTickets.consumedAt),
         isNull(launchTickets.revokedAt),
         gt(launchTickets.expiresAt, now),

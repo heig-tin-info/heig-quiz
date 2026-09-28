@@ -28,7 +28,7 @@ import { WatchSubject, isStaffOnly, type ServerEvent } from "@quiz/contracts";
 import { iso } from "../../clock.js";
 import { classrooms, courses, enrollments, evaluations, pools } from "../../db/schema.js";
 import { subscribe, type BusMessage } from "../../events.js";
-import { SITTING } from "../../auth/session.js";
+import { SITTING, delegated } from "../../auth/session.js";
 import { accessWhere, findReachableEvaluation, poolAccess, sitRefusal, staffAccess } from "../guards.js";
 import * as live from "../live/service.js";
 import * as bus from "./bus.js";
@@ -393,7 +393,9 @@ export async function realtimePlugin(app: FastifyInstance) {
       }
       watch = resolved.watch;
       staff = resolved.staff;
-      participant = resolved.participant;
+      // Somebody acting as the student is not the student in the room: the
+      // dashboard must not show them present (ADR-034).
+      participant = resolved.participant && !delegated(req.auth);
     }
 
     const topics = await topicsOf(app, req);

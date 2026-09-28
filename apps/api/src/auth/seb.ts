@@ -22,6 +22,7 @@ import type { AppConfig } from "../config.js";
 import { users } from "../db/schema.js";
 import { sebSeat } from "../modules/live/service.js";
 import { consumeLaunchTicket, issueLaunchTicket } from "./launch.js";
+import { delegated } from "./session.js";
 
 /**
  * Where the `.seb` starts; the ticket secret is the last segment, which the
@@ -157,7 +158,10 @@ export async function sebRoutes(app: FastifyInstance, config: AppConfig) {
     { preHandler: (req, reply) => app.requireSession(req, reply) },
     async (req, reply) => {
       const params = IdParam.safeParse(req.params);
-      const evaluation = params.success && (await sebSeat(app.db, req.user!.id, params.data.id));
+      // Nobody acting as a student mints the student's `.seb` (ADR-034):
+      // a SEB exam stays out of an impersonation's reach.
+      const evaluation =
+        params.success && !delegated(req.auth) && (await sebSeat(app.db, req.user!.id, params.data.id));
       if (!evaluation) return reply.code(404).send({ error: "not_found" });
       const secret = await issueLaunchTicket(
         app.db,
@@ -194,7 +198,7 @@ export async function sebRoutes(app: FastifyInstance, config: AppConfig) {
     const now = app.clock.now();
     const url = new URL(req.url, config.PUBLIC_URL).href;
     if (!configKeyMatches(url, req.headers[CONFIG_KEY_HEADER])) return refuse("config_key");
-    const ticket = await consumeLaunchTicket(app.db, req.params.secret, now);
+    const ticket = await consumeLaunchTicket(app.db, "seb", req.params.secret, now);
     if (!ticket) return refuse("ticket");
     // The ticket is a few minutes old: the seat, and the requirement, are checked again now.
     const evaluation = await sebSeat(app.db, ticket.userId, ticket.auth.evaluationId!);

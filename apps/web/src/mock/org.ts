@@ -7,6 +7,7 @@ import type {
   AdminUser,
   ClassroomDetail,
   CourseSummary,
+  ImpersonationLink,
   RosterEntry,
   StudentClassroom,
 } from "@quiz/contracts";
@@ -646,6 +647,11 @@ on("POST", "/app/api/classrooms/:id/roster/:eid/unclaim", (m) => {
   if (s) Object.assign(s, { status: "pending", conflictFlag: false, userId: null });
   return undefined;
 });
+// ADR-034: the one-time link an admin copies. `?as=student&impersonating=1`
+// shows what opening it looks like.
+on("POST", "/app/api/classrooms/:id/roster/:eid/impersonation", (): ImpersonationLink => ({
+  url: `${window.location.origin}/app/auth/as/mock-${nextId("link")}`,
+}));
 
 // --- Student ---
 

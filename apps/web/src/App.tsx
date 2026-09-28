@@ -6,11 +6,11 @@ import type { Me, PublicConfig } from "@quiz/contracts";
 
 import { api, useMe } from "./api";
 import { Logo } from "./Header";
-import { useI18n, useT } from "./i18n";
+import { type Dict, useI18n, useT } from "./i18n";
 import { useLiveUpdates } from "./live";
 import { CoachLayer } from "./coach/CoachLayer";
 import { useRoute, type Navigate, type Route, type RouteOf } from "./router";
-import { Shell, StudentViewBanner } from "./Shell";
+import { ImpersonationBanner, Shell, StudentViewBanner } from "./Shell";
 import {
   enterStudentView,
   leaveStudentView,
@@ -101,8 +101,16 @@ const DevGallery = import.meta.env.DEV
  * - Finish: a sheet of paper (`surface` + hairline + card radius) on the warm
  *   canvas. No shadow: it sits in the page flow.
  */
+/** A one-time link that was refused lands on the landing page with its query parameter. */
+const REFUSALS: readonly (readonly [string, keyof Dict])[] = [
+  ["seb", "seb.invalid"], // ADR-027: a `.seb` launch, in SEB
+  ["impersonation", "impersonation.invalid"], // ADR-034: an impersonation link
+];
+
 function Landing() {
   const t = useT();
+  const search = new URLSearchParams(window.location.search);
+  const refused = REFUSALS.find(([param]) => search.has(param))?.[1] ?? null;
   // The one unauthenticated endpoint. A failure is not an error state here:
   // the OIDC button is the real door and it is always there.
   const config = useQuery<PublicConfig>({
@@ -119,10 +127,11 @@ function Landing() {
           <Logo className="mx-auto w-55" />
         </h1>
         <p className="mt-6 text-base leading-relaxed text-fg-muted">{t("landing.tagline")}</p>
-        {/* ADR-027: a SEB launch that was refused lands here, in SEB. */}
-        {new URLSearchParams(window.location.search).has("seb") ? (
+        {/* ADR-027: a SEB launch that was refused lands here, in SEB; and
+            ADR-034: so does a used or expired impersonation link. */}
+        {refused ? (
           <p role="alert" className="mt-4 text-sm text-danger">
-            {t("seb.invalid")}
+            {t(refused)}
           </p>
         ) : null}
         <LinkButton href="/app/auth/login" variant="primary" size="lg" className="mt-8 w-full">
@@ -421,12 +430,14 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
     return inStudentView && shown.view === "attempt" ? (
       <StudentViewBanner onLeave={toggleView}>{page}</StudentViewBanner>
     ) : (
-      page
+      <ImpersonationBanner me={me.data}>{page}</ImpersonationBanner>
     );
   }
 
+  // ADR-034: an admin acting as this student says so on every page, the
+  // full-screen ones above included (the banner is a no-op otherwise).
   return (
-    <>
+    <ImpersonationBanner me={me.data}>
     <Shell
       me={me.data}
       route={route}
@@ -441,6 +452,6 @@ function SessionApp({ route, navigate }: { route: Route; navigate: Navigate }) {
     {/* Inside the frame only: a full-screen view (an exam, a projection)
         returned above and never gets a bubble. */}
     <CoachLayer me={me.data} view={shown.view} teacherUi={teacherUi} />
-    </>
+    </ImpersonationBanner>
   );
 }

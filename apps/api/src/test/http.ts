@@ -94,3 +94,27 @@ export async function testServer(env: Record<string, string> = {}): Promise<Test
     },
   };
 }
+
+export type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+/**
+ * Every (method, path) of Fastify's route tree (`printRoutes({ commonPrefix:
+ * false })`), HEAD aside: what the tests that probe EVERY route walk — a
+ * `seb` session answering like nobody (ADR-027), an impersonation refused
+ * every write (ADR-034).
+ */
+export function routesOf(tree: string): { method: Method; path: string }[] {
+  const stack: string[] = [];
+  return tree.split("\n").flatMap((line) => {
+    const match = /^(.*?)[├└]── (\S+) \(([^)]+)\)/.exec(line);
+    if (!match) return [];
+    const depth = match[1]!.length / 4;
+    stack.length = depth;
+    stack.push(match[2]!);
+    const path = stack.join("");
+    return match[3]!
+      .split(", ")
+      .filter((m) => m !== "HEAD")
+      .map((method) => ({ method: method as Method, path }));
+  });
+}

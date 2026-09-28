@@ -10,14 +10,13 @@ import { registerForTests } from "@quiz/registry/server";
 
 import { launchTickets } from "../db/schema.js";
 import { fakeShort } from "../test/fakeType.js";
-import { testServer, type TestServer } from "../test/http.js";
+import { routesOf, testServer, type Method, type TestServer } from "../test/http.js";
 import { seedLive } from "../test/live.js";
 import { consumeLaunchTicket, issueLaunchTicket } from "./launch.js";
 import { CONFIG_KEY_HEADER, configKeyHeaderFor } from "./seb.js";
 import { CSRF_COOKIE, SESSION_COOKIE } from "./session.js";
 
 type Who = { id: string; headers: Record<string, string> };
-type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 /** The routes that declare `SITTING` (ADR-027), and no others. */
 const SITTING_ROUTES = new Set([
@@ -35,23 +34,6 @@ const SITTING_ROUTES = new Set([
   "POST /app/api/attempts/:id/run",
   "POST /app/api/attempts/:id/simulate",
 ]);
-
-/** Every (method, path) of `printRoutes`' tree, HEAD aside. */
-function routesOf(tree: string): { method: Method; path: string }[] {
-  const stack: string[] = [];
-  return tree.split("\n").flatMap((line) => {
-    const match = /^(.*?)[├└]── (\S+) \(([^)]+)\)/.exec(line);
-    if (!match) return [];
-    const depth = match[1]!.length / 4;
-    stack.length = depth;
-    stack.push(match[2]!);
-    const path = stack.join("");
-    return match[3]!
-      .split(", ")
-      .filter((m) => m !== "HEAD")
-      .map((method) => ({ method: method as Method, path }));
-  });
-}
 
 let server: TestServer;
 let restore: () => void;
@@ -131,8 +113,8 @@ describe("the launch ticket", () => {
       now,
     );
     const both = await Promise.all([
-      consumeLaunchTicket(server.app.db, secret, now),
-      consumeLaunchTicket(server.app.db, secret, now),
+      consumeLaunchTicket(server.app.db, "seb", secret, now),
+      consumeLaunchTicket(server.app.db, "seb", secret, now),
     ]);
     expect(both.filter(Boolean)).toHaveLength(1);
   });
@@ -174,7 +156,11 @@ describe("the seb session (ADR-027)", () => {
 
   it("sits its own evaluation", async () => {
     const me = await call("GET", "/app/api/me", seb);
-    expect(me.json().session).toEqual({ kind: "seb", evaluationId: exam.evaluationId });
+    expect(me.json().session).toEqual({
+      kind: "seb",
+      evaluationId: exam.evaluationId,
+      readOnly: false,
+    });
     const entered = await call("POST", `/app/api/evaluations/${exam.evaluationId}/attempt`, seb);
     expect(entered.statusCode).toBe(200);
     attemptId = entered.json().view.attempt.id;
