@@ -1091,6 +1091,29 @@ export async function setClosesAt(db: DbOrTx, id: string, closesAt: Date, now: D
   await db.update(evaluations).set({ closesAt, updatedAt: now }).where(eq(evaluations.id, id));
 }
 
+/**
+ * `live.extendTime`: `closes_at` moved by `seconds` IN the statement, so two
+ * concurrent extensions both count, and the row returned as committed — the
+ * caller publishes that, never the record it loaded before (a pause or a
+ * resume may have landed in between). Null when there was no `closes_at`.
+ */
+export async function extendClosesAt(
+  db: DbOrTx,
+  id: string,
+  seconds: number,
+  now: Date,
+): Promise<EvaluationRecord | null> {
+  const [row] = await db
+    .update(evaluations)
+    .set({
+      closesAt: sql`${evaluations.closesAt} + make_interval(secs => ${seconds})`,
+      updatedAt: now,
+    })
+    .where(and(eq(evaluations.id, id), isNotNull(evaluations.closesAt)))
+    .returning();
+  return row ?? null;
+}
+
 /** `poll.setRevealed`: the poll switches and the feedback policy, moved together. */
 export async function setPollSettings(
   db: DbOrTx,

@@ -854,6 +854,40 @@ describe("teacher controls (F-LIVE-11, F-LIVE-12)", () => {
     expect((await reload(db, seed.evaluationId)).state).toBe("closed");
   });
 
+  it("publishes the evaluation as committed, not as the extension request loaded it", async () => {
+    const opensAt = clock.now();
+    const closesAt = new Date(opensAt.getTime() + 3_600_000);
+    const seed = await seedLive(db, {
+      settings: { timing: "deadline" },
+      durationS: null,
+      opensAt,
+      closesAt,
+    });
+    const loaded = await applyState(db, await reload(db, seed.evaluationId), "running", clock.now());
+    // A pause lands between the extension request's load and its write.
+    await service.pauseEvaluation(db, loaded, clock.now());
+    const frames: Record<string, unknown>[] = [];
+    const unsubscribe = subscribe((message: BusMessage) => {
+      if (message.kind === "data" && message.event.type === "evaluation.state") {
+        frames.push(message.event as unknown as Record<string, unknown>);
+      }
+    });
+    try {
+      await service.extendTime(db, loaded, { minutes: 5 }, clock.now());
+    } finally {
+      unsubscribe();
+    }
+    const committed = await reload(db, seed.evaluationId);
+    expect(committed.closesAt!.getTime()).toBe(closesAt.getTime() + 5 * 60_000);
+    expect(frames).toEqual([
+      expect.objectContaining({
+        state: "paused",
+        pausedAt: committed.pausedAt!.toISOString(),
+        closesAt: committed.closesAt!.toISOString(),
+      }),
+    ]);
+  });
+
   it("closing the evaluation expires every open attempt", async () => {
     const { evaluation, attempt } = await running();
     const closed = await service.closeEvaluation(db, evaluation, clock.now());

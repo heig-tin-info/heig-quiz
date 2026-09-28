@@ -13,6 +13,7 @@ import { attempts, enrollments } from "../../db/schema.js";
 import {
   applyState,
   byId as evaluationById,
+  extendClosesAt,
   setClosesAt,
   seatsOf,
   settingsOf,
@@ -192,10 +193,11 @@ export async function extendTime(
   // everybody without moving it would hand the minutes out and let the
   // ticker take them back at the old instant.
   if (target === undefined && settingsOf(evaluation).timing === "deadline" && evaluation.closesAt) {
-    const closesAt = new Date(evaluation.closesAt.getTime() + seconds * 1000);
-    await setClosesAt(db, evaluation.id, closesAt, now);
-    // The dashboard and the players read the new end from this frame.
-    events.stateChanged({ ...evaluation, closesAt }, now);
+    const committed = await extendClosesAt(db, evaluation.id, seconds, now);
+    // The dashboard and the players read the new end from this frame — the
+    // row as committed, not `evaluation`, which a concurrent pause or resume
+    // may have outdated since this request loaded it.
+    if (committed) events.stateChanged(committed, now);
   }
   const where =
     target === undefined
