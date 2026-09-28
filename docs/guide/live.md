@@ -30,7 +30,11 @@ With the waiting room set to **Automatic**, the evaluation starts by itself once
   <figcaption>Students down, questions across; the identity column stays put while the question columns scroll.</figcaption>
 </figure>
 
-Once the evaluation runs, the ring becomes a grid: one row per student on the roster, one column per question, headed `Q1`, `Q2`... with the question's type underneath. The **Student** column stays fixed while the questions scroll. Beside the name it carries the student's state (`handed in`, `closed`, the extra-time chip), their progress as `3/5 · 60 %`, and their presence: a green dot when connected, `offline` when the page dropped, `never connected` for a student who has not opened the evaluation. **Score** and **Time** show the running score and the individual time left. The **Class** row at the bottom gives the completion rate of each question, then its success rate once the grading exists.
+Once the evaluation runs, the ring becomes a grid: one row per student on the roster, one column per question, headed `Q1`, `Q2`... (hover a header for the question's type). The **Student** column stays fixed while the questions scroll. Each row is one line: the presence dot, the name, and the student's state (`handed in`, `closed`, the extra-time chip). The dot is green when connected; a Wi-Fi-off icon beside the name means the page dropped, and a greyed name a student who has not opened the evaluation (hover the dot for the word). **Progress** gives how far each student has got, `3/5` and `60 %`. **Score** appears once there is a score to show. The **Class** row at the bottom gives the completion rate of each question, then its success rate once the grading exists.
+
+The time left is the big countdown in the header, beside **Pause**. A row shows its own countdown, at the end of the name, only when its deadline is not everybody's: an extension given to that student, extra time, or a late start in **Per student** mode.
+
+The rows shrink to fit the whole class on the screen, down to a readable minimum; past that the page scrolls.
 
 ### Cell states
 
@@ -38,17 +42,18 @@ Each cell says where one student stands on one question. The legend under the gr
 
 | Cell | Meaning |
 | --- | --- |
-| **Not started** | The student has not opened this question |
-| **In progress** | The question is open, nothing is written yet |
-| **Answered** | Something is written and saved |
-| **Done** | The student marked the question as done |
+| **Not started** (a faint small square) | The student has not opened this question |
+| **In progress** (an empty box) | The question is open, nothing is written yet |
+| **Answered** (a light blue box) | Something is written and saved |
+| **Won't answer** (a dash, dashed edge) | The student chose to leave the question |
+| **Validated** (a dark blue box with a check) | The student validated the question (**Validate and continue**, a checkpoint) |
 | **Correct**, **Partly correct**, **Wrong** | The verdict, once the evaluation is closed and graded |
 
 A column darkening downward is the class moving through the quiz. With **Answers** on, the cell also carries a glyph of the answer itself: the letters ticked on a multiple choice, the word typed in a short answer, `9L` for nine lines of code.
 
 ### The three switches and the projector
 
-Three switches sit above the grid: **Names**, **Answers** and **Results**. They exist for the projector. Turn **Names** off and each row becomes `Student 1`, `Student 2`..., in an order that is shuffled per evaluation and stable across reloads, so the number says nothing about the roster's alphabetical order. Turn **Answers** off and the glyphs disappear; the cells keep only their state. **Results** is what turns a progress cell into a verdict cell once grading exists.
+Three switches sit above the grid: **Names**, **Answers** and **Results**. They exist for the projector, and they are all **off** the first time you open a dashboard; your browser then remembers how you left them. Turn **Names** off and each row becomes `Student 1`, `Student 2`..., in an order that is shuffled per evaluation and stable across reloads, so the number says nothing about the roster's alphabetical order. Turn **Answers** off and the glyphs disappear; the cells keep only their state. **Results** is what turns a progress cell into a verdict cell once grading exists.
 
 The arrows icon at the top right, or the `F` key, puts the dashboard in full screen for projection.
 
@@ -115,7 +120,7 @@ When the evaluation is closed, the automatic grading runs and the grid turns int
 The shortcuts are listed in the sidebar and under the grid, so a colleague standing in for you finds them without this page.
 
 !!! tip "During the exam"
-    - Before projecting, switch **Names** and **Answers** off. The grid still shows who is done and who is stuck, as `Student 7`.
+    - Before projecting, check that **Names** and **Answers** are off (they are, unless you turned them on). The grid still shows who is done and who is stuck, as `Student 7`.
     - If the evaluation has an **Access code**, write it on the board only once the waiting room is open. A student needs it once, at entry.
     - Check the `+25 % time` chips in the waiting room against your list; extra time comes from the roster, not from this screen.
     - A laptop that dies mid-exam: the attempt is still open on the server and its answers are saved. Let the student log in on another machine and continue. If they lost several minutes, **+5 minutes for this student** from the row's actions. If their attempt expired in the meantime, **Reopen this attempt**, then extend it: a reopened attempt keeps its original deadline.

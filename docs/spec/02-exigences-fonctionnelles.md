@@ -114,8 +114,8 @@ Every requirement is identified `F-AREA-nn`, with its phase P1 / P2 / P3 and its
 | Id | Requirement | Phase | Prio |
 |---|---|---|---|
 | F-DASH-01 | Grid with students as rows, questions as columns. Every cell shows the state: not opened, opened, answered, "won't answer", validated (`forward_only`, a crossed checkpoint), and after grading correct / partial / wrong. A cell the student flagged for review carries a flag, and each column header counts the students who flagged it — a question many students flag may be unclear (issue #89). Staff only: a student never sees another student's flags. | P1 | M |
-| F-DASH-02 | Toggles: show names, show answers, show results. Hidden names give a stable pseudonym per row. | P1 | M |
-| F-DASH-03 | Columns: running score, individual remaining time, connection state, last event. Sort by column. | P1 | M |
+| F-DASH-02 | Toggles: show names, show answers, show results. Hidden names give a stable pseudonym per row. All three are **off** on a first visit — the safe frame for a projected screen — and each browser remembers the teacher's choice (issues #80, #227). | P1 | M |
+| F-DASH-03 | Columns: progress, running score (shown once at least one row has points), connection state, last event. The remaining time is one countdown in the header, on the common deadline; a row shows its **individual remaining time** beside the name only when its deadline differs from the common one (an individual extension, a time bonus, a late start in `duration` mode, F-LIVE-12) (issue #227). Sort by column. | P1 | M |
 | F-DASH-04 | Total row per question: completion rate — the share of started students who answered the question, said they would not, or validated it — and after grading success rate. | P1 | M |
 | F-DASH-05 | A click on a cell opens the student's answer read-only. | P1 | M |
 | F-DASH-06 | Full-screen mode suited to projection. | P1 | S |

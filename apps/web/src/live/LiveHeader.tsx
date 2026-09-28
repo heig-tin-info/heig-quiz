@@ -8,7 +8,8 @@ import { Badge, Button, ClockCountdown, IconButton, Menu, PageHeader } from "../
 
 /**
  * The band a teacher watches from the back of the room: where we are, how
- * long is left, and the three things they will actually press.
+ * long is left — the big clock, right beside the controls that change it —
+ * and the three things they will actually press.
  *
  * Exactly one primary action, and it changes with the state: in the waiting
  * room it is Start, and from the moment the class is working there is no
@@ -71,25 +72,27 @@ export function LiveHeader({
       // The heading is the evaluation, and nothing else. The state badge and
       // the countdown used to live inside it, which made the document heading
       // read "Quiz 3 — pointeurs et tableaux running 11:58" and rewrite itself
-      // every second (W6). They sit under it now, on the same line as each
-      // other, where they are still the first thing the eye lands on.
+      // every second (W6). The badge sits under it.
       title={title}
       help="live"
-      description={
-        <span className="flex flex-wrap items-center gap-3">
-          <Badge tone={stateTone(state)}>{evaluationStateLabel(state, t)}</Badge>
+      description={<Badge tone={stateTone(state)}>{evaluationStateLabel(state, t)}</Badge>}
+      actions={
+        <>
+          {/* The ONE clock of the screen (#227), big, beside the controls
+              that act on it: the grid no longer repeats it on every row, and
+              only a row whose deadline differs from this one shows its own.
+              Read from the back of the room, so about 30 px and tabular; it
+              keeps the paused state and the warning and danger tones of
+              every countdown. No clock in the waiting room or once closed:
+              there is no running window to count. */}
           {closesAt && live ? (
             <ClockCountdown
               deadlineAt={Date.parse(closesAt)}
               clock={clock}
               paused={paused}
-              className="text-[20px]"
+              className="mr-2 text-[30px] leading-none [&_svg]:size-6"
             />
           ) : null}
-        </span>
-      }
-      actions={
-        <>
           {isGraded(state) ? (
             <Button onClick={onGoToGrading}>
               <ClipboardCheck /> {t("live.goToGrading")}

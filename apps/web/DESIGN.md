@@ -706,24 +706,32 @@ live in `ui/state.ts`, each written once.
   labelled "Correct": two targets and a word that named nothing a teacher was
   looking for.
 - VerdictCell: one cell of the live grid and of the grading list, nine
-  states in two families. PROGRESS — `blank` (nothing), `inProgress` (opened,
-  nothing written, neutral), `answered` (holds an answer, `info-soft`),
-  `skipped` ("I won't answer", issue #89: `surface-2` with a DASHED
-  `fg-faint` edge and a dash — a decision to leave the question, not progress
-  through it, so not blue), `done` (validated in a locking navigation, the
-  `info` fill) — and VERDICT, which the grid's
+  states in two families. PROGRESS is drawn in SHAPES, not pictograms
+  (#227) — `blank` (never opened: a faint 10 px hollow square glyph,
+  `line-strong`), `inProgress` (opened, nothing written: the cell itself an
+  empty box, a `line-strong` edge and no fill), `answered` (holds an answer:
+  the box filled `info-soft`, no icon), `done` (validated in a locking
+  navigation: the `info` fill AND a check, because two blues alone would be
+  colour alone), `skipped` ("I won't answer", issue #89: `surface-2` with a
+  DASHED `fg-faint` edge and a dash — a decision to leave the question, not
+  progress through it, so not blue) — and VERDICT, which the grid's
   "Results" switch puts in their place: `correct`, `partial`, `wrong`,
-  `pending`. Icon **and** tint **and** word, never a tint alone: a dashboard
-  projected on a lecture-hall wall loses half its saturation. `value` holds
-  the answer in a glyph or two ("A, C", "NULL", "12 L") beside the icon, and
+  `pending`, each with its icon, since there the icon is the meaning. Shape
+  or icon, **and** tint, **and** word, never a tint alone: a dashboard
+  projected on a lecture-hall wall loses half its saturation. Its height is
+  `--cell-h` (28 px by default): the live grid sets it from the row height
+  it computes to fit the class on one screen (`--row-h`, 24 to 36 px). `value` holds
+  the answer in a glyph or two ("A, C", "NULL", "12 L") beside the icon (or
+  alone in the box), and
   INHERITS the state's ink rather than carrying `fg` — that is what keeps it
   readable on the filled `done` blue, where `fg` measured 2.9:1. `flagged`
   (the student's review flag, issue #89) is a third fact on top of the state,
   so it is a corner mark rather than a tint: a solid `warning` flag on a
   14 px `surface` disc with a `line` ring, top right, and "flagged for
   review" in the accessible name. The column header counts the class's flags
-  (a flag and the number, `warning`, on a line that is there even at zero so
-  the header never grows when the first student flags).
+  (a flag and the number, `warning`) on the same line as `Q3`, so the header
+  row stays one line tall, level with Student and Actions; the question's
+  type is the header's tooltip.
 - Master and detail (the grading panel, #102): from `lg`, the step header
   (picker, chevrons, progress) sticks to the top on a strip of `canvas`; its
   measured height is the CSS variable `--grading-sticky`, under which the

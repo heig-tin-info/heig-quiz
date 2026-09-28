@@ -25,10 +25,18 @@ export interface LiveToggles {
 
 export const LIVE_TOGGLES_KEY = "quiz-live-toggles";
 
+/**
+ * All three OFF on a first visit (#227). The dashboard is a projected screen
+ * more often than not, and the safe first frame in front of a class is the
+ * one that shows nobody's name and nobody's answer. Results off also spares
+ * the server the provisional grading pass on every refresh (ADR-020) until
+ * somebody actually asks for the colours. A browser that already stored a
+ * choice keeps it: the defaults only speak where nothing was stored.
+ */
 export const LIVE_TOGGLE_DEFAULTS: Readonly<LiveToggles> = Object.freeze({
-  names: true,
-  answers: true,
-  results: true,
+  names: false,
+  answers: false,
+  results: false,
 });
 
 const FIELDS = ["names", "answers", "results"] as const;

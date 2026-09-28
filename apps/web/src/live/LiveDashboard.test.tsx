@@ -66,7 +66,20 @@ class SilentEventSource {
 
 const navigate = vi.fn();
 
-function setup(view = makeDashboard(3, 4), extra: Record<string, ReturnType<typeof ok>> = {}) {
+/*
+ * The switches start OFF on a first visit (#227), but most of this file is
+ * about the grid with names, answers and results on — so `setup` stores that
+ * preference first, as a teacher who turned them on would have. `null`
+ * leaves the storage alone, for the tests about the preference itself.
+ */
+const ALL_ON = JSON.stringify({ names: true, answers: true, results: true });
+
+function setup(
+  view = makeDashboard(3, 4),
+  extra: Record<string, ReturnType<typeof ok>> = {},
+  stored: string | null = ALL_ON,
+) {
+  if (stored !== null) localStorage.setItem(LIVE_TOGGLES_KEY, stored);
   const queryClient = makeQueryClient();
   queryClient.setQueryData(dashboardKey(EVALUATION_ID, true, true), initialGrid(view));
   const stubs = mockFetch({
@@ -104,8 +117,9 @@ describe("LiveDashboard — the grid", () => {
     // Waiting LONGER can only reveal more fetches, so the three zero-fetch
     // expectations below are not weakened by it.
     await waitFor(() => expect(screen.getAllByRole("row")).toHaveLength(32), { timeout: 20_000 });
-    // 3 identity/score/time columns + 12 questions + the actions column.
-    expect(screen.getAllByRole("columnheader")).toHaveLength(16);
+    // Student and progress + 12 questions + the actions column; no score
+    // column while no row has points (#227).
+    expect(screen.getAllByRole("columnheader")).toHaveLength(15);
     // Only the evaluation's own detail; the grid came from the cache and no
     // cell asked for anything of its own.
     expect(calls.filter((c) => c.url.includes("/dashboard"))).toHaveLength(0);
@@ -169,7 +183,8 @@ describe("LiveDashboard — the clock", () => {
       await vi.advanceTimersByTimeAsync(0);
     });
     const timers = () => screen.getAllByRole("timer").map((el) => el.textContent);
-    // The header (20 minutes to the close), then one per running row.
+    // The header (20 minutes to the close), then one per running row whose
+    // own deadline (10 minutes, in the fixture) is not the common one.
     expect(timers()).toEqual(["20:00", "10:00", "10:00", "10:00"]);
     const before = cellRenders.count;
 
@@ -228,7 +243,7 @@ describe("LiveDashboard — keyboard", () => {
     });
     first.unmount();
 
-    setup();
+    setup(undefined, {}, null);
     expect(await screen.findByText("Student 1")).toBeInTheDocument();
     expect(screen.queryByText("Nadia Roux 0")).not.toBeInTheDocument();
     expect(screen.getByRole("switch", { name: /names/i })).toHaveAttribute("aria-checked", "false");
@@ -236,11 +251,20 @@ describe("LiveDashboard — keyboard", () => {
     expect(screen.getByRole("switch", { name: /results/i })).toHaveAttribute("aria-checked", "true");
   });
 
+  // #227: a projected screen's first frame shows nobody's name or answer.
+  it("opens with names, answers and results off on a first visit", async () => {
+    setup(undefined, {}, null);
+    expect(await screen.findByText("Student 1")).toBeInTheDocument();
+    expect(screen.queryByText("Nadia Roux 0")).not.toBeInTheDocument();
+    for (const name of [/names/i, /answers/i, /results/i]) {
+      expect(screen.getByRole("switch", { name })).toHaveAttribute("aria-checked", "false");
+    }
+  });
+
   it("opens with the defaults when the stored preference is malformed", async () => {
-    localStorage.setItem(LIVE_TOGGLES_KEY, "{not json");
-    setup();
-    expect(await screen.findByText("Nadia Roux 0")).toBeInTheDocument();
-    expect(screen.getByRole("switch", { name: /answers/i })).toHaveAttribute("aria-checked", "true");
+    setup(undefined, {}, "{not json");
+    expect(await screen.findByText("Student 1")).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: /answers/i })).toHaveAttribute("aria-checked", "false");
   });
 
   it("Space pauses a running evaluation and resumes a paused one", async () => {

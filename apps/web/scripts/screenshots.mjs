@@ -46,6 +46,14 @@ const heightOpt = opt("height").map(Number).find(Boolean);
 //        below the fold comes out undimmed, which reads as a bug and is not
 //        what anyone sees.
 
+/**
+ * The live dashboard with names, answers and results on. They start OFF on a
+ * first visit (#227), which is right in front of a class and says nothing in
+ * a user guide: the scenes about what the grid shows turn them on, as a
+ * teacher who flipped the switches would have.
+ */
+const LIVE_ALL_ON = { "quiz-live-toggles": JSON.stringify({ names: true, answers: true, results: true }) };
+
 /** The mock's evaluation, taken by the student persona (WP9). */
 const TAKE = "/take/11111111-1111-4111-8111-111111111111";
 /**
@@ -259,31 +267,31 @@ const scenes = [
       await p.getByRole("menuitem", { name: /reset my test attempt|réinitialiser ma tentative/i }).click();
     } },
   // The staff row, badged, in the three places attempts are listed.
-  { name: "live-running-staff", role: "teacher", path: "/evaluations/running/live?mytest=1" },
+  { name: "live-running-staff", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live?mytest=1" },
   { name: "grading-staff", role: "teacher", path: "/evaluations/closed/grading?mytest=1" },
   { name: "results-staff", role: "teacher", path: "/evaluations/closed/results?mytest=1" },
   // The banner the walk comes back through: the student view, entered from an
   // evaluation, with "Back to teacher view" pointing at it.
   { name: "student-view-banner", role: "teacher", path: "/", ss: { "quiz-view-as": "student", "quiz-view-as-return": "/evaluations/closed" } },
   // The frame's teacher/student switch (ADR-018 addendum), both ways round.
-  { name: "view-switch-teacher", role: "teacher", path: "/evaluations/running/live", fold: true, settle: 3000 },
+  { name: "view-switch-teacher", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, settle: 3000 },
   { name: "view-switch-student", role: "teacher", path: "/", fold: true, settle: 3000, ss: { "quiz-view-as": "student", "quiz-view-as-return": "/evaluations/running/live" } },
-  { name: "live-running", role: "teacher", path: "/evaluations/running/live" },
-  { name: "live-running-many", role: "teacher", path: "/evaluations/running/live?many=1" },
+  { name: "live-running", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live" },
+  { name: "live-running-many", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live?many=1" },
   { name: "live-lobby", role: "teacher", path: "/evaluations/lobby/live" },
-  { name: "live-closed", role: "teacher", path: "/evaluations/closed/live" },
-  { name: "live-inspect", role: "teacher", path: "/evaluations/running/live", act: (p) => p.getByRole("button", { name: /· Question 1$/ }).first().click() },
+  { name: "live-closed", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/closed/live" },
+  { name: "live-inspect", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", act: (p) => p.getByRole("button", { name: /· Question 1$/ }).first().click() },
   // #94: the complete answer of one cell, on hover (fetched on demand).
-  { name: "live-tip-code", role: "teacher", path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^Rochat, Louis · Question 1$/ }).hover() },
-  { name: "live-tip-cloze", role: "teacher", path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^Favre, Ethan · Question 5$/ }).hover() },
-  { name: "live-tip-mcq", role: "teacher", path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^Gauthier, Samuel · Question 6$/ }).hover() },
-  { name: "live-extend-menu", role: "teacher", path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^extend$/i }).first().click() },
-  { name: "live-fullscreen", role: "teacher", path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^full screen$/i }).first().click() },
+  { name: "live-tip-code", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^Rochat, Louis · Question 1( · flagged.*)?$/ }).hover() },
+  { name: "live-tip-cloze", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^Favre, Ethan · Question 5$/ }).hover() },
+  { name: "live-tip-mcq", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^Gauthier, Samuel · Question 6$/ }).hover() },
+  { name: "live-extend-menu", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^extend$/i }).first().click() },
+  { name: "live-fullscreen", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/running/live", fold: true, act: (p) => p.getByRole("button", { name: /^full screen$/i }).first().click() },
   { name: "live-empty", role: "teacher", path: "/evaluations/running/live?empty=1", settle: 900 },
   { name: "live-loading", role: "teacher", path: "/evaluations/running/live?slow=1", settle: 300 },
   { name: "live-error", role: "teacher", path: "/evaluations/running/live?fail=1", settle: 2500 },
   // F-EVAL-15: an exercise with retakes — attempt badges, no Reopen.
-  { name: "live-retakes", role: "teacher", path: "/evaluations/paused/live" },
+  { name: "live-retakes", role: "teacher", ls: LIVE_ALL_ON, path: "/evaluations/paused/live" },
 
   // Student
   { name: "student-home", role: "student", path: "/" },

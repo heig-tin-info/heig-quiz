@@ -7,6 +7,11 @@ describe("parseLiveToggles (#80)", () => {
     expect(parseLiveToggles(null)).toEqual(LIVE_TOGGLE_DEFAULTS);
   });
 
+  // #227: the first frame a projector shows names nobody and answers nothing.
+  it("starts with everything hidden", () => {
+    expect(LIVE_TOGGLE_DEFAULTS).toEqual({ names: false, answers: false, results: false });
+  });
+
   it("reads back what was stored", () => {
     expect(parseLiveToggles('{"names":false,"answers":true,"results":false}')).toEqual({
       names: false,
@@ -22,16 +27,16 @@ describe("parseLiveToggles (#80)", () => {
   });
 
   it("falls back field by field: a malformed field does not take the others down", () => {
-    expect(parseLiveToggles('{"names":false,"answers":"no","results":0,"extra":1}')).toEqual({
-      names: false,
-      answers: true,
-      results: true,
+    expect(parseLiveToggles('{"names":true,"answers":"no","results":0,"extra":1}')).toEqual({
+      names: true,
+      answers: false,
+      results: false,
     });
   });
 
   it("never hands out the shared defaults object", () => {
     const a = parseLiveToggles(null);
-    a.names = false;
-    expect(parseLiveToggles(null).names).toBe(true);
+    a.names = true;
+    expect(parseLiveToggles(null).names).toBe(false);
   });
 });

@@ -66,17 +66,25 @@ describe("StudentGrid — the rows", () => {
     setup(viewIn("running", 3, 4));
     expect(screen.getByRole("table")).toHaveAccessibleName("Student progress");
     expect(screen.getAllByRole("row")).toHaveLength(5);
-    // Student, Score, Time, four questions, Actions.
+    // Student, Progress, four questions, Actions: no Score while nobody
+    // has points, no Time since the header carries the clock (#227).
     expect(screen.getAllByRole("columnheader").map((c) => c.textContent?.trim())).toEqual([
       "Student",
-      "Score",
-      "Time",
-      "Q1mcq",
-      "Q2short",
-      "Q3mcq",
-      "Q4short",
+      "Progress",
+      "Q1",
+      "Q2",
+      "Q3",
+      "Q4",
       "Actions",
     ]);
+  });
+
+  // #227: one line tall; the type is still there, on hover.
+  it("keeps the question type in the column header's tooltip", () => {
+    setup(viewIn("running", 1, 2));
+    const [q1, q2] = screen.getAllByRole("columnheader").slice(2, 4);
+    expect(q1).toHaveAttribute("title", "mcq");
+    expect(q2).toHaveAttribute("title", "short");
   });
 
   it("names a row through `nameOf`, not through the payload", () => {
@@ -89,8 +97,19 @@ describe("StudentGrid — the rows", () => {
     const view = viewIn("released", 2, 4);
     view.rows[0] = { ...view.rows[0]!, points: 3, maxPoints: 4, state: "submitted" };
     setup(view);
+    expect(screen.getByRole("columnheader", { name: "Score" })).toBeInTheDocument();
     expect(within(rowOf("Nadia Roux 0")).getByText("3 / 4")).toBeVisible();
     expect(within(rowOf("Nadia Roux 1")).getAllByText("—").length).toBeGreaterThan(0);
+  });
+
+  // #227: the column follows the data, header, cells and footer alike.
+  it("has no Score column at all while no row has points", () => {
+    setup(viewIn("running", 2, 2));
+    expect(screen.queryByRole("columnheader", { name: "Score" })).toBeNull();
+    // Student, Progress, two questions, Actions — in every row, footer included.
+    for (const row of screen.getAllByRole("row")) {
+      expect(row.children).toHaveLength(5);
+    }
   });
 
   it("carries the progress of the row, counting only what was written in", () => {
@@ -107,7 +126,8 @@ describe("StudentGrid — the rows", () => {
       ],
     };
     setup(view);
-    expect(within(rowOf("Nadia Roux 0")).getByText("2/4 · 50 %")).toBeVisible();
+    expect(within(rowOf("Nadia Roux 0")).getByText("2/4")).toBeVisible();
+    expect(within(rowOf("Nadia Roux 0")).getByText("50 %")).toBeInTheDocument();
   });
 
   it("counts a skipped question as progress (issue #89)", () => {
@@ -121,7 +141,7 @@ describe("StudentGrid — the rows", () => {
       ],
     };
     setup(view);
-    expect(within(rowOf("Nadia Roux 0")).getByText("1/2 · 50 %")).toBeVisible();
+    expect(within(rowOf("Nadia Roux 0")).getByText("1/2")).toBeVisible();
     expect(within(rowOf("Nadia Roux 0")).getByRole("button", { name: /Question 1/ })).toBeInTheDocument();
   });
 
@@ -144,10 +164,11 @@ describe("StudentGrid — the rows", () => {
 
     const headers = screen.getAllByRole("columnheader");
     const q1 = headers.find((h) => h.textContent?.startsWith("Q1"))!;
-    expect(q1).toHaveTextContent(/^Q1mcq2/);
+    // "Q1", the flag and "2" on one line (#227).
+    expect(q1).toHaveTextContent(/^Q12/);
     expect(within(q1).getByText("2 students flagged this question for review")).toBeInTheDocument();
     const q2 = headers.find((h) => h.textContent?.startsWith("Q2"))!;
-    expect(q2).toHaveTextContent(/^Q2short$/);
+    expect(q2).toHaveTextContent(/^Q2$/);
 
     expect(
       within(rowOf("Nadia Roux 0")).getByRole("button", { name: /Question 1 · flagged for review/ }),
@@ -182,8 +203,21 @@ describe("StudentGrid — the rows", () => {
     setup(view);
     // The "handed in" badge already carries it; "offline" would be about the
     // browser rather than about the exam.
+    expect(within(rowOf("Nadia Roux 0")).queryByRole("img", { name: "offline" })).toBeNull();
+    expect(within(rowOf("Nadia Roux 1")).getByRole("img", { name: "never connected" })).toBeInTheDocument();
+  });
+
+  // #227: presence is a mark beside the name, never a line under it — and
+  // the word stays, as the dot's accessible name and tooltip.
+  it("marks an offline student beside the name, on the same line", () => {
+    const view = viewIn("running", 1, 2);
+    view.rows[0] = { ...view.rows[0]!, online: false };
+    setup(view);
+    const dot = within(rowOf("Nadia Roux 0")).getByRole("img", { name: "offline" });
+    expect(dot).toHaveAttribute("title", "offline");
+    // The dot, and the WifiOff beside the name.
+    expect(within(rowOf("Nadia Roux 0")).getAllByTitle("offline")).toHaveLength(2);
     expect(within(rowOf("Nadia Roux 0")).queryByText("offline")).toBeNull();
-    expect(within(rowOf("Nadia Roux 1")).getAllByText("never connected").length).toBeGreaterThan(0);
   });
 
   it("says a student on the roster has not signed in yet, rather than leaving them out", () => {
@@ -197,9 +231,9 @@ describe("StudentGrid — the rows", () => {
     };
     setup(view);
     expect(
-      within(rowOf("Nadia Roux 1")).getAllByText("has not signed in to Quiz yet").length,
-    ).toBeGreaterThan(0);
-    expect(within(rowOf("Nadia Roux 1")).queryByText("never connected")).toBeNull();
+      within(rowOf("Nadia Roux 1")).getByRole("img", { name: "has not signed in to Quiz yet" }),
+    ).toBeInTheDocument();
+    expect(within(rowOf("Nadia Roux 1")).queryByRole("img", { name: "never connected" })).toBeNull();
   });
 
   it("gives every cell an accessible name that says whose and which question", () => {
@@ -440,12 +474,35 @@ describe("StudentGrid — the class row", () => {
 });
 
 describe("StudentGrid — the clock", () => {
-  it("counts a running attempt down, and shows nothing for one that is over", () => {
+  // The fixture's common close is 20 minutes away; these rows have their own.
+  it("counts a running attempt with its own deadline down, and shows nothing for one that is over", () => {
     const view = viewIn("running", 2, 2);
     view.rows[0] = { ...view.rows[0]!, state: "in_progress", deadlineAt: liveAt(5 * 60_000) };
     view.rows[1] = { ...view.rows[1]!, state: "submitted", deadlineAt: liveAt(5 * 60_000) };
     setup(view);
     expect(within(rowOf("Nadia Roux 0")).getByText("5:00")).toBeVisible();
     expect(within(rowOf("Nadia Roux 1")).queryByText("5:00")).toBeNull();
+  });
+
+  /*
+   * #227, F-DASH-03: the header carries the common clock, so a row repeats a
+   * countdown only when its deadline is not that one. Compared as instants:
+   * the same moment written with and without milliseconds is not "different".
+   */
+  it("shows no countdown on a row whose deadline is the common one", () => {
+    const view = viewIn("running", 1, 2);
+    const close = new Date(Math.floor(Date.parse(view.evaluation.closesAt!) / 1000) * 1000);
+    view.evaluation.closesAt = close.toISOString(); // "…:00.000Z"
+    view.rows[0] = { ...view.rows[0]!, deadlineAt: close.toISOString().replace(".000Z", "Z") };
+    setup(view);
+    expect(within(rowOf("Nadia Roux 0")).queryByRole("timer")).toBeNull();
+  });
+
+  it("shows every running row's countdown when there is no common close", () => {
+    const view = viewIn("running", 1, 2);
+    view.evaluation.closesAt = null;
+    view.rows[0] = { ...view.rows[0]!, deadlineAt: liveAt(7 * 60_000) };
+    setup(view);
+    expect(within(rowOf("Nadia Roux 0")).getByText("7:00")).toBeVisible();
   });
 });

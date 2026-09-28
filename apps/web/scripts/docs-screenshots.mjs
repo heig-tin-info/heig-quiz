@@ -138,6 +138,14 @@ int somme(const int *t, int n) {
 // fullPage  the whole page instead of the viewport
 // phone     true = a 390 px variant too; "only" = the phone variant alone
 // ignore    console messages that are the scene's own (a 401 with no session)
+// storage   extra localStorage entries, written before the first paint
+
+/**
+ * The live dashboard with names, answers and results on. They start OFF on a
+ * first visit (#227), which is right in front of a class and shows a guide
+ * reader nothing: the dashboard scenes turn them on, as a teacher would.
+ */
+const LIVE_ALL_ON = { "quiz-live-toggles": JSON.stringify({ names: true, answers: true, results: true }) };
 
 const scenes = [
   // Sign-in
@@ -367,6 +375,7 @@ const scenes = [
   },
   {
     name: "live-running",
+    storage: LIVE_ALL_ON,
     caption: "The dashboard during the evaluation: one row per student, one cell per question.",
     persona: "teacher",
     path: (w) => `/evaluations/${w.evals.lobby.id}/live`,
@@ -377,6 +386,7 @@ const scenes = [
   },
   {
     name: "live-inspect",
+    storage: LIVE_ALL_ON,
     caption: "A cell opened: what the student wrote, live.",
     persona: "teacher",
     path: (w) => `/evaluations/${w.evals.lobby.id}/live`,
@@ -388,6 +398,7 @@ const scenes = [
   },
   {
     name: "live-extend",
+    storage: LIVE_ALL_ON,
     caption: "Giving more time: to the whole class or to one student.",
     persona: "teacher",
     path: (w) => `/evaluations/${w.evals.lobby.id}/live`,
@@ -399,6 +410,7 @@ const scenes = [
   },
   {
     name: "live-closed",
+    storage: LIVE_ALL_ON,
     caption: "The dashboard of a closed evaluation: verdicts and scores.",
     phase: "graded",
     persona: "teacher",
@@ -1177,14 +1189,18 @@ async function capture(world, scene, theme, phone) {
   });
   const problems = [];
   try {
-    await ctx.addInitScript((t) => {
-      try {
-        localStorage.setItem("quiz-locale", "en");
-        localStorage.setItem("quiz-theme", t);
-      } catch {
-        /* a private window; the defaults are then the system's */
-      }
-    }, theme);
+    await ctx.addInitScript(
+      ({ t, storage }) => {
+        try {
+          localStorage.setItem("quiz-locale", "en");
+          localStorage.setItem("quiz-theme", t);
+          for (const [k, v] of Object.entries(storage)) localStorage.setItem(k, v);
+        } catch {
+          /* a private window; the defaults are then the system's */
+        }
+      },
+      { t: theme, storage: scene.storage ?? {} },
+    );
     if (scene.persona !== "none" && scene.persona !== "guest") {
       await login(ctx.request, scene.persona);
     }

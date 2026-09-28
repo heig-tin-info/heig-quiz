@@ -91,6 +91,12 @@ interface Held {
 }
 
 function setup(answer: () => string | Held) {
+  // The switches start off on a first visit (#227); this file is about the
+  // answers, so it opens as a teacher who turned them on — unless a test
+  // stored its own preference first.
+  if (localStorage.getItem(LIVE_TOGGLES_KEY) === null) {
+    localStorage.setItem(LIVE_TOGGLES_KEY, JSON.stringify({ names: true, answers: true, results: true }));
+  }
   const view = dashboard();
   const queryClient = makeQueryClient();
   queryClient.setQueryData(dashboardKey(EVALUATION_ID, true, true), initialGrid(view));

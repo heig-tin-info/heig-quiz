@@ -395,7 +395,17 @@ export function makeRows(e: MockEvaluation, started: boolean): MockRowState[] {
           : "in_progress",
       online,
       lastSeenAt: online ? iso(-2000) : hasAttempt ? iso(-40_000) : null,
-      deadlineAt: hasAttempt ? iso(12 * 60_000 + index * 1000) : null,
+      // The common close for most of the class, so the grid shows the
+      // header's clock and nothing per row (#227). A time bonus carries its
+      // share of the window (the duration), and one student got five more minutes: the two
+      // cases in which a row shows a countdown of its own.
+      deadlineAt: hasAttempt
+        ? new Date(
+            Date.parse(e.closesAt ?? iso(12 * 60_000)) +
+              ((e.durationS ?? 0) * 1000 * student.timeBonusPercent) / 100 +
+              (index === 4 ? 5 * 60_000 : 0),
+          ).toISOString()
+        : null,
       timeBonusPercent: student.timeBonusPercent,
       // An exercise with retakes: every third student is on a later attempt.
       attemptCount: !hasAttempt ? 0 : retaking && index % 3 === 1 ? 2 + (index % 2) : 1,
