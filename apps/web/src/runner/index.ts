@@ -23,14 +23,6 @@ import { RUNNO_LANGUAGES, type CodeRuntime } from "@quiz/qt-code/client";
 
 import { BrowserRunnerUnavailable, type BrowserRunner, type RunHooks } from "./types";
 
-export type {
-  BackendRun,
-  BackendRunOptions,
-  BrowserRunner,
-  ManualInput,
-  RunHooks,
-  RunStage,
-} from "./types";
 export { BrowserRunnerUnavailable } from "./types";
 
 /** Cheap enough to answer before loading anything: the list is two entries long. */
@@ -44,7 +36,7 @@ export function browserCanRun(language: string): boolean {
  * The import is dynamic so that `@runno/wasi`, the worker and the tar reader
  * stay out of the chunk a student downloads to answer an MCQ (N-PERF-05).
  */
-export async function browserRunner(language: string): Promise<BrowserRunner | null> {
+async function browserRunner(language: string): Promise<BrowserRunner | null> {
   if (!browserCanRun(language)) return null;
   try {
     const { runnoRunner } = await import("./runno/runner");

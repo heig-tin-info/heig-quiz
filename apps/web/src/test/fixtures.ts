@@ -4,7 +4,6 @@ import type {
   CourseSummary,
   Me,
   RosterEntry,
-  StudentClassroom,
 } from "@quiz/contracts";
 
 /*
@@ -114,17 +113,3 @@ export function makeClassroomDetail(overrides: Partial<ClassroomDetail> = {}): C
   };
 }
 
-export function makeStudentClassroom(
-  overrides: Partial<StudentClassroom> = {},
-): StudentClassroom {
-  return {
-    id: "r1",
-    name: "PRG1-2026",
-    period: "2026-A",
-    courseName: "Programmation C",
-    courseCode: "PRG1",
-    teachers: ["Marie Dupont"],
-    timeBonusPercent: 0,
-    ...overrides,
-  };
-}

@@ -469,18 +469,6 @@ export function PageSkeleton({
   );
 }
 
-/** Indeterminate progress bar (unknown duration work). */
-export function Progress({ label }: { label: string }) {
-  return (
-    <div className="space-y-1.5" role="status" aria-label={label}>
-      <p className="text-sm text-fg-muted">{label}</p>
-      <div className="h-1 overflow-hidden rounded-full bg-surface-3">
-        <div className="progress-bar h-full w-1/3 rounded-full bg-accent" />
-      </div>
-    </div>
-  );
-}
-
 /**
  * A key cap, for the places that teach a shortcut (the command palette and
  * its sidebar trigger). `font-sans` on purpose: the mono face is reserved for
