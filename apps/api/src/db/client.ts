@@ -18,7 +18,7 @@ import * as schema from "./schema.js";
  */
 export type Db = NodePgDatabase<typeof schema>;
 
-export interface DbHandle {
+interface DbHandle {
   db: Db;
   /** True when running on the embedded, single-process database. */
   embedded: boolean;

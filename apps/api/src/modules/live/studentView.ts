@@ -131,13 +131,19 @@ export function studentView(input: StudentViewInput): unknown {
  * `feedbackPolicy.showKey` first.
  */
 export function solutionView(input: Omit<StudentViewInput, "shuffle"> & { shuffle?: boolean }): unknown {
-  const type = typeOf(input.type);
-  const config = loadConfig(input.type, input.version);
-  return type.toSolution(config, {
+  return solutionViewOf(input.type, loadConfig(input.type, input.version), {
     seed: input.seed,
     itemId: input.itemId,
     shuffle: input.shuffle ?? false,
   });
+}
+
+/**
+ * {@link solutionView} for a caller that already holds the PARSED config: the
+ * grading panel, which parses each item once and shows it for every attempt.
+ */
+export function solutionViewOf(type: string, config: unknown, view: StudentView): unknown {
+  return typeOf(type).toSolution(config, view);
 }
 
 /** `type.shuffleable(config)`: whether shuffling means anything for this one. */

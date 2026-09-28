@@ -44,7 +44,7 @@ function parseUrl(raw: string): URL | null {
 }
 
 /** An address a client may register: https, or http on this machine; never a fragment. */
-export function isAcceptableRedirect(raw: string): boolean {
+function isAcceptableRedirect(raw: string): boolean {
   const url = parseUrl(raw);
   if (!url || url.hash !== "" || url.username !== "" || url.password !== "") return false;
   if (url.protocol === "https:") return true;
@@ -153,10 +153,4 @@ export async function resolveClient(
     .onConflictDoUpdate({ target: oauthClients.id, set: values })
     .returning();
   return row!;
-}
-
-/** Reads a client without ever fetching: the token endpoint's lookup. */
-export async function findClient(db: Db, clientId: string): Promise<OAuthClient | null> {
-  const [row] = await db.select().from(oauthClients).where(eq(oauthClients.id, clientId)).limit(1);
-  return row ?? null;
 }

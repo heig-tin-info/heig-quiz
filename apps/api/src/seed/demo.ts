@@ -124,7 +124,7 @@ async function ensureQuestion(
     return { id: existing.id, created: false };
   }
 
-  const id = await poolService.createQuestion(db, {
+  const { id } = await poolService.createQuestion(db, {
     poolId: ctx.poolId,
     type: spec.type,
     internalName: spec.internalName,

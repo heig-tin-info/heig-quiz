@@ -9,7 +9,7 @@
  * here: the routes load the entity through the guards first (invariant 6),
  * and a list takes the access predicate as an argument.
  */
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 
 import { and, asc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 
@@ -382,14 +382,17 @@ export async function removeEnrollment(db: Db, entryId: string): Promise<void> {
 
 /**
  * No `0/O`, no `1/I/L`: the code is read off a slide and typed by hand, so
- * the alphabet has no pair a student can confuse. 8 characters out of 32 is
+ * the alphabet has no pair a student can confuse. 8 characters out of 31 is
  * ~40 bits — far beyond guessing for a classroom of 200.
  */
 const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ";
 
+/**
+ * Each character drawn uniformly by `randomInt`: `byte % 31` would favour
+ * the first nine characters (256 is not a multiple of 31).
+ */
 function newJoinCode(): string {
-  const bytes = randomBytes(8);
-  return Array.from(bytes, (b) => ALPHABET[b % ALPHABET.length]).join("");
+  return Array.from({ length: 8 }, () => ALPHABET[randomInt(ALPHABET.length)]).join("");
 }
 
 /**

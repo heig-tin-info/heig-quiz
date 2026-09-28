@@ -410,24 +410,13 @@ export async function loadEvaluation(
   return row;
 }
 
-/** `/evaluations/:id` — teacher side. */
-export async function accessibleEvaluation(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
-): Promise<EvaluationScope | null> {
-  const params = IdParam.safeParse(req.params);
-  if (!params.success) return notFound(reply);
-  return loadEvaluation(app, req, reply, params.data.id);
-}
-
 /**
  * An evaluation TEMPLATE (ADR-031) and its course, for a member of that
  * course's staff; null otherwise. A template is a row of `evaluations` whose
  * `course_id` is set, so the inner join on `courses` through that column is
  * what tells it apart: a classroom's evaluation or a poll never matches.
  */
-export async function findTemplate(
+async function findTemplate(
   db: Db,
   user: Caller,
   templateId: string,
@@ -461,7 +450,7 @@ type ReachableEvaluation = { evaluation: typeof evaluations.$inferSelect; staff:
  * nobody else reaches it (an admin, through `accessWhere`). A colleague gets
  * the same 404 as for a poll that does not exist.
  */
-export function ownedPollAccess(userId: string): SQL {
+function ownedPollAccess(userId: string): SQL {
   // `classroom_id is null` alone is no longer a poll: a template has none
   // either (ADR-031), and its creator must NOT own it through this door.
   return sql`(${ownedPollSql()} and ${qualified(evaluations.createdBy)} = ${userId})`;

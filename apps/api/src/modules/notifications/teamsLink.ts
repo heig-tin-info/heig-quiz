@@ -110,7 +110,7 @@ export async function previewLinkToken(
   return row ?? null;
 }
 
-export interface LinkOutcome {
+interface LinkOutcome {
   link: TeamsLink;
   /** The account this Teams account was linked to before, now unlinked; null if none. */
   displaced: string | null;
@@ -166,6 +166,16 @@ export async function teamsLinkOf(
   const where = "userId" in key ? eq(teamsLinks.userId, key.userId) : identityWhere(teamsLinks, key);
   const [row] = await db.select().from(teamsLinks).where(where).limit(1);
   return row ?? null;
+}
+
+/** Which of `userIds` have linked Teams: {@link teamsLinkOf} by account, for many accounts in one query. */
+export async function teamsLinkedUsers(db: Db, userIds: readonly string[]): Promise<Set<string>> {
+  if (userIds.length === 0) return new Set();
+  const rows = await db
+    .select({ userId: teamsLinks.userId })
+    .from(teamsLinks)
+    .where(inArray(teamsLinks.userId, [...userIds]));
+  return new Set(rows.map((r) => r.userId));
 }
 
 /** Forgets an account's link (Disconnect). Returns the account; null when there was none. */

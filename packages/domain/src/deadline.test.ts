@@ -5,7 +5,6 @@ import {
   GRACE_MS,
   isWritable,
   previewDurationS,
-  remainingSeconds,
 } from "./deadline.js";
 
 const startedAt = new Date("2026-09-20T08:00:00Z");
@@ -92,16 +91,6 @@ describe("isWritable", () => {
 
   it("always accepts when there is no deadline", () => {
     expect(isWritable(null, new Date())).toBe(true);
-  });
-});
-
-describe("remainingSeconds", () => {
-  const deadline = new Date("2026-09-20T08:30:00Z");
-
-  it("floors at zero and is null without a deadline", () => {
-    expect(remainingSeconds(deadline, new Date("2026-09-20T08:29:00Z"))).toBe(60);
-    expect(remainingSeconds(deadline, new Date("2026-09-20T08:31:00Z"))).toBe(0);
-    expect(remainingSeconds(null, new Date())).toBeNull();
   });
 });
 

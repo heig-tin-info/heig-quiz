@@ -58,7 +58,7 @@ async function publishMcq(
   name: string,
   policy: "inherit" | McqPolicy,
 ): Promise<string> {
-  const id = await poolService.createQuestion(db, {
+  const { id } = await poolService.createQuestion(db, {
     poolId,
     type: "mcq",
     internalName: name,

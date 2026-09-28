@@ -13,6 +13,7 @@ import { attempts, enrollments } from "../../db/schema.js";
 import {
   applyState,
   byId as evaluationById,
+  extendClosesAt,
   setClosesAt,
   seatsOf,
   settingsOf,
@@ -24,10 +25,9 @@ import { enqueueEvaluationGrading } from "../grading/jobs.js";
 import {
   type AttemptRecord,
   EvaluationFinished,
-  attemptById,
   beginAttempt,
 } from "./attempt.js";
-import { logAttemptEvent } from "./autosave.js";
+import { logAttemptEvent, logAttemptEvents } from "./autosave.js";
 
 // --- Teacher controls (§5.1, F-LIVE-11) -----------------------------------
 
@@ -193,10 +193,11 @@ export async function extendTime(
   // everybody without moving it would hand the minutes out and let the
   // ticker take them back at the old instant.
   if (target === undefined && settingsOf(evaluation).timing === "deadline" && evaluation.closesAt) {
-    const closesAt = new Date(evaluation.closesAt.getTime() + seconds * 1000);
-    await setClosesAt(db, evaluation.id, closesAt, now);
-    // The dashboard and the players read the new end from this frame.
-    events.stateChanged({ ...evaluation, closesAt }, now);
+    const committed = await extendClosesAt(db, evaluation.id, seconds, now);
+    // The dashboard and the players read the new end from this frame — the
+    // row as committed, not `evaluation`, which a concurrent pause or resume
+    // may have outdated since this request loaded it.
+    if (committed) events.stateChanged(committed, now);
   }
   const where =
     target === undefined
@@ -212,11 +213,14 @@ export async function extendTime(
       updatedAt: now,
     })
     .where(where)
-    .returning({ id: attempts.id });
-  for (const row of updated) {
-    const attempt = (await attemptById(db, row.id))!;
-    await logAttemptEvent(db, row.id, "time_added", { minutes: input.minutes }, now);
-    events.deadlineChanged(evaluation, attempt, "teacher_extend", now);
-  }
+    .returning();
+  await logAttemptEvents(
+    db,
+    updated.map((attempt) => attempt.id),
+    "time_added",
+    { minutes: input.minutes },
+    now,
+  );
+  for (const attempt of updated) events.deadlineChanged(evaluation, attempt, "teacher_extend", now);
   return updated.length;
 }

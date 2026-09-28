@@ -21,7 +21,7 @@ import { compilesPerMinute } from "@quiz/domain";
 import type { Db } from "../../db/client.js";
 import { loadConfig, typeOf } from "../pool/config.js";
 import type { EvaluationRecord } from "../evaluation/service.js";
-import { gradeDefaults } from "../evaluation/service.js";
+import { gradeDefaults, joinedItem } from "../evaluation/service.js";
 import * as events from "./events.js";
 import { studentView } from "./studentView.js";
 import {
@@ -39,7 +39,6 @@ import {
   NotRunnable,
   NothingToRun,
   assertWritable,
-  itemOf,
 } from "./attempt.js";
 import { logAttemptEvent, countRecentEvents } from "./autosave.js";
 
@@ -78,7 +77,7 @@ async function attemptRunContext<T>(
   // The server owns the clock: a run is a write's worth of work, so it is
   // refused past the deadline exactly like an autosave (invariant 5).
   assertWritable(evaluation, attempt, now);
-  const joined = await itemOf(db, evaluation.id, itemId);
+  const joined = await joinedItem(db, evaluation.id, itemId);
   // 404 and not 403: an item of another evaluation is indistinguishable from
   // one that does not exist (invariant 6).
   if (!joined) throw new LiveError("not_found", 404);

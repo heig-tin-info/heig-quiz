@@ -334,6 +334,47 @@ describe("notify fans out", () => {
     expect(sent.map((j) => j.data.channel)).toEqual(["email"]);
   });
 
+  it("delivers to many at once exactly as notify would to each", async () => {
+    const [judy, karl, lena] = [
+      await seedUser("judy@heig.test"),
+      await seedUser("karl@heig.test"),
+      await seedUser("lena@heig.test"),
+    ];
+    await service.setPreference(db, karl, { kind: "pool_shared", channel: "bell", enabled: false });
+    await service.setPreference(db, lena, { kind: "pool_shared", channel: "email", enabled: false });
+    // A preference on ANOTHER kind changes nothing here.
+    await service.setPreference(db, judy, { kind: "pool_ownership", channel: "email", enabled: false });
+    await linkTeams(lena);
+    const { queue, sent } = recordingQueue();
+    openOutbox({ queue, teams: true, log });
+    const hints: string[][] = [];
+    const off = subscribe((e) => {
+      if (e.kind === "hint") hints.push(e.topics);
+    });
+    const payload = await sharedPool("Toute la classe");
+    const created = await service.notifyMany(
+      db,
+      [judy, karl, lena].map((userId) => ({ userId, payload })),
+    );
+    off();
+
+    expect(created.map((c) => c?.payload ?? null)).toEqual([payload, null, payload]);
+    expect(hints).toEqual([[`user:${judy}`], [`user:${lena}`]]);
+    expect(sent.map((j) => [j.data.userId, j.data.channel])).toEqual([
+      [judy, "email"],
+      [karl, "email"],
+      [lena, "teams"],
+    ]);
+    for (const [userId, rows] of [
+      [judy, 1],
+      [karl, 0],
+      [lena, 1],
+    ] as const) {
+      expect((await service.listNotifications(db, userId)).items).toHaveLength(rows);
+    }
+    expect(await service.notifyMany(db, [])).toEqual([]);
+  });
+
   it("never breaks the caller when the queue fails: the bell row still stands", async () => {
     const ivan = await seedUser("ivan@heig.test");
     const { queue } = recordingQueue(true);

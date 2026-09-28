@@ -17,7 +17,7 @@ import type { Db } from "../../db/client.js";
 import { answers, attemptEvents, attempts } from "../../db/schema.js";
 import { loadConfig, typeOf } from "../pool/config.js";
 import { settingsOf, type EvaluationRecord, type JoinedItem } from "../evaluation/service.js";
-import { gradeDefaults, joinedItems } from "../evaluation/service.js";
+import { gradeDefaults, joinedItem, joinedItems } from "../evaluation/service.js";
 import * as events from "./events.js";
 import { verdictOf } from "../grading/service.js";
 import { UnavailableRunner } from "../runner/unavailable.js";
@@ -34,7 +34,6 @@ import {
   lockedItemIds,
   answersOf,
   assertWritable,
-  itemOf,
 } from "./attempt.js";
 
 /** One line, and never wider than a cell (`ANSWER_SUMMARY_MAX`). */
@@ -302,22 +301,7 @@ export async function saveAnswer(
   },
 ): Promise<AutosaveResponse> {
   const { evaluation, attempt, itemId, revision, now } = input;
-  assertWritable(evaluation, attempt, now);
-
-  // Free navigation needs this one item only. A locking mode needs the whole
-  // ordered list anyway, so the item is taken from it rather than read twice.
-  const settings = settingsOf(evaluation);
-  const ordered =
-    settings.navigation === "free"
-      ? null
-      : orderItems(await joinedItems(db, evaluation.id), settings, attempt.seed, evaluation.id);
-  const joined = ordered
-    ? (ordered.find((o) => o.item.id === itemId) ?? null)
-    : await itemOf(db, evaluation.id, itemId);
-  if (!joined) throw new LiveError("not_found", 404);
-
-  const stored = await answersOf(db, attempt.id);
-  if (ordered && lockedItemIds(settings, ordered, stored).has(itemId)) throw new ItemLocked();
+  const { joined, current } = await stateTarget(db, evaluation, attempt, itemId, now);
 
   // Never persist garbage: the type's own schema is the gate (§4.7 step 6).
   const type = typeOf(joined.question.type);
@@ -365,7 +349,6 @@ export async function saveAnswer(
   if (written.length === 0) {
     // Stale: the row in the database is newer. Hand it back so the client
     // adopts it (last-writer-wins by revision).
-    const current = stored.get(itemId);
     return {
       accepted: false,
       revision: current?.revision ?? 0,
@@ -479,9 +462,15 @@ async function writeState(
 }
 
 /**
- * What the two state writes of issue #89 share: the write gate (a `410` past
- * the deadline plus grace, on the server's clock), the item, and the lock of
- * the locking navigations — a validated question takes no write of any kind.
+ * What every write of a student to one item shares — an answer, and the two
+ * state writes of issue #89: the write gate (a `410` past the deadline plus
+ * grace, on the server's clock), the item, the lock of the locking
+ * navigations — a validated question takes no write of any kind — and the
+ * row as it stands.
+ *
+ * Free navigation needs this one item and this one row only. A locking mode
+ * needs the whole ordered list and every answer anyway (the lock depends on
+ * them), so the item and the row are taken from those rather than read twice.
  */
 async function stateTarget(
   db: Db,
@@ -492,16 +481,26 @@ async function stateTarget(
 ): Promise<{ joined: JoinedItem; current: AnswerRecord | null }> {
   assertWritable(evaluation, attempt, now);
   const settings = settingsOf(evaluation);
-  const ordered =
-    settings.navigation === "free"
-      ? null
-      : orderItems(await joinedItems(db, evaluation.id), settings, attempt.seed, evaluation.id);
-  const joined = ordered
-    ? (ordered.find((o) => o.item.id === itemId) ?? null)
-    : await itemOf(db, evaluation.id, itemId);
+  if (settings.navigation === "free") {
+    const joined = await joinedItem(db, evaluation.id, itemId);
+    if (!joined) throw new LiveError("not_found", 404);
+    const [current] = await db
+      .select()
+      .from(answers)
+      .where(and(eq(answers.attemptId, attempt.id), eq(answers.itemId, itemId)))
+      .limit(1);
+    return { joined, current: current ?? null };
+  }
+  const ordered = orderItems(
+    await joinedItems(db, evaluation.id),
+    settings,
+    attempt.seed,
+    evaluation.id,
+  );
+  const joined = ordered.find((o) => o.item.id === itemId) ?? null;
   if (!joined) throw new LiveError("not_found", 404);
   const stored = await answersOf(db, attempt.id);
-  if (ordered && lockedItemIds(settings, ordered, stored).has(itemId)) throw new ItemLocked();
+  if (lockedItemIds(settings, ordered, stored).has(itemId)) throw new ItemLocked();
   return { joined, current: stored.get(itemId) ?? null };
 }
 
@@ -575,13 +574,27 @@ export async function logAttemptEvent(
   details: unknown,
   now: Date,
 ): Promise<void> {
-  await db.insert(attemptEvents).values({
-    id: randomUUID(),
-    attemptId,
-    kind,
-    at: now,
-    details: details ?? null,
-  });
+  await logAttemptEvents(db, [attemptId], kind, details, now);
+}
+
+/** {@link logAttemptEvent} for many attempts at once: one multi-row insert. */
+export async function logAttemptEvents(
+  db: Db,
+  attemptIds: readonly string[],
+  kind: typeof attemptEvents.$inferInsert["kind"],
+  details: unknown,
+  now: Date,
+): Promise<void> {
+  if (attemptIds.length === 0) return;
+  await db.insert(attemptEvents).values(
+    attemptIds.map((attemptId) => ({
+      id: randomUUID(),
+      attemptId,
+      kind,
+      at: now,
+      details: details ?? null,
+    })),
+  );
 }
 
 /**

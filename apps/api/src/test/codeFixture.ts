@@ -39,7 +39,7 @@ export const codeConfig = {
 export async function seedCodeEvaluation(db: Db, now: Date): Promise<CodeFixture> {
   const seed = await seedLive(db, { students: 1, questions: 0 });
 
-  const questionId = await poolService.createQuestion(db, {
+  const { id: questionId } = await poolService.createQuestion(db, {
     poolId: seed.poolId,
     type: "code",
     internalName: `code-${nextSuffix()}`,

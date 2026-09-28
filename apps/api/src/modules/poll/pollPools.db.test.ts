@@ -45,7 +45,7 @@ async function question(
   input: { type: "mcq" | "short"; name: string; config: unknown; tags?: string[]; publish?: boolean },
 ): Promise<string> {
   const db = server.app.db;
-  const id = await poolService.createQuestion(db, {
+  const { id } = await poolService.createQuestion(db, {
     poolId,
     type: input.type,
     internalName: input.name,

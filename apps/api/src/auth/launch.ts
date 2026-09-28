@@ -15,9 +15,9 @@ import { launchTickets } from "../db/schema.js";
 import { hashToken, newToken, type SessionAuth } from "./session.js";
 
 /** Long enough to download a file and start Safe Exam Browser, no longer. */
-export const LAUNCH_TICKET_TTL_MS = 5 * 60_000;
+const LAUNCH_TICKET_TTL_MS = 5 * 60_000;
 
-export interface LaunchTicket {
+interface LaunchTicket {
   userId: string;
   /** Who acts through the session, when not the user themself (as on `sessions`). */
   actorUserId: string | null;

@@ -127,7 +127,7 @@ async function publish(
   config: unknown,
   explanation = "",
 ): Promise<string> {
-  const id = await poolService.createQuestion(db, {
+  const { id } = await poolService.createQuestion(db, {
     poolId,
     type,
     internalName: `${SECRETS.internalName}-${type}-${randomUUID().slice(0, 6)}`,

@@ -24,11 +24,11 @@ import {
 } from "@quiz/contracts";
 import { shuffle, streamSeed } from "@quiz/core/rng";
 import {
-  GRACE_MS,
   attemptDeadline,
   bonusSeconds,
   gradeFromPoints,
   isFinishedAttempt,
+  isWritable,
   latestAttempt,
   lockedItems,
   retakeRefusal,
@@ -52,7 +52,6 @@ import {
 import {
   isLatestAttempt,
   itemCountsByEvaluation,
-  joinedItem,
   joinedItems,
   retakePolicyOf,
   retakesEnabled,
@@ -114,7 +113,7 @@ export class AttemptClosedError extends LiveError {
  * make-up session after the close is another feature: the grading pass has
  * already run.
  */
-export class EvaluationNotLive extends LiveError {
+class EvaluationNotLive extends LiveError {
   constructor() {
     super("evaluation_not_live", 409, "the evaluation is not running or paused");
   }
@@ -268,11 +267,6 @@ function deadlineFor(
     deadlineAt: attemptDeadline({ ...base, startedAt: input.startedAt, extraS: input.extraS }),
     bonusS: Math.round(bonusSeconds(base)),
   };
-}
-
-/** The acceptance rule, shared with the ticker through `GRACE_MS` (D12). */
-function pastGrace(deadlineAt: Date | null, now: Date): boolean {
-  return deadlineAt !== null && now.getTime() > deadlineAt.getTime() + GRACE_MS;
 }
 
 // --- Access ---------------------------------------------------------------
@@ -546,19 +540,6 @@ export async function attemptOf(
     .orderBy(desc(attempts.attemptNumber))
     .limit(1);
   return row ?? null;
-}
-
-/** Every attempt of one account on one evaluation, first attempt first. */
-export async function attemptsOfUser(
-  db: Db,
-  evaluationId: string,
-  userId: string,
-): Promise<AttemptRecord[]> {
-  return db
-    .select()
-    .from(attempts)
-    .where(and(eq(attempts.evaluationId, evaluationId), eq(attempts.userId, userId)))
-    .orderBy(asc(attempts.attemptNumber));
 }
 
 /** A 32-bit seed, drawn once per attempt and never stored per permutation (D19). */
@@ -1096,7 +1077,8 @@ function closedReason(
   } else if (evaluation.state !== "running") {
     return "evaluation_closed";
   }
-  return pastGrace(attempt.deadlineAt, now) ? "deadline" : null;
+  // `@quiz/domain`'s acceptance rule, the one the ticker's cutoff is built on.
+  return isWritable(attempt.deadlineAt, now) ? null : "deadline";
 }
 
 /** {@link closedReason} as the 410 of §4.7. */
@@ -1144,14 +1126,6 @@ export function assertOpen(
   now: Date,
 ): void {
   assertGate(evaluation, attempt, now, "presence");
-}
-
-export async function itemOf(
-  db: Db,
-  evaluationId: string,
-  itemId: string,
-): Promise<JoinedItem | null> {
-  return joinedItem(db, evaluationId, itemId);
 }
 
 /**

@@ -2,8 +2,9 @@
  * Notifications: the bell (F-POOL-05) and the channels that leave the
  * platform, e-mail and Microsoft Teams (ADR-030).
  *
- * `notify` is the ONE entry. Every other module calls it and never inserts
- * into `notifications` itself, nor enqueues a delivery of its own. For each
+ * `notifyMany` is the ONE entry, and `notify` its one-recipient case. Every
+ * other module calls them and never inserts into `notifications` itself, nor
+ * enqueues a delivery of its own. For each
  * channel the recipient's preference decides (`notification_preferences`,
  * sparse, defaults of `DEFAULT_CHANNEL_ENABLED`):
  *
@@ -18,7 +19,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import {
   DEFAULT_CHANNEL_ENABLED,
@@ -38,71 +39,115 @@ import type { Db } from "../../db/client.js";
 import { notificationPreferences, notifications, users } from "../../db/schema.js";
 import { hint, userTopic } from "../realtime/bus.js";
 import { enqueueDeliveries, teamsOpen, type ExternalChannel } from "./outbox.js";
-import { teamsLinkOf } from "./teamsLink.js";
+import { teamsLinkedUsers, teamsLinkOf } from "./teamsLink.js";
 
 const DEFAULT_LIMIT = 30;
 
 type NotificationRow = typeof notifications.$inferSelect;
 
-/** The channels one user wants for one kind, defaults filled in. */
+/** The channels each of `userIds` wants for each of `kinds`, defaults filled in: one query. */
 async function channelsFor(
   db: Db,
-  userId: string,
-  kind: NotificationKind,
-): Promise<Record<NotificationChannel, boolean>> {
+  userIds: readonly string[],
+  kinds: readonly NotificationKind[],
+): Promise<(userId: string, kind: NotificationKind) => Record<NotificationChannel, boolean>> {
   const rows = await db
-    .select({ channel: notificationPreferences.channel, enabled: notificationPreferences.enabled })
+    .select({
+      userId: notificationPreferences.userId,
+      kind: notificationPreferences.kind,
+      channel: notificationPreferences.channel,
+      enabled: notificationPreferences.enabled,
+    })
     .from(notificationPreferences)
-    .where(and(eq(notificationPreferences.userId, userId), eq(notificationPreferences.kind, kind)));
-  const out = { ...DEFAULT_CHANNEL_ENABLED };
-  for (const row of rows) out[row.channel] = row.enabled;
-  return out;
+    .where(
+      and(
+        inArray(notificationPreferences.userId, [...userIds]),
+        inArray(notificationPreferences.kind, [...kinds]),
+      ),
+    );
+  const moved = new Map<string, Partial<Record<NotificationChannel, boolean>>>();
+  for (const row of rows) {
+    const key = `${row.userId}:${row.kind}`;
+    moved.set(key, { ...moved.get(key), [row.channel]: row.enabled });
+  }
+  return (userId, kind) => ({ ...DEFAULT_CHANNEL_ENABLED, ...moved.get(`${userId}:${kind}`) });
 }
 
 /**
- * Delivers one notification to one account, on every channel it chose.
- *
- * The payload is parsed on the way IN as well as on the way out: a caller
- * that builds one by hand cannot write a shape the list would then refuse.
+ * Delivers one notification to one account, on every channel it chose:
+ * {@link notifyMany} with a single delivery.
  *
  * Returns the bell row, or null when the user turned the bell off for this
  * kind: then no row is written at all — a row they asked not to see would
  * still count in the badge.
- *
- * Call it AFTER the write it announces has committed, never inside a
- * transaction: the jobs it enqueues live in their own connection and would
- * survive a rollback.
  */
 export async function notify(
   db: Db,
   userId: string,
   payload: NotificationPayload,
 ): Promise<Notification | null> {
-  const parsed = NotificationPayload.parse(payload);
-  const wanted = await channelsFor(db, userId, parsed.kind);
+  const [created] = await notifyMany(db, [{ userId, payload }]);
+  return created ?? null;
+}
 
-  let created: Notification | null = null;
-  if (wanted.bell) {
-    const [row] = await db
-      .insert(notifications)
-      .values({
-        id: randomUUID(),
-        userId,
-        poolId: "poolId" in parsed ? parsed.poolId : null,
-        evaluationId: "evaluationId" in parsed ? parsed.evaluationId : null,
-        payload: parsed,
-      })
-      .returning();
-    hint("notifications", [userTopic(userId)]);
-    created = notificationJson(row!);
-  }
+/**
+ * Delivers notifications to many accounts at once — a release tells a whole
+ * class — with the reads grouped: the preferences in one query, the Teams
+ * links in one, the bell rows in one multi-row insert. Each recipient still
+ * gets its own hint and its own jobs, exactly as {@link notify} would.
+ *
+ * The payload is parsed on the way IN as well as on the way out: a caller
+ * that builds one by hand cannot write a shape the list would then refuse.
+ *
+ * Returns the bell row of each delivery, in order; null where the user
+ * turned the bell off for that kind.
+ *
+ * Call it AFTER the write it announces has committed, never inside a
+ * transaction: the jobs it enqueues live in their own connection and would
+ * survive a rollback.
+ */
+export async function notifyMany(
+  db: Db,
+  deliveries: readonly { userId: string; payload: NotificationPayload }[],
+): Promise<(Notification | null)[]> {
+  if (deliveries.length === 0) return [];
+  const parsed = deliveries.map((d) => ({
+    userId: d.userId,
+    payload: NotificationPayload.parse(d.payload),
+  }));
+  const userIds = [...new Set(parsed.map((d) => d.userId))];
+  const wantedBy = await channelsFor(db, userIds, [...new Set(parsed.map((d) => d.payload.kind))]);
+  const planned = parsed.map((d) => ({ ...d, wanted: wantedBy(d.userId, d.payload.kind) }));
 
-  const external: ExternalChannel[] = [];
-  if (wanted.email) external.push("email");
   // A Teams job needs a link; without one it would only be dropped later.
-  if (wanted.teams && teamsOpen() && (await teamsLinkOf(db, { userId }))) external.push("teams");
-  if (external.length > 0) await enqueueDeliveries(userId, parsed, external);
-  return created;
+  const linked = await teamsLinkedUsers(
+    db,
+    teamsOpen() ? [...new Set(planned.filter((d) => d.wanted.teams).map((d) => d.userId))] : [],
+  );
+
+  const bells = planned.map((d) =>
+    d.wanted.bell
+      ? {
+          id: randomUUID(),
+          userId: d.userId,
+          poolId: "poolId" in d.payload ? d.payload.poolId : null,
+          evaluationId: "evaluationId" in d.payload ? d.payload.evaluationId : null,
+          payload: d.payload,
+        }
+      : null,
+  );
+  const values = bells.filter((b) => b !== null);
+  const rows = values.length === 0 ? [] : await db.insert(notifications).values(values).returning();
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  for (const row of values) hint("notifications", [userTopic(row.userId)]);
+
+  for (const d of planned) {
+    const external: ExternalChannel[] = [];
+    if (d.wanted.email) external.push("email");
+    if (d.wanted.teams && linked.has(d.userId)) external.push("teams");
+    if (external.length > 0) await enqueueDeliveries(d.userId, d.payload, external);
+  }
+  return bells.map((b) => (b ? notificationJson(byId.get(b.id)!) : null));
 }
 
 /**

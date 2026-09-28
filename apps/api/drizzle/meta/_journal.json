@@ -169,6 +169,13 @@
       "when": 1790576942989,
       "tag": "0023_teams_graph_activity",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1790581952178,
+      "tag": "0024_enrollments_user_idx",
+      "breakpoints": true
     }
   ]
 }

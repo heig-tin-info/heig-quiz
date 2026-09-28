@@ -448,7 +448,7 @@ describe("a student reads the assets of their own attempt (H3)", () => {
     });
     // A question whose statement embeds the uploaded image, published
     // through the real pipeline: the link row is written at publication.
-    const questionId = await poolService.createQuestion(db, {
+    const { id: questionId } = await poolService.createQuestion(db, {
       poolId: seed.poolId,
       type: "short",
       internalName: "with-an-image",

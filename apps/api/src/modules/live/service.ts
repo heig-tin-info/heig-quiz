@@ -46,13 +46,11 @@ export {
   ensureGuest,
   attemptById,
   attemptOf,
-  attemptsOfUser,
   ensureAttempt,
   retakeAttempt,
   gradeFinishedRetakes,
   beginAttempt,
   markPresent,
-  lockedItemIds,
   attemptOrLobbyView,
   attemptView,
   previewView,
@@ -66,7 +64,6 @@ export {
   studentHome,
 } from "./attempt.js";
 export {
-  summarizeAnswer,
   saveAnswer,
   markDone,
   setSkipped,

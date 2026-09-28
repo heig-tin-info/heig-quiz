@@ -109,7 +109,7 @@ beforeAll(async () => {
   });
   shortItemId = seed.itemIds[0]!;
 
-  const questionId = await createQuestion(db, {
+  const { id: questionId } = await createQuestion(db, {
     poolId: seed.poolId,
     type: "circuit",
     internalName: "rc-lowpass",

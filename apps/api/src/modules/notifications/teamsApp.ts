@@ -87,7 +87,7 @@ export function teamsAppStrings(locale: MailLocale): Record<string, string> {
   return strings;
 }
 
-export function teamsManifest(opts: AppOptions): Record<string, unknown> {
+function teamsManifest(opts: AppOptions): Record<string, unknown> {
   const site = opts.publicUrl;
   const host = new URL(site).host;
   const en = teamsAppStrings("en");

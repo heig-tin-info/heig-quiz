@@ -137,7 +137,7 @@ export class Locked extends EvaluationError {
  * the access control and the feedback policy. Time is added from the live
  * dashboard, not through a patch.
  */
-export class RunningLocked extends EvaluationError {
+class RunningLocked extends EvaluationError {
   constructor() {
     super("running_locked", 409, "the evaluation is running: its configuration is locked until it closes");
   }
@@ -202,7 +202,7 @@ class AttemptsExist extends EvaluationError {
  * The evaluation has been opened to students (`lobby` or later): its list of
  * questions is frozen even while nobody has entered yet (issue #79).
  */
-export class ItemsFrozen extends EvaluationError {
+class ItemsFrozen extends EvaluationError {
   constructor() {
     super("items_frozen", 409, "the evaluation has been opened: its questions are frozen");
   }
@@ -253,7 +253,7 @@ class QuestionNotInCourse extends EvaluationError {
  * `running` today (it cannot pause, and the authoring transitions refuse
  * it); should one appear, it answers this 409 instead of a 500.
  */
-export class CodeTaken extends EvaluationError {
+class CodeTaken extends EvaluationError {
   constructor() {
     super("code_taken", 409, "another running poll holds this session code");
   }
@@ -999,7 +999,7 @@ export async function createPollEvaluation(
  * A handle or an open transaction: the state change below is also the second
  * half of a withdrawal that must not land alone (`unreleaseResults`).
  */
-export type DbOrTx = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
+type DbOrTx = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 export async function byId(db: DbOrTx, id: string): Promise<EvaluationRecord | null> {
   const [row] = await db.select().from(evaluations).where(eq(evaluations.id, id)).limit(1);
@@ -1091,6 +1091,29 @@ export async function setClosesAt(db: DbOrTx, id: string, closesAt: Date, now: D
   await db.update(evaluations).set({ closesAt, updatedAt: now }).where(eq(evaluations.id, id));
 }
 
+/**
+ * `live.extendTime`: `closes_at` moved by `seconds` IN the statement, so two
+ * concurrent extensions both count, and the row returned as committed — the
+ * caller publishes that, never the record it loaded before (a pause or a
+ * resume may have landed in between). Null when there was no `closes_at`.
+ */
+export async function extendClosesAt(
+  db: DbOrTx,
+  id: string,
+  seconds: number,
+  now: Date,
+): Promise<EvaluationRecord | null> {
+  const [row] = await db
+    .update(evaluations)
+    .set({
+      closesAt: sql`${evaluations.closesAt} + make_interval(secs => ${seconds})`,
+      updatedAt: now,
+    })
+    .where(and(eq(evaluations.id, id), isNotNull(evaluations.closesAt)))
+    .returning();
+  return row ?? null;
+}
+
 /** `poll.setRevealed`: the poll switches and the feedback policy, moved together. */
 export async function setPollSettings(
   db: DbOrTx,
@@ -1126,7 +1149,7 @@ export async function clearRelease(db: DbOrTx, id: string, now: Date): Promise<v
 }
 
 /** A grade read from the frozen snapshot rather than recomputed. */
-export interface CachedGrade {
+interface CachedGrade {
   points: number;
   totalPoints: number;
   grade: number;
@@ -1512,7 +1535,7 @@ export async function updateVersions(
  * Where a copy lives: a classroom (a duplicate, F-EVAL-14, or an instance of
  * a template) or a course (a template, ADR-031).
  */
-export type CopyHome = { classroomId: string } | { courseId: string };
+type CopyHome = { classroomId: string } | { courseId: string };
 
 /**
  * THE copy of an evaluation into a new draft: its settings, grade scale,

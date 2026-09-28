@@ -4,11 +4,14 @@
  * or a metadata document (CIMD), authorize, the teacher's consent, the code
  * exchange with PKCE, the MCP call, the refresh with rotation, revocation.
  */
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 
+import { like } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { oauthClients, oauthGrants } from "../../db/schema.js";
 import { testServer, type TestServer } from "../../test/http.js";
+import { purgeOAuth } from "./service.js";
 
 let server: TestServer;
 let teacher: { id: string; headers: Record<string, string> };
@@ -298,5 +301,44 @@ describe("a client identified by its metadata document (CIMD)", () => {
     });
     expect(res.headers.location).toBe("/oauth/authorize/invalid?reason=invalid_client");
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("the ticker's sweep", () => {
+  it("deletes the self-registered clients a day old that never got a grant, and only those", async () => {
+    const db = server.app.db;
+    const now = new Date("2026-09-28T12:00:00Z");
+    const old = new Date(now.getTime() - 2 * 86_400_000);
+    const client = (id: string, kind: "dcr" | "cimd", createdAt: Date) => ({
+      id,
+      kind,
+      name: id,
+      redirectUris: [REDIRECT],
+      createdAt,
+    });
+    await db.insert(oauthClients).values([
+      client("purge-orphan-1", "dcr", old),
+      client("purge-orphan-2", "dcr", old),
+      client("purge-granted", "dcr", old),
+      client("purge-recent", "dcr", now),
+      client("purge-cimd", "cimd", old),
+    ]);
+    await db.insert(oauthGrants).values({
+      id: randomUUID(),
+      userId: teacher.id,
+      clientId: "purge-granted",
+      scope: "quiz",
+      resource: RESOURCE,
+      refreshHash: createHash("sha256").update("purge").digest("hex"),
+      expiresAt: new Date(now.getTime() + 86_400_000),
+    });
+
+    await purgeOAuth(db, now);
+
+    const left = await db
+      .select({ id: oauthClients.id })
+      .from(oauthClients)
+      .where(like(oauthClients.id, "purge-%"));
+    expect(left.map((c) => c.id).sort()).toEqual(["purge-cimd", "purge-granted", "purge-recent"]);
   });
 });

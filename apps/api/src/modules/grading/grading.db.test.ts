@@ -16,7 +16,7 @@ import type { RunnerOutcome, RunnerService } from "@quiz/core/server";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
-import { answers, attempts, gradings } from "../../db/schema.js";
+import { answers, attempts, gradings, guestParticipants } from "../../db/schema.js";
 import { subscribe } from "../../events.js";
 import { testApp, testDb, type TestDb } from "../../test/db.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
@@ -281,6 +281,33 @@ describe("the panel queue (F-GRADE-03)", () => {
     const oneAttempt = await queue({ attemptId: rows[1]!.id });
     expect(oneAttempt.entries).toEqual(["s1q0:validated:answer:1", "s1q1:none:no-answer:0"]);
     expect(oneAttempt.counts).toEqual({ total: 2, validated: 1, proposed: 0, missing: 1 });
+    // Narrowed, the panel reads only the selected cells — and shows each one
+    // exactly as the whole panel does: answer, views, grading, history, name.
+    const whole = (await queue({})).raw;
+    expect(oneItem.raw).toEqual(whole.filter((e) => e.itemId === items[1]!.item.id));
+    expect(oneAttempt.raw).toEqual(whole.filter((e) => e.attemptId === rows[1]!.id));
+  });
+
+  it("names a guest's attempt, which has no account behind it (ADR-014)", async () => {
+    const { evaluation, attempts: rows } = await closedEvaluation();
+    const guestId = randomUUID();
+    await db
+      .insert(guestParticipants)
+      .values({ id: guestId, evaluationId: evaluation.id, tokenHash: randomUUID() });
+    await db
+      .update(attempts)
+      .set({ userId: null, guestId })
+      .where(eq(attempts.id, rows[0]!.id));
+    const record = (await byId(db, evaluation.id))!;
+    for (const anonymous of [true, false]) {
+      const queue = await service.gradingQueue(db, record, { by: "student", anonymous });
+      const labels = [...new Set(queue.entries.map((e) => e.label))];
+      expect(labels).toHaveLength(2);
+      expect(labels[0]).toBe("Guest 1");
+      expect(labels[1]).not.toBe("—");
+      const steps = await service.gradingSteps(db, record, { by: "student", anonymous });
+      expect(steps.steps.map((s) => s.label)).toEqual(labels);
+    }
   });
 
   it("summarises the steps of both orders with the queue's own counts (#107)", async () => {
@@ -480,6 +507,45 @@ describe("batch validation (F-GRADE-04)", () => {
 
     const rest = await service.batchValidate(db, evaluation.id, {}, rows[0]!.userId, now);
     expect(rest).toBe(1);
+  });
+
+  it("leaves the history a click by click validation would", async () => {
+    const { app, evaluation, items, attempts: rows } = await closedEvaluation();
+    const propose = (attemptId: string) =>
+      service.writeGrading(db, {
+        attemptId,
+        itemId: items[1]!.item.id,
+        answerId: null,
+        points: 0.5,
+        maxPoints: 1,
+        source: "auto",
+        state: "proposed",
+        confidence: "medium",
+        comment: "machine",
+        regradeNote: "note",
+        details: { reason: "llm" },
+        now: app.clock.now(),
+      });
+    const [clicked, batched] = [await propose(rows[0]!.id), await propose(rows[1]!.id)];
+    app.clock.advance(1000);
+    const teacher = rows[0]!.userId;
+    await service.validateGrading(db, clicked, {}, teacher, app.clock.now());
+    expect(
+      await service.batchValidate(db, evaluation.id, { itemId: items[1]!.item.id }, teacher, app.clock.now()),
+    ).toBe(1);
+
+    // The same cell history, field for field, but for the ids and the attempt.
+    const shape = async (proposal: typeof clicked) => {
+      const history = await db
+        .select()
+        .from(gradings)
+        .where(and(eq(gradings.attemptId, proposal.attemptId), eq(gradings.itemId, proposal.itemId)))
+        .orderBy(gradings.createdAt);
+      expect(history.map((g) => g.state)).toEqual(["superseded", "validated"]);
+      expect(history[1]!.supersedesId).toBe(proposal.id);
+      return history.map(({ id, attemptId, supersedesId, ...rest }) => rest);
+    };
+    expect(await shape(batched)).toEqual(await shape(clicked));
   });
 });
 
