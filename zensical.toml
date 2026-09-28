@@ -28,6 +28,7 @@ nav = [
     { "AI assistants (MCP)" = "guide/assistants.md" },
     { "For students" = "guide/students.md" },
     { "Administration" = "guide/admin.md" },
+    { "Protection des données" = "guide/data-protection.md" },
   ] },
   { "Development" = [
     { "Local setup" = "development/index.md" },
