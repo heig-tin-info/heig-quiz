@@ -40,6 +40,7 @@ import {
 import {
   byId,
   gradeDefaults,
+  joinedItem,
   joinedItems,
   type EvaluationRecord,
   type JoinedItem,
@@ -447,8 +448,7 @@ async function runRunnerGrading(
   if (!evaluation) return;
   if (await hasValidated(db, job.attemptId, job.itemId)) return;
 
-  const items = await joinedItems(db, job.evaluationId);
-  const item = items.find((i) => i.item.id === job.itemId);
+  const item = await joinedItem(db, job.evaluationId, job.itemId);
   if (!item) return;
   const [attempt] = await db.select().from(attempts).where(eq(attempts.id, job.attemptId)).limit(1);
   if (!attempt) return;

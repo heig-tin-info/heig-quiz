@@ -287,8 +287,7 @@ export async function gradingPlugin(app: FastifyInstance) {
     teacher(
       { params: ItemParam, body: RegradeBody, load: staffEvaluation },
       async ({ req, reply, now, params, body, scope }) => {
-        const items = await joinedItems(app.db, scope.evaluation.id);
-        const item = items.find((i) => i.item.id === params.itemId);
+        const item = await joinedItem(app.db, scope.evaluation.id, params.itemId);
         if (!item) return notFound(reply);
 
         let note = body.note.trim();

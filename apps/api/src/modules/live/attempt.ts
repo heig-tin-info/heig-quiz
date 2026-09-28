@@ -52,7 +52,6 @@ import {
 import {
   isLatestAttempt,
   itemCountsByEvaluation,
-  joinedItem,
   joinedItems,
   retakePolicyOf,
   retakesEnabled,
@@ -1144,14 +1143,6 @@ export function assertOpen(
   now: Date,
 ): void {
   assertGate(evaluation, attempt, now, "presence");
-}
-
-export async function itemOf(
-  db: Db,
-  evaluationId: string,
-  itemId: string,
-): Promise<JoinedItem | null> {
-  return joinedItem(db, evaluationId, itemId);
 }
 
 /**
