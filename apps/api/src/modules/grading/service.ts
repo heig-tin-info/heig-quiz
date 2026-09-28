@@ -46,7 +46,8 @@ import {
   type EvaluationRecord,
   type JoinedItem,
 } from "../evaluation/service.js";
-import { solutionView, studentView } from "../live/studentView.js";
+import { solutionViewOf, studentViewOf } from "../live/studentView.js";
+import { loadConfig } from "../pool/config.js";
 import { tallyByAttempt } from "./kept.js";
 
 export type GradingRecord = typeof gradings.$inferSelect;
@@ -274,20 +275,36 @@ export function verdictOf(row: Pick<GradingRecord, "points" | "maxPoints" | "sta
   return row.points > 0 ? "partial" : "wrong";
 }
 
+/** The cells of an evaluation a read is about: all of them, or one item's, or one attempt's. */
+interface CellScope {
+  itemId?: string | undefined;
+  attemptId?: string | undefined;
+}
+
+/** The `WHERE` of a {@link CellScope} on `gradings` joined to its attempts. */
+const gradingsIn = (evaluationId: string, scope: CellScope) =>
+  and(
+    eq(attempts.evaluationId, evaluationId),
+    scope.itemId ? eq(gradings.itemId, scope.itemId) : undefined,
+    scope.attemptId ? eq(gradings.attemptId, scope.attemptId) : undefined,
+  );
+
 /**
  * Every grading of an evaluation that is still standing (`validated` or
  * `proposed`), keyed by cell. One query: the dashboard, the results and the
  * panel all need the same map and none of them may issue a query per cell.
+ * The panel narrowed to one item or one attempt reads only those cells.
  */
 export async function standingGradings(
   db: Db,
   evaluationId: string,
+  scope: CellScope = {},
 ): Promise<Map<PairKey, GradingRecord>> {
   const rows = await db
     .select({ grading: gradings })
     .from(gradings)
     .innerJoin(attempts, eq(gradings.attemptId, attempts.id))
-    .where(and(eq(attempts.evaluationId, evaluationId), ne(gradings.state, "superseded")))
+    .where(and(gradingsIn(evaluationId, scope), ne(gradings.state, "superseded")))
     .orderBy(asc(gradings.gradedAt));
   const map = new Map<PairKey, GradingRecord>();
   for (const row of rows) {
@@ -348,32 +365,57 @@ export function reasonOf(details: unknown): string | null {
 
 // --- The panel (F-GRADE-03) ----------------------------------------------
 
+type AttemptRecord = typeof attempts.$inferSelect;
+
 interface Roster {
   userId: string;
   displayName: string;
   pseudonym: string;
 }
 
-async function rosterOf(db: Db, evaluationId: string): Promise<Map<string, Roster>> {
-  // LEFT JOIN, not INNER: an attempt of a poll may belong to a GUEST, whose
-  // `user_id` is null (ADR-014). An inner join silently dropped those rows
-  // and the panel showed a graded answer with no owner at all.
-  const rows = await db
-    .select({
-      attemptId: attempts.id,
-      userId: attempts.userId,
-      attemptNumber: attempts.attemptNumber,
-      givenName: users.givenName,
-      familyName: users.familyName,
-      email: users.email,
-    })
-    .from(attempts)
-    .leftJoin(users, eq(attempts.userId, users.id))
-    .where(eq(attempts.evaluationId, evaluationId))
-    .orderBy(asc(attempts.createdAt));
+/**
+ * The name and the pseudonym of each attempt. `attemptRows` is EVERY attempt
+ * of the evaluation, oldest first, as the caller already loaded them: the
+ * pseudonyms, the guests' numbers and the " · #2" of a retake depend on all
+ * of them, whatever the panel shows.
+ */
+async function rosterOf(
+  db: Db,
+  evaluationId: string,
+  attemptRows: readonly Pick<AttemptRecord, "id" | "userId" | "attemptNumber">[],
+): Promise<Map<string, Roster>> {
   // Deduplicated: a student who retook an exercise holds several attempts
   // (F-EVAL-15), and a repeated id would draw them a second pseudonym.
-  const userIds = [...new Set(rows.map((r) => r.userId).filter((id): id is string => id !== null))];
+  const userIds = [
+    ...new Set(attemptRows.map((r) => r.userId).filter((id): id is string => id !== null)),
+  ];
+  const people =
+    userIds.length === 0
+      ? []
+      : await db
+          .select({
+            id: users.id,
+            givenName: users.givenName,
+            familyName: users.familyName,
+            email: users.email,
+          })
+          .from(users)
+          .where(inArray(users.id, userIds));
+  const person = new Map(people.map((p) => [p.id, p]));
+  // An attempt of a poll may belong to a GUEST, whose `user_id` is null
+  // (ADR-014): it keeps its row, named "Guest n" below, rather than leave the
+  // panel a graded answer with no owner at all.
+  const rows = attemptRows.map((a) => {
+    const who = a.userId === null ? undefined : person.get(a.userId);
+    return {
+      attemptId: a.id,
+      userId: a.userId,
+      attemptNumber: a.attemptNumber,
+      givenName: who?.givenName ?? null,
+      familyName: who?.familyName ?? null,
+      email: who?.email ?? null,
+    };
+  });
   const pseudonyms = uniquePseudonyms(evaluationId, userIds);
   const attemptsOf = new Map<string, number>();
   for (const r of rows) if (r.userId) attemptsOf.set(r.userId, (attemptsOf.get(r.userId) ?? 0) + 1);
@@ -420,12 +462,13 @@ const historyEntry = (grading: GradingRecord): GradingHistoryEntry => ({
 async function historyOf(
   db: Db,
   evaluationId: string,
+  scope: CellScope,
 ): Promise<Map<PairKey, GradingHistoryEntry[]>> {
   const rows = await db
     .select({ grading: gradings })
     .from(gradings)
     .innerJoin(attempts, eq(gradings.attemptId, attempts.id))
-    .where(eq(attempts.evaluationId, evaluationId))
+    .where(gradingsIn(evaluationId, scope))
     .orderBy(...NEWEST_FIRST);
   const map = new Map<PairKey, GradingHistoryEntry[]>();
   for (const { grading } of rows) {
@@ -437,8 +480,6 @@ async function historyOf(
   return map;
 }
 
-type AttemptRecord = typeof attempts.$inferSelect;
-
 /** Everything the panel reads besides the items and the attempts, keyed by cell. */
 interface QueueContext {
   answers: Map<PairKey, typeof answers.$inferSelect>;
@@ -447,38 +488,63 @@ interface QueueContext {
   roster: Map<string, Roster>;
   /** The teacher's own test walks (ADR-018). */
   staffAttempts: ReadonlySet<string>;
+  /** Each item's config, parsed once for every attempt that shows it. */
+  configs: Map<string, unknown>;
 }
 
-/** The five whole-evaluation reads of the panel: one query each, never one per cell. */
+/**
+ * The reads of the panel: one query each, never one per cell, and only for
+ * the selected cells — a panel narrowed to one item or one attempt does not
+ * load the answers and the history of the whole evaluation.
+ */
 async function loadQueueContext(
   db: Db,
   evaluation: EvaluationRecord,
   attemptRows: readonly AttemptRecord[],
+  selection: { attempts: readonly AttemptRecord[]; items: readonly JoinedItem[]; scope: CellScope },
 ): Promise<QueueContext> {
-  const answerRows =
-    attemptRows.length === 0
+  const { scope } = selection;
+  const [answerRows, standing, history, roster, staffAttempts] = await Promise.all([
+    selection.attempts.length === 0 || selection.items.length === 0
       ? []
-      : await db
+      : db
           .select()
           .from(answers)
           .where(
-            inArray(
-              answers.attemptId,
-              attemptRows.map((a) => a.id),
+            and(
+              inArray(
+                answers.attemptId,
+                selection.attempts.map((a) => a.id),
+              ),
+              scope.itemId ? eq(answers.itemId, scope.itemId) : undefined,
             ),
-          );
-  return {
-    answers: new Map(answerRows.map((a) => [pairKey(a.attemptId, a.itemId), a])),
-    standing: await standingGradings(db, evaluation.id),
-    history: await historyOf(db, evaluation.id),
-    roster: await rosterOf(db, evaluation.id),
+          ),
+    standingGradings(db, evaluation.id, scope),
+    historyOf(db, evaluation.id, scope),
+    rosterOf(db, evaluation.id, attemptRows),
     // The teacher's own test walk is corrected like any other — they asked
     // for it — but the panel says whose it is (ADR-018).
-    staffAttempts: await staffAttemptIds(db, evaluation),
+    staffAttemptIds(db, evaluation),
+  ]);
+  return {
+    answers: new Map(answerRows.map((a) => [pairKey(a.attemptId, a.itemId), a])),
+    standing,
+    history,
+    roster,
+    staffAttempts,
+    configs: new Map(
+      selection.items.map((i) => [
+        i.item.id,
+        loadConfig(i.question.type, {
+          config: i.version.config,
+          configVersion: i.version.configVersion,
+        }),
+      ]),
+    ),
   };
 }
 
-/** One cell of the panel. The views still come from `studentView`/`solutionView` (invariant 4). */
+/** One cell of the panel. The views still come from `studentViewOf`/`solutionViewOf` (invariant 4). */
 function entryOf(
   { attempt, item }: { attempt: AttemptRecord; item: JoinedItem },
   grading: GradingRecord | null,
@@ -488,7 +554,8 @@ function entryOf(
   const key = pairKey(attempt.id, item.item.id);
   const answer = context.answers.get(key) ?? null;
   const who = context.roster.get(attempt.id);
-  const version = { config: item.version.config, configVersion: item.version.configVersion };
+  const config = context.configs.get(item.item.id);
+  const view = { seed: attempt.seed, itemId: item.item.id, shuffle: false };
   return {
     answerId: answer?.id ?? null,
     attemptId: attempt.id,
@@ -497,19 +564,8 @@ function entryOf(
     label: anonymous ? (who?.pseudonym ?? "—") : (who?.displayName ?? attempt.userId ?? "—"),
     staff: context.staffAttempts.has(attempt.id),
     answer: answer?.payload ?? null,
-    student: studentView({
-      type: item.question.type,
-      version,
-      seed: attempt.seed,
-      itemId: item.item.id,
-      shuffle: false,
-    }),
-    solution: solutionView({
-      type: item.question.type,
-      version,
-      seed: attempt.seed,
-      itemId: item.item.id,
-    }),
+    student: studentViewOf(item.question.type, config, view),
+    solution: solutionViewOf(item.question.type, config, view),
     grading: grading ? toGrading(grading) : null,
     history: context.history.get(key) ?? [],
   };
@@ -528,17 +584,23 @@ export async function gradingQueue(
   evaluation: EvaluationRecord,
   query: GradingQuery,
 ): Promise<GradingQueue> {
-  const allItems = await joinedItems(db, evaluation.id);
+  const [allItems, attemptRows] = await Promise.all([
+    joinedItems(db, evaluation.id),
+    db
+      .select()
+      .from(attempts)
+      .where(eq(attempts.evaluationId, evaluation.id))
+      .orderBy(asc(attempts.createdAt)),
+  ]);
   const items = query.itemId ? allItems.filter((i) => i.item.id === query.itemId) : allItems;
-  const attemptRows = await db
-    .select()
-    .from(attempts)
-    .where(eq(attempts.evaluationId, evaluation.id))
-    .orderBy(asc(attempts.createdAt));
   const selected = query.attemptId
     ? attemptRows.filter((a) => a.id === query.attemptId)
     : attemptRows;
-  const context = await loadQueueContext(db, evaluation, attemptRows);
+  const context = await loadQueueContext(db, evaluation, attemptRows, {
+    attempts: selected,
+    items,
+    scope: { itemId: query.itemId, attemptId: query.attemptId },
+  });
 
   const pairs: { attempt: AttemptRecord; item: JoinedItem }[] =
     query.by === "student"
@@ -588,7 +650,7 @@ export async function gradingSteps(
 ): Promise<GradingSteps> {
   const items = await joinedItems(db, evaluation.id);
   const attemptRows = await db
-    .select({ id: attempts.id, userId: attempts.userId })
+    .select({ id: attempts.id, userId: attempts.userId, attemptNumber: attempts.attemptNumber })
     .from(attempts)
     .where(eq(attempts.evaluationId, evaluation.id))
     .orderBy(asc(attempts.createdAt));
@@ -630,8 +692,10 @@ export async function gradingSteps(
     };
   }
 
-  const roster = await rosterOf(db, evaluation.id);
-  const staff = await staffAttemptIds(db, evaluation);
+  const [roster, staff] = await Promise.all([
+    rosterOf(db, evaluation.id, attemptRows),
+    staffAttemptIds(db, evaluation),
+  ]);
   return {
     order: "student",
     steps: attemptRows.map((attempt) => {
@@ -826,8 +890,7 @@ export async function cellOfAnswer(
     .where(eq(answers.id, answerId))
     .limit(1);
   if (!row) return null;
-  const items = await joinedItems(db, row.evaluationId);
-  const item = items.find((i) => i.item.id === row.itemId);
+  const item = await joinedItem(db, row.evaluationId, row.itemId);
   if (!item) return null;
   return {
     evaluationId: row.evaluationId,

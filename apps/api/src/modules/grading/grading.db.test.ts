@@ -16,7 +16,7 @@ import type { RunnerOutcome, RunnerService } from "@quiz/core/server";
 import { registerForTests } from "@quiz/registry/server";
 
 import type { Db } from "../../db/client.js";
-import { answers, attempts, gradings } from "../../db/schema.js";
+import { answers, attempts, gradings, guestParticipants } from "../../db/schema.js";
 import { subscribe } from "../../events.js";
 import { testApp, testDb, type TestDb } from "../../test/db.js";
 import { fakeRunnableCode, fakeShort } from "../../test/fakeType.js";
@@ -281,6 +281,33 @@ describe("the panel queue (F-GRADE-03)", () => {
     const oneAttempt = await queue({ attemptId: rows[1]!.id });
     expect(oneAttempt.entries).toEqual(["s1q0:validated:answer:1", "s1q1:none:no-answer:0"]);
     expect(oneAttempt.counts).toEqual({ total: 2, validated: 1, proposed: 0, missing: 1 });
+    // Narrowed, the panel reads only the selected cells — and shows each one
+    // exactly as the whole panel does: answer, views, grading, history, name.
+    const whole = (await queue({})).raw;
+    expect(oneItem.raw).toEqual(whole.filter((e) => e.itemId === items[1]!.item.id));
+    expect(oneAttempt.raw).toEqual(whole.filter((e) => e.attemptId === rows[1]!.id));
+  });
+
+  it("names a guest's attempt, which has no account behind it (ADR-014)", async () => {
+    const { evaluation, attempts: rows } = await closedEvaluation();
+    const guestId = randomUUID();
+    await db
+      .insert(guestParticipants)
+      .values({ id: guestId, evaluationId: evaluation.id, tokenHash: randomUUID() });
+    await db
+      .update(attempts)
+      .set({ userId: null, guestId })
+      .where(eq(attempts.id, rows[0]!.id));
+    const record = (await byId(db, evaluation.id))!;
+    for (const anonymous of [true, false]) {
+      const queue = await service.gradingQueue(db, record, { by: "student", anonymous });
+      const labels = [...new Set(queue.entries.map((e) => e.label))];
+      expect(labels).toHaveLength(2);
+      expect(labels[0]).toBe("Guest 1");
+      expect(labels[1]).not.toBe("—");
+      const steps = await service.gradingSteps(db, record, { by: "student", anonymous });
+      expect(steps.steps.map((s) => s.label)).toEqual(labels);
+    }
   });
 
   it("summarises the steps of both orders with the queue's own counts (#107)", async () => {
