@@ -17,6 +17,7 @@ import {
   cx,
   EmptyState,
   Field,
+  FormDialog,
   Menu,
   Modal,
   QueryError,
@@ -235,36 +236,24 @@ export function VersionHistory({
       ) : null}
 
       {deprecating ? (
-        <Modal
+        <FormDialog
           title={t("question.versions.deprecateTitle", { n: deprecating.number })}
           onClose={() => setDeprecating(null)}
-          footer={
-            <>
-              <Button variant="secondary" onClick={() => setDeprecating(null)}>
-                {t("common.cancel")}
-              </Button>
-              <Button
-                variant="danger"
-                loading={deprecate.isPending}
-                disabled={note.trim() === ""}
-                onClick={() => deprecate.mutate({ number: deprecating.number, note: note.trim() })}
-              >
-                {t("question.versions.deprecate")}
-              </Button>
-            </>
-          }
+          onSubmit={() => deprecate.mutate({ number: deprecating.number, note: note.trim() })}
+          submitLabel={t("question.versions.deprecate")}
+          submitting={deprecate.isPending}
+          canSubmit={note.trim() !== ""}
+          danger
         >
-          <div className="space-y-3">
-            <Alert tone="warning">{t("question.versions.deprecateNote")}</Alert>
-            <Field
-              label={t("question.versions.deprecateNote")}
-              fullWidth
-              autoFocus
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-            />
-          </div>
-        </Modal>
+          <Alert tone="warning">{t("question.versions.deprecateNote")}</Alert>
+          <Field
+            label={t("question.versions.deprecateNote")}
+            fullWidth
+            autoFocus
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+          />
+        </FormDialog>
       ) : null}
     </div>
   );

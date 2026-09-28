@@ -9,14 +9,19 @@ import { HINT_ROOTS, hintRoots, invalidateHint } from "./hints";
 /** The head of every key `queryKeys.ts` can build, factories called with dummies. */
 const KEY_ROOTS = new Set(
   Object.values(keys).map((k) => {
-    const key = typeof k === "function" ? (k as (...a: unknown[]) => unknown[])("x", "x", "x", "x") : k;
+    const key =
+      typeof k === "function"
+        ? (k as unknown as (...a: string[]) => readonly unknown[])("x", "x", "x", "x")
+        : k;
     return String((key as readonly unknown[])[0]);
   }),
 );
 
 describe("hint kinds -> query-key roots", () => {
   it("has an entry for every kind the contract names", () => {
-    expect(Object.keys(HINT_ROOTS).sort()).toEqual([...HintEvent.shape.kinds.element.options].sort());
+    expect(Object.keys(HINT_ROOTS).sort()).toEqual(
+      [...HintEvent.shape.kinds.element.options].sort(),
+    );
   });
 
   it("names only roots that queryKeys.ts builds", () => {
@@ -27,7 +32,9 @@ describe("hint kinds -> query-key roots", () => {
   });
 
   it("maps a known kind to its roots and unions several", () => {
-    expect(hintRoots(["notifications"])).toEqual(new Set(["notifications", "notification-settings"]));
+    expect(hintRoots(["notifications"])).toEqual(
+      new Set(["notifications", "notification-settings"]),
+    );
     const both = hintRoots(["notifications", "admin"]);
     expect(both).not.toBe("all");
     expect([...(both as Set<string>)].sort()).toEqual(
