@@ -20,6 +20,7 @@ import { reload, seedLive } from "../../test/live.js";
 import { applyState, joinedItems } from "../evaluation/service.js";
 import * as live from "../live/service.js";
 import { runEvaluationGrading } from "./jobs.js";
+import { announceGradingReady } from "./ready.js";
 import { regradeItem } from "./service.js";
 
 let db: Db;
@@ -176,5 +177,14 @@ describe("grading_ready", () => {
     await db.update(evaluations).set({ state: "running" }).where(eq(evaluations.id, evaluation.id));
     await runEvaluationGrading(app, { evaluationId: evaluation.id, announce: true });
     expect(await readyRows(evaluation.id)).toEqual([]);
+  });
+
+  it("reads the state NOW: a job that loaded the evaluation while it ran still tells after the close", async () => {
+    const { app, seed, evaluation } = await closedEvaluation(true);
+    await runEvaluationGrading(app, { evaluationId: evaluation.id });
+    await db.delete(notifications).where(eq(notifications.evaluationId, evaluation.id));
+    // The row a runner job picked up before the close.
+    await announceGradingReady(app, { ...evaluation, state: "running" });
+    expect((await readyRows(evaluation.id)).map((r) => r.userId)).toContain(seed.teacherId);
   });
 });

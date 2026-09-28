@@ -17,7 +17,7 @@
 import type { FastifyInstance } from "fastify";
 
 import { notifyMany } from "../notifications/service.js";
-import type { EvaluationRecord } from "../evaluation/service.js";
+import { byId, type EvaluationRecord } from "../evaluation/service.js";
 import { staffOf } from "./events.js";
 import { progressOf } from "./service.js";
 
@@ -36,8 +36,12 @@ export async function announceGradingReady(
   evaluation: EvaluationRecord,
 ): Promise<void> {
   if (evaluation.mode === "poll") return;
-  if (evaluation.state === "running" || evaluation.state === "paused") return;
   try {
+    // The state NOW, not the row the job loaded when it started: a runner
+    // job picked up while the evaluation ran may finish after its close, and
+    // it may be the one that completes the grid.
+    const current = await byId(app.db, evaluation.id);
+    if (!current || current.state === "running" || current.state === "paused") return;
     const progress = await progressOf(app.db, evaluation.id);
     const proposed = progress.pending.runner + progress.pending.llm + progress.failed;
     if (progress.done + proposed < progress.total || proposed === 0) return;
@@ -49,7 +53,7 @@ export async function announceGradingReady(
         payload: {
           kind: "grading_ready",
           evaluationId: evaluation.id,
-          evaluationTitle: evaluation.title,
+          evaluationTitle: current.title,
           count: proposed,
         },
       })),

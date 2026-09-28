@@ -212,17 +212,26 @@ export async function removeMember(db: Db, poolId: string, userId: string): Prom
 
 /**
  * The topics a change of the pool's people must reach: the owner and every
- * member, on their OWN topic.
+ * member (or only the members of `roles`), on their OWN topic.
  *
  * `pool:<id>` is not enough here — a connection subscribes to the pools it
  * could reach WHEN IT OPENED, so the colleague who has just been named is
  * precisely the one not listening to it yet.
  */
-export async function poolAudience(db: Db, pool: PoolRow): Promise<string[]> {
+export async function poolAudience(
+  db: Db,
+  pool: Pick<PoolRow, "id" | "ownerId">,
+  roles?: readonly PoolRole[],
+): Promise<string[]> {
   const rows = await db
     .select({ userId: poolMembers.userId })
     .from(poolMembers)
-    .where(eq(poolMembers.poolId, pool.id));
+    .where(
+      and(
+        eq(poolMembers.poolId, pool.id),
+        roles ? inArray(poolMembers.role, [...roles]) : undefined,
+      ),
+    );
   return [...new Set([pool.ownerId, ...rows.map((r) => r.userId)])];
 }
 
@@ -240,20 +249,17 @@ export async function poolAudience(db: Db, pool: PoolRow): Promise<string[]> {
 export async function tellPoolOfPublication(db: Db, poolId: string, authorId: string): Promise<void> {
   try {
     const [pool] = await db
-      .select({ name: pools.name, ownerId: pools.ownerId })
+      .select({ id: pools.id, name: pools.name, ownerId: pools.ownerId })
       .from(pools)
       .where(eq(pools.id, poolId))
       .limit(1);
     if (!pool) return;
-    const members = await db
-      .select({ userId: poolMembers.userId })
-      .from(poolMembers)
-      .where(and(eq(poolMembers.poolId, poolId), inArray(poolMembers.role, ["contributor", "owner"])));
-    const recipients = new Set([pool.ownerId, ...members.map((m) => m.userId)]);
-    recipients.delete(authorId);
+    const recipients = (await poolAudience(db, pool, ["contributor", "owner"])).filter(
+      (userId) => userId !== authorId,
+    );
     await notifyMany(
       db,
-      [...recipients].map((userId) => ({
+      recipients.map((userId) => ({
         userId,
         payload: { kind: "pool_question_added", poolId, poolName: pool.name, count: 1 },
       })),

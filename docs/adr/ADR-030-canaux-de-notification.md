@@ -642,8 +642,10 @@ Step 5 (`grading_ready`, `pool_question_added`) settled:
   graded every attempt, alone, while it ran); a runner job only when its own
   cell had none. A pass run again with nothing new tells nobody; a re-grade
   empties its item's cells, so its pass tells again if proposals remain.
-  Nothing is sent while the evaluation is `running` or `paused`, nor for a
-  poll. The count is every proposal standing on the evaluation, placeholders
+  Nothing is sent while the evaluation is `running` or `paused` — its state
+  re-read at the moment of telling, not the row the job loaded, since a
+  runner job picked up during the run may complete the grid after the close
+  — nor for a poll. The count is every proposal standing on the evaluation, placeholders
   included (they need the teacher too). Recipients are `staffOf`, the course's
   staff seats: the pass is asynchronous, so the teacher who closed the
   evaluation is told too. Not folded. Best-effort: a failure is logged and
