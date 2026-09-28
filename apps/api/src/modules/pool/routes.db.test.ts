@@ -1011,7 +1011,11 @@ describe("pool sharing", () => {
     const own = await courseOf(outsider);
     const refused = await link(own, outsider, [open]);
     expect(refused.statusCode).toBe(403);
-    expect(refused.json()).toMatchObject({ error: "pool_link_forbidden", poolIds: [open] });
+    expect(refused.json()).toEqual({
+      error: "pool_link_forbidden",
+      message: 'Linking the pool "Public, not linkable" needs contributor access to it',
+      poolIds: [open],
+    });
     const rewrite = await server.app.inject({
       method: "PATCH",
       url: `/app/api/questions/${question}`,
@@ -1022,7 +1026,13 @@ describe("pool sharing", () => {
 
     // A named reader may not link the shared pool either; a contributor may.
     const readers = await courseOf(reader);
-    expect((await link(readers, reader, [shared])).statusCode).toBe(403);
+    const byReader = await link(readers, reader, [shared]);
+    expect(byReader.statusCode).toBe(403);
+    expect(byReader.json()).toMatchObject({
+      error: "pool_link_forbidden",
+      message: expect.stringMatching(/^Linking the pool ".+" needs contributor access to it$/),
+      poolIds: [shared],
+    });
     const contributors = await courseOf(contributor);
     const linked = await link(contributors, contributor, [shared]);
     expect(linked.statusCode).toBe(200);
@@ -1038,6 +1048,31 @@ describe("pool sharing", () => {
     expect(kept.statusCode).toBe(200);
     expect(kept.json().map((p: { id: string }) => p.id)).toEqual([shared]);
     expect((await link(mixed, reader, [])).json()).toEqual([]);
+  });
+
+  it("refuses a copy into a pool where the caller only holds a reader's seat", async () => {
+    const own = (
+      await server.app.inject({
+        method: "POST",
+        url: "/app/api/pools",
+        headers: reader.headers,
+        payload: { name: "The reader's own pool" },
+      })
+    ).json().id as string;
+    const source = (await writeQuestion(own, reader, "to copy")).json().meta.id as string;
+    const count = async () =>
+      (await server.app.db.select({ id: questions.id }).from(questions).where(eq(questions.poolId, shared)))
+        .length;
+    const before = await count();
+    const copied = await server.app.inject({
+      method: "POST",
+      url: `/app/api/questions/${source}/copy`,
+      headers: reader.headers,
+      payload: { targetPoolId: shared },
+    });
+    expect(copied.statusCode).toBe(403);
+    expect(copied.json()).toEqual({ error: "forbidden", message: "Read-only access", role: "reader" });
+    expect(await count()).toBe(before);
   });
 
   it("lists every reachable pool with its role and its member count", async () => {
