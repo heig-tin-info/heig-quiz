@@ -225,10 +225,18 @@ export interface QuestionTypeClient<
 
   /** Empty answer for a fresh item (e.g. `{ selected: [] }`). */
   emptyAnswer(student: TStudent): TAnswer;
-  /** Drives the "empty / seen / done" progress segments (F-LIVE-09). */
-  isAnswered(answer: TAnswer | null): boolean;
-  /** One-line rendering for the dashboard inspection panel and the cell tooltip. */
-  summarize(answer: TAnswer | null, student: TStudent): string;
+  /**
+   * Drives the "empty / seen / done" progress segments (F-LIVE-09): the same
+   * predicate as the server's `isAnswered`. The host answers "no" for a
+   * missing answer itself, so `answer` is never `null` here.
+   */
+  isAnswered(answer: TAnswer): boolean;
+  /**
+   * One line for the cell tooltip of the dashboard, for an answer the host
+   * cannot read as text by itself (a schematic). Omitting it leaves the host
+   * the server's `summarizeAnswer` of the cell.
+   */
+  summarize?(answer: TAnswer | null, student: TStudent): string;
 }
 
 export { QUESTION_TYPE_IDS } from "./contract.js";

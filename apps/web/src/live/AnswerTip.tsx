@@ -248,7 +248,7 @@ function AnswerTipBody({
 
 function typeSummary(entry: { item: { type: string }; studentConfig: unknown; answer: unknown }) {
   try {
-    const summary = questionType(entry.item.type)?.summarize(entry.answer, entry.studentConfig);
+    const summary = questionType(entry.item.type)?.summarize?.(entry.answer, entry.studentConfig);
     return summary && summary !== "—" ? summary : null;
   } catch {
     return null;

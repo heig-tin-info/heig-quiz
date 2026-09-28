@@ -59,10 +59,11 @@ const renderMarkdown = (source: string): ReactNode => <MarkdownView source={sour
  * does not know falls back to "anything at all".
  */
 export function isAnswered(type: string, answer: unknown): boolean {
+  if (answer === null || answer === undefined) return false;
   try {
-    return questionTypeClient(type).isAnswered(answer ?? null);
+    return questionTypeClient(type).isAnswered(answer);
   } catch {
-    return answer !== null && answer !== undefined;
+    return true;
   }
 }
 

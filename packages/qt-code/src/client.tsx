@@ -11,7 +11,6 @@ import { lazy } from "react";
 import type { QuestionTypeClient } from "@quiz/core/client";
 import { isCodeAnswered } from "./schema.js";
 
-import { initialRegions } from "./segments.js";
 import type { CodeAnswer, CodeConfig, CodeDetails, CodeSolution, CodeStudent } from "./schema.js";
 /*
  * Two VALUES escape to the host, and only these two: the list of languages the
@@ -63,16 +62,7 @@ export const codeClient: QuestionTypeClient<
     return { regions: [] };
   },
 
-  isAnswered: (answer) => answer !== null && isCodeAnswered(answer),
-
-  summarize(answer, student) {
-    if (answer === null) return "—";
-    const last = answer.lastRun;
-    if (last !== undefined && last !== null) return `${last.passed}/${last.total}`;
-    const seeded = initialRegions(student.segments);
-    const written = answer.regions.filter((r, i) => r.trim() !== "" && r !== seeded[i]).length;
-    return written === 0 ? "—" : `${written}/${seeded.length}`;
-  },
+  isAnswered: isCodeAnswered,
 };
 
 export { CodeIcon };

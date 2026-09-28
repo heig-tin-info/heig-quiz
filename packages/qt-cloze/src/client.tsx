@@ -53,14 +53,7 @@ export const clozeClient: ClozeClient = {
   Review: lazy(async () => ({ default: (await import("./Review.js")).ClozeReview })),
 
   emptyAnswer: (student) => ({ blanks: student.blanks.map(() => null) }),
-  isAnswered: (answer) => answer !== null && isClozeAnswered(answer),
-
-  /** One line for the dashboard cell: how many blanks carry something. */
-  summarize: (answer, student) => {
-    const filled =
-      answer?.blanks.filter((blank) => blank !== null && blank.trim() !== "").length ?? 0;
-    return `${filled}/${student.blanks.length}`;
-  },
+  isAnswered: isClozeAnswered,
 };
 
 /*

@@ -9,7 +9,6 @@ import { lazy } from "react";
 import type { QuestionTypeClient } from "@quiz/core/client";
 import { isMcqAnswered } from "./schema.js";
 import type { McqAnswer, McqConfig, McqDetails, McqSolution, McqStudent } from "./schema.js";
-import { choiceLetter } from "./ui.js";
 
 type McqClient = QuestionTypeClient<McqConfig, McqAnswer, McqStudent, McqSolution, McqDetails>;
 
@@ -43,18 +42,7 @@ export const mcqClient: McqClient = {
   Stats: lazy(async () => ({ default: (await import("./Stats.js")).McqStats })),
 
   emptyAnswer: () => ({ selected: [] }),
-  isAnswered: (answer) => answer !== null && isMcqAnswered(answer),
-
-  /** One line for the dashboard cell: the letters of what was ticked. */
-  summarize: (answer, student) => {
-    const selected = answer?.selected ?? [];
-    if (selected.length === 0) return "—";
-    const position = new Map(student.choices.map((choice, index) => [choice.id, index]));
-    return selected
-      .map((id) => choiceLetter(position.get(id) ?? id))
-      .sort()
-      .join(", ");
-  },
+  isAnswered: isMcqAnswered,
 };
 
 /*

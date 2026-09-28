@@ -8,7 +8,6 @@ import { lazy } from "react";
 import type { QuestionTypeClient } from "@quiz/core/client";
 import { isCodeImageAnswered } from "./schema.js";
 
-import { editableSegments } from "../segments.js";
 import type {
   CodeImageAnswer,
   CodeImageConfig,
@@ -58,12 +57,5 @@ export const codeimageClient: QuestionTypeClient<
     return { regions: [] };
   },
 
-  isAnswered: (answer) => answer !== null && isCodeImageAnswered(answer),
-
-  summarize(answer, student) {
-    if (answer === null) return "—";
-    const seeded = editableSegments(student.segments).map((s) => s.text);
-    const written = answer.regions.filter((r, i) => r.trim() !== "" && r !== seeded[i]).length;
-    return written === 0 ? "—" : `${written}/${seeded.length}`;
-  },
+  isAnswered: isCodeImageAnswered,
 };

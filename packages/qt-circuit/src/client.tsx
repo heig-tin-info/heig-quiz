@@ -69,7 +69,7 @@ export const circuitClient: QuestionTypeClient<
     return { schematic: { components: [], wires: [] } };
   },
 
-  isAnswered: (answer) => answer !== null && isCircuitAnswered(answer),
+  isAnswered: isCircuitAnswered,
 
   /**
    * The budget, which is the one number a teacher scanning the dashboard can
