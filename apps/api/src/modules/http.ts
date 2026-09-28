@@ -105,7 +105,7 @@ type Schema = z.ZodType;
 type Parsed<S> = S extends Schema ? z.output<S> : undefined;
 
 /** What a guarded handler receives: everything the preamble used to compute. */
-interface RouteContext<P, B, Q, S> {
+export interface RouteContext<P, B, Q, S> {
   req: FastifyRequest;
   reply: FastifyReply;
   /** The server's clock, read once per request before anything else (invariant 5). */
