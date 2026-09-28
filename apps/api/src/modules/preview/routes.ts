@@ -39,17 +39,15 @@ import * as service from "./service.js";
 export async function previewPlugin(app: FastifyInstance) {
   const requireTeacher = teacherGuard(app);
 
-  function failure(reply: FastifyReply, error: unknown): FastifyReply {
-    if (error instanceof service.PreviewError) {
-      const { retryAfterS, ...extra } = error.extra;
-      if (typeof retryAfterS === "number") reply.header("retry-after", String(retryAfterS));
-      return reply.code(error.status).send({ error: error.code, ...extra });
-    }
-    reply.log.error({ err: error, cause: (error as Error)?.cause }, "preview route failed");
-    return reply.code(500).send({ error: "internal_error" });
+  /** A refusal of the preview is `{ error, ...extra }`, a `retry-after` lifted to a header. */
+  function arms(reply: FastifyReply, error: unknown): FastifyReply | null {
+    if (!(error instanceof service.PreviewError)) return null;
+    const { retryAfterS, ...extra } = error.details ?? {};
+    if (typeof retryAfterS === "number") reply.header("retry-after", String(retryAfterS));
+    return reply.code(error.status).send({ error: error.code, ...extra });
   }
 
-  const teacher = teacherRoute(app, failure);
+  const teacher = teacherRoute(app, arms);
   const staffEvaluation = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
     loadEvaluation(app, req, reply, p.id);
   const options = { preHandler: requireTeacher, config: { readOnly: true } };

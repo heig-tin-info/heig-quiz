@@ -14,7 +14,6 @@
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { and, eq, getTableName, isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
-import { z } from "zod";
 
 import type { PoolRole } from "@quiz/contracts";
 import { effectivePoolRole, ipAllowed, poolRoleAllows } from "@quiz/domain";
@@ -39,8 +38,6 @@ import {
   ownedPollSql,
 } from "../db/schema.js";
 import { sebRequired } from "./evaluation/service.js";
-
-const IdParam = z.object({ id: z.uuid() });
 
 /**
  * THE access predicate, on a query that has `courses` in scope: a seat on
@@ -209,24 +206,27 @@ export function accessWhere(user: Pick<Caller, "role">, predicate: SQL): SQL | u
   return user.role === "admin" ? undefined : predicate;
 }
 
+/*
+ * The route loaders below take the `params` the route wrapper has already
+ * parsed with its schema from `@quiz/contracts` (a malformed id is the
+ * wrapper's 404, indistinguishable from a miss), and answer their own 404.
+ */
+
 /** Loads the course if and only if the current user is on its staff. */
 export async function accessibleCourse(
   app: FastifyInstance,
   req: FastifyRequest,
   reply: FastifyReply,
+  params: { id: string },
 ) {
-  const params = IdParam.safeParse(req.params);
-  if (!params.success) return notFound(reply);
   const [course] = await app.db
     .select()
     .from(courses)
-    .where(and(eq(courses.id, params.data.id), accessWhere(req.user!, staffAccess(req.user!.id))))
+    .where(and(eq(courses.id, params.id), accessWhere(req.user!, staffAccess(req.user!.id))))
     .limit(1);
   if (!course) return notFound(reply);
   return course;
 }
-
-const ClassroomParam = z.object({ id: z.uuid() });
 
 /** The classroom + its course if the caller is on its staff; null otherwise. */
 export async function findAccessibleClassroom(db: Db, user: Caller, classroomId: string) {
@@ -244,22 +244,18 @@ export async function accessibleClassroom(
   app: FastifyInstance,
   req: FastifyRequest,
   reply: FastifyReply,
+  params: { id: string },
 ) {
-  const params = ClassroomParam.safeParse(req.params);
-  if (!params.success) return notFound(reply);
-  return (await findAccessibleClassroom(app.db, req.user!, params.data.id)) ?? notFound(reply);
+  return (await findAccessibleClassroom(app.db, req.user!, params.id)) ?? notFound(reply);
 }
-
-const EnrollmentParam = z.object({ id: z.uuid(), eid: z.uuid() });
 
 /** Loads the roster entry if the current user is on the course's staff. */
 export async function accessibleEnrollment(
   app: FastifyInstance,
   req: FastifyRequest,
   reply: FastifyReply,
+  params: { id: string; eid: string },
 ) {
-  const params = EnrollmentParam.safeParse(req.params);
-  if (!params.success) return notFound(reply);
   const [row] = await app.db
     .select({ enrollment: enrollments })
     .from(enrollments)
@@ -267,8 +263,8 @@ export async function accessibleEnrollment(
     .innerJoin(courses, eq(classrooms.courseId, courses.id))
     .where(
       and(
-        eq(enrollments.id, params.data.eid),
-        eq(enrollments.classroomId, params.data.id),
+        eq(enrollments.id, params.eid),
+        eq(enrollments.classroomId, params.id),
         accessWhere(req.user!, staffAccess(req.user!.id)),
       ),
     )
@@ -283,20 +279,18 @@ export async function accessibleEnrollment(
 
 type AccessiblePool = typeof pools.$inferSelect;
 
-/** Loads a pool by id if and only if `poolAccess` holds; 404 otherwise. */
-async function loadPool(
-  app: FastifyInstance,
-  req: FastifyRequest,
-  reply: FastifyReply,
+/** The pool if `poolAccess` holds for the caller; null otherwise. */
+export async function findAccessiblePool(
+  db: Db,
+  user: Caller,
   poolId: string,
 ): Promise<AccessiblePool | null> {
-  const [pool] = await app.db
+  const [pool] = await db
     .select()
     .from(pools)
-    .where(and(eq(pools.id, poolId), accessWhere(req.user!, poolAccess(req.user!.id))))
+    .where(and(eq(pools.id, poolId), accessWhere(user, poolAccess(user.id))))
     .limit(1);
-  if (!pool) return notFound(reply);
-  return pool;
+  return pool ?? null;
 }
 
 /** `/pools/:id` */
@@ -304,10 +298,9 @@ export async function accessiblePool(
   app: FastifyInstance,
   req: FastifyRequest,
   reply: FastifyReply,
+  params: { id: string },
 ): Promise<AccessiblePool | null> {
-  const params = IdParam.safeParse(req.params);
-  if (!params.success) return notFound(reply);
-  return loadPool(app, req, reply, params.data.id);
+  return (await findAccessiblePool(app.db, req.user!, params.id)) ?? notFound(reply);
 }
 
 type QuestionScope = { question: typeof questions.$inferSelect; pool: AccessiblePool };
@@ -357,10 +350,9 @@ export async function accessibleQuestion(
   app: FastifyInstance,
   req: FastifyRequest,
   reply: FastifyReply,
+  params: { id: string },
 ): Promise<QuestionScope | null> {
-  const params = IdParam.safeParse(req.params);
-  if (!params.success) return notFound(reply);
-  return (await findAccessibleQuestion(app.db, req.user!, params.data.id)) ?? notFound(reply);
+  return (await findAccessibleQuestion(app.db, req.user!, params.id)) ?? notFound(reply);
 }
 
 /** `/categories/:id` — the category AND its pool. */
@@ -368,14 +360,13 @@ export async function accessibleCategory(
   app: FastifyInstance,
   req: FastifyRequest,
   reply: FastifyReply,
+  params: { id: string },
 ): Promise<{ category: typeof categories.$inferSelect; pool: AccessiblePool } | null> {
-  const params = IdParam.safeParse(req.params);
-  if (!params.success) return notFound(reply);
   const [row] = await app.db
     .select({ category: categories, pool: pools })
     .from(categories)
     .innerJoin(pools, eq(categories.poolId, pools.id))
-    .where(and(eq(categories.id, params.data.id), accessWhere(req.user!, poolAccess(req.user!.id))))
+    .where(and(eq(categories.id, params.id), accessWhere(req.user!, poolAccess(req.user!.id))))
     .limit(1);
   if (!row) return notFound(reply);
   return row;

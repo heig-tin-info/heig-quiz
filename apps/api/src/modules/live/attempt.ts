@@ -12,7 +12,6 @@ import { and, asc, count, desc, eq, gt, inArray, min, sql } from "drizzle-orm";
 
 import {
   EvaluationSettings,
-  GradingScale,
   type AttemptClosed,
   type AttemptItem,
   type AttemptOrLobby,
@@ -26,7 +25,6 @@ import { shuffle, streamSeed } from "@quiz/core/rng";
 import {
   attemptDeadline,
   bonusSeconds,
-  gradeFromPoints,
   isFinishedAttempt,
   isWritable,
   latestAttempt,
@@ -39,6 +37,7 @@ import { audit, type AuditAction } from "../../audit.js";
 import { iso, isoOrNull } from "../../clock.js";
 import type { Db } from "../../db/client.js";
 import { answers, attempts, auditLog, enrollments, evaluations, guestParticipants } from "../../db/schema.js";
+import { DomainError } from "../http.js";
 import {
   feedbackOf,
   gradeDefaults,
@@ -59,13 +58,12 @@ import {
   studentEvaluationRows,
   totalPointsByEvaluation,
   totalPointsOf,
-  cachedGrade,
 } from "../evaluation/service.js";
 import * as events from "./events.js";
 import { enqueueEvaluationGrading } from "../grading/jobs.js";
-import { pointsByAttempt, scoreOf, studentAttempts, tallyByAttempt } from "../grading/service.js";
+import { scoreOf, studentAttempts, tallyByAttempt } from "../grading/service.js";
 import { presence } from "../realtime/presence.js";
-import { scoreVisible } from "../results/service.js";
+import { countedAttemptId, releasedGradesOf, scoreVisible } from "../results/service.js";
 import { isShuffleable, studentView } from "./studentView.js";
 
 export type AttemptRecord = typeof attempts.$inferSelect;
@@ -77,15 +75,8 @@ export const PREVIEW_ATTEMPT_ID = "00000000-0000-4000-8000-000000000000";
 
 // --- Failures -------------------------------------------------------------
 
-export class LiveError extends Error {
-  constructor(
-    readonly code: string,
-    readonly status: number,
-    message?: string,
-  ) {
-    super(message ?? code);
-    this.name = "LiveError";
-  }
+export class LiveError extends DomainError {
+  override name = "LiveError";
 }
 
 /** The 410 of §4.7. The body carries the reason AND the server's clock. */
@@ -166,7 +157,7 @@ class AccessCodeInvalid extends LiveError {
 
 
 export class AnswerInvalid extends LiveError {
-  constructor(readonly details: unknown) {
+  constructor(readonly issues: unknown) {
     super("answer_invalid", 422);
   }
 }
@@ -1341,38 +1332,22 @@ export async function studentHome(db: Db, userId: string, now: Date): Promise<St
     userId,
     withRetakes.map((r) => r.evaluation),
   );
-  const counted = (row: (typeof rows)[number]): string | null =>
-    perEvaluation.has(row.evaluation.id)
-      ? (perEvaluation.get(row.evaluation.id)!.kept?.id ?? null)
-      : (row.attempt?.id ?? null);
 
-  // The grade of a released evaluation (WP6): the sum of the validated
-  // gradings of the student's counted attempt, converted by the evaluation's
-  // scale. A fixed number of queries for the whole page, not one per card.
-  const attemptIds = rows.map(counted).filter((id): id is string => id !== null);
-  const pointsPerAttempt = await pointsByAttempt(db, attemptIds);
-  const released = rows.filter((r) => r.evaluation.releasedAt !== null);
-  const totals = await totalPointsByEvaluation(db, [
-    ...new Set([...released, ...withRetakes].map((r) => r.evaluation.id)),
+  // The grade of a released evaluation is the results page's (WP6), and the
+  // score of a kept attempt what its feedback page would show. A fixed
+  // number of queries for the whole page, not one per card.
+  const retakeIds = withRetakes.map((r) => r.evaluation.id);
+  const [grades, totals, itemCounts, keptTallies] = await Promise.all([
+    releasedGradesOf(db, userId, rows, perEvaluation),
+    totalPointsByEvaluation(db, retakeIds),
+    itemCountsByEvaluation(db, retakeIds),
+    tallyByAttempt(
+      db,
+      withRetakes
+        .map((row) => countedAttemptId(perEvaluation, row))
+        .filter((id): id is string => id !== null),
+    ),
   ]);
-  const itemCounts = await itemCountsByEvaluation(
-    db,
-    withRetakes.map((r) => r.evaluation.id),
-  );
-  const keptTallies = await tallyByAttempt(
-    db,
-    withRetakes.map(counted).filter((id): id is string => id !== null),
-  );
-
-  const gradeOf = (row: (typeof rows)[number]): number | null => {
-    if (row.evaluation.releasedAt === null) return null;
-    const attemptId = counted(row);
-    const hit = cachedGrade(row.evaluation, userId, attemptId);
-    if (hit) return hit.grade;
-    const total = totals.get(row.evaluation.id) ?? 0;
-    const points = attemptId ? (pointsPerAttempt.get(attemptId) ?? 0) : 0;
-    return gradeFromPoints(points, total, GradingScale.parse(row.evaluation.gradingScale));
-  };
 
   const retakesOf = (row: (typeof rows)[number]): EvaluationCard["retakes"] => {
     const mine = perEvaluation.get(row.evaluation.id);
@@ -1426,7 +1401,7 @@ export async function studentHome(db: Db, userId: string, now: Date): Promise<St
     attemptState: row.attempt?.state ?? null,
     attemptStartedAt: isoOrNull(row.attempt?.startedAt ?? null),
     deadlineAt: isoOrNull(row.attempt?.deadlineAt ?? null),
-    grade: gradeOf(row),
+    grade: grades.get(row.evaluation.id)?.grade ?? null,
     retakes: retakesOf(row),
     safeExamBrowser: sebRequired(row.evaluation),
   });

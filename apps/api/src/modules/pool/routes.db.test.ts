@@ -247,6 +247,99 @@ describe("the draft and publication routes", () => {
       expect(res.json().meta.type).toBe(type);
     }
   });
+
+  it("refuses a second question by the same name with 409 duplicate_name", async () => {
+    await createQuestion("twice");
+    const res = await server.app.inject({
+      method: "POST",
+      url: `/app/api/pools/${poolId}/questions`,
+      headers: owner.headers,
+      payload: { type: "short", internalName: "twice" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toEqual({
+      error: "duplicate_name",
+      message: "This pool already has a question by that name",
+    });
+  });
+
+  it("refuses a category that is not one of the pool's: the 404 of a move", async () => {
+    const post = (user: typeof owner, url: string, payload: Payload) =>
+      server.app.inject({ method: "POST", url, headers: user.headers, payload });
+    const categoryIn = async (user: typeof owner, name: string) => {
+      const pool = await post(user, "/app/api/pools", { name });
+      expect(pool.statusCode).toBe(201);
+      const category = await post(user, `/app/api/pools/${pool.json().id}/categories`, {
+        name: "Loops",
+      });
+      expect(category.statusCode).toBe(201);
+      return category.json().id as string;
+    };
+    const foreign = {
+      // Another pool of the same teacher, which they can see and write.
+      mine: await categoryIn(owner, "other pool of the owner"),
+      // A pool the teacher cannot reach at all.
+      theirs: await categoryIn(stranger, "stranger's pool"),
+      missing: "00000000-0000-4000-8000-00000000cafe",
+    };
+    const questionCount = async () =>
+      (await server.app.db.select({ id: questions.id }).from(questions)).length;
+    for (const [label, categoryId] of Object.entries(foreign)) {
+      let before = await questionCount();
+      const created = await post(owner, `/app/api/pools/${poolId}/questions`, {
+        type: "short",
+        internalName: `in a foreign category ${label}`,
+        categoryId,
+      });
+      expect(created.statusCode, label).toBe(404);
+      expect(created.json(), label).toEqual({ error: "not_found" });
+      expect(await questionCount(), label).toBe(before);
+
+      const id = await createQuestion(`to patch ${label}`);
+      const patched = await server.app.inject({
+        method: "PATCH",
+        url: `/app/api/questions/${id}`,
+        headers: owner.headers,
+        payload: { internalName: `renamed ${label}`, categoryId },
+      });
+      expect(patched.statusCode, label).toBe(404);
+      expect(patched.json(), label).toEqual({ error: "not_found" });
+      // The whole patch is refused: the name did not change either.
+      const [row] = await server.app.db.select().from(questions).where(eq(questions.id, id));
+      expect(row!.internalName, label).toBe(`to patch ${label}`);
+      expect(row!.categoryId, label).toBeNull();
+
+      before = await questionCount();
+      const copied = await post(owner, `/app/api/questions/${id}/copy`, {
+        targetPoolId: poolId,
+        categoryId,
+      });
+      expect(copied.statusCode, label).toBe(404);
+      expect(copied.json(), label).toEqual({ error: "not_found" });
+      expect(await questionCount(), label).toBe(before);
+    }
+    // No question of the pool sits in a foreign category.
+    const rows = await server.app.db.select().from(questions).where(eq(questions.poolId, poolId));
+    expect(rows.every((q) => q.categoryId === null)).toBe(true);
+  });
+
+  it("refuses a rename onto a name the pool holds with 409 duplicate_name", async () => {
+    await createQuestion("taken name");
+    const id = await createQuestion("free name");
+    const renamed = await server.app.inject({
+      method: "PATCH",
+      url: `/app/api/questions/${id}`,
+      headers: owner.headers,
+      payload: { internalName: "taken name" },
+    });
+    expect(renamed.statusCode).toBe(409);
+    expect(renamed.json()).toEqual({
+      error: "duplicate_name",
+      message: "This pool already has a question by that name",
+    });
+    const [row] = await server.app.db.select().from(questions).where(eq(questions.id, id));
+    expect(row!.internalName).toBe("free name");
+  });
 });
 
 describe("POST /questions/:id/try (F-QST-09)", () => {
@@ -918,7 +1011,11 @@ describe("pool sharing", () => {
     const own = await courseOf(outsider);
     const refused = await link(own, outsider, [open]);
     expect(refused.statusCode).toBe(403);
-    expect(refused.json()).toMatchObject({ error: "pool_link_forbidden", poolIds: [open] });
+    expect(refused.json()).toEqual({
+      error: "pool_link_forbidden",
+      message: 'Linking the pool "Public, not linkable" needs contributor access to it',
+      poolIds: [open],
+    });
     const rewrite = await server.app.inject({
       method: "PATCH",
       url: `/app/api/questions/${question}`,
@@ -929,7 +1026,13 @@ describe("pool sharing", () => {
 
     // A named reader may not link the shared pool either; a contributor may.
     const readers = await courseOf(reader);
-    expect((await link(readers, reader, [shared])).statusCode).toBe(403);
+    const byReader = await link(readers, reader, [shared]);
+    expect(byReader.statusCode).toBe(403);
+    expect(byReader.json()).toMatchObject({
+      error: "pool_link_forbidden",
+      message: expect.stringMatching(/^Linking the pool ".+" needs contributor access to it$/),
+      poolIds: [shared],
+    });
     const contributors = await courseOf(contributor);
     const linked = await link(contributors, contributor, [shared]);
     expect(linked.statusCode).toBe(200);
@@ -945,6 +1048,31 @@ describe("pool sharing", () => {
     expect(kept.statusCode).toBe(200);
     expect(kept.json().map((p: { id: string }) => p.id)).toEqual([shared]);
     expect((await link(mixed, reader, [])).json()).toEqual([]);
+  });
+
+  it("refuses a copy into a pool where the caller only holds a reader's seat", async () => {
+    const own = (
+      await server.app.inject({
+        method: "POST",
+        url: "/app/api/pools",
+        headers: reader.headers,
+        payload: { name: "The reader's own pool" },
+      })
+    ).json().id as string;
+    const source = (await writeQuestion(own, reader, "to copy")).json().meta.id as string;
+    const count = async () =>
+      (await server.app.db.select({ id: questions.id }).from(questions).where(eq(questions.poolId, shared)))
+        .length;
+    const before = await count();
+    const copied = await server.app.inject({
+      method: "POST",
+      url: `/app/api/questions/${source}/copy`,
+      headers: reader.headers,
+      payload: { targetPoolId: shared },
+    });
+    expect(copied.statusCode).toBe(403);
+    expect(copied.json()).toEqual({ error: "forbidden", message: "Read-only access", role: "reader" });
+    expect(await count()).toBe(before);
   });
 
   it("lists every reachable pool with its role and its member count", async () => {

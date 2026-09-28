@@ -53,6 +53,7 @@ import {
   enrollments,
   gradings,
 } from "../../db/schema.js";
+import { DomainError } from "../http.js";
 import {
   applyState,
   cachedGrade,
@@ -88,19 +89,13 @@ import {
   verdictOf,
   type GradingRecord,
   type PairKey,
+  type StudentAttempts,
 } from "../grading/service.js";
 import { solutionView, stripKeys, studentView } from "../live/studentView.js";
 import { typeOf } from "../pool/config.js";
 
-export class ResultsError extends Error {
-  constructor(
-    readonly code: string,
-    readonly status: number,
-    message?: string,
-  ) {
-    super(message ?? code);
-    this.name = "ResultsError";
-  }
+export class ResultsError extends DomainError {
+  override name = "ResultsError";
 }
 
 export class NotReleasable extends ResultsError {
@@ -690,41 +685,88 @@ export function filterDetails(
   return stripKeys(shaped, forbiddenDetailKeys, publishedExpected);
 }
 
+/** A row of `studentEvaluationRows`: one per evaluation, with the latest attempt. */
+type StudentRow = Awaited<ReturnType<typeof studentEvaluationRows>>[number];
+
+/**
+ * The attempt that counts (F-EVAL-15): with retakes, the best or the last
+ * one (`retaking`, from `studentAttempts`); otherwise the student's only
+ * attempt, which the row already holds.
+ */
+export function countedAttemptId(
+  retaking: ReadonlyMap<string, StudentAttempts>,
+  row: StudentRow,
+): string | null {
+  const mine = retaking.get(row.evaluation.id);
+  return mine ? (mine.kept?.id ?? null) : (row.attempt?.id ?? null);
+}
+
+export interface ReleasedGrade {
+  attemptId: string | null;
+  points: number;
+  totalPoints: number;
+  grade: number;
+}
+
+/**
+ * The grade of each RELEASED row, keyed by evaluation id: what the student
+ * home and the results page both show. `retaking` holds the student's
+ * attempts of (at least) every row with retakes.
+ *
+ * The grade frozen at release is served as long as it is still true
+ * (`cachedGrade`, D-06). F-GRADE-09 is explicit: a re-correction after the
+ * release UPDATES the grades, so once `modified_after_release` is set they
+ * are recomputed from the validated gradings of the counted attempt. Two
+ * grouped queries for the rows that need it, not two per row — and none when
+ * every row is cached.
+ */
+export async function releasedGradesOf(
+  db: Db,
+  userId: string,
+  rows: readonly StudentRow[],
+  retaking: ReadonlyMap<string, StudentAttempts>,
+): Promise<Map<string, ReleasedGrade>> {
+  const released = rows.filter((row) => row.evaluation.releasedAt !== null);
+  const cached = new Map(
+    released.map((row) => [
+      row.evaluation.id,
+      cachedGrade(row.evaluation, userId, countedAttemptId(retaking, row)),
+    ]),
+  );
+  const live = released.filter((row) => cached.get(row.evaluation.id) === null);
+  const [totals, pointsPerAttempt] = await Promise.all([
+    totalPointsByEvaluation(db, [...new Set(live.map((r) => r.evaluation.id))]),
+    pointsByAttempt(
+      db,
+      live.map((row) => countedAttemptId(retaking, row)).filter((id): id is string => id !== null),
+    ),
+  ]);
+  return new Map(
+    released.map((row) => {
+      const attemptId = countedAttemptId(retaking, row);
+      const hit = cached.get(row.evaluation.id) ?? null;
+      if (hit) return [row.evaluation.id, { attemptId, ...hit }];
+      const totalPoints = totals.get(row.evaluation.id) ?? 0;
+      const points = attemptId ? (pointsPerAttempt.get(attemptId) ?? 0) : 0;
+      const grade = gradeFromPoints(points, totalPoints, scaleOf(row.evaluation));
+      return [row.evaluation.id, { attemptId, points, totalPoints, grade }];
+    }),
+  );
+}
+
 /** `GET /student/results` — one card per released evaluation the student took. */
 export async function studentResultCards(db: Db, userId: string): Promise<ResultCard[]> {
   const rows = (await studentEvaluationRows(db, userId)).filter(
     (row) => row.evaluation.releasedAt !== null,
   );
-  // The grade frozen at release is served as long as it is still true
-  // (`cachedGrade`, D-06). F-GRADE-09 is explicit: a re-correction after the
-  // release UPDATES the grades, so once `modified_after_release` is set they
-  // are recomputed from the validated gradings. Two grouped queries for the
-  // cards that need it, not two per card — and none when every card is cached.
-  // The attempt that counts (F-EVAL-15): with retakes, the best or the last
-  // one; otherwise the student's only attempt, which the row already holds.
   const retaking = await studentAttempts(
     db,
     userId,
     rows.filter((row) => retakesEnabled(row.evaluation)).map((row) => row.evaluation),
   );
-  const countedOf = (row: (typeof rows)[number]): string | null =>
-    retaking.has(row.evaluation.id)
-      ? (retaking.get(row.evaluation.id)!.kept?.id ?? null)
-      : (row.attempt?.id ?? null);
-  const cached = new Map(
-    rows.map((row) => [row, cachedGrade(row.evaluation, userId, countedOf(row))]),
-  );
-  const live = rows.filter((row) => cached.get(row) === null);
-  const totals = await totalPointsByEvaluation(db, [...new Set(live.map((r) => r.evaluation.id))]);
-  const pointsPerAttempt = await pointsByAttempt(
-    db,
-    live.map(countedOf).filter((id): id is string => typeof id === "string"),
-  );
+  const grades = await releasedGradesOf(db, userId, rows, retaking);
   return rows.map((row) => {
-    const hit = cached.get(row) ?? null;
-    const attemptId = countedOf(row);
-    const totalPoints = hit ? hit.totalPoints : (totals.get(row.evaluation.id) ?? 0);
-    const points = hit ? hit.points : attemptId ? (pointsPerAttempt.get(attemptId) ?? 0) : 0;
+    const { attemptId, points, totalPoints, grade } = grades.get(row.evaluation.id)!;
     return {
       evaluationId: row.evaluation.id,
       title: row.evaluation.title,
@@ -735,7 +777,7 @@ export async function studentResultCards(db: Db, userId: string): Promise<Result
       releasedAt: isoOrNull(row.evaluation.releasedAt),
       points,
       totalPoints,
-      grade: hit ? hit.grade : gradeFromPoints(points, totalPoints, scaleOf(row.evaluation)),
+      grade,
     };
   });
 }

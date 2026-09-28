@@ -55,6 +55,7 @@ import { issuesOf } from "@quiz/contracts";
 import { displayName, effectivePoolRole, poolRoleAllows } from "@quiz/domain";
 
 import { isForeignKeyViolation, isUniqueViolation, type Db } from "../../db/client.js";
+import { DomainError } from "../http.js";
 import {
   assets,
   attempts,
@@ -96,7 +97,7 @@ import {
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 export type PoolRow = typeof pools.$inferSelect;
-type QuestionRecord = typeof questions.$inferSelect;
+export type QuestionRecord = typeof questions.$inferSelect;
 
 /**
  * The pool of a question this module was handed. Every route reaches a
@@ -132,6 +133,65 @@ export class VersionInUse extends Error {
     super("a published version is in use");
     this.name = "VersionInUse";
   }
+}
+
+/**
+ * A new question named like one its pool already holds
+ * (`questions_pool_name_uq`): `409 duplicate_name`, sent by the shared tail.
+ */
+export class NameTaken extends DomainError {
+  override name = "NameTaken";
+  constructor() {
+    super("duplicate_name", 409, "This pool already has a question by that name");
+  }
+}
+
+/**
+ * A category that is not a category OF THE QUESTION'S POOL — another pool's,
+ * or one that does not exist: as good as missing, the `404 not_found` a move
+ * answers. The pool routes send it as `{ error: "not_found" }`.
+ */
+export class CategoryNotInPool extends DomainError {
+  override name = "CategoryNotInPool";
+  constructor() {
+    super("not_found", 404, "the category is not a category of this pool");
+  }
+}
+
+/** True when `categoryId` is null or a category of `poolId`. */
+export async function isCategoryOf(
+  db: Db | Tx,
+  poolId: string,
+  categoryId: string | null,
+): Promise<boolean> {
+  if (categoryId === null) return true;
+  const [category] = await db
+    .select({ id: categories.id })
+    .from(categories)
+    .where(and(eq(categories.id, categoryId), eq(categories.poolId, poolId)))
+    .limit(1);
+  return category !== undefined;
+}
+
+async function assertCategoryOf(
+  db: Db | Tx,
+  poolId: string,
+  categoryId: string | null | undefined,
+): Promise<void> {
+  if (!(await isCategoryOf(db, poolId, categoryId ?? null))) throw new CategoryNotInPool();
+}
+
+/**
+ * A write of `questions` refused by a constraint a caller can trip: its
+ * name taken in the pool, or — the backstop of `assertCategoryOf` — a
+ * category deleted in between. Anything else is rethrown as it is.
+ */
+function questionWriteError(error: unknown): unknown {
+  if (isUniqueViolation(error, "questions_pool_name_uq")) return new NameTaken();
+  if (isForeignKeyViolation(error, "questions_category_id_categories_id_fk")) {
+    return new CategoryNotInPool();
+  }
+  return error;
 }
 
 /**
@@ -795,10 +855,16 @@ export async function poolsOfCourse(db: Db, courseId: string) {
  * link would hand the whole course staff `contributor` on it, a write access
  * the caller does not hold. Answered `403 pool_link_forbidden`.
  */
-export class PoolLinkForbidden extends Error {
+export class PoolLinkForbidden extends DomainError {
+  override name = "PoolLinkForbidden";
   constructor(readonly pools: { id: string; name: string }[]) {
-    super("linking a pool needs contributor access to it");
-    this.name = "PoolLinkForbidden";
+    // The caller sees these pools, so naming them leaks nothing (ADR-013).
+    super(
+      "pool_link_forbidden",
+      403,
+      `Linking the pool "${pools[0]!.name}" needs contributor access to it`,
+      { poolIds: pools.map((p) => p.id) },
+    );
   }
 }
 
@@ -1512,6 +1578,7 @@ export async function createQuestion(
   const id = randomUUID();
   const now = new Date();
   return db.transaction(async (tx) => {
+    await assertCategoryOf(tx, input.poolId, input.categoryId);
     const [created] = await tx.insert(questions).values({
       id,
       poolId: input.poolId,
@@ -1534,6 +1601,8 @@ export async function createQuestion(
       createdAt: now,
     });
     return created!;
+  }).catch((error: unknown) => {
+    throw questionWriteError(error);
   });
 }
 
@@ -1776,6 +1845,7 @@ export async function patchQuestion(
 ): Promise<void> {
   const now = new Date();
   await db.transaction(async (tx) => {
+    if (patch.categoryId !== undefined) await assertCategoryOf(tx, poolOf(question), patch.categoryId);
     await tx
       .update(questions)
       .set({
@@ -1814,6 +1884,8 @@ export async function patchQuestion(
           .where(eq(questionVersions.id, draft.id));
       }
     }
+  }).catch((error: unknown) => {
+    throw questionWriteError(error);
   });
 }
 
@@ -2140,6 +2212,7 @@ export async function copyQuestion(
   const now = new Date();
   const name = await freeName(db, input.targetPoolId, question.internalName);
   return db.transaction(async (tx) => {
+    await assertCategoryOf(tx, input.targetPoolId, input.categoryId);
     const [created] = await tx.insert(questions).values({
       id,
       poolId: input.targetPoolId,
@@ -2171,6 +2244,8 @@ export async function copyQuestion(
       await ensurePoolTags(tx, input.targetPoolId, tags);
     }
     return created!;
+  }).catch((error: unknown) => {
+    throw questionWriteError(error);
   });
 }
 

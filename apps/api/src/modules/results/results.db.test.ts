@@ -671,7 +671,8 @@ describe("the student's pages read in a fixed number of statements (audit D-05)"
 
       statements.mockClear();
       const home = await live.studentHome(db, studentId!, app.clock.now());
-      expect(statements).toHaveBeenCalledTimes(3);
+      // The same `releasedGradesOf` as the cards: one statement too.
+      expect(statements).toHaveBeenCalledTimes(1);
       expect(new Map(home.past.map((c) => [c.id, c.grade]))).toEqual(
         new Map([...expected].map(([id, e]) => [id, e.grade])),
       );

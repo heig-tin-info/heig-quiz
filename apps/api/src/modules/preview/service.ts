@@ -47,6 +47,7 @@ import {
 import { attemptTotal, compilesPerMinute, gradeFromPoints, previewDurationS, round2 } from "@quiz/domain";
 
 import type { Db } from "../../db/client.js";
+import { DomainError } from "../http.js";
 import {
   gradeDefaults,
   joinedItem,
@@ -70,14 +71,14 @@ import { hasKey, loadConfig, typeOf } from "../pool/config.js";
 
 // --- Failures -------------------------------------------------------------
 
-export class PreviewError extends Error {
-  constructor(
-    readonly code: string,
-    readonly status: number,
-    readonly extra: Record<string, unknown> = {},
-  ) {
-    super(code);
-    this.name = "PreviewError";
+/**
+ * A refusal of the preview. Its body is `{ error, ...extra }`, without the
+ * `message` of the shared tail, so the route answers it in its own arm.
+ */
+export class PreviewError extends DomainError {
+  override name = "PreviewError";
+  constructor(code: string, status: number, extra: Record<string, unknown> = {}) {
+    super(code, status, undefined, extra);
   }
 }
 

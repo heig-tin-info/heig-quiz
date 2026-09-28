@@ -8,12 +8,8 @@
  * never in a handler (audit B-12). The teacher routes
  * that act on one entity run on `teacherRoute`: params (404), then the entity
  * under `staffAccess` (404, invariant 6), then the body — so a caller off the
- * staff learns nothing, not even that their body was malformed.
- *
- * Their 400 is still the raw zod `issues` shape (`invalidIssues` below, B-03's
- * second shape), not the `details` of `invalid()`: aligning it is a wire
- * change with its own look at the web error rendering, so the body is parsed
- * inside the handler rather than by the wrapper.
+ * staff learns nothing, not even that their body was malformed. Their 400
+ * is the wrapper's `invalid()`, `{ error: "validation", details }`.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -47,8 +43,8 @@ import {
   staffAccess,
   teacherGuard,
 } from "../guards.js";
-import { teacherRoute } from "../http.js";
-import { PoolLinkForbidden, poolsOfCourse, setCoursePools } from "../pool/service.js";
+import { invalid, teacherRoute } from "../http.js";
+import { poolsOfCourse, setCoursePools } from "../pool/service.js";
 import { claimForExistingUsers, importRoster, rosterView } from "./roster.js";
 import * as service from "./service.js";
 
@@ -63,33 +59,25 @@ const StaffBody = z.object({ email: z.email() });
 const StaffParam = z.object({ id: z.uuid(), uid: z.uuid() });
 const EntryParam = z.object({ id: z.uuid(), eid: z.uuid() });
 
-/** The 400 these routes have always sent: the raw zod issues (B-03's second shape). */
-function invalidIssues(reply: FastifyReply, error: z.ZodError) {
-  return reply.code(400).send({ error: "validation", issues: error.issues });
-}
-
 export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
   const requireTeacher = teacherGuard(app);
   const trace = tracer(app);
 
-  /** The module's error tail: nothing it expects, so every failure is a logged 500. */
-  function failure(reply: FastifyReply, error: unknown): FastifyReply {
-    reply.log.error({ err: error, cause: (error as Error)?.cause }, "org route failed");
-    return reply.code(500).send({ error: "internal_error" });
-  }
-
-  const teacher = teacherRoute(app, failure);
+  const teacher = teacherRoute(app);
   /** The loaders of invariant 6: each answers its own 404 and returns null. */
-  const loadCourse = (req: FastifyRequest, reply: FastifyReply) => accessibleCourse(app, req, reply);
+  const loadCourse = (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
+    accessibleCourse(app, req, reply, p);
   const onCourse = { params: IdParam, load: loadCourse };
   const onClassroom = {
     params: IdParam,
-    load: (req: FastifyRequest, reply: FastifyReply) => accessibleClassroom(app, req, reply),
+    load: (req: FastifyRequest, reply: FastifyReply, p: { id: string }) =>
+      accessibleClassroom(app, req, reply, p),
   };
   const onEntry = {
     params: EntryParam,
-    load: (req: FastifyRequest, reply: FastifyReply) => accessibleEnrollment(app, req, reply),
+    load: (req: FastifyRequest, reply: FastifyReply, p: { id: string; eid: string }) =>
+      accessibleEnrollment(app, req, reply, p),
   };
 
   // --- Courses ---
@@ -100,7 +88,7 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
 
   app.post("/app/api/courses", { preHandler: requireTeacher }, async (req, reply) => {
     const body = CourseCreate.safeParse(req.body);
-    if (!body.success) return invalidIssues(reply, body.error);
+    if (!body.success) return invalid(reply, body.error);
     const code = body.data.code.trim().toUpperCase();
     const created = await service.createCourse(
       app.db,
@@ -154,11 +142,9 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.patch(
     "/app/api/courses/:id",
     { preHandler: requireTeacher },
-    teacher(onCourse, async ({ req, reply, scope: course }) => {
-      const body = CoursePatch.safeParse(req.body);
-      if (!body.success) return invalidIssues(reply, body.error);
-      const updated = await service.updateCourse(app.db, course.id, body.data);
-      await trace(req, "course.update", "course", course.id, body.data);
+    teacher({ ...onCourse, body: CoursePatch }, async ({ req, body, scope: course }) => {
+      const updated = await service.updateCourse(app.db, course.id, body);
+      await trace(req, "course.update", "course", course.id, body);
       return updated;
     }),
   );
@@ -206,27 +192,15 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.put(
     "/app/api/courses/:id/pools",
     { preHandler: requireTeacher },
-    teacher(onCourse, async ({ req, reply, scope: course }) => {
-      const body = CoursePoolsPut.safeParse(req.body);
-      if (!body.success) return invalidIssues(reply, body.error);
-      let linked;
-      try {
-        linked = await setCoursePools(
-          app.db,
-          course.id,
-          body.data.poolIds,
-          accessWhere(req.user!, poolAccess(req.user!.id)),
-          req.user!,
-        );
-      } catch (error) {
-        if (!(error instanceof PoolLinkForbidden)) throw error;
-        // The caller sees these pools, so a 403 leaks nothing (ADR-013).
-        return reply.code(403).send({
-          error: "pool_link_forbidden",
-          message: `Linking the pool "${error.pools[0]!.name}" needs contributor access to it`,
-          poolIds: error.pools.map((p) => p.id),
-        });
-      }
+    teacher({ ...onCourse, body: CoursePoolsPut }, async ({ req, body, scope: course }) => {
+      // A pool the caller only reads is `PoolLinkForbidden`'s 403 (ADR-013).
+      const linked = await setCoursePools(
+        app.db,
+        course.id,
+        body.poolIds,
+        accessWhere(req.user!, poolAccess(req.user!.id)),
+        req.user!,
+      );
       await trace(req, "course.pools_update", "course", course.id, {
         poolIds: linked.map((p) => p.id),
       });
@@ -293,10 +267,8 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.post(
     "/app/api/courses/:id/classrooms",
     { preHandler: requireTeacher },
-    teacher(onCourse, async ({ req, reply, scope: course }) => {
-      const body = ClassroomCreate.safeParse(req.body);
-      if (!body.success) return invalidIssues(reply, body.error);
-      const room = await service.createClassroom(app.db, course.id, body.data);
+    teacher({ ...onCourse, body: ClassroomCreate }, async ({ req, reply, body, scope: course }) => {
+      const room = await service.createClassroom(app.db, course.id, body);
       await trace(req, "classroom.create", "classroom", room.id, {
         name: room.name,
         courseId: course.id,
@@ -324,19 +296,17 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.patch(
     "/app/api/classrooms/:id",
     { preHandler: requireTeacher },
-    teacher(onClassroom, async ({ req, reply, scope }) => {
-      const body = ClassroomPatch.safeParse(req.body);
-      if (!body.success) return invalidIssues(reply, body.error);
+    teacher({ ...onClassroom, body: ClassroomPatch }, async ({ req, body, scope }) => {
       // Self-enrolment is a switch of its own: turning it on mints the code
       // when there is none (F-ORG-06).
-      if (body.data.joinCodeEnabled !== undefined) {
-        const state = await service.setJoinCode(app.db, scope.room.id, body.data.joinCodeEnabled);
+      if (body.joinCodeEnabled !== undefined) {
+        const state = await service.setJoinCode(app.db, scope.room.id, body.joinCodeEnabled);
         await trace(req, "classroom.join_code", "classroom", scope.room.id, {
           enabled: state.joinCodeEnabled,
         });
       }
-      const updated = await service.updateClassroom(app.db, scope.room.id, body.data);
-      const { name, period, periodStart } = body.data;
+      const updated = await service.updateClassroom(app.db, scope.room.id, body);
+      const { name, period, periodStart } = body;
       if (name !== undefined || period !== undefined || periodStart !== undefined) {
         // The period is part of what the classroom is called: its old and new
         // label and months ride on the same entry (#156).
@@ -437,20 +407,18 @@ export async function orgPlugin(app: FastifyInstance, opts: { config: AppConfig 
   app.patch(
     "/app/api/classrooms/:id/roster/:eid",
     { preHandler: requireTeacher },
-    teacher(onEntry, async ({ req, reply, scope: entry }) => {
-      const body = EnrollmentPatch.safeParse(req.body);
-      if (!body.success) return invalidIssues(reply, body.error);
-      const email = body.data.email?.trim().toLowerCase();
+    teacher({ ...onEntry, body: EnrollmentPatch }, async ({ req, reply, body, scope: entry }) => {
+      const email = body.email?.trim().toLowerCase();
       const emailChanged = email !== undefined && email !== entry.email;
       try {
         const updated = await service.updateEnrollment(
           app.db,
           entry.id,
-          body.data,
+          body,
           email,
           emailChanged,
         );
-        await trace(req, "roster.update", "enrollment", entry.id, { ...body.data, emailChanged });
+        await trace(req, "roster.update", "enrollment", entry.id, { ...body, emailChanged });
         if (emailChanged) await claimForExistingUsers(app.db, entry.classroomId);
         return updated;
       } catch {

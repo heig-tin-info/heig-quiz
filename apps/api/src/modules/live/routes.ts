@@ -61,13 +61,16 @@ export async function livePlugin(app: FastifyInstance) {
     app.requireSession(req, reply);
   const requireTeacher = teacherGuard(app);
 
-  /** Maps every failure of the module to its status, `410` bodies included. */
-  function failure(reply: FastifyReply, error: unknown, now: Date): FastifyReply {
+  /**
+   * The failures this module answers in their own shape — the `410` of the
+   * clock, a `retry-after`, a `reason` — before the shared tail.
+   */
+  function arms(reply: FastifyReply, error: unknown, now: Date): FastifyReply | null {
     if (error instanceof service.AttemptClosedError) {
       return reply.code(410).send(error.body(now));
     }
     if (error instanceof service.AnswerInvalid) {
-      return reply.code(422).send({ error: error.code, details: error.details });
+      return reply.code(422).send({ error: error.code, details: error.issues });
     }
     if (error instanceof service.RateLimited) {
       return reply
@@ -87,21 +90,12 @@ export async function livePlugin(app: FastifyInstance) {
         .code(error.status)
         .send({ error: error.code, reason: error.reason, message: error.message });
     }
-    if (error instanceof service.LiveError) {
-      return reply.code(error.status).send({ error: error.code, message: error.message });
-    }
-    if (error instanceof evaluationService.EvaluationError) {
-      return reply
-        .code(error.status)
-        .send({ error: error.code, message: error.message, ...error.details });
-    }
-    reply.log.error({ err: error, cause: (error as Error)?.cause }, "live route failed");
-    return reply.code(500).send({ error: "internal_error" });
+    return null;
   }
 
   const trace = tracer(app);
-  const student = studentRoute(app, failure);
-  const teacher = teacherRoute(app, failure);
+  const student = studentRoute(app, arms);
+  const teacher = teacherRoute(app, arms);
 
   // The loaders of invariant 6, each answering its own 404 — and, for the
   // routes that sit an evaluation, the same 404 when this session may not

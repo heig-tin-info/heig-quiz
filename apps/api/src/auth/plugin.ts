@@ -10,6 +10,7 @@ import { avatars, users } from "../db/schema.js";
 import { publish } from "../events.js";
 import { CoachSeenPatch, MePatch, type PublicConfig, type SessionKind } from "@quiz/contracts";
 
+import { invalid } from "../modules/http.js";
 import { devLoginRoutes } from "./dev.js";
 import { loginAdmits, signIn } from "./login.js";
 import { OidcProvider, type OidcClaims } from "./oidc.js";
@@ -319,11 +320,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
       // Invariant 7: the body is validated by the contract schema the SPA
       // sends against, never by a hand-rolled chain of `in` checks.
       const parsed = MePatch.safeParse(req.body ?? {});
-      if (!parsed.success) {
-        return reply
-          .code(400)
-          .send({ error: "validation", message: "Unsupported preference", details: parsed.error.issues });
-      }
+      if (!parsed.success) return invalid(reply, parsed.error);
       const patch = parsed.data;
       await app.db.update(users).set(patch).where(eq(users.id, req.user!.id));
       const before = req.user!;
@@ -347,11 +344,7 @@ async function authPluginImpl(app: FastifyInstance, opts: { config: AppConfig })
     { preHandler: (req, reply) => app.requireSession(req, reply) },
     async (req, reply) => {
       const parsed = CoachSeenPatch.safeParse(req.body ?? {});
-      if (!parsed.success) {
-        return reply
-          .code(400)
-          .send({ error: "validation", message: "Invalid coach marks", details: parsed.error.issues });
-      }
+      if (!parsed.success) return invalid(reply, parsed.error);
       const body = parsed.data;
       const [row] = await app.db
         .update(users)

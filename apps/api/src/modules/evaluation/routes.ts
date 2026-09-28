@@ -50,20 +50,15 @@ import * as templates from "./templates.js";
 export async function evaluationPlugin(app: FastifyInstance) {
   const requireTeacher = teacherGuard(app);
 
-  /** Everything this module refuses carries its own status and machine code; the rest is a 500. */
-  function failure(reply: FastifyReply, error: unknown): FastifyReply {
-    // Exactly the loader's 404 (invariant 6), not an error envelope with a message.
-    if (error instanceof templates.TemplateGone) return notFound(reply);
-    if (error instanceof service.EvaluationError) {
-      return reply
-        .code(error.status)
-        .send({ error: error.code, message: error.message, ...error.details });
-    }
-    reply.log.error({ err: error, cause: (error as Error)?.cause }, "evaluation route failed");
-    return reply.code(500).send({ error: "internal_error" });
+  /**
+   * A template gone between the loader and the write is exactly the loader's
+   * 404 (invariant 6), not an error envelope with a message.
+   */
+  function arms(reply: FastifyReply, error: unknown): FastifyReply | null {
+    return error instanceof templates.TemplateGone ? notFound(reply) : null;
   }
 
-  const teacher = teacherRoute(app, failure);
+  const teacher = teacherRoute(app, arms);
 
   /** The audit entry every write of this module leaves behind. */
   const trace = tracer(app);
@@ -341,8 +336,9 @@ export async function evaluationPlugin(app: FastifyInstance) {
   app.get(
     "/app/api/courses/:id/templates",
     { preHandler: requireTeacher },
-    teacher({ params: IdParam, load: (req, reply) => accessibleCourse(app, req, reply) }, ({ scope }) =>
-      templates.listTemplates(app.db, scope.id),
+    teacher(
+      { params: IdParam, load: (req, reply, p) => accessibleCourse(app, req, reply, p) },
+      ({ scope }) => templates.listTemplates(app.db, scope.id),
     ),
   );
 
@@ -373,7 +369,7 @@ export async function evaluationPlugin(app: FastifyInstance) {
     "/app/api/courses/:id/templates",
     { preHandler: requireTeacher },
     teacher(
-      { params: IdParam, body: TemplateNew, load: (req, reply) => accessibleCourse(app, req, reply) },
+      { params: IdParam, body: TemplateNew, load: (req, reply, p) => accessibleCourse(app, req, reply, p) },
       async ({ req, reply, body, scope }) => {
         const row = await templates.createTemplate(app.db, {
           courseId: scope.id,

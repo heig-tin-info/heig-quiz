@@ -7,15 +7,17 @@
  * `details` built by `issuesOf()` from `@quiz/contracts`, the same function
  * the client parses with `ZodIssueLite` (invariant 7).
  *
- * Two other 400 shapes still live inline in `org/routes.ts`
- * (`{ error: "validation", issues }`, the raw zod issues) and in
+ * One other 400 shape still lives inline in
  * `realtime/routes.ts`/`notifications/routes.ts` (bare
- * `{ error: "validation" }`). Aligning them is a wire change and gets its
- * own commit, with a matching look at the web error rendering.
+ * `{ error: "validation" }`).
+ *
+ * Then `DomainError`, the one refusal a service throws, and `sendFailure`,
+ * the error tail every route shares: a module's own arms first (the 410 of
+ * the clock, a `retry-after`), then any `DomainError` as
+ * `{ error, message, ...details }`, then a logged 500.
  *
  * Below them, `studentRoute`/`teacherRoute`: the guarded-route preamble
- * (clock, params, body, loader, error tail) written once. `live` uses them;
- * the other modules move onto them one PR at a time.
+ * (clock, params, body, loader, error tail) written once.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { z } from "zod";
@@ -43,18 +45,64 @@ export function notFound(reply: FastifyReply) {
 }
 
 // ---------------------------------------------------------------------------
+// Failures
+// ---------------------------------------------------------------------------
+
+/**
+ * Base of everything a service refuses: a machine `code`, an HTTP `status`,
+ * a sentence for the log and, in `details`, the machine half of a refusal
+ * the screen translates rather than prints (#76). It travels in the body
+ * beside `error` and `message`. The modules keep a thin subclass each
+ * (`EvaluationError`, `LiveError`, …) so a route can still single out
+ * its own family when it needs to.
+ */
+export class DomainError extends Error {
+  constructor(
+    readonly code: string,
+    readonly status: number,
+    message?: string,
+    readonly details?: Readonly<Record<string, unknown>>,
+  ) {
+    super(message ?? code);
+    this.name = "DomainError";
+  }
+}
+
+/**
+ * A module's own arms, tried before the shared tail: a reply when the error
+ * is one it answers in its own shape, `null` to fall through.
+ */
+export type FailureArms = (reply: FastifyReply, error: unknown, now: Date) => FastifyReply | null;
+
+/**
+ * The error tail of every route: the module's `arms`, then a `DomainError`
+ * with its status, then a 500. An unexpected error is logged through
+ * `reply.log`, the request-scoped logger, so the line carries the `reqId`
+ * the global handler's `req.log` did.
+ */
+export function sendFailure(
+  reply: FastifyReply,
+  error: unknown,
+  now: Date,
+  arms?: FailureArms,
+): FastifyReply {
+  const handled = arms?.(reply, error, now);
+  if (handled) return handled;
+  if (error instanceof DomainError) {
+    return reply
+      .code(error.status)
+      .send({ error: error.code, message: error.message, ...error.details });
+  }
+  reply.log.error({ err: error, cause: (error as Error)?.cause }, "route failed");
+  return reply.code(500).send({ error: "internal_error" });
+}
+
+// ---------------------------------------------------------------------------
 // Route wrappers (audit B-02)
 // ---------------------------------------------------------------------------
 
 type Schema = z.ZodType;
 type Parsed<S> = S extends Schema ? z.output<S> : undefined;
-
-/**
- * A module's error tail: every failure it knows mapped to a reply, the rest a
- * 500. An unexpected error is logged through `reply.log`, the request-scoped
- * logger, so the line carries the `reqId` the global handler's `req.log` did.
- */
-type Failure = (reply: FastifyReply, error: unknown, now: Date) => FastifyReply;
 
 /** What a guarded handler receives: everything the preamble used to compute. */
 interface RouteContext<P, B, Q, S> {
@@ -107,7 +155,7 @@ function isClientError(error: unknown): boolean {
 }
 
 function wrapper(order: Order) {
-  return (app: FastifyInstance, failure: Failure) =>
+  return (app: FastifyInstance, arms?: FailureArms) =>
     <
       P extends Schema,
       S,
@@ -162,21 +210,21 @@ function wrapper(order: Order) {
         } catch (error) {
           // A Fastify client error (a multipart limit's 413, …) goes back to
           // the global error handler, which sends it as it always did; only
-          // the rest is the module's to map.
+          // the rest goes through the shared tail.
           if (isClientError(error)) throw error;
-          return failure(reply, error, now);
+          return sendFailure(reply, error, now, arms);
         }
       };
 }
 
 /**
- * `studentRoute(app, failure)(spec, handler)` — params (404), body (400),
- * scope (the loader's 404), then the handler under the module's `failure`.
+ * `studentRoute(app, arms?)(spec, handler)` — params (404), body (400),
+ * scope (the loader's 404), then the handler under `sendFailure`.
  */
 export const studentRoute = wrapper("body-first");
 
 /**
- * `teacherRoute(app, failure)(spec, handler)` — params (404), scope (the
- * loader's 404), body/query (400), then the handler under `failure`.
+ * `teacherRoute(app, arms?)(spec, handler)` — params (404), scope (the
+ * loader's 404), body/query (400), then the handler under `sendFailure`.
  */
 export const teacherRoute = wrapper("scope-first");
