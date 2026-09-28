@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { badge, button, buttonClass, cx, input, inputClass, inputSm } from "./styles.js";
+import { badge, button, buttonClass, cx, inputClass, textareaClass } from "./styles.js";
 
 describe("cx", () => {
   it("joins the truthy parts and skips the rest", () => {
@@ -28,9 +28,15 @@ describe("badge", () => {
   });
 });
 
+describe("inputClass", () => {
+  it("carries no height, width or vertical padding: inputSize and the caller give them", () => {
+    expect(inputClass).not.toMatch(/(^| )(h|w|py)-/);
+  });
+});
+
 describe("tokens", () => {
   it("never carries a dark: variant or a raw radius", () => {
-    for (const cls of [input, inputSm, button(), badge(), inputClass, buttonClass]) {
+    for (const cls of [inputClass, textareaClass, button(), badge(), buttonClass]) {
       expect(cls).not.toMatch(/\bdark:/);
       expect(cls).not.toMatch(/\brounded-(xl|lg|md)\b/);
     }

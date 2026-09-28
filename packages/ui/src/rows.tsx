@@ -6,7 +6,7 @@
 import type { ReactNode } from "react";
 
 import { CheckboxField, FieldCell, NumberField } from "./fields.js";
-import { badge, button, cx, inputSm, sectionTitle } from "./styles.js";
+import { badge, button, cx, inputClass, inputSize, sectionTitle } from "./styles.js";
 
 /** The list with the row at `index` merged with `patch`; the others untouched. */
 export function patchAt<T>(list: readonly T[], index: number, patch: Partial<T>): T[] {
@@ -154,7 +154,7 @@ export function RowHead({
       <FieldCell label={nameLabel} htmlFor={nameId} className="min-w-40 flex-1">
         <input
           id={nameId}
-          className={cx(inputSm, "w-full font-medium")}
+          className={cx(inputClass, inputSize.sm, "w-full font-medium")}
           aria-label={nameAriaLabel}
           disabled={disabled}
           value={name}

@@ -25,10 +25,33 @@ export const hint = "text-[13px] text-fg-muted";
 /** A checkbox in a column of settings (`CheckboxField.className`): no fixed height, the body ink. */
 export const setting = "flex items-center gap-2 text-[13px] text-fg";
 
-export const input =
-  "rounded-field border border-line-strong bg-surface px-3 text-sm text-fg transition-colors placeholder:text-fg-faint hover:border-fg-faint focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-50";
+/**
+ * Field chrome, with no width and no height of its own — the one field of the
+ * product: `apps/web`'s `Field`, `Select` and `Textarea` wear it, as the
+ * editors and players of every question type do, so a field inside a
+ * question editor is the same field as one in a settings form.
+ *
+ * Tailwind resolves conflicting utilities by their order in the generated
+ * stylesheet, not by their order in the class attribute, so a `w-16` or an
+ * `h-8` written next to this string was never guaranteed to win. Height comes
+ * from `inputSize` and width from the caller, which both compose instead of
+ * fighting. The radius is the `rounded-field` token, never a literal.
+ */
+export const inputClass =
+  "rounded-field border border-line-strong bg-surface px-3 text-sm text-fg transition-colors placeholder:text-fg-faint hover:border-fg-faint focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-50 disabled:hover:border-line-strong";
 
-export const inputSm = `${input} h-7`;
+/**
+ * Control heights, aligned on the button scale of `apps/web/DESIGN.md`:
+ * `sm` 28 px for a control inside a dense row, `md` 34 px everywhere else.
+ */
+export const inputSize = { sm: "h-7", md: "h-8.5" } as const;
+
+/**
+ * A multi-line field: the chrome above, with the vertical padding and the
+ * reading line height of `apps/web`'s `Textarea`. Its height is its content
+ * (`rows`), never one of the two control heights.
+ */
+export const textareaClass = `${inputClass} py-2 leading-relaxed`;
 
 export const codeArea =
   "w-full rounded-field border border-line-strong bg-surface px-3 py-2 font-mono text-[13px] leading-[1.55] text-fg transition-colors focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-60";
@@ -94,15 +117,6 @@ export const table = {
  * ui.tsx of each of the three packages — and short and cloze had drifted to
  * a literal `rounded-xl` (audit P-01, divergence 1).
  */
-
-/**
- * Field chrome: the `--radius-field` token, `line-strong` hairline, accent
- * ring on focus. The RADIUS is a token and not `rounded-xl` on purpose — the
- * field radius of `apps/web/src/style.css` is a value the design owns, and a
- * literal here would drift the day it changes.
- */
-export const inputClass =
-  "rounded-field border border-line-strong bg-surface px-3 py-1.5 text-sm text-fg transition-colors placeholder:text-fg-faint hover:border-fg-faint focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-50";
 
 export const labelClass = "text-[13px] font-medium text-fg";
 export const helpClass = "text-xs text-fg-faint";

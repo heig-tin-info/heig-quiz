@@ -22,7 +22,7 @@ import {
   type ShortStudent,
 } from "./schema.js";
 import { shortPlayerStrings, type ShortPlayerStringKey } from "./strings.js";
-import { cx, helpClass, inputClass, isLocked, labelClass, markdown } from "@quiz/ui";
+import { cx, helpClass, inputClass, inputSize, isLocked, labelClass, markdown } from "@quiz/ui";
 
 type ShortPlayerProps = PlayerProps<ShortStudent, ShortAnswer> & {
   /** Alias of `readOnly`, for hosts that speak in disabled controls. */
@@ -111,7 +111,7 @@ export function ShortPlayer({
           {...fieldAttributes(student.kind, constraints)}
           autoComplete="off"
           spellCheck={false}
-          className={cx(inputClass, "w-full max-w-md")}
+          className={cx(inputClass, inputSize.md, "w-full max-w-md")}
           placeholder={student.placeholder ?? ""}
           value={answer?.text ?? ""}
           disabled={locked}

@@ -11,7 +11,7 @@ import type { ConfigIssue, RichTextComponent } from "@quiz/core/client";
 
 import { IssueList } from "./issues.js";
 import { PromptField } from "./PromptField.js";
-import { card, cx, hint as hintToken, input, label, sectionTitle } from "./styles.js";
+import { card, cx, hint as hintToken, label, sectionTitle, textareaClass } from "./styles.js";
 
 /**
  * One card of an editor's main column: its title, an optional one-line
@@ -86,7 +86,7 @@ export function PromptSection({
           uploadImage={uploadImage}
           {...(rows === undefined ? {} : { rows })}
           labelClassName={label}
-          textareaClassName={cx(input, "w-full py-2 leading-relaxed")}
+          textareaClassName={cx(textareaClass, "w-full")}
         />
         <IssueList issues={issues} />
       </div>

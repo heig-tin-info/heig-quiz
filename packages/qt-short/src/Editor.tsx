@@ -30,6 +30,7 @@ import {
   FieldCell,
   helpClass,
   inputClass,
+  inputSize,
   IssueList,
   labelClass,
   NumberField,
@@ -37,6 +38,7 @@ import {
   removeAt,
   sectionClass,
   Segmented,
+  textareaClass,
 } from "@quiz/ui";
 
 type ShortEditorProps = Omit<EditorProps<ShortConfig>, "uploadAsset"> & {
@@ -123,7 +125,7 @@ function MatcherFields({
 }) {
   const id = (name: string) => `${idBase}-${name}`;
   const wide = "col-span-2 sm:min-w-48 sm:flex-1";
-  const narrow = { inputClassName: inputClass, width: "w-full sm:w-28" };
+  const narrow = { size: "md", width: "w-full sm:w-28" } as const;
 
   switch (matcher.kind) {
     /*
@@ -136,7 +138,7 @@ function MatcherFields({
           <input
             id={id("value")}
             type="text"
-            className={cx(inputClass, "w-full")}
+            className={cx(inputClass, inputSize.md, "w-full")}
             value={matcher.value}
             disabled={disabled}
             onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
@@ -150,7 +152,7 @@ function MatcherFields({
             <input
               id={id("pattern")}
               type="text"
-              className={cx(inputClass, "w-full font-mono text-[13px]")}
+              className={cx(inputClass, inputSize.md, "w-full font-mono text-[13px]")}
               value={matcher.pattern}
               disabled={disabled}
               onChange={(e) => onPatch({ ...matcher, pattern: e.target.value })}
@@ -160,7 +162,7 @@ function MatcherFields({
             <input
               id={id("flags")}
               type="text"
-              className={cx(inputClass, "w-full font-mono text-[13px] sm:w-20")}
+              className={cx(inputClass, inputSize.md, "w-full font-mono text-[13px] sm:w-20")}
               value={matcher.flags}
               disabled={disabled}
               onChange={(e) => onPatch({ ...matcher, flags: e.target.value })}
@@ -198,7 +200,7 @@ function MatcherFields({
           <FieldCell label={s.toleranceMode} htmlFor={id("mode")} {...rowCell(index)}>
             <select
               id={id("mode")}
-              className={cx(inputClass, "w-full sm:w-36")}
+              className={cx(inputClass, inputSize.md, "w-full sm:w-36")}
               value={matcher.toleranceMode}
               disabled={disabled}
               onChange={(e) =>
@@ -213,7 +215,7 @@ function MatcherFields({
             <input
               id={id("unit")}
               type="text"
-              className={cx(inputClass, "w-full sm:w-24")}
+              className={cx(inputClass, inputSize.md, "w-full sm:w-24")}
               value={matcher.unit ?? ""}
               disabled={disabled}
               onChange={(e) => {
@@ -247,7 +249,7 @@ function MatcherFields({
             <input
               id={id("value")}
               type="date"
-              className={cx(inputClass, "w-full sm:w-40")}
+              className={cx(inputClass, inputSize.md, "w-full sm:w-40")}
               value={matcher.value}
               disabled={disabled}
               onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
@@ -277,7 +279,7 @@ function MatcherFields({
             <input
               id={id("value")}
               type="time"
-              className={cx(inputClass, "w-full sm:w-32")}
+              className={cx(inputClass, inputSize.md, "w-full sm:w-32")}
               value={matcher.value}
               disabled={disabled}
               onChange={(e) => onPatch({ ...matcher, value: e.target.value })}
@@ -302,7 +304,7 @@ function MatcherFields({
           <textarea
             id={id("rubric")}
             rows={2}
-            className={cx(inputClass, "w-full resize-y")}
+            className={cx(textareaClass, "w-full resize-y")}
             value={matcher.rubric}
             disabled={disabled}
             onChange={(e) => onPatch({ ...matcher, rubric: e.target.value })}
@@ -342,7 +344,7 @@ function ConstraintFields({
   s: Strings;
   onPatch: (next: ShortConstraints) => void;
 }) {
-  const field = { labelClassName: labelClass, inputClassName: inputClass };
+  const field = { labelClassName: labelClass, size: "md" } as const;
 
   switch (kind) {
     case "text":
@@ -408,7 +410,7 @@ function ConstraintFields({
             <input
               id="short-from"
               type="date"
-              className={cx(inputClass, "w-40")}
+              className={cx(inputClass, inputSize.md, "w-40")}
               value={constraints.from ?? ""}
               disabled={disabled}
               onChange={(e) => onPatch(withBound(constraints, "from", e.target.value || undefined))}
@@ -418,7 +420,7 @@ function ConstraintFields({
             <input
               id="short-to"
               type="date"
-              className={cx(inputClass, "w-40")}
+              className={cx(inputClass, inputSize.md, "w-40")}
               value={constraints.to ?? ""}
               disabled={disabled}
               onChange={(e) => onPatch(withBound(constraints, "to", e.target.value || undefined))}
@@ -472,7 +474,7 @@ export function ShortEditor({
           RichText={RichText}
           uploadImage={uploadAsset}
           labelClassName={labelClass}
-          textareaClassName={cx(inputClass, "w-full resize-y font-mono text-[13px]")}
+          textareaClassName={cx(textareaClass, "w-full resize-y font-mono text-[13px]")}
         />
         <IssueList issues={issuesAt(issues, "prompt")} />
       </section>
@@ -520,7 +522,7 @@ export function ShortEditor({
           <input
             id="short-placeholder"
             type="text"
-            className={cx(inputClass, "w-full")}
+            className={cx(inputClass, inputSize.md, "w-full")}
             value={config.placeholder ?? ""}
             disabled={disabled}
             onChange={(e) => {
@@ -581,7 +583,7 @@ export function ShortEditor({
                     >
                       <select
                         id={`${rowId}-kind`}
-                        className={cx(inputClass, "w-full sm:w-44")}
+                        className={cx(inputClass, inputSize.md, "w-full sm:w-44")}
                         value={matcher.kind}
                         disabled={disabled}
                         onChange={(e) =>
@@ -616,7 +618,7 @@ export function ShortEditor({
                             min={0}
                             max={1}
                             step={0.25}
-                            className={cx(inputClass, "w-20 tabular-nums")}
+                            className={cx(inputClass, inputSize.md, "w-20 tabular-nums")}
                             aria-describedby={`${rowId}-points-hint`}
                             value={matcher.points}
                             disabled={disabled}

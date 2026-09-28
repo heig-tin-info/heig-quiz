@@ -35,8 +35,8 @@ import {
   EditorSection,
   FieldCell,
   hint,
-  input,
-  inputSm,
+  inputClass,
+  inputSize,
   IssueList,
   label as labelToken,
   NumberField,
@@ -46,6 +46,7 @@ import {
   RowList,
   RowListHeader,
   setting,
+  textareaClass,
   TryPanel,
   tryStatusOf,
   useReferenceTry,
@@ -417,7 +418,7 @@ function CaseFields({
           <textarea
             id={`${ids}-stdin-${i}`}
             rows={2}
-            className={cx(input, "w-full py-1.5 font-mono")}
+            className={cx(textareaClass, "w-full font-mono")}
             aria-label={`${s.stdin} ${i + 1}`}
             disabled={disabled}
             value={testCase.stdin}
@@ -445,7 +446,7 @@ function CaseFields({
           >
             <input
               id={`${ids}-expected-${i}`}
-              className={cx(inputSm, "w-full font-mono")}
+              className={cx(inputClass, inputSize.sm, "w-full font-mono")}
               aria-label={`${s.expected} ${i + 1}`}
               disabled={disabled}
               value={testCase.expected}
@@ -541,7 +542,7 @@ function AdvancedFields({
                     },
             })
           }
-          className={cx(input, "h-8.5")}
+          className={cx(inputClass, inputSize.md)}
         >
           <option value="off">{s.numericOff}</option>
           <option value="abs">{s.numericAbs}</option>
@@ -555,7 +556,7 @@ function AdvancedFields({
             type="number"
             min={0}
             step="any"
-            className={cx(input, "h-8.5 tabular-nums")}
+            className={cx(inputClass, inputSize.md, "tabular-nums")}
             disabled={disabled}
             value={compare.numeric.epsilon}
             onChange={(e) =>

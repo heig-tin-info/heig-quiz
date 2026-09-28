@@ -29,9 +29,8 @@ export {
   cx,
   helpClass,
   hint,
-  input,
   inputClass,
-  inputSm,
+  inputSize,
   label,
   labelClass,
   lockedBlock,
@@ -39,6 +38,7 @@ export {
   sectionTitle,
   setting,
   table,
+  textareaClass,
   type BadgeTone,
 } from "./styles.js";
 export { breakdownOf, isLocked, markdown } from "./content.js";

@@ -45,11 +45,11 @@ import {
   card,
   cx,
   hint,
-  input,
   isLocked,
   lockedBlock,
   sectionTitle,
   table,
+  textareaClass,
   Verdict,
   verdictTone,
 } from "@quiz/ui";
@@ -341,7 +341,7 @@ export function CodePlayer({
                 id={`${ids}-manual-stdin`}
                 rows={3}
                 aria-label={s.stdin}
-                className={cx(input, "w-full py-1.5 font-mono")}
+                className={cx(textareaClass, "w-full font-mono")}
                 disabled={locked}
                 value={manualStdin}
                 onChange={(e) => setManualStdin(e.target.value)}

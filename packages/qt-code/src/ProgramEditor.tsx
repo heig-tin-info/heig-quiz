@@ -39,7 +39,8 @@ import {
   EditorSection,
   FieldCell,
   hint,
-  input,
+  inputClass,
+  inputSize,
   IssueList,
   label as labelToken,
   PromptSection,
@@ -148,7 +149,7 @@ export function ProgramPromptSection({
             disabled={disabled}
             value={config.language}
             onChange={(e) => patch({ language: e.target.value as CodeLanguage })}
-            className={cx(input, "h-8.5 w-52")}
+            className={cx(inputClass, inputSize.md, "w-52")}
           >
             {CODE_LANGUAGES.map((lang) => (
               <option key={lang} value={lang}>
@@ -407,7 +408,7 @@ export function SettingNumber({
         min={min}
         {...(step === undefined ? {} : { step })}
         {...(max === undefined ? {} : { max })}
-        className={cx(input, "h-8.5 tabular-nums")}
+        className={cx(inputClass, inputSize.md, "tabular-nums")}
         disabled={disabled}
         value={value}
         onChange={(e) => onChange(Number(e.target.value) || fallback)}
@@ -499,7 +500,7 @@ export function ProgramAdvancedFields({
             disabled={disabled}
             value={config.action}
             onChange={(e) => patch({ action: e.target.value === "check" ? "check" : "run" })}
-            className={cx(input, "h-8.5")}
+            className={cx(inputClass, inputSize.md)}
           >
             <option value="run">{s.actionRun}</option>
             <option value="check">{s.actionCheck}</option>
@@ -509,7 +510,7 @@ export function ProgramAdvancedFields({
       <FieldCell label={s.compileArgs} htmlFor={`${ids}-args`}>
         <input
           id={`${ids}-args`}
-          className={cx(input, "h-8.5 font-mono")}
+          className={cx(inputClass, inputSize.md, "font-mono")}
           disabled={disabled}
           value={config.compileArgs}
           onChange={(e) => patch({ compileArgs: e.target.value })}

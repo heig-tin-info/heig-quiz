@@ -57,7 +57,7 @@ export function ClozePlayer({
       return (
         <select
           aria-label={label}
-          className={cx(inputClass, "mx-0.5 h-8 py-0 align-baseline")}
+          className={cx(inputClass, "mx-0.5 h-8 align-baseline")}
           value={value}
           disabled={locked}
           onChange={(e) => onChange(withBlank(given, count, index, e.target.value))}
@@ -81,7 +81,7 @@ export function ClozePlayer({
         spellCheck={false}
         size={Math.max(6, value.length + 2)}
         maxLength={200}
-        className={cx(inputClass, "mx-0.5 h-8 py-0 align-baseline")}
+        className={cx(inputClass, "mx-0.5 h-8 align-baseline")}
         value={value}
         disabled={locked}
         onChange={(e) => onChange(withBlank(given, count, index, e.target.value))}

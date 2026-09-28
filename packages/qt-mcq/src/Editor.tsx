@@ -58,6 +58,7 @@ import {
   cx,
   helpClass,
   inputClass,
+  inputSize,
   IssueList,
   labelClass,
   patchAt,
@@ -65,6 +66,7 @@ import {
   removeAt,
   sectionClass,
   Segmented,
+  textareaClass,
 } from "@quiz/ui";
 import {
   choiceLetter,
@@ -325,7 +327,7 @@ export function McqEditor({
             type="number"
             min={1}
             max={MCQ_MAX_CHOICES}
-            className={cx(inputClass, "w-28 tabular-nums")}
+            className={cx(inputClass, inputSize.md, "w-28 tabular-nums")}
             value={config.maxSelections ?? ""}
             disabled={disabled}
             onChange={(e) => {
@@ -411,7 +413,7 @@ export function McqEditor({
           RichText={RichText}
           uploadImage={uploadAsset}
           labelClassName={labelClass}
-          textareaClassName={cx(inputClass, "w-full resize-y font-mono text-[13px]")}
+          textareaClassName={cx(textareaClass, "w-full resize-y font-mono text-[13px]")}
         />
         <IssueList issues={issuesAt(issues, "prompt")} />
       </section>
@@ -612,7 +614,7 @@ function ChoiceRow({
         <input
           type="text"
           id={choiceId(index)}
-          className={cx(inputClass, "min-w-0 flex-1")}
+          className={cx(inputClass, inputSize.md, "min-w-0 flex-1")}
           aria-label={`${s.choiceText} ${letter}`}
           value={choice.text}
           disabled={disabled}

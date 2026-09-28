@@ -19,7 +19,7 @@
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from "react";
 
 import { fmt } from "@quiz/core/client";
-import { button, cx, inputSm, lockedBlock } from "@quiz/ui";
+import { button, cx, inputClass, inputSize, lockedBlock } from "@quiz/ui";
 
 import { PlusIcon, TrashIcon } from "./icons.js";
 import type { CodeLanguage } from "./schema.js";
@@ -154,7 +154,7 @@ export function ArgsInput({
               ref={(el) => {
                 inputs.current[i] = el;
               }}
-              className={cx(inputSm, "min-w-0 flex-1 font-mono")}
+              className={cx(inputClass, inputSize.sm, "min-w-0 flex-1 font-mono")}
               aria-label={fmt(s.argument, { n: i + 1 })}
               spellCheck={false}
               autoComplete="off"

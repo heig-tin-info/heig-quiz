@@ -2,7 +2,9 @@ import { Check, ChevronDown, Loader2, Search } from "lucide-react";
 import { useId } from "react";
 import type { ReactNode } from "react";
 
-import { cx, HelpIcon, type IconType } from "./layers";
+import { cx, inputClass, inputSize, textareaClass } from "@quiz/ui";
+
+import { HelpIcon, type IconType } from "./layers";
 
 // --- Buttons ---
 
@@ -80,22 +82,15 @@ export function LinkButton({
 
 // --- Form controls ---
 
-/**
- * Field chrome, with no width and no height of its own. Tailwind resolves
- * conflicting utilities by their order in the generated stylesheet, not by
- * their order in the class attribute, so a `w-16` or an `h-8` written next to
- * this string was never guaranteed to win. Size comes from `inputSize` and
- * width from the caller, which both compose instead of fighting.
+/*
+ * The field chrome (`inputClass`, no width and no height of its own), the two
+ * control heights (`inputSize`) and the multi-line field (`textareaClass`)
+ * are written once, in `@quiz/ui`: the editors and players of the question
+ * types wear them too, so a field in a question editor is the field of every
+ * other form of the app.
  */
-export const inputClass =
-  "rounded-field border border-line-strong bg-surface px-3 text-sm text-fg transition-colors placeholder:text-fg-faint hover:border-fg-faint focus:border-accent focus:outline-none focus:ring-3 focus:ring-accent/20 disabled:opacity-50 disabled:hover:border-line-strong";
-
-/** Control heights, aligned on the button scale of DESIGN.md (sm 28, md 34). */
-type InputSize = "sm" | "md";
-export const inputSize: Record<InputSize, string> = {
-  sm: "h-7",
-  md: "h-8.5",
-};
+export { inputClass, inputSize, textareaClass };
+type InputSize = keyof typeof inputSize;
 
 /**
  * Label above a control; used by Field, Select and Textarea.
@@ -220,7 +215,7 @@ export function Textarea({
     <textarea
       {...props}
       id={id}
-      className={cx(inputClass, "min-h-24 w-full py-2 leading-relaxed", className)}
+      className={cx(textareaClass, "min-h-24 w-full", className)}
     />
   );
   if (!label) return control;

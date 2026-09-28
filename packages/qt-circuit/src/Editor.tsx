@@ -44,7 +44,6 @@ import {
   EditorSection,
   FieldCell,
   hint,
-  input,
   IssueList,
   label,
   NumberField,
@@ -57,6 +56,7 @@ import {
   sectionTitle,
   Segmented,
   setting,
+  textareaClass,
   TryPanel,
   tryStatusOf,
   useReferenceTry,
@@ -706,7 +706,7 @@ function GradingSection({
           <textarea
             id={`${ids}-rubric`}
             rows={4}
-            className={cx(input, "w-full py-2 leading-relaxed")}
+            className={cx(textareaClass, "w-full")}
             disabled={disabled}
             value={config.grading.rubric}
             onChange={(e) => patch({ grading: { ...config.grading, rubric: e.target.value } })}

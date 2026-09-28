@@ -6,7 +6,7 @@
  */
 import type { ReactNode } from "react";
 
-import { cx, inputSm, label as labelToken } from "./styles.js";
+import { cx, inputClass, inputSize, label as labelToken } from "./styles.js";
 
 /**
  * The segmented control of `apps/web/src/ui/controls.tsx`, mirrored class for class:
@@ -146,7 +146,7 @@ export function NumberField({
   step,
   placeholder,
   width = "w-28",
-  inputClassName = inputSm,
+  size = "sm",
   "aria-label": ariaLabel,
   ...chrome
 }: FieldCellChrome & {
@@ -161,8 +161,8 @@ export function NumberField({
   step?: number | string | undefined;
   placeholder?: string | undefined;
   width?: string;
-  /** The field chrome of the caller's family; `inputSm` by default. */
-  inputClassName?: string;
+  /** The control height: `sm` 28 px in a dense row (the default), `md` 34 px in a form. */
+  size?: keyof typeof inputSize;
   /** When the visible label is shared by several rows ("Points" → "Points 2"). */
   "aria-label"?: string | undefined;
 }): ReactNode {
@@ -171,7 +171,7 @@ export function NumberField({
       <input
         id={id}
         type="number"
-        className={cx(inputClassName, width, "text-right tabular-nums")}
+        className={cx(inputClass, inputSize[size], width, "text-right tabular-nums")}
         {...(ariaLabel === undefined ? {} : { "aria-label": ariaLabel })}
         disabled={disabled}
         {...(min === undefined ? {} : { min })}

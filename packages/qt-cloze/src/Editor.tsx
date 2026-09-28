@@ -23,11 +23,11 @@ import {
   CheckboxField,
   cx,
   helpClass,
-  inputClass,
   IssueList,
   labelClass,
   PromptField,
   sectionClass,
+  textareaClass,
 } from "@quiz/ui";
 
 type ClozeEditorProps = Omit<EditorProps<ClozeConfig>, "uploadAsset"> & {
@@ -75,7 +75,7 @@ export function ClozeEditor({
           holes
           rows={8}
           labelClassName={labelClass}
-          textareaClassName={cx(inputClass, "w-full resize-y font-mono text-[13px]")}
+          textareaClassName={cx(textareaClass, "w-full resize-y font-mono text-[13px]")}
         />
         <p className={helpClass}>{s.textHint}</p>
         <IssueList issues={issuesAt(issues, "text")} />
