@@ -28,6 +28,8 @@ import {
 } from "./runtime";
 import {
   MockEvaluation,
+  RICH_LONG_ANSWER,
+  RICH_SHORT_ANSWER,
   evaluationOr404,
   evaluations,
 } from "./evaluation";
@@ -168,6 +170,9 @@ function mockAnswer(q: MockQuestion, config: Record<string, unknown>, ability: n
     // The wrong half of the class left the capacitor's lower pin in the air,
     // which is the mistake this type actually produces.
     return { schematic: rand() < ability ? RC_REFERENCE : RC_STUDENT };
+  }
+  if (q.type === "rich") {
+    return { text: rand() < ability ? RICH_LONG_ANSWER : RICH_SHORT_ANSWER };
   }
   const good = rand() < ability;
   return {
@@ -331,10 +336,21 @@ function buildGradingWorld(
         details = graded.details;
       }
 
+      // An essay is graded by hand (issue #192): the type proposes 0, and
+      // only a teacher turns it into points — already done once released.
+      if (q.type === "rich" && !blank) {
+        if (options.allValidated) {
+          points = halfPoints(attempt.ability * item.points);
+          source = "manual";
+        } else {
+          state = "proposed";
+        }
+      }
+
       // `code` needs the teacher's eyes in the MVP (the stub runner cannot
       // settle it on its own), and every fourth answer of the two longest
       // questions is still a proposal waiting to be validated.
-      if (!options.allValidated && !blank) {
+      if (!options.allValidated && !blank && q.type !== "rich") {
         const proposeRate = q.type === "code" ? 0.55 : itemIndex >= items.length - 2 ? 0.3 : 0.08;
         if (rand() < proposeRate) {
           state = "proposed";

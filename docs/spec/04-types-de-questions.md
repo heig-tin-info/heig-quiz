@@ -224,13 +224,21 @@ config:
 - **Answer**: `regions[]` content of each editable region, `lastRun` summary of the last run for the dashboard.
 - **Code editor**: Monaco, theme aligned with the platform, VS Code shortcuts, configurable tab width, no language server.
 
-## 4.8 Rich answer `rich`, phase 2
+## 4.8 Rich answer `rich` ("Essay")
 
-**Configuration**: `prompt`, `rubric[]` criteria with `label`, `points`, `description`, optional `reference` model answer, optional `maxWords`, `allowImages`.
+Shown as **Essay** / « Rédaction » in the interface; the id `rich` is the one stored in the database and in the canonical format. Brought forward from phase 2 in a first version graded by hand (issue #192, `packages/qt-rich`).
 
-**Answer**: `markdown` with pasted images.
+**Configuration** (`configVersion: 1`): `prompt`, `rubric` markdown (may be empty), optional `reference` model answer (markdown), optional `maxChars`, `format` `markdown` (default) or `plain`.
 
-**Scoring**: `grade` returns `pending: 'llm'`. The LLM service receives the statement, the rubric, the reference, the anonymised answer, and must reply in JSON: points per criterion, short justification per criterion, confidence `low` / `medium` / `high`. The teacher validates in the grading panel. Without a configured provider, grading is manual with the rubric as the form.
+**Limit**: in CHARACTERS, not words — a schema can count characters, and a word is ambiguous in code or a formula. It is counted on the stored text, markdown marks included (UTF-16 code units, what `String.length` and a textarea's `maxLength` count). `maxChars` is 1 to 50 000; an answer never exceeds 50 000 characters whatever the question says (`answerSchema`), because the autosave sends the whole answer every 300 ms. The server refuses an answer over the question's `maxChars` with `422 answer_invalid` (`answerMisfit`, key `rich.too_long`); the player never sends one — past the limit it shows the excess in red and sends nothing until the answer fits. The editor and the player translate a count into A4 pages at 3 000 characters a page, as a hint.
+
+**Student**: `toStudent` keeps `prompt`, `format` and `maxChars`; the rubric and the model answer never leave (invariant 4). `format: markdown` gives the student the host's formatted editor (`PlayerProps.RichText`, lent without an image upload); `plain`, a textarea.
+
+**Answer**: `{ text }`, markdown or plain text according to `format`. No image in v1: pool assets are readable by every teacher session of the pool, and a student upload would need an ADR on personal data and retention.
+
+**Scoring, v1**: manual. `grade` proposes 0 points (`state: proposed`, `details.reason: manual`) for a written answer, and a validated 0 for nothing written (`reason: empty`); the teacher sets the points and a comment in the grading panel, which shows the answer beside the rubric and the model answer (`toSolution`). The dashboard cell shows the character count, never the text. Not pollable, no drill.
+
+**Scoring, later**: `grade` returns `pending: 'llm'`. The LLM service receives the statement, the rubric, the reference, the anonymised answer, and must reply in JSON: points per criterion, short justification per criterion, confidence `low` / `medium` / `high`. The teacher validates in the grading panel (F-LLM-01..04). A rubric of criteria with `label`, `points` and `description`, used as the grading form, comes with it.
 
 ## 4.9 Code image `codeimage`
 

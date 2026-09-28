@@ -33,9 +33,10 @@ Modular monolith, ADR-001 of heig-classroom: a single API process, a single depl
 ### Repository
 
 *This tree is the TARGET layout of the specification, not the current one.
-`canonical/`, `cli/` and the `qt-rich` package do not exist yet, `deploy/` was
-never created (the deployment files are at the root), and `qt-circuit` and the
-`codeimage` type of `qt-code` came later (ADR-019, ADR-021). The current
+`canonical/` and `cli/` do not exist yet, `deploy/` was
+never created (the deployment files are at the root), and `qt-circuit`, the
+`codeimage` type of `qt-code` and `qt-rich` came later (ADR-019, ADR-021,
+issue #192). The current
 layout is in `CLAUDE.md` and on the development site's repository page.*
 
 ```

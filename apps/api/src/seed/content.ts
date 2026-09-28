@@ -11,7 +11,7 @@
  * looks them up before it writes, so running it twice changes nothing.
  */
 
-type QuestionTypeName = "mcq" | "short" | "cloze" | "code" | "circuit" | "codeimage";
+type QuestionTypeName = "mcq" | "short" | "cloze" | "code" | "circuit" | "codeimage" | "rich";
 
 export interface QuestionSpec {
   /** Unique inside its pool, and the key the seed is idempotent on. */
@@ -432,6 +432,35 @@ const C_POOL: PoolSpec = {
         referenceSolution: CHECKERBOARD_SOLUTION,
         image: { width: 16, height: 16, palette: "bw" },
         target: { width: 16, height: 16, palette: "bw", pixels: CHECKERBOARD_TARGET },
+      },
+    },
+    {
+      internalName: "prg1-redaction-pile",
+      type: "rich",
+      category: POINTERS,
+      difficulty: 3,
+      tags: ["pile", "mémoire", "rédaction"],
+      explanation:
+        "La pile d'un thread a une taille fixe ; une récursion sans fin l'épuise, et " +
+        "l'écriture suivante touche la page de garde, ce qui déclenche une erreur de segmentation.",
+      // Graded by hand (issue #192): the rubric and the model answer are what
+      // the grading panel shows beside each answer, never the student.
+      config: {
+        configVersion: 1,
+        prompt:
+          "Expliquez en quelques phrases pourquoi une **récursion infinie** fait planter un " +
+          "programme C, et ce que le système d'exploitation y voit.",
+        rubric:
+          "- **2 pts** : la pile a une taille bornée et chaque appel y empile un cadre.\n" +
+          "- **1 pt** : le dépassement touche une page non allouée (page de garde).\n" +
+          "- **1 pt** : le noyau envoie `SIGSEGV`, le programme s'arrête.",
+        reference:
+          "Chaque appel empile un cadre (adresse de retour, variables locales). La pile " +
+          "ayant une taille fixe, une récursion sans fin finit par écrire au-delà, dans une " +
+          "page de garde non allouée : le processeur lève une faute de page que le noyau " +
+          "transforme en `SIGSEGV`.",
+        maxChars: 1500,
+        format: "markdown",
       },
     },
   ],

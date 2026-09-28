@@ -154,6 +154,14 @@ export interface PlayerProps<TStudent, TAnswer> {
   readOnly: boolean;
   /** Code type only: interactive run through `POST /attempts/:id/run`. */
   run?: (payload: unknown) => Promise<unknown>;
+  /**
+   * The host's WYSIWYG markdown editor, lent to a player for the reason it is
+   * lent to an editor (`EditorProps.RichText`): the `rich` type's formatted
+   * answer field (issue #192). A player that has no such field ignores it;
+   * absent, a player falls back to a textarea of markdown source. The host
+   * lends it WITHOUT an image upload: a student's answer carries no image.
+   */
+  RichText?: RichTextComponent;
 }
 
 export interface ReviewProps<TStudent, TAnswer, TSolution, TDetails> {

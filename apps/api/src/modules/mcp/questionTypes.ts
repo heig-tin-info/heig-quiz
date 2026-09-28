@@ -88,6 +88,23 @@ const GUIDES: Record<string, TypeGuide> = {
       "Read an existing code question with `get_question` for a complete, working example.",
     ],
   },
+  rich: {
+    summary: "Essay: the student writes a text, graded by hand by the teacher against a rubric.",
+    rules: [
+      "`prompt`, `rubric` and `reference` are Markdown; `rubric` and `reference` are never shown to the student.",
+      "Write the rubric as a list of criteria, each with its points, so the grader can apply it.",
+      '`format: "markdown"` gives the student a formatted editor, `"plain"` a bare text field.',
+      "`maxChars` limits the answer in characters (markdown marks included); about 3000 fill an A4 page. Omit it for no limit.",
+    ],
+    example: {
+      configVersion: 1,
+      prompt: "Expliquez pourquoi une **récursion infinie** fait planter un programme C.",
+      rubric: "- **2 pts** : la pile est bornée, chaque appel y empile un cadre.\n- **1 pt** : le noyau envoie `SIGSEGV`.",
+      reference: "Chaque appel empile un cadre ; la pile finit par déborder sur une page de garde.",
+      maxChars: 1500,
+      format: "markdown",
+    },
+  },
   circuit: {
     summary: "Circuit: the student draws a schematic, graded by an ngspice simulation.",
     rules: [

@@ -28,6 +28,7 @@
     "@quiz/qt-cloze": "workspace:*",
     "@quiz/qt-code": "workspace:*",
     "@quiz/qt-mcq": "workspace:*",
+    "@quiz/qt-rich": "workspace:*",
     "@quiz/qt-short": "workspace:*",
     "@quiz/registry": "workspace:*",
     "@quiz/ui": "workspace:*",

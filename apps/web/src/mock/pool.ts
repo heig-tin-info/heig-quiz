@@ -64,6 +64,20 @@ import {
   me,
 } from "./session";
 import { codeimageConfig, codeimageStudentView, codeimageTryDetails } from "./codeimage";
+/*
+ * The `rich` type's own server half: it has no formula to mirror, and its
+ * `toStudent` is the one place the rubric and the model answer are dropped,
+ * so the mock calls it rather than restating it.
+ */
+import { richServer } from "@quiz/qt-rich/server";
+import type { RichConfig } from "@quiz/qt-rich/client";
+import type { RunnerService } from "@quiz/core/server";
+
+/** `rich` never runs anything; its grade context still names a runner. */
+const NO_RUNNER: RunnerService = {
+  run: () => Promise.reject(new Error("the mock has no runner")),
+  health: () => Promise.resolve({ ok: false, languages: [], queued: 0, avgMs: null }),
+};
 
 // --- 2. Pools, categories, questions (WP7) --------------------------------
 //
@@ -88,7 +102,7 @@ interface MockVersion {
 export interface MockQuestion {
   id: string;
   poolId: string;
-  type: "mcq" | "short" | "cloze" | "code" | "circuit" | "codeimage";
+  type: "mcq" | "short" | "cloze" | "code" | "circuit" | "codeimage" | "rich";
   internalName: string;
   categoryId: string | null;
   difficulty: number;
@@ -657,6 +671,24 @@ export function makeQuestion(
   };
 }
 
+/** The essay of the mock: a rubric, a model answer and a limit of half a page. */
+export const RICH_CONFIG: Record<string, unknown> = {
+  configVersion: 1,
+  prompt:
+    "Expliquez en quelques phrases pourquoi une **récursion infinie** fait planter un programme C, " +
+    "et ce que le système d'exploitation y voit.",
+  rubric:
+    "- **2 pts** : la pile a une taille bornée et chaque appel y empile un cadre.\n" +
+    "- **1 pt** : le dépassement touche une page non allouée (page de garde).\n" +
+    "- **1 pt** : le noyau envoie `SIGSEGV`, le programme s'arrête.",
+  reference:
+    "Chaque appel empile un cadre (adresse de retour, variables locales). La pile ayant une " +
+    "taille fixe, une récursion sans fin finit par écrire au-delà, dans une page de garde non " +
+    "allouée : le processeur lève une faute de page que le noyau transforme en `SIGSEGV`.",
+  maxChars: 1500,
+  format: "markdown",
+};
+
 export const questions: MockQuestion[] = [
   makeQuestion({
     poolId: "p1",
@@ -1001,6 +1033,24 @@ export const questions: MockQuestion[] = [
     tags: ["boucles", "image"],
     config: codeimageConfig(),
     explanation: "La distance au bord le plus proche est min(x, y, 15 − x, 15 − y).",
+  }),
+  /*
+   * The `rich` question, an essay graded by hand (issue #192). Last in the
+   * list for the reason `codeimage` is; `itemSource` in `evaluation.ts`
+   * splices it into the evaluations so the grading panel has one to show.
+   */
+  makeQuestion({
+    poolId: "p1",
+    type: "rich",
+    internalName: "redaction-pile",
+    categoryId: "k1",
+    difficulty: 3,
+    shuffleable: false,
+    randomizable: false,
+    tags: ["pile", "mémoire", "rédaction"],
+    config: RICH_CONFIG,
+    explanation: "La pile est bornée : une récursion sans fin finit par toucher la page de garde.",
+    published: [{ number: 1, changeNote: "Première version", daysAgo: 6 }],
   }),
 ];
 
@@ -1392,6 +1442,8 @@ export function studentView(q: MockQuestion, config: Record<string, unknown>): u
     }
     case "codeimage":
       return codeimageStudentView(config);
+    case "rich":
+      return richServer.toStudent(config as RichConfig, { seed: 0, itemId: q.id, shuffle: false });
     case "code": {
       const cases = ((config.tests as { cases?: CodeCaseLike[] })?.cases ?? []) as CodeCaseLike[];
       const visible = cases.filter((c) => c.visible);
@@ -1520,6 +1572,8 @@ export function solutionOf(q: MockQuestion): unknown {
         stimuli: config.stimuli ?? [],
         grading: config.grading ?? { mode: "manual", tolerance: 0.05, rubric: "" },
       };
+    case "rich":
+      return richServer.toSolution(config as RichConfig, { seed: 0, itemId: q.id, shuffle: false });
   }
 }
 
@@ -1531,6 +1585,15 @@ export function tryAnswer(
   negativeMarking = false,
 ): unknown {
   if (q.type === "code") return { status: "runner_unavailable", reason: "not_configured" };
+  // An essay is graded by hand: the type proposes 0 points and the teacher decides.
+  if (q.type === "rich") {
+    const graded = richServer.grade(
+      config as RichConfig,
+      (answer as { text: string } | null) ?? null,
+      { seed: 0, itemId: q.id, attemptId: "", itemPoints: 1, now: new Date(), runner: NO_RUNNER },
+    ) as { points: number; maxPoints: number; details: unknown };
+    return { status: "graded", points: graded.points, maxPoints: graded.maxPoints, details: graded.details, solution: solutionOf(q) };
+  }
   /*
    * `codeimage` answers the picture its reference draws — which is what the
    * editor's "Use as target" needs to be looked at in the mock. A student
@@ -2071,6 +2134,8 @@ export function emptyConfig(type: MockQuestion["type"]): Record<string, unknown>
       return codeConfig("", "", [{ name: "", stdin: "", expected: "", visible: true }]);
     case "codeimage":
       return { ...codeimageConfig(), prompt: "", template: "", referenceSolution: "", target: null };
+    case "rich":
+      return { ...richServer.emptyDraft() };
     case "circuit":
       return {
         configVersion: 1,

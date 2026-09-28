@@ -132,6 +132,8 @@ export function answerText(type: string, student: unknown, answer: unknown): Ans
     case "cloze":
       return cloze(student, answer);
     case "short":
+    // An essay is read like a short answer: its text, clipped to TEXT_CHARS.
+    case "rich":
       return short(answer);
     case "code":
     case "codeimage":

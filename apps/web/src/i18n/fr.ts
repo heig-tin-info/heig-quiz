@@ -795,6 +795,8 @@ export const fr: Record<keyof Dict, string> = {
   "qt.circuit.hint": "Un quadripôle à câbler depuis une palette.",
   "qt.codeimage.label": "Code image",
   "qt.codeimage.hint": "Un programme qui dessine une grille de pixels.",
+  "qt.rich.label": "Rédaction",
+  "qt.rich.hint": "Un texte à rédiger, corrigé à la main avec une grille.",
   "qt.loading": "Chargement de l'éditeur…",
   "qt.unknown": "Ce type de question n'est pas disponible dans cette version.",
 
@@ -904,6 +906,40 @@ export const fr: Record<keyof Dict, string> = {
   "qt.short.r.expected": "Réponses acceptées",
   "qt.short.r.matchedBy": "Reconnue par",
   "qt.short.r.score": "Score",
+
+  // --- qt-rich strings (issue #192) ---
+  "qt.rich.e.prompt": "Énoncé",
+  "qt.rich.e.format": "Champ de réponse",
+  "qt.rich.e.formatMarkdown": "Texte mis en forme",
+  "qt.rich.e.formatPlain": "Texte brut",
+  "qt.rich.e.formatHint":
+    "Le texte mis en forme donne à l'étudiant une barre d'outils : gras, listes, code, formules. Le texte brut est un simple champ.",
+  "qt.rich.e.maxChars": "Limite de caractères",
+  "qt.rich.e.maxCharsHint": "Vide : jusqu'à {cap} caractères. Une page A4 contient environ {perPage} caractères.",
+  "qt.rich.e.maxCharsPages": "Environ {pages} page(s) A4.",
+  "qt.rich.e.rubric": "Grille de correction",
+  "qt.rich.e.rubricHint":
+    "Ce qui rapporte les points. Le correcteur la lit à côté de chaque réponse ; un étudiant ne la voit jamais avant la publication.",
+  "qt.rich.e.reference": "Réponse modèle",
+  "qt.rich.e.referenceHint": "Facultative. Montrée au correcteur à côté de chaque réponse.",
+  "qt.rich.e.manualGrading":
+    "Corrigée à la main : chaque réponse rédigée arrive dans le panneau de correction comme une proposition de 0 point, à trancher.",
+  "qt.rich.e.decimal": ",",
+  "qt.rich.p.label": "Votre réponse",
+  "qt.rich.p.placeholder": "Rédigez votre réponse ici.",
+  "qt.rich.p.count": "{count} caractères",
+  "qt.rich.p.countOf": "{count} / {max} caractères",
+  "qt.rich.p.pages": "environ {pages} page(s) A4",
+  "qt.rich.p.over":
+    "{n} caractères de trop. Raccourcissez votre réponse : rien n'est enregistré tant qu'elle dépasse la limite.",
+  "qt.rich.p.decimal": ",",
+  "qt.rich.r.answer": "Réponse",
+  "qt.rich.r.noAnswer": "Pas de réponse",
+  "qt.rich.r.count": "{count} caractères",
+  "qt.rich.r.rubric": "Grille de correction",
+  "qt.rich.r.noRubric": "Pas de grille.",
+  "qt.rich.r.reference": "Réponse modèle",
+  "qt.rich.r.score": "Score",
 
   // --- qt-cloze strings ---
   "qt.cloze.e.text": "Texte à trous",

@@ -1,6 +1,6 @@
 # Question types
 
-Six types are available today: multiple choice, short answer, fill in the blanks, code, code with image and circuit. This chapter walks through the first four; the last two are summed up under [More types](#more-types). All are graded automatically and written in the editor described in [Question pools](pools.md). This chapter covers what each form asks for, how the answer is scored and what the student gets.
+Seven types are available today: multiple choice, short answer, fill in the blanks, code, code with image, circuit and essay. This chapter walks through the first four; the last three are summed up under [More types](#more-types). All but the essay are graded automatically, and all are written in the editor described in [Question pools](pools.md). This chapter covers what each form asks for, how the answer is scored and what the student gets.
 
 ## Multiple choice
 
@@ -269,21 +269,23 @@ After **Run**, the table shows for each visible case its stdin, the expected out
 | Short answer | yes | yes, per matcher | yes | a keyword, a computed value, a date |
 | Fill in the blanks | yes | yes, per blank | yes, with short blanks | complete a sentence, a formula or a line of code |
 | Code | yes, on the server | yes, per case | not comfortably | write or complete a function against test cases |
+| Essay | no, by hand | yes, your points | yes, for a short text | explain, argue, describe in a few paragraphs |
 
 ## More types
 
-Two more types are available, each with its editor, player and grading:
+Three more types are available, each with its editor, player and grading:
 
 - **Code with image**: a code question whose program prints a picture, compared pixel by pixel with the target you produce by running your reference solution. It shares the code question's editor for the program half.
 - **Circuit**: the student wires components inside a two-port box on a grid, and the schematic is graded by simulating it with ngspice and comparing its output with the one you expect.
+- **Essay**: the student writes a text, in a formatted field (bold, lists, code, formulas) or a plain one, which you choose per question. You can set a **Character limit**; the editor gives it in A4 pages (about 3,000 characters a page), and the student sees a counter under the field and cannot save past the limit. The **Rubric** and the optional **Model answer** are never shown to the student before you release the key. An essay is graded **by hand**: after closing, every written answer waits in the [grading panel](grading.md) as a proposal of 0 points, shown beside your rubric and model answer; you set the points and validate. The dashboard shows how many characters each student has written, never the text itself. An essay cannot be used in a poll.
 
-Their full rules are in the specification, [4.9 Code image](../spec/04-types-de-questions.md#49-code-image-codeimage) and [4.11 Schematic](../spec/04-types-de-questions.md#411-schematic-circuit).
+Their full rules are in the specification, [4.8 Rich answer](../spec/04-types-de-questions.md#48-rich-answer-rich-essay), [4.9 Code image](../spec/04-types-de-questions.md#49-code-image-codeimage) and [4.11 Schematic](../spec/04-types-de-questions.md#411-schematic-circuit).
 
 ## Planned types
 
 The specification announces more types for later phases. None is available today:
 
-- **Rich answer**: a free text graded against a rubric, with your validation.
+- **Essay graded by an assistant**: a proposal of points per rubric criterion, which you validate.
 - **Drawing**: a small canvas with shapes and freehand strokes, graded with a rubric.
 
 Random values in a statement, announced for phase 2, are not available either.

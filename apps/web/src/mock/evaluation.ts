@@ -106,8 +106,14 @@ function itemSource(): MockQuestion[] {
    * spliced in early enough that even a four-item evaluation carries it.
    */
   const circuit = published.filter((q) => q.type === "circuit");
+  /*
+   * The essay is spliced in the same way, fifth, so the closed and released
+   * evaluations the grading panel is built from carry one (issue #192).
+   */
+  const essay = published.filter((q) => q.type === "rich");
+  const rest = primary.filter((q) => q.type !== "rich");
   if (primary.length === 0) return published;
-  return [...primary.slice(0, 2), ...circuit, ...primary.slice(2)];
+  return [...rest.slice(0, 2), ...circuit, ...rest.slice(2, 3), ...essay, ...rest.slice(3)];
 }
 
 const studentConfigOf = (q: MockQuestion): unknown => studentView(q, frozenConfig(q));
@@ -178,8 +184,19 @@ function answerOf(q: MockQuestion, seedValue: number): unknown {
     // type actually produces, and the strip under the canvas names it.
     case "circuit":
       return { schematic: wrong ? RC_STUDENT : RC_REFERENCE };
+    // An essay has no wrong answer to pick: a short one and a longer one.
+    case "rich":
+      return { text: wrong ? RICH_SHORT_ANSWER : RICH_LONG_ANSWER };
   }
 }
+
+/** Two essays of the mock class, the second one finished. */
+export const RICH_SHORT_ANSWER = "La pile déborde et le programme plante.";
+export const RICH_LONG_ANSWER =
+  "Chaque appel de fonction empile un **cadre** : l'adresse de retour et les variables locales.\n\n" +
+  "La pile a une taille fixe (8 Mio par défaut sous Linux). Une récursion sans condition d'arrêt " +
+  "finit par écrire sous sa limite, dans une page non allouée. Le processeur lève une faute de " +
+  "page, et le noyau envoie `SIGSEGV` au processus, qui s'arrête.";
 
 /**
  * The glyph a dashboard cell carries, the way the SERVER writes it: the
@@ -211,6 +228,12 @@ export function summaryOf(q: MockQuestion, seedValue: number): string {
       const max = (frozenConfig(q).palette as { maxComponents?: number } | undefined)
         ?.maxComponents;
       return `${schematic?.components?.length ?? 0}/${max ?? 10}`;
+    }
+    // `summarizeAnswer` of `@quiz/qt-rich`: the count, never the first line.
+    case "rich": {
+      const chars = (answer as { text: string }).text.length;
+      const max = frozenConfig(q).maxChars as number | undefined;
+      return max === undefined ? `${chars} chars` : `${chars} / ${max} chars`;
     }
   }
 }

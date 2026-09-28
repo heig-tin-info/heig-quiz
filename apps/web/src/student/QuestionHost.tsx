@@ -29,6 +29,7 @@ import { useT } from "../i18n";
 import { ClozeMarkdownText } from "../markdown/ClozeMarkdownText";
 import { MarkdownView } from "../markdown/MarkdownView";
 import { Alert, ScrollableCode, Spinner } from "../ui";
+import { LazyRichText } from "../questionTypes";
 import { circuitCanvasStringsFor, playerStringsFor } from "./questionStrings";
 
 /** What every shipped player accepts on top of the core contract. */
@@ -133,6 +134,7 @@ export function QuestionHost({
           {...(type === "circuit" ? { canvasStrings: circuitCanvasStringsFor(t) } : {})}
           renderMarkdown={renderMarkdown}
           {...(type === "cloze" ? { renderText: ClozeMarkdownText } : {})}
+          {...(type === "rich" ? { RichText: LazyRichText } : {})}
           {...(onRun ? { onRun } : {})}
           {...(allowManualRun === undefined ? {} : { allowManualRun })}
           {...(onSimulate ? { onSimulate } : {})}

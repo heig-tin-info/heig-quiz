@@ -811,6 +811,8 @@ export const en = {
   "qt.circuit.hint": "A two-port box to wire from a palette.",
   "qt.codeimage.label": "Code image",
   "qt.codeimage.hint": "A program that draws a pixel grid.",
+  "qt.rich.label": "Essay",
+  "qt.rich.hint": "A text to write, graded by hand with a rubric.",
   "qt.loading": "Loading the editor…",
   "qt.unknown": "This question type is not available in this version.",
 
@@ -920,6 +922,39 @@ export const en = {
   "qt.short.r.expected": "Accepted answers",
   "qt.short.r.matchedBy": "Matched by",
   "qt.short.r.score": "Score",
+
+  // --- qt-rich strings (issue #192) ---
+  "qt.rich.e.prompt": "Statement",
+  "qt.rich.e.format": "Answer field",
+  "qt.rich.e.formatMarkdown": "Formatted text",
+  "qt.rich.e.formatPlain": "Plain text",
+  "qt.rich.e.formatHint":
+    "Formatted text gives the student a toolbar: bold, lists, code, formulas. Plain text is a bare field.",
+  "qt.rich.e.maxChars": "Character limit",
+  "qt.rich.e.maxCharsHint": "Empty: up to {cap} characters. About {perPage} characters fill an A4 page.",
+  "qt.rich.e.maxCharsPages": "About {pages} A4 page(s).",
+  "qt.rich.e.rubric": "Rubric",
+  "qt.rich.e.rubricHint":
+    "What earns the points. The grader reads it beside every answer; a student never sees it before release.",
+  "qt.rich.e.reference": "Model answer",
+  "qt.rich.e.referenceHint": "Optional. Shown to the grader beside every answer.",
+  "qt.rich.e.manualGrading":
+    "Graded by hand: every written answer reaches the grading panel as a proposal of 0 points, to settle.",
+  "qt.rich.e.decimal": ".",
+  "qt.rich.p.label": "Your answer",
+  "qt.rich.p.placeholder": "Write your answer here.",
+  "qt.rich.p.count": "{count} characters",
+  "qt.rich.p.countOf": "{count} / {max} characters",
+  "qt.rich.p.pages": "about {pages} A4 page(s)",
+  "qt.rich.p.over": "{n} characters over the limit. Shorten your answer: nothing is saved until it fits.",
+  "qt.rich.p.decimal": ".",
+  "qt.rich.r.answer": "Answer",
+  "qt.rich.r.noAnswer": "No answer",
+  "qt.rich.r.count": "{count} characters",
+  "qt.rich.r.rubric": "Rubric",
+  "qt.rich.r.noRubric": "No rubric.",
+  "qt.rich.r.reference": "Model answer",
+  "qt.rich.r.score": "Score",
 
   // --- qt-cloze strings ---
   "qt.cloze.e.text": "Text with blanks",

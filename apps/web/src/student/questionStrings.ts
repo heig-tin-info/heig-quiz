@@ -77,6 +77,8 @@ export function playerStringsFor(type: string, t: TFunction): unknown {
     // `questionTypes.tsx` for the same reason as the two above.
     case "codeimage":
       return playerStrings.codeimage(t);
+    case "rich":
+      return playerStrings.rich(t);
     default:
       return undefined;
   }
