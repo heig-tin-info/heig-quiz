@@ -250,7 +250,9 @@ interface DeadlineParts {
 /**
  * The ONE place an attempt deadline is computed (§10). `startedAt` is the
  * student's own start in `duration` timing, and is ignored in `deadline`
- * timing, where the base is the announced window (decision D8).
+ * timing, where the anchor is `closesAt` as it stands and the base of the
+ * bonus is the announced window, extensions and pauses taken out (decision
+ * D8, #253).
  */
 function deadlineFor(
   evaluation: EvaluationRecord,
@@ -262,6 +264,7 @@ function deadlineFor(
     durationS: evaluation.durationS,
     opensAt: evaluation.opensAt,
     closesAt: evaluation.closesAt,
+    closesAtShiftS: evaluation.closesAtShiftS,
     timeBonusPercent: input.timeBonusPercent,
   };
   return {

@@ -164,6 +164,7 @@ export async function startPreview(
       durationS: evaluation.durationS,
       opensAt: evaluation.opensAt,
       closesAt: evaluation.closesAt,
+      closesAtShiftS: evaluation.closesAtShiftS,
     }),
     view,
   };

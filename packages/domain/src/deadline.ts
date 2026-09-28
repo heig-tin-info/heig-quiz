@@ -12,12 +12,22 @@ export const GRACE_MS = 3000;
 
 export type EvaluationTiming = "duration" | "deadline" | "manual";
 
-export interface BonusInput {
+/**
+ * The common window of a `deadline`-timed evaluation as the teacher set it.
+ * `closesAt` is where the end stands NOW; `closesAtShiftS` is how far the live
+ * controls (an extension to all, a resume after a pause) have moved it since
+ * the teacher last set the timing (#253).
+ */
+export interface WindowInput {
+  opensAt: Date | null;
+  closesAt: Date | null;
+  closesAtShiftS: number;
+}
+
+export interface BonusInput extends WindowInput {
   timing: EvaluationTiming;
   /** Nominal duration in seconds, `duration` timing only. */
   durationS: number | null;
-  opensAt: Date | null;
-  closesAt: Date | null;
   /** Accommodation, in percent of the nominal duration (0 = none). */
   timeBonusPercent: number;
 }
@@ -36,11 +46,31 @@ export interface DeadlineInput extends BonusInput {
 }
 
 /**
+ * The ANNOUNCED window, in seconds: `closesAt - opensAt` as the teacher set
+ * them, the live shifts taken back out (decision D8, #253). `null` when an
+ * instant is missing or the window is empty or reversed.
+ *
+ * The announced window follows the teacher's own edits of the timing for as
+ * long as the configuration is editable (draft, scheduled, a lobby nobody has
+ * entered); it is frozen once it locks (F-EVAL-03: running, paused, or any
+ * attempt). What the live controls add after that — "+N min" to everybody,
+ * a pause — moves `closesAt` for everybody and never grows it: a student who
+ * starts late, or whose attempt is reopened, gets the accommodation of the
+ * window that was announced, not of the one the room ended up sitting.
+ */
+export function announcedWindowS(input: WindowInput): number | null {
+  if (input.opensAt === null || input.closesAt === null) return null;
+  const windowS = (input.closesAt.getTime() - input.opensAt.getTime()) / 1000 - input.closesAtShiftS;
+  return windowS > 0 ? windowS : null;
+}
+
+/**
  * The accommodation, in seconds.
  *
  * In `deadline` timing the base is the announced common window
- * `closesAt - opensAt` (decision D8), so two students with the same
- * accommodation get the same extension whatever time they started.
+ * ({@link announcedWindowS}, decision D8), so two students with the same
+ * accommodation get the same extension whatever time they started, and
+ * whatever time was added to everybody since.
  */
 export function bonusSeconds(input: BonusInput): number {
   if (input.timeBonusPercent <= 0) return 0;
@@ -48,9 +78,8 @@ export function bonusSeconds(input: BonusInput): number {
     return input.durationS === null ? 0 : (input.durationS * input.timeBonusPercent) / 100;
   }
   if (input.timing === "deadline") {
-    if (input.opensAt === null || input.closesAt === null) return 0;
-    const windowS = (input.closesAt.getTime() - input.opensAt.getTime()) / 1000;
-    return windowS <= 0 ? 0 : (windowS * input.timeBonusPercent) / 100;
+    const windowS = announcedWindowS(input);
+    return windowS === null ? 0 : (windowS * input.timeBonusPercent) / 100;
   }
   return 0;
 }
@@ -83,24 +112,20 @@ export function isWritable(deadline: Date | null, now: Date): boolean {
  *
  * The preview starts when the teacher presses the button, so a `duration`
  * evaluation gives its duration and a `deadline` one gives its announced
- * window `closesAt - opensAt` — the time a student who starts at the opening
- * has (decision D8's base). A `manual` evaluation has no clock to rehearse,
+ * window ({@link announcedWindowS}) — the time a student who starts at the
+ * opening has (decision D8's base). A `manual` evaluation has no clock to rehearse,
  * and neither has a timing whose reference instants are missing or reversed.
  * No accommodation applies: the teacher has none.
  */
-export function previewDurationS(input: {
-  timing: EvaluationTiming;
-  durationS: number | null;
-  opensAt: Date | null;
-  closesAt: Date | null;
-}): number | null {
+export function previewDurationS(
+  input: WindowInput & { timing: EvaluationTiming; durationS: number | null },
+): number | null {
   if (input.timing === "duration") {
     return input.durationS !== null && input.durationS > 0 ? input.durationS : null;
   }
   if (input.timing === "deadline") {
-    if (input.opensAt === null || input.closesAt === null) return null;
-    const windowS = Math.round((input.closesAt.getTime() - input.opensAt.getTime()) / 1000);
-    return windowS > 0 ? windowS : null;
+    const windowS = announcedWindowS(input);
+    return windowS === null ? null : Math.round(windowS);
   }
   return null;
 }
