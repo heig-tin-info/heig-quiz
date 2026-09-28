@@ -486,6 +486,24 @@ describe("notify fans out", () => {
     expect(sent.map((j) => j.data.channel)).toEqual(["email", "teams"]);
   });
 
+  it("never goes beyond the channels a delivery is limited to, whatever the user chose", async () => {
+    const mia = await seedUser("mia@heig.test");
+    await linkTeams(mia);
+    const { queue, sent } = recordingQueue();
+    openOutbox({ queue, teams: true, log });
+    const payload = await sharedPool("Limité");
+
+    // The app only (an in-class exercise opening, ADR-030 §h.3): a row, no job.
+    const [inApp] = await service.notifyMany(db, [{ userId: mia, payload, channels: ["bell"] }]);
+    expect(inApp).not.toBeNull();
+    expect(sent).toHaveLength(0);
+    // Within the limit, the preferences still decide: e-mail turned off stays off.
+    await service.setPreference(db, mia, { kind: "pool_shared", channel: "email", enabled: false });
+    const [none] = await service.notifyMany(db, [{ userId: mia, payload, channels: ["email"] }]);
+    expect(none).toBeNull();
+    expect(sent).toHaveLength(0);
+  });
+
   it("sends no Teams job when the platform has no Teams application", async () => {
     const heidi = await seedUser("heidi@heig.test");
     await linkTeams(heidi);

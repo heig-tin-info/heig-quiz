@@ -11,7 +11,9 @@
  *   - `writes.ts`: create, patch, delete, and the narrow writers the other
  *     modules call;
  *   - `items.ts`: the item list, the pools it draws from, and the copy;
- *   - `activities.ts`: the Activities section, across classrooms (#190).
+ *   - `activities.ts`: the Activities section, across classrooms (#190);
+ *   - `announce.ts`: what an exercise's students are told when it is
+ *     scheduled or starts running (ADR-030 §c).
  *
  * Three rules shape this layer:
  *   - an item freezes ONE published question version at the moment it is
@@ -44,6 +46,7 @@ export {
 } from "./stateMachine.js";
 export type { JoinedItem } from "./reads.js";
 export { listActivities } from "./activities.js";
+export { announceMove } from "./announce.js";
 export {
   seatsOf,
   classroomIdOf,

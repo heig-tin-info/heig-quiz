@@ -54,6 +54,22 @@ export const NotificationPayload = z.discriminatedUnion("kind", [
     /** The attempt that counts, whose feedback page the notification opens. */
     attemptId: z.uuid(),
   }),
+  /**
+   * Exercises of the recipient's classroom were scheduled for the first time
+   * (ADR-030, addendum §c and §h), folded per classroom: "16 exercises
+   * scheduled in PRG1-2026". Never an exam, never a poll.
+   */
+  z.object({ kind: z.literal("activity_scheduled"), ...classroomCount }),
+  z.object({
+    /**
+     * An exercise of the recipient's classroom moved to `running` (§c): it
+     * can be taken now. The title and the id of the evaluation, nothing of
+     * its content.
+     */
+    kind: z.literal("activity_available"),
+    evaluationId: z.uuid(),
+    evaluationTitle: z.string(),
+  }),
   /** Students took their seat in a classroom (join code, or a roster claim). */
   z.object({ kind: z.literal("student_joined"), ...classroomCount }),
   /** Roster lines of a classroom were flagged for the teacher's decision (AU-21). */
@@ -108,6 +124,8 @@ export type NotificationQuery = z.infer<typeof NotificationQuery>;
 /** Every kind of persistent notification, in the order the settings list them. */
 export const NOTIFICATION_KINDS = [
   "results_released",
+  "activity_scheduled",
+  "activity_available",
   "student_joined",
   "roster_conflict",
   "grading_ready",
@@ -140,6 +158,12 @@ export const DEFAULT_CHANNEL_ENABLED: Readonly<
   Record<NotificationKind, Readonly<Record<NotificationChannel, boolean>>>
 > = {
   results_released: { bell: true, email: true, teams: true },
+  // A term of exercises scheduled in one sitting must not send a class
+  // sixteen e-mails (§h.1).
+  activity_scheduled: { bell: true, email: false, teams: false },
+  // On, but only a take-home exercise leaves the app: an in-class one opens
+  // with the students in the room (§h.3, the `channels` of `notifyMany`).
+  activity_available: { bell: true, email: true, teams: true },
   student_joined: { bell: true, email: false, teams: false },
   roster_conflict: { bell: true, email: true, teams: true },
   grading_ready: { bell: true, email: true, teams: true },
@@ -148,9 +172,16 @@ export const DEFAULT_CHANNEL_ENABLED: Readonly<
   pool_question_added: { bell: true, email: false, teams: false },
 };
 
+/** What a student receives; a teacher or an admin receives every kind. */
+const STUDENT_KINDS: readonly NotificationKind[] = [
+  "results_released",
+  "activity_scheduled",
+  "activity_available",
+];
+
 /** The kinds a role receives, as the settings grid lists them. */
 export function notificationKindsFor(role: "student" | "teacher" | "admin"): NotificationKind[] {
-  return role === "student" ? ["results_released"] : [...NOTIFICATION_KINDS];
+  return role === "student" ? [...STUDENT_KINDS] : [...NOTIFICATION_KINDS];
 }
 
 /** The resolved grid: every kind × every channel, defaults filled in. */

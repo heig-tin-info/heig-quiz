@@ -11,6 +11,7 @@ import type { ClosedBy } from "@quiz/contracts";
 import type { Db } from "../../db/client.js";
 import { attempts, enrollments } from "../../db/schema.js";
 import {
+  announceMove,
   applyState,
   byId as evaluationById,
   extendClosesAt,
@@ -77,15 +78,21 @@ async function beginWaitingAttempts(
   }
 }
 
-/** `lobby|scheduled|draft → running` (F-LIVE-03/04). */
+/**
+ * `lobby|scheduled|draft → running` (F-LIVE-03/04), by hand or by the
+ * ticker. The students are told (`announceMove`) only when THIS call made
+ * the move: a double click or a second ticker process tells nobody twice.
+ */
 export async function startEvaluation(
   db: Db,
   evaluation: EvaluationRecord,
   now: Date,
 ): Promise<EvaluationRecord> {
-  const next = await applyState(db, evaluation, "running", now);
+  const moved = await tryApplyState(db, evaluation, "running", now);
+  const next = moved ?? (await evaluationById(db, evaluation.id))!;
   await beginWaitingAttempts(db, next, await attemptsWithBonus(db, next), now);
   events.stateChanged(next, now);
+  if (moved) await announceMove(db, moved, now);
   return next;
 }
 

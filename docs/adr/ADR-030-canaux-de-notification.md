@@ -478,7 +478,9 @@ the change made no difference a user could see.
   students are in the room, and e-mailing a whole class the moment an exam
   is scheduled would leave the teacher no way to keep it a surprise. It is
   sent the first time the evaluation is scheduled and never again when it is
-  rescheduled. The payload carries `opensAt`.
+  rescheduled. The payload was to carry `opensAt`; folded per classroom
+  (§h.1) it carries `{ classroomId, classroomName, count }` instead, since
+  one entry counting sixteen exercises has no single opening time.
 - **`activity_available`: the move to `running`**, by the ticker or by hand,
   for exercises only. The lobby and `opensAt` are not "open". Polls are
   excluded: they happen live in the room.
@@ -662,3 +664,43 @@ Step 5 (`grading_ready`, `pool_question_added`) settled:
   the fold reads it, and a test holds the migrated database to it.
   `pool_question_added` folds on `(user_id, pool_id)`, migration
   `0028_notification_pool_fold`.
+
+Step 6 (`activity_scheduled`, `activity_available`) settled:
+
+- **One entry, `announceMove`** (`modules/evaluation/announce.ts`), called
+  with the row a move has just committed by the two functions that make the
+  moves: `transition` (the authoring moves, `scheduled` among them) and
+  `startEvaluation` (the move to `running`, by hand, by the ticker's
+  opening or by a full lobby). Both call it only when THEIR compare-and-set
+  won (`tryApplyState`), so a double click or a second ticker process tells
+  nobody twice. It is a no-op for anything but an exercise in a classroom.
+  `tryApplyState` itself was not the hook: it also runs inside
+  transactions, and `notifyMany` must run after the commit.
+- **The "already announced" marker is a column**,
+  `evaluations.scheduled_announced_at`, claimed by one conditional
+  `UPDATE … WHERE scheduled_announced_at IS NULL` before anything is sent.
+  A reschedule, a trip back to draft and forward again, or two concurrent
+  moves find it set and tell nobody. An audit lookup was rejected: the audit
+  entry is written by the route, not by the service the seed and the tests
+  call, and it is a log, not a guard two concurrent moves can race on. The
+  column is never copied (a copy starts at null) and never cleared. A
+  claimed marker whose notification then failed is not retried
+  (best-effort).
+- **`notifyMany` takes an optional `channels` per delivery**: the most that
+  delivery may use. The recipient's preferences still decide within it; a
+  channel left out is not used whatever they chose. An in-class exercise
+  opening is delivered with `channels: ["bell"]`, so the settings toggle for
+  e-mail stays on (a take-home exercise uses it) and the delivery job knows
+  nothing of exercises. The settings grid says so in the kind's description.
+- **Recipients** are the claimed student seats of the classroom
+  (`enrollments.user_id` set, `staff` false); an unclaimed roster line has
+  nobody to tell. `activity_available` carries
+  `{ evaluationId, evaluationTitle }`, no `closesAt` (it would need a date
+  rendered in the recipient's time zone in the e-mail) and nothing of the
+  content. `activity_scheduled` opens the student home, `activity_available`
+  the attempt page (`/take/<id>`), where the server decides between the
+  lobby and the player. `activity_scheduled` folds on `(user_id,
+  classroom_id)`, migration `0029_activity_notifications` (with the marker
+  column).
+- Best-effort, as `tellStaff`: a failure is logged and never fails the
+  transition, the start or the ticker pass.
