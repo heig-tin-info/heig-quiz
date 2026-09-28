@@ -14,7 +14,12 @@ import { deliver, type DeliveryDeps } from "./jobs.js";
 import type { Mail } from "./mailer.js";
 import { closeOutbox, NOTIFICATION_DELIVERY_QUEUE, openOutbox, type DeliveryJob } from "./outbox.js";
 import * as service from "./service.js";
-import { TeamsError, type OutgoingActivity, type TeamsClient, type TeamsConversation } from "./teams.js";
+import {
+  TeamsError,
+  type ActivityNotification,
+  type TeamsClient,
+  type TeamsRecipient,
+} from "./teams.js";
 
 let db: Db;
 let alice: string;
@@ -48,14 +53,13 @@ function poolShared(poolId: string, name: string) {
 }
 
 /** A Teams link as the link page writes it; the flow itself is `teams.db.test.ts`'s. */
-async function linkChat(userId: string, conversationId = `a:${userId}`, linkedAt = new Date()) {
+async function linkTeams(userId: string, linkedAt = new Date()) {
   await db.insert(teamsLinks).values({
     userId,
     tenantId: "t",
     aadObjectId: `o-${userId}`,
-    conversationId,
-    serviceUrl: "https://smba.trafficmanager.net/emea/",
     teamsName: "Léa Teams",
+    teamsUsername: "lea@heig-vd.ch",
     linkedAt,
   });
 }
@@ -259,20 +263,26 @@ describe("preferences", () => {
     const dave = await seedUser("dave@heig.test");
     const none = await service.notificationSettings(db, dave, true);
     expect(none.email).toBe("dave@heig.test");
-    expect(none.teams).toEqual({ available: true, linkedAt: null, teamsName: null });
+    expect(none.teams).toEqual({ available: true, linkedAt: null, teamsName: null, teamsUsername: null });
 
-    await linkChat(dave, "a:dave", new Date("2026-09-01T10:00:00Z"));
+    await linkTeams(dave, new Date("2026-09-01T10:00:00Z"));
     const linked = await service.notificationSettings(db, dave, true);
     expect(linked.teams).toEqual({
       available: true,
       linkedAt: "2026-09-01T10:00:00.000Z",
       teamsName: "Léa Teams",
+      teamsUsername: "lea@heig-vd.ch",
     });
     expect((await service.notificationSettings(db, dave, false)).teams).toEqual({
       available: false,
       linkedAt: null,
       teamsName: null,
+      teamsUsername: null,
     });
+
+    // A link made before the username was recorded: unknown, so null.
+    await db.update(teamsLinks).set({ teamsUsername: "" }).where(eq(teamsLinks.userId, dave));
+    expect((await service.notificationSettings(db, dave, true)).teams.teamsUsername).toBeNull();
 
     expect(await service.unlinkTeams(db, { userId: dave })).toBe(dave);
     expect(await service.unlinkTeams(db, { userId: dave })).toBeNull();
@@ -305,7 +315,7 @@ describe("notify fans out", () => {
     expect(sent[0]!.data).toEqual({ userId: grace, channel: "email", payload });
 
     sent.length = 0;
-    await linkChat(grace);
+    await linkTeams(grace);
     await bell(db, grace, payload);
     expect(sent.map((j) => j.data.channel)).toEqual(["email", "teams"]);
 
@@ -317,7 +327,7 @@ describe("notify fans out", () => {
 
   it("sends no Teams job when the platform has no Teams application", async () => {
     const heidi = await seedUser("heidi@heig.test");
-    await linkChat(heidi);
+    await linkTeams(heidi);
     const { queue, sent } = recordingQueue();
     openOutbox({ queue, teams: false, log });
     await bell(db, heidi, await sharedPool("Sans Teams"));
@@ -337,12 +347,12 @@ describe("notify fans out", () => {
 describe("the delivery job", () => {
   function fakes() {
     const mails: Mail[] = [];
-    const posts: { to: TeamsConversation; activity: OutgoingActivity }[] = [];
+    const posts: { to: TeamsRecipient; activity: ActivityNotification }[] = [];
     const warnings: object[] = [];
     let refuse: number | null = null;
     const teams: TeamsClient = {
-      async send(to, activity) {
-        if (refuse) throw new TeamsError(`refused ${refuse}`, refuse);
+      async notify(to, activity) {
+        if (refuse) throw new TeamsError(`refused ${refuse}`, refuse, "Forbidden");
         posts.push({ to, activity });
       },
     };
@@ -356,6 +366,7 @@ describe("the delivery job", () => {
         },
       },
       teams,
+      teamsAppId: "app-id",
       tenants: [] as string[],
       log: { info: () => {}, warn: (obj: object) => void warnings.push(obj) },
     };
@@ -383,15 +394,21 @@ describe("the delivery job", () => {
     );
   });
 
-  it("posts to the linked chat, and does nothing once unlinked", async () => {
+  it("notifies the linked Teams account in its feed, in the account's language, and nothing once unlinked", async () => {
     const ken = await seedUser("ken@heig.test");
-    await linkChat(ken, "a:ken");
+    await db.update(users).set({ locale: "fr" }).where(eq(users.id, ken));
+    await linkTeams(ken);
     const { deps, posts } = fakes();
     await deliver(deps, { userId: ken, channel: "teams", payload: released("Labo") });
     expect(posts).toHaveLength(1);
-    expect(posts[0]!.to).toEqual({ serviceUrl: "https://smba.trafficmanager.net/emea/", conversationId: "a:ken" });
-    expect(posts[0]!.activity).toMatchObject({ type: "message", textFormat: "xml" });
-    expect(posts[0]!.activity.text).toContain("Labo");
+    expect(posts[0]!.to).toEqual({ tenantId: "t", aadObjectId: `o-${ken}` });
+    expect(posts[0]!.activity).toMatchObject({
+      topic: "Labo",
+      activityType: "resultsReleased",
+      previewText: "Les résultats de « Labo » sont disponibles.",
+      templateParameters: { evaluationTitle: "Labo" },
+    });
+    expect(posts[0]!.activity.webUrl).toMatch(/^https:\/\/teams\.microsoft\.com\/l\/entity\/app-id\/home\?context=/);
 
     await service.unlinkTeams(db, { userId: ken });
     await deliver(deps, { userId: ken, channel: "teams", payload: released("Labo") });
@@ -400,7 +417,7 @@ describe("the delivery job", () => {
 
   it("sends nothing to a link whose tenant was removed from the allowed list", async () => {
     const olga = await seedUser("olga@heig.test");
-    await linkChat(olga);
+    await linkTeams(olga);
     const { deps, posts, warnings } = fakes();
     deps.tenants = ["another-tenant"];
     await expect(deliver(deps, { userId: olga, channel: "teams", payload: released("X") })).resolves.toBeUndefined();
@@ -411,14 +428,14 @@ describe("the delivery job", () => {
     expect(posts).toHaveLength(1);
   });
 
-  it("drops a delivery Teams refuses for good (403, 404), keeps the link, and retries the rest", async () => {
+  it("drops a delivery Graph refuses for good (403, 404), keeps the link, and retries the rest", async () => {
     const nina = await seedUser("nina@heig.test");
-    await linkChat(nina);
+    await linkTeams(nina);
     for (const status of [403, 404]) {
       const { deps, warnings, refuseWith } = fakes();
       refuseWith(status);
       await expect(deliver(deps, { userId: nina, channel: "teams", payload: released("X") })).resolves.toBeUndefined();
-      expect(warnings).toHaveLength(1);
+      expect(warnings).toEqual([expect.objectContaining({ status, code: "Forbidden" })]);
     }
     expect(await service.teamsLinkOf(db, { userId: nina })).not.toBeNull();
     const { deps, refuseWith } = fakes();

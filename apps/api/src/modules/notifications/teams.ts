@@ -1,18 +1,22 @@
 /**
  * Every HTTP call the platform makes to Microsoft, and nothing else
- * (ADR-030): the bot posts an activity into a Teams chat through Bot
- * Connector, as itself.
+ * (ADR-030): an activity-feed notification to one Teams user, through
+ * Microsoft Graph, as the HEIG Quiz application.
  *
- *  - a client-credentials token of the bot's Entra application, for the
- *    scope `https://api.botframework.com/.default`, issued by
- *    `TEAMS_BOT_TENANT` (`botframework.com` for a multi-tenant bot, the home
- *    tenant id for a single-tenant one), cached until a minute before expiry;
- *  - `POST {serviceUrl}/v3/conversations/{id}/activities`.
+ *  - a client-credentials token of the Entra application, IN THE RECIPIENT'S
+ *    TENANT (`login.microsoftonline.com/<tid>`), for the scope
+ *    `https://graph.microsoft.com/.default`, cached per tenant until a minute
+ *    before it expires. The application is multi-tenant; its permission,
+ *    `TeamsActivity.Send.User`, is resource-specific: each user granted it to
+ *    the app by installing the Teams app, and Graph checks it per recipient;
+ *  - `POST /v1.0/users/{oid}/teamwork/sendActivityNotification`.
  *
- * The `serviceUrl` came from an activity Microsoft posted to us, and the
- * bearer token goes wherever it points: it is checked against the allowlist
- * of Teams hosts at reception AND here, before every send, so a row written
- * before a rule changed cannot send the token elsewhere either.
+ * A 403 or 404 from Graph means the app is not installed for that user, its
+ * permission was not consented (an older manifest), a policy blocks it, or
+ * the user is gone: retrying cannot change that, so the error is `permanent`
+ * and the delivery is dropped — the link is KEPT (reinstalling the app is the
+ * user's fix, and the link then works again). A token failure is our own
+ * configuration (a lapsed secret) and is retried like any other failure.
  *
  * `fetch` is injected: the unit tests replay Microsoft's answers without a
  * network.
@@ -20,134 +24,123 @@
 import type { AppConfig } from "../../config.js";
 
 const LOGIN = "https://login.microsoftonline.com";
-const BOT_SCOPE = "https://api.botframework.com/.default";
+const GRAPH = "https://graph.microsoft.com/v1.0";
+const GRAPH_SCOPE = "https://graph.microsoft.com/.default";
 const TIMEOUT_MS = 15_000;
 
+/** A Teams user, as the link knows them. */
+export interface TeamsRecipient {
+  /** The Entra tenant of the account (lower-case). */
+  tenantId: string;
+  /** The Entra object id of the account in that tenant. */
+  aadObjectId: string;
+}
+
 /**
- * The hosts Bot Connector gives as `serviceUrl` for Microsoft Teams in the
- * public cloud: `https://smba.trafficmanager.net/<region>/` (`amer`, `emea`,
- * `apac`, `in`, `teams`, or a tenant id). The government and sovereign clouds
- * (`smba.infra.gcc.teams.microsoft.com`, `….gov.teams.microsoft.us`, …) are
- * left out on purpose: HEIG-VD is not in them, and a host added here is a
- * host the bot's token may be sent to.
+ * One activity-feed notification. `activityType` is one of the manifest's
+ * `activities.activityTypes`; `templateParameters` fill its `templateText`,
+ * which Teams renders in the language of the recipient's client.
  */
-export const TEAMS_SERVICE_HOSTS: readonly string[] = ["smba.trafficmanager.net"];
-
-/** HTTPS, an allowed host, the default port, no credentials, query or fragment. */
-export function allowedServiceUrl(raw: string): boolean {
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    return false;
-  }
-  return (
-    url.protocol === "https:" &&
-    url.port === "" &&
-    url.username === "" &&
-    url.password === "" &&
-    url.search === "" &&
-    url.hash === "" &&
-    TEAMS_SERVICE_HOSTS.includes(url.hostname)
-  );
-}
-
-/** Where one chat is answered: the pair Bot Connector gave us for it. */
-export interface TeamsConversation {
-  serviceUrl: string;
-  conversationId: string;
-}
-
-/** The subset of a Bot Framework activity the bot sends. */
-export interface OutgoingActivity {
-  type: "message";
-  text?: string;
-  textFormat?: "plain" | "xml" | "markdown";
-  attachments?: { contentType: string; content: unknown }[];
+export interface ActivityNotification {
+  /** The first line of the notification: the evaluation's or the pool's name. */
+  topic: string;
+  /** Where a click leads: a Teams deep link (Graph requires teams.microsoft.com). */
+  webUrl: string;
+  activityType: string;
+  /** The line under it, already rendered in the recipient's platform language. */
+  previewText: string;
+  templateParameters: Record<string, string>;
 }
 
 export class TeamsError extends Error {
   constructor(
     message: string,
     readonly status?: number,
-    /** The request was never made: the `serviceUrl` is not an allowed one. */
-    readonly refused = false,
+    /** Graph's own error code (`error.code` of the body), for the logs. */
+    readonly code?: string,
   ) {
     super(message);
     this.name = "TeamsError";
   }
 
   /**
-   * 403: the person blocked the bot or removed the app; 404: the chat is
-   * gone. Retrying cannot change either — the delivery is dropped (the link
-   * stays until the uninstall event or the user removes it). A refused
-   * `serviceUrl` would be refused again just as well.
+   * 403: the app is not installed for the user, its permission is missing,
+   * or a policy forbids it; 404: no such user. A retry meets the same answer.
    */
   get permanent(): boolean {
-    return this.refused || this.status === 403 || this.status === 404;
+    return this.status === 403 || this.status === 404;
   }
 }
 
 export interface TeamsClient {
-  send(to: TeamsConversation, activity: OutgoingActivity): Promise<void>;
+  notify(to: TeamsRecipient, notification: ActivityNotification): Promise<void>;
 }
 
-type TeamsConfig = Pick<AppConfig, "TEAMS_CLIENT_ID" | "TEAMS_CLIENT_SECRET" | "TEAMS_BOT_TENANT">;
+type TeamsConfig = Pick<AppConfig, "TEAMS_CLIENT_ID" | "TEAMS_CLIENT_SECRET">;
 
 export function createTeamsClient(config: TeamsConfig, fetchImpl: typeof fetch = fetch): TeamsClient {
-  let token: { value: string; until: number } | null = null;
+  /** One token per tenant: a client-credentials token is issued by one. */
+  const tokens = new Map<string, { value: string; until: number }>();
 
   async function call(url: string, init: RequestInit): Promise<Response> {
     return fetchImpl(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
   }
 
-  async function fail(what: string, res: Response): Promise<never> {
+  /** Throws; `retryable` drops the status, so the error is never `permanent`. */
+  async function fail(what: string, res: Response, retryable = false): Promise<never> {
     const body = await res.text().catch(() => "");
-    throw new TeamsError(`${what}: ${res.status} ${body.slice(0, 300)}`, res.status);
+    let code: string | undefined;
+    try {
+      const parsed = JSON.parse(body) as { error?: { code?: unknown } | string };
+      const raw = typeof parsed.error === "object" ? parsed.error?.code : parsed.error;
+      if (typeof raw === "string") code = raw;
+    } catch {
+      // Not JSON: the status says enough.
+    }
+    // Microsoft's own words stay out of the logs: the status and the code say it.
+    throw new TeamsError(`${what}: ${res.status}${code ? ` ${code}` : ""}`, retryable ? undefined : res.status, code);
   }
 
-  async function botToken(): Promise<string> {
-    if (token && token.until > Date.now()) return token.value;
-    const res = await call(
-      `${LOGIN}/${encodeURIComponent(config.TEAMS_BOT_TENANT)}/oauth2/v2.0/token`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          grant_type: "client_credentials",
-          client_id: config.TEAMS_CLIENT_ID,
-          client_secret: config.TEAMS_CLIENT_SECRET,
-          scope: BOT_SCOPE,
-        }),
-      },
-    );
-    // A token failure is OUR configuration (a lapsed secret): never permanent.
-    if (!res.ok) await fail("Bot Connector token", res);
+  async function graphToken(tenantId: string): Promise<string> {
+    const cached = tokens.get(tenantId);
+    if (cached && cached.until > Date.now()) return cached.value;
+    const res = await call(`${LOGIN}/${encodeURIComponent(tenantId)}/oauth2/v2.0/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "client_credentials",
+        client_id: config.TEAMS_CLIENT_ID,
+        client_secret: config.TEAMS_CLIENT_SECRET,
+        scope: GRAPH_SCOPE,
+      }),
+    });
+    // A token failure is OUR configuration (a lapsed secret, the app missing
+    // from that tenant): never permanent, whatever the status.
+    if (!res.ok) await fail("Graph token", res, true);
     const json = (await res.json()) as { access_token?: string; expires_in?: number };
-    if (!json.access_token) throw new TeamsError("Bot Connector token: no access_token");
+    if (!json.access_token) throw new TeamsError("Graph token: no access_token");
     const ttl = (json.expires_in ?? 600) * 1000;
-    token = { value: json.access_token, until: Date.now() + ttl - 60_000 };
+    tokens.set(tenantId, { value: json.access_token, until: Date.now() + ttl - 60_000 });
     return json.access_token;
   }
 
   return {
-    async send(to, activity) {
-      if (!allowedServiceUrl(to.serviceUrl)) {
-        throw new TeamsError(`refused serviceUrl ${to.serviceUrl}`, undefined, true);
-      }
-      const base = to.serviceUrl.replace(/\/+$/, "");
+    async notify(to, n) {
+      const token = await graphToken(to.tenantId);
       const res = await call(
-        `${base}/v3/conversations/${encodeURIComponent(to.conversationId)}/activities`,
+        `${GRAPH}/users/${encodeURIComponent(to.aadObjectId)}/teamwork/sendActivityNotification`,
         {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${await botToken()}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(activity),
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            topic: { source: "text", value: n.topic, webUrl: n.webUrl },
+            activityType: n.activityType,
+            previewText: { content: n.previewText },
+            templateParameters: Object.entries(n.templateParameters).map(([name, value]) => ({ name, value })),
+          }),
         },
       );
-      if (!res.ok) await fail("post the Teams message", res);
+      if (!res.ok) await fail("send the Teams activity", res);
     },
   };
 }

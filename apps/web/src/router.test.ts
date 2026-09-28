@@ -130,6 +130,7 @@ describe("ROUTES", () => {
     join: { view: "join", code: "ABC123" },
     oauthConsent: { view: "oauthConsent", id: "0190d3c4-0000-7000-8000-000000000001" },
     teamsLink: { view: "teamsLink" },
+    teamsTab: { view: "teamsTab" },
     feedback: { view: "feedback", attemptId: "a-1" },
     live: { view: "live", id: "e-1" },
     evaluationPreview: { view: "evaluationPreview", id: "e-1" },
@@ -151,7 +152,7 @@ describe("ROUTES", () => {
     }
   });
 
-  it("marks the seven views a student has a screen for, and only them", () => {
+  it("marks the eight views a student has a screen for, and only them", () => {
     expect(ROUTE_VIEWS.filter((v) => ROUTES[v].studentSafe).sort()).toEqual([
       "attempt",
       "feedback",
@@ -160,6 +161,7 @@ describe("ROUTES", () => {
       "oauthConsent",
       "settings",
       "teamsLink",
+      "teamsTab",
     ]);
   });
 
@@ -193,6 +195,7 @@ describe("ROUTES", () => {
         "results",
         "settings",
         "teamsLink",
+        "teamsTab",
       ].sort(),
     );
   });

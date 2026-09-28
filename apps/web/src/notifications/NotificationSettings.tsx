@@ -32,7 +32,8 @@ import {
  * Where each kind of notification reaches this account (ADR-030): a grid of
  * kinds × channels, then the channels themselves — the e-mail address, which
  * needs nothing, and Microsoft Teams, which needs the HEIG Quiz app uploaded
- * into the user's Teams and its chat linked (the link page, `TeamsLinkPage`).
+ * into the user's Teams and linked from its tab (`TeamsTabPage`, then the
+ * link page, `TeamsLinkPage`). Notifications arrive in the activity feed.
  *
  * The grid lists the kinds the account's role receives (a student is only
  * ever told of a released result). The Teams column is there only when the
@@ -131,7 +132,7 @@ function TeamsRow({ settings }: { settings: NotificationSettings }) {
     },
     onError: toastError("error.save"),
   });
-  const { available, linkedAt, teamsName } = settings.teams;
+  const { available, linkedAt, teamsName, teamsUsername } = settings.teams;
   if (!available) {
     return <SettingRow title={t("settings.teams.title")} desc={t("settings.teams.unavailable")} />;
   }
@@ -139,7 +140,10 @@ function TeamsRow({ settings }: { settings: NotificationSettings }) {
     return (
       <SettingRow
         title={t("settings.teams.title")}
-        desc={t("settings.teams.linked", { name: teamsName ?? "", date: isoDateTime(linkedAt) })}
+        desc={t("settings.teams.linked", {
+          name: teamsUsername && teamsUsername !== teamsName ? `${teamsName ?? ""} (${teamsUsername})` : (teamsName ?? ""),
+          date: isoDateTime(linkedAt),
+        })}
       >
         <Button variant="secondary" size="sm" loading={disconnect.isPending} onClick={() => disconnect.mutate()}>
           {t("settings.teams.disconnect")}
@@ -148,7 +152,7 @@ function TeamsRow({ settings }: { settings: NotificationSettings }) {
     );
   }
   // Not linked: the package to upload, and the three steps that follow in
-  // Teams. The link itself is confirmed on the page the bot's card opens.
+  // Teams. The link itself is confirmed on the page the app's tab opens.
   return (
     <div className="pb-3">
       <SettingRow title={t("settings.teams.title")} desc={t("settings.teams.off")}>

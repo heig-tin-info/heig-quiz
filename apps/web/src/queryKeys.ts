@@ -32,6 +32,9 @@ export const connectionsKey = ["oauth-connections"] as const;
 export const oauthRequestKey = (id: string) => ["oauth-request", id] as const;
 /** One pending Teams link, on the link page (ADR-030). */
 export const teamsLinkKey = (token: string) => ["teams-link", token] as const;
+/** The HEIG Quiz tab inside Teams: the Teams host, then what the tab endpoint says (ADR-030). */
+export const teamsHostKey = ["teams-host"] as const;
+export const teamsTabKey = ["teams-tab"] as const;
 
 // --- Courses and classrooms --------------------------------------------------
 

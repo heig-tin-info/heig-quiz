@@ -1,8 +1,8 @@
 /**
  * The HTTP surface of the channels (ADR-030) through the real application:
- * the settings, one toggle, and the Teams bot — its messaging endpoint
- * called with tokens signed by a stand-in Bot Framework, Bot Connector
- * replaced by a stub of `fetch`, the only way out of the process.
+ * the settings, one toggle, and Teams — the tab's endpoint called with SSO
+ * tokens signed by a stand-in Entra (its key served through a stub of
+ * `fetch`, the only way out of the process), and the link page.
  */
 import { randomUUID } from "node:crypto";
 
@@ -10,20 +10,22 @@ import { and, eq } from "drizzle-orm";
 import { unzipSync } from "fflate";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { NotificationSettings, TeamsLinkPreview } from "@quiz/contracts";
+import { NotificationSettings, TeamsLinkPreview, TeamsTabState } from "@quiz/contracts";
 
 import { auditLog, teamsLinks, teamsLinkTokens } from "../../db/schema.js";
-import { fakeBotFramework, type FakeBotFramework } from "../../test/botFramework.js";
+import { ENTRA_TENANT, fakeEntra, type FakeEntra } from "../../test/entra.js";
 import { testServer, type TestServer } from "../../test/http.js";
+import { issueLinkToken } from "./teamsLink.js";
 
-const APP_ID = "5f0c0a2e-0000-4000-8000-000000000b07";
-const SERVICE_URL = "https://smba.trafficmanager.net/emea/";
+const APP_ID = "31583357-0d89-48ab-8eeb-e9bc49f9e243";
 const TEAMS_ENV = {
   TEAMS_CLIENT_ID: APP_ID,
   TEAMS_CLIENT_SECRET: "client-secret",
-  TEAMS_ALLOWED_TENANTS: "tenant-heig",
+  TEAMS_ALLOWED_TENANTS: ENTRA_TENANT,
 };
+const TAB = "/app/api/notifications/teams/tab";
 const PREVIEW = "/app/api/notifications/teams/link/preview";
+const LINK = "/app/api/notifications/teams/link";
 
 describe("without a Teams application", () => {
   let server: TestServer;
@@ -38,7 +40,7 @@ describe("without a Teams application", () => {
     expect(res.statusCode).toBe(200);
     const body = NotificationSettings.parse(res.json());
     expect(body.email).toBe("sam@heig.test");
-    expect(body.teams).toEqual({ available: false, linkedAt: null, teamsName: null });
+    expect(body.teams).toEqual({ available: false, linkedAt: null, teamsName: null, teamsUsername: null });
     expect(body.matrix.results_released).toEqual({ bell: true, email: true, teams: true });
   });
 
@@ -68,7 +70,7 @@ describe("without a Teams application", () => {
     expect(unlink.statusCode).toBe(503);
     expect(unlink.json()).toEqual({ error: "teams_unavailable" });
     for (const [method, url] of [
-      ["POST", "/app/api/notifications/teams/messages"],
+      ["POST", "/app/api/notifications/teams/tab"],
       ["GET", "/app/api/notifications/teams/app.zip"],
       ["POST", "/app/api/notifications/teams/link/preview"],
       ["POST", "/app/api/notifications/teams/link"],
@@ -84,29 +86,19 @@ describe("without a Teams application", () => {
   });
 });
 
-describe("with a Teams bot", () => {
+describe("with Teams", () => {
   let server: TestServer;
-  let bf: FakeBotFramework;
-  /** What the bot posted to Bot Connector. */
-  const posts: { url: string; body: Record<string, unknown> }[] = [];
-  /** The status Bot Connector answers with; 201 unless a test says otherwise. */
-  let connectorStatus = 201;
+  let entra: FakeEntra;
+  /** Every call that left the process. */
+  const outbound: string[] = [];
 
   beforeAll(async () => {
-    bf = await fakeBotFramework({ appId: APP_ID, serviceUrl: SERVICE_URL, endorsements: ["msteams"] });
-    // The verifier and the Teams client bind `fetch` when the plugin registers.
-    vi.stubGlobal("fetch", async (input: string | URL, init?: RequestInit) => {
+    entra = await fakeEntra({ appId: APP_ID });
+    // The verifier binds `fetch` when the plugin registers.
+    vi.stubGlobal("fetch", async (input: string | URL) => {
       const url = String(input);
-      const published = bf.answer(url);
-      if (published) return published;
-      if (url.startsWith("https://login.microsoftonline.com/")) {
-        return Response.json({ access_token: "bot-token", expires_in: 3600 });
-      }
-      if (url.startsWith("https://smba.trafficmanager.net/")) {
-        posts.push({ url, body: JSON.parse(String(init?.body)) as Record<string, unknown> });
-        return new Response("{}", { status: connectorStatus });
-      }
-      return new Response("unexpected", { status: 599 });
+      outbound.push(url);
+      return entra.answer(url) ?? new Response("unexpected", { status: 599 });
     });
     server = await testServer(TEAMS_ENV);
   });
@@ -115,118 +107,62 @@ describe("with a Teams bot", () => {
     await server.close();
   });
 
-  function activity(conversationId: string, over: Record<string, unknown> = {}) {
-    return {
-      type: "installationUpdate",
-      action: "add",
-      id: "f:1",
-      channelId: "msteams",
-      serviceUrl: SERVICE_URL,
-      locale: "en-US",
-      from: { id: "29:user", name: "Léa Rochat", aadObjectId: "aad-lea" },
-      recipient: { id: "28:bot", name: "HEIG Quiz" },
-      conversation: { id: conversationId, conversationType: "personal", tenantId: "tenant-heig" },
-      channelData: { tenant: { id: "tenant-heig" }, source: { name: "message" } },
-      entities: [{ type: "clientInfo", locale: "en-US" }],
-      ...over,
-    };
-  }
-
-  async function post(body: unknown, token?: string) {
+  /** The tab's call, as Teams makes it: the SSO token, no cookie, no body. */
+  async function tab(token?: string) {
     return server.app.inject({
       method: "POST",
-      url: "/app/api/notifications/teams/messages",
-      headers: { authorization: `Bearer ${token ?? (await bf.sign())}`, "content-type": "application/json" },
-      payload: JSON.stringify(body),
+      url: TAB,
+      headers: { authorization: `Bearer ${token ?? (await entra.sign())}` },
     });
   }
 
-  /** Installs the app in a fresh chat and returns the token of the card. */
-  async function install(): Promise<{ conversation: string; token: string }> {
-    const conversation = `a:${randomUUID()}`;
-    const before = posts.length;
-    expect((await post(activity(conversation))).statusCode).toBe(200);
-    expect(posts).toHaveLength(before + 1);
-    const card = (posts.at(-1)!.body.attachments as { content: { actions: { url: string }[] } }[])[0]!;
-    const url = new URL(card.content.actions[0]!.url);
+  /** A fresh Teams account opens the tab; returns its identity and link token. */
+  async function openTab(claims: Record<string, unknown> = {}) {
+    const oid = randomUUID();
+    const res = await tab(await entra.sign({ oid, ...claims }));
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["cache-control"]).toBe("no-store");
+    const state = TeamsTabState.parse(res.json());
+    if (state.state !== "unlinked") throw new Error("expected an unlinked account");
+    const url = new URL(state.linkUrl);
     expect(url.origin + url.pathname).toBe("http://localhost:3000/teams/link");
-    return { conversation, token: url.searchParams.get("token")! };
+    return { oid, token: url.searchParams.get("token")! };
   }
 
-  it("answers an install with the link card, in the chat Microsoft named", async () => {
-    const { conversation } = await install();
-    expect(posts.at(-1)!.url).toBe(
-      `${SERVICE_URL}v3/conversations/${encodeURIComponent(conversation)}/activities`,
-    );
+  const link = (headers: Record<string, string>, token: string) =>
+    server.app.inject({ method: "POST", url: LINK, headers, payload: { token } });
+
+  it("gives an unlinked Teams account a link to open in the browser", async () => {
+    const { oid, token } = await openTab();
+    expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const rows = await server.app.db.select().from(teamsLinkTokens).where(eq(teamsLinkTokens.aadObjectId, oid));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ tenantId: ENTRA_TENANT, teamsUsername: "lea.rochat@heig-vd.ch" });
   });
 
-  it("refuses a call without a valid token BEFORE reading the body", async () => {
-    const conversation = `a:${randomUUID()}`;
-    const before = posts.length;
+  it("refuses the tab without a valid SSO token, and says when the organization is not allowed", async () => {
+    const before = (await server.app.db.select().from(teamsLinkTokens)).length;
     for (const token of [
-      await bf.sign({ aud: "another-bot" }),
-      await bf.sign({}, { key: "rogue" }),
+      await entra.sign({ aud: "another-api" }),
+      await entra.sign({ azp: "00000000-0000-4000-8000-000000000bad" }),
+      await entra.sign({}, { key: "rogue" }),
       "garbage",
     ]) {
-      const res = await server.app.inject({
-        method: "POST",
-        url: "/app/api/notifications/teams/messages",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        // Not even JSON: a 401 proves the body was never parsed.
-        payload: "{not json",
-      });
+      const res = await tab(token);
       expect(res.statusCode).toBe(401);
+      expect(res.json()).toEqual({ error: "unauthorized" });
     }
-    const bare = await server.app.inject({
-      method: "POST",
-      url: "/app/api/notifications/teams/messages",
-      payload: activity(conversation),
-    });
-    expect(bare.statusCode).toBe(401);
-    expect(posts).toHaveLength(before);
-  });
-
-  it("refuses an activity whose serviceUrl is not the token's, or not a Teams host", async () => {
-    const conversation = `a:${randomUUID()}`;
-    const before = posts.length;
-    const other = await post(activity(conversation, { serviceUrl: "https://smba.trafficmanager.net/amer/" }));
-    expect(other.statusCode).toBe(401);
-    const evil = "https://evil.example/teams/";
-    const outside = await post(activity(conversation, { serviceUrl: evil }), await bf.sign({ serviceurl: evil }));
-    expect(outside.statusCode).toBe(403);
-    expect(posts).toHaveLength(before);
-    expect(await server.app.db.select().from(teamsLinkTokens).where(eq(teamsLinkTokens.conversationId, conversation))).toHaveLength(0);
-  });
-
-  it("caps the body of an activity", async () => {
-    const res = await post(activity(`a:${randomUUID()}`, { text: "x".repeat(70 * 1024) }));
-    expect(res.statusCode).toBe(413);
-  });
-
-  it("mints no link for a Teams account of an organization not allowed", async () => {
-    const conversation = `a:${randomUUID()}`;
-    const before = posts.length;
-    const outsider = activity(conversation, {
-      conversation: { id: conversation, conversationType: "personal", tenantId: "tenant-elsewhere" },
-      channelData: { tenant: { id: "tenant-elsewhere" } },
-    });
-    expect((await post(outsider)).statusCode).toBe(200);
-    expect(posts).toHaveLength(before + 1);
-    expect(posts.at(-1)!.body).toMatchObject({ type: "message", textFormat: "plain" });
-    expect(posts.at(-1)!.body.attachments).toBeUndefined();
-    const tokens = await server.app.db.select().from(teamsLinkTokens).where(eq(teamsLinkTokens.conversationId, conversation));
-    expect(tokens).toHaveLength(0);
-  });
-
-  it("ignores, with a 200, what it does not serve", async () => {
-    const before = posts.length;
-    const res = await post(activity(`a:${randomUUID()}`, { conversation: { id: "19:c", conversationType: "channel" } }));
-    expect(res.statusCode).toBe(200);
-    expect(posts).toHaveLength(before);
+    expect((await server.app.inject({ method: "POST", url: TAB })).statusCode).toBe(401);
+    const stranger = await tab(await entra.sign({ tid: "96412a41-a2a2-422e-8438-f29c95c02686" }));
+    expect(stranger.statusCode).toBe(403);
+    expect(stranger.json()).toEqual({ error: "tenant_not_allowed" });
+    expect(await server.app.db.select().from(teamsLinkTokens)).toHaveLength(before);
+    // Nothing but Entra's key set was ever fetched.
+    expect(outbound.every((url) => url === "https://login.microsoftonline.com/common/discovery/v2.0/keys")).toBe(true);
   });
 
   it("previews the link without consuming it, and links once with the CSRF check", async () => {
-    const { conversation, token } = await install();
+    const { oid, token } = await openTab();
     const me = await server.signIn("student", `lea-${randomUUID()}@heig.test`);
 
     const anonymous = await server.app.inject({ method: "POST", url: PREVIEW, payload: { token } });
@@ -234,50 +170,57 @@ describe("with a Teams bot", () => {
     for (let i = 0; i < 2; i++) {
       const preview = await server.app.inject({ method: "POST", url: PREVIEW, headers: me.headers, payload: { token } });
       expect(preview.statusCode).toBe(200);
-      expect(TeamsLinkPreview.parse(preview.json())).toMatchObject({ teamsName: "Léa Rochat", tenantId: "tenant-heig" });
+      expect(TeamsLinkPreview.parse(preview.json())).toMatchObject({
+        teamsName: "Léa Rochat",
+        teamsUsername: "lea.rochat@heig-vd.ch",
+        tenantId: ENTRA_TENANT,
+      });
     }
 
     const { "x-csrf-token": _csrf, ...noCsrf } = me.headers;
-    const forged = await server.app.inject({
-      method: "POST",
-      url: "/app/api/notifications/teams/link",
-      headers: noCsrf,
-      payload: { token },
-    });
-    expect(forged.statusCode).toBe(403);
+    expect((await link(noCsrf, token)).statusCode).toBe(403);
 
-    const before = posts.length;
-    const linked = await server.app.inject({
-      method: "POST",
-      url: "/app/api/notifications/teams/link",
-      headers: me.headers,
-      payload: { token },
-    });
+    const linked = await link(me.headers, token);
     expect(linked.statusCode).toBe(200);
-    expect(NotificationSettings.parse(linked.json()).teams).toMatchObject({ available: true, teamsName: "Léa Rochat" });
+    expect(NotificationSettings.parse(linked.json()).teams).toMatchObject({
+      available: true,
+      teamsName: "Léa Rochat",
+      teamsUsername: "lea.rochat@heig-vd.ch",
+    });
     const [row] = await server.app.db.select().from(teamsLinks).where(eq(teamsLinks.userId, me.id));
-    expect(row).toMatchObject({ conversationId: conversation, tenantId: "tenant-heig", aadObjectId: "aad-lea" });
+    expect(row).toMatchObject({ tenantId: ENTRA_TENANT, aadObjectId: oid });
     const audited = await server.app.db
       .select()
       .from(auditLog)
       .where(and(eq(auditLog.action, "teams.link"), eq(auditLog.subjectId, me.id)));
     expect(audited).toHaveLength(1);
-    // The confirmation in Teams comes after the answer, best effort.
-    await vi.waitFor(() => expect(posts.length).toBe(before + 1));
-    expect(posts.at(-1)!.body).toMatchObject({ type: "message", textFormat: "plain" });
 
     // Replayed: the token is spent.
     for (const res of [
-      await server.app.inject({ method: "POST", url: "/app/api/notifications/teams/link", headers: me.headers, payload: { token } }),
+      await link(me.headers, token),
       await server.app.inject({ method: "POST", url: PREVIEW, headers: me.headers, payload: { token } }),
     ]) {
       expect(res.statusCode).toBe(404);
       expect(res.json()).toEqual({ error: "link_invalid" });
     }
+
+    // The tab now says to whom it is linked, and mints nothing.
+    const again = await tab(await entra.sign({ oid }));
+    expect(TeamsTabState.parse(again.json())).toEqual({ state: "linked", accountName: "Test student" });
+    expect(await server.app.db.select().from(teamsLinkTokens).where(eq(teamsLinkTokens.aadObjectId, oid))).toHaveLength(1);
+  });
+
+  it("invalidates the previous link each time the tab mints a new one", async () => {
+    const { oid, token: first } = await openTab();
+    const res = await tab(await entra.sign({ oid }));
+    const second = new URL((TeamsTabState.parse(res.json()) as { linkUrl: string }).linkUrl).searchParams.get("token")!;
+    const me = await server.signIn("student");
+    expect((await server.app.inject({ method: "POST", url: PREVIEW, headers: me.headers, payload: { token: first } })).statusCode).toBe(404);
+    expect((await link(me.headers, second)).statusCode).toBe(200);
   });
 
   it("refuses to preview or link through a personal API token", async () => {
-    const { token } = await install();
+    const { token } = await openTab();
     const me = await server.signIn("teacher");
     const created = await server.app.inject({
       method: "POST",
@@ -287,7 +230,7 @@ describe("with a Teams bot", () => {
     });
     const bearer = (created.json() as { token?: string }).token;
     expect(bearer).toBeTruthy();
-    for (const url of [PREVIEW, "/app/api/notifications/teams/link"]) {
+    for (const url of [PREVIEW, LINK]) {
       const res = await server.app.inject({
         method: "POST",
         url,
@@ -298,46 +241,27 @@ describe("with a Teams bot", () => {
     }
   });
 
-  it("moves a chat linked elsewhere, auditing the unlink of the previous account", async () => {
+  it("moves a Teams account linked elsewhere, auditing the unlink of the previous account", async () => {
     const first = await server.signIn("student");
     const second = await server.signIn("student");
-    // Two cards for one chat: the install's, and a message's a minute later.
-    const { conversation, token: firstCard } = await install();
-    server.clock.advance(61_000);
-    await post(activity(conversation, { type: "message", text: "link?" }));
-    const cards = posts.at(-1)!.body.attachments as { content: { actions: { url: string }[] } }[];
-    const secondCard = new URL(cards[0]!.content.actions[0]!.url).searchParams.get("token")!;
+    const { oid, token } = await openTab();
+    expect((await link(first.headers, token)).statusCode).toBe(200);
+    // Once linked the tab mints nothing; a token for the same Teams account
+    // can still be pending (two tabs racing), and it moves the link.
+    const pending = await issueLinkToken(
+      server.app.db,
+      { tenantId: ENTRA_TENANT, aadObjectId: oid, teamsName: "Léa Rochat", teamsUsername: "lea.rochat@heig-vd.ch" },
+      server.clock.now(),
+    );
+    expect((await link(second.headers, pending)).statusCode).toBe(200);
 
-    const link = (headers: Record<string, string>, token: string) =>
-      server.app.inject({ method: "POST", url: "/app/api/notifications/teams/link", headers, payload: { token } });
-    expect((await link(first.headers, firstCard)).statusCode).toBe(200);
-    expect((await link(second.headers, secondCard)).statusCode).toBe(200);
-
-    const holders = await server.app.db.select().from(teamsLinks).where(eq(teamsLinks.conversationId, conversation));
+    const holders = await server.app.db.select().from(teamsLinks).where(eq(teamsLinks.aadObjectId, oid));
     expect(holders.map((l) => l.userId)).toEqual([second.id]);
     const [moved] = await server.app.db
       .select()
       .from(auditLog)
       .where(and(eq(auditLog.action, "teams.unlink"), eq(auditLog.subjectId, first.id)));
     expect(moved).toMatchObject({ actorUserId: second.id, payload: { via: "moved", to: second.id } });
-
-    // Linked: a message is told to whom, and no token is minted.
-    server.clock.advance(61_000);
-    const before = await server.app.db.select().from(teamsLinkTokens).where(eq(teamsLinkTokens.conversationId, conversation));
-    await post(activity(conversation, { type: "message", text: "who?" }));
-    expect(posts.at(-1)!.body).toMatchObject({ type: "message", textFormat: "plain" });
-    expect(String(posts.at(-1)!.body.text)).toContain("Test student");
-    const after = await server.app.db.select().from(teamsLinkTokens).where(eq(teamsLinkTokens.conversationId, conversation));
-    expect(after).toHaveLength(before.length);
-
-    // The app removed from Teams: the link goes, audited as the account's own act.
-    await post(activity(conversation, { type: "installationUpdate", action: "remove" }));
-    expect(await server.app.db.select().from(teamsLinks).where(eq(teamsLinks.userId, second.id))).toHaveLength(0);
-    const [removed] = await server.app.db
-      .select()
-      .from(auditLog)
-      .where(and(eq(auditLog.action, "teams.unlink"), eq(auditLog.subjectId, second.id)));
-    expect(removed).toMatchObject({ actorUserId: second.id, payload: { via: "teams" } });
   });
 
   it("serves the Teams app package", async () => {
@@ -347,16 +271,23 @@ describe("with a Teams bot", () => {
     const files = unzipSync(res.rawPayload);
     const manifest = JSON.parse(Buffer.from(files["manifest.json"]!).toString("utf8"));
     expect(manifest.id).toBe(APP_ID);
-    expect(manifest.bots[0].botId).toBe(APP_ID);
+    expect(manifest.webApplicationInfo).toEqual({ id: APP_ID, resource: `api://localhost:3000/${APP_ID}` });
+    expect(manifest.staticTabs[0].contentUrl).toBe("http://localhost:3000/teams");
     expect(manifest.validDomains).toEqual(["localhost:3000"]);
+    expect(files["fr.json"]).toBeDefined();
   });
 
   it("disconnects a linked account", async () => {
     const me = await server.signIn("student");
-    const { token } = await install();
-    await server.app.inject({ method: "POST", url: "/app/api/notifications/teams/link", headers: me.headers, payload: { token } });
+    const { token } = await openTab();
+    await link(me.headers, token);
     const unlink = await server.app.inject({ method: "DELETE", url: "/app/api/notifications/teams", headers: me.headers });
-    expect(NotificationSettings.parse(unlink.json()).teams).toEqual({ available: true, linkedAt: null, teamsName: null });
+    expect(NotificationSettings.parse(unlink.json()).teams).toEqual({
+      available: true,
+      linkedAt: null,
+      teamsName: null,
+      teamsUsername: null,
+    });
     const unlinked = await server.app.db
       .select()
       .from(auditLog)

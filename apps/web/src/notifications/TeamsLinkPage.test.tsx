@@ -9,8 +9,8 @@ import { mockFetch, ok, renderWithProviders } from "../test/render";
 import { TeamsLinkPage } from "./TeamsLinkPage";
 
 /*
- * The page the Teams bot's card opens (ADR-030): which Teams account, which
- * Quiz account, and ONE action — Link.
+ * The page the HEIG Quiz tab in Teams opens in the browser (ADR-030): which
+ * Teams account, which Quiz account, and ONE action — Link.
  */
 
 const TOKEN = "T".repeat(43);
@@ -18,6 +18,7 @@ const ROUTE = `/teams/link?token=${TOKEN}`;
 const PREVIEW_URL = "POST /app/api/notifications/teams/link/preview";
 const preview: TeamsLinkPreview = {
   teamsName: "Léa Rochat (HEIG-VD)",
+  teamsUsername: "lea.rochat@heig-vd.ch",
   tenantId: "a372f724-c0b2-4ea0-abfb-0eb8c6f84e40",
   expiresAt: "2026-09-27T12:15:00.000Z",
 };
@@ -28,7 +29,12 @@ const linked: NotificationSettings = {
     pool_ownership: { bell: true, email: true, teams: true },
   },
   email: "marie.dupont@heig-vd.ch",
-  teams: { available: true, linkedAt: "2026-09-27T12:01:00.000Z", teamsName: preview.teamsName },
+  teams: {
+    available: true,
+    linkedAt: "2026-09-27T12:01:00.000Z",
+    teamsName: preview.teamsName,
+    teamsUsername: preview.teamsUsername,
+  },
 };
 
 describe("the Teams link page", () => {
@@ -44,6 +50,8 @@ describe("the Teams link page", () => {
       await screen.findByRole("heading", { name: "Link this Teams account to your Quiz account?" }),
     ).toBeVisible();
     expect(screen.getByText("Léa Rochat (HEIG-VD)")).toBeVisible();
+    expect(screen.getByText("Microsoft account")).toBeVisible();
+    expect(screen.getByText("lea.rochat@heig-vd.ch")).toBeVisible();
     expect(screen.getByText(preview.tenantId)).toBeVisible();
     expect(screen.getByText("Marie Dupont (marie.dupont@heig-vd.ch)")).toBeVisible();
     expect(screen.getByText("Only link a Teams account that is yours.")).toBeVisible();
@@ -64,7 +72,7 @@ describe("the Teams link page", () => {
     mockFetch({ [PREVIEW_URL]: { status: 404, body: { error: "link_invalid" } } });
     renderWithProviders(<TeamsLinkPage me={makeMe()} />, { route: ROUTE });
     expect(await screen.findByRole("heading", { name: "This link can no longer be used" })).toBeVisible();
-    expect(screen.getByText(/Send any message to HEIG Quiz in Teams/)).toBeVisible();
+    expect(screen.getByText(/Open HEIG Quiz in Teams again/)).toBeVisible();
   });
 
   it("says the same of a link that lost its token", () => {

@@ -12,14 +12,15 @@ import { SignInGate } from "../SignInGate";
 import { Alert, Button, Card, FormError, GateFrame, Skeleton } from "../ui";
 
 /**
- * The Teams link page (ADR-030). The HEIG Quiz bot's card in Teams opens it
- * with a one-time token in `?token=`; the page shows which Teams account —
- * and which Microsoft 365 organization — the token stands for, and asks ONE
- * question: link it to this Quiz account? ONE primary action, Link.
+ * The Teams link page (ADR-030). The HEIG Quiz tab in Teams opens it in the
+ * browser with a one-time token in `?token=`; the page shows which Teams
+ * account — its name, its Microsoft account and its Microsoft 365
+ * organization — the token stands for, and asks ONE question: link it to
+ * this Quiz account? ONE primary action, Link.
  *
  * Signed out, it offers the sign-in and comes back here with the same URL.
  * An expired, spent or missing token is one state, whose way out is in
- * Teams: any message to the bot brings a new card.
+ * Teams: opening the tab again gives a new link.
  *
  * The token travels to the API in a request BODY, never in a path, and
  * leaves the address bar once spent; the request log masks it (`redact.ts`).
@@ -128,6 +129,9 @@ function Confirm({ token, me, onSettings }: { token: string; me: Me; onSettings?
   const until = new Date(p.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const rows: [string, string][] = [
     [t("teamsLink.teams"), p.teamsName],
+    // The Microsoft account's sign-in name: shown so a person can tell their
+    // own account from a look-alike, never compared with the Quiz address.
+    ...(p.teamsUsername ? ([[t("teamsLink.username"), p.teamsUsername]] as [string, string][]) : []),
     [t("teamsLink.tenant"), p.tenantId],
     [t("teamsLink.quiz"), account],
   ];

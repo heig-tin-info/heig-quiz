@@ -109,13 +109,11 @@ describe("notification channels (ADR-030)", () => {
     expect(loadConfig({}).MAIL_FROM_NAME).toBe("HEIG Quiz");
   });
 
-  it("turns Teams on only with the bot's id and secret", () => {
+  it("turns Teams on only with the application's id and secret", () => {
     const all = { TEAMS_CLIENT_ID: "c", TEAMS_CLIENT_SECRET: "s" };
     expect(teamsEnabled(loadConfig({}))).toBe(false);
     expect(teamsEnabled(loadConfig({ ...all, TEAMS_CLIENT_SECRET: " " }))).toBe(false);
     expect(teamsEnabled(loadConfig(all))).toBe(true);
-    expect(loadConfig({}).TEAMS_BOT_TENANT).toBe("botframework.com");
-    expect(loadConfig({ TEAMS_BOT_TENANT: " 96412a41 " }).TEAMS_BOT_TENANT).toBe("96412a41");
   });
 
   it("parses the allowed Teams tenants once, lower-cased", () => {

@@ -65,6 +65,16 @@ if (sceneParam !== null) {
 }
 export const scene = (localStorage.getItem(SCENE_KEY) ?? "running") as Scene;
 
+/**
+ * The HEIG Quiz tab's scene inside the fake Teams (`mock/teams.ts`), from
+ * `?teams=`. Not remembered: outside that one page there is no Teams.
+ */
+const TEAMS_SCENES = ["unlinked", "linked", "target", "refused", "sso"] as const;
+export type TeamsScene = (typeof TEAMS_SCENES)[number];
+const teamsParam = params.get("teams");
+export const teamsScene: TeamsScene | null =
+  TEAMS_SCENES.find((scene) => scene === teamsParam) ?? null;
+
 if (urlDirty) {
   const q = params.toString();
   window.history.replaceState(null, "", window.location.pathname + (q ? `?${q}` : ""));

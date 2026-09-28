@@ -81,15 +81,15 @@ export const notificationPreferences = pgTable(
 );
 
 /**
- * An account's Microsoft Teams link (ADR-030): the one-to-one chat between
- * the person and the HEIG Quiz bot, learned when they clicked the link card
- * the bot posted there and confirmed it while signed in to the platform. No
- * Microsoft token is kept — a delivery uses the bot's own credentials.
+ * An account's Microsoft Teams link (ADR-030): the Teams (Entra) account its
+ * notifications go to, as an activity in that account's Teams activity feed.
+ * Learned from the SSO token of the HEIG Quiz tab in Teams, and confirmed on
+ * the link page while signed in to the platform. No Microsoft token is kept —
+ * a delivery uses the application's own credentials.
  *
- * One chat per account (the primary key) and one account per chat (the
- * unique conversation): linking a chat already linked elsewhere MOVES it.
- * `service_url` is where Bot Connector told the bot to answer that chat; it
- * is checked against the allowlist again before every send.
+ * One Teams account per Quiz account (the primary key) and one Quiz account
+ * per Teams account (the unique pair): linking a Teams account already linked
+ * elsewhere MOVES it.
  */
 export const teamsLinks = pgTable(
   "teams_links",
@@ -97,41 +97,42 @@ export const teamsLinks = pgTable(
     userId: uuid("user_id")
       .primaryKey()
       .references(() => users.id, { onDelete: "cascade" }),
-    /** The Entra tenant of the Teams account (`channelData.tenant.id`). */
+    /** The Entra tenant of the Teams account (the token's `tid`), lower-case. */
     tenantId: text("tenant_id").notNull(),
-    /** The Entra object id of the person in that tenant (`from.aadObjectId`). */
+    /** The Entra object id of the person in that tenant (the token's `oid`). */
     aadObjectId: text("aad_object_id").notNull(),
-    conversationId: text("conversation_id").notNull(),
-    serviceUrl: text("service_url").notNull(),
-    /** The display name Teams gave for the person, shown in the settings. */
+    /** The display name of the Teams account, shown in the settings. */
     teamsName: text("teams_name").notNull(),
+    /** Its sign-in name (`preferred_username`), shown beside the name. */
+    teamsUsername: text("teams_username").notNull().default(""),
     linkedAt: timestamp("linked_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("teams_links_conversation_idx").on(t.conversationId)],
+  (t) => [uniqueIndex("teams_links_identity_idx").on(t.tenantId, t.aadObjectId)],
 );
 
 /**
- * A pending link, minted by the bot when it posts its link card (ADR-030).
- * The URL carries a random secret; only its SHA-256 is stored, the way a
- * session id is (`sessions.sid_hash`), so reading this table links nothing.
- * Single use: `consumed_at` is set in the transaction that writes the link.
- * Fifteen minutes to live; expired rows are pruned whenever a new one is made.
+ * A pending link, minted when the HEIG Quiz tab in Teams finds its account
+ * unlinked (ADR-030). The URL carries a random secret; only its SHA-256 is
+ * stored, the way a session id is (`sessions.sid_hash`), so reading this
+ * table links nothing. Single use: `consumed_at` is set in the transaction
+ * that writes the link. Fifteen minutes to live; a new token for the same
+ * Teams account deletes its unspent ones, and expired rows are pruned
+ * whenever a token is made.
  */
 export const teamsLinkTokens = pgTable(
   "teams_link_tokens",
   {
     tokenHash: text("token_hash").primaryKey(),
-    conversationId: text("conversation_id").notNull(),
-    serviceUrl: text("service_url").notNull(),
     tenantId: text("tenant_id").notNull(),
     aadObjectId: text("aad_object_id").notNull(),
     teamsName: text("teams_name").notNull(),
+    teamsUsername: text("teams_username").notNull().default(""),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     consumedAt: timestamp("consumed_at", { withTimezone: true }),
   },
   (t) => [
-    index("teams_link_tokens_conversation_idx").on(t.conversationId, t.createdAt),
+    index("teams_link_tokens_identity_idx").on(t.tenantId, t.aadObjectId),
     index("teams_link_tokens_expires_idx").on(t.expiresAt),
   ],
 );

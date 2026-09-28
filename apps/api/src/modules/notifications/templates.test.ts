@@ -33,11 +33,10 @@ describe("renderNotification", () => {
     expect(fr.subject).toBe("Résultats disponibles : Test 0 — bases du C");
     expect(fr.html).toContain("Voir mes résultats");
     expect(fr.html).toContain("Réglages des notifications");
-    expect(fr.teams).toContain("Voir mes résultats");
+    expect(fr.preview).toBe("Les résultats de « Test 0 — bases du C » sont disponibles.");
 
-    const role = renderNotification(shared, "fr", "https://quiz.test/");
+    const role = renderNotification(shared, "fr", "https://quiz.test");
     expect(role.text).toContain("avec vous comme contributeur");
-    // A trailing slash on the base does not double in the link.
     expect(role.text).toContain("https://quiz.test/pools/" + POOL);
   });
 
@@ -51,7 +50,7 @@ describe("renderNotification", () => {
     for (const payload of [shared, released, ownership]) {
       for (const locale of ["en", "fr"] as const) {
         const out = renderNotification(payload, locale, "https://quiz.test");
-        for (const part of [out.subject, out.text, out.html, out.teams]) {
+        for (const part of [out.subject, out.text, out.html, out.preview]) {
           expect(part).not.toMatch(/\{\w+\}/);
           expect(part.length).toBeGreaterThan(10);
         }
@@ -66,13 +65,13 @@ describe("renderNotification", () => {
       byName: `Eve " onmouseover='y'`,
     };
     const out = renderNotification(hostile, "en", "https://quiz.test");
-    for (const html of [out.html, out.teams]) {
-      expect(html).not.toContain("<script>");
-      expect(html).toContain("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;");
-      expect(html).toContain("Eve &quot; onmouseover=&#39;y&#39;");
-    }
-    // The plain-text part is text: it carries the name as typed.
+    expect(out.html).not.toContain("<script>");
+    expect(out.html).toContain("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;");
+    expect(out.html).toContain("Eve &quot; onmouseover=&#39;y&#39;");
+    // The plain-text parts are text: they carry the name as typed (Teams
+    // renders a preview as text).
     expect(out.text).toContain(`<script>alert("x")</script>`);
+    expect(out.preview).toContain(`<script>alert("x")</script>`);
   });
 
   it("keeps the subject on one line", () => {
@@ -83,6 +82,7 @@ describe("renderNotification", () => {
     );
     expect(out.subject).not.toMatch(/[\r\n]/);
     expect(out.subject).toBe("Results available: Line one Bcc: someone@evil.test");
+    expect(out.preview).not.toMatch(/[\r\n]/);
   });
 
   it("carries ids and a title, never a grade", () => {

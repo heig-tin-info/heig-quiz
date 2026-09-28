@@ -59,10 +59,16 @@ export type Route =
    */
   | { view: "oauthConsent"; id: string }
   /**
-   * The Teams link page (ADR-030): the bot's card opens it with the pending
-   * link's one-time token in `?token=`, which the page reads itself.
+   * The Teams link page (ADR-030): the HEIG Quiz tab in Teams opens it in the
+   * browser with the pending link's one-time token in `?token=`, which the
+   * page reads itself.
    */
   | { view: "teamsLink" }
+  /**
+   * The HEIG Quiz tab INSIDE Teams (ADR-030): rendered with no session at
+   * all — Teams frames it, and the platform's cookies do not follow.
+   */
+  | { view: "teamsTab" }
   // WP10: grading + results
   /** The teacher's grading panel for one evaluation. */
   | { view: "grading"; evaluationId: string }
@@ -219,10 +225,16 @@ export const ROUTES: { readonly [V in Route["view"]]: RouteSpec<V> } = {
       head === "oauth" && tail === "authorize" && id ? { view: "oauthConsent", id } : null,
     studentSafe: true,
   },
-  // ADR-030: reached from the bot's card in Teams, signed in or not, by any role.
+  // ADR-030: opened from the HEIG Quiz tab in Teams, signed in or not, by any role.
   teamsLink: {
     path: () => "/teams/link",
     match: ([head, tail]) => (head === "teams" && tail === "link" ? { view: "teamsLink" } : null),
+    studentSafe: true,
+  },
+  // ADR-030: the tab itself, `/teams` exactly — the manifest's `contentUrl`.
+  teamsTab: {
+    path: () => "/teams",
+    match: (parts) => (parts.length === 1 && parts[0] === "teams" ? { view: "teamsTab" } : null),
     studentSafe: true,
   },
   // WP10: the student's feedback on one attempt — the ONE student results page.

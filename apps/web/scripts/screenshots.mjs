@@ -649,10 +649,17 @@ const scenes = [
   { name: "oauth-consent", role: "teacher", path: "/oauth/authorize/0190d3c4-0000-7000-8000-000000000001" },
   { name: "oauth-consent-loopback", role: "teacher", path: "/oauth/authorize/0190d3c4-0000-7000-8000-000000000001?loopback=1" },
   { name: "oauth-invalid", role: "teacher", path: "/oauth/authorize/invalid?reason=invalid_redirect_uri" },
-  // ADR-030: the page the Teams bot's card opens; a token starting with
-  // `expired` is one the mock refuses.
+  // ADR-030: the page the HEIG Quiz tab in Teams opens in the browser; a
+  // token starting with `expired` is one the mock refuses.
   { name: "teams-link", role: "student", path: `/teams/link?token=${"T".repeat(43)}` },
   { name: "teams-link-expired", role: "student", path: `/teams/link?token=expired${"T".repeat(36)}` },
+  // ADR-030: the tab itself, inside the mock's fake Teams (`mock/teams.ts`).
+  { name: "teams-tab-outside", role: "student", path: "/teams" },
+  { name: "teams-tab-unlinked", role: "student", path: "/teams?teams=unlinked" },
+  { name: "teams-tab-linked", role: "student", path: "/teams?teams=linked" },
+  { name: "teams-tab-target", role: "student", path: "/teams?teams=target" },
+  { name: "teams-tab-sso", role: "student", path: "/teams?teams=sso" },
+  { name: "teams-tab-refused", role: "student", path: "/teams?teams=refused" },
   { name: "settings-token-new", role: "teacher", path: "/settings", fold: true, act: (p) => p.getByRole("button", { name: /new token/i }).first().click() },
   {
     name: "settings-token-created",
