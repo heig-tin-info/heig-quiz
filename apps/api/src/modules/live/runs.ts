@@ -170,6 +170,25 @@ async function runForStudent(
   }
 }
 
+interface RunInput {
+  runner: RunnerService;
+  evaluation: EvaluationRecord;
+  attempt: AttemptRecord;
+  itemId: string;
+  regions: string[];
+  stdin?: string | undefined;
+  /** The command line of the free-stdin try; a visible case keeps the teacher's. */
+  args?: string[] | undefined;
+  /**
+   * The Compile button: the runner builds the program (`action: "check"`)
+   * and runs no case at all. It spends its own budget, `compilesPerMinute`,
+   * never a test run's (ADR-024, addendum of 2026-09-25), and journals
+   * `compileOnly: true`, which is how the two budgets are told apart.
+   */
+  compileOnly?: boolean | undefined;
+  now: Date;
+}
+
 /**
  * `POST /attempts/:id/run` — the student's Run button.
  *
@@ -180,25 +199,6 @@ async function runForStudent(
  * with Podman exists (decision D14) — this ends in `503 runner_unavailable`,
  * which is a configuration, not a failure.
  */
-interface RunInput {
-    runner: RunnerService;
-    evaluation: EvaluationRecord;
-    attempt: AttemptRecord;
-    itemId: string;
-    regions: string[];
-    stdin?: string | undefined;
-    /** The command line of the free-stdin try; a visible case keeps the teacher's. */
-    args?: string[] | undefined;
-    /**
-     * The Compile button: the runner builds the program (`action: "check"`)
-     * and runs no case at all. It spends its own budget, `compilesPerMinute`,
-     * never a test run's (ADR-024, addendum of 2026-09-25), and journals
-     * `compileOnly: true`, which is how the two budgets are told apart.
-     */
-    compileOnly?: boolean | undefined;
-    now: Date;
-}
-
 async function runVisibleCasesNow(
   db: Db,
   input: RunInput,
@@ -236,6 +236,15 @@ async function runVisibleCasesNow(
   return { requestId, result };
 }
 
+interface SimulateInput {
+  runner: RunnerService;
+  evaluation: EvaluationRecord;
+  attempt: AttemptRecord;
+  itemId: string;
+  answer: unknown;
+  now: Date;
+}
+
 /**
  * `POST /attempts/:id/simulate` — the student's own button, for a type that
  * builds its OWN request (ADR-019).
@@ -253,15 +262,6 @@ async function runVisibleCasesNow(
  * cares about; a simulation is a curve the student asked for, so the response
  * is the delivery.
  */
-interface SimulateInput {
-  runner: RunnerService;
-  evaluation: EvaluationRecord;
-  attempt: AttemptRecord;
-  itemId: string;
-  answer: unknown;
-  now: Date;
-}
-
 async function simulateAnswerNow(db: Db, input: SimulateInput): Promise<RunnerOutcome> {
   const prepared = await attemptRunContext(db, {
     ...input,

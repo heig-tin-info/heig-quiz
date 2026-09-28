@@ -297,6 +297,7 @@ export async function simulatePreview(
 ): Promise<RunnerOutcome> {
   const { evaluation, now } = input;
   const { joined, type, config, student } = await previewItem(db, evaluation, input.itemId, input.seed);
+  // The second test is implied by the first; it is there for TypeScript's narrowing.
   if (runButton(type, student) !== "simulate" || !type.interactiveRequest) throw notRunnable();
   budget.spend(
     `run:${input.userId}:${evaluation.id}`,
