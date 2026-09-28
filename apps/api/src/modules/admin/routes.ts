@@ -2,14 +2,16 @@ import { randomUUID } from "node:crypto";
 
 import type { FastifyInstance } from "fastify";
 import { eq, sql } from "drizzle-orm";
-import { z } from "zod";
 
-import { audit } from "../audit.js";
-import type { AppConfig } from "../config.js";
-import { courseStaff, teacherGrants, users } from "../db/schema.js";
-import { publish } from "../events.js";
-import { syncUserRole } from "../roles.js";
-import { adminGuard } from "./guards.js";
+import { TeacherGrantCreate, TeacherGrantParams } from "@quiz/contracts";
+
+import { audit } from "../../audit.js";
+import type { AppConfig } from "../../config.js";
+import { courseStaff, teacherGrants, users } from "../../db/schema.js";
+import { publish } from "../../events.js";
+import { syncUserRole } from "../../roles.js";
+import { adminGuard } from "../guards.js";
+import { listUsers } from "./service.js";
 
 /**
  * Administration: the super admin (email in the environment) manages
@@ -20,6 +22,11 @@ import { adminGuard } from "./guards.js";
 export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfig }) {
   const { config } = opts;
   const requireAdmin = adminGuard(app);
+
+  // Every account, with its role, why, and its teaching footprint (F-ADMIN-01).
+  app.get("/app/api/admin/users", { preHandler: requireAdmin }, async () =>
+    listUsers(app.db, config),
+  );
 
   app.get("/app/api/admin/teachers", { preHandler: requireAdmin }, async () => {
     const rows = await app.db
@@ -43,10 +50,8 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
     }));
   });
 
-  const GrantBody = z.object({ email: z.email() });
-
   app.post("/app/api/admin/teachers", { preHandler: requireAdmin }, async (req, reply) => {
-    const body = GrantBody.safeParse(req.body);
+    const body = TeacherGrantCreate.safeParse(req.body);
     if (!body.success) {
       return reply.code(400).send({ error: "validation", message: "A valid e-mail is required" });
     }
@@ -83,10 +88,8 @@ export async function adminPlugin(app: FastifyInstance, opts: { config: AppConfi
     return reply.code(201).send(created);
   });
 
-  const GrantParam = z.object({ gid: z.uuid() });
-
   app.delete("/app/api/admin/teachers/:gid", { preHandler: requireAdmin }, async (req, reply) => {
-    const params = GrantParam.safeParse(req.params);
+    const params = TeacherGrantParams.safeParse(req.params);
     if (!params.success) return reply.code(404).send({ error: "not_found" });
     const [grant] = await app.db
       .select()

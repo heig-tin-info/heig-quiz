@@ -24,6 +24,12 @@ export const notificationsKey = ["notifications"] as const;
 /** The kinds x channels grid, the address and the Teams link (settings, ADR-030). */
 export const notificationSettingsKey = ["notification-settings"] as const;
 export const adminTeachersKey = ["admin-teachers"] as const;
+/**
+ * Every account (F-ADMIN-01): under `adminTeachersKey`, so a grant, a revoke
+ * and the `admin` and `courses` hints that refresh the teachers refresh the
+ * roles and counts of this list too.
+ */
+export const adminUsersKey = [...adminTeachersKey, "users"] as const;
 /** The caller's personal API tokens (settings). */
 export const apiTokensKey = ["api-tokens"] as const;
 /** The assistants connected through OAuth (settings, ADR-023). */

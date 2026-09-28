@@ -20,7 +20,7 @@ import { systemClock } from "./clock.js";
 import type { AppConfig } from "./config.js";
 import { createDb } from "./db/client.js";
 import { publish } from "./events.js";
-import { adminPlugin } from "./modules/admin.js";
+import { adminPlugin } from "./modules/admin/routes.js";
 import { adminGuard } from "./modules/guards.js";
 import { avatarPlugin } from "./modules/avatar.js";
 import { evaluationPlugin } from "./modules/evaluation/routes.js";

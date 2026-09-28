@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Library, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { useState } from "react";
 
-import type { AdminTeacher } from "@quiz/contracts";
+import type { AdminTeacher, TeacherGrantCreate } from "@quiz/contracts";
 
 import { api, apiErrorMessage } from "./api";
 import { useConfirm } from "./confirm";
@@ -25,12 +25,14 @@ import {
   useSortableTable,
   type Column,
 } from "./ui";
+import { UsersSection } from "./AdminUsers";
 import { adminTeachersKey } from "./queryKeys";
 
 type SortKey = "email" | "name" | "lastLoginAt" | "courses" | "grantedAt";
 
 /**
- * Administration: the teacher grants, and nothing else.
+ * Administration: the teacher grants, then every account (`UsersSection`,
+ * read-only).
  *
  * A grant is an e-mail address, issued before or after that person ever
  * signs in — the role is recomputed server-side at every login, so this
@@ -50,7 +52,10 @@ export function AdminPage() {
   const invalidate = () => qc.invalidateQueries({ queryKey: adminTeachersKey });
   const grant = useMutation({
     mutationFn: () =>
-      api("/app/api/admin/teachers", { method: "POST", body: JSON.stringify({ email }) }),
+      api("/app/api/admin/teachers", {
+        method: "POST",
+        body: JSON.stringify({ email } satisfies TeacherGrantCreate),
+      }),
     onSuccess: () => {
       setEmail("");
       invalidate();
@@ -190,6 +195,8 @@ export function AdminPage() {
           </Card>
         )}
       </section>
+
+      <UsersSection />
     </div>
   );
 }

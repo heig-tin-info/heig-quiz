@@ -4,6 +4,7 @@
  */
 import type {
   AdminTeacher,
+  AdminUser,
   ClassroomDetail,
   CourseSummary,
   RosterEntry,
@@ -337,6 +338,79 @@ function strip() {
 if (flags.many) inflate();
 if (flags.empty) strip();
 
+/**
+ * Every account (F-ADMIN-01): the signed-up grantees, one teacher for each
+ * other branch of the role rule, one stale teacher the rule no longer gives
+ * a reason for, and every claimed seat of the rosters as a student — some
+ * seventy of them, enough for the "Show all" row.
+ */
+const account = (
+  id: string,
+  givenName: string,
+  familyName: string,
+  email: string,
+  rest: Partial<AdminUser> = {},
+): AdminUser => ({
+  id,
+  email,
+  givenName,
+  familyName,
+  role: "teacher",
+  reason: null,
+  lastLoginAt: iso(-rand() * 30 * D),
+  createdAt: iso(-(100 + rand() * 400) * D),
+  pools: 0,
+  questions: 0,
+  classrooms: 0,
+  ...rest,
+});
+
+function buildAdminUsers(): AdminUser[] {
+  if (flags.empty) return [];
+  const teaching = (pools: number, questions: number, classrooms: number) => ({
+    pools,
+    questions,
+    classrooms,
+  });
+  const staff: AdminUser[] = [
+    account("u-admin", "Admin", "Démo", "admin@heig-vd.ch", {
+      role: "admin",
+      reason: "super_admin",
+      lastLoginAt: iso(-3 * H),
+      ...teaching(1, 4, 0),
+    }),
+    ...teachers
+      .filter((g) => g.signedUp)
+      .map((g, i) =>
+        account(`u-${g.id}`, g.givenName ?? "", g.familyName ?? "", g.email, {
+          reason: "grant",
+          lastLoginAt: g.lastLoginAt,
+          ...teaching(1 + (i % 3), 12 + i * 17, g.courses),
+        }),
+      ),
+    account("u-wirth", "Niklaus", "Wirth", "niklaus.wirth@heig-vd.ch", {
+      reason: "course_seat",
+      ...teaching(0, 0, 2),
+    }),
+    account("u-hoare", "Tony", "Hoare", "tony.hoare@hes-so.ch", {
+      // The affiliation is read at sign-in: this account has signed in.
+      reason: "staff_affiliation",
+      lastLoginAt: iso(-6 * D),
+    }),
+    account("u-knuth", "Donald", "Knuth", "donald.knuth@heig-vd.ch", teaching(2, 48, 0)),
+  ];
+  // One account per address: a student may sit in two rosters.
+  const claimed = new Map(
+    rooms.flatMap((r) => r.roster.filter((e) => e.userId !== null).map((e) => [e.email, e])),
+  );
+  const students = [...claimed.values()].map((e) =>
+    account(e.userId!, e.prenom, e.nom, e.email, { role: "student", lastLoginAt: e.lastLoginAt }),
+  );
+  return [...staff, ...students];
+}
+
+const adminUsers = buildAdminUsers();
+
 // --- Views ---
 
 const courseSummary = (c: Course): CourseSummary => ({
@@ -580,6 +654,7 @@ on("GET", "/app/api/student/classrooms", () => studentRooms());
 // --- Admin ---
 
 on("GET", "/app/api/admin/teachers", () => teachers);
+on("GET", "/app/api/admin/users", () => adminUsers);
 on("POST", "/app/api/admin/teachers", (_m, body) => {
   teachers.push({
     id: nextId("t"),

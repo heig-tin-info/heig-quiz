@@ -16,6 +16,7 @@ describe("queryKeys — each factory is the literal it replaced", () => {
     ["notificationsKey", keys.notificationsKey, ["notifications"]],
     ["notificationSettingsKey", keys.notificationSettingsKey, ["notification-settings"]],
     ["adminTeachersKey", keys.adminTeachersKey, ["admin-teachers"]],
+    ["adminUsersKey", keys.adminUsersKey, ["admin-teachers", "users"]],
     ["apiTokensKey", keys.apiTokensKey, ["api-tokens"]],
     ["connectionsKey", keys.connectionsKey, ["oauth-connections"]],
     ["oauthRequestKey", keys.oauthRequestKey("q1"), ["oauth-request", "q1"]],
