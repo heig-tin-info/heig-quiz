@@ -54,6 +54,7 @@ import {
 } from "../ui";
 import { studentClassroomsKey, studentHomeKey } from "../queryKeys";
 import { useRetake } from "./retake";
+import { SebLaunchModal } from "./SebLaunchModal";
 
 const MODE_KEY = {
   exam: "shome.mode.exam",
@@ -313,6 +314,8 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
   // (`retake.ts`). The server decides (`canRetake`, and `retake_refused` on
   // the route); on success the player opens on the new attempt.
   const retake = useRetake(navigate);
+  // Issue #270: the SEB card opens its instructions; the file comes from there.
+  const [sebFor, setSebFor] = useState<EvaluationCardData | null>(null);
 
   /** The one button of an open card. */
   const openAction = (card: EvaluationCardData) => {
@@ -327,12 +330,13 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
     }
     // Issue #203: a finished attempt that cannot be retaken is never here —
     // the server lists it under Past, where the results are.
-    // ADR-027: sat in Safe Exam Browser only — the card hands out the file.
+    // ADR-027: sat in Safe Exam Browser only — the card hands out the file,
+    // after the instructions (#270).
     if (card.safeExamBrowser) {
       return {
         label: t("shome.seb"),
         primary: true,
-        onClick: () => window.location.assign(`/app/api/evaluations/${card.id}/seb`),
+        onClick: () => setSebFor(card),
       };
     }
     return {
@@ -483,6 +487,14 @@ export function StudentHome({ me, navigate }: { me: Me; navigate: (r: Route) => 
         )}
         <JoinCard />
       </section>
+
+      {sebFor ? (
+        <SebLaunchModal
+          evaluationId={sebFor.id}
+          title={sebFor.title}
+          onClose={() => setSebFor(null)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -44,6 +44,18 @@ An in-class evaluation usually opens on a waiting room. You enter it from your h
 
 The ring shows how many students of the class are already here. Under it, three notes tell you what to expect: the clock is the server's, your answers are saved as you type, and you take the evaluation once. If you have extra time, the room says how many minutes that gives you. The line at the bottom reads **Connected · clock synchronised** once your browser has caught the server's time. **Leave** takes you back home; you can come back as long as the room is open.
 
+## Exams in Safe Exam Browser
+
+Some exams are sat in [Safe Exam Browser](https://safeexambrowser.org) (SEB) only. Their card on your home says **Open in Safe Exam Browser**; press it and follow the three steps:
+
+1. **Install Safe Exam Browser**, once, from [safeexambrowser.org](https://safeexambrowser.org/download_en.html) (Windows or macOS). Skip this if it is already on the computer.
+2. **Download the exam file.** It is yours alone, works once, and expires after 5 minutes.
+3. **Open the file.** SEB starts and takes you straight to the exam without asking you to sign in again: to its waiting room, if it has one, until your teacher starts the exam, then to the questions.
+
+The button appears once the exam is open; until then the card is under **Coming up**.
+
+If SEB says the file is invalid or has expired, quit SEB and download a new file from your home. Once you have handed in, you may quit SEB; your results are read later from your home, in an ordinary browser.
+
 ## Taking an evaluation
 
 The player shows one question per screen. The strip at the top is the list of the questions, one segment per question, and clicking a segment moves to that question when the navigation allows it. Each segment says where you stand, by its shape as well as its colour: a solid bar with a check for a question that holds an answer, a dashed bar with a dash for one you said you will not answer, a hollow bar for one with nothing yet, and a small flag beside the number of a question you flagged for review. The current question is outlined in red. The header carries the countdown when the evaluation is timed, the saving indicator, a theme toggle and **Hand in**.

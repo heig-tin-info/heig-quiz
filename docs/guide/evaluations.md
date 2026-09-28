@@ -110,10 +110,23 @@ Everything else lives behind **Advanced options**, folded by default. A novice n
 - **Feedback**: **None** (the student never sees a correction here), **On release** (nothing until you publish the results) or **Right away** (as soon as the student validates a question, exercises only). Two separate switches decide what the feedback carries: **Show the expected answer** and **Show the explanation**. Your comment on an adjusted grading is always part of it.
 - **Multiple-answer scoring**: the policy every multiple-choice item of this evaluation uses when the student ticks only some of several correct answers, unless the question names its own. **Exact**, **True/false**, **Distance**, **Symmetric** or **Ripkey**; a question with a single correct answer is always all or nothing. The formulas are in [Question types](question-types.md).
 - **Access code**: asked once, before the student enters. Three characters at least; empty means no code.
+- **Safe Exam Browser** (exams only): the students sit the exam in [Safe Exam Browser](https://safeexambrowser.org), and only there. See below.
 - **Grading scale**: **Linear** (grade = 1 + 5 × points / total) or **Threshold** (grade = 1 + 5 × points / threshold, capped at 6). Both land on the Swiss 1 to 6 scale, rounded to the tenth.
 
 !!! note
     The waiting room and the feedback policy are part of what the presets decide, but their controls sit under **Advanced options**, not on the main card. Open the disclosure to change them.
+
+### Safe Exam Browser
+
+An exam can require Safe Exam Browser (SEB), the locked-down browser that keeps the student inside the exam. Turn on **Safe Exam Browser** under **Advanced options**; the switch is offered on exams only.
+
+What changes for the students:
+
+- The card of the exam on their home no longer opens it: its button, **Open in Safe Exam Browser**, shows the steps (install SEB, download the exam file, open it) and hands out the file.
+- The button appears once the exam is open (from its scheduled opening, or when you open it). The file is personal, works once and expires after 5 minutes. Opening it starts SEB straight on the exam, **without signing in again**: in its waiting room if it has one, until you press **Start** (or until the whole roster is there, with an automatic waiting room), then on the questions.
+- The exam cannot be sat from an ordinary browser, and inside SEB nothing else of the platform is reachable. After handing in, the student may quit SEB; the results are read later from the portal.
+
+To try it yourself before the class does, give yourself a seat with **Join as student** in the classroom (a seat badged as a staff test), switch to the student view and download the file like a student. Plan a first run on a real machine of the room: SEB must be installed there, and its version is what the students will use.
 
 ## Step 3: Launch
 

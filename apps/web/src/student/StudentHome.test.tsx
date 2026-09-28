@@ -6,6 +6,7 @@ import type { EvaluationCard, Me, StudentHome as StudentHomeData } from "@quiz/c
 
 import { fail, mockFetch, ok, renderWithProviders } from "../test/render";
 import { StudentHome } from "./StudentHome";
+import { SEB_DOWNLOAD_URL } from "./SebLaunchModal";
 
 const me: Me = {
   id: "u1",
@@ -95,8 +96,33 @@ describe("the student home", () => {
     vi.stubGlobal("location", { ...window.location, assign });
     const { navigate } = render();
     await userEvent.click(await screen.findByRole("button", { name: "Ouvrir dans Safe Exam Browser" }));
+    // Issue #270: the instructions first; nothing is downloaded yet.
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByText("Installez Safe Exam Browser.")).toBeInTheDocument();
+    expect(within(dialog).getByRole("link", { name: "safeexambrowser.org" })).toHaveAttribute(
+      "href",
+      SEB_DOWNLOAD_URL,
+    );
+    expect(assign).not.toHaveBeenCalled();
+    await userEvent.click(within(dialog).getByRole("button", { name: "Télécharger le fichier d'examen" }));
     expect(assign).toHaveBeenCalledWith("/app/api/evaluations/e1/seb");
     expect(navigate).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it("closes the Safe Exam Browser instructions without downloading", async () => {
+    mockFetch({
+      "GET /app/api/student/home": ok({ ...home, open: [card({ safeExamBrowser: true })] }),
+      "GET /app/api/student/classrooms": ok([]),
+    });
+    const assign = vi.fn();
+    vi.stubGlobal("location", { ...window.location, assign });
+    render();
+    await userEvent.click(await screen.findByRole("button", { name: "Ouvrir dans Safe Exam Browser" }));
+    await userEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Annuler" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(assign).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
 

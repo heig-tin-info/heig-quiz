@@ -329,6 +329,8 @@ const scenes = [
   // WP9: student player. `TAKE` is the mock's evaluation; `?scene=` picks the
   // state the fake backend serves (see the WP9 block of src/mock/student.ts).
   { name: "student-home-eval", role: "student", path: "/" },
+  // Issue #270: an exam sat in Safe Exam Browser — its card opens the steps.
+  { name: "student-seb", role: "student", path: "/?seb=1", act: (p) => p.getByRole("button", { name: /^(open in safe exam browser|ouvrir dans safe exam browser)$/i }).first().click() },
   { name: "student-lobby", role: "student", path: `${TAKE}?scene=lobby` },
   { name: "player-mcq", role: "student", path: `${TAKE}?scene=running` },
   { name: "player-cloze", role: "student", path: `${TAKE}?scene=running`, act: (p) => openQuestion(p, 2) },
